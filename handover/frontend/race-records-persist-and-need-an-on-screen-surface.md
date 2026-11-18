@@ -86,7 +86,7 @@ surface; `xdotool` is X11-only and finds nothing, and no
 `wtype`/`ydotool`/`wlrctl` is installed), and there is no `SIGTERM` handler
 anywhere in `crates/game/src/main`, so a `kill` bypasses `escape()` rather
 than exercising it. Speed Lap and Zone - the two modes that depend on this
-site entirely, since `Race::finished` never turns `true` for either - have
+site entirely, since `RaceSim::finished` never turns `true` for either - have
 not themselves produced a saved row on a real desktop yet. Run this on one:
 
 ```sh

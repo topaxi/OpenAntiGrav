@@ -1164,7 +1164,7 @@ a guess.
   `locate_player_driver(slot)`, and the Eliminator's kill-target finish.
   Moved to per person-flown slot afterwards (`per-slot-sim-leftovers`,
   2026-10-13; every one is **chosen, not measured** where it says so, the
-  original having one player). The LeachBeam's lock is `Race::sight_target(slot)`,
+  original having one player). The LeachBeam's lock is `RaceSim::sight_target(slot)`,
   a simulation quantity computed from the world for whichever slot fires, with
   the reticle reading the primary's; a second person has no reticle, so no
   Pulse hold on the lock (chosen). The fire arms of `spend_pickup` still wrote
@@ -1174,26 +1174,26 @@ a guess.
   the slot's own place now go to every person-flown slot (they went to slot 0),
   and the pad refresh countdown runs on the primary slot, the first one
   stepped. AI: the rubber band, the position-keyed tables and the Pure zone
-  multiplier read the best-placed person (`Race::rubber_band_reference`, lowest
+  multiplier read the best-placed person (`RaceSim::rubber_band_reference`, lowest
   slot on a tie, chosen); the original field's round robin is every active craft
   nobody flies; pad seeking skips every person-flown slot; the weapon AI's
   `player_gap` is the nearest person ahead, else the first person's gap
   (chosen); the speed plan's reference hull tries the people's craft first, and
   `build_player_speed_plan` builds the primary's (one plan per hull already
   serves every person's autopilot, `adapt_hull_plans` walks every slot).
-  Results: `Race::finished` is every person-flown slot's own `race[slot].finished`
+  Results: `RaceSim::finished` is every person-flown slot's own `race[slot].finished`
   (line crossing and wreck are per slot, the Eliminator's kill target ends all
   persons together), `runs_on_after_the_line` needs every person across the
   line, and the board marks every person's row as the player's
   (`scoreboard::Craft::person`; `Board::player()` is the best-placed one). Slot
   0 handed to the AI with a person elsewhere gets a driver seeded from
   `Driver::for_slot(race_seed, MAX_SHIPS)` and located on the line on the first
-  tick (`Race::seed_vacated_driver`; lazily, because `driver.index` is hashed).
+  tick (`RaceSim::seed_vacated_driver`; lazily, because `driver.index` is hashed).
   **Unanswered, with addresses:** how the original ends a two-player race.
   `Race_FinishAllCrafts` (`0x08824e10`), reached only through `FUN_0882461c`
   from `FUN_088dfb90` in the `GriefReport_*` screen code, is the one multiplayer
   finish path found (`race-finish.md`), and it never ran live in Single Race or
-  Time Trial, so `Race::finished` ("every person is done") is chosen, not
+  Time Trial, so `RaceSim::finished` ("every person is done") is chosen, not
   measured. The AI's single player is `AiManager_SnapshotRacers` (`0x088352c0`).
   **Player-visible now:** `--players N` (`oag_game::split_screen`) marks every
   viewed slot `Controller::Local`, so a split-screen race reaches the end-race

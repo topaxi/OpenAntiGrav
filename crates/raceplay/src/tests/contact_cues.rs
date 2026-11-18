@@ -166,7 +166,8 @@ fn hd_with_grind() -> ContactCues {
 }
 
 fn raised(race: &Race, slot: u8) -> Vec<oag_gameplay::cue::CueEvent> {
-    race.pending_cues()
+    race.sim
+        .pending_cues()
         .iter()
         .filter(|event| event.slot == slot)
         .copied()
@@ -177,7 +178,7 @@ fn raised(race: &Race, slot: u8) -> Vec<oag_gameplay::cue::CueEvent> {
 fn a_hard_craft_bump_is_a_craft_surface_hit_on_both_hulls() {
     let mut race = closing(20.0, hd());
     race.resolve_craft_pairs();
-    race.raise_impulse_cues();
+    race.sim.raise_impulse_cues();
     let impulse = race.pair_impulses[0];
     assert!(impulse > 18.0, "the fixture bump is too gentle: {impulse}");
     let severity = if impulse > 50.0 {
@@ -191,7 +192,7 @@ fn a_hard_craft_bump_is_a_craft_surface_hit_on_both_hulls() {
             .into_iter()
             .filter(|event| event.cue == Cue::Collision)
             .collect();
-        assert_eq!(hits.len(), 1, "slot {slot}: {:?}", race.pending_cues());
+        assert_eq!(hits.len(), 1, "slot {slot}: {:?}", race.sim.pending_cues());
         assert_eq!(
             hits[0].contact,
             Some(ContactCue {
@@ -208,7 +209,7 @@ fn a_hard_craft_bump_is_a_craft_surface_hit_on_both_hulls() {
 fn gentle_bump(contact_cues: ContactCues) -> Race {
     let mut race = closing(0.5, contact_cues);
     race.resolve_craft_pairs();
-    race.raise_impulse_cues();
+    race.sim.raise_impulse_cues();
     let impulse = race.pair_impulses[0];
     assert!(
         impulse > 0.5 && impulse < 18.0,
@@ -222,18 +223,22 @@ fn a_gentle_craft_bump_is_a_grind_for_the_person_and_silent_for_the_opponent() {
     let race = gentle_bump(hd_with_grind());
     let person: Vec<_> = raised(&race, 0).iter().map(|event| event.cue).collect();
     assert_eq!(person, [Cue::Grind]);
-    assert!(raised(&race, 1).is_empty(), "{:?}", race.pending_cues());
+    assert!(raised(&race, 1).is_empty(), "{:?}", race.sim.pending_cues());
 }
 
 #[test]
 fn hd_s_grind_is_held_back_and_its_hit_is_not() {
     assert!(!law().grind_played, "HD's grind is held back");
     let race = gentle_bump(hd());
-    assert!(race.pending_cues().is_empty(), "{:?}", race.pending_cues());
+    assert!(
+        race.sim.pending_cues().is_empty(),
+        "{:?}",
+        race.sim.pending_cues()
+    );
 
     let mut race = closing(20.0, hd());
     race.resolve_craft_pairs();
-    race.raise_impulse_cues();
+    race.sim.raise_impulse_cues();
     let cues: Vec<_> = raised(&race, 0).iter().map(|event| event.cue).collect();
     assert_eq!(
         cues,
@@ -246,9 +251,13 @@ fn hd_s_grind_is_held_back_and_its_hit_is_not() {
 fn the_re_armed_law_raises_no_impulse_cue_for_a_craft_bump() {
     let mut race = closing(20.0, ContactCues::Rearmed);
     race.resolve_craft_pairs();
-    race.raise_impulse_cues();
+    race.sim.raise_impulse_cues();
     assert!(race.pair_impulses[0] > 18.0);
-    assert!(race.pending_cues().is_empty(), "{:?}", race.pending_cues());
+    assert!(
+        race.sim.pending_cues().is_empty(),
+        "{:?}",
+        race.sim.pending_cues()
+    );
     assert!(
         race.sim
             .contact_impulse

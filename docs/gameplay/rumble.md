@@ -206,7 +206,7 @@ finishes the previous voice. Id 11 is why that slot has no file. The sign and un
 `oag_input::rumble::contact`). `oag_input::rumble::feed::Feed` turns a race's
 output into voices on one pad's `Player`; `oag_game::rumble::Rumbler` runs one
 per local person and writes each to the pad assigned to that person's slot. It
-reads the tick's cues **before** the sound drains them (`Race::pending_cues`),
+reads the tick's cues **before** the sound drains them (`RaceSim::pending_cues`),
 so one queue serves both, and it runs on every arm that ticks sound: racing,
 paused (patterns advance, output is zero) and finished.
 

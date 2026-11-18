@@ -42,8 +42,8 @@ fn a_rooms_rolls_assists_and_zone_target_reach_the_race() {
     let none = oag_gameplay::PlayerInputs::none();
 
     let (plain, _) = oag_net::race::load(&params(), &source).expect("loads");
-    assert!(plain.barrel_rolls());
-    assert_eq!(plain.pilot_assist_level_of(0), Level::Off);
+    assert!(plain.sim.barrel_rolls());
+    assert_eq!(plain.sim.pilot_assist_level_of(0), Level::Off);
 
     let room = RaceParams {
         no_barrel_rolls: true,
@@ -52,9 +52,12 @@ fn a_rooms_rolls_assists_and_zone_target_reach_the_race() {
         ..params()
     };
     let (mut race, _) = oag_net::race::load(&room, &source).expect("loads");
-    assert!(!race.barrel_rolls(), "rolls are off");
+    assert!(!race.sim.barrel_rolls(), "rolls are off");
     assert_eq!(
-        (race.pilot_assist_level_of(0), race.pilot_assist_level_of(1)),
+        (
+            race.sim.pilot_assist_level_of(0),
+            race.sim.pilot_assist_level_of(1)
+        ),
         (Level::Extreme, Level::Normal),
         "each seat flies its own level"
     );

@@ -434,7 +434,7 @@ fn state_of(session: &mut Session) -> State {
             .map(|endrace| if endrace.is_photo() { "photo" } else { "other" }.to_string());
         state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
         state.sim_tick = Some(stage.race.sim.world.tick);
-        state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
+        state.pilot_assist = Some(stage.race.sim.pilot_assist_level().name().to_string());
         state.ghost_visible = Some(stage.race.ghost_visible());
         state.recorded_events = stage.race.recorded_event_count();
         state.humans = Some(stage.race.sim.world.human_slots().count());
@@ -464,7 +464,8 @@ fn resolved(session: &Session) -> Option<Resolved> {
     };
     Some(Resolved {
         mods: race.map_or_else(Vec::new, |race| {
-            race.extension_reports()
+            race.sim
+                .extension_reports()
                 .into_iter()
                 .map(|r| r.mod_id)
                 .collect()
@@ -497,7 +498,7 @@ fn resolved(session: &Session) -> Option<Resolved> {
         mode: options.mode.name().to_string(),
         target: race
             .filter(|_| options.mode == oag_race::Mode::Eliminator)
-            .map(|race| race.eliminator_target()),
+            .map(|race| race.sim.eliminator_target()),
     })
 }
 

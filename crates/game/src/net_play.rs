@@ -635,7 +635,7 @@ impl NetPlay {
     /// Compares this client's board with the server's, once both exist, and says which. They
     /// are the same race (the tick hash proves the state), so a difference is a bug.
     fn check_server_board(&self, race: &Race) {
-        if self.board_checked.get() || !race.finished() || race.results().is_none() {
+        if self.board_checked.get() || !race.sim.finished() || race.results().is_none() {
             return;
         }
         let Some(theirs) = self.server_board() else {

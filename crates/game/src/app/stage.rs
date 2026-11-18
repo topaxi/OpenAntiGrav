@@ -657,19 +657,20 @@ impl Stage {
             campaign_skill: None,
             skill_level: None,
         };
-        race.apply_launch(&launch);
+        race.sim.apply_launch(&launch);
         if let Some(progress) = campaign_2048_event.as_ref() {
-            race.arm_event_xp(progress);
+            race.sim.arm_event_xp(progress);
         }
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");
             let skill = autopilot_skill.unwrap_or(difficulty);
             if let Some(pilot) = autopilot_pilot {
-                race.set_autopilot_pilot(pilot, skill);
+                race.sim.set_autopilot_pilot(pilot, skill);
             }
             if let Some(skill) = autopilot_skill {
                 info!("--autopilot-skill: flying at {}", skill.name());
-                race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+                race.sim
+                    .set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
             }
         }
         race.set_ghost_visible(settings.display.ghost_ship_shown(title));

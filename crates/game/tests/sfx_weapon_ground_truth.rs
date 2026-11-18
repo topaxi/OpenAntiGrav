@@ -128,7 +128,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     assert!(
-        race.ship_count() > 1,
+        race.sim.ship_count() > 1,
         "the fixture raced alone, so the LeachBeam below has no target"
     );
     let mut audio = oag_sound::Audio::open(
@@ -257,8 +257,8 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
     }
     let idle = voices(&audio);
 
-    let stats = race.quake_stats().expect("Pulse authors a Quake");
-    let length = race.course().expect("a course").length();
+    let stats = race.sim.quake_stats().expect("Pulse authors a Quake");
+    let length = race.sim.course().expect("a course").length();
     race.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
         0,
         length * 0.5,

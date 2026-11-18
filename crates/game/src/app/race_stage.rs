@@ -436,7 +436,7 @@ impl RaceStage {
     /// doc for why it takes primitives rather than a `&Race`.
     pub(crate) fn observation(&self) -> crate::records::Observation {
         let standing = self.race.player_standing();
-        let finished = self.race.finished();
+        let finished = self.race.sim.finished();
         // A scored race (an HD Eliminator) is placed on its points, the board's own order, which
         // the results table, the headline, the voice and the record all read.
         let place = self
@@ -573,7 +573,7 @@ impl RaceStage {
     /// `Launch::record_result`.
     pub(crate) fn campaign_tier_name(&self) -> Option<String> {
         let standing = self.race.player_standing();
-        let tier = self.campaign_tier(self.race.finished(), standing.best_lap_ticks)?;
+        let tier = self.campaign_tier(self.race.sim.finished(), standing.best_lap_ticks)?;
         Some(self.campaign_tiers().get(tier)?.name.clone())
     }
 

@@ -218,7 +218,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
         advance_one_tick(race, held, audio, options, tick);
         tick += 1;
         let tick_us = start.elapsed().as_secs_f64() * 1e6;
-        if race.finished() {
+        if race.sim.finished() {
             // The player's crossing ends the bench; the field running on
             // under the end-race screens is not what a lap costs.
             finished = true;

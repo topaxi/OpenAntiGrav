@@ -130,6 +130,7 @@ impl Session {
                 id: listing.id.clone(),
                 version: listing.version.clone(),
                 sha256: race
+                    .sim
                     .mods_used()
                     .iter()
                     .find(|used| used.id == listing.id)

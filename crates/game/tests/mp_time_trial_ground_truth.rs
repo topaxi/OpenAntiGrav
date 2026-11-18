@@ -104,11 +104,11 @@ fn the_board_is_ranked_by_total_time_and_names_both_people() {
     let Some(mut race) = people_race(oag_race::Mode::TimeTrial, 2) else {
         return;
     };
-    race.set_autopilot(true);
-    while !race.finished() && race.sim.world.tick < CAP {
+    race.sim.set_autopilot(true);
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.finished(), "still running after {CAP} ticks");
+    assert!(race.sim.finished(), "still running after {CAP} ticks");
     let board = race.results().expect("both people finished");
     assert_eq!(
         board.rows.len(),
@@ -173,7 +173,7 @@ fn two_windows_are_the_multiplayer_time_trial_too() {
     assert_eq!(world.ship_count, 2, "two craft");
     assert_eq!(world.human_slots().count(), 2, "both flown by a person");
     assert!(race.windowed());
-    assert_eq!(race.people(), 2);
+    assert_eq!(race.sim.people(), 2);
     assert_eq!(race.viewport_count(), 2, "the views the records gate reads");
 
     let apart = |race: &mut race::Race| {

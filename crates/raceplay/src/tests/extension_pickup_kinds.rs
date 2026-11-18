@@ -93,9 +93,12 @@ fn two_mods_each_hand_out_a_pickup_of_their_own_kind_and_neither_faults() {
     assert_eq!(race.sim.world.ships[0].pickup.weapon, kind(0));
     assert_eq!(race.sim.world.ships[1].pickup.weapon, kind(1));
     assert!(
-        race.extension_reports().iter().all(|r| r.faulted.is_none()),
+        race.sim
+            .extension_reports()
+            .iter()
+            .all(|r| r.faulted.is_none()),
         "{:?}",
-        race.extension_reports()
+        race.sim.extension_reports()
     );
 }
 

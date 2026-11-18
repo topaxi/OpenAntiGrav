@@ -107,7 +107,12 @@ fn cues_over(
     let mut seen = 0;
     for _ in 0..ticks {
         race.tick(&inputs());
-        seen += race.drain_cues().iter().filter(|e| e.cue == cue).count();
+        seen += race
+            .sim
+            .drain_cues()
+            .iter()
+            .filter(|e| e.cue == cue)
+            .count();
     }
     seen
 }

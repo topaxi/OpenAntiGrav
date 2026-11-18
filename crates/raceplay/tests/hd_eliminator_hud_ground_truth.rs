@@ -297,7 +297,7 @@ fn sweep_score_changes() {
     })
     .expect("loading an HD Eliminator");
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let mut out =
         String::from("t,craft,score,kills,w6f78,shield,lap,lap2,state,attacker,dmgcause,lastdmg\n");
     let mut last = [(f32::NAN, 0u32, 0u32, 0u32); 8];
@@ -421,11 +421,11 @@ fn race_to_target(
     .expect("loading an HD Eliminator");
     let mut race = oag_raceplay::Race::start(loaded.setup);
     assert_eq!(
-        race.pad_seeking(),
+        race.sim.pad_seeking(),
         oag_raceplay::PadSeeking::Off,
         "a score Eliminator's opponents steer for no pad"
     );
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     for tick in 0..60_000u64 {
         race.tick_sim_only(&PlayerInputs::none());
         if race.results().is_some() {

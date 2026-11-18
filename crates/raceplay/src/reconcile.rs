@@ -99,7 +99,7 @@ impl Race {
     /// **What still runs although it lives in the view**, because the
     /// simulation or the caller reads it back. The lock-on is not one of them:
     /// each person-flown slot's lock is simulation state
-    /// ([`Race::advance_locks`], hashed), advanced from the world with no camera, so
+    /// ([`RaceSim::advance_locks`], hashed), advanced from the world with no camera, so
     /// the chase camera and the reticle are never read by a shot, and a server
     /// with neither agrees with its client about a lock. The picture's reticle
     /// is advanced only by a drawn tick, and follows the lock.

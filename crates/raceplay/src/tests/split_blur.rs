@@ -47,7 +47,7 @@ pub(super) fn hull_scene(
         livery.hull.radius = 30.0;
         livery
     };
-    let liveries: Vec<_> = (0..race.ship_count()).map(|_| hull()).collect();
+    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| hull()).collect();
     scene_over_post(
         device,
         queue,

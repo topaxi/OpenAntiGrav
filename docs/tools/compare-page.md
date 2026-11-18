@@ -87,7 +87,7 @@ The Autopilot's icon with its `5.00` under it (the hexagon at the top, about x 2
 ours. `psp-pulse-pair.py --field` now records the player's held slot beside the timer (`original.held_pickup`: `+0x1bc` read **-1**,
 empty; `+0x1b8` read `0x800`, bit `0x1000` clear; `+0x148` the timer) and passes `--hud-autopilot SECONDS` when the timer is above zero
 and below the sane bound. The frame is the evidence for what draws the row: held empty, no `0x1000`, timer 5.0, and the icon and `5.00`
-are in `theirs.png`, so the row follows the timer, as ours' readout does (`Race::sub_weapon` and the icon fallback).
+are in `theirs.png`, so the row follows the timer, as ours' readout does (`RaceSim::sub_weapon` and the icon fallback).
 **`--give` was not the lever:** it acts inside a tick (`race_capture/tick.rs`) and a race shot runs none, and a held pickup shows no countdown until it
 runs. `--hud-autopilot` (a `CaptureHud` field, like `--hud-boost-phase`) draws the icon and countdown on the readout alone and leaves the
 race's own `autopilot_timer` at 0, so the craft is not handed to the driver and nothing in the simulation moves. `compare-rerender-ours.py`
@@ -1264,7 +1264,7 @@ at the one stop the screenshot is taken at. `just compare-rerender` re-makes it 
      history of a craft that has been flying: the field file carries `vel_x,vel_y,vel_z` per row (the body's velocity read at the same
      stop: PSP `body+0x140`, HD `body+0x190`, units per second; HD's agree with the forward axis and `|v| * 3.6` is the HUD's km/h) and a
      slot 0 row for the player, and ours replays **the exhaust alone** (no physics, AI, pad, lap, weapon or clock step; `world.tick`
-     stays 0) for `Race::field_warm_up_ticks` steps (the intensity's full climb, 1 / 0.25 s, plus a full HD tube: 294 ticks at 60 Hz),
+     stays 0) for `RaceSim::field_warm_up_ticks` steps (the intensity's full climb, 1 / 0.25 s, plus a full HD tube: 294 ticks at 60 Hz),
      each craft on a straight path that ends exactly on its captured pose. A file without the columns is refused by name, never given a
      guessed velocity. **Chosen, not measured:** the straight path and fixed heading (the original's craft had curved, so a ribbon in
      a corner leans where ours is straight) and full thrust for every craft (the player's throttle reads 100; an opponent's is not

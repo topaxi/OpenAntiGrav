@@ -43,7 +43,7 @@ fn beamed(ticks: usize) -> Option<race::Race> {
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle()));
     }
-    assert!(race.force_leach_lock(0, 1), "Pulse authors a LeachBeam");
+    assert!(race.sim.force_leach_lock(0, 1), "Pulse authors a LeachBeam");
     for _ in 0..ticks {
         race.tick(&PlayerInputs::single(throttle()));
     }

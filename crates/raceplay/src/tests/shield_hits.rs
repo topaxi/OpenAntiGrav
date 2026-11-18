@@ -119,7 +119,8 @@ fn step(race: &mut Race, buttons: &mut Buttons, fire: bool) -> bool {
     }
     let snapshot = buttons.tick(if fire { SQUARE } else { 0 });
     race.tick(&PlayerInputs::single(snapshot));
-    race.drain_cues()
+    race.sim
+        .drain_cues()
         .into_iter()
         .any(|e| e.cue == oag_gameplay::cue::Cue::RocketHitShip)
 }

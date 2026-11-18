@@ -45,8 +45,8 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
     // Past the 0.75-second fizzle the unlocked arm runs on - which is an engine
     // literal rather than this fixture's `active_time`, so the loop is sized on
     // the constant itself rather than on the table.
-    let ticks = (oag_weapons::projectile::leach_beam::UNLOCKED_FIZZLE_SECONDS / race.dt()).ceil()
-        as usize
+    let ticks = (oag_weapons::projectile::leach_beam::UNLOCKED_FIZZLE_SECONDS / race.sim.dt())
+        .ceil() as usize
         + 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::single(buttons.tick(0)));
@@ -77,7 +77,7 @@ fn a_leach_beam_press_at_the_limit_spends_the_pickup_and_fires_nothing() {
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
     assert_eq!(race.sim.world.leach_beams_live(), 1);
-    race.drain_cues();
+    race.sim.drain_cues();
 
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     let before = race.sim.world.leach_beams;
@@ -95,7 +95,7 @@ fn a_leach_beam_press_at_the_limit_spends_the_pickup_and_fires_nothing() {
         before[1..],
         "no further entry arms"
     );
-    let fired = race.drain_cues().into_iter().any(|cue| {
+    let fired = race.sim.drain_cues().into_iter().any(|cue| {
         matches!(
             cue.cue,
             oag_gameplay::cue::Cue::Leach | oag_gameplay::cue::Cue::LeachFail
@@ -218,8 +218,8 @@ fn two_live_leach_beams_each_drain_their_own_victim() {
     }
     let beam =
         |owner, target| oag_weapons::projectile::leach_beam::Beam::locked(owner, target, &stats);
-    assert!(race.arm_leach_beam(beam(0, 1)));
-    assert!(race.arm_leach_beam(beam(0, 2)));
+    assert!(race.sim.arm_leach_beam(beam(0, 1)));
+    assert!(race.sim.arm_leach_beam(beam(0, 2)));
     assert_eq!(race.sim.world.leach_beams_live(), 2);
 
     race.tick(&PlayerInputs::none());
@@ -439,7 +439,7 @@ fn the_leach_beam_locks_only_once_its_reticle_has() {
 
 /// A second person's LeachBeam locks on what is in front of *their* craft.
 ///
-/// `Race::sight_target` used to measure from `ships[0]` and read slot 0's
+/// `RaceSim::sight_target` used to measure from `ships[0]` and read slot 0's
 /// held weapon, so slot 1 pressing fire with a rival dead ahead of it got the
 /// unlocked arm (slot 0 held nothing, and had it held one, the window would
 /// have been slot 0's). Here slot 0 is the rival, parked 60 units ahead of
@@ -463,7 +463,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
         race.sim.world.ships[0].physics.body.orientation;
     race.sim.world.ships[1].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     assert_eq!(
-        race.sight_target(1),
+        race.sim.sight_target(1),
         None,
         "nothing is in front of slot 1 before the rival is parked"
     );
@@ -476,7 +476,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
         race.sim.world.ships[1].physics.body.linear_velocity = Vec3::ZERO;
         if tick == 0 {
             assert_eq!(
-                race.sight_target(1),
+                race.sim.sight_target(1),
                 Some(0),
                 "slot 1's own window does not find the rival ahead of it"
             );
@@ -498,7 +498,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
 /// **The player's own beam drains on the title's cadence**, as an opponent's
 /// does: once a ball trip where the title says `PerTrip` (HD, and the titles
 /// that inherit its law), every tick where it says `PerTick` (Pulse). See
-/// `oag_title::weapons::LeachDrain` and `Race::locked_leach_beam`.
+/// `oag_title::weapons::LeachDrain` and `RaceSim::locked_leach_beam`.
 #[test]
 fn the_players_locked_beam_takes_the_titles_drain_cadence() {
     let fire = |drain: oag_title::weapons::LeachDrain| {

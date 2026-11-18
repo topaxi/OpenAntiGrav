@@ -114,7 +114,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
 fn the_discs_cannon_block_decodes() {
     let Some(loaded) = single_race() else { return };
     let race = race::Race::start(loaded.setup);
-    let cannon = race.cannon_stats().expect("the disc authors a Cannon");
+    let cannon = race.sim.cannon_stats().expect("the disc authors a Cannon");
 
     assert!(cannon.absorb > 0.0, "no authored absorb: {cannon:?}");
     assert!(cannon.rounds > 0.0, "no authored rounds: {cannon:?}");
@@ -146,7 +146,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let cannon = race.cannon_stats().expect("the disc authors a Cannon");
+    let cannon = race.sim.cannon_stats().expect("the disc authors a Cannon");
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Cannon);
 
     // Long enough that a self-firing countdown would have gone off many times
@@ -264,7 +264,7 @@ fn an_opponent_holding_a_cannon_fires_it_with_no_button_anywhere() {
     };
     let count = usize::from(race.sim.world.ship_count);
     assert!(count > 1, "a single race should grid more than one craft");
-    let cannon = race.cannon_stats().expect("the disc authors a Cannon");
+    let cannon = race.sim.cannon_stats().expect("the disc authors a Cannon");
     for slot in 1..count {
         race.sim.world.ships[slot].pickup.weapon = Some(Weapon::Cannon);
     }

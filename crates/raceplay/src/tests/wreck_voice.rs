@@ -1,6 +1,6 @@
 //! `cont_elim`, the one sound an opponent's destruction makes in the original:
 //! raised once per wreck, 2.3 s after the craft is down, in every mode but the
-//! Eliminator, for the player never. `Race::tick_wreck_voice`.
+//! Eliminator, for the player never. `RaceSim::tick_wreck_voice`.
 
 use super::*;
 use oag_gameplay::PlayerInputs;
@@ -27,7 +27,7 @@ fn raised(mode: Mode, voiced: bool, down: &[usize]) -> Vec<(u64, usize)> {
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
         let stepped = race.sim.world.tick - 1;
-        for event in race.drain_cues() {
+        for event in race.sim.drain_cues() {
             if event.cue == Cue::ContElim {
                 out.push((stepped, usize::from(event.slot)));
             }

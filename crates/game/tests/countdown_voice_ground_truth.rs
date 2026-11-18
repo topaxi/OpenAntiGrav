@@ -140,7 +140,7 @@ fn countdown(source: &Path, class: &str, mode: oag_race::Mode, name: &str, ticks
         // already moved on by the time it returns.
         race.tick(&PlayerInputs::none());
         let stepped = race.sim.world.tick - 1;
-        for event in race.pending_cues() {
+        for event in race.sim.pending_cues() {
             if matches!(event.cue, Cue::Ready | Cue::Go) {
                 raised.push((stepped, event.cue));
             }

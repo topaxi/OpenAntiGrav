@@ -370,8 +370,9 @@ fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race:
         cli.driver.ai,
         crate::ai_choice::Source::Free(difficulty),
     );
-    race.set_control_scheme(scheme);
-    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
+    race.sim.set_control_scheme(scheme);
+    race.sim
+        .set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
     race
 }
 
@@ -452,7 +453,7 @@ pub(crate) fn write_trace(
         .and(cli.pose_boost)
         .filter(|_| cli.ticks == 0);
     if let Some(velocities) = field_warmup_velocities(cli)? {
-        race.warm_up_field(&velocities, race.field_warm_up_ticks(), warmed_boost);
+        race.warm_up_field(&velocities, race.sim.field_warm_up_ticks(), warmed_boost);
     }
 
     // Built from the world rather than from `Telemetry`, which carries a summary

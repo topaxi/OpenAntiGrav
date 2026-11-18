@@ -902,7 +902,7 @@ impl Session {
                     // The finished player's thrust reads the same scale:
                     // `AI_ResolveSkillScale` is its one source too.
                     if let Some(scale) = race_stage.campaign_ai_skill_scale {
-                        race_stage.race.apply_campaign_skill(scale);
+                        race_stage.race.sim.apply_campaign_skill(scale);
                     }
                     // **Whose driver flies the opponents** (`crate::ai_choice`):
                     // the original's, in every race with opponents, unless
@@ -925,7 +925,7 @@ impl Session {
                         race_stage.campaign_difficulty,
                     );
                     if let Some(pilot) = custom.as_ref().and_then(|c| c.pilot.as_ref()) {
-                        race_stage.race.set_opponent_pilot(pilot, ai_difficulty);
+                        race_stage.race.sim.set_opponent_pilot(pilot, ai_difficulty);
                     }
                     let source = if let Some(custom) = custom.as_ref()
                         && custom.ai == crate::campaign::custom::Ai::Ours

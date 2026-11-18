@@ -808,7 +808,7 @@ fixed.
    for them). A room's value is capped at 20 (Omega's slider) and zeroed in the other modes. `oag-server
    --laps`, `oag-game --online-laps`.
 2. **A leaver held the finish open.** A seat whose person left kept repeating its last input and
-   `Race::finished` still counted it as a person, so the race ran to the tick limit (30 minutes). Now
+   `RaceSim::finished` still counted it as a person, so the race ran to the tick limit (30 minutes). Now
    `TickRecord.retired` (a cumulative seat mask, one byte a record) carries the departure: from the
    record it first appears in, **both ends** set that slot's controller to `Away`, the opponent
    driver below racing pace with the pickup kept (`race::retire`; a returning person is handed the
@@ -1007,13 +1007,13 @@ Wire v1 was edited in place. The lobby validates (`Rooms::validate`: a zone targ
 raised or lowered into 15 to 55) and builds the params at launch (`launch_for`). Both ends then
 call `oag_net::race::prepare`, the one function that already forced Pilot Assist off, which now:
 
-- sets each seat's level from `assists` (`Race::set_pilot_assist_seat`; the level is per slot in the
+- sets each seat's level from `assists` (`RaceSim::set_pilot_assist_seat`; the level is per slot in the
   sim now, `Sim::pilot_assist_levels`), which is the lobby's gate: with the room's assist off,
   every entry is `0`;
-- turns barrel rolls off for every craft, the AI included (`Race::set_barrel_rolls`, read as
+- turns barrel rolls off for every craft, the AI included (`RaceSim::set_barrel_rolls`, read as
   `Environment::barrel_rolls` in `oag_physics::forces`; the gesture is never read, so no roll arms
   and no shield is spent);
-- gives a Zone race its ending (`Race::set_zone_target`, `RaceState::zone_target`: the race ends
+- gives a Zone race its ending (`RaceSim::set_zone_target`, `RaceState::zone_target`: the race ends
   on the step that reaches the target zone; a zone is 600 ticks). **Chosen, not measured**:
   Omega's slider is the only zone target a race ever has, and the original's own Zone ends only on
   destruction. `RaceState::zone_target` is hashed only while set, so every race without one keeps

@@ -14,7 +14,7 @@
 //!
 //! Single Race (weapons and damage on) with an empty grid, so two races differ only by
 //! the player's craft. The mod's pickup (`Weapon::Extension`) is put in the craft's hands
-//! at the start, which is what a weapon pad does under the mod's `pickup-roll`. This project's driver flies the craft (`Race::set_autopilot`);
+//! at the start, which is what a weapon pad does under the mod's `pickup-roll`. This project's driver flies the craft (`RaceSim::set_autopilot`);
 //! fire and absorb are pressed by the script.
 #![cfg(feature = "extensions")]
 
@@ -97,7 +97,7 @@ fn race_on(
     let mut race = race::Race::start(loaded.setup);
     // This project's driver steers (a scripted stick finds the first bend's wall); the
     // buttons below still reach the pickup and the mod.
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let ship = &mut race.sim.world.ships[0];
     ship.physics.shield = ship.handling.dimensions.shield * 0.5;
     if turbo {
@@ -170,7 +170,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
         return;
     };
     let mut carried = race_with(Some(&source), true).unwrap();
-    assert!(boosted.is_modded());
+    assert!(boosted.sim.is_modded());
     const FIRE: std::ops::Range<u32> = 360..480;
     let a = drive(&mut boosted, 0..480, FIRE, None);
     let b = drive(&mut carried, 0..480, 0..0, None);
@@ -439,7 +439,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
     let mut modded = race::Race::start(loaded.setup);
-    assert!(modded.is_modded());
+    assert!(modded.sim.is_modded());
     modded.start_recording(oag_replay::Header::new(
         "pulse",
         TRACK,
@@ -534,7 +534,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let ran = race::replay::resimulate(&vanilla, &image, &[], std::slice::from_ref(&source))
         .expect("builds");
     assert!(
-        !ran.race.is_modded(),
+        !ran.race.sim.is_modded(),
         "the recording named no module, so none runs"
     );
 }

@@ -53,7 +53,7 @@ fn the_reversed_grid_lands_on_the_track_too() {
     let race = race::Race::start(loaded.setup);
 
     assert_eq!(
-        race.ship_count(),
+        race.sim.ship_count(),
         8,
         "16_Track reversed should field a full grid"
     );
@@ -73,6 +73,7 @@ fn the_reversed_grid_lands_on_the_track_too() {
     for (index, ship) in ships.iter().enumerate() {
         let position = ship.physics.body.position;
         let distance = race
+            .sim
             .spline()
             .distance_to(position)
             .expect("the track has samples");

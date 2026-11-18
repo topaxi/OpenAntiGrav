@@ -59,7 +59,7 @@ impl crate::Race {
                     left: transit.ticks_left,
                     ..seat
                 }),
-                (Some(transit), _) => self.transit_seat(slot, transit),
+                (Some(transit), _) => self.sim.transit_seat(slot, transit),
             };
             self.view.transit_seats[slot] = seat;
         }
@@ -73,16 +73,18 @@ impl crate::Race {
             _ => self.sim.dt,
         }
     }
+}
 
+impl crate::RaceSim {
     /// The seat of `slot`'s craft as its transit starts. `None` with no course or road to
     /// frame the pair on, which leaves the camera on the frozen craft.
     fn transit_seat(&self, slot: usize, transit: oag_gameplay::Transit) -> Option<Seat> {
         use oag_render::camera::portal::{Face, through};
 
-        let course = self.sim.course.as_ref()?;
-        let ship = &self.sim.world.ships[slot];
+        let course = self.course.as_ref()?;
+        let ship = &self.world.ships[slot];
         let stands = ship.standing.progress?;
-        let speed = ship.physics.body.linear_velocity.length() * self.sim.dt;
+        let speed = ship.physics.body.linear_velocity.length() * self.dt;
         let entrance = crate::transit::Exit::ring(course.index_at_progress(stands)?);
         let exit = crate::transit::Exit {
             to: transit.to as usize,
@@ -94,12 +96,12 @@ impl crate::Race {
         )
         .inverse();
         let placed = crate::breadcrumbs::emerge(
-            &self.sim.spline,
+            &self.spline,
             self.exit_position(exit)?,
             transit.exit_speed,
         )?;
         // It flies the exit tick's step before its camera first sees it.
-        let position = placed.pose.position + placed.velocity * self.sim.dt;
+        let position = placed.pose.position + placed.velocity * self.dt;
         Some(Seat {
             target: Target {
                 position: back.transform_point3(position),
@@ -112,7 +114,9 @@ impl crate::Race {
             left: transit.ticks_left,
         })
     }
+}
 
+impl crate::Race {
     /// `target`, `slot`'s craft as a camera follows it: for a craft in a transit, eased onto
     /// its seat and flown on from there; `target` itself for a craft in the world.
     pub(super) fn seated(&self, slot: usize, target: Target) -> Target {
@@ -190,11 +194,11 @@ impl crate::Race {
     }
 
     /// Whether `slot`'s hull is drawn in the view being drawn: a craft in the world
-    /// ([`Self::ship_active`]), or the view's own craft flown through a backdrop
+    /// ([`RaceSim::ship_active`](crate::RaceSim::ship_active)), or the view's own craft flown through a backdrop
     /// ([`Self::ship_flown_in_view`]).
     #[must_use]
     pub fn ship_drawn(&self, slot: usize) -> bool {
-        self.ship_active(slot) || self.ship_flown_in_view(slot)
+        self.sim.ship_active(slot) || self.ship_flown_in_view(slot)
     }
 
     /// The rigid frame of the craft the view being drawn follows, in the world: its right, up

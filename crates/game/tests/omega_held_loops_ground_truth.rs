@@ -208,7 +208,7 @@ fn the_leach_attach_plays_once_while_the_beam_holds(grid: &mut Grid) {
         "_NGP_LEACHATTACH",
         0,
         |race| {
-            assert!(race.ship_count() > 1, "the beam needs a second craft");
+            assert!(race.sim.ship_count() > 1, "the beam needs a second craft");
             race.sim.world.leach_beams[0] = Some(oag_weapons::projectile::leach_beam::Beam {
                 owner: 0,
                 target: 1,

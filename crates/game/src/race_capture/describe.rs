@@ -12,11 +12,11 @@ use super::*;
 pub fn observation(race: &Race) -> crate::records::Observation {
     let standing = &race.sim.world.ships[0].standing;
     crate::records::Observation {
-        finished: race.finished(),
+        finished: race.sim.finished(),
         place: Some(race.player_place()),
         laps_completed: crate::records::laps_completed(
             standing.lap,
-            race.finished(),
+            race.sim.finished(),
             race.sim.world.laps_target(),
         ),
         tick: oag_race::race_clock_ticks(standing.finish_tick.unwrap_or(race.sim.world.tick)),

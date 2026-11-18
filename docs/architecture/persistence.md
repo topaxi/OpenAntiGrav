@@ -154,7 +154,7 @@ resume path during review, not by a test, since neither capture site's own
 unit tests touch `Session` at all.
 
 The second site exists because `oag_race::Mode::laps_target` is `None` for
-Speed Lap and Zone, so `Race::finished` never turns `true` for either mode -
+Speed Lap and Zone, so `RaceSim::finished` never turns `true` for either mode -
 and Speed Lap's entire purpose is a fast lap time. Leaving a race is the one
 exit every mode has in common; finishing is not. See ADR-0049 for the full
 reasoning, including what this still cannot catch (a hard quit or a crash

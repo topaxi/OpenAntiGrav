@@ -305,7 +305,7 @@ impl Race {
     /// same "no evicting a running effect" rule
     /// [`weapons::visuals::advance_one_flare`]'s own flare-stage fallback
     /// takes. The hemispheres' frame is read off the track here, see
-    /// [`Race::track_frame_at`].
+    /// [`RaceSim::track_frame_at`].
     ///
     /// Called from [`Race::ignite_blast`] for every Plasma detonation - a
     /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
@@ -315,7 +315,7 @@ impl Race {
         if !self.view.hd_plasma_blast && self.view.plasma_blast_law.is_none() {
             return;
         }
-        let frame = self.track_frame_at(position);
+        let frame = self.sim.track_frame_at(position);
         if let Some(slot) = self.view.plasma_blasts.iter().position(Option::is_none) {
             self.view.plasma_blasts[slot] = Some(PlasmaBlast {
                 position,
@@ -422,7 +422,9 @@ impl Race {
             ))
         })
     }
+}
 
+impl RaceSim {
     /// `(heading, up, right)` of the circuit at the sample nearest `position`:
     /// the tangent, the sample's own up (the negated down axis, made square to
     /// the heading) and `heading x up`. The axes the original's first
@@ -432,7 +434,7 @@ impl Race {
     /// track-fit `PlasmaBlast_Construct` builds is inferred, not read**. A
     /// circuit with no spline gets the world axes.
     fn track_frame_at(&self, position: Vec3) -> [Vec3; 3] {
-        let Some((_, sample, _)) = self.sim.spline.nearest(position) else {
+        let Some((_, sample, _)) = self.spline.nearest(position) else {
             return [Vec3::NEG_Z, Vec3::Y, Vec3::X];
         };
         let up = (-Vec3::from_array(sample.down))
@@ -444,7 +446,9 @@ impl Race {
             .unwrap_or_else(|| up.any_orthonormal_vector());
         [heading, up, heading.cross(up)]
     }
+}
 
+impl Race {
     /// Ages every live blast one tick, steps its three scale eases and
     /// retires whichever just crossed its title's own lifetime -
     /// `PlasmaBlastLaw::life` on Pulse and Pure, [`HD_BLAST_LIFETIME_SECONDS`]
@@ -583,7 +587,7 @@ impl Race {
 
 /// The frame Pulse's two hemispheres are placed in, world-fixed from the
 /// detonation: local `x` along the track's heading, `y` its up and `z` its
-/// right, translated to `position` ([`Race::track_frame_at`] has what this
+/// right, translated to `position` ([`RaceSim::track_frame_at`] has what this
 /// frame is read off and what is inferred).
 fn pulse_frame(position: Vec3, [heading, up, right]: [Vec3; 3]) -> Mat4 {
     Mat4::from_cols(

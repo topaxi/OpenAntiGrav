@@ -32,7 +32,7 @@ fn recording(ticks: u64, events: &[(u64, Level)]) -> (Replay, Vec<String>) {
             race.change_pilot_assist(*level);
         }
         race.tick(&inputs(tick));
-        race.drain_cues();
+        race.sim.drain_cues();
         text.push(format!("{:?}", race.sim));
     }
     (race.recorded().expect("recording"), text)
@@ -87,10 +87,10 @@ fn an_event_on_a_keyframes_own_tick_applies_after_it() {
     let (replay, _) = recording(TICKS, &[(at, Level::Extreme)]);
     let mut timeline = opened(replay);
     timeline.seek(at).expect("in the prefix");
-    let before = timeline.probe().pilot_assist_level();
+    let before = timeline.probe().sim.pilot_assist_level();
     timeline.seek(at + 1).expect("in the prefix");
-    assert_ne!(before, timeline.probe().pilot_assist_level());
-    assert_eq!(timeline.probe().pilot_assist_level(), Level::Extreme);
+    assert_ne!(before, timeline.probe().sim.pilot_assist_level());
+    assert_eq!(timeline.probe().sim.pilot_assist_level(), Level::Extreme);
 }
 
 #[test]
@@ -187,9 +187,9 @@ fn a_visit_leaves_the_live_race_as_it_found_it() {
     let mut timeline = Timeline::live(fixture(), &visited);
     for tick in 0..TICKS {
         alone.tick(&inputs(tick));
-        alone.drain_cues();
+        alone.sim.drain_cues();
         visited.tick(&inputs(tick));
-        visited.drain_cues();
+        visited.sim.drain_cues();
         timeline.keep(&visited);
         if tick == 299 {
             let before = format!("{:?}", visited.sim);
@@ -212,7 +212,7 @@ fn a_race_that_records_nothing_rewinds_to_whole_keyframes() {
     let mut timeline = Timeline::live(fixture(), &race);
     for tick in 0..130 {
         race.tick(&inputs(tick));
-        race.drain_cues();
+        race.sim.drain_cues();
         timeline.keep(&race);
     }
     timeline.visit(&race);
@@ -241,7 +241,7 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
             );
         }
         race.tick(&inputs(tick));
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     let replay = race.recorded().expect("recording");
     assert_eq!(

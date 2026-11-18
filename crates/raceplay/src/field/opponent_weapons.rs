@@ -20,20 +20,19 @@
 use super::*;
 use oag_weapons::Craft as _;
 
-impl Race {
-    /// Fires an opponent's Missile, once `Race::opponent_decides` has decided to.
+impl RaceSim {
+    /// Fires an opponent's Missile, once `RaceSim::opponent_decides` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
     ///
     /// **Two gates rather than one**, and they answer different questions.
-    /// `Race::opponent_decides` is the *driver's*: has the roll come up, with
-    /// something in the shot's path. `Race::fire_missile` then runs the
+    /// `RaceSim::opponent_decides` is the *driver's*: has the roll come up, with
+    /// something in the shot's path. `RaceSim::fire_missile` then runs the
     /// *weapon's* - `Ship_AcquireLock`'s recovered window, cone and along-track
     /// screen - and declines if nothing is lockable.
     pub(crate) fn fire_opponent_missile(&mut self, slot: usize) -> bool {
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::missile)
@@ -43,7 +42,7 @@ impl Race {
         self.fire_missile(slot, &stats)
     }
 
-    /// Fires an opponent's Rocket, once `Race::opponent_decides` has decided to.
+    /// Fires an opponent's Rocket, once `RaceSim::opponent_decides` has decided to.
     ///
     /// Returns whether anything left the rails, so the caller knows whether to
     /// spend the pickup.
@@ -56,22 +55,21 @@ impl Race {
     /// `an_opponents_rocket_is_owned_by_the_slot_that_fired_it` pins it.
     pub(crate) fn fire_opponent_rocket(&mut self, slot: usize) -> bool {
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::rocket)
         else {
             return false;
         };
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         // `None` where the weapon table authors a speed per class and this
         // race's rung is outside them - the shot does not happen rather than
         // flying at a rung it was not tuned for.
         let Some(fired) = oag_weapons::projectile::fire_rocket(
-            &mut self.sim.world.projectiles,
+            &mut self.world.projectiles,
             &ship.physics,
             &stats,
-            &self.sim.class,
+            &self.class,
             slot as u8,
             ship.weapon_counts.rockets,
             ship.launch_normal(),
@@ -92,7 +90,7 @@ impl Race {
     /// only one Quake can be in flight in the whole race, so a driver that
     /// wants to fire into an already-travelling wave simply keeps the
     /// pickup, the same as a full projectile pool would. Whether to fire is
-    /// `Race::opponent_decides`'s, as for every forward weapon; under the
+    /// `RaceSim::opponent_decides`'s, as for every forward weapon; under the
     /// original's law the Quake is the one that needs nothing in its path.
     fn fire_opponent_quake(&mut self, slot: usize) -> bool {
         // Chosen, not measured: a driver that wants a Quake while a wave is up
@@ -132,26 +130,25 @@ impl Race {
             return false;
         }
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
         };
-        let count = self.sim.world.ship_count as usize;
-        let ship = &self.sim.world.ships[slot];
-        // The same window `Race::sight_target` runs for the player, from the
+        let count = self.world.ship_count as usize;
+        let ship = &self.world.ships[slot];
+        // The same window `RaceSim::sight_target` runs for the player, from the
         // craft's own position - the LeachBeam has no recovered launch offset to
         // measure from, so neither path invents one.
         let Some(target) = oag_weapons::projectile::missile::lock_window(
-            &self.sim.world.ships[..count],
+            &self.world.ships[..count],
             slot as u8,
             ship.physics.body.position,
             ship.physics.body.forward(),
             stats.lock_min_dist,
             stats.lock_max_dist,
-            self.sim.course.as_deref().map(oag_race::Course::length),
+            self.course.as_deref().map(oag_race::Course::length),
         ) else {
             return false;
         };
@@ -159,7 +156,7 @@ impl Race {
         // LeachBeam case pushes - an opponent only ever fires this weapon
         // with a lock (this function's own gate, above), so there is no
         // unlocked arm to reach here at all.
-        self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+        self.cues.push(oag_gameplay::cue::CueEvent::new(
             oag_gameplay::cue::Cue::Leach,
             slot,
         ));
@@ -174,21 +171,20 @@ impl Race {
     /// craft's hands rather than cashing it in - the `&&`-chain bug
     /// `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup` covers.
     ///
-    /// Whether to fire is `Race::opponent_decides`'s. Under the original's law
+    /// Whether to fire is `RaceSim::opponent_decides`'s. Under the original's law
     /// the Plasma differs from the Rocket in two read places only: its own
     /// `WeaponAIstats.xml` row and its own shot speed in the path test.
     fn fire_opponent_plasma(&mut self, slot: usize) -> bool {
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::plasma)
         else {
             return false;
         };
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let Some((position, velocity)) =
-            oag_weapons::projectile::plasma::launch(ship, &stats, &self.sim.class)
+            oag_weapons::projectile::plasma::launch(ship, &stats, &self.class)
         else {
             return false;
         };
@@ -197,7 +193,7 @@ impl Race {
         // `oag_weapons::projectile::plasma::CHARGE_SECONDS`. An opponent's
         // charging bolt occupies the array the same way, so the
         // "none already in flight" gate above sees it.
-        self.sim.world.projectiles.charge_up(
+        self.world.projectiles.charge_up(
             position,
             velocity,
             slot as u8,
@@ -207,8 +203,8 @@ impl Race {
 
     /// Throws an opponent's blade, if its driver wants a shot now.
     ///
-    /// Returns whether anything left, for [`Race::fire_opponent_plasma`]'s
-    /// reason; whether to throw is `Race::opponent_decides`'s.
+    /// Returns whether anything left, for [`RaceSim::fire_opponent_plasma`]'s
+    /// reason; whether to throw is `RaceSim::opponent_decides`'s.
     ///
     /// **The coin is drawn from the world's generator here exactly as it is on
     /// the player's path**, and only once there is room in the array - see
@@ -218,42 +214,43 @@ impl Race {
     /// holding a Shuriken this tick.
     fn throw_opponent_shuriken(&mut self, slot: usize) -> bool {
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::shuriken)
         else {
             return false;
         };
-        if self.sim.world.projectiles.live() >= oag_weapons::projectile::MAX_PROJECTILES {
+        if self.world.projectiles.live() >= oag_weapons::projectile::MAX_PROJECTILES {
             return false;
         }
         let Some(thrown) = oag_weapons::projectile::shuriken::fire(
-            &mut self.sim.world.projectiles,
-            &self.sim.world.ships[slot],
+            &mut self.world.projectiles,
+            &self.world.ships[slot],
             &stats,
-            &self.sim.class,
-            &mut self.sim.world.rng,
+            &self.class,
+            &mut self.world.rng,
             slot as u8,
         ) else {
             return false;
         };
         if thrown {
-            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+            self.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::ShurikenLaunch,
                 slot,
             ));
         }
         thrown
     }
+}
 
+impl Race {
     /// What an opponent does with a pickup it is holding.
     ///
     /// # When a forward weapon fires or is absorbed is the original's; the rest is policy
     ///
     /// **`WeaponAi_DecideFireOrAbsorb` (`0x088518b4`) is ported**, fire
     /// and absorb halves:
-    /// `Race::opponent_decides` asks `oag_ai::weapon_ai` for the Rocket,
+    /// `RaceSim::opponent_decides` asks `oag_ai::weapon_ai` for the Rocket,
     /// Missile, Plasma, Shuriken, LeachBeam, Repulser and Quake, on the odds out
     /// of the title's `WeaponAIstats.xml`, and falls back to
     /// `oag_ai::Driver::wants_to_fire` (fire only) where that file was not
@@ -266,7 +263,7 @@ impl Race {
     ///   turbo spent into a wall. The original fires it on the roll alone;
     ///   this gate is chosen. It arms that craft's own boost plume, the same
     ///   reuse the player's Turbo makes of the speed pad's visual.
-    /// - **A forward weapon is fired or absorbed when `Race::opponent_decides`
+    /// - **A forward weapon is fired or absorbed when `RaceSim::opponent_decides`
     ///   says so**, and kept rather than spent when it says hold, or when the
     ///   weapon itself declines (no lock, no authored stats, no free slot).
     /// - **An Autopilot flies the original's player driver for its `time` at
@@ -275,7 +272,7 @@ impl Race {
     ///   the title's `oag_title::RaceDefaults::opponent_autopilot` at the
     ///   race's class, measured faster on every class and, at RAPIER and
     ///   PHANTOM, less safe (`docs/gameplay/ai.md`);
-    ///   `Race::set_opponent_autopilot` overrides it.
+    ///   `RaceSim::set_opponent_autopilot` overrides it.
     ///   It is named here rather than left to fall through the default below,
     ///   because "no effect by design" and "no arm written yet" must not look
     ///   the same in this file.
@@ -305,7 +302,7 @@ impl Race {
             return;
         }
         // Before anything returns: it advances this craft's weapon-AI clocks.
-        let decision = self.opponent_decides(slot, field);
+        let decision = self.sim.opponent_decides(slot, field);
         if let Some(pace) = self.sim.score_pace
             && self.sim.world.ships[slot].weapon_ai.held_ticks < pace.hold_ticks
         {
@@ -352,7 +349,7 @@ impl Race {
                 self.eliminator_absorb(slot);
                 return;
             }
-            self.absorb_opponent_pickup(slot, absorb);
+            self.sim.absorb_opponent_pickup(slot, absorb);
             return;
         }
 
@@ -411,7 +408,7 @@ impl Race {
             let route = ship.driver.branching.route;
             let context = oag_ai::Context {
                 air_trim: 0.0,
-                line: self.line_of(slot),
+                line: self.sim.line_of(slot),
                 tuning: &self.sim.ai_tuning,
                 pilot: &self.sim.ai_pilots[slot],
                 field,
@@ -446,41 +443,41 @@ impl Race {
             // effectively the tick it collected it. The comment that used to sit
             // here claimed the opposite in as many words. See
             // `an_opponent_that_declines_a_shot_does_not_absorb_the_pickup`.
-            if !fires || !self.fire_opponent_rocket(slot) {
+            if !fires || !self.sim.fire_opponent_rocket(slot) {
                 // No target, no authored rocket or no free slot. Keep it - the
                 // same rule the player's path follows, which is a `match` with
                 // early returns and always did.
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Missile {
-            if !fires || !self.fire_opponent_missile(slot) {
+            if !fires || !self.sim.fire_opponent_missile(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Plasma {
-            if !fires || !self.fire_opponent_plasma(slot) {
+            if !fires || !self.sim.fire_opponent_plasma(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Shuriken {
-            if !fires || !self.throw_opponent_shuriken(slot) {
+            if !fires || !self.sim.throw_opponent_shuriken(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Quake {
-            if !fires || !self.fire_opponent_quake(slot) {
+            if !fires || !self.sim.fire_opponent_quake(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Repulser {
-            if !fires || !self.fire_repulser(slot) {
+            if !fires || !self.sim.fire_repulser(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::LeachBeam {
-            if !fires || !self.fire_opponent_leach_beam(slot) {
+            if !fires || !self.sim.fire_opponent_leach_beam(slot) {
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Autopilot {
             // Absorbed, unless the class's switch hands the craft to the
-            // original's player driver (`Race::set_opponent_autopilot`).
-            if !self.engage_opponent_autopilot(slot) {
-                self.absorb_opponent_pickup(slot, absorb);
+            // original's player driver (`RaceSim::set_opponent_autopilot`).
+            if !self.sim.engage_opponent_autopilot(slot) {
+                self.sim.absorb_opponent_pickup(slot, absorb);
                 return;
             }
         } else if weapon == oag_tables::weapons::Weapon::Disruptor {
@@ -523,8 +520,8 @@ impl Race {
             // `every_implemented_weapon_has_a_fire_arm_on_both_paths` is what
             // makes that fail loudly.
             // **In the Eliminator an opponent keeps the weapon**: see
-            // `Race::absorb_opponent_pickup`.
-            self.absorb_opponent_pickup(slot, absorb);
+            // `RaceSim::absorb_opponent_pickup`.
+            self.sim.absorb_opponent_pickup(slot, absorb);
             return;
         }
         // The fire request the original announces (`Weapon_AnnounceIncoming`): one per
@@ -537,7 +534,9 @@ impl Race {
         // would silently stop being safe the day that stops being true.
         self.sim.world.ships[slot].pickup.take();
     }
+}
 
+impl RaceSim {
     /// Absorbs `slot`'s held pickup, paying `absorb` energy into its pool.
     ///
     /// **In the Eliminator an opponent keeps the weapon.** An absorb there
@@ -547,15 +546,15 @@ impl Race {
     /// forces `+0x34` to `0` in mode 8; `docs/ghidra/functions/psp-pulse-usa/weapon-ai.md`).
     /// Not ported: it measured as no change in the time to five kills.
     fn absorb_opponent_pickup(&mut self, slot: usize, absorb: Option<f32>) {
-        if !self.sim.world.mode().pickups_absorb() {
+        if !self.world.mode().pickups_absorb() {
             return;
         }
         let Some(amount) = absorb else {
             return;
         };
-        let dimensions = self.sim.world.ships[slot].handling.dimensions;
-        oag_physics::damage::add(&mut self.sim.world.ships[slot].physics, &dimensions, amount);
-        self.sim.world.ships[slot].pickup.take();
+        let dimensions = self.world.ships[slot].handling.dimensions;
+        oag_physics::damage::add(&mut self.world.ships[slot].physics, &dimensions, amount);
+        self.world.ships[slot].pickup.take();
     }
 }
 
@@ -564,7 +563,7 @@ impl Race {
     ///
     /// Returns whether a drop began, so the caller can leave the pickup in the
     /// craft's hands - unlike every other opponent arm, this one is not finished
-    /// on the tick it is taken. `Race::lay_mines` runs the rest of it and clears
+    /// on the tick it is taken. `RaceSim::lay_mines` runs the rest of it and clears
     /// the slot when the cluster is out.
     ///
     /// # An opponent uses the *behind* gate, and the player uses none
@@ -595,7 +594,7 @@ impl Race {
         let ship = &self.sim.world.ships[slot];
         let context = oag_ai::Context {
             air_trim: 0.0,
-            line: self.line_of(slot),
+            line: self.sim.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
@@ -624,7 +623,7 @@ impl Race {
     }
 }
 
-impl Race {
+impl RaceSim {
     /// The nearest laid charge `slot` should steer around, if any.
     ///
     /// **This is the half that knows what a weapon is**, which is why it is here
@@ -664,14 +663,14 @@ impl Race {
         forward: oag_core::math::Vec3,
         right: oag_core::math::Vec3,
     ) -> Option<oag_ai::Hazard> {
-        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.sim.weapons.as_deref());
-        let origin = self.sim.world.ships[slot].physics.body.position;
+        let radii = oag_weapons::projectile::TriggerRadii::from_table(self.weapons.as_deref());
+        let origin = self.world.ships[slot].physics.body.position;
         // Half the hull's width, so a charge the craft would clip with a wingtip
         // counts as much as one it would drive over.
-        let half_width = self.sim.world.ships[slot].handling.dimensions.width * 0.5;
+        let half_width = self.world.ships[slot].handling.dimensions.width * 0.5;
 
         let mut best: Option<oag_ai::Hazard> = None;
-        for charge in &self.sim.world.projectiles.slots {
+        for charge in &self.world.projectiles.slots {
             let Some(kind) = charge.kind else { continue };
             if charge.owner as usize == slot
                 && charge.age < oag_weapons::projectile::mine::OWNER_EXEMPT_SECONDS

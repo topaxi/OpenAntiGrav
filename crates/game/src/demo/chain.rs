@@ -171,7 +171,7 @@ pub fn run(
         let mut run = Run::new(false);
         let leave = loop {
             race.tick(&PlayerInputs::default());
-            if let Some(leave) = run.tick(length.min(timing.length), race.finished(), true) {
+            if let Some(leave) = run.tick(length.min(timing.length), race.sim.finished(), true) {
                 break leave;
             }
         };

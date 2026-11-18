@@ -595,7 +595,7 @@ fn every_hd_hull_authors_the_spark_anchors_a_trail_hit_lands_on(loaded: &race::L
 fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
     let Some(loaded) = load() else { return };
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     for _ in 0..300 {
         race.tick(&PlayerInputs::none());
     }
@@ -630,7 +630,7 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
 fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
     let Some(loaded) = load() else { return };
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     for _ in 0..300 {
         race.tick(&PlayerInputs::none());
     }
@@ -698,7 +698,7 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         "the viewing player's craft never gets the sprite"
     );
     let far = hd::SPRITE_FADEOUT_DIST + hd::SPRITE_FADEOUT_RANGE;
-    for slot in 1..race.ship_count() as usize {
+    for slot in 1..race.sim.ship_count() as usize {
         let nozzle = race
             .nozzle_of(slot)
             .expect("every HD hull authors a nozzle");

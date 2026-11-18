@@ -42,7 +42,7 @@ count) is in the executable and was **not read**.
    layout's last message line (`Info4`) reads `FINISHED` (`OAG_SPLIT_FINISHED`, our
    own text, translated in the four project languages). The other views race on.
    Their craft is flown by the driver as a single-player craft is after the line
-   (`Race::flown_for_the_player`, per slot), at the original's post-finish thrust.
+   (`RaceSim::flown_for_the_player`, per slot), at the original's post-finish thrust.
 2. **When the last person finishes** the race is over. One view is drawn
    (`Race::views_drawn`, not `viewport_count`, which stays the answer to "was this a
    split"), so `Race End Photo` and the panels sit over the one picture a

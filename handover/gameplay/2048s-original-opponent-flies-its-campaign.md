@@ -20,7 +20,7 @@ Settled: `oag_ai::original::Laws` gains `every_tick`, `event_ring_rate`,
 `oag_2048::race::ORIGINAL_DRIVER` carries 2048's, its `event_ai`
 (`oag_title::original_driver::EventAi`: skill, two AI skills, level off `SP.xml`
 over the constructor's defaults) included; `Campaign2048Progress::ai`
-takes them to `Race::use_original_ai` and `Race::set_original_event_ai_skills`.
+takes them to `RaceSim::use_original_ai` and `RaceSim::set_original_event_ai_skills`.
 
 ## Open
 

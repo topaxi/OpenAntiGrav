@@ -70,7 +70,7 @@ and it was one.
 `crates/raceplay/tests/rocket_floor_trace.rs` (a scratch trace, `#[ignore]`d and
 gated on `OAG_ROCKET_TRACE`) flies the player on the autopilot, fires a volley
 every two seconds, and re-runs each rocket's own probe and sweep against the
-race's own `CollisionWorld` (`Race::collision`) every tick, so the tick a
+race's own `CollisionWorld` (`RaceSim::collision`) every tick, so the tick a
 rocket stops on names why. 90 seconds a circuit, VENOM, single race with the
 field on. The columns that matter: how many rocket-ticks were spent *falling*
 (probe miss), and how many rockets **expired** - flew their whole 10 s cap

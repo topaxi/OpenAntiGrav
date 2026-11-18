@@ -87,15 +87,15 @@ fn contact_where() {
         let mut lap_shield = Vec::new();
         let start_shield = race.sim.world.ships[1].physics.shield;
         for tick in 0..18_000u64 {
-            let before = race.wall_contact_ticks_of(1);
+            let before = race.sim.wall_contact_ticks_of(1);
             race.tick(&PlayerInputs::none());
             let ship = &race.sim.world.ships[1];
-            if race.wall_contact_ticks_of(1) != before {
+            if race.sim.wall_contact_ticks_of(1) != before {
                 let speed = ship.physics.body.linear_velocity.length();
                 let position = ship.physics.body.position;
                 let lap_now = ship.standing.lap;
                 let index = ship.driver.index;
-                let spline = race.spline().nearest(position).map_or(0, |(i, _, _)| i);
+                let spline = race.sim.spline().nearest(position).map_or(0, |(i, _, _)| i);
                 let e = bins
                     .entry(index / bin * bin + 100_000 * u32::from(lap_now > 1))
                     .or_insert((0, 0.0, usize::MAX, 0));
@@ -111,7 +111,7 @@ fn contact_where() {
                 lap = ship.standing.lap;
             }
         }
-        let total = race.wall_contact_ticks_of(1);
+        let total = race.sim.wall_contact_ticks_of(1);
         let end_shield = race.sim.world.ships[1].physics.shield;
         // Shield lost per completed lap, from the pool at each lap line.
         let mut pool = Vec::with_capacity(lap_shield.len() + 1);
@@ -189,15 +189,15 @@ fn contact_trace() {
     };
     println!("tick lap idx speed target ceil pace lat steer thrust brake abL abR contact");
     for tick in 0..18_000u64 {
-        let before = race.wall_contact_ticks_of(1);
+        let before = race.sim.wall_contact_ticks_of(1);
         race.tick(&PlayerInputs::none());
-        let contact = race.wall_contact_ticks_of(1) != before;
+        let contact = race.sim.wall_contact_ticks_of(1) != before;
         let ship = &race.sim.world.ships[1];
         let index = ship.driver.index as usize;
         if (index as f32) < lo || (index as f32) > hi {
             continue;
         }
-        let line = race.line_of(1);
+        let line = race.sim.line_of(1);
         let p = ship.physics.body.position;
         let lat = line
             .corridor_at(index)

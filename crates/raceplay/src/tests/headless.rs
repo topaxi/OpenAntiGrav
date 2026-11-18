@@ -19,7 +19,7 @@ fn a_disc_free_race_ticks_and_moves_its_hash() {
 
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        race.drain_cues();
+        race.sim.drain_cues();
     }
 
     assert_eq!(race.sim.world.tick, 30, "the clock did not advance");
@@ -74,9 +74,9 @@ fn a_snapshot_in_an_unflown_slot_changes_nothing() {
 
     for _ in 0..30 {
         quiet.tick(&PlayerInputs::none());
-        quiet.drain_cues();
+        quiet.sim.drain_cues();
         noisy.tick(&loud);
-        noisy.drain_cues();
+        noisy.sim.drain_cues();
     }
 
     assert_eq!(

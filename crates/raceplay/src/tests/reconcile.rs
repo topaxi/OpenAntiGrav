@@ -76,7 +76,7 @@ fn steering(stick_x: f32) -> PlayerInputs {
 /// ticks through [`Race::tick`] would raise their cues a second time.
 fn advance(race: &mut Race, inputs: &PlayerInputs) {
     race.tick(inputs);
-    race.drain_cues();
+    race.sim.drain_cues();
 }
 
 /// The whole claim, end to end: a client that predicted wrong, handed the
@@ -270,7 +270,7 @@ fn a_remote_slots_input_reaches_its_own_craft() {
                 evaluations.get(1).is_some(),
                 "{controller:?}: slot 1 was not stepped"
             );
-            hard_over.drain_cues();
+            hard_over.sim.drain_cues();
             advance(&mut idle, &two_steering(0.0, 0.0));
         }
 
@@ -309,7 +309,7 @@ fn an_ai_slot_is_not_stepped_as_a_player() {
             evaluations.get(1).is_none(),
             "an AI slot was stepped as a player"
         );
-        shouted_at.drain_cues();
+        shouted_at.sim.drain_cues();
         advance(&mut idle, &two_steering(0.0, 0.0));
     }
     assert_eq!(
@@ -494,8 +494,8 @@ fn a_quiet_replay_reaches_the_hash_of_a_normal_one() {
     // counters, dwell timers and cue bookkeeping outside `state_hash`, and a
     // skipped helper that wrote one would pass every check above.
     for race in [&mut server, &mut quiet] {
-        race.drain_announcements();
-        race.drain_class_announcements();
+        race.sim.drain_announcements();
+        race.sim.drain_class_announcements();
     }
     assert_eq!(
         format!("{:?}", server.sim),
@@ -550,6 +550,7 @@ fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
     assert_eq!(normal.sim.state_hash(), quiet.sim.state_hash());
     assert!(
         normal
+            .sim
             .pending_cues()
             .iter()
             .any(|e| e.cue == Cue::SpeedupPad),
@@ -557,9 +558,9 @@ fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
     );
     assert!(normal.view.exhaust[0].boost_timer() > 0.0);
     assert!(
-        quiet.pending_cues().is_empty(),
+        quiet.sim.pending_cues().is_empty(),
         "{:?}",
-        quiet.pending_cues()
+        quiet.sim.pending_cues()
     );
     assert_eq!(quiet.view.exhaust[0].boost_timer(), 0.0);
 }
@@ -570,10 +571,10 @@ fn a_quiet_tick_enters_the_pad_without_the_plume_or_the_cue() {
 fn a_quiet_replay_keeps_the_cues_that_were_already_queued() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
-    let waiting = race.pending_cues().len();
+    let waiting = race.sim.pending_cues().len();
     assert!(waiting > 0, "no cue was waiting, so the claim is vacuous");
     for _ in 0..10 {
         race.tick_sim_only(&PlayerInputs::none());
     }
-    assert_eq!(race.pending_cues().len(), waiting);
+    assert_eq!(race.sim.pending_cues().len(), waiting);
 }

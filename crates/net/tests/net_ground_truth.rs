@@ -498,7 +498,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
                 "person {who} was told the race ran to the finish line, not to a limit"
             );
             assert!(
-                race.finished(),
+                race.sim.finished(),
                 "person {who}'s own state has every person finished"
             );
             let board = race.results().expect("a finished race has a board");
@@ -782,7 +782,7 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
     let mut again = holding_turbo(&params, &source);
     let found = oag_replay::Verifier::run(&replay, again.sim.state_hash(), |due, inputs| {
         for event in due {
-            again.apply_event(event).expect("applies");
+            again.sim.apply_event(event).expect("applies");
         }
         again.tick_sim_only(inputs);
         again.sim.state_hash()

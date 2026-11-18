@@ -62,7 +62,7 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | # | Phase | Today's call site | Events raised | Commands applied |
 | --- | --- | --- | --- | --- |
 | 0 | Grid flags, hover caps | `tick.rs:118` to `:131` | | |
-| 1 | Every person's controls | `Race::player_controls`, `tick.rs:137` to `:142` | | |
+| 1 | Every person's controls | `RaceSim::player_controls`, `tick.rs:137` to `:142` | | |
 | 2 | Pickups spent, autopilot | `Race::spend_pickup`, `tick.rs:166` to `:173` (`crates/raceplay/src/weapons.rs:148`) | `weapon-fired` (person slots) | |
 | 3 | Mines, cannons | `tick.rs:180`, `:186` | | |
 | **C** | **The call** (to be added) | between `tick.rs:186` and `:193` | | commands validated and queued |
@@ -71,7 +71,7 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | 6 | Rescue, AI craft, pairs | `tick.rs:415` to `:422`; `Race::step_opponents` (`crates/raceplay/src/field.rs:689`) | `respawned`, `reset`; phase 4's events and `weapon-fired` for AI craft | phase 4's commands for AI craft |
 | 7 | Clock | `self.sim.world.tick += 1`, `tick.rs:446` | | |
 | 8 | Race rules per person | `Race::advance_player_rules`, `tick.rs:493` (`player_step.rs:381`); `eliminate_if_wrecked` at `tick.rs:476` | `lap-completed`, `eliminated` | `set-finished` |
-| 9 | Standings | `Race::update_standings`, `tick.rs:501` (`field.rs:1019`) | `lap-completed` (AI craft) | `set-finished` (AI craft), `set-standing-key` |
+| 9 | Standings | `RaceSim::update_standings`, `tick.rs:501` (`field.rs:1019`) | `lap-completed` (AI craft) | `set-finished` (AI craft), `set-standing-key` |
 | 10 | Quake, leach beam, repulsers | `tick.rs:510` to `:530` | | |
 | 11 | Results | `Race::capture_results`, `tick.rs:541` | | |
 
@@ -115,7 +115,7 @@ rollback replays it. Names are the README's `event` variants.
   [the track file](../../formats/track-file.md), each a matrix plus
   `_OAG_MIN`/`_OAG_MAX`), tested by the shared sweep (`Race::pad_sweep`,
   `pads.rs:45`) with `contains` and `distance`; and the reset zones
-  `Race::reset_zone_contact` reads (`crates/raceplay/src/respawn.rs:235`). There is
+  `RaceSim::reset_zone_contact` reads (`crates/raceplay/src/respawn.rs:235`). There is
   no generic named volume.
 - **Proposed:** a third node kind with the same box shape, tested in the same
   sweep after the weapon pads, with an entry and an exit edge per craft and the
@@ -125,7 +125,7 @@ rollback replays it. Names are the README's `event` variants.
 ### `wall-contact`
 
 - **Raised at** the wall contact a craft's step reports (`evaluated.wall.impact`),
-  where `Race::count_wall_contact` (`field.rs:545`, called from `step_player` and
+  where `RaceSim::count_wall_contact` (`field.rs:545`, called from `step_player` and
   `step_opponents`) already counts it and `raise_contact_cue`
   (`crates/raceplay/src/cues.rs:41`, called at `tick.rs:673`) raises the sound.
 - **Per contact edge**, once per craft per tick at most.
@@ -167,7 +167,7 @@ rollback replays it. Names are the README's `event` variants.
 
 - **Raised at** the impacts `oag_weapons::projectile::step` returns
   (`crates/weapons/src/projectile.rs:536`, called at `tick.rs:235`), walked at
-  `tick.rs:267`, where `Race::credit_blast` (`crates/raceplay/src/eliminator.rs:498`)
+  `tick.rs:267`, where `RaceSim::credit_blast` (`crates/raceplay/src/eliminator.rs:498`)
   already credits kills and `last_damager` is set.
 - **Carries** victim, source, weapon. The damage itself is the weapon's law and is
   already applied when the event is raised.
@@ -180,7 +180,7 @@ Two sources, because a person and an AI craft count laps through two structs:
   for the slots stepped as people (`tick.rs:452` to `:494`), calls
   `RaceState::update` (`crates/race/src/state.rs:410`); its `Outcome`
   (`state.rs:590`) has `lap_completed` and `lap_ticks`.
-- **Every craft, AI included:** `Race::update_standings` (`field.rs:1019`) runs
+- **Every craft, AI included:** `RaceSim::update_standings` (`field.rs:1019`) runs
   `advance_standings` (`field.rs:1258`), which calls `Standing::update`
   (`crates/race/src/standing.rs:175`) per active craft and returns whether a lap
   completed. An AI craft's `RaceState` is deliberately not advanced (the comment at
@@ -190,7 +190,7 @@ Two sources, because a person and an AI craft count laps through two structs:
 
 - `respawned`: `Race::respawn` (`respawn.rs:280`); `reset`: `Race::reset`
   (`respawn.rs:322`); both from the rescue at phase 6 and the reset zones.
-- `eliminated`: `Race::eliminate_if_wrecked` (`player_step.rs:366`, called at
+- `eliminated`: `RaceSim::eliminate_if_wrecked` (`player_step.rs:366`, called at
   `tick.rs:476`) for people and `Race::tick_destroyed_craft`
   (`crates/raceplay/src/eliminator.rs:129`, `tick.rs:439`) for the field.
 
@@ -383,7 +383,7 @@ the backstop for a guest written without the SDK.
   course's numbering (`Course::routes`, the region's route entities); the host faults a route
   at or past the count and two for one slot; two modules for one slot, the later in id order
   wins.
-- **Read by** `Race::steer_branching` (`crates/raceplay/src/routes.rs`), run for every craft
+- **Read by** `RaceSim::steer_branching` (`crates/raceplay/src/routes.rs`), run for every craft
   a driver flies before it drives (`Ai_ChooseBranch`'s states 0 to 2): the coin is drawn as
   before on entering the pre-fork path, then where the driver moves onto a route's line
   (within `SWITCH_SAMPLES` of the split) a held preference replaces the coin's draw, if the
@@ -442,7 +442,7 @@ the backstop for a guest written without the SDK.
 
 Pilot Assist on Pulse and Pure is the planned oracle (bit-identical replay hashes
 against the built-in law, `pilot_assist_ground_truth.rs`). The built-in law is fed
-through `Environment::pilot_assist`, which `Race::pilot_assist_input`
+through `Environment::pilot_assist`, which `RaceSim::pilot_assist_input`
 (`crates/raceplay/src/pilot_assist.rs`, called at `player_step.rs:219`) builds from
 the person's controls and the craft's pose. A module version needs a command that
 lands there, for person slots, before the step, carrying what
@@ -456,16 +456,16 @@ names no mod). All three are per slot, from a rules or a track module.
 
 | What | Where | Notes |
 | --- | --- | --- |
-| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`Race::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
+| The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`RaceSim::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
 | A crossing of the line in the move | `Standing::jumped`, `crates/race/src/standing.rs:278`; `RaceState::jumped`, `crates/race/src/state.rs:511` | The standing credits it at once (lap, spawn crossing, deficit, finish), unless the lap's half-way gate is still shut (`Standing::gate`), when it is no lap and no finish as for a driven crossing, and a move that lands past half-way has driven both halves of the lap it lands on; the person's clock seeds its previous reading so that tick's `update` reads one forward wrap, and its `Outcome` flows as for a driven crossing |
-| Resolving a distance | `Race::exit_ahead` (`Race::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
-| `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `Race::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
-| Out of the world | `Ship::in_world`, `crates/gameplay/src/world.rs:259` | `Craft::active` (weapons), `resolve_craft_pairs`, `fire_law` targeting, the draw (`Race::ship_active`, model matrices, shadow, exhaust), `step_opponents` skip; `step_player` returns an idle step (`player_step.rs:144`); pickup presses unheard (`tick.rs:165`) |
-| Reset triggers held | `Race::reset_held`, `transit.rs`, read by `Race::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
+| Resolving a distance | `RaceSim::exit_ahead` (`RaceSim::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
+| `transit{slot, ticks, distance, exit_factor}` lands | `RaceSim::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `RaceSim::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
+| Out of the world | `Ship::in_world`, `crates/gameplay/src/world.rs:259` | `Craft::active` (weapons), `resolve_craft_pairs`, `fire_law` targeting, the draw (`RaceSim::ship_active`, model matrices, shadow, exhaust), `step_opponents` skip; `step_player` returns an idle step (`player_step.rs:144`); pickup presses unheard (`tick.rs:165`) |
+| Reset triggers held | `RaceSim::reset_held`, `transit.rs`, read by `RaceSim::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
 | Exit | `Race::advance_transits`, `transit.rs`, called at `tick.rs:191` before the call | Moved and stepped the same tick; `transit-end{slot}` is in that very call's events |
 | `scale-speed{slot, factor}` | `apply`, `crates/raceplay/src/extensions/on.rs:902` | Velocity times `factor`, once, at the call; before any `transit` of the same tick, so a transit's exit speed is taken after it |
 | A frozen craft's progress | `tracking` in `extensions/on.rs`, `Standing::progress` | `Craft::progress()` is last tick's, and a craft in transit keeps reporting the progress it went in at on every tick of the flight (its standing is frozen); a guest asks for a portal's pair from where the craft stands and may rely on it (`tests::transit::a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at`) |
-| `probe-clearance{slot, distance, radius}` | `Race::clearance`, `transit.rs` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
+| `probe-clearance{slot, distance, radius}` | `RaceSim::clearance`, `transit.rs` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
 | Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | Every declaring module has its own kind from the start; `oag_weapons::pickup::draw` walks each `Weapon::Extension(kind)` row after the title's weapons, in kind order, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
 
 ## `race-start`: the grid
@@ -489,7 +489,7 @@ its mod is on for (title, scope), as before, so no guest built earlier needs the
 | The question | `oag_ext_abi::RaceInfo` (`crates/ext-abi/src/race.rs`) | Written at the start of the I/O buffer of a fresh instance, its own 20-byte layout (the call happens before a race has a tick, a craft or a track, so the tick observation is not used): the ABI major, the title key (`channel_key` of its slug), the class key (`channel_key` of its lowercased name, 0 for none), the mode (`RaceMode`, the engine's `Mode` order from 1), a flags byte (`RACE_WEAPONS`, `RACE_CAMPAIGN`), the people flying, the craft on the grid and the module's four `sim` option picks (`Source::options.sim`, as a tick would read them) |
 | The answer | `RUN` (1) or `SKIP` (0) | Any other value, a trap or running out of fuel leaves the module out of the race by name (`mod <id>: <module> left out: its race check <fault>`), because a broken check must not run a module its guest meant to withhold |
 | The cost | `Module::wants_race`, `crates/modhost/src/lib.rs` | One fresh instance and one call under the module's own fuel budget (`FUEL_PER_TICK`), at race load. A load cost: not a tick's fuel, never in the overlay's per-tick figures. A module that exports no check is not instantiated for it |
-| The choke point | `oag_raceplay::extensions::admit`, `crates/raceplay/src/extensions/admit.rs`, which `sources_for_race` (the load's one call) runs on what `gather` found | Filters the sources to those for the race's title and scope whose module does not decline. Every later consumer (shaders, effects, sounds and icons of the mod, `[[pickup.odds]]`, the pickup kind it would take, `MAX_SIM_MODS`, `prepare`'s compile, the MODDED line, the state blob and the hash) sees only the accepted sources, so a module that declines has no presence in that race: no `tick`, no fuel, no state, no pickup, no HUD or sound or effect of its own, and `Race::is_modded` stays false on its account (a race with only decliners records a replay). The decline is one `debug` line in the load report |
+| The choke point | `oag_raceplay::extensions::admit`, `crates/raceplay/src/extensions/admit.rs`, which `sources_for_race` (the load's one call) runs on what `gather` found | Filters the sources to those for the race's title and scope whose module does not decline. Every later consumer (shaders, effects, sounds and icons of the mod, `[[pickup.odds]]`, the pickup kind it would take, `MAX_SIM_MODS`, `prepare`'s compile, the MODDED line, the state blob and the hash) sees only the accepted sources, so a module that declines has no presence in that race: no `tick`, no fuel, no state, no pickup, no HUD or sound or effect of its own, and `RaceSim::is_modded` stays false on its account (a race with only decliners records a replay). The decline is one `debug` line in the load report |
 | What the race is | `describe`, same file | From the load's `Options`: the mode through an exhaustive `match` on `oag_race::Mode` (a new mode does not compile until it has a code), `Options::weapons_on` (the override over the mode), `Options::campaign` (the launch sites set it for a campaign cell or a 2048 event), `Options::people_flying`, and the craft count from `spawn::field_opponents` plus one, the function `Race::start` grids with, so the two cannot disagree |
 
 A module that does not compile is not dropped by `admit`: `prepare` compiles it again and

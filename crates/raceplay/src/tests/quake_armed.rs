@@ -41,6 +41,7 @@ fn run(race: &mut Race, grants: &[usize], presses: &[usize], ticks: usize) -> Ru
         let snapshot = buttons.tick(if presses.contains(&tick) { SQUARE } else { 0 });
         race.tick(&PlayerInputs::single(snapshot));
         seen.launch_cues += race
+            .sim
             .drain_cues()
             .iter()
             .filter(|e| e.cue == Cue::QuakeLaunch)

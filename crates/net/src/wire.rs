@@ -119,7 +119,7 @@ pub struct RaceParams {
     /// [`oag_ai::Difficulty::name`].
     pub difficulty: String,
     /// [`oag_gameplay::ControlScheme::name`]: how every snapshot maps to controls.
-    /// One per race in this engine (`Race::set_control_scheme`), so a client flies
+    /// One per race in this engine (`RaceSim::set_control_scheme`), so a client flies
     /// the server's, whatever its own settings say.
     pub scheme: String,
     /// The world seed.

@@ -10,6 +10,7 @@
 //! `oag_title::weapons::WeaponModels::leach_strip`. Where it draws, Pulse's own
 //! ribbon does not.
 
+use crate::RaceSim;
 use oag_core::math::{Mat4, Vec3};
 use oag_fx::exhaust::FlareTexture;
 use oag_fx::leach_strip::{self as law, AnchorTrail, Phase};
@@ -127,37 +128,44 @@ impl Race {
             ),
         }
     }
+}
 
+impl RaceSim {
     /// The craft's progress along the course, unwrapped across laps: **this
     /// engine's equivalent** of the original's 0..1 lap fraction with a lap fix
     /// (`craft + 0x7020`), the same ordering.
     fn leach_progress(&self, slot: usize) -> f32 {
-        let standing = &self.sim.world.ships[slot].standing;
+        let standing = &self.world.ships[slot].standing;
         standing.lap.saturating_sub(1) as f32 * self.leach_course_length()
             + standing.progress.unwrap_or(0.0)
     }
+}
 
+impl Race {
     /// The craft's trail record as of now: anchor, progress and the body's
     /// rows 0 and 1 (`+0x1d0`, `+0x1e0`), here the physics body's own axes.
     fn leach_record(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> law::Record {
         let orientation = self.sim.world.ships[slot].physics.body.orientation;
         law::Record {
             anchor: self.leach_anchor(anchors, slot),
-            progress: self.leach_progress(slot),
+            progress: self.sim.leach_progress(slot),
             row0: orientation * Vec3::X,
             row1: orientation * Vec3::Y,
         }
     }
+}
 
+impl RaceSim {
     /// The beams the strip draws: locked and not broken, in pool order.
     fn leach_beams_live(&self) -> impl Iterator<Item = oag_weapons::projectile::leach_beam::Beam> {
-        self.sim
-            .world
+        self.world
             .leach_beams_iter()
             .copied()
             .filter(|beam| beam.kind == Kind::Locked && beam.disconnected_at.is_none())
     }
+}
 
+impl Race {
     /// `LeachTrail_RecordAnchor`, every tick, every craft; and the wobble's
     /// phases, which step once a tick while a beam lives and **carry over to the
     /// next beam**: read live: the original's phases
@@ -169,7 +177,7 @@ impl Race {
             return;
         };
         for slot in 0..usize::from(self.sim.world.ship_count).min(MAX_SHIPS) {
-            if !self.ship_active(slot) {
+            if !self.sim.ship_active(slot) {
                 continue;
             }
             let record = self.leach_record(&strip.anchors, slot);
@@ -177,7 +185,7 @@ impl Race {
         }
         // One set of phases for the whole race, stepped once a tick while any beam
         // lives (chosen: the original has one beam to read them off).
-        if self.leach_beams_live().next().is_some() {
+        if self.sim.leach_beams_live().next().is_some() {
             law::advance_wobble(&mut strip.phases);
         }
         self.view.leach_strip = Some(strip);
@@ -196,19 +204,21 @@ impl Race {
             return Vec::new();
         };
         let mut out = Vec::new();
-        for beam in self.leach_beams_live() {
+        for beam in self.sim.leach_beams_live() {
             let Some((reveal, window)) = Phase::at(beam.age).reveal() else {
                 continue;
             };
             let nodes = match &strip.path {
-                Some(path) => law::nodes(&Self::path_records(path), reveal, window),
+                Some(path) => law::nodes(&RaceSim::path_records(path), reveal, window),
                 None => self.walked_nodes(strip, beam, reveal, window),
             };
             law::extend_vertices(&mut out, &nodes);
         }
         out
     }
+}
 
+impl RaceSim {
     /// A forced path as records: only the positions reach the nodes.
     fn path_records(path: &[Vec3]) -> Vec<law::Record> {
         path.iter()
@@ -220,7 +230,9 @@ impl Race {
             })
             .collect()
     }
+}
 
+impl Race {
     /// The race's own path: walk, bend and wobble, then the nodes.
     fn walked_nodes(
         &self,
@@ -258,7 +270,7 @@ impl Race {
         );
         law::bend(&mut samples, trailer_record.anchor);
         let cumulative = law::cumulative(&samples);
-        law::wobble(&mut samples, &strip.phases, self.leach_course_length());
+        law::wobble(&mut samples, &strip.phases, self.sim.leach_course_length());
         WalkedPath {
             samples,
             cumulative,
@@ -279,12 +291,12 @@ impl Race {
         let strip = self.view.leach_strip.as_ref()?;
         let path = match &strip.path {
             Some(forced) => {
-                let samples = Self::path_records(forced);
+                let samples = RaceSim::path_records(forced);
                 WalkedPath {
                     cumulative: law::cumulative(&samples),
                     samples,
-                    shooter_walked: self.leach_progress(usize::from(beam.owner))
-                        > self.leach_progress(usize::from(beam.target)),
+                    shooter_walked: self.sim.leach_progress(usize::from(beam.owner))
+                        > self.sim.leach_progress(usize::from(beam.target)),
                 }
             }
             None => self.walked_path(strip, beam),

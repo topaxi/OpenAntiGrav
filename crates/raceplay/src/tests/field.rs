@@ -104,11 +104,11 @@ fn craft_that_are_not_touching_are_left_alone() {
 fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     let mut race = race_with_a_grid();
     race.sim.weapons = Some(Arc::new(one_rocket_table()));
-    // Whether to fire is `Race::opponent_decides`'s question, asked by the
+    // Whether to fire is `RaceSim::opponent_decides`'s question, asked by the
     // caller; this asks only who owns what leaves the rails.
     let firing = 3usize;
     assert!(
-        race.fire_opponent_rocket(firing),
+        race.sim.fire_opponent_rocket(firing),
         "nothing was fired to check the owner of"
     );
 
@@ -138,7 +138,7 @@ fn a_craft_on_a_track_with_no_ring_sees_an_empty_field() {
     race.sim.course = None;
     for slot in 0..8 {
         assert_eq!(
-            race.field_for(slot, &race.places()),
+            race.sim.field_for(slot, &race.places()),
             oag_ai::Field::EMPTY,
             "slot {slot}"
         );
@@ -151,7 +151,7 @@ fn a_craft_on_a_track_with_no_ring_sees_an_empty_field() {
 fn the_field_a_driver_sees_never_includes_itself() {
     let race = race_with_a_grid();
     for slot in 0..8 {
-        let field = race.field_for(slot, &race.places());
+        let field = race.sim.field_for(slot, &race.places());
         for rival in [field.ahead, field.behind, field.alongside]
             .into_iter()
             .flatten()
@@ -170,7 +170,7 @@ fn the_field_a_driver_sees_never_includes_itself() {
 fn the_field_a_driver_sees_orders_rivals_by_how_far_round_they_are() {
     let race = race_with_a_grid();
     for slot in 0..8 {
-        let field = race.field_for(slot, &race.places());
+        let field = race.sim.field_for(slot, &race.places());
         if let Some(ahead) = field.ahead {
             assert!(ahead.gap >= 0.0, "slot {slot}: an 'ahead' rival is behind");
         }
@@ -201,7 +201,7 @@ fn a_craft_on_the_grid_can_see_somebody() {
     let race = race_with_a_grid();
     let seen = (0..8)
         .filter(|&slot| {
-            let field = race.field_for(slot, &race.places());
+            let field = race.sim.field_for(slot, &race.places());
             field.ahead.is_some() || field.behind.is_some() || field.alongside.is_some()
         })
         .count();
@@ -230,7 +230,7 @@ fn a_craft_on_the_grid_can_see_somebody() {
 #[test]
 fn the_opponents_are_driven_rather_than_parked() {
     let mut race = race_with_a_grid();
-    assert_eq!(race.ship_count(), 8);
+    assert_eq!(race.sim.ship_count(), 8);
     for _ in 0..oag_race::COUNTDOWN_TICKS + u64::from(STALL_TICKS / 2) {
         race.tick(&PlayerInputs::none());
     }
@@ -260,7 +260,7 @@ fn the_opponents_are_driven_rather_than_parked() {
 fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.respawns_of(1), 0);
+    assert_eq!(race.sim.respawns_of(1), 0);
 
     // Straight up and far away, which no reset volume in this fixture
     // covers - the point being that geometry cannot catch this.
@@ -271,7 +271,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     // leap over a gap would teleport it mid-flight.
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.respawns_of(1),
+        race.sim.respawns_of(1),
         0,
         "one tick away is a jump, not a craft that is gone"
     );
@@ -280,13 +280,13 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     // out on the tick after the rescue would measure the shove, not the
     // recovery.
     for _ in 0..RESCUE_TICKS {
-        if race.respawns_of(1) > 0 {
+        if race.sim.respawns_of(1) > 0 {
             break;
         }
         race.sim.world.ships[1].physics.body.position = away;
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.respawns_of(1), 1, "the craft was never recovered");
+    assert_eq!(race.sim.respawns_of(1), 1, "the craft was never recovered");
 
     // Back on the line, and - the part that is easy to get wrong - its
     // driver knows where it was put. A driver left pointing at the old index
@@ -296,7 +296,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
         .physics
         .body
         .position
-        .distance(race.line_of(1).point(ship.driver.index as usize));
+        .distance(race.sim.line_of(1).point(ship.driver.index as usize));
     assert!(
         residual < race.sim.rescue_distance,
         "recovered {residual} from where its driver thinks it is"
@@ -304,7 +304,11 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
 
     // And nobody else was touched.
     for slot in [0usize, 2, 3] {
-        assert_eq!(race.respawns_of(slot), 0, "craft {slot} was recovered too");
+        assert_eq!(
+            race.sim.respawns_of(slot),
+            0,
+            "craft {slot} was recovered too"
+        );
     }
 }
 
@@ -326,9 +330,13 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
         race.tick(&PlayerInputs::none());
     }
 
-    assert_eq!(race.respawns_of(1), 0, "a craft given up on was recovered");
     assert_eq!(
-        race.respawns_of(2),
+        race.sim.respawns_of(1),
+        0,
+        "a craft given up on was recovered"
+    );
+    assert_eq!(
+        race.sim.respawns_of(2),
         1,
         "giving up on craft 1 switched off craft 2's recovery"
     );

@@ -10,7 +10,7 @@
 //!
 //! The law is `Detonator_UpdateRace`'s (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`):
 //! the stage opens at `1`, steps on each completed lap and the race is over at `15`. The
-//! player flies alone on the autopilot's racing line (`Race::set_autopilot`), and the run
+//! player flies alone on the autopilot's racing line (`RaceSim::set_autopilot`), and the run
 //! stops on the tick the race finishes.
 
 use oag_gameplay::PlayerInputs;
@@ -65,8 +65,8 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    // The player flies their own racing line (`Race::set_autopilot`); the rules are the race's.
-    race.set_autopilot(true);
+    // The player flies their own racing line (`RaceSim::set_autopilot`); the rules are the race's.
+    race.sim.set_autopilot(true);
     assert_eq!(race.sim.world.race[LONE].mode, oag_race::Mode::Detonator);
     assert_eq!(race.sim.world.race[LONE].laps_target, Some(14));
 

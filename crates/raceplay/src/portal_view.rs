@@ -3,6 +3,7 @@
 //! of [`Race::view`] while the scene draws the secondary view. No part of a transit: a craft
 //! goes through a portal in `crate::transit`, which shares the road frame and nothing else.
 
+use crate::RaceSim;
 use oag_core::math::frustum::Frustum;
 use oag_core::math::{Mat4, Vec3, Vec4};
 use oag_render::camera::portal::{self, Face};
@@ -37,12 +38,12 @@ pub(crate) struct Reach {
     pub(crate) radius: f32,
 }
 
-impl Race {
+impl RaceSim {
     /// A portal's frame at `exit`, on the road's own up: the spline sample's banking, not the
     /// course's tangent alone. A ring point faces along the ring; a route's exit faces along the
     /// route's own deck, which leaves the ring's direction at a fork.
     pub(crate) fn portal_frame(&self, exit: Exit, face: Face) -> Option<Mat4> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.course.as_ref()?;
         let (_, up, centre, _) = self.road_frame(exit)?;
         let along = if exit.route == 0 {
             course.tangent(exit.to)?
@@ -51,7 +52,9 @@ impl Race {
         };
         portal::frame(centre, along, up, face)
     }
+}
 
+impl Race {
     /// `request` as the view being drawn sees it through `projection`; `None` when a progress
     /// is off the lap, or the entrance's face is not towards the camera or is outside the view,
     /// so nothing of it can be on the screen.
@@ -63,10 +66,11 @@ impl Race {
         let course = self.sim.course.as_ref()?;
         let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
         let entrance_section = self
+            .sim
             .road_sample(entrance)
             .map_or(UNPLACED, |sample| sample.section_id);
-        let entrance = self.portal_frame(entrance, Face::Oncoming)?;
-        let exit = self.portal_frame(request.exit?, Face::Departing)?;
+        let entrance = self.sim.portal_frame(entrance, Face::Oncoming)?;
+        let exit = self.sim.portal_frame(request.exit?, Face::Departing)?;
         // A craft in a transit has flown on past its entrance; its pair is seen from its seat.
         let main = self.pair_view();
         let centre = entrance.w_axis.truncate();

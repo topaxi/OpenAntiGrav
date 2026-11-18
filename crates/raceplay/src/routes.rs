@@ -12,8 +12,8 @@
 //! unchanged, and leaving the route is the line wrapping back to its start.
 //! The driver's index is into whichever line it is on, so everything that
 //! pairs `driver.index` with a line or a sample goes through
-//! [`Race::line_of`] and [`Race::ai_sample_for`]. Each route has its own speed
-//! plan, built the way the ring's is ([`Race::route_speed_plans`]), and **a
+//! [`RaceSim::line_of`] and [`RaceSim::ai_sample_for`]. Each route has its own speed
+//! plan, built the way the ring's is ([`RaceSim::route_speed_plans`]), and **a
 //! route whose plan does not lap clean is not offered to the coin** - chosen,
 //! not measured: the original sends half its field down every route, and a
 //! route our physics cannot drive (`07_Track`'s centre ramp) would park half
@@ -58,7 +58,7 @@ pub(super) struct RouteLine {
     /// route that could not be matched onto the spline is skipped here, not there).
     pub(super) course_route: usize,
     /// This line's speed plan, built after the field is seated
-    /// ([`Race::route_speed_plans`]); `None` drives the corner model.
+    /// ([`RaceSim::route_speed_plans`]); `None` drives the corner model.
     pub(super) plan: Option<oag_ai::SpeedPlan>,
 }
 
@@ -287,23 +287,25 @@ impl Race {
             self.sim.world.ships[slot].driver.branching.route,
         )
     }
+}
 
+impl RaceSim {
     /// The line slot `slot`'s driver is on - the ring, or a route.
     #[must_use]
     pub fn line_of(&self, slot: usize) -> &oag_ai::Line {
         line_for(
-            &self.sim.routes,
-            &self.sim.racing_line,
-            self.sim.world.ships[slot].driver.branching.route,
+            &self.routes,
+            &self.racing_line,
+            self.world.ships[slot].driver.branching.route,
         )
     }
 
     /// The spline sample index of line index `ai_index` on slot `slot`'s line.
     pub(super) fn sample_index_for(&self, slot: usize, ai_index: usize) -> Option<usize> {
-        let route = self.sim.world.ships[slot].driver.branching.route;
+        let route = self.world.ships[slot].driver.branching.route;
         match route
             .checked_sub(1)
-            .and_then(|k| self.sim.routes.get(usize::from(k)))
+            .and_then(|k| self.routes.get(usize::from(k)))
         {
             Some(r) if !r.order.is_empty() => Some(r.order[ai_index % r.order.len()] as usize),
             _ => self.sample_index_of(ai_index),
@@ -315,13 +317,13 @@ impl Race {
     #[must_use]
     pub fn ai_sample_for(&self, slot: usize, ai_index: usize) -> Option<&Sample> {
         self.sample_index_for(slot, ai_index)
-            .and_then(|index| self.sim.spline.sample(index))
+            .and_then(|index| self.spline.sample(index))
     }
 
     /// How many ways round forks this race's drivers can take.
     #[must_use]
     pub fn route_count(&self) -> usize {
-        self.sim.routes.len()
+        self.routes.len()
     }
 
     /// Moves slot `slot`'s driver between the ring and the routes, before it
@@ -332,19 +334,19 @@ impl Race {
     /// (the player's Autopilot): it reads no speed plan, so [`Self::recommit`]
     /// follows it onto any route, planned or not.
     pub(super) fn steer_branching(&mut self, slot: usize, original: bool) {
-        if self.sim.routes.is_empty() {
+        if self.routes.is_empty() {
             return;
         }
-        let Some(course) = self.sim.course.as_deref() else {
+        let Some(course) = self.course.as_deref() else {
             return;
         };
         let n = course.len();
         if n == 0 {
             return;
         }
-        let routes = &self.sim.routes;
-        let preferred = self.sim.extensions.preferred_route(slot);
-        let driver = &mut self.sim.world.ships[slot].driver;
+        let routes = &self.routes;
+        let preferred = self.extensions.preferred_route(slot);
+        let driver = &mut self.world.ships[slot].driver;
         let mut branching = driver.branching;
         let index = driver.index as usize;
         match branching.route.checked_sub(1).map(usize::from) {
@@ -366,7 +368,7 @@ impl Race {
                     branching.decided_at = path + 1;
                     // A route whose plan did not verify is not offered: its
                     // share of the coin stays on the ring. Ours - see
-                    // `Race::route_speed_plans`.
+                    // `RaceSim::route_speed_plans`.
                     let candidates = routes
                         .iter()
                         .enumerate()
@@ -420,7 +422,7 @@ impl Race {
     /// squared distance. For a cold locate, which otherwise only sees the ring.
     pub(super) fn nearest_route_sample(&self, position: Vec3) -> Option<(u16, usize, f32)> {
         let mut best: Option<(u16, usize, f32)> = None;
-        for (k, r) in self.sim.routes.iter().enumerate() {
+        for (k, r) in self.routes.iter().enumerate() {
             let route = u16::try_from(k + 1).unwrap_or(0);
             if let Some((i, distance)) = r.nearest_own_sample(position)
                 // Strictly nearer, so a tie keeps the earlier candidate.
@@ -452,10 +454,10 @@ impl Race {
     /// short of `05_Track`'s first jump onto route 1's deck kept steering at the
     /// ring 60 units above it and ground the wall until its shield was gone.
     fn recommit(&mut self, slot: usize, original: bool) {
-        let Some(n) = self.sim.course.as_deref().map(Course::len) else {
+        let Some(n) = self.course.as_deref().map(Course::len) else {
             return;
         };
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         // **Not in the air, ours.** Over a jump both lines are under the craft
         // at once, neither is "the track", and scoring them flipped a craft
         // between them every tick across `05_Track`'s first jump (328 switches
@@ -467,7 +469,7 @@ impl Race {
         let moving = ship.physics.body.linear_velocity.length() >= 0.1;
         let branching = ship.driver.branching;
         let index = ship.driver.index as usize;
-        let routes = &self.sim.routes;
+        let routes = &self.routes;
         // Which fork's stretch the craft is in, and where it is now.
         let (fork, current) = match branching.route.checked_sub(1).map(usize::from) {
             Some(k) => {
@@ -497,13 +499,13 @@ impl Race {
         // like, and a sibling must beat it by `RECOMMIT_MARGIN`. Both ours.
         let order: &[u32] = match branching.route.checked_sub(1).map(usize::from) {
             Some(k) => &routes[k].order,
-            None => &self.sim.ai_order,
+            None => &self.ai_order,
         };
         let here = (index.saturating_sub(RECOMMIT_WINDOW)..index + RECOMMIT_WINDOW)
             .filter_map(|i| {
                 order
                     .get(i % order.len().max(1))
-                    .and_then(|&s| self.sim.spline.sample(s as usize))
+                    .and_then(|&s| self.spline.sample(s as usize))
             })
             .map(|sample| fit(sample, position))
             .fold(f32::INFINITY, f32::min)
@@ -523,7 +525,7 @@ impl Race {
         let own = Vec3::from_array(current.pos);
         let mut consider = |route: u16, order: &[u32], from: usize, to: usize| {
             for i in from..to {
-                let Some(sample) = self.sim.spline.sample(order[i % order.len()] as usize) else {
+                let Some(sample) = self.spline.sample(order[i % order.len()] as usize) else {
                     continue;
                 };
                 if (Vec3::from_array(sample.pos) - own).length() <= mouth {
@@ -550,10 +552,10 @@ impl Race {
         {
             let split = (r.merge + r.kept) % n;
             let span = (r.merge + n - split) % n;
-            consider(0, &self.sim.ai_order, split, split + span);
+            consider(0, &self.ai_order, split, split + span);
         }
         let Some((route, at, _)) = best else { return };
-        let driver = &mut self.sim.world.ships[slot].driver;
+        let driver = &mut self.world.ships[slot].driver;
         driver.index = u32::try_from(at).unwrap_or(0);
         driver.branching.route = route;
         driver.branching.entered = route != 0;

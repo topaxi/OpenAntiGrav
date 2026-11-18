@@ -57,13 +57,16 @@ fn plan_probe() {
     })
     .expect("loading");
     let race = race::Race::start(loaded.setup);
-    let rows = race.probe_speed_plan(1, var("OAG_SPEED", 15.0), var("OAG_TICKS", 12_000));
+    let rows = race
+        .sim
+        .probe_speed_plan(1, var("OAG_SPEED", 15.0), var("OAG_TICKS", 12_000));
     if std::env::var_os("OAG_UP").is_some() {
         use oag_core::math::Vec3;
         use oag_physics::{Ray, Raycaster};
-        let line = race.racing_line();
+        let line = race.sim.racing_line();
         for r in rows.iter().filter(|r| r.height < -15.0).step_by(40) {
             let up = race
+                .sim
                 .collision()
                 .raycast(Ray::new(r.position, Vec3::Y, 200.0), None, false)
                 .map(|h| (h.distance, h.surface));
@@ -135,8 +138,8 @@ fn line_surface() {
     })
     .expect("loading");
     let race = race::Race::start(loaded.setup);
-    let line = race.racing_line();
-    let world = race.collision();
+    let line = race.sim.racing_line();
+    let world = race.sim.collision();
     println!("index\tx\ty\tz\tunsupported\ttakeoff\tleft\tright\thits_below");
     for i in 0..line.len() {
         let p = line.point(i);
@@ -200,14 +203,14 @@ fn race_probe() {
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
     let slot: usize = var("OAG_LONE_SLOT", 1);
-    for s in 0..race.ship_count() as usize {
+    for s in 0..race.sim.ship_count() as usize {
         if s != slot {
             race.sim.world.ships[s].active = false;
         }
     }
     let from: u32 = var("OAG_FROM", 130);
     let to: u32 = var("OAG_TO", 240);
-    let line = race.racing_line().clone();
+    let line = race.sim.racing_line().clone();
     println!("tick\tindex\tspeed\toffset\theight\tthrust\tbrake\tgrounded\tclimb\tpitch\tsteer");
     let mut respawns = 0;
     let mut finished_seen = false;
@@ -219,8 +222,8 @@ fn race_probe() {
             finished_seen = true;
             println!("FINISHED tick {tick} lap {}", sh.standing.lap);
         }
-        if race.respawns_of(slot) != respawns {
-            respawns = race.respawns_of(slot);
+        if race.sim.respawns_of(slot) != respawns {
+            respawns = race.sim.respawns_of(slot);
             println!(
                 "RESPAWN tick {tick} prev idx {} pos {:?} air {:.2} speed {:.1} now idx {}",
                 last.0, last.1, last.2, last.3, sh.driver.index
@@ -281,8 +284,8 @@ fn pad_map() {
     })
     .expect("loading");
     let race = race::Race::start(loaded.setup);
-    let line = race.racing_line();
-    for pad in race.speedup_pads() {
+    let line = race.sim.racing_line();
+    for pad in race.sim.speedup_pads() {
         let c = Vec3::from_array(pad.centre());
         let i = (0..line.len())
             .min_by(|&a, &b| {
@@ -328,7 +331,7 @@ fn floor_grid() {
     })
     .expect("loading");
     let race = race::Race::start(loaded.setup);
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let from: usize = var("OAG_FROM", 140);
     let to: usize = var("OAG_TO", 240);
     let step: usize = var("OAG_STEP", 4);
@@ -339,7 +342,7 @@ fn floor_grid() {
         for o in (-12..=12).step_by(2) {
             let q = p + lat * o as f32;
             let mut out = [None; 8];
-            let count = race.collision().raycast_all(
+            let count = race.sim.collision().raycast_all(
                 Ray::new(q + Vec3::Y * 20.0, -Vec3::Y, 60.0),
                 None,
                 false,
@@ -385,8 +388,8 @@ fn field_takeoffs() {
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
     race.sim.world.ships[0].active = false;
-    let count = race.ship_count() as usize;
-    let line = race.racing_line().clone();
+    let count = race.sim.ship_count() as usize;
+    let line = race.sim.racing_line().clone();
     let lip: u32 = var("OAG_LIP", 152);
     let mut prev = vec![0u32; count];
     let mut pending: Vec<Option<(u64, f32, f32, f32)>> = vec![None; count];
@@ -481,13 +484,13 @@ fn beneath_census() {
         })
         .unwrap();
         let mut race = race::Race::start(loaded.setup);
-        let count = race.ship_count() as usize;
+        let count = race.sim.ship_count() as usize;
         for s in 0..count {
             if s == 0 || (lone && s != 1) {
                 race.sim.world.ships[s].active = false;
             }
         }
-        let line = race.racing_line().clone();
+        let line = race.sim.racing_line().clone();
         let mut run = vec![0u32; count];
         let mut longest = (0u32, 0usize, 0u32);
         let mut causes: Vec<String> = Vec::new();
@@ -502,7 +505,7 @@ fn beneath_census() {
                 let i = sh.driver.index;
                 let beneath = sh.physics.time_airborne <= 0.0
                     && !line.is_unsupported(i as usize)
-                    && race.ai_sample(i as usize).is_some_and(|sample| {
+                    && race.sim.ai_sample(i as usize).is_some_and(|sample| {
                         let up = -Vec3::from_array(sample.down).normalize_or_zero();
                         (line.point(i as usize) - sh.physics.body.position).dot(up) > threshold
                     });
@@ -521,9 +524,9 @@ fn beneath_census() {
                 if run[s] > longest.0 {
                     longest = (run[s], s, i);
                 }
-                if race.respawns_of(s) != respawns[s] {
-                    respawns[s] = race.respawns_of(s);
-                    causes.push(format!("{:?}@{i}", race.last_respawn_cause_of(s)));
+                if race.sim.respawns_of(s) != respawns[s] {
+                    respawns[s] = race.sim.respawns_of(s);
+                    causes.push(format!("{:?}@{i}", race.sim.last_respawn_cause_of(s)));
                 }
             }
         }

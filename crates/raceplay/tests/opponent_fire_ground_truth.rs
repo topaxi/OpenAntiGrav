@@ -44,7 +44,7 @@ fn a_pulse_race_fires_on_the_original_law() {
         let Some(race) = loaded(mode, 1) else {
             return;
         };
-        assert_eq!(race.fire_law(), FireLaw::Original, "{mode:?}");
+        assert_eq!(race.sim.fire_law(), FireLaw::Original, "{mode:?}");
     }
 }
 
@@ -52,7 +52,7 @@ fn a_pulse_race_fires_on_the_original_law() {
 /// field, for one game-minute of a parked-player Eliminator.
 fn forward_hold(seed: u64, law: FireLaw) -> Option<(u64, u64)> {
     let mut race = loaded(oag_race::Mode::Eliminator, seed)?;
-    race.set_fire_law(law);
+    race.sim.set_fire_law(law);
     let parked = PlayerInputs::single(oag_gameplay::InputSnapshot::new());
     let forward = |w: Option<Weapon>| {
         matches!(

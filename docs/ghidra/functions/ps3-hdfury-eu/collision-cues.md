@@ -307,7 +307,7 @@ wired in the law and not played.
 
 2026-11-16, lane `hd-impact-2`. `ImpulseLaw::grind_played` is `false` for HD
 (`oag_hd::HD_IMPULSE_LAW`): `decide_contact_cues` still decides the grind and the banks still
-build its blocks, and `Race::raise_impulse_cues` drops the grind (and `.GRINDSHIELD`, the same
+build its blocks, and `RaceSim::raise_impulse_cues` drops the grind (and `.GRINDSHIELD`, the same
 block) before it reaches the cue list. `.COLLISIONS` and `.COLLSHIELD` play. Setting the field
 to `true` plays it again (`OAG_SWEEP_GRIND=1` in the sweep below).
 

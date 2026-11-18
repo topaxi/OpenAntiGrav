@@ -72,11 +72,12 @@ fn slots(race: &race::Race) -> Vec<Slot> {
         }
         let position = ship.physics.body.position;
         let slot = if index == 0 { 8 } else { index };
-        let (_, s, _) = race.spline().nearest(position).expect("samples");
+        let (_, s, _) = race.sim.spline().nearest(position).expect("samples");
         let lateral = (position - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral));
         let origin = position + Vec3::Y * 2.0;
         let ray = oag_physics::Ray::new(origin, Vec3::NEG_Y, 12.0);
-        let ground = oag_physics::Raycaster::raycast(race.collision(), ray, None, false).is_some();
+        let ground =
+            oag_physics::Raycaster::raycast(race.sim.collision(), ray, None, false).is_some();
         out.push(Slot {
             slot,
             lateral,
@@ -150,16 +151,16 @@ fn lone_craft_respawns() {
         race.sim.world.ships[slot].active = false;
     }
     race.sim.world.ships[0].active = false;
-    let mut seen = race.respawns_of(1);
+    let mut seen = race.sim.respawns_of(1);
     for tick in 0..18_000u64 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        if race.respawns_of(1) != seen {
-            seen = race.respawns_of(1);
+        if race.sim.respawns_of(1) != seen {
+            seen = race.sim.respawns_of(1);
             let ship = &race.sim.world.ships[1];
             let position = ship.physics.body.position;
             println!(
                 "RESPAWN tick {tick} cause {:?} pos ({:.1}, {:.1}, {:.1}) index {}",
-                race.last_respawn_cause_of(1),
+                race.sim.last_respawn_cause_of(1),
                 position.x,
                 position.y,
                 position.z,
@@ -168,7 +169,7 @@ fn lone_craft_respawns() {
         }
         if tick < 400 && tick % 50 == 0 {
             let p = race.sim.world.ships[1].physics.body.position;
-            let (i, s, _) = race.spline().nearest(p).unwrap();
+            let (i, s, _) = race.sim.spline().nearest(p).unwrap();
             let lat = (p - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral));
             println!(
                 "TRACE tick {tick} index {i} lat {lat:.1} corridor [{:.1},{:.1}] ",
@@ -316,20 +317,20 @@ fn player_departures() {
             for slot in 1..oag_gameplay::MAX_SHIPS {
                 race.sim.world.ships[slot].active = false;
             }
-            race.set_autopilot(true);
+            race.sim.set_autopilot(true);
             let mut peak = 0.0f32;
             for _ in 0..6_000 {
                 race.tick(&oag_gameplay::PlayerInputs::none());
                 let p = race.sim.world.ships[0].physics.body.position;
-                peak = peak.max(race.spline().distance_to(p).unwrap_or(0.0));
+                peak = peak.max(race.sim.spline().distance_to(p).unwrap_or(0.0));
             }
             println!(
                 "DEPART {} {:?} peak {:.1} respawns {} cause {:?}",
                 circuit.id,
                 level,
                 peak,
-                race.respawns(),
-                race.last_respawn_cause_of(0)
+                race.sim.respawns(),
+                race.sim.last_respawn_cause_of(0)
             );
         }
     }

@@ -222,10 +222,10 @@ fn photo_mode_draws_every_section_and_leaving_restores_the_cull() {
 #[test]
 fn photo_modes_weather_section_is_the_subjects() {
     let mut race = race_on_a_sectioned_straight();
-    let last = race.spline().len() - 1;
-    let pos = race.spline().sample(last).expect("a sample").pos;
+    let last = race.sim.spline().len() - 1;
+    let pos = race.sim.spline().sample(last).expect("a sample").pos;
     let line = (0..race.sim.ai_order.len())
-        .find(|&k| race.ai_sample_index(k) == Some(last))
+        .find(|&k| race.sim.ai_sample_index(k) == Some(last))
         .expect("the last sample is on the racing line");
     let ship = &mut race.sim.world.ships[3];
     ship.physics.body.position = Vec3::from_array(pos);
@@ -243,6 +243,6 @@ fn photo_modes_weather_section_is_the_subjects() {
     assert_ne!(subject, seat);
     assert_eq!(
         subject,
-        race.spline().sample(last).expect("a sample").section_id
+        race.sim.spline().sample(last).expect("a sample").section_id
     );
 }

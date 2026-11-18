@@ -609,7 +609,7 @@ change, `Camera_SubmitScene`'s viewport count, see
   per scene, so every view reads the primary's speed class.
 - **The reticle of a view that is not the primary's is display only.** It is
   projected through that slot's own chase camera and field of view
-  (`SlotHud::sight`, fed by `Race::sight_target(slot)`) at the title's HUD aspect, so
+  (`SlotHud::sight`, fed by `RaceSim::sight_target(slot)`) at the title's HUD aspect, so
   a narrow view sees a slightly wider vertical field than it assumes. It is told the
   slot's lock, which is simulation state (`RaceSim::locks`, `crates/raceplay/src/lock.rs`):
   every person-flown slot's shot waits for its own lock, as the primary's does
@@ -974,7 +974,7 @@ the circuit's animated nodes), so no view's map draws the static circuit at all 
 [shadows.md](shadows.md), step 7. Not re-measured on the iGPU.
 
 *The floor rays ask the road once per point* (2026-10-13, `shadow-floor-rays`). The hull gather's
-cost was `conform_to_floor`: one `Race::floor_above` ray (a `raycast_all` over the circuit's BVH)
+cost was `conform_to_floor`: one `RaceSim::floor_above` ray (a `raycast_all` over the circuit's BVH)
 per output vertex, twelve per coarse hull triangle. A triangle has six distinct points (three
 corners, three midpoints), each shared by three or four of the twelve, and the ear-clipped fan of
 a hull ring shares its corners and diagonals across neighbouring triangles, so most rays repeated
@@ -1864,7 +1864,7 @@ emulator yet): PS2 Pulse `FUN_0012ad78`/`FUN_0012b880` and HD/Fury's `SPArcade` 
   clean before and after; no golden changed).
 - A craft keeps its own pilot and driver seed when it changes row, so nobody's character moves.
   The laws that key on the grid *row* follow the new row: the original AI's `8 - grid` formation slot
-  and `GridPlace<N>` start stats take `rank_from_back` (`Race::use_original_ai`, campaign only, so one
+  and `GridPlace<N>` start stats take `rank_from_back` (`RaceSim::use_original_ai`, campaign only, so one
   person there today), and the `pilots on the grid` log line lists the rows.
 - If the head count at launch is higher than the devices that turn up (an unplugged pad), the rows are still the people's and the vacant ones are flown by
   the grid's driver (`follow_devices`).

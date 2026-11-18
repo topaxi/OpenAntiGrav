@@ -42,10 +42,10 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
-    race.set_autopilot(true);
-    let count = race.ship_count() as usize;
+    race.sim.set_autopilot(true);
+    let count = race.sim.ship_count() as usize;
     assert!(count >= 2, "{track}: no field to split");
-    let routes = race.route_count();
+    let routes = race.sim.route_count();
     let mut forks = Forks::default();
     let mut decided = vec![0u16; count];
     let mut laps: Vec<u32> = (0..count)
@@ -92,7 +92,7 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
             "{track}: slot {slot} lap {} route {} respawns {} state {:?} progress {:?} index {}",
             ship.standing.lap,
             ship.driver.branching.route,
-            race.respawns_of(slot),
+            race.sim.respawns_of(slot),
             ship.physics.craft_state,
             ship.standing.progress,
             ship.driver.index
@@ -223,7 +223,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
     }
 
     // The ring point in the bypassed stretch furthest from the route.
-    let course = race.course().expect("a ring").clone();
+    let course = race.sim.course().expect("a ring").clone();
     let route = &course.routes()[0];
     let n = course.len();
     let span = (route.merge + n - route.split) % n;
@@ -244,7 +244,7 @@ fn a_craft_shoved_onto_the_other_side_of_a_fork_follows_that_side() {
         "the route never leaves the ring's side: {stray:.1}"
     );
 
-    let on_route = race.line_of(1).len() - route.len() / 2;
+    let on_route = race.sim.line_of(1).len() - route.len() / 2;
     let position = course.position(ring_at).expect("in range");
     let tangent = course.tangent(ring_at).expect("in range");
     {

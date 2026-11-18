@@ -4,7 +4,7 @@
 //! `World::primary_slot` falls back to slot 0 for a race with no person in it, which is the slot a
 //! full-screen HUD and a single camera follow. That slot is stepped by the player step whatever its
 //! controller says, so the operator's autopilot is what flies it
-//! ([`Race::set_autopilot`]); every other slot is an opponent.
+//! ([`RaceSim::set_autopilot`](crate::RaceSim::set_autopilot)); every other slot is an opponent.
 
 use oag_gameplay::{Controller, MAX_PLAYERS};
 
@@ -27,7 +27,7 @@ impl Race {
     /// nothing.
     pub fn fly_as_demo(&mut self, demo: &oag_title::demo::Demo) {
         self.sim.world.controllers = [Controller::Ai; MAX_PLAYERS];
-        self.set_autopilot(true);
+        self.sim.set_autopilot(true);
         self.sim.fire_terms.use_scale = demo.rules.ai_weapon_use.value;
         #[cfg(feature = "view")]
         {
@@ -62,7 +62,7 @@ mod tests {
         assert_eq!(race.sim.world.human_slots().count(), 0);
         let camera_slot = race.sim.world.primary_slot();
         assert!(
-            race.flown_for_the_player(camera_slot),
+            race.sim.flown_for_the_player(camera_slot),
             "the camera slot is stepped as a player and nobody holds its pad: the autopilot must"
         );
         for slot in 0..usize::from(race.sim.world.ship_count) {

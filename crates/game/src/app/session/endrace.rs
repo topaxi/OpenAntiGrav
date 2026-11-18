@@ -42,7 +42,7 @@ impl Session {
         if stage.demo.is_some() {
             return;
         }
-        if !stage.race.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
+        if !stage.race.sim.finished() || stage.endrace.is_some() || stage.endrace_unavailable {
             return;
         }
         // The prefetch still running on its worker: try again next frame rather than wait on it.

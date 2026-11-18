@@ -192,7 +192,7 @@ impl Session {
     }
 
     fn racing(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+        matches!(&self.stage, Stage::Race(stage) if !stage.race.sim.finished())
     }
 
     fn window_size(&self) -> (f32, f32) {

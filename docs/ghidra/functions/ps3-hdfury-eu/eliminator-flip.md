@@ -164,7 +164,7 @@ No hull-side effect or sound of the flip was looked for.
 
 `oag_title::Title::eliminator_flip` is `0.2 s` on HD and `oag_raceplay::score_law::of` resolves it
 once at load into `Setup::flip_law`, `None` outside an Eliminator. `oag_physics::flip` is the turn;
-`Race::tick_flips` starts it on a person's `Button::Flip` press, past the countdown, on a craft in
+`RaceSim::tick_flips` starts it on a person's `Button::Flip` press, past the countdown, on a craft in
 the race. `Button::Flip` is bit 10 of the masks a replay and the wire already carry, so neither
 format moves and a replay without the move reads as before; the flip enters the state hash only once a
 craft has flipped.
@@ -174,7 +174,7 @@ craft has flipped.
   alone. `F` on a keyboard, and a row in the bindings page. **Chosen, not measured:** the key.
   Touch has no flip button.
 - The lean is `ShipState::steer_lean_follower`, HD's `craft+0x6a58` follower.
-- The race line's marker turns on `Race::facing_back`, the test `wrong_way_kill` runs. The original's
+- The race line's marker turns on `RaceSim::facing_back`, the test `wrong_way_kill` runs. The original's
   frames of a flip show no `WRONG WAY`, so a race with a flip draws none; the rumble is untouched.
   That is read off frames, not off the code: `Hud_UpdateWrongWay` (`0x00093c48`) reads `status+0x54`,
   whose writer is not traced.

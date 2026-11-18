@@ -209,7 +209,7 @@ tally and banks its total.
 Awarded in ours through `XpTally`, fed from `Race::tick`'s own edges and never part of the state hash:
 `oag_raceplay::tests::xp_edges` pins the lap, launch, pad, place, rocket, shield and Quake feeds, and
 `an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors` runs a disc event. A hit is
-attributed to the human through `Impact::owner` (the Eliminator's `Race::impact_reaching`, shared)
+attributed to the human through `Impact::owner` (the Eliminator's `RaceSim::impact_reaching`, shared)
 or `Wave::owner`; Missile, Plasma, Cannon, Mine and Bomb go through the same lookup and are not
 tested one by one. Never paid by the original and left unpaid here: 59-61, 65-70, 77.
 An award that would land after the player's own finish is not banked: the finish banks and empties the tally

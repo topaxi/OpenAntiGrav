@@ -33,7 +33,7 @@ fn first_lock(weapon: Weapon, pulse: bool, distance: f32, side: f32) -> Option<u
     let (mut race, at) = parked_race(weapon, pulse, distance, side);
     (0..200).find(|_| {
         tick_parked(&mut race, at);
-        race.lock_of(0).locked()
+        race.sim.lock_of(0).locked()
     })
 }
 
@@ -69,10 +69,10 @@ fn the_reticle_shows_the_lock_the_simulation_took() {
             tick_parked(&mut race, at);
             assert_eq!(
                 race.sight().locked(),
-                race.lock_of(0).locked(),
+                race.sim.lock_of(0).locked(),
                 "{weapon:?}: the reticle disagrees with the lock on tick {tick}"
             );
-            taken |= race.lock_of(0).locked();
+            taken |= race.sim.lock_of(0).locked();
         }
         assert!(taken, "{weapon:?} never locked");
     }
@@ -104,13 +104,13 @@ fn the_lock_does_not_read_the_camera() {
             turned.sim.state_hash(),
             "the camera reached the state hash on tick {tick}"
         );
-        if locked_at.is_none() && turned.lock_of(0).locked() {
+        if locked_at.is_none() && turned.sim.lock_of(0).locked() {
             locked_at = Some(tick);
         }
     }
     assert_eq!(locked_at, Some(48), "the lock moved with the camera");
     assert!(
-        !turned.sight().locked() || turned.lock_of(0).locked(),
+        !turned.sight().locked() || turned.sim.lock_of(0).locked(),
         "the reticle cannot be locked on a lock the simulation does not hold"
     );
 }
@@ -200,7 +200,7 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
                 quiet.sim.state_hash(),
                 "{weapon:?}: the quiet path left the normal one on tick {tick}"
             );
-            if locked_at.is_none() && quiet.lock_of(0).locked() {
+            if locked_at.is_none() && quiet.sim.lock_of(0).locked() {
                 locked_at = Some(tick);
             }
         }
@@ -212,10 +212,10 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
             !quiet.sight().locked() && !quiet.sight().visible(),
             "{weapon:?}: a quiet tick advanced the picture's reticle"
         );
-        normal.drain_announcements();
-        quiet.drain_announcements();
-        normal.drain_class_announcements();
-        quiet.drain_class_announcements();
+        normal.sim.drain_announcements();
+        quiet.sim.drain_announcements();
+        normal.sim.drain_class_announcements();
+        quiet.sim.drain_class_announcements();
         assert_eq!(
             format!("{:?}", normal.sim),
             format!("{:?}", quiet.sim),

@@ -206,7 +206,7 @@ which says so. It is left out rather than left half-built.
 Nothing here schedules a reset on its own initiative - `Fsr3::render` only
 ever does what `Temporal::reset` tells it to, and that flag is produced
 entirely on the `oag-game` side, by `race::scene::motion::CutWatch`. It
-observes `Race::camera_view()` and the player's own `Race::respawns()` once a
+observes `Race::camera_view()` and the player's own `RaceSim::respawns()` once a
 frame and reports a cut whenever either has moved since the last observation:
 a `SELECT`-cycled view change (`Race::set_camera_view`), or the player's craft
 being teleported back onto the track after a `Reset` contact. Both hand the

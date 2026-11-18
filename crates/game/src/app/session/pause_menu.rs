@@ -42,7 +42,7 @@ impl Session {
             // A demo is not paused into: leaving it is the main menu. Nor is a recording being
             // watched: the viewer's exit lands on REPLAYS and nothing is parked to resume or quit.
             Stage::Race(stage)
-                if !stage.race.finished() && stage.demo.is_none() && !stage.watching =>
+                if !stage.race.sim.finished() && stage.demo.is_none() && !stage.watching =>
             {
                 Some(&**stage)
             }
@@ -138,7 +138,7 @@ impl Session {
         let Some(parked) = self.suspended_race.as_mut() else {
             return;
         };
-        if parked.race.pilot_assist_level() == level {
+        if parked.race.sim.pilot_assist_level() == level {
             return;
         }
         // Applied and recorded together: the recording keeps going and the change is an

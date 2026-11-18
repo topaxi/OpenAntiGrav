@@ -384,7 +384,7 @@ which is the whole point of the weapon.
 
 Read whole on [repulser.md](../../docs/ghidra/functions/psp-pulse-usa/repulser.md)
 (twenty functions, 60-90) and built: `oag_weapons::projectile::repulser`,
-`Race::fire_repulser`/`advance_repulsers`/`advance_repulser_visual`. What is
+`RaceSim::fire_repulser`/`advance_repulsers`/`advance_repulser_visual`. What is
 still open, most player-visible first:
 
 - ~~The field model is not drawn~~ **drawn 2026-10-04 (pulse-repulser-2)**:
@@ -729,7 +729,7 @@ gated on `projectile.kind.is_none()` - true for *any* live projectile - to
 decide who rides a [`ROCKET_FLARE_EFFECT`] (`WO_ROCKET_FLARE`) instance. That
 effect's emitters are looping (see `mine.md`'s neighbour reading on
 `Rocket_Init`), so a mine or a bomb got it attached the instant
-[`Race::lay_mines`] placed it and kept it burning at that fixed point for the
+[`RaceSim::lay_mines`] placed it and kept it burning at that fixed point for the
 charge's whole life - which reads exactly like an explosion that started at
 the drop and never really ended. Invisible to `just test`: the headless
 harness builds `Race` with an empty `psys::Library`
@@ -1169,7 +1169,7 @@ suite (931 passed).
 - ~~**Their own cues are still unwired**~~ **One of six landed, 2026-09-06;
   five stay open and here is exactly why.** `Cue::MineLaunch` now fires
   `MINELAUNCH` off the firing craft's own emitter (`Placement::Craft`) every
-  time `Race::lay_mines` lays a charge whose weapon is `Weapon::Mine` -
+  time `RaceSim::lay_mines` lays a charge whose weapon is `Weapon::Mine` -
   `crates/sound/src/sfx.rs`, wired from `crates/raceplay/src/weapons.rs`.
   Both `Mine_Init` (`0x08859ac8`) and its only caller, `Weapon_DropMines`
   (`0x088675cc`), were decompiled directly this session to settle *how* the
@@ -1484,7 +1484,7 @@ HUD comparison that surfaced this is closed; its thread was deleted once it land
 **So a blanket countdown weapon gate may now be the correct call**, where it
 was rejected on the reasoning above.
 
-**Landed 2026-09-07**: `Race::grant_free_turbo`'s call site moved from
+**Landed 2026-09-07**: `RaceSim::grant_free_turbo`'s call site moved from
 `Race::start` (tick 0) to the release edge (`world.tick ==
 oag_race::state::COUNTDOWN_TICKS`, i.e. the same tick
 `RaceState::thrust_gated` first reads `false`) - (the

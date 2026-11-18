@@ -85,7 +85,7 @@ fn run(cell: &Cell) -> Vec<Craft> {
     }
     let mut race = race::Race::start(setup);
     race.sim.world.ships[0].active = false;
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     let mut crafts = vec![Craft::default(); count];
     let mut prev_wall = vec![0.0f32; count];
     let mut prev_roll = vec![0.0f32; count];
@@ -97,12 +97,13 @@ fn run(cell: &Cell) -> Vec<Craft> {
         race.tick(&PlayerInputs::none());
         for s in 1..count {
             let ship = &race.sim.world.ships[s];
-            let wall = race.wall_shield_charged_of(s);
-            let roll = race.roll_shield_spent_of(s);
-            let resp = race.respawns_of(s);
+            let wall = race.sim.wall_shield_charged_of(s);
+            let roll = race.sim.roll_shield_spent_of(s);
+            let resp = race.sim.respawns_of(s);
             let (dwall, droll) = (wall - prev_wall[s], roll - prev_roll[s]);
             if resp != prev_resp[s] {
                 let cause = race
+                    .sim
                     .last_respawn_cause_of(s)
                     .map_or("unknown", |cause| cause.label());
                 *crafts[s].rescues.entry(cause).or_default() += resp - prev_resp[s];

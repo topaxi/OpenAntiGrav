@@ -90,7 +90,8 @@ impl super::super::Scene {
         out.clear();
         let alpha = race.draw_alpha();
         let generation = race.pose_generations();
-        let models = || (0..usize::from(race.ship_count())).map(|slot| race.ship_tick_model(slot));
+        let models =
+            || (0..usize::from(race.sim.ship_count())).map(|slot| race.ship_tick_model(slot));
         let mut cache = self.hull_cache.borrow_mut();
         let fresh = cache.current.as_ref().is_some_and(|gather| {
             gather.generation == generation.current && gather.models.iter().copied().eq(models())

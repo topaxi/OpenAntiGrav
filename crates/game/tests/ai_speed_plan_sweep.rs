@@ -162,8 +162,9 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
     // top level, standing in for a human who keeps up; the opponents are still
     // the measured craft. Otherwise slot 0 sits out.
     if scenario == "player" {
-        race.set_autopilot(true);
-        race.set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
+        race.sim.set_autopilot(true);
+        race.sim
+            .set_autopilot_tuning(oag_ai::Difficulty::Ace.tune(&oag_ai::Tuning::default()));
     } else {
         race.sim.world.ships[0].active = false;
     }
@@ -197,24 +198,24 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
     };
     for tick in 0..ticks() {
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
-            craft.respawns_before = race.respawns_of(slot);
+            craft.respawns_before = race.sim.respawns_of(slot);
         }
         race.tick(&PlayerInputs::none());
         let mut live = false;
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
-            if race.respawns_of(slot) != craft.respawns_before {
+            if race.sim.respawns_of(slot) != craft.respawns_before {
                 craft.recovered = true;
                 if std::env::var_os("OAG_SWEEP_CAUSES").is_some() {
                     let ship = &race.sim.world.ships[slot];
                     eprintln!(
                         "respawn {id} {class} slot {slot} tick {tick} index {} cause {:?}",
                         ship.driver.index,
-                        race.last_respawn_cause_of(slot)
+                        race.sim.last_respawn_cause_of(slot)
                     );
                 }
             }
             let ship = &race.sim.world.ships[slot];
-            let contacts = race.wall_contact_ticks_of(slot);
+            let contacts = race.sim.wall_contact_ticks_of(slot);
             if let Some(width) = profile_bin()
                 && craft.lap > 1
                 && !ship.standing.finished()
@@ -315,8 +316,8 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
             fmt(best),
             fmt(mean),
             fmt(any),
-            race.wall_contact_ticks_of(slot),
-            race.respawns_of(slot),
+            race.sim.wall_contact_ticks_of(slot),
+            race.sim.respawns_of(slot),
             ship.standing.deaths,
             u8::from(
                 ship.physics.craft_state != oag_physics::CraftState::Racing
@@ -478,7 +479,7 @@ fn plan_floor_report() {
                 continue;
             };
             let race = race::Race::start(loaded.setup);
-            let (plan, report) = race.build_speed_plan(1);
+            let (plan, report) = race.sim.build_speed_plan(1);
             let mut runs: Vec<(usize, usize, f32)> = Vec::new();
             for i in 0..plan.len() {
                 let ceiling = plan.ceiling(i);
@@ -540,7 +541,7 @@ fn takeoff_census() {
                 continue;
             };
             let race = race::Race::start(loaded.setup);
-            let line = race.racing_line();
+            let line = race.sim.racing_line();
             let n = line.len();
             for lip in 0..n {
                 let before = (lip + n - 1) % n;

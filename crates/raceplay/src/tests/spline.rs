@@ -133,11 +133,11 @@ fn an_ai_index_reads_the_sample_the_lap_puts_there() {
     });
     race.sim.world.ships[0].active = true;
 
-    let length = race.racing_line().len();
+    let length = race.sim.racing_line().len();
     assert!(length > 0);
     let walked: Vec<u16> = (0..length)
         .map(|ai_index| {
-            let sample = race.sample_index_of(ai_index).expect("a sample index");
+            let sample = race.sim.sample_index_of(ai_index).expect("a sample index");
             race.sim.spline.path_of(sample).expect("a path")
         })
         .collect();
@@ -154,7 +154,10 @@ fn an_ai_index_reads_the_sample_the_lap_puts_there() {
     // *path* it lands on: this fixture's three paths are clones of one
     // straight, so comparing positions would hold even on a wrap into the
     // branch the lap skips.
-    assert_eq!(race.sample_index_of(length), race.sample_index_of(0));
+    assert_eq!(
+        race.sim.sample_index_of(length),
+        race.sim.sample_index_of(0)
+    );
 }
 
 /// A local search finds what a whole-table search would, when the answer is
@@ -194,12 +197,12 @@ fn a_local_search_that_misses_reports_a_distance_the_caller_will_reject() {
 #[test]
 fn a_position_off_the_track_refuses_to_name_a_section() {
     let race = Race::start(setup(Handling::default()));
-    let spline = race.spline();
+    let spline = race.sim.spline();
     let sample = *spline.sample(4).expect("a sample");
     let on_line = Vec3::from_array(sample.pos);
 
     assert_eq!(
-        race.section_of(4, on_line),
+        race.sim.section_of(4, on_line),
         sample.section_id,
         "a craft on the racing line names its own section"
     );
@@ -210,22 +213,24 @@ fn a_position_off_the_track_refuses_to_name_a_section() {
     let half_width = 12.0 * OFF_TRACK_HALF_WIDTHS;
     let lateral = Vec3::from_array(sample.lateral);
     assert_eq!(
-        race.section_of(4, on_line + lateral * (half_width - 1.0)),
+        race.sim
+            .section_of(4, on_line + lateral * (half_width - 1.0)),
         sample.section_id,
         "still on the track at just under the gate"
     );
     assert_eq!(
-        race.section_of(4, on_line + lateral * (half_width + 1.0)),
+        race.sim
+            .section_of(4, on_line + lateral * (half_width + 1.0)),
         UNPLACED,
         "just past the gate, nothing may be culled on this position's word"
     );
     assert_eq!(
-        race.section_of(4, on_line + Vec3::Y * 200.0),
+        race.sim.section_of(4, on_line + Vec3::Y * 200.0),
         UNPLACED,
         "far above the track - airborne over a gap, or fallen through"
     );
     assert_eq!(
-        race.section_of(9_999, on_line),
+        race.sim.section_of(9_999, on_line),
         UNPLACED,
         "a sample index the table does not have"
     );

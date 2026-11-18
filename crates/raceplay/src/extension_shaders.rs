@@ -137,13 +137,13 @@ impl Race {
         self.view
             .stage
             .extend_shaded(&mut surfaces, right, up, guard.as_ref());
-        for (mod_id, beam) in self.extension_beams() {
+        for (mod_id, beam) in self.sim.extension_beams() {
             let place = match beam.shader {
                 None => Some(FLAT),
                 Some(shader) => self.view.handles.shaders().place(mod_id, shader),
             };
             let in_world = |slot: usize| {
-                usize::from(self.ship_count()) > slot && self.sim.world.ships[slot].in_world()
+                usize::from(self.sim.ship_count()) > slot && self.sim.world.ships[slot].in_world()
             };
             let (Some(place), true) = (place, in_world(beam.from) && in_world(beam.to)) else {
                 continue;
@@ -171,7 +171,7 @@ impl Race {
     /// The view being drawn's fill through a shader. One that names a shader the mod lacks
     /// is no fill.
     pub(crate) fn mod_fill(&self) -> Option<Fill> {
-        let (mod_id, shader, colour) = self.extension_shaded_fill(self.viewed_slot())?;
+        let (mod_id, shader, colour) = self.sim.extension_shaded_fill(self.viewed_slot())?;
         Some(Fill {
             shader: self.view.handles.shaders().place(mod_id, shader)?,
             colour,
@@ -182,7 +182,7 @@ impl Race {
     pub(crate) fn mod_shader_params(&self) -> Vec<[Option<f32>; MAX_PARAMS]> {
         let shaders = self.view.handles.shaders();
         let mut params = vec![[None; MAX_PARAMS]; shaders.list().len()];
-        for (mod_id, shader, index, value) in self.extension_shader_params(self.viewed_slot()) {
+        for (mod_id, shader, index, value) in self.sim.extension_shader_params(self.viewed_slot()) {
             if let Some(place) = shaders.place(mod_id, shader) {
                 params[place][usize::from(index)] = Some(value);
             }

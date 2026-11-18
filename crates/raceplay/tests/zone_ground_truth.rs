@@ -1023,7 +1023,7 @@ fn a_zone_craft_that_falls_short_of_05_tracks_first_jump_follows_the_deck_it_lan
     })
     .expect("loading the race");
     let mut zone = race::Race::start(loaded.setup);
-    zone.set_autopilot(true);
+    zone.sim.set_autopilot(true);
     let shield = zone.ship().physics.shield;
     let mut landed_on_route = false;
     for _ in 0..3_000 {

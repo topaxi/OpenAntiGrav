@@ -121,7 +121,7 @@ impl Scene {
         grade.follow(
             zone,
             race.sim.world.primary_race().zone_timer,
-            race.dt(),
+            race.sim.dt(),
             race.ship().physics.body.position.to_array(),
         );
         stepped

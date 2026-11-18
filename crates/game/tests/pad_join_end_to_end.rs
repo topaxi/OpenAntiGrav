@@ -58,7 +58,7 @@ fn fly(keyboard_slot: Option<usize>) -> Race {
     for _ in 0..60 {
         let inputs = controls.player_snapshots();
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     race
 }

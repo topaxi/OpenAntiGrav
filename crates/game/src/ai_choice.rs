@@ -9,7 +9,7 @@
 //! included.
 //!
 //! [`decide`] is the pure half, so the rules test without a disc; [`apply`]
-//! hands its answer to [`Race::use_original_ai`], which keeps its own honest
+//! hands its answer to [`RaceSim::use_original_ai`](oag_raceplay::RaceSim::use_original_ai), which keeps its own honest
 //! fallback (no tables for the title and class, or no closed lap) and logs it.
 
 use oag_raceplay::Race;
@@ -126,7 +126,7 @@ pub fn decide(choice: AiChoice, opponents: bool, humans: usize, source: Source) 
 
 /// Decides and acts on `race`, logging once which AI flies and why. Returns
 /// whether the original driver flies (`false` for the reasons in [`Reason`]
-/// and for [`Race::use_original_ai`]'s own fallbacks, which it logs itself).
+/// and for [`RaceSim::use_original_ai`](oag_raceplay::RaceSim::use_original_ai)'s own fallbacks, which it logs itself).
 pub fn apply(race: &mut Race, choice: AiChoice, source: Source) -> bool {
     apply_noting(race, choice, source).0
 }
@@ -151,9 +151,10 @@ pub fn apply_noting(
             level,
             event,
         } => {
-            let flies = race.use_original_ai(skill, level);
+            let flies = race.sim.use_original_ai(skill, level);
             if flies && let Some((pad_tracking, weapon_avoidance)) = event {
-                race.set_original_event_ai_skills(pad_tracking, weapon_avoidance);
+                race.sim
+                    .set_original_event_ai_skills(pad_tracking, weapon_avoidance);
             }
             let note =
                 (flies && event.is_none()).then_some(oag_raceplay::OriginalAi { skill, level });

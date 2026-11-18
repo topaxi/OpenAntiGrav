@@ -20,19 +20,19 @@
 use oag_core::math::Vec3;
 use oag_race::Mode;
 
-use super::Race;
+use super::RaceSim;
 
 /// `dot(forward, tangent)` below this is wrong-way for the kill (`0xbecccccd`, `0x088428dc`).
 pub const WRONG_WAY_DOT: f32 = -0.4;
 
-impl Race {
+impl RaceSim {
     /// Writes [`oag_physics::ShipState::wrong_way_kill`] for every craft this tick: set only in
     /// an Eliminator race, on a title that has the law, for a craft facing back down the track.
     pub(super) fn set_wrong_way_kill(&mut self) {
-        let armed = self.sim.eliminator_wrong_way_kill && self.sim.world.mode() == Mode::Eliminator;
-        for slot in 0..self.sim.world.ships.len() {
+        let armed = self.eliminator_wrong_way_kill && self.world.mode() == Mode::Eliminator;
+        for slot in 0..self.world.ships.len() {
             let kill = armed && self.facing_back(slot);
-            self.sim.world.ships[slot].physics.wrong_way_kill = kill;
+            self.world.ships[slot].physics.wrong_way_kill = kill;
         }
     }
 
@@ -40,9 +40,8 @@ impl Race {
     /// HD `craft+0x6ad8`, which turns the race line's marker
     /// (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`).
     pub(super) fn facing_back(&self, slot: usize) -> bool {
-        let body = &self.sim.world.ships[slot].physics.body;
-        self.sim
-            .spline
+        let body = &self.world.ships[slot].physics.body;
+        self.spline
             .nearest(body.position)
             .is_some_and(|(_, sample, _)| {
                 let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();

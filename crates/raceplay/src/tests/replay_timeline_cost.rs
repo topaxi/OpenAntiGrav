@@ -438,14 +438,14 @@ fn replay_timeline_cost_sweep() {
     println!(
         "start: Race::start(setup.clone()) {start_ms:.0} ms first, {copy_ms:.0} ms second; \
          ships {}; size_of RaceSim {} bytes, Race {} bytes",
-        race.ship_count(),
+        race.sim.ship_count(),
         std::mem::size_of::<RaceSim>(),
         std::mem::size_of::<Race>(),
     );
 
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
-    let slots = usize::from(race.ship_count());
+    let slots = usize::from(race.sim.ship_count());
 
     let before_run = Split::of(&race.sim);
     let constants_at_start = constant_part(&race.sim);
@@ -477,7 +477,7 @@ fn replay_timeline_cost_sweep() {
         if [617, 5117, 9017].contains(&now) {
             probes.push((now, race.snapshot_sim()));
         }
-        if finished_at.is_none() && race.finished() {
+        if finished_at.is_none() && race.sim.finished() {
             finished_at = Some(now);
         }
         track
@@ -592,7 +592,7 @@ fn replay_timeline_cost_sweep() {
                     race.tick_sim_only(&idle);
                 } else {
                     race.tick(&idle);
-                    race.drain_cues();
+                    race.sim.drain_cues();
                 }
             }
             let us = t.elapsed().as_secs_f64() * 1e6 / 240.0;
@@ -676,7 +676,7 @@ fn replay_timeline_cost_sweep() {
     for (_, sim) in keyframes.iter().skip(2).step_by(5) {
         for (inputs, out) in [(&idle, &mut dead), (&held, &mut thrust)] {
             race.restore_sim(sim);
-            race.set_autopilot(false);
+            race.sim.set_autopilot(false);
             let base = race.sim.wall_contact_ticks[0];
             let shield = race.ship().physics.shield;
             let mut first = None;
@@ -691,7 +691,7 @@ fn replay_timeline_cost_sweep() {
                 shield_after.push(f64::from(shield - race.ship().physics.shield));
             }
         }
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
     }
     let report = |name: &str, v: &mut Vec<f64>| {
         let (m, lo, hi) = median(v);

@@ -16,10 +16,10 @@ The official mod `oag.slipstream` (official-mods submodule `assets/mods/official
 of a portal weapon", and `hooks.md`, "Built for a portal weapon"):
 
 - `Race::move_to` (forward to a course point under a lap, the line crossing credited:
-  `Standing::jumped`, `RaceState::jumped`), `Race::point_ahead` (`Distance`: units,
+  `Standing::jumped`, `RaceState::jumped`), `RaceSim::point_ahead` (`Distance`: units,
   seconds, lap share, progress, trigger).
 - `transit` (command 27) with `transit-end` (event 11), `Ship::transit`, `Ship::in_world`,
-  reset triggers held (`Race::reset_held` in `Race::armed`).
+  reset triggers held (`RaceSim::reset_held` in `RaceSim::armed`).
 - `probe-clearance` (29) and `clearance` (12); `scale-speed` (28).
 - `[[pickup.odds]]` per title and class (`oag_tables::pickup_look::odds_for`).
 - Proof: `transit_ground_truth` (Pulse PSP EU `16_Track`), `tests::transit`,
@@ -56,7 +56,7 @@ The engine never names the mod.
    route's sample than the ring's names that route (`transit::Exit::route`, `Transit::route`, in
    the state hash only while a transit runs). `Course::route_point` maps the ring point onto the
    route (the inverse of `locate_on_route`), `Race::move_to` places the craft there, and
-   `Race::seat_on_route` (shared with `locate_player_driver`) puts the driver on the route's
+   `RaceSim::seat_on_route` (shared with `locate_player_driver`) puts the driver on the route's
    line; `Course::locate_exit` decides ring or route. A reset and every other distance (units, seconds, lap share, progress) stay on the
    ring: only a trigger can name a route, and a craft already on a route that jumps forward by
    units still comes out on the ring. Proof: `transit_ground_truth::an_exit_on_a_forks_route_...`

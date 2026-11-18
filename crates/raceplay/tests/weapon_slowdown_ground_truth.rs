@@ -100,7 +100,7 @@ fn held(button: Button) -> oag_gameplay::InputSnapshot {
 
 /// The Plasma's blast, straight off the player's disc.
 fn plasma_blast(race: &race::Race) -> BlastStats {
-    let plasma = race.plasma_stats().expect("the disc authors a Plasma");
+    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
     BlastStats {
         weapon: oag_tables::weapons::Weapon::Plasma,
         radius: plasma.blastradius,
@@ -304,6 +304,7 @@ fn a_second_plasma_inside_the_window_does_not_extend_the_timer() {
     refill_energy(&mut race);
 
     let limit = race
+        .sim
         .slowdown_limit()
         .expect("the disc authors a <Global slowdown_limit>");
     let stats = plasma_blast(&race);
@@ -370,16 +371,20 @@ fn every_decoded_weapon_authors_a_slowdown_inside_the_ceiling() {
     let Some(loaded) = single_race() else { return };
     let race = race::Race::start(loaded.setup);
     let limit = race
+        .sim
         .slowdown_limit()
         .expect("the disc authors a <Global slowdown_limit>");
 
     let authored: Vec<(&str, f32)> = [
-        ("Rocket", race.rocket_stats().map(|s| s.slowdown_time)),
-        ("Missile", race.missile_stats().map(|s| s.slowdown_time)),
-        ("Plasma", race.plasma_stats().map(|s| s.slowdown_time)),
-        ("Mine", race.mine_stats().map(|s| s.slowdown_time)),
-        ("Bomb", race.bomb_stats().map(|s| s.slowdown_time)),
-        ("Shuriken", race.shuriken_stats().map(|s| s.slowdown_time)),
+        ("Rocket", race.sim.rocket_stats().map(|s| s.slowdown_time)),
+        ("Missile", race.sim.missile_stats().map(|s| s.slowdown_time)),
+        ("Plasma", race.sim.plasma_stats().map(|s| s.slowdown_time)),
+        ("Mine", race.sim.mine_stats().map(|s| s.slowdown_time)),
+        ("Bomb", race.sim.bomb_stats().map(|s| s.slowdown_time)),
+        (
+            "Shuriken",
+            race.sim.shuriken_stats().map(|s| s.slowdown_time),
+        ),
     ]
     .into_iter()
     .filter_map(|(name, value)| value.map(|v| (name, v)))

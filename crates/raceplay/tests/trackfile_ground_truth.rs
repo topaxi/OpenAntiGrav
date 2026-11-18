@@ -507,7 +507,7 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
     let lap = race.sim.world.ships[1].standing.lap;
     println!(
         "{file}: lap {lap} after 7200 ticks, respawns {}",
-        race.respawns_of(1)
+        race.sim.respawns_of(1)
     );
     assert!(lap >= 2, "got round at all: lap {lap}");
 }
@@ -786,7 +786,7 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         );
         assert!(loaded.setup.zone.is_some(), "{}", file.display());
         let mut race = race::Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..15_200 {
             race.tick(&inputs);
@@ -794,8 +794,8 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         let zone = race.sim.world.race[0].zone;
         println!("{}: zone {zone} after 15200 ticks", file.display());
         assert!(zone >= 24, "{}: zone {zone}", file.display());
-        assert_eq!(race.respawns_of(0), 0, "{}", file.display());
-        assert!(!race.finished(), "{}", file.display());
+        assert_eq!(race.sim.respawns_of(0), 0, "{}", file.display());
+        assert!(!race.sim.finished(), "{}", file.display());
     }
 }
 
@@ -876,7 +876,7 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
             .unwrap_or_else(|| panic!("{image}: no host speed pads line: {:#?}", loaded.report));
         println!("{image}: {pads}");
         let mut race = race::Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..1_800 {
             race.tick(&inputs);

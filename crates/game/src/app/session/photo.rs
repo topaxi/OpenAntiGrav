@@ -99,7 +99,7 @@ impl super::Session {
     /// is on screen or parked behind the menus, and this build can write a shot.
     pub(crate) fn photo_available(&self) -> bool {
         let race = match &self.stage {
-            Stage::Race(stage) if !stage.race.finished() => Some(stage),
+            Stage::Race(stage) if !stage.race.sim.finished() => Some(stage),
             _ => self.suspended_race.as_ref(),
         };
         self.net.is_none() && race.is_some_and(|stage| fits(stage))

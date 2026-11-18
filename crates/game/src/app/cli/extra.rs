@@ -209,7 +209,7 @@ pub(crate) struct WreckArgs {
     /// A verification aid, there because a wreck is hard to produce at a chosen
     /// place and moment. It enters the state `Ship_Damage`'s depletion does, so
     /// the sequence that follows is the simulation's own. See
-    /// [`oag_raceplay::Race::force_destroy`].
+    /// [`oag_raceplay::RaceSim::force_destroy`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wreck: Option<String>,
 
@@ -227,7 +227,7 @@ pub(crate) struct WreckArgs {
     /// for a seat's wall sparks, shake and contact sound, there because a
     /// headless run flies no person into a wall (it meets one where the circuit has a wall on
     /// that side). The wall contact that follows
-    /// is the simulation's own. See [`oag_raceplay::Race::force_wall_slide`].
+    /// is the simulation's own. See [`oag_raceplay::RaceSim::force_wall_slide`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wall_slide: Option<String>,
 
@@ -253,7 +253,7 @@ pub(crate) struct WreckArgs {
     /// at the end of a tick: `TICK:SLOT`, e.g. `600:1`. A verification aid for
     /// the Bomb's detonation, there because a headless run has no rival that
     /// drives over it. The next tick's own trip test does the rest. See
-    /// [`oag_raceplay::Race::force_bomb_trip`].
+    /// [`oag_raceplay::RaceSim::force_bomb_trip`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_bomb_trip: Option<String>,
 
@@ -287,7 +287,7 @@ pub(crate) struct WreckArgs {
     /// fired at the end of a tick: `TICK:SLOT`, e.g. `330:1`. The same aid
     /// `--force-bomb-trip` is, for the Missile's explosion: a headless run's
     /// rivals drive away from the shot. The next tick's own hit test does the
-    /// rest. See [`oag_raceplay::Race::force_missile_hit`].
+    /// rest. See [`oag_raceplay::RaceSim::force_missile_hit`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_missile_hit: Option<String>,
 
@@ -389,7 +389,7 @@ pub(crate) struct BlurArgs {
 pub(crate) struct DriverArgs {
     /// Let an opponent's driver fly the player's craft.
     ///
-    /// A verification aid - see `race::Race::set_autopilot` - and the only way
+    /// A verification aid - see `race::RaceSim::set_autopilot` - and the only way
     /// to reach the **end** of a race without a human at the keyboard for four
     /// minutes: a race finishes when the player crosses the line for the last
     /// time, so nothing that holds the throttle in a straight line ever gets

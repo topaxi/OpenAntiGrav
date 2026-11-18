@@ -59,7 +59,7 @@ fn hashes(
         for slot in 0..usize::from(params.people) {
             race.sim.world.controllers[slot] = oag_gameplay::Controller::Local;
         }
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
     }
     let none = PlayerInputs::none();
     let mut out = Vec::new();
@@ -67,7 +67,7 @@ fn hashes(
     while out.len() < ticks && after < 60 {
         race.tick_sim_only(&none);
         out.push(race.sim.state_hash());
-        if to_the_finish && race.finished() {
+        if to_the_finish && race.sim.finished() {
             after += 1;
         }
     }

@@ -267,7 +267,7 @@ impl Race {
             return Vec::new();
         }
         (0..MAX_SHIPS)
-            .filter(|&slot| self.ship_active(slot))
+            .filter(|&slot| self.sim.ship_active(slot))
             .filter_map(|slot| {
                 let light = self.view.engine_lights.get(slot).copied().flatten()?;
                 let nozzle = self.nozzle_local_of(slot)?;

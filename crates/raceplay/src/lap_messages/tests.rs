@@ -268,7 +268,7 @@ mod race_wiring {
             ..Default::default()
         };
         race.observe_lap(0, &done, &clean);
-        race.drain_cues().into_iter().map(|e| e.cue).collect()
+        race.sim.drain_cues().into_iter().map(|e| e.cue).collect()
     }
 
     /// Pulse voices the perfect lap on the crossing tick and, its executable

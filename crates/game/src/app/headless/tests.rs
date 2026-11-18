@@ -152,8 +152,8 @@ fn trace_out_flies_the_original_driver_unless_told_otherwise() {
     };
     let default_cli = Cli::parse_from(["oag-game", "--race"]);
     let race = super::started_race(by_default, &default_cli, ControlScheme::default());
-    assert!(race.original_ai_active());
+    assert!(race.sim.original_ai_active());
     let ours_cli = Cli::parse_from(["oag-game", "--race", "--ai", "ours"]);
     let race = super::started_race(ours, &ours_cli, ControlScheme::default());
-    assert!(!race.original_ai_active());
+    assert!(!race.sim.original_ai_active());
 }

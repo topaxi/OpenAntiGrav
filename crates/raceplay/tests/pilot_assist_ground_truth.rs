@@ -62,7 +62,7 @@ fn fly(race: &mut Race) -> (u32, u32, f32) {
     }
     let progress = race.sim.world.ships[0]
         .standing
-        .distance(race.course().expect("a course"));
+        .distance(race.sim.course().expect("a course"));
     (ticks, contacts, progress)
 }
 
@@ -76,10 +76,10 @@ fn a_new_player_meets_fewer_walls_with_pilot_assist_on() {
         return;
     };
     assert!(
-        on.pilot_assist_available(Level::Extreme),
+        on.sim.pilot_assist_available(Level::Extreme),
         "HD authors <PilotAssist>"
     );
-    on.set_pilot_assist(Level::Extreme);
+    on.sim.set_pilot_assist(Level::Extreme);
     let (off_ticks, off_contacts, off_progress) = fly(&mut off);
     let (on_ticks, on_contacts, on_progress) = fly(&mut on);
     println!(
@@ -106,7 +106,7 @@ fn no_opponent_ever_gets_the_assist() {
     let Some(mut race) = started(oag_race::Mode::SingleRace) else {
         return;
     };
-    race.set_pilot_assist(Level::Extreme);
+    race.sim.set_pilot_assist(Level::Extreme);
     let inputs = thrust();
     for _ in 0..600 {
         race.tick(&inputs);
@@ -136,7 +136,7 @@ fn the_hud_indicator_follows_the_switch_and_the_corrections() {
     ) else {
         return;
     };
-    on.set_pilot_assist(Level::Extreme);
+    on.sim.set_pilot_assist(Level::Extreme);
     let inputs = thrust();
     let (mut main_ticks, mut arrow_ticks) = (0, 0);
     for _ in 0..TICKS {

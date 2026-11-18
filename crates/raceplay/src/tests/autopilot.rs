@@ -58,20 +58,20 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
         Some(oag_tables::weapons::Weapon::Autopilot)
     );
     assert!(
-        !race.flown_for_the_player(0),
+        !race.sim.flown_for_the_player(0),
         "holding one is not the same as having spent it"
     );
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
     assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
     assert!(
-        race.flown_for_the_player(0),
+        race.sim.flown_for_the_player(0),
         "the craft was not handed over"
     );
     // The authored `time` less the one tick the countdown has already run.
     let armed = race.sim.world.ships[0].autopilot_timer;
     assert!(
-        (armed - (FIXTURE_AUTOPILOT_TIME - race.dt())).abs() < 1e-5,
+        (armed - (FIXTURE_AUTOPILOT_TIME - race.sim.dt())).abs() < 1e-5,
         "expected {FIXTURE_AUTOPILOT_TIME} less one tick, got {armed}"
     );
 
@@ -82,18 +82,18 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
         ticks += 1;
         assert!(ticks < 600, "the autopilot never let go");
     }
-    assert!(!race.flown_for_the_player(0));
+    assert!(!race.sim.flown_for_the_player(0));
     assert!(
-        !race.autopilot(),
+        !race.sim.autopilot(),
         "the pickup moved the operator's own switch"
     );
     // Measured in seconds rather than in ticks: the tick count is the file's
     // duration divided by `dt` and rounded up, plus the one the arm itself
     // consumed, and pinning that arithmetic tests the rounding rather than the
     // duration. What matters is that it ran for what the file says.
-    let flown = ticks as f32 * race.dt();
+    let flown = ticks as f32 * race.sim.dt();
     assert!(
-        flown >= FIXTURE_AUTOPILOT_TIME && flown < FIXTURE_AUTOPILOT_TIME + 2.0 * race.dt(),
+        flown >= FIXTURE_AUTOPILOT_TIME && flown < FIXTURE_AUTOPILOT_TIME + 2.0 * race.sim.dt(),
         "flew for {flown} s against the file's {FIXTURE_AUTOPILOT_TIME}"
     );
 }
@@ -116,6 +116,7 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
     for tick in 0..600u32 {
         race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
         let raised = race
+            .sim
             .drain_cues()
             .into_iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
@@ -132,9 +133,9 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
     let at = at.expect("no warning at all");
     // The crossing is `now < 1.0 && now + dt > 1.0`, so the remainder at the
     // warning lands inside one tick below a second - never above it.
-    let remaining = FIXTURE_AUTOPILOT_TIME - (at + 2) as f32 * race.dt();
+    let remaining = FIXTURE_AUTOPILOT_TIME - (at + 2) as f32 * race.sim.dt();
     assert!(
-        remaining > 1.0 - 2.0 * race.dt() && remaining <= 1.0,
+        remaining > 1.0 - 2.0 * race.sim.dt() && remaining <= 1.0,
         "warned with {remaining} s left, not one"
     );
 }
@@ -152,7 +153,10 @@ fn race_under_autopilot() -> (Race, Buttons) {
     let mut buttons = Buttons::new();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert!(race.flown_for_the_player(0), "the Autopilot did not arm");
+    assert!(
+        race.sim.flown_for_the_player(0),
+        "the Autopilot did not arm"
+    );
     assert_eq!(race.ship_pickup(), None, "arming must spend the pickup");
     // Released first: both buttons are edge-triggered, so a second press
     // without a gap is not a press at all.
@@ -173,7 +177,10 @@ fn absorbing_under_autopilot_cancels_it_with_an_empty_slot() {
     let (mut race, mut buttons) = race_under_autopilot();
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
-    assert!(!race.flown_for_the_player(0), "absorb did not cancel it");
+    assert!(
+        !race.sim.flown_for_the_player(0),
+        "absorb did not cancel it"
+    );
     assert_eq!(race.sim.world.ships[0].autopilot_timer, 0.0);
     assert_eq!(race.ship_pickup(), None, "the cancel invented a pickup");
 }
@@ -215,7 +222,10 @@ fn absorbing_under_autopilot_keeps_a_held_pickup() {
     race.sim.world.ships[0].physics.shield = 50.0;
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
-    assert!(!race.flown_for_the_player(0), "absorb did not cancel it");
+    assert!(
+        !race.sim.flown_for_the_player(0),
+        "absorb did not cancel it"
+    );
     assert_eq!(race.ship_pickup(), held, "the cancel spent the pickup");
     assert_eq!(
         race.sim.world.ships[0].physics.shield, 50.0,
@@ -235,7 +245,7 @@ fn firing_under_autopilot_does_nothing() {
     let timer = race.sim.world.ships[0].autopilot_timer;
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert!(race.flown_for_the_player(0), "firing cancelled it");
+    assert!(race.sim.flown_for_the_player(0), "firing cancelled it");
     assert_eq!(race.ship_pickup(), held, "the press fired the pickup");
     assert_eq!(
         race.sim.world.projectiles.live(),
@@ -259,7 +269,7 @@ fn a_held_autopilot_cannot_be_fired_into_a_running_one() {
     assert_eq!(race.ship_pickup(), held, "the press spent the held pickup");
     let now = race.sim.world.ships[0].autopilot_timer;
     assert!(
-        (now - (timer - race.dt())).abs() < 1e-5,
+        (now - (timer - race.sim.dt())).abs() < 1e-5,
         "the timer was re-armed or cancelled: {timer} then {now}"
     );
 }
@@ -276,7 +286,7 @@ fn no_pad_grant_while_the_autopilot_runs() {
     race.sim.weapon_pad_refresh_left[0] = 0.0;
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
-    assert!(race.flown_for_the_player(0));
+    assert!(race.sim.flown_for_the_player(0));
     assert_eq!(race.ship_pickup(), None, "a pad granted mid-stint");
     assert!(
         race.sim.weapon_pad_refresh_left[0] > 0.0,
@@ -296,7 +306,7 @@ fn absorbing_under_autopilot_does_not_cancel_it_where_the_title_has_no_cancel() 
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
     assert!(
-        race.flown_for_the_player(0),
+        race.sim.flown_for_the_player(0),
         "a title with no cancel cancelled"
     );
     assert_eq!(race.ship_pickup(), held, "the absorb reached the pickup");
@@ -326,14 +336,15 @@ fn a_title_whose_pads_grant_mid_stint_still_hands_one_over() {
 #[test]
 fn cancelling_with_time_left_says_disengaging_and_the_last_second_does_not() {
     let disengaging = |race: &mut Race| {
-        race.drain_cues()
+        race.sim
+            .drain_cues()
             .into_iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
             .count()
     };
 
     let (mut race, mut buttons) = race_under_autopilot();
-    race.drain_cues();
+    race.sim.drain_cues();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
     assert_eq!(
         disengaging(&mut race),
@@ -347,9 +358,9 @@ fn cancelling_with_time_left_says_disengaging_and_the_last_second_does_not() {
 
     let (mut race, mut buttons) = race_under_autopilot();
     race.sim.world.ships[0].autopilot_timer = 0.5;
-    race.drain_cues();
+    race.sim.drain_cues();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
-    assert!(!race.flown_for_the_player(0));
+    assert!(!race.sim.flown_for_the_player(0));
     assert_eq!(disengaging(&mut race), 0, "the last second was announced");
 }
 
@@ -365,7 +376,7 @@ fn an_eliminator_absorb_arms_the_shield_and_cancels_the_autopilot() {
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
 
     assert!(
-        !race.flown_for_the_player(0),
+        !race.sim.flown_for_the_player(0),
         "the absorb did not cancel it"
     );
     assert_eq!(race.ship_pickup(), None, "the held weapon was kept");
@@ -385,7 +396,7 @@ fn the_autopilot_engine_bits_follow_the_titles_law() {
         race.sim.autopilot_engine, MEASURED,
         "the synthetic setup carries the measured law"
     );
-    let flags = race.autopilot_engine_flags(0);
+    let flags = race.sim.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, Some(1.2));
     assert!(flags.uncapped);
 
@@ -393,12 +404,12 @@ fn the_autopilot_engine_bits_follow_the_titles_law() {
         speedup: Sourced::chosen(1.5),
         uncapped: Sourced::chosen(false),
     };
-    let flags = race.autopilot_engine_flags(0);
+    let flags = race.sim.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, Some(1.5));
     assert!(!flags.uncapped);
 
     race.sim.world.ships[0].autopilot_timer = 0.0;
-    let flags = race.autopilot_engine_flags(0);
+    let flags = race.sim.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, None, "no pickup, no multiplier");
 }
 
@@ -436,7 +447,8 @@ fn disengaging_from(race: &mut Race, slot: usize) -> Vec<usize> {
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         raised.extend(
-            race.drain_cues()
+            race.sim
+                .drain_cues()
                 .into_iter()
                 .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
                 .map(|e| usize::from(e.slot)),

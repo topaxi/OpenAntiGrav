@@ -778,7 +778,7 @@ impl Client {
         self.pending.retain(|&t, _| t >= self.confirmed_tick);
         // The board is the server's: taken again from the confirmed state the first
         // time it is finished (the prediction finished first and took its own).
-        if !self.board_confirmed && race.finished() {
+        if !self.board_confirmed && race.sim.finished() {
             race.recapture_results();
             self.board_confirmed = true;
         }

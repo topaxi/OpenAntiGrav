@@ -177,7 +177,7 @@ impl Race {
         beam: oag_weapons::projectile::leach_beam::Beam,
         dt: f32,
     ) {
-        let gap = self.leach_trip_gap(beam);
+        let gap = self.sim.leach_trip_gap(beam);
         let wrapped = match beam.trip {
             // The simulation's clock wrapped this tick (the drain landed):
             // it went down since the last frame read it.
@@ -234,19 +234,23 @@ impl Race {
         let at = self.leach_ball_point(beam, self.view.leach_ball_elapsed[entry]);
         Some(Mat4::from_translation(at))
     }
+}
 
+impl RaceSim {
     /// The trip's length: the two craft's gap along the course
     /// (`oag_weapons::projectile::leach_beam::trip::gap`), the length the
     /// simulation's own trip reads.
     fn leach_trip_gap(&self, beam: oag_weapons::projectile::leach_beam::Beam) -> f32 {
-        let ships = &self.sim.world.ships;
+        let ships = &self.world.ships;
         oag_weapons::projectile::leach_beam::trip::gap(
             ships[beam.owner as usize].standing.progress,
             ships[beam.target as usize].standing.progress,
             self.leach_course_length(),
         )
     }
+}
 
+impl Race {
     /// Where the ball is `elapsed` seconds into its trip: on the drawn strip
     /// where the title has one ([`Self::leach_ball_on_strip`]), else on the
     /// straight line between the two bodies, [`oag_fx::beam::hd_ball::position`].
@@ -255,7 +259,7 @@ impl Race {
         beam: oag_weapons::projectile::leach_beam::Beam,
         elapsed: f32,
     ) -> Vec3 {
-        let fraction = leach_ball_fraction(elapsed, self.leach_trip_gap(beam));
+        let fraction = leach_ball_fraction(elapsed, self.sim.leach_trip_gap(beam));
         self.leach_ball_on_strip(beam, fraction).unwrap_or_else(|| {
             let ships = &self.sim.world.ships;
             oag_fx::beam::hd_ball::position(

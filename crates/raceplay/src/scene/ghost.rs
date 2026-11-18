@@ -114,7 +114,7 @@ impl Scene {
         Some(oag_render::ghost::Frame {
             view_projection,
             model: race.ghost_draw_matrix(&now, &before),
-            prev_mvp: prev_vp * Race::ghost_model_matrix(&before),
+            prev_mvp: prev_vp * RaceSim::ghost_model_matrix(&before),
             fade: oag_render::ghost::fade(distance),
             offsets: offsets.1,
         })

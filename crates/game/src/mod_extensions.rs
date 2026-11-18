@@ -228,24 +228,27 @@ pub fn attach(
 /// The dev overlay's `mods` block for `race`, `None` in a race with no simulation mod.
 #[must_use]
 pub fn readout(race: &oag_raceplay::Race) -> Option<oag_present::perf::mods::Readout> {
-    race.is_modded().then(|| oag_present::perf::mods::Readout {
-        modules: race
-            .extension_reports()
-            .into_iter()
-            .map(|r| oag_present::perf::mods::Module {
-                id: r.mod_id,
-                fuel_used: r.fuel_used,
-                fuel_peak: r.fuel_peak,
-                fuel_budget: r.fuel_budget,
-                memory_bytes: r.memory_bytes,
-                memory_peak: r.memory_peak,
-                memory_cap: r.memory_cap,
-                state_bytes: r.state_bytes,
-                call_us: r.call_us,
-                faulted: r.faulted,
-            })
-            .collect(),
-    })
+    race.sim
+        .is_modded()
+        .then(|| oag_present::perf::mods::Readout {
+            modules: race
+                .sim
+                .extension_reports()
+                .into_iter()
+                .map(|r| oag_present::perf::mods::Module {
+                    id: r.mod_id,
+                    fuel_used: r.fuel_used,
+                    fuel_peak: r.fuel_peak,
+                    fuel_budget: r.fuel_budget,
+                    memory_bytes: r.memory_bytes,
+                    memory_peak: r.memory_peak,
+                    memory_cap: r.memory_cap,
+                    state_bytes: r.state_bytes,
+                    call_us: r.call_us,
+                    faulted: r.faulted,
+                })
+                .collect(),
+        })
 }
 
 #[cfg(test)]

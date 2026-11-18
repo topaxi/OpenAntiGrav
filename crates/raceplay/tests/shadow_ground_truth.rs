@@ -68,7 +68,7 @@ fn every_craft_on_the_grid_casts_a_blob_shadow_onto_the_floor() {
     let placements = race.shadow_placements();
     assert_eq!(
         placements.len(),
-        usize::from(race.ship_count()),
+        usize::from(race.sim.ship_count()),
         "a craft resting on the grid has ground under it, so every slot places"
     );
 

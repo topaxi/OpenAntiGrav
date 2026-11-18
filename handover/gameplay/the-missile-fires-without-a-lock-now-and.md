@@ -110,7 +110,7 @@ reticle is render-only state on `Race`.
   for every missile an opponent fires in the original, regardless of what
   `Ship_AcquireLock` found. This engine's opponents already run the geometric
   lock unconditionally (a deliberate, already-documented deviation - see
-  `Race::fire_missile`'s doc comment), and the hold gate just landed leaves that
+  `RaceSim::fire_missile`'s doc comment), and the hold gate just landed leaves that
   choice untouched: only `slot == 0`'s candidate is gated on `sight::Sight`,
   because that is the only craft this project has found a reticle for. If the
   hypothesis above is right, this engine's opponents are strictly better shots
@@ -174,7 +174,7 @@ reticle is render-only state on `Race`.
   `"MISSILEEXPWALL"` and `"MISSILEEXPSHIP"`. Checked twice. Confidence 60 that it
   is a copy-paste in the original; not load-bearing here.
 
-**The gate landed.** `Race::fire_missile` now passes the geometric candidate
+**The gate landed.** `RaceSim::fire_missile` now passes the geometric candidate
 through only when the *firing craft's own* hold has caught up -
 `self.sight.locked()` for `slot == 0`, since `sight::Sight` is the reticle and it
 is drawn for one craft. A press before the brackets close still fires - the

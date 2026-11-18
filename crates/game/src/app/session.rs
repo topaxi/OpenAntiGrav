@@ -465,11 +465,11 @@ pub(crate) struct Session {
     /// `--autopilot`, carried the same way and applied to every race this
     /// session starts - including one launched from the menus, which is how
     /// the results table is reached without driving. See
-    /// `race::Race::set_autopilot`.
+    /// `race::RaceSim::set_autopilot`.
     pub(crate) autopilot: bool,
-    /// `--autopilot-pilot`, carried the same way. See `race::Race::set_autopilot_pilot`.
+    /// `--autopilot-pilot`, carried the same way. See `race::RaceSim::set_autopilot_pilot`.
     pub(crate) autopilot_pilot: Option<oag_ai::Pilot>,
-    /// `--autopilot-skill`, carried the same way. See `race::Race::set_autopilot_tuning`.
+    /// `--autopilot-skill`, carried the same way. See `race::RaceSim::set_autopilot_tuning`.
     pub(crate) autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--ai`, carried the same way. See `crate::ai_choice`.
     pub(crate) ai_choice: crate::ai_choice::AiChoice,

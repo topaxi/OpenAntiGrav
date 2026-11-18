@@ -16,14 +16,13 @@
 //! - Every craft gets it, AI included: the original's release loop covers the craft array, and
 //!   Time Trial's lone player was the only one measured.
 
+use crate::RaceSim;
 use oag_core::math::Vec3;
 use oag_physics::hover::{MAX_PROBES, NormalMean, Rig, SpringLaw};
 use oag_race::RaceState;
 use oag_title::craft_laws::CraftLaws;
 use oag_title::hover_rig::HoverRig;
 use oag_title::launch_hover::LaunchHover;
-
-use super::Race;
 
 /// The clamp on the pre-scale hover target at `world_tick`, for a race ticking at `dt` seconds.
 ///
@@ -125,23 +124,22 @@ fn released_ticks(world_tick: u64) -> u64 {
     (world_tick + 1).saturating_sub(oag_race::COUNTDOWN_TICKS) + 1
 }
 
-impl Race {
+impl RaceSim {
     /// Writes this tick's grid hover clamp to every craft (`None` for a title with none), the
     /// title's hover probe set and its steering clamp.
     pub(super) fn set_hover_caps(&mut self) {
         let cap = self
-            .sim
             .launch_hover
-            .map(|hover| cap_at(hover, self.sim.world.tick, self.sim.dt));
-        for ship in &mut self.sim.world.ships {
+            .map(|hover| cap_at(hover, self.world.tick, self.dt));
+        for ship in &mut self.world.ships {
             ship.physics.hover_cap = cap;
-            ship.physics.hover_rig = self.sim.hover_rig;
-            ship.physics.steer_ramp_clamped = self.sim.steer_ramp_clamped;
-            ship.physics.air_pitch_bias = self.sim.air_pitch_bias;
-            ship.physics.pitch_gate = self.sim.pitch_gate;
-            ship.physics.sideshift_grid_gate = self.sim.sideshift_grid_gate;
-            ship.physics.turbo_running_laws = self.sim.turbo_running_laws;
-            ship.physics.inertia_frame = self.sim.inertia_frame;
+            ship.physics.hover_rig = self.hover_rig;
+            ship.physics.steer_ramp_clamped = self.steer_ramp_clamped;
+            ship.physics.air_pitch_bias = self.air_pitch_bias;
+            ship.physics.pitch_gate = self.pitch_gate;
+            ship.physics.sideshift_grid_gate = self.sideshift_grid_gate;
+            ship.physics.turbo_running_laws = self.turbo_running_laws;
+            ship.physics.inertia_frame = self.inertia_frame;
         }
     }
 }

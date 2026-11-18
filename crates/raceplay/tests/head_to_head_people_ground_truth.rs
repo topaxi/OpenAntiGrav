@@ -134,7 +134,7 @@ fn each_person_reads_the_gap_to_the_other_person() {
     // The operator's autopilot flies every local seat, so the second person is handed
     // to the network seat, which sits still with no input: one drives, one waits.
     race.sim.world.controllers[1] = Controller::Remote;
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let mut gaps = Vec::new();
     for tick in 1..=1200 {
         race.tick(&PlayerInputs::none());
@@ -186,7 +186,7 @@ fn one_persons_head_to_head_is_the_same_race_with_or_without_the_hatch() {
         })
         .expect("loading the race");
         let mut race = Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         for _ in 0..600 {
             race.tick(&PlayerInputs::none());
         }

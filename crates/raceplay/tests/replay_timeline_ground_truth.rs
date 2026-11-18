@@ -87,8 +87,8 @@ fn watch(run: &mut Run, race: &Race) {
     let tick = run.hashes.len() as u64;
     run.hashes.push(race.sim.state_hash());
     run.truth.push(
-        (0..usize::from(race.ship_count()))
-            .map(|slot| race.craft_pose(slot))
+        (0..usize::from(race.sim.ship_count()))
+            .map(|slot| race.sim.craft_pose(slot))
             .collect(),
     );
     let readout = race.readout();
@@ -102,7 +102,7 @@ fn watch(run: &mut Run, race: &Race) {
 fn assist_level(race: &Race) -> Option<Level> {
     [Level::Extreme, Level::Normal]
         .into_iter()
-        .find(|level| race.pilot_assist_available(*level))
+        .find(|level| race.sim.pilot_assist_available(*level))
 }
 
 /// What the run changes outside the tick, through the writers a session calls, so that it is
@@ -126,7 +126,7 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
     let loaded = race::load(&single_race(&source)).expect("loading the race");
     let seed = loaded.setup.seed;
     let mut race = Race::start(loaded.setup);
-    race.apply_launch(&launch());
+    race.sim.apply_launch(&launch());
     race.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&race);
     let mut run = Run {
@@ -152,10 +152,10 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
         write_between_ticks(&mut race, assist, tick);
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         tick += 1;
         watch(&mut run, &race);
-        if finished_at.is_none() && race.finished() {
+        if finished_at.is_none() && race.sim.finished() {
             finished_at = Some(tick);
         }
     }
@@ -280,7 +280,7 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
     let visit_at = 1_500;
     let seed = setup.seed;
     let mut live = Race::start(setup.clone());
-    live.apply_launch(&launch());
+    live.sim.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&live);
     let mut timeline = Timeline::live(setup, &live);
@@ -289,7 +289,7 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
     for tick in 0..visit_at + 300 {
         write_between_ticks(&mut live, assist, tick);
         live.tick(&run.replay.inputs_at(tick));
-        live.drain_cues();
+        live.sim.drain_cues();
         timeline.keep(&live);
         if tick + 1 == early {
             early_text = format!("{:?}", live.sim);
@@ -384,7 +384,7 @@ fn a_rewind_changes_nothing(title: &str) {
     let setup = file_setup(&source, &run);
     let seed = setup.seed;
     let mut live = Race::start(setup.clone());
-    live.apply_launch(&launch());
+    live.sim.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&live);
     let mut keeper = Keeper::new(setup, &live);
@@ -392,7 +392,7 @@ fn a_rewind_changes_nothing(title: &str) {
     for tick in 0..visit_at + 300 {
         write_between_ticks(&mut live, assist, tick);
         live.tick(&run.replay.inputs_at(tick));
-        live.drain_cues();
+        live.sim.drain_cues();
         keeper.keep(&live);
         if tick + 1 == visit_at {
             let before = format!("{:?}", live.sim);
@@ -470,7 +470,7 @@ fn a_split_screen_recording_reproduces() {
     let seed = setup.seed;
     let mut race = Race::start(setup.clone());
     let unseated = race.sim.state_hash();
-    race.apply_launch(&launch());
+    race.sim.apply_launch(&launch());
     assert_eq!(race.set_viewport_count(2), 2);
     for slot in 0..2 {
         race.sim.world.controllers[slot] = Controller::Local;
@@ -497,7 +497,7 @@ fn a_split_screen_recording_reproduces() {
             inputs.set(slot, snapshot);
         }
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         watch(&mut run, &race);
     }
     let bytes = race.recorded().expect("recording").to_bytes();
@@ -589,13 +589,13 @@ fn dump_the_recordings_for_a_compressor() {
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
     let mut race = Race::start(loaded.setup);
-    race.apply_launch(&launch());
+    race.sim.apply_launch(&launch());
     race.start_recording(header_of(&title, oag_race::Mode::SingleRace, seed));
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
     for _ in 0..ticks {
         race.tick(&idle);
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     std::fs::write(
         out.join(format!("{title}-{class}-autopilot.oagr")),

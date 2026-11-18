@@ -35,7 +35,7 @@ fn vertex(at: [f32; 3], strength: f32) -> GpuVertex {
 fn gather(race: &Race, slot: usize, vertices: Vec<GpuVertex>) -> HullGather {
     HullGather {
         generation: 0,
-        models: (0..usize::from(race.ship_count()))
+        models: (0..usize::from(race.sim.ship_count()))
             .map(|slot| race.ship_tick_model(slot))
             .collect(),
         slots: vec![(slot, 0..vertices.len())],

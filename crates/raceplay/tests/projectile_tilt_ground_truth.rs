@@ -99,13 +99,13 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
 /// judging each tick it is in the air.
 fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let mut race = start(title.0, title.1)?;
-    let craft_box = race.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
+    let craft_box = race.sim.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
     let mut input: Option<Input> = None;
     let mut next_shot = 200;
     let mut out = Ride::default();
     let shield = race.sim.world.ships[0].physics.shield;
     for tick in 0..ticks {
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         if tick < next_shot {
             let snap = snapshot(Button::Cross.bit(), input.as_ref());
             input = Some(snap.buttons);
@@ -169,7 +169,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                         None,
                     ),
             );
-            let Some(floor) = race.collision().raycast(
+            let Some(floor) = race.sim.collision().raycast(
                 Ray::new(shot.position, -shot.surface, reach),
                 None,
                 false,
@@ -340,7 +340,7 @@ fn assert_laid_on_a_bank(title: (&str, &str), weapon: Weapon, judge_pose: bool) 
         race.sim.world.ships[0].physics.shield = shield;
         // Pressed and released on alternate ticks: a held button is one edge.
         let dropping = tick >= next_drop && (tick - next_drop) % 2 == 0;
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         // Anything in the pool after the tick was laid on it.
         race.sim.world.projectiles.clear();
         if tick >= next_drop {

@@ -453,7 +453,10 @@ impl Race {
         let slot = self.player_slot();
         self.view.huds[slot].messages.set_standing(id);
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceSim {
     /// Puts the craft in `slot` into the destroyed sequence, for
     /// `--force-wreck`: state 4 with its half second, which is what
     /// `Ship_Damage`'s depletion does (`oag_physics::damage`), so the
@@ -461,7 +464,7 @@ impl Race {
     /// do in a race. A verification aid and nothing else; a slot that is not
     /// racing is left alone.
     pub fn force_destroy(&mut self, slot: usize) {
-        let state = &mut self.sim.world.ships[slot].physics;
+        let state = &mut self.world.ships[slot].physics;
         if state.craft_state == oag_physics::CraftState::Racing {
             state.craft_state = oag_physics::CraftState::Destroyed;
             state.state_timer = oag_physics::damage::DESTROYED_DURATION;
@@ -473,13 +476,16 @@ impl Race {
     /// contact that follows is the simulation's own. A verification aid and nothing
     /// else; a slot that is not racing is left alone.
     pub fn force_wall_slide(&mut self, slot: usize) {
-        let ship = &mut self.sim.world.ships[slot].physics;
+        let ship = &mut self.world.ships[slot].physics;
         if ship.craft_state == oag_physics::CraftState::Racing {
             let side = ship.body.right();
             ship.body.linear_velocity += side * 600.0;
         }
     }
+}
 
+#[cfg(feature = "view")]
+impl Race {
     /// The camera's own world position, from the view matrix it produces.
     ///
     /// A view matrix is the inverse of the camera's world transform, so
@@ -529,10 +535,10 @@ impl Race {
         // would cost more per frame than the culling it enables saves.
         // `u16::MAX` is the never-located sentinel, and it is out of range of
         // any real table, so the bounds check covers both.
-        let Some(index) = self.located_sample(ship) else {
+        let Some(index) = self.sim.located_sample(ship) else {
             return (UNPLACED, UNPLACED);
         };
-        let craft = self.section_of(index, ship.physics.body.position);
+        let craft = self.sim.section_of(index, ship.physics.body.position);
         // The camera is a chase spring a few units behind, so it is a few
         // samples away in the same table. See `Spline::nearest_within` for why
         // a local search is allowed to miss.
@@ -541,7 +547,7 @@ impl Race {
             index,
             CAMERA_SEARCH_SAMPLES,
         ) {
-            Some((camera_index, _, _)) => self.section_of(camera_index, self.camera_position()),
+            Some((camera_index, _, _)) => self.sim.section_of(camera_index, self.camera_position()),
             None => UNPLACED,
         };
         (craft, camera)
@@ -590,7 +596,7 @@ impl Race {
             return None;
         }
         self.drawn_craft_of_a_station_camera()
-            .map(|slot| self.section_of_slot(slot))
+            .map(|slot| self.sim.section_of_slot(slot))
     }
 
     /// The section the draws are masked with during the pre-race flyby: that of the spline
@@ -624,10 +630,13 @@ impl Race {
         (self.view.camera_override.is_none() && self.destroy_camera_now().is_some())
             .then(|| self.player_slot())
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceSim {
     /// The section of the craft in `slot`, or [`UNPLACED`] where it cannot be told.
     pub(super) fn section_of_slot(&self, slot: usize) -> u8 {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let Some(index) = self.located_sample(ship) else {
             return UNPLACED;
         };
@@ -643,11 +652,14 @@ impl Race {
     ///
     /// **Only at tick 0.** Once a tick has run a craft that reads [`UNPLACED`] is off the track, airborne or under a
     /// stretch that crosses itself, and a global scan could take it to the wrong stretch (the bridge above the
-    /// road): that stays *draw everything*, as [`Self::visibility_sections`] documents.
+    /// road): that stays *draw everything*, as [`Race::visibility_sections`] documents.
     fn located_sample(&self, ship: &oag_gameplay::Ship) -> Option<usize> {
         self.located_from(ship, usize::from(ship.segment))
     }
+}
 
+#[cfg(feature = "view")]
+impl Race {
     /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
     /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
     /// opponent's `segment` is never written, and its driver's index on its own line, mapped
@@ -657,37 +669,40 @@ impl Race {
         let slot = self.framed_slot();
         let ship = &self.sim.world.ships[slot];
         let index = if self.sim.world.person_flown(slot) {
-            self.located_sample(ship)
+            self.sim.located_sample(ship)
         } else {
             let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
-            self.located_from(
+            self.sim.located_from(
                 ship,
-                self.sample_index_for(slot, line).unwrap_or(usize::MAX),
+                self.sim.sample_index_for(slot, line).unwrap_or(usize::MAX),
             )
         };
         index.map_or(UNPLACED, |index| {
-            self.section_of(index, ship.physics.body.position)
+            self.sim.section_of(index, ship.physics.body.position)
         })
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceSim {
     /// [`Self::located_sample`] from `index`, where the simulation last had the craft.
     fn located_from(&self, ship: &oag_gameplay::Ship, index: usize) -> Option<usize> {
-        if index < self.sim.spline.len()
+        if index < self.spline.len()
             && self.section_of(index, ship.physics.body.position) != UNPLACED
         {
             return Some(index);
         }
-        if self.sim.world.tick > 0 {
+        if self.world.tick > 0 {
             return None;
         }
-        let (index, _, _) = self.sim.spline.nearest(ship.physics.body.position)?;
+        let (index, _, _) = self.spline.nearest(ship.physics.body.position)?;
         Some(index)
     }
 
     /// The section of the sample at `index`, or [`UNPLACED`] when `position` is
-    /// too far from it to trust. See [`Self::visibility_sections`].
+    /// too far from it to trust. See [`Race::visibility_sections`].
     pub(super) fn section_of(&self, index: usize, position: Vec3) -> u8 {
-        let Some(sample) = self.sim.spline.sample(index) else {
+        let Some(sample) = self.spline.sample(index) else {
             return UNPLACED;
         };
         let distance = (Vec3::from_array(sample.pos) - position).length();
@@ -697,7 +712,10 @@ impl Race {
         }
         sample.section_id
     }
+}
 
+#[cfg(feature = "view")]
+impl Race {
     /// The projection for a viewport of the given aspect ratio, with the
     /// player's field-of-view setting applied.
     ///
@@ -841,10 +859,10 @@ impl Race {
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
         // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
-        let offset = self
-            .camera_scalar_between(self.extension_fov_offset(self.player_slot()), |previous| {
-                previous.fov_offset
-            });
+        let offset = self.camera_scalar_between(
+            self.sim.extension_fov_offset(self.player_slot()),
+            |previous| previous.fov_offset,
+        );
         finish_vertical_fov(
             authored,
             offset,

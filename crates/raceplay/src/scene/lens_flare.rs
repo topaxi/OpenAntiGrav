@@ -37,7 +37,7 @@ impl Scene {
         projection: Mat4,
         viewport: (f32, f32, f32, f32),
     ) {
-        let sun = race.extension_sky().sun;
+        let sun = race.sim.extension_sky().sun;
         let placement = self
             .lens_flare
             .borrow()

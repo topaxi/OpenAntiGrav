@@ -41,7 +41,7 @@ was asked to measured.
 Fixing it is not simply plumbing the same four fields through - `--give`
 writes the pickup slot from *outside* `Race::tick` (`capture.rs`'s own doc:
 "so nothing here can reach a determinism hash"), and `--autopilot` calls
-`Race::set_autopilot` before the tick loop starts. `write_trace`'s loop has
+`RaceSim::set_autopilot` before the tick loop starts. `write_trace`'s loop has
 neither hook today, so wiring this in is a second pass through the same
 function, not a one-line addition.
 

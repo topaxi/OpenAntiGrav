@@ -210,7 +210,8 @@ fn step(race: &mut Race, buttons: &mut Buttons, fire: bool) -> bool {
     }
     let snapshot = buttons.tick(if fire { SQUARE } else { 0 });
     race.tick(&PlayerInputs::single(snapshot));
-    race.drain_cues()
+    race.sim
+        .drain_cues()
         .into_iter()
         .any(|e| e.cue == oag_gameplay::cue::Cue::RocketHitShip)
 }
@@ -372,7 +373,7 @@ fn a_race_without_a_module_hashes_the_same_run_twice_and_an_unshielded_craft_tak
         step(&mut plain, &mut buttons, tick == 0);
         assert_eq!(plain.sim.state_hash(), *hash);
     }
-    assert!(!race.is_modded());
+    assert!(!race.sim.is_modded());
     assert_eq!(
         energy(&race),
         100.0 - ROCKET_DAMAGE,

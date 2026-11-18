@@ -885,7 +885,7 @@ every use it had under way is **cancelled, not paused**. Our rule.
   (`Race::advance_cannons`). A mod's own pickup (`Weapon::Extension`, `pickup-fire`,
   `pickup-absorbed`) is raised from the first two and nowhere else, so a mod adding a
   weapon handles nothing itself.
-- **The cancel**: `Race::cancel_pickup_use_of_downed_crafts`, first in the weapon step,
+- **The cancel**: `RaceSim::cancel_pickup_use_of_downed_crafts`, first in the weapon step,
   ends a mine or bomb cluster part laid, a Cannon magazine part fired and an armed Quake
   press. A started mine cluster or magazine is the pickup being used, so the pickup is
   spent with it (the craft respawns with the slot empty, no fresh cluster); an armed

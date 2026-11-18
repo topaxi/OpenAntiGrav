@@ -20,7 +20,7 @@
 //! against standings written by hand. This is the one that shows a craft
 //! actually driving a single race and the game noticing how it ends.
 //!
-//! The player is flown by [`race::Race::set_autopilot`], which is a verification
+//! The player is flown by [`race::RaceSim::set_autopilot`], which is a verification
 //! aid and says so: nothing else can reach a finished race without a human at
 //! the keyboard for four minutes.
 //!
@@ -73,17 +73,17 @@ fn autopiloted_race() -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 
 /// Runs until the race ends or [`CAP`] runs out, and says which.
 fn race_to_the_flag(race: &mut race::Race) {
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "the race was still running after {CAP} ticks; the player reached lap {} of {:?}",
         race.sim.world.primary_race().lap,
         race.sim.world.laps_target()
