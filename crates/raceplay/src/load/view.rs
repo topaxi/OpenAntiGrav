@@ -83,7 +83,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         &stats,
         &stats_name,
         options,
-        &handling,
+        handling,
         &team,
         zone_file_read,
         &mut report,
@@ -139,7 +139,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     seams.mark(Seam::Scene, &report);
     let shadows = super::shadow::assets(
         craft_of(&mut craft, &mut archives),
-        &slot_teams,
+        slot_teams,
         craft_title.race,
         options.mode,
         options.shadow_resolution,
@@ -243,7 +243,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     } else if ribbon {
         drawn
             .take()
-            .unwrap_or_else(|| track_render::build_model(&label, &ai))
+            .unwrap_or_else(|| track_render::build_model(&label, ai))
     } else {
         let mut track_model = mesh::build_with_textures(&track, &track_blob, None)?;
         // Same PS2 signature and the same directory-position heuristic as the
@@ -469,7 +469,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         &track,
         &mut track_model,
         &track_blob,
-        &ai,
+        ai,
         ps3_geometry.as_deref(),
         geometry_name.as_deref(),
         vex_geometry,
@@ -550,7 +550,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         title.race,
         title.hud_art.lap_hud,
         options.mode,
-        &slot_teams,
+        slot_teams,
         &mut report,
     );
     mods.sounds(&mut sounds, &mut report);

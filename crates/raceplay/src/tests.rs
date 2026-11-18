@@ -580,7 +580,7 @@ pub(super) fn race_with_a_grid() -> Race {
 pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
     let mut setup = setup(hulled_handling());
     let mut view = fixture_view();
-    view.sight = sight.clone();
+    view.sight = sight;
     setup.sight = sight;
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
