@@ -474,6 +474,7 @@ impl Scene {
             stamp_pipeline: _,
             prepass: _,
             plain_draws: _,
+            plain_blend: _,
             culled: _,
             unwritten: _,
             foliage: _,

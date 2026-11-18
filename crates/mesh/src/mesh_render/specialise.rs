@@ -68,19 +68,37 @@ pub(super) struct PlainDraws {
 /// The plain half of `model`'s opaque list, or `None` where one pipeline already says everything:
 /// none of the draws is plain, or all of them are.
 pub(super) fn plain_draws(model: &Model) -> Option<PlainDraws> {
+    plain_of(model, &model.draws)
+}
+
+/// [`plain_draws`] for `model`'s transparent list: on Omega's Tech de Ra 162 of its 166 blended
+/// draws name no row, and the four that do held the road's decal layers on the rich shading.
+pub(super) fn plain_transparent_draws(model: &Model) -> Option<PlainDraws> {
+    plain_of(model, &model.transparent_draws)
+}
+
+fn plain_of(model: &Model, draws: &[crate::mesh::DrawCall]) -> Option<PlainDraws> {
     let carried = |draw: &crate::mesh::DrawCall| {
         model.indices[draw.range.start as usize..draw.range.end as usize]
             .iter()
             .fold(0, |all, &i| all | model.vertices[i as usize].slots)
     };
-    split_plain(model.draws.iter().map(carried))
+    split_plain(draws.iter().map(carried))
 }
 
 /// Whether every vertex the `plain` draws of `model` use is lit by the rig (`lit` exactly 1.0):
 /// under a rig that is on, each of their pixels then weighs the rig's result at one.
 pub(super) fn plain_is_lit(model: &Model, plain: &[bool]) -> bool {
-    model
-        .draws
+    plain_list_is_lit(model, &model.draws, plain)
+}
+
+/// [`plain_is_lit`] over any of `model`'s lists.
+pub(super) fn plain_list_is_lit(
+    model: &Model,
+    draws: &[crate::mesh::DrawCall],
+    plain: &[bool],
+) -> bool {
+    draws
         .iter()
         .zip(plain)
         .filter(|&(_, &plain)| plain)
