@@ -18,8 +18,9 @@
 //!
 //! Here: the camera and its shake, the exhaust and its trails, the shield
 //! bubble and the HUD flash it drives, every particle system and its seeds,
-//! the *loaded* sound banks, the boost kick, the airbrake flap animation, the
-//! lock-on reticle and the finished scoreboard.
+//! the *loaded* sound banks, the boost kick, the airbrake flap animation and the
+//! lock-on reticle. The finished scoreboard is not here: it is the race's
+//! [`Outcome`](crate::outcome::Outcome), beside `RaceSim`.
 //!
 //! Not here, deliberately: the cue vectors (`Race::cues`,
 //! `Race::announcements`, `Race::class_announcements`). ADR-0018 calls a cue a

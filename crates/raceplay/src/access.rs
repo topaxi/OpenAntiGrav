@@ -593,8 +593,8 @@ impl SimRace {
 impl Race {
     /// Names the slot this machine's person flies in a network race, for every
     /// presentation-side reader ([`SimRace::player_slot`]) and for the correction
-    /// glide, which carries the camera and its craft together. View-only: nothing
-    /// the simulation reads changes.
+    /// glide, which carries the camera and its craft together. Not simulation state: the
+    /// seat is the race's [`Outcome`](crate::outcome::Outcome), outside `RaceSim` and its hash.
     pub fn set_seat(&mut self, slot: Option<usize>) {
         #[cfg(feature = "view")]
         let followed = self.core.player_slot();

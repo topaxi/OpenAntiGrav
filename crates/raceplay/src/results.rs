@@ -235,7 +235,8 @@ impl SimRace {
     /// Names the person flying each slot, by slot (empty for a slot with none): what the end
     /// screens and the multiplayer tags call the people. A network race gives the lobby's names;
     /// a local one gives seat 1 the stored player name
-    /// (`oag_game::split_screen::name_first_seat`). View-only; the simulation never reads it.
+    /// (`oag_game::split_screen::name_first_seat`). Not simulation state: `RaceSim` never reads
+    /// it; the board takes its names from here ([`Self::results`]).
     pub fn set_person_names(&mut self, names: Vec<String>) {
         self.outcome.person_names = names;
     }
