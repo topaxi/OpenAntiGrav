@@ -20,7 +20,7 @@
 //! that wrote it, and the product it scrolls by to the two constants it multiplies.
 
 use super::isa::{Encoding, Instruction, Operand};
-use super::{Program, Stage};
+use super::{Program, Stage, Usage};
 
 /// The two taps of one pixel program.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -67,26 +67,70 @@ impl Program<'_> {
             .find(|(_, i)| matches!(i.dst[0], Some(d) if super::sample::overlaps(&d, register, 1)))
     }
 
-    /// The name of the constant scalar register `sgpr` holds at instruction `k`: the member of
-    /// the one constant buffer that the last `s_buffer_load` into it read.
-    fn constant_in(&self, k: usize, sgpr: u8) -> Option<&str> {
-        let reflection = self.reflection.as_ref().ok()?;
-        let buffer = reflection.constant_buffer()?;
-        let (load, first) = self.instructions[..k]
+    /// The index in the reflection's resources of the constant buffer whose descriptor starts
+    /// at scalar register `base` when instruction `k` reads through it. The patch's compile
+    /// splits the constants over two buffers, so the one a load reads is found the way a
+    /// texture's is: the descriptor is `s_load`ed through the extended table, and the header's
+    /// usage record at that offset names the API slot.
+    fn constant_buffer_at(&self, k: usize, base: u8) -> Option<usize> {
+        const CONSTANT_BUFFER: u8 = 2;
+        let record = |register: u32| {
+            self.usage
+                .iter()
+                .find(|u| u.kind == CONSTANT_BUFFER && u32::from(u.register) == register)
+        };
+        let load = self.instructions[..k]
             .iter()
             .rev()
-            .find_map(|i| match i.dst[0] {
-                Some(Operand::Sgpr { first, count }) if (first..first + count).contains(&sgpr) => {
-                    Some((i, first))
-                }
-                _ => None,
-            })?;
+            .find(|i| matches!(i.dst[0], Some(Operand::Sgpr { first, count: 4 }) if first == base));
+        let slot = match load {
+            None => record(u32::from(base))?.slot,
+            Some(load) => {
+                let (Some(Operand::Sgpr { first: table, .. }), Some(Operand::Imm(offset))) =
+                    (load.src[0], load.src[1])
+                else {
+                    return None;
+                };
+                self.usage
+                    .iter()
+                    .find(|u| u.kind == Usage::EXTENDED_TABLE && u.register == table)?;
+                record(Usage::TABLE_BASE + offset)?.slot
+            }
+        };
+        self.reflection
+            .as_ref()
+            .ok()?
+            .resources
+            .iter()
+            .position(|r| r.size > 0 && r.slot == u32::from(slot))
+    }
+
+    /// The name of the constant scalar register `sgpr` holds at instruction `k`: the member
+    /// that the last `s_buffer_load` into it read from its constant buffer.
+    fn constant_in(&self, k: usize, sgpr: u8) -> Option<&str> {
+        let reflection = self.reflection.as_ref().ok()?;
+        let (at, load, first) =
+            self.instructions[..k]
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(at, i)| match i.dst[0] {
+                    Some(Operand::Sgpr { first, count })
+                        if (first..first + count).contains(&sgpr) =>
+                    {
+                        Some((at, i, first))
+                    }
+                    _ => None,
+                })?;
         if !load.name.is_some_and(|n| n.starts_with("s_buffer_load")) {
             return None;
         }
-        let Some(Operand::Imm(dword)) = load.src[1] else {
+        let (Some(Operand::Sgpr { first: base, .. }), Some(Operand::Imm(dword))) =
+            (load.src[0], load.src[1])
+        else {
             return None;
         };
+        let buffer = self.constant_buffer_at(at, base)?;
         reflection
             .constant_at(buffer, dword + u32::from(sgpr - first))
             .map(|(constant, _)| constant.name.as_str())

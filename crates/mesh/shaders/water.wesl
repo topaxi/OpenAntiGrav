@@ -5,8 +5,8 @@ import package::hull_normal::{hull_normal};
 import package::texture_lod::{MATERIAL_PAD_MASK, material_sample};
 
 // The entry's family, `program[1]`: 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`,
-// 4 `water_noref`, 5 `enhanced`, 6 2048's own sea (`mesh::rcs::psp2::water`); 0 where the
-// entry is not a water entry.
+// 4 `water_noref`, 5 `enhanced`, 6 to 8 2048's own seas, 9 and 10 Omega's reflective sea and
+// its blended edge (`mesh::rcs::psp2::water`); 0 where the entry is not a water entry.
 fn water_kind(entry: u32, row_scale: vec4<f32>) -> f32 {
     if entry != 0u && row_scale.z > 16.5 && row_scale.z < 17.5 {
         return row_scale.w;
@@ -48,8 +48,10 @@ fn water_specular_colour(entry: u32) -> vec3<f32> {
 // `2x - 1` and rebuild `z = sqrt(1 - x^2 - y^2)` (the sea's `@0x00`..`@0x1f`); Vineta K
 // decodes RGB (`MAD R0.xyz, tap, 2, -1`). Three taps, unrolled; the sea's third weighs zero.
 fn water_normal(entry: u32, kind: f32, uv: vec2<f32>, n: vec3<f32>, tangent: vec4<f32>) -> vec3<f32> {
-    // Vineta K and 2048's sea decode the map's RGB (`MAD R0.xyz, tap, 2, -1`).
-    let rgb = (kind > 2.5 && kind < 4.5) || kind > 5.5;
+    // Vineta K and 2048's seas decode the map's RGB (`MAD R0.xyz, tap, 2, -1`); Omega's
+    // reflective sea decodes `.ag` and rebuilds `z` as HD's does (`reflectplane_mid` pixel
+    // `@0x1b4`..`@0x200`).
+    let rgb = (kind > 2.5 && kind < 4.5) || (kind > 5.5 && kind < 8.5);
     var sum = vec3<f32>(0.0);
     for (var i = 0u; i < 3u; i = i + 1u) {
         let texel = material_sample(MATERIAL_PAD_MASK, water_tap_uv(entry, kind, i, uv));
@@ -96,4 +98,15 @@ fn enhanced_water(
     return tint.rgb * vertex_colour * (ENHANCED_DARK + ENHANCED_LIT * ndl)
         + glint
         + sky * (tint.w * fresnel);
+}
+
+// **Omega's reflective sea** (kinds 9 and 10): the weight of its reflection,
+// `ReflectivityStrength * (ReflectivityMin + ReflectivityScale * sat(1 - N.V)^ReflectivityPower)`
+// (`reflectplane_mid` pixel `@0x28c`..`@0x30c`, `@0x380`). The entry carries the two products
+// with `ReflectivityStrength` in the tap entries' `rate` lanes and the power in the second's
+// last `program` lane (`mesh::rcs::water::Fresnel::lanes`).
+fn reflective_sea_weight(entry: u32, n: vec3<f32>, to_eye: vec3<f32>) -> f32 {
+    let facing = clamp(1.0 - dot(n, to_eye), 0.0, 1.0);
+    let second = emissive_scale(entry + 2u);
+    return emissive_scale(entry + 1u).y + second.y * pow(facing, second.w);
 }

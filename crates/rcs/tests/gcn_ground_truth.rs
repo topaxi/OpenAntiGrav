@@ -512,6 +512,28 @@ fn the_reflective_sea_programs_carry_the_two_opposite_taps_in_every_variant() {
             "{entry}"
         );
     }
+    // The patch re-ships the five as a later compile whose constants sit in two buffers
+    // (`__GLOBAL_CB__` and `ViewDep`); it is the copy a patched game loads, and it reads the
+    // same.
+    if let Some(patch) = path("omega-eu-patch/uroot/data08.psarc") {
+        let mut patch = oag_assets::psarc::Archive::open_file(&patch).expect("the archive opens");
+        for (entry, colour, specular_strength, opacity) in seas {
+            let bytes = patch
+                .read_path(&format!("data/environments2048/{entry}.rcsmaterial"))
+                .unwrap_or_else(|e| panic!("{entry} reads from the patch: {e}"));
+            assert_eq!(
+                gcn::sea(&bytes),
+                Some(gcn::Sea {
+                    taps,
+                    colour: colour.to_string(),
+                    specular_strength,
+                    opacity,
+                    programs: 8,
+                }),
+                "{entry} (patch)"
+            );
+        }
+    }
     for entry in [
         "park/materials/reflectplane_dc_seawater",
         "shared/objectlibrary/materials/reflectplane_rt_seawateredging",
