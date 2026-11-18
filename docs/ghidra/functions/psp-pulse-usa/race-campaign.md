@@ -2194,7 +2194,7 @@ and [`docs/ui/campaign-screens.md`](../../../ui/campaign-screens.md)'s "Where th
 - **Consequence for the build (applied 2026-10-02, see the measured bullet below)**: the persisted thing is **one Selector
   position shared by every grid**, not a per-grid memory. Entering a different grid keeps
   the same `(x, y)` when that grid has a cell there (named for the new grid) and falls to
-  the default scan otherwise. `CellCursors` (`crates/game/src/main/campaign_stage.rs`)
+  the default scan otherwise. `CellCursors` (`crates/game/src/app/campaign_stage.rs`)
   keyed per grid, which the measurement below falsified; it is now one shared slot.
 - Whether the Selector survives leaving the campaign altogether (to `Main Menu` and back)
   depends on the screen object's lifetime and is not read here.

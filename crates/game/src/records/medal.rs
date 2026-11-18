@@ -81,7 +81,7 @@ impl Medal {
 /// earned at - `oag_tables::race_campaign::Cell::targets_for_difficulty`'s
 /// own three rungs, restated here for the same reason [`Medal`] is: this
 /// module stays free of `oag-tables`, and a caller converts at the boundary
-/// (`crate::main::campaign_stage::to_campaign_difficulty` and its own
+/// (`crate::app::campaign_stage::to_campaign_difficulty` and its own
 /// inverse), the same shape `to_campaign_medal` already gives [`Medal`].
 ///
 /// **Serialized as a lowercase word for the identical reason [`Medal`]'s

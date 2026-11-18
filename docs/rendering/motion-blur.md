@@ -801,7 +801,7 @@ Measured 2026-09-03 on an HD/Fury circuit at 2560x1440: `high` motion blur costs
 about 1.7 ms of a 9.3 ms frame, with the scene pass and the FSR 3.1 chain
 unmoved. Blur draws through the render extent, so its cost falls with the
 resolution like the scene pass's; the controller budgets it as its own meter
-(`oag_present::drs`, `crates/game/src/main/session.rs` `blur_cost`).
+(`oag_present::drs`, `crates/game/src/app/session.rs` `blur_cost`).
 
 ## The gather on the Deck: bisected, two exact cuts flat (2026-11-09, `deck-gpu`)
 

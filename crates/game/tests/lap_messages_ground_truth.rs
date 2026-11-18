@@ -166,7 +166,7 @@ fn a_single_race_shows_the_lap_line_gap_in_the_originals_format() {
 #[test]
 fn both_game_loops_still_switch_the_lap_lines_on() {
     for source in [
-        include_str!("../src/main/stage.rs"),
+        include_str!("../src/app/stage.rs"),
         include_str!("../src/race_capture.rs"),
     ] {
         assert!(

@@ -17,7 +17,7 @@ The Deck now holds 90 on a moving Anulpha race, with the maintainer's settings. 
 ## Open
 
 - The 3 slow seconds a minute: log a frame's phases when `total` passes 10 ms (a few lines in
-  `crates/game/src/main/session/phases.rs`, `end_frame`) and see what the slow ones share.
+  `crates/game/src/app/session/phases.rs`, `end_frame`) and see what the slow ones share.
 - Further `submit` levers, from the doc section: post-chain pass count (10 bloom downsample, 7
   motion blur passes a frame), shared 1x1 fallback textures (1,276 of 1,863 live textures),
   a third split point.

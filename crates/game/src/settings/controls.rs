@@ -27,7 +27,7 @@ pub struct Controls {
     /// A **token**, not a typed enum, for the reason `Race::mode` is: a bad
     /// value in this file must not fail the boot, and `load` propagates a serde
     /// error rather than falling back. An unrecognised scheme is reported and
-    /// the default is used - that fallback lives in `main.rs`'s
+    /// the default is used - that fallback lives in `app.rs`'s
     /// `resolve_scheme`, which is also where `--scheme` overrides this.
     ///
     /// The two differ in *how a sideshift is asked for*, not in what the ship
@@ -39,7 +39,7 @@ pub struct Controls {
     /// What the analog triggers do: `airbrakes` or `thrust_brake`.
     ///
     /// A **token** for the same reason `scheme` is one, and resolved the same
-    /// way - `main.rs`'s `resolve_triggers` reports an unrecognised value and
+    /// way - `app.rs`'s `resolve_triggers` reports an unrecognised value and
     /// carries on. See [`TriggerMode`] for what each mapping is and why the
     /// older one is still offered.
     #[serde(default = "default_triggers")]

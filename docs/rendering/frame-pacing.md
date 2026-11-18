@@ -1,9 +1,9 @@
 # Frame pacing: present mode and swapchain depth
 
 How the VSYNC row becomes a present mode and a queue depth, and why a fullscreen window
-queues one frame more than a window does. Code: `crates/game/src/main/window.rs`
+queues one frame more than a window does. Code: `crates/game/src/app/window.rs`
 (`present_modes`, `frame_latency`, `queued_frames`) and `Output::configure` in
-`crates/game/src/main/gpu.rs`.
+`crates/game/src/app/gpu.rs`.
 
 ## The decision
 

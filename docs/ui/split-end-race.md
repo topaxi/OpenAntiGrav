@@ -12,7 +12,7 @@ Code: `crates/raceplay/src/telemetry.rs` (`Race::finished_view`, the held readou
 `crates/ui-screens/src/endrace/split.rs` (`Results Split`), `.../draw.rs`
 (`split_rewards_draw_list`), `.../borrow.rs` (the PSP's borrowed copies),
 `.../table.rs` (the grid geometry), `.../people.rs` (Pulse's one table),
-`.../hd.rs` (HD's grid), `crates/game/src/main/session/endrace.rs` (the split branch of
+`.../hd.rs` (HD's grid), `crates/game/src/app/session/endrace.rs` (the split branch of
 `build_endrace`). Tests: `crates/raceplay/src/results/tests.rs`,
 `crates/game/src/results_tables.rs`, the unit tests in `crates/ui-screens/src/endrace/`
 (`split/tests.rs`, `table/tests.rs`), and the disc-backed

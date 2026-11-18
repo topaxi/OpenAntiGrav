@@ -15,12 +15,12 @@
 //!
 //! # Why this stops short of `EndRaceRuntime`
 //!
-//! `crate::main::race_stage::endrace::EndRaceRuntime` and
-//! `crate::main::session::endrace::Session::build_endrace` are the binary
-//! crate's own (`crates/game/src/main/`), not `[lib]` `oag_game`'s - a
+//! `crate::app::race_stage::endrace::EndRaceRuntime` and
+//! `crate::app::session::endrace::Session::build_endrace` are the binary
+//! crate's own (`crates/game/src/app/`), not `[lib]` `oag_game`'s - a
 //! `crates/game/tests/*.rs` integration test only ever sees the library, the
 //! same reason every other ground-truth file in this directory reaches for
-//! `oag_raceplay`/`oag_game::endrace` rather than `crate::main::*`. What
+//! `oag_raceplay`/`oag_game::endrace` rather than `crate::app::*`. What
 //! those two hold beyond what this test exercises is thin, GPU-touching
 //! glue: opening a renderer. The `Board` rows become `FieldRow`s in
 //! `oag_game::results_tables`, which has its own fast, disc-free unit tests and

@@ -149,7 +149,7 @@ pub fn show_total(mode: oag_race::Mode) -> bool {
 /// reachable only from the binary, and `crate::capture::menu_page` - the
 /// `--menu-page records` still - needed the identical resolution to avoid
 /// silently disagreeing with the live RECORDS page about which classes
-/// exist or which column a mode draws. `crates/game/src/main/records_page.rs`
+/// exist or which column a mode draws. `crates/game/src/app/records_page.rs`
 /// is now a thin wrapper over [`records_table`] that supplies the live
 /// session's own `Shell::tracks_for`-based track lookup.
 #[must_use]
@@ -191,7 +191,7 @@ pub fn class_table(
 /// `docs/architecture/menus.md` for why offering it here too would diverge
 /// wider than asked, even though it is what Pure's own front end does.
 ///
-/// Moved here from `crate::main::session::menus` - which re-exports it under
+/// Moved here from `crate::app::session::menus` - which re-exports it under
 /// its own name, so every existing call site there keeps working unchanged -
 /// for the same reason [`class_table`] moved: [`records_table`] needs the
 /// identical list, and a `--menu-page records` capture has no `Session` to

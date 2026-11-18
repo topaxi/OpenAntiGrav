@@ -12,9 +12,9 @@ and [`hd-endrace-screens.md`](../formats/hd-endrace-screens.md).
 Implemented in [`oag_ui_screens::endrace::touch`](../../crates/ui-screens/src/endrace/touch.rs)
 (model, draw list, pointer), [`oag_game::endrace::touch`](../../crates/game/src/endrace/touch.rs)
 (the disc read and the wording of a finished race),
-[`race_stage::endrace_touch`](../../crates/game/src/main/race_stage/endrace_touch.rs)
+[`race_stage::endrace_touch`](../../crates/game/src/app/race_stage/endrace_touch.rs)
 (the runtime and its flow) and
-[`session::endrace_touch`](../../crates/game/src/main/session/endrace_touch.rs)
+[`session::endrace_touch`](../../crates/game/src/app/session/endrace/touch.rs)
 (building it, driving it, retry and exit).
 
 ## Which file, and which copy

@@ -18,7 +18,7 @@ Worst read: `crates/raceplay/src/scene/viewports.rs:135` `render_view` takes `de
 `encoder`, `view`, `race`, `window`, `slot`, `area` (a 4-tuple), `fov`, `cull`, `pvs_cull`,
 `anim_seconds`, `shadows`, `zone_spectrum`, `shared`, `effects`: 17 parameters, four of them `bool`.
 `render_viewports` (`:202`) and `render_window` (`:263`) repeat most of the list. Other 8+ parameter
-public functions: `game/src/preview.rs` (4), `game/src/render.rs` (3), `game/src/main/race_stage/endrace_touch.rs` (3).
+public functions: `game/src/preview.rs` (4), `game/src/render.rs` (3), `game/src/app/race_stage/endrace_touch.rs` (3).
 A boolean-heavy call site (`..., true, false, None, ...`) cannot be read without the signature.
 
 ## Why it hurts

@@ -245,7 +245,7 @@ pub struct CampaignMap {
     /// The craft a fresh boot is about to race, before the player ever
     /// touches `Team` this session - `settings.race.team`/`variant`,
     /// combined the same way a campaign launch eventually loads with
-    /// (`crate::main::session::menus::combine_variant`'s own return shape,
+    /// (`crate::app::session::menus::combine_variant`'s own return shape,
     /// e.g. `"Qirex2048\3"`). `Frontend::team_choice` stays `None` until the
     /// player actually moves on `Team` - `Session::frame` relies on that to
     /// tell "never touched" from "touched, first tile" - so this is the

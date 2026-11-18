@@ -15,7 +15,7 @@ let's say 30fps lowers the error tolerance quite a bit"*.
 ## What is not tied to the frame
 
 **Mixing already runs on its own thread and always has.** `cpal` calls
-`Mixer::render` from its own callback, and `crates/game/src/main/session/frame.rs`
+`Mixer::render` from its own callback, and `crates/game/src/app/session/frame.rs`
 says so where the tick loop calls `audio.tick()`: "there is deliberately no
 per-frame counterpart: with a device attached `cpal` drains the mixer from its
 own callback thread". `Output::render_tick` returns zero the moment a stream

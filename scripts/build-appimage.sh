@@ -199,7 +199,7 @@ install -m 644 "$project_root/packaging/appimage/oag-game.desktop" \
 install -m 644 "$app_dir/oag-game.desktop" \
     "$app_dir/usr/share/applications/oag-game.desktop"
 
-# The same rasterizer `main/window.rs` uses for the live window icon, so the
+# The same rasterizer `app/window.rs` uses for the live window icon, so the
 # taskbar icon a packaged build installs and the one the window shows at
 # startup can never drift apart the way the old hand-drawn chevron did. See
 # `oag_game::icon` and docs/tools/packaging.md.

@@ -674,7 +674,7 @@ stated inline above rather than renamed.
 6. **Draw the tournament standings table for real** - `oag_ui_screens::endrace`
    now has both pages (`crates/ui-screens/src/endrace.rs`'s `TournamentResults`),
    fed by `oag_race::tournament`/`crate::race::tournament::Progress`
-   (`crates/game/src/main/race_stage/endrace.rs`'s `tournament_results`).
+   (`crates/game/src/app/race_stage/endrace.rs`'s `tournament_results`).
    Not yet checked against a live PPSSPP capture of a real tournament leg
    ending - see `docs/ui/endrace-screens.md`'s own Open section for why a
    live capture through to a finished leg was not attempted this pass

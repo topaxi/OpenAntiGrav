@@ -1,0 +1,1265 @@
+//! One frame: the fixed timestep and the stage update. The draw itself is
+//! [`Session::draw`], in the sibling `draw.rs` this module doc used to
+//! describe alongside - see that file's own doc for why it moved out.
+
+use anyhow::Result;
+use log::{debug, error, warn};
+
+use crate::{records, report, settings};
+use oag_display::display;
+use oag_display::space::Space;
+use oag_gameplay::input::Button;
+use oag_physics::pilot_assist::Level;
+use oag_raceplay as race;
+use oag_ui::frontend::{self};
+use oag_ui::strings;
+
+/// Ticks a network race may stand ended with nobody finished before the menus return: one
+/// second. **Chosen.**
+const NET_OVER_TICKS: u32 = 60;
+use oag_ui::{font, menu};
+
+/// What the end screens of a multi-window race read from every seat, not only the keyboard's
+/// slot: the menu's move, confirm and back, the photo's spectator pad. **Chosen, not measured.**
+const END_SCREEN_BUTTONS: [Button; 7] = [
+    Button::Up,
+    Button::Down,
+    Button::Left,
+    Button::Right,
+    Button::Cross,
+    Button::Start,
+    Button::Circle,
+];
+
+use crate::app::hints;
+use crate::app::stage::Stage;
+
+use super::Session;
+use super::pointer;
+
+impl Session {
+    pub(crate) fn frame(&mut self) -> Result<()> {
+        // `--measure-race-load`'s clock and its `LAUNCH RACE`, first so the
+        // frame it times is all of this one. A no-op on every other run.
+        self.probe_begin_frame();
+        self.dev_frame();
+        self.refresh_prompts();
+        self.poll_custom_tracks();
+        // Whatever the audio callback could not render while this thread held
+        // the mixer lock, said out loud from a thread that can afford to
+        // allocate a sentence. Here rather than in the tick loop because a
+        // dropped buffer is a property of the wall clock, not of the timestep,
+        // and `Output::report_health` throttles itself in frames.
+        self.audio.output().report_health();
+        self.audio.output().flush_tap();
+
+        // Before everything, because it is what makes there be anything: until
+        // a disc has been picked there is no boot to finish and no front end to
+        // hand a window to. Read a frame after the press for the same reason
+        // `Launch Game` is checked here rather than in the tick loop - the row
+        // lighting up is drawn before the load stalls the window.
+        let picked = match &mut self.stage {
+            Stage::Launcher(stage) => stage.picked.take(),
+            _ => None,
+        };
+        if let Some(source) = picked
+            && let Err(e) = self.finish_launcher(&source)
+        {
+            // Reported and stayed on rather than fatal: the chooser is still on
+            // screen and the other rows are still there to try. A disc that
+            // will not boot is exactly the case this screen exists to survive.
+            error!("cannot boot {source}: {e:#}");
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        self.sync_web_window();
+
+        // Before this frame's ticks, so the front end's own first frame is drawn
+        // on the frame after the fade ended rather than a frame later still.
+        if let Err(e) = self.finish_loading() {
+            error!("cannot open the front end: {e:#}");
+            self.quit = true;
+            return Ok(());
+        }
+
+        // Checked before this frame's ticks rather than after them, so the frame
+        // that entered `Launch Game` is drawn once before the load stalls the
+        // window.
+        // Whatever the picker settled on, remembered for next time. Saved the
+        // frame the pick lands, not when the menus open: a player who quits
+        // from the title screen (the web build reloads the page) would
+        // otherwise be asked again. Here rather than in the picker because
+        // `menu.rs` and `frontend.rs` stay ignorant of where settings live.
+        if let Stage::Frontend(stage) = &self.stage
+            && let Some(language) = stage.frontend.chosen()
+            && self.settings.language.as_deref() != Some(language)
+        {
+            self.settings.language = Some(language.to_string());
+            if let Err(e) = settings::save(&self.settings) {
+                warn!("could not save the chosen language: {e:#}");
+            }
+        }
+
+        // `Launch Game` opens **our menus**, not a race. The original has a main
+        // menu between the picker and a track and this build now has one too; it
+        // is simply not the original's, which is why the state whose transition
+        // gets us here is still spelled the way the disc spells it while what it
+        // reaches is not a recovered screen at all. See `oag_ui::menu`.
+        if !self.launched
+            && matches!(&self.stage, Stage::Frontend(stage)
+                // `--measure-race-load` times the race path, not the boot
+                // sequence, and skips straight past it.
+                if stage.frontend.is_finished() || self.load_probe.is_some() || self.demo.cli.is_some())
+        {
+            self.launched = true;
+            debug!("{}: opening the menus", frontend::states::LAUNCH_GAME);
+            // Wipeout 2048's own Team/Options screens, read the same "only
+            // if the player actually touched it" way the language above is -
+            // `None` on every title without a touch front end, and on this
+            // one until `Home`'s own tiles are visited at all. Applied
+            // before `open_menus` below, which is what seeds the RACE and a mod's race
+            // pages' own TEAM row and the Team screen's campaign-launch
+            // team from `settings.race.team`/`variant` - after it, the row
+            // would already be built off the untouched value. See
+            // `oag_ui::frontend::team`'s and `::options2048`'s own module
+            // docs for what each of these carries and why the rest (skin,
+            // motion sensor) is drawn and not read here.
+            if let Stage::Frontend(stage) = &self.stage {
+                if let Some((team, variant)) = stage.frontend.team_choice() {
+                    self.settings.race.team = team.to_string();
+                    self.settings.race.variant = variant.to_string();
+                }
+                if let Some(index) = stage.frontend.camera_choice() {
+                    self.settings.graphics.camera_view = match index {
+                        0 => display::CameraView::Close,
+                        2 => display::CameraView::Internal,
+                        _ => display::CameraView::Far,
+                    };
+                }
+                // `OptionsPilot`'s list is `FE_OFF`, `FE_NORMAL`, `FE_SUPER`.
+                if let Some(index) = stage.frontend.pilot_choice() {
+                    self.settings.controls.pilot_assist = match index {
+                        0 => Level::Off,
+                        1 => Level::Normal,
+                        _ => Level::Extreme,
+                    };
+                }
+                if let Some(percent) = stage.frontend.music_choice() {
+                    self.settings.audio.music_volume =
+                        oag_sound::Volume::try_from(percent).unwrap_or_default();
+                }
+                if let Some(percent) = stage.frontend.sfx_choice() {
+                    self.settings.audio.sfx_volume =
+                        oag_sound::Volume::try_from(percent).unwrap_or_default();
+                }
+            }
+            let hint_strings = strings::project_table(self.settings.language.as_deref());
+            // What Wipeout 2048's own front end asked for, if it was that
+            // title: its `Launch 2048` carries a request where every other
+            // title's `Launch Game` opens the menus and stops. See
+            // `oag_ui::frontend::Launch`.
+            let (launch, card) = match &self.stage {
+                Stage::Frontend(stage) => (
+                    stage.frontend.launch().cloned(),
+                    stage.frontend.launched_card(),
+                ),
+                _ => (None, None),
+            };
+            let opening = web_time::Instant::now();
+            if let Err(e) = self.open_menus() {
+                error!("cannot open the menus: {e:#}");
+            } else {
+                debug!(
+                    "opened the menus in {:.0} ms (a stall on the main thread, drawn as the held backdrop)",
+                    opening.elapsed().as_secs_f32() * 1000.0
+                );
+                println!("\n{}", hints::shell_keys(&hint_strings));
+                self.follow_launch(launch, card);
+            }
+        }
+
+        self.poll_hosted_map();
+
+        // As soon as the circuit's own load lands, not only once the fade that
+        // covers it has run out - see `Session::advance_race_build`, which is
+        // the fix for the gap that otherwise opens up behind the black screen.
+        // A no-op on every frame but the one the worker actually finishes on.
+        //
+        // Before the timing block below and not after it, same as
+        // `finish_loading` above: the scene build it does is itself a load,
+        // `advance_race_build` sets `self.stalled` for exactly that reason, and
+        // a call on the other side of `elapsed` would land the stall in the
+        // *next* frame's measurement instead, past the point that flag is read.
+        self.advance_race_build();
+
+        // **The swapchain image first, then the clock.** Under a blocking
+        // present mode (`Vsync::On`, or `smooth` falling back to Fifo) the
+        // acquire is where the loop waits for a free image. Taken here, that
+        // wait counts toward this frame's `elapsed`, so the ticks below, the
+        // input they sample (`player_snapshots` polls the pads) and the draw
+        // alpha all describe the moment after it; taken in `Session::draw`, as
+        // everything drawn would be a wait older. After
+        // every stage change above, which may resize; `Session::draw` takes
+        // the image, or draws nothing if there is none. See `Gpu::acquire`.
+        let acquire_start = web_time::Instant::now();
+        let acquired = self.gpu.output.acquire(&self.gpu.device);
+        let acquire_wait = acquire_start.elapsed();
+        self.phases.begin();
+        if acquired {
+            self.frame_timing
+                .acquired(acquire_start, acquire_start + acquire_wait);
+        }
+
+        // Fixed timestep, per ADR-0007: the simulation steps at exactly 1/60
+        // whatever the window is doing. The clock's own catch-up cap is what keeps
+        // the race load above from being paid back as a burst of ticks.
+        let now = web_time::Instant::now();
+        self.wall = now.duration_since(self.wall_origin).as_secs_f64();
+        let elapsed = now.duration_since(self.last);
+        self.last = now;
+        self.schedule_next_frame(now);
+        // The presentation layer's only reader of the clock, and it reads the
+        // same value the timestep does rather than taking its own.
+        //
+        // **A load is not a frame time.** Opening the menus or building a race
+        // stalls the loop for a few hundred milliseconds, and that stall lands
+        // in exactly one `elapsed` - the same one, whichever side of this the
+        // stage change happened on, because a stage only ever changes above or
+        // below here. Recording it would put one 1000 ms column across the
+        // graph for the two seconds a player is most likely to be looking at
+        // it, so the frame that carries a load is dropped instead.
+        // Counted here, before anything this frame is measured against it. A
+        // GPU reading names the frame it was taken on rather than the frame it
+        // arrives on, which is what `stall_frame` below is then able to
+        // exclude - see [`oag_gpu::timing::PassTimer`].
+        self.frame_index += 1;
+        // **How long this frame took, or nothing at all on a stalled one.**
+        // The same value `meter` is fed, handed to the same guard: a load is
+        // not a frame time, and the residual `drs::Residual` learns from is
+        // `frame - timed`, so a 300 ms stall paired with a 3 ms scene would
+        // teach it that this machine spends 297 ms on work nothing times. The
+        // `Option` is how "the caller has no reading" is said, rather than a
+        // zero that would read as a frame that took no time.
+        let frame_seconds = (!self.stalled).then_some(elapsed.as_secs_f32());
+        if self.stalled {
+            self.meter.clear();
+            // The same guard, reaching a measurement that has not come back
+            // yet: `clear` empties what was recorded, and the reading for this
+            // frame is still somewhere between the queue and the map. Every
+            // reading up to and including this one is dropped when it lands.
+            self.scene_cost.clear();
+            self.blur_cost.stalled(self.frame_index);
+            self.hd_bloom_cost.stalled(self.frame_index);
+            self.upscale_cost.stalled(self.frame_index);
+            self.upscale_presented_cost.stalled(self.frame_index);
+            // The two wall-clock meters, on the same guard and for the same
+            // reason: a 300 ms track build recorded as this frame's CPU cost
+            // would sit in the `CPU` row for the two seconds a player is most
+            // likely to be reading it.
+            self.cpu_cost.clear();
+            self.present_cost.clear();
+            // The controller's own half of the same guard. It holds the scale
+            // rather than resetting it - see `drs::Controller::reset` for why
+            // snapping back to the ceiling on a load is the wrong move.
+            self.drs.reset();
+            self.stall_frame = self.frame_index;
+            self.stalled = false;
+        } else {
+            self.meter.record(elapsed.as_secs_f32());
+            // **A stutter, named where it happened.** An audio underrun and a
+            // frame that took 90 ms are the same event seen from two threads,
+            // and the only way to tell that from an audio path that is late on
+            // its own is to have both lines in one terminal.
+            if let Some(line) = self.stutter.observe(now, elapsed) {
+                warn!("{line}");
+            }
+        }
+        // `--drive` steps exactly one tick a frame, so a script counts ticks, not milliseconds.
+        let nanos = if self.dev.lockstep {
+            self.clock.rate().dt_nanos()
+        } else {
+            u64::try_from(elapsed.as_nanos()).unwrap_or(u64::MAX)
+        };
+        let steps = self.clock.advance(nanos);
+        let dt = f64::from(self.clock.rate().dt());
+
+        // Before the snapshot below, because it is what makes the snapshot
+        // start meaning anything: `--prefetch` may not run until the boot's own
+        // movies are done with the cache, so this is the frame that starts it.
+        // A no-op on every frame but one, and on every run without the flag.
+        // `race.is_none()` because the race path puts the same stage up again
+        // long after the boot, and starting a conversion from *there* would put
+        // ten minutes of `ffmpeg` behind a two-second screen. `--prefetch` is
+        // the boot's, and the boot's screen is the one that waits for it.
+        if matches!(&self.stage, Stage::Loading(stage) if stage.media_ready() && stage.race.is_none())
+        {
+            self.start_prefetch();
+        }
+
+        // One snapshot for the whole frame, taken outside the tick loop: it is a
+        // lock and a clone, and the ticks in one frame cannot have seen the
+        // worker at different points anyway. `phase` itself is unused here -
+        // `Session::draw` reads it off a second, equally cheap call instead,
+        // now that drawing is split into its own file - but `progress` is
+        // read again below, inside the tick loop.
+        let (_phase, progress) = self.loading_progress();
+        // Where the picture is on the surface this frame, for the pointer:
+        // the same rectangle `Session::draw` fits every stage into, so a
+        // click maps back through exactly the transform the rows went out
+        // through. See `session::pointer::in_grid`.
+        let rect = display::viewport(self.gpu.output.size(), self.aspect());
+
+        for _ in 0..steps {
+            // Ends the devices' tick for both stages. A race reads the snapshot's
+            // axes; the front end reads the button edges the same call computed,
+            // through `buttons_mut`, because it needs `consume_press` and a
+            // snapshot is a value.
+            // One snapshot per grid slot, from whichever device
+            // `oag_input::pad::Assignment` says drives it - every device on
+            // slot 0 until something assigns one elsewhere (one merged stream). The front end reads the
+            // button edges this same call computed, through `buttons_mut`, for
+            // the one slot the keyboard drives; it has one menu and one cursor
+            // however many people are racing.
+            self.feed_touch();
+            self.sync_keyboard_reach();
+            if self.windowed_race() && !self.keys_by_window() {
+                self.controls.let_go_extra_seats();
+            }
+            let inputs = self.controls.player_snapshots();
+            // Taken every tick so a press made while paused or in a menu is spent there, and
+            // acted on only by the unpaused race arm below.
+            let music_input = self.controls.take_music();
+            self.frame_timing.sampled(web_time::Instant::now());
+            self.pad_dir = super::menu_sound::pad_direction(self.controls.buttons());
+            // The pad spoke: the drawn cursor goes until the mouse moves
+            // again, the same rule a key press applies in `app.rs`. Read
+            // off the pad's own contribution rather than the merged
+            // snapshot, because a click synthesises a press through the
+            // keyboard's latch and that press is the mouse speaking.
+            if self.controls.pad_spoke() {
+                self.pointer.other_device();
+            }
+            self.idle.update_window(
+                self.gpu.output.window.get(),
+                // An attract demo is not somebody playing: a menu left alone may still blank the
+                // screen. A wallpaper is meant to stay up.
+                self.race_running() && (!self.in_demo() || self.demo_is_wallpaper()),
+                self.controls.pad_spoke(),
+                web_time::Instant::now(),
+            );
+            // And the pointer's, on the same latch terms: one take per tick,
+            // in window pixels until a stage says which grid it draws in.
+            let mut pointer = self.pointer.take();
+            // A notice over the screen takes the press that dismisses it, so the screen under it
+            // does not also act on it.
+            self.tick_notice(&mut pointer);
+            // `--replay-png` opens its screenshot as soon as the main menu is up, ahead of an
+            // attract demo that would start on the same tick.
+            if self.tick_shot_cli() {
+                break;
+            }
+            // The attract demo: an untouched main menu starts one, input ends it. Before the
+            // stage's own tick so the press that ends a demo is not also read by the menu it
+            // returns to.
+            if self.tick_demo(&pointer) {
+                break;
+            }
+            // The further windows' too, every tick, so a click made mid-race is spent and the end
+            // screens (the finished arm below) see only what happened since the line.
+            let seat_pointers = self.seat_pointers();
+            // HD's list rows are taller to the finger, and back to the
+            // authored size once a pad, key or mouse speaks.
+            if let Stage::Menu(stage) = &mut self.stage {
+                stage.skin.set_touch_rows(self.pointer.touch_spoke_last());
+            }
+            self.poll_music_pool();
+            // The audio's whole tick, and it is inside this loop rather than
+            // beside it on purpose. Cue emission and mixer control are driven by
+            // the tick count, exactly as the exhaust and the chase camera are
+            // (see `race::Race::tick`), so a headless capture and a window
+            // produce the same sound at the same tick. There is deliberately no
+            // per-frame counterpart: with a device attached `cpal` drains the
+            // mixer from its own callback thread, and with none the offline
+            // dump below is the only reader.
+            //
+            // The movie's playhead is read **before** that call, so that this
+            // loop and `capture::run` pace the picture against the same
+            // measurement - where the sound had got to at the end of the
+            // previous tick - rather than differing by one tick depending on
+            // which side of `tick` each happened to sit. See
+            // `frontend::Player::follow`.
+            let movie_playhead = self.audio.movie_playhead();
+            self.audio.tick();
+            self.audio.poll_route(&mut self.settings.audio);
+            self.save_race_music_periodically();
+            // The in-race camera cycle, read off the shared `Input` and consumed,
+            // exactly as the front end and the menus consume their own presses -
+            // a press seen on two devices is one press and there is one place to
+            // clear it.
+            //
+            // Deliberately here and **not** inside `Race::tick`. The tick takes an
+            // `InputSnapshot` by value and the selected view is not part of one, so
+            // keeping the cycle outside is what makes "cycling the camera cannot
+            // move a simulation bit" true by construction rather than by argument.
+            // It also puts the settings file - which `Race` cannot see - in reach,
+            // which is what persists the choice across a restart. Before the tick
+            // rather than after, so the frame this tick produces is already drawn
+            // from the new view.
+            // A recording being watched owns the devices and the race, and nothing the loop does
+            // for a race that is driven applies to it: not the pause, not the end screens, not
+            // a record or a ghost.
+            if self.viewer.is_some() && matches!(self.stage, Stage::Race(_)) {
+                // Photo mode over the viewer owns the devices, as it does over a race; the
+                // viewer carries on from where it leaves the playhead.
+                if self.photo.is_some() {
+                    self.tick_photo(&pointer, inputs.get(0));
+                } else {
+                    self.tick_viewer(&pointer);
+                }
+                continue;
+            }
+            // Photo mode first: while it is open it owns the devices and the race stands
+            // still, and what it leaves (a press it spent, a leave) is settled before the
+            // blocks below read the pad.
+            // **The tick that leaves it is still the mode's**: `inputs` was read from the
+            // devices before the mode spent its presses, so the race that takes the next tick
+            // reads them, whatever the mode does with the button that left (CIRCLE is the
+            // absorb).
+            let photo_tick = self.photo.is_some();
+            if photo_tick {
+                self.tick_photo(&pointer, inputs.get(0));
+            }
+            // SELECT on `Race End Photo` opens photo mode, once that screen takes input; on
+            // any other race tick it is the camera cycle.
+            let at_the_finish = matches!(&self.stage, Stage::Race(stage)
+                if stage.endrace.as_ref().is_some_and(
+                    crate::app::race_stage::endrace_touch::EndRace::is_photo));
+            if matches!(self.stage, Stage::Race(_))
+                && self.photo.is_none()
+                && !self.in_demo()
+                && self.controls.buttons().is_pressed(Button::Select)
+            {
+                self.controls.buttons_mut().consume_press(Button::Select);
+                if !at_the_finish {
+                    self.cycle_camera_view();
+                } else if matches!(&self.stage, Stage::Race(stage)
+                    if stage.endrace.as_ref().is_some_and(
+                        crate::app::race_stage::endrace_touch::EndRace::photo_takes_select))
+                {
+                    self.open_photo_at_the_finish();
+                }
+            }
+            // Pause, on the same button the original spends on "leave the
+            // results table" - free during a still-running race because
+            // nothing else there reads `Start` yet. **No menu, no overlay** (where the
+            // title has no pause screen of its own, see below):
+            // this only decides whether `Race::tick` below runs, so the world
+            // is exactly as the freezing tick left it, the way the finished
+            // race arm below already leaves it under the results table.
+            // **Any seated player's Start**, not the keyboard's slot alone: in a
+            // split race each pad drives its own slot, and a Deck's own Start
+            // would otherwise never be seen. And
+            // only the player who paused resumes, and a resume in a race with more
+            // than one person counts down first - see `session::pause`.
+            // A click on a paused race is slot 0's Start, through the same owner
+            // rule: a mouse cannot lift player 2's pause inside their timeout.
+            if self.photo.is_none()
+                && !self.in_demo()
+                && matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+            {
+                let paused = matches!(self.pause, crate::pause::State::Paused { .. });
+                let click = pointer.clicked && paused;
+                // A click on a further window is its first seat's Start, the same way.
+                let seat_clicks = self.take_seat_clicks();
+                let presses = self.controls.take_presses(Button::Start)
+                    | u8::from(click)
+                    | if paused { seat_clicks } else { 0 };
+                // The title's own pause screen takes START (the original's pause is a menu).
+                if presses != 0
+                    && let Stage::Race(stage) = &self.stage
+                    && !paused
+                    && self.pause_screen_applies(stage)
+                {
+                    // START plays `ACCEPT` on pausing, measured.
+                    self.play_navs([oag_ui::menu::nav::Nav::Accept]);
+                    self.escape();
+                } else {
+                    self.step_pause(presses);
+                }
+            }
+            // Circle is "back" everywhere else on screen - the menus, the
+            // front end - and a paused race is the one place a still-running
+            // one reads it too. Gated on `self.paused` rather than on the
+            // stage alone, so an unpaused race keeps Circle for
+            // `spend_pickup`'s absorb - see `race::weapons`. Same shape as
+            // the results-table block below: hand the window back to the
+            // menus, exactly as `escape` does from any race.
+            // Only the player who paused leaves, as for Start above.
+            if matches!(self.stage, Stage::Race(_))
+                && self.photo.is_none()
+                && self.paused()
+                && crate::pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
+            {
+                self.escape();
+                // The remaining steps this frame owed belong to whatever is on
+                // screen now, and it has not been drawn once yet.
+                break;
+            }
+            // What leaves the built-in results table, and it is the same thing
+            // escape does from a race: hand the window back to the menus, or
+            // quit a `--race` run that never had any. See
+            // `crate::scoreboard`. **Only while no EndRace flow is built**:
+            // once it is, Cross/Start belong to `Session::tick_endrace` below,
+            // which walks `Results` -> `Rewards` -> `Menu` - see
+            // `race_stage::endrace::results_table_takes_confirm` for the bug
+            // this guard fixed.
+            //
+            // **A rising edge**, so the thrust the player was holding as they
+            // crossed the line cannot dismiss the board they have not read yet.
+            if self.photo.is_none()
+                && matches!(&self.stage, Stage::Race(stage)
+                if crate::app::race_stage::endrace::results_table_takes_confirm(
+                    stage.race.finished(),
+                    stage.endrace.is_some(),
+                ))
+                && [Button::Cross, Button::Start]
+                    .into_iter()
+                    .any(|press| self.controls.buttons().is_pressed(press))
+            {
+                for press in [Button::Cross, Button::Start] {
+                    self.controls.buttons_mut().consume_press(press);
+                }
+                // A tournament with a leg to go carries on to it: a title with no
+                // EndRace flow (Pure) has no `NEXT RACE` row to do it from, and
+                // `escape` here would abandon the series after its first race.
+                if self.tournament_has_next_leg() {
+                    self.advance_tournament_leg();
+                } else {
+                    self.escape();
+                }
+                // The remaining steps this frame owed belong to whatever is on
+                // screen now, and it has not been drawn once yet.
+                break;
+            }
+            self.poll_online();
+            match &mut self.stage {
+                // Photo mode: the race does not tick, whatever state it is in (running, or
+                // finished with the end screens behind). The audio is not simulation state, so
+                // it is stepped as under the pause, which is what lets the engine note spin down
+                // while `World` stands at the tick the mode caught it on.
+                Stage::Race(stage) if photo_tick || self.photo.is_some() => {
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
+                    crate::sound::race_tick(&mut self.audio, &mut stage.race);
+                }
+                // Stepped in the tick loop with everything else, so the wave's
+                // heartbeat runs at the simulation's fixed 60 Hz rather than at
+                // whatever the window is managing. The original's own loading
+                // thread ran it at 30; ours is one beat per 24 ticks either way,
+                // and a frame-rate-dependent heartbeat is exactly the thing
+                // ADR-0007 fixed the timestep to avoid.
+                // Two waits, one screen: the boot's own movies, and the
+                // `--prefetch` conversion when there is one. The fade starts
+                // when both are done - `Screen::advance` holds at full opacity
+                // until then - and `finish_loading` hands the window on when it
+                // has run out.
+                // In the tick loop with everything else, so a held key is read
+                // as one press at the same 60 Hz the menus read theirs at.
+                Stage::Launcher(stage) => {
+                    stage.update(self.controls.buttons_mut());
+                    // The chooser draws in the PSP's grid, having no source
+                    // to take one from - see `Stage::launcher`.
+                    stage.pointer(&pointer::in_grid(pointer, Space::PSP, rect, 1.0));
+                }
+                Stage::Loading(stage) => {
+                    stage.screen.set_load_stage(progress.load_stage);
+                    stage
+                        .screen
+                        .advance(progress.finished && stage.media_ready() && stage.race_ready());
+                }
+                Stage::Frontend(stage) => {
+                    // The language picker takes the pointer itself; every
+                    // other screen in the chain waits for a button and
+                    // reads a click as one. See `session::pointer`.
+                    let grid = pointer::in_grid(
+                        pointer,
+                        stage.frontend.space(),
+                        rect,
+                        stage.renderer.inset(),
+                    );
+                    stage
+                        .frontend
+                        .set_pad_driving(!self.pointer.pointer_spoke_last());
+                    stage.frontend.set_view_stick(self.controls.view().right);
+                    self.pointer
+                        .set_mouse_pans(stage.frontend.wants_mouse_pan());
+                    if !stage.frontend.pointer(&grid) {
+                        pointer::press_for_click(&mut self.controls, &grid);
+                    }
+                    stage.frontend.set_music_levels(self.audio.music_levels());
+                    let events =
+                        stage
+                            .frontend
+                            .update(dt, self.controls.buttons_mut(), movie_playhead);
+                    // SCREEN SIZE on a touch front end: applied the tick it moves, and saved
+                    // like every other row.
+                    if let (Some(scale), Some(percent)) = (
+                        stage.frontend.screen_size_scale(),
+                        stage.frontend.screen_size_choice(),
+                    ) {
+                        stage.renderer.set_inset(scale);
+                        if self.settings.graphics.hud_safe_area != Some(percent) {
+                            self.settings.graphics.hud_safe_area = Some(percent);
+                            if let Err(e) = settings::save(&self.settings) {
+                                warn!("could not save the screen size: {e:#}");
+                            }
+                        }
+                    }
+                    // One set of planes and one voice serve every movie the front
+                    // end draws, so each is installed on the tick its own screen
+                    // is entered - picture and sound together, which is what makes
+                    // `movie_playhead` report *that* movie's position for the
+                    // screen's own update to pace against.
+                    //
+                    // Every entered state is offered rather than one named screen:
+                    // which screens play movies came out of the title's own chain,
+                    // and Pure's two are neither its boot step nor the step after
+                    // its picker.
+                    for event in &events {
+                        if let oag_ui::state_machine::Event::Enter(name) = event {
+                            stage.install_movie(name, &mut self.audio);
+                        }
+                    }
+                    report(&events, stage.trace);
+                    oag_raceplay::loader_log::lines(stage.frontend.take_notes());
+                    let boot_navs = stage.frontend.take_nav();
+                    // Hidden campaign events the player just found are kept in the
+                    // profile, off the render thread.
+                    let found = stage.frontend.take_found_events();
+                    if let (false, Some(shell)) = (found.is_empty(), self.shell.as_ref()) {
+                        let title = records::campaign_title(shell.title, shell.platform);
+                        for name in &found {
+                            self.records.record_found(&title, name);
+                        }
+                        records::save_in_background(&self.records);
+                    }
+                    // The movie's sound outlives neither leg, and a skip leaves
+                    // the state without finishing the player - see
+                    // `Frontend::is_playing_movie`.
+                    //
+                    if !stage.frontend.is_playing_movie() {
+                        self.audio.stop_movie();
+                    }
+                    // The menu music's cue is **no movies left**, not "not in one
+                    // right now". The two are the same question only on a title
+                    // whose boot opens on its movie: Pure opens on its language
+                    // picker, so "not in a movie" is true before its reel has
+                    // played at all, and starting the loop there put it under the
+                    // reel - which is the overlap this test was written to stop.
+                    // `pending` empties as each movie is installed, so it is
+                    // exactly "none still to come".
+                    //
+                    // Every tick rather than on the edge - the state is what is
+                    // asked, not a transition - which `start_music` absorbs by
+                    // being idempotent.
+                    if !stage.frontend.is_playing_movie() && stage.pending.is_empty() {
+                        self.audio.start_music(
+                            &self.music_discs,
+                            self.settings.audio.music_source,
+                            &oag_source::cache::default_audio_cache_dir(),
+                        );
+                    }
+                    self.play_navs(boot_navs);
+                }
+                Stage::Menu(stage) => {
+                    stage.tick(dt, &self.audio.output().spectrum().levels());
+                    self.unseat_after_split_race();
+                    self.sync_multiplayer();
+                    self.sync_lan();
+                    self.sync_online();
+                    let Stage::Menu(stage) = &mut self.stage else {
+                        continue;
+                    };
+                    // A selection screen takes the tick whole, the way a
+                    // modal prompt does below: the rows behind it are a
+                    // picture. Confirming may hand the window to a loading
+                    // screen, so the catch-up loop stops the same way it does
+                    // for a race the menu just started.
+                    let grid =
+                        pointer::in_grid(pointer, stage.skin.space(), rect, stage.renderer.inset());
+                    if stage.picker.is_some() {
+                        self.tick_picker(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // The Race Campaign's own screens, same shape: they take
+                    // the tick whole rather than sitting behind the rows.
+                    if stage.campaign.is_some() && stage.prompt.is_none() {
+                        self.tick_campaign(&grid);
+                        continue;
+                    }
+                    // Wipeout Pure's campaign list, same shape.
+                    if stage.pure_chain.is_some() {
+                        self.tick_pure_chain(&grid);
+                        continue;
+                    }
+                    // The seat assignment screen, after the layout screen: same shape.
+                    if stage.assign.is_some() {
+                        self.tick_seat_assign(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // The window layout screen, after the join screen: same shape.
+                    if stage.layout.is_some() {
+                        self.tick_window_layout(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // LAN's lobby and host list take the tick whole too, except while the typed
+                    // address keyboard is over them: that goes through the prompt below.
+                    if stage.lan.is_some() && stage.prompt.is_none() {
+                        if self.online.is_some() {
+                            self.tick_online(&grid);
+                        } else {
+                            self.tick_lan(&grid);
+                        }
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // The split-screen join screen, same shape. Starting it hands
+                    // the window to the race box's screens, and possibly a load.
+                    if stage.join.is_some() {
+                        self.tick_join(&grid);
+                        if !matches!(self.stage, Stage::Menu(_)) {
+                            break;
+                        }
+                        continue;
+                    }
+                    // Snapshotted *before* the input is consumed, because the
+                    // page being left stops existing the moment the model
+                    // moves. Compared by page id rather than by stack depth:
+                    // `back` and `open` both change the page, and a jump
+                    // between two pages at the same depth is still a change.
+                    let before = stage.menu.page().id.clone();
+                    let leaving = menu::draw_list(
+                        &stage.menu,
+                        &stage.skin,
+                        &|button| self.controls.bound_keys(button),
+                        &|text| font::measure(&stage.text_atlas, text),
+                        None,
+                        &stage.frame,
+                        // The same fact `Session::draw`'s own call reads off
+                        // `suspended_race` - a page change mid-pause has to
+                        // drop this snapshot's own full-screen chrome too, or
+                        // the outgoing half of the tween flashes it back on.
+                        self.suspended_race.is_some(),
+                    );
+                    // Off the raw `Input`, ahead of `Menu::update` - see
+                    // `Session::maybe_begin_binding`'s own doc comment for why
+                    // it takes its fields apart rather than borrowing `self`.
+                    Session::maybe_begin_binding(
+                        &mut self.awaiting_binding,
+                        &mut self.controls,
+                        &stage.menu,
+                    );
+                    // A modal prompt eats the tick's input outright: while an
+                    // on-screen keyboard or a confirm is up, the rows behind
+                    // it are a picture. Ahead of the menus rather than beside
+                    // them, and `Input::take` is why finishing on this very
+                    // tick is safe for a *button* - the edge that closed the
+                    // prompt is consumed, so `Menu::update` below sees
+                    // nothing. A `Pointer` is a value nothing consumes, so
+                    // the menus are gated on whether a prompt was up *before*
+                    // this tick: the click that answered KEEP, or the
+                    // right-click that cancelled a keyboard, must not also
+                    // land on the row beneath it.
+                    let prompt_was_open = stage.prompt.is_some();
+                    let mut prompt_navs = Vec::new();
+                    let finished = Session::tick_prompt(
+                        stage,
+                        self.controls.buttons_mut(),
+                        &grid,
+                        &self.pilot_roster,
+                        self.shell.as_ref().map(|shell| &shell.strings),
+                        &mut prompt_navs,
+                    );
+                    // Frozen while a capture is in flight: `app.rs` diverts
+                    // every keyboard event away from `Controls::set_key` for
+                    // as long as `awaiting_binding` is `Some`, so there is
+                    // nothing new here for the menus to navigate with anyway
+                    // - and the pointer is held back with it, so a click
+                    // cannot move the page under a prompt or a capture.
+                    let events = if self.awaiting_binding.is_some() || prompt_was_open {
+                        Vec::new()
+                    } else {
+                        let mut events = stage.menu.update(self.controls.buttons_mut());
+                        events.extend(pointer::menu_pointer(
+                            stage,
+                            &grid,
+                            &mut self.awaiting_binding,
+                            &mut self.controls,
+                        ));
+                        events
+                    };
+                    if stage.menu.page().id != before {
+                        stage.begin_change(leaving);
+                    }
+                    let mut navs = prompt_navs;
+                    navs.extend(stage.menu.take_nav());
+                    // After the stage borrow above is over, which is the whole
+                    // reason `tick_prompt` hands the answer out rather than
+                    // acting on it: renaming reloads the roster and re-supplies
+                    // the very menu it was reading.
+                    if let Some(finished) = finished {
+                        self.finish_prompt(finished);
+                    }
+                    for event in events {
+                        self.handle_menu(&event);
+                    }
+                    self.play_navs(navs);
+                    // **Break if the menu just started or resumed a race**,
+                    // the same way the results table above breaks when it
+                    // hands the window back. `LaunchRace` itself only reaches
+                    // `Stage::Loading` synchronously - the race proper waits
+                    // behind that screen's fade - but `Session::resume_race`
+                    // (on `MenuEvent::Closed` over a parked race, see
+                    // `Session::suspended_race`) swaps `Stage::Menu` straight
+                    // for `Stage::Race`, and without this the frame's
+                    // remaining catch-up steps would tick it with whatever
+                    // closed the menu still held - Circle, say, read as the
+                    // in-race absorb it also means. Bounded by the catch-up
+                    // cap, so usually zero or one step, which is easy to miss.
+                    if matches!(self.stage, Stage::Race(_)) {
+                        break;
+                    }
+                }
+                Stage::Race(stage) if stage.race.finished() => {
+                    // The built-in results table waits for cross or start
+                    // and draws nothing to aim at, so a click is the press -
+                    // the rising edge the block above this match reads next
+                    // tick. The EndRace flow answers the pointer directly
+                    // instead (`Session::tick_endrace`, called after this
+                    // match ends) - `EndRace Menu`'s own rows need a real
+                    // hit-test, which a synthesised Cross press on every
+                    // click would fight with.
+                    if stage.endrace.is_none() {
+                        pointer::press_for_click(&mut self.controls, &pointer);
+                        // A click in any further window of a multi-window race is the same press.
+                        for (seat, _) in &seat_pointers {
+                            pointer::press_for_click(&mut self.controls, seat);
+                        }
+                    }
+                    // **A race that ended any way but the line is over, so
+                    // nothing is stepped.** The world is left exactly as the
+                    // finishing tick left it and the frame loop goes on drawing it
+                    // under the results table.
+                    //
+                    // Stopping here rather than inside `Race::tick` is
+                    // deliberate: the tick is what the trace harness, the
+                    // headless capture and the disc-backed AI tests all drive,
+                    // and a tick that quietly became a no-op would change what
+                    // every one of them produces. See `race::results`.
+                    //
+                    // **The audio still advances**, because it is not the
+                    // simulation: `~ENGINE` is a held voice with a spin-down
+                    // law, and leaving it unticked here would hold the engine
+                    // at racing pitch under the results table for as long as
+                    // the player looked at it. Nothing this call touches is
+                    // `World` state, so "nothing is stepped" is still true of
+                    // the thing that sentence is about.
+                    // **Except when the player crossed the line**, where the
+                    // original keeps the race running behind the panels: the
+                    // opponents go on lapping and the player's craft is flown by
+                    // the AI. Neutral input, because the panels consume the pad
+                    // and a craft that is not the player's must not read it. The
+                    // player's standing was fixed at the line; the board keeps
+                    // up with the rest of the field finishing, and the tables
+                    // that list it are rebuilt from it. See
+                    // `Race::runs_on_after_the_line` and `Race::refresh_results`.
+                    //
+                    // A Single Race wreck steps the whole world too
+                    // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
+                    // run) steps only what is seen: the explosion, the shake, the
+                    // destroy camera. See `Race::tick_cosmetics`.
+                    // A network race goes on through the protocol: the server's
+                    // world runs on after the line, and its confirmed state is
+                    // what the board is finally taken from (`oag_net::client`).
+                    match &self.net {
+                        Some(net) => {
+                            net.step(&mut stage.race, oag_gameplay::InputSnapshot::EMPTY);
+                        }
+                        None => {
+                            stage.race.tick_finished();
+                            stage.refresh_endrace_board();
+                        }
+                    }
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
+                    }
+                    crate::sound::race_tick(&mut self.audio, &mut stage.race);
+                    // `stage`'s own last use - the reborrow inside
+                    // `Session::tick_endrace` is legal from here on, the
+                    // same NLL shape `Stage::Menu`'s own arm relies on for
+                    // `Session::tick_campaign`.
+                    let space = stage
+                        .endrace
+                        .as_ref()
+                        .map(crate::app::race_stage::endrace_touch::EndRace::space);
+                    if let Some(space) = space {
+                        // One menu for every window: a press on any seat's pad or keyboard and a
+                        // click in any window drive it (`docs/rendering/multi-window.md`).
+                        let windowed = stage.race.windowed();
+                        if windowed {
+                            self.controls.fold_presses(&END_SCREEN_BUTTONS);
+                        }
+                        let grid = pointer::in_grid(pointer, space, rect, 1.0);
+                        let grid = if windowed {
+                            pointer::end_screen_pointer(grid, space, &seat_pointers)
+                        } else {
+                            grid
+                        };
+                        self.tick_endrace(&grid);
+                    }
+                }
+                Stage::Race(stage) if self.pause.frozen() => {
+                    // A paused race reads circle as "back to the menus";
+                    // the secondary button is circle everywhere else on
+                    // screen, so it is here too. Not through the resume
+                    // countdown, which nobody leaves.
+                    if pointer.back && matches!(self.pause, crate::pause::State::Paused { .. }) {
+                        self.controls.tap(Button::Circle);
+                    }
+                    // Same shape as the finished arm above and for the same
+                    // reason: the audio is not simulation state, so ticking
+                    // it is what keeps the engine note honest while `World`
+                    // itself sits frozen at whatever tick `Start` caught it on.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, true, self.controls.pad_mut());
+                    }
+                    crate::sound::race_tick(&mut self.audio, &mut stage.race);
+                }
+                // **The pre-race flyby steps instead of the world**: the circuit's own
+                // camera animation, held to its end or a held Cross, with the grid
+                // standing at its first tick. The countdown's 272 ticks start when it
+                // ends - the original's does too. See `race::intro_camera`. After the
+                // paused and finished arms, so Start still pauses it; and never reached
+                // by a headless run, whose loop drives `Race::tick` from tick 0.
+                // A network race starts on the server's clock: no flyby.
+                Stage::Race(stage)
+                    if !self.no_intro && self.net.is_none() && stage.race.intro_to_play() =>
+                {
+                    stage.race.begin_intro();
+                    if pointer.clicked {
+                        stage.race.skip_intro();
+                    }
+                    stage.race.tick_intro(&inputs);
+                    crate::sound::intro_cues(&mut self.audio, &mut stage.race);
+                    // The held craft's engines at idle sound under the flyby from the camera it
+                    // draws from, through the effects fade, on a title whose rule has one.
+                    // Output only: the world does not tick.
+                    crate::sound::flyby_tick(&mut self.audio, &mut stage.race);
+                }
+                Stage::Race(stage) => {
+                    // Tops the slot up the way a pad grant would, and only when
+                    // the slot is already empty, so firing still spends it. It
+                    // writes between ticks, so it is recorded as an event: a
+                    // replay or a rewind that did not hear of it would hold an
+                    // empty slot where the live race held the weapon.
+                    if let Some(weapon) = self.give {
+                        stage.race.give_weapon(0, weapon);
+                    }
+                    // Every slot's snapshot, straight off the devices'
+                    // assignment - see `oag_input::pad::Assignment`. Under its
+                    // default every device is on slot 0, so this is the one
+                    // snapshot the single-argument signature used to take, in
+                    // the slot it used to go to.
+                    // A local slot nobody is on flies as the AI, or the race
+                    // never ends: see `split_screen::follow_devices`.
+                    if let Some(net) = &self.net {
+                        // The server's race: predicted and corrected by the
+                        // protocol, this machine's devices on its seat. The
+                        // devices are all on slot 0 under the default assignment.
+                        net.step(&mut stage.race, *inputs.get(0));
+                    } else {
+                        // The first keyframe is cut here, after every writer that ran at
+                        // the race's build and before the first tick's events, so a rewind
+                        // that pre-rolls from it flies the race that was flown.
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.recut_first(&stage.race);
+                        }
+                        // A demo is nobody's: a seat left from an earlier race takes no slot.
+                        if stage.demo.is_none() {
+                            crate::split_screen::follow_devices(
+                                &mut stage.race,
+                                self.controls.assignment(),
+                            );
+                        }
+                        stage.race.tick(&inputs);
+                        // Photo mode's rewind goes back through these (`session::photo_rewind`).
+                        if let Some(keeper) = &mut stage.keeper {
+                            keeper.keep(&stage.race);
+                        }
+                    }
+                    stage.tick_messages();
+                    crate::music_pad::drive(
+                        &mut self.audio,
+                        &mut stage.race,
+                        self.settings.audio.music_volume,
+                        music_input,
+                    );
+                    // A server that ends a race nobody had finished (the host left, a link
+                    // died) leaves a frozen world: after a second of it, back to the menus.
+                    match self.net.as_ref().and_then(crate::net_play::NetPlay::over) {
+                        Some(why) if !stage.race.finished() => {
+                            self.net_over_ticks += 1;
+                            if self.net_over_ticks == NET_OVER_TICKS {
+                                log::error!("the network race ended before the finish: {why}");
+                                self.net_over_ticks = 0;
+                                if let Err(e) = self.open_menus() {
+                                    log::error!("cannot reopen the menus: {e:#}");
+                                }
+                                break;
+                            }
+                        }
+                        _ => self.net_over_ticks = 0,
+                    }
+                    // Immediately after the tick and inside this loop, so a cue
+                    // lands on the tick that raised it whether the frame
+                    // stepped once, twice or not at all. See
+                    // `oag_sound::Audio::race_tick`. Rumble reads the same cues first.
+                    if let Some(rumbler) = &mut self.rumbler {
+                        rumbler.tick(&stage.race, false, self.controls.pad_mut());
+                    }
+                    crate::sound::race_tick(&mut self.audio, &mut stage.race);
+                    if self.log_every > 0
+                        && stage.race.sim.world.tick % u64::from(self.log_every) == 0
+                    {
+                        println!("{}", race::describe(&stage.race.telemetry()));
+                    }
+                }
+            }
+
+            // **The one moment a *finished* race's result is captured** -
+            // never from inside `Race::tick` above, and never on every frame
+            // the results table sits on screen: `result_saved` makes this a
+            // one-time transition even though the finished arm re-enters
+            // every tick for as long as the player looks at the board.
+            // `escape` is the other capture site, for the three modes that
+            // may never reach this one at all - see `crate::records`'s own
+            // module doc for why both exist.
+            //
+            // Outside the `match` above on purpose: that borrows `self.stage`
+            // mutably through `stage`, and `self.records` is a different
+            // field of the same `self` - ending the first borrow before this
+            // runs is what lets the second start. See `Session::escape`,
+            // which draws the same borrow apart the same way.
+            // A ghost is written on the tick a lap beats it, not only at the
+            // finish: Speed Lap never finishes, and a lap set before a crash
+            // should survive it. A no-op on every tick without a new best.
+            // Neither a ghost nor a record comes out of a network race: its
+            // inputs are predictions corrected by a server, under the server's
+            // settings, not this player's run.
+            let unofficial = self.race_is_unofficial();
+            if let Stage::Race(stage) = &mut self.stage
+                && self.net.is_none()
+                && !unofficial
+            {
+                crate::app::race_stage::ghost::save(&mut stage.race, &stage.result_key);
+            }
+            let campaign_title = self.campaign_title();
+            if let Stage::Race(stage) = &mut self.stage
+                && stage.race.finished()
+                && !stage.result_saved
+                // A split screen's result is nobody's record: the results are
+                // slot 0's, which a second person was racing.
+                && stage.race.viewport_count() <= 1
+                && self.net.is_none()
+            {
+                stage.result_saved = true;
+                let key = stage.result_key.clone();
+                // Before `stage.observation()` below reads
+                // `RaceStage::tournament_final_rank` for the medal: a
+                // Tournament cell's own rank is not known until the leg
+                // that just finished is folded into the running standings.
+                // See `super::tournament::record_finished_leg`'s own doc
+                // for why this is a plain function taking `stage` rather
+                // than a `Session` method.
+                super::tournament::record_finished_leg(&mut self.tournament, stage);
+                let observation = stage.observation();
+                // Read before `self.records.record` below folds `observation`
+                // into the row: `PersonalBest::compare` wants the row as it
+                // stood *before* this race, and `Store::record` mutates it in
+                // place - so this is the last point the "before" value can
+                // still be read. See `crate::scoreboard`'s own "personal
+                // best" line, the one reader of this field.
+                stage.personal_best = Some(records::PersonalBest::compare(
+                    self.records.get(&key),
+                    &observation,
+                ));
+                // A Free Play race has a cell to launch through and no medal to
+                // keep (`oag_tables::pure_campaign::free_play_event`).
+                if let Some(cell) = stage
+                    .campaign_cell
+                    .as_ref()
+                    .filter(|cell| !oag_tables::pure_campaign::is_free_play(&cell.name))
+                    .filter(|_| !unofficial)
+                {
+                    match stage.campaign_custom.as_ref() {
+                        Some(launch) => launch.record_result(
+                            &mut self.records,
+                            &cell.name,
+                            stage.campaign_tier_name().as_deref(),
+                            observation.campaign_difficulty,
+                        ),
+                        None => self.records.record_campaign(
+                            campaign_title.as_deref().unwrap_or(&key.title),
+                            &cell.name,
+                            observation.campaign_medal,
+                            observation.campaign_difficulty,
+                        ),
+                    }
+                }
+                if let Some(progress) = stage.campaign_2048_event.as_ref().filter(|_| !unofficial) {
+                    let title = campaign_title.as_deref().unwrap_or(&key.title);
+                    // The best before this race, which `record_campaign` below overwrites.
+                    let prior = self
+                        .records
+                        .campaign_medal(title, &progress.name)
+                        .and_then(|row| row.best_medal);
+                    self.records.record_campaign(
+                        title,
+                        &progress.name,
+                        observation.campaign_medal,
+                        None,
+                    );
+                    let banked = stage.race.xp_tally_mut().map(|tally| {
+                        let earned = self.records.bank_event_xp(
+                            tally,
+                            prior,
+                            observation.campaign_medal,
+                            observation.place,
+                        );
+                        // What the EndRace page shows: the completion award among it.
+                        (earned, tally.completion_xp())
+                    });
+                    let xp = banked.map_or(0, |(earned, _)| earned);
+                    log::debug!("xp: {} +{xp} (total {})", progress.name, self.records.xp());
+                    stage.xp_banked =
+                        banked.map(|(earned, bonus)| crate::endrace::touch::XpBanked {
+                            earned,
+                            bonus,
+                            total_after: self.records.xp(),
+                        });
+                }
+                // A title whose EndRace screens do not bank the award (Pure, 2048
+                // and Omega read none of Pulse's or HD's) is paid here, under the
+                // law its `Title::loyalty` names.
+                if let (Some(shell), Some(options)) =
+                    (self.shell.as_ref(), self.race_options.as_ref())
+                    && !unofficial
+                    && let Some(earning) = shell.title.loyalty.filter(|e| !e.banked_by_endrace)
+                    && let Some(team) = options.team.as_deref()
+                {
+                    let award = crate::app::race_stage::hd_loyalty::earned(
+                        earning,
+                        crate::app::race_stage::hd_loyalty::HdRace {
+                            mode: options.mode,
+                            laps: observation.laps_completed,
+                            kills: stage.race.sim.world.ships[0].standing.kills,
+                            zones: u32::from(stage.race.sim.world.primary_race().zone),
+                            difficulty: stage.campaign_difficulty,
+                        },
+                    );
+                    let total = self.records.record_loyalty(shell.title, team, award);
+                    log::info!("loyalty: {team} +{award} (total {total})");
+                }
+                // A mod campaign's medal lives only under its own title.
+                let observation = records::Observation {
+                    campaign_medal: observation
+                        .campaign_medal
+                        .filter(|_| stage.campaign_custom.is_none()),
+                    ..observation
+                };
+                if !unofficial {
+                    self.records.record(key, observation);
+                    records::save_in_background(&self.records);
+                }
+            }
+        }
+
+        // Once per frame, not once per catch-up step above - the pointer
+        // input itself is handled per-step, inside the loop's own finished-
+        // race arm (`Session::tick_endrace`'s call site there), the same
+        // grid-resolution shape `Stage::Menu`'s own arm uses for
+        // `Session::tick_campaign`. `build_endrace` is idempotent past its
+        // first call - `RaceStage::endrace`'s own `is_some()` guard for the
+        // built case, `RaceStage::endrace_unavailable` for the failed one -
+        // so calling it every frame the race sits finished costs nothing
+        // once it has either built the flow or given up. The second guard
+        // is not decoration: without it a source whose screens do not read
+        // reopened its disc image once a frame and warned once a frame.
+        self.phases.mark(super::phases::Phase::Ticks);
+        self.start_endrace_prefetch();
+        self.start_menu_source();
+        self.refresh_opening_reads();
+        self.build_endrace();
+
+        self.begin_scene_frame();
+        self.phases.mark(super::phases::Phase::Prep);
+        let presented = self.draw(now, frame_seconds, acquire_wait.as_secs_f32())?;
+        // The further windows of a `--windows` run, once window 1's frame is submitted: each
+        // seat is its own submission. A no-op with one window.
+        self.draw_screens();
+        let tick = match &self.stage {
+            Stage::Race(stage) => stage.race.sim.world.tick,
+            _ => 0,
+        };
+        self.phases.end_frame(tick);
+        if let Some(summary) = self.frame_timing.end_frame(web_time::Instant::now()) {
+            log::debug!(
+                "frame timing: {} frame(s), acquire waited {:.2} ms, input sampled {:.2} ms \
+                 before the image was acquired ({} of {} sampling frame(s) before it)",
+                summary.frames,
+                summary.mean_wait * 1000.0,
+                summary.mean_lead * 1000.0,
+                summary.sampled_before,
+                summary.sampled,
+            );
+        }
+        self.probe_end_frame(elapsed);
+        // **What the `OUTSIDE` row is derived from**, and the anchor matters:
+        // measured from `acquire_start`, the first thing this frame times, so
+        // this frame's body (the acquire's wait included, as `present_cost`
+        // includes it, which keeps `CPU = frame - present` free of either
+        // swapchain wait) and the gap after it partition the interval between
+        // one frame's acquire and the next. `elapsed` is read a wait later, at
+        // `now`; over the meters' window of frames the two intervals average
+        // the same. What lands in the gap is the frame limiter's
+        // `ControlFlow::WaitUntil` (see `App::about_to_wait`), the event loop,
+        // and the handful of cheap calls this function makes before the
+        // acquire - which is why the row is not called `SLEEP`.
+        //
+        // Recorded after the draw rather than around it, so the reading covers
+        // the whole frame - ticks, stage update and draw together - which is
+        // what has to be subtracted from the wall clock for the remainder to
+        // be the gap. Under the same load guard as `meter` above, and under
+        // `draw`'s own answer besides: a frame that never got a surface
+        // texture recorded nothing on `present_cost`, and recording it here
+        // would leave the two meters averaging different sets of frames.
+        if frame_seconds.is_some() && presented {
+            let cpu_seconds = acquire_start.elapsed().as_secs_f32();
+            self.cpu_cost.record(cpu_seconds);
+            self.feed_governor((cpu_seconds - self.last_present_seconds).max(0.0));
+        }
+        Ok(())
+    }
+}

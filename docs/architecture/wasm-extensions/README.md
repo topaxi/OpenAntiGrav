@@ -1436,7 +1436,7 @@ with wasmtime's own switches left on as a second line
   running the same modded race can therefore fault the same module at different ticks,
   or one of them not at all. Network races force vanilla
   (`mod_extensions::attach` is told `vanilla` for them, which leaves `find_extensions`
-  `None`: `game/src/main/session/load.rs:505-508`, `game/src/main_body.rs:534-536`), so
+  `None`: `game/src/app/session/load.rs:505-508`, `game/src/app.rs:534-536`), so
   no two machines compare a modded race's hash live. **A modded replay is the case that
   now does, and the failure has not been moved out of the hash**: a recording whose
   module hit a host-local fault (a pool or mmap failure, a deep guest) disagrees on a

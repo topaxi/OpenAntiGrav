@@ -45,7 +45,7 @@
 #     than an honest gap and harder for a reviewer who does not read French
 #     to catch.
 #   - **`OAG_HINTS_ESC_TO_MENU`/`OAG_HINTS_ESC_QUITS`** - each is a suffix
-#     `crates/game/src/main/hints.rs` appends onto one of the three deferred
+#     `crates/game/src/app/hints.rs` appends onto one of the three deferred
 #     key-hint sentences above (`esc_to_menu`/`esc_quits` are called right
 #     after `race_keys`/`shell_keys`); translating the suffix alone while its
 #     sentence stays English would read as broken French, not as progress.

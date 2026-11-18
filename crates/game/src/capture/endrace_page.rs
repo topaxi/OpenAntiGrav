@@ -284,7 +284,7 @@ pub(super) fn capture(
 /// race's own outcome - a `--menu-page` capture has no `Session`/`RaceStage`
 /// behind it to read one from, the same reason `campaign_page` feeds
 /// `GridSelection`/`CellSelection` the fresh-profile numbers rather than a
-/// save. See `crate::main::session::endrace` for the live flow this is a
+/// save. See `crate::app::session::endrace` for the live flow this is a
 /// still of.
 #[allow(
     clippy::too_many_arguments,

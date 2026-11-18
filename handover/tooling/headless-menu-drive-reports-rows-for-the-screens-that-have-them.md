@@ -8,7 +8,7 @@ summary: "--drive runs our menus headless (race box, RACE REMIX, track files on 
 # `--drive` takes our menus into a race with no window; most overlays report no rows yet
 
 `oag-game --drive "<steps>" --state-log f.jsonl` runs the real `Session` with no window
-(`docs/tools/oag-game.md`, "Driving the menus with no window"; `crates/game/src/main/drive.rs`,
+(`docs/tools/oag-game.md`, "Driving the menus with no window"; `crates/game/src/app/drive.rs`,
 `oag_game::drive`). The race box and RACE REMIX with a `--track-file` race are proven on Pulse by
 `crates/game/tests/drive_ground_truth.rs`.
 
@@ -17,7 +17,7 @@ summary: "--drive runs our menus headless (race box, RACE REMIX, track files on 
 - **Overlays report no rows.** `prompt`, `campaign`, `pure-chain`, `join`, `window-layout` and
   `seat-assign` show as `screen=<kind>` with an empty row list, so a script can wait for them and
   `press` through them but not `select` in them. The custom-campaigns work adds the campaign grid:
-  one more arm in `main/drive.rs`'s `screen`, no change to the driver.
+  one more arm in `app/drive.rs`'s `screen`, no change to the driver.
 - **`string_id` is not reported.** The brief asked for it; `RowMeta` holds `id` only, and the
   string id is resolved away in `menu/definition`. A row without an `id` is selected by its
   setting key or its action name (`launch_race`), which are language-stable.

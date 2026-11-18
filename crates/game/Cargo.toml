@@ -218,22 +218,17 @@ oag-schema = { workspace = true, features = ["validate"] }
 [target.'cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))'.dev-dependencies]
 oag-net = { workspace = true, features = ["client", "test-cheats"] }
 
-# The Android entry point: the binary's own body again (`src/android.rs`
-# `include!`s `src/main_body.rs`, as `src/main.rs` does), as the cdylib the
-# NativeActivity loads. An example because the windowed `App` lives in the
-# binary's own modules and nothing may depend on `oag-game`; `bin` cannot be a
-# cdylib and `cargo rustc` refuses to mix the two crate types. Two roots that
-# share one body by `include!` keep Cargo from warning about one file in two
-# targets; see docs/tools/android.md.
+# The Android entry point: the `cdylib` the NativeActivity loads. An example because `bin`
+# cannot be a cdylib and `cargo rustc` refuses to mix the two crate types; it exports the
+# `android_main` symbol and calls `oag_game::app::android_main`. See docs/tools/android.md.
 [[example]]
 name = "oag_android"
 path = "src/android.rs"
 crate-type = ["cdylib"]
 required-features = ["android"]
 
-# The browser entry point: the binary's body once more (`src/web.rs`
-# `include!`s `src/main_body.rs`), as the cdylib `wasm-bindgen` wraps. An
-# example for the reason the Android one is. See docs/tools/web.md.
+# The browser entry point: the `cdylib` `wasm-bindgen` wraps, exporting `oag_game::app::web`'s
+# functions. An example for the reason the Android one is. See docs/tools/web.md.
 [[example]]
 name = "oag_web"
 path = "src/web.rs"

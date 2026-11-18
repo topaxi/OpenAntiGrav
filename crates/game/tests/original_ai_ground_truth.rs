@@ -204,7 +204,7 @@ fn loaded_single_race() -> Option<oag_raceplay::Loaded> {
 /// The default flies the original in a plain single race, which is no
 /// campaign launch (2026-10-13). This pins `ai_choice::apply`'s rule on a real
 /// race; the call sites that start a race through it are pinned separately
-/// (`--trace-out` in `main/headless/tests.rs`).
+/// (`--trace-out` in `app/headless/tests.rs`).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_single_race_flies_the_original_by_default() {

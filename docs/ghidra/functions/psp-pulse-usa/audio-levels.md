@@ -881,7 +881,7 @@ paper over the mismatch.
 
 Time Trial, one craft, full throttle, music muted the same way, 24 s
 tick-bracketed window on the original; our own port run with `--mode
-time_trial` (no opponents, no weapon pads - `main/cli.rs`'s own doc comment:
+time_trial` (no opponents, no weapon pads - `app/cli.rs`'s own doc comment:
 "`single_race` is the only one that races with weapons"), same settings pin:
 
 | | Peak | RMS | Clipped |

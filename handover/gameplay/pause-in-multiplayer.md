@@ -17,7 +17,7 @@ Any seated player's Start pauses the race, and the pause belongs to them: only
 their Start (or a click, which is slot 0's Start) resumes and only their Circle
 leaves the race. A pause nobody pressed for (the window losing focus) is anyone's
 to lift. Code: `oag_game::pause` (the pure rule) and `session::pause` in
-`crates/game/src/main/session/pause.rs` (the session glue and the line). Written
+`crates/game/src/app/session/pause.rs` (the session glue and the line). Written
 up in [`docs/rendering/split-screen.md`](../../docs/rendering/split-screen.md),
 "Who plays which slot".
 

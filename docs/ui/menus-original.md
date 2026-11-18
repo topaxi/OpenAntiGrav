@@ -478,7 +478,7 @@ the previous reading of this defect over-scoped its own fix.
 
 The menu stage's renderer bound exactly one atlas (`rows_face`, the `menu`
 role's `Pulse_20.fnt`) as its whole glyph source before this pass -
-`crates/game/src/main/session/menus.rs`'s `Renderer::new` call - with every
+`crates/game/src/app/session/menus.rs`'s `Renderer::new` call - with every
 other role's text drawn through it too, scaled by a ratio
 (`oag_ui_screens::picker::FaceScales`/`crate::picker::FaceScales::face_scale`)
 that changes *size* and never *which glyphs*. Swapping which atlas is

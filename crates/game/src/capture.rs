@@ -553,12 +553,12 @@ pub fn run(
                         gamma: options.settings.display.gamma,
                     },
                 }),
-                // No CLI flag on this path for either: see `main/headless.rs`.
+                // No CLI flag on this path for either: see `app/headless.rs`.
                 zone_spectrum_test: false,
                 touch_demo: None,
                 net_overlay: false,
                 previous_best,
-                // No flag for it on this path; see `main/headless.rs`.
+                // No flag for it on this path; see `app/headless.rs`.
                 ghost: race::GhostCapture::default(),
                 screen_filter:
                     crate::screen::Catalogue::load(crate::screen::Catalogue::directory())
@@ -818,7 +818,7 @@ pub fn run(
                 // The Race Campaign's own two screens - the disc's, opened
                 // over the menus the same way the race box's are, not pages
                 // of our own tree. See `oag_game::campaign` and
-                // `crate::main::session::campaign` for the live flow this is
+                // `crate::app::session::campaign` for the live flow this is
                 // a still of.
                 let mut archives = match options.race.as_ref() {
                     Some(race) => open_for_previews(race)?,
@@ -840,7 +840,7 @@ pub fn run(
                     .map(|(key, value)| (key.as_str(), value.as_str()))
                     .collect();
                 // `Campaign Selection`'s own four idstrings, the same
-                // `DATA06`-only overlay `crate::main::session::campaign::open_campaign`
+                // `DATA06`-only overlay `crate::app::session::campaign::open_campaign`
                 // applies for a live session - without it this still shows
                 // `FE_RC_SELECT`/`FE_CAMPSEL_MODES`/`FE_RC_FURY`/`FE_RC_HD` as
                 // raw ids, since `strings` above resolves through the general
@@ -878,7 +878,7 @@ pub fn run(
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
             } else if let Some(seated) = join_page::seats(page) {
-                // The split-screen join screen - see `crate::main::session::join`
+                // The split-screen join screen - see `crate::app::session::join`
                 // for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) =
@@ -886,7 +886,7 @@ pub fn run(
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some((lobby, people, focus)) = join_page::lan(page) {
-                // LAN's lobby and host list - see `crate::main::session::lan` for the live flow.
+                // LAN's lobby and host list - see `crate::app::session::lan` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) = join_page::capture_lan(
                     lobby,
@@ -902,7 +902,7 @@ pub fn run(
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some((room, people, focus, raced)) = join_page::online(page) {
-                // The online lobby's room and room list - see `crate::main::session::online`.
+                // The online lobby's room and room list - see `crate::app::session::online`.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) = join_page::capture_online(
                     room,
@@ -920,7 +920,7 @@ pub fn run(
                 (backdrop, video_format, list, space)
             } else if let Some(request) = window_layout_page::request(page) {
                 // The window layout screen, after the join screen - see
-                // `crate::main::session::window_layout` for the live flow.
+                // `crate::app::session::window_layout` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) = window_layout_page::capture(
                     &request,
@@ -934,7 +934,7 @@ pub fn run(
                 (backdrop, video_format, list, space)
             } else if let Some(request) = seat_assign_page::request(page) {
                 // The seat assignment screen, after the window layout - see
-                // `crate::main::session::seat_assign` for the live flow.
+                // `crate::app::session::seat_assign` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let (list, clip) = seat_assign_page::capture(
                     &request,
@@ -948,7 +948,7 @@ pub fn run(
                 (backdrop, video_format, list, space)
             } else if let Some(answers) = pure_chain_page::answers(page) {
                 // Wipeout Pure's SINGLE PLAYER screens - see
-                // `crate::main::session::pure_chain` for the live flow.
+                // `crate::app::session::pure_chain` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let globals: Vec<(&str, &str)> = frontend
                     .screens()

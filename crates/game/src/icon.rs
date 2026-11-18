@@ -1,8 +1,8 @@
 //! The application icon, rasterised from `assets/icons/64x64.svg`.
 //!
-//! One source, not a per-consumer redraw: `main/gpu.rs` builds a
+//! One source, not a per-consumer redraw: `app/gpu.rs` builds a
 //! [`winit::window::Icon`] from it for the titlebar/taskbar on X11 and
-//! Windows, and `--write-icon` (see `main.rs`) writes it as a PNG for the
+//! Windows, and `--write-icon` (see `app.rs`) writes it as a PNG for the
 //! desktop entry `just install-desktop-file` installs and the one
 //! `scripts/build-appimage.sh` packages. Before this module the AppImage's
 //! own icon was a hand-drawn chevron with no connection to `assets/icons/`
@@ -11,8 +11,8 @@
 //!
 //! No winit type appears here on purpose: rasterising is pure data in, data
 //! out, so it is testable without a window or a GPU, the same reason
-//! `crate::capture` exists. `main/window.rs`'s `window_icon` is the only
-//! place that touches [`winit::window::Icon`]; `main/gpu.rs` only calls it.
+//! `crate::capture` exists. `app/window.rs`'s `window_icon` is the only
+//! place that touches [`winit::window::Icon`]; `app/gpu.rs` only calls it.
 
 use resvg::{tiny_skia, usvg};
 

@@ -23,7 +23,7 @@
 //! measured wanting them (`docs/ui/campaign-screens.md`'s 2026-09-14
 //! pass), and neither title's own campaign screen file authors a
 //! per-screen gate to read instead. Every ordinary menu page
-//! (`crate::main::menu_stage::MenuStage::render` in `oag-game`) shows
+//! (`crate::app::menu_stage::MenuStage::render` in `oag-game`) shows
 //! `Confirm` always and `Back` only past this build's own tree root
 //! (`Menu::depth() > 1`) - **chosen** for this build's own tree, which no
 //! disc screen names, but corroborated rather than picked for symmetry:
@@ -61,7 +61,7 @@
 //! here invents a value for `NewsItemTagText` at all (it draws nothing, see
 //! [`TickerLayout`]'s own doc), and [`ticker_draw`] only ever rotates
 //! through disc strings the caller resolved honestly - see
-//! `crate::main::campaign_stage::CampaignStage::ticker_tips` in `oag-game`
+//! `crate::app::campaign_stage::CampaignStage::ticker_tips` in `oag-game`
 //! for the rule.
 
 use std::collections::HashMap;
@@ -990,7 +990,7 @@ const GAP: f32 = 40.0;
 /// `clip: Option<(usize, f32, f32)>`, keyed on the draw's own index in the
 /// flattened list). That mechanism clips one index, not several, so a
 /// caller wanting the render-level clip needs one draw to point it at - see
-/// `crate::main::campaign_stage::CampaignStage::ticker_draw` in `oag-game`
+/// `crate::app::campaign_stage::CampaignStage::ticker_draw` in `oag-game`
 /// for where the index is found. The trade is an honest half-second of
 /// nothing shown at each wrap rather than a seam this build cannot clip
 /// away, and a real player never sees it: the eye follows leaving/entering

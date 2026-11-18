@@ -2,7 +2,7 @@
 //! layout and every grid tier's own cells.
 //!
 //! One function, called from two places that cannot share a module tree -
-//! `crate::main::session::campaign` (the live session) and
+//! `crate::app::session::campaign` (the live session) and
 //! `crate::capture::menu_page` (`--menu-page grid-select`/`cell-select`) -
 //! the same reason [`crate::preview`] exists for the race box's own
 //! selection screens.
@@ -570,7 +570,7 @@ fn load_hd(
 /// not carry both screens - a base, non-Fury HD pressing this project has
 /// not seen, say. [`load_hd`] still returns its own `Campaign` in that
 /// case: the base `Grid Selection`/`Cell Selection` this function does not
-/// touch are unaffected, and `crate::main::session::campaign::open_campaign`
+/// touch are unaffected, and `crate::app::session::campaign::open_campaign`
 /// falls back to opening straight on `Grid Selection`, the pre-this-pass
 /// behaviour, rather than refusing the whole campaign over one missing
 /// screen.
@@ -588,7 +588,7 @@ fn load_hd(
 /// caller's own `strings.get_or_id` falls back to the bare id rather than
 /// panicking.
 ///
-/// **Shared by both readers of this screen** - `crate::main::session::campaign::open_campaign`
+/// **Shared by both readers of this screen** - `crate::app::session::campaign::open_campaign`
 /// (the live session) and `crate::capture::campaign_page` (`--menu-page
 /// campaign-select`) - so the two cannot resolve these four ids differently.
 /// Before this function existed, only the live path applied any overlay at
@@ -807,7 +807,7 @@ fn load_flyers(
 /// its targets - a base, non-Fury HD pressing this project has not seen, say.
 /// The caller still returns its own `Campaign` in that case: the base `Grid
 /// Selection`/`Cell Selection` are unaffected, and
-/// `crate::main::session::campaign::open_campaign` falls back to opening
+/// `crate::app::session::campaign::open_campaign` falls back to opening
 /// straight on `Grid Selection`, rather than refusing the whole campaign over
 /// one missing screen.
 fn chooser_screens(

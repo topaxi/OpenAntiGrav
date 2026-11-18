@@ -689,14 +689,14 @@ of `options`, and calls the existing `race::load` unchanged. **A second entry
 point rather than a new required `Options` field for any of those** - most
 call sites across this workspace build `Options` through `..Options::default()`
 rather than exhaustively today, but a handful (measured 2026-09-28: one,
-`crates/game/src/main/prepare.rs`) still name every field, and a *required*
+`crates/game/src/app/prepare.rs`) still name every field, and a *required*
 new one would have touched every one of them for a feature only this
 campaign needs. `Options::grid_teams` (below) is the one field this pass did
 add - safe as an addition precisely because it defaults to "no override" and
 so only that one exhaustive call site needed a line naming it explicitly, not
 dozens. `oag-game`'s own `--event <NAME>` flag drives it through the one call
 site that runs `--race`'s headless load
-(`crates/game/src/main/headless.rs::run_race`).
+(`crates/game/src/app/headless.rs::run_race`).
 
 Verified against the real EU v1.04 package:
 

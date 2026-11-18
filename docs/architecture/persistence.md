@@ -131,11 +131,11 @@ Two places in the composition root do, both reading `Race`'s already-public
 state after the fact:
 
 1. **`Session::frame`**, in the match arm that already exists for "the race
-   has finished" (`crates/game/src/main/session/frame.rs`). Guarded by a
+   has finished" (`crates/game/src/app/session/frame.rs`). Guarded by a
    `result_saved` flag on `RaceStage` so the once-per-tick arm saves exactly
    once, on the tick the transition happens, not on every frame the results
    table is on screen afterwards.
-2. **`Session::escape`** (`crates/game/src/main/session/menus.rs`), on
+2. **`Session::escape`** (`crates/game/src/app/session/menus.rs`), on
    leaving a `Stage::Race` - whether that is a player backing out to the
    menus, or an unfinished `--race` run quitting outright. Guarded by the
    same flag, so a race already saved on finishing does not get saved again
@@ -162,7 +162,7 @@ between the last `escape`/finish and the moment it happens - `records.rs`'s
 own module doc names this as a known, accepted gap rather than a silent one).
 
 Both sites build the same `oag_game::records::Observation` off the same
-helper, `RaceStage::observation` (`crates/game/src/main/race_stage.rs`), so
+helper, `RaceStage::observation` (`crates/game/src/app/race_stage.rs`), so
 the field list only has to agree with `oag_game::records` in one place.
 
 **Only `Session::frame`'s finish arm also builds a
@@ -205,7 +205,7 @@ read-only.
 ## The key: resolved once, at load, never re-derived
 
 `RaceStage::result_key` is built once, in `Stage::build_race_stage`
-(`crates/game/src/main/stage.rs`), from `race::Loaded::title` and the
+(`crates/game/src/app/stage.rs`), from `race::Loaded::title` and the
 `race::Options` the load was actually started from - not re-read later,
 because neither is reachable from a finished or an escaped race stage any
 other way. This is also why `Stage::build_race_stage` and `Stage::race` each
@@ -267,7 +267,7 @@ at all. `Store::campaign_medal`/`Store::record_campaign` are the two new
 methods; `oag_ui_screens::campaign::GridSummary::from_grid_with_medals`/
 `CellSelection::with_medals` are what `Grid Selection`'s `Medals`/`Points`
 rows and `Cell Selection`'s `Line6`/`Line7` read them through, fed by
-`crates/game/src/main/campaign_stage.rs`.
+`crates/game/src/app/campaign_stage.rs`.
 
 The ordinary `[[records]]` row for a campaign race is still written too, at
 its usual `(title, track, mode, class)` key - the two tables answer
@@ -285,7 +285,7 @@ section) is this title's own medal law, read off `M_PASSOBJECTIVE`/
 `M_ELITEOBJECTIVE` rather than reused from `Cell_EvaluateMedal` - 2048's
 own law is genuinely two-tier (pass/elite, never a third authored rung),
 where Pulse/HD's is three-tier (bronze/silver/gold). `RaceStage::observation`
-(`crates/game/src/main/race_stage.rs`) maps `Tier::Elite` to `Medal::Gold`
+(`crates/game/src/app/race_stage.rs`) maps `Tier::Elite` to `Medal::Gold`
 and `Tier::Pass` to `Medal::Bronze` - **chosen, not measured, no confidence
 score**: floor to floor and top to top, `Medal::Silver` never produced by
 this title. `race::load_event` resolves the event's own objectives once, at
@@ -320,7 +320,7 @@ need `string_id`s - see `scripts/check-strings.py`). Not started.
 
 **A campaign cell now reaches `Observation::campaign_medal` for real**,
 closing what this section used to describe as the gap:
-`Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
+`Session::launch_campaign_cell` (`crates/game/src/app/session/campaign.rs`)
 resolves the cell's own track against the open source
 (`crate::catalogue::Track::entry_name`, matched by the cell's own `track=`
 id, which turned out to share `catalogue::Track::id`'s own spelling - no
@@ -329,7 +329,7 @@ onto the five `oag_race::Mode` this engine implements
 (`oag_game::campaign::race_mode_for_cell`, `None` for `Tournament`/
 `Head2Head`/`Custom Grid`/`AI Race`, which refuse to launch and log why),
 and carries the cell itself on `Session::campaign_cell` through to
-`RaceStage::campaign_cell`. `RaceStage::observation` (`crates/game/src/main/race_stage.rs`)
+`RaceStage::campaign_cell`. `RaceStage::observation` (`crates/game/src/app/race_stage.rs`)
 evaluates the per-mode value and calls `Cell::evaluate_medal`:
 
 - `Race` and `Time Trial` gate on `finished` - a running position or an
@@ -375,7 +375,7 @@ exists for it, see `oag_game::campaign::race_mode_for_cell`'s own doc.
 `oag_tables::race_campaign::grid_points_met` reimplements the named-grid
 comparison directly - `Unlock_GridName`'s target, matched case-insensitively,
 against that grid's own `points_earned` and `required_points` - and
-`CampaignStage::grid_is_unlocked` (`crates/game/src/main/campaign_stage.rs`)
+`CampaignStage::grid_is_unlocked` (`crates/game/src/app/campaign_stage.rs`)
 is what `Session::handle_campaign` gates `Grid Selection`'s own Confirm on,
 in place of the display-only lock-glyph shortcut it used to reuse for the
 purpose. See [race-campaign.md](../formats/race-campaign.md) and

@@ -1101,7 +1101,7 @@ fn the_two_settings_pages_offer_only_values_that_parse() {
 /// `menu_seeds` fills in, or it is a row that moves and does nothing - which
 /// is the failure this whole file is arranged to prevent.
 ///
-/// Checked against the seeds rather than against `main.rs`, which this
+/// Checked against the seeds rather than against `app.rs`, which this
 /// crate's library half cannot see: a setting the seeds do not know would
 /// also open its row on the list's first option instead of the player's
 /// own value, so the two lists have to agree anyway.
@@ -1183,7 +1183,7 @@ fn every_settings_row_is_one_the_game_seeds() {
 ///
 /// Pinned here because the halves live in different files: the pairing is
 /// asserted in `assets/ui/menu.toml`, and the loop that honours it is in
-/// `main.rs` against `Vsync::paces_itself`. Both have to name the same
+/// `app.rs` against `Vsync::paces_itself`. Both have to name the same
 /// value or the row greys out at the wrong time, and a row that lost its
 /// `disabled_by` altogether would still parse.
 #[test]

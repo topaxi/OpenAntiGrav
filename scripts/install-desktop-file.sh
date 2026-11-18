@@ -3,10 +3,10 @@
 # Installs a `.desktop` entry and icon for a source checkout, into the
 # current user's own XDG data directories - no root, no package manager.
 #
-# **Why this exists at all.** On X11, `winit`'s window icon (`main/window.rs`
+# **Why this exists at all.** On X11, `winit`'s window icon (`app/window.rs`
 # -> `oag_game::icon`) is enough on its own: a taskbar can read it straight
 # off the window. On Wayland there is no such protocol - a compositor's
-# taskbar instead looks up the window's app_id (`main/gpu.rs` sets it to
+# taskbar instead looks up the window's app_id (`app/gpu.rs` sets it to
 # `oag-game`, matching this script) against an *installed* `.desktop` entry
 # and takes the icon that entry names. `just appimage` already does this
 # packaging step for a distributed build; running the game straight out of

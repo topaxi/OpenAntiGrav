@@ -13,7 +13,7 @@ setup that matters first.
 
 ## What landed with this note
 
-`crates/game/src/main/window.rs::frame_latency` sets
+`crates/game/src/app/window.rs::frame_latency` sets
 `SurfaceConfiguration::desired_maximum_frame_latency` per resolved present
 mode (before this, wgpu's default 2 everywhere). Vulkan's swapchain holds that
 plus one images:
@@ -50,7 +50,7 @@ the previous input begin, and replaces the older `MESA_LAYER_ANTI_LAG`.
 It helps where frames queue: `on`/`smooth`, and any GPU-bound frame (the
 Deck, heavy HD/Omega circuits). Under `off` below the limiter's cap there is
 little to remove: the limiter already waits *before* a frame
-(`crates/game/src/main/app.rs`, `about_to_wait`), which is the same idea.
+(`crates/game/src/app/handler.rs`, `about_to_wait`), which is the same idea.
 
 ## Open
 
@@ -75,7 +75,7 @@ little to remove: the limiter already waits *before* a frame
   active one of the two waits has to go.
 - **The swapchain acquire hoist landed 2026-10-13** (vendor-neutral, no
   extension): `Session::frame` acquires the image (`Gpu::acquire`,
-  `crates/game/src/main/gpu.rs`) before its `now`/elapsed read, so a blocking
+  `crates/game/src/app/gpu.rs`) before its `now`/elapsed read, so a blocking
   acquire's wait counts toward the frame's `elapsed` and the ticks, the pad
   input they sample (`player_snapshots` polls gilrs there) and the draw alpha
   describe the moment after it. Keyboard events that arrive during the wait

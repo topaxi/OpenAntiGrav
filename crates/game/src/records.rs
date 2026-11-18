@@ -79,7 +79,7 @@
 //! `oag_tables::race_campaign::Cell::evaluate_medal`, not guessed at here;
 //! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
 //! [`Observation::campaign_medal`] is what feeds both: [`RaceStage::observation`]
-//! (`crates/game/src/main/race_stage.rs`) evaluates it once a race carries a
+//! (`crates/game/src/app/race_stage.rs`) evaluates it once a race carries a
 //! [`RaceStage::campaign_cell`], and [`Store::record`] folds it into the
 //! ordinary `[[records]]` row the way every other field is.
 //!
@@ -234,7 +234,7 @@ pub struct Observation {
     /// scored met no medal.
     ///
     /// **Fed by a real race.** `RaceStage::observation`
-    /// (`crates/game/src/main/race_stage.rs`) calls `RaceStage::campaign_medal`,
+    /// (`crates/game/src/app/race_stage.rs`) calls `RaceStage::campaign_medal`,
     /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
     /// selected - see that method's own doc for the per-mode law. Still
     /// `None` for a race launched any other way (the ordinary RACE page,

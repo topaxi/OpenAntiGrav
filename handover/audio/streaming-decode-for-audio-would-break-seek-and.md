@@ -83,7 +83,7 @@ frame/settings thread, and one is not:
 
 - **`Audio::set_music_source`** (`crates/sound/src/lib.rs:954`), the
   `audio.music_source` settings row's handler
-  (`crates/game/src/main/session/apply.rs:224`) - a player toggling the
+  (`crates/game/src/app/session/apply.rs:224`) - a player toggling the
   MUSIC SOURCE row, in the menu or **mid-race**, calls this **synchronously**
   on whatever thread applies a settings change. `apply.rs`'s own comment
   already states the cost it accepts: "measured at 2.0 s for the PS2's 36

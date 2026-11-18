@@ -392,7 +392,7 @@ with exit status: 2: error text", "timed out after 60s waiting for ...").
 | The race behind a seam: `Runner`, `ChildRunner` (exec), `ThreadRunner` (tests), `run_race` | `crates/net/src/online/race_proc.rs` |
 | A lobby client over any `Link` | `crates/net/src/online/client.rs` |
 | `oag-server lobby`, `oag-server race` | `crates/net/src/bin/oag_server/` |
-| `oag-game --online` | `crates/game/src/online.rs`, `crates/game/src/main/cli/extra.rs` |
+| `oag-game --online` | `crates/game/src/online.rs`, `crates/game/src/app/cli/extra.rs` |
 
 `oag-server` with no subcommand is the standalone race server it always was. Rule 6 of
 `just check-deps` holds: the lobby is `oag-net` without the `client` feature, and the one new
@@ -915,7 +915,7 @@ crossed the line (tick ~2800), 0 bad hashes on the survivor, the leaver's craft 
 
 **Ours, chosen, not measured** except where it says Omega's. Omega's order, with our login:
 MULTIPLAYER, ONLINE, a connect step, CREATE GAME or JOIN GAME, the settings (CREATE) or the room
-list (JOIN), team selection, the room. Code: `crates/game/src/main/session/online.rs` (the state
+list (JOIN), team selection, the room. Code: `crates/game/src/app/session/online.rs` (the state
 machine, native only; `online_web.rs` is the browser's no-op), the rows in
 `crates/game/src/online_screen.rs` (shared with the stills), the screens
 `oag_ui_screens::join` in its list and lobby forms (the slot LAN uses, `stage.lan`, only one of
@@ -1109,7 +1109,7 @@ the code is `oag_net::weapon_sync`, the test `crates/net/tests/weapons_ground_tr
 
 **Ours, chosen, not measured**, except where Omega's own strings are named. Code: `crates/net/src/wire/board.rs`,
 `online/rooms.rs` (`rematch`, `kick`, `race_over`), `crates/game/src/net_play.rs`,
-`crates/game/src/main/session/online.rs`, `crates/game/src/online_screen.rs`; tests in `rooms/tests/after_race.rs`,
+`crates/game/src/app/session/online.rs`, `crates/game/src/online_screen.rs`; tests in `rooms/tests/after_race.rs`,
 `tests/online.rs` and `tests/net_ground_truth.rs`.
 
 ### The board

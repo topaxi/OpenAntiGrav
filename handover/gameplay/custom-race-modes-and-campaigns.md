@@ -200,7 +200,7 @@ The design notes below are from before v1.0:
 
 What the titles' campaigns already give us: Pulse/HD/Omega grids and Pure's list (both launch
 events as **campaign cells** through one path, record medals in `[[campaign]]` and apply unlocks;
-`crates/game/src/main/session/campaign.rs`, `crates/game/src/campaign/`, the Pure chain in
+`crates/game/src/app/session/campaign.rs`, `crates/game/src/campaign/`, the Pure chain in
 `crates/ui-screens`). What a custom one needs:
 
 1. **A campaign definition file of our own** (`schemas/v1/campaign.tosd`): id, name, the events in

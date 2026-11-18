@@ -24,8 +24,8 @@ hit-tested as a hexagon rather than its bounding box - the staggered grid's
 neighbours overlap at their corners otherwise. Implemented in
 [`oag_ui_screens::campaign`](../../crates/ui-screens/src/campaign.rs) (model, layout, draw),
 [`oag_game::campaign`](../../crates/game/src/campaign.rs) (the shared read
-off an open source), `crates/game/src/main/campaign_stage.rs` (what the
-session holds open) and `crates/game/src/main/session/campaign.rs` (the
+off an open source), `crates/game/src/app/campaign_stage.rs` (what the
+session holds open) and `crates/game/src/app/session/campaign.rs` (the
 flow: `RACE CAMPAIGN` opens it, confirm and back move between the two
 screens, and a confirmed cell launches). Captured headlessly with
 `--menu-page grid-select` / `--menu-page cell-select`, on `pulse-psp-eu` -
@@ -127,7 +127,7 @@ on "harmless to skip"; open at 50 on what `Grid1` is *for*.
 record, which now exists (`records.toml`'s `[[campaign]]` table, see
 `docs/architecture/persistence.md`). `oag_ui_screens::campaign::GridSummary::from_grid_with_medals`/
 `CellSelection::with_medals` take a `Fn(&str) -> Option<Medal>` keyed on a
-cell's own `name`, and `crates/game/src/main/campaign_stage.rs` feeds it
+cell's own `name`, and `crates/game/src/app/campaign_stage.rs` feeds it
 from `Session::records` - a snapshot read once when the screen opens, the
 same "read once" choice the sixteen grid files themselves already make.
 `GridSummary::from_grid`/`CellSelection::new` still exist for a caller with
@@ -187,7 +187,7 @@ now draws under it on both screens - see that section for which widgets
 still do not.
 
 **Confirming a locked tile also refuses, on both screens - chosen, not
-measured.** `crate::main::session::campaign::handle_campaign` reuses the
+measured.** `crate::app::session::campaign::handle_campaign` reuses the
 identical glyph predicate to swallow a `Confirm` on a locked tier or cell,
 logging why rather than opening `Cell Selection`/launching. This is *not* a
 decompiled mechanism: no PI001 function this project has read
@@ -356,7 +356,7 @@ Confirming a team launches the race with the cell's own track/mode/class/
 laps/kill target, and a finished or escaped run's medal is evaluated against
 the cell's own gold/silver/bronze targets and folded into `records.toml`'s
 new `[[campaign]]` table - see `docs/architecture/persistence.md`. See that
-page and `crates/game/src/main/session/campaign.rs` for the full mode-by-
+page and `crates/game/src/app/session/campaign.rs` for the full mode-by-
 mode detail; this page stays about what draws.
 
 **Not launched from a cell: the AI difficulty curve.** A campaign cell's own
@@ -1019,9 +1019,9 @@ authored differently inside each screen. Implemented in
 [`oag_ui_screens::campaign::hd`](../../crates/ui-screens/src/campaign/hd.rs), wired through
 `oag_game::campaign::load` (title-dispatched to a Wipeout HD/Fury branch the
 same way the rest of this build picks a title's tables),
-`crate::main::campaign_stage::CampaignStage::is_hd`/`circuit_names`/
-`cell_grid_summary`, and a draw/pointer dispatch in `crate::main::menu_stage`/
-`crate::main::session::pointer`. **The confirm/launch path is untouched** -
+`crate::app::campaign_stage::CampaignStage::is_hd`/`circuit_names`/
+`cell_grid_summary`, and a draw/pointer dispatch in `crate::app::menu_stage`/
+`crate::app::session::pointer`. **The confirm/launch path is untouched** -
 `Screen::Grid`/`Screen::Cell` and `oag_ui_screens::campaign::Event` are shared
 between the two titles, so `session::campaign::handle_campaign`/
 `launch_campaign_cell` need no HD arm of their own; an HD cell launches
@@ -1731,7 +1731,7 @@ compile-time-fixed list**. `oag_hd::endrace::EXTRA_TEXTURES`
 `oag_game::endrace::load_hd` extends the front-end's base sheet with for
 this screen, and it names exactly one file - `Title_Arrow_HD.gtf` -
 `Hexmedal_HD` is not in it, on any code path: the same constant builds the
-sheet whether the caller is a live session (`crate::main::session::endrace`,
+sheet whether the caller is a live session (`crate::app::session::endrace`,
 which passes `shell.sprites` - the plain front-end sheet, not the
 campaign-extended one `renderer_set_sprites` only ever uploads to the GPU
 transiently while campaign screens are up) or `--menu-page endrace-results`.
@@ -2249,7 +2249,7 @@ reproduction of it, so the choice is visible and the pointer has something to
 hover.
 
 **The `--menu-page` capture path resolves the same four ids the live session
-does.** Before this pass, only `crate::main::session::campaign::open_campaign`
+does.** Before this pass, only `crate::app::session::campaign::open_campaign`
 (the live path) overlaid `DATA06`'s own copy of `FE_RC_SELECT`/`FE_CAMPSEL_MODES`
 onto `strings` - `crate::capture::campaign_page` (`--menu-page
 campaign-select`) had no such overlay at all, so a capture showed all four
@@ -2484,7 +2484,7 @@ a scratch directory, not kept; ours and the comparisons
     not committed. **Left for whoever next has a working interactive Xvfb
     setup** - the headless `--menu-page` capture above and the RPCS3
     measurements are what this pass leans on instead, and neither exercises
-    `crate::main::session::campaign::open_campaign`/`CampaignStage`'s own
+    `crate::app::session::campaign::open_campaign`/`CampaignStage`'s own
     live wiring end to end. Everything downstream of `open_campaign`
     (`handle_campaign`'s new `Screen::Selection` arms,
     `CampaignStage::open_grid_selection`/`open_selection`) is proven only by
@@ -2688,7 +2688,7 @@ is the `Title` role, not a body face. Two consequences, both left open:
 ### The same unclipped-ticker defect recurred in a new capture path, 2026-09-27
 
 **`pulse-menu-ticker` lane, wiring the ordinary menus' own footer ticker
-(`MenuStage`, not `CampaignStage`).** `crate::main::menu_stage::footer` copied
+(`MenuStage`, not `CampaignStage`).** `crate::app::menu_stage::footer` copied
 this page's own 2026-09-21 fix correctly for the *live* session
 (`footer::resolve_clip` mirrors `CampaignStage::ticker_clip_bounds`'s call
 site exactly), but `crate::capture::menu_page` - the `--menu-page main` still
@@ -2800,7 +2800,7 @@ implementation keyed on `Locked == false` and would have failed G1; it now asks 
 moment of re-entry (the lock layer's fade flag is a second bit this walk did not separate), anything on HD/Fury, and a
 grid reached by the game's own unlock path rather than the `Locked` poke.
 
-**Implemented** (`crates/game/src/main/campaign_stage.rs`, `CellCursor`, four unit tests): the slot is the cell's
+**Implemented** (`crates/game/src/app/campaign_stage.rs`, `CellCursor`, four unit tests): the slot is the cell's
 `(x, y)` from its name (`Cell::grid_coords`); `restore` selects the cell at the slot and puts the cursor back on the
 default if `selected_is_locked()` says that cell still shows a glyph; the records store carries it across
 `RACE CAMPAIGN` openings and relaunches (see "Where the campaign reopens" below; written when the campaign closes on any path, including launching a race). HD/Fury run the
@@ -2902,7 +2902,7 @@ on persist per campaign in `records.toml`, so the rule holds after a relaunch to
   open**: the cursor is separately confirmed to *persist* across a back-out
   to `Grid Selection` and a re-entry in the original, live-tested twice this
   pass - this build's own `CampaignStage::open_cell_selection`
-  (`crates/game/src/main/campaign_stage.rs`) rebuilds a fresh
+  (`crates/game/src/app/campaign_stage.rs`) rebuilds a fresh
   `CellSelection` on every call instead, so a re-entry here always lands
   back on the document-order default rather than wherever the player left
   it. ~~Not fixed this pass.~~ **Fixed, 2026-09-28 (`pulse-campaign-flow`
@@ -3318,7 +3318,7 @@ and its own "what is not determined" section.
   screen** on both sides (the in-race HUD does not label either directly).
   On this project's own side, rather than drive a second race build (the
   slow path measured above), this pass read `launch_campaign_cell`
-  (`crates/game/src/main/session/campaign.rs:287`, read-only - a different
+  (`crates/game/src/app/session/campaign.rs:287`, read-only - a different
   lane's own file), whose mapping for this cell is field-for-field:
   `race_mode_for_cell(cell.mode)` sends the authored string `"Race"`
   straight to `oag_race::Mode::SingleRace` (unit-tested,
@@ -3365,7 +3365,7 @@ and its own "what is not determined" section.
   `NavigationLegend`'s own `FE_CONFIRM` shrink-to-fit (`Prompt::left_bound`/
   `align_right_to`, since removed, 2026-10-29: see the superseded note above) is now measured against the atlas it actually
   draws through rather than the wrong one - **on both paths**: the live
-  session (`crate::main::menu_stage::MenuStage`'s own `default_atlas`/
+  session (`crate::app::menu_stage::MenuStage`'s own `default_atlas`/
   `default_measure`) and `--menu-page`/`capture.rs`, which had its *own*,
   separate `measure` closure still pointed at `menu_font` and was the
   reason the first live capture of this fix (`cellselect-usa-after2.png`)
@@ -3437,7 +3437,7 @@ still is now directly comparable to those frames rather than to a
 combined-16 state nothing on the real disc, or this build's own live
 session, ever draws. **Capture-only**: the live `CampaignStage` path already
 narrowed correctly before this change; a player was never shown `01/16`.
-`crates/game/src/main/campaign_stage.rs`'s own `grid_layout()` already picks
+`crates/game/src/app/campaign_stage.rs`'s own `grid_layout()` already picks
 `grid_layout_fury` the same way when `active_campaign == Some(Campaign::Fury)`
 - the still-path fix mirrors that existing rule rather than inventing a new
 one.
@@ -3455,7 +3455,7 @@ Selection`'s own frame carries. `hd_grid_draw_list`/`selection::draw_list`
 (`crates/ui-screens/src/campaign/hd.rs`/`crates/ui-screens/src/campaign/selection.rs`) both
 gained the same `footer_overlay: &[Draw]` parameter `hd_cell_draw_list`
 already had, appended to `layers.chrome` right after the title the same way;
-`crates/game/src/main/menu_stage.rs`'s `Selection`/`Grid` arms and
+`crates/game/src/app/menu_stage.rs`'s `Selection`/`Grid` arms and
 `crates/game/src/capture/campaign_page.rs`'s two HD arms all now pass
 `campaign.nav_legend_draw(...)`/the already-computed `footer_overlay`
 through, the same call `Cell`'s own arm already made. No ticker on either
@@ -4501,7 +4501,7 @@ two arrow rects, and a finger's drag (`Pointer::drag`) was ignored.
   threshold as a drag with no position and no click, and the lift is `released` alone; a tap on
   the card still confirms. Pinned by `oag_ui_screens::campaign::hd::tests` (`a_swipe_*`,
   `one_long_swipe_steps_once_and_only_once`, `the_next_gesture_steps_again`, `a_tap_on_the_card_still_confirms`).
-- **Omega takes the same path.** `CampaignStage::is_hd` (`oag_game`'s `main/campaign_stage.rs`) is `CampaignDialect::draws_hd_screens`, true for
+- **Omega takes the same path.** `CampaignStage::is_hd` (`oag_game`'s `app/campaign_stage.rs`) is `CampaignDialect::draws_hd_screens`, true for
   HD and Omega, and `campaign_pointer` hands both to `hd_pointer`: one change, no title branching.
   Checked on the PS4 package: its `Grid Selection` authors the same two arrows at the same rects.
 
