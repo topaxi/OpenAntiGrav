@@ -4,9 +4,10 @@
 //! read, a constant `ColourConstant`, `SpecularPower`, and a vertex program that declares
 //! `time` ([`oag_rcs::gxp::sampler_use`]). Its fragment program (`docs/rendering/water.md`,
 //! "2048 (Vita)") decodes the map as `2t - 1` on all three channels into the chunk's tangent
-//! frame, lights it as `(ambient + diffuse * sat(N.L)) * ColourConstant`, and adds
-//! `liveLighting0specular * t.a * sat(R.L)^SpecularPower`, `R` the view reflected about the
-//! mapped normal. The vertex program adds `0.05 * time` to the first coordinate's `u`.
+//! frame, lights it as `(ambient + diffuse * sat(N.L)) * ColourConstant` (the uniform as it is,
+//! not squared as a picture is), and adds `liveLighting0specular * t.a * sat(R.L)^SpecularPower`,
+//! `R` the view reflected about the mapped normal. The vertex program adds `0.05 * time` to the
+//! first coordinate's `u`.
 //! `liveLighting0specular` is drawn as the sun's diffuse colour (chosen, not measured: 2048's
 //! envsettings author no sun specular colour).
 //!
@@ -16,11 +17,11 @@
 //!
 //! **`fc17`** (Park's `fc17_effects_vscroll_water`, Altima's blended
 //! `fc17_effects_vscroll_wateredge_vertexcol`, `docs/rendering/water.md`, "2048 (Vita)") shares
-//! that frame and light, takes its colour from `Watercolour` (the uniform as it is, not squared
-//! as a picture is), multiplies the highlight by `SpecularColour` with no gloss from the map's
-//! alpha, and scrolls `v` by `Speed * time`. The edge adds an alpha chain over `Opacity`, the
-//! map's alpha and the two vertex colour lanes `VertexColour1.x` and `.y`, which ride the
-//! vertex's second coordinate pair.
+//! that frame and light, takes its colour from `Watercolour` (as it is, like the pond's),
+//! multiplies the highlight by `SpecularColour` with no gloss from the map's alpha, and scrolls
+//! `v` by `Speed * time`. The edge adds an alpha chain over `Opacity`, the map's alpha and the
+//! two vertex colour lanes `VertexColour1.x` and `.y`, which ride the vertex's second coordinate
+//! pair.
 //!
 //! **Omega's reflective seas** (`reflectplane_mid`, `_edge`, `_pond`, `_dc_seawater_new`,
 //! `_dc_seawater_tow`; `docs/rendering/water.md`, "Omega (PS4)") replace those materials on the

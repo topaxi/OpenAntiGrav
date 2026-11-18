@@ -8,15 +8,16 @@
 //! alpha; the same colour drawn as kind 7 (opaque water, no chain) is the reference. Drop the map's
 //! alpha, `vc.x`, `vc.y` or `Opacity` from the shader and one of the readings below moves.
 //!
-//! The colour is `light * Watercolour` with the uniform as it is (`@23`): a second test draws two
-//! constants and holds the picture to the ratio a raw multiply gives, which a constant decoded
-//! like a picture misses.
+//! The colour is `light * Watercolour` with the uniform as it is (`@23`), as the `fc15` pond's is
+//! `light * ColourConstant`: a second test draws two constants on each of the three kinds and
+//! holds the picture to the ratio a raw multiply gives, which a constant decoded like a picture
+//! misses.
 //!
 //! Skips when there is no adapter. Runs in `just test`.
 
 use std::sync::Arc;
 
-use oag_mesh::mesh::rcs::{Tap, VITA_EDGE_KIND, VITA_WATER_KIND};
+use oag_mesh::mesh::rcs::{Tap, VITA_EDGE_KIND, VITA_SEA_KIND, VITA_WATER_KIND};
 use oag_mesh::mesh::{
     Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_WATER, Texels, slots,
 };
@@ -135,19 +136,20 @@ fn stage() -> Option<(wgpu::Device, wgpu::Queue, Scene)> {
     Some((device, queue, scene))
 }
 
-/// `light * Watercolour` takes the uniform as it is, where a picture is decoded first: doubling
-/// the constant doubles the light the target encodes, `2^(1/2.2)` in the picture. Decoded like a
-/// picture the constant would double the picture itself.
+/// `light * Watercolour` (and `fc15`'s `light * ColourConstant`, kind 6) takes the uniform as it
+/// is, where a picture is decoded first: doubling the constant doubles the light the target
+/// encodes, `2^(1/2.2)` in the picture. Decoded like a picture the constant would double the
+/// picture itself. The map's alpha is zero, which takes the pond's highlight out of the sum.
 #[test]
 fn the_water_colour_multiplies_the_light_undecoded() {
     let Some((device, queue, scene)) = stage() else {
         return;
     };
     let at = |kind, colour| {
-        let model = model(kind, colour, 1.0, 255, [0.0, 1.0]);
+        let model = model(kind, colour, 1.0, 0, [0.0, 1.0]);
         f32::from(draw(&device, &queue, &model, scene)[0])
     };
-    for kind in [VITA_WATER_KIND, VITA_EDGE_KIND] {
+    for kind in [VITA_SEA_KIND, VITA_WATER_KIND, VITA_EDGE_KIND] {
         let (dim, bright) = (at(kind, 0.2), at(kind, 0.4));
         assert!(dim > 40.0 && bright < 250.0, "kind {kind}: {dim}, {bright}");
         let ratio = bright / dim;
