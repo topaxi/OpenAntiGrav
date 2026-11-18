@@ -314,3 +314,5 @@
 0x0885e348	function	Plasma_Update	84	own-craft-box.md
 0x08822e28	function	Collision_AddBoxCollider	82	own-craft-box.md
 0x08827038	function	Collider_SetBoxDimensions	84	own-craft-box.md
+0x08a8c5f4	data	g_world_state	75	world-clock.md
+0x0888681c	function	WorldNode_AdvanceAnimation	65	world-clock.md

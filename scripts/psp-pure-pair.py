@@ -49,6 +49,10 @@ SHIP_UPDATE_CRAFT = 0x0892D214
 CAMERA_COPY_TRIPOD = 0x08849970
 RACE_LAUNCH_GRADE = 0x0880F870
 CLOCK_OFFSET = 0x130
+#: The scenery clock: `*(0x08A8C5F4) + 0x44` is the world-state object's running time, advanced by the frame's dt at `0x0880c78c` and copied
+#: into each animated node (`node + 0x134`) by the node updater at `0x0888681c` (docs/ghidra/functions/psp-pure-usa/world-clock.md).
+WORLD_STATE_POINTER = 0x08A8C5F4
+WORLD_CLOCK_FIELD = 0x44
 #: `+0x1cc` the body pointer, as on Pulse; the body's own offsets are Pure's.
 BODY_POINTER = 0x1CC
 BODY_VELOCITY = 0x180
@@ -287,6 +291,8 @@ def main():
     pose1 = read_pose(dbg)
     clock = 0.0 if zone else dbg.read_f32(clock_at)
     dt = dbg.read_f32(pose1["craft"] + 0x1C8)
+    world_state = dbg.read_u32(WORLD_STATE_POINTER)
+    world_ram = dbg.read_f32(world_state + WORLD_CLOCK_FIELD) if 0x08800000 <= world_state < 0x0A000000 else None
     if zone:
         sidecar = Path(args.state + ".json")
         record = args.autopilot_record or (int(json.loads(sidecar.read_text()).get("autopilot_record", "0"), 0) if sidecar.exists() else 0)
@@ -302,6 +308,15 @@ def main():
     shot.replace(out / "theirs.png")
     shown = clock - PRESENTED_LAG * dt
     clock = shown
+    world_shown = None if world_ram is None else world_ram - PRESENTED_LAG * dt
+    pair.check("the scenery clock was read (world-state pointer %#x, +%#x)" % (WORLD_STATE_POINTER, WORLD_CLOCK_FIELD),
+               world_shown is not None and math.isfinite(world_shown) and world_shown > 0.0,
+               "state %#x, clock %s" % (world_state, world_ram))
+    if world_shown is not None and world_shown > 0.0:
+        pair.rec["original"]["world_clock_s"] = world_shown
+        pair.rec["original"]["world_clock_offset_s"] = world_shown - shown
+        pair.rec["original"]["world_clock_note"] = ("the world-state object's running time (*(%#x)+%#x) at the stop, less the "
+                                                    "presented-frame lag, less the race clock" % (WORLD_STATE_POINTER, WORLD_CLOCK_FIELD))
     if zone:
         pair.rec["original"].update({"frame_dt_s": dt, "presented_lag_ticks": PRESENTED_LAG, "autopilot_at_stop": autopilot,
                                      "zone_hud_read_by_eye": zone})
@@ -385,6 +400,11 @@ def main():
         pair.caveat("Zone state imposed on ours: zone %d and score %d read off the original's HUD by eye (Pure's Zone counters are not "
                     "located in RAM), %.1f km/h; the zone clock is written as 0, ours runs no ticks (no exhaust or trail history), and the "
                     "shield is drawn full" % (zone["zone"], zone["score"], kmh))
+    if world_shown is not None and world_shown > 0.0:
+        # ours' animation clock is ticks / 60 plus the offset, so the offset puts ours' clock on the original's at the tick ours renders
+        ours_offset = world_shown - ticks / 60
+        base += ["--world-clock-offset", "%.3f" % ours_offset]
+        pair.rec["ours"]["world_clock_offset_s"] = ours_offset
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
     pair.rec["ours"].update({"mode": mode, "class": args.klass, "team": args.team or "default",
                              "camera": "ours' own Close chase rig, not fed (Pure's tripod is sheared)"})
