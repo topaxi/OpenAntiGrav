@@ -40,25 +40,6 @@ impl CockpitHit {
 }
 
 impl Race {
-    /// `CockpitHitFx_Arm` for a weapon hit on `slot`: the human's own craft
-    /// only. An arm while a run is going is ignored by the node.
-    pub(super) fn arm_cockpit_hit(&mut self, slot: usize) {
-        if slot != self.core.player_slot() {
-            return;
-        }
-        if let Some(hit) = &mut self.view.cockpit_hit {
-            hit.node.arm();
-        }
-    }
-
-    /// `CockpitHitFx_Update`, once a drawn tick.
-    pub(super) fn advance_cockpit_hit(&mut self) {
-        let dt = self.core.sim.dt;
-        if let Some(hit) = &mut self.view.cockpit_hit {
-            hit.node.advance(dt, &mut hit.rng);
-        }
-    }
-
     /// The static to draw in the view being drawn, or `None` with none: no
     /// node, no run, an extra seat's view, the view through a portal pair, or any
     /// camera but the internal one.
@@ -90,5 +71,26 @@ impl Race {
             .cockpit_hit
             .as_ref()
             .is_some_and(|hit| hit.node.running())
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `CockpitHitFx_Arm` for a weapon hit on `slot`: the human's own craft
+    /// only. An arm while a run is going is ignored by the node.
+    pub(super) fn arm_cockpit_hit(&mut self, core: &SimRace, slot: usize) {
+        if slot != core.player_slot() {
+            return;
+        }
+        if let Some(hit) = &mut self.cockpit_hit {
+            hit.node.arm();
+        }
+    }
+    /// `CockpitHitFx_Update`, once a drawn tick.
+    pub(super) fn advance_cockpit_hit(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        if let Some(hit) = &mut self.cockpit_hit {
+            hit.node.advance(dt, &mut hit.rng);
+        }
     }
 }

@@ -132,112 +132,6 @@ impl DamageFx {
 }
 
 impl Race {
-    /// A weapon hit landed on `slot`: plays the smoke its remaining shield
-    /// calls for. Nothing on a title that answers no [`Trigger::DamageMild`],
-    /// on a craft with no shield left, or while the hold rules it out.
-    pub(super) fn throw_damage_smoke(&mut self, slot: usize) {
-        let ship = &self.core.sim.world.ships[slot];
-        let shield = ship.physics.shield;
-        if shield <= 0.0 || !ship.in_world() {
-            return;
-        }
-        let state = State::of(shield);
-        let fx = &self.view.damage_fx;
-        if !plays(state, fx.last[slot], fx.hold[slot]) {
-            return;
-        }
-        let at = self.view.drawn_position(&self.core, slot);
-        let velocity = ship.physics.body.linear_velocity;
-        let changed = state != self.view.damage_fx.last[slot];
-        let mut any = false;
-        for &trigger in state.triggers() {
-            let Some(effect) = self.view.handles.get(trigger).cloned() else {
-                continue;
-            };
-            if changed && !any {
-                self.kill_state_smoke(slot);
-            }
-            if let Some(playing) = self.view.stage.play_riding(&effect, at, 1.0) {
-                self.view.stage.carry(playing, &effect, velocity);
-                self.view.damage_fx.riding.push(Riding {
-                    slot,
-                    playing,
-                    state_smoke: true,
-                });
-                self.view.damage_fx.started += 1;
-                any = true;
-            }
-        }
-        if any {
-            self.view.damage_fx.last[slot] = state;
-            self.view.damage_fx.hold[slot] = HOLD;
-        }
-    }
-
-    /// A landed LeachBeam hit on `slot`, on a title whose hit spark is not
-    /// thrown from the hull's locators (HD): one burst of
-    /// [`Trigger::LeachHitSpark`] attached at the craft's damage-effect point.
-    ///
-    /// `0x000e7760` sets a flag (`object + 0x260`) on a weapon kind 7 hit and
-    /// `0x002a06e0`, running every tick, clears it and spawns
-    /// `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` attached at `+0x1c0`, the point
-    /// [`State`]'s smoke uses. No state, no hold: every hit throws one.
-    pub(super) fn throw_attached_leach_spark(&mut self, slot: usize) {
-        let ship = &self.core.sim.world.ships[slot];
-        if !ship.in_world() {
-            return;
-        }
-        let at = self.view.drawn_position(&self.core, slot);
-        let Some(effect) = self.view.handles.get(Trigger::LeachHitSpark).cloned() else {
-            return;
-        };
-        if let Some(playing) = self.view.stage.play_riding(&effect, at, 1.0) {
-            self.view.damage_fx.riding.push(Riding {
-                slot,
-                playing,
-                state_smoke: false,
-            });
-            self.view.damage_fx.started += 1;
-        }
-    }
-
-    /// Ends `slot`'s previous damage state outright, particles included (`0x002a1994`, which
-    /// calls `0x0027f7b0(.., 1)` and `0x00285868`; `particle-triggers.md`, "the damage smoke
-    /// re-read").
-    fn kill_state_smoke(&mut self, slot: usize) {
-        let stage = &mut self.view.stage;
-        self.view.damage_fx.riding.retain(|smoke| {
-            let ends = smoke.slot == slot && smoke.state_smoke;
-            if ends {
-                stage.kill(smoke.playing);
-            }
-            !ends
-        });
-    }
-
-    /// Counts the holds down and keeps every emitting smoke on its craft.
-    /// Before `Stage::advance`, like the hit sparks.
-    pub(super) fn advance_damage_smoke(&mut self) {
-        let dt = self.core.sim.dt;
-        for left in &mut self.view.damage_fx.hold {
-            *left = (*left - dt).max(0.0);
-        }
-        let mut riding = std::mem::take(&mut self.view.damage_fx.riding);
-        riding.retain(|smoke| {
-            let ship = &self.core.sim.world.ships[smoke.slot];
-            if !ship.in_world() || !self.view.stage.is_emitting(smoke.playing) {
-                self.view.stage.detach(smoke.playing);
-                return false;
-            }
-            self.view.stage.follow(
-                smoke.playing,
-                self.view.drawn_position(&self.core, smoke.slot),
-            );
-            true
-        });
-        self.view.damage_fx.riding = riding;
-    }
-
     /// Where every smoke riding a craft sits now, for tests.
     #[doc(hidden)]
     #[must_use]
@@ -255,6 +149,110 @@ impl Race {
     #[must_use]
     pub fn damage_smokes_started_for_tests(&self) -> u32 {
         self.view.damage_fx.started
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// A weapon hit landed on `slot`: plays the smoke its remaining shield
+    /// calls for. Nothing on a title that answers no [`Trigger::DamageMild`],
+    /// on a craft with no shield left, or while the hold rules it out.
+    pub(super) fn throw_damage_smoke(&mut self, core: &SimRace, slot: usize) {
+        let ship = &core.sim.world.ships[slot];
+        let shield = ship.physics.shield;
+        if shield <= 0.0 || !ship.in_world() {
+            return;
+        }
+        let state = State::of(shield);
+        let fx = &self.damage_fx;
+        if !plays(state, fx.last[slot], fx.hold[slot]) {
+            return;
+        }
+        let at = self.drawn_position(core, slot);
+        let velocity = ship.physics.body.linear_velocity;
+        let changed = state != self.damage_fx.last[slot];
+        let mut any = false;
+        for &trigger in state.triggers() {
+            let Some(effect) = self.handles.get(trigger).cloned() else {
+                continue;
+            };
+            if changed && !any {
+                self.kill_state_smoke(slot);
+            }
+            if let Some(playing) = self.stage.play_riding(&effect, at, 1.0) {
+                self.stage.carry(playing, &effect, velocity);
+                self.damage_fx.riding.push(Riding {
+                    slot,
+                    playing,
+                    state_smoke: true,
+                });
+                self.damage_fx.started += 1;
+                any = true;
+            }
+        }
+        if any {
+            self.damage_fx.last[slot] = state;
+            self.damage_fx.hold[slot] = HOLD;
+        }
+    }
+    /// A landed LeachBeam hit on `slot`, on a title whose hit spark is not
+    /// thrown from the hull's locators (HD): one burst of
+    /// [`Trigger::LeachHitSpark`] attached at the craft's damage-effect point.
+    ///
+    /// `0x000e7760` sets a flag (`object + 0x260`) on a weapon kind 7 hit and
+    /// `0x002a06e0`, running every tick, clears it and spawns
+    /// `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` attached at `+0x1c0`, the point
+    /// [`State`]'s smoke uses. No state, no hold: every hit throws one.
+    pub(super) fn throw_attached_leach_spark(&mut self, core: &SimRace, slot: usize) {
+        let ship = &core.sim.world.ships[slot];
+        if !ship.in_world() {
+            return;
+        }
+        let at = self.drawn_position(core, slot);
+        let Some(effect) = self.handles.get(Trigger::LeachHitSpark).cloned() else {
+            return;
+        };
+        if let Some(playing) = self.stage.play_riding(&effect, at, 1.0) {
+            self.damage_fx.riding.push(Riding {
+                slot,
+                playing,
+                state_smoke: false,
+            });
+            self.damage_fx.started += 1;
+        }
+    }
+    /// Ends `slot`'s previous damage state outright, particles included (`0x002a1994`, which
+    /// calls `0x0027f7b0(.., 1)` and `0x00285868`; `particle-triggers.md`, "the damage smoke
+    /// re-read").
+    fn kill_state_smoke(&mut self, slot: usize) {
+        let stage = &mut self.stage;
+        self.damage_fx.riding.retain(|smoke| {
+            let ends = smoke.slot == slot && smoke.state_smoke;
+            if ends {
+                stage.kill(smoke.playing);
+            }
+            !ends
+        });
+    }
+    /// Counts the holds down and keeps every emitting smoke on its craft.
+    /// Before `Stage::advance`, like the hit sparks.
+    pub(super) fn advance_damage_smoke(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        for left in &mut self.damage_fx.hold {
+            *left = (*left - dt).max(0.0);
+        }
+        let mut riding = std::mem::take(&mut self.damage_fx.riding);
+        riding.retain(|smoke| {
+            let ship = &core.sim.world.ships[smoke.slot];
+            if !ship.in_world() || !self.stage.is_emitting(smoke.playing) {
+                self.stage.detach(smoke.playing);
+                return false;
+            }
+            self.stage
+                .follow(smoke.playing, self.drawn_position(core, smoke.slot));
+            true
+        });
+        self.damage_fx.riding = riding;
     }
 }
 

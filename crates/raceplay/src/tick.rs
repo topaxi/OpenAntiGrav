@@ -305,7 +305,9 @@ impl Race {
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.throw_hit_sparks(&hits, false);
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, false)
+            });
         }
         // After `projectile::step`, so a flare rides where its rocket
         // actually ended the tick rather than a tick behind it.
@@ -407,7 +409,8 @@ impl Race {
             if let (Weapon::Cannon, Some(struck)) = (impact.kind, impact.struck)
                 && self.draws()
             {
-                self.throw_weapon_spark(usize::from(struck), impact.point);
+                self.view
+                    .throw_weapon_spark(&self.core, usize::from(struck), impact.point);
             }
             if let Some((wall, ship)) = hit_cues {
                 let cue = if impact.struck.is_some() { ship } else { wall };
@@ -476,9 +479,9 @@ impl Race {
         if self.draws() {
             self.advance_engine_flares();
             self.advance_absorb_bursts();
-            self.advance_hit_sparks();
+            self.view.advance_hit_sparks(&self.core);
             self.draw_extension_effects();
-            self.advance_damage_smoke();
+            self.view.advance_damage_smoke(&self.core);
             self.advance_wreck_fx();
             self.view
                 .stage
@@ -641,7 +644,7 @@ impl Race {
             if let Some(flash) = &mut self.view.screen_flash {
                 flash.advance(self.core.sim.dt, eye);
             }
-            self.advance_cockpit_hit();
+            self.view.advance_cockpit_hit(&self.core);
 
             // Advanced here, on the fixed tick, and not in the frame loop. That is
             // what makes the headless `capture` path - which calls only `tick` -

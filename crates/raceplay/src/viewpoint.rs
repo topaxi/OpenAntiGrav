@@ -481,19 +481,6 @@ impl Race {
             .map(|slot| self.view.viewpoints.view(slot, self.view.draw_alpha()))
     }
 
-    /// The wall-contact effects of `slot`'s seat: the player's own for the player's slot, an
-    /// extra person's beside their camera, `None` for a craft nobody sits in. The one
-    /// place a shake or a spark is routed to the seat it belongs to.
-    pub(super) fn seat_contact_mut(&mut self, slot: usize) -> Option<&mut ContactFx> {
-        if slot == self.core.player_slot() {
-            return Some(&mut self.view.contact);
-        }
-        if !self.core.sim.world.person_flown(slot) {
-            return None;
-        }
-        self.view.viewpoints.contact.get_mut(slot)?.as_deref_mut()
-    }
-
     /// Steps every extra seat's shake one tick, as the player's is. See
     /// [`Self::advance_seat_contact_fx`](super::tick).
     pub(super) fn advance_seat_shakes(&mut self, dt: f32) {
@@ -551,5 +538,25 @@ impl RaceView {
             self.boost_fov_kick.gain(),
             aspect,
         ))
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The wall-contact effects of `slot`'s seat: the player's own for the player's slot, an
+    /// extra person's beside their camera, `None` for a craft nobody sits in. The one
+    /// place a shake or a spark is routed to the seat it belongs to.
+    pub(super) fn seat_contact_mut(
+        &mut self,
+        core: &SimRace,
+        slot: usize,
+    ) -> Option<&mut ContactFx> {
+        if slot == core.player_slot() {
+            return Some(&mut self.contact);
+        }
+        if !core.sim.world.person_flown(slot) {
+            return None;
+        }
+        self.viewpoints.contact.get_mut(slot)?.as_deref_mut()
     }
 }

@@ -86,7 +86,7 @@ impl Race {
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
             if was != CraftState::Destroyed
                 && state == CraftState::Destroyed
-                && let Some(fx) = self.seat_contact_mut(slot)
+                && let Some(fx) = self.view.seat_contact_mut(&self.core, slot)
             {
                 // `Ship_SetState` case 4, the local player's half: it zeroes
                 // the camera's shake duration, cancelling a running one.
@@ -139,7 +139,7 @@ impl Race {
         slot: usize,
         (magnitude, duration, side): (f32, f32, Side),
     ) {
-        if let Some(fx) = self.seat_contact_mut(slot) {
+        if let Some(fx) = self.view.seat_contact_mut(&self.core, slot) {
             fx.shake
                 .arm_with(magnitude, duration, side, &mut fx.shake_rng);
         }

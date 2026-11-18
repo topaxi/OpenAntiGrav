@@ -316,7 +316,9 @@ impl Race {
         );
         self.core.sim.cage_reset[slot] = cage.reset;
         #[cfg(feature = "view")]
-        self.throw_cage_sparks(slot, &cage);
+        self.core.lending_cues(|core, cues| {
+            crate::stage::stage!(self).throw_cage_sparks(core, cues, slot, &cage)
+        });
         self.core.sim.lay_crumb(slot, crumb_flags);
         self.core
             .sim

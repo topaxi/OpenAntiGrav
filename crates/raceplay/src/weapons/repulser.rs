@@ -111,7 +111,9 @@ impl Race {
             }
         }
         #[cfg(feature = "view")]
-        self.throw_hit_sparks(&hits, false);
+        self.core.lending_cues(|core, cues| {
+            crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, false)
+        });
         for (slot, owner) in credits {
             if hits[slot].landed {
                 self.core.sim.record_pending_hit(slot, owner);

@@ -997,7 +997,9 @@ impl Race {
             );
             self.core.sim.cage_reset[slot] = cage.reset;
             #[cfg(feature = "view")]
-            self.throw_cage_sparks(slot, &cage);
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).throw_cage_sparks(core, cues, slot, &cage)
+            });
             self.core.sim.lay_crumb(
                 slot,
                 self.core
@@ -1366,7 +1368,16 @@ impl Race {
                     #[cfg(feature = "view")]
                     if self.draws() {
                         for slot in [a, b] {
-                            self.throw_contact_spark(slot, contact.point, contact.impulse, true);
+                            self.core.lending_cues(|core, cues| {
+                                crate::stage::stage!(self).throw_contact_spark(
+                                    core,
+                                    cues,
+                                    slot,
+                                    contact.point,
+                                    contact.impulse,
+                                    true,
+                                )
+                            });
                             self.view.pair_contacts[slot] = Some(crate::contact_fx::PairContact {
                                 point: contact.point,
                                 impulse: contact.impulse,

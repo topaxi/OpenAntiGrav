@@ -220,7 +220,9 @@ impl Race {
         // `race::hit_sparks`. Last, once `course`'s borrow has ended.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.throw_hit_sparks(&hits, false);
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, false)
+            });
         }
         self.core.xp_weapon_hits(
             &hits,
@@ -342,7 +344,9 @@ impl Race {
                 hit.landed = true;
             }
             #[cfg(feature = "view")]
-            self.throw_hit_sparks(&hits, true);
+            self.core.lending_cues(|core, cues| {
+                crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, true)
+            });
         }
         self.core.sim.world.leach_beams[at] = if report.retired { None } else { Some(beam) };
     }
