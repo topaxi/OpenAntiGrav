@@ -102,7 +102,7 @@ mod tests {
             assert_eq!(parse(&format(at)), Some(at), "{}", format(at));
         }
         assert_eq!(
-            parse("2026-11-18T12:34:56.789Z").map(|t| format(t)),
+            parse("2026-11-18T12:34:56.789Z").map(format),
             Some("2026-11-18T12:34:56.789Z".to_string())
         );
         for bad in [
