@@ -771,10 +771,16 @@ fn the_honeycomb_fill_fades_toward_the_grids_edge() {
         }
     }
     let (lowest, highest) = (fills.iter().min().copied(), fills.iter().max().copied());
-    eprintln!("{} grey fill pixels, {lowest:?} to {highest:?}", fills.len());
+    eprintln!(
+        "{} grey fill pixels, {lowest:?} to {highest:?}",
+        fills.len()
+    );
     assert!(fills.len() > 2_000, "the grid's fills: {}", fills.len());
     assert!(lowest.is_some_and(|v| v <= 28), "no faded fill: {lowest:?}");
-    assert!(highest.is_some_and(|v| v >= 38), "no fill near the selection: {highest:?}");
+    assert!(
+        highest.is_some_and(|v| v >= 38),
+        "no fill near the selection: {highest:?}"
+    );
 }
 
 /// Omega's craft is lit by Omega's own `fe.EnvSettings`, in its own key spelling and with its

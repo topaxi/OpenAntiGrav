@@ -350,15 +350,31 @@ fn a_faded_grid_shades_each_fill_toward_the_selected_column() {
     assert_eq!(cells.len(), 28, "four fading columns of seven");
     cells.sort_by(|a, b| a.0.total_cmp(&b.0));
     let by_column: Vec<&[(f32, f32, f32)]> = cells.chunks(7).collect();
-    let (outer_left, inner_left, inner_right, outer_right) =
-        (by_column[0][0], by_column[1][0], by_column[2][0], by_column[3][0]);
-    assert!(outer_left.2 > outer_left.1, "left of the selection, brighter toward it");
+    let (outer_left, inner_left, inner_right, outer_right) = (
+        by_column[0][0],
+        by_column[1][0],
+        by_column[2][0],
+        by_column[3][0],
+    );
+    assert!(
+        outer_left.2 > outer_left.1,
+        "left of the selection, brighter toward it"
+    );
     assert!(inner_left.2 > inner_left.1);
-    assert!(inner_right.1 > inner_right.2, "right of it, brighter on its left");
+    assert!(
+        inner_right.1 > inner_right.2,
+        "right of it, brighter on its left"
+    );
     assert!(outer_right.1 > outer_right.2);
-    assert!(inner_left.1 > outer_left.1 && inner_right.1 > outer_right.1, "dimmer further out");
+    assert!(
+        inner_left.1 > outer_left.1 && inner_right.1 > outer_right.1,
+        "dimmer further out"
+    );
     let authored = oag_ui::screen::argb_to_rgba(0x6480_8080)[3];
-    assert!(inner_left.2 < authored, "the grid's own colour is the selected column's");
+    assert!(
+        inner_left.2 < authored,
+        "the grid's own colour is the selected column's"
+    );
 }
 
 #[test]
