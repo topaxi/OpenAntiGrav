@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse, 2048, omega]
 updated: 2026-11-18
-summary: "Deck native 4K: HD misses 60 Hz (18 ms p50), 2048 holds it, Omega at the line (p95 15.9 ms offscreen). Left: shadow redraw, Omega prepass"
+summary: "Deck native 4K: HD misses 60 Hz (16.6 ms p50 after circuit cuts), 2048 holds it, Omega near the line. Left: shadow redraw, rich pipelines"
 categories: [rendering, tooling]
 ---
 
@@ -33,10 +33,10 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
   3. **The craft pass, 3.08 ms at 4K**, 4.5 ns a fragment against the circuit's 1.4. Not opened:
      its overdraw is unmeasured, and the `lit_by_rig` fold is not applied to it because a craft
      draws under a scene block of its own (`ship_scene`), which needs an audit first.
-  4. **The sun-removal arithmetic, 0.46 ms at 4K**: computed for every pixel, used where a shadow
-     covers one.
-  5. Fourteen `pow` a pixel remain in the plain pipeline, all authored (lightmap curve, vertex
-     light curve, albedo decode, specular, fog, encode).
+  4. ~~**The sun-removal arithmetic, 0.46 ms at 4K**~~: moved under the coverage test
+     2026-11-18 (`circuit-lighting-rungs`), byte-identical and 0.8 % slower on the Deck; dropped.
+  5. Eleven `pow` a pixel remain in HD's plain pipeline (lightmap curve, albedo decode, specular,
+     fog, encode); the vertex light curve now runs per vertex, the original's order.
 - An RGP capture of an HD 4K frame was not obtained (headless gamescope wrote no trace).
 - **The first bloom downsample's read law** (`hd-scene-8bit`): through the sRGB view (averaging
   light, what renderer.md says the ladder does) the pairs move away, mean grey +0.02 to +0.13 on 12
@@ -82,6 +82,26 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
      `RADV_DEBUG=shaderstats` for their plain pipelines first.
   4. **Race bench gap**: `gpu_us` misses `wo_composite` and Omega's tone map and bloom chain;
      timestamps around them would let a whole race show a cut there.
+
+- **2026-11-18, `circuit-lighting-rungs`** (`docs/rendering/hires-gpu-levers.md`, "Circuit
+  shading: exact cuts, the vertex curve and a lighting rung"). Landed: six exact cuts and HD's
+  vertex curve in the vertex stage (the original's order, renderer.md "The vertex curve is per
+  vertex"); Deck `track solid, shaded` at 4K HD 10.49 to 8.65 ms, 2048 6.71 to under 5.9, Omega
+  8.38 to under 7.1. `graphics.circuit_lighting` (`original` default, `simplified`): a further
+  19 % on HD at 4K, but it buys only about 5 % of render scale at a 4K output, and exact
+  lighting at 90 % looks better. Approximated light curves: no gain on RDNA2, not added.
+  Left:
+  1. **The rich pipelines' `programs_present` override** (HD 0.58 ms, Omega 0.80 ms at 4K is the
+     whole rich half), and the craft pass, all rich (3 ms at 4K). Measure: the `track solid,
+     shaded` and `craft, weapons, shields` spans, same command as the page.
+  2. **Omega's plain draws carrying specular or a normal map**: `simplified` saves 17 % of
+     Omega's shading at 4K for 0.2 % of its pixels. A census of which plain draws carry them,
+     and a pipeline of their own, may take most of that exactly. Measure: the same span on Tech de
+     Ra, pixels diffed.
+  3. **B (albedo decode through an sRGB view)**: one small lane judged by the 13 HD pairs;
+     **D (trilinear lightmap sampler)**: read the original's lightmap unit filter first.
+  4. **A's pair check is mixed** (7 of 13 HD pairs toward the original, 5 away): the pairs where
+     ours is already too bright get brighter; read why those pairs are bright before blaming A.
 
 ## Next Steps
 
