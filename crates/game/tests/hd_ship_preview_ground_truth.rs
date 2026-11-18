@@ -748,6 +748,41 @@ fn ship_selects_hull_is_as_bright_as_the_original_on_both_paths() {
     assert!(live > 127.0, "the live screen's hull is {live:.2}");
 }
 
+/// The honeycomb's grey fill is not one value: the original's frame reads 43 beside the
+/// selected column and eases to 23 at the grid's edge (`HexColFade`'s 25 and a little under),
+/// where the authored `HexCol` over black is 50 everywhere. Held to the fill's own greys, which
+/// no padlock, thumbnail or text reaches below 15 or above 48; a flat grid has none of them.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images and a GPU adapter"]
+fn the_honeycomb_fill_fades_toward_the_grids_edge() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let still = ship_select_still(&image, "Feisar", "3");
+    let width = still.width as usize;
+    let mut fills = Vec::new();
+    for y in (440..860).step_by(20) {
+        for x in 160..720 {
+            let at = (y * width + x) * 4;
+            let [r, g, b] = [still.rgba[at], still.rgba[at + 1], still.rgba[at + 2]];
+            if r == g && g == b && (15..=48).contains(&r) {
+                fills.push(r);
+            }
+        }
+    }
+    let (lowest, highest) = (fills.iter().min().copied(), fills.iter().max().copied());
+    eprintln!(
+        "{} grey fill pixels, {lowest:?} to {highest:?}",
+        fills.len()
+    );
+    assert!(fills.len() > 2_000, "the grid's fills: {}", fills.len());
+    assert!(lowest.is_some_and(|v| v <= 28), "no faded fill: {lowest:?}");
+    assert!(
+        highest.is_some_and(|v| v >= 38),
+        "no fill near the selection: {highest:?}"
+    );
+}
+
 /// Omega's craft is lit by Omega's own `fe.EnvSettings`, in its own key spelling and with its
 /// sun scale: ambient `0.2 0.3 0.32` and a sun of `0.748 0.906 1` at intensity 2, which are not
 /// HD's rig. No tone stage and no halved lit output: neither is read for Omega.

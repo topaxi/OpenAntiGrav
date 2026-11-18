@@ -130,6 +130,15 @@ def check_safe_area(root):
     cm.extra_settings(locked, race={"track": "01_vineta_k"}, locked=True)
     doc = tomllib_load(ce.settings_path(locked))
     assert cm.profile_is_locked(locked) and doc["dev"]["unlock_everything"] is False and doc["race"]["track"] == "01_vineta_k"
+    # HD's menu pair script builds its profile locked: its walk starts from a profile with the locks, so Ship Select's grid draws padlocks
+    hd_script = importlib.util.spec_from_file_location("hd_menu_pair", HERE / "rpcs3-hd-menu-pair.py")
+    hd = importlib.util.module_from_spec(hd_script)
+    sys.path.insert(0, str(HERE))
+    hd_script.loader.exec_module(hd)
+    hd_profile = root / "hd-locked"
+    hd.prepare_profile(ce.platform("hd-fury"), hd_profile, 96, "FURY", None)
+    assert cm.profile_is_locked(hd_profile), "the HD menu pair script must lock ours' profile"
+    assert tomllib_load(ce.settings_path(hd_profile))["display"]["front_end_style"] == "FURY"
 
 
 def check_ps2_world_clock(root):

@@ -415,6 +415,7 @@ pub(super) fn selection_layouts(
 ) {
     let borrows_ps2_split = front_end.is_some_and(|front_end| front_end.borrows_ps2_split_screens);
     let ship_pose = front_end.and_then(|front_end| front_end.ship_preview_pose);
+    let hex_fade = front_end.and_then(|front_end| front_end.team_hex_fade);
     let track_labels = front_end.map_or(&[][..], |front_end| front_end.track_label_overrides);
     let faces = oag_ui_screens::picker::FaceScales {
         default: menu_font.map_or(
@@ -495,6 +496,9 @@ pub(super) fn selection_layouts(
                     ));
                     model.origin = pose.origin;
                     model.z = pose.z;
+                }
+                if let Some(grid) = layout.hd.as_mut().and_then(|screen| screen.hex.as_mut()) {
+                    grid.fade = hex_fade;
                 }
                 layout
             })

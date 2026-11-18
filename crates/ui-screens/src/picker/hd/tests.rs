@@ -317,6 +317,66 @@ fn the_hex_column_draws_cells_padlocks_and_the_selected_team_in_red() {
     );
 }
 
+/// With a fade the hexagon fills are shaded across each cell and ease with the column's
+/// distance from the selected one: brighter toward it, on both sides, and dimmer the further
+/// out. Without one (the layout as read) they stay the one authored colour.
+#[test]
+fn a_faded_grid_shades_each_fill_toward_the_selected_column() {
+    let mut layout = layout();
+    let picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
+    let flat = |layout: &Layout| {
+        let extra = layout.hd.as_deref().unwrap();
+        body(&picker, layout, extra, &Frame::default(), &|n| sheet(n))
+            .iter()
+            .any(|draw| matches!(draw, Draw::GradientSprite { .. }))
+    };
+    assert!(!flat(&layout), "a grid read off the disc fades nothing");
+    layout.hd.as_deref_mut().unwrap().hex.as_mut().unwrap().fade = Some(oag_title::HexFade {
+        columns: 2.22,
+        span: Some(109.0),
+    });
+    let extra = layout.hd.as_deref().unwrap();
+    let draws = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
+    // Each cell's fill: (column centre, left alpha, right alpha), over the five columns.
+    let mut cells: Vec<(f32, f32, f32)> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::GradientSprite {
+                rect, left, right, ..
+            } => Some((rect[0], left[3], right[3])),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(cells.len(), 28, "four fading columns of seven");
+    cells.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let by_column: Vec<&[(f32, f32, f32)]> = cells.chunks(7).collect();
+    let (outer_left, inner_left, inner_right, outer_right) = (
+        by_column[0][0],
+        by_column[1][0],
+        by_column[2][0],
+        by_column[3][0],
+    );
+    assert!(
+        outer_left.2 > outer_left.1,
+        "left of the selection, brighter toward it"
+    );
+    assert!(inner_left.2 > inner_left.1);
+    assert!(
+        inner_right.1 > inner_right.2,
+        "right of it, brighter on its left"
+    );
+    assert!(outer_right.1 > outer_right.2);
+    assert!(
+        inner_left.1 > outer_left.1 && inner_right.1 > outer_right.1,
+        "dimmer further out"
+    );
+    let authored = oag_ui::screen::argb_to_rgba(0x6480_8080)[3];
+    assert!(
+        inner_left.2 < authored,
+        "the grid's own colour is the selected column's"
+    );
+}
+
 #[test]
 fn the_cursor_ring_follows_the_chosen_livery_row() {
     let layout = layout();

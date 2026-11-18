@@ -4020,7 +4020,7 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 | padlock | `Padlock.gtf` (the image this screen authors at 512x512), visible art 91x129 texels drawn at 0.44; colour `SelectedLockCol` on the selected column, faded toward `SelectedLockColFade` by 0.2 and 0.65 one and two columns out (frame reads 128, 110, 68) | 70 |
 | model icon | `<modellocation>\FE\thumb<LiveryNumber>.gtf` - `Feisar_c1\FE\thumb4.gtf` for `concept1`, `Feisar\FE\thumb0.gtf` for `normal`; census: every model of every team carries one | 85 (the frame's two icons match thumb4 and thumb0) |
 | selected column | `SelectedColumnCol` drawn twice on the bare cell (the two-pass fill `Block_Render` uses): `0x64` twice over black is 160, the frame reads (151, 6, 20) | 70 |
-| neighbour columns | the same cells in `HexCol`, open rows ghosting their thumbnail in black at 0.35: **chosen, not measured** (the frame shows faint silhouettes) | - |
+| neighbour columns | the same cells in `HexCol` fading with distance (see "The honeycomb fades" below), open rows ghosting their thumbnail in black at 0.35: **chosen, not measured** (the frame shows faint silhouettes) | - |
 
 Geometry, one settled RPCS3 frame (Feisar selected, fresh profile of the
 maintainer's save): first column centre = the authored origin `x=272`, column
@@ -4058,6 +4058,37 @@ the offered rows; whether the original's cursor can rest on a locked row is
 unmeasured. Tests: `picker::hd::tests::*` (the miniature) and
 `hd_reads_its_own_team_selection` (the disc: the five colours, the origin,
 Feisar's open rows and thumbnails, every model's thumbnail on the sheet).
+
+### The honeycomb fades with the column's distance, and each cell is shaded across itself, 2026-11-18 (`hd-menu-ship`)
+
+The pair `hd/menu-ship-select` (Fury style, Feisar, Safe Area 96, one frame) shows the grey fill of the cells
+as **a function of the column, not one value**: the median fill of the plain cells (pixels where ours drew the authored 50),
+by x in 12-pixel steps, is 23, 24, 25, 27, 29, 30, 31 | 35, 37, 38, 40, 41, 42 on the left of the selected column and the
+mirror image on its right (42, 41, 39, 38, 36, 34, 31, 29, 28, 27, 25, 23); it does not vary with the row. Two things are in that:
+
+- **A step per column.** The cell centres read 38.5 one column out and 27.5 two out, 11.25 less each: `HexCol` (fill 50)
+  easing to `HexColFade` (25) at `2.22` columns (`HexColFade`'s alpha over `HexCol`'s, lerped as colours, alpha included).
+  The 5-column grid's half width, 2.5, would give 40 and 30; the two read values fit 2.2 better. Two points, one frame:
+  confidence 50. `HexFade::columns`. The track screen's grid (nine columns, `fade_columns` 4 in the entry below) is another read.
+- **A slope across each cell.** Inside a cell the fill rises toward the selected column by 0.117 per pixel (24 to 31 across the
+  cell two out, 35 to 42 across the one beside the selected column), so the step between two neighbouring cells is larger than
+  the slope inside them: each cell has its own colour at its two edges, as per-vertex colours on the sprite do, not one
+  function of x. Drawn as `Draw::GradientSprite` with the colour at the sprite's left and right edges taken from the cell's
+  column distance `-/+ x / 109` texels per column (`HexFade::span`, fitted to the 0.117 and the 11.25, confidence 50). The texture
+  is 128 wide and its visible hexagon centred on texel 37, so the edge colours are the visible edges' values extended to the
+  texture's edges.
+
+Where it lives: `oag_title::HexFade` on `oag_hd::frontend::FRONT_END` (`team_hex_fade`), applied by
+`oag_game::boot::screens` after `picker::hd::read`, which reads the grid with no fade. **The other titles are unchanged**:
+Omega's grid has none until its own frame is read, and the track screen keeps its stepped fade (`HexFade { columns: 4, span:
+None }`). The HD style's colours are the same `HexCol`; its frame is unmeasured, so the fade is inherited there. What
+the same frame still shows and is not drawn: the selected cell's ring in a lighter pink (`200, 92, 102` against our flat red), the
+red cells' (149, 6, 20) against ours (161, 0, 0), and the team card's fill at 31 where ours draws 50 (the authored
+`HD_LightGrey` `0x7f646464` over black; the original's alpha reads about `0x50`; cause unread).
+
+Tests: `picker::hd::tests::a_faded_grid_shades_each_fill_toward_the_selected_column` (the shading's direction and order),
+`hd_ship_preview_ground_truth::the_honeycomb_fill_fades_toward_the_grids_edge` (the page through the binary; 4,016 grey fill
+pixels from 15 to 42 with it, 1,082 with the wiring dropped, where the count assertion fails).
 
 ### Ship Select follows the variant, and draws what it adds in red, 2026-10-09 (hd-ship-variants)
 

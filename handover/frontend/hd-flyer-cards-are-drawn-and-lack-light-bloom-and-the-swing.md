@@ -38,7 +38,16 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
     `bBg_x_y` read, then those quads drawn into the scene layer. Small (40).
   - **Ship Select's backdrop runs the track block.** The read there is the model screens' block too; the hull is
     not in the scene (its level is a constant exposure). Putting the hull into the scene layer would give it the
-    chain's bloom and retire `FrontEndTone::adapted_fury`. Medium (40).
+    chain's bloom and retire `FrontEndTone::adapted_fury`. Medium (40). Measured 2026-11-18 (`hd-menu-ship`,
+    `front-end-model-lighting.md`, "Ship Select, per region"): the hull is 1.01 of the pair's 5.29 grey, 4 % dark
+    (red 0.91), and mostly texture detail; the backdrop inside the box is 0.83 and is the unrecorded cloud pick. So
+    this item can move about a third of the hull's share, not the pair.
+  - **Ship Select's pair was drawn with every team open, and its honeycomb is not flat.** LANDED 2026-11-18
+    (`hd-menu-ship`): the HD menu pair script now locks ours' profile (5.72 to 5.09) and the honeycomb fades with the
+    column's distance, each cell shaded across (`oag_title::HexFade`, 5.09 to 4.55; `campaign-screens.md`, "The
+    honeycomb fades"). Open from the same frame: the selected cell's ring (`200, 92, 102`) and red (149, 6, 20), and
+    the team card's fill, 31 in the original against ours' 50 (alpha about `0x50` against the authored `0x7f`).
+    Small (60).
   - Track Select, Racebox and Options: which block their screens load is unread (the loader's other callers).
 - **The back card** draws on `Cell Selection` face-on (`CELL_POSE`, rectangle
   measured, `BACK_STRETCH` chosen); its wordmark glow draws (the chain's bloom). The wordmark stands 6 pixels right

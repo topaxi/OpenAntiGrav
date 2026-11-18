@@ -332,6 +332,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     )),
     borrows_ps2_split_screens: true,
     model_lighting: None,
+    team_hex_fade: None,
 };
 
 /// The bulk archive's candidates, in the order they are tried.
