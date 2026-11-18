@@ -165,6 +165,11 @@ from the original.
 Crates (`crates/<name>`; the full table and reasoning:
 [`docs/architecture/workspace-layout.md`](docs/architecture/workspace-layout.md)).
 Add a crate only when its milestone opens; no placeholder crates.
+**Every crate has a short `README.md` in its root, and a new crate lands with
+one**: what the crate is for in a few lines, plus the relations that matter
+(its layer, what it must not depend on, the crate it complements). No
+dependency lists, API tables or status: `Cargo.toml`, rustdoc and `docs/`
+carry those, and a README that repeats them drifts.
 
 | Crate | Purpose |
 | --- | --- |
