@@ -113,7 +113,7 @@ TEST_LIMIT = 500
 # ratchet at 11,294 lines, dropped to 7,751 when its test module moved out, and
 # was split along its own seams on 2026-08-16 into `race.rs` plus twenty-four
 # modules under `crates/raceplay/src/`. `main.rs` followed it the same day:
-# 4,808 lines into 430 plus eighteen modules under `crates/game/src/app/`.
+# 4,808 lines into 430 plus eighteen modules under `crates/game/src/main/`.
 BASELINE = {
 }
 
