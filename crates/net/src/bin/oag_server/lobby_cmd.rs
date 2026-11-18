@@ -52,8 +52,11 @@ pub struct Args {
     /// Write the lobby's certificate hash to this file as well as printing it.
     #[arg(long)]
     hash_out: Option<std::path::PathBuf>,
-    /// The ban list for players who host a race: lines `key <64 hex> [reason]` or
-    /// `addr <ip> [reason]`, read again when the file changes.
+    /// The moderation file for players who host a race: lines `key <64 hex> <date> [until
+    /// <date>] [reason]` or `addr <ip> <date> [until <date>] [reason]` (no `until`: permanent),
+    /// each date a UTC stamp (`2026-11-18T12:34:56.000Z`), read again when the file changes. The
+    /// lobby appends a `strike` line for each proven cheat and a timed `key` ban when a key's
+    /// strikes reach the threshold (`oag_net::online::moderation`).
     #[arg(long)]
     ban_file: Option<std::path::PathBuf>,
     /// The base of the races' seeds.
@@ -92,6 +95,16 @@ pub fn run(args: &Args) -> Result<()> {
         join_timeout: Duration::from_secs(args.join_timeout),
         max_ticks: args.max_ticks.unwrap_or(Limits::default().max_ticks),
     };
+    // The lobby re-simulates a reported player-hosted race from the job it issued, with the
+    // same load a race child does (no renderer: `oag-raceplay` without `view`).
+    let referee_images = images.clone();
+    let referee: oag_net::online::race_proc::Loader = std::sync::Arc::new(move |params| {
+        let (_, image) = referee_images
+            .iter()
+            .find(|(title, _)| *title == params.title)
+            .ok_or_else(|| anyhow::anyhow!("no image for {}", params.title))?;
+        oag_net::race::load(params, image).map(|(race, _)| race)
+    });
     let runner = ChildRunner {
         program: std::env::current_exe().context("finding this binary to run races with")?,
         images,
@@ -116,6 +129,7 @@ pub fn run(args: &Args) -> Result<()> {
         },
         Box::new(runner),
     )?;
+    server.set_referee(referee);
     println!("lobby listening on {}", server.local_addr());
     println!("race port {}", args.race_listen.port());
     println!("lobby cert-hash {}", server.cert_hash_hex());

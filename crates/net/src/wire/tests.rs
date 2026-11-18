@@ -76,6 +76,11 @@ fn every_control_message_round_trips() {
             reason: "every person has finished".into(),
             board: sample_board(),
         },
+        Control::Checkpoint {
+            ticks: 120,
+            chain: [3; 32],
+            signature: [4; 64],
+        },
     ];
     for message in messages {
         assert_eq!(Control::decode(&message.encode()), Ok(message.clone()));
@@ -88,9 +93,18 @@ fn every_datagram_round_trips_with_the_exact_bits() {
         seat: 3,
         first: 99,
         inputs: vec![held(5, f32::MIN_POSITIVE), held(6, -0.3333333)],
+        signature: None,
     };
     let decoded = Datagram::decode(&inputs.encode()).expect("parses");
     assert_eq!(decoded, inputs);
+    let signed = Datagram::Inputs {
+        seat: 3,
+        first: 99,
+        inputs: vec![held(5, 0.5)],
+        signature: Some([0xA5; 64]),
+    };
+    assert_eq!(signed.encode().len(), 1 + 1 + 4 + 1 + Held::BYTES + 64);
+    assert_eq!(Datagram::decode(&signed.encode()), Ok(signed));
     let Datagram::Inputs { inputs: back, .. } = decoded else {
         unreachable!()
     };

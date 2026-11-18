@@ -7,7 +7,9 @@
 //! address. The claims: both race Pulse's circuit 01 (one lap) to the finish with no bad hash
 //! and the lobby, which ran no race, is told the result; a host that is killed ends the race
 //! for the guest with the lobby's reason; a host whose key is on the lobby's ban file is
-//! refused with the ban's reason.
+//! refused with the ban's reason; a host that alters its race (the tests' own build cheats on
+//! `OAG_TEST_CHEAT`) is reported by the guest, proven by the lobby's re-simulation and struck
+//! with a dated line but not banned (one strike is no ban), and the guest is told why (ADR-0092, "The anti-cheat path").
 //!
 //! The games are spawned by `net_rejoin_ground_truth::Lab` (`CARGO_BIN_EXE_oag-game`), so this
 //! module is in nextest's `gpu-vram` group like that one.
@@ -141,7 +143,11 @@ fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
         .expect("a key is made");
     let bans = scratch.join("bans.txt");
     let hex: String = key.public().iter().map(|b| format!("{b:02x}")).collect();
-    std::fs::write(&bans, format!("key {hex} altered a race\n")).expect("the ban file");
+    std::fs::write(
+        &bans,
+        format!("key {hex} 2026-11-18T00:00:00.000Z altered a race\n"),
+    )
+    .expect("the ban file");
     let bans = bans.display().to_string();
     let lab = Lab::with_lobby_args("hosted-banned", image, 20_000, &["--ban-file", &bans]);
     let profile = lab.dir.join("a").join("config").join("oag");
@@ -164,6 +170,72 @@ fn a_host_whose_profile_key_is_on_the_ban_file_is_refused_with_the_reason() {
         !lab.read("lobby").contains("hosts room"),
         "nothing was listed"
     );
+}
+
+#[test]
+#[ignore = "needs a disc image"]
+fn a_host_that_alters_its_race_is_proven_by_the_lobby_and_struck_and_the_guest_is_told_why() {
+    let Some(image) = image() else {
+        return;
+    };
+    let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("hosted-cheat-bans");
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(&scratch).expect("a scratch directory");
+    let bans = scratch.join("bans.txt");
+    let bans = bans.display().to_string();
+    let lab = Lab::with_lobby_args("hosted-cheat", image, 20_000, &["--ban-file", &bans]);
+    // The host's game is the tests' own build, which cheats when asked (`oag_net::host::Cheat`):
+    // its own craft moves further than the simulation moves it from tick 300 on.
+    let a = lab.client_env("a", true, &HOST_ARGS, &[("OAG_TEST_CHEAT", "speed")]);
+    lab.wait("the lobby to list the hosted room", 90, |lab| {
+        lab.read("a")
+            .contains("online: room 1 (player-hosted): 1 in it")
+    });
+    let mut b = lab.client_with("b", false, &[]);
+    lab.wait("the guest to be told the host was caught", 240, |lab| {
+        lab.read("b").contains("online: the lobby closed the room:")
+    });
+    let guest = lab.read("b");
+    assert!(
+        guest.contains("online: reporting the host to the lobby: Desync"),
+        "the guest reported:\n{}",
+        tail(&guest)
+    );
+    assert!(
+        guest.contains("its host was caught cheating"),
+        "the guest is told why:\n{}",
+        tail(&guest)
+    );
+    let lobby = lab.read("lobby");
+    assert!(
+        lobby.contains("\"b\"'s report is proven") && lobby.contains("gets a strike (1 of 2"),
+        "the lobby proved it:\n{}",
+        tail(&lobby)
+    );
+    let key = oag_game::identity::load_or_create_at(
+        &lab.dir
+            .join("a")
+            .join("config")
+            .join("oag")
+            .join("identity.toml"),
+    )
+    .expect("the host's key");
+    let hex: String = key.public().iter().map(|b| format!("{b:02x}")).collect();
+    let written = std::fs::read_to_string(&bans).expect("the strike was written");
+    assert!(
+        written
+            .lines()
+            .any(|line| line.starts_with(&format!("strike {hex} 20")) && line.contains(" by ")),
+        "the host's key is struck with its date and reporter: {written}"
+    );
+    assert!(
+        !written.lines().any(|line| line.starts_with("key ")),
+        "one proven case bans nobody: {written}"
+    );
+    assert!(!lobby.contains("banned for"), "{}", tail(&lobby));
+    let status = b.finish(60);
+    assert!(status.is_some(), "the guest's race ended by itself");
+    drop(a);
 }
 
 fn tail(log: &str) -> &str {

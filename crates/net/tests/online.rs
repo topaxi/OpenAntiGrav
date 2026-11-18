@@ -92,16 +92,22 @@ impl Lab {
     }
 
     pub(crate) fn join(&mut self, name: &str) -> usize {
+        self.join_keyed(name, [0; 32])
+    }
+
+    /// [`Self::join`] naming the player's public `key` in the hello.
+    pub(crate) fn join_keyed(&mut self, name: &str, key: [u8; 32]) -> usize {
         let link = oag_net::wt::connect(
             &self.server.local_addr().to_string(),
             self.server.cert_hash(),
         )
         .expect("connects to the lobby");
-        self.people.push(LobbyClient::connect(
+        self.people.push(LobbyClient::connect_keyed(
             Box::new(link) as Box<dyn Link>,
             name,
             &[edition()],
             "",
+            key,
         ));
         let who = self.people.len() - 1;
         self.until("the welcome", |lab| lab.people[who].welcomed());

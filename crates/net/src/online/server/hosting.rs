@@ -5,6 +5,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 use std::sync::mpsc;
+use std::time::SystemTime;
 
 use web_time::{Duration, Instant};
 
@@ -38,8 +39,8 @@ const HOSTED_RACE_LIMIT: Duration = Duration::from_secs(35 * 60);
 
 /// A player whose offer verified and whose port answered.
 pub(super) struct HostRec {
-    key: [u8; 32],
-    addr: SocketAddr,
+    pub(super) key: [u8; 32],
+    pub(super) addr: SocketAddr,
     cert_hash: [u8; 32],
 }
 
@@ -54,11 +55,13 @@ pub(super) struct Probe {
 
 /// A race a player's machine runs for a room.
 pub(super) struct HostedRace {
-    host: ClientId,
+    pub(super) host: ClientId,
     /// `(client, name, seat token)` by seat.
     pub(super) seats: Vec<(ClientId, String, String)>,
+    /// `crate::fair::params_hash` of the job: what the hand-off carries.
+    pub(super) hash: [u8; 32],
     up: bool,
-    launched: Instant,
+    pub(super) launched: Instant,
     /// When the host last said it is up: it says so once a second while the race runs.
     heard: Instant,
 }
@@ -71,7 +74,17 @@ fn host_part(addr: IpAddr) -> String {
     }
 }
 
-fn short(key: &[u8; 32]) -> String {
+/// A seed from the system's random source.
+fn random_seed() -> u64 {
+    use ring::rand::SecureRandom;
+    let mut bytes = [0u8; 8];
+    ring::rand::SystemRandom::new()
+        .fill(&mut bytes)
+        .expect("the system's random source works");
+    u64::from_le_bytes(bytes)
+}
+
+pub(super) fn short(key: &[u8; 32]) -> String {
     crate::wt::hex(&key[..8])
 }
 
@@ -108,8 +121,8 @@ impl Server {
             let text = "the hosting offer is not signed for this lobby and session".into();
             return self.refuse_host(id, Refusal::BadHost, text);
         }
-        if let Some(reason) = self.bans.bans().banned(&offer.key, ip) {
-            let text = format!("you may not host on this lobby: {reason}");
+        if let Some(refused) = self.bans.bans().banned(&offer.key, ip, SystemTime::now()) {
+            let text = format!("you may not host on this lobby: {refused}");
             return self.refuse_host(id, Refusal::Banned, text);
         }
         if let Err((code, text)) = self.rooms.vet_hosted(id, &settings) {
@@ -221,13 +234,34 @@ impl Server {
             .iter()
             .map(|(id, name)| (*id, name.clone(), token()))
             .collect();
+        // The lobby draws the seed, so the host cannot pick one that suits it (ADR-0092, "The
+        // anti-cheat path", item 1).
+        let mut params = launch.params;
+        params.seed = random_seed();
         let job = RaceJob {
-            params: launch.params,
+            params,
             seats: seats
                 .iter()
                 .map(|(_, n, t)| (n.clone(), t.clone()))
                 .collect(),
+            keys: seats
+                .iter()
+                .map(|(id, _, _)| self.clients.get(id).map_or([0; 32], |c| c.key))
+                .collect(),
         };
+        let hash = crate::fair::params_hash(&job.params);
+        let race_params = job.params.clone();
+        if let Some(rec) = self.hosts.get(&host) {
+            let seated = seats
+                .iter()
+                .zip(&job.keys)
+                .map(|((id, name, _), key)| (*id, name.clone(), *key))
+                .collect();
+            self.referee.races.insert(
+                room,
+                super::referee::RaceCase::new(host, rec.key, rec.addr, race_params, seated),
+            );
+        }
         log::info!(
             "host-log: room {room} races on its host's machine: {:?}",
             job.params
@@ -240,6 +274,7 @@ impl Server {
             HostedRace {
                 host,
                 seats,
+                hash,
                 up: false,
                 launched: Instant::now(),
                 heard: Instant::now(),
@@ -258,6 +293,8 @@ impl Server {
             cert_hash: host.cert_hash,
             token: token.clone(),
             name: name.clone(),
+            params: race.hash,
+            host_key: host.key,
         })
     }
 
@@ -272,6 +309,9 @@ impl Server {
             return;
         }
         race.up = true;
+        if let Some(case) = self.referee.races.get_mut(&room) {
+            case.up = Some(Instant::now());
+        }
         let seats: Vec<ClientId> = race.seats.iter().map(|(seat, _, _)| *seat).collect();
         for seat in seats {
             if let (Some(message), Some(client)) =
@@ -352,11 +392,12 @@ impl Server {
             }
         }
         if self.bans.refresh() {
+            let now = SystemTime::now();
             let banned: Vec<(u32, String, [u8; 32], SocketAddr)> = self
                 .hosts
                 .iter()
                 .filter_map(|(id, host)| {
-                    let reason = self.bans.bans().banned(&host.key, host.addr.ip())?;
+                    let reason = self.bans.bans().banned(&host.key, host.addr.ip(), now)?;
                     Some((
                         self.rooms.hosted_by(*id)?,
                         reason.to_string(),

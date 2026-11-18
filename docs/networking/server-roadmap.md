@@ -673,10 +673,38 @@ and how to run it is in [the online lobby](online-lobby.md), part 12. In this pa
   lobby. UPnP, hole punching and a capped relay are later, in that order.
 - **When the host leaves, the race ends** with a reason on every guest's screen; the journal
   (decision 1) is what would let it move instead.
-- **Moderation** is a ban file by key and address and a `host-log:` line per event.
-- **Not built:** the anti-cheat path (the params hash in the hand-off, signed checkpoints, the
-  lobby's re-simulation, signed inputs), a report row, a random seed (today's is predictable
-  from the room id, for every race), the server's own second race slot.
+- **Moderation** is one text file by key and address and a `host-log:` line per event. A proven
+  cheat is a strike, not a ban: two strikes from distinct races and reporters within a week ban
+  the key for an hour, doubling per later ban up to 30 days (ADR-0092 decision 6). The lobby
+  keeps the history in the file (one line a strike, one a ban), so it grows by about 250 bytes a
+  proven case; nothing prunes it yet.
+- **The anti-cheat path is built** (2026-11-18, ADR-0092 decision 7 items 1 to 4; how it works
+  and its limits: [the online lobby](online-lobby.md#anti-cheat-built-2026-11-18)). A hosted
+  race's seed is drawn at random by the lobby; a server race's is still predictable from the
+  room id, which matters only for a race the lobby does not run.
+- **Not built:** a report row on the room screen, the server's own second race slot, decision
+  8's resync (a client reports at its first mismatch a checkpoint covers instead).
+
+### Anti-cheat: what it costs
+
+Measured 2026-11-18 on the desktop, `oag-net`'s test build (opt-level 2), load average about 9
+(another member's gate), by the `OAG_SWEEP` sweep
+`net_ground_truth::sweep_what_judging_a_five_minute_hosted_race_costs_the_lobby`: 18,000 ticks
+(five minutes) of two people on Pulse's circuit 01.
+
+| | Value | Kind |
+| --- | --- | --- |
+| Proof of a five-minute, two-person race | 882,119 bytes (49 bytes a tick; 249 at twelve seats, 4.5 MB) | measured / arithmetic |
+| The lobby's decode and chain check of it | 13 ms | measured |
+| Loading the race to re-simulate | 0.42 s | measured |
+| Re-simulating 18,000 ticks | 0.87 s | measured |
+| Lobby memory for one judgement | +33 to +36 MiB RSS while it runs (one race, as a race child) | measured |
+| Lobby memory for reports, worst case | 64 MiB of proofs held at once (`MAX_HELD_BYTES`), so about 100 MB with the race being judged | chosen bound |
+| Ed25519 check of one signed input datagram | 32 microseconds; 660 a second for eleven guests is about 2 % of a core on the host | measured |
+| Signed inputs, up | +64 bytes a datagram (167 to 231 at eight inputs), +3.84 KB/s a client at 60 Hz, on server races too (a client signs whenever it has a key) | arithmetic, datagram size asserted in `wire::tests` |
+| Host memory for the signed inputs it keeps | two minutes a seat, about 2 MB | arithmetic |
+| Checkpoints, down | 101 bytes a second a seat (plus the stream's 4-byte length) | arithmetic |
+| The lobby's bounds | one report a seat a race; 2 assembling, 4 queued, 1 judging; a proof no longer than the ticks the race can have run plus 600; 60 s to re-simulate; 10 s to answer a challenge | chosen |
 
 ## Infrastructure
 

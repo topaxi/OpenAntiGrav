@@ -60,6 +60,16 @@ pub struct Connect {
     /// came from a lobby.
     #[cfg(not(target_arch = "wasm32"))]
     pub lobby: Option<crate::online::LobbyWord>,
+    /// What a race from a lobby is held to ([`Pending::guard`]): the hash of the race the lobby
+    /// issued, all zero for none.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub params: [u8; 32],
+    /// A player host's public key, all zero for a server or a plain `--connect`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub host_key: [u8; 32],
+    /// The profile's key, which signs this seat's inputs in a player-hosted race.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub signer: Option<std::sync::Arc<oag_net::online::hostkey::PlayerKey>>,
 }
 
 /// A connection to a server and the client half of the protocol.
@@ -152,6 +162,23 @@ impl Pending {
             label: label.to_string(),
             seat,
             dialer: None,
+        }
+    }
+
+    /// Holds the host to the race the lobby issued (`params`), to a player host's signed
+    /// checkpoints (`host_key`, all zero for a server), and signs this seat's inputs with
+    /// `signer` in a player-hosted race
+    /// (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
+    /// "The anti-cheat path").
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn guard(
+        &mut self,
+        params: [u8; 32],
+        host_key: [u8; 32],
+        signer: Option<std::sync::Arc<oag_net::online::hostkey::PlayerKey>>,
+    ) {
+        if let Some(client) = self.client.as_mut() {
+            client.guard(params, host_key, signer);
         }
     }
 
@@ -289,6 +316,7 @@ impl NetPlay {
             &args.addr,
             Some((rejoin, args.shim)),
         );
+        pending.guard(args.params, args.host_key, args.signer.clone());
         let asked = Instant::now();
         loop {
             if let Some(net) = pending.poll()? {
@@ -429,6 +457,15 @@ impl NetPlay {
         self.heed_lobby();
         self.redial_step();
         let ticks = self.client.borrow_mut().step(race, &own);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(word) = self.lobby.borrow().as_ref()
+            && let Some(proof) = self.take_report()
+        {
+            word.reports
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .push(proof);
+        }
         self.keep_record();
         self.log_second(race);
         if self.over().is_some() && !self.board_printed.replace(true) {
@@ -441,6 +478,17 @@ impl NetPlay {
         }
         self.check_server_board(race);
         ticks
+    }
+
+    /// The case against a player host this client found, once (the lobby judges it).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn take_report(&self) -> Option<oag_net::fair::Proof> {
+        let proof = self.client.borrow_mut().take_report()?;
+        println!(
+            "net: the host's race does not hold up ({:?} up to tick {}): reporting it to the lobby",
+            proof.claim, proof.checkpoint.ticks
+        );
+        Some(proof)
     }
 
     /// The lobby says the room closed under this race (its host left, or was banned): the race

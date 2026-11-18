@@ -28,6 +28,8 @@ pub mod client;
 pub mod discovery;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod extract;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod fair;
 pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod lan;

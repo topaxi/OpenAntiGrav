@@ -8,7 +8,8 @@ per player is enough identity for version one; a player-hosted race's results ar
 with server races. It builds on [ADR-0070](0070-the-network-transport-is-webtransport.md) (the
 transport) and on decisions 1, 3 and 8 of
 [the server roadmap](../../networking/server-roadmap.md). Every choice here is **chosen, not
-measured**.
+measured**. Decisions 6 and 7 were edited in place on 2026-11-18 (strikes before a ban, timed
+bans), which a `Proposed` ADR allows.
 
 ## Context
 
@@ -103,9 +104,20 @@ port, or a server slot that is free.
 
 Version one:
 
-- **A ban list as a file** (`oag-server lobby --ban-file`): lines `key <64 hex> [reason]` and
-  `addr <ip> [reason]`, re-read when it changes. A banned host is refused with the reason; a room
-  whose host is banned while it is listed is closed. Bans cover hosting only.
+- **A moderation file** (`oag-server lobby --ban-file`): lines `key <64 hex> <date> [until
+  <date>] [reason]` and `addr <ip> <date> [until <date>] [reason]`, each date a UTC stamp, the
+  first when the ban was made; a line with no `until` is permanent (the form an operator writes),
+  one with `until` ends then. The lobby also appends `strike` lines (decision 7, item 3). The
+  file is re-read when it changes. A banned host is refused with the reason and the time left; a
+  room whose host is banned while it is listed is closed. Bans cover hosting only.
+- **A proven case is a strike, not a ban** (maintainer, 2026-11-18: "Could anti cheat not
+  instant ban one occurrence? Maybe after 2-3 clients / lobbies disagree? We can always tighten
+  later. Expiry: first offense one hour, then increase exponentially."). A key is banned once two
+  of its strikes within seven days come from distinct races, each reported by a different player
+  (`STRIKES_TO_BAN`, `STRIKE_WINDOW`). The lobby's n-th ban on a key lasts one hour doubled n - 1
+  times, at most 30 days; the strikes a ban was made on do not count again, and the history stays
+  in the file so the next ban is longer. The thresholds are one constant each, to tighten later;
+  the reasoning is in `oag_net::online::moderation`.
 - **A host log**: one `host-log` line in the lobby's log per registration, refusal, launch and
   end, with the key, address, name, room and settings.
 - The operator's "command" is editing the file.
@@ -114,9 +126,15 @@ Later: a REPORT row on a player-hosted room (a count without a proof is weak evi
 waits for decision 7 below), `oag-server` subcommands over a control socket, an account-bound key
 if a new key per ban becomes a problem (outside the roadmap).
 
-### 7. The anti-cheat path (design only)
+### 7. The anti-cheat path
 
-State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes it needs:
+State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes it needs. Items 1
+to 4 are built (2026-11-18; [the online lobby](../../networking/online-lobby.md#anti-cheat-built-2026-11-18)
+has the messages, bounds and tests); item 5 is not. Two details the build settled: a client
+reports at the first mismatch a verified checkpoint covers, since decision 8's resync is not
+built; and a client judges an input "never sent" from the first tick it sent, so a game that
+skipped a tick (its present behind) still sees a forgery there, and one that came back in a new
+process judges nothing before it sent.
 
 1. **The lobby is the reference for the race.** It issues the job, so the hand-off carries a hash
    of the job's `RaceParams` and a client refuses a host whose welcome differs. This also settles
@@ -129,7 +147,7 @@ State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes
    its player key. A client that cannot reproduce a checkpointed state hash after decision 8's
    resync sends the lobby the tick records since tick 0 and the signed checkpoint.
 3. **The lobby re-simulates** from the job it issued (about a second for a five-minute race) and
-   bans on a proven mismatch. Where it lacks the content, agreeing reports from several members
+   strikes the host's key on a proven mismatch (decision 6 turns strikes into a ban). Where it lacks the content, agreeing reports from several members
    are evidence, not proof.
 4. **Player-signed inputs.** Each client signs each input datagram with its own key (one
    signature per datagram, about 4 KB/s up). A client that sees an input confirmed for its seat
@@ -147,8 +165,8 @@ State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes
 | Identity | key pair per player, signed registration | account-bound key |
 | Mark | list and room, one line | region and round trip to the host |
 | Host leaves | race ends with a reason | the journal moves to another host |
-| Moderation | ban file, host log | report, operator commands |
-| Anti-cheat | hash comparison every tick (already there) | params hash, signed checkpoints, fraud proof, signed inputs |
+| Moderation | moderation file (strikes, timed and permanent bans), host log | report, operator commands |
+| Anti-cheat | params hash, signed checkpoints, fraud proof and re-simulation, signed inputs (built 2026-11-18) | withheld-input statistics as evidence, commit-reveal seed for a race with no lobby |
 
 ## Consequences
 
@@ -157,8 +175,11 @@ State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes
   a refusal that names the port.
 - The other players' addresses are visible to the host and the host's to them. A server race
   shows a player's address to the server only.
-- A host that cheats in the simulation is noticed by every honest client and nothing more happens
-  in version one than a logged bad hash: the mark is the whole defence.
+- A host that alters the simulation, forges a guest's input or races another job than the lobby
+  issued is caught: the client refuses the job, or the lobby proves the case from the client's
+  records and the host's signed checkpoint and strikes the key; two strikes from two races and
+  two reporters ban it for an hour, doubling with each later ban. Proving needs the lobby to have the
+  content; without it a report is evidence only.
 - A banned player makes a new key; the address ban is a speed bump. Accepted by the maintainer.
 - The lobby now dials out (the probe). It is bounded and aims only at the registrant, but it is a
   new kind of traffic for the server's firewall.

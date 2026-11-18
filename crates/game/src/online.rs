@@ -23,12 +23,14 @@ use crate::net_play::Connect;
 /// ([`crate::net_play::NetPlay`]) in a `--online` run.
 #[derive(Debug, Default)]
 pub struct LobbyLine {
-    /// The lobby closed the room under this person (its host left, or was banned), and why:
-    /// said from outside the race, it ends the race.
+    /// The lobby closed the room under this person (its host left, was caught cheating, or was
+    /// banned), and why: said from outside the race, it ends the race.
     pub closed: Mutex<Option<String>>,
     /// This machine hosts the race and has not yet told the lobby how it ended: a process
     /// that is about to exit waits a moment for this, so the room gets its board.
     pub unreported: std::sync::atomic::AtomicBool,
+    /// Cases against the race's host the race found, for the lobby to judge.
+    pub reports: Mutex<Vec<oag_net::fair::Proof>>,
 }
 
 /// A [`LobbyLine`] as its two ends hold it.
@@ -78,6 +80,12 @@ impl Hosting {
         })
     }
 
+    /// Signs each hosted race's checkpoints with the profile's `key`, and takes a seat's inputs
+    /// only signed by its own player's key.
+    pub fn sign_with(&mut self, key: Arc<oag_net::online::hostkey::PlayerKey>) {
+        self.host.sign_with(key);
+    }
+
     /// The port the listener is on.
     #[must_use]
     pub fn port(&self) -> u16 {
@@ -119,6 +127,19 @@ impl Hosting {
                 job,
                 Arc::new(move |params| oag_net::race::load(params, &source).map(|(race, _)| race)),
             );
+        }
+        // The lobby's challenges: the signed datagram behind an input a seat says it never sent.
+        for (room, seat, tick) in lobby.take_challenges() {
+            let datagram = self.host.show_input(seat, tick);
+            log::debug!(
+                "online: the lobby asks for seat {seat}'s input of tick {tick}: {}",
+                if datagram.is_empty() {
+                    "none kept"
+                } else {
+                    "shown"
+                }
+            );
+            lobby.show_input(room, seat, tick, datagram);
         }
         while let Some(event) = self.host.poll() {
             match event {
@@ -224,11 +245,14 @@ pub fn run(plan: &Plan) -> Result<Connect> {
     let link = oag_net::wt::connect(&plan.addr, plan.cert_hash)?;
     let lobby_peer = link.peer().ip();
     let mut hosting = None::<Hosting>;
-    let mut lobby = LobbyClient::connect(
+    // Every online player has a key: a player-hosted race takes only signed inputs.
+    let key = Arc::new(crate::identity::load_or_create()?);
+    let mut lobby = LobbyClient::connect_keyed(
         Box::new(link) as Box<dyn Link>,
         &plan.name,
         &plan.titles,
         "",
+        key.public(),
     );
     let started = Instant::now();
     let mut stage = 0;
@@ -264,6 +288,9 @@ pub fn run(plan: &Plan) -> Result<Connect> {
                 name: handoff.name,
                 token: handoff.token,
                 lobby: Some(word),
+                params: handoff.params,
+                host_key: handoff.host_key,
+                signer: Some(key),
             });
         }
         if stage == 0 && lobby.welcomed() {
@@ -274,8 +301,8 @@ pub fn run(plan: &Plan) -> Result<Connect> {
             stage = 1;
             match (&plan.action, &plan.host) {
                 (Action::Create(settings), Some((source, port))) => {
-                    let opened = Hosting::open(source, *port, lobby_peer)?;
-                    let key = crate::identity::load_or_create()?;
+                    let mut opened = Hosting::open(source, *port, lobby_peer)?;
+                    opened.sign_with(key.clone());
                     println!(
                         "online: hosting on UDP port {}, asking the lobby to check it",
                         opened.port()
@@ -365,6 +392,18 @@ fn keep_lobby_open(mut lobby: LobbyClient, mut hosting: Option<Hosting>, word: L
                     word.unreported
                         .store(false, std::sync::atomic::Ordering::Relaxed);
                 }
+                let reports = std::mem::take(
+                    &mut *word
+                        .reports
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner),
+                );
+                if let Some(room) = lobby.room.as_ref().map(|room| room.id) {
+                    for proof in reports {
+                        println!("online: reporting the host to the lobby: {:?}", proof.claim);
+                        lobby.queue_report(room, &proof.encode());
+                    }
+                }
                 if let Some(reason) = lobby.left.take() {
                     println!("online: the lobby closed the room: {reason}");
                     *word
@@ -398,6 +437,8 @@ mod tests {
             cert_hash: [0; 32],
             token: String::new(),
             name: String::new(),
+            params: [0; 32],
+            host_key: [0; 32],
         }
     }
 

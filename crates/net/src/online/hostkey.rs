@@ -66,14 +66,20 @@ impl PlayerKey {
         cert_hash: [u8; 32],
     ) -> HostOffer {
         let statement = HostOffer::statement(lobby, token, port, &cert_hash);
-        let mut signature = [0; 64];
-        signature.copy_from_slice(self.pair.sign(&statement).as_ref());
         HostOffer {
             port,
             cert_hash,
             key: self.public(),
-            signature,
+            signature: self.sign(&statement),
         }
+    }
+
+    /// This key's signature over `statement`.
+    #[must_use]
+    pub fn sign(&self, statement: &[u8]) -> [u8; 64] {
+        let mut signature = [0; 64];
+        signature.copy_from_slice(self.pair.sign(statement).as_ref());
+        signature
     }
 }
 
@@ -89,8 +95,14 @@ impl std::fmt::Debug for PlayerKey {
 #[must_use]
 pub fn verify(offer: &HostOffer, lobby: &[u8; 32], token: &str) -> bool {
     let statement = HostOffer::statement(lobby, token, offer.port, &offer.cert_hash);
-    UnparsedPublicKey::new(&ED25519, &offer.key)
-        .verify(&statement, &offer.signature)
+    signed_by(&offer.key, &statement, &offer.signature)
+}
+
+/// Whether `signature` is `key`'s over `statement`.
+#[must_use]
+pub fn signed_by(key: &[u8; 32], statement: &[u8], signature: &[u8; 64]) -> bool {
+    UnparsedPublicKey::new(&ED25519, key)
+        .verify(statement, signature)
         .is_ok()
 }
 

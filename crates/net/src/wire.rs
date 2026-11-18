@@ -76,7 +76,7 @@ impl Held {
         .sanitised()
     }
 
-    fn put(self, out: &mut Vec<u8>) {
+    pub(crate) fn put(self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.buttons.to_le_bytes());
         for axis in [
             self.stick_x,
@@ -88,7 +88,7 @@ impl Held {
         }
     }
 
-    fn take(reader: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
+    pub(crate) fn take(reader: &mut Reader<'_, Le>) -> Result<Self, Malformed> {
         Ok(Self {
             buttons: reader.u32()?,
             stick_x: reader.f32()?,
@@ -195,6 +195,16 @@ pub enum Control {
     },
     /// Server to client: confirmed ticks, in reply to [`Self::Resend`].
     Ticks(Confirmed),
+    /// Host to client, once a second in a player-hosted race: the host's signature over the
+    /// running hash of the first `ticks` confirmed records (`crate::fair::Checkpoint`).
+    Checkpoint {
+        /// How many records the chain covers.
+        ticks: u32,
+        /// The running hash after them.
+        chain: [u8; 32],
+        /// The host's player key over the checkpoint statement.
+        signature: [u8; 64],
+    },
     /// Either way: the race is over or the peer is leaving.
     End {
         /// Why.
@@ -240,6 +250,9 @@ pub enum Datagram {
         first: u32,
         /// One input per tick from `first`.
         inputs: Vec<Held>,
+        /// The sender's player key over `crate::fair::input_statement`, in a player-hosted
+        /// race; `None` elsewhere.
+        signature: Option<[u8; 64]>,
     },
     /// Server to client: the newest confirmed ticks (several, for the same
     /// reason), and how far ahead of the server this client's input is arriving.
@@ -363,7 +376,7 @@ impl Confirmed {
 }
 
 impl RaceParams {
-    fn put(&self, out: &mut Vec<u8>) {
+    pub(crate) fn put(&self, out: &mut Vec<u8>) {
         for text in [
             &self.title,
             &self.track,
@@ -487,6 +500,16 @@ impl Control {
                 put_string(&mut out, reason);
                 board.put(&mut out);
             }
+            Self::Checkpoint {
+                ticks,
+                chain,
+                signature,
+            } => {
+                out.push(9);
+                out.extend_from_slice(&ticks.to_le_bytes());
+                out.extend_from_slice(chain);
+                out.extend_from_slice(signature);
+            }
         }
         out
     }
@@ -533,6 +556,18 @@ impl Control {
                 reason: reader.string()?,
                 board: board::Board::take(&mut reader)?,
             },
+            9 => {
+                let ticks = reader.u32()?;
+                let mut chain = [0; 32];
+                chain.copy_from_slice(reader.take(32)?);
+                let mut signature = [0; 64];
+                signature.copy_from_slice(reader.take(64)?);
+                Self::Checkpoint {
+                    ticks,
+                    chain,
+                    signature,
+                }
+            }
             _ => return Err(Malformed("unknown control message")),
         };
         reader.end()?;
@@ -550,13 +585,17 @@ impl Datagram {
                 seat,
                 first,
                 inputs,
+                signature,
             } => {
-                out.push(0x10);
+                out.push(if signature.is_some() { 0x12 } else { 0x10 });
                 out.push(*seat);
                 out.extend_from_slice(&first.to_le_bytes());
                 out.push(u8::try_from(inputs.len()).unwrap_or(u8::MAX));
                 for held in inputs.iter().take(usize::from(u8::MAX)) {
                     held.put(&mut out);
+                }
+                if let Some(signature) = signature {
+                    out.extend_from_slice(signature);
                 }
             }
             Self::Confirmed { lead, confirmed } => {
@@ -576,17 +615,25 @@ impl Datagram {
     pub fn decode(bytes: &[u8]) -> Result<Self, Malformed> {
         let mut reader = Reader::new(bytes);
         let message = match reader.u8()? {
-            0x10 => {
+            tag @ (0x10 | 0x12) => {
                 let seat = reader.u8()?;
                 let first = reader.u32()?;
                 let count = usize::from(reader.u8()?);
                 let inputs = (0..count)
                     .map(|_| Held::take(&mut reader))
                     .collect::<Result<_, _>>()?;
+                let signature = if tag == 0x12 {
+                    let mut signature = [0; 64];
+                    signature.copy_from_slice(reader.take(64)?);
+                    Some(signature)
+                } else {
+                    None
+                };
                 Self::Inputs {
                     seat,
                     first,
                     inputs,
+                    signature,
                 }
             }
             0x11 => {
