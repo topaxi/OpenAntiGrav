@@ -33,8 +33,9 @@ difficulty: medium (25)
   build) and the custom-track survey. Reopen by enabling it in a shipped build once foreign tracks render enough
   (atlas, sky, scenery below). `just check-ballisticng` keeps it compiling and its survey tests running. With it on
   the survey is lazy (first CUSTOM open, never in a race) and cached by path and mtime. The disc-backed `foreign_*`
-  ground-truth tests of the mapping live in `oag-bng-import` and run in `just test-data` (they skip without
-  `data/ballisticng`); the race-level ones in `oag-raceplay` are compiled only with the feature: `cargo nextest run
+  ground-truth tests of the mapping live in `oag-bng-import` behind its off-by-default `ground-truth` feature (compiled and
+  linted by `just check-ballisticng`, never run by `just test-data`): `cargo nextest run -p oag-bng-import --features
+  ground-truth --run-ignored only`; the race-level ones in `oag-raceplay` are compiled only with the feature: `cargo nextest run
   -p oag-raceplay --features ballisticng --run-ignored only -E 'test(foreign)'`.
 
 - **Not exercised by any real file, so untested against Unity** (the format page scores each): meshes with more than one

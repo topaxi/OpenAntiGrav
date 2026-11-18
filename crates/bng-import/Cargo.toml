@@ -24,6 +24,12 @@ oag-gameplay.workspace = true
 oag-physics.workspace = true
 oag-testdata.workspace = true
 
+[features]
+# The disc-backed mapping ground truth (`tests/foreign_ground_truth.rs`). Off by
+# default, so `just test-data` neither compiles nor runs it; `just check-ballisticng`
+# compiles and lints it.
+ground-truth = []
+
 [lints]
 workspace = true
 
