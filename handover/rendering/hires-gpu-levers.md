@@ -1,8 +1,8 @@
 ---
 status: measure
-titles: [hd, pulse]
+titles: [hd, pulse, 2048, omega]
 updated: 2026-11-18
-summary: "HD native 4K still misses 60 Hz on the Deck (18 ms p50 after the 8-bit scene): shadow redraw, craft pass and f16 left"
+summary: "Deck native 4K: HD misses 60 Hz (18 ms p50); 2048 and Omega hold it. Left: shadow redraw, Omega prepass and tone map, f16"
 categories: [rendering, tooling]
 ---
 
@@ -66,6 +66,20 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
   GPU at the price of a softer HD HUD.
 - The Deck's 4K clock bimodality (27 to 33 ms in one run) hides real 4K differences; a 4K Deck
   comparison needs a fixed clock or interleaved A B A B with many rounds.
+
+- **2026-11-18, `deck-vita-ps4-perf`** (`docs/rendering/hires-gpu-levers.md`, "2048 and Omega on
+  the Deck, pass by pass"). Landed: a circuit's plain blended draws shade through their own
+  pipelines (Omega `track blended` 6.70 to 2.55 ms at 4K, whole-race frame p95 19.85 to 15.92 ms)
+  and 2048's exposure readback over 256 invocations (0.27 to 0.09 ms at 4K). At 800p both titles
+  are bound by the CPU. Left, largest first:
+  1. **Omega's depth prepass, 1.2 to 2.0 ms, flat** (vertex-bound). A position-only prepass entry
+     needs `@invariant` and a depth-equal proof. Measure: the `track solid` span at 800p.
+  2. **Omega's tone map apply, 1.6 ms at 4K**: skip the distortion fetch where nothing refracted.
+     Measure: `omega tonemap apply`.
+  3. **The circuits' opaque shading** (2048 6.7 ms, Omega 8.4 ms at 4K): read
+     `RADV_DEBUG=shaderstats` for their plain pipelines first.
+  4. **Race bench gap**: `gpu_us` misses `wo_composite` and Omega's tone map and bloom chain;
+     timestamps around them would let a whole race show a cut there.
 
 ## Next Steps
 
