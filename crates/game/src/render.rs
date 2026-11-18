@@ -65,7 +65,7 @@ use quad::{
 use text::GlyphSlot;
 use video::Video;
 
-pub use backdrop::FuryBackdrop;
+pub use backdrop::{DrawSceneLayer, FuryBackdrop, SCENE_LAYER_FORMAT, SceneLayer};
 pub use scene::SceneBackdrop;
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.

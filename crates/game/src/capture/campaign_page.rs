@@ -108,6 +108,16 @@ pub(super) struct FlyerShot {
 }
 
 impl FlyerShot {
+    /// The shot's cards as the Fury backdrop's scene layer, for the frames a still
+    /// settles over - see [`crate::flyer::Flyers::scene_layer`].
+    pub(super) fn scene_layer(
+        &self,
+        space: oag_display::space::Space,
+        inset: f32,
+    ) -> impl FnMut(crate::render::SceneLayer<'_>) + '_ {
+        self.flyers.scene_layer(&self.shows, space, inset)
+    }
+
     /// Renders `list` into `view` with the card in between.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render(

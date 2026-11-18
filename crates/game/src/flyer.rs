@@ -53,7 +53,7 @@ use oag_ui::frontend::Draw;
 use oag_ui_screens::campaign::flyer::{self, FlyerWidget};
 
 use crate::preview::{CardTint, Preview};
-use crate::render::Renderer;
+use crate::render::{Renderer, SCENE_LAYER_FORMAT, SceneLayer};
 
 mod clip;
 mod shell;
@@ -179,24 +179,37 @@ impl Side {
     }
 }
 
-/// How much brighter one of Fury's grid cards is than its textures: every texel
-/// doubled (and clamped). **Measured on Fury, mechanism unread.** A flat panel's
-/// texel is 63 and RPCS3 shows 130 (`Cell Selection` of `09_blitzed`, the
-/// back's `flyer_back_colour.gtf`); the stripe texture's 197 shows 255 on both
-/// the back and `Grid Selection`'s front, whose dominant red is 255 against the
-/// 198 an undoubled texel drew.
+/// What one of Fury's grid cards is multiplied by, in encoded values, **where no
+/// tone stage draws it** ([`Layer::Page`]): a stand-in for the exposure the original
+/// applies, **chosen, not measured**. The original draws the card into the scene its
+/// bloom chain reads, so the level is that chain's adapted exposure plus its bloom,
+/// which follows the card: live it reads 2.2 to 2.5 on `09_blitzed`, 3.0 to 3.3 on
+/// the next three grids, in linear light
+/// (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The flyer
+/// card is drawn before the resolve"). On the Fury style the card goes through
+/// that chain ([`Layer::Scene`]) and this is not applied.
 pub const FURY_GAIN: f32 = 2.0;
 
-/// The base campaign's eight grid cards, front and back: **no gain**. Not
-/// measured against a frame of its own `Cell Selection`; doubled, the eight
-/// cards' cyan and white clamp to flat colour where the earlier fit to RPCS3's
-/// base `Grid Selection` frames matched the undoubled texels.
+/// The base campaign's eight grid cards, front and back, on [`Layer::Page`]: none.
+/// Their pages are bright enough that the original's exposure sits at its floor of
+/// 1 (read live: adapted luma 0.22 and 0.47 against the 0.086 the floor starts at).
 pub const BASE_GAIN: f32 = 1.0;
 
-/// The two `Campaign Selection` cards: none. Undoubled they matched the frame;
-/// doubled the HD card clamps to a plain white rectangle. Which materials carry
-/// the factor is unread.
+/// The two `Campaign Selection` cards on [`Layer::Page`]: none, the same floor
+/// (adapted luma 0.12 with Fury chosen, 0.25 with `HD`).
 pub const CAMPAIGN_GAIN: f32 = 1.0;
+
+/// Where a card is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layer {
+    /// Over the page, at its texel colours times the card's gain: a title or style
+    /// with no tone stage behind its menus.
+    Page,
+    /// Into the scene the Fury backdrop's bloom chain reads
+    /// ([`crate::render::SceneLayer`]), at its texel colours: the chain's exposure
+    /// and bloom are the card's level, as they are in the original.
+    Scene,
+}
 
 /// The colour multiplier of the focused `Campaign Selection` card: none.
 pub const FOCUSED_TINT: CardTint = CardTint::NONE;
@@ -234,7 +247,8 @@ pub struct CardSpec {
     pub window: f32,
     /// `1.0` or [`CAMPAIGN_STRETCH`].
     pub stretch: f32,
-    /// [`FURY_GAIN`], [`BASE_GAIN`] or [`CAMPAIGN_GAIN`].
+    /// [`FURY_GAIN`], [`BASE_GAIN`] or [`CAMPAIGN_GAIN`]: what the card's texels are
+    /// multiplied by on [`Layer::Page`].
     pub gain: f32,
     /// Play the UV keys the card's `.vex` authors per mesh, on a PS4 or Vita card.
     ///
@@ -418,10 +432,12 @@ fn hide_effects(model: &mut Model, textures: &[String]) {
     model.transparent_draws.retain(|draw| !hidden(draw));
 }
 
-/// Where a card sits on its rectangle: half its width and height, card units.
+/// Where a card sits on its rectangle: half its width and height, card units, and
+/// its [`CardSpec::gain`].
 #[derive(Debug, Clone, Copy)]
 struct Placement {
     half_size: [f32; 2],
+    gain: f32,
 }
 
 /// The card's outline widened by `stretch`.
@@ -451,8 +467,9 @@ pub struct Flyers {
     widgets: HashMap<String, FlyerWidget>,
     /// Decoded, not yet on the GPU, by `FlyerName`.
     waiting: RefCell<HashMap<String, Model>>,
-    /// On the GPU, by `FlyerName`.
-    cards: RefCell<HashMap<String, Preview>>,
+    /// On the GPU, by `FlyerName` and the format of the target it was built for: the
+    /// page's, or the scene layer's.
+    cards: RefCell<HashMap<(String, wgpu::TextureFormat), Preview>>,
     /// The rectangle of each card, by `FlyerName`.
     placed: HashMap<String, Placement>,
     /// The cards `Campaign Selection` shows, one per campaign in its
@@ -543,7 +560,7 @@ impl Flyers {
                     // comes out at about 0.4 of its own colours.
                     for vertex in &mut model.vertices {
                         vertex.lit = 0.0;
-                        vertex.colour = [*gain, *gain, *gain, 1.0];
+                        vertex.colour = [1.0; 4];
                     }
                     model.vertex_colour_is_light = false;
                     clip::bake(&mut model, SETTLED_SECONDS);
@@ -573,7 +590,13 @@ impl Flyers {
                         }
                         None => clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]),
                     }
-                    placed.insert(name.clone(), Placement { half_size: half });
+                    placed.insert(
+                        name.clone(),
+                        Placement {
+                            half_size: half,
+                            gain: *gain,
+                        },
+                    );
                     waiting.insert(name.clone(), model);
                 }
                 Err(error) => report.push(format!("{entry}: {error:#} - no flyer is drawn")),
@@ -774,13 +797,44 @@ impl Flyers {
     #[must_use]
     pub fn has(&self, show: &Show) -> bool {
         let key = show.key();
-        self.waiting.borrow().contains_key(&key) || self.cards.borrow().contains_key(&key)
+        self.waiting.borrow().contains_key(&key)
+            || self.cards.borrow().keys().any(|(name, _)| *name == key)
+    }
+
+    /// Draws `shows`' cards into a [`SceneLayer`], on `space`'s grid at the safe
+    /// area's `inset`: what [`render_list`] hands the Fury backdrop, and what a still
+    /// hands its settle frames.
+    pub fn scene_layer<'a>(
+        &'a self,
+        shows: &'a [Show],
+        space: Space,
+        inset: f32,
+    ) -> impl FnMut(SceneLayer<'_>) + 'a {
+        move |layer: SceneLayer<'_>| {
+            let (width, height) = layer.size;
+            for show in shows.iter().filter(|show| self.has(show)) {
+                self.draw(
+                    layer.device,
+                    layer.queue,
+                    SCENE_LAYER_FORMAT,
+                    layer.encoder,
+                    layer.view,
+                    (0.0, 0.0, width as f32, height as f32),
+                    layer.size,
+                    space,
+                    inset,
+                    show,
+                    Layer::Scene,
+                );
+            }
+        }
     }
 
     /// Draws `show`'s card into the screen, over whatever `view` holds.
     ///
-    /// The first call for a name builds its GPU state; a card whose pipelines
-    /// will not build is logged, dropped, and draws nothing from then on.
+    /// The first call for a name and a target format builds its GPU state; a card
+    /// whose pipelines will not build is logged, dropped, and draws nothing from
+    /// then on.
     #[allow(clippy::too_many_arguments)]
     fn draw(
         &self,
@@ -794,14 +848,26 @@ impl Flyers {
         space: Space,
         inset: f32,
         show: &Show,
+        layer: Layer,
     ) {
-        let key = show.key();
-        if let Some(model) = self.waiting.borrow_mut().remove(&key) {
-            match Preview::new(device, queue, format, self.anisotropy, model) {
-                Ok(card) => {
-                    self.cards.borrow_mut().insert(key.clone(), card);
+        let name = show.key();
+        let key = (name.clone(), format);
+        if !self.cards.borrow().contains_key(&key) {
+            // The decoded card, or a copy of the one another format's target was built from.
+            let model = self.waiting.borrow_mut().remove(&name).or_else(|| {
+                let cards = self.cards.borrow();
+                cards
+                    .iter()
+                    .find(|((built, _), _)| *built == name)
+                    .map(|(_, card)| card.untinted_model())
+            });
+            if let Some(model) = model {
+                match Preview::new(device, queue, format, self.anisotropy, model) {
+                    Ok(card) => {
+                        self.cards.borrow_mut().insert(key.clone(), card);
+                    }
+                    Err(error) => log::warn!("flyer {}: {error:#} - it draws nothing", show.flyer),
                 }
-                Err(error) => log::warn!("flyer {}: {error:#} - it draws nothing", show.flyer),
             }
         }
         let Some((view_projection, model)) = self.matrices(show, space) else {
@@ -810,11 +876,21 @@ impl Flyers {
         // The card obeys the safe zone (`obeySafeZone="true"` on the widget): its picture is
         // drawn at `inset` about the middle of the screen, as the widgets over it are.
         let view_projection = Mat4::from_scale(Vec3::new(inset, inset, 1.0)) * view_projection;
+        let gain = match layer {
+            Layer::Page => self.placed.get(&name).map_or(1.0, |placed| placed.gain),
+            Layer::Scene => 1.0,
+        };
         let mut cards = self.cards.borrow_mut();
         let Some(card) = cards.get_mut(&key) else {
             return;
         };
-        card.set_tint(queue, show.tint);
+        card.set_tint(
+            queue,
+            CardTint {
+                front: show.tint.front.map(|channel| channel * gain),
+                mirror: show.tint.mirror.map(|channel| channel * gain),
+            },
+        );
         card.draw_matrices(
             device,
             queue,
@@ -835,6 +911,10 @@ impl Flyers {
 /// cards sit over the backdrop and under every widget, `Flyer Pad Lock`
 /// included. With no card (`None`, or none that loaded) this is exactly
 /// `renderer.render_with(load, .., list, ..)`.
+///
+/// Where the backdrop is the Fury style's, the cards are drawn into the scene its
+/// bloom chain reads ([`Layer::Scene`]) and reach the page with it; anywhere else
+/// they are drawn over the page ([`Layer::Page`]).
 ///
 /// `list` is the draws and the backdrop's length; `frame` the viewport, the
 /// target's full size and the grid; `gpu` the device, queue and target format.
@@ -862,6 +942,20 @@ pub fn render_list(
         return;
     };
     let split = split.min(list.len());
+    let inset = renderer.inset();
+    let in_scene = match renderer.fury_scene_frame(&list[..split]) {
+        Some(frame) => {
+            let shows: Vec<Show> = shown.iter().map(|show| (*show).clone()).collect();
+            renderer.prepare_fury_scene(
+                (device, queue, encoder),
+                frame,
+                (viewport.2 as u32, viewport.3 as u32),
+                &mut flyers.scene_layer(&shows, space, inset),
+            );
+            true
+        }
+        None => false,
+    };
     renderer.render_with(
         load,
         device,
@@ -873,7 +967,7 @@ pub fn render_list(
         None,
     );
     renderer.renew_quad_buffer(device);
-    for show in shown {
+    for show in shown.into_iter().filter(|_| !in_scene) {
         flyers.draw(
             device,
             queue,
@@ -883,8 +977,9 @@ pub fn render_list(
             viewport,
             target_size,
             space,
-            renderer.inset(),
+            inset,
             show,
+            Layer::Page,
         );
     }
     let over = wgpu::LoadOp::Load;

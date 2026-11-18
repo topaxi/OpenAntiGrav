@@ -674,20 +674,33 @@ fn resolve_flat(store: SceneStore, stored: f64) -> Option<u8> {
 
 /// [`resolve_flat`] under a tone and bloom block of the caller's.
 fn resolve_flat_with(params: Params, store: SceneStore, stored: f64) -> Option<u8> {
+    resolve_flat_switched(params, None, store, stored)
+}
+
+/// [`resolve_flat_with`] on a chain built under `built` and handed `switched` before it runs.
+fn resolve_flat_switched(
+    built: Params,
+    switched: Option<Params>,
+    store: SceneStore,
+    stored: f64,
+) -> Option<u8> {
     let instance = wgpu::Instance::default();
     let adapters = oag_gpu::test_adapter::ordered(&instance);
     let adapter = adapters.first()?;
     let (device, queue) = pollster::block_on(adapter.request_device(&Default::default())).ok()?;
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let canvas = (64u32, 64u32);
-    let chain = Chain::new(
+    let mut chain = Chain::new(
         &device,
         format,
         canvas,
-        Params { store, ..params },
+        Params { store, ..built },
         Glow::Drawn,
     )
     .expect("the pipelines build");
+    if let Some(switched) = switched {
+        chain.set_settings(switched);
+    }
     let output = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("hd bloom store test output"),
         size: wgpu::Extent3d {
@@ -849,6 +862,55 @@ fn the_exposure_function_is_the_scale_the_resolve_applies() {
     assert!(
         expected - unscaled >= 5,
         "the scale moves the byte ({unscaled} to {expected})"
+    );
+}
+
+/// A block handed to a built chain is the one its next run resolves under, tone and gate
+/// alike, and what the chain was built for stays: a scene built to store encoded values is
+/// still decoded where it is read, whatever store the new block names.
+#[test]
+fn a_chain_runs_under_the_settings_it_was_last_handed() {
+    let dark = Params {
+        alpha_contribution: 0.0,
+        frame_contribution: 0.0,
+        adaption_rate: 1.0,
+        tone_adaption_boost: 0.0,
+        tone_darkening_clamp: 0.0,
+        tone_maximum_brightness: 1.0,
+        ..params()
+    };
+    // A boost low enough that a flat grey of 63 leaves the exposure off its floor.
+    let bright = Params {
+        tone_adaption_boost: 5.0,
+        tone_darkening_clamp: 3.0,
+        tone_maximum_brightness: 4.0,
+        ..dark
+    };
+    let stored = 63.0 / 255.0;
+    let store = SceneStore::Encoded;
+    let Some(built_dark) = resolve_flat_with(dark, store, stored) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let built_bright = resolve_flat_with(bright, store, stored).expect("an adapter a moment ago");
+    // The new block names another store: the chain keeps the one it was built for.
+    let handed = Params {
+        store: SceneStore::Computed,
+        ..bright
+    };
+    let switched =
+        resolve_flat_switched(dark, Some(handed), store, stored).expect("an adapter a moment ago");
+    assert_eq!(
+        built_dark, 63,
+        "an exposure of one resolves the byte it was given"
+    );
+    assert!(
+        built_bright > built_dark + 10,
+        "the two blocks are told apart: {built_dark} and {built_bright}"
+    );
+    assert_eq!(
+        switched, built_bright,
+        "a chain handed the bright block resolves as one built under it"
     );
 }
 
