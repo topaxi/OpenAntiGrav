@@ -486,11 +486,8 @@ pub fn capture(
         .and(options.pose_boost)
         .filter(|_| options.ticks == 0);
     if let Some(velocities) = &options.field_warmup {
-        race.warm_up_field(
-            velocities,
-            race.core.sim.field_warm_up_ticks(),
-            warmed_boost,
-        );
+        let ticks = race.core.sim.field_warm_up_ticks();
+        race.warm_up_field(velocities, ticks, warmed_boost);
         race.warm_up_contact_sparks(velocities, &options.pose_sparks);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
@@ -547,9 +544,8 @@ pub fn capture(
             race.core.sim.set_autopilot_pilot(pilot, skill);
         }
         if let Some(skill) = options.autopilot_skill {
-            race.core
-                .sim
-                .set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+            let tuning = skill.tune(&oag_ai::Tuning::default());
+            race.core.sim.set_autopilot_tuning(tuning);
         }
     }
 

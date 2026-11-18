@@ -24,8 +24,10 @@
 //!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
 //!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
 //!   message board decides whether a `Cue::Message` is raised. Most methods that read and
-//!   write this half alone are `impl RaceSim` methods, reached as `race.core.sim.x()`; the ones
-//!   that read a view accessor (the seat's slot, the intro, who hears a cue) stay on `Race`.
+//!   write this half alone are `impl RaceSim` methods, reached as `race.core.sim.x()`; those
+//!   that also read the [`Outcome`](crate::outcome::Outcome) (the seat's slot, who hears a
+//!   cue, the results board) are `impl SimRace` methods, reached as `race.core.x()`; the ones
+//!   that read a view accessor (the viewed slot, the intro, the followed craft) stay on `Race`.
 //! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
 //!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
 //!   crate.
