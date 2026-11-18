@@ -44,6 +44,14 @@ fn present_for(carried: u32) -> u32 {
     carried | ALWAYS | material
 }
 
+/// Whether any vertex of `model` is a 2048 vertex-lit one (`sun_mask` 2 or above, read by
+/// `shade.wesl` as `>= 1.5`): `false` lets its pipelines fold `nova_vertex` to false. An
+/// interpolated `sun_mask` never exceeds its vertices', so a model none of whose vertices
+/// reaches 1.5 never draws a pixel that does.
+pub(super) fn nova_vertices(model: &Model) -> bool {
+    model.vertices.iter().any(|v| v.sun_mask >= 1.5)
+}
+
 /// The value of `bindings.wesl`'s `emissive_rows` override for a pipeline whose `slots_present`
 /// is `present`: `0` where no vertex can name a row, so every read of the table is its all-zero
 /// row 0 (`Emissives::of`) and the driver can drop the tests on it.

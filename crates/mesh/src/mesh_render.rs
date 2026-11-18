@@ -465,6 +465,9 @@ pub fn build_with(
     }
     let present = specialise::slots_present(model);
     constants.push(("slots_present", f64::from(present)));
+    if !specialise::nova_vertices(model) {
+        constants.push(("nova_vertices", 0.0));
+    }
     constants.push((
         "emissive_rows",
         f64::from(specialise::emissive_rows(present)),

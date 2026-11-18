@@ -27,6 +27,11 @@ override zone_race: f32 = 1.0;
 // whose light is an authored rig (`BuildCacheScope::lit_by`).
 override lit_by_rig: f32 = 0.0;
 
+// **Whether any vertex this pipeline draws can be a 2048 vertex-lit one** (`sun_mask` 2 or above,
+// `NOVAColor`). 0.0 where none is (`mesh_render::specialise::nova_vertices`), so `lit_texel`'s
+// `nova_vertex` is the constant false; 1.0, the vertex deciding, by default.
+override nova_vertices: f32 = 1.0;
+
 // **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
 // Wipeout HD `.rcsmodel`, set from `Model::vertex_colour_is_light`. HD's
 // fragment programs *add* the interpolated colour to the lightmap term before
