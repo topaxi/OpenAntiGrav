@@ -14,12 +14,14 @@ use crate::split_fixture::{SIZE, device, frame, paint, read_red};
 /// `1300 / 1920` is. Not square, so a divisor taken from the wrong axis shows.
 const VIEWPORT: (u32, u32) = (43, 41);
 
-fn params(final_half_texel: bool, store: SceneStore) -> Params {
+/// `eight_bit` puts an encoded scene in the 8-bit target, which the resolve reads through
+/// its sRGB view in one hardware tap; every claim below holds for both.
+fn params(final_half_texel: bool, store: SceneStore, eight_bit: bool) -> Params {
     Params {
         // No glow and no darkening: the resolve's scale is exactly one.
         tone_darkening_clamp: 0.0,
         final_half_texel,
-        eight_bit: false,
+        eight_bit,
         store,
         ..super::tests::params()
     }
@@ -79,16 +81,23 @@ fn the_half_texel_averages_four_texels_in_linear_light() {
     let flat = resolve(
         &device,
         &queue,
-        params(false, SceneStore::Computed),
+        params(false, SceneStore::Computed, false),
         |_, _| 0.5,
     );
     let light = flat[(10 * SIZE.0 + 10) as usize];
-    let shifted = resolve(&device, &queue, params(true, SceneStore::Encoded), checker);
-    for (x, y, byte) in interior(&shifted) {
-        assert!(
-            byte.abs_diff(light) <= 1,
-            "pixel ({x}, {y}) read {byte}, the mean of its four texels in light is {light}"
+    for eight_bit in [false, true] {
+        let shifted = resolve(
+            &device,
+            &queue,
+            params(true, SceneStore::Encoded, eight_bit),
+            checker,
         );
+        for (x, y, byte) in interior(&shifted) {
+            assert!(
+                byte.abs_diff(light) <= 1,
+                "8-bit {eight_bit}: pixel ({x}, {y}) read {byte}, the mean of its four texels in light is {light}"
+            );
+        }
     }
 }
 
@@ -97,10 +106,17 @@ fn without_the_tap_the_checker_reaches_the_screen_texel_for_texel() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let plain = resolve(&device, &queue, params(false, SceneStore::Encoded), checker);
-    for (x, y, byte) in interior(&plain) {
-        let want = if (x + y).is_multiple_of(2) { 0 } else { 255 };
-        assert_eq!(byte, want, "pixel ({x}, {y})");
+    for eight_bit in [false, true] {
+        let plain = resolve(
+            &device,
+            &queue,
+            params(false, SceneStore::Encoded, eight_bit),
+            checker,
+        );
+        for (x, y, byte) in interior(&plain) {
+            let want = if (x + y).is_multiple_of(2) { 0 } else { 255 };
+            assert_eq!(byte, want, "8-bit {eight_bit}: pixel ({x}, {y})");
+        }
     }
 }
 
@@ -111,18 +127,23 @@ fn a_whole_pictures_last_row_and_column_keep_their_light() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let red = resolve_over(
-        &device,
-        &queue,
-        params(true, SceneStore::Encoded),
-        SIZE,
-        |_, _| 0.5,
-    );
-    let inside = red[(10 * SIZE.0 + 10) as usize];
-    for y in 0..SIZE.1 {
-        for x in 0..SIZE.0 {
-            let byte = red[(y * SIZE.0 + x) as usize];
-            assert_eq!(byte, inside, "pixel ({x}, {y}) of a flat scene");
+    for eight_bit in [false, true] {
+        let red = resolve_over(
+            &device,
+            &queue,
+            params(true, SceneStore::Encoded, eight_bit),
+            SIZE,
+            |_, _| 0.5,
+        );
+        let inside = red[(10 * SIZE.0 + 10) as usize];
+        for y in 0..SIZE.1 {
+            for x in 0..SIZE.0 {
+                let byte = red[(y * SIZE.0 + x) as usize];
+                assert_eq!(
+                    byte, inside,
+                    "8-bit {eight_bit}: pixel ({x}, {y}) of a flat scene"
+                );
+            }
         }
     }
 }
