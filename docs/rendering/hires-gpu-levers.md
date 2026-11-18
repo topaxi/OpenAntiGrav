@@ -1229,7 +1229,7 @@ What each is:
    vertex has a tangent.** 2048's and Omega's circuits author `specular x0.00`, so the generic
    specular is a product with zero; `BuildCacheScope::lit_by` pins `rig_specular` to 0 there.
    `tangents_present` (an OR over the model's vertices) folds the normal-map branches. Found
-   because the lighting rung below saved 18 % on 2048 with no pixel changed.
+   while reading what the lighting rung below skips on 2048.
 
 **Measured and dropped:**
 
@@ -1261,13 +1261,17 @@ Deck `track solid, shaded`, us, exact to `simplified`, on the final exact build:
 |---|---|---|---|---|
 | HD | 1,768 to 1,459 | 2,956 to 2,400 | 8,647 to 6,940 (-19.7 %) | 30 % (2,507,308), up to 238 levels |
 | Omega | 2,025 to 1,899 | 2,708 to 2,518 | 6,320 to 5,830 (-7.8 %); blended 1,637 to 1,502 | 0.2 % (18,691), up to 41 |
-| 2048 | 857 to 788 | 1,540 to 1,426 | 5,145 to 4,784 (-7.0 %) | none |
+| 2048 | 857 to 788 | 1,540 to 1,426 | 5,145 to 4,784 (-7.0 %) | none at this tick |
+
+The pixel column is one tick (2,500). Over ticks 600, 1,500, 2,500 and 4,000 at 1280x800 the
+change is HD 22 % to 43 % of the frame (up to 234 levels), Omega 0.01 % to 12 % (up to 81) and
+2048 83 % at every tick but 2,500 (up to 165): tick 2,500 is in shade, and in the sun 2048's road
+loses its warm sunlit tone and turns grey.
 
 On the build before cut 6 the rung read: HD 1,778 to 1,459 / 2,963 to 2,397 / 8,650 to 6,974 us
 (-19.4 %), Omega 2,090 to 1,928 / 2,927 to 2,554 / 7,133 to 5,929 (-16.9 %) and its blended road
-decals 2,026 to 1,504, 2048 942 to 795 / 1,730 to 1,441 / 5,906 to 4,833 with no pixel changed:
-dead work, most of which cut 6 now takes exactly; the 7 % left on 2048 still changes no pixel
-(open, below). Skipping the SPU sum in the
+decals 2,026 to 1,504, 2048 942 to 795 / 1,730 to 1,441 / 5,906 to 4,833; cut 6 took the part of
+that which changed no pixel at any tick. Skipping the SPU sum in the
 vertex stage as well (a vertex-stage constant, which the prepass sharing `vs_main` rules out for a
 committed form) measured the same as skipping its use in the fragment stage.
 
@@ -1277,11 +1281,12 @@ is plainly the same. On a sunny circuit the loss is larger: Modesto Heights lose
 on the road and the bright metal at the side, and the road turns matte grey-blue. Against the 13
 HD race pairs it moves away from the original on 9 (Modesto Heights whole-frame error 3.12 to
 5.77, Anulpha Pass 2.94 to 5.16), and stays level on Talon's Junction and The Amphiseum. Omega
-changes only where its draws carry a specular or normal map (0.2 % of the frame).
+changes only where its draws carry a specular or normal map (0.01 % to 12 % of the frame). 2048
+loses the sun's warmth on its road wherever the sun reaches it.
 
-**Titles.** HD and Omega share the shader family and are wired. 2048 is wired and changes no pixel
-at three sizes (its circuits author no specular and have no SPU lights), yet `simplified` still
-saves 7 % of its shading at 4K after cut 6: dead work whose cause is open (below). Pulse and
+**Titles.** HD and Omega share the shader family and are wired. 2048 is wired too: its circuits
+author no specular and no SPU lights, so the rung takes their normal-map lighting, a visible loss
+in the sun for 7 % of its shading at 4K. Pulse and
 Pure: skipped, the row is dropped (`Definition::drop_unavailable_circuit_lighting`, keyed on
 `Looks::material_render_state`); their circuits have no authored rig to simplify.
 
@@ -1364,9 +1369,8 @@ shading. Every run finished at tick 7,020 with hash `94a2261ef5045e63`.
 
 - The rich pipelines (`programs_present`, cut 2 above) and the craft pass, which runs only rich
   pipelines (3 ms at 4K on HD).
-- 2048's rung saving left after cut 6 (7 % at 4K, no pixel changed): `tangents_present` is an
-  OR over the whole model, so one textured hull-like draw keeps the branch for every plain
-  pixel; a per-list OR, as `slots_present` has, is the next try.
-- Omega's rung saving after cut 6 (7.8 % at 4K for 0.2 % of the pixels): most of that work is
+- `tangents_present` is an OR over the whole model; a per-list OR, as `slots_present` has, may
+  fold the normal-map branch for more plain draws exactly.
+- Omega's rung saving after cut 6 (7.8 % at 4K for 0.01 % to 12 % of the pixels): most of that work is
   shown on few pixels. A census of which plain Omega draws carry the specular or normal map would say whether
   those draws want a pipeline of their own.

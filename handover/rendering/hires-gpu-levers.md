@@ -94,9 +94,9 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
   1. **The rich pipelines' `programs_present` override** (HD 0.58 ms, Omega 0.80 ms at 4K is the
      whole rich half), and the craft pass, all rich (3 ms at 4K). Measure: the `track solid,
      shaded` and `craft, weapons, shields` spans, same command as the page.
-  2. **Dead work the rung still finds**: `simplified` saves 7 % of 2048's shading at 4K with no
-     pixel changed (try `tangents_present` per plain list, as `slots_present` is) and 7.8 % of
-     Omega's for 0.2 % of its pixels. A census of which plain draws carry them,
+  2. **Work the rung finds on few pixels**: `simplified` saves 7.8 % of Omega's shading at 4K for
+     0.01 % to 12 % of its pixels (`tangents_present` per plain list, as `slots_present` is, is
+     one try). A census of which plain draws carry them,
      and a pipeline of their own, may take most of that exactly. Measure: the same span on Tech de
      Ra, pixels diffed.
   3. **B (albedo decode through an sRGB view)**: one small lane judged by the 13 HD pairs;
