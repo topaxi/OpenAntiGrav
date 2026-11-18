@@ -15,10 +15,19 @@ impl Chain {
         device: &wgpu::Device,
         params: &Params,
         sized: &Sized,
+        scene_format: wgpu::TextureFormat,
     ) -> Result<Option<Zoom>> {
         params
             .zoom
-            .map(|tuning| Zoom::new(device, tuning, &sized.downsamples[1].target, sized.quarter))
+            .map(|tuning| {
+                Zoom::new(
+                    device,
+                    tuning,
+                    &sized.downsamples[1].target,
+                    sized.quarter,
+                    scene_format,
+                )
+            })
             .transpose()
     }
 

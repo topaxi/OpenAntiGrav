@@ -46,6 +46,9 @@ impl Cli {
         if let Some(resolution) = self.shadow_resolution {
             profile.shadow_resolution = resolution;
         }
+        if let Some(precision) = self.scene_precision {
+            profile.scene_precision = precision;
+        }
         if let Some(screen_filter) = &self.screen_filter {
             profile.screen_filter = screen_filter.clone();
         }

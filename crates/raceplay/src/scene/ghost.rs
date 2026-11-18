@@ -57,11 +57,7 @@ impl Scene {
         if !mode.races_a_ghost() {
             return;
         }
-        let format = if self.draws_linear() {
-            oag_gpu::formats::SCENE_FORMAT
-        } else {
-            caller_format
-        };
+        let format = self.scene_format(caller_format);
         self.ghost.pipeline = Some(oag_render::ghost::Pipeline::new(
             device,
             queue,

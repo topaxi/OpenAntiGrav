@@ -40,7 +40,6 @@
 //!   original's CPU/GPU pipelining, and is not modelled.
 
 use anyhow::Result;
-use oag_gpu::formats::SCENE_FORMAT;
 
 use super::{sampler_entry, texture_entry, uniform_entry};
 
@@ -374,13 +373,14 @@ impl Zoom {
         tuning: Tuning,
         quarter: &wgpu::TextureView,
         quarter_size: (u32, u32),
+        scene_format: wgpu::TextureFormat,
     ) -> Result<Self> {
         Self::build(
             device,
             tuning,
             Some(quarter),
             quarter_size,
-            SCENE_FORMAT,
+            scene_format,
             wgpu::ColorWrites::ALL,
         )
     }

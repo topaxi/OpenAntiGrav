@@ -36,7 +36,7 @@ fn rows(definition: &Definition, id: &str) -> Vec<String> {
         .collect()
 }
 
-fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static str> {
+fn advanced(pulse_like: bool, weather: bool, trail_hits: bool, encoded: bool) -> Vec<&'static str> {
     // WINGTIP CONTRAILS is on the titles with no `wingtip` class of their own: the PSP pair, as
     // TRAIL ORDER and BOOST ZOOM are.
     let wingtip = pulse_like;
@@ -45,10 +45,16 @@ fn advanced(pulse_like: bool, weather: bool, trail_hits: bool) -> Vec<&'static s
         "graphics.motion_blur_resolution",
         "graphics.shadows",
         "graphics.shadow_resolution",
+    ];
+    // SCENE PRECISION is on the title whose scene stores encoded values: HD.
+    if encoded {
+        rows.push("graphics.scene_precision");
+    }
+    rows.extend([
         "graphics.water",
         "graphics.model_detail",
         "graphics.texture_detail",
-    ];
+    ]);
     if pulse_like {
         rows.push("graphics.trail_order");
         rows.push("graphics.scenery_sort");
@@ -86,6 +92,7 @@ fn the_graphics_page_keeps_the_original_and_performance_rows_and_opens_advanced(
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_hits(title);
+        definition.drop_unavailable_scene_precision(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_own_rockets(title);
@@ -110,6 +117,7 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         let mut definition = built_in();
         definition.drop_unavailable_boost_zoom(title);
         definition.drop_unavailable_trail_hits(title);
+        definition.drop_unavailable_scene_precision(title);
         definition.drop_unavailable_wingtip_contrails(title);
         definition.drop_unavailable_own_shield(title);
         definition.drop_unavailable_own_rockets(title);
@@ -119,7 +127,12 @@ fn advanced_holds_the_look_extras_and_the_mixed_rows_in_order() {
         definition.drop_unavailable_weather(title);
         assert_eq!(
             rows(&definition, "graphics_advanced"),
-            advanced(pulse_like, title.weather.is_played(), trail_hits),
+            advanced(
+                pulse_like,
+                title.weather.is_played(),
+                trail_hits,
+                title.looks.blends_encoded.applies_everywhere(),
+            ),
             "{}",
             title.name
         );

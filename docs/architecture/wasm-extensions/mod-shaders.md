@@ -84,7 +84,7 @@ count this way.
 Both textures sample at level 0 with a repeating linear sampler, so they may be read anywhere,
 inside an `if` too. `mod_fragment` returns straight alpha in gamma space, like every colour a mod
 hands the engine: the engine converts it to whatever the title's scene target holds
-(`oag_shaders::target`), so one file looks alike on Pulse's 8-bit target and HD's float target.
+(`oag_shaders::target`), so one file looks alike on Pulse's 8-bit gamma target and HD's encoded scene (8-bit by default, `graphics.scene_precision`).
 A value is clamped to 0..1 on an 8-bit target; on a linear float target (Omega's, 2048's) only
 below 0, and above 1 it is kept up to the half float's ceiling (65504) for the bloom and the
 tonemap, as the frame's own draws are. HD's scene stores what the console's packer wrote,

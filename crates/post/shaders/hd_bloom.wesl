@@ -148,10 +148,10 @@ fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
 // which is an LDR bright pass and not the HDR one this module's header used
 // to claim.
 //
-// This project's scene target stays [`SCENE_FORMAT`] (`Rgba16Float`) - 8 bits
-// of *linear* light bands visibly in the darks, and the shading that writes
-// it is ADR-0026's - so the hardware's clamp is applied here instead, at the
-// three points the chain samples the scene. Measured on the Talon's Junction
+// HD's scene goes into the original's 8-bit target by default, which clamps on
+// write; the opt-in float target (`SCENE_FORMAT`, `Rgba16Float`) and a scene of
+// linear light (8 bits of which band in the darks) do not, so the hardware's
+// clamp is applied here too, at the three points the chain samples the scene. Measured on the Talon's Junction
 // grid: clipped-white share 16.5 % -> 14.3 %, and the gate's peak argument
 // falls from ~1.6e5 to 2.43.
 fn surface(texel: vec4<f32>) -> vec4<f32> {
@@ -161,6 +161,11 @@ fn surface(texel: vec4<f32>) -> vec4<f32> {
 // 1.0 on the two pipelines that read the scene target itself (the first
 // downsample and the resolve) when the scene stores encoded values.
 override scene_encoded: f32 = 0.0;
+
+// 1.0 on the resolve when it reads the 8-bit scene through its sRGB view: the
+// texture unit has decoded every texel before it filtered, so a bilinear tap is
+// already light, and the resolve takes one hardware tap.
+override scene_srgb_view: f32 = 0.0;
 
 // A tap of the scene target, in linear light.
 fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
@@ -295,7 +300,11 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // first (`scene_tap`), then weighted, and the four stay inside the drawn
 // rectangle.
 fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
-    if constants.read_shift.x == 0.0 && constants.read_shift.y == 0.0 {
+    // Through the sRGB view the hardware filter averages light, which is what the
+    // taps below compute by hand. `drawn_scene` keeps the tap's footprint inside the
+    // drawn rectangle as the clamped texels below do.
+    if scene_srgb_view == 1.0
+        || (constants.read_shift.x == 0.0 && constants.read_shift.y == 0.0) {
         return scene_tap(textureSample(source_tex, source_sampler, drawn_scene(uv))).rgb;
     }
     let size = vec2<f32>(textureDimensions(source_tex));

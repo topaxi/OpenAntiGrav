@@ -236,6 +236,10 @@ optional = true
 type = "string"
 optional = true
 
+[types.render-profile.scene_precision]
+type = "string"
+optional = true
+
 [types.render-profile.water]
 type = "string"
 optional = true

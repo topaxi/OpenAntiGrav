@@ -1178,6 +1178,10 @@ pub fn menu_seeds(
             "graphics.shadow_resolution",
             text(&profile.shadow_resolution.to_string()),
         ),
+        (
+            "graphics.scene_precision",
+            text(&profile.scene_precision.to_string()),
+        ),
         ("graphics.water", text(&profile.water.to_string())),
         (
             "graphics.model_detail",

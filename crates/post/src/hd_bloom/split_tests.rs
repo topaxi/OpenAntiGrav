@@ -9,7 +9,9 @@
 use super::*;
 use crate::split_fixture::{SIZE, device, frame, mean, paint, read_red};
 
-fn params() -> Params {
+/// `eight_bit` stores the scene encoded in HD's 8-bit target, read through its sRGB view;
+/// every claim below holds for both targets.
+fn params(eight_bit: bool) -> Params {
     Params {
         // A real adaptation: the exposure falls with the mean, so a bright view resolves
         // darker than the same pixels would in a dark picture.
@@ -18,6 +20,12 @@ fn params() -> Params {
         tone_darkening_clamp: 0.9,
         tone_maximum_brightness: 1.0,
         final_half_texel: false,
+        eight_bit,
+        store: if eight_bit {
+            SceneStore::Encoded
+        } else {
+            SceneStore::Computed
+        },
         // No glow: the exposure is what is under test.
         frame_contribution: 0.0,
         alpha_contribution: 0.0,
@@ -32,9 +40,15 @@ fn dark_over_bright(_x: u32, y: u32) -> f32 {
 
 /// Two 64x32 views of `dark_over_bright`, each run on its own, several frames over so the
 /// adaptation settles. Returns the frame's red bytes.
-fn split_frames(device: &wgpu::Device, queue: &wgpu::Queue, frames: usize) -> Vec<u8> {
+fn split_frames(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    frames: usize,
+    eight_bit: bool,
+) -> Vec<u8> {
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let chain = Chain::new(device, format, SIZE, params(), Glow::Drawn).expect("pipelines build");
+    let chain =
+        Chain::new(device, format, SIZE, params(eight_bit), Glow::Drawn).expect("pipelines build");
     paint(queue, chain.scene_texture(), dark_over_bright);
     let output = frame(device);
     let target = output.create_view(&Default::default());
@@ -62,9 +76,16 @@ fn split_frames(device: &wgpu::Device, queue: &wgpu::Queue, frames: usize) -> Ve
 }
 
 /// One whole picture of a single brightness, run as a picture of its own, settled.
-fn alone(device: &wgpu::Device, queue: &wgpu::Queue, level: f32, frames: usize) -> f64 {
+fn alone(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    level: f32,
+    frames: usize,
+    eight_bit: bool,
+) -> f64 {
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let chain = Chain::new(device, format, SIZE, params(), Glow::Drawn).expect("pipelines build");
+    let chain =
+        Chain::new(device, format, SIZE, params(eight_bit), Glow::Drawn).expect("pipelines build");
     paint(queue, chain.scene_texture(), |_, _| level);
     let output = frame(device);
     let target = output.create_view(&Default::default());
@@ -87,19 +108,21 @@ fn each_view_resolves_as_it_would_alone() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let red = split_frames(&device, &queue, 12);
-    let top = mean(&red, 2..SIZE.1 / 2 - 2);
-    let bottom = mean(&red, SIZE.1 / 2 + 2..SIZE.1 - 2);
-    let dark = alone(&device, &queue, 0.25, 12);
-    let bright = alone(&device, &queue, 0.75, 12);
-    assert!(
-        (top - dark).abs() < 2.0,
-        "the dark view resolved to {top}, the same picture alone to {dark}"
-    );
-    assert!(
-        (bottom - bright).abs() < 2.0,
-        "the bright view resolved to {bottom}, the same picture alone to {bright}"
-    );
+    for eight_bit in [false, true] {
+        let red = split_frames(&device, &queue, 12, eight_bit);
+        let top = mean(&red, 2..SIZE.1 / 2 - 2);
+        let bottom = mean(&red, SIZE.1 / 2 + 2..SIZE.1 - 2);
+        let dark = alone(&device, &queue, 0.25, 12, eight_bit);
+        let bright = alone(&device, &queue, 0.75, 12, eight_bit);
+        assert!(
+            (top - dark).abs() < 2.0,
+            "8-bit {eight_bit}: the dark view resolved to {top}, the same picture alone to {dark}"
+        );
+        assert!(
+            (bottom - bright).abs() < 2.0,
+            "8-bit {eight_bit}: the bright view resolved to {bottom}, the same picture alone to {bright}"
+        );
+    }
 }
 
 /// **A seat keeps its own adaptation from frame to frame.** After a bright seat has settled,
@@ -111,13 +134,15 @@ fn a_new_seat_starts_from_its_own_first_frame() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let first_frame_dark = alone(&device, &queue, 0.25, 1);
-    let red = split_frames(&device, &queue, 1);
-    let top = mean(&red, 2..SIZE.1 / 2 - 2);
-    assert!(
-        (top - first_frame_dark).abs() < 2.0,
-        "the dark seat's first frame resolved to {top}, alone to {first_frame_dark}"
-    );
+    for eight_bit in [false, true] {
+        let first_frame_dark = alone(&device, &queue, 0.25, 1, eight_bit);
+        let red = split_frames(&device, &queue, 1, eight_bit);
+        let top = mean(&red, 2..SIZE.1 / 2 - 2);
+        assert!(
+            (top - first_frame_dark).abs() < 2.0,
+            "8-bit {eight_bit}: the dark seat's first frame resolved to {top}, alone to {first_frame_dark}"
+        );
+    }
 }
 
 /// **The cut stays clean.** Nothing a view resolves reaches into the other's rows: with
@@ -127,51 +152,53 @@ fn a_views_glow_stops_at_its_rectangle() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let format = wgpu::TextureFormat::Rgba8Unorm;
-    let glowing = Params {
-        frame_contribution: 4.0,
-        frame_exponent: 1.0,
-        horizontal_size: 4.0,
-        vertical_size: 4.0,
-        ..params()
-    };
-    let spill = |bright_top: bool| {
-        let chain =
-            Chain::new(&device, format, SIZE, glowing, Glow::Drawn).expect("pipelines build");
-        paint(&queue, chain.scene_texture(), |_, y| {
-            if (y < SIZE.1 / 2) == bright_top {
-                1.0
-            } else {
-                0.0
+    for eight_bit in [false, true] {
+        let format = wgpu::TextureFormat::Rgba8Unorm;
+        let glowing = Params {
+            frame_contribution: 4.0,
+            frame_exponent: 1.0,
+            horizontal_size: 4.0,
+            vertical_size: 4.0,
+            ..params(eight_bit)
+        };
+        let spill = |bright_top: bool| {
+            let chain =
+                Chain::new(&device, format, SIZE, glowing, Glow::Drawn).expect("pipelines build");
+            paint(&queue, chain.scene_texture(), |_, y| {
+                if (y < SIZE.1 / 2) == bright_top {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
+            let output = frame(&device);
+            let target = output.create_view(&Default::default());
+            let half_height = SIZE.1 / 2;
+            for (seat, y) in [(0, 0), (1, half_height)] {
+                let mut encoder = device.create_command_encoder(&Default::default());
+                chain.run_view(
+                    &queue,
+                    &device,
+                    &mut encoder,
+                    &target,
+                    View {
+                        seat,
+                        rect: (0, y, SIZE.0, half_height),
+                        area: SIZE,
+                        reach: (1.0, 1.0),
+                        first: seat == 0,
+                    },
+                );
+                queue.submit(Some(encoder.finish()));
             }
-        });
-        let output = frame(&device);
-        let target = output.create_view(&Default::default());
-        let half_height = SIZE.1 / 2;
-        for (seat, y) in [(0, 0), (1, half_height)] {
-            let mut encoder = device.create_command_encoder(&Default::default());
-            chain.run_view(
-                &queue,
-                &device,
-                &mut encoder,
-                &target,
-                View {
-                    seat,
-                    rect: (0, y, SIZE.0, half_height),
-                    area: SIZE,
-                    reach: (1.0, 1.0),
-                    first: seat == 0,
-                },
-            );
-            queue.submit(Some(encoder.finish()));
-        }
-        read_red(&device, &queue, &output)
-    };
-    // A black view beside a white one: its glow-free resolve is black through and through.
-    let red = spill(true);
-    let dark_rows = mean(&red, SIZE.1 / 2..SIZE.1);
-    assert!(
-        dark_rows < 1.0,
-        "the dark view read {dark_rows}: the bright view's glow crossed the cut"
-    );
+            read_red(&device, &queue, &output)
+        };
+        // A black view beside a white one: its glow-free resolve is black through and through.
+        let red = spill(true);
+        let dark_rows = mean(&red, SIZE.1 / 2..SIZE.1);
+        assert!(
+            dark_rows < 1.0,
+            "8-bit {eight_bit}: the dark view read {dark_rows}: the bright view's glow crossed the cut"
+        );
+    }
 }

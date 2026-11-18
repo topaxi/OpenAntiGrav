@@ -177,6 +177,7 @@ impl Pending {
             own_rockets: self.settings.graphics.own_rockets,
             water: oag_display::display::Water::default(),
             shadow_resolution: oag_display::display::ShadowResolution::default(),
+            scene_precision: oag_display::display::ScenePrecision::default(),
             foreign_track: self
                 .foreign_entry
                 .as_ref()

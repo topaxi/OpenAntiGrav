@@ -168,14 +168,10 @@ impl Scene {
     /// validation error, so this is not optional on resize.
     pub fn resize(&mut self, device: &wgpu::Device, format: wgpu::TextureFormat, size: (u32, u32)) {
         let sample_count = self.msaa.samples();
-        // Under the HD chain every scene pipeline was built against the
-        // linear float format, so the MSAA attachment has to match it, and
+        // Under a post chain every scene pipeline was built against the
+        // chain's scene format, so the MSAA attachment has to match it, and
         // the chain's own targets track the viewport.
-        let format = if self.draws_linear() {
-            oag_gpu::formats::SCENE_FORMAT
-        } else {
-            format
-        };
+        let format = self.scene_format(format);
         if let Some(hd) = &mut self.hd {
             hd.resize(device, size);
         }

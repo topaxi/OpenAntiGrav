@@ -341,6 +341,11 @@ pub struct RenderProfile {
     /// scene. See [`oag_display::display::ShadowResolution`].
     #[serde(default)]
     pub shadow_resolution: oag_display::display::ShadowResolution,
+    /// What Wipeout HD's scene target keeps of each pixel: `original` (the default,
+    /// the original's 8-bit sRGB target) or `float`. Read when a race builds its
+    /// scene. See [`oag_display::display::ScenePrecision`].
+    #[serde(default)]
+    pub scene_precision: oag_display::display::ScenePrecision,
 }
 
 impl RenderProfile {
@@ -495,6 +500,7 @@ impl Default for RenderProfile {
             weather: oag_display::display::Weather::default(),
             water: oag_display::display::Water::default(),
             shadow_resolution: oag_display::display::ShadowResolution::default(),
+            scene_precision: oag_display::display::ScenePrecision::default(),
         }
     }
 }
@@ -526,7 +532,7 @@ pub(super) fn ensure_known_titles(settings: &mut Settings) {
 /// hold", because the struct answers that. What needs it is the sweep that
 /// checks every menu seed lands in a table the settings file actually writes.
 #[cfg(test)]
-pub(super) const PROFILE_KEYS: [&str; 20] = [
+pub(super) const PROFILE_KEYS: [&str; 21] = [
     "render_scale",
     "render_scale_chosen",
     "target_fps",
@@ -547,6 +553,7 @@ pub(super) const PROFILE_KEYS: [&str; 20] = [
     "weather",
     "water",
     "shadow_resolution",
+    "scene_precision",
 ];
 
 /// The keys that used to live flat in `[graphics]` and now live in one

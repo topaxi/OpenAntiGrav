@@ -7,7 +7,7 @@
 
 use super::*;
 
-/// Wipeout HD's post chain: a linear float scene target, the read
+/// Wipeout HD's post chain: its scene target (the original's 8-bit one by default), the read
 /// FunkLayerBloom passes and the encode. Present exactly when the circuit
 /// authors an `HDR and Bloom` block - see `oag_post::hd_bloom` for
 /// what of it is the microcode's. A failure is reported and dropped the way
@@ -21,7 +21,7 @@ use super::*;
 ///
 /// Returns the chain itself (or `None`), the caller's own surface format -
 /// **the format is the statement about colour space**: with the chain in
-/// place every pipeline built after this call switches to the linear float
+/// place every pipeline built after this call switches to the chain's scene
 /// target and its own linear output, see `mesh_render::is_linear_target` -
 /// and that caller format again, unshadowed, for the one pass that runs
 /// after every chain has already encoded into the caller's view (see
@@ -48,28 +48,27 @@ pub(super) fn build(
         }
     };
     let caller_format = format;
-    let format = if hd.is_some() {
-        oag_gpu::formats::SCENE_FORMAT
-    } else {
-        format
-    };
+    let format = hd
+        .as_ref()
+        .map_or(format, oag_post::hd_bloom::Chain::scene_format);
     (hd, format, caller_format)
 }
 
 /// Omega's tone map (`oag_post::omega_tonemap`), built when the
 /// circuit authors a `Tonemap` block and no HD chain already owns the scene
-/// target. Returns it and the scene format, switched to the linear float one
+/// target (`owned`). Returns it and the scene format, switched to the linear float one
 /// when it is there - the same statement [`build`] makes. A failure is
 /// reported and dropped: the race then draws the pre-tonemap picture.
 pub(super) fn build_omega(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
     caller_format: wgpu::TextureFormat,
+    owned: bool,
     size: (u32, u32),
     params: Option<oag_post::omega_tonemap::Params>,
 ) -> (Option<oag_post::omega_tonemap::Chain>, wgpu::TextureFormat) {
     let omega = match params
-        .filter(|_| format == caller_format)
+        .filter(|_| !owned)
         .map(|params| oag_post::omega_tonemap::Chain::new(device, caller_format, size, params))
         .transpose()
     {
@@ -89,18 +88,19 @@ pub(super) fn build_omega(
 
 /// Wipeout 2048's `wo_*` chain (`oag_post::wo_composite`), built when the
 /// title runs it and the circuit authors its keys, and no other chain already
-/// owns the scene target. Returns it and the scene format, switched to the
+/// owns the scene target (`owned`). Returns it and the scene format, switched to the
 /// linear float one when it is there - the same statement [`build`] makes. A
 /// failure is reported and dropped: the race then draws without it.
 pub(super) fn build_wo(
     device: &wgpu::Device,
     format: wgpu::TextureFormat,
     caller_format: wgpu::TextureFormat,
+    owned: bool,
     size: (u32, u32),
     params: Option<oag_post::wo_composite::Params>,
 ) -> (Option<oag_post::wo_composite::Chain>, wgpu::TextureFormat) {
     let wo = match params
-        .filter(|_| format == caller_format)
+        .filter(|_| !owned)
         .map(|params| oag_post::wo_composite::Chain::new(device, caller_format, size, params))
         .transpose()
     {
@@ -134,7 +134,7 @@ pub(super) fn store(
 }
 
 impl Scene {
-    /// The linear float target the race pass draws into under any post chain,
+    /// The scene target the race pass draws into under any post chain,
     /// or `None` when it draws straight into the caller's view.
     pub(super) fn linear_scene_view(&self) -> Option<&wgpu::TextureView> {
         match (&self.hd, &self.omega, &self.wo) {
@@ -150,7 +150,17 @@ impl Scene {
         store(self.hd.as_ref(), self.omega.as_ref(), self.wo.is_some())
     }
 
-    /// Whether the scene's pipelines were built against the linear float
+    /// The format the scene's pipelines were built against: the chain's scene target's
+    /// under a post chain (HD's may be the 8-bit one), else `caller_format`.
+    pub(super) fn scene_format(&self, caller_format: wgpu::TextureFormat) -> wgpu::TextureFormat {
+        match (&self.hd, self.draws_linear()) {
+            (Some(hd), _) => hd.scene_format(),
+            (None, true) => oag_gpu::formats::SCENE_FORMAT,
+            (None, false) => caller_format,
+        }
+    }
+
+    /// Whether the scene's pipelines were built against a post chain's scene
     /// target - see [`build`], [`build_omega`] and [`build_wo`].
     pub(super) fn draws_linear(&self) -> bool {
         self.hd.is_some() || self.omega.is_some() || self.wo.is_some()

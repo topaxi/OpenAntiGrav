@@ -16,14 +16,22 @@ pub(crate) fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
     )
 }
 
-/// Writes `level(x, y)` (linear grey) into a scene target.
+/// Writes `level(x, y)` (linear grey, or the stored value on a target that stores encoded
+/// values) into a scene target: half floats, or bytes into Wipeout HD's 8-bit one.
 pub(crate) fn paint(queue: &wgpu::Queue, texture: &wgpu::Texture, level: impl Fn(u32, u32) -> f32) {
+    let bytes = texture.format() == oag_gpu::formats::SCENE_FORMAT_8BIT;
     let mut texels = Vec::new();
     for y in 0..SIZE.1 {
         for x in 0..SIZE.0 {
-            let v = half(level(x, y));
-            for channel in [v, v, v, half(0.0)] {
-                texels.extend_from_slice(&channel);
+            let value = level(x, y);
+            if bytes {
+                let v = (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+                texels.extend_from_slice(&[v, v, v, 0]);
+            } else {
+                let v = half(value);
+                for channel in [v, v, v, half(0.0)] {
+                    texels.extend_from_slice(&channel);
+                }
             }
         }
     }
@@ -37,7 +45,7 @@ pub(crate) fn paint(queue: &wgpu::Queue, texture: &wgpu::Texture, level: impl Fn
         &texels,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
-            bytes_per_row: Some(SIZE.0 * 8),
+            bytes_per_row: Some(SIZE.0 * if bytes { 4 } else { 8 }),
             rows_per_image: Some(SIZE.1),
         },
         wgpu::Extent3d {

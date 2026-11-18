@@ -300,6 +300,11 @@ place; the HUD reads 0:12.0 (a race running, the countdown long over), position 
 boat, a smooth shore gradient (no glints, no speckle). Ours at the same pose has the same basin and boat but a stippled grey-white speckle
 along the shore (water.md, 2048, Open 4a).
 
+**Clock and Park (2026-11-18, `vita-water-pairs`)**: the place path's scenery clock now picks the group that advances
+(`ghidra/functions/vita-2048-eu-v104/world-clock.md`, "The place path took a constant"); the 2.0039 s of the first pair was a fixed node. A
+second Altima pose (`-250,25,1385` yaw -15) held and matched on its first clean boot. **Park's `1000,200,-3500` is refused by the hold**
+(the guest pulls the body 725 units at 200 up: out of bounds above the track), and the Race-cell route loaded Park first time. Boots hang on
+"Sony Computer Entertainment presents" about every second launch (two in a row here: the watchdog's 150 s silence stops it; a third clean).
 **Not traced**: the chain from `Ship_UpdateCameraRigs` (`0x811bd89a`) to the body is not read (the picture and 14 and 38 hull matrices at the
 pose in the three scans are the evidence, not the chain), so nothing here is a rename (next: trace the camera rig from `0x811bd89a` to the body, then name the craft array `0x818a6bf8` as data); `camera.md` already has `bodyPos = *(*(ship+0x5f84)+0x38)`.
 A steering-only discriminator was not needed.

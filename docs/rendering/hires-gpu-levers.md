@@ -822,3 +822,86 @@ An RGP trace: `MESA_VK_TRACE=rgp MESA_VK_TRACE_FRAME=600` on the game under `gam
 headless` (`ENABLE_GAMESCOPE_WSI=0`) wrote no `.rgp` file, and the race sat in `race-paused`
 there without `pause_on_focus_loss = false`. Omega and 2048 were not run on the Deck (it holds
 the HD, Pulse and Pure images only).
+
+## HD's scene in 8 bits: the resolve in one hardware tap (2026-11-18, `hd-scene-8bit`)
+
+The question: what the original's own 8-bit `A8R8G8B8` scene target saves, read through an sRGB
+view so the bloom resolve is one hardware-filtered tap rather than four sRGB decodes (the lever
+"Dropped: the resolve through a decoded copy" above pointed at). It landed as the default,
+`graphics.scene_precision = original`; `float` is the target before. Picture and pairs:
+[hd-track-tone.md](hd-track-tone.md), "The scene target is 8-bit by default" (the pairs stay put,
+`float` is byte-identical to the build before).
+
+**Result on the NVIDIA RTX PRO 2000 (this notebook's dGPU).** The resolve span falls to a third
+at every size, the bloom downsample by a fifth, and the scene's own passes write half the bytes;
+at 4K the whole race's GPU time falls 17 % on the median.
+
+Method: `OAG_RENDER_GPU_BENCH=100 OAG_RENDER_PERF=1 oag-game <HD image> --race --mode single_race
+--seed 1 --autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 --screenshot out.png`,
+release `perf-probe` builds of `a9466c367` (before) and this change, the three arms interleaved,
+3 rounds, medians of the rounds' medians, load 1.8 to 3.1. `float` is this change's binary with
+`--scene-precision float`.
+
+| us, NVIDIA | 1280x800 before / 8-bit / float | 1920x1080 | 3840x2160 |
+| --- | --- | --- | --- |
+| `hd encode` (the resolve) | 48 / 14 / 48 | 113 / 36 / 121 | 556 / 208 / 550 |
+| `hd bloom downsample` | 35 / 31 / 35 | 54 / 46 / 55 | 164 / 120 / 172 |
+| `track solid, shaded` | 404 / 410 / 401 | 601 / 610 / 614 | 1,775 / 1,672 / 1,714 |
+| craft, weapons, shields | 104 / 106 / 104 | 150 / 152 / 154 | 490 / 459 / 469 |
+| sum of spans | 1,269 / 1,244 / 1,267 | 1,681 / 1,606 / 1,701 | 4,121 / 3,547 / 4,018 |
+| pipelined per frame | 2,239 / 2,156 / 2,212 | 2,812 / 2,790 / 2,977 | 7,334 / 6,124 / 7,398 |
+
+Whole race, `scripts/bench-render.py run hd --binary <bin> --size WxH` (one run each, 7,019
+frames both, load 2.1 to 3.4), before to after, ms:
+
+| NVIDIA | 1280x800 | 1920x1080 | 3840x2160 |
+| --- | --- | --- | --- |
+| GPU p50 | 1.18 to 1.13 (-4.7 %) | 2.21 to 1.99 (-10.0 %) | 7.22 to 6.01 (-16.8 %) |
+| GPU p95 | 1.87 to 1.77 (-5.2 %) | 3.23 to 2.99 (-7.5 %) | 9.94 to 8.64 (-13.2 %) |
+| frame p50 | 2.12 to 2.06 | 2.94 to 2.74 | 8.03 to 6.72 (-16.3 %) |
+
+**Result on the Steam Deck.** The resolve falls to 28 % of its cost at every size (3.88 to 1.10 ms
+at 4K, against about 1.2 ms the lever's estimate expected), the bloom downsample by 30 %, and the
+whole race's GPU time by 6 % at 800p, 10 % at 1080p and 13 % at 4K on the median.
+
+Method: `RADV VANGOGH`, AC, GPU clock unpinned and sampled with `amdgpu_top --json` beside every
+run (spans at a busy median of 1,040 MHz, whole races at 1,600 MHz for 130 to 145 of about 160
+one-second samples at 4K), Deck load 0.8 to 2.8, offscreen over ssh under the Deck's lock. One
+binary, the `oag-appimage-build:bookworm` container's release `perf-probe` build with `-C
+target-cpu=znver2`; **before is the same binary with `--scene-precision float`** (byte-identical
+to the build before on every HD pair), after is the default. Spans: this page's "Method" command,
+the two arms interleaved (ABBA), 2 rounds, which agree within 0.3 %.
+
+| us, Deck | 1280x800 float / 8-bit | 1920x1080 | 3840x2160 |
+| --- | --- | --- | --- |
+| `hd encode` (the resolve) | 448 / 130 | 984 / 284 | 3,881 / 1,104 (-72 %) |
+| `hd bloom downsample` | 157 / 118 | 320 / 228 | 1,108 / 776 |
+| `track solid, shaded` | 2,057 / 2,018 | 3,489 / 3,468 | 10,524 / 10,490 |
+| craft, weapons, shields | 678 / 674 | 1,091 / 1,090 | 3,084 / 3,077 |
+| sum of spans | 5,876 / 5,412 | 8,749 / 7,943 | 23,026 / 19,866 (-13.7 %) |
+| pipelined per frame | 5,754 / 5,695 (CPU bound) | 6,651 / 6,124 | 16,249 / 14,138 (-13.0 %) |
+
+Whole race, `scripts/bench-render.py run hd --binary <arm> --size WxH`, 7,019 frames in every run,
+ms, float to 8-bit; the 4K pair was run twice (float, 8-bit, float, 8-bit), and the two agree:
+
+| Deck | 1280x800 | 1920x1080 | 3840x2160, run 1 | 3840x2160, run 2 |
+| --- | --- | --- | --- | --- |
+| GPU p50 | 3.76 to 3.53 (-6.0 %) | 6.00 to 5.42 (-9.7 %) | 18.33 to 15.97 (-12.9 %) | 18.48 to 15.98 (-13.5 %) |
+| GPU p95 | 4.63 to 4.40 (-5.1 %) | 7.95 to 7.34 (-7.7 %) | 26.62 to 24.36 (-8.5 %) | 26.98 to 24.38 (-9.6 %) |
+| frame p50 | 5.56 to 5.51 | 7.76 to 7.28 (-6.2 %) | 20.43 to 18.06 (-11.6 %) | 20.37 to 18.04 (-11.5 %) |
+| frame p95 | 7.01 to 6.88 | 9.95 to 9.33 (-6.3 %) | 28.47 to 26.30 (-7.6 %) | 28.76 to 26.34 (-8.4 %) |
+
+The float arm reproduces the page's earlier 4K figures (GPU p50 18.36 ms after the `lit_by_rig` fold,
+above), so the float arm is the before. Native 4K on the Deck still misses 60 Hz (frame p50 18.1 ms,
+p95 26.3).
+
+### Not landed: opaque draws writing through an sRGB attachment view
+
+With the scene 8-bit, the circuit's opaque draws could write linear light through an
+`Rgba8UnormSrgb` attachment view and drop `target_out`'s three `pow`; the blended draws must keep
+blending encoded values, so they need the race pass split in two by attachment view. The bound,
+measured with a timing arm that drops the encode from every mesh pipeline (wrong picture on
+purpose, not committed): NVIDIA 4K `track solid, shaded` 1,540 to 1,491 us and craft 441 to 402 us,
+medians of 3, about 1.5 % of a 6.2 ms frame before the second pass's cost; the Deck's own arm
+above ("no target encode") is 0.57 ms of a serialised 11.3 ms span, about 0.37 ms at the race's
+clock. Not worth a split race pass on this evidence; it stays recorded.

@@ -656,3 +656,16 @@ fn a_shadow_resolution_round_trips_and_only_grows() {
             .all(|pair| pair[0].scale() < pair[1].scale())
     );
 }
+
+#[test]
+fn a_scene_precision_round_trips_and_defaults_to_the_originals_8_bits() {
+    for value in ScenePrecision::ALL {
+        assert_eq!(value.name().parse::<ScenePrecision>(), Ok(value));
+        assert_eq!(value.to_string(), value.name());
+    }
+    assert_eq!("FLOAT".parse::<ScenePrecision>(), Ok(ScenePrecision::Float));
+    assert!("half".parse::<ScenePrecision>().is_err());
+    assert_eq!(ScenePrecision::default(), ScenePrecision::Original);
+    assert!(ScenePrecision::Original.is_eight_bit());
+    assert!(!ScenePrecision::Float.is_eight_bit());
+}

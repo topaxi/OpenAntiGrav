@@ -625,6 +625,19 @@ impl Session {
                     return;
                 }
             },
+            // Read when the next race builds its scene: every scene pipeline is built
+            // against the target's format.
+            "graphics.scene_precision" => match text.parse::<display::ScenePrecision>() {
+                Ok(precision) => {
+                    if let Some(profile) = self.render_profile_mut() {
+                        profile.scene_precision = precision;
+                    }
+                }
+                Err(e) => {
+                    warn!("ignoring {setting} = {text:?}: {e}");
+                    return;
+                }
+            },
             // Read when the next race loads its circuit: the water families
             // are classified into their material slots there
             // (`oag_mesh::mesh::WaterLaw`).

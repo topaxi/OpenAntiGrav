@@ -933,6 +933,15 @@ pub(crate) struct Cli {
     #[arg(long)]
     pub(crate) shadow_resolution: Option<oag_display::display::ShadowResolution>,
 
+    /// What Wipeout HD's scene target keeps of each pixel: original (the
+    /// original's 8-bit sRGB target) or float.
+    ///
+    /// Overrides `[render_profiles.<title>] scene_precision` for every title,
+    /// for this run only. See docs/rendering/hd-track-tone.md, "The scene target
+    /// is 8-bit by default".
+    #[arg(long)]
+    pub(crate) scene_precision: Option<oag_display::display::ScenePrecision>,
+
     /// Which screen filter draws the finished frame: `off`, a built-in such
     /// as `psp-3000` or `crt-interlaced`, or the stem of a `.wgsl` file in
     /// `<config dir>/oag/shaders/`.

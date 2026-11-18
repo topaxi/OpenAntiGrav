@@ -26,6 +26,7 @@ pub(super) fn params() -> Params {
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
         final_half_texel: false,
+        eight_bit: false,
         zoom: None,
         store: oag_gpu::formats::SceneStore::Computed,
     }
@@ -856,4 +857,49 @@ fn exposure_falls_with_the_adapted_luma_and_stops_at_the_clamp() {
     assert!((exposure(0.0, 35.0, 3.0, 4.0) - 4.0).abs() < 1e-6);
     assert!((exposure(0.0163, 35.0, 3.0, 4.0) - 3.4295).abs() < 1e-4);
     assert!((exposure(1.0, 35.0, 3.0, 4.0) - 1.0).abs() < 1e-6);
+}
+
+/// HD's scene in the original's 8-bit target, read by the resolve through its sRGB view,
+/// resolves a flat encoded value as the float target does, on texel centres and half a
+/// texel off (the one-tap read stands in for the four decoded taps), and only a scene that
+/// stores encoded values is put in it.
+#[test]
+fn the_8bit_scene_resolves_as_the_float_one() {
+    let eight_bit = |final_half_texel| Params {
+        eight_bit: true,
+        final_half_texel,
+        ..params()
+    };
+    for shift in [false, true] {
+        for byte in [41.0f64, 128.0, 200.0] {
+            let stored = byte / 255.0;
+            let float = resolve_flat_with(
+                Params {
+                    final_half_texel: shift,
+                    ..params()
+                },
+                SceneStore::Encoded,
+                stored,
+            );
+            let (Some(float), Some(eight)) = (
+                float,
+                resolve_flat_with(eight_bit(shift), SceneStore::Encoded, stored),
+            ) else {
+                eprintln!("no GPU adapter: skipping");
+                return;
+            };
+            assert!(
+                float.abs_diff(eight) <= 1,
+                "level {byte}, shifted {shift}: float {float}, 8-bit {eight}"
+            );
+        }
+    }
+    assert_eq!(
+        oag_gpu::formats::scene_format(SceneStore::Encoded, true),
+        oag_gpu::formats::SCENE_FORMAT_8BIT
+    );
+    assert_eq!(
+        oag_gpu::formats::scene_format(SceneStore::Computed, true),
+        SCENE_FORMAT
+    );
 }
