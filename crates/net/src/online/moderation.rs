@@ -3,9 +3,12 @@
 //! (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
 //! decision 6).
 //!
-//! One ban a line, `key <64 hex digits> [reason]` or `addr <ip address> [reason]`; blank lines
-//! and lines starting with `#` are skipped. A line that does not parse is reported and skipped,
-//! never a reason to stop serving.
+//! One ban a line, `key <64 hex digits> [date] [reason]` or `addr <ip address> [date]
+//! [reason]`; blank lines and lines starting with `#` are skipped. The date is when the ban was
+//! made, a UTC stamp as the log writes one (`2026-11-18T12:34:56.789Z`, `oag_log::stamp`), so a
+//! list can be pruned or bans given a lifetime later; a line without one is a ban of unknown
+//! date. The lobby writes the date on every ban it makes itself. A line that does not parse is
+//! reported and skipped, never a reason to stop serving.
 
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
@@ -22,11 +25,39 @@ const MAX_BANS: usize = 10_000;
 /// The reason shown when a ban line gives none.
 const NO_REASON: &str = "banned by the operator";
 
+/// One ban: why, and since when.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ban {
+    /// Why, as the player is told.
+    pub reason: String,
+    /// When the ban was made (`oag_log::stamp`), `None` for a line that gives no date.
+    pub since: Option<String>,
+}
+
+impl Ban {
+    /// A ban made now, for `reason`.
+    #[must_use]
+    pub fn now(reason: &str) -> Self {
+        Self {
+            reason: reason.replace(['\n', '\r'], " "),
+            since: Some(oag_log::stamp::format(SystemTime::now())),
+        }
+    }
+
+    /// The ban's line after its subject: the date if known, then the reason.
+    fn tail(&self) -> String {
+        match &self.since {
+            Some(since) => format!("{since} {}", self.reason),
+            None => self.reason.clone(),
+        }
+    }
+}
+
 /// The parsed list.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Bans {
-    keys: Vec<([u8; 32], String)>,
-    addrs: Vec<(IpAddr, String)>,
+    keys: Vec<([u8; 32], Ban)>,
+    addrs: Vec<(IpAddr, Ban)>,
 }
 
 impl Bans {
@@ -42,12 +73,17 @@ impl Bans {
             }
             let mut words = line.splitn(3, char::is_whitespace);
             let (kind, subject) = (words.next().unwrap_or(""), words.next().unwrap_or(""));
-            let reason = words
-                .next()
-                .map(str::trim)
+            let rest = words.next().map_or("", str::trim);
+            let (since, rest) = match rest.split_once(char::is_whitespace) {
+                Some((first, more)) if is_stamp(first) => (Some(first.to_string()), more.trim()),
+                None if is_stamp(rest) => (Some(rest.to_string()), ""),
+                _ => (None, rest),
+            };
+            let reason = Some(rest)
                 .filter(|reason| !reason.is_empty())
                 .unwrap_or(NO_REASON)
                 .to_string();
+            let reason = Ban { reason, since };
             match kind {
                 "key" => match crate::wt::parse_hash(subject) {
                     Ok(key) => bans.keys.push((key, reason)),
@@ -70,13 +106,22 @@ impl Bans {
         self.keys
             .iter()
             .find(|(banned, _)| banned == key)
-            .map(|(_, reason)| reason.as_str())
+            .map(|(_, ban)| ban.reason.as_str())
             .or_else(|| {
                 self.addrs
                     .iter()
                     .find(|(banned, _)| *banned == addr)
-                    .map(|(_, reason)| reason.as_str())
+                    .map(|(_, ban)| ban.reason.as_str())
             })
+    }
+
+    /// The ban on `key`, if there is one: its reason and date.
+    #[must_use]
+    pub fn key_ban(&self, key: &[u8; 32]) -> Option<&Ban> {
+        self.keys
+            .iter()
+            .find(|(banned, _)| banned == key)
+            .map(|(_, ban)| ban)
     }
 
     /// How many bans the list holds.
@@ -90,6 +135,11 @@ impl Bans {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+}
+
+/// Whether `word` is a ban's date: a log stamp and nothing more.
+fn is_stamp(word: &str) -> bool {
+    word.len() == oag_log::stamp::WIDTH && oag_log::stamp::leads(word)
 }
 
 /// An IPv4 address a dual-stack socket reports as `::ffff:a.b.c.d` is that IPv4 address.
@@ -108,6 +158,8 @@ pub struct BanFile {
     /// The file's modification time and length when it was last read.
     seen: Option<(SystemTime, u64)>,
     looked: Option<Instant>,
+    /// Keys the lobby banned itself, on a proof: kept whatever the file says.
+    proven: Vec<([u8; 32], Ban)>,
 }
 
 impl BanFile {
@@ -120,6 +172,7 @@ impl BanFile {
             bans: Bans::default(),
             seen: None,
             looked: None,
+            proven: Vec::new(),
         };
         file.refresh();
         file
@@ -147,7 +200,12 @@ impl BanFile {
             return false;
         }
         self.seen = modified;
-        let bans = read(&path);
+        let mut bans = read(&path);
+        for (key, ban) in &self.proven {
+            if !bans.keys.iter().any(|(k, _)| k == key) {
+                bans.keys.push((*key, ban.clone()));
+            }
+        }
         let changed = bans != self.bans;
         self.bans = bans;
         if changed {
@@ -158,6 +216,30 @@ impl BanFile {
             );
         }
         changed
+    }
+}
+
+impl BanFile {
+    /// Bans `key` from hosting for `reason` from now, and after a restart: the line, dated, is
+    /// appended to the file when there is one (the operator may delete it to lift the ban).
+    pub fn ban(&mut self, key: [u8; 32], reason: &str) {
+        let ban = Ban::now(reason);
+        if !self.bans.keys.iter().any(|(k, _)| *k == key) {
+            self.bans.keys.push((key, ban.clone()));
+        }
+        let line = format!("key {} {}\n", crate::wt::hex(&key), ban.tail());
+        self.proven.push((key, ban));
+        let Some(path) = &self.path else {
+            return;
+        };
+        let written = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut file| std::io::Write::write_all(&mut file, line.as_bytes()));
+        if let Err(e) = written {
+            log::warn!("lobby: could not add the ban to {}: {e}", path.display());
+        }
     }
 }
 
@@ -197,5 +279,41 @@ mod tests {
             Some("v4 in v6")
         );
         assert_eq!(bans.banned(&[1; 32], free), None);
+        assert_eq!(
+            bans.key_ban(&[0xAB; 32]).and_then(|b| b.since.clone()),
+            None
+        );
+    }
+
+    #[test]
+    fn a_ban_names_its_date_and_the_lobby_writes_it_on_its_own_bans() {
+        let key = "cd".repeat(32);
+        let text = format!(
+            "key {key} 2026-11-18T09:15:00.000Z forged an input\naddr 192.0.2.7 \
+             2026-11-17T00:00:00.000Z\n"
+        );
+        let (bans, skipped) = Bans::parse(&text);
+        assert!(skipped.is_empty(), "{skipped:?}");
+        let ban = bans.key_ban(&[0xCD; 32]).expect("the key is banned");
+        assert_eq!(ban.reason, "forged an input");
+        assert_eq!(ban.since.as_deref(), Some("2026-11-18T09:15:00.000Z"));
+        assert_eq!(
+            bans.banned(&[1; 32], "192.0.2.7".parse().expect("addr")),
+            Some(NO_REASON),
+            "a date with no reason"
+        );
+        let dir = std::env::temp_dir().join(format!("oag-ban-date-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("bans.txt");
+        let _ = std::fs::remove_file(&path);
+        let mut file = BanFile::new(Some(path.clone()));
+        file.ban([7; 32], "altered the race");
+        let written = std::fs::read_to_string(&path).expect("the ban was written");
+        let (again, skipped) = Bans::parse(&written);
+        assert!(skipped.is_empty(), "{written}");
+        let ban = again.key_ban(&[7; 32]).expect("read back");
+        assert_eq!(ban.reason, "altered the race");
+        assert!(ban.since.as_deref().is_some_and(is_stamp), "{written}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

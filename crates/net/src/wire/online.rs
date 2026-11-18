@@ -277,6 +277,9 @@ pub enum Message {
         titles: Vec<Edition>,
         /// A token an earlier [`Self::Welcome`] issued, empty for none.
         token: String,
+        /// The player's Ed25519 public key, all zero for none: what a player-hosted race checks
+        /// this person's signed inputs against.
+        key: [u8; 32],
     },
     /// Client to lobby: send [`Self::Rooms`].
     ListRooms,
@@ -326,6 +329,30 @@ pub enum Message {
         /// The room.
         room: u32,
     },
+    /// Client to lobby: one part of a case against a player host (`crate::fair::Proof`'s bytes
+    /// in [`crate::fair::PART_BYTES`] parts, in order).
+    Report {
+        /// The room whose race it is.
+        room: u32,
+        /// This part's index.
+        part: u16,
+        /// How many parts the proof has.
+        parts: u16,
+        /// The part's bytes.
+        bytes: Vec<u8>,
+    },
+    /// Host to lobby: the answer to [`Self::ShowInput`], the signed input datagram (encoded) or
+    /// empty for none.
+    InputShown {
+        /// The room.
+        room: u32,
+        /// The seat asked about.
+        seat: u8,
+        /// The tick asked about.
+        tick: u32,
+        /// The datagram's bytes.
+        datagram: Vec<u8>,
+    },
     /// Host to lobby: the hosted race is over, and why.
     HostOver {
         /// The room.
@@ -361,6 +388,16 @@ pub enum Message {
         /// The race and its seats, as a race child is told them.
         job: RaceJob,
     },
+    /// Lobby to a player host: show the signed datagram behind the input the race confirmed for
+    /// `seat` at `tick` ([`Self::InputShown`]); its seat says it never sent it.
+    ShowInput {
+        /// The room.
+        room: u32,
+        /// The seat.
+        seat: u8,
+        /// The tick.
+        tick: u32,
+    },
     /// Lobby to client: the race is up. Reconnect to `host` on `port`, trusting only
     /// `cert_hash`, and say the seat `token` in the race hello. The lobby link stays open.
     Handoff {
@@ -375,6 +412,11 @@ pub enum Message {
         token: String,
         /// The name the seat is under.
         name: String,
+        /// `crate::fair::params_hash` of the race the lobby issued: a welcome naming another
+        /// race is refused.
+        params: [u8; 32],
+        /// A player host's public key, which signs its checkpoints; all zero for a server race.
+        host_key: [u8; 32],
     },
     /// Lobby to client: refused, and why.
     Rejected {
@@ -394,6 +436,9 @@ pub struct RaceJob {
     pub params: RaceParams,
     /// `(name, seat token)` by seat.
     pub seats: Vec<(String, String)>,
+    /// Each seat's player key as its lobby hello named it, by seat, all zero for none. A player
+    /// host takes only inputs signed by it.
+    pub keys: Vec<[u8; 32]>,
 }
 
 impl RaceJob {
@@ -406,6 +451,10 @@ impl RaceJob {
         for (name, token) in self.seats.iter().take(usize::from(u8::MAX)) {
             put_string(&mut out, name);
             put_string(&mut out, token);
+        }
+        out.push(u8::try_from(self.keys.len()).unwrap_or(u8::MAX));
+        for key in self.keys.iter().take(usize::from(u8::MAX)) {
+            out.extend_from_slice(key);
         }
         out
     }
@@ -428,7 +477,15 @@ impl RaceJob {
         let seats = (0..count)
             .map(|_| Ok((r.string()?, r.string()?)))
             .collect::<Result<Vec<_>, Malformed>>()?;
-        Ok(Self { params, seats })
+        let count = r.u8()?;
+        let keys = (0..count)
+            .map(|_| take_key(r))
+            .collect::<Result<Vec<_>, Malformed>>()?;
+        Ok(Self {
+            params,
+            seats,
+            keys,
+        })
     }
 
     /// The job as one line of hex.
@@ -445,6 +502,23 @@ impl RaceJob {
     pub fn from_line(line: &str) -> Result<Self, Malformed> {
         Self::decode(&super::from_hex(line)?)
     }
+}
+
+fn take_key(r: &mut Reader<'_, Le>) -> Result<[u8; 32], Malformed> {
+    let mut key = [0; 32];
+    key.copy_from_slice(r.take(32)?);
+    Ok(key)
+}
+
+fn put_bytes(out: &mut Vec<u8>, bytes: &[u8]) {
+    let len = bytes.len().min(u32::MAX as usize);
+    out.extend_from_slice(&u32::try_from(len).unwrap_or(u32::MAX).to_le_bytes());
+    out.extend_from_slice(&bytes[..len]);
+}
+
+fn take_bytes(r: &mut Reader<'_, Le>) -> Result<Vec<u8>, Malformed> {
+    let len = r.u32()? as usize;
+    Ok(r.take(len)?.to_vec())
 }
 
 fn put_editions(out: &mut Vec<u8>, list: &[Edition]) {
@@ -548,6 +622,7 @@ impl Message {
                 name,
                 titles,
                 token,
+                key,
             } => {
                 out.push(0x20);
                 out.extend_from_slice(&MAGIC);
@@ -555,6 +630,7 @@ impl Message {
                 put_string(&mut out, name);
                 put_editions(&mut out, titles);
                 put_string(&mut out, token);
+                out.extend_from_slice(key);
             }
             Self::ListRooms => out.push(0x21),
             Self::CreateRoom(settings) => {
@@ -604,6 +680,36 @@ impl Message {
                 out.extend_from_slice(&room.to_le_bytes());
                 put_string(&mut out, reason);
                 board.put(&mut out);
+            }
+            Self::Report {
+                room,
+                part,
+                parts,
+                bytes,
+            } => {
+                out.push(0x2D);
+                out.extend_from_slice(&room.to_le_bytes());
+                out.extend_from_slice(&part.to_le_bytes());
+                out.extend_from_slice(&parts.to_le_bytes());
+                put_bytes(&mut out, bytes);
+            }
+            Self::InputShown {
+                room,
+                seat,
+                tick,
+                datagram,
+            } => {
+                out.push(0x2E);
+                out.extend_from_slice(&room.to_le_bytes());
+                out.push(*seat);
+                out.extend_from_slice(&tick.to_le_bytes());
+                put_bytes(&mut out, datagram);
+            }
+            Self::ShowInput { room, seat, tick } => {
+                out.push(0x37);
+                out.extend_from_slice(&room.to_le_bytes());
+                out.push(*seat);
+                out.extend_from_slice(&tick.to_le_bytes());
             }
             Self::Launch { room, job } => {
                 out.push(0x36);
@@ -661,6 +767,8 @@ impl Message {
                 cert_hash,
                 token,
                 name,
+                params,
+                host_key,
             } => {
                 out.push(0x34);
                 put_string(&mut out, host);
@@ -668,6 +776,8 @@ impl Message {
                 out.extend_from_slice(cert_hash);
                 put_string(&mut out, token);
                 put_string(&mut out, name);
+                out.extend_from_slice(params);
+                out.extend_from_slice(host_key);
             }
             Self::Rejected { code, text } => {
                 out.push(0x35);
@@ -696,6 +806,7 @@ impl Message {
                     name: r.string()?,
                     titles: take_editions(&mut r)?,
                     token: r.string()?,
+                    key: take_key(&mut r)?,
                 }
             }
             0x21 => Self::ListRooms,
@@ -720,6 +831,23 @@ impl Message {
                 room: r.u32()?,
                 reason: r.string()?,
                 board: Board::take(&mut r)?,
+            },
+            0x2D => Self::Report {
+                room: r.u32()?,
+                part: r.u16()?,
+                parts: r.u16()?,
+                bytes: take_bytes(&mut r)?,
+            },
+            0x2E => Self::InputShown {
+                room: r.u32()?,
+                seat: r.u8()?,
+                tick: r.u32()?,
+                datagram: take_bytes(&mut r)?,
+            },
+            0x37 => Self::ShowInput {
+                room: r.u32()?,
+                seat: r.u8()?,
+                tick: r.u32()?,
             },
             0x36 => Self::Launch {
                 room: r.u32()?,
@@ -783,6 +911,8 @@ impl Message {
                     cert_hash,
                     token: r.string()?,
                     name: r.string()?,
+                    params: take_key(&mut r)?,
+                    host_key: take_key(&mut r)?,
                 }
             }
             0x35 => Self::Rejected {
@@ -797,12 +927,13 @@ impl Message {
 
     /// The hello a client opens with.
     #[must_use]
-    pub fn hello(name: &str, titles: &[Edition], token: &str) -> Self {
+    pub fn hello(name: &str, titles: &[Edition], token: &str, key: [u8; 32]) -> Self {
         Self::Hello {
             protocol: PROTOCOL,
             name: name.to_string(),
             titles: titles.to_vec(),
             token: token.to_string(),
+            key,
         }
     }
 }
@@ -842,7 +973,25 @@ mod tests {
                     Edition::default(),
                 ],
                 "tok",
+                [0x5A; 32],
             ),
+            Message::Report {
+                room: 4,
+                part: 1,
+                parts: 3,
+                bytes: vec![1, 2, 3],
+            },
+            Message::InputShown {
+                room: 4,
+                seat: 1,
+                tick: 300,
+                datagram: vec![0x12, 9],
+            },
+            Message::ShowInput {
+                room: 4,
+                seat: 1,
+                tick: 300,
+            },
             Message::ListRooms,
             Message::CreateRoom(settings()),
             Message::JoinRoom { room: 9 },
@@ -918,6 +1067,8 @@ mod tests {
                 cert_hash: [7; 32],
                 token: "seat".into(),
                 name: "ann".into(),
+                params: [8; 32],
+                host_key: [9; 32],
             },
         ];
         for message in messages {
@@ -971,6 +1122,7 @@ mod tests {
                 zone_target: 30,
             },
             seats: vec![("ann".into(), "t0".into()), ("bob".into(), "t1".into())],
+            keys: vec![[1; 32], [0; 32]],
         };
         assert_eq!(RaceJob::from_line(&job.to_line()), Ok(job));
         assert!(RaceJob::from_line("zz").is_err());
@@ -987,7 +1139,7 @@ mod tests {
 
     #[test]
     fn a_truncated_or_unmagicked_hello_is_refused_by_name() {
-        let hello = Message::hello("x", &[], "").encode();
+        let hello = Message::hello("x", &[], "", [0; 32]).encode();
         assert_eq!(
             Message::decode(&hello[..hello.len() - 1]),
             Err(Malformed("truncated"))

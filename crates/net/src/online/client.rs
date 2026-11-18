@@ -24,6 +24,10 @@ pub struct Handoff {
     pub token: String,
     /// The name the seat is under.
     pub name: String,
+    /// The hash of the race the lobby issued (`crate::fair::params_hash`); all zero for none.
+    pub params: [u8; 32],
+    /// A player host's public key, all zero for a server race.
+    pub host_key: [u8; 32],
 }
 
 /// A connection to a lobby.
@@ -47,13 +51,30 @@ pub struct LobbyClient {
     pub refused: Option<(Refusal, String)>,
     /// A race the lobby asked this machine to host; taken with [`Self::take_launch`].
     launch: Option<(u32, RaceJob)>,
+    /// Inputs the lobby asked this machine, as a room's host, to show: `(room, seat, tick)`.
+    challenges: Vec<(u32, u8, u32)>,
 }
+
+/// Challenges a host keeps unanswered at most; past it the oldest is dropped.
+const MAX_CHALLENGES: usize = 64;
 
 impl LobbyClient {
     /// Says hello on `link` as `name`, able to race `titles` (each with its platform and content); `token` is an earlier
     /// session's, empty for a new one.
-    pub fn connect(mut link: Box<dyn Link>, name: &str, titles: &[Edition], token: &str) -> Self {
-        link.send_lobby(&Message::hello(name, titles, token));
+    pub fn connect(link: Box<dyn Link>, name: &str, titles: &[Edition], token: &str) -> Self {
+        Self::connect_keyed(link, name, titles, token, [0; 32])
+    }
+
+    /// [`Self::connect`] naming the player's public `key`, which a player-hosted race checks
+    /// this person's signed inputs against.
+    pub fn connect_keyed(
+        mut link: Box<dyn Link>,
+        name: &str,
+        titles: &[Edition],
+        token: &str,
+        key: [u8; 32],
+    ) -> Self {
+        link.send_lobby(&Message::hello(name, titles, token, key));
         Self {
             link,
             name: None,
@@ -65,6 +86,7 @@ impl LobbyClient {
             left: None,
             refused: None,
             launch: None,
+            challenges: Vec::new(),
         }
     }
 
@@ -104,6 +126,8 @@ impl LobbyClient {
                     cert_hash,
                     token,
                     name,
+                    params,
+                    host_key,
                 }) => {
                     self.handoff = Some(Handoff {
                         host,
@@ -111,7 +135,15 @@ impl LobbyClient {
                         cert_hash,
                         token,
                         name,
+                        params,
+                        host_key,
                     });
+                }
+                Ok(Message::ShowInput { room, seat, tick }) => {
+                    if self.challenges.len() >= MAX_CHALLENGES {
+                        self.challenges.remove(0);
+                    }
+                    self.challenges.push((room, seat, tick));
                 }
                 Ok(Message::Rejected { code, text }) => self.refused = Some((code, text)),
                 Ok(other) => log::warn!("lobby: unexpected {other:?}"),
@@ -167,6 +199,31 @@ impl LobbyClient {
     /// Tells the lobby the hosted race of `room` is loaded and its seats may dial.
     pub fn host_up(&mut self, room: u32) {
         self.link.send_lobby(&Message::HostUp { room });
+    }
+
+    /// The inputs the lobby asked this machine to show, as `(room, seat, tick)`; taken.
+    pub fn take_challenges(&mut self) -> Vec<(u32, u8, u32)> {
+        std::mem::take(&mut self.challenges)
+    }
+
+    /// Answers a challenge: the signed datagram behind the input, empty for none.
+    pub fn show_input(&mut self, room: u32, seat: u8, tick: u32, datagram: Vec<u8>) {
+        self.link.send_lobby(&Message::InputShown {
+            room,
+            seat,
+            tick,
+            datagram,
+        });
+    }
+
+    /// Sends the lobby one part of a case against the host of `room`'s race.
+    pub fn report_part(&mut self, room: u32, part: u16, parts: u16, bytes: Vec<u8>) {
+        self.link.send_lobby(&Message::Report {
+            room,
+            part,
+            parts,
+            bytes,
+        });
     }
 
     /// Tells the lobby the hosted race of `room` is over.

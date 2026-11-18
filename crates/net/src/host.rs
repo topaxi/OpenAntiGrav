@@ -71,6 +71,8 @@ pub struct Seat {
     ready: bool,
     /// Inputs that arrived for ticks not yet run, by tick.
     inputs: BTreeMap<u32, Held>,
+    /// The signed datagram (encoded) each of [`Self::inputs`] came in, in a player-hosted race.
+    signed: BTreeMap<u32, std::sync::Arc<[u8]>>,
     /// The input applied last, repeated when the buffer has nothing for a tick.
     last: Held,
     /// The edge state the held stream has advanced, the server's own.
@@ -143,7 +145,61 @@ pub struct Host {
     expected: Vec<(String, String)>,
     /// What the seats are told when whoever runs this host stops it.
     stop_reason: &'static str,
+    /// A player host's checkpoints and input checks ([`Self::sign_with`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    fair: Option<Fair>,
+    /// The test-only cheat this host commits.
+    #[cfg(feature = "test-cheats")]
+    cheat: Cheat,
 }
+
+/// What a player host signs and checks
+/// (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
+/// "The anti-cheat path").
+#[cfg(not(target_arch = "wasm32"))]
+struct Fair {
+    key: std::sync::Arc<crate::online::hostkey::PlayerKey>,
+    params: [u8; 32],
+    chain: crate::fair::Chain,
+    /// Each seat's player key, all zero for a seat whose inputs need no signature.
+    seat_keys: Vec<[u8; 32]>,
+    ledger: crate::fair::SharedLedger,
+}
+
+/// A cheat a test makes a host commit, to prove it is caught. Built only with the
+/// `test-cheats` feature, which no shipped build turns on.
+#[cfg(feature = "test-cheats")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Cheat {
+    /// An honest host.
+    #[default]
+    None,
+    /// From [`CHEAT_AT`] on, the host's own craft (seat 0) flies 5 percent faster than the
+    /// simulation says, every tick.
+    Speed,
+    /// At [`CHEAT_AT`], seat 1 is confirmed an input it never sent.
+    Forge,
+    /// The race is loaded and welcomed with another seed than the lobby issued.
+    Seed,
+}
+
+#[cfg(feature = "test-cheats")]
+impl Cheat {
+    /// The cheat `OAG_TEST_CHEAT` names (`speed`, `forge`, `seed`), else none.
+    #[must_use]
+    pub fn from_env() -> Self {
+        match std::env::var("OAG_TEST_CHEAT").as_deref() {
+            Ok("speed") => Self::Speed,
+            Ok("forge") => Self::Forge,
+            Ok("seed") => Self::Seed,
+            _ => Self::None,
+        }
+    }
+}
+
+/// The tick a test cheat starts at: five seconds in.
+#[cfg(feature = "test-cheats")]
+pub const CHEAT_AT: u32 = 300;
 
 impl Host {
     /// A host for `race`, already prepared ([`crate::race::prepare`]), seating
@@ -164,7 +220,38 @@ impl Host {
             phase: Phase::Lobby,
             expected: Vec::new(),
             stop_reason: "the host stopped",
+            #[cfg(not(target_arch = "wasm32"))]
+            fair: None,
+            #[cfg(feature = "test-cheats")]
+            cheat: Cheat::None,
         }
+    }
+
+    /// Makes this a player host's race: it signs a checkpoint of the confirmed records once a
+    /// second with `key`, and takes a seat's inputs only signed by that seat's key in
+    /// `seat_keys` (a zero key takes them unsigned), noting each applied one's datagram in
+    /// `ledger` to show the lobby on a challenge.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn sign_with(
+        &mut self,
+        key: std::sync::Arc<crate::online::hostkey::PlayerKey>,
+        seat_keys: Vec<[u8; 32]>,
+        ledger: crate::fair::SharedLedger,
+    ) {
+        let params = crate::fair::params_hash(&self.params);
+        self.fair = Some(Fair {
+            key,
+            params,
+            chain: crate::fair::Chain::new(&params, self.fingerprint),
+            seat_keys,
+            ledger,
+        });
+    }
+
+    /// Makes this host commit `cheat` (tests only).
+    #[cfg(feature = "test-cheats")]
+    pub fn set_cheat(&mut self, cheat: Cheat) {
+        self.cheat = cheat;
     }
 
     /// What the seats are told when whoever runs this host stops it ([`crate::serve::run`]).
@@ -330,12 +417,42 @@ impl Host {
             }
             while let Some(message) = seat.link.recv() {
                 match message {
-                    Ok(Datagram::Inputs {
-                        seat: from,
-                        first,
-                        inputs,
-                    }) if usize::from(from) == slot => {
+                    Ok(datagram @ Datagram::Inputs { seat: from, .. })
+                        if usize::from(from) == slot =>
+                    {
                         seat.heard = Instant::now();
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let signed = match self.fair.as_ref() {
+                            Some(fair) => match fair.seat_keys.get(slot).filter(|k| **k != [0; 32])
+                            {
+                                Some(key)
+                                    if crate::fair::inputs_signed(
+                                        &datagram,
+                                        &fair.params,
+                                        from,
+                                        key,
+                                    ) =>
+                                {
+                                    Some(std::sync::Arc::<[u8]>::from(datagram.encode()))
+                                }
+                                Some(_) => {
+                                    seat.log.warn(|| {
+                                        format!(
+                                            "net: seat {slot}: an input datagram not signed by \
+                                             the seat's key, dropped"
+                                        )
+                                    });
+                                    continue;
+                                }
+                                None => None,
+                            },
+                            None => None,
+                        };
+                        #[cfg(target_arch = "wasm32")]
+                        let signed = None::<std::sync::Arc<[u8]>>;
+                        let Datagram::Inputs { first, inputs, .. } = datagram else {
+                            continue;
+                        };
                         for (i, held) in inputs.into_iter().enumerate() {
                             let tick = first.saturating_add(u32::try_from(i).unwrap_or(u32::MAX));
                             if tick < next {
@@ -350,6 +467,9 @@ impl Host {
                                 continue;
                             }
                             seat.inputs.insert(tick, held);
+                            if let Some(bytes) = &signed {
+                                seat.signed.insert(tick, bytes.clone());
+                            }
                             seat.newest = Some(seat.newest.map_or(tick, |n| n.max(tick)));
                         }
                     }
@@ -464,6 +584,7 @@ impl Host {
                     name,
                     ready: false,
                     inputs: BTreeMap::new(),
+                    signed: BTreeMap::new(),
                     last: Held::default(),
                     edges: Input::new(),
                     newest: None,
@@ -531,6 +652,7 @@ impl Host {
         seat.left_at = None;
         seat.ready = false;
         seat.inputs.clear();
+        seat.signed.clear();
         seat.newest = None;
         seat.heard = Instant::now();
         seat.resent = None;
@@ -556,11 +678,31 @@ impl Host {
             let held = match seat.as_mut() {
                 Some(seat) => {
                     seat.inputs.retain(|&t, _| t >= tick);
+                    seat.signed.retain(|&t, _| t >= tick);
                     if let Some(held) = seat.inputs.remove(&tick) {
                         seat.counts.fresh += 1;
                         seat.last = held;
+                        let signed = seat.signed.remove(&tick);
+                        #[cfg(not(target_arch = "wasm32"))]
+                        if let (Some(fair), Some(bytes)) = (self.fair.as_ref(), signed)
+                            && let Ok(mut ledger) = fair.ledger.lock()
+                        {
+                            ledger.applied(slot, tick, bytes);
+                        }
+                        #[cfg(target_arch = "wasm32")]
+                        drop(signed);
                     } else {
                         seat.counts.repeated += 1;
+                    }
+                    #[cfg(feature = "test-cheats")]
+                    if self.cheat == Cheat::Forge && slot == 1 && tick == CHEAT_AT {
+                        let mut forged = seat.last;
+                        forged.buttons ^= oag_gameplay::input::Button::Square.bit();
+                        forged.stick_x = if forged.stick_x > 0.0 { -0.75 } else { 0.75 };
+                        let snapshot = forged.snapshot(&mut seat.edges);
+                        inputs.set(slot, snapshot);
+                        applied.push(forged);
+                        continue;
                     }
                     seat.counts.lead = seat
                         .newest
@@ -578,12 +720,50 @@ impl Host {
         let retired = self.retired_mask();
         crate::race::presence(&mut self.race, retired);
         self.race.tick_sim_only(&inputs);
+        #[cfg(feature = "test-cheats")]
+        if self.cheat == Cheat::Speed && tick >= CHEAT_AT {
+            self.race.sim.world.ships[0].physics.body.linear_velocity *= 1.05;
+        }
         self.history.push(TickRecord {
             hash: self.race.sim.state_hash(),
             inputs: applied,
             retired,
         });
         self.broadcast();
+        #[cfg(not(target_arch = "wasm32"))]
+        self.checkpoint(false);
+    }
+
+    /// Folds the newest record into the chain and, once a second (or `now`), sends every seat
+    /// the signed checkpoint: a player host's word on the records it sent.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn checkpoint(&mut self, now: bool) {
+        let Some(fair) = self.fair.as_mut() else {
+            return;
+        };
+        for record in self.history.iter().skip(fair.chain.ticks() as usize) {
+            fair.chain.push(record);
+        }
+        if fair.chain.ticks() == 0
+            || !(now
+                || fair
+                    .chain
+                    .ticks()
+                    .is_multiple_of(crate::fair::CHECKPOINT_EVERY))
+        {
+            return;
+        }
+        let signed = crate::fair::Checkpoint::sign(&fair.key, &fair.params, &fair.chain);
+        let message = Control::Checkpoint {
+            ticks: signed.ticks,
+            chain: signed.chain,
+            signature: signed.signature,
+        };
+        for seat in self.seats.iter_mut().flatten() {
+            if seat.left.is_none() {
+                seat.link.send_control(&message);
+            }
+        }
     }
 
     /// The seats whose person is away now, as [`TickRecord::retired`] carries them.
@@ -683,8 +863,21 @@ impl Host {
             ticks: self.history[first..].to_vec(),
         };
         let board = self.board();
+        #[cfg(not(target_arch = "wasm32"))]
+        let last = self
+            .fair
+            .as_ref()
+            .map(|fair| crate::fair::Checkpoint::sign(&fair.key, &fair.params, &fair.chain));
         for seat in self.seats.iter_mut().flatten() {
             seat.link.send_control(&Control::Ticks(tail.clone()));
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(last) = last {
+                seat.link.send_control(&Control::Checkpoint {
+                    ticks: last.ticks,
+                    chain: last.chain,
+                    signature: last.signature,
+                });
+            }
             seat.link.send_control(&Control::End {
                 reason: reason.to_string(),
                 board: board.clone(),

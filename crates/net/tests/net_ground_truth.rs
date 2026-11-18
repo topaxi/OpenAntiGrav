@@ -584,6 +584,7 @@ fn a_race_child_stops_when_its_lobby_is_gone() {
             ..params()
         },
         seats: vec![("Ada".into(), "tok".into())],
+        keys: Vec::new(),
     };
     let mut child = Command::new(env!("CARGO_BIN_EXE_oag-server"))
         .args(["race", "--image", &image.display().to_string()])

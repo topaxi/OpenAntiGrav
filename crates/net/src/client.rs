@@ -238,6 +238,9 @@ pub struct Client {
     /// The shots the confirmed state has held: where a shot's age at first sight is read,
     /// the tick the server fired it on.
     fired: Vec<Sighted>,
+    /// The watch on a player host ([`Self::guard`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    watch: Option<crate::fair::Watch>,
 }
 
 /// The most ticks into its flight a shot can be when the present first holds it: the widest
@@ -322,7 +325,40 @@ impl Client {
             bot_hand: None,
             shown: Vec::new(),
             fired: Vec::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            watch: None,
         }
+    }
+
+    /// Holds the host to the race the lobby issued (`params`, `crate::fair::params_hash`), to
+    /// the checkpoints a player host signs with `host_key` (all zero for a server), and signs
+    /// this client's inputs with `signer` in a player-hosted race
+    /// (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
+    /// "The anti-cheat path"). Call before the welcome.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn guard(
+        &mut self,
+        params: [u8; 32],
+        host_key: [u8; 32],
+        signer: Option<std::sync::Arc<crate::online::hostkey::PlayerKey>>,
+    ) {
+        self.watch = Some(crate::fair::Watch::new(params, host_key, signer));
+    }
+
+    /// The case against the host for the lobby, once this client has one; once only.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn take_report(&mut self) -> Option<crate::fair::Proof> {
+        self.watch.as_mut()?.take_report()
+    }
+
+    /// What the watch on the host has seen ([`Self::guard`]).
+    #[cfg(not(target_arch = "wasm32"))]
+    #[must_use]
+    pub fn watch_stats(&self) -> crate::fair::WatchStats {
+        self.watch
+            .as_ref()
+            .map(crate::fair::Watch::stats)
+            .unwrap_or_default()
     }
 
     /// Takes the seat back on a new `link` after the old one closed: says hello with the seat
@@ -379,6 +415,19 @@ impl Client {
                     params,
                     fingerprint,
                 } => {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if let Some(Err(reason)) = self
+                        .watch
+                        .as_ref()
+                        .map(|watch| watch.check_welcome(&params))
+                    {
+                        log::warn!("net: {reason}");
+                        self.link.send_control(&Control::End {
+                            reason: reason.clone(),
+                            board: Board::default(),
+                        });
+                        return Err(anyhow::anyhow!(reason));
+                    }
                     let welcome = Welcome {
                         seat: usize::from(seat),
                         params,
@@ -429,6 +478,10 @@ impl Client {
         self.confirmed_tick = u32::try_from(race.sim.world.tick).unwrap_or(0);
         self.confirmed_edges = vec![Input::new(); people];
         self.remote_last = vec![Held::default(); people];
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(watch) = &mut self.watch {
+            watch.start(welcome.seat, ours);
+        }
         self.link
             .send_control(&Control::Ready { fingerprint: ours });
         self.phase = Phase::Ready;
@@ -448,6 +501,20 @@ impl Client {
                     self.link.send_control(&Control::Ready { fingerprint });
                 }
                 Ok(Control::Ticks(confirmed)) => self.stash(confirmed),
+                #[cfg(not(target_arch = "wasm32"))]
+                Ok(Control::Checkpoint {
+                    ticks,
+                    chain,
+                    signature,
+                }) => {
+                    if let Some(watch) = &mut self.watch {
+                        watch.checkpoint(crate::fair::Checkpoint {
+                            ticks,
+                            chain,
+                            signature,
+                        });
+                    }
+                }
                 Ok(Control::End { reason, board }) => {
                     log::info!("net: the server ended the race: {reason}");
                     self.final_board = Some(board).filter(|board| !board.is_empty());
@@ -622,15 +689,24 @@ impl Client {
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
         let from = self.own.len().saturating_sub(INPUT_REDUNDANCY);
         let first = self.own.get(from).map_or(tick, |(t, _, _)| *t);
+        let inputs: Vec<Held> = self
+            .own
+            .iter()
+            .skip(from)
+            .map(|(_, held, _)| *held)
+            .collect();
+        #[cfg(not(target_arch = "wasm32"))]
+        let signature = self
+            .watch
+            .as_mut()
+            .and_then(|watch| watch.sign(first, &inputs));
+        #[cfg(target_arch = "wasm32")]
+        let signature = None;
         self.link.send(&Datagram::Inputs {
             seat: u8::try_from(seat).unwrap_or(0),
             first,
-            inputs: self
-                .own
-                .iter()
-                .skip(from)
-                .map(|(_, held, _)| *held)
-                .collect(),
+            inputs,
+            signature,
         });
     }
 
@@ -670,7 +746,12 @@ impl Client {
             crate::race::presence(race, record.retired);
             self.retired = record.retired;
             race.tick_confirmed(&inputs);
-            if race.sim.state_hash() == record.hash {
+            let matched = race.sim.state_hash() == record.hash;
+            #[cfg(not(target_arch = "wasm32"))]
+            if let Some(watch) = &mut self.watch {
+                watch.confirmed(self.confirmed_tick, &record, matched);
+            }
+            if matched {
                 self.stats.hash_matches += 1;
             } else {
                 self.stats.hash_mismatches += 1;

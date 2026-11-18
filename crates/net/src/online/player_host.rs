@@ -16,7 +16,9 @@ use std::thread::JoinHandle;
 use anyhow::{Context, Result};
 use web_time::{Duration, Instant};
 
+use super::hostkey::PlayerKey;
 use super::race_proc::{Ended, Limits, Loader, run_race};
+use crate::fair::{Ledger, SharedLedger};
 use crate::host::Host;
 use crate::wire::online::RaceJob;
 use crate::wt::{Identity, LinkLimits, Listener};
@@ -37,6 +39,10 @@ struct Job {
     room: u32,
     job: RaceJob,
     load: Loader,
+    key: Option<Arc<PlayerKey>>,
+    ledger: SharedLedger,
+    #[cfg(feature = "test-cheats")]
+    cheat: crate::host::Cheat,
 }
 
 /// A listener and the thread that hosts races on it.
@@ -48,6 +54,12 @@ pub struct PlayerHost {
     stop: Arc<AtomicBool>,
     end_race: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
+    /// The player's key, which signs each race's checkpoints ([`Self::sign_with`]).
+    key: Option<Arc<PlayerKey>>,
+    /// The signed datagram behind each input the race under way applied.
+    ledger: SharedLedger,
+    #[cfg(feature = "test-cheats")]
+    cheat: crate::host::Cheat,
 }
 
 impl PlayerHost {
@@ -79,6 +91,10 @@ impl PlayerHost {
             stop,
             end_race,
             thread: Some(thread),
+            key: None,
+            ledger: SharedLedger::default(),
+            #[cfg(feature = "test-cheats")]
+            cheat: crate::host::Cheat::None,
         })
     }
 
@@ -94,10 +110,52 @@ impl PlayerHost {
         self.hash
     }
 
+    /// Signs every race's checkpoints with the player's `key` and takes each seat's inputs
+    /// only signed by the key its job names
+    /// (`docs/architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md`,
+    /// "The anti-cheat path").
+    pub fn sign_with(&mut self, key: Arc<PlayerKey>) {
+        self.key = Some(key);
+    }
+
+    /// Makes the races this host runs commit `cheat` (tests only).
+    #[cfg(feature = "test-cheats")]
+    pub fn set_cheat(&mut self, cheat: crate::host::Cheat) {
+        self.cheat = cheat;
+    }
+
     /// Hosts `job`, the race of `room`, built by `load`.
     pub fn launch(&self, room: u32, job: RaceJob, load: Loader) {
         self.end_race.store(false, Ordering::Relaxed);
-        let _ = self.jobs.send(Job { room, job, load });
+        if let Ok(mut ledger) = self.ledger.lock() {
+            *ledger = Ledger::default();
+        }
+        let _ = self.jobs.send(Job {
+            room,
+            job,
+            load,
+            key: self.key.clone(),
+            ledger: self.ledger.clone(),
+            #[cfg(feature = "test-cheats")]
+            cheat: self.cheat,
+        });
+    }
+
+    /// The signed datagram behind the input the race under way applied for `seat` at `tick`,
+    /// encoded, or empty when there is none: the answer to the lobby's challenge.
+    #[must_use]
+    pub fn show_input(&self, seat: u8, tick: u32) -> Vec<u8> {
+        self.ledger
+            .lock()
+            .ok()
+            .and_then(|ledger| ledger.find(usize::from(seat), tick))
+            .unwrap_or_default()
+    }
+
+    /// How many signed inputs the race under way has applied.
+    #[must_use]
+    pub fn signed_inputs(&self) -> u64 {
+        self.ledger.lock().map_or(0, |ledger| ledger.count())
     }
 
     /// Ends the race under way, telling its seats the host left.
@@ -151,7 +209,15 @@ fn run(
         while let Some(link) = listener.accept() {
             drop(link);
         }
-        let Job { room, job, load } = match jobs.try_recv() {
+        let Job {
+            room,
+            job,
+            load,
+            key,
+            ledger,
+            #[cfg(feature = "test-cheats")]
+            cheat,
+        } = match jobs.try_recv() {
             Ok(job) => job,
             Err(mpsc::TryRecvError::Empty) => {
                 std::thread::sleep(Duration::from_millis(20));
@@ -161,9 +227,20 @@ fn run(
         };
         let stopped = || stop.load(Ordering::Relaxed) || end_race.load(Ordering::Relaxed);
         let outcome = (|| -> Result<Ended, String> {
-            let race = load(&job.params).map_err(|e| format!("{e:#}"))?;
-            let mut host = Host::new(race, job.params.clone());
+            #[allow(unused_mut)]
+            let mut params = job.params.clone();
+            #[cfg(feature = "test-cheats")]
+            if cheat == crate::host::Cheat::Seed {
+                params.seed ^= 0x5EED;
+            }
+            let race = load(&params).map_err(|e| format!("{e:#}"))?;
+            let mut host = Host::new(race, params);
             host.set_stop_reason(HOST_LEFT);
+            if let Some(key) = key {
+                host.sign_with(key, job.keys.clone(), ledger);
+            }
+            #[cfg(feature = "test-cheats")]
+            host.set_cheat(cheat);
             let _ = events.send(Event::Up(room));
             run_race(
                 &mut host,

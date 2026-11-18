@@ -36,7 +36,9 @@ pub const MAX_CONNECTIONS: usize = 64;
 pub const MAX_PER_ADDRESS: usize = 16;
 
 mod hosting;
+mod referee;
 pub use hosting::{HOST_ASK_INTERVAL, MAX_HOSTED_PER_ADDRESS, MAX_HOSTED_ROOMS, MAX_PROBES};
+pub use referee::{CHALLENGE_TIMEOUT, JUDGE_TIME, MAX_ASSEMBLING, Ruling};
 
 /// What the service is built from.
 #[derive(Debug, Clone)]
@@ -70,6 +72,8 @@ struct Connected {
     dropped: Option<Instant>,
     /// When this connection last asked to host.
     host_asked: Option<Instant>,
+    /// The player's public key its hello named, all zero for none.
+    key: [u8; 32],
 }
 
 struct Running {
@@ -80,6 +84,8 @@ struct Running {
     /// Where the race listens once it is up: what a hand-off carries.
     up: Option<(u16, [u8; 32])>,
     handed_off: bool,
+    /// `crate::fair::params_hash` of the job: what a hand-off carries.
+    params: [u8; 32],
 }
 
 /// The lobby service.
@@ -104,6 +110,8 @@ pub struct Server {
     /// The player-hosted races under way, by room.
     hosted: BTreeMap<u32, hosting::HostedRace>,
     bans: BanFile,
+    /// Reports against player hosts, and their judging.
+    referee: referee::Referee,
 }
 
 /// A fresh 128-bit token, hex.
@@ -142,6 +150,7 @@ impl Server {
             probes: Vec::new(),
             hosted: BTreeMap::new(),
             bans: BanFile::new(config.ban_file),
+            referee: referee::Referee::default(),
         })
     }
 
@@ -184,6 +193,7 @@ impl Server {
         self.launch();
         self.watch_race();
         self.watch_hosted();
+        self.watch_referee();
         self.flush();
     }
 
@@ -245,7 +255,8 @@ impl Server {
                     name,
                     titles,
                     token,
-                }) => self.hello(pending.link, protocol, &name, titles, &token),
+                    key,
+                }) => self.hello(pending.link, protocol, &name, titles, &token, key),
                 Ok(other) => {
                     let mut link = pending.link;
                     link.send_lobby(&Message::Rejected {
@@ -279,6 +290,7 @@ impl Server {
         name: &str,
         titles: Vec<Edition>,
         token_in: &str,
+        key: [u8; 32],
     ) {
         if protocol != PROTOCOL {
             link.send_lobby(&Message::Rejected {
@@ -308,6 +320,7 @@ impl Server {
                     token: token_in.to_string(),
                     dropped: None,
                     host_asked: None,
+                    key,
                 },
             );
             self.welcome(id);
@@ -330,6 +343,7 @@ impl Server {
                         token: token(),
                         dropped: None,
                         host_asked: None,
+                        key,
                     },
                 );
                 log::debug!("lobby: {:?} joined as client {id}", self.rooms.name(id));
@@ -356,6 +370,8 @@ impl Server {
             cert_hash,
             token: token.clone(),
             name: name.clone(),
+            params: running.params,
+            host_key: [0; 32],
         };
         if let Some(client) = self.clients.get_mut(&id) {
             client.link.send_lobby(&message);
@@ -397,6 +413,18 @@ impl Server {
                         reason,
                         board,
                     } => self.host_over(id, room, &reason, board),
+                    Message::Report {
+                        room,
+                        part,
+                        parts,
+                        bytes,
+                    } => self.report_part(id, room, part, parts, bytes),
+                    Message::InputShown {
+                        room,
+                        seat,
+                        tick,
+                        datagram,
+                    } => self.input_shown(id, room, seat, tick, &datagram),
                     other => self.rooms.handle(id, other),
                 }
             }
@@ -438,7 +466,9 @@ impl Server {
                 .iter()
                 .map(|(_, n, t)| (n.clone(), t.clone()))
                 .collect(),
+            keys: Vec::new(),
         };
+        let params = crate::fair::params_hash(&job.params);
         match self.runner.launch(&job) {
             Ok(handle) => {
                 log::info!("lobby: room {} races: {:?}", launch.room, job.params);
@@ -448,6 +478,7 @@ impl Server {
                     seats,
                     up: None,
                     handed_off: false,
+                    params,
                 });
             }
             Err(why) => {
@@ -475,6 +506,8 @@ impl Server {
                                 cert_hash,
                                 token: token.clone(),
                                 name: name.clone(),
+                                params: running.params,
+                                host_key: [0; 32],
                             });
                         }
                     }

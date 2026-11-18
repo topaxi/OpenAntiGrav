@@ -659,6 +659,7 @@ fn a_peer_cannot_grow_a_seats_buffer_with_inputs_for_far_future_ticks() {
             seat: 0,
             first: n,
             inputs: vec![oag_net::wire::Held::default()],
+            signature: None,
         });
     }
     host.poll();

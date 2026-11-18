@@ -51,9 +51,12 @@ web-transport-quinn = { version = "0.13", default-features = false, features = [
 # turns it on, the server leaves it off. Its tests turn it on through the
 # dev-dependency on this crate below.
 client = ["oag-raceplay/view"]
+# A host that cheats on purpose (`host::Cheat`), armed by `OAG_TEST_CHEAT`, so the tests can
+# prove a cheat is caught. Only dev-dependencies turn it on; no shipped build has it.
+test-cheats = []
 
 [dev-dependencies]
-oag-net = { path = ".", features = ["client"] }
+oag-net = { path = ".", features = ["client", "test-cheats"] }
 oag-replay.workspace = true
 oag-tables.workspace = true
 oag-testdata.workspace = true
