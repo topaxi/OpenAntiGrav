@@ -54,7 +54,7 @@ pub enum Shadows {
     Blob,
     /// What the title itself authors.
     ///
-    /// **Built on Pulse and nowhere else yet**, and a title with nothing built
+    /// **Built on Pulse and HD/Fury** (`docs/rendering/shadows.md`), and a title with nothing built
     /// draws no shadow at all rather than falling back to [`Self::Blob`] - the
     /// load report says which happened, because a tier that silently becomes
     /// another tier is how a missing feature stops being noticed. Wipeout
