@@ -94,6 +94,19 @@ it), `0x1b` a pointer to an **extended-user-data table** (a kind-0 record there 
 ends at the first record of kind `0x0f`, the start of a fixed tail. Confidence 85: every `2x - 1` sample over all
 nine archives places (0 unplaced, asserted per archive in `gcn_ground_truth`).
 
+**A program can read two constant buffers** (2026-11-18, `water-omega`). The patch's compile of
+the sea materials (`data08.psarc`'s `reflectplane_mid`) splits its constants over
+`__GLOBAL_CB__` (API slot 0) and `ViewDep` (slot 2: `view`, `viewProj`,
+`eyePositionWorldSpace`, `reflectProject`, `refractProject`), where the base compile has one
+buffer. Each is a kind 2 record, `register` 16 plus the dword offset of its descriptor in the
+extended table (`s_load_dwordx4 s[52:55], s[12:13], 0x18` beside the record `kind 2, slot 0,
+register 40`; `0x1c` beside `slot 2, register 44`), so the buffer an `s_buffer_load` reads is
+found from the register it loads through, the way a texture's slot is
+(`Program::constant_buffer_at` in `oag_rcs::gcn::sea`). Confidence 90: both records agree
+with the constant names the loads must be reading (`time`, `Speed`, `reflectProject`) in all
+8 pixel variants of 5 materials. `gcn_dump`'s per-load annotation still names constants only
+for a program with one buffer.
+
 **A vertex input is a factor on the light when its parameter is only ever multiplied** (`oag_rcs::gcn::input_is_factor`). A
 file lists each vertex program directly before the pixel program it feeds. `Program::exported_input` finds the `exp paramN`
 whose three lanes are the registers a named input was fetched into; `Program::attribute_is_only_a_factor` follows

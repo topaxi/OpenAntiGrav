@@ -269,8 +269,10 @@ fn omega_altimas_road_binds_its_diffuse_map() {
 /// draws `Constant1` times its map's alpha (`mesh::rcs::psp2::alpha_product`,
 /// read off both titles' programs): 2048 41 to 10, Omega 149 to 67. Left on
 /// 2048: Chenghou's `diffuse_normal_specular_emmissivenew` (7), the Altima
-/// water edge and `temp_diffuse` on Square and Subway. The counts may shrink
-/// further and must never grow.
+/// water edge and `temp_diffuse` on Square and Subway. Omega's Altima counts one for its Zone
+/// model's water edge, the slot 2048 counts: the census is of what the colour slot binds, and
+/// the edge's entry reads that map for its alpha alone. The counts may shrink further and must
+/// never grow.
 const VITA_FAULTS: usize = 3;
 
 /// One Omega circuit directory, both directions, against its known gap.
@@ -285,14 +287,60 @@ fn omega_circuit(dir: &str, known: usize) {
         circuits: n,
         faulty,
         unbound,
-        ..
+        seas,
     } = every_circuit_binds(&mut archives, 0, |p| {
         p.contains(&marker) && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
+            // Altima's Zone model rides its circuit's walk: the one Zone model whose water
+            // edge is pinned (`omegas_reflective_seas_are_the_two_tap_batches`).
+            || dir == "altima" && p.ends_with("/altima/trackZone.rcsmodel")
     });
     println!("{dir}: {n} model(s), {faulty} drawn colour slot(s) that are not pictures");
+    omegas_reflective_seas_are_the_two_tap_batches(dir, &seas);
     assert!(n >= 1, "{dir} was found");
     assert!(faulty <= known, "{dir}: {faulty} > {known}");
     only_by_design(dir, &unbound);
+}
+
+/// Omega's reflective seas, by their PS4 programs' declared interface and taps
+/// (`oag_rcs::gcn::sea`, `psp2::water`): the batches of `reflectplane_mid`, `_edge`, `_pond`,
+/// `_dc_seawater_new` and `_dc_seawater_tow`, counted per circuit model and all drawn under
+/// `original`. Drop the PS4 classification and every count falls to zero. Park's
+/// `reflectplane_dc_seawater` and the HD circuits' seas carry HD's interface, the shore strip
+/// (`reflectplane_rt_seawateredging`) reads no reflection: none is this law, and no PS4 model
+/// matches 2048's GXP laws.
+///
+/// Altima's Zone model keeps 2048's blended edge (`oag_rcs::gcn::scrolled_edge`): its five
+/// batches draw the alpha chain, and no circuit model has one.
+fn omegas_reflective_seas_are_the_two_tap_batches(
+    dir: &str,
+    seas: &[(String, psp2::water::Census)],
+) {
+    // (circuit directory, batches, of which the blended edge)
+    const WANT: [(&str, usize, usize); 5] = [
+        ("altima", 10, 5),
+        ("mall", 8, 0),
+        ("tower", 5, 0),
+        ("square", 7, 0),
+        ("bridge", 13, 0),
+    ];
+    let (batches, edge) = WANT
+        .iter()
+        .find(|(name, ..)| *name == dir)
+        .map_or((0, 0), |&(_, batches, edge)| (batches, edge));
+    for (path, sea) in seas {
+        println!("{path}: {sea:?}");
+        let zone = path.ends_with("/trackZone.rcsmodel");
+        let (batches, edge, zone_edge) = if zone { (0, 0, 5) } else { (batches, edge, 0) };
+        assert_eq!(sea.reflective, batches, "{path}: {sea:?}");
+        assert_eq!(sea.reflective_drawn, batches, "{path}: {sea:?}");
+        assert_eq!(sea.reflective_edge_drawn, edge, "{path}: {sea:?}");
+        assert_eq!(sea.zone_edge, zone_edge, "{path}: {sea:?}");
+        assert_eq!(sea.zone_edge_drawn, zone_edge, "{path}: {sea:?}");
+        assert_eq!(
+            sea.submeshes, 0,
+            "{path}: a PS4 model matches no GXP law: {sea:?}"
+        );
+    }
 }
 
 /// A draw that names a texture of its own never goes without it, and a texture that is
@@ -371,7 +419,8 @@ omega_circuit_test!(
     "tech_de_ra",
     12
 );
-omega_circuit_test!(omega_altima_binds_no_more_lookups_than_known, "altima", 0);
+omega_circuit_test!(omega_altima_binds_no_more_lookups_than_known, "altima", 1);
+omega_circuit_test!(omega_bridge_binds_no_more_lookups_than_known, "bridge", 0);
 omega_circuit_test!(omega_mall_binds_no_more_lookups_than_known, "mall", 0);
 omega_circuit_test!(omega_tower_binds_no_more_lookups_than_known, "tower", 0);
 omega_circuit_test!(omega_arena_binds_no_more_lookups_than_known, "arena", 1);

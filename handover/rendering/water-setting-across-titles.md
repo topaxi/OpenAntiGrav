@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-17
-summary: "HD taps, setting, enhanced, 2048 fc15 and fc17 and the planar read landed; next planar pass, HD sea brightness, Omega law"
+updated: 2026-11-18
+summary: "HD taps, setting, enhanced, 2048 fc15/fc17, planar read and Omega's own sea landed; next planar pass, lender loader, Omega Zone model"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -30,7 +30,7 @@ and TBD.
 | `original` | the title's own law (water.md): Pulse textures plus Vostok Reef's caustic pass; Pure textures; HD taps plus planar or sky reflection; 2048 one scrolled tap; Omega two taps plus Fresnel planar reflection | the title's own disc | always |
 | `HD` | HD's sea law: two `dc_waternormalmap` taps at `u + 0.05 t` and `1.15 (-u + 0.05 t)`, sun diffuse and specular, reflection | HD's `dc_waternormalmap.gtf` (and `waves2.gtf` for Vineta K) | the HD image is present, and the title is not HD |
 | `2048` | 2048's `fc15` law: one `water_lapping_waves2_n` tap at `u + 0.05 t`, sun diffuse and specular, no reflection | 2048's `water_lapping_waves2_n.gxt` | the 2048 package is present, and the title is not 2048 |
-| `Omega` | Omega's `reflectplane_mid` law: `NormalMap` and `NormalMap1`, `Speed`, Fresnel-weighted planar reflection | Omega's `dc_waternormalmap.gnf`, `Water_lapping_waves2_N.gnf` | the Omega package is present, the title is not Omega, **and lane 6 has read the law** |
+| `Omega` | Omega's `reflectplane_mid` law (read, water.md "Omega (PS4)"): two `.ag` taps at `+-u + 0.05 Speed t`, Phong highlight, reflection at `Strength (Min + Scale (1 - N.V)^Power)` | Omega's `dc_waternormalmap.gnf` and its instance numbers for the circuit | the Omega package is present, the title is not Omega, **and a borrower draws it** (none does: lane 8's lender loader) |
 
 A choice equal to the title's own `original` is dropped from that title's row,
 not shown twice. All three later-title choices borrow a normal map, so none is
@@ -150,12 +150,29 @@ map.**
 - The planar reflection is read on HD Moa Therma (water.md, "The planar reflection, read off
   live frames"); unread: Chenghou's and Modesto's seas (recipe there), bit 1 as the mirror, and
   Omega's and 2048's copies of the same passes.
-- Omega's `Reflectivity*` combine and `Speed` law are unread. 2048's `fc17` edge and sea
+- **LANDED (`water-omega`, 2026-11-18): Omega's own sea.** The `Reflectivity*` combine, the
+  `Speed` scroll and the taps are read from the GCN programs and drawn under `original` on
+  Omega's 2048 circuits (43 batches over Altima, Mall, Tower, Square, Bridge); the WATER row
+  shows on Omega. Still open from it: the planar term (the sky stands in), what Omega's
+  `reflectProject` holds (the program hands it `eye - P`), HD's law through `psp2` for
+  `reflectplane_dc_seawater` (Park, the HD circuits) and the shore strip
+  `reflectplane_rt_seawateredging`, and a frame of the original (shadPS4) to set the stand-in
+  against. **The patch re-ships the sea materials as a different compile; read the patched
+  extraction.**
+- **The `omega` choice on 2048's circuits is checked, applies, not wired**: the law fits the
+  Vita meshes, but no lender's archive is opened in a race load, 2048 has no sky map and no
+  sun specular colour, and the offer is gated per law, not per borrower. Recipe: water.md,
+  "Omega (PS4)", "The 2048 side". It belongs with lane 8 (the same loader).
+- **Omega's Zone `fc17` edge is wired as its Zone permutation reads it** (the scrolled alpha
+  chain, 5 batches on Altima's Zone model) and **not seen on a frame**: a Zone race on an
+  Omega 2048 circuit loads the race model, not `trackZone.rcsmodel`. Whether the Vita's Zone
+  permutation also drops the mapped normal and highlight is unread.
+- 2048's `fc17` edge and sea
   are read whole and drawn (water.md, "2048 (Vita)"; the lane pairing of `pa0.w`/`pa4.w`
   is 75, no iterator table confirms it); Altima's edge `Watercolour` is unauthored and
-  drawn as the pond's `ColourConstant` (chosen). No Vita3K frame of Altima's sea was
-  taken: it would test that stand-in and the pairing. Omega's `trackZone` `fc17` is
-  checked, applies, not wired (GCN program unread).
+  drawn as the pond's `ColourConstant` (chosen; Omega authors `(0.1332, 0.1726, 0.2176)` on the
+  same material, which agrees to the third digit, and its named vertex inputs raise the lane
+  pairing to 88). No Vita3K frame of Altima's sea was taken.
 - Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
   Pure's version-4 batches.
 - Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
@@ -207,8 +224,8 @@ Ranked. Hours are for one member on an idle machine.
    **Each choice is hidden until its law is drawn:** `mesh::rcs::water::is_drawn(law)`
    is the one flag; `water_setting::offered` also requires it, so today the row
    holds `off` and `original` only; on HD `original` draws the taps. Lane 8 flips
-   `Hd` (lane 1 drew the law on HD only), lane 5 `Vita2048`, lane 6 `Omega` (and adds the
-   `Reading` variant) when its law is drawn; the menu test
+   `Hd` (lane 1 drew the law on HD only), lane 5 `Vita2048`, and `Omega` with its first
+   borrower (lane 6 drew the law on Omega only), each when its law is drawn; the menu test
    `with_every_lender_present_only_drawn_laws_are_offered` then grows its list.
    A saved `hd`/`2048`/`omega` resolves to `original` until then.
    Original wording: (`oag-wire`, sonnet, 3 to 4 h). Enum, per-title
@@ -244,10 +261,10 @@ Ranked. Hours are for one member on an idle machine.
    frame pair on Altima at two times (it tests the edge's chosen `Watercolour` and the
    `pa0.w`/`pa4.w` lane pairing). `is_drawn(Vita2048)` stays
    false on purpose: it is the borrowed `2048` choice on other titles, which nothing draws yet.
-6. **Omega's own water** (`oag-re` then `oag-wire`, opus, 8 h). A GCN
-   instruction read of `reflectplane_mid` (`Reflectivity*`, `Speed`), then
-   wire it on Omega's 2048 circuits and as the `Omega` choice. Checked against
-   2048 in the same change.
+6. **LANDED (`water-omega`): Omega's own water** on its 2048 circuits (`oag_rcs::gcn::sea`,
+   `mesh::rcs::psp2::water` kinds 9 and 10, `oag_omega::TITLE.water.original_differs`).
+   `is_drawn(Omega)` stays false on purpose: it is the borrowed choice, which needs lane 8's
+   lender loader (see "Open").
 7. **Vostok Reef's caustics** (`oag-capture`, sonnet, 2 h, then `oag-wire`,
    sonnet, 4 h). A PCSX2 frame of the underwater floor with and without the
    pass, batch state `0x202`'s blend, then the pass. PS2 inherits the PSP law
