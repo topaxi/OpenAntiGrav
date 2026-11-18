@@ -22,8 +22,8 @@ pub const VELOCITY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 /// write would have left.
 pub const DISTORTION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
-/// The scene target's format: linear, and wide enough for the bloom gate to
-/// see luminance above 1.0. Drawing into it is what tells every mesh pipeline
+/// The float scene target's format: linear, and wide enough for the bloom gate to
+/// see luminance above 1.0. HD's scene is in [`SCENE_FORMAT_8BIT`] by default. Drawing into it is what tells every mesh pipeline
 /// to output linear light - see `oag_mesh::mesh_render::is_linear_target`.
 pub const SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 

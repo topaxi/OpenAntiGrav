@@ -7,7 +7,7 @@
 
 use super::*;
 
-/// Wipeout HD's post chain: a linear float scene target, the read
+/// Wipeout HD's post chain: its scene target (the original's 8-bit one by default), the read
 /// FunkLayerBloom passes and the encode. Present exactly when the circuit
 /// authors an `HDR and Bloom` block - see `oag_post::hd_bloom` for
 /// what of it is the microcode's. A failure is reported and dropped the way
@@ -21,7 +21,7 @@ use super::*;
 ///
 /// Returns the chain itself (or `None`), the caller's own surface format -
 /// **the format is the statement about colour space**: with the chain in
-/// place every pipeline built after this call switches to the linear float
+/// place every pipeline built after this call switches to the chain's scene
 /// target and its own linear output, see `mesh_render::is_linear_target` -
 /// and that caller format again, unshadowed, for the one pass that runs
 /// after every chain has already encoded into the caller's view (see
@@ -134,7 +134,7 @@ pub(super) fn store(
 }
 
 impl Scene {
-    /// The linear float target the race pass draws into under any post chain,
+    /// The scene target the race pass draws into under any post chain,
     /// or `None` when it draws straight into the caller's view.
     pub(super) fn linear_scene_view(&self) -> Option<&wgpu::TextureView> {
         match (&self.hd, &self.omega, &self.wo) {
@@ -160,7 +160,7 @@ impl Scene {
         }
     }
 
-    /// Whether the scene's pipelines were built against the linear float
+    /// Whether the scene's pipelines were built against a post chain's scene
     /// target - see [`build`], [`build_omega`] and [`build_wo`].
     pub(super) fn draws_linear(&self) -> bool {
         self.hd.is_some() || self.omega.is_some() || self.wo.is_some()

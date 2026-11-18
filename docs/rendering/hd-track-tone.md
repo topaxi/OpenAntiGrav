@@ -1764,6 +1764,105 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
 - `oag_post::hd_zoom` reads the chain's quarter-res copy, which is decoded, so it needed no
   change; it is not exercised by any of the 13 pairs.
 
+## The scene target is 8-bit by default (2026-11-18, `hd-scene-8bit`)
+
+**Claim**: HD's race scene renders into an 8-bit target holding sRGB-encoded bytes, as the
+original's does, and the bloom resolve reads it through an sRGB view in one hardware tap; the
+half-float target stays as an opt-in. **True: the pairs stay put (14 pairs, every metric within
+0.015 of a level of mean grey), the opt-in is byte-identical to the build before, and the resolve is
+a third of its cost on the dGPU.** The Steam Deck's numbers are open (below).
+
+**Evidence the original is 8-bit** (read, not re-derived here): the race's scene target is
+`A8R8G8B8`, two samples, `SET_SHADER_PACKER` 1 (this page, "HD's blends combine encoded values";
+the 1080p path's scene surface `0x148` above; [renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md)).
+RPCS3, which made every reference frame, binds `VK_FORMAT_B8G8R8A8_UNORM` there.
+
+**What changed.** `graphics.scene_precision` (`original` | `float`, default `original`, per-title
+render profile, `--scene-precision`; ADVANCED page, HD only, `Definition::drop_unavailable_scene_precision`).
+Under `original` a scene that stores encoded values (`SceneStore::Encoded`) is drawn into
+`oag_gpu::formats::SCENE_FORMAT_8BIT` (`Rgba8Unorm`, with an `Rgba8UnormSrgb` view format), every
+draw writing the same encoded value it wrote into the float target; the attachment rounds it to a
+byte and clamps each blend's result to `[0, 1]`. The format alone no longer says "linear scene"
+(every gamma target is `Rgba8Unorm`), so `is_scene_target(format, store)` does: the 8-bit format
+is a scene only when it stores encoded values. On wgpu's GL backend the sRGB view is not used and
+the resolve keeps its four decoded taps.
+
+### Every pass that touches the target, and what it assumed
+
+| pass | reads or writes | assumption about range or precision | under 8 bits |
+| --- | --- | --- | --- |
+| race draws (`target_out`, `encoded_out`) | write | already `enc(clamp(x, 0, 1))` | same value, rounded to 1/255 |
+| blended draws (`ONE`/`ONE`, `SRC_ALPHA`) | blend into it | the float target let an add run past 1 and a later mix pull it back | clamped after every blend, as the original's `A8R8G8B8` is ("clamped to [0,1] per draw", above) |
+| glow mask (alpha) | written by draws, read by the gate | float alpha kept fractions | 8 bits, as the original's alpha byte (`0x40cc0000` dump, byte 0) |
+| first bloom downsample (`copy_scene`) | read | `surface()` clamps; filters the encoded texels, decodes after | unchanged: it reads the target's own view, never the sRGB one (below) |
+| resolve (`fs_encode`) | read | `surface()` clamps, then decodes four texels by hand when read half a texel off | one bilinear tap of the sRGB view (decode before filter, as the original's units decode on fetch) |
+| zoom-streak ring (`hd_zoom`) | draws into it | none | built against the chain's scene format |
+| behind-glass grab | copy of the scene format | `target_in` decodes | an 8-bit copy, same decode |
+| MSAA colour | resolves into it | averages encoded values | same, in bytes; the original's two samples are bytes too |
+| mod shaders (`fragment_options`) | draw into it | HD already clamped a mod's output at 1 (`mod_shader.wesl`, `scene_rgb`) | unchanged for a mod |
+| motion blur, photo fx | after the resolve, caller's format | none | untouched |
+
+No pass relied on a value above 1.0 on HD: the encode clamps at every draw, and `surface()` clamped
+at every read. The only range difference is the per-blend clamp, which the original has.
+
+### The pairs
+
+`scripts/compare-rerender-ours.py`'s `rerender` on copies of the 14 HD race pairs (the world clock
+recorded), debug builds of `a9466c367` (before) and this change, `rmse` / `edge` / `mean grey`
+before and after (`mean grey` and `rmse` lower is better, `edge` higher):
+
+| pair | rmse | edge | mean grey |
+| --- | --- | --- | --- |
+| anulpha-pass | 0.0483 / 0.0483 | 0.439 / 0.438 | 4.337 / 4.337 |
+| chenghou-project | 0.0424 / 0.0424 | 0.394 / 0.393 | 2.888 / 2.895 |
+| metropia | 0.0414 / 0.0414 | 0.447 / 0.447 | 3.653 / 3.658 |
+| moa-therma | 0.0588 / 0.0587 | 0.452 / 0.451 | 6.331 / 6.331 |
+| modesto-heights | 0.0557 / 0.0557 | 0.417 / 0.417 | 4.954 / 4.953 |
+| sebenco-climb | 0.0566 / 0.0566 | 0.395 / 0.395 | 4.988 / 4.996 |
+| sol-2 | 0.0685 / 0.0684 | 0.430 / 0.430 | 6.406 / 6.409 |
+| talons | 0.0420 / 0.0420 | 0.429 / 0.430 | 3.457 / 3.461 |
+| talons-assegai-c1 | 0.0618 / 0.0618 | 0.409 / 0.409 | 4.910 / 4.915 |
+| talons-pack | 0.1712 / 0.1711 | 0.092 / 0.092 | 23.077 / 23.063 |
+| tech-de-ra | 0.0470 / 0.0470 | 0.453 / 0.453 | 4.660 / 4.673 |
+| the-amphiseum | 0.0667 / 0.0667 | 0.414 / 0.414 | 6.261 / 6.259 |
+| ubermall | 0.0435 / 0.0434 | 0.448 / 0.448 | 4.499 / 4.496 |
+| vineta-k | 0.0420 / 0.0420 | 0.431 / 0.431 | 3.364 / 3.353 |
+
+`--scene-precision float` renders every pair byte-identical to the build before. Under `original`
+32 to 36 % of a frame's pixels move, nearly all by one level, mean signed change -0.04 to +0.00
+levels; the largest single moves (10 to 19 levels) sit on the craft's exhaust and shield blends,
+where the per-blend clamp acts. The three that move most (mean |change|: talons-pack 0.146,
+moa-therma 0.142, tech-de-ra 0.139) were read at 3x round the hottest 64-pixel window (the pack's
+trail beam, the cockpit's glow and its HUD arc) and in a dark gradient with its levels stretched
+four times (Talon's blue wall, a frame's deepest gradient): no banding appears and nothing a player
+could point to differs. A player sees the same picture.
+
+### The first downsample keeps its read law
+
+Built first with the sRGB view under both scene reads, the pairs moved **away** from the original:
+mean grey +0.02 to +0.13 on 12 of 14 (vineta-k 3.364 to 3.491), 40 % of pixels up by a level in
+the mid-tones. The cause is the first bloom downsample alone: through the sRGB view it averages
+light, where the float path averages the encoded texels and decodes after; averaging light is
+brighter at every edge (the decode is convex), so the quarter-res picture the gate reads is
+brighter and the glow grows. With only the resolve on the sRGB view, vineta-k reads 3.353. The
+downsample keeps the target's own view. Which law the original's half-res downsample runs is open:
+renderer.md says every ladder draw decodes on fetch, which is the brighter law the pairs disagree
+with by these numbers.
+
+### Other titles
+
+- **Omega**: checked, differs. Its pixel shaders export fp16 into a float target that its own tone
+  map reads (this page, "HD's blends combine encoded values", "Other titles"); its store is
+  `SrgbTexels`, so `scene_format` keeps it float and the row is dropped.
+- **HD's front end (the Fury backdrop, which Omega's front end shares)**: checked, not changed. The
+  backdrop's chain stores computed values (`boot/fury.rs`, `eight_bit: false`), so it stays float;
+  the original's menu target format is unread.
+- **2048**: checked, differs. `oag_post::wo_composite` reads the Vita scene as `U2F10F10F10`
+  (format `0x41000000` in `0x81035b10`), a float target; its store is `Squared`.
+- **Pulse, Pure**: draw into an 8-bit gamma target already; no change.
+
+Speed: [hires-gpu-levers.md](hires-gpu-levers.md), "HD's scene in 8 bits".
+
 ## Vineta K's warm light pool on the wall top: ours draws a second, lightmap-less copy over it (2026-10-27, `vineta-warm-pool`)
 
 **Claim (the maintainer, from the compare page):** on `hd/vineta-k` the original shows a warm, orange-white pool of light on the

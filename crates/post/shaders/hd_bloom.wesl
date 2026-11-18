@@ -148,10 +148,10 @@ fn fs_copy(in: VertexOutput) -> @location(0) vec4<f32> {
 // which is an LDR bright pass and not the HDR one this module's header used
 // to claim.
 //
-// This project's scene target stays [`SCENE_FORMAT`] (`Rgba16Float`) - 8 bits
-// of *linear* light bands visibly in the darks, and the shading that writes
-// it is ADR-0026's - so the hardware's clamp is applied here instead, at the
-// three points the chain samples the scene. Measured on the Talon's Junction
+// HD's scene goes into the original's 8-bit target by default, which clamps on
+// write; the opt-in float target (`SCENE_FORMAT`, `Rgba16Float`) and a scene of
+// linear light (8 bits of which band in the darks) do not, so the hardware's
+// clamp is applied here too, at the three points the chain samples the scene. Measured on the Talon's Junction
 // grid: clipped-white share 16.5 % -> 14.3 %, and the gate's peak argument
 // falls from ~1.6e5 to 2.43.
 fn surface(texel: vec4<f32>) -> vec4<f32> {

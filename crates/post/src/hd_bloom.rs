@@ -65,8 +65,8 @@
 //! the race pass attaches, and [`Chain::run`] is everything between it and
 //! the caller's own surface.
 //!
-//! **That target is a float one here and an 8-bit one on the disc, and the
-//! difference is corrected rather than kept.** This header used to say the
+//! **That target is the original's 8-bit one by default** ([`Params::eight_bit`],
+//! `graphics.scene_precision`), and a float one as an opt-in. This header used to say the
 //! gate "only produces the reference frame's glow when the weighted luminance
 //! runs over 1.0", i.e. that it reads an HDR scene. It does not: the original's
 //! scene surface and all seven of `FUN_003af980`'s ladder buffers are
@@ -74,11 +74,12 @@
 //! at eight call sites of the render-target factory `FUN_005a6ce0`; exactly one
 //! `F_W16Z16Y16X16` surface exists in the executable and it is neither the
 //! scene nor in the ladder). The gate's `(0.3, 0.59, 0.11) * 3` weights put its
-//! knee at luma ~1/3, which is what an LDR bright pass looks like. Our target
-//! stays [`SCENE_FORMAT`] because 8 bits of *linear* light bands in the darks,
-//! and `hd_bloom.wesl`'s `surface()` applies the hardware's clamp at the three
-//! points the chain samples the scene instead - see its own comment for the
-//! measurement.
+//! knee at luma ~1/3, which is what an LDR bright pass looks like. A scene that
+//! stores encoded values goes into the 8-bit target; the float one holds the
+//! same encoded values unrounded, and `hd_bloom.wesl`'s `surface()` applies the
+//! hardware's clamp at the three points the chain samples the scene - see its
+//! own comment for the measurement. A scene holding linear light stays float:
+//! 8 bits of *linear* light band in the darks.
 
 use anyhow::Result;
 use oag_gpu::formats::{SCENE_FORMAT, SceneStore};

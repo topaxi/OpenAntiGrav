@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-18
-summary: "HD native 4K still misses 60 Hz on the Deck: the shadow redraw the original's way, an 8-bit scene, the craft pass and f16 are left"
+summary: "HD native 4K still misses 60 Hz on the Deck: 8-bit scene landed (Deck unmeasured); shadow redraw, craft pass and f16 left"
 categories: [rendering, tooling]
 ---
 
@@ -26,11 +26,12 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
      within reach of a craft through a sunless permutation, blended, so no other pixel asks. It
      composites on encoded values, so shadowed pixels move: a rendering change with a pair check,
      not a speed lane. Measure: the `track solid, shaded` span, same command as the page.
-  2. **The bloom resolve, 3.85 ms at 4K.** Its cost is four sRGB decodes a pixel and the encode.
-     The original's scene is `A8R8G8B8` and its units decode on fetch; an 8-bit scene target read
-     through an sRGB view would make the resolve one hardware tap (about 1.2 ms measured for a
-     one-tap resolve, so about 2.6 ms off the span, less at the race's clock). It rounds the scene
-     to 8 bits as the console does, which moves the picture: the maintainer's call.
+  2. ~~**The bloom resolve, 3.85 ms at 4K.**~~ Landed 2026-11-18 (`hd-scene-8bit`): HD's scene is
+     8-bit by default (`graphics.scene_precision`), the resolve one sRGB-view tap; NVIDIA 4K resolve
+     556 to 208 us, whole-race GPU p50 -16.8 %, pairs unchanged (`docs/rendering/hires-gpu-levers.md`,
+     "HD's scene in 8 bits"). **Open: the Deck's numbers** (ssh could not authenticate that lane).
+     Measure: the Deck commands in that section, `--scene-precision float` as before against the
+     default, 800p, 1080p, 4K, interleaved, clock recorded.
   3. **The craft pass, 3.08 ms at 4K**, 4.5 ns a fragment against the circuit's 1.4. Not opened:
      its overdraw is unmeasured, and the `lit_by_rig` fold is not applied to it because a craft
      draws under a scene block of its own (`ship_scene`), which needs an audit first.
@@ -39,6 +40,14 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
   5. Fourteen `pow` a pixel remain in the plain pipeline, all authored (lightmap curve, vertex
      light curve, albedo decode, specular, fog, encode).
 - An RGP capture of an HD 4K frame was not obtained (headless gamescope wrote no trace).
+- **The first bloom downsample's read law** (`hd-scene-8bit`): through the sRGB view (averaging
+  light, what renderer.md says the ladder does) the pairs move away, mean grey +0.02 to +0.13 on 12
+  of 14; the downsample keeps averaging encoded texels. Read which the original runs (its half-res
+  pass's unit gamma nibble in an RPCS3 dump) before changing it. Measure: the 14 HD pairs as in
+  `docs/rendering/hd-track-tone.md`, "The scene target is 8-bit by default".
+- **Opaque draws through an sRGB attachment view**: bounded at about 1.5 % of an NVIDIA 4K frame and
+  0.37 ms of a Deck 4K frame before the cost of splitting the race pass; not built
+  (`docs/rendering/hires-gpu-levers.md`, "Not landed: opaque draws writing through an sRGB attachment view").
 
 - **`between passes`** (x28 on HD, 0.5 ms on the Deck). Split it by what it holds
   (the race pass's clears and resolve first). Measure: read the span on the Deck, then move a mark.
@@ -62,8 +71,8 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
 
 ## Next Steps
 
-1. Decide items 1 and 2 above (both move the original's picture toward the console's own
-   structure); either is worth more at 4K than every exact cut left.
+1. Run the Deck half of item 2, then decide item 1 (it moves the shadowed pixels toward the
+   console's own structure); it is worth more at 4K than every exact cut left.
 2. Only docked 4K still gains from the GPU (`docs/rendering/hires-gpu-levers.md`, "The Deck's verdict"):
    f16 in `lit_texel`, and fewer than about 104 VGPRs on HD's rich pipelines for more waves than 8
    (the plain pipeline is already at 40 VGPRs, 24 waves).
