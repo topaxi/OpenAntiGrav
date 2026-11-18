@@ -1075,6 +1075,19 @@ a quiet machine and under 48 busy loops, in 5.5 s against 98 s. The server's
 `confirm_sum_ms` stat still reads the wall clock, so in these runs it is the harness's
 own speed and not a round trip.
 
+**A link joins the host only after its race is loaded (2026-11-18).** `Host` drops a joining
+link that stays silent for `HELLO_TIMEOUT` (10 s) on the **wall** clock, while a `Shim` on the
+virtual clock holds a client's hello back until the harness advances that clock, which it does
+only inside `ready_all`. A harness that joined a link and then loaded that client's race from
+the disc (seconds, far more under machine load) before its first `host.poll()` lost the link
+to the timeout, and `ready_all` then spun forever waiting for a welcome that could not come:
+the four `weapons_ground_truth` races hung for 30 to 39 minutes at load average 26 to 37. The
+disc-backed harnesses now load every race first and join afterwards, and `ready_all` fails
+after a 60 s wall-clock limit naming the client and `Host::seat_names`
+(`loopback::a_link_the_host_dropped_before_its_hello_fails_the_handshake_fast`,
+`loopback::a_link_joined_after_the_slow_work_is_welcomed`). The production server is
+unaffected: a real client connects after it has loaded.
+
 **Not covered here** (weapons, loss, jitter, four clients and the own craft's correction
 are measured in ADR-0071's follow-up and "An analog stick, 2026-10-19" below): the
 Galaxy S24 (deferred by the maintainer), a recorded human analog hand, a client joining

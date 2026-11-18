@@ -129,14 +129,40 @@ pub(crate) fn drive_observed(
     totals
 }
 
+/// How long a handshake may take on the wall clock before the harness gives up. Generous for a
+/// loaded machine; a hang is a failure naming the seats, never an endless spin.
+const HANDSHAKE_LIMIT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Welcomes every client and waits until the host has them all ready.
+///
+/// A link must join the host only after its race is loaded: the host drops a link that is
+/// silent for its hello timeout on the wall clock, while a [`Shim`] holds the hello back on
+/// the virtual clock, which only this function advances.
 pub(crate) fn ready_all(host: &mut Host, clients: &mut [(Client, Box<Race>, Pilot)], pace: &Pace) {
-    for (client, race, _) in clients.iter_mut() {
+    ready_all_within(host, clients, pace, HANDSHAKE_LIMIT);
+}
+
+/// [`ready_all`] with the wall-clock `limit` given.
+pub(crate) fn ready_all_within(
+    host: &mut Host,
+    clients: &mut [(Client, Box<Race>, Pilot)],
+    pace: &Pace,
+    limit: std::time::Duration,
+) {
+    let began = std::time::Instant::now();
+    for (n, (client, race, _)) in clients.iter_mut().enumerate() {
         loop {
             host.poll();
             if client.poll_welcome().expect("welcomed").is_some() {
                 break;
             }
+            assert!(
+                began.elapsed() < limit,
+                "client {n} was never welcomed (the host may have dropped its link in the \
+                 handshake); seats {:?}, {} still joining",
+                host.seat_names(),
+                host.joining()
+            );
             pace.idle(std::time::Duration::from_millis(1));
         }
         client.ready(race).expect("same start state");
@@ -147,7 +173,7 @@ pub(crate) fn ready_all(host: &mut Host, clients: &mut [(Client, Box<Race>, Pilo
         for (client, _, _) in clients.iter_mut() {
             client.poll();
         }
-        assert!(asked.elapsed().as_secs() < 5, "{:?}", host.seat_names());
+        assert!(asked.elapsed() < limit, "{:?}", host.seat_names());
         pace.idle(std::time::Duration::from_millis(1));
     }
 }
@@ -797,4 +823,81 @@ fn ten_thousand_malformed_datagrams_from_one_seat_log_at_most_a_line_a_second() 
         (1..=seconds + 1).contains(&lines),
         "{lines} lines in {seconds} s"
     );
+}
+
+/// A link whose hello is behind a delay on the virtual clock is dropped by the host if the
+/// harness sits on the wall clock past the hello timeout before its first poll (a race loading
+/// from disc under load did). The handshake then fails fast naming the seats instead of
+/// spinning forever.
+#[test]
+fn a_link_the_host_dropped_before_its_hello_fails_the_handshake_fast() {
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params.clone());
+    host.set_hello_timeout(std::time::Duration::from_millis(20));
+    let clock = Clock::default();
+    let (server_end, client_end) = Loopback::pair();
+    host.join(Box::new(server_end));
+    let link: Box<dyn Link> = Box::new(Shim::with_clock(
+        client_end,
+        Conditions {
+            one_way: web_time::Duration::from_millis(100),
+            loss: 0.0,
+            ..Conditions::default()
+        },
+        clock.clone(),
+    ));
+    let mut clients = vec![(
+        Client::connect(link, "client 0"),
+        headless(&params),
+        pilot(0),
+    )];
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    let pace = Pace::Virtual(clock, std::time::Duration::from_micros(16_667));
+    let began = std::time::Instant::now();
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        ready_all_within(
+            &mut host,
+            &mut clients,
+            &pace,
+            std::time::Duration::from_secs(2),
+        );
+    }));
+    let message = outcome
+        .expect_err("a dropped link cannot be welcomed")
+        .downcast::<String>()
+        .expect("an assert message");
+    assert!(message.contains("client 0 was never welcomed"), "{message}");
+    assert!(began.elapsed().as_secs() < 10);
+}
+
+/// The same link joined after the slow work, the order the disc-backed harnesses now use, is
+/// welcomed.
+#[test]
+fn a_link_joined_after_the_slow_work_is_welcomed() {
+    let params = params(1);
+    let mut host = Host::new(headless(&params), params.clone());
+    host.set_hello_timeout(std::time::Duration::from_millis(20));
+    let races = vec![headless(&params)];
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    let clock = Clock::default();
+    let mut clients: Vec<_> = races
+        .into_iter()
+        .map(|race| {
+            let (server_end, client_end) = Loopback::pair();
+            host.join(Box::new(server_end));
+            let link: Box<dyn Link> = Box::new(Shim::with_clock(
+                client_end,
+                Conditions {
+                    one_way: web_time::Duration::from_millis(100),
+                    loss: 0.0,
+                    ..Conditions::default()
+                },
+                clock.clone(),
+            ));
+            (Client::connect(link, "client 0"), race, pilot(0))
+        })
+        .collect();
+    let pace = Pace::Virtual(clock, std::time::Duration::from_micros(16_667));
+    ready_all(&mut host, &mut clients, &pace);
+    assert!(host.all_ready());
 }
