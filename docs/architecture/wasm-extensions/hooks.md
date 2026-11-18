@@ -167,7 +167,7 @@ rollback replays it. Names are the README's `event` variants.
 
 - **Raised at** the impacts `oag_weapons::projectile::step` returns
   (`crates/weapons/src/projectile.rs:536`, called at `tick.rs:235`), walked at
-  `tick.rs:267`, where `Race::credit_blast` (`crates/raceplay/src/eliminator.rs:498`)
+  `tick.rs:267`, where `RaceSim::credit_blast` (`crates/raceplay/src/eliminator.rs:498`)
   already credits kills and `last_damager` is set.
 - **Carries** victim, source, weapon. The damage itself is the weapon's law and is
   already applied when the event is raised.

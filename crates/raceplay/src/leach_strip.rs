@@ -133,7 +133,7 @@ impl Race {
     /// (`craft + 0x7020`), the same ordering.
     fn leach_progress(&self, slot: usize) -> f32 {
         let standing = &self.sim.world.ships[slot].standing;
-        standing.lap.saturating_sub(1) as f32 * self.leach_course_length()
+        standing.lap.saturating_sub(1) as f32 * self.sim.leach_course_length()
             + standing.progress.unwrap_or(0.0)
     }
 
@@ -258,7 +258,7 @@ impl Race {
         );
         law::bend(&mut samples, trailer_record.anchor);
         let cumulative = law::cumulative(&samples);
-        law::wobble(&mut samples, &strip.phases, self.leach_course_length());
+        law::wobble(&mut samples, &strip.phases, self.sim.leach_course_length());
         WalkedPath {
             samples,
             cumulative,

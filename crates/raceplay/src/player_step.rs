@@ -504,7 +504,7 @@ impl Race {
         // `0x08823270`: `craft+0x911` set -> held = 4). Never at the
         // release: a craft that has not reached the line holds nothing.
         if outcome.lap_completed || outcome.first_crossing {
-            self.grant_free_turbo(slot);
+            self.sim.grant_free_turbo(slot);
         }
         self.observe_lap(slot, &outcome, evaluated);
         if outcome.lap_completed {

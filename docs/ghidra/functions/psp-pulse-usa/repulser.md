@@ -485,7 +485,7 @@ aimed (`+0x58`). No Repulser-specific rule exists.
 
 `oag_tables::weapons::RepulserStats`, `oag_race::Course::{centre, corridor_width}`,
 `oag_weapons::projectile::repulser` (the timeline, the walk, the sweep, the hit)
-and, in `oag_game`, `Race::fire_repulser`, `advance_repulsers` (the craft sweep,
+and, in `oag_game`, `RaceSim::fire_repulser`, `advance_repulsers` (the craft sweep,
 the Mine/Bomb sweep, `REPULSOR`/`REPULSORHIT`) and `advance_repulser_visual`
 (`WO_REPULSER_BLAST`, two `WO_REPULSER`, screen flash kind 2). Chosen, not
 measured: the waves follow the primary ring (no fork), step ring points

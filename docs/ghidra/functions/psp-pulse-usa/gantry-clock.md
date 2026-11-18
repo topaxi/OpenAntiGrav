@@ -271,4 +271,4 @@ which modes they are was not established, so they stay unnamed. Turbo is 4 at
 forward crossing (with `+0x910`, once) and on every completed lap. So **a craft
 that never reaches the line never holds a Turbo**, which is why the stationary
 capture shows no pickup icon. Ported: `oag_race::Outcome::first_crossing`,
-`Race::grant_free_turbo`. 85 for the moment.
+`RaceSim::grant_free_turbo`. 85 for the moment.

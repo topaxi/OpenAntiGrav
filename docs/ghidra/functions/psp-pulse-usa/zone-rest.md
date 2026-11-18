@@ -121,7 +121,7 @@ instance's start is deferred to an emitter update nobody traced); the `EXPLBIG` 
 and 6, to the frame.
 
 **Wired 2026-10-02 (`pulse-elim-credit`).** `Cue::ContElim` (`"cont_elim"`) loads with `Ready`/`Go` from the
-mode's speech bank (`Cue::COUNTDOWN`), and `Race::tick_wreck_voice` (called from `tick_destroyed_craft`) raises it
+mode's speech bank (`Cue::COUNTDOWN`), and `RaceSim::tick_wreck_voice` (called from `tick_destroyed_craft`) raises it
 2.3 s (`WRECK_VOICE_DELAY`) after a non-player craft is first seen `Eliminated`, once per wreck, in every mode
 except `Mode::Eliminator`. The mode gate: game modes 2 (`Demo`), 8 (`Elimination`) and 18 (`Multiplayer
 Elimination`) are the exclusions, by `g_game_mode_names` in [state-machine.md](state-machine.md); only 8 exists

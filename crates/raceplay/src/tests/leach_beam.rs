@@ -218,8 +218,8 @@ fn two_live_leach_beams_each_drain_their_own_victim() {
     }
     let beam =
         |owner, target| oag_weapons::projectile::leach_beam::Beam::locked(owner, target, &stats);
-    assert!(race.arm_leach_beam(beam(0, 1)));
-    assert!(race.arm_leach_beam(beam(0, 2)));
+    assert!(race.sim.arm_leach_beam(beam(0, 1)));
+    assert!(race.sim.arm_leach_beam(beam(0, 2)));
     assert_eq!(race.sim.world.leach_beams_live(), 2);
 
     race.tick(&PlayerInputs::none());
@@ -498,7 +498,7 @@ fn a_second_persons_leach_beam_locks_on_what_is_ahead_of_their_craft() {
 /// **The player's own beam drains on the title's cadence**, as an opponent's
 /// does: once a ball trip where the title says `PerTrip` (HD, and the titles
 /// that inherit its law), every tick where it says `PerTick` (Pulse). See
-/// `oag_title::weapons::LeachDrain` and `Race::locked_leach_beam`.
+/// `oag_title::weapons::LeachDrain` and `RaceSim::locked_leach_beam`.
 #[test]
 fn the_players_locked_beam_takes_the_titles_drain_cadence() {
     let fire = |drain: oag_title::weapons::LeachDrain| {

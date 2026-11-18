@@ -10,7 +10,7 @@ difficulty: medium (45)
 # After a press: `FUN_006778d8(..., 0x1d)`, and HD's live Quake latch
 
 The Quake half landed 2026-11-02 (`quake-armed`): a press made under a live wave sets
-`Held::quake_armed` and `Race::fire_armed_quakes` launches it the tick after the wave ends, on every
+`Held::quake_armed` and `RaceSim::fire_armed_quakes` launches it the tick after the wave ends, on every
 title. Pulse PSP was seen live (confidence 90, `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
 "the armed press, seen live"); HD, 2048 and Omega are the same static reading (65). The LeachBeam half
 landed 2026-10-31.

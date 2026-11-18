@@ -48,7 +48,7 @@ impl RaceSim {
     ///
     /// A slot holding nothing that locks is returned to a cleared lock, so a
     /// lock never outlives its weapon. Opponents have no lock (their shot takes
-    /// the window's candidate at once - see [`Race::fire_missile`]).
+    /// the window's candidate at once - see [`RaceSim::fire_missile`]).
     pub(super) fn advance_locks(&mut self) {
         let dt = self.dt;
         for slot in 0..self.world.ship_count as usize {

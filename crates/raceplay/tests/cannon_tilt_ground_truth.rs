@@ -190,7 +190,7 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
             continue;
         }
         race.sim.world.projectiles.clear();
-        assert!(race.fire_missile(0, &stats));
+        assert!(race.sim.fire_missile(0, &stats));
         let missile = race
             .sim
             .world

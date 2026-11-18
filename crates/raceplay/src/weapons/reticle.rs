@@ -227,7 +227,7 @@ impl RaceSim {
     /// The **origin** is not: `Ship_AcquireLock` uses one weapon-independent
     /// origin for both branches, and this engine already moved the Missile's to
     /// the craft's *nose* - a deliberate deviation argued at
-    /// [`Race::fire_missile`], where the missile actually starts. The LeachBeam
+    /// [`RaceSim::fire_missile`], where the missile actually starts. The LeachBeam
     /// has no recovered launch offset to move to, so its arm measures from the
     /// craft's own position. **Ours, and the absence of an invention rather
     /// than one**: borrowing the Missile's nose offset for a weapon with no
@@ -243,7 +243,7 @@ impl RaceSim {
             sight::Held::Missile => {
                 let missile = stats.missile()?;
                 // From the nose and along the craft's forward, the same two the
-                // fire path takes the lock from - see [`Race::fire_missile`] on
+                // fire path takes the lock from - see [`RaceSim::fire_missile`] on
                 // why the nose and not the centre.
                 let (origin, _, _) = oag_weapons::projectile::missile::launch(
                     &ship.physics,

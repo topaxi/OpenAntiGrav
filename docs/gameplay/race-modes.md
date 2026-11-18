@@ -1036,7 +1036,7 @@ before:
 | Absorb | The measured decision's absorb half spends the weapon on the Eliminator's 1 s Shield (`Race::eliminator_absorb`, the player's path) instead of keeping it | The decision and HD's `absorbScale` (`3.6 / 2.6 / 0.6`) are measured ([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)); keeping the weapon fired it later instead |
 | Hold | The Hard rung (Elite, Ace) keeps a fresh pickup 20 s before spending it in any way (fire, drop, absorb, Turbo, Autopilot), on top of the measured 0.8 s gate | Measured on ours: an Elite opponent spent a Missile 1.5 to 1.8 s after taking it, and scaling the fire odds by 0.2 did not lengthen that. Why is unverified; the window's flat second chance (`rates[4]`, which ignores the odds) is a candidate. A held weapon blocks the next pad, so the hold paces supply. Novice and Skilled absorb enough of theirs |
 | No pad seeking | `PadSeeking::Off` ([Steering for weapon pads](#steering-for-weapon-pads-2026-10-03)) | Tuned for Pulse's five-kill race. Here it doubled the supply |
-| No pack | `Race::eliminator_pack_scale` is `1.0` | Tuned for Pulse's five-kill race. A pack this dense let one Repulser take several kills at once |
+| No pack | `RaceSim::eliminator_pack_scale` is `1.0` | Tuned for Pulse's five-kill race. A pack this dense let one Repulser take several kills at once |
 
 **Before and after.** Measured on Vineta K, Venom, the person under autopilot, seeds 1 to 12.
 Race length is the leading opponent's completed laps when the race ends; a race still running at

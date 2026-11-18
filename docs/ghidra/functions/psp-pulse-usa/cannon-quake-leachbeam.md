@@ -2571,7 +2571,7 @@ reused whole" above.
 **2026-09-23: `LEACH` and `~LEACHATTACH` wired.**
 `Cue::Leach` and `Cue::LeachAttach` are in `crates/sound/src/sfx/cue.rs`.
 `Cue::Leach` fires from both places a beam can be fired locked -
-`Race::spend_pickup`'s own LeachBeam arm and `Race::fire_opponent_leach_beam`
+`Race::spend_pickup`'s own LeachBeam arm and `RaceSim::fire_opponent_leach_beam`
 - since this section names `LeachBeam_InitLocked` alone, not the unlocked
 fizzle case. `Cue::LeachAttach` is held for as long as a **locked** `Beam`
 instance exists, through its own disconnect linger, matching "carried by the

@@ -878,7 +878,7 @@ impl Race {
                 controls.thrust = 0.0;
             }
             // An Eliminator leader waits for the pack; only ever a reduction.
-            controls.thrust *= self.eliminator_pack_scale(slot);
+            controls.thrust *= self.sim.eliminator_pack_scale(slot);
             // An opponent under a Disruptor: always AI-driven, so the Stall
             // passes it by and the rest apply. See `RaceSim::disrupted_controls`.
             controls = self.sim.disrupted_controls(slot, controls, true);
@@ -1118,7 +1118,7 @@ impl Race {
         }
         for (slot, &before) in laps_before.iter().enumerate() {
             if self.sim.world.ships[slot].standing.lap > before {
-                self.credit_lap_points(slot);
+                self.sim.credit_lap_points(slot);
             }
         }
         // The tick a person crosses the line for the last time is the tick
@@ -1175,7 +1175,7 @@ impl Race {
 
         let mut field = oag_ai::Field {
             place: places[slot],
-            hazard: self.hazard_for(slot, forward, right),
+            hazard: self.sim.hazard_for(slot, forward, right),
             pad: self.sim.pad_for(slot),
             ..oag_ai::Field::EMPTY
         };

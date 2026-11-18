@@ -1,6 +1,6 @@
 //! `cont_elim`, the one sound an opponent's destruction makes in the original:
 //! raised once per wreck, 2.3 s after the craft is down, in every mode but the
-//! Eliminator, for the player never. `Race::tick_wreck_voice`.
+//! Eliminator, for the player never. `RaceSim::tick_wreck_voice`.
 
 use super::*;
 use oag_gameplay::PlayerInputs;

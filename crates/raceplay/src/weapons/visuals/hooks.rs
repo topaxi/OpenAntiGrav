@@ -34,8 +34,8 @@ impl Race {
         else {
             return false;
         };
-        let beam = self.locked_leach_beam(owner, target, &stats);
-        self.arm_leach_beam(beam)
+        let beam = self.sim.locked_leach_beam(owner, target, &stats);
+        self.sim.arm_leach_beam(beam)
     }
 
     /// Puts craft `slot` on the first laid Bomb another craft owns, for

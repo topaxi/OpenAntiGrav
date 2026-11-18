@@ -172,7 +172,7 @@ impl Race {
                 .map(|table| table.slowdown_limit),
         );
 
-        self.cancel_pickup_use_of_downed_crafts();
+        self.sim.cancel_pickup_use_of_downed_crafts();
         // Before the force law, so a Turbo fired this tick boosts this tick.
         // `tick_autopilot` after it, so a pickup armed this tick gets its whole
         // duration rather than a tick less, and so the cancel-on-absorb branch
@@ -194,9 +194,9 @@ impl Race {
         // tick the button was pressed and from where the craft was when it was
         // pressed. A mine never moves again, so this is the only tick that can
         // place it correctly.
-        self.lay_mines();
+        self.sim.lay_mines();
         // A Quake press made under a live wave, now that the wave may have ended.
-        self.fire_armed_quakes();
+        self.sim.fire_armed_quakes();
         // Right after, for the same reason: a Cannon's own countdown has to
         // see every tick the button is down, and a round fired this tick has
         // to leave from where the craft started it. It reads the snapshot for
@@ -286,12 +286,13 @@ impl Race {
                 self.shield_hit(slot);
             }
             if hit.landed {
-                self.note_weapon_hit(slot);
+                self.sim.note_weapon_hit(slot);
             }
         }
-        self.credit_impact_points(&impacts, &hits);
+        self.sim.credit_impact_points(&impacts, &hits);
         let by = std::array::from_fn(|slot| {
-            self.impact_reaching(&impacts, slot)
+            self.sim
+                .impact_reaching(&impacts, slot)
                 .map(|impact| (impact.owner, impact.kind))
         });
         self.xp_weapon_hits(&hits, &by);
@@ -322,7 +323,7 @@ impl Race {
             if let Some(struck) = impact.struck {
                 self.sim.last_damager[struck as usize] = Some(impact.owner);
             }
-            self.credit_blast(impact, &hits);
+            self.sim.credit_blast(impact, &hits);
             #[cfg(feature = "view")]
             self.note_blast(
                 impact.kind,

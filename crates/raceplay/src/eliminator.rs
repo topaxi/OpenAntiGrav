@@ -43,12 +43,12 @@
 //! **Measured** (`docs/ghidra/functions/psp-pulse-usa/eliminator-kill-target.md`,
 //! `Ship_Damage`, confidence 85): a kill is credited on the blow that empties
 //! the shield, when that blow is a weapon's, to the craft recorded as the
-//! victim's last attacker - [`Race::credit_kill`]. A wall that finishes a craft
+//! victim's last attacker - [`RaceSim::credit_kill`]. A wall that finishes a craft
 //! credits nobody, and an earlier wall scrape does not erase the attacker.
 //!
 //! **Chosen, and said so where it happens**: how the attacker id is derived.
 //! [`RaceSim::last_damager`] is the craft whose weapon last hit the victim
-//! directly, or whose blast last reached it ([`Race::credit_blast`]); which
+//! directly, or whose blast last reached it ([`RaceSim::credit_blast`]); which
 //! blast a splash belongs to is re-derived from the impact whose radius the
 //! victim was inside.
 //!
@@ -107,14 +107,16 @@ pub(super) fn eliminator_respawn_delay(is_player: bool) -> f32 {
         }
 }
 
-impl Race {
+impl RaceSim {
     /// What this race's Eliminator ends on: kills on a kill rule, points on a score rule. The
     /// kill-count default where the race was handed none.
     #[must_use]
     pub fn eliminator_target(&self) -> u32 {
-        self.sim.eliminator_kill_target
+        self.eliminator_kill_target
     }
+}
 
+impl Race {
     /// Brings a destroyed craft back, on the terms its mode sets.
     ///
     /// **Only the Eliminator brings one back.** Every craft there returns after
@@ -133,7 +135,7 @@ impl Race {
     /// that respawns this tick is placed where it is *put*, not where the
     /// explosion left it.
     pub(super) fn tick_destroyed_craft(&mut self) {
-        self.tick_wreck_voice();
+        self.sim.tick_wreck_voice();
         let mode = self.sim.world.mode();
 
         for slot in 0..self.sim.world.ship_count as usize {
@@ -159,7 +161,7 @@ impl Race {
             if self.sim.respawn_delay[slot] <= 0.0 {
                 self.sim.respawn_delay[slot] = delay;
                 if mode == Mode::Eliminator {
-                    self.credit_kill(slot);
+                    self.sim.credit_kill(slot);
                     if let Some(law) = self.sim.score_law {
                         law.charge_death(&mut self.sim.world.ships[slot].standing);
                     }
@@ -332,7 +334,9 @@ impl Race {
             self.shield_activate(slot);
         }
     }
+}
 
+impl RaceSim {
     /// How much of its throttle an Eliminator opponent uses, so the field stays
     /// within reach of itself. `1.0` everywhere but the front of the pack.
     ///
@@ -369,22 +373,21 @@ impl Race {
     /// that has come off the circuit rather than one to wait for.
     pub(super) fn eliminator_pack_scale(&self, slot: usize) -> f32 {
         // A score Eliminator keeps no pack (`crate::score_pace`).
-        if self.sim.world.mode() != Mode::Eliminator || self.sim.score_pace.is_some() {
+        if self.world.mode() != Mode::Eliminator || self.score_pace.is_some() {
             return 1.0;
         }
-        let Some(course) = &self.sim.course else {
+        let Some(course) = &self.course else {
             return 1.0;
         };
         let racing = |other: usize| {
             other != 0
-                && self.sim.world.ships[other].active
-                && self.sim.world.ships[other].physics.craft_state
-                    == oag_physics::CraftState::Racing
+                && self.world.ships[other].active
+                && self.world.ships[other].physics.craft_state == oag_physics::CraftState::Racing
         };
-        let mine = self.sim.world.ships[slot].standing.distance(course);
+        let mine = self.world.ships[slot].standing.distance(course);
         let mut nearest_behind = f32::INFINITY;
-        for other in (1..self.sim.world.ship_count as usize).filter(|&o| o != slot && racing(o)) {
-            let gap = self.sim.world.ships[other].standing.distance(course) - mine;
+        for other in (1..self.world.ship_count as usize).filter(|&o| o != slot && racing(o)) {
+            let gap = self.world.ships[other].standing.distance(course) - mine;
             if gap >= 0.0 {
                 return 1.0;
             }
@@ -416,20 +419,20 @@ impl Race {
     /// hit within [`FATAL_BLOW_WINDOW_TICKS`] of the craft being seen down, since the
     /// destroyed sequence sits between the two.
     pub(super) fn credit_kill(&mut self, victim: usize) {
-        let tick = self.sim.world.tick;
-        let hit = self.sim.last_weapon_hit[victim];
+        let tick = self.world.tick;
+        let hit = self.last_weapon_hit[victim];
         if hit == 0 || tick + 1 - hit > FATAL_BLOW_WINDOW_TICKS {
             return;
         }
-        if let Some(killer) = self.sim.last_damager[victim]
+        if let Some(killer) = self.last_damager[victim]
             && killer as usize != victim
-            && self.sim.world.ships[killer as usize].active
+            && self.world.ships[killer as usize].active
         {
             let killer = killer as usize;
-            self.sim.world.ships[killer].standing.kills += 1;
-            if let Some(law) = self.sim.score_law {
-                let person = self.sim.world.person_flown(killer);
-                law.credit_kill(&mut self.sim.world.ships[killer].standing, person);
+            self.world.ships[killer].standing.kills += 1;
+            if let Some(law) = self.score_law {
+                let person = self.world.person_flown(killer);
+                law.credit_kill(&mut self.world.ships[killer].standing, person);
             }
         }
     }
@@ -439,14 +442,14 @@ impl Race {
     /// Shield return.
     pub(super) fn credit_hit_points(&mut self, victim: usize, attacker: u8, amount: f32) {
         let attacker = attacker as usize;
-        let Some(law) = self.sim.score_law else {
+        let Some(law) = self.score_law else {
             return;
         };
-        if attacker == victim || !self.sim.world.ships[attacker].active {
+        if attacker == victim || !self.world.ships[attacker].active {
             return;
         }
-        let person = self.sim.world.person_flown(attacker);
-        law.credit_damage(&mut self.sim.world.ships[attacker].standing, person, amount);
+        let person = self.world.person_flown(attacker);
+        law.credit_damage(&mut self.world.ships[attacker].standing, person, amount);
     }
 
     /// The impact that reached `slot` this tick: the one that struck it, or whose blast radius
@@ -456,10 +459,10 @@ impl Race {
         impacts: &'a [Option<oag_weapons::projectile::Impact>],
         slot: usize,
     ) -> Option<&'a oag_weapons::projectile::Impact> {
-        let position = self.sim.world.ships[slot].physics.body.position;
+        let position = self.world.ships[slot].physics.body.position;
         impacts.iter().flatten().find(|impact| {
             impact.struck.is_some_and(|struck| struck as usize == slot)
-                || oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
+                || oag_weapons::projectile::blast_stats(self.weapons.as_deref(), impact.kind)
                     .is_some_and(|stats| (position - impact.point).length() <= stats.radius)
         })
     }
@@ -471,7 +474,7 @@ impl Race {
         impacts: &[Option<oag_weapons::projectile::Impact>],
         hits: &[oag_weapons::projectile::WeaponHit; MAX_SHIPS],
     ) {
-        if self.sim.score_law.is_none() {
+        if self.score_law.is_none() {
             return;
         }
         for (slot, hit) in hits.iter().enumerate() {
@@ -489,12 +492,12 @@ impl Race {
 
     /// A completed lap's points, Eliminator only.
     pub(super) fn credit_lap_points(&mut self, slot: usize) {
-        if self.sim.world.mode() != Mode::Eliminator {
+        if self.world.mode() != Mode::Eliminator {
             return;
         }
-        if let Some(law) = self.sim.score_law {
-            let person = self.sim.world.person_flown(slot);
-            law.credit_lap(&mut self.sim.world.ships[slot].standing, person);
+        if let Some(law) = self.score_law {
+            let person = self.world.person_flown(slot);
+            law.credit_lap(&mut self.world.ships[slot].standing, person);
         }
     }
 
@@ -510,30 +513,30 @@ impl Race {
     /// opponent's `EXPLSMALL`/`EXPLBIG` are not voiced. A title that does not
     /// voice its start has no speech bank loaded and raises nothing.
     fn tick_wreck_voice(&mut self) {
-        if !self.sim.countdown_voice || self.sim.world.mode() == Mode::Eliminator {
+        if !self.countdown_voice || self.world.mode() == Mode::Eliminator {
             return;
         }
-        for slot in 0..self.sim.world.ship_count as usize {
-            let down = self.sim.world.ships[slot].active
-                && self.sim.world.ships[slot].physics.craft_state
+        for slot in 0..self.world.ship_count as usize {
+            let down = self.world.ships[slot].active
+                && self.world.ships[slot].physics.craft_state
                     == oag_physics::CraftState::Eliminated;
-            if self.sim.world.person_flown(slot) || !down {
-                self.sim.wreck_voice[slot] = 0.0;
+            if self.world.person_flown(slot) || !down {
+                self.wreck_voice[slot] = 0.0;
                 continue;
             }
-            let timer = &mut self.sim.wreck_voice[slot];
+            let timer = &mut self.wreck_voice[slot];
             if *timer < 0.0 {
                 continue;
             }
             if *timer == 0.0 {
                 *timer = WRECK_VOICE_DELAY;
             }
-            *timer -= self.sim.dt;
+            *timer -= self.dt;
             if *timer <= 0.0 {
                 *timer = -1.0;
-                self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                self.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::ContElim,
-                    self.sim.world.primary_slot(),
+                    self.world.primary_slot(),
                 ));
             }
         }
@@ -551,12 +554,10 @@ impl Race {
     /// the destroyed sequence between the blow and the craft being seen down.
     /// Every other mode records every landed hit as before.
     pub(super) fn note_weapon_hit(&mut self, victim: usize) {
-        if self.sim.world.mode() == Mode::Eliminator
-            && self.sim.world.ships[victim].physics.shield > 0.0
-        {
+        if self.world.mode() == Mode::Eliminator && self.world.ships[victim].physics.shield > 0.0 {
             return;
         }
-        self.sim.last_weapon_hit[victim] = self.sim.world.tick + 1;
+        self.last_weapon_hit[victim] = self.world.tick + 1;
     }
 
     /// Records a hit by a weapon that is not a projectile - the LeachBeam's
@@ -567,10 +568,10 @@ impl Race {
     /// original reads it; elsewhere nothing is written, so no other mode's
     /// state moves.
     pub(super) fn record_pending_hit(&mut self, victim: usize, attacker: u8) {
-        if self.sim.world.mode() != Mode::Eliminator {
+        if self.world.mode() != Mode::Eliminator {
             return;
         }
-        self.sim.last_damager[victim] = Some(attacker);
+        self.last_damager[victim] = Some(attacker);
         self.note_weapon_hit(victim);
     }
 
@@ -586,27 +587,23 @@ impl Race {
         impact: &oag_weapons::projectile::Impact,
         hits: &[oag_weapons::projectile::WeaponHit; MAX_SHIPS],
     ) {
-        if self.sim.world.mode() != Mode::Eliminator {
+        if self.world.mode() != Mode::Eliminator {
             return;
         }
         let Some(stats) =
-            oag_weapons::projectile::blast_stats(self.sim.weapons.as_deref(), impact.kind)
+            oag_weapons::projectile::blast_stats(self.weapons.as_deref(), impact.kind)
         else {
             return;
         };
-        for (slot, hit) in hits
-            .iter()
-            .enumerate()
-            .take(self.sim.world.ship_count as usize)
-        {
+        for (slot, hit) in hits.iter().enumerate().take(self.world.ship_count as usize) {
             if slot == impact.owner as usize || !hit.landed {
                 continue;
             }
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.world.ships[slot];
             if !ship.active || (ship.physics.body.position - impact.point).length() > stats.radius {
                 continue;
             }
-            self.sim.last_damager[slot] = Some(impact.owner);
+            self.last_damager[slot] = Some(impact.owner);
         }
     }
 }

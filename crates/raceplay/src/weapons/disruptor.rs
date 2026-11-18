@@ -29,7 +29,7 @@ impl Race {
     /// `DisruptorPool_Fire` passes `craft+0x194` - the lock the sight keeps -
     /// and a locked bolt homes. This engine's sight does not run for a
     /// Disruptor (`RaceSim::sight_held` answers `None`), so the same lock test
-    /// `Race::fire_missile` runs is run here for both the player and an
+    /// `RaceSim::fire_missile` runs is run here for both the player and an
     /// opponent, without the reticle hold; `None` is a bolt that flies
     /// straight, which is what the original fires with no lock. The window is
     /// the Missile's authored one, and a table with no Missile block has no

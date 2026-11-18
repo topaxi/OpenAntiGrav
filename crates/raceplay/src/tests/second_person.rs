@@ -155,7 +155,7 @@ fn the_missiles_reticle_hold_follows_the_primary_slot() {
             .find(|p| p.kind == Some(Weapon::Missile) && p.owner == owner)
             .map(|p| p.target)
     };
-    assert!(race.fire_missile(1, &stats));
+    assert!(race.sim.fire_missile(1, &stats));
     assert_eq!(
         target_of(&race, 1),
         Some(None),

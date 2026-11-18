@@ -243,7 +243,7 @@ impl Race {
         oag_weapons::projectile::leach_beam::trip::gap(
             ships[beam.owner as usize].standing.progress,
             ships[beam.target as usize].standing.progress,
-            self.leach_course_length(),
+            self.sim.leach_course_length(),
         )
     }
 

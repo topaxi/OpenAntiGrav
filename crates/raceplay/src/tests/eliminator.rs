@@ -126,7 +126,7 @@ fn struck(age: u64) -> Race {
 #[test]
 fn a_kill_is_credited_when_a_weapon_hit_finished_the_craft() {
     let mut race = struck(29);
-    race.credit_kill(1);
+    race.sim.credit_kill(1);
     assert_eq!(race.sim.world.ships[0].standing.kills, 1);
 }
 
@@ -136,7 +136,7 @@ fn a_kill_is_credited_when_a_weapon_hit_finished_the_craft() {
 #[test]
 fn a_death_long_after_the_last_weapon_hit_credits_nobody() {
     let mut race = struck(1800);
-    race.credit_kill(1);
+    race.sim.credit_kill(1);
     assert_eq!(race.sim.world.ships[0].standing.kills, 0);
 }
 
@@ -145,7 +145,7 @@ fn a_death_long_after_the_last_weapon_hit_credits_nobody() {
 fn a_craft_is_never_credited_with_its_own_death() {
     let mut race = struck(10);
     race.sim.last_damager[1] = Some(1);
-    race.credit_kill(1);
+    race.sim.credit_kill(1);
     assert_eq!(race.sim.world.ships[1].standing.kills, 0);
 }
 
@@ -157,7 +157,7 @@ fn pending_hit(shield: f32) -> Race {
     race.sim.world.ships[1].active = true;
     race.sim.world.tick = 5000;
     race.sim.world.ships[1].physics.shield = shield;
-    race.record_pending_hit(1, 0);
+    race.sim.record_pending_hit(1, 0);
     race
 }
 
@@ -166,7 +166,7 @@ fn pending_hit(shield: f32) -> Race {
 #[test]
 fn a_beam_or_quake_blow_that_empties_the_shield_is_credited() {
     let mut race = pending_hit(0.0);
-    race.credit_kill(1);
+    race.sim.credit_kill(1);
     assert_eq!(race.sim.world.ships[0].standing.kills, 1);
 }
 
@@ -175,7 +175,7 @@ fn a_beam_or_quake_blow_that_empties_the_shield_is_credited() {
 #[test]
 fn a_beam_hit_that_left_the_shield_standing_does_not_credit_a_wall_death() {
     let mut race = pending_hit(40.0);
-    race.credit_kill(1);
+    race.sim.credit_kill(1);
     assert_eq!(race.sim.world.ships[0].standing.kills, 0);
 }
 
@@ -186,7 +186,7 @@ fn a_pending_hit_writes_nothing_outside_eliminator() {
     let mut race = race_with_a_grid();
     race.sim.world.ships[1].physics.shield = 0.0;
     let before = race.sim.state_hash();
-    race.record_pending_hit(1, 0);
+    race.sim.record_pending_hit(1, 0);
     assert_eq!(race.sim.state_hash(), before);
 }
 
@@ -419,16 +419,16 @@ fn near(value: f32, expected: f32) {
 #[test]
 fn a_hit_pays_the_attacker_and_the_scale_is_an_opponents_alone() {
     let mut race = scored(200);
-    race.credit_hit_points(1, 0, 30.0);
+    race.sim.credit_hit_points(1, 0, 30.0);
     near(score_of(&race, 0), 3.0);
-    race.credit_hit_points(0, 1, 80.0);
+    race.sim.credit_hit_points(0, 1, 80.0);
     near(score_of(&race, 1), 9.2);
 }
 
 #[test]
 fn a_craft_earns_nothing_for_hitting_itself() {
     let mut race = scored(200);
-    race.credit_hit_points(1, 1, 80.0);
+    race.sim.credit_hit_points(1, 1, 80.0);
     near(score_of(&race, 1), 0.0);
 }
 
@@ -437,7 +437,7 @@ fn a_kill_pays_twenty_on_top_of_its_count() {
     let mut race = scored(200);
     race.sim.last_damager[1] = Some(0);
     race.sim.last_weapon_hit[1] = race.sim.world.tick + 1;
-    race.credit_kill(1);
+    race.sim.credit_kill(1);
     assert_eq!(race.sim.world.ships[0].standing.kills, 1);
     near(score_of(&race, 0), 20.0);
 }
@@ -445,15 +445,15 @@ fn a_kill_pays_twenty_on_top_of_its_count() {
 #[test]
 fn a_lap_pays_every_craft_and_nothing_outside_the_eliminator() {
     let mut race = scored(200);
-    race.credit_lap_points(0);
-    race.credit_lap_points(1);
+    race.sim.credit_lap_points(0);
+    race.sim.credit_lap_points(1);
     near(score_of(&race, 0), 5.0);
     near(score_of(&race, 1), 5.75);
 
     let mut race =
         race_with_weapon_table(Mode::SingleRace, enveloping_pad(), 1.0, one_mine_table());
     race.sim.score_law = Some(SCORE_LAW);
-    race.credit_lap_points(0);
+    race.sim.credit_lap_points(0);
     near(score_of(&race, 0), 0.0);
 }
 
@@ -483,8 +483,8 @@ fn the_race_ends_on_the_score_target_and_not_on_kills() {
 fn a_kill_race_scores_nothing_and_still_ends_on_kills() {
     let mut race = eliminator();
     race.sim.eliminator_kill_target = 1;
-    race.credit_hit_points(1, 0, 80.0);
-    race.credit_lap_points(0);
+    race.sim.credit_hit_points(1, 0, 80.0);
+    race.sim.credit_lap_points(0);
     near(score_of(&race, 0), 0.0);
     race.sim.world.ships[0].standing.kills = 1;
     race.tick_destroyed_craft();

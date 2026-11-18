@@ -7,7 +7,7 @@
 use super::*;
 use oag_weapons::projectile::repulser::Repulser;
 
-impl Race {
+impl RaceSim {
     /// `Weapon_FireRepulser` (`0x0886ce8c`) for `slot`: claims a pool slot and
     /// plays `REPULSOR` on the firer.
     ///
@@ -17,7 +17,6 @@ impl Race {
     /// keeps the pickup, the same "nothing to fire" rule every arm follows.
     pub(crate) fn fire_repulser(&mut self, slot: usize) -> bool {
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::repulser)
@@ -27,16 +26,18 @@ impl Race {
         let Ok(owner) = u8::try_from(slot) else {
             return false;
         };
-        if let Some(free) = self.sim.world.repulsers.iter_mut().find(|r| r.is_none()) {
+        if let Some(free) = self.world.repulsers.iter_mut().find(|r| r.is_none()) {
             *free = Some(Repulser::launch(owner, &stats));
-            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+            self.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Repulsor,
                 slot,
             ));
         }
         true
     }
+}
 
+impl Race {
     /// One tick of `RepulserPool_Update` (`0x0886cc70`) over every live
     /// Repulser, in pool order: `Repulser_Update`, then
     /// `RepulserPool_SweepTargets`, then retire the ones whose lifetime is up.
@@ -113,8 +114,8 @@ impl Race {
         self.throw_hit_sparks(&hits, false);
         for (slot, owner) in credits {
             if hits[slot].landed {
-                self.record_pending_hit(slot, owner);
-                self.credit_hit_points(slot, owner, hits[slot].amount);
+                self.sim.record_pending_hit(slot, owner);
+                self.sim.credit_hit_points(slot, owner, hits[slot].amount);
             }
         }
     }

@@ -108,7 +108,7 @@ fn an_opponents_rocket_is_owned_by_the_slot_that_fired_it() {
     // caller; this asks only who owns what leaves the rails.
     let firing = 3usize;
     assert!(
-        race.fire_opponent_rocket(firing),
+        race.sim.fire_opponent_rocket(firing),
         "nothing was fired to check the owner of"
     );
 
