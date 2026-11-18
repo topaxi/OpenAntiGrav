@@ -21,8 +21,10 @@ use oag_net::online::server::Ruling;
 use web_time::Duration;
 
 use crate::loopback::headless;
-use crate::online::{Lab, Racer, config, fly_once, thread_runner};
-use crate::player_host::{alive, hosted_room_starts_keyed, player_host};
+use crate::online::config;
+use crate::online::{Lab, Racer, fly_once, thread_runner};
+use crate::player_host::{alive, hosted_room_starts_keyed, offer_room, player_host};
+use oag_net::wire::online::Refusal;
 
 const ANN: usize = 0;
 const BOB: usize = 1;
@@ -39,6 +41,20 @@ struct Hosted {
 }
 
 fn hosted(cheat: Cheat, max_ticks: u32, ban_file: Option<std::path::PathBuf>) -> Hosted {
+    let keys = [
+        Arc::new(PlayerKey::generate().expect("a key")),
+        Arc::new(PlayerKey::generate().expect("a key")),
+    ];
+    hosted_by(cheat, max_ticks, ban_file, keys)
+}
+
+/// [`hosted`] with Ann's and Bob's keys given: the same player across lobby runs.
+fn hosted_by(
+    cheat: Cheat,
+    max_ticks: u32,
+    ban_file: Option<std::path::PathBuf>,
+    keys: [Arc<PlayerKey>; 2],
+) -> Hosted {
     let mut lab = Lab::with_config(
         oag_net::online::server::Config {
             ban_file,
@@ -48,10 +64,6 @@ fn hosted(cheat: Cheat, max_ticks: u32, ban_file: Option<std::path::PathBuf>) ->
     );
     lab.server
         .set_referee(Arc::new(|params| Ok(headless(params))));
-    let keys = [
-        Arc::new(PlayerKey::generate().expect("a key")),
-        Arc::new(PlayerKey::generate().expect("a key")),
-    ];
     assert_eq!(lab.join_keyed("ann", keys[ANN].public()), ANN);
     assert_eq!(lab.join_keyed("bob", keys[BOB].public()), BOB);
     let mut host = player_host(max_ticks);
@@ -143,8 +155,65 @@ fn ban_file(tag: &str) -> std::path::PathBuf {
     dir.join("bans.txt")
 }
 
+/// The lines of `file` that start with `kind` and name `key`.
+fn lines_on(file: &std::path::Path, kind: &str, key: &PlayerKey) -> Vec<String> {
+    let text = std::fs::read_to_string(file).unwrap_or_default();
+    let prefix = format!("{kind} {} ", oag_net::wt::hex(&key.public()));
+    text.lines()
+        .filter(|line| line.starts_with(&prefix))
+        .map(str::to_string)
+        .collect()
+}
+
+/// One race on a fresh lobby over `file` (a lobby restart between races), hosted by `host`
+/// cheating with `cheat` and reported by `guest`: the room closes and the verdict is proven.
+fn one_proven_case(
+    file: &std::path::Path,
+    cheat: Cheat,
+    host: &Arc<PlayerKey>,
+    guest: &Arc<PlayerKey>,
+) {
+    let mut race = hosted_by(
+        cheat,
+        100_000,
+        Some(file.to_path_buf()),
+        [host.clone(), guest.clone()],
+    );
+    let reason = race.until_closed();
+    assert!(
+        reason.contains("its host was caught cheating") && !reason.contains("banned"),
+        "the guest is told the proof, not a ban: {reason}"
+    );
+    assert!(
+        race.judged()
+            .iter()
+            .any(|(who, verdict)| who == "bob" && matches!(verdict, Verdict::Proven(_))),
+        "{:?}",
+        race.judged()
+    );
+}
+
+/// A fresh lobby over `file`; `key` offers a room from a new connection. `Ok` when the room is
+/// listed, `Err` with the refusal's text when it is refused.
+fn try_to_host(file: &std::path::Path, key: &PlayerKey) -> Result<(), (Refusal, String)> {
+    let mut lab = Lab::with_config(
+        oag_net::online::server::Config {
+            ban_file: Some(file.to_path_buf()),
+            ..config()
+        },
+        thread_runner(60),
+    );
+    let who = lab.join_keyed("ann", key.public());
+    let host = player_host(60);
+    offer_room(&mut lab, who, &host, key);
+    lab.until("a room or a refusal", |lab| {
+        lab.people[who].room.is_some() || lab.people[who].refused.is_some()
+    });
+    lab.people[who].refused.take().map_or(Ok(()), Err)
+}
+
 #[test]
-fn a_host_that_alters_its_simulation_is_proven_by_the_lobbys_re_simulation_and_banned() {
+fn a_host_that_alters_its_simulation_is_proven_by_the_lobbys_re_simulation_and_struck_not_banned() {
     let file = ban_file("speed");
     let mut race = hosted(Cheat::Speed, 100_000, Some(file.clone()));
     let reason = race.until_closed();
@@ -162,18 +231,67 @@ fn a_host_that_alters_its_simulation_is_proven_by_the_lobbys_re_simulation_and_b
         other => panic!("not proven: {other:?}"),
     }
     assert_eq!(race.lab.server.judgements(), 1, "one re-simulation");
-    let text = std::fs::read_to_string(&file).expect("the ban was written");
-    let (bans, skipped) = Bans::parse(&text);
+    let text = std::fs::read_to_string(&file).expect("the strike was written");
+    let (_, skipped) = Bans::parse(&text);
     assert!(skipped.is_empty(), "{text}");
-    let ban = bans
-        .key_ban(&race.keys[ANN].public())
-        .expect("the host's key is banned");
-    assert!(ban.reason.starts_with("caught cheating"), "{text}");
-    assert!(ban.since.starts_with("20"), "dated: {text}");
+    let strikes = lines_on(&file, "strike", &race.keys[ANN]);
+    assert_eq!(strikes.len(), 1, "one strike: {text}");
+    let bob_hex = oag_net::wt::hex(&race.keys[BOB].public());
     assert!(
-        bans.key_ban(&race.keys[BOB].public()).is_none(),
-        "the guest is not banned"
+        strikes[0].contains(&format!(" by {bob_hex} ")) && strikes[0].contains(" race "),
+        "the strike names the race and the reporter: {text}"
     );
+    assert!(
+        lines_on(&file, "key", &race.keys[ANN]).is_empty(),
+        "no ban: {text}"
+    );
+    assert!(
+        lines_on(&file, "strike", &race.keys[BOB]).is_empty(),
+        "{text}"
+    );
+    let ann = race.keys[ANN].clone();
+    drop(race);
+    assert_eq!(
+        try_to_host(&file, &ann),
+        Ok(()),
+        "one proven case bans nobody"
+    );
+}
+
+#[test]
+fn two_proven_cases_from_two_races_and_two_reporters_ban_the_host_for_an_hour() {
+    let file = ban_file("two-reporters");
+    let ann = Arc::new(PlayerKey::generate().expect("a key"));
+    let (bob, cy) = (
+        Arc::new(PlayerKey::generate().expect("a key")),
+        Arc::new(PlayerKey::generate().expect("a key")),
+    );
+    one_proven_case(&file, Cheat::Speed, &ann, &bob);
+    assert_eq!(try_to_host(&file, &ann), Ok(()), "one strike: still hosts");
+    one_proven_case(&file, Cheat::Forge, &ann, &cy);
+    let bans = lines_on(&file, "key", &ann);
+    assert_eq!(bans.len(), 1, "one ban line: {bans:?}");
+    assert!(bans[0].contains(" until "), "the ban expires: {bans:?}");
+    let (code, text) = try_to_host(&file, &ann).expect_err("banned");
+    assert_eq!(code, Refusal::Banned, "{text}");
+    assert!(text.contains("caught cheating"), "the reason: {text}");
+    assert!(
+        text.contains("59 min left") || text.contains("1 h left"),
+        "the time left: {text}"
+    );
+    assert_eq!(try_to_host(&file, &bob), Ok(()), "a reporter is not banned");
+}
+
+#[test]
+fn two_proven_cases_reported_by_the_same_player_are_one_strikes_worth() {
+    let file = ban_file("one-reporter");
+    let ann = Arc::new(PlayerKey::generate().expect("a key"));
+    let bob = Arc::new(PlayerKey::generate().expect("a key"));
+    one_proven_case(&file, Cheat::Speed, &ann, &bob);
+    one_proven_case(&file, Cheat::Forge, &ann, &bob);
+    assert_eq!(lines_on(&file, "strike", &ann).len(), 2, "both written");
+    assert!(lines_on(&file, "key", &ann).is_empty(), "no ban");
+    assert_eq!(try_to_host(&file, &ann), Ok(()), "still hosts");
 }
 
 #[test]

@@ -36,7 +36,7 @@ pub(crate) fn player_host(max_ticks: u32) -> PlayerHost {
 }
 
 /// `who` offers `host`'s listener to the lobby, signed with `key`.
-fn offer_room(lab: &mut Lab, who: usize, host: &PlayerHost, key: &PlayerKey) {
+pub(crate) fn offer_room(lab: &mut Lab, who: usize, host: &PlayerHost, key: &PlayerKey) {
     let token = lab.people[who].token.clone().expect("welcomed");
     let offer = key.offer(&lab.server.cert_hash(), &token, host.port(), host.hash());
     lab.people[who].host_room(settings(), offer);
