@@ -530,11 +530,11 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
 | --- | --- | --- | --- | --- |
 | Pulse PSP `psp-pulse-pair.py` (grid, race, Zone) | `Mesh_UpdateTextureTransforms` `0x0890e160` `mesh+0x40`, most common non-zero value over 40 hits, less the HUD clock | yes, `ours.world_clock_offset_s` | yes (flag stored; race shot recomputed) | 85 for the read (24 states, two loads identical); the "time since the circuit loaded" meaning is inferred |
 | Pulse PS2 `pcsx2-pulse-pair.py` | `*(g_ingame + 0x40)` in the state file's EE RAM (`g_ingame` `0x27DDBC`), run on by the race clock to the grab | yes | yes (flag stored; rebuilt from state file if absent) | 75 (`anim-transform.md`) |
-| Pure PSP `psp-pure-pair.py` | **none** | no | no | no address located in Pure's `BOOT.BIN` |
+| Pure PSP `psp-pure-pair.py` | `*(0x08a8c5f4) + 0x44` (the world-state object's running time), read at the same stop as the race clock, less the presented-frame lag (`psp-pure-usa/world-clock.md`) | yes, `ours.world_clock_offset_s` = world clock less ours' tick over 60 | yes (flag stored) | 85 for the read (three loads of a state: one frame apart each), 75 that it places the scenery (one pair, `10_Sebenco_Climb`) |
 | HD `rpcs3-hd-pair.py` | `MeshImporter` nodes (vtable `0x00869fd0`) `+0xc0` with `+0x15c` stamp, most common value past the gantry windows, RAM in the same pause as the frame | yes | yes (flag stored) | 85 (`rpcs3_hd_field.scenery_clock`, 12 circuits) |
 | HD sea pair `hd-sea-place-dump.py` | none until this lane; now reads the same `scenery_clock` and the lap clock in the pause and writes `world.json` (`world_clock_s`, `lap_clock_s`, `world_clock_offset_s`) | by hand: `--world-clock-offset` = `world_clock_s` less `ticks / 60`; the sea pair still has no `pair.json` | n/a | 85, same read as `rpcs3-hd-pair.py`; see "Closed" below |
-| 2048 `vita-2048-pair.py` | **none** | no | no | HD's `MeshImporter` equivalent not yet located in the eboot |
-| Omega `shadps4-omega-pair.py` | **none** | no | no | running build is v1.07, not in Ghidra |
+| 2048 `vita-2048-pair.py` (`--walk`) | the value ~1,000 scenery nodes share, in pairs `0x40` apart, scanned from `/proc/<pid>/mem` before the Retry and re-read at each grab (`vita-2048-eu-v104/world-clock.md`) | yes, `ours.world_clock_offset_s` = world clock less ours' tick over 60 | yes (flag stored) | 85 for the read; 60 that it places the scenery (the one pair's vehicle was 2.5 s off) |
+| Omega `shadps4-omega-pair.py`, `wipeout-pc-omega-pair.py` | **none** | no | no | memory **is** readable (the native port, `/proc/<pid>/mem`, below), not scanned in the `clock-titles` lane; the executable's node class is not read |
 | Weapon, camera and menu pair scripts (`psp-weapon-pair.py`, `psp-camera-pair.py`, `hd-weapon-pair.py`, `hd-missile-film-pair.py`, `rpcs3-hd-trail-hit-pair.py`) | none | no | no | crops of a craft or an effect; a moving prop elsewhere in the frame is not matched. Open, low priority |
 
 | Title | Random craft motion the original applies | Post-body? | Off on the original | Off on ours | Evidence |
@@ -581,20 +581,20 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
   `grim` or `x11grab` itself, and a helper that stopped writing the sidecar; `check-pair-provenance` (rule `hd_world_clock`, in
   `compare_provenance.py`) fails an HD race, scenery or zone pair without a numeric `original.world_clock_offset_s`, and a menu or loading pair
   without `original.world_clock_note`; `Pair.finish` refuses it at make time too (override: `--accept-provenance hd_world_clock=REASON`). `HD_CLOCK_BASELINE` is empty since the re-capture below: every HD pair records its clock (or the no-race note), and an entry may not be added. Other titles: not covered, see the rows above.
-- **Open, 2048, Omega, Pure world clocks.** No `MeshImporter` equivalent is located: the 2048 and Omega executables carry no
-  `MeshImporter` string, and `find_similar_functions_fuzzy` of HD's `MeshImporter_AdvanceTime` (`0x002be9c0`) into the 2048 eboot at
-  threshold 0.5 returns nothing (PPC to Thumb-2). Pure's `BOOT.BIN` is not in the open Ghidra (`/pulse` and `/omega`, `/2048`, `/hdfury` are),
-  and the running Omega is v1.07, which is not in Ghidra. **Recipe, 2048:** find the animated scenery's texture-transform updater by the
-  texture scroll of a known animated surface (a breakpoint is not available on Vita3K; read `/proc/<pid>/mem` at guest address plus
-  `0x400000000`, the channel `vita-2048-pair.py` patches through) with two reads a second apart of floats that advance by 1.0 per second
-  inside the scene graph, then name the node type; check Omega against it (`checked, applies` if the same node layout holds). **Recipe,
-  Pure:** import `BOOT.BIN`, match Pulse's `Mesh_UpdateTextureTransforms` (`0x0890e160`) by its callers' string neighbourhood, then
-  `scripts/psp-world-anim-clock.py` with the new address. **Recipe, Omega:** shadPS4 exposes no readable guest memory on this
-  machine; the HD node layout is expected, not measured.
+- **Pure and 2048 world clocks (2026-11-18, `clock-titles`).** Pure: closed for the read, one pair (`10_Sebenco_Climb`, Time Trial restart, race clock
+  0.80 s): world clock 10.84 s, ours at offset 5.508 s and tick 320. The cyan energy beam across the track scrolls with the clock; a sweep of ours' offset (0 to
+  8 s in 0.25 s steps, 9, 12, 20) correlated with the original on the beam band gives 0.862 at 5.5 s (0.853 at 5.75 s, 0.43 at 0, 0.22 at 7.0, 0.68 to 0.70 at
+  12 and 20), so the falsifier did not fire (`psp-pure-usa/world-clock.md`). 2048: the read works (the pair script scans the guest for the value ~1,000 scenery
+  nodes share and re-reads it at each grab), but the one pair made (`dlc-vineta-k`, clock 28.17 s) places its animated element, a dark vehicle crossing the sky,
+  2.5 s before the read clock, so **2048 stays open**: the read is not shown to be the clock that places the vehicle (`vita-2048-eu-v104/world-clock.md`).
+  Omega: the 2026-11-18 census said shadPS4 exposes no readable guest memory; **the native port's does** (`/proc/<pid>/mem` of the launching process, image base
+  `0x800000000`, "Second original, 2026-11-01" above), so the scan is possible there; not run in this lane, open. The scan needs the nodes of the HD class
+  (`MeshImporter`), unread in the PS4 executable.
 - **Open, random craft motion.** HD is closed (hull shake). 2048: the chase camera's "internal tripod" shake stays on in the original
   and ours draws none, a difference no patch can remove (nopping it kept the HUD down); the alternative is a flag on ours that draws the
   same shake from the same law (`HullShake::HD` already ships), recorded as `ours.camera_tripod_shake`, and a pair would then match
-  in law, not frame for frame. Omega: the hull shake is on in the original (no patch located for v1.07). HD `Apply` with `r5 != 0`: callers
+  in law, not frame for frame. **A patch that keeps the call is read, not tried (2026-11-18, `clock-titles`):** zero the three products that make a new spline point
+  (`0x811b5380`, `0x811b53a4`, `0x811b53ca` in `HullShake_Update`), `vita-2048-eu-v104/hull-shake.md`, "Where the shake's random points are made". Omega: the hull shake is on in the original (no patch located for v1.07). HD `Apply` with `r5 != 0`: callers
   not enumerated (Ghidra holds no call xref to `0x000d39d0`); recipe: scan `.text` for `bl` encodings that resolve to `0x000d39d0` from the
   extracted `EBOOT.elf`, which is not under `data/extracted`.
 - **The re-render keeps a recorded offset.** `compare-rerender-ours.py` now adds `--world-clock-offset` from `ours.world_clock_offset_s`
