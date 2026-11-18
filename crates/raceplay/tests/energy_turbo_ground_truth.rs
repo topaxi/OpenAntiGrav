@@ -351,7 +351,7 @@ fn in_a_full_field_every_second_turbo_is_the_mods_and_the_ai_boosts_on_it() {
     );
     assert!(boost_ticks > 0, "no AI craft boosted on the energy turbo");
     // The player's own draws are printed, not asserted: one grant path serves every
-    // slot (`Race::test_weapon_pads`), and whether the human column's odds deal the
+    // slot (`SimRace::test_weapon_pads`), and whether the human column's odds deal the
     // player a Turbo in one race is luck of the race (one energy turbo at x1.6, none
     // at x1.9).
 }

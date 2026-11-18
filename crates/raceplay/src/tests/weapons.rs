@@ -110,7 +110,7 @@ fn sitting_on_a_weapon_pad_does_not_refill_the_slot() {
 /// test got wrong, both worth knowing:
 ///
 /// - **Emptying the pad list is not the same as leaving a pad.**
-///   [`Race::test_weapon_pads`] returns before the countdown when there is
+///   [`SimRace::test_weapon_pads`] returns before the countdown when there is
 ///   nothing to test, which is right - the original runs the timer as the
 ///   pad class's own `update` method, so no pads means no timers to run -
 ///   but it means a test that clears the list freezes every cooldown.

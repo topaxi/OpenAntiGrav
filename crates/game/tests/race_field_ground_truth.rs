@@ -322,7 +322,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
         race.tick(&PlayerInputs::none());
     }
 
-    let places = race.places();
+    let places = race.core.places();
     let mut seen: Vec<u8> = places.to_vec();
     seen.sort_unstable();
     assert_eq!(
@@ -330,7 +330,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
         (1..=8).collect::<Vec<u8>>(),
         "the places are not a permutation of 1..=8: {places:?}"
     );
-    assert_eq!(race.player_place(), places[0]);
+    assert_eq!(race.core.player_place(), places[0]);
 
     // The craft in first is the one furthest round, since nobody has finished a
     // three-lap race in fifteen seconds.
@@ -355,7 +355,7 @@ fn the_field_is_placed_by_how_far_round_it_is() {
 
 /// The place reaches the HUD, which is the only place a player can read it.
 ///
-/// `Race::places` had no reader outside the tests until 2026-08-11 - the table was
+/// `SimRace::places` had no reader outside the tests until 2026-08-11 - the table was
 /// computed every tick and shown to nobody - so this asserts the *wiring* rather
 /// than the ordering: the readout's place is the player's place, the field size is
 /// the grid, and both halves of the widget group have a value at the same time.
@@ -383,7 +383,7 @@ fn the_players_place_reaches_the_hud() {
 
     let readout = race.readout();
     let course = race.core.sim.course().expect("16_Track closes");
-    let places = race.places();
+    let places = race.core.places();
     for (slot, place) in places.iter().enumerate() {
         let standing = race.core.sim.world.ships[slot].standing;
         println!(
@@ -397,7 +397,7 @@ fn the_players_place_reaches_the_hud() {
         "the player is {} of {} after {} tick(s)",
         readout.place, readout.ships, 900
     );
-    assert_eq!(readout.place, u32::from(race.player_place()));
+    assert_eq!(readout.place, u32::from(race.core.player_place()));
     assert!(
         (1..=8).contains(&readout.place),
         "the HUD would draw a place of {}, which is not a position in a field of eight",

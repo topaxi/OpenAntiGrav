@@ -339,7 +339,7 @@ fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
     let count = usize::from(race.core.sim.world.ship_count);
     // Whoever is out front right now: `Field::ahead` is empty for it, so
     // `Driver::holds_fire` has nothing to aim at.
-    let places = race.places();
+    let places = race.core.places();
     let leader = (1..count)
         .min_by_key(|&slot| places[slot])
         .expect("a grid of more than one");
@@ -349,7 +349,7 @@ fn an_opponent_with_nobody_ahead_does_not_fire_its_cannon() {
         race.tick(&PlayerInputs::single(throttle));
         // Stop as soon as it is no longer leading - the premise has gone and
         // the rest of the run would be measuring something else.
-        if race.places()[leader] != 1 {
+        if race.core.places()[leader] != 1 {
             break;
         }
         assert!(

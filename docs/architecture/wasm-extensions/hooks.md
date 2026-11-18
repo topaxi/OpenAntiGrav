@@ -73,7 +73,7 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | 8 | Race rules per person | `Race::advance_player_rules`, `tick.rs:493` (`player_step.rs:381`); `eliminate_if_wrecked` at `tick.rs:476` | `lap-completed`, `eliminated` | `set-finished` |
 | 9 | Standings | `RaceSim::update_standings`, `tick.rs:501` (`field.rs:1019`) | `lap-completed` (AI craft) | `set-finished` (AI craft), `set-standing-key` |
 | 10 | Quake, leach beam, repulsers | `tick.rs:510` to `:530` | | |
-| 11 | Results | `Race::capture_results`, `tick.rs:541` | | |
+| 11 | Results | `SimRace::capture_results`, `tick.rs:541` | | |
 
 **Why the call sits at C.** After phase 2, so this tick's `weapon-fired` for a
 person is in the observation and a mod weapon fired this tick acts this tick;
@@ -100,7 +100,7 @@ rollback replays it. Names are the README's `event` variants.
 - **Raised at** the speed pad's entry edge in `Race::test_speedup_pads`
   (`crates/raceplay/src/pads.rs:73`), at `if entered != self.core.sim.pad_current[slot]`
   (`pads.rs:113`), the edge the Zone score and the exhaust flare already hang off;
-  and at the weapon pad's edge in `Race::test_weapon_pads` (`pads.rs:216`), at
+  and at the weapon pad's edge in `SimRace::test_weapon_pads` (`pads.rs:216`), at
   `pads.rs:258`. Both run for a person's craft from `step_player`
   (`player_step.rs:210`, `:215`) and for an AI craft from `step_opponents`
   (`field.rs:824`, `:825`), so one site covers every craft.
@@ -328,7 +328,7 @@ the backstop for a guest written without the SDK.
 ### `set-standing-key{slot, key}`
 
 - **Lands in** the ordering `oag_race::places` computes (`standing.rs:322`, read by
-  `Race::places` in `field.rs`): a per-slot key sorted before progress and time.
+  `SimRace::places` in `field.rs`): a per-slot key sorted before progress and time.
   **Engine change:** `places` takes standings and the course only today.
 
 ### Built for Energy Turbo (2026-10-29)
@@ -341,7 +341,7 @@ the backstop for a guest written without the SDK.
   the mod's own pickup (`Weapon::Extension`). Delivered at the same tick's call (phase
   2 is before C).
 - **`speed-pad{slot, pad}`** / **`weapon-pad{slot, pad}`**: raised at the entry edge
-  of `Race::test_speedup_pads` and `Race::test_weapon_pads`
+  of `Race::test_speedup_pads` and `SimRace::test_weapon_pads`
   (`crates/raceplay/src/pads.rs`) for every craft, whatever the pad's factor or
   cooldown; delivered at the next tick's call. **`trigger-enter` / `trigger-exit`**:
   `Extensions::test_triggers`, called beside the pad tests in the people's step and the
@@ -356,7 +356,7 @@ the backstop for a guest written without the SDK.
   gain through `damage::add`.
 - **`give-pickup` / `clear-pickup`** write the slot's pickup at C. **`pickup-roll`**
   is host state (`RaceSim::extensions`: each module's rule and its count),
-  hashed, and is read at the weapon pad's grant in `Race::test_weapon_pads`
+  hashed, and is read at the weapon pad's grant in `SimRace::test_weapon_pads`
   (`crates/raceplay/src/pads.rs`).
 - **`scale-thrust` above 1.0** lands in `Environment::extension_thrust`, taken by the
   step (`player_step.rs`, `field.rs`).

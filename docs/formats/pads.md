@@ -25,7 +25,7 @@ other.
 **A weapon pad hands out a pickup** as of 2026-08-11, in the one mode that arms
 them - see [pickups](../gameplay/pickups.md) for the trigger, the draw and the
 recovered-versus-ours split. Its trigger volumes are carried on
-`oag_raceplay::Setup::weapon_pads` and consumed by `Race::test_weapon_pads`.
+`oag_raceplay::Setup::weapon_pads` and consumed by `SimRace::test_weapon_pads`.
 
 `crates/game/tests/race_weapons_ground_truth.rs::the_weapon_pads_are_drawn_where_they_trigger`
 is what makes "drawn where they trigger" a fact rather than a hope: the geometry

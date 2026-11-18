@@ -241,7 +241,7 @@ impl Race {
         // track can author a weapon pad on top of a speed pad and both fire -
         // and this one returns nothing, because a pickup is an event rather than
         // a per-tick force.
-        self.test_weapon_pads(slot, before, moved, &sweep);
+        self.core.test_weapon_pads(slot, before, moved, &sweep);
         self.core
             .sim
             .extensions

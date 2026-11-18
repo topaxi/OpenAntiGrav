@@ -638,7 +638,7 @@ const _: () = {
 };
 
 impl RaceSim {
-    /// [`Race::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
+    /// [`SimRace::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
     /// module's commands): only a racing craft uses a pickup.
     pub(super) fn may_use_pickup(&self, slot: usize) -> bool {
         self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing

@@ -36,7 +36,7 @@ The engine never names the mod.
    (`default-enabled`, ADR-0089) are on branch `slipstream`. What each left open:
    - **Wreck gate: landed** (main merged). A guest's `clear-pickup`, `scale-speed` and `transit` for a
      craft `may_use_pickup` refuses are ignored engine-side (`RaceSim::may_use_pickup`, which
-     `Race::may_use_pickup` calls); proof `tests::extension_view`.
+     `SimRace::may_use_pickup` calls); proof `tests::extension_view`.
    - **The portal is a camera-facing sprite**, a mod PNG through the particle system placed at the
      road ahead (`fire-mod-effect-ahead`), not a half disc standing across the road. A shader can
      draw it now (`docs/architecture/wasm-extensions/mod-shaders.md`); a real mesh is a later piece.

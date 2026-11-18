@@ -220,7 +220,7 @@ fn run_from(mut race: oag_raceplay::Race, ticks: u64) -> Run {
     }
     let ship = &race.core.sim.world.ships[0];
     out.laps = ship.standing.lap.saturating_sub(1);
-    out.place = race.places()[0];
+    out.place = race.core.places()[0];
     out.respawns = race.core.sim.respawns_of(0);
     out.shield_end = ship.physics.shield;
     out

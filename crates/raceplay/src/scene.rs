@@ -886,7 +886,7 @@ impl Scene {
         // `World_CollectNodeLists` clears the node's own visibility bit
         // whenever `g_weapons_enabled` is `0`, which the front end forces for
         // time trial, speed lap and Zone alike - see `Mode::weapons_enabled`.
-        // **The same predicate gates the trigger** (`Race::test_weapon_pads`),
+        // **The same predicate gates the trigger** (`SimRace::test_weapon_pads`),
         // deliberately: in the original both come from that one global, so a
         // pad that draws is a pad that can be crossed and there is no mode
         // where one is true and the other is not.

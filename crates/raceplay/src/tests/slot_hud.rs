@@ -17,8 +17,8 @@ fn a_slots_readout_is_off_its_own_craft() {
     let (one, two) = (race.readout_for(1), race.readout_for(2));
     assert_eq!((one.shield, two.shield), (25.0, 75.0));
     assert!(one.speed_kmh > two.speed_kmh);
-    assert_eq!(one.place, u32::from(race.places()[1]));
-    assert_eq!(two.place, u32::from(race.places()[2]));
+    assert_eq!(one.place, u32::from(race.core.places()[1]));
+    assert_eq!(two.place, u32::from(race.core.places()[2]));
     assert_eq!(race.readout(), race.readout_for(race.core.player_slot()));
 }
 

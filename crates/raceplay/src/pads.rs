@@ -68,7 +68,7 @@ impl Race {
     /// the Zone score, and arming the exhaust flare.
     ///
     /// `moved` and `sweep` come from [`Self::pad_sweep`] and are shared with
-    /// [`Self::test_weapon_pads`], because the original's two trigger functions
+    /// [`SimRace::test_weapon_pads`], because the original's two trigger functions
     /// run in the same craft update against the same previous position.
     pub(super) fn test_speedup_pads(
         &mut self,
@@ -199,14 +199,16 @@ impl Race {
             }
         })
     }
+}
 
+impl SimRace {
     /// Crosses the ship against the track's weapon pads, granting a pickup.
     ///
     /// Reimplements `WeaponPads_TestCraft` (`0x0888727c`), which
     /// `docs/ghidra/functions/psp-pulse-usa/pads.md` reads as "the exact mirror
     /// of `Pads_TestCraft`" for the `world+0x10c` list - same swept test, same
     /// per-racer distance cache. So the broadphase and the sweep below are
-    /// [`Self::test_speedup_pads`]' verbatim, and what differs is only what
+    /// [`Race::test_speedup_pads`]' verbatim, and what differs is only what
     /// happens on a hit.
     ///
     /// # Three things happen here and one of them is partly recovered
@@ -242,7 +244,7 @@ impl Race {
         moved: f32,
         sweep: &[Vec3],
     ) {
-        if self.core.sim.weapon_pads.is_empty() {
+        if self.sim.weapon_pads.is_empty() {
             return;
         }
 
@@ -256,19 +258,19 @@ impl Race {
         // every tick: the player step runs before the opponents', lowest
         // person first, and the primary is always a person - slot 0 unless
         // slot 0 is handed to the AI.
-        if slot == self.core.sim.world.primary_slot() {
-            for left in &mut self.core.sim.weapon_pad_refresh_left {
-                *left = (*left - self.core.sim.dt).max(0.0);
+        if slot == self.sim.world.primary_slot() {
+            for left in &mut self.sim.weapon_pad_refresh_left {
+                *left = (*left - self.sim.dt).max(0.0);
             }
         }
 
         let mut hit = None;
-        for (index, pad) in self.core.sim.weapon_pads.iter().enumerate() {
-            self.core.sim.weapon_pad_distance[slot][index] -= moved;
-            if self.core.sim.weapon_pad_distance[slot][index] > 0.0 {
+        for (index, pad) in self.sim.weapon_pads.iter().enumerate() {
+            self.sim.weapon_pad_distance[slot][index] -= moved;
+            if self.sim.weapon_pad_distance[slot][index] > 0.0 {
                 continue;
             }
-            self.core.sim.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
+            self.sim.weapon_pad_distance[slot][index] = pad.distance(position.to_array());
 
             if hit.is_none() && sweep.iter().any(|point| pad.contains(point.to_array())) {
                 hit = Some(index);
@@ -277,26 +279,26 @@ impl Race {
 
         // The edge, outside the loop for the same reason the speed pad's is: two
         // pads overlapping on one tick is one entry.
-        if hit == self.core.sim.weapon_pad_current[slot] {
+        if hit == self.sim.weapon_pad_current[slot] {
             return;
         }
-        self.core.sim.weapon_pad_current[slot] = hit;
+        self.sim.weapon_pad_current[slot] = hit;
         let Some(index) = hit else {
             return;
         };
         // A simulation mod hears every entry, cooling down or not.
-        self.core.sim.extensions.pad_entered(slot, index, true);
+        self.sim.extensions.pad_entered(slot, index, true);
 
         // Point 1 above. Unconditional, and before the grant, so a pad that
         // hands nothing over is still spent.
-        if self.core.sim.weapon_pad_refresh_left[index] > 0.0 {
+        if self.sim.weapon_pad_refresh_left[index] > 0.0 {
             // Still cooling down. The stamp is not refreshed - re-stamping would
             // make a craft parked on a pad hold it inert forever, and the
             // original cannot reach this branch at all: its timer is what
             // `Pad_ContainsPoint` is asked about before the hit is reported.
             return;
         }
-        self.core.sim.weapon_pad_refresh_left[index] = self.core.sim.weapon_pad_refresh;
+        self.sim.weapon_pad_refresh_left[index] = self.sim.weapon_pad_refresh;
 
         // **Nothing is granted to a craft whose Autopilot runs**, on any slot, an
         // opponent on this project's Autopilot included: `Ship_TestWeaponPads`
@@ -304,25 +306,23 @@ impl Race {
         // clear (`0x0883f0c0`), after `WeaponPads_TestCraft` has stamped the pad,
         // so the stamp above stays. Read statically on Pulse, confidence 80 - see
         // [`oag_title::weapons::Weapons::autopilot_pad_grants`].
-        if self.core.sim.world.ships[slot].autopilot_timer > 0.0
-            && !self.core.sim.autopilot_pad_grants
-        {
+        if self.sim.world.ships[slot].autopilot_timer > 0.0 && !self.sim.autopilot_pad_grants {
             return;
         }
 
         // Points 2 and 3.
-        if !self.core.sim.world.ships[slot].pickup.is_empty() {
+        if !self.sim.world.ships[slot].pickup.is_empty() {
             return;
         }
-        let Some(weapons) = self.core.sim.weapons.as_deref() else {
+        let Some(weapons) = self.sim.weapons.as_deref() else {
             return;
         };
-        let Some(table) = weapons.pickups_for(&self.core.sim.class) else {
+        let Some(table) = weapons.pickups_for(&self.sim.class) else {
             return;
         };
         // A mod's own pickup, drawn beside the title's weapons at its `[[pickup.odds]]`.
         let with_mod;
-        let mod_odds = self.core.sim.extensions.pickup_odds(&self.core.sim.class);
+        let mod_odds = self.sim.extensions.pickup_odds(&self.sim.class);
         let table = if mod_odds.is_empty() {
             table
         } else {
@@ -338,15 +338,15 @@ impl Race {
         // not depend on where it is; the rubber-banding is aimed at the player.
         // See `docs/gameplay/pickups.md`.
         // **Whichever slot a person flies**: their own place, their own column.
-        let who = if self.core.sim.world.person_flown(slot) {
+        let who = if self.sim.world.person_flown(slot) {
             oag_weapons::pickup::Driver::Human {
                 place: self.places()[slot],
-                field: self.core.sim.world.ship_count,
+                field: self.sim.world.ship_count,
             }
         } else {
             oag_weapons::pickup::Driver::Ai
         };
-        let last = self.core.sim.world.ships[slot].pickup.last;
+        let last = self.sim.world.ships[slot].pickup.last;
         // `None` for every non-2048 race and for a 2048 event whose weapon
         // set decodes to nothing recognised - the same "empty is no
         // restriction" reading `Setup::allowed_weapons`'s own doc comment
@@ -355,18 +355,16 @@ impl Race {
         // pads, not about who crosses them - **chosen, not measured**, since
         // no consumer of this mask has been found in `eboot.elf` to read
         // otherwise.
-        let allowed =
-            (!self.core.sim.allowed_weapons.is_empty()).then_some(&*self.core.sim.allowed_weapons);
-        let drawn =
-            oag_weapons::pickup::draw(&mut self.core.sim.world.rng, table, who, last, allowed);
+        let allowed = (!self.sim.allowed_weapons.is_empty()).then_some(&*self.sim.allowed_weapons);
+        let drawn = oag_weapons::pickup::draw(&mut self.sim.world.rng, table, who, last, allowed);
         if let Some(weapon) = drawn {
-            let pickup = &mut self.core.sim.world.ships[slot].pickup;
+            let pickup = &mut self.sim.world.ships[slot].pickup;
             pickup.grant(weapon);
-            self.core.xp_weapon_pad(slot);
-            let pickup = &mut self.core.sim.world.ships[slot].pickup;
+            self.xp_weapon_pad(slot);
+            let pickup = &mut self.sim.world.ships[slot].pickup;
             // A simulation mod's `pickup-roll`: this grant becomes the mod's own pickup,
             // with `last` still the drawn weapon, so the title's repeat rule is unchanged.
-            if let Some(kind) = self.core.sim.extensions.rolls(slot, weapon) {
+            if let Some(kind) = self.sim.extensions.rolls(slot, weapon) {
                 pickup.weapon = Some(oag_tables::weapons::Weapon::Extension(kind));
             }
         }

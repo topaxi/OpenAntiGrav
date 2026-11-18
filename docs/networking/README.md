@@ -1028,7 +1028,7 @@ on "every person has finished" at tick 6,617 and 6,607):
 confirmed copy of the server's state does, and the board used to be taken there: on
 the first whole race the two clients' boards differed from each other by one tick
 in a person's time. The board is now taken again from the confirmed state when that
-finishes (`Race::recapture_results`), and both clients print the server's board
+finishes (`SimRace::recapture_results`), and both clients print the server's board
 exactly (compared line by line against `oag-server`'s own `board` lines).
 
 At 100 ms the first two seconds are not clean: the clients start 50 ms after the

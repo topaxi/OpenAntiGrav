@@ -150,12 +150,12 @@ impl Race {
             // already reads as "unknown" and it omits the "of N" half.
             laps: race.laps_target.filter(|_| counted).unwrap_or(0),
             // The player's place in the field, from the same table the results
-            // will read - [`Self::player_place`], slot 0 of [`Self::places`].
+            // will read - [`SimRace::player_place`], slot 0 of [`SimRace::places`].
             //
             // Two gates, both meaning "there is no place to report" rather than
             // "the place is one". `counted`, because with no closed ring there is
             // no distance round the circuit to order the field by and
-            // [`Self::places`] answers "everyone is first" - honest as a return
+            // [`SimRace::places`] answers "everyone is first" - honest as a return
             // value and a lie on screen. And a field of **more than one craft**,
             // because a place is a position among opponents: a time trial, a speed
             // lap and a Zone run all grid the player alone, and so does a single
@@ -483,7 +483,7 @@ impl SimRace {
         let world = &self.sim.world;
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;
-        // **Measured between the two craft, not read off [`Race::places`].** A place is
+        // **Measured between the two craft, not read off [`SimRace::places`].** A place is
         // a rank among all eight slots, and a slot with no craft in it sits at
         // distance zero, so a person still short of the line (the back of the grid
         // is) ranks behind empty slots and neither of two people ever read first.

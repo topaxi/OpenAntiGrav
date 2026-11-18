@@ -131,7 +131,7 @@ impl Facts {
             standing.finish_tick.unwrap_or(race.core.sim.world.tick),
         ));
         let zone = race.core.sim.world.primary_race().zone;
-        let place = race.player_place();
+        let place = race.core.player_place();
         let shown = match mode {
             oag_race::Mode::TimeTrial => Standing::Time(total),
             oag_race::Mode::SpeedLap => standing
@@ -212,7 +212,7 @@ pub fn finished_event(
     };
     let mut profile = crate::records::Store::default();
     profile.bank_xp(prior_xp);
-    let place = Some(race.player_place());
+    let place = Some(race.core.player_place());
     let banked = race.core.sim.xp_tally_mut().map(|tally| {
         let earned = profile.bank_event_xp(tally, prior_medal, medal, place);
         XpBanked {

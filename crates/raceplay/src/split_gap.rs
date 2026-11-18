@@ -142,7 +142,7 @@ impl super::Race {
         let mut events = GapEvents::default();
         let mut live = 0;
         let ships = usize::from(self.core.sim.ship_count());
-        let places = self.places();
+        let places = self.core.places();
         let length = self
             .core
             .sim

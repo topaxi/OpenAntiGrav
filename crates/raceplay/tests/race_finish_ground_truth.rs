@@ -108,7 +108,7 @@ fn a_single_race_ends_when_the_player_finishes_or_is_eliminated() {
         "the race finished on tick {} ({:.1} s), the player {} of 8, craft state {:?}",
         race.core.sim.world.tick,
         race.core.sim.world.tick as f32 / 60.0,
-        race.player_place(),
+        race.core.player_place(),
         race.core.sim.world.ships[0].physics.craft_state
     );
     match race.core.sim.world.ships[0].standing.finish_tick {
@@ -171,7 +171,7 @@ fn the_finished_race_leaves_a_board_with_the_whole_grid_on_it() {
     assert_eq!(places, (1..=8).collect::<Vec<_>>());
 
     let player = board.player().expect("the player is on the board");
-    assert_eq!(player.place, race.player_place());
+    assert_eq!(player.place, race.core.player_place());
 
     if player.finished() {
         assert_eq!(player.laps_completed, board.laps_target.unwrap_or(0));

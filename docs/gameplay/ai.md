@@ -4783,8 +4783,8 @@ that is a capture-only synthetic warmup, not a field-wide mechanic.
 **Every craft counts its own laps as of 2026-08-11**, and the field can be
 ordered. `oag_race::Standing` is the small per-craft thing - lap, distance round
 the circuit, finish tick - that sits on every `Ship` and therefore inside the
-world snapshot, so a replay reproduces the finishing order. `Race::places()`
-returns all eight positions and `Race::player_place()` the player's.
+world snapshot, so a replay reproduces the finishing order. `SimRace::places()`
+returns all eight positions and `SimRace::player_place()` the player's.
 
 **The lap rule is not written twice.** A lap is a wrap of the distance-along, and
 the two-half `LapGate` is what stops a craft rocking over the line and scoring

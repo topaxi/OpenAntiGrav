@@ -130,7 +130,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Whether the craft may fire or absorb its pickup: only while racing.
     ///
     /// A craft in its destroyed sequence (`Destroyed`, then `Eliminated` until the
@@ -144,7 +144,7 @@ impl Race {
     /// reaches the mod only through those two fire paths. A mod adding a weapon
     /// handles nothing itself.
     pub(crate) fn may_use_pickup(&self, slot: usize) -> bool {
-        self.core.sim.may_use_pickup(slot)
+        self.sim.may_use_pickup(slot)
     }
 }
 
@@ -229,7 +229,7 @@ impl Race {
         if !fire && !absorb {
             return;
         }
-        if !self.may_use_pickup(slot) {
+        if !self.core.may_use_pickup(slot) {
             return;
         }
         if self.core.sim.world.ships[slot].autopilot_timer > 0.0 {
@@ -833,12 +833,12 @@ impl Race {
         // Built once for the whole grid, the same way `Race::step_opponents`
         // does it: every craft's view of the field needs the same ordering, and
         // an opponent's trigger reads that view.
-        let places = self.places();
+        let places = self.core.places();
         for slot in 0..self.core.sim.world.ship_count as usize {
             // A human slot follows its own pad; every other slot asks its own
             // driver. Not the literal slot 0, which is the same
             // only while slot 0 is the only human.
-            if !self.may_use_pickup(slot) {
+            if !self.core.may_use_pickup(slot) {
                 continue;
             }
             let holds_fire =

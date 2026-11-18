@@ -993,7 +993,7 @@ pub struct Setup {
     /// The track's weapon pads, as trigger volumes.
     ///
     /// Everything [`Self::speedup_pads`] says applies, one class over. Consumed
-    /// by [`Race::test_weapon_pads`] in the one mode that arms them, and decoded
+    /// by [`SimRace::test_weapon_pads`] in the one mode that arms them, and decoded
     /// on every mode regardless, which is what lets
     /// `the_weapon_pads_are_drawn_where_they_trigger` check the geometry against
     /// them. Two independent decodes of the same nodes agreeing is worth more

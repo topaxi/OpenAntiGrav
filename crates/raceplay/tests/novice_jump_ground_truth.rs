@@ -751,7 +751,7 @@ fn the_pad_before_the_jump() {
     let mut pending = [None::<(u64, f32)>; 8];
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
-        let places = race.places();
+        let places = race.core.places();
         for slot in 1..8 {
             let ship = &race.core.sim.world.ships[slot];
             let index = ship.driver.index;

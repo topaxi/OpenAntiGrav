@@ -99,7 +99,7 @@ fn tracker() -> crate::extensions::Source {
 #[test]
 fn a_module_reads_the_course_length_and_the_places_the_hud_shows() {
     let mut race = grid(prepared(&[tracker()]));
-    let before = race.places();
+    let before = race.core.places();
     race.tick(&PlayerInputs::none());
     let blob = race.core.sim.extensions.blob_for_tests(0);
     let length = f32::from_bits(u32::from_le_bytes(blob[..4].try_into().unwrap()));

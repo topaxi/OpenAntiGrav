@@ -13,7 +13,7 @@ pub fn observation(race: &Race) -> crate::records::Observation {
     let standing = &race.core.sim.world.ships[0].standing;
     crate::records::Observation {
         finished: race.core.sim.finished(),
-        place: Some(race.player_place()),
+        place: Some(race.core.player_place()),
         laps_completed: crate::records::laps_completed(
             standing.lap,
             race.core.sim.finished(),

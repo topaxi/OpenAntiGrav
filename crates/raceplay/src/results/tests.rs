@@ -58,7 +58,7 @@ fn a_finish_time_excludes_the_start_line_countdown() {
     finish(&mut race, 0, 5_000);
     finish(&mut race, 2, 5_100);
     race.core.sim.world.primary_race_mut().finished = true;
-    race.capture_results();
+    race.core.capture_results();
     let board = race.core.results().expect("a board");
 
     let time = |slot| board.rows.iter().find(|row| row.slot == slot)?.finish_tick;
@@ -74,11 +74,11 @@ fn the_board_is_not_revised_after_it_is_taken() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 1_000);
     race.core.sim.world.primary_race_mut().finished = true;
-    race.capture_results();
+    race.core.capture_results();
     let taken = race.core.results().cloned().expect("a board");
 
     finish(&mut race, 3, 1_200);
-    race.capture_results();
+    race.core.capture_results();
     assert_eq!(race.core.results(), Some(&taken));
 }
 
@@ -88,7 +88,7 @@ fn a_finisher_is_placed_ahead_of_everyone_still_racing() {
     finish(&mut race, 5, 900);
     finish(&mut race, 0, 1_000);
     race.core.sim.world.primary_race_mut().finished = true;
-    race.capture_results();
+    race.core.capture_results();
     let board = race.core.results().expect("a board");
 
     assert_eq!(board.rows[0].slot, 5, "the earlier crossing takes first");
@@ -104,7 +104,7 @@ fn there_is_one_row_per_grid_slot() {
     let mut race = race_with_a_grid();
     finish(&mut race, 0, 1_000);
     race.core.sim.world.primary_race_mut().finished = true;
-    race.capture_results();
+    race.core.capture_results();
     let board = race.core.results().expect("a board");
     assert_eq!(board.rows.len(), 8);
     let mut slots: Vec<u8> = board.rows.iter().map(|row| row.slot).collect();
@@ -120,7 +120,7 @@ fn the_places_are_a_permutation_of_the_field() {
     finish(&mut race, 2, 800);
     finish(&mut race, 0, 1_000);
     race.core.sim.world.primary_race_mut().finished = true;
-    race.capture_results();
+    race.core.capture_results();
     let board = race.core.results().expect("a board");
     let mut places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
     places.sort_unstable();
@@ -269,7 +269,7 @@ fn a_person_s_row_carries_the_name_they_raced_under() {
         .set_person_names(vec!["Ada".into(), String::new(), "Eve".into()]);
     finish(&mut race, 0, 5_000);
     race.core.sim.world.primary_race_mut().finished = true;
-    race.capture_results();
+    race.core.capture_results();
     let board = race.core.results().expect("a board");
     let name = |slot| {
         board
@@ -419,7 +419,7 @@ fn a_race_that_did_not_end_on_the_line_keeps_its_board() {
     assert!(!race.core.sim.runs_on_after_the_line());
     let (held, revision) = (race.core.results().cloned(), race.core.results_revision());
     finish(&mut race, 3, 1_200);
-    race.refresh_results();
+    race.core.refresh_results();
     assert_eq!(race.core.results().cloned(), held);
     assert_eq!(race.core.results_revision(), revision);
 }

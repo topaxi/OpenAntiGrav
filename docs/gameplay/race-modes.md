@@ -1526,7 +1526,7 @@ Three things happen on that tick, and they are in three layers on purpose:
 1. **`oag-race` decides it.** Nothing was changed here - the condition and the
    ordering (`places`: finishers by when they finished, then racers by distance,
    then by slot) both predate this.
-2. **`Race::capture_results` takes a snapshot**, once, at the end of that tick.
+2. **`SimRace::capture_results` takes a snapshot**, once, at the end of that tick.
    The field is still moving when the player crosses, so a table recomputed a
    second later would show a different result; the board is fixed at the flag
    and never revised. `Race::tick` itself is unchanged and goes on stepping if

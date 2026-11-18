@@ -779,7 +779,7 @@ impl Client {
         // The board is the server's: taken again from the confirmed state the first
         // time it is finished (the prediction finished first and took its own).
         if !self.board_confirmed && race.core.sim.finished() {
-            race.recapture_results();
+            race.core.recapture_results();
             self.board_confirmed = true;
         }
         let confirmed = std::mem::replace(&mut race.core.sim, present);

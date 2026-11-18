@@ -145,7 +145,7 @@ fn the_board_ranks_the_people_by_total_time() {
     for slot in 0..3 {
         race.core.sim.world.race[slot].finished = true;
     }
-    race.capture_results();
+    race.core.capture_results();
     let board = race
         .core
         .results()

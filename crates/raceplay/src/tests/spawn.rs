@@ -33,7 +33,7 @@ fn a_field_of_one_reports_no_place() {
     // The *table* still says first, because a lone craft leads the race it is
     // in. The readout is where that stops being reported as a standing, so a
     // gate that only consulted `places()` would not pass this.
-    assert_eq!(race.player_place(), 1);
+    assert_eq!(race.core.player_place(), 1);
 }
 
 /// A ship must arrive on the track with its mass in the body, or the hover

@@ -36,7 +36,7 @@ pub struct Outcome {
     /// one table, not one that moves under a reader at every tick. The field is
     /// still moving when the player crosses - `oag_race::places` ranks whoever
     /// has not finished by distance covered - so the board is replaced only by
-    /// [`crate::Race::refresh_results`], when the world runs on behind the end screens,
+    /// [`crate::SimRace::refresh_results`], when the world runs on behind the end screens,
     /// and each replacement bumps [`Self::results_revision`].
     ///
     /// Not in `World`: it is derived from state the world already holds, so hashing it would

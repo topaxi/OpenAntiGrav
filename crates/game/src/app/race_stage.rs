@@ -416,7 +416,7 @@ impl RaceStage {
     }
 
     /// Hands the end screens the race's board when it was retaken since they were built:
-    /// [`oag_raceplay::Race::refresh_results`]'s craft that crossed after the person, now
+    /// [`oag_raceplay::SimRace::refresh_results`]'s craft that crossed after the person, now
     /// with a time. Touches no race state; the screen keeps its page and its cursor.
     pub(crate) fn refresh_endrace_board(&mut self) {
         if let (Some(endrace_touch::EndRace::Disc(runtime)), Some(board)) =
@@ -445,7 +445,7 @@ impl RaceStage {
             .results()
             .filter(|board| board.scored())
             .and_then(|board| board.player())
-            .map_or_else(|| self.race.player_place(), |row| row.place);
+            .map_or_else(|| self.race.core.player_place(), |row| row.place);
         crate::records::Observation {
             finished,
             place: Some(place),
@@ -487,7 +487,7 @@ impl RaceStage {
         let standing = self.race.core.player_standing();
         let outcome = oag_2048::campaign::EventOutcome {
             finished,
-            place: self.race.player_place(),
+            place: self.race.core.player_place(),
             finish_centiseconds: finished.then(|| {
                 ticks_to_centiseconds(oag_race::race_clock_ticks(
                     standing
@@ -593,7 +593,7 @@ impl RaceStage {
         let cell = self.campaign_cell.as_ref()?;
         let value = match cell.mode {
             CampaignMode::Race | CampaignMode::Head2Head if finished => {
-                Some(i64::from(self.race.player_place()))
+                Some(i64::from(self.race.core.player_place()))
             }
             CampaignMode::TimeTrial if finished => {
                 let tick = self

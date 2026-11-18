@@ -613,8 +613,8 @@ impl Race {
         // reads, and a no-op on every tick but the one the race ends on. It
         // takes a snapshot and touches no simulation state, which is what lets
         // it sit inside the tick without moving a hash - see
-        // [`Race::capture_results`].
-        self.capture_results();
+        // [`SimRace::capture_results`].
+        self.core.capture_results();
 
         #[cfg(feature = "view")]
         if self.draws() {

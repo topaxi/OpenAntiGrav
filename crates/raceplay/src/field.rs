@@ -756,7 +756,7 @@ impl Race {
     pub(super) fn step_opponents(&mut self) {
         let damage_rules = self.core.sim.damage_rules();
         // Once for the whole grid: every craft's view needs the same ordering.
-        let places = self.places();
+        let places = self.core.places();
         // The campaign's original field, when on: its round robin advances
         // once a tick before any driver, as `AiManager_Update` does.
         let lane_slot = self.core.sim.original_ai_begin_tick();
@@ -910,7 +910,7 @@ impl Race {
             let (moved, sweep) = self.pad_sweep(slot, position);
             let pad_hit = self.test_speedup_pads(slot, position, moved, &sweep);
             if !away {
-                self.test_weapon_pads(slot, position, moved, &sweep);
+                self.core.test_weapon_pads(slot, position, moved, &sweep);
             }
             self.core
                 .sim
@@ -1168,7 +1168,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Every craft's race position, `1`-based, in slot order.
     ///
     /// Inactive slots are placed too - they are at the start line and last,
@@ -1176,7 +1176,7 @@ impl Race {
     /// reads [`RaceSim::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
-        self.core.sim.places()
+        self.sim.places()
     }
 }
 
@@ -1186,13 +1186,13 @@ impl RaceSim {
     /// **`Field::EMPTY` when the track has no closed ring.** `Standing::distance`
     /// needs a `Course` to mean anything, and a guessed along-track gap is worse
     /// than none - it would put a craft half a lap away in the mirror and have a
-    /// driver defend against it. The same answer [`Race::places`] gives, for the
+    /// driver defend against it. The same answer [`SimRace::places`] gives, for the
     /// same reason.
     ///
     /// Slot order throughout and `total_cmp` for every comparison, so nothing
     /// here can feed the simulation an order that depends on a hasher.
     ///
-    /// Takes the places rather than calling [`Race::places`] itself, because the
+    /// Takes the places rather than calling [`SimRace::places`] itself, because the
     /// caller asks this once per craft and that would sort the standings eight
     /// times a tick to get the same answer.
     #[must_use]
@@ -1275,13 +1275,15 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// The player's own race position, `1`-based.
     #[must_use]
     pub fn player_place(&self) -> u8 {
-        self.places()[self.core.player_slot()]
+        self.places()[self.player_slot()]
     }
+}
 
+impl Race {
     /// Craft against craft, every pair, once a tick.
     ///
     /// `oag_physics::pair::resolve` is `Body_ResolveContactPair` (`0x0884ef30`),

@@ -211,7 +211,7 @@ pub struct Observation {
     /// re-derived here, always [`oag_raceplay::RaceSim::finished`]'s own answer.
     pub finished: bool,
     /// The player's own race position at the moment of capture, from
-    /// [`oag_raceplay::Race::places`]. Always `Some` for a race that had a
+    /// [`oag_raceplay::SimRace::places`]. Always `Some` for a race that had a
     /// [`oag_raceplay::Race`] to read at all.
     pub place: Option<u8>,
     /// Laps completed - see [`laps_completed`], which is what every caller

@@ -774,7 +774,7 @@ same stride, same `+0x160` and `+0x168`, and prints `0` as `ER_RACING` and above
 stride agree, which is why this is "likely" and not 75). Not read: the `-2` case. Static read of
 `/hdfury/EBOOT-ps3-hdfury-eu.elf`, no emulator.
 
-**The fix**: `Race::refresh_results` (`crates/raceplay/src/results.rs`), called from
+**The fix**: `SimRace::refresh_results` (`crates/raceplay/src/results.rs`), called from
 `Race::tick_finished` while the world runs on after the line, retakes the board from the world.
 It replaces the board only when it differs and bumps `SimRace::results_revision`; nothing is done
 once every craft has finished. The player's row, `Board::tick` and the people's names stay as

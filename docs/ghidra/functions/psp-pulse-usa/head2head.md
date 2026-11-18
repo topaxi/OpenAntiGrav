@@ -210,7 +210,7 @@ top-right anchor, a red `+ 3m`, the mint 5-px bar, `2.` below it, `POS` gone.
 two-player Head to Head is not read: mode `0xf` shares this HUD swap but the grid-size table has
 no row for it. This build fields the two seated people's craft and no AI; each person's readout
 is `|d_self - d_other|` with `player_leads` from the signed difference, **not** from
-`Race::places` (a place counts empty slots at distance zero, so a person short of the line
+`SimRace::places` (a place counts empty slots at distance zero, so a person short of the line
 ranked behind them and neither of two people ever read first). In a split the bar lives in the
 same split-HUD group as the place widgets (`SplitHud_Pulse.toml`), because the readout needs
 `Position`, `Position Outof`, `PositionOf` and `HeadToHeadBar` in one layout.

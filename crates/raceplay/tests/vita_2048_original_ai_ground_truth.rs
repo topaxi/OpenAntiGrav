@@ -87,7 +87,7 @@ fn held(skill: f32, from: f32, to: f32) -> Option<Vec<Vec<(u8, f32)>>> {
     while seconds(&race) <= to {
         race.tick_sim_only(&PlayerInputs::none());
         if seconds(&race) >= from {
-            let places = race.places();
+            let places = race.core.places();
             let field = race.core.sim.original_ai_field().expect("the field is on");
             out.push(
                 (1..8)

@@ -493,7 +493,7 @@ seen from the authoring side.
       below is what a fourth, opponent-bearing mode is waiting on.
       **A race now ends and shows a result** (2026-08-17): the finish condition
       had no reader outside the rules layer, so a race that ran past its last
-      lap simply carried on. `Race::capture_results` takes a snapshot board on
+      lap simply carried on. `SimRace::capture_results` takes a snapshot board on
       the tick the player crosses for the last time - places, laps, finish
       ticks, best lap - the composition root stops stepping the simulation, and
       the table is drawn in place of the HUD until X or escape leaves.

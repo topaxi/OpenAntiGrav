@@ -202,7 +202,7 @@ fn an_icons_art_box_is_the_drawn_pixels_and_where_they_sit_on_the_canvas() {
 }
 
 /// A guest's `clear-pickup`, `scale-speed` and `transit` for a wrecked craft are ignored
-/// engine-side (`Race::may_use_pickup`), and the same commands act on a racing one.
+/// engine-side (`SimRace::may_use_pickup`), and the same commands act on a racing one.
 #[test]
 fn a_guests_pickup_and_motion_commands_for_a_wrecked_craft_are_ignored() {
     use oag_physics::CraftState;

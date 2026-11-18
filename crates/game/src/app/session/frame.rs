@@ -884,7 +884,7 @@ impl Session {
                     // player's standing was fixed at the line; the board keeps
                     // up with the rest of the field finishing, and the tables
                     // that list it are rebuilt from it. See
-                    // `RaceSim::runs_on_after_the_line` and `Race::refresh_results`.
+                    // `RaceSim::runs_on_after_the_line` and `SimRace::refresh_results`.
                     //
                     // A Single Race wreck steps the whole world too
                     // (`SimRace::runs_on_after_the_wreck`); any other ending (a Zone

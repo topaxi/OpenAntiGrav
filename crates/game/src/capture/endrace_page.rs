@@ -178,7 +178,7 @@ fn seconds_to_ticks(seconds: f64) -> u32 {
 
 /// The board a two-person race leaves, stated: slots 0 and 1 are people and
 /// finish 5th and 7th of eight, and the last craft is still racing when the
-/// race ends. Built through `scoreboard::build` as `Race::capture_results` does.
+/// race ends. Built through `scoreboard::build` as `SimRace::capture_results` does.
 fn two_person_board(online: bool) -> oag_raceplay::scoreboard::Board {
     use oag_raceplay::scoreboard::Craft;
     let places = [5, 7, 1, 2, 3, 4, 6, 8];

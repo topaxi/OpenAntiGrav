@@ -56,7 +56,7 @@ fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Held> {
     while race_time(&race) <= to {
         race.tick(&PlayerInputs::none());
         if race_time(&race) >= from {
-            let places = race.places();
+            let places = race.core.places();
             let field = race.core.sim.original_ai_field().expect("the field is on");
             out.extend((1..8).map(|s| (places[s], field.drivers[s].held_thrust)));
             // The throttle state the engine read this tick: above `100` it

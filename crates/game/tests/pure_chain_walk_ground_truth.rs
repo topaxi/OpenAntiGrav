@@ -224,7 +224,7 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
         println!(
             "leg {}: place {}, {} points so far",
             leg + 1,
-            race.player_place(),
+            race.core.player_place(),
             progress.points(0)
         );
         progress.advance();
