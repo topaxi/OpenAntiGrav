@@ -36,11 +36,16 @@
 //! degree turn, which no settled frame shows) and the native code that settles
 //! them is unread.
 //!
-//! **Not drawn**: the card's body colour under the picture, the glow around it, the flip to `flyer_back.vex` (which `Cell Selection` draws face-on, [`CELL_POSE`], with no flip), the elements
+//! **The card's level and glow are the front end's bloom chain's**, where the Fury
+//! style's backdrop runs one: the card is drawn into the scene that chain reads
+//! ([`Layer::Scene`]), as the original draws it before its resolve, so the adapted
+//! exposure and the bloom are what a player sees on it.
+//!
+//! **Not drawn**: the card's body colour under the picture, the flip to `flyer_back.vex` (which `Cell Selection` draws face-on, [`CELL_POSE`], with no flip), the elements
 //! animating, and the light: Fury's cards are lit by `simpletexture*`
 //! programs whose light direction and colours (`0x02df31e5`, `0x2dba643d`,
-//! `0x81db67ea`) are written by code nobody has found, so every card is drawn
-//! at its own texture colours.
+//! `0x81db67ea`) are not bound here, so every card is drawn at its own texture
+//! colours.
 
 use std::cell::RefCell;
 use std::collections::HashMap;

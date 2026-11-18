@@ -636,6 +636,14 @@ is the check on the law. The live settings store (`*0x008b6fb4`, `+0x52c`..`+0x5
 not match. Wired: `oag_game::boot::fury` reads that file through `oag_raceplay::hd_bloom_params` and the backdrop runs
 `oag_post::hd_bloom::Chain`, with the adaptation per clip frame. **Confidence 90** on the law, **85** on the file.
 
+**The block is the screen's (2026-11-18, `hd-menu-cell`).** That read is `Main Menu`'s. On `Campaign Selection`, both
+`Grid Selection`s and `Cell Selection` the same store reads boost 35 and rate 0.015, DATA06's `fe.fury.envsettings`,
+as it did on `Team Selection`: a screen that draws a model loads that file (`FrontEnd_LoadEnvSettings(0)`), and the
+running chain takes its constants and keeps its adapted luma. Wired for the pages that hand the backdrop a model (a
+campaign's flyer card, drawn into the finished field before the present); the reads, the law checked on the card and
+what is not wired (Ship Select's backdrop still runs the track block) are on
+[front-end-model-lighting.md](front-end-model-lighting.md), "The flyer card is drawn before the resolve".
+
 **A race's final composite is the same quad** (2026-11-05, offline, ring dumps of earlier lanes). The last full-screen immediate `QUADS` of a frame runs fragment program
 `0x01113c41`, unit 0 filter word `0x02022000`, from the scaled scene, with `TEXCOORD0` at the top left `(0.5 / width, 0.5 / height)` of **that source**: 23 of 23 1080p
 frames, 8 of them races on Anulpha Pass, Moa Therma, Talon's Junction and Vineta K at widths `1300`, `1320` and `1660` (`0.000385`, `0.000379`, `0.000301`), `0.000463` on `v`

@@ -1645,6 +1645,13 @@ the page shows the same numbers per pair). The most visible difference is read o
 | Omega Track Select (Vineta K) | `Track_Selection_Definition.xml` | 0.204 / 0.27 / 19.7 | circuit name `01_Track` (the unresolved name of Omega's entry: the load line names `Data\Environments\01_Vineta_K\screen.xml`, so the circuit is Vineta K) and no photo (the original names it and shows the stills), no length values, the model is turned differently |
 | Omega Ship Select (Feisar) | `Team_Selection_Definition.xml` | 0.283 / 0.26 / 34.0 | hull about twice the original's size in a different livery (dark teal and yellow against pale blue and yellow), a ringed Feisar logo against the flat one, the cursor on the top hex against the third row |
 
+**2026-11-18 (`hd-menu-cell`)**: HD's campaign cards are drawn through the front end's bloom chain (the original's
+exposure and bloom, read live per screen: `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The
+flyer card is drawn before the resolve"). Mean grey, RMSE, edge correlation, re-rendered the same day from the
+pairs' recorded flags: `hd/menu-cell-select` 5.06, 0.0813, 0.456 to **3.00**, 0.0684, 0.454; `hd/menu-grid-select`
+7.68, 0.1269, 0.308 to 7.28, 0.1239, 0.325; `hd/menu-campaign-select` 5.12, 0.0739, 0.229 to 4.77, 0.0698, 0.236;
+`hd/menu-ship-select`, `menu-track-select`, `loading-loading` and the five `omega/menu-*` unchanged to the digit.
+
 Gaps (no pair, the original's frame kept in `gap-*` beside the pairs with `gap.json`): HD Main Menu, Racebox setup and Options+
 (`Additional`); Omega Main Menu, Racebox setup and Options (Omega Campaign Select was a gap until 2026-11-05: `scripts/shadps4-omega-menu-pair.py`'s `WALK` row is now an XML page, so a re-run of `pairs` makes it a pair; adopting the pair made without the emulator from the kept frame: replace `omega/gap-campaign-select` with `omega/menu-campaign-select`, then add it to the `manifest` command below, 10 entries). The ranked list of differences is in the
 `menu-pairs-hd-omega` handover thread. Adopt: the pair directories are under `data/reference/compare-page/{hd,omega}/menu-*`;

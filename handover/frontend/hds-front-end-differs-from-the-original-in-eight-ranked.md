@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-12
+updated: 2026-11-18
 summary: "HD front end: Ship Select camera, settle and hull lighting wired; settle start, craft turn and zoom, Omega pose open"
 difficulty: medium (30)
 ---
@@ -88,11 +88,15 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   original's default team is the maintainer's save (Feisar), not a gap
 - Cell Selection (closed 2026-10-08, hd-cell-select: back card face-on, 32-hex
   field, four `_bw` icons, `corner2` brackets, next-grid logo, barcode, rule,
-  capitals): the wordmark's glow and bloom, the card's `FURY_GAIN` mechanism
-  (which materials carry the 2x, unread; the base campaign's cards and their
-  backs have no measurement), the Y-joint and mark margins (one
-  frame), a Tournament cell and the `NitroBattle` icon (no `_bw` file named for
-  it), and the live pad/pointer walk (headless stills only)
+  capitals; 2026-11-18, `hd-menu-cell`: the card's level, the wordmark's glow and the bloom are the front end's
+  bloom chain, the pair `hd/menu-cell-select` 5.06 to 3.00 mean grey, walked live with the pointer). Open, by
+  share of the pair's remaining 3.00: the footer legend's spacing (0.63: ours spreads the prompts wider), the
+  wordmark 6 pixels right of the original's (0.58 in its box), the black hexagon field in the scene (about 0.25:
+  the flyer thread), `EVENT 01/08`'s letter spacing (0.11), the selected cell's white outline (0.05: ours draws a
+  grey fill), the title rule's fade at its right end (the original's is solid). Also open: the base campaign's page
+  (a first frame of `01_uplift` exists since 2026-11-18: values and the selected outline are cyan `0, 178, 231`,
+  headings `82, 82, 82`, the card `233, 234, 233`; ours keeps `TitleColor`), the Y-joint and mark margins (one
+  frame), a Tournament cell and the `NitroBattle` icon (no `_bw` file named for it)
 - Frame chrome (closed 2026-10-08): the title's size and offset against the
   0.904 layout scale remain; the quad-buffer bug that dropped the rules on every
   flyer page is fixed (`Renderer::renew_quad_buffer`)
