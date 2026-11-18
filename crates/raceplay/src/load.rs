@@ -76,8 +76,7 @@ use oag_source::pair::craft_of;
 ///
 /// # Errors
 ///
-/// Whatever [`load`] would refuse the circuit for, and a circuit with no
-/// `Start Position` node.
+/// Whatever [`load`] would refuse the circuit for, and a circuit with no `Start Position` node.
 pub fn export_track(options: &Options) -> Result<oag_trackfile::Track> {
     let (packs, pure_packs, _) = oag_source::dlc::packs_from_defaults(
         &options.dlc,
