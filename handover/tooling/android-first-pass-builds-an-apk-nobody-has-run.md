@@ -55,17 +55,13 @@ manifest and `cache/<image>` rows in `just push-data`.
   `android-activity` or move to GameActivity); no haptics.
 - **AArch64 determinism.** `oag-core`'s determinism test builds for the target; run it
   on the phone with the command in the doc and compare to the committed hashes.
-- **`android_main` still lives in the `oag_android` example.** Moving the windowed
-  `App` and every `main/` module into `oag-game`'s lib (so `android_main` lives in
-  the lib and the example goes) was the optional last step of the controls lane and
-  was **not started**: it touches about 13,000 lines of the binary's modules
-  (`main_body.rs`, the `#[path]` tree, `main.rs`'s rustdoc header) and wants its own
-  lane with a behaviour-identical check. The new `touch` module is one more
-  `#[path]` module there.
-- **Cargo warning on every invocation.** The cdylib is a second target rooted at
-  `src/main.rs` (an `[[example]]`), so Cargo warns "present in multiple build
-  targets". Moving the windowed `App` and its stages into `oag-game`'s lib removes
-  both the warning and the example; `android_main` would then live in the lib.
+- **The `android_main` export from the cdylib is unbuilt.** The body is `oag_game::app::android_main`
+  in the library; the `#[no_mangle]` symbol stays in the `oag_android` example
+  (`crates/game/src/android.rs`) as a one-call shim. The gate does not build Android, and
+  the `aarch64-linux-android` std was not installed where the move was made, so the
+  Android-only code was not type-checked. First build: `cargo check -p oag-game --example
+  oag_android --target aarch64-linux-android --no-default-features --features android,extensions`,
+  then `just apk` and `llvm-nm -D --defined-only` on `liboag_android.so` for `android_main`.
 - **`oag-source` has no Android search path.** `android_main` works around it by
   changing the working directory to the files directory. A real
   `cfg(target_os = "android")` root (and a DLC and package-extract root) belongs in

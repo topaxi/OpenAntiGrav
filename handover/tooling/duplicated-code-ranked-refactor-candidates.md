@@ -206,18 +206,18 @@ section below).
    - Size: S, 1-2 hours. Confidence 30.
 
 9. **LAN and online menu ticks copy the button and pointer handling.**
-   - `crates/game/src/main/session/lan.rs:342-364` against
+   - `crates/game/src/app/session/lan.rs:342-364` against
      `session/online.rs:596-618` (23 lines: the fold of presses and the
      stage borrow), and `lan.rs:366-381` against `online.rs:625-640` (16
      lines: Start, Circle and pointer events).
-   - Shared home: a helper in `crates/game/src/main/session/` that both call.
+   - Shared home: a helper in `crates/game/src/app/session/` that both call.
      Legal.
    - Size: S, 2-3 hours. Confidence 25. Measure: `cargo nextest run -p
      oag-game` for the session tests, under the gpu-vram cap if they spawn
      the game.
 
 10. **`race::Loaded` is destructured field by field in two places.**
-    - `crates/game/src/main/stage.rs:465-504` against
+    - `crates/game/src/app/stage.rs:465-504` against
       `crates/game/src/race_capture.rs:413-452` (36 lines): a 45-field
       `let race::Loaded { ... } = ...` pattern repeated. Adding a field
       means editing both.
@@ -240,7 +240,7 @@ section below).
       values.
 
 Also small, same pattern: `word()` helper copies in
-`game/src/main/session/photo.rs:66` and `replays.rs:175` (11 lines each).
+`game/src/app/session/photo.rs:66` and `replays.rs:175` (11 lines each).
 
 ### Title data (not dedupe candidates, a policy call for the lead)
 

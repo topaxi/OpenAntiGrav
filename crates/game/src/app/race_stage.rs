@@ -98,7 +98,7 @@ pub(crate) struct RaceStage {
     /// The campaign cell this race was launched against, or `None` for an
     /// ordinary RACE-page/two-title race page/`--race` launch. Drained from
     /// `Session::campaign_cell` into here the moment this stage is built
-    /// (`crate::app::main::session::load::finish_loading`) - the mirror of
+    /// (`crate::app::session::load::finish_loading`) - the mirror of
     /// `DAT_08b30ffc`, per
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a
     /// campaign event launches". Read by [`RaceStage::observation`] alone.
@@ -118,7 +118,7 @@ pub(crate) struct RaceStage {
     /// [`Self::campaign_cell`]'s own resolved AI skill scale, drained the
     /// same moment and applied to [`Self::race`]'s AI tuning right after -
     /// see `Session::campaign_ai_skill_scale`'s own doc and
-    /// `crate::app::main::session::load::advance_race_build`, the one place this
+    /// `crate::app::session::load::advance_race_build`, the one place this
     /// is read.
     pub(crate) campaign_ai_skill_scale: Option<f32>,
     /// The final standings rank this leg earns against
@@ -134,7 +134,7 @@ pub(crate) struct RaceStage {
     /// build time, because the rank is not known until the leg itself
     /// finishes.
     ///
-    /// [`Session::tournament`]: crate::app::main::session::Session::tournament
+    /// [`Session::tournament`]: crate::app::session::Session::tournament
     pub(crate) tournament_final_rank: Option<u8>,
     /// Whether a window of this frame has already drawn, and so did the frame's
     /// camera-independent work (`Scene::render_window`'s `shared`). Cleared once a frame by
@@ -157,7 +157,7 @@ pub(crate) struct RaceStage {
     /// open source [`endrace::EndRaceRuntime::new`] could not read), which
     /// falls this stage back to [`RaceStage::scoreboard`] exactly as before
     /// this existed. Built once, by `Session::frame`'s finish-transition
-    /// arm - see `crate::app::main::session::endrace`. [`Self::endrace_unavailable`]
+    /// arm - see `crate::app::session::endrace`. [`Self::endrace_unavailable`]
     /// is what makes that "forever" true rather than "retried every frame".
     pub(crate) endrace: Option<endrace_touch::EndRace>,
     /// Set once [`Session::build_endrace`] has tried to build
@@ -178,10 +178,10 @@ pub(crate) struct RaceStage {
     /// Per race rather than per process: a second race on a source that has
     /// no screens says so once more, which is a fact about that race.
     ///
-    /// [`Session::build_endrace`]: crate::app::main::session::Session::build_endrace
+    /// [`Session::build_endrace`]: crate::app::session::Session::build_endrace
     pub(crate) endrace_unavailable: bool,
     /// The worker building [`Self::endrace`]'s screens while the race runs, so the finishing frame
-    /// does no disc read or GPU build. See `crate::app::main::session::endrace::prefetch`.
+    /// does no disc read or GPU build. See `crate::app::session::endrace::prefetch`.
     pub(crate) endrace_prefetch: Option<crate::app::session::endrace::prefetch::Prefetch>,
     /// Whether that worker has been offered a start, so it is started once per race.
     pub(crate) endrace_prefetch_started: bool,

@@ -72,7 +72,7 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
   the window's DPI is not consulted, so the feel varies with screen size.
 - **Headless captures cannot click.** `--press` drives buttons through the
   capture's own tick loop, but the pointer arrives only through winit
-  events in `main/app.rs`; a `--click X,Y` would need `capture::run` to
+  events in `app/handler.rs`; a `--click X,Y` would need `capture::run` to
   build a `Pointer` per tick the way it builds an `Input`. The unit tests
   cover every model directly, so this is a verification convenience rather
   than a gap in behaviour.

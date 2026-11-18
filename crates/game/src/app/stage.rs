@@ -723,7 +723,7 @@ impl Stage {
             campaign_2048_event,
             xp_banked: None,
             // Built lazily once the race finishes - see
-            // `crate::app::main::session::endrace` and `RaceStage::endrace`'s own
+            // `crate::app::session::endrace` and `RaceStage::endrace`'s own
             // doc. Never known here for the same reason `campaign_cell`
             // isn't: this function has no `Session` to read a `Shell` from.
             endrace: None,

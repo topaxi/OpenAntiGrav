@@ -73,7 +73,7 @@ The engine today is **hard single-player**, not "single-player by default":
   "Single-ship for now: the modes that need it - time trial, speed lap, Zone -
   have one ship on the track, and per-opponent timing arrives with the grid
   rather than before it." Only `ships[0]` is ever the timed, human-controlled
-  ship; `crates/game/src/main/race_stage.rs` reads that index directly for
+  ship; `crates/game/src/app/race_stage.rs` reads that index directly for
   every HUD and lap-timing field. **Not everything per-ship is missing,
   though**: `ShipState::standing: oag_race::Standing` (lap, circuit place,
   finished) is already tracked "every craft, the player included" - it's
@@ -90,7 +90,7 @@ The engine today is **hard single-player**, not "single-player by default":
   Deck with a pad plugged into its dock should steer from either"
   (`crates/input/src/pad.rs:366`). There is no `GamepadId` -> player-slot
   mapping anywhere, even as a stub.
-- `App` (`crates/game/src/main/app.rs:95`) is documented as "one of these per
+- `App` (`crates/game/src/app/handler.rs:95`) is documented as "one of these per
   run, not one per window" - the composition root assumes exactly one winit
   window for the process's whole life.
 
@@ -563,7 +563,7 @@ The complexity here is entirely on the app/render plumbing, and it's a
 different shape of work than split screen's, not a strict superset:
 
 - `App`'s "one of these per run, not one per window" assumption
-  (`crates/game/src/main/app.rs:95`) has to go. winit's `ApplicationHandler`
+  (`crates/game/src/app/handler.rs:95`) has to go. winit's `ApplicationHandler`
   needs to route resize/redraw/input events per-window, and `Session`
   (currently singular) needs to become one-per-window or gain an explicit
   window index.

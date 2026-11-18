@@ -696,7 +696,7 @@ pub(crate) fn run_race(
         // `Session::render_profile` does.
         //
         // **The four CLI overrides are re-applied on top**, and forgetting them
-        // is a bug this carried: `main.rs` applies them by walking
+        // is a bug this carried: `app.rs` applies them by walking
         // `settings.render_profiles`, which this profile was not in - so every
         // one of them was silently discarded on a headless capture, and `just
         // compare-upscalers` produced three byte-identical images while
@@ -714,7 +714,7 @@ pub(crate) fn run_race(
             None => None,
         };
         cli.apply_render_overrides(&mut render_profile, render_scale);
-        // The same key `main::stage::build_race_stage` resolves for a real
+        // The same key `crate::app::stage::build_race_stage` resolves for a real
         // session - see `crate::records::Key::track`'s own doc for why the
         // fallback order matters - read here only to look a row up, never to
         // write one back. See `crate::race_capture::CaptureOptions::previous_best`'s own doc

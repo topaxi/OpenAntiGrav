@@ -10,7 +10,7 @@ thing is known and unbuilt: the `Loyalty` bar.** Implemented in
 [`oag_ui_screens::picker::slideshow`](../../crates/ui-screens/src/picker/slideshow.rs)
 (the window's state machine),
 [`oag_game::preview`](../../crates/game/src/preview.rs) (the 3D pass and
-the slideshow's loader) and `crates/game/src/main/session/picker.rs` (the
+the slideshow's loader) and `crates/game/src/app/session/picker.rs` (the
 flow). Captured headlessly with `--menu-page track-select` /
 `--menu-page ship-select`, on `pulse-psp-usa`, `pulse-psp-eu` and
 `pulse-ps2-eu` alike.
@@ -548,7 +548,7 @@ Confidence **90** for the sequence and the titles, **60** for what `InputPad`
 does (the file names it; no behaviour was observed). 2048's string table carries
 the same two ids (`FE_SHIPSEL_P1`/`_P2`); its front end is unread.
 
-**What this build does** (`crates/game/src/main/session/picker.rs` and its `seat`
+**What this build does** (`crates/game/src/app/session/picker.rs` and its `seat`
 module, `oag_ui_screens::picker::split`):
 
 - A source that authors `Team SelectionSplit` (the PS2 pressing) **and** a race

@@ -219,7 +219,7 @@ the unlock graph - also carry `M_RankRequired`, unread and unenforced.
   search.
 - **The other three lanes' own boundaries were crossed once, narrowly, and
   flagged to the coordinator rather than merged silently.**
-  `crates/game/src/main/headless.rs::run_race` needed one match arm to
+  `crates/game/src/app/headless.rs::run_race` needed one match arm to
   dispatch `--event` to `race::load_event` instead of `race::load` - the
   only call site in the workspace that actually invokes `race::load` for
   `--race`, and every other option for wiring the flag through would have

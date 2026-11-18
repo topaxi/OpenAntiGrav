@@ -4,7 +4,7 @@
 //!
 //! The model and the drawing are `oag_ui_screens::endrace::touch`; what a
 //! finished race says is `crate::endrace::touch::summary`; the flow that
-//! builds and drives this is `crate::app::main::session::endrace_touch`. Like
+//! builds and drives this is `crate::app::session::endrace_touch`. Like
 //! [`super::endrace`], it draws inside `Stage::Race` over the race's own last
 //! frame rather than moving to `Stage::Menu`.
 

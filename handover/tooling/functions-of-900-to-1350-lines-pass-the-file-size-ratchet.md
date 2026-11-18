@@ -18,15 +18,15 @@ source (the closing brace at the `fn`'s indent):
 | --- | --- | --- |
 | `crates/raceplay/src/load.rs:88` `load` | 88-1437 | 1,350 |
 | `crates/game/src/race_capture.rs:393` `capture` | 393-1467 | 1,075 |
-| `crates/game/src/main/session/frame.rs:41` `frame` | 41-1072 | 1,032 |
+| `crates/game/src/app/session/frame.rs:41` `frame` | 41-1072 | 1,032 |
 | `crates/game/src/capture.rs:199` `run` | 199-1223 | 1,025 |
 | `crates/raceplay/src/scene/frame.rs:259` `prepare_view` | 259-1230 | 972 |
-| `crates/game/src/main/session/draw.rs:124` `draw` | 124-1070 | 947 |
+| `crates/game/src/app/session/draw.rs:124` `draw` | 124-1070 | 947 |
 | `crates/raceplay/src/start.rs:30` `start` | 30-968 | 939 |
 | `crates/mesh/src/mesh_render.rs:338` `build_with` | 338-1220 | 883 |
 
 Next tier (roughly 660 to 720 lines): `raceplay/src/tick.rs:58` `tick_body` (58-721),
-`game/src/main/session/apply.rs:172` `apply_setting` (172-830, see the settings thread).
+`game/src/app/session/apply.rs:172` `apply_setting` (172-830, see the settings thread).
 
 The file ceiling was raised from 1,000 to 1,500 on 2026-10-12 and the tree grew into it: 83 non-test
 `.rs` files are over 1,000 lines and 14 over 1,300 (`vex/src/vex.rs` 1,498, `fx/src/psys.rs` 1,489,

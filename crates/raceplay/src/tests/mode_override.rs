@@ -1,6 +1,6 @@
 //! [`Options::laps_override`]/[`Options::eliminator_kill_target`], the two
 //! fields a campaign launch is the only real caller of - see
-//! `crate::main::session::campaign::Session::launch_campaign_cell`. Neither
+//! `crate::app::session::campaign::Session::launch_campaign_cell`. Neither
 //! reaches a disc here: these are the same synthetic `setup` fixture every
 //! other file in this directory shares.
 

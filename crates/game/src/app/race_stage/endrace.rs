@@ -1,9 +1,9 @@
 //! The EndRace flow a finished race holds open: `EndRace Results` ->
 //! (`EndRace Rewards`, campaign only) -> `EndRace Menu`. See
 //! `oag_ui_screens::endrace` for the model and the drawing, `crate::endrace` for
-//! the disc read, and `crate::app::main::session::endrace` for the flow that
+//! the disc read, and `crate::app::session::endrace` for the flow that
 //! drives one - the same split `crate::app::campaign_stage`/
-//! `crate::app::main::session::campaign` make for the Race Campaign's own
+//! `crate::app::session::campaign` make for the Race Campaign's own
 //! screens.
 //!
 //! **Drawn inside `Stage::Race`, not `Stage::Menu`.** A finished race's own
@@ -304,7 +304,7 @@ impl EndRaceRuntime {
 
     /// Advances to the next screen on a `Confirmed` event - see
     /// [`Flow::advance`]. `Menu` does not advance here - a row's own action
-    /// is `crate::app::main::session::endrace`'s job.
+    /// is `crate::app::session::endrace`'s job.
     pub(crate) fn advance(&mut self) {
         let campaign = self
             .rewards
@@ -371,7 +371,7 @@ impl EndRaceRuntime {
     }
 
     /// The grid these screens are authored in - what
-    /// `crate::app::main::session::pointer::in_grid` resolves a window-pixel
+    /// `crate::app::session::pointer::in_grid` resolves a window-pixel
     /// pointer against before `Session::tick_endrace` reads it.
     #[must_use]
     pub(crate) fn space(&self) -> oag_display::space::Space {
@@ -690,11 +690,11 @@ pub(crate) fn menu_options(
 /// law: [`Board`](oag_raceplay::scoreboard::Board) for this leg's own finish
 /// order and leg points (`oag_race::tournament::points_for_place`, the same
 /// law already folded into the running totals a moment earlier -
-/// `crate::app::main::session::tournament::record_finished_leg` runs before
+/// `crate::app::session::tournament::record_finished_leg` runs before
 /// `Session::build_endrace` in the same frame), and
 /// `oag_raceplay::tournament::Progress` for the cumulative totals and rank.
 /// `slot_teams` is this leg's own grid roster, in slot order -
-/// `crate::app::main::session::endrace::build_endrace` reads it off the race
+/// `crate::app::session::endrace::build_endrace` reads it off the race
 /// (`Race::slot_teams`), since which team flew which slot is not carried on
 /// `Board`/`Progress` themselves. `None` team entries draw the
 /// name absent rather than a placeholder - see

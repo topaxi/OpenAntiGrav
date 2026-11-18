@@ -9,7 +9,7 @@ impl Cli {
     /// to one render profile.
     ///
     /// **One function because there are two callers and they disagreed.**
-    /// `main.rs` applies these by walking `settings.render_profiles`, which is
+    /// `app.rs` applies these by walking `settings.render_profiles`, which is
     /// keyed by title - and a headless `--race` capture has no title in hand,
     /// so it built a `RenderProfile::default()` instead and every one of these
     /// four flags was silently discarded. That made `just compare-upscalers`

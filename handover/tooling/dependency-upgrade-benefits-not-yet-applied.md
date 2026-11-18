@@ -23,7 +23,7 @@ the numbers below is measured unless it says so.
 - **wgpu 30's surface colour space** (`SurfaceConfiguration::color_space`,
   `SurfaceColorSpace::{ExtendedSrgbLinear, Bt2100Pq, DisplayP3, ...}`,
   `Surface::display_hdr_info()` for luminance and headroom). `oag-game`'s
-  surface setup (`crates/game/src/main/gpu.rs`) takes `Auto`, which is the old
+  surface setup (`crates/game/src/app/gpu.rs`) takes `Auto`, which is the old
   behaviour. A real HDR or wide-gamut output would follow the HDR target and
   tone-map work that is already a thread
   (`handover/rendering/hdr-target-and-tone-map-per-title.md`). Impact: HDR

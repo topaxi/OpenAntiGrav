@@ -10,9 +10,9 @@ score, except where a section says it is the disc's own data.
 
 Code: `crates/render/src/viewport.rs` (layout), `crates/raceplay/src/viewpoint.rs`
 (cameras), `crates/raceplay/src/scene/viewports.rs` (drawing),
-`crates/game/src/split_screen.rs` (the flag and the lobby), `crates/game/src/main/session/picker/seat.rs` (Ship Select per seat), `crates/input/src/lobby.rs`
+`crates/game/src/split_screen.rs` (the flag and the lobby), `crates/game/src/app/session/picker/seat.rs` (Ship Select per seat), `crates/input/src/lobby.rs`
 and `crates/input/src/pad.rs` (who plays which slot), `crates/ui-screens/src/join.rs`
-and `crates/game/src/main/session/join.rs` (the join screen),
+and `crates/game/src/app/session/join.rs` (the join screen),
 `crates/game/src/hud_views.rs` and `crates/raceplay/src/slot_hud.rs` (the per-view
 HUD). Tests: the modules' unit tests, `crates/game/tests/pad_join_end_to_end.rs` and
 the disc-backed `crates/game/tests/split_screen_ground_truth.rs` and

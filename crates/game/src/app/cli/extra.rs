@@ -11,7 +11,7 @@ pub(crate) struct IconArgs {
     ///
     /// Touches no disc, no settings file and no window - only `crate::icon`.
     /// What `just install-desktop-file` and `scripts/build-appimage.sh` both
-    /// call, so the icon on disk and the one `main/window.rs` hands winit at
+    /// call, so the icon on disk and the one `app/window.rs` hands winit at
     /// startup come from the same rasterizer and never drift apart:
     ///
     /// ```sh

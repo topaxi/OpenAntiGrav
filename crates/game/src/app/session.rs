@@ -587,9 +587,9 @@ pub(crate) struct Session {
     /// title's name back into a source path.
     ///
     /// Surveyed once here rather than reused from whatever decided the disc
-    /// chooser in `main.rs`: the two run in different processes' worth of
+    /// chooser in `app.rs`: the two run in different processes' worth of
     /// state (this is `App`/`Session`, the chooser's own decision is local to
-    /// `main.rs`) and threading one through costs more than a second survey,
+    /// `app.rs`) and threading one through costs more than a second survey,
     /// which happens once per windowed boot, not per frame. See
     /// `crate::launcher::{survey, distinct_titles}`.
     pub(crate) titles: Vec<crate::launcher::Candidate>,
@@ -691,7 +691,7 @@ pub(crate) struct Session {
     /// `Cell Selection`'s own confirm is handled
     /// ([`Session::launch_campaign_cell`]) to the moment the race stage is
     /// actually built, which drains it via [`Option::take`] into
-    /// [`RaceStage::campaign_cell`] - see `crate::app::main::session::load`'s
+    /// [`RaceStage::campaign_cell`] - see `crate::app::session::load`'s
     /// `finish_loading`. The mirror of `DAT_08b30ffc`,
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "current
     /// campaign cell" - not carried through `race::Options`/`race::Setup`
@@ -821,7 +821,7 @@ pub(crate) struct Session {
     /// track's `stats.xml` - draining into [`RaceStage::campaign_ai_skill_scale`]
     /// the identical way [`Self::campaign_difficulty`] does, and applied to
     /// the race's AI tuning there
-    /// (`crate::app::main::session::load::advance_race_build`). Computed once, in
+    /// (`crate::app::session::load::advance_race_build`). Computed once, in
     /// [`Session::launch_campaign_cell`], rather than read again at drain
     /// time - see that function's own `resolve_campaign_ai_skill_scale`.
     /// `None` whenever [`Self::campaign_difficulty`] is, or the resolution
@@ -835,7 +835,7 @@ pub(crate) struct Session {
     /// A Tournament cell's own leg list and running standings, from the
     /// moment `Session::launch_campaign_cell` starts one to the moment its
     /// last leg's `EndRace Menu` is left (`RETURN TO GRID`/`RETURN TO MENU`).
-    /// See `crate::app::main::session::tournament` and
+    /// See `crate::app::session::tournament` and
     /// `race::tournament::Progress`'s own doc.
     ///
     /// **Unlike [`Self::campaign_cell`], this survives across a leg's own
@@ -991,7 +991,7 @@ pub(crate) struct Shell {
     pub(crate) globals: Vec<(String, String)>,
     /// Wipeout HD/Fury's own circuit-name fold, carried from
     /// `boot::Shell::circuit_names` for
-    /// `crate::app::main::session::campaign::open_campaign`, the one place after
+    /// `crate::app::session::campaign::open_campaign`, the one place after
     /// boot that resolves a track id to a name outside the RACE page's own
     /// rows (which use [`Self::tracks`]/[`Self::zone_tracks`], already
     /// folded above). `CircuitNames::default()` on every other title, which

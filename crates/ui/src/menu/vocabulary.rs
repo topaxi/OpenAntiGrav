@@ -45,7 +45,7 @@ pub enum Action {
     /// restores it. See `crate::pilots::is_built_in_name`.
     DeletePilot,
     /// Opens the Race Campaign's `Grid Selection` screen - see
-    /// `oag_ui_screens::campaign` and `crate::main::session::campaign` in `oag-game`.
+    /// `oag_ui_screens::campaign` and `crate::app::session::campaign` in `oag-game`.
     ///
     /// **A stub past `Grid Selection`/`Cell Selection` themselves.** Neither
     /// screen launches a race here - see `oag_ui_screens::campaign`'s own module doc
@@ -62,16 +62,16 @@ pub enum Action {
     /// The MULTIPLAYER page's LOCAL MULTIPLAYER row: starts the multiplayer flow, which seats
     /// the people ("press a button to join"), lays out the windows and goes on to the RACE
     /// page and Track and Ship Select - see `oag_ui_screens::join` and
-    /// `crate::main::session::multiplayer` in `oag-game`.
+    /// `crate::app::session::multiplayer` in `oag-game`.
     OpenMultiplayerLocal,
     /// The LAN page's HOST GAME row: the RACE page, Track Select and Ship Select, then a lobby
-    /// that waits for the others - `crate::main::session::lan` in `oag-game`.
+    /// that waits for the others - `crate::app::session::lan` in `oag-game`.
     HostLan,
     /// The LAN page's JOIN GAME row: the list of hosts discovery finds, and a typed address
     /// for the ones it does not.
     JoinLan,
     /// The MULTIPLAYER page's ONLINE row: asks for the lobby's address, hash and a name,
-    /// connects, and opens the ONLINE page - `crate::main::session::online` in `oag-game`.
+    /// connects, and opens the ONLINE page - `crate::app::session::online` in `oag-game`.
     OpenOnline,
     /// The ONLINE page's CREATE GAME row: the RACE page, Track Select and Ship Select, then
     /// a room on the lobby.
@@ -82,22 +82,22 @@ pub enum Action {
     /// The ONLINE page's JOIN GAME row: Ship Select, then the lobby's list of rooms.
     OnlineJoin,
     /// The OPTIONS page's PLAYER NAME row: opens the name entry on the stored name
-    /// (`crate::main::session::player_name` in `oag-game`).
+    /// (`crate::app::session::player_name` in `oag-game`).
     EditPlayerName,
     /// The OPTIONS page's PLAYER TAG row, on titles that use a tag.
     EditPlayerTag,
     /// The pause menu's PHOTO MODE row: resumes the parked race into the one photo mode
-    /// (`crate::main::session::photo` in `oag-game`). The row is on the page only while a
+    /// (`crate::app::session::photo` in `oag-game`). The row is on the page only while a
     /// race with one view is parked ([`super::Menu::offer`]).
     PhotoMode,
     /// The pause menu's RESTART RACE row: the parked race again from the grid, on the options
-    /// it ran with (`crate::main::session::pause_menu` in `oag-game`).
+    /// it ran with (`crate::app::session::pause_menu` in `oag-game`).
     RestartRace,
     /// The pause menu's QUIT RACE row: leaves the parked race for the front end, or for the
     /// campaign cell it was launched from.
     QuitRace,
     /// The REPLAYS page's WATCH row: opens the replay the REPLAY row is on in the viewer
-    /// (`crate::main::session::replays` in `oag-game`).
+    /// (`crate::app::session::replays` in `oag-game`).
     WatchReplay,
     /// The REPLAYS page's KEEP row: copies an automatic replay into the player's own folder,
     /// where the ring never reaches it.

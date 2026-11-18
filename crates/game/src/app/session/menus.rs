@@ -831,7 +831,7 @@ impl Session {
     /// [`Self::launch_race`], plus the same hand-off report on success and
     /// the same non-fatal log on failure every launcher wants - the RACE
     /// page's own [`Self::launch_from_settings`] above and a campaign cell's
-    /// [`Self::launch_campaign_cell`] (`crate::app::main::session::campaign`)
+    /// [`Self::launch_campaign_cell`] (`crate::app::session::campaign`)
     /// alike. Neither builds `self.race_options` here: by the time either
     /// calls this, it is already exactly what should load.
     pub(crate) fn finish_launch(&mut self) {

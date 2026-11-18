@@ -308,7 +308,7 @@ on the place: the flat `1/0/0` targets make place 1 gold and nothing else a
 medal. Confidence 85 (decompile, same function the `Race` evidence on
 `race-campaign.md` rests on; the place-to-medal compare itself was not
 re-walked to a finish live). `oag_game`'s `campaign_medal` already treats `Race`
-and `Head2Head` alike (`crates/game/src/main/race_stage.rs`).
+and `Head2Head` alike (`crates/game/src/app/race_stage.rs`).
 
 **Live, campaign cell `grid4_5_2`** (Head to Head, `04_Track` = Tech de Ra
 White, Flash, Weapons Off, 4 laps; the dev-unlock byte opened Grid 5): the

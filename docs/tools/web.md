@@ -56,11 +56,12 @@ makes no request after loading itself.
 ## How it is wired
 
 - **Entry.** `crates/game/src/web.rs` is the `oag_web` example
-  (`crate-type = ["cdylib"]`, `required-features = ["web"]`) and `include!`s
-  `main_body.rs`, the same arrangement as the Android library
-  ([android.md](android.md)): the windowed `App` lives in the binary's own
-  modules, and nothing may depend on `oag-game`. It exports one function,
-  `start(name, image, log)`, which the page calls with the picked file.
+  (`crate-type = ["cdylib"]`, `required-features = ["web"]`): the same arrangement as
+  the Android library ([android.md](android.md)). It holds the `#[wasm_bindgen]`
+  exports `inspect`, `start` and (with `fault-test`) `fault_test`, each one call into
+  `oag_game::app::web` (`crates/game/src/app/web.rs`, built for wasm32 with the `web`
+  feature), where the windowed `App` and the rest of `oag_game::app` are. `start(name, image,
+  log, key)` is what the page calls with the picked file.
 - **The image.** `oag-disc` opens an image through `oag_disc::mount`: on
   native that is `std::fs::File` and nothing changed; on wasm it is a cursor
   over a `Blob` the entry point registered under `/web/<file name>`, which is
@@ -850,7 +851,7 @@ names `libGLX_nvidia.so.0`, which loads `libEGL.so.1`, which loads `libEGL_nvidi
 backend.
 
 **A player reaches this too, measured.** `--drive` runs the real session
-(`crates/game/src/main/drive.rs`), and closing the window on the loading screen takes the same route:
+(`crates/game/src/app/drive.rs`), and closing the window on the loading screen takes the same route:
 `event_loop.exit()`, `Session::drop`, `main` returning. A real X11 window on Xvfb on the NVIDIA GPU,
 sent `WM_DELETE_WINDOW` once `race load reached` is logged (2048, first event), with `race-load` left
 out of the registry: 3 of 9 closes crashed (`SIGSEGV` on `race-load`, exit -11). With it registered:

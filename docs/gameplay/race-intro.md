@@ -86,7 +86,7 @@ and both settle at 2 s; a Cross held at 1 s (the earliest the lock allows) leave
 | Rule | Where |
 | --- | --- |
 | the loader reads `<circuit>\start_grid.vex` on Pulse PSP and reports its length and cuts | `race/load/intro.rs` |
-| the windowed session begins it when the race scene is handed over and steps it **instead of the world** until it ends: `World::tick` stays `0`, so every golden hash, replay and the 272-tick countdown are exactly as before | `main/session/frame.rs`, `Race::tick_intro` |
+| the windowed session begins it when the race scene is handed over and steps it **instead of the world** until it ends: `World::tick` stays `0`, so every golden hash, replay and the 272-tick countdown are exactly as before | `app/session/frame.rs`, `Race::tick_intro` |
 | the pose is the animation as of the previous tick, fov `54.309` vertical degrees (measured, both circuits, not derivable from the file: all twelve `gridCamera` payloads are identical but for the aim point) | `oag_vex::grid_camera`, `race::intro_camera` |
 | the hold is 28 ticks, the lock 60, the end `AnimEnd` or Cross held | `race::intro_camera::Timeline` |
 | the HUD is hidden through it and for 30 ticks after | `Race::hud_shown` |

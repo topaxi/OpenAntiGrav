@@ -212,8 +212,8 @@ pub(crate) struct CampaignStage {
     pub(crate) notice: Option<String>,
     /// [`oag_title::Title::name`], for [`Self::medal_of`] - the same string
     /// `crate::records::Key::new`'s own `title` takes. Also what
-    /// `crate::app::main::menu_stage::MenuStage::render` and
-    /// `crate::app::main::session::pointer::campaign_pointer` dispatch on to
+    /// `crate::app::menu_stage::MenuStage::render` and
+    /// `crate::app::session::pointer::campaign_pointer` dispatch on to
     /// pick between Pulse's draw/pointer functions and
     /// [`oag_ui_screens::campaign::hd`]'s own, since both screens share one name.
     title: String,
@@ -572,7 +572,7 @@ impl CampaignStage {
     /// Which tip strings the ticker honestly has to show - see
     /// `crate::records::ticker_tips`'s own doc for the `TKR_NO*` rotation
     /// and why it is one shared function rather than three copies:
-    /// `MenuStage`'s own ticker (`crate::app::main::menu_stage`) and
+    /// `MenuStage`'s own ticker (`crate::app::menu_stage`) and
     /// `capture::menu_page`'s `--menu-page` still both read the identical
     /// list off the identical save file.
     #[must_use]
@@ -643,7 +643,7 @@ impl CampaignStage {
         summary
     }
 
-    /// Every grid this campaign carries - `crate::app::main::session::endrace`'s
+    /// Every grid this campaign carries - `crate::app::session::endrace`'s
     /// own `RETURN TO GRID` reads this to find which one a raced cell
     /// belongs to.
     #[must_use]
@@ -652,7 +652,7 @@ impl CampaignStage {
     }
 
     /// Whether the grid at absolute index `which` (into [`Self::grids`]) is
-    /// unlocked - what `crate::app::main::session::campaign::handle_campaign`
+    /// unlocked - what `crate::app::session::campaign::handle_campaign`
     /// gates `Grid Selection`'s own Confirm on.
     ///
     /// **The recovered law, not `GridSelection::tier_shows_lock`'s own
@@ -893,7 +893,7 @@ impl CampaignStage {
 
     /// Opens `Cell Selection` on `which`'s own cells - an **absolute**
     /// index into [`Self::grids`], the same contract this method has always
-    /// had (`crate::app::main::session::endrace::return_to_campaign` reaches a
+    /// had (`crate::app::session::endrace::return_to_campaign` reaches a
     /// cell this way, off `Self::grids()`'s own flat list, without ever
     /// touching `Campaign Selection` first). `false` when `which` is out of
     /// range or the grid carries no cells at all, and the caller stays on
@@ -1012,7 +1012,7 @@ impl CampaignStage {
     /// [`Self::open_cell_selection`], for `slot` relative to
     /// [`Self::grid_range`] - what `Grid Selection`'s own
     /// `GridSelection::index()` returns, the call site
-    /// `crate::app::main::session::campaign::handle_campaign`'s own `Screen::Grid`
+    /// `crate::app::session::campaign::handle_campaign`'s own `Screen::Grid`
     /// confirm arm has.
     pub(crate) fn open_cell_selection_at_grid_slot(&mut self, slot: usize) -> bool {
         match self.grid_range.start.checked_add(slot) {
@@ -1106,7 +1106,7 @@ impl CampaignStage {
         };
         // Shared by every title - [`Self::has_selection`] is the same "did
         // `Campaign Selection` read" discriminator [`Self::open_grid_selection`]'s
-        // own doc and `crate::app::main::session::campaign::handle_campaign`'s
+        // own doc and `crate::app::session::campaign::handle_campaign`'s
         // `Back` routing already use, so this rebuild pages the same way
         // the screen it is returning to just did.
         let mut model = oag_ui_screens::campaign::GridSelection::new(

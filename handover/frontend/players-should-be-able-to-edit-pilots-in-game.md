@@ -62,7 +62,7 @@ was blocking them - **this project had no way to accept typed text at all**.
   in both directions by a test: a grid offering a slash would build a name
   refused only at the end, and a grid missing `_` would show a player a file
   they cannot type back in.
-- **A desk keyboard types into it too**, through `main/typing.rs` -
+- **A desk keyboard types into it too**, through `app/typing.rs` -
   `rebind.rs`'s sibling, and split out for the same reason. Diverted rather
   than shared, or a letter also bound to a game button would type itself and
   press the grid's selected key at once.
@@ -122,7 +122,7 @@ four landed:
 - Create-from-template (`NEW FROM PILOT`) copies whichever pilot is
   currently selected, auto-named `pilot-1`, `pilot-2`, ... - no text entry
   needed.
-- Session wiring lives in `crates/game/src/main/session/pilot_editor.rs`
+- Session wiring lives in `crates/game/src/app/session/pilot_editor.rs`
   (new file, kept out of `session/menus.rs` and `session/apply.rs`, both
   close to the 1,000-line ceiling) plus one line in each of those two and
   in `session.rs`/`app.rs` for the roster field. `PILOT`/`AXIS`/`LOW`/`HIGH`

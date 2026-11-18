@@ -2,7 +2,7 @@
 //! disc-authored layout and the sprite sheet to draw them from.
 //!
 //! One function, called from two places that cannot share a module tree -
-//! `crate::main::session::endrace` (the live session) and
+//! `crate::app::session::endrace` (the live session) and
 //! `crate::capture::menu_page` (`--menu-page endrace-results`/
 //! `endrace-rewards`/`endrace-menu`) - the same reason [`crate::campaign`]
 //! exists for the Race Campaign's own two screens, and this mirrors it

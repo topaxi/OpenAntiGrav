@@ -1,6 +1,6 @@
 //! The command line: every flag `oag-game` takes, and nothing else.
 //!
-//! Its own module because it is a third of what `main.rs` used to be, and it
+//! Its own module because it is a third of what `app.rs` used to be, and it
 //! is pure declaration - `clap` derives the parser, and every consumer
 //! (`main`, [`crate::app::headless`], [`crate::app::args`]) reads fields off it.
 
@@ -836,7 +836,7 @@ pub(crate) struct Cli {
     /// Overrides `[render_profiles.<title>] reconstruction` for *every* title,
     /// for this run only; the file on disk is not changed. Every title rather
     /// than one, because no title is open yet this early to single one out -
-    /// see `crate::app::main::render_scale` in `main.rs`. Here for the same reason
+    /// see `render_scale` in `app.rs`. Here for the same reason
     /// `--anisotropy` is, and for one more: two `--presented` captures
     /// differing only by this flag are how these get compared, and asking
     /// somebody to edit a settings file between them is how a comparison ends

@@ -39,7 +39,7 @@ recompile. After a split an edit in `load` rebuilds the new crate, then all of r
 then all of game: the same work plus a crate boundary. A split only saves the moved
 code's compile time for an edit *outside* it. By non-test code lines, `load` is 12.2 %
 of raceplay's 51k (about 2 s of a 44 s rebuild, 5 %). The game lib is 38k lines and the
-binary (`main/`, `main_body.rs`) 27k: boot, movie and loading are 21 % of the lib (about
+windowed application (`app`, in the lib since the binary's body moved there) 27k: boot, movie and loading are 21 % of the lib (about
 3.4 s of 34 s, 10 %), the profile set (records, unlock, ghosts, campaign, settings,
 profile) 16 % (7.5 %), all of them 37 % (about 6 s, 17 % best case, about 11 % weighted
 by where edits land). The binary unit (12-18 s, half the wall) does not move. Line share

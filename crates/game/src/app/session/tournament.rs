@@ -3,7 +3,7 @@
 //! one, and discarding it once its `EndRace Menu` is left. The points law
 //! and the leg list themselves are `oag_raceplay::tournament::Progress`'s -
 //! this module only drives it against the rest of the session, the same
-//! split `crate::app::main::session::campaign`/`crate::app::main::session::endrace`
+//! split `crate::app::session::campaign`/`crate::app::session::endrace`
 //! already make for the screens either owns.
 
 use log::warn;

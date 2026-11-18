@@ -269,7 +269,7 @@ OAG_TRACKS=crates/trackfile/tests/fixtures oag-game data/images/pulse-psp-eu.chd
     select launch_remix; press cross; until stage=race within 3000'
 ```
 
-**Making a screen drivable.** `main/drive.rs` builds the state from the stage on screen and keeps
+**Making a screen drivable.** `app/drive.rs` builds the state from the stage on screen and keeps
 no list of pages: a menu page reports its entries, a picker its entries and which buttons move it.
 A screen over the menus that reports no rows (a prompt, the campaign grid, the join screen) shows
 as `screen=<kind>` with an empty row list, so a script can wait for it and `press` through it;

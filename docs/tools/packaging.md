@@ -41,7 +41,7 @@ on first use, next to the Ghidra extensions - gitignored, like everything else
 under `data/`. Nothing binary is committed: even the icon is generated, by the
 freshly built binary's own `--write-icon`, which rasterises
 [`assets/icons/64x64.svg`](../../assets/icons/64x64.svg) through `oag_game::icon`
-- the same code path `main/window.rs` uses for the live window/taskbar icon, so
+- the same code path `app/window.rs` uses for the live window/taskbar icon, so
 the two can never draw two different pictures.
 
 ## The dist profile
@@ -369,8 +369,8 @@ from a terminal, and either it starts or it names the version it wanted.
 every place this project's icon appears; `oag_game::icon` rasterises it and
 nothing hand-redraws it a second time. Two consumers, one function:
 
-- `main/window.rs`'s `window_icon` hands winit an `Icon` at window creation
-  (`main/gpu.rs`), which reaches the titlebar, alt-tab and, **on X11 only**,
+- `app/window.rs`'s `window_icon` hands winit an `Icon` at window creation
+  (`app/gpu.rs`), which reaches the titlebar, alt-tab and, **on X11 only**,
   the taskbar.
 - `oag-game --write-icon FILE --icon-size N` rasterises the same SVG to a
   PNG and exits, touching no disc and no window. `scripts/build-appimage.sh`
@@ -380,7 +380,7 @@ nothing hand-redraws it a second time. Two consumers, one function:
 implements `set_window_icon` as a no-op (checked directly against its
 source) - a taskbar under niri, or any other Wayland compositor, never sees
 the call above at all. What it reads instead is the window's app_id
-(`main/gpu.rs` sets it to `oag-game` via `with_name`, the same field X11's
+(`app/gpu.rs` sets it to `oag-game` via `with_name`, the same field X11's
 `WM_CLASS` uses) looked up against an **installed** `.desktop` entry, whose
 `Icon=` key is then resolved through the user's icon theme. A packaged
 AppImage installs that entry as part of assembling the AppDir (see

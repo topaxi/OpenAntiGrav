@@ -2,7 +2,7 @@
 //! rule that moves focus to a row.
 //!
 //! `oag-game --drive` runs the real windowed session on a device with no window
-//! (`crate::main::drive`, in the binary) and reads this module's three halves:
+//! (`crate::app::drive`, in the binary) and reads this module's three halves:
 //!
 //! - [`script`]: the steps a run is told to take (`until page=race`, `select track`, `press cross`);
 //! - [`state`]: what the game says about itself after every frame, one JSON line per change;

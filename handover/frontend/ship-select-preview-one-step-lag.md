@@ -24,4 +24,4 @@ re-run on main, so whether it predates the lane is unknown. A real window was no
    `until screen.id=ship-select`, `ticks 3000`, `press right`, `ticks 3000`, `screenshot a.png`;
    compare the hull with the selected team.
 2. If it reproduces, trace `refresh_preview` / `poll_preview` / `land` in
-   `crates/game/src/main/picker_stage.rs` against the index the frame draws.
+   `crates/game/src/app/picker_stage.rs` against the index the frame draws.

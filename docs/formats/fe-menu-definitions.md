@@ -126,7 +126,7 @@ have:**
   ranking and no per-lap breakdown. So RECORDS draws Speed Lap's shape
   (track picker, one row per class) for every mode, picking whichever of
   `best_lap_ticks`/`best_total_ticks` fits the mode - see
-  `crate::records_page`'s own module doc in `crates/game/src/main/
+  `crate::records_page`'s own module doc in `crates/game/src/app/
   records_page.rs`.
 - **TAG, TEAM and the boost/perfect-lap icons are left off entirely**, since
   nothing in this project's persisted schema carries a pilot identity, a

@@ -1,6 +1,6 @@
 //! Builds and drives the EndRace flow a finished race holds open - the same
-//! split `crate::app::main::session::campaign` makes for the Race Campaign's own
-//! screens. See `crate::app::main::race_stage::endrace` for the runtime this
+//! split `crate::app::session::campaign` makes for the Race Campaign's own
+//! screens. See `crate::app::race_stage::endrace` for the runtime this
 //! module builds and drives, and `oag_ui_screens::endrace` for the model.
 
 use log::warn;
@@ -547,7 +547,7 @@ impl Session {
                 }
                 // The same cell has to be re-armed before `finish_launch`
                 // relaunches: `Session::launch_campaign_cell`'s own drain
-                // (`crate::app::main::session::load::finish_loading`) already
+                // (`crate::app::session::load::finish_loading`) already
                 // cleared `self.campaign_cell` into the *first* `RaceStage`,
                 // so a second launch with nothing set here would lose the
                 // medal evaluation and `EndRace Rewards`' own `campaign`

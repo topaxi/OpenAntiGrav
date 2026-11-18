@@ -133,7 +133,7 @@ impl Session {
         if teams.len() != declared_team_count {
             debug!(
                 "{}: {} of {declared_team_count} declared team(s) are raceable - see \
-                 crate::main::session::placeholder::raceable_teams for why the rest \
+                 crate::app::session::placeholder::raceable_teams for why the rest \
                  are not offered",
                 title.plugin_definition,
                 teams.len(),
@@ -198,7 +198,7 @@ impl Session {
             // runs whichever circuit is already picked, so the CIRCUIT row
             // offers the same list under either mode. See
             // `oag_2048::race::DEFAULTS.zone` and
-            // `crate::app::main::session::Shell::tracks_for`.
+            // `crate::app::session::Shell::tracks_for`.
             demo_config: None,
             zone_tracks: tracks.clone(),
             tracks,

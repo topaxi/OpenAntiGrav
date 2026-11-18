@@ -6,7 +6,7 @@
 //! **`#[ignore]`d and never run in CI.** It needs a disc image. `just test-data`.
 //!
 //! What is *not* here is the window: the screens, the team picker and the launch
-//! are the session's (`crates/game/src/main/session/pure_chain.rs`), and a
+//! are the session's (`crates/game/src/app/session/pure_chain.rs`), and a
 //! windowed walk covers them. What is here is every part below the window -
 //! the chain's own screens and their answers, the cell it hands the race, the
 //! race it asks for, the medal law over the real race clock and the real field,

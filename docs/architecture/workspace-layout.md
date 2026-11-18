@@ -85,7 +85,7 @@ Older pages, and [`goals.md`](../overview/goals.md)'s scope table, use
 | `oag-hd` | `crates/hd` | Wipeout HD / Fury's, in the same shape - and the release that forced `ArchiveCandidates::extra`, a *set* of archives all of which mount, because HD ships seven and they do not split by kind. |
 | `oag-omega` | `crates/omega` | Wipeout: Omega Collection's, on PS4 - HD's own `PI001` front-end plugin carried forward, off a base package plus a mandatory patch. Racing is out of scope: the patch's `data09.psarc` carries the newest front end (older layers sit in `data00` and `data08`) and no circuits at all. |
 | `oag-net` | `crates/net` | Network play: the wire messages (`wire`), a transport of two channel kinds (`link::Link`, an in-process pair and a latency/loss shim), WebTransport over `web-transport-quinn` (`wt`, native only), one race setup for server and client (`race`), the authoritative host (`host`), the predicting client (`client`), and the `oag-server` binary. No gameplay crate depends on it (rule 1). [ADR-0070](adr/0070-the-network-transport-is-webtransport.md). |
-| `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. |
+| `oag-game` | `crates/game` | The composition root. Boots the front end; see [front-end boot](frontend-boot.md). A thin binary over a library, so the boot sequence can be tested without a GPU. The windowed application (the `Session`/stage state machine, the CLI, the window and the headless runs) is the library's `app` module; `main.rs`, `android.rs` and `web.rs` are one-call entry points. |
 
 ## Crates that do not exist yet
 

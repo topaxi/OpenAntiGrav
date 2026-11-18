@@ -46,7 +46,7 @@ and `check-leakage.py --dir`.
   cause of a red `check` job. It is a measured-state trace like the seven already
   tracked; the maintainer should confirm the commit.
 - A Windows-only warning shows in the MinGW build: `APP_ID` and one import in
-  `crates/game/src/main.rs` / `main/window.rs` are unused off Linux. `ci.yml` runs
+  `crates/game/src/main.rs` / `app/window.rs` are unused off Linux. `ci.yml` runs
   clippy on Ubuntu only, so nothing gates it; a `cfg` fix is cheap.
 - Release builds are unsigned: no Windows code signing, no AppImage signature, no
   notarisation question (macOS is not built at all).

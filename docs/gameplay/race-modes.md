@@ -555,7 +555,7 @@ nothing until now.
   `oag_tables::race_campaign::Cell::laps` straight through to
   `oag_race::RaceState::laps_target`, overriding whatever this table would
   have answered - `Session::launch_campaign_cell`
-  (`crates/game/src/main/session/campaign.rs`) is the one caller. **Only for
+  (`crates/game/src/app/session/campaign.rs`) is the one caller. **Only for
   `Time Trial` and `Single Race`**, the two modes this table's own
   `laps_target` already answers `Some` for - `Speed Lap` and `Zone` both
   author a `laps` attribute too (`7` and `0`) that is display convention,
@@ -760,7 +760,7 @@ gold-medal figure, and the values actually used are **10, 7 or 5** - never
 one flat figure. `FEData.wad`'s `10` was one sample of three read as the
 whole population. **A campaign Eliminator launch now fills this in from the
 cell's own gold target, 2026-09-14** -
-`Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
+`Session::launch_campaign_cell` (`crates/game/src/app/session/campaign.rs`)
 sets `Options::eliminator_kill_target` to `cell.gold`, so the campaign's own
 `10`/`7`/`5` reach `Race::start` per race rather than one flat figure. A
 Custom Race outside the campaign still has no cell to read, so
@@ -1337,7 +1337,7 @@ onward) scored as one event:
 - **A leg advances when the player picks `Race Again`'s mid-tournament
   sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
   the last (`endrace-screens.md`) - `Session::advance_tournament_leg`
-  (`crates/game/src/main/session/tournament.rs`) is
+  (`crates/game/src/app/session/tournament.rs`) is
   `Tournament_AdvanceLeg`'s effect, reached through this engine's existing
   relaunch machinery rather than a parallel path.
 - **The campaign medal a finished tournament earns is a threshold on the

@@ -150,7 +150,7 @@ for this track/class" the way `EndRaceMenu_PopulateExistingGhost`/
 pointer), `oag_game::endrace` (the disc read), `crate::race_stage::endrace`
 (the runtime a finished race holds open, drawn inside `Stage::Race` over the
 already-frozen scene rather than through `MenuStage`) and
-`crate::main::session::endrace` (the flow). See
+`crate::app::session::endrace` (the flow). See
 [`docs/ui/endrace-screens.md`](../../docs/ui/endrace-screens.md) for what
 draws, what is left blank and why, and its own measured-vs-chosen table.
 `--menu-page endrace-results`/`endrace-rewards`/`endrace-menu` captures

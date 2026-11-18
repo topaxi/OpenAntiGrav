@@ -705,8 +705,8 @@ the original never presents on *any* run, first or not.
 `Frontend::skip_never_shown_picker` closes that: on HD alone, with no
 settings language yet, it defaults straight to `"English"` - the plugin both
 matched and unmatched runs actually loaded - rather than waiting on a player.
-Wired into both boot paths (`crates/game/src/main/session/load.rs`,
-`crates/game/src/main/headless.rs`), tested in
+Wired into both boot paths (`crates/game/src/app/session/load.rs`,
+`crates/game/src/app/headless.rs`), tested in
 `crates/ui/src/frontend/tests/intro.rs`.
 
 #### Two `TTY.log` screen names that are not boot steps
@@ -2301,7 +2301,7 @@ screens for the frames to compare against - see
 
 ### What this did change
 
-`crates/game/src/main/session/endrace.rs` no longer retries the load once a
+`crates/game/src/app/session/endrace.rs` no longer retries the load once a
 race has failed it: `RaceStage::endrace_unavailable` records the failure, so
 the warning is once per race and the disc image is reopened once per race
 rather than once per frame. The message says "this title's EndRace screens are

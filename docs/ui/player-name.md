@@ -144,7 +144,7 @@ pinned by a test: it is in the binary, which only a window reaches.
 ## Open
 
 - The Pulse prompts read the disc (`pilot_editor::Session::pulse_tag_entry`, in
-  `crates/game/src/main/session/pilot_editor.rs`: opens the archive, parses two XML entries) on the
+  `crates/game/src/app/session/pilot_editor.rs`: opens the archive, parses two XML entries) on the
   render thread each time a name or tag prompt opens. Inherited from the pilot rename; a boot-time read
   of the `Name` and `Tag` geometry beside `read_nav_legend` would remove it.
 - The footer tag draws only where a root authors a `type="tag"` `TextInfo` and the title uses a tag:

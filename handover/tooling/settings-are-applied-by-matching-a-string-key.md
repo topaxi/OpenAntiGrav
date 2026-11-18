@@ -10,7 +10,7 @@ kind: debt
 
 # Settings are applied by matching a string key
 
-2026-11-02, `debt-survey`. `crates/game/src/main/session/apply.rs:172` `apply_setting(&mut self,
+2026-11-02, `debt-survey`. `crates/game/src/app/session/apply.rs:172` `apply_setting(&mut self,
 setting: &str, value: &menu::Value)` runs to line 830 and matches 73 string-literal arms
 (`"display.monitor" =>` at `:178` and so on). The same keys are spelled in `assets/ui/menu.toml`
 rows, and called from `session/menus.rs` and `session/window_layout.rs`.
