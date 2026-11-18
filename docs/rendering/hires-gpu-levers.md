@@ -614,3 +614,207 @@ sum of its passes), microseconds, median of 3 processes of 95 timed runs:
 The whole HUD pass is 0.32 to 0.43 ms on the Intel iGPU at 4K and 0.04 to 0.06 ms on NVIDIA, so even
 a free HUD cannot reach the scout's 0.05 to 0.3 ms; the change moved it by -7 to +10 microseconds in
 both directions. Reverted. Pictures were not compared, since nothing landed.
+
+## The 4K frame on the Deck pass by pass, one fold landed, seven cuts dropped (2026-11-18, `gpu-hires`)
+
+The question: where a 3840x2160 frame's GPU time goes on the Steam Deck today (blur off, MSAA off),
+and what can be cut. **Chosen workload, not measured against any original.**
+
+**Result.** HD at native 4K is bound by the circuit's shading (48 % of the spans), the bloom
+resolve (16 %) and the craft (13 %). One exact fold landed, 7.4 % off the circuit's shading at 4K
+and 2.4 % off the whole-race GPU time (18.82 to 18.36 ms p50); seven other cuts were built,
+measured and dropped, four of them on the craft shadow lookup. Native 4K still misses 60 Hz on HD
+(frame p50 20.4 ms, p95 28.4): the internal resolution that holds it is 2573x1447 (67 %), frame
+p50 11.4 ms and p95 15.0. Pulse holds 60 Hz at native 4K with room (4.3 ms p50, 6.6 p95). A
+defect found on the way is fixed: the HD resolve drew every frame's bottom row and right column a
+quarter too dark.
+
+### Method
+
+`RADV VANGOGH` (Mesa 26.2.0-devel), AC, `powersave`, GPU clock unpinned, offscreen over ssh, Deck
+load 0.8 to 2.0. Release `-C target-cpu=znver2` `--features perf-probe` builds from the
+`oag-appimage-build:bookworm` container; before is `main` at `550bffc24`. Spans:
+`OAG_RENDER_GPU_BENCH=100 OAG_RENDER_PERF=1 oag-game <image> --race --mode single_race --seed 1
+--autopilot --no-audio --size WxH --ticks 2500 --render-scale 100 --screenshot out.png`, the arms of
+a comparison interleaved, 2 rounds; the rounds agree to 0.1 to 0.3 % at every size, 4K included.
+Whole race: `scripts/bench-render.py run hd --binary ./oag-game --size WxH`. The second adapter is
+this notebook's NVIDIA RTX PRO 2000 (host release build, same span command, load 2 to 11).
+
+**The clock.** `amdgpu_top --json -s 250` beside every run: the serialised span bench sits at
+1,040 MHz and a whole race at 1,600 MHz (133 to 154 of about 190 one-second samples of each 4K
+race, the rest the load), so a race pays about 0.65 of an arithmetic-bound span and nearer all of
+a bandwidth-bound one. `pipelined per frame` (frames back to back) runs at the race's clock and is
+the row to plan from.
+
+### Spans, defaults, us (medians of 2 rounds)
+
+HD, the default circuit (Talon's Junction):
+
+| span | 1280x800 | 1920x1080 | 3840x2160 | share at 4K | grows with pixels |
+|---|---:|---:|---:|---:|---|
+| track solid, shaded | 2,142 | 3,690 | 11,359 | 48 % | yes, arithmetic bound, 1.00x overdraw |
+| hd encode (the bloom resolve) | 445 | 976 | 3,851 | 16 % | yes, 4.0x for 4x pixels |
+| craft, weapons, shields | 677 | 1,090 | 3,080 | 13 % | yes, about 350 us fixed |
+| track solid (depth prepass) | 628 | 764 | 1,431 | 6 % | partly |
+| hd bloom downsample (x10 to x12) | 157 | 320 | 1,110 | 5 % | yes |
+| track blended | 119 | 190 | 593 | 2 % | yes |
+| between passes (x31 to x33) | 578 | 587 | 569 | 2 % | no |
+| advert cards (x5) | 506 | 505 | 501 | 2 % | no |
+| sun occlusion (x4), self shadow (x4), shadow atlas | 574 | 579 | 592 | 2 % | no |
+| bloom gate and two blurs | 60 | 100 | 387 | 2 % | yes, quarter size |
+| sum of spans | 5,959 | 8,936 | 23,847 | | |
+| pipelined per frame | 5,670 | 6,753 | 16,748 | | |
+
+The self-shadow passes draw 0 fragments in 4 passes (176 us): the per-craft passes are the open
+item of the handover thread, not a 4K matter. Pulse (PSP EU default circuit): race pass 1,088 /
+2,015 / 6,943 us; at 4K track shaded 3,114, track shine 1,507, track blended 1,012, prepass 599;
+pipelined 3,008 / 2,911 / 5,171 us.
+
+Whole race, HD, before (frame p50 / p95 / p99 ms; GPU p50 / p95): 1280x800 5.67 / 7.09 / 7.72 (3.79
+/ 4.68), 1920x1080 7.79 / 10.02 / 12.03 (6.09 / 8.05), 2573x1447 11.60 / 15.13 / 18.53 (9.64 /
+13.20), 2880x1620 13.35 / 17.80 / 21.80 (11.40 / 15.86), 3840x2160 20.83 / 28.79 / 36.35 (18.82 /
+26.87; scene 14.59, bloom chain 4.00). Pulse: 2573x1447 3.08 / 3.93 / 4.70, 2880x1620 3.22 / 4.25
+/ 5.72, 3840x2160 4.32 / 6.57 / 9.54. A second 4K HD run of the same binary read 20.84 / 28.84
+(GPU 18.79 / 26.90), so a difference over 0.2 % is not noise here. Every run finishes at tick
+7,020 with state hash `94a2261ef5045e63`.
+
+### The hot shader
+
+`RADV_DEBUG=shaderstats` over an HD race compiles 131 pixel shaders; the heaviest is 5,943
+instructions at 168 VGPRs (it was 3,886 at 128 on 2026-11-05: the materials added since grew the
+rich pipelines by half). The one that matters is the circuit's plain pipeline
+(`Prepass::plain`, 95 % of the circuit's pixels and 69 % of the screen on this frame, counted on a
+false-colour frame at 1280x800): **2,039 instructions, 40 VGPRs, 24 waves a SIMD**, found by
+diffing the statistics of two builds that differ only there. 1,200 of those instructions are the
+shadow term: the craft lookup unrolled eight times and the `mapped` tier's eight depth taps, each
+twice over (once for each arm of the wet road test). A pixel executes about 650 (an estimate: 48
+always-executed instructions were 7.4 % of the time, below). Each `pow` is a `v_log_f32`, a
+multiply and a `v_exp_f32`, and by the compiled blocks a pixel now runs fourteen: the lightmap
+curve (3), the vertex light curve (3), the albedo's sRGB decode (3), the specular (1), the fog (1)
+and the target encode (3).
+
+Timing arms on the same binary (a pipeline constant read from an environment variable, not
+committed, wrong pictures on purpose), `track solid, shaded`, us:
+
+| arm | 1920x1080 | 3840x2160 | pipelined at 4K |
+|---|---:|---:|---:|
+| full shader | 3,632 | 11,264 | 16,341 |
+| constant colour | 833 | 1,913 | 7,299 |
+| albedo times lightmap, fogged, shadowed, encoded | 1,713 | 4,348 | 10,010 |
+| no target encode | 3,483 | 10,692 | 15,990 |
+| no decode of the stand-in result | 3,487 | 10,725 | 15,940 |
+| no fog | 3,503 | 10,642 | 15,861 |
+| no shadow term at all | 3,138 | 9,383 | 14,968 |
+| the shadow lookup kept, its sun term a constant | | 10,892 | 16,408 |
+| the sun term kept, the lookup gone | | 10,009 | 15,835 |
+| the stand-in result alone (no rig path) | 2,020 | 5,643 | 10,894 |
+
+### Landed: the plain draws that the rig lights at every vertex drop the stand-in result
+
+`lit_texel` ends on `mix(stand-in, rig, enabled * lit)`. HD's rig is on for the whole race and
+every vertex of the circuit's plain draws carries `lit` 1.0, so every pixel weighed the rig's
+result at one, and the stand-in result with the sRGB decode of it (three `pow`) was computed and
+thrown away. `mesh_render::specialise::plain_is_lit` checks the vertices, the build scope
+remembers that its light is an authored rig (`BuildCacheScope::lit_by`), and the plain pipeline is
+built with `lit_by_rig`, under which the mix is its second argument alone. 48 of the 2,039
+instructions go. Only the prepassed circuit's plain half is told: other drawables of a race draw
+under scene blocks of their own, which this lane did not audit.
+
+| Deck, us, medians of 2 rounds | 1280x800 | 1920x1080 | 3840x2160 |
+|---|---|---|---|
+| `track solid, shaded` | 2,143 to 2,056 (-4.1 %) | 3,688 to 3,485 (-5.5 %) | 11,358 to 10,523 (-7.4 %) |
+| race pass | 3,653 to 3,562 | 5,852 to 5,658 | 16,806 to 15,970 |
+| sum of spans | 5,970 to 5,881 | 8,940 to 8,744 | 23,865 to 23,026 (-3.5 %) |
+| pipelined per frame | 5,640 to 5,663 (CPU bound) | 6,779 to 6,660 (-1.8 %) | 16,753 to 16,227 (-3.1 %) |
+
+| Deck, whole race, ms | 1280x800 | 1920x1080 | 2573x1447 | 3840x2160 |
+|---|---|---|---|---|
+| frame p50 | 5.67 to 5.56 | 7.79 to 7.69 | 11.60 to 11.36 | 20.83 to 20.37 (-2.2 %) |
+| frame p95 | 7.09 to 7.04 | 10.02 to 9.88 | 15.13 to 15.05 | 28.79 to 28.42 (-1.3 %) |
+| GPU p50 | 3.79 to 3.74 | 6.09 to 5.99 | 9.64 to 9.44 | 18.82 to 18.36 (-2.4 %) |
+| GPU p95 | 4.68 to 4.66 | 8.05 to 7.95 | 13.20 to 13.05 | 26.87 to 26.58 |
+
+NVIDIA, `track solid, shaded`, us, 2 rounds: 354 to 355, 545 to 521 (-4.4 %), 1,525 to 1,537 (its
+4K rounds spread 1,489 to 1,561, so read as no change); pipelined flat at every size.
+
+**Picture.** Not byte-identical, by the driver's float order: on the Deck 0 of 1,024,000, 1 of
+2,073,600 and 3 of 8,294,400 pixels differ, each by 1 of 255 (tick 2,500, two rounds equal). On
+NVIDIA 1 to 15 of 2,073,600 at ticks 300, 600, 1,500 and 2,500. Against the binary before this
+lane, 1280x800, ticks 1,200 and 2,500, NVIDIA: Pulse and Pure identical; 2048 and Omega 1 to 2
+pixels by one level (their plain halves fold too); HD 0 to 2 pixels by one level besides the edge
+fix below.
+
+### Fixed on the way: the resolve's bottom row and right column
+
+The half-texel resolve takes its bilinear read by hand (`resolve_scene_tap`), and clamped the far
+texel to `floor(scene_max * size)`. A whole picture's `scene_max` is 1.0 (`sub_rectangle_at`), so
+that was one texel past the last row and column, and a load from there reads zero: both edges
+came out at half their light (a sky row read `(34, 88, 123)` under `(50, 121, 169)`). Now clamped
+to the last texel, as a clamped sampler reads it;
+`a_whole_pictures_last_row_and_column_keep_their_light` fails without the fix. 690 to 725 pixels of
+a 1280x800 HD frame change, all in the last row and column, by up to 61 levels.
+
+### Dropped: the resolve through a decoded copy of the scene
+
+The resolve decodes each scene texel four times
+([frame-thread-cpu.md](frame-thread-cpu.md), "HD encode: three exact cuts measured, none kept";
+its untried cut 3). Built: one pass decodes the scene texel for texel into an `Rgba16Float`
+target, and the resolve takes one hardware-filtered tap of that.
+
+| us | 1280x800 | 1920x1080 | 3840x2160 |
+|---|---|---|---|
+| Deck `hd encode`, before | 445 | 976 | 3,850 |
+| Deck decode + encode, after | 155 + 148 | 339 + 326 | 1,141 + 1,189 (-39 %) |
+| Deck pipelined per frame | 5,627 to 5,727 | 6,757 to 6,777 | 16,771 to 16,345 (-2.5 %) |
+| NVIDIA encode, before / decode + encode | 42 / 20 + 13 | 101 / 48 + 33 | 498 / 258 + 222 |
+
+At the race's clock the two new passes are half bandwidth, which the clock does not speed up, so
+1.5 ms of span is 0.43 ms of frame, and NVIDIA gains nothing at 4K. The picture is not the same:
+the linear value is rounded to f16 before the filter, and 5.4 % of an HD frame's pixels move by 1
+of 255 (112,575 of 2,073,600). This pass has been held to byte identity, so it is dropped. The
+exact form needs an `Rgba32Float` copy, twice the traffic of a form that already gains only 0.43
+ms; not built.
+
+### Dropped: four cuts of the craft shadow lookup
+
+The lookup (`craft_shadow_coverage`, eight craft a pixel) is 1,342 us of the 11,350 at 4K by the
+arms above, 0.9 ms of a frame back to back. Four exact ways to do less of it were built; every
+picture stayed byte-identical on the Deck and on NVIDIA, and none paid:
+
+| cut | Deck `track solid, shaded` at 4K, us |
+|---|---|
+| the same eight sphere tests first, with no branch between them, and an early return | 11,360 to 11,314 |
+| a pipeline with no lookup for the draws whose bounds clear every craft's sphere | 11,360 to 11,328 |
+| a per-triangle craft mask from the vertex stage, for draws of triangles under 32 units | 11,364 to 11,514 (+1.3 %) |
+| the sphere fitted to the receiver's slab (33.5 units round its middle, not 56 round the craft) | 11,371 to 11,338 |
+
+Why: a false-colour frame of the mask says 51.5 % of the screen is circuit within reach of some
+craft and 1.3 % is not (a pack, tick 2,500), so nothing is culled, and the compiled loop already
+rejects a craft in seven instructions and one scalar load. The lookup's cost is its eight tests,
+and those run for every pixel whatever is fitted round them. What would remove it is the
+original's own structure: redraw the chunks near a craft through the `ShadowToAlpha` permutation,
+blended (`Shadow_CompileShadowedTrackRedraw`), so no other pixel asks. That composites on encoded
+values, as the console does, so it moves the shadowed pixels and is not a speed change alone.
+
+### Dropped: the two light curves behind their conditions
+
+The lightmap curve and the vertex light curve (three `pow` each) both run for every pixel and a
+`select` keeps what the chunk's bits ask for. Behind `if`s on those flat bits: `track solid,
+shaded` 10,528 to 10,562 us at 4K, 3,458 to 3,499 at 1080p, byte-identical. Most chunks need both.
+
+### What a 4K output costs after this, and what holds 60 Hz
+
+HD, whole race, after: 3840x2160 20.37 / 28.42 ms (frame p50 / p95), 2573x1447 11.36 / 15.05,
+1920x1080 7.69 / 9.88. The presented resolve adds about 1.0 ms at a 4K output (two passes of 0.51
+ms, above) and the HUD. So **HD holds 60 Hz at a 4K output at 67 % (2573x1447) on the median and
+on p95 with about 0.6 ms to spare before the HUD, not at 75 % (p95 17.8 ms before the fold) and not
+natively.**
+Gamescope's default for a 4K output stays 1906x1080 (`GAMESCOPE_PIXEL_BUDGET`): 67 % has no
+margin for a heavier circuit, and this is one circuit. Pulse can be given native 4K.
+
+### Not captured
+
+An RGP trace: `MESA_VK_TRACE=rgp MESA_VK_TRACE_FRAME=600` on the game under `gamescope --backend
+headless` (`ENABLE_GAMESCOPE_WSI=0`) wrote no `.rgp` file, and the race sat in `race-paused`
+there without `pause_on_focus_loss = false`. Omega and 2048 were not run on the Deck (it holds
+the HD, Pulse and Pure images only).

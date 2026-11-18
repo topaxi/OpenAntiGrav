@@ -1,7 +1,7 @@
 ---
 status: blocked-hardware
 titles: [hd]
-updated: 2026-10-31
+updated: 2026-11-18
 summary: "Velocity gate landed (AMD 2-7 %); left: Deck shadow/MSAA/blur spans and the cold submit_us"
 ---
 
@@ -17,6 +17,10 @@ left is a measurement only the Deck can make.
   AMD at 1280x800 and 1080p, identical picture; table in `docs/rendering/hd-gpu-cost.md`.
 - **The Deck's 28 fps was not a GPU stretch** (2026-10-19, `docs/rendering/hd-gpu-cost.md`, last
   section): it was a stalled frame at race start, now fixed. So the gate is not chasing it.
+- **The Deck's spans at the defaults are taken** (2026-11-18, `docs/rendering/hires-gpu-levers.md`,
+  "The 4K frame on the Deck pass by pass"): the shadow passes are flat at 0.57 to 0.59 ms (shadow
+  atlas 0.04, sun occlusion x4 0.36, self shadow x4 0.18 with 0 fragments drawn), so they are not
+  the Deck's worst stretch at any size. The MSAA and blur spans below are still not taken.
 - **Deck spans for the rest of the frame are not taken.** The gate's Deck run (race pass only,
   1280x800 / 1080p / 4K) exists; the shadow, MSAA and blur spans on the Deck do not. Whether
   the shadows (about 1.4 ms at 1080p), MSAA or the blur is the Deck's worst stretch is unknown.

@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd]
-updated: 2026-11-10
+updated: 2026-11-18
 summary: "Deck HD Anulpha: four desktop cuts won on the Deck, HD encode cuts dropped; open: 32-bit prepared texel, unused scratch target"
 categories: [rendering]
 ---
@@ -59,6 +59,11 @@ proposed as a default.
     it costs +10 % at every size on the Deck; without it, +0.5 %. The selects that assemble each
     lane's texels eat the saved decode.
   - A GPU-built decode table (4,819 f16 entries) is slower too: 1455 against 989 us at 1080p.
+  - Measured 2026-11-18 (`gpu-hires`) and dropped: decoding the scene once into an `Rgba16Float`
+    copy and resolving that with one filtered tap. `hd encode` 3,850 to 1,141 + 1,189 us at 4K
+    on the Deck, but 0.43 ms of a frame back to back, nothing on NVIDIA at 4K, and 5.4 % of the
+    pixels move by 1 of 255 (`docs/rendering/hires-gpu-levers.md`, "Dropped: the resolve through a
+    decoded copy of the scene").
   - Still open, not tried: a compute encode with workgroup-shared texels (about 1.1 decodes per
     pixel). It needs the caller's canvas as a storage texture, which `oag-post` does not own.
     Measure with the recipe on that page.

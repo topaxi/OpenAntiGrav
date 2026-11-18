@@ -78,7 +78,9 @@
   folds `lit_texel`'s unused branches, Deck 1080p HD track solid -7 %, Pulse -52 %, byte-identical,
   then 2026-11-04: the emissive table, a pipeline for a circuit's plain draws and the rig and Zone
   folds, Intel iGPU 1080p HD track shaded -51 %, Pulse -47 %, the Deck not run),
-  the blur skip and the 1080p gamescope window were measured and dropped - see
+  the blur skip and the 1080p gamescope window were measured and dropped; 2026-11-18: the Deck's 4K
+  frame pass by pass, the `lit_by_rig` fold (HD circuit shading -7.4 % at 4K, whole-race GPU -2.4 %),
+  seven cuts measured and dropped, and the internal resolution that holds 60 Hz (HD 67 %) - see
   [`hires-gpu-levers.md`](hires-gpu-levers.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two
