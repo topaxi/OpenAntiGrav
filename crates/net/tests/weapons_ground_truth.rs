@@ -81,8 +81,15 @@ fn race_in_mode(
     // The round trip is counted in ticks on a clock the harness advances, not in milliseconds of
     // whatever machine this runs on: under load the same race was a different one.
     let clock = Clock::default();
-    let mut clients: Vec<_> = (0..people)
-        .map(|n| {
+    // Every race is loaded before any link joins: the host's hello timeout runs on the wall
+    // clock from the join, and a load under machine load outlasts it.
+    let races: Vec<_> = (0..people)
+        .map(|_| oag_net::race::load(&params, &source).expect("loads").0)
+        .collect();
+    let mut clients: Vec<_> = races
+        .into_iter()
+        .zip(0..people)
+        .map(|(race, n)| {
             let (server_end, client_end) = Loopback::pair();
             host.join(Box::new(server_end));
             let link: Box<dyn Link> =
@@ -90,7 +97,6 @@ fn race_in_mode(
             let mut client = Client::connect(link, &format!("bot {n}"));
             client.set_weapon_trigger(weapon_trigger);
             client.set_bot_hand(hand.then_some(0x4841_4E44 + u64::from(n)));
-            let (race, _) = oag_net::race::load(&params, &source).expect("loads");
             let pilot: Pilot = Box::new(|client, race| client.bot_input(race));
             (client, race, pilot)
         })
