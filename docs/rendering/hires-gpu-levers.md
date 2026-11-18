@@ -734,6 +734,10 @@ under scene blocks of their own, which this lane did not audit.
 | GPU p50 | 3.79 to 3.74 | 6.09 to 5.99 | 9.64 to 9.44 | 18.82 to 18.36 (-2.4 %) |
 | GPU p95 | 4.68 to 4.66 | 8.05 to 7.95 | 13.20 to 13.05 | 26.87 to 26.58 |
 
+The 4K pair was run twice, before, after, before, after: frame p50 20.830, 20.372, 20.840, 20.361
+ms and GPU p50 18.815, 18.355, 18.789, 18.317 (`scripts/bench-render.py compare`: GPU p50 -2.4 %,
+p95 -1.1 %, draws and triangles equal).
+
 NVIDIA, `track solid, shaded`, us, 2 rounds: 354 to 355, 545 to 521 (-4.4 %), 1,525 to 1,537 (its
 4K rounds spread 1,489 to 1,561, so read as no change); pipelined flat at every size.
 
