@@ -34,7 +34,7 @@ fn held(tick: u32, seat: u32) -> Held {
 fn honest(params: &RaceParams, ticks: u32) -> (u64, Vec<TickRecord>) {
     let mut race = race(params);
     let fingerprint = crate::race::fingerprint(&race);
-    let mut edges = vec![Input::new(); 2];
+    let mut edges = [Input::new(); 2];
     let records = (0..ticks)
         .map(|tick| {
             let inputs: Vec<Held> = (0..2).map(|seat| held(tick, seat)).collect();
