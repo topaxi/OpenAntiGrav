@@ -761,9 +761,7 @@ impl Race {
         // once a tick before any driver, as `AiManager_Update` does.
         let lane_slot = self.core.sim.original_ai_begin_tick();
         #[cfg(feature = "view")]
-        {
-            self.view.field_sparks.walls = [None; oag_gameplay::MAX_SHIPS];
-        }
+        self.view.clear_field_walls();
         for slot in 0..self.core.sim.world.ship_count as usize {
             // A craft a person flies is stepped by `Race::tick`'s player step,
             // not here. With one person in slot 0 this skips slot 0, which the
@@ -984,7 +982,7 @@ impl Race {
             );
             #[cfg(feature = "view")]
             if self.draws() {
-                self.view.field_sparks.walls[slot] = Some(evaluated.wall);
+                self.view.note_field_wall(slot, evaluated.wall);
             }
             let reset_contact = self.core.sim.reset_zone_contact(slot, &env, position);
             let eliminator_route = self.core.sim.world.mode() == Mode::Eliminator;
@@ -1326,9 +1324,7 @@ impl Race {
     /// be wrecked by a bump.
     pub(super) fn resolve_craft_pairs(&mut self) {
         #[cfg(feature = "view")]
-        {
-            self.view.pair_contacts = [None; oag_gameplay::MAX_SHIPS];
-        }
+        self.view.clear_pair_contacts();
         let people = self.core.sim.world.human_slots().count();
         if !self.core.sim.world.mode().craft_collide(people) {
             return;
@@ -1379,10 +1375,8 @@ impl Race {
                                     true,
                                 )
                             });
-                            self.view.pair_contacts[slot] = Some(crate::contact_fx::PairContact {
-                                point: contact.point,
-                                impulse: contact.impulse,
-                            });
+                            self.view
+                                .note_pair_contact(slot, contact.point, contact.impulse);
                         }
                     }
                     // The ring loop's friction test passes for a pair record, then splits on the
@@ -1424,7 +1418,7 @@ impl Race {
                         self.core.sim.pair_damage[slot] += report.lost;
                         #[cfg(feature = "view")]
                         {
-                            self.view.pair_spoil[slot] |= racing && !shielded;
+                            self.view.spoil_lap(slot, racing && !shielded);
                             if racing && shielded {
                                 crate::stage::stage!(self).shield_hit(&self.core, slot);
                             }

@@ -73,26 +73,9 @@ impl Race {
         // `oag_render::camera::shake`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.view.advance_now_playing();
-            self.view.contact.shake.advance(self.core.sim.dt);
-            self.view.advance_seat_shakes(self.core.sim.dt);
-            if !self.view.camera_shake_on {
-                self.view.contact.shake.cancel();
-            }
-            let mut shown = false;
-            for slot in 0..MAX_SHIPS {
-                if self.core.sim.world.person_flown(slot) {
-                    let board = &mut self.view.huds[slot].messages;
-                    board.advance();
-                    let showing = board.just_shown();
-                    shown |= showing && self.core.heard_here(slot);
-                }
-            }
-            if shown {
-                self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                    oag_gameplay::cue::Cue::Message,
-                    self.core.player_slot(),
-                ));
+            self.view.advance_shakes(&self.core);
+            if let Some(cue) = self.view.message_cue(&self.core) {
+                self.core.sim.cues.push(cue);
             }
         }
         // Before anything steps, so the perfect start's edge is a change
@@ -241,22 +224,10 @@ impl Race {
         // or one that got through (the hull's own sparks). Both have to come
         // back out of the step rather than being invisible on both sides.
         let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];
-        // Read before the step, for `ignite_missile_bounces` below: a bounce
-        // never stops a projectile, so it never reaches `impacts` and the
-        // only way to see one is to compare this counter before and after.
+        // Read before the step: what the drawn bounce and blast below compare the step's result
+        // against. See `RaceView::before_projectile_step`.
         #[cfg(feature = "view")]
-        let bounces_before: [u8; oag_weapons::projectile::MAX_PROJECTILES] =
-            std::array::from_fn(|slot| self.core.sim.world.projectiles.slots[slot].bounces);
-        // Read before the step too, for `ignite_blast`'s Bomb arm below: a
-        // detonated slot resets to `Projectile::default()` inside `step`
-        // (`Quat::IDENTITY`), so the frozen pose a laid Bomb detonated with
-        // has to be read before that happens - the same before/after shape
-        // `bounces_before` already takes, and `impacts` is slot-indexed the
-        // same way. Read for every slot rather than gated on `kind ==
-        // Bomb`, since nothing here is on the determinism-hashed path.
-        #[cfg(feature = "view")]
-        let orientations_before: [Quat; oag_weapons::projectile::MAX_PROJECTILES] =
-            std::array::from_fn(|slot| self.core.sim.world.projectiles.slots[slot].orientation);
+        let before = self.view.before_projectile_step(&self.core.sim.world);
         let floor_arms = self.core.sim.floor_arms();
         let own_craft = self.core.sim.own_craft_probe();
         let plasma_release = self.core.sim.plasma_release();
@@ -338,7 +309,7 @@ impl Race {
                 impact.kind,
                 impact.point,
                 impact.struck.map(usize::from),
-                orientations_before[slot],
+                before.orientations[slot],
             );
             // A Pulse Plasma craft hit detonates twice in the same tick: the
             // bolt's own blast above, and one at the struck craft.
@@ -353,7 +324,7 @@ impl Race {
                     impact.kind,
                     at,
                     impact.struck.map(usize::from),
-                    orientations_before[slot],
+                    before.orientations[slot],
                 );
             }
             // `Plasma_SweepCraftHit` (`0x0886afb8`) plays `PLASMAHITSHIP` on a
@@ -439,7 +410,7 @@ impl Race {
             self.core
                 .lending_cues(|core, cues| self.view.advance_magstrip_wake(core, cues));
             self.view
-                .ignite_missile_bounces(&self.core, &bounces_before);
+                .ignite_missile_bounces(&self.core, &before.bounces);
         }
         // The same `bounces_before`/after edge the visual bounce above reads,
         // for the two weapons' own bounce cues - `Cue::MissileHitWall`
@@ -453,7 +424,7 @@ impl Race {
         for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
             if !weapons::bounced_this_tick(
                 projectile.kind,
-                bounces_before[slot],
+                before.bounces[slot],
                 projectile.bounces,
             ) {
                 continue;
@@ -491,9 +462,7 @@ impl Race {
             self.draw_extension_effects();
             self.view.advance_damage_smoke(&self.core);
             self.view.advance_wreck_fx(&self.core);
-            self.view
-                .stage
-                .advance(self.core.sim.dt, &mut self.view.stage_rng);
+            self.view.advance_particles(&self.core);
             self.view.advance_scenery_fx(&self.core, self.core.sim.dt);
         }
 
@@ -630,30 +599,7 @@ impl Race {
 
         #[cfg(feature = "view")]
         if self.draws() {
-            self.view.advance_transit_seats(&self.core);
-            let target = self.view.camera_target(&self.core);
-            // A craft put further round (`Race::move_to`) takes its camera with it, settled:
-            // the spring would sweep the eye across the gap.
-            let jumps = self.core.sim.jumps[self.core.player_slot()];
-            if std::mem::replace(&mut self.view.camera_jumps, jumps) == jumps {
-                let step = self.view.camera_step(&self.core, self.core.player_slot());
-                self.view
-                    .camera
-                    .advance(target, &self.view.chase_params, step);
-            } else {
-                self.view.camera = Chase::snapped(target, &self.view.chase_params);
-            }
-            // The split-screen views' own cameras, view-side: a no-op with one view.
-            self.view.advance_viewpoints(&self.core);
-            // After the chase camera and before the eye is read: behind the end-race panels the
-            // spectator director's pose replaces it. A no-op until the player has finished.
-            self.view.advance_finish_camera(&self.core);
-            // After the camera, so the flash's falloff measures from this tick's eye.
-            let eye = self.view.camera_position(&self.core);
-            if let Some(flash) = &mut self.view.screen_flash {
-                flash.advance(self.core.sim.dt, eye);
-            }
-            self.view.advance_cockpit_hit(&self.core);
+            self.view.advance_chase_camera(&self.core);
 
             // Advanced here, on the fixed tick, and not in the frame loop. That is
             // what makes the headless `capture` path - which calls only `tick` -
@@ -667,76 +613,7 @@ impl Race {
             self.core.lending_cues(|core, cues| {
                 crate::stage::stage!(self).fire_roll_payouts(core, cues, &roll_payouts)
             });
-            self.view.advance_hull_shakes(&self.core);
-            self.view.advance_exhausts(&self.core);
-            // After the trails have taken this tick's sample, so a craft is tested
-            // against the ribbon as it stands now rather than one tick stale.
-            self.view.advance_trail_hits(&self.core);
-            // Same argument, and after `step`/`step_opponents` so a shell that lost
-            // its last tick of protection this frame starts fading this frame.
-            self.view.advance_shields(&self.core);
-
-            // Open while the boost's own timer runs, close once it has expired, both
-            // as an exponential approach so neither edge is a step. Driven from
-            // `pad_timer` rather than from the exhaust, because the exhaust's boost
-            // is a `max` that other things may one day also arm and this must follow
-            // the pad specifically.
-            if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
-                let boosting = self.core.sim.world.ships[self.core.player_slot()]
-                    .physics
-                    .pad_timer
-                    > 0.0;
-                self.view.boost_kick =
-                    step_boost_kick(self.view.boost_kick, boosting, self.core.sim.dt);
-            }
-
-            // The flaps, on the fixed tick beside the camera and the exhaust, and
-            // for the same reason: a headless capture calls only `tick`, so an
-            // animation advanced in the frame loop would be at a different angle in
-            // a screenshot than in a window at the same tick count.
-            //
-            // Two rates, not one. `up_speed` and `down_speed` are authored beside
-            // each other in `<AirbrakeGraphics>` and are *not* the force law's
-            // `gain`/`falloff`, so a flap deploys and returns at its own pace while
-            // the airbrake it depicts ramps at another. The state it chases is the
-            // ramped `airbrake_left`/`airbrake_right` on `0..=100` rather than the
-            // raw input, so a flap follows the airbrake the ship actually has.
-            //
-            // **The rates are on the airbrake's own `0..=100` scale**, per second,
-            // which is why `self.view.flaps` holds a level rather than an angle. Not
-            // read out of the binary - no consumer of `<AirbrakeGraphics>` was
-            // located - but not a coin flip either: every team authors
-            // `up_speed = 500` against a `down_speed` of 80 to 120, and on this
-            // reading that is a flap that snaps out in 0.2 s and folds back over
-            // about a second, which is what an airbrake does. Read as *fractions*
-            // of full deflection per second instead, 500 would be full travel in
-            // two milliseconds and the parameter would not be worth authoring.
-            // It is also the convention `<Airbrake gain/falloff>` already uses on
-            // the same scale, one element away.
-            for slot in 0..MAX_SHIPS {
-                // A craft nobody flies folds its flaps back, so a seat handed to the AI
-                // does not keep its last deflection.
-                let flown = self.core.sim.world.person_flown(slot);
-                let ship = &self.core.sim.world.ships[slot].physics;
-                for (flap, level) in self.view.flaps[slot]
-                    .iter_mut()
-                    .zip([ship.airbrake_left, ship.airbrake_right])
-                {
-                    let level = if flown { level } else { 0.0 };
-                    let target = level.clamp(0.0, 100.0);
-                    let (rate, rising) = if target > *flap {
-                        (self.view.flap_graphics.up_speed, true)
-                    } else {
-                        (self.view.flap_graphics.down_speed, false)
-                    };
-                    let step = rate * self.core.sim.dt;
-                    *flap = if rising {
-                        (*flap + step).min(target)
-                    } else {
-                        (*flap - step).max(target)
-                    };
-                }
-            }
+            self.view.advance_craft_looks(&self.core);
         }
         // The lock-on, simulation state advanced from the world alone
         // ([`crate::lock`]), also in a sim-only tick: the next tick's shot reads
@@ -762,7 +639,7 @@ impl Race {
         if self.draws() {
             self.view.advance_slot_huds(&self.core);
         } else {
-            self.view.incoming_raises.clear();
+            self.view.forget_incoming_raises();
         }
 
         // Every person-flown craft's wall-contact cue, in slot order, drawn tick
@@ -797,9 +674,10 @@ impl Race {
             let seat = if steps[seat].is_some() { seat } else { primary };
             if let Some(step) = &steps[seat] {
                 let evaluated = step.evaluated;
-                self.core.lending_cues(|core, cues| {
-                    self.view.advance_contact_fx(core, cues, seat, &evaluated)
-                });
+                if let Some(cue) = self.view.shield_up_cue(&self.core, seat) {
+                    self.core.sim.cues.push(cue);
+                }
+                self.view.advance_contact_fx(&self.core, seat, &evaluated);
             }
             self.view.advance_seat_contact_fx(&self.core, &steps, seat);
             self.view.advance_field_sparks(&self.core);
@@ -814,105 +692,5 @@ impl Race {
             crate::stage::stage!(self).record_tick(&self.core, inputs);
         }
         Evaluations::new(&steps, primary)
-    }
-}
-
-/// One tick of the boost's field-of-view kick: open while the boost's own timer runs, close once
-/// it has expired, both as an exponential approach so neither edge is a step. The player's
-/// ([`RaceView::boost_kick`](super::view::RaceView::boost_kick)) and every other local seat's
-/// (`Cam::boost_kick`) are this one rule.
-#[cfg(feature = "view")]
-pub(super) fn step_boost_kick(kick: f32, boosting: bool, dt: f32) -> f32 {
-    let (target, rate) = if boosting {
-        (1.0, BOOST_FOV_OPEN_RATE)
-    } else {
-        (0.0, BOOST_FOV_CLOSE_RATE)
-    };
-    let kick = kick + (target - kick) * rate * dt;
-    // Snapped, so a closed kick is *exactly* zero and `projection` takes
-    // its bit-identical path rather than an `atan(tan(x))` round trip
-    // that never quite settles.
-    if !boosting && kick < 1.0e-3 {
-        0.0
-    } else {
-        kick
-    }
-}
-
-#[cfg(feature = "view")]
-impl RaceView {
-    #[cfg(feature = "view")]
-    /// The seat's collision sparks, the shake a hit arms and the shield edge, for its wall
-    /// contact this tick (`slot`, `evaluated`). The two contact sounds are raised for every
-    /// flown slot in [`Race::tick`].
-    ///
-    /// Everything [`Race::tick`] draws on a wall contact, in one place so
-    /// [`Race::tick_sim_only`] can skip it whole. The one piece of
-    /// simulation state in it is `contact_cue_cooldown`, which the sim-only
-    /// path advances itself.
-    fn advance_contact_fx(
-        &mut self,
-        core: &SimRace,
-        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
-        slot: usize,
-        evaluated: &Evaluated,
-    ) {
-        let shielded = core.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
-        // The announcer, on the shield coming up and not on it being up.
-        // `Shield_Activate` plays `"shieldactive"` one line above the
-        // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
-        // and differ in shape: a one-shot on this edge, a held voice on the
-        // level the edge starts. The level half is `SimRace::shield_is_up`, read
-        // by the audio layer; the edge is here, with every other cue edge.
-        if shielded && !self.shield_was_up {
-            cues.push(oag_gameplay::cue::CueEvent::new(
-                oag_gameplay::cue::Cue::ShieldActive,
-                slot,
-            ));
-        }
-        self.shield_was_up = shielded;
-        let model_matrix = self.ship_model_matrix_of(core, slot);
-        self.contact.advance(
-            &self.handles,
-            &self.collision_fx,
-            &core.sim.world.ships[slot],
-            model_matrix,
-            core.sim.dt,
-            super::contact_fx::Touch {
-                evaluated,
-                pair: self.pair_contacts[slot],
-            },
-        );
-    }
-    #[cfg(feature = "view")]
-    /// Every other local person's sparks and shake, from their own craft's wall contact.
-    /// A split screen's or a window's extra seat has a [`ContactFx`](super::contact_fx::ContactFx)
-    /// beside its camera; the seat `own` is the one [`Self::advance_contact_fx`] ran.
-    fn advance_seat_contact_fx(
-        &mut self,
-        core: &SimRace,
-        steps: &[Option<PlayerStep>],
-        own: usize,
-    ) {
-        for (slot, step) in steps.iter().enumerate() {
-            let Some(step) = step else { continue };
-            if slot == own || self.viewpoints.contact[slot].is_none() {
-                continue;
-            }
-            let model_matrix = self.ship_model_matrix_of(core, slot);
-            if let Some(fx) = self.viewpoints.contact[slot].as_mut() {
-                fx.advance(
-                    &self.handles,
-                    &self.collision_fx,
-                    &core.sim.world.ships[slot],
-                    model_matrix,
-                    core.sim.dt,
-                    super::contact_fx::Touch {
-                        evaluated: &step.evaluated,
-                        pair: self.pair_contacts[slot],
-                    },
-                );
-            }
-        }
     }
 }

@@ -33,8 +33,6 @@ impl RaceSim {
     }
 }
 
-impl Race {}
-
 impl SimRace {
     /// The name over `slot`'s craft: the one [`Self::set_person_names`] gave it (the lobby's in a
     /// network race, the stored player name for seat 1 in a local one), else `Player N` (a stop

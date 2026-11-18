@@ -62,8 +62,6 @@ impl FieldSparks {
     }
 }
 
-impl Race {}
-
 #[cfg(feature = "view")]
 impl RaceView {
     /// Every local view's eye: the player's and each extra seat's.

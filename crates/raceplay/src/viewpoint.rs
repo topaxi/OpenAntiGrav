@@ -518,7 +518,7 @@ impl RaceView {
                 cam.chase.advance(target, &params, step);
             }
             if kicks {
-                cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
+                cam.boost_kick = crate::stage::hooks::step_boost_kick(cam.boost_kick, boosting, dt);
             }
             cam.previous = cam.current;
             cam.current = cam.chase.view(target, &params);

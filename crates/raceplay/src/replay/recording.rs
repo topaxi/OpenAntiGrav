@@ -316,8 +316,6 @@ impl RaceSim {
     }
 }
 
-impl Race {}
-
 impl Recording {
     /// The poses of world ticks `start..=end`, as a lap of `end - start`
     /// ticks, or `None` when any of them is no longer held.

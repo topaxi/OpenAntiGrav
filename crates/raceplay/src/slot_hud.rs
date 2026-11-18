@@ -235,8 +235,6 @@ impl RaceSim {
     }
 }
 
-impl Race {}
-
 /// The shield bar's post-hit flash, one tick of `Hud_UpdateEnergyBar`'s own
 /// `hud+0x118`/`hud+0x11c` pair.
 ///

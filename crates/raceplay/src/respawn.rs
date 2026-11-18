@@ -428,8 +428,7 @@ impl Race {
         // player, who is the only craft one is flown from.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.view.exhaust[slot].clear_trail();
-            self.view.hd_trail[slot].clear();
+            self.view.clear_trails(slot);
         }
     }
 

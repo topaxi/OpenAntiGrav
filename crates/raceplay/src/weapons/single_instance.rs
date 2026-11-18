@@ -159,7 +159,7 @@ impl Race {
             // `self.quiet` rather than `shield_hit`: `course` above borrows
             // `self.core.sim` for the whole function.
             if hit.absorbed && !self.quiet {
-                self.view.shield[slot].hit();
+                self.view.bulge_shield(slot);
             }
         }
         // `QUAKEHIT` (confidence 85), on the rising edge of the wave's own

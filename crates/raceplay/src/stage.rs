@@ -18,6 +18,8 @@ use crate::catch_up::Journal;
 use crate::replay::ReplayState;
 use crate::{Race, RaceView, SimRace};
 
+pub(crate) mod hooks;
+
 /// The view-side fields of a [`Race`], borrowed together for one call while the tick holds
 /// the simulation. Built with [`stage!`].
 pub(crate) struct Stage<'a> {

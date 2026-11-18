@@ -52,8 +52,6 @@ use oag_gameplay::MAX_SHIPS;
 use oag_physics::CraftState;
 use oag_render::camera::shake::Side;
 
-use super::Race;
-
 /// Seconds from the state 5 edge to the big explosion: `Ship_SetState` case
 /// 5 writes `1.5` to the state timer and `Ship_UpdateDestroyed` counts it down.
 pub(super) const BLOWUP_DELAY: f32 = super::eliminator::DESTROYED_DWELL;
@@ -74,8 +72,6 @@ pub(super) struct CraftFlashes {
     /// and an Eliminator craft has been put back on the track by then.
     blowup: [Option<(f32, Vec3, Mat4)>; MAX_SHIPS],
 }
-
-impl Race {}
 
 #[cfg(feature = "view")]
 impl RaceView {

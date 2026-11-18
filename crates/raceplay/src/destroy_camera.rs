@@ -103,8 +103,6 @@ pub(super) fn focus_rate(class: &str) -> f32 {
     destroy::FOCUS_RATE_BY_CLASS[index]
 }
 
-impl Race {}
-
 #[cfg(feature = "view")]
 impl RaceView {
     /// The camera, while it has the picture.
