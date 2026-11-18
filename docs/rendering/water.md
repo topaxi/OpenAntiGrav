@@ -890,6 +890,24 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    original (`water-fc17` did not take the 45-minute capture; the edge's stand-in `Watercolour`
    and the lane pairing of `pa0.w`/`pa4.w`, 75, are what a frame would test: walk Empire Climb in
    `scripts/vita3k-drive.py race`, hold position at the pond, `shot` and compare the shore wedges).
+   **Attempted 2026-11-18 (`water-2048cmp`): no pair; the original shows no fc15/fc17 water from its racing line
+   on either circuit (seen once per circuit, one boot each, sparse samples).** (1) Ours at the grids of Altima and
+   Park (`--race --track ...\altima\track.vex`, tick 240, 960x544) shows no water (a stadium floor, a brick road);
+   the pond is about 1,270 units from Altima's grid. (2) Zone route: the HD Campaign's Zone event renamed to Altima
+   (`vita-2048-pair.py --walk --game-mode hd --node 600 395 --node-recentred 527 297 --rename-track Vineta_K altima
+   --zone-capture 70`, 37 samples): **Zone mode posterises every frame into flat colour bands**, so ripple scale,
+   glint and edge colour are unreadable there, and ours draws no Zone grade on a native circuit. (3) Race-cell
+   route: the same walk with `--node-recentred 440 240` (the wing-icon node of Uplift's first cluster) and
+   `--rename-track Vineta_K altima` or `park` loads and races in the Race cell (card "39_Track", Pilot Assist on; the
+   first Altima boot stuck at 94 % on the loading screen, the second ran; Park loaded first time), then
+   `vita3k-drive.py --display N hold e 1.5` plus `shot` in a loop with Pilot Assist flying the craft: 64 frames of
+   Altima (0:13 to 2:33, a full lap and the start of lap 2) and 70 of Park (0:12 to 2:14, lap 1 and the start of
+   lap 2), read as contact sheets. **No pond, shore wedge or sea is in view in any frame**: Altima's cyan hexagon
+   floor at 0:47 to 0:50 is a glowing track-side deck, not water; Park shows grass, brick and the same deck. The
+   samples are 2 to 3 s apart (about 150 to 300 units), so a short glimpse could fall between them, and ours' pond
+   and sea poses (`-250,-8,1372` and `1000,200,-3500`) are free cameras no craft flight reproduces. A comparison
+   needs the teleport (never built, [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft
+   teleport) or a denser sample around where the spline passes the water.
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.
