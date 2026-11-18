@@ -673,7 +673,11 @@ and how to run it is in [the online lobby](online-lobby.md), part 12. In this pa
   lobby. UPnP, hole punching and a capped relay are later, in that order.
 - **When the host leaves, the race ends** with a reason on every guest's screen; the journal
   (decision 1) is what would let it move instead.
-- **Moderation** is a ban file by key and address and a `host-log:` line per event.
+- **Moderation** is one text file by key and address and a `host-log:` line per event. A proven
+  cheat is a strike, not a ban: two strikes from distinct races and reporters within a week ban
+  the key for an hour, doubling per later ban up to 30 days (ADR-0092 decision 6). The lobby
+  keeps the history in the file (one line a strike, one a ban), so it grows by about 250 bytes a
+  proven case; nothing prunes it yet.
 - **The anti-cheat path is built** (2026-11-18, ADR-0092 decision 7 items 1 to 4; how it works
   and its limits: [the online lobby](online-lobby.md#anti-cheat-built-2026-11-18)). A hosted
   race's seed is drawn at random by the lobby; a server race's is still predictable from the

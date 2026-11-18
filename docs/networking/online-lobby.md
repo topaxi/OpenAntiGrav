@@ -1320,12 +1320,31 @@ port | cert_hash` (`HostOffer::statement`). The key pair is made on first use an
 
 ### Moderation
 
-`oag-server lobby --ban-file PATH`: one ban a line, `key <64 hex digits> <date> [reason]` or
-`addr <ip> <date> [reason]`, `#` for a comment. The date is when the ban was made, a UTC stamp as
-the log writes one (`2026-11-18T12:34:56.000Z`), so the list can be pruned or bans given a
-lifetime later; a line without one is reported and skipped. The lobby appends its own dated line
-when it proves a host cheated. The file is read again within 2 s of a change; a listed room whose
-host is now banned is closed with the reason. Every registration, refusal, launch and end is a
+`oag-server lobby --ban-file PATH` (`oag_net::online::moderation`): one entry a line, `#` for a
+comment, every date a UTC stamp as the log writes one (`2026-11-18T12:34:56.000Z`):
+
+| Line | Meaning | Written by |
+| --- | --- | --- |
+| `key <64 hex> <since> [reason]` | the key may not host, permanently | the operator |
+| `key <64 hex> <since> until <stamp> [reason]` | the key may not host until then | the lobby, or the operator |
+| `addr <ip> <since> [until <stamp>] [reason]` | the same for an address | the operator |
+| `strike <host key> <when> race <16 hex> by <reporter key> [reason]` | one case the lobby proved; `race` is the first 8 bytes of the race's params hash | the lobby |
+
+A proven case (anti-cheat below) appends a `strike` line and bans nobody. When a key's strikes
+reach `STRIKES_TO_BAN` (2), counted within `STRIKE_WINDOW` (7 days), after its last timed ban,
+and only over distinct races each reported by a different player (a maximum matching, so the
+order they came in does not matter; reporters with no key count as one), the lobby appends a
+timed `key` line. Its n-th timed ban lasts `FIRST_BAN` (1 h) doubled n - 1 times, at most
+`LONGEST_BAN` (30 days): 1 h, 2 h, 4 h ... The lines are never removed by the lobby, so the
+count survives a restart and an expired ban still makes the next one longer. A refused host is
+told the reason and the time left (`you may not host on this lobby: caught cheating in 2 races,
+... (59 min left)`). Constants and the reasoning behind each: the module's doc comments. Address
+bans are unchanged apart from taking the same optional `until`.
+
+A line that does not parse (no date, a bad key, `until` with no stamp after it, a strike missing
+`race` or `by`) is reported by line number in the log and skipped, never a ban. To lift a ban,
+delete its `key` line; to forgive a strike, delete its `strike` line. The file is read again
+within 2 s of a change; a listed room whose host is now banned is closed with the reason. Every registration, refusal, launch and end is a
 `host-log:` line in the lobby's log with the first 16 digits of the key, the address, the name,
 the room and its settings.
 
@@ -1354,9 +1373,11 @@ the race, is the referee. Every value here is **chosen, not measured**; the cost
    it reads a record, checks the signature and folds the chain again, then re-simulates the
    records from the job on a thread of its own (`fair::judge`, the client's confirmed path:
    away mask, held-stream edges, one simulation tick, the hash). A hash the host's own inputs do
-   not give is proven: the host's key is banned with a dated line in the ban file, its room is
-   closed with `the lobby closed this game: its host was caught cheating (...)`, and a
-   `host-log:` line names the reporter, the key and the address. A start state the lobby cannot
+   not give is proven: the host's key gets a dated `strike` line in the moderation file (above;
+   two from distinct races and reporters ban it), its room is closed with `the lobby closed this
+   game: its host was caught cheating (...)`, and a `host-log:` line names the reporter, the key,
+   the address and the strike count (`gets a strike (1 of 2 counted)`, plus `, banned for 1 h`
+   when it bans). A start state the lobby cannot
    reproduce (content it lacks, mods) or a re-simulation out of time is "not checkable", kept as
    evidence, never a ban. A report that reproduces is dismissed.
 4. **Signed inputs.** A hosted race's job names each seat's player key (from the lobby hello's
@@ -1371,7 +1392,7 @@ the race, is the referee. Every value here is **chosen, not measured**; the cost
    not a repeat in the signed records, and asks the host `ShowInput { room, seat, tick }`; the
    host answers `InputShown { room, seat, tick, datagram }`. A datagram signed by the seat's key
    with that input at that tick dismisses the report; none, a wrong one, or no answer in 10 s is
-   proven, with the same ban. What would convict an honest host is ruled out: a claim on a tick
+   proven, with the same strike. What would convict an honest host is ruled out: a claim on a tick
    older than half the ledger, counted from when the host said its race was up
    (`fair::too_old_to_challenge`), is not checkable, and so is a host that left the lobby before
    the answer was due (an honest `--online` host exits after its race).
@@ -1425,15 +1446,22 @@ may not host on this lobby: altered a race`.
   host that vanishes, and one that goes quiet, close the room with the reason; a wrong signature,
   a second request too soon and a closed port are refused by name; an address hosts only its
   cap; a banned key is refused and a ban added later delists the room.
-- `oag-net` `hostkey`, `moderation`, the wire round trip; `oag-game` `identity` (made on first
+- `oag-net` `hostkey`, `moderation` (every line form and each malformed one refused by name; a
+  timed ban's time left and its end; strikes counted over distinct races and reporters in any
+  order; one reporter or one race is one strike's worth; the window; bans of 1 h, 2 h, 4 h across
+  restarts with injected time, the 30-day cap, a ban using up its strikes), `oag-log` `stamp`
+  (parse round trip), the wire round trip; `oag-game` `identity` (made on first
   use, the same key after, owner-only, a broken file left alone) and `online_screen` (the mark
   and its line).
 - `oag-game` `net_hosted_ground_truth` (`#[ignore]`d, real processes): the three runs above,
   and a host whose game cheats (`OAG_TEST_CHEAT=speed`) reported by the guest, proven by the
-  lobby's re-simulation ("after tick 300 the host claimed state ..."), its key banned with a
-  dated line and the guest told why, in about 14 s.
-- `oag-net` `anticheat::` (no disc, real sockets): an altered simulation proven and banned; a
-  forged input the host cannot show signed, proven without a re-simulation; a host racing
+  lobby's re-simulation ("after tick 300 the host claimed state ..."), its key given a dated
+  `strike` line and no `key` line (one case bans nobody), and the guest told why, in about 16 s.
+- `oag-net` `anticheat::` (no disc, real sockets): an altered simulation proven and struck, the
+  host free to host again at once; a forged input the host cannot show signed, proven without a
+  re-simulation; two proven cases in two lobby runs over one file (a restart between), reported
+  by two players, ban the host with the reason and `59 min left`, the reporter not banned; the
+  same two by one reporter are one strike's worth; a host racing
   another seed refused at the welcome; an honest race with no report, every checkpoint verified
   and every input signed; a malformed and an oversized report refused without judging, the race
   going on; a lying guest that claims a forgery of an input it sent is dismissed when the host

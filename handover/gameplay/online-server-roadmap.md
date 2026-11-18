@@ -60,15 +60,19 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
    it prints `listening on`.
 7. **Anti-cheat for player-hosted races (landed on `net-anticheat`, 2026-11-18).** ADR-0092
    decision 7 items 1 to 4: the params hash in the hand-off, signed checkpoints, the client's
-   fraud proof and the lobby's re-simulation, signed inputs and the host's challenge; a proven
-   host is banned with a dated ban line (dates are required in the ban file now, maintainer
-   2026-11-18). Measured: 0.87 s and about 35 MiB to judge a five-minute two-person Pulse race
+   fraud proof and the lobby's re-simulation, signed inputs and the host's challenge. A proven
+   case is a strike, not a ban (maintainer 2026-11-18): two strikes from distinct races and
+   distinct reporters within 7 days ban the key, for 1 h doubling per later ban up to 30 days,
+   all of it dated lines in the moderation file that survive a restart (ADR-0092 decision 6,
+   `docs/networking/online-lobby.md` part 12 "Moderation"). Measured: 0.87 s and about 35 MiB to judge a five-minute two-person Pulse race
    (`server-roadmap.md`, "Anti-cheat: what it costs"). Still open: decision 8's resync (a
    client reports at its first covered mismatch instead), item 5 (withheld inputs, report
    only), a REJOIN RACE game signs its inputs but keeps no watch on the host (the record has
    no params hash or host key), no
-   report row on the room screen, a TTL or prune for the ban file (the dates are there for it),
-   and a server race's seed is still predictable from the room id.
+   report row on the room screen, a prune of old strike and expired ban lines (the lobby never
+   deletes them, since the history sets the next ban's length; personal data with no retention
+   limit yet), the build-equality guard (the lobby refuses to judge when the host's build
+   differs from its own), and a server race's seed is still predictable from the room id.
 6. **Lobby and race boundary.** Already split in code (`rooms.rs` has no I/O, the `Runner`
    seam, the job on standard input, the hand-off with port and hash); tied to one machine
    by a hand-off with no host, pipes, the lobby opening the images, one slot. The page's
