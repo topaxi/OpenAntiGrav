@@ -12,7 +12,7 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
-import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
@@ -1607,8 +1607,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let edge_map = material_sample(MATERIAL_PAD_MASK, water_tap_uv(water_entry, water_raw, 0u, in.texcoord)).a;
     let edge_x = edge_map * in.lightmap_texcoord.z;
     let edge_alpha = in.lightmap_texcoord.w * (row_tint.w - edge_x) + edge_x;
+    // The rig's result alone where the weight is one for every pixel of the pipeline
+    // (`lit_by_rig`): `mix(a, b, 1.0)` is `b`, and `a` then goes uncomputed.
+    var shaded_rgb = authored_rgb;
+    if lit_by_rig == 0.0 {
+        shaded_rgb = mix(plain_rgb, authored_rgb, rig_on * in.lit);
+    }
     let shaded = vec4<f32>(
-        mix(plain_rgb, authored_rgb, rig_on * in.lit),
+        shaded_rgb,
         select(
             select(texel.a * in.colour.a, edge_alpha, vita_edge),
             in.lightmap_texcoord.w * row_tint.w,

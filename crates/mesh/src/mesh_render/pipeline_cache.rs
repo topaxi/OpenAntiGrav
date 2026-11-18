@@ -87,6 +87,8 @@ struct Cache {
     /// Pipeline constants every `build()` in the scope appends - see
     /// [`Scope::lit_by`].
     constants: Vec<(&'static str, f64)>,
+    /// Whether the scope's light is an authored rig that is on - see [`Scope::lit_by`].
+    rig_on: bool,
     texture_calls: u32,
     texture_hits: u32,
     shader_calls: u32,
@@ -140,6 +142,16 @@ impl Scope {
         }
         if light.enabled == 0.0 {
             self.constant("light_rig");
+        }
+        // The other end of the same fact: a rig that is on stays on (a Zone grade carries
+        // the flag), which lets a pipeline whose vertices are all lit drop the stand-in
+        // result its last mix weighs at zero (`specialise::plain_is_lit`).
+        if light.enabled == 1.0 {
+            CACHE.with(|cell| {
+                if let Some(cache) = cell.borrow_mut().as_mut() {
+                    cache.rig_on = true;
+                }
+            });
         }
     }
 
@@ -272,6 +284,12 @@ fn with_open_cache<R>(read: impl FnOnce(&Cache) -> R) -> R {
 
 /// The constants [`Scope::lit_by`] set, for `build` to append; none with no
 /// scope open.
+/// Whether the open scope draws under an authored rig that is on ([`Scope::lit_by`]);
+/// `false` with no scope open.
+pub(crate) fn scope_rig_is_on() -> bool {
+    CACHE.with(|cell| cell.borrow().as_ref().is_some_and(|cache| cache.rig_on))
+}
+
 pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {
     CACHE.with(|cell| {
         cell.borrow()

@@ -76,6 +76,28 @@ pub(super) fn plain_draws(model: &Model) -> Option<PlainDraws> {
     split_plain(model.draws.iter().map(carried))
 }
 
+/// Whether every vertex the `plain` draws of `model` use is lit by the rig (`lit` exactly 1.0):
+/// under a rig that is on, each of their pixels then weighs the rig's result at one.
+pub(super) fn plain_is_lit(model: &Model, plain: &[bool]) -> bool {
+    model
+        .draws
+        .iter()
+        .zip(plain)
+        .filter(|&(_, &plain)| plain)
+        .all(|(draw, _)| {
+            every_one(
+                model.indices[draw.range.start as usize..draw.range.end as usize]
+                    .iter()
+                    .map(|&index| model.vertices[index as usize].lit),
+            )
+        })
+}
+
+/// Whether each of `lit` is exactly 1.0.
+fn every_one(mut lit: impl Iterator<Item = f32>) -> bool {
+    lit.all(|lit| lit == 1.0)
+}
+
 /// [`plain_draws`] from each draw's OR of its vertices' `slots`.
 fn split_plain(carried: impl Iterator<Item = u32>) -> Option<PlainDraws> {
     let mut present = 0;
@@ -141,6 +163,13 @@ mod tests {
             split_plain([1 << slots::MATERIAL_SHIFT, slots::RIM_GLOW].into_iter()),
             None
         );
+    }
+
+    #[test]
+    fn one_prelit_or_half_lit_vertex_keeps_the_mix() {
+        assert!(every_one([1.0, 1.0].into_iter()));
+        assert!(!every_one([1.0, 0.0, 1.0].into_iter()));
+        assert!(!every_one([1.0, 0.999].into_iter()));
     }
 
     #[test]
