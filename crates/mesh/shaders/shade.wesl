@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading, shield_shading};
-import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_exempt, shadow_sampler, sky_probe_tex, sun_authored, sun_known, sun_sunless, sun_weight, uniforms};
+import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -309,7 +309,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     );
     var authored = vec3<f32>(0.0);
     // The sun's share of `authored`, kept apart so the track's shadowed redraw
-    // can take exactly that out - see `shadow::sun_delta`.
+    // can take exactly that out - see `sun_removed` below.
     var sun_light = vec3<f32>(0.0);
     var mask = 0.0;
     var emissive = false;
@@ -1157,6 +1157,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The authored rig's half of the output, computed only when the rig is
     // on - see the same branch above `atlas`.
     var authored_rgb = vec3<f32>(0.0);
+    // What the sun adds to `authored_rgb`, in its output space.
+    var sun_removed = vec3<f32>(0.0);
     if rig_on != 0.0 {
         let half_vector = to_eye + scene.light.direction;
         let ndh = clamp(
@@ -1481,10 +1483,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `docs/ghidra/functions/ps3-hdfury-eu/shadow-track-redraw.md`.
         let sun_linear = scene.light.output_scale
             * ((surface_linear * program_sun * pane_cover + program_specular) * program_multiplier);
-        // Its encode and the difference are left to `shadow::sun_delta`, which runs them only
-        // where a craft's shadow covers the pixel.
-        sun_sunless = lit_linear - sun_linear;
-        sun_authored = authored_rgb;
+        let sunless = lit_linear - sun_linear;
+        let sunless_encoded = pow(
+            clamp(sunless, vec3<f32>(0.0), vec3<f32>(1.0)),
+            vec3<f32>(1.0 / 2.2),
+        );
+        sun_removed = authored_rgb - mix(sunless_encoded, sunless, linear_out);
     }
 
     // The stand-in path, byte-for-byte what every other title always drew.
@@ -2050,7 +2054,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     );
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
-        // what `shadow::sun_delta` is computed against. The facing-ramp sheen, the magstrip
+        // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
         // floor, the light cone, the flame and the absorb shell each replace it with
         // their own program, and subtracting the generic sun term from one of those
         // would take out light it never contained: they leave `sun_known` clear and
@@ -2062,7 +2066,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             && flame_shading == 0.0
             && absorb_shading == 0.0;
         if generic_combine && rig_on != 0.0 {
-            sun_weight = rig_on * in.lit;
+            sun_delta = rig_on * in.lit * sun_removed;
             sun_known = 1.0;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every
