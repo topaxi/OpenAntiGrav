@@ -2,8 +2,9 @@
 
 Every `/oag-drive` member reads this first. The brief supplies `<lane>`
 (worktree, branch, scratch name), `:9N` (your Xvfb display), emulator ports,
-lanes you must not touch, and the gate baseline. If one is missing, ask
-`team-lead` with `SendMessage` (`main` may not resolve from a member).
+lanes you must not touch, and the gate baseline. If one is missing, ask the
+lead as "A question you cannot proceed without" (Report section) says: end your
+turn with it.
 
 ## Step zero
 
@@ -79,7 +80,7 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 - A docs/`handover/`/`HANDOVER.md`-only lane runs `just check-docs` (plus `check-names`, `check-handover` when those files moved) instead of the gate.
 - **A commit after your last gate that touches any `.rs` file, even a doc comment, needs `just gate-affected` re-run before you report** (a "docs plus one test line" commit once pushed a file over `check-size`'s ceiling and `main` went red).
 - The brief states the baseline failure count; anything red beyond it is yours.
-- **Never end a turn waiting for a background job to notify you**; no member has ever been woken that way. Run long commands in the foreground with a 600000 ms timeout, or poll the output file.
+- **Never end a turn waiting for a background job to notify you**; no member has ever been woken that way. Run long commands in the foreground with a 600000 ms timeout, or poll the output file. (Ending a turn to wait for the lead's answer is the opposite case and is correct: see "A question you cannot proceed without".)
 - **No fine-grained Monitors** (maintainer, 2026-10-19): each event wakes you and your idle turn wakes the lead. Watch only the whole run or gate finishing, or poll at 10 minute intervals or more.
 
 ## Commits
@@ -117,7 +118,9 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 
 Write full findings to `/home/topaxi/projects/OpenAntiGrav/data/scratch/<lane>/report.md`: commits per step, the gate result you watched finish (counts and exit status), any regression gate quoted before and after, screenshot paths, what is still open. Quote your brief's claim and say whether it came out true, false or unknown, with the acceptance evidence. Return ONLY that path plus at most 15 lines (long returns can silently fail to arrive). A negative result reported honestly is a good outcome; "I could not determine X, here is its address" is a result.
 
-**Send each report once: as the final text of your turn, not with `SendMessage`.** The lead receives that text when your turn ends. A `SendMessage` report followed by a closing summary reaches the lead twice. Use `SendMessage` only mid-turn, for a question you must wait on or a blocker. In that case, end the turn with one line, for example "Waiting on the lead: spu-objdump." The same applies to replies to the lead: the reply is your turn's final text.
+**Send each report once: as the final text of your turn, not with `SendMessage`.** The lead receives that text when your turn ends. A `SendMessage` report followed by a closing summary reaches the lead twice. The same applies to replies to the lead: the reply is your turn's final text.
+
+**A question you cannot proceed without: end your turn.** Make it the final text ("Question for the lead: ... Options, each in full: ... Default if no answer: ...") and stop. Do not `SendMessage` it and keep working, and do not poll or sleep for an answer: the lead may not see a mid-turn message until your turn ends (2026-11-18: a member's A/B question about an API shape reached the lead only after the maintainer stopped the member), and the answer arrives as a new turn. A question you can proceed without: put your default in the message, proceed on it, and treat any reply as a correction. `SendMessage` mid-turn is for that second kind only.
 
 **Your report is the end of the lane.** After sending it, do not commit, merge main or edit your worktree unless the lead sends you back; the lead removes the worktree as soon as the report arrives. Finish everything first.
 
