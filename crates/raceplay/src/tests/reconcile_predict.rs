@@ -130,7 +130,7 @@ fn held_only(last: &InputSnapshot) -> InputSnapshot {
 fn person_race(setup: &SimSetup) -> Race {
     let mut race = Race::start(
         setup.clone(),
-        crate::ViewSetup::headless(),
+        crate::tests::fixture_view(),
         crate::extensions::Prepared::default(),
     );
     race.core
@@ -155,7 +155,7 @@ fn person_race(setup: &SimSetup) -> Race {
 fn record_pack(setup: &SimSetup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) {
     let mut race = Race::start(
         setup.clone(),
-        crate::ViewSetup::headless(),
+        crate::tests::fixture_view(),
         crate::extensions::Prepared::default(),
     );
     let slots = race.core.sim.world.ship_count as usize;
@@ -594,7 +594,7 @@ fn reconcile_predict_ai_sweep() {
         let slots = streams.len();
         let hull = Race::start(
             setup.clone(),
-            crate::ViewSetup::headless(),
+            crate::tests::fixture_view(),
             crate::extensions::Prepared::default(),
         )
         .core

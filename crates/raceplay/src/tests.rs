@@ -579,6 +579,8 @@ pub(super) fn race_with_a_grid() -> Race {
 /// the way a load hands it.
 pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
     let mut setup = setup(hulled_handling());
+    let mut view = fixture_view();
+    view.sight = sight.clone();
     setup.sight = sight;
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
@@ -591,11 +593,7 @@ pub(super) fn race_with_a_grid_sighted(sight: Sighting) -> Race {
     // one's craft have no engine, so nothing here reaches the end of the straight
     // - and the opponent-rescue tests built on it assert that slot 0 was *not*
     // recovered, which is worth nothing if slot 0's recovery is switched off.
-    Race::start(
-        setup,
-        crate::tests::fixture_view(),
-        crate::extensions::Prepared::default(),
-    )
+    Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
 /// The reticle a title's sight dialect gives a race, as a load builds it.

@@ -132,22 +132,15 @@ fn a_burst_effect_leaves_the_opponents_and_the_seats_law_alone() {
     assert!(!held(&race, 1) && !held(&race, 2));
     assert_eq!(race.view.stage.playing_count(), 0);
 
-    let mut seat = Race::start(
-        {
-            let setup = setup_with(
-                hulled_handling(),
-                vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
-            );
-            let mut view = crate::tests::fixture_view();
-            let blob = one_emitter_pob("WO_TEST_SPARK", 0);
-            let effect =
-                oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full).unwrap();
-            view.handles.insert(Trigger::CollisionSpark, effect);
-            setup
-        },
-        crate::tests::fixture_view(),
-        crate::extensions::Prepared::default(),
+    let setup = setup_with(
+        hulled_handling(),
+        vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
+    let mut view = crate::tests::fixture_view();
+    let blob = one_emitter_pob("WO_TEST_SPARK", 0);
+    let effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full).unwrap();
+    view.handles.insert(Trigger::CollisionSpark, effect);
+    let mut seat = Race::start(setup, view, crate::extensions::Prepared::default());
     super::respawn::push_toward_wall(&mut seat);
     let evaluated = seat.tick(&PlayerInputs::none());
     assert!(evaluated.wall.impact);
