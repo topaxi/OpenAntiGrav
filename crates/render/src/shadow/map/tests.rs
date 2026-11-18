@@ -343,3 +343,27 @@ fn a_resolution_scales_the_atlas_layout_whole() {
         );
     }
 }
+
+/// The receiver's list keeps the drawn records in slot order and packs them to the front, so
+/// `craft_shadow_coverage` can stop at the first empty one and multiply in the same order.
+#[test]
+fn the_receiver_reads_the_drawn_records_packed_in_slot_order() {
+    let record = |x: f32| CraftShadow {
+        matrix: [[x; 4]; 4],
+        rect: [0.0, 0.0, 0.25, 0.25],
+        centre: [x, 0.0, 0.0, 1.0],
+    };
+    let mut records = [CraftShadow::NONE; MAX_CASTERS];
+    let mut painted = [false; MAX_CASTERS];
+    for (slot, drawn) in [(1, true), (3, false), (4, true), (6, true)] {
+        records[slot] = record(slot as f32);
+        painted[slot] = drawn;
+    }
+    let packed = packed(&records, &painted);
+    assert_eq!(&packed[..3], &[record(1.0), record(4.0), record(6.0)]);
+    assert!(packed[3..].iter().all(|r| *r == CraftShadow::NONE));
+    assert!(
+        packed[3..].iter().all(|r| r.centre[3] <= 0.0),
+        "the shader's end mark"
+    );
+}

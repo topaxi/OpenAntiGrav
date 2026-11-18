@@ -64,6 +64,12 @@ fn craft_shadow_coverage(world: vec3<f32>) -> f32 {
         // the slab would, and is the original's own "track chunks within 50
         // units of the ship" in form.
         let centre = scene.craft_shadow[i].centre;
+        // The drawn records are packed to the front (`oag_render::shadow::map::Map::
+        // receiver_shadows`), so the first empty one ends the list: a uniform branch, and a
+        // one-craft race tests one record and not eight.
+        if centre.w <= 0.0 {
+            break;
+        }
         let offset = world - centre.xyz;
         if dot(offset, offset) > centre.w {
             continue;
