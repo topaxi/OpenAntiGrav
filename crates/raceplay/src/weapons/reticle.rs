@@ -59,7 +59,7 @@ impl Race {
     pub(crate) fn update_sight(&mut self) {
         // The reticle is the primary person's; every other person-flown slot
         // reads the same lock through [`RaceSim::sight_target`] without one.
-        let primary = self.player_slot();
+        let primary = self.core.player_slot();
         if let Some(held) = self.core.sim.sight_held(primary) {
             self.view.sight.set_held(held);
         }
@@ -123,7 +123,7 @@ impl Race {
     /// the tick's reticle untouched.
     #[must_use]
     pub fn drawn_sight(&self, slot: usize) -> sight::Sight {
-        let primary = slot == self.player_slot();
+        let primary = slot == self.core.player_slot();
         let (sight, aim) = if primary {
             (self.view.sight, self.view.sight_aim)
         } else {
@@ -172,7 +172,7 @@ impl Race {
         if self.core.outcome.seat.is_some() {
             return;
         }
-        let primary = self.player_slot();
+        let primary = self.core.player_slot();
         for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
             if let Some(held) = self.core.sim.sight_held(slot) {
                 self.view.huds[slot].sight.set_held(held);

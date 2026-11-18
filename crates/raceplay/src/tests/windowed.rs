@@ -104,7 +104,7 @@ fn once_the_race_is_over_every_window_with_a_seat_draws_the_one_end_view() {
         race.core.sim.world.race[slot].finished = true;
     }
     assert!(race.core.sim.finished());
-    let player = race.player_slot();
+    let player = race.core.player_slot();
     assert_eq!(race.window_drawn(0), vec![player]);
     assert_eq!(
         race.window_drawn(1),
@@ -456,7 +456,7 @@ fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
     let drawn: Vec<Vec<usize>> = (0..3).map(|window| watched.window_drawn(window)).collect();
     assert_eq!(
         drawn[0],
-        vec![watched.player_slot()],
+        vec![watched.core.player_slot()],
         "window 1 keeps the demo's own camera"
     );
     let mut slots: Vec<usize> = drawn.iter().map(|seats| seats[0]).collect();

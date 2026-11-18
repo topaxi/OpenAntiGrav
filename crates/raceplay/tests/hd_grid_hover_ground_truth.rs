@@ -37,7 +37,7 @@ fn started() -> Option<Race> {
 }
 
 fn height(race: &Race) -> f32 {
-    race.ship().physics.body.position.y - FLOOR_Y
+    race.core.ship().physics.body.position.y - FLOOR_Y
 }
 
 fn run_to(race: &mut Race, tick: u64) {

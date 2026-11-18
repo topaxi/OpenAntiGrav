@@ -93,13 +93,13 @@ impl Race {
         header.tick_rate = TickRate::DEFAULT.hz();
         header.setup = self.replay.request.clone();
         let recorder = Recorder::new(header, self.core.sim.state_hash());
-        let standing = self.player_standing();
+        let standing = self.core.player_standing();
         let mut track = PoseRecorder::new(usize::from(self.core.sim.ship_count()));
         track.push(&self.core.sim.grid_poses());
         self.replay.recording = Some(Recording {
             recorder,
             track,
-            poses: vec![self.player_pose()],
+            poses: vec![self.core.player_pose()],
             base: self.core.sim.world.tick,
             last_lap: standing.lap,
             last_start: standing.lap_start_tick,
@@ -174,7 +174,10 @@ impl Race {
         if self.core.sim.finished() || self.replay.ghost_hidden {
             return None;
         }
-        let ticks = self.player_standing().lap_ticks(self.core.sim.world.tick)?;
+        let ticks = self
+            .core
+            .player_standing()
+            .lap_ticks(self.core.sim.world.tick)?;
         let now = ghost.lap.pose_at(ticks)?;
         let before = ticks
             .checked_sub(1)
@@ -243,12 +246,14 @@ impl Race {
         (replay.ticks() >= tick)
             .then(|| oag_replay::ShotRecord::new(replay, tick, self.core.sim.state_hash()))
     }
+}
 
+impl SimRace {
     /// The player's craft as a pose: its position, and its orientation with
     /// the barrel roll and the steering lean folded in exactly as [`model_matrix_of`]
     /// folds them.
     fn player_pose(&self) -> Pose {
-        self.core.sim.craft_pose(self.player_slot())
+        self.sim.craft_pose(self.player_slot())
     }
 }
 
@@ -319,9 +324,9 @@ impl Race {
         let sim = &self.core.sim;
         recording.recorder.record(inputs, || sim.state_hash());
 
-        let pose = self.player_pose();
+        let pose = self.core.player_pose();
         let grid = self.core.sim.grid_poses();
-        let standing = *self.player_standing();
+        let standing = *self.core.player_standing();
         let tick = self.core.sim.world.tick;
         let Some(recording) = self.replay.recording.as_mut() else {
             return;
@@ -454,7 +459,8 @@ impl GhostCapture {
         if self.race.is_some() {
             match race.ghost_pose() {
                 Some((pose, _)) => {
-                    let distance = (race.ship().physics.body.position - pose.position).length();
+                    let distance =
+                        (race.core.ship().physics.body.position - pose.position).length();
                     let fade = oag_render::ghost::fade(distance);
                     println!(
                         "ghost: {distance:.1} units from the player, weight {:.3}, glow {}",

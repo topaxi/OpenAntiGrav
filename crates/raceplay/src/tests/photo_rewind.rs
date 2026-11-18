@@ -297,7 +297,7 @@ fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
             &mut race,
         );
         race.set_draw_alpha(alpha);
-        let slot = race.player_slot();
+        let slot = race.core.player_slot();
         let craft = race.ship_model_matrix_of(slot).w_axis.truncate();
         seen.push((eye(&race), craft, race.view().transform_point3(craft)));
         shot.advance();

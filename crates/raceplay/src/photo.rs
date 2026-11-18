@@ -877,7 +877,7 @@ impl Race {
             .as_ref()
             .is_some_and(finish_camera::FinishCamera::has_nodes);
         let restore = self.view.camera_override;
-        let subject = self.player_slot();
+        let subject = self.core.player_slot();
         // The first frame is the one the pause left: the lens it opens on is the camera on
         // screen, free to be flown from there.
         let on_screen = self.on_screen_camera();
@@ -1040,7 +1040,7 @@ impl Race {
             .iter()
             .map(|s| s.slot)
             .collect();
-        let now = self.player_slot();
+        let now = self.core.player_slot();
         match step_among(&live, now, forward) {
             Some(next) if next != now => {
                 self.follow(next);
@@ -1054,9 +1054,9 @@ impl Race {
     /// only; the player's own craft is no seat at all). The jump is a camera cut, so the motion
     /// blur and the temporal history do not smear the old craft across the new one.
     pub fn follow(&mut self, slot: usize) {
-        let before = self.player_slot();
+        let before = self.core.player_slot();
         self.set_seat((slot != self.core.sim.world.primary_slot()).then_some(slot));
-        if self.player_slot() != before {
+        if self.core.player_slot() != before {
             #[cfg(feature = "view")]
             {
                 self.view.restores = self.view.restores.wrapping_add(1);

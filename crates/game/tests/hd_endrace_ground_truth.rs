@@ -93,7 +93,11 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
     };
     race_to_the_flag(&mut race);
 
-    let board = race.results().expect("a finished race has results").clone();
+    let board = race
+        .core
+        .results()
+        .expect("a finished race has results")
+        .clone();
     assert!(!board.rows.is_empty(), "the board should carry the field");
     assert!(
         board.rows.iter().any(|row| row.player),
@@ -102,7 +106,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
 
     let rows = oag_game::results_tables::field_rows(
         Some(&board),
-        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.slot_teams()),
+        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.core.slot_teams()),
     );
     let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
@@ -182,7 +186,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
     for row in &board.rows {
         let team = oag_title::team::listed_id(
             oag_hd::TITLE.teams,
-            &race.slot_teams()[usize::from(row.slot)],
+            &race.core.slot_teams()[usize::from(row.slot)],
         );
         let shown = strings.get_or_id(team);
         assert!(
@@ -211,7 +215,7 @@ fn results_texts(
 ) -> Vec<String> {
     let rows = oag_game::results_tables::field_rows(
         Some(board),
-        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.slot_teams()),
+        &oag_game::results_tables::team_keys(oag_hd::TITLE, race.core.slot_teams()),
     );
     let model = oag_ui_screens::endrace::FieldResults {
         loyalty: None,
@@ -261,7 +265,11 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
         race.core.sim.runs_on_after_the_line(),
         "the autopilot crossed the line"
     );
-    let first = race.results().expect("a finished race has results").clone();
+    let first = race
+        .core
+        .results()
+        .expect("a finished race has results")
+        .clone();
     let racing_at_the_flag = first.rows.iter().filter(|row| !row.finished()).count();
     assert!(
         racing_at_the_flag > 0,
@@ -290,15 +298,15 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
 
     let hash_at_the_flag = race.core.sim.state_hash();
     let mut shown = first.clone();
-    let revision = race.results_revision();
+    let revision = race.core.results_revision();
     for _ in 0..CAP {
         race.tick_finished();
-        if race.results_revision() != revision
-            && race.results().is_some_and(|board| {
+        if race.core.results_revision() != revision
+            && race.core.results().is_some_and(|board| {
                 board.rows.iter().filter(|row| !row.finished()).count() < racing_at_the_flag
             })
         {
-            shown = race.results().expect("a board").clone();
+            shown = race.core.results().expect("a board").clone();
             break;
         }
     }

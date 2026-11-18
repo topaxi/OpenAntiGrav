@@ -35,13 +35,13 @@ pub struct Telemetry {
     pub projectiles: usize,
 }
 
-impl Race {
+impl SimRace {
     /// What the ship did, as of the last tick.
     #[must_use]
     pub fn telemetry(&self) -> Telemetry {
         let ship = self.ship();
         let position = ship.physics.body.position;
-        let (spline_distance, height_above_spline) = self.core.sim.spline.nearest(position).map_or(
+        let (spline_distance, height_above_spline) = self.sim.spline.nearest(position).map_or(
             (f32::NAN, f32::NAN),
             |(_, sample, distance)| {
                 let up = (-Vec3::from_array(sample.down)).normalize_or_zero();
@@ -50,11 +50,11 @@ impl Race {
         );
 
         Telemetry {
-            tick: self.core.sim.world.tick,
+            tick: self.sim.world.tick,
             position,
             speed: ship.physics.body.linear_velocity.length(),
             pickup: ship.pickup.weapon,
-            projectiles: self.core.sim.world.projectiles.live(),
+            projectiles: self.sim.world.projectiles.live(),
             grounded: ship.physics.grounded,
             spline_distance,
             height_above_spline,
@@ -78,12 +78,12 @@ impl Race {
     /// round: a spurious warning is worse than a missing one.
     #[must_use]
     pub fn wrong_way(&self) -> bool {
-        self.core.sim.wrong_way_for(self.player_slot())
+        self.sim.wrong_way_for(self.player_slot())
     }
 }
 
 impl RaceSim {
-    /// [`Race::wrong_way`] for the craft in `slot`.
+    /// [`SimRace::wrong_way`] for the craft in `slot`.
     #[must_use]
     pub fn wrong_way_for(&self, slot: usize) -> bool {
         let ship = &self.world.ships[slot];
@@ -106,7 +106,7 @@ impl Race {
     /// not have. See `docs/ui/hud.md`.
     #[must_use]
     pub fn readout(&self) -> oag_hud::Readout {
-        self.readout_for(self.player_slot())
+        self.readout_for(self.core.player_slot())
     }
 
     #[cfg(feature = "view")]
@@ -122,7 +122,7 @@ impl Race {
     /// colour grade the caller fills in is one per scene.
     #[must_use]
     pub fn readout_for(&self, slot: usize) -> oag_hud::Readout {
-        let primary = slot == self.player_slot();
+        let primary = slot == self.core.player_slot();
         let ship = &self.core.sim.world.ships[slot];
         let race = &self.core.sim.world.race[slot];
         let hud = &self.view.huds[slot];
@@ -249,8 +249,8 @@ impl Race {
             // the same seam
             // `zone_stage`/`zone_next_in` already use above.
             time_trial_pace: None,
-            head_to_head: self.head_to_head(slot),
-            kill_tags: self.kill_tags(slot),
+            head_to_head: self.core.head_to_head(slot),
+            kill_tags: self.core.kill_tags(slot),
             score_rows: self.core.sim.score_law.is_some()
                 && self.core.sim.world.mode() == oag_race::Mode::Eliminator,
             race_line: self.core.sim.race_line(slot),
@@ -379,20 +379,20 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     #[cfg(feature = "view")]
     /// The Eliminator's kill column, top row first, in the order the original
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
     /// for a slot with no team on record (a `Setup` built by hand).
     fn kill_tags(&self, player: usize) -> Vec<oag_hud::KillTag> {
-        let world = &self.core.sim.world;
+        let world = &self.sim.world;
         if world.mode() != oag_race::Mode::Eliminator {
             return Vec::new();
         }
         let slots: Vec<usize> = (0..world.ship_count as usize)
             .filter(|&slot| world.ships[slot].active)
             .collect();
-        let scored = self.core.sim.score_law.is_some();
+        let scored = self.sim.score_law.is_some();
         let counts: Vec<u32> = slots
             .iter()
             .map(|&slot| {
@@ -409,7 +409,7 @@ impl Race {
             .filter_map(|row| {
                 let slot = slots[row];
                 Some(oag_hud::KillTag {
-                    team: self.core.outcome.slot_teams.get(slot)?.clone(),
+                    team: self.outcome.slot_teams.get(slot)?.clone(),
                     count: counts[row],
                     player: slot == player,
                 })
@@ -464,7 +464,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     #[cfg(feature = "view")]
     /// Head2Head's gap readout: the unwrapped-progress difference between the
     /// player and the one opponent, and who leads. `None` outside Head2Head.
@@ -476,14 +476,14 @@ impl Race {
     /// engine's `craft+0xad0` with the same lap-1 wrap fix, in the same
     /// arc-length units. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
     fn head_to_head(&self, player: usize) -> Option<oag_hud::HeadToHead> {
-        if self.core.sim.world.mode() != oag_race::Mode::Head2Head {
+        if self.sim.world.mode() != oag_race::Mode::Head2Head {
             return None;
         }
-        let course = self.core.sim.course.as_deref()?;
-        let world = &self.core.sim.world;
+        let course = self.sim.course.as_deref()?;
+        let world = &self.sim.world;
         let opponent = (0..world.ship_count as usize)
             .find(|&slot| slot != player && world.ships[slot].active)?;
-        // **Measured between the two craft, not read off [`Self::places`].** A place is
+        // **Measured between the two craft, not read off [`Race::places`].** A place is
         // a rank among all eight slots, and a slot with no craft in it sits at
         // distance zero, so a person still short of the line (the back of the grid
         // is) ranks behind empty slots and neither of two people ever read first.
@@ -491,8 +491,8 @@ impl Race {
             - world.ships[opponent].standing.distance(course);
         // Two people: both rows carry a team name, each view's own first. One person: the
         // player's row is the profile tag in the original, which this build has none of.
-        let named = self.core.sim.people > 1;
-        let team = |slot: usize| self.core.outcome.slot_teams.get(slot).cloned();
+        let named = self.sim.people > 1;
+        let team = |slot: usize| self.outcome.slot_teams.get(slot).cloned();
         Some(oag_hud::HeadToHead {
             gap: ahead.abs(),
             player_leads: ahead > 0.0,

@@ -286,8 +286,8 @@ fn frame_of<'a>(
         listener: listener_of(race),
         craft: craft_positions(race, false),
         mod_craft: craft_positions(race, true),
-        slot_teams: std::array::from_fn(|slot| race.slot_team(slot)),
-        player_slot: race.player_slot(),
+        slot_teams: std::array::from_fn(|slot| race.core.slot_team(slot)),
+        player_slot: race.core.player_slot(),
         // The local player's throttle, `0..=100`: what
         // `Ship_UpdateEngineCrossfade` reads as `ctrl[+4]` for the craft whose
         // role is zero.
@@ -296,16 +296,16 @@ fn frame_of<'a>(
             .sim
             .world
             .ships
-            .get(race.player_slot())
+            .get(race.core.player_slot())
             .map_or(0.0, |ship| ship.physics.thrust),
         // An owned snapshot - `Projectile` is `Copy` and the array is small.
         // Read after `Race::tick` has already run, so a bolt that ended this
         // tick is already back to `Projectile::default()` here.
         projectiles: race.core.sim.world.projectiles.slots,
         running: !race.core.sim.finished(),
-        shielded: race.shield_is_up(),
-        exploding: race.craft_is_exploding(),
-        autopilot_active: race.autopilot_is_active(),
+        shielded: race.core.shield_is_up(),
+        exploding: race.core.craft_is_exploding(),
+        autopilot_active: race.core.autopilot_is_active(),
         thrust_gated: oag_race::RaceState::thrust_gated(race.core.sim.world.tick),
         sight: race.sight_state(),
         quake_point: race.quake_point(),

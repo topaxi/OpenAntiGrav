@@ -8,7 +8,7 @@
 //! gate (`cannon-quake-leachbeam.md`, 2026-10-26). Ours raised the first alone
 //! until the sparks' gate also raised `Cue::Collision`.
 //!
-//! The rival's wave is launched with `Race::force_quake`, the same aid
+//! The rival's wave is launched with `SimRace::force_quake`, the same aid
 //! `--force-quake` is. Dropping the cue from `Race::throw_hit_spark` takes the
 //! `.COLLISIONS` count to zero here.
 //!
@@ -35,9 +35,9 @@ fn a_quake_hit_on_the_player_plays_quakehit_and_the_hull_s_collision_cues() {
         race.tick(&PlayerInputs::none());
     }
     let _ = race.core.sim.drain_cues();
-    let player = race.player_slot();
+    let player = race.core.player_slot();
 
-    assert!(race.force_quake(1), "the rival's wave never launched");
+    assert!(race.core.force_quake(1), "the rival's wave never launched");
     let (mut quake_hits, mut collisions, mut every_craft) = (0, 0, 0);
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());

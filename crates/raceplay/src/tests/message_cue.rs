@@ -68,7 +68,7 @@ fn a_clients_message_cue_follows_its_seat() {
 }
 
 /// One machine flying both seats: every person's line sounds, once, for the
-/// primary seat (`Race::heard_here`).
+/// primary seat (`SimRace::heard_here`).
 #[test]
 fn a_machine_flying_both_seats_hears_either_message_once() {
     use super::autopilot::two_people;

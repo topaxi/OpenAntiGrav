@@ -212,7 +212,7 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
                 // The plan of the line the craft is on: the ring's, or the
                 // route's it drew at a fork (`oag_raceplay`'s `routes`).
                 && let Some(v) = race
-                    .plan_of(slot)
+                    .core.plan_of(slot)
                     .filter(|plan| (index as usize) < plan.len())
                     .map(|plan| plan.pace(index as usize))
                 && v.is_finite()

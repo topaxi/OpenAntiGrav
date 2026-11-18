@@ -125,7 +125,7 @@ impl Facts {
         // carries its own, and `race_options.mode` still says what the RACE
         // page held.
         let mode = race.core.sim.world.mode();
-        let standing = race.player_standing();
+        let standing = race.core.player_standing();
         let finished = race.core.sim.finished();
         let total = oag_game_ticks(oag_race::race_clock_ticks(
             standing.finish_tick.unwrap_or(race.core.sim.world.tick),

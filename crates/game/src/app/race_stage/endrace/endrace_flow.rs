@@ -19,7 +19,7 @@ pub(super) enum Which {
 }
 
 /// Whether a race's end-race flow opens on `Race End Photo`: the race ended in a way whose
-/// world runs on (the line, or a Single Race wreck - `Race::runs_on_after_the_end`), the disc's
+/// world runs on (the line, or a Single Race wreck - `SimRace::runs_on_after_the_end`), the disc's
 /// screen read, and the title is not Wipeout HD/Fury, whose equivalent was not read.
 pub(super) fn opens_on_photo(runs_on: bool, photo_read: bool, hd: bool) -> bool {
     runs_on && photo_read && !hd

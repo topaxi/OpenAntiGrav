@@ -185,7 +185,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
         .expect("16_Track authors a Start Position");
     let mut race = race::Race::start(loaded.setup);
 
-    let start = race.telemetry();
+    let start = race.core.telemetry();
     println!(
         "spawned at {:?}, {:.3} above the slot's own authored y",
         start.position,
@@ -194,7 +194,7 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
 
     // Facing where the slot says, still, after the pose has been through a
     // quaternion and back out of the body.
-    let forward = race.ship().physics.body.forward();
+    let forward = race.core.ship().physics.body.forward();
     assert!(
         forward.dot(Vec3::from_array(slot.forward)) > 0.999,
         "the spawned ship faces {forward} and the slot says {:?}",
@@ -205,11 +205,11 @@ fn a_ship_spawned_on_the_authored_slot_starts_in_contact() {
     let mut held = race::HeldButtons::new(0);
     race.tick(&PlayerInputs::single(held.snapshot()));
     assert_eq!(
-        race.ship().physics.grounded,
+        race.core.ship().physics.grounded,
         1.0,
         "both hover probes must reach the track from the authored slot, got {}: {}",
-        race.ship().physics.grounded,
-        race::describe(&race.telemetry())
+        race.core.ship().physics.grounded,
+        race::describe(&race.core.telemetry())
     );
 
     // And the surface really is under it, at the height the spawn claims.

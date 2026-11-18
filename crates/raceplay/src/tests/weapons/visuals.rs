@@ -412,7 +412,7 @@ fn a_charging_plasma_head_is_drawn_on_the_crafts_weapon_node() {
         assert!(bolt.charge > 0.0, "the bolt was released within six ticks");
         let instance = race.view.projectile_flare[0].expect("the head is playing");
         let anchor = race.view.stage.anchor_of(instance).expect("a live head");
-        let body = race.ship().physics.body;
+        let body = race.core.ship().physics.body;
         (
             (anchor - body.position).dot(body.forward()),
             (bolt.position - body.position).dot(body.forward()),
@@ -480,7 +480,7 @@ fn a_released_plasma_head_draws_on_the_bolt_that_left_from_the_weapon_node() {
             );
             if bolt.charge <= 0.0 {
                 if released_for == 0 {
-                    let body = race.ship().physics.body;
+                    let body = race.core.ship().physics.body;
                     at_release = (bolt.position - body.position).dot(body.forward());
                 }
                 released_for += 1;

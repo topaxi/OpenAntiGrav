@@ -114,7 +114,7 @@ fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
         if race.core.sim.respawns() > 0 {
-            let position = race.ship().physics.body.position;
+            let position = race.core.ship().physics.body.position;
             assert!(position.is_finite());
             return race.core.sim.spline().distance_to(position);
         }
@@ -295,7 +295,7 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
 
     // And it came back somewhere on the track rather than to the origin or to a
     // non-finite pose.
-    let position = race.ship().physics.body.position;
+    let position = race.core.ship().physics.body.position;
     assert!(position.is_finite());
     let distance = race
         .core

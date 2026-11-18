@@ -346,9 +346,9 @@ impl Race {
             camera: CameraPose {
                 view: self.tick_view(),
                 unshaken: self.tick_view_unshaken(),
-                forward_speed: self.tick_forward_speed(),
+                forward_speed: self.core.tick_forward_speed(),
                 boost_kick: self.view.boost_kick,
-                fov_offset: self.core.sim.extension_fov_offset(self.player_slot()),
+                fov_offset: self.core.sim.extension_fov_offset(self.core.player_slot()),
                 key: self.camera_key(),
             },
             ships: std::array::from_fn(|slot| {
@@ -677,9 +677,11 @@ impl Race {
     pub fn world_clock_offset(&self) -> f32 {
         self.view.world_clock_offset
     }
+}
 
+impl SimRace {
     /// The player's speed along their own nose this tick, the term
-    /// [`Self::vertical_fov`] widens the field by.
+    /// [`Race::vertical_fov`] widens the field by.
     pub(super) fn tick_forward_speed(&self) -> f32 {
         let body = &self.ship().physics.body;
         body.forward().dot(body.linear_velocity)

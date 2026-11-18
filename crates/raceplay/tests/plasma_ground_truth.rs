@@ -240,7 +240,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
         launched.len()
     );
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "firing must spend the pickup on the tick the bolt leaves"
     );

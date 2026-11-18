@@ -67,8 +67,8 @@ fn contact_where() {
             &race.core.sim.world.ships[1].handling,
             &race.core.sim.world.ships[1].physics.body,
         );
-        let reference_ptr = race.speed_plan().map(|p| p as *const _ as usize);
-        let planned = race.plan_of(1).map_or("none".to_string(), |p| {
+        let reference_ptr = race.core.speed_plan().map(|p| p as *const _ as usize);
+        let planned = race.core.plan_of(1).map_or("none".to_string(), |p| {
             format!(
                 "{} share {:.3}",
                 if Some(p as *const _ as usize) == reference_ptr {
@@ -184,7 +184,7 @@ fn contact_trace() {
     }
     race.core.sim.world.ships[0].active = false;
     let targets: Vec<(f32, f32, f32)> = {
-        let Some(plan) = race.plan_of(1) else {
+        let Some(plan) = race.core.plan_of(1) else {
             println!("no plan: the corner model drives");
             return;
         };

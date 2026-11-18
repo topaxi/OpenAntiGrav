@@ -889,7 +889,7 @@ read whole, so the opponents' controller flies it here.
 
 Still this project's driver: a race whose title and class have no original
 tables, `--autopilot-skill` and `--autopilot-pilot` (developer flags that tune
-ours, logged), and the network bot (`Race::autopilot_wants`), whose restore of
+ours, logged), and the network bot (`SimRace::autopilot_wants`), whose restore of
 the whole simulation every call would reset a driver kept outside the world.
 
 Measured, Pulse PSP USA, VENOM, seed 1, the original field at level 1, slot 0
@@ -1886,7 +1886,7 @@ project's driver follows a speed plan (`oag_ai::plan`), and the original driver
 reads none. `Race::start` no longer learns it: the head of `Race::tick` does
 (`SimRace::ensure_speed_plans`), when an opponent flies this project's driver
 (`--ai ours`, a fallback, several humans), when the player's autopilot is on, or
-when the circuit has a fork, and `Race::speed_plan` and `Race::plan_of` learn it
+when the circuit has a fork, and `SimRace::speed_plan` and `SimRace::plan_of` learn it
 first, so a reader never sees a plan missing that used to be there. (Until
 2026-10-14 `start` learned it at once, which made every race-starting test pay
 for it: see the test-data budget in `docs/architecture/workspace-layout.md`.) A
@@ -6512,7 +6512,7 @@ OAG_SWEEP=1 OAG_REQUIRE_GAME_DATA=1 OAG_ROUTE_BOARD_OUT=board.tsv \
 
 Lane `route-coverage`, a measurement: nothing a race does changed. The tool is
 `route_verify_probe` in `crates/raceplay/tests/route_plan_board.rs`. It learns a
-route's reference plan exactly as the race does (`Race::probe_route_plan`: the ring
+route's reference plan exactly as the race does (`SimRace::probe_route_plan`: the ring
 plans first, for their reference hull, then `SpeedPlan::build_within` on the
 route's line) and replays the plan's final verification tick by tick
 (`oag_ai::plan::probe::verify`, the same loop as `SpeedPlan::verify`). Each
@@ -6672,7 +6672,7 @@ sites verify at every class, on both titles
 ([above](#a-road-under-the-line-is-a-failure-2026-11-11)).
 
 `route=0`'s lead-in shares the first site. These are on the reference hull
-(`RaceSim::plan_reference`, `Race::probe_ring_plan`). **Omega**: checked, applies.
+(`RaceSim::plan_reference`, `SimRace::probe_ring_plan`). **Omega**: checked, applies.
 Its re-shipped `square` fails at the same two sites (3389-3406 and 1591-1674), with a
 different split by class: VENOM 15 and FLASH 4 wall ticks at 3389-3406 only;
 RAPIER and PHANTOM add the 1591-1674 site, with rescues and no completed lap. `sol`

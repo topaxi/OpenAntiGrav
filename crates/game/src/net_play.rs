@@ -410,7 +410,7 @@ impl NetPlay {
     pub fn begin_join(&self, race: &mut Race, title: &str) -> Result<()> {
         oag_net::race::check_title(&self.welcome.params, title)?;
         oag_net::race::prepare(race, &self.welcome.params)?;
-        race.set_person_names(self.names.borrow().clone());
+        race.core.set_person_names(self.names.borrow().clone());
         let mut client = self.client.borrow_mut();
         client.ready(race)?;
         println!(
@@ -635,7 +635,7 @@ impl NetPlay {
     /// Compares this client's board with the server's, once both exist, and says which. They
     /// are the same race (the tick hash proves the state), so a difference is a bug.
     fn check_server_board(&self, race: &Race) {
-        if self.board_checked.get() || !race.core.sim.finished() || race.results().is_none() {
+        if self.board_checked.get() || !race.core.sim.finished() || race.core.results().is_none() {
             return;
         }
         let Some(theirs) = self.server_board() else {
@@ -867,7 +867,7 @@ fn fmt_ms(value: Option<f32>) -> String {
 /// The board as this client has it when the server ends the race, in the
 /// server's own `board` lines' shape, so the two logs compare line for line.
 fn print_board(race: &Race) {
-    let Some(board) = race.results() else {
+    let Some(board) = race.core.results() else {
         println!("net: the race ended with no board on this client");
         return;
     };

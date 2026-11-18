@@ -143,7 +143,11 @@ fn the_finished_race_leaves_a_board_with_the_whole_grid_on_it() {
     };
     race_to_the_flag(&mut race);
 
-    let board = race.results().expect("a finished race has results").clone();
+    let board = race
+        .core
+        .results()
+        .expect("a finished race has results")
+        .clone();
     for row in &board.rows {
         println!(
             "{:>2}  slot {}  laps {}  {}",
@@ -210,10 +214,10 @@ fn ticking_past_the_flag_does_not_rewrite_the_result() {
         return;
     };
     race_to_the_flag(&mut race);
-    let taken = race.results().expect("a board").clone();
+    let taken = race.core.results().expect("a board").clone();
 
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.results(), Some(&taken));
+    assert_eq!(race.core.results(), Some(&taken));
 }

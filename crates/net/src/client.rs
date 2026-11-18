@@ -897,7 +897,7 @@ impl Client {
     /// countdown, the way a player holds it.
     pub fn bot_input(&mut self, race: &mut Race) -> InputSnapshot {
         let seat = self.welcome.as_ref().map_or(0, |w| w.seat);
-        let wants = race.autopilot_wants(seat, &mut self.bot);
+        let wants = race.core.autopilot_wants(seat, &mut self.bot);
         let gated = oag_race::RaceState::thrust_gated(race.core.sim.world.tick);
         if let Some(hand) = &mut self.bot_hand {
             let mut snapshot = hand.apply(wants, gated);

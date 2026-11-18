@@ -59,7 +59,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Launches craft `slot`'s Quake with its bump centred on the player, for
     /// `--force-quake`: the wave reaches the player on the next tick and the
     /// ordinary hit path runs (the cue, the lift, the slowdown, the hull's
@@ -73,12 +73,10 @@ impl Race {
     /// aid and nothing else.
     pub fn force_quake(&mut self, slot: usize) -> bool {
         let player = self.player_slot();
-        if slot == player || !self.core.sim.ship_active(slot) || self.core.sim.world.quake.is_some()
-        {
+        if slot == player || !self.sim.ship_active(slot) || self.sim.world.quake.is_some() {
             return false;
         }
         let Some(stats) = self
-            .core
             .sim
             .weapons
             .as_deref()
@@ -86,10 +84,10 @@ impl Race {
         else {
             return false;
         };
-        let Some(progress) = self.core.sim.world.ships[player].standing.progress else {
+        let Some(progress) = self.sim.world.ships[player].standing.progress else {
             return false;
         };
-        self.core.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
+        self.sim.world.quake = Some(oag_weapons::projectile::quake::Wave::launch(
             slot as u8,
             progress - oag_weapons::projectile::quake::LAUNCH_LEAD,
             1.0,

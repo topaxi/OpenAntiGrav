@@ -142,7 +142,7 @@ fn the_race_hash_sees_a_pickup_being_spent() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     let mut buttons = Buttons::new();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
-    assert!(race.ship_pickup().is_some(), "nothing to spend");
+    assert!(race.core.ship_pickup().is_some(), "nothing to spend");
 
     let held = race.core.sim.state_hash();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));

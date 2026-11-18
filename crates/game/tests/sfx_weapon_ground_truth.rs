@@ -287,7 +287,7 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
 /// `sfx_ground_truth.rs`'s own
 /// `the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires`
 /// already proves for the shield: `Cue::Autopilot` is a level
-/// (`Race::autopilot_is_active`), not a queued edge, so watching the pool is
+/// (`SimRace::autopilot_is_active`), not a queued edge, so watching the pool is
 /// the only way to see it open and close on the right tick.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -327,7 +327,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     assert!(idle >= 1, "the engine never opened");
 
     // Set directly, the same reason `shield_pickup_timer` is set directly in
-    // the shield's own test: this is the field `Race::autopilot_is_active`
+    // the shield's own test: this is the field `SimRace::autopilot_is_active`
     // reads, and granting a real pickup would be testing the pad table
     // instead. Long enough to clear both the `autopilot_eng` one-shot below
     // and the wait for it to end.
@@ -468,7 +468,7 @@ fn the_explosion_re_keys_through_the_race_and_stops_when_it_ends() {
     }
     let floor = sounding(&audio);
     race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Destroyed;
-    assert!(race.craft_is_exploding());
+    assert!(race.core.craft_is_exploding());
     let mut peak = 0;
     for _ in 0..60 {
         oag_game::sound::race_tick(&mut audio, &mut race);
@@ -512,7 +512,7 @@ fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
     oag_game::sound::hold_race_song(&mut audio, oag_pulse::TITLE);
     for tick in 0..LAUNCH + 40 {
         if tick == LAUNCH {
-            assert!(race.force_quake(1), "the rival's wave never launched");
+            assert!(race.core.force_quake(1), "the rival's wave never launched");
         }
         race.tick(&PlayerInputs::none());
         oag_game::sound::race_tick_keeping(&mut audio, &mut race, |event| {

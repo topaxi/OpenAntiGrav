@@ -101,9 +101,9 @@ pub(crate) struct EndRaceRuntime {
 /// which board the table shows.
 struct FieldFeed {
     /// The team ids in slot order, in the shape the table's builder takes (`team_keys` for HD's
-    /// `Results`, `Race::slot_teams` for Pulse's people table).
+    /// `Results`, `SimRace::slot_teams` for Pulse's people table).
     roster: Vec<String>,
-    /// `Race::results_revision` of the board the table was built from.
+    /// `SimRace::results_revision` of the board the table was built from.
     revision: u32,
 }
 
@@ -695,7 +695,7 @@ pub(crate) fn menu_options(
 /// `oag_raceplay::tournament::Progress` for the cumulative totals and rank.
 /// `slot_teams` is this leg's own grid roster, in slot order -
 /// `crate::app::session::endrace::build_endrace` reads it off the race
-/// (`Race::slot_teams`), since which team flew which slot is not carried on
+/// (`SimRace::slot_teams`), since which team flew which slot is not carried on
 /// `Board`/`Progress` themselves. `None` team entries draw the
 /// name absent rather than a placeholder - see
 /// [`oag_ui_screens::endrace::TournamentRow::team_name`]'s own doc.

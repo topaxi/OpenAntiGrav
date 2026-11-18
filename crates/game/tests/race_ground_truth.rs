@@ -210,7 +210,7 @@ fn the_front_end_hands_off_into_a_driveable_race() {
     for tick in 0..HANDOFF_TICKS {
         let snapshot = held.snapshot();
         race.tick(&PlayerInputs::single(snapshot));
-        let telemetry = race.telemetry();
+        let telemetry = race.core.telemetry();
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
@@ -221,18 +221,18 @@ fn the_front_end_hands_off_into_a_driveable_race() {
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
             race::describe(&telemetry)
         );
-        if race.ship().physics.grounded > 0.0 {
+        if race.core.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
         }
     }
 
-    println!("{}", race::describe(&race.telemetry()));
+    println!("{}", race::describe(&race.core.telemetry()));
     assert!(
         grounded_ticks > 0,
         "no hover probe reached the track in {HANDOFF_TICKS} ticks"
     );
-    let forward = race.ship().physics.body.forward();
-    let along = race.ship().physics.body.linear_velocity.dot(forward);
+    let forward = race.core.ship().physics.body.forward();
+    let along = race.core.ship().physics.body.linear_velocity.dot(forward);
     assert!(
         along > 0.0,
         "the ship the front end handed off to does not drive forwards: {along:.2}"
@@ -290,7 +290,7 @@ fn a_ship_stays_on_the_track_for_ten_seconds() {
     for tick in 0..600u32 {
         let snapshot = held.snapshot();
         race.tick(&PlayerInputs::single(snapshot));
-        let telemetry = race.telemetry();
+        let telemetry = race.core.telemetry();
         assert!(
             telemetry.position.is_finite(),
             "the ship went non-finite at tick {tick}"

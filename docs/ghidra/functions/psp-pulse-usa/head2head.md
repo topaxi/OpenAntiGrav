@@ -199,7 +199,7 @@ vertical; `+0xa0` on an `<Image>` is `Height`.
 
 `crates/hud/src/head_to_head.rs` draws exactly the above from the layout's
 own widgets (`Layout::fill("HeadToHeadBar")`, `label("Position")` etc.), fed by
-`Race::head_to_head` in `crates/raceplay/src/telemetry.rs`
+`SimRace::head_to_head` in `crates/raceplay/src/telemetry.rs`
 (`|Standing::distance(player) - Standing::distance(opponent)|`, and
 `player_place() == 1`). `--mode head_to_head` on `oag-game --race` now reaches it
 headlessly (a verification aid; a player reaches the mode through a campaign

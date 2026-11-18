@@ -23,6 +23,6 @@ the plan for `verify_respawns == 1`.
 ## Next Steps
 
 1. ~~Wire `route_clean`~~ landed 2026-10-31 (lane `cathedral-route-start`), census in `docs/gameplay/ai.md`.
-2. ~~Census~~ exactly the 16 cathedral plans change verdict, seed 1 (seeds 2-3 in the report). Their other hulls' adapted copies are now judged by the same rule: count their verdicts and `Race::plan_steps` for the board.
+2. ~~Census~~ exactly the 16 cathedral plans change verdict, seed 1 (seeds 2-3 in the report). Their other hulls' adapted copies are now judged by the same rule: count their verdicts and `SimRace::plan_steps` for the board.
 3. Then the board (`route-plans-cost-a-whole-lap-each.md`, Next Steps 1-3) for what full fields do on the two
    routes with the whole-lap plans (the stretch learner's 390 traversals were with different plans).

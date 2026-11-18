@@ -173,7 +173,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
     for tick in 0..60 {
         race.tick(&PlayerInputs::single(throttle));
         if still_held_after_first.is_none() && !laid(&race).is_empty() {
-            still_held_after_first = Some(race.ship_pickup());
+            still_held_after_first = Some(race.core.ship_pickup());
             assert!(tick < 5, "the first mine took {tick} ticks to leave");
         }
     }
@@ -197,7 +197,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
         "the pickup was spent on the first mine of the cluster rather than the last"
     );
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "the craft is still holding a Mine after the whole cluster came out"
     );
@@ -461,7 +461,7 @@ fn a_bomb_is_one_static_charge_at_the_crafts_own_position() {
         charges.len()
     );
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "the pickup survived a drop of one, so the counter did not reach zero"
     );

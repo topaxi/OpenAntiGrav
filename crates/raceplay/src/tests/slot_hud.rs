@@ -19,7 +19,7 @@ fn a_slots_readout_is_off_its_own_craft() {
     assert!(one.speed_kmh > two.speed_kmh);
     assert_eq!(one.place, u32::from(race.places()[1]));
     assert_eq!(two.place, u32::from(race.places()[2]));
-    assert_eq!(race.readout(), race.readout_for(race.player_slot()));
+    assert_eq!(race.readout(), race.readout_for(race.core.player_slot()));
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn a_grant_announces_for_one_second_and_a_regrant_announces_again() {
     };
     assert_eq!(ticks_up(&mut race), 0, "nothing held, nothing announced");
 
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     let up = ticks_up(&mut race);
     assert!((59..=60).contains(&up), "a second at 60 Hz, got {up} ticks");
@@ -155,7 +155,7 @@ fn the_grant_flies_at_1800_pixels_a_second_once_the_announcement_ends() {
 fn a_grant_on_a_race_reads_its_flight_off_the_readout() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     let mut flights = Vec::new();
     for _ in 0..70 {
@@ -193,7 +193,7 @@ fn a_grant_on_a_race_reads_its_flight_off_the_readout() {
 fn a_held_weapon_plays_the_fade_and_the_last_one_fades_out_after_use() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
@@ -279,7 +279,7 @@ fn the_grant_icon_pops_in_and_re_arms_only_once_it_has_shrunk_away() {
 fn a_grant_on_a_race_reads_its_pop_in_off_the_readout() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().pickup_pop, Some([10.0, 0.0]));
     race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);
@@ -295,7 +295,7 @@ fn a_grant_on_a_race_reads_its_pop_in_off_the_readout() {
 fn a_released_weapon_is_named_by_the_readout_until_its_icon_has_collapsed() {
     use oag_tables::weapons::Weapon;
     let mut race = race_with_a_grid();
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().pickup_releasing, None);
     race.core.sim.world.ships[slot].pickup.weapon = Some(Weapon::Missile);

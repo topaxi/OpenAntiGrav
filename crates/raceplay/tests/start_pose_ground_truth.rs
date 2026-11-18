@@ -65,7 +65,7 @@ fn start() -> Option<race::Race> {
 /// Yaw about world up, in degrees from `+X` toward `-Z`, the way the capture
 /// reads it (`atan2(forward.z, forward.x)`).
 fn yaw_degrees(race: &race::Race) -> f32 {
-    let forward = race.ship().physics.body.orientation * Vec3::NEG_Z;
+    let forward = race.core.ship().physics.body.orientation * Vec3::NEG_Z;
     forward.z.atan2(forward.x).to_degrees()
 }
 
@@ -74,7 +74,7 @@ fn fly(race: &mut race::Race, ticks: u64) -> Vec<(f32, Vec3)> {
     let held = throttle_held();
     (0..ticks)
         .map(|_| {
-            let row = (yaw_degrees(race), race.ship().physics.body.position);
+            let row = (yaw_degrees(race), race.core.ship().physics.body.position);
             race.tick(&PlayerInputs::single(held));
             row
         })

@@ -109,7 +109,7 @@ fn the_board_is_ranked_by_total_time_and_names_both_people() {
         race.tick(&PlayerInputs::none());
     }
     assert!(race.core.sim.finished(), "still running after {CAP} ticks");
-    let board = race.results().expect("both people finished");
+    let board = race.core.results().expect("both people finished");
     assert_eq!(
         board.rows.len(),
         2,
@@ -128,7 +128,7 @@ fn the_board_is_ranked_by_total_time_and_names_both_people() {
     let places: Vec<u8> = board.rows.iter().map(|row| row.place).collect();
     assert_eq!(places, [1, 2]);
 
-    let people = oag_game::results_tables::people_rows(Some(board), race.slot_teams())
+    let people = oag_game::results_tables::people_rows(Some(board), race.core.slot_teams())
         .expect("a board gives a table");
     let named: Vec<_> = people.rows.iter().map(|row| row.name.clone()).collect();
     for seat in [1, 2] {

@@ -163,7 +163,7 @@ fn the_collision_cue_needs_no_spark_effect_and_follows_the_struck_craft() {
 }
 
 /// A Quake wave reaching the player, launched by the rival through
-/// `Race::force_quake` and ticked through `Race::tick`: one `QUAKEHIT` and the
+/// `SimRace::force_quake` and ticked through `Race::tick`: one `QUAKEHIT` and the
 /// hull's own one or two `.COLLISIONS`, one for every spark thrown.
 #[test]
 fn a_quake_hit_plays_quakehit_and_the_collision_pair() {
@@ -177,7 +177,7 @@ fn a_quake_hit_plays_quakehit_and_the_collision_pair() {
     race.tick(&PlayerInputs::none());
     let _ = race.core.sim.drain_cues();
 
-    assert!(race.force_quake(1), "the rival's wave never launched");
+    assert!(race.core.force_quake(1), "the rival's wave never launched");
     let (mut quake_hits, mut collisions) = (0, 0);
     // Twenty ticks, not the wave's five seconds: this fixture's synthetic
     // circuit is a 141-unit ring, so the wave laps it and strikes the
@@ -213,13 +213,16 @@ fn force_quake_launches_one_rivals_wave_and_nothing_else() {
     race.core.sim.world.ships[1].handling = hulled_handling();
     race.tick(&PlayerInputs::none());
     assert!(
-        !race.force_quake(0),
+        !race.core.force_quake(0),
         "the player was made their own shooter"
     );
-    assert!(!race.force_quake(5), "a craft not racing fired a Quake");
-    assert!(race.force_quake(1));
+    assert!(
+        !race.core.force_quake(5),
+        "a craft not racing fired a Quake"
+    );
+    assert!(race.core.force_quake(1));
     assert_eq!(race.core.sim.world.quake.map(|wave| wave.owner), Some(1));
-    assert!(!race.force_quake(1), "a second wave joined the first");
+    assert!(!race.core.force_quake(1), "a second wave joined the first");
 }
 
 /// Nothing without a hit that landed, and nothing on a hull with no

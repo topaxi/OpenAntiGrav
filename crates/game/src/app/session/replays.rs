@@ -415,7 +415,7 @@ impl Session {
             return (None, None);
         };
         (
-            Some(stage.race.player_slot().to_string()),
+            Some(stage.race.core.player_slot().to_string()),
             Some(if active.hud { "on" } else { "off" }.to_string()),
         )
     }

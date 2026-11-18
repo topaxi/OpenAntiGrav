@@ -16,7 +16,7 @@ impl Race {
     /// the route plans on top). The head of [`Self::tick`] learns them
     /// ([`SimRace::ensure_speed_plans`]) only if something will read them, after
     /// the caller has had its say on whose driver flies
-    /// ([`RaceSim::use_original_ai`]); [`Self::speed_plan`] and [`Self::plan_of`]
+    /// ([`RaceSim::use_original_ai`]); [`SimRace::speed_plan`] and [`SimRace::plan_of`]
     /// learn them first, so no reader sees a plan missing that was there.
     ///
     /// The mass is copied into the rigid body because the force law reads

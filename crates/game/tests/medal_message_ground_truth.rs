@@ -285,7 +285,7 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
         let (mut bests, mut cues) = (Vec::new(), Vec::new());
         for step in 0..6_000_u64 {
             race.tick(&PlayerInputs::none());
-            let now = race.player_standing().best_lap_ticks;
+            let now = race.core.player_standing().best_lap_ticks;
             if now != best {
                 bests.push(step);
                 best = now;

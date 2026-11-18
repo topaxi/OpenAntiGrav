@@ -1551,7 +1551,7 @@ frozen race has no ticks to count; nothing here is hashed). **Chosen, not measur
   per view of a split and over the gantry circuits too (a gantry stands at the start line,
   not where the race was paused); `GO` stays 1.5 s after the race moves. The start voice's
   `ready` is raised as the countdown starts and `go` as it ends, on titles that voice their
-  start (`Race::raise_start_cue`; Pulse only).
+  start (`SimRace::raise_start_cue`; Pulse only).
 - **Where a title authors no countdown art, the count is text in its own `HUD` face**
   (2026-10-14, **chosen, not measured**; the original has no resume countdown at all).
   Pure's HUD authors `Ready_GO.vex` and no `Cockpit321Go` widget, HD's `hud_ready_go.xml` is

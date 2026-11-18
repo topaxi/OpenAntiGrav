@@ -147,6 +147,7 @@ fn the_board_ranks_the_people_by_total_time() {
     }
     race.capture_results();
     let board = race
+        .core
         .results()
         .expect("every person finished, so there is a board");
     let order: Vec<u8> = board.rows.iter().map(|row| row.slot).collect();

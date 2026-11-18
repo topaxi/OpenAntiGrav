@@ -90,7 +90,7 @@ fn fly(track: &str, edge: u64, frames: u64) -> Vec<(f32, oag_core::math::Vec3)> 
     (0..frames)
         .map(|frame| {
             race.tick(&PlayerInputs::single(held(frame >= edge)));
-            let body = &race.ship().physics.body;
+            let body = &race.core.ship().physics.body;
             (
                 body.linear_velocity
                     .dot(body.orientation * oag_core::math::Vec3::NEG_Z),
@@ -296,7 +296,7 @@ fn pulse_ps2_times_its_launch_like_the_psp() {
         let mut speed = 0.0;
         for frame in 0..edge + frames {
             race.tick(&PlayerInputs::single(held(frame >= edge)));
-            let body = &race.ship().physics.body;
+            let body = &race.core.ship().physics.body;
             speed = body
                 .linear_velocity
                 .dot(body.orientation * oag_core::math::Vec3::NEG_Z);

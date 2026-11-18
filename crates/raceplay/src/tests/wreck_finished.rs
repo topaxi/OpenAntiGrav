@@ -1,5 +1,5 @@
 //! What a race a wreck ended goes on doing under the results - see
-//! `Race::tick_cosmetics` and `Race::runs_on_after_the_wreck`. In a Single Race
+//! `Race::tick_cosmetics` and `SimRace::runs_on_after_the_wreck`. In a Single Race
 //! the world runs on, as the original's does (the field races, the player's wreck
 //! stays down); in a Zone run only what is seen moves: the explosion, the shake and
 //! the destroy camera.
@@ -55,7 +55,7 @@ fn a_race_ready_for_a_wreck(mode: Mode) -> Race {
 #[test]
 fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
     let mut race = a_race_the_wreck_ended_in(Mode::Zone);
-    assert!(!race.runs_on_after_the_end());
+    assert!(!race.core.runs_on_after_the_end());
     assert_eq!(
         race.core.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated
@@ -119,8 +119,8 @@ fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
         !race.core.sim.runs_on_after_the_line(),
         "the player never crossed"
     );
-    assert!(race.runs_on_after_the_wreck());
-    assert!(race.runs_on_after_the_end());
+    assert!(race.core.runs_on_after_the_wreck());
+    assert!(race.core.runs_on_after_the_end());
     let tick = race.core.sim.world.tick;
     for _ in 0..200 {
         race.tick_finished();

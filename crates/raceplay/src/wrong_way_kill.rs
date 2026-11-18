@@ -12,7 +12,7 @@
 //! ([`oag_physics::ShipState::wrong_way_kill`]). In every other mode the block is skipped and
 //! nothing else sets the bit. The tangent is `entity+0xb00`, the located spline record's;
 //! **chosen, not measured:** here it is the nearest sample's tangent, normalised, which is
-//! what [`crate::Race::wrong_way`] reads too, at its own threshold (`0.0`, the HUD's).
+//! what [`crate::SimRace::wrong_way`] reads too, at its own threshold (`0.0`, the HUD's).
 //!
 //! The original sets the bit at the end of a craft's update and the force law reads it in the
 //! next; written here at the top of the tick from the same pose, which is the same value.

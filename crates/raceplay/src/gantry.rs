@@ -825,7 +825,7 @@ fn matrix(mount: &Mount, forward: Vec3) -> Mat4 {
 /// ([`BoardWindow::of`]), entered on the crossing that picked it.
 fn race_clock(clock: &Clock, tracker: &std::cell::Cell<BoardTracker>, race: &Race) -> f32 {
     let tick = race.core.sim.world.tick;
-    let standing = race.player_standing();
+    let standing = race.core.player_standing();
     let Some(laps) = clock.laps else {
         return clock.seconds(tick);
     };

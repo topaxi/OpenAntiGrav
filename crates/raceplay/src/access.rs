@@ -58,7 +58,7 @@ impl Race {
     /// scale, and note the rates driving it are **not** the force law's.
     #[must_use]
     pub fn airbrake_flaps(&self) -> [f32; 2] {
-        self.airbrake_flaps_of(self.player_slot())
+        self.airbrake_flaps_of(self.core.player_slot())
     }
 
     #[cfg(feature = "view")]
@@ -69,11 +69,13 @@ impl Race {
         self.flaps_between(slot)
             .map(|level| self.view.flap_graphics.amount * level / 100.0)
     }
+}
 
+impl SimRace {
     /// The team id the craft in `slot` flies, when the grid named one.
     #[must_use]
     pub fn slot_team(&self, slot: usize) -> Option<&str> {
-        self.core.outcome.slot_teams.get(slot).map(String::as_str)
+        self.outcome.slot_teams.get(slot).map(String::as_str)
     }
 }
 
@@ -235,7 +237,7 @@ impl Race {
     /// grid (`fit_sights`).
     #[must_use]
     pub fn sight_screen_of(&self, slot: usize) -> [f32; 2] {
-        if slot == self.player_slot() {
+        if slot == self.core.player_slot() {
             self.view.sight.screen()
         } else {
             self.view.huds[slot].sight.screen()
@@ -545,7 +547,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Which grid slot the person at this screen is flying.
     ///
     /// [`oag_gameplay::World::primary_slot`], and `0` under every session this
@@ -554,20 +556,19 @@ impl Race {
     /// a second local player arrives, "which craft is this view about" is a
     /// parameter in one place rather than a literal `0` in thirty.
     ///
-    /// In a network race, the seat [`Self::set_seat`] names: there every person's
+    /// In a network race, the seat [`Race::set_seat`] names: there every person's
     /// slot is remote on every peer, so the world's lowest person slot is not
     /// necessarily this machine's.
     #[must_use]
     pub fn player_slot(&self) -> usize {
-        self.core
-            .outcome
+        self.outcome
             .seat
-            .unwrap_or_else(|| self.core.sim.world.primary_slot())
+            .unwrap_or_else(|| self.sim.world.primary_slot())
     }
 
     /// Whether `slot`'s person is one this machine's speakers are for.
     ///
-    /// A network client names its seat ([`Self::set_seat`]) and hears that seat
+    /// A network client names its seat ([`Race::set_seat`]) and hears that seat
     /// alone: every person is person-flown on its copy of the world, and a dry
     /// line (`Cue::Disengaging`, the held `~AUTOPILOT`) from another seat would
     /// play in its ear. Without a seat, every person flown at this machine is
@@ -578,36 +579,40 @@ impl Race {
     /// `docs/ghidra/functions/ps3-hdfury-eu/autopilot.md`.
     #[must_use]
     pub fn heard_here(&self, slot: usize) -> bool {
-        match self.core.outcome.seat {
+        match self.outcome.seat {
             Some(seat) => slot == seat,
             None => {
-                slot == self.core.sim.world.primary_slot()
-                    || self.core.sim.world.controllers.get(slot)
+                slot == self.sim.world.primary_slot()
+                    || self.sim.world.controllers.get(slot)
                         == Some(&oag_gameplay::Controller::Local)
             }
         }
     }
+}
 
+impl Race {
     /// Names the slot this machine's person flies in a network race, for every
-    /// presentation-side reader ([`Self::player_slot`]) and for the correction
+    /// presentation-side reader ([`SimRace::player_slot`]) and for the correction
     /// glide, which carries the camera and its craft together. View-only: nothing
     /// the simulation reads changes.
     pub fn set_seat(&mut self, slot: Option<usize>) {
         #[cfg(feature = "view")]
-        let followed = self.player_slot();
+        let followed = self.core.player_slot();
         self.core.outcome.seat = slot.filter(|&slot| slot < oag_gameplay::MAX_PLAYERS);
         // The camera starts settled on the craft it now follows, as a race start's does; a
         // seat that names the craft it already follows is no cut.
         #[cfg(feature = "view")]
-        if self.player_slot() != followed {
+        if self.core.player_slot() != followed {
             self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
         }
     }
+}
 
+impl SimRace {
     /// The player's ship.
     #[must_use]
     pub fn ship(&self) -> &Ship {
-        &self.core.sim.world.ships[self.player_slot()]
+        &self.sim.world.ships[self.player_slot()]
     }
 
     /// The player's lap, place and finish tick.

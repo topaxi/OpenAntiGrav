@@ -41,9 +41,10 @@ fn the_players_own_craft_gets_no_sprite_and_an_opponent_ahead_does() {
     // Slot 1 straight ahead of the player on the +X straight, facing the
     // same way: the chase camera behind slot 0 looks along +X into slot 1's
     // nozzle, a few units off - well inside `Flare Fadeout Dist`.
-    let player = race.ship().physics.body.position;
+    let player = race.core.ship().physics.body.position;
     race.core.sim.world.ships[1].physics.body.position = player + Vec3::X * 8.0;
-    race.core.sim.world.ships[1].physics.body.orientation = race.ship().physics.body.orientation;
+    race.core.sim.world.ships[1].physics.body.orientation =
+        race.core.ship().physics.body.orientation;
     let (right, up) = camera_axes(&race);
     assert!(
         race.hd_sprite_quad(FOLLOWED_SLOT, right, up).is_empty(),
@@ -70,18 +71,19 @@ fn the_players_own_craft_gets_no_sprite_and_an_opponent_ahead_does() {
 #[test]
 fn an_opponent_facing_the_camera_or_beyond_the_fadeout_range_draws_nothing() {
     let mut race = race_with_hd_flares();
-    let player = race.ship().physics.body.position;
+    let player = race.core.ship().physics.body.position;
     let (right, up) = camera_axes(&race);
     // Turned about: the nozzle now points along +X, away from the eye.
     race.core.sim.world.ships[1].physics.body.position = player + Vec3::X * 8.0;
     race.core.sim.world.ships[1].physics.body.orientation =
-        race.ship().physics.body.orientation * Quat::from_rotation_y(std::f32::consts::PI);
+        race.core.ship().physics.body.orientation * Quat::from_rotation_y(std::f32::consts::PI);
     assert!(
         race.hd_sprite_quad(1, right, up).is_empty(),
         "a non-positive view dot is the original's early-out, no quad"
     );
     // Facing the right way but past `Dist + Range` from the eye.
-    race.core.sim.world.ships[1].physics.body.orientation = race.ship().physics.body.orientation;
+    race.core.sim.world.ships[1].physics.body.orientation =
+        race.core.ship().physics.body.orientation;
     race.core.sim.world.ships[1].physics.body.position = player + Vec3::X * 200.0;
     assert!(
         race.hd_sprite_quad(1, right, up).is_empty(),

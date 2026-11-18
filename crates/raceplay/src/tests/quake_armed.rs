@@ -56,7 +56,7 @@ fn run(race: &mut Race, grants: &[usize], presses: &[usize], ticks: usize) -> Ru
         }
         was_up = up;
     }
-    seen.held = race.ship_pickup();
+    seen.held = race.core.ship_pickup();
     seen
 }
 

@@ -67,6 +67,7 @@ impl RaceStage {
         replay.header.ticks = ticks;
         replay.header.finish =
             self.race
+                .core
                 .results()
                 .and_then(race_board_player)
                 .map(|(place, finish_ticks)| Finish {

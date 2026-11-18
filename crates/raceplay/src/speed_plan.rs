@@ -475,7 +475,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Route `k`'s reference plan learned again exactly as the race learns it
     /// (the ring's plans first, for their reference hull), its report, and its
     /// verification replayed tick by tick. A diagnostic for a route that is not
@@ -490,8 +490,8 @@ impl Race {
         stages_at: Option<u32>,
         stuck: Option<u32>,
     ) -> Option<RouteProbe> {
-        self.core.ensure_speed_plans();
-        let sim = &self.core.sim;
+        self.ensure_speed_plans();
+        let sim = &self.sim;
         let route = sim.routes.get(k)?;
         let (plan, report, rows, stages) = RaceSim::with_plan_course_on(
             sim,
@@ -531,14 +531,14 @@ impl Race {
     /// ring.
     #[must_use]
     pub fn probe_ring_plan(&mut self, stuck: Option<u32>) -> RouteProbe {
-        self.core.ensure_speed_plans();
+        self.ensure_speed_plans();
         let (plan, report, rows) = RaceSim::with_plan_course_on(
-            &self.core.sim,
-            &self.core.sim.racing_line,
-            &self.core.sim.ai_order,
+            &self.sim,
+            &self.sim.racing_line,
+            &self.sim.ai_order,
             1,
             None,
-            self.core.sim.plan_reference,
+            self.sim.plan_reference,
             |c, craft| {
                 let tuning = oag_ai::Tuning::default();
                 let (plan, report) = oag_ai::SpeedPlan::build(c, craft, &tuning);
@@ -551,11 +551,11 @@ impl Race {
             report,
             rows,
             stages: None,
-            order: self.core.sim.ai_order.to_vec(),
-            kept: self.core.sim.racing_line.len(),
+            order: self.sim.ai_order.to_vec(),
+            kept: self.sim.racing_line.len(),
             merge: 0,
-            ring_len: self.core.sim.racing_line.len(),
-            line: (*self.core.sim.racing_line).clone(),
+            ring_len: self.sim.racing_line.len(),
+            line: (*self.sim.racing_line).clone(),
         }
     }
 }
@@ -694,8 +694,8 @@ impl SimRace {
 
     /// Learns the ring's, each hull's and the routes' speed plans, once, if
     /// anything will read them ([`Self::needs_speed_plans`]). Called at the
-    /// head of [`Race::tick`] and by [`Race::speed_plan`] and
-    /// [`Race::plan_of`]. On a race that has not ticked it is before any craft
+    /// head of [`Race::tick`] and by [`SimRace::speed_plan`] and
+    /// [`SimRace::plan_of`]. On a race that has not ticked it is before any craft
     /// has moved, so the plans are learned from the grid `Race::start` used to
     /// learn them from and are bit-identical to what it built. (A player's
     /// autopilot switched on mid-race would learn them from wherever slot 1
@@ -1128,27 +1128,27 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// The plan the field is following, if any, learned first if nothing has
     /// yet ([`SimRace::ensure_speed_plans`]). For a diagnostic that has to compare
     /// a craft's speed against the target it was given; `None` where the
     /// original driver flies a circuit without a fork.
     #[must_use]
     pub fn speed_plan(&mut self) -> Option<&oag_ai::SpeedPlan> {
-        self.core.ensure_speed_plans();
-        self.core.sim.speed_plan.as_deref()
+        self.ensure_speed_plans();
+        self.sim.speed_plan.as_deref()
     }
 
     /// What learning this race's route plans cost, learned first if nothing
     /// has yet. A diagnostic for `route_plan_board`.
     #[must_use]
     pub fn plan_steps(&mut self) -> &PlanSteps {
-        self.core.ensure_speed_plans();
-        &self.core.sim.plan_steps
+        self.ensure_speed_plans();
+        &self.sim.plan_steps
     }
 }
 
-/// What [`Race::probe_route_plan`] found for one route.
+/// What [`SimRace::probe_route_plan`] found for one route.
 #[derive(Debug, Clone)]
 pub struct RouteProbe {
     pub plan: oag_ai::SpeedPlan,

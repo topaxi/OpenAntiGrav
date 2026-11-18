@@ -35,7 +35,7 @@ fn cross(down: bool) -> PlayerInputs {
 }
 
 fn forward_speed(race: &Race) -> f32 {
-    let body = &race.ship().physics.body;
+    let body = &race.core.ship().physics.body;
     body.linear_velocity.dot(body.forward())
 }
 

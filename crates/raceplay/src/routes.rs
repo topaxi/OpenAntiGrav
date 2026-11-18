@@ -274,17 +274,17 @@ pub(super) fn line_for<'a>(
         .map_or(ring, |r| &r.line)
 }
 
-impl Race {
+impl SimRace {
     /// The speed plan slot `slot`'s driver follows on its own line: the
     /// ring's, a route's, or none.
     #[must_use]
     pub fn plan_of(&mut self, slot: usize) -> Option<&oag_ai::SpeedPlan> {
-        self.core.ensure_speed_plans();
+        self.ensure_speed_plans();
         plan_for(
-            &self.core.sim.routes,
-            self.core.sim.speed_plan.as_deref(),
-            super::speed_plan::hull_of(&self.core.sim.hull_plans, self.core.sim.ship_plan[slot]),
-            self.core.sim.world.ships[slot].driver.branching.route,
+            &self.sim.routes,
+            self.sim.speed_plan.as_deref(),
+            super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
+            self.sim.world.ships[slot].driver.branching.route,
         )
     }
 }

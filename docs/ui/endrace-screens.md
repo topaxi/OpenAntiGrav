@@ -776,7 +776,7 @@ stride agree, which is why this is "likely" and not 75). Not read: the `-2` case
 
 **The fix**: `Race::refresh_results` (`crates/raceplay/src/results.rs`), called from
 `Race::tick_finished` while the world runs on after the line, retakes the board from the world.
-It replaces the board only when it differs and bumps `Race::results_revision`; nothing is done
+It replaces the board only when it differs and bumps `SimRace::results_revision`; nothing is done
 once every craft has finished. The player's row, `Board::tick` and the people's names stay as
 the finish took them, so nothing read once at the finish (the place the voice speaks, the
 loyalty banked, the best lap recorded, a Tournament leg's points) can change, and the screens'

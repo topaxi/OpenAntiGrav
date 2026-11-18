@@ -110,21 +110,21 @@ fn a_held_pose_takes_the_engine_ribbon_with_the_hull() {
     // The resting craft turns under the clock (bank-to-yaw): put it a third of a turn round,
     // then let the ribbon lay samples along the turned hull.
     race.place_player(
-        race.ship().physics.body.position,
-        Quat::from_rotation_y(0.6) * race.ship().physics.body.orientation,
+        race.core.ship().physics.body.position,
+        Quat::from_rotation_y(0.6) * race.core.ship().physics.body.orientation,
     );
     for _ in 0..20 {
         race.tick(&input);
     }
     let (_, back_turned) = race.exhaust().newest_trail_sample().expect("a trail");
     assert!(
-        back_turned.dot(-race.ship().physics.body.forward()) > 0.999,
+        back_turned.dot(-race.core.ship().physics.body.forward()) > 0.999,
         "the ribbon is laid along the hull as it is flown"
     );
 
     held.restore(&mut race);
     let (head, back) = race.exhaust().newest_trail_sample().expect("a trail");
-    let hull_back = -race.ship().physics.body.forward();
+    let hull_back = -race.core.ship().physics.body.forward();
     assert!(
         back.dot(hull_back) > 0.999,
         "the ribbon points back along the restored hull: {back:?} against {hull_back:?}"

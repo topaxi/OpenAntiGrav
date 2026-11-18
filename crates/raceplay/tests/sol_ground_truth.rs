@@ -280,7 +280,7 @@ fn gap_run_up_trace() {
         return;
     }
     if std::env::var_os("OAG_SOL_VERIFY").is_some() {
-        let probe = race.probe_ring_plan(None);
+        let probe = race.core.probe_ring_plan(None);
         println!("verify report {:?}", probe.report);
         for followed in &probe.rows {
             let row = &followed.row;

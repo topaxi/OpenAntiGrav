@@ -65,7 +65,7 @@ pub(crate) struct RaceStage {
     /// [`oag_raceplay::scoreboard::Board`] - see [`RaceStage::draw_hud`].
     ///
     /// `None` until the finish arm sets it, and forever `None` on a race that
-    /// is escaped rather than finished: [`oag_raceplay::Race::results`] is
+    /// is escaped rather than finished: [`oag_raceplay::SimRace::results`] is
     /// `None` on that path too, so there is no table for it to be drawn on.
     /// See `Session::frame`'s finish-transition arm, the only writer.
     pub(crate) personal_best: Option<crate::records::PersonalBest>,
@@ -420,9 +420,9 @@ impl RaceStage {
     /// with a time. Touches no race state; the screen keeps its page and its cursor.
     pub(crate) fn refresh_endrace_board(&mut self) {
         if let (Some(endrace_touch::EndRace::Disc(runtime)), Some(board)) =
-            (&mut self.endrace, self.race.results())
+            (&mut self.endrace, self.race.core.results())
         {
-            runtime.refresh_field(board, self.race.results_revision());
+            runtime.refresh_field(board, self.race.core.results_revision());
         }
     }
 
@@ -435,12 +435,13 @@ impl RaceStage {
     /// agree with `crate::records` in one place. See that module's own
     /// doc for why it takes primitives rather than a `&Race`.
     pub(crate) fn observation(&self) -> crate::records::Observation {
-        let standing = self.race.player_standing();
+        let standing = self.race.core.player_standing();
         let finished = self.race.core.sim.finished();
         // A scored race (an HD Eliminator) is placed on its points, the board's own order, which
         // the results table, the headline, the voice and the record all read.
         let place = self
             .race
+            .core
             .results()
             .filter(|board| board.scored())
             .and_then(|board| board.player())
@@ -483,7 +484,7 @@ impl RaceStage {
     fn campaign_2048_medal(&self, finished: bool) -> Option<crate::records::Medal> {
         let progress = self.campaign_2048_event.as_ref()?;
         let objectives = progress.objectives.as_ref()?;
-        let standing = self.race.player_standing();
+        let standing = self.race.core.player_standing();
         let outcome = oag_2048::campaign::EventOutcome {
             finished,
             place: self.race.player_place(),
@@ -576,7 +577,7 @@ impl RaceStage {
     /// list calls it; recorded under a mod campaign's title by
     /// `Launch::record_result`.
     pub(crate) fn campaign_tier_name(&self) -> Option<String> {
-        let standing = self.race.player_standing();
+        let standing = self.race.core.player_standing();
         let tier = self.campaign_tier(self.race.core.sim.finished(), standing.best_lap_ticks)?;
         Some(self.campaign_tiers().get(tier)?.name.clone())
     }
@@ -597,6 +598,7 @@ impl RaceStage {
             CampaignMode::TimeTrial if finished => {
                 let tick = self
                     .race
+                    .core
                     .player_standing()
                     .finish_tick
                     .unwrap_or(self.race.core.sim.world.tick);
@@ -613,8 +615,8 @@ impl RaceStage {
                 self.title.campaign.counting_modes,
                 self.campaign_custom.is_some(),
                 finished,
-                self.race.player_standing().kills,
-                self.race.eliminator_place(),
+                self.race.core.player_standing().kills,
+                self.race.core.eliminator_place(),
             ),
             CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
             CampaignMode::CustomGrid | CampaignMode::AiRace | CampaignMode::Other(_) => None,
@@ -762,7 +764,7 @@ impl RaceStage {
             );
             return true;
         }
-        let Some(board) = self.race.results() else {
+        let Some(board) = self.race.core.results() else {
             return false;
         };
         self.scoreboard.draw(

@@ -38,15 +38,19 @@ fn a_thrown_shuriken_leaves_at_the_recovered_angle() {
 
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Shuriken)
     );
 
-    let forward = race.ship().physics.body.forward();
-    let up = race.ship().physics.body.up();
+    let forward = race.core.ship().physics.body.forward();
+    let up = race.core.ship().physics.body.up();
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
-    assert_eq!(race.ship_pickup(), None, "throwing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "throwing must spend the pickup"
+    );
     assert_eq!(
         race.core.sim.world.projectiles.live(),
         1,
@@ -98,8 +102,8 @@ fn a_shurikens_side_is_drawn_and_both_sides_come_up() {
     );
     race.tick(&PlayerInputs::none());
 
-    let forward = race.ship().physics.body.forward();
-    let up = race.ship().physics.body.up();
+    let forward = race.core.ship().physics.body.forward();
+    let up = race.core.ship().physics.body.up();
     let right = forward.cross(up);
 
     let mut sides = (0, 0);
@@ -144,7 +148,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
 
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Plasma)
     );
     assert_eq!(
@@ -153,11 +157,15 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
         "nothing before firing"
     );
 
-    let before = race.ship().physics.body.position;
-    let forward = race.ship().physics.body.forward();
+    let before = race.core.ship().physics.body.position;
+    let forward = race.core.ship().physics.body.forward();
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     assert_eq!(
         race.core.sim.world.projectiles.live(),
         1,
@@ -182,7 +190,7 @@ fn a_fired_plasma_puts_exactly_one_projectile_in_the_air() {
         bolt.velocity.length()
     );
     // Straight down the nose: no fan, so no lateral component at all.
-    let right = race.ship().physics.body.right();
+    let right = race.core.ship().physics.body.right();
     assert!(
         bolt.velocity.dot(right).abs() < 1e-2,
         "the bolt was fanned: lateral component {}",
@@ -207,7 +215,7 @@ fn a_craft_with_one_rocket_fires_one() {
 
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Rocket)
     );
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
@@ -257,7 +265,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Rocket)
     );
     assert_eq!(
@@ -266,11 +274,15 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
         "nothing before firing"
     );
 
-    let before = race.ship().physics.body.position;
-    let forward = race.ship().physics.body.forward();
+    let before = race.core.ship().physics.body.position;
+    let forward = race.core.ship().physics.body.forward();
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     assert_eq!(
         race.core.sim.world.projectiles.live(),
         oag_weapons::projectile::ROCKET_SHOTS,
@@ -308,7 +320,7 @@ fn a_fired_rocket_puts_three_projectiles_in_the_air() {
 
     // And they really are fanned rather than three copies of one shot,
     // which the count alone would not catch.
-    let right = race.ship().physics.body.right();
+    let right = race.core.ship().physics.body.right();
     let lateral: Vec<f32> = (0..oag_weapons::projectile::ROCKET_SHOTS)
         .map(|slot| {
             race.core.sim.world.projectiles.slots[slot]

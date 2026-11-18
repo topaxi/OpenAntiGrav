@@ -173,7 +173,7 @@ fn a_held_fire_button_is_what_fires_a_cannon() {
         );
     }
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(Weapon::Cannon),
         "an unfired Cannon must still be in the slot after {quiet} ticks"
     );

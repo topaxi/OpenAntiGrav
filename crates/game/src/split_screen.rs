@@ -422,12 +422,12 @@ pub fn seat_for_launch(
     }
 }
 
-/// Names the person at this machine, seat 1 ([`Race::player_slot`]), with the stored player
+/// Names the person at this machine, seat 1 ([`SimRace::player_slot`](oag_raceplay::SimRace::player_slot)), with the stored player
 /// name ([`crate::settings::Player::name`]), so the multiplayer tag over their craft in the
 /// other seat's view and their row on the end screens carry it. Every other slot stays unnamed
 /// and keeps `Player N`. With no name stored, or on a title that keeps no name
 /// (`profile`: 2048 and Omega, which ask when it is first needed), nothing is set. A network
-/// race's lobby names replace this whole list when it joins ([`Race::set_person_names`]).
+/// race's lobby names replace this whole list when it joins ([`SimRace::set_person_names`](oag_raceplay::SimRace::set_person_names)).
 ///
 /// Display only: nothing here reaches the simulation or its hash.
 pub fn name_first_seat(
@@ -438,10 +438,10 @@ pub fn name_first_seat(
     let Some(name) = player.name().filter(|_| profile.asks_for_name()) else {
         return;
     };
-    let seat = race.player_slot();
+    let seat = race.core.player_slot();
     let mut names = vec![String::new(); seat + 1];
     names[seat] = name.to_string();
-    race.set_person_names(names);
+    race.core.set_person_names(names);
 }
 
 /// Keeps `race`'s local slots to the ones a device is on: a slot below the seated

@@ -82,9 +82,9 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     // its height off the *collision mesh* under the slot while this reads it off the
     // *spline*: agreeing to a hundredth means those two surfaces agree there, which
     // nothing made them do.
-    let start = race.telemetry();
+    let start = race.core.telemetry();
     assert!(start.position.is_finite(), "{:?}", start.position);
-    assert_eq!(race.ship().physics.body.mass, handling.physical.mass);
+    assert_eq!(race.core.ship().physics.body.mass, handling.physical.mass);
     assert!(
         (start.height_above_spline - race::spawn_height(&handling)).abs() < 0.01,
         "spawned at {} above the spline, wanted {}",
@@ -95,9 +95,9 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     // backwards buries the ship. On this track's first sample the surface is roughly
     // level, so the ship's own up must have a positive world y.
     assert!(
-        race.ship().physics.body.up().y > 0.5,
+        race.core.ship().physics.body.up().y > 0.5,
         "the ship is not the right way up: {}",
-        race.ship().physics.body.up()
+        race.core.ship().physics.body.up()
     );
 
     // Out of the countdown first - it gates thrust, so the window below used to
@@ -107,7 +107,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::single(held.snapshot()));
     }
-    let moving_from = race.telemetry().position;
+    let moving_from = race.core.telemetry().position;
     let mut grounded_ticks = 0u32;
     // Counted apart, because one probe in contact and two are different situations:
     // a single probe is a pitch torque applied every tick.
@@ -118,7 +118,7 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     for tick in 0..TICKS {
         let snapshot = held.snapshot();
         race.tick(&PlayerInputs::single(snapshot));
-        let telemetry = race.telemetry();
+        let telemetry = race.core.telemetry();
 
         assert!(
             telemetry.position.is_finite(),
@@ -131,17 +131,17 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
             race::describe(&telemetry)
         );
 
-        if race.ship().physics.grounded > 0.0 {
+        if race.core.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
         }
-        if race.ship().physics.grounded == 1.0 {
+        if race.core.ship().physics.grounded == 1.0 {
             both_probes += 1;
         }
         worst_distance = worst_distance.max(telemetry.spline_distance);
         peak_speed = peak_speed.max(telemetry.speed);
     }
 
-    let end = race.telemetry();
+    let end = race.core.telemetry();
     println!("{}", race::describe(&end));
     println!(
         "grounded on {grounded_ticks}/{TICKS} tick(s), both probes on {both_probes}, \
@@ -177,8 +177,8 @@ fn a_ship_spawns_on_the_track_and_flies_along_it() {
     // hold - the spline's tangent, the rotation `Pose::from_sample` builds from it,
     // and the body axis the engine pushes along - and any one of them inverted would
     // still satisfy every assertion above.
-    let forward = race.ship().physics.body.forward();
-    let along = race.ship().physics.body.linear_velocity.dot(forward);
+    let forward = race.core.ship().physics.body.forward();
+    let along = race.core.ship().physics.body.linear_velocity.dot(forward);
     assert!(
         along > 0.0,
         "thrust drove the ship backwards along its own forward axis: {along:.2}"

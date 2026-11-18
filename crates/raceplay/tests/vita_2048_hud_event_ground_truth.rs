@@ -293,7 +293,7 @@ fn a_grant_flies_the_missile_icon_to_the_slot_and_widens_the_frame(
     context: &oag_hud::Context<'_>,
     race: &mut oag_raceplay::Race,
 ) {
-    let slot = race.player_slot();
+    let slot = race.core.player_slot();
     // Whatever the race held before, a few ticks of nothing re-arm the pop-in (the height runs out
     // at 10/s, then the next frame resets it).
     race.core.sim.world.ships[slot].pickup.weapon = None;

@@ -120,7 +120,7 @@ impl Facts {
                 found
             );
         }
-        let slot = race.player_slot();
+        let slot = race.core.player_slot();
         let body = &race.core.sim.world.ships[slot].physics.body;
         let race_info = shot_meta::Race {
             track: self.circuit.clone(),

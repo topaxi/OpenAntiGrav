@@ -669,7 +669,7 @@ impl Race {
     /// the seven AI crafts (`docs/ghidra/functions/ps3-hdfury-eu/
     /// engine-trail.md`, "Tenth session", confidence 92). The craft this
     /// engine's one view belongs to is slot 0: [`Race::view`] frames
-    /// [`Race::ship`], which is `ships[0]`, and a `CameraOverride` pose is
+    /// [`SimRace::ship`], which is `ships[0]`, and a `CameraOverride` pose is
     /// still that player's view, so slot 0 is skipped under one too.
     #[must_use]
     pub fn hd_sprite_quad(&self, slot: usize, right: Vec3, up: Vec3) -> SpriteQuad {
@@ -889,7 +889,7 @@ impl Race {
         // game uses it - a real race pushes one true sample per tick from
         // `Race::tick`.
         if let Some(nozzle) = self.nozzle() {
-            let back = -self.ship().physics.body.forward();
+            let back = -self.core.ship().physics.body.forward();
             self.view.exhaust[0].clear_trail();
             for k in (0..self.view.exhaust[0].trail_samples_kept()).rev() {
                 let behind = back * (speed * self.core.sim.dt * k as f32);
@@ -898,7 +898,7 @@ impl Race {
             // The HD tube on the same straight-line terms, when it is the
             // ribbon this race draws.
             if self.view.hd_trail_active {
-                let up = self.ship().physics.body.up();
+                let up = self.core.ship().physics.body.up();
                 let s01 = exhaust::hd::speed01(self.view.exhaust[0].speed_kmh(), 1.0);
                 self.view.hd_trail[0].clear();
                 for k in (0..exhaust::hd::SAMPLES).rev() {
@@ -1047,7 +1047,9 @@ impl Race {
     pub fn sparks(&self) -> &psys::System {
         &self.view.contact.sparks
     }
+}
 
+impl SimRace {
     /// Whether the player's craft is mid-explosion.
     ///
     /// A *level*, like [`Self::shield_is_up`] and for the same reason:
@@ -1078,7 +1080,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Whether an Autopilot pickup is currently active under a person this
     /// machine's speakers are for ([`Self::heard_here`]).
     ///
@@ -1091,12 +1093,14 @@ impl Race {
     #[must_use]
     pub fn autopilot_is_active(&self) -> bool {
         (0..oag_gameplay::MAX_PLAYERS).any(|slot| {
-            self.core.sim.world.person_flown(slot)
+            self.sim.world.person_flown(slot)
                 && self.heard_here(slot)
-                && self.core.sim.world.ships[slot].autopilot_timer > 0.0
+                && self.sim.world.ships[slot].autopilot_timer > 0.0
         })
     }
+}
 
+impl Race {
     /// Where the Quake wave is on the road, while one travels: the point
     /// [`oag_gameplay::cue::Cue::QuakeTravel`] is heard from.
     #[must_use]
@@ -1160,14 +1164,16 @@ impl Race {
             }
         }
     }
+}
 
+impl SimRace {
     /// Whether the player's shield pickup is currently up.
     ///
     /// A *level*, not an edge, and that is what `~SHIELD` wants:
     /// `Shield_Activate` opens a looping voice with a handle and the shield's
     /// own expiry releases it, so the voice's lifetime is exactly this
     /// predicate's. The same timer gates the collision sparks - see
-    /// [`Self::tick`] - so "the shell is up" is one fact read in two places.
+    /// [`Race::tick`] - so "the shell is up" is one fact read in two places.
     #[must_use]
     pub fn shield_is_up(&self) -> bool {
         self.ship().physics.shield_pickup_timer > 0.0
@@ -1264,7 +1270,7 @@ impl Race {
 }
 
 /// The slot the one view belongs to: [`Race::view`] is built around
-/// [`Race::ship`], which is `ships[0]`.
+/// [`SimRace::ship`], which is `ships[0]`.
 pub(super) const FOLLOWED_SLOT: usize = 0;
 
 /// The exhaust flicker seed for one craft.

@@ -97,7 +97,7 @@ pub(crate) struct Pad {
     tuning: oag_ai::Tuning,
     input: Input,
     /// `Some` when the pad is the race's own driver for the player's craft
-    /// ([`race::Race::autopilot_wants`]): the speed plan, the field and the
+    /// ([`race::SimRace::autopilot_wants`]): the speed plan, the field and the
     /// hull's yaw ceiling, kept outside the world, as `--net-bot` flies.
     race_driver: Option<Option<oag_ai::Driver>>,
     /// Whether the bare driver has been found on the line yet. Its search is
@@ -132,7 +132,7 @@ impl Pad {
     /// What this pad holds this tick for the craft in `slot`.
     pub(crate) fn snapshot(&mut self, race: &mut race::Race, slot: usize) -> InputSnapshot {
         let controls = if let Some(driver) = self.race_driver.as_mut() {
-            race.autopilot_wants(slot, driver)
+            race.core.autopilot_wants(slot, driver)
         } else {
             let line = race.core.sim.racing_line();
             let physics = &race.core.sim.world.ships[slot].physics;
@@ -334,8 +334,8 @@ fn round_trip(title: &str, mut race: race::Race, replay: Replay) {
         "{title}: {} ticks, lap {} reached, best lap {:?} ticks; file {} bytes \
          (inputs {inputs} bytes = {:.2} bytes/tick, {} hashes, ghost {ghost} poses)",
         replay.ticks(),
-        race.player_standing().lap,
-        race.player_standing().best_lap_ticks,
+        race.core.player_standing().lap,
+        race.core.player_standing().best_lap_ticks,
         bytes.len(),
         inputs as f64 / replay.ticks() as f64,
         replay.hashes.len(),
@@ -448,7 +448,7 @@ fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
     let line = race.core.sim.racing_line();
     let gap = line
         .point(pad.driver.index as usize)
-        .distance(race.ship().physics.body.position);
+        .distance(race.core.ship().physics.body.position);
     assert!(
         gap < 20.0,
         "the pad's line sample is {gap} units from its craft"

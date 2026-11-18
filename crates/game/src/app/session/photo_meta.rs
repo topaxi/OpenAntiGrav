@@ -99,7 +99,7 @@ impl Session {
         };
         let slot = race
             .photo()
-            .map_or_else(|| race.player_slot(), |photo| photo.subject());
+            .map_or_else(|| race.core.player_slot(), |photo| photo.subject());
         let body = &race.core.sim.world.ships[slot].physics.body;
         let craft = shot_meta::Craft {
             position: [body.position.x, body.position.y, body.position.z],

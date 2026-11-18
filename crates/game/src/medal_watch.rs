@@ -48,6 +48,7 @@ pub fn live_value(mode: &Mode, race: &Race) -> Option<i64> {
     match mode {
         Mode::Zone => Some(i64::from(race.core.sim.world.primary_race().zone)),
         Mode::SpeedLap => race
+            .core
             .player_standing()
             .best_lap_ticks
             .map(|ticks| ticks_to_centiseconds(u64::from(ticks))),
@@ -137,7 +138,7 @@ fn every_best_lap(
     let value = ticks_to_centiseconds(u64::from(ticks));
     let now = cell.evaluate_medal_for_difficulty(value, difficulty, counting)?;
     race.raise_message(phrase(now), true);
-    race.raise_cue(voice(now));
+    race.core.raise_cue(voice(now));
     if improvement(*earned, Some(now)).is_some() {
         *earned = Some(now);
         race.set_standing_message(phrase(now));

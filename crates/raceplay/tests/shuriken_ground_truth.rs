@@ -256,7 +256,11 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
 
     let thrown: Vec<_> = blades(&race);
     assert_eq!(thrown.len(), 1, "one press threw {} blades", thrown.len());
-    assert_eq!(race.ship_pickup(), None, "throwing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "throwing must spend the pickup"
+    );
 
     // Off to one side, at the recovered angle's magnitude - the side itself is
     // the coin's and is deliberately not asserted here.

@@ -91,7 +91,7 @@ impl Scene {
             let stepped = grade.follow_laps(
                 laps,
                 primary.lap_ticks(race.core.sim.world.tick),
-                race.ship().physics.body.position.to_array(),
+                race.core.ship().physics.body.position.to_array(),
             );
             if stepped {
                 debug!(
@@ -122,7 +122,7 @@ impl Scene {
             zone,
             race.core.sim.world.primary_race().zone_timer,
             race.core.sim.dt(),
-            race.ship().physics.body.position.to_array(),
+            race.core.ship().physics.body.position.to_array(),
         );
         stepped
     }

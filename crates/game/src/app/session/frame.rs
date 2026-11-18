@@ -887,7 +887,7 @@ impl Session {
                     // `RaceSim::runs_on_after_the_line` and `Race::refresh_results`.
                     //
                     // A Single Race wreck steps the whole world too
-                    // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
+                    // (`SimRace::runs_on_after_the_wreck`); any other ending (a Zone
                     // run) steps only what is seen: the explosion, the shake, the
                     // destroy camera. See `Race::tick_cosmetics`.
                     // A network race goes on through the protocol: the server's
@@ -1043,7 +1043,7 @@ impl Session {
                     if self.log_every > 0
                         && stage.race.core.sim.world.tick % u64::from(self.log_every) == 0
                     {
-                        println!("{}", race::describe(&stage.race.telemetry()));
+                        println!("{}", race::describe(&stage.race.core.telemetry()));
                     }
                 }
             }

@@ -123,7 +123,7 @@ fn the_result_is_frozen_at_the_line_while_the_race_runs_on() {
         return;
     };
     let standing = race.core.sim.world.ships[0].standing;
-    let board = race.results().cloned();
+    let board = race.core.results().cloned();
     let lap = race.core.sim.world.primary_race().lap;
     let ghost_lap = race.core.sim.world.ships[0].standing.best_lap_ticks;
     // Long enough for the craft to come all the way round to the line again, which
@@ -142,7 +142,7 @@ fn the_result_is_frozen_at_the_line_while_the_race_runs_on() {
         ghost_lap
     );
     assert_eq!(
-        race.results().cloned(),
+        race.core.results().cloned(),
         board,
         "the board taken at the line was revised"
     );

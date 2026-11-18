@@ -223,7 +223,7 @@ fn record_hand_pack_measured(
         let gated = oag_race::RaceState::thrust_gated(race.core.sim.world.tick);
         let mut inputs = PlayerInputs::none();
         for slot in 0..slots {
-            let wants = race.autopilot_wants(slot, &mut drivers[slot]);
+            let wants = race.core.autopilot_wants(slot, &mut drivers[slot]);
             let snapshot = if straight {
                 let mut buttons = Input::new();
                 buttons.begin_frame(if gated || wants.thrust > 0.5 {

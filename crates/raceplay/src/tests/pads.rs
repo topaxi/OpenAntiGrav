@@ -107,7 +107,7 @@ fn a_track_with_no_pads_never_boosts() {
         let evaluated = race.tick(&PlayerInputs::none());
         assert_eq!(evaluated.speedup_pad, Vec3::ZERO);
     }
-    assert_eq!(race.ship().physics.pad_timer, 0.0);
+    assert_eq!(race.core.ship().physics.pad_timer, 0.0);
 }
 
 /// The whole chain, end to end: containment in `oag_vex::pads`, the
@@ -125,7 +125,7 @@ fn a_ship_inside_a_pad_is_pushed_along_the_pads_own_axis() {
         Vec3::Z,
         "the boost must follow row 2 of the pad's matrix"
     );
-    assert!(race.ship().physics.pad_timer > 0.0);
+    assert!(race.core.ship().physics.pad_timer > 0.0);
 }
 
 /// Leaving the pad does not end the boost, it starts the countdown. This is
@@ -134,7 +134,7 @@ fn a_ship_inside_a_pad_is_pushed_along_the_pads_own_axis() {
 fn the_boost_outlives_the_pad_and_then_expires() {
     let mut race = race_with_pads(Mode::TimeTrial, vec![pad_at(Vec3::ZERO, 1.0e6)]);
     race.tick(&PlayerInputs::none());
-    assert!(race.ship().physics.pad_timer > 0.0);
+    assert!(race.core.ship().physics.pad_timer > 0.0);
 
     // Take the pad away, which is the same to the trigger as driving off it.
     race.core.sim.speedup_pads = Vec::new().into();
@@ -152,7 +152,7 @@ fn the_boost_outlives_the_pad_and_then_expires() {
         "{boosted_ticks} ticks of boost after leaving the pad"
     );
     assert_eq!(
-        race.ship().physics.pad_timer,
+        race.core.ship().physics.pad_timer,
         0.0,
         "the timer never expired"
     );
@@ -187,7 +187,7 @@ fn the_class_gravity_scale_reaches_the_grounded_half_of_gravity() {
             evaluated = race.tick(&PlayerInputs::none());
         }
         assert!(
-            race.ship().physics.grounded > 0.0,
+            race.core.ship().physics.grounded > 0.0,
             "the ship never found the floor, so the grounded lane is not under test"
         );
         evaluated.gravity.y
@@ -217,7 +217,7 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
     let mut race = race_with_pads(Mode::TimeTrial, enveloping_pad());
     // Well under the flare's fixed duration, so the two are distinguishable.
     assert!(
-        race.ship().handling.speedup_pads.time < exhaust::BOOST_SECONDS,
+        race.core.ship().handling.speedup_pads.time < exhaust::BOOST_SECONDS,
         "the fixture must make the flare the longer of the two"
     );
 
@@ -273,7 +273,7 @@ fn only_zone_mode_scores_for_a_speed_pad() {
             race.tick(&PlayerInputs::none());
         }
         assert!(
-            race.ship().physics.pad_timer > 0.0,
+            race.core.ship().physics.pad_timer > 0.0,
             "{mode:?}: the pad did not fire at all, so the score assertion proves nothing"
         );
         assert_eq!(
@@ -294,7 +294,7 @@ fn entering_a_pad_counts_one_boost_on_the_current_lap_and_not_again_while_inside
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
     }
-    let boosts = race.run_stats().boosts_by_lap;
+    let boosts = race.core.run_stats().boosts_by_lap;
     assert_eq!(boosts.iter().sum::<u32>(), 1, "{boosts:?}");
     assert_eq!(boosts[lap as usize - 1], 1, "on lap {lap}: {boosts:?}");
 }
@@ -309,5 +309,5 @@ fn an_opponent_entering_a_pad_is_not_a_boost_on_the_players_lap() {
         (0..8).all(|slot| race.core.sim.pad_current[slot] == Some(0)),
         "the whole grid should be on the pad"
     );
-    assert_eq!(race.run_stats().boosts_by_lap.iter().sum::<u32>(), 1);
+    assert_eq!(race.core.run_stats().boosts_by_lap.iter().sum::<u32>(), 1);
 }

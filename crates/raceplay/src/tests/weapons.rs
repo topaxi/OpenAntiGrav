@@ -45,11 +45,14 @@ fn one_shield_table() -> oag_tables::weapons::WeaponStats {
 fn crossing_a_weapon_pad_grants_the_pickup_its_class_weights() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     assert!(
-        race.ship_pickup().is_none(),
+        race.core.ship_pickup().is_none(),
         "a race must start empty-handed"
     );
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Turbo));
+    assert_eq!(
+        race.core.ship_pickup(),
+        Some(oag_tables::weapons::Weapon::Turbo)
+    );
 }
 
 /// The mode gate, and it is the one thing about a weapon pad that *is*
@@ -70,7 +73,7 @@ fn a_weapons_off_mode_never_grants_anything() {
             race.tick(&PlayerInputs::none());
         }
         assert!(
-            race.ship_pickup().is_none(),
+            race.core.ship_pickup().is_none(),
             "{mode:?} handed out a pickup, and the original arms no pads for it"
         );
     }
@@ -86,7 +89,7 @@ fn sitting_on_a_weapon_pad_does_not_refill_the_slot() {
     let mut granted = 0;
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
-        if race.ship_pickup().is_some() {
+        if race.core.ship_pickup().is_some() {
             granted += 1;
             race.core.sim.world.ships[0].pickup.weapon = None;
         }
@@ -132,7 +135,10 @@ fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
     };
 
     race.tick(&PlayerInputs::none());
-    assert!(race.ship_pickup().is_some(), "the first crossing must pay");
+    assert!(
+        race.core.ship_pickup().is_some(),
+        "the first crossing must pay"
+    );
     race.core.sim.world.ships[0].pickup.weapon = None;
 
     // Off the pad, then back on, well inside the cooldown.
@@ -141,7 +147,7 @@ fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
     place(&mut race, enveloping_pad()[0]);
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "a pad re-entered inside its refresh time paid a second time"
     );
@@ -156,7 +162,7 @@ fn a_pad_re_entered_within_its_cooldown_hands_out_nothing() {
     place(&mut race, enveloping_pad()[0]);
     race.tick(&PlayerInputs::none());
     assert!(
-        race.ship_pickup().is_some(),
+        race.core.ship_pickup().is_some(),
         "the pad never became collectable again"
     );
 }
@@ -184,7 +190,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     fired.tick(&PlayerInputs::single(fired_buttons.tick(CROSS)));
     plain.tick(&PlayerInputs::single(plain_buttons.tick(CROSS)));
     assert_eq!(
-        fired.ship_pickup(),
+        fired.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Turbo)
     );
 
@@ -214,10 +220,14 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     );
 
     assert!(
-        fired.ship().physics.turbo_timer > 0.0,
+        fired.core.ship().physics.turbo_timer > 0.0,
         "firing must arm the timer"
     );
-    assert_eq!(fired.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        fired.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     assert!(
         boosted.engine.thrust > ordinary.engine.thrust,
         "a fired turbo must add thrust: {} against {}",
@@ -227,7 +237,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     // Exactly the authored `<Engine turbo>`, doubled by the engine's own
     // fixed `* 2.0` - the two races differ in nothing else on this tick, so
     // the whole difference is the add.
-    let turbo = fired.ship().handling.engine.turbo;
+    let turbo = fired.core.ship().handling.engine.turbo;
     assert!(turbo > 0.0, "the fixture must author a turbo to add");
     assert!(
         (boosted.engine.thrust
@@ -241,7 +251,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
 
     // And it expires on the file's own duration rather than running forever.
     let mut ticks: u32 = 1;
-    while fired.ship().physics.turbo_timer > 0.0 {
+    while fired.core.ship().physics.turbo_timer > 0.0 {
         fired.tick(&PlayerInputs::single(fired_buttons.tick(CROSS)));
         ticks += 1;
         assert!(ticks < 600, "the turbo never expired");
@@ -285,22 +295,26 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Shield),
         "a table weighting Shield alone must hand out a Shield"
     );
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     // The authored `time`, less the one tick `crate::step` has already
     // counted off - the countdown runs after the damage path reads it, which
     // is what protects the tick a shield is fired on.
     assert!(
-        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.core.sim.dt()))
+        (race.core.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.core.sim.dt()))
             .abs()
             < 1e-5,
         "expected the authored {FIXTURE_SHIELD_TIME} less one tick, got {}",
-        race.ship().physics.shield_pickup_timer
+        race.core.ship().physics.shield_pickup_timer
     );
 
     // And it expires on the file's own duration, one tick longer than the
@@ -308,7 +322,7 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
     // gives and `a_fired_turbo_multiplies_thrust_for_its_authored_duration`
     // spells out at length.
     let mut ticks: u32 = 1;
-    while race.ship().physics.shield_pickup_timer > 0.0 {
+    while race.core.ship().physics.shield_pickup_timer > 0.0 {
         race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
         ticks += 1;
         assert!(ticks < 600, "the shield never expired");
@@ -338,7 +352,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    let after_first = race.ship().physics.shield_pickup_timer;
+    let after_first = race.core.ship().physics.shield_pickup_timer;
     assert!(after_first > 0.0, "the first Shield never armed");
 
     // The slot is written directly rather than waiting for a second grant: the
@@ -350,7 +364,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
 
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "the second Shield must be spent even though it did nothing"
     );
@@ -358,9 +372,9 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     // by exactly those two - not been reset to the authored duration.
     let expected = after_first - 2.0 * race.core.sim.dt();
     assert!(
-        (race.ship().physics.shield_pickup_timer - expected).abs() < 1e-5,
+        (race.core.ship().physics.shield_pickup_timer - expected).abs() < 1e-5,
         "the second Shield refreshed the timer: expected {expected}, got {}",
-        race.ship().physics.shield_pickup_timer
+        race.core.ship().physics.shield_pickup_timer
     );
 }
 
@@ -375,7 +389,7 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
 
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Shield)
     );
     // Spend the pool first, or the payment lands against a full one and the
@@ -383,14 +397,18 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
     race.core.sim.world.ships[0].physics.shield = 10.0;
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
 
-    assert_eq!(race.ship_pickup(), None, "absorbing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "absorbing must spend the pickup"
+    );
     assert!(
-        (race.ship().physics.shield - (10.0 + FIXTURE_SHIELD_ABSORB)).abs() < 1e-4,
+        (race.core.ship().physics.shield - (10.0 + FIXTURE_SHIELD_ABSORB)).abs() < 1e-4,
         "expected the shield's own absorb of {FIXTURE_SHIELD_ABSORB}, pool is {}",
-        race.ship().physics.shield
+        race.core.ship().physics.shield
     );
     assert_eq!(
-        race.ship().physics.shield_pickup_timer,
+        race.core.ship().physics.shield_pickup_timer,
         0.0,
         "absorbing must not also raise the shield"
     );
@@ -412,7 +430,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
         race.core.sim.grant_free_turbo(0);
         assert_eq!(
-            race.ship_pickup(),
+            race.core.ship_pickup(),
             Some(Weapon::Turbo),
             "{mode:?} should be given a free turbo"
         );
@@ -423,7 +441,11 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     for mode in [Mode::Zone, Mode::SingleRace] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
         race.core.sim.grant_free_turbo(0);
-        assert_eq!(race.ship_pickup(), None, "{mode:?} was given a free turbo");
+        assert_eq!(
+            race.core.ship_pickup(),
+            None,
+            "{mode:?} was given a free turbo"
+        );
     }
 
     // A held pickup is kept rather than replaced, so a player who saved last
@@ -431,7 +453,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     let mut race = race_with_weapon_pads(Mode::TimeTrial, Vec::new(), 1.0);
     race.core.sim.grant_free_turbo(0);
     race.core.sim.grant_free_turbo(0);
-    assert_eq!(race.ship_pickup(), Some(Weapon::Turbo));
+    assert_eq!(race.core.ship_pickup(), Some(Weapon::Turbo));
 
     // And a disc whose weapon table did not load hands out nothing rather
     // than a turbo with no duration behind it.
@@ -440,7 +462,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     setup.weapons = None;
     let mut race = Race::start(setup);
     race.core.sim.grant_free_turbo(0);
-    assert_eq!(race.ship_pickup(), None);
+    assert_eq!(race.core.ship_pickup(), None);
 }
 
 /// The original never holds anything in the pickup slot through the
@@ -461,7 +483,7 @@ fn a_craft_that_never_reaches_the_line_is_never_given_a_turbo() {
         for _ in 0..oag_race::COUNTDOWN_TICKS + 600 {
             race.tick(&PlayerInputs::none());
             assert_eq!(
-                race.ship_pickup(),
+                race.core.ship_pickup(),
                 None,
                 "{mode:?} held a pickup on tick {}",
                 race.core.sim.world.tick
@@ -476,34 +498,41 @@ fn a_craft_that_never_reaches_the_line_is_never_given_a_turbo() {
 fn absorbing_pays_the_pool_and_never_past_its_maximum() {
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Turbo));
+    assert_eq!(
+        race.core.ship_pickup(),
+        Some(oag_tables::weapons::Weapon::Turbo)
+    );
 
     // The pool starts full, so absorbing into it must add nothing at all -
     // which is the clamp under test rather than a missing absorb.
-    let max = race.ship().handling.dimensions.shield;
+    let max = race.core.ship().handling.dimensions.shield;
     assert!(max > 0.0, "the fixture must have a pool to fill");
     let mut buttons = Buttons::new();
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
-    assert_eq!(race.ship_pickup(), None, "absorbing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "absorbing must spend the pickup"
+    );
     assert!(
-        race.ship().physics.shield <= max,
+        race.core.ship().physics.shield <= max,
         "the pool went past its maximum: {} against {max}",
-        race.ship().physics.shield
+        race.core.ship().physics.shield
     );
 
     // Now with room in the pool, so the payment itself is observable.
     let mut race = race_with_weapon_pads(Mode::SingleRace, enveloping_pad(), 1.0);
     race.core.sim.world.ships[0].physics.shield = 1.0;
     race.tick(&PlayerInputs::none());
-    let before = race.ship().physics.shield;
+    let before = race.core.ship().physics.shield;
     let mut buttons = Buttons::new();
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
     assert!(
-        race.ship().physics.shield > before,
+        race.core.ship().physics.shield > before,
         "absorbing paid nothing: {} against {before}",
-        race.ship().physics.shield
+        race.core.ship().physics.shield
     );
 }
 
@@ -637,7 +666,7 @@ fn a_missile_with_nothing_to_lock_is_fired_unguided_and_spent() {
         "an empty grid handed the missile a target to chase"
     );
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "the pickup survived a shot that did leave the rail"
     );
@@ -969,7 +998,7 @@ fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
     let mut granted = 0;
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        if race.ship_pickup().is_some() {
+        if race.core.ship_pickup().is_some() {
             granted += 1;
             race.core.sim.world.ships[0].pickup.weapon = None;
         }
@@ -989,7 +1018,7 @@ fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
     place(&mut race, enveloping_pad()[0]);
     race.tick(&PlayerInputs::none());
     assert!(
-        race.ship_pickup().is_some(),
+        race.core.ship_pickup().is_some(),
         "re-entering an unstamped pad one tick later paid nothing"
     );
 }

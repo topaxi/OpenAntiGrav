@@ -53,7 +53,7 @@ fn hds_thrust_percent_is_the_craft_throttle_with_no_chase() {
 
     held(&mut race, 90);
     let held_value = race.readout().thrust_percent;
-    assert_eq!(held_value, race.ship().physics.thrust);
+    assert_eq!(held_value, race.core.ship().physics.thrust);
     assert!(
         held_value > 90.0,
         "full throttle reads near 100, got {held_value}"

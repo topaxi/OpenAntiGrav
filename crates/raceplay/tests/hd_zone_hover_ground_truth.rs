@@ -38,7 +38,7 @@ fn zone() -> Option<Race> {
 
 /// The craft's centre above the surface straight below it, along that surface's normal.
 fn height(race: &Race) -> f32 {
-    let body = &race.ship().physics.body;
+    let body = &race.core.ship().physics.body;
     let down = -body.up();
     let hit = race
         .core

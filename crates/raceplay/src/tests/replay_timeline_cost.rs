@@ -208,7 +208,7 @@ fn changed(a: &[(&'static str, u64)], b: &[(&'static str, u64)]) -> Vec<&'static
         .collect()
 }
 
-/// One craft's drawn pose: where `Race::player_pose` puts the player's, for any slot.
+/// One craft's drawn pose: where `SimRace::player_pose` puts the player's, for any slot.
 fn pose(race: &Race, slot: usize) -> (Vec3, Quat) {
     let ship = &race.core.sim.world.ships[slot];
     let roll = oag_render::roll::display_rotation(
@@ -678,7 +678,7 @@ fn replay_timeline_cost_sweep() {
             race.restore_sim(sim);
             race.core.sim.set_autopilot(false);
             let base = race.core.sim.wall_contact_ticks[0];
-            let shield = race.ship().physics.shield;
+            let shield = race.core.ship().physics.shield;
             let mut first = None;
             for k in 0..600u32 {
                 race.tick_sim_only(inputs);
@@ -688,7 +688,7 @@ fn replay_timeline_cost_sweep() {
             }
             out.push(first.map_or(600.0, f64::from));
             if std::ptr::eq(inputs, &held) {
-                shield_after.push(f64::from(shield - race.ship().physics.shield));
+                shield_after.push(f64::from(shield - race.core.ship().physics.shield));
             }
         }
         race.core.sim.set_autopilot(true);

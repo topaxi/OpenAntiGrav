@@ -62,9 +62,9 @@ fn a_started_race_puts_one_ship_on_the_spline_with_its_mass_set() {
     let race = Race::start(setup);
 
     assert_eq!(race.core.sim.world.ship_count, 1);
-    assert!(race.ship().active);
-    assert_eq!(race.ship().physics.body.mass, 7.5);
-    assert_eq!(race.ship().handling.physical.mass, 7.5);
+    assert!(race.core.ship().active);
+    assert_eq!(race.core.ship().physics.body.mass, 7.5);
+    assert_eq!(race.core.ship().handling.physical.mass, 7.5);
     assert_eq!(race.core.sim.dt(), 1.0 / 60.0);
 
     // Lifted off the surface line by the height its own suspension holds it at,
@@ -81,7 +81,7 @@ fn a_started_race_puts_one_ship_on_the_spline_with_its_mass_set() {
     // Well inside the probes' reach, which is what gives the suspension travel.
     assert!(spawn_height(&handling) < handling.antigrav.ride_height);
     let up = (-Vec3::from_array(start.down)).normalize();
-    let offset = race.ship().physics.body.position - Vec3::from_array(start.pos);
+    let offset = race.core.ship().physics.body.position - Vec3::from_array(start.pos);
     assert!(
         (offset.dot(up) - spawn_height(&handling)).abs() < 1e-4,
         "{offset}"
@@ -298,7 +298,7 @@ fn a_ship_over_nothing_falls_and_stays_finite() {
         ..Handling::ZERO
     };
     let mut race = Race::start(setup(handling));
-    let start = race.ship().physics.body.position;
+    let start = race.core.ship().physics.body.position;
 
     let mut held = HeldButtons::new(0);
     for _ in 0..60 {
@@ -306,12 +306,12 @@ fn a_ship_over_nothing_falls_and_stays_finite() {
         race.tick(&PlayerInputs::single(snapshot));
     }
 
-    let now = race.ship().physics.body.position;
+    let now = race.core.ship().physics.body.position;
     assert!(now.is_finite(), "{now}");
     assert!(now.y < start.y, "nothing to hover on, so it must fall");
-    assert_eq!(race.ship().physics.grounded, 0.0);
+    assert_eq!(race.core.ship().physics.grounded, 0.0);
     assert_eq!(race.core.sim.world.tick, 60);
-    assert!(race.telemetry().spline_distance.is_finite());
+    assert!(race.core.telemetry().spline_distance.is_finite());
 }
 
 /// A slot pointing back down its own track is turned round.
@@ -333,7 +333,7 @@ fn a_slot_facing_back_down_its_own_track_is_turned_round() {
     });
     let race = Race::start(setup);
 
-    let forward = race.ship().physics.body.forward();
+    let forward = race.core.ship().physics.body.forward();
     assert!(
         forward.x > 0.9,
         "the track runs along +x and the craft must too: {forward}"
@@ -374,7 +374,7 @@ fn a_solo_mode_starts_on_slot_one_not_slot_eight() {
         race.core.sim.world.ship_count, 1,
         "a solo mode fields one ship"
     );
-    let position = race.ship().physics.body.position;
+    let position = race.core.ship().physics.body.position;
     assert!(
         position.x > 50.0,
         "slot 1 is far ahead of the node along the track's own +x, not on top of \
@@ -400,7 +400,7 @@ fn a_full_grid_still_starts_the_player_on_slot_eight() {
         race.core.sim.world.ship_count, 8,
         "a full grid fields eight ships"
     );
-    let position = race.ship().physics.body.position;
+    let position = race.core.ship().physics.body.position;
     assert!(
         position.x.abs() < 5.0,
         "slot 8 is the node itself, not ahead of it: {position}"
@@ -472,7 +472,7 @@ fn a_slot_that_agrees_keeps_its_own_heading() {
     setup.start_position = Some(angled);
     let race = Race::start(setup);
 
-    let forward = race.ship().physics.body.forward();
+    let forward = race.core.ship().physics.body.forward();
     assert!(
         (forward.z - angled.forward[2]).abs() < 1.0e-3,
         "the authored angle survives: {forward}"

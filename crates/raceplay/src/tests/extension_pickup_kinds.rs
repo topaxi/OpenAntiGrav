@@ -190,7 +190,7 @@ fn a_pad_can_hand_out_either_mods_pickup() {
         ]));
         race.tick(&PlayerInputs::none());
         for (i, seen) in seen.iter_mut().enumerate() {
-            *seen |= race.ship_pickup() == kind(i);
+            *seen |= race.core.ship_pickup() == kind(i);
         }
     }
     assert_eq!(seen, [true, true], "both kinds came off the pad");

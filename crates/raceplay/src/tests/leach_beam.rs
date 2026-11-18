@@ -33,7 +33,11 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
-    assert_eq!(race.ship_pickup(), None, "the beam must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "the beam must spend the pickup"
+    );
     let beam = race.core.sim.world.leach_beams[0].expect("a fired beam must exist");
     assert_eq!(beam.owner, 0);
     assert_eq!(
@@ -85,7 +89,7 @@ fn a_leach_beam_press_at_the_limit_spends_the_pickup_and_fires_nothing() {
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
 
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "a press at the limit spends the pickup"
     );

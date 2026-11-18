@@ -176,8 +176,8 @@ fn the_magstrip_holds_its_hum_until_the_craft_leaves_it(grid: &mut Grid) {
         grid,
         "_magstrip01",
         5,
-        |race| race.raise_cue(Cue::Magstrip),
-        |race| race.raise_cue(Cue::MagstripStop),
+        |race| race.core.raise_cue(Cue::Magstrip),
+        |race| race.core.raise_cue(Cue::MagstripStop),
     );
 }
 

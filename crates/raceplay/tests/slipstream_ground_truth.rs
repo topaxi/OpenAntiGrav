@@ -236,7 +236,7 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
     race.tick(&throttle());
     assert_eq!(ship(&race).transit, None, "no portal, no transit");
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST)),
         "kept"
     );
@@ -278,7 +278,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
         "began at the entrance: {} units on",
         before - pressed_at
     );
-    assert_eq!(race.ship_pickup(), None, "spent");
+    assert_eq!(race.core.ship_pickup(), None, "spent");
     let mut out = 1;
     while ship(&race).transit.is_some() {
         assert_eq!(ship(&race).physics.body.position, entry, "frozen at {out}");

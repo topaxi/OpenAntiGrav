@@ -19,7 +19,7 @@
 //! contact of a solo run:
 //!
 //! - `plan`: per route, whether its reference plan verified, the physics steps
-//!   it took (`Race::plan_steps`), the steps each other hull's adaptation took,
+//!   it took (`SimRace::plan_steps`), the steps each other hull's adaptation took,
 //!   and the wall clock of learning every plan of the race.
 //! - `solo`: per route, one craft alone, forced down it at every visit (the
 //!   coin's draw overwritten), as slot 0 (the player's hull, the plans'
@@ -312,6 +312,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
             let speed = ship.physics.body.linear_velocity.length();
             let (route, index) = (ship.driver.branching.route, ship.driver.index);
             let target = race
+                .core
                 .plan_of(slot)
                 .map_or(f32::INFINITY, |p| p.target(index as usize));
             emit(&format!(
@@ -405,9 +406,9 @@ fn board_at(circuit: &Circuit, class: &str, seed: u64) {
             return;
         }
         let started = Instant::now();
-        let steps = plans.plan_steps().clone();
+        let steps = plans.core.plan_steps().clone();
         let seconds = started.elapsed().as_secs_f64();
-        let ring = plans.speed_plan().is_some();
+        let ring = plans.core.speed_plan().is_some();
         for k in 0..routes {
             let hulls: Vec<String> = steps
                 .hull_routes
@@ -477,7 +478,7 @@ fn route_plan_board() {
 
 /// Where a route's reference plan fails its verification: per circuit
 /// (`OAG_ROUTE_BOARD_ONLY`), class and seed, each route's learning report and
-/// every failure tick of its verification replayed (`Race::probe_route_plan`),
+/// every failure tick of its verification replayed (`SimRace::probe_route_plan`),
 /// with the line index read as ring or route sample. `OAG_ROUTE_PROBE_DUMP`
 /// names a directory that gets every tick of every route as a TSV;
 /// `OAG_ROUTE_PROBE_STAGES=<tick>` re-steps that verification tick stage by
@@ -515,7 +516,7 @@ fn route_verify_probe() {
                 if std::env::var_os("OAG_ROUTE_PROBE_RING").is_some()
                     && std::env::var_os("OAG_ROUTE_PROBE_FLOOR").is_none()
                 {
-                    let probe = race.probe_ring_plan(var_u32("OAG_ROUTE_PROBE_STUCK"));
+                    let probe = race.core.probe_ring_plan(var_u32("OAG_ROUTE_PROBE_STUCK"));
                     report_route(
                         &race,
                         &circuit.label,
@@ -532,7 +533,8 @@ fn route_verify_probe() {
                         .ok()
                         .and_then(|t| t.parse().ok());
                     let Some(probe) =
-                        race.probe_route_plan(k, at, var_u32("OAG_ROUTE_PROBE_STUCK"))
+                        race.core
+                            .probe_route_plan(k, at, var_u32("OAG_ROUTE_PROBE_STUCK"))
                     else {
                         continue;
                     };

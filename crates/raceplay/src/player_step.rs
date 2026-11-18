@@ -449,7 +449,7 @@ impl Race {
     /// non-primary slot's rules run on `race[slot]` all the same, so its lap
     /// clock, its zone counter and its finish are the simulation's.
     pub(super) fn advance_player_rules(&mut self, slot: usize, evaluated: &Evaluated) {
-        let primary = slot == self.player_slot();
+        let primary = slot == self.core.player_slot();
         if primary && self.draws() {
             let body = &self.core.sim.world.ships[slot].physics.body;
             self.core
@@ -485,7 +485,7 @@ impl Race {
             xp.zone_cleared(self.core.sim.world.race[slot].zone, outcome.perfect_zone);
         }
         if primary && outcome.lap_completed {
-            self.xp_lap_completed();
+            self.core.xp_lap_completed();
         }
         if primary && outcome.perfect_zone && self.draws() {
             self.core.outcome.run_stats.perfect_zones += 1;
@@ -548,7 +548,7 @@ impl Race {
     }
 }
 
-impl Race {
+impl SimRace {
     #[cfg(feature = "view")]
     /// Whether this machine grades `slot`'s laps: the player's slot, not the
     /// world's lowest person slot (in a network race a client flying seat 1
@@ -556,9 +556,11 @@ impl Race {
     /// slot, so each seat of a split or multi-window race gets its own lines.
     fn watches_laps_of(&self, slot: usize) -> bool {
         slot == self.player_slot()
-            || (self.core.outcome.seat.is_none() && self.core.sim.world.person_flown(slot))
+            || (self.outcome.seat.is_none() && self.sim.world.person_flown(slot))
     }
+}
 
+impl Race {
     /// Feeds each local person's craft to its own lap watch. A replayed tick
     /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
     /// already did. **Chosen, not measured.**
@@ -572,7 +574,7 @@ impl Race {
         #[cfg(feature = "view")]
         let pair = std::mem::take(&mut self.view.pair_spoil[slot]);
         #[cfg(feature = "view")]
-        if self.draws() && self.watches_laps_of(slot) {
+        if self.draws() && self.core.watches_laps_of(slot) {
             self.raise_lap_messages(slot, outcome, pair || lap_spoiling_contact(evaluated));
         }
     }

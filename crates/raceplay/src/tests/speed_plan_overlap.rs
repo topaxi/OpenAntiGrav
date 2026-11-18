@@ -137,11 +137,14 @@ fn a_job_started_on_the_load_thread_survives_the_launch() {
 
     ahead.core.ensure_speed_plans();
     lazy.core.ensure_speed_plans();
-    assert_eq!(ahead.speed_plan().cloned(), lazy.speed_plan().cloned());
+    assert_eq!(
+        ahead.core.speed_plan().cloned(),
+        lazy.core.speed_plan().cloned()
+    );
     for slot in 0..8 {
         assert_eq!(
-            ahead.plan_of(slot).cloned(),
-            lazy.plan_of(slot).cloned(),
+            ahead.core.plan_of(slot).cloned(),
+            lazy.core.plan_of(slot).cloned(),
             "slot {slot}"
         );
     }

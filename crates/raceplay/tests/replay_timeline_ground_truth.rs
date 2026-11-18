@@ -163,7 +163,7 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
         Replay::from_bytes(&race.recorded().expect("recording").to_bytes()).expect("reads");
     println!(
         "{title}: {tick} ticks, finished at {finished_at:?}, lap {}, {} events",
-        race.player_standing().lap,
+        race.core.player_standing().lap,
         run.replay.events.len()
     );
     Some((source, run))

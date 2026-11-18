@@ -252,7 +252,7 @@ fn a_seek_back_clears_what_the_view_kept_about_a_later_moment() {
     });
     race.core.outcome.wreck_ended_tick = Some(TICKS);
     viewer.seek(&mut race, 100);
-    assert!(race.results().is_none());
+    assert!(race.core.results().is_none());
     assert!(race.core.outcome.wreck_ended_tick.is_none());
 }
 
@@ -496,20 +496,20 @@ fn following_another_craft_moves_the_picture_and_not_one_tick_of_the_run() {
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
     viewer.update(&mut race);
-    let start = race.player_slot();
+    let start = race.core.player_slot();
     let count = usize::from(race.core.sim.world.ship_count);
     assert!(count > 1, "the fixture field");
     assert!(race.step_followed(true));
     assert_eq!(
-        race.player_slot(),
+        race.core.player_slot(),
         (start + 1) % count,
         "R1 follows the next craft"
     );
     assert!(race.step_followed(false));
-    assert_eq!(race.player_slot(), start, "and L1 back");
+    assert_eq!(race.core.player_slot(), start, "and L1 back");
     assert!(race.step_followed(false));
     assert_eq!(
-        race.player_slot(),
+        race.core.player_slot(),
         (start + count - 1) % count,
         "L1 wraps over the start"
     );
@@ -530,10 +530,14 @@ fn following_skips_a_craft_out_of_the_race() {
     let (mut viewer, mut race) = open(replay);
     assert_eq!(pass_ended(&mut viewer), Pass::Complete);
     viewer.update(&mut race);
-    let start = race.player_slot();
+    let start = race.core.player_slot();
     let next = (start + 1) % usize::from(race.core.sim.world.ship_count);
     race.core.sim.world.ships[next].physics.craft_state = oag_physics::CraftState::Eliminated;
     race.step_followed(true);
-    assert_ne!(race.player_slot(), next, "an eliminated craft is skipped");
-    assert_ne!(race.player_slot(), start);
+    assert_ne!(
+        race.core.player_slot(),
+        next,
+        "an eliminated craft is skipped"
+    );
+    assert_ne!(race.core.player_slot(), start);
 }

@@ -1138,7 +1138,7 @@ multiplayer table (`PRO_POS`, `PRO_NAME`, `PRO_TOT_TIME`, the same `PeopleResult
 gets), on HD and Omega the field grid, in Eliminator and Zone the mode's own tables. **A network race is not a split screen
 for anything else**: the loyalty, the medal and the menu rows are what they were before, and the PS2's two stacked
 `EndRace Results Split` tables stay a local split screen's (they say only a place, not who). **The name column is a
-person's name** where the race knows one (`Race::set_person_names`, set from the room's members in seat order at the hand-off;
+person's name** where the race knows one (`SimRace::set_person_names`, set from the room's members in seat order at the hand-off;
 `scoreboard::Row.name`), else `PLAYER n`. That the original's multiplayer table prints the person's name in `PRO_NAME` is
 what `endrace/people.rs` already records for Pulse's network-play branch; HD's `PI001` fills its name cell the same way, so the
 name is the authored behaviour, the seat fallback is ours. Opponents are not named by the HD grid (its authored column).

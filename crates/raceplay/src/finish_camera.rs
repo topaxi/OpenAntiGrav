@@ -542,7 +542,7 @@ impl Race {
     /// director runs. `true` when the camera changed.
     pub fn spectator_press(&mut self, button: oag_gameplay::input::Button) -> bool {
         use oag_gameplay::input::Button;
-        if self.core.sim.world.ships[self.player_slot()]
+        if self.core.sim.world.ships[self.core.player_slot()]
             .standing
             .finish_tick
             .is_none()
@@ -582,10 +582,10 @@ impl Race {
             self.step_director(START_TICKS, None);
             return;
         }
-        if self.view.finish_camera.is_none() || !self.runs_on_after_the_end() {
+        if self.view.finish_camera.is_none() || !self.core.runs_on_after_the_end() {
             return;
         }
-        let player = self.player_slot();
+        let player = self.core.player_slot();
         // The line's clock is the finishing tick; a Single Race wreck's is the tick the
         // race ended, with the start pushed back to `WRECK_HANDOFF_TICKS`.
         let (finish, delay) = match self.core.sim.world.ships[player].standing.finish_tick {
@@ -625,7 +625,7 @@ impl Race {
 
     /// One tick of the director, `since` ticks into its life, imposing its pose.
     fn step_director(&mut self, since: u64, wreck: Option<Wreck>) {
-        let player = self.player_slot();
+        let player = self.core.player_slot();
         let live = self.core.sim.spectator_subjects();
         let Some(director) = self.view.finish_camera.as_mut() else {
             return;

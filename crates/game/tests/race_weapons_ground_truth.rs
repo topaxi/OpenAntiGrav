@@ -119,7 +119,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     // the entry edge.
     let mut single = race_at_pad(oag_race::Mode::SingleRace);
     single.tick(&Default::default());
-    let granted = single.ship_pickup();
+    let granted = single.core.ship_pickup();
     let granted = granted.expect(
         "a craft standing on a real weapon pad was handed nothing - either the \
          trigger missed the volume or the class's <Pickupodds> did not resolve",
@@ -139,7 +139,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
     let turbo_seed = (0..64u64).find(|&seed| {
         let mut race = race_at_pad_seeded(oag_race::Mode::SingleRace, Some(seed));
         race.tick(&Default::default());
-        race.ship_pickup() == Some(oag_tables::weapons::Weapon::Turbo)
+        race.core.ship_pickup() == Some(oag_tables::weapons::Weapon::Turbo)
     });
     let turbo_seed = turbo_seed.expect(
         "no seed in 0..64 drew a Turbo from this class's authored odds - either \
@@ -179,9 +179,13 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
         &mut fired_buttons,
         CROSS | SQUARE,
     )));
-    assert_eq!(fired.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        fired.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     assert!(
-        fired.ship().physics.turbo_timer > 0.0,
+        fired.core.ship().physics.turbo_timer > 0.0,
         "firing must arm the turbo"
     );
 
@@ -189,7 +193,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
         control.tick(&PlayerInputs::single(snapshot(&mut control_buttons, CROSS)));
         fired.tick(&PlayerInputs::single(snapshot(&mut fired_buttons, CROSS)));
     }
-    let speed = |race: &race::Race| race.ship().physics.body.linear_velocity.length();
+    let speed = |race: &race::Race| race.core.ship().physics.body.linear_velocity.length();
     let (boosted, plain) = (speed(&fired), speed(&control));
     println!("after one second: {boosted:.1} boosted against {plain:.1} plain");
     // Twice the control's speed. A deliberately coarse bar: what it is there to
@@ -215,7 +219,7 @@ fn a_weapon_pad_on_the_disc_hands_out_a_pickup_in_a_single_race() {
             race.tick(&Default::default());
         }
         assert_eq!(
-            race.ship_pickup(),
+            race.core.ship_pickup(),
             None,
             "{mode:?} handed out a pickup, and the original arms no pads for it"
         );
@@ -273,7 +277,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
         .find(|&seed| {
             let mut race = race_at_pad(seed);
             race.tick(&Default::default());
-            race.ship_pickup() == Some(oag_tables::weapons::Weapon::Rocket)
+            race.core.ship_pickup() == Some(oag_tables::weapons::Weapon::Rocket)
         })
         .expect(
             "no seed in 0..64 drew a Rocket from this class's authored odds - either the \
@@ -294,13 +298,17 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
 
     race.tick(&PlayerInputs::single(snapshot(&mut buttons, 0)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Rocket)
     );
 
-    let muzzle = race.ship().physics.body.position;
+    let muzzle = race.core.ship().physics.body.position;
     race.tick(&PlayerInputs::single(snapshot(&mut buttons, SQUARE)));
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     assert_eq!(
         race.core.sim.world.projectiles.live(),
         oag_weapons::projectile::ROCKET_SHOTS,
@@ -312,7 +320,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
     // units over the distance to a wall. That is the whole reason this is
     // asserted as a *fan* rather than eyeballed: at this angle a volley and
     // three copies of one shot look identical in a screenshot.
-    let right = race.ship().physics.body.right();
+    let right = race.core.ship().physics.body.right();
     let lateral: Vec<f32> = (0..oag_weapons::projectile::ROCKET_SHOTS)
         .map(|slot| {
             race.core.sim.world.projectiles.slots[slot]

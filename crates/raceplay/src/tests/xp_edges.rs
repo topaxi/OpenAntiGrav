@@ -61,7 +61,7 @@ fn a_pad_pickup_pays_once_the_race_is_on_and_not_on_the_grid() {
     ));
     race.tick(&PlayerInputs::none());
     assert!(
-        race.ship_pickup().is_some(),
+        race.core.ship_pickup().is_some(),
         "sanity: the pad granted on the grid"
     );
     assert_eq!(paid(&race, 8), 0, "the grid is not racing");
@@ -73,7 +73,7 @@ fn a_pad_pickup_pays_once_the_race_is_on_and_not_on_the_grid() {
     race.core.sim.weapon_pad_refresh_left.fill(0.0);
     race.tick(&PlayerInputs::none());
     assert!(
-        race.ship_pickup().is_some(),
+        race.core.ship_pickup().is_some(),
         "sanity: the pad granted again"
     );
     assert_eq!(paid(&race, 8), 1);

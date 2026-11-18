@@ -39,7 +39,7 @@ fn a_destroyed_craft_holding_fire_launches_nothing_and_keeps_its_pickup() {
         }
         assert_eq!(rockets(&race, 0), 0, "{state:?} fired a rocket");
         assert_eq!(
-            race.ship_pickup(),
+            race.core.ship_pickup(),
             Some(Weapon::Rocket),
             "{state:?} lost its pickup"
         );
@@ -158,7 +158,11 @@ fn a_mine_drop_cut_short_by_destruction_does_not_resume_after_the_respawn() {
     let after = cues_over(&mut race, Cue::MineLaunch, 120, PlayerInputs::none);
     assert_eq!((during, after), (0, 0), "the drop went on");
     assert!(!race.core.sim.world.ships[0].pickup.is_dropping());
-    assert_eq!(race.ship_pickup(), None, "the part-laid cluster survived");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "the part-laid cluster survived"
+    );
 }
 
 #[test]
@@ -190,7 +194,11 @@ fn a_cannon_burst_cut_short_by_destruction_does_not_resume_after_the_respawn() {
     respawn(&mut race);
     let after = cues_over(&mut race, Cue::Cannon, 60, &mut held);
     assert_eq!((during, after), (0, 0), "the burst went on");
-    assert_eq!(race.ship_pickup(), None, "the part-fired magazine survived");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "the part-fired magazine survived"
+    );
 }
 
 fn quake_holder() -> Race {
@@ -208,7 +216,7 @@ fn quake_holder() -> Race {
 fn an_armed_quake_fires_for_a_racing_craft() {
     let mut race = quake_holder();
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.ship_pickup(), None, "the control did not fire");
+    assert_eq!(race.core.ship_pickup(), None, "the control did not fire");
 }
 
 #[test]
@@ -224,7 +232,7 @@ fn an_armed_quake_cut_short_by_destruction_does_not_fire_after_the_respawn() {
     }
     assert!(race.core.sim.world.quake.is_none(), "the armed press fired");
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(Weapon::Quake),
         "never fired, so kept"
     );

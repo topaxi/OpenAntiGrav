@@ -135,7 +135,7 @@ fn the_start_voice_is_the_seats() {
     for seat in SEATS {
         let mut race = four_people_against_a_wall(Some(seat));
         race.core.sim.countdown_voice = true;
-        race.raise_start_cue(Cue::Ready);
+        race.core.raise_start_cue(Cue::Ready);
         assert_eq!(usize::from(race.core.sim.pending_cues()[0].slot), seat);
     }
 }

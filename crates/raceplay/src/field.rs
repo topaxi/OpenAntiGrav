@@ -332,7 +332,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Counts the Autopilot pickup down and lets go of the craft at zero.
     ///
     /// `Autopilot_Update` (`0x08861404`), ported: subtract `dt`, raise the
@@ -344,21 +344,21 @@ impl Race {
     /// not need to.** That field exists only to make the warning an edge, and
     /// with a fixed timestep the previous value *is* `timer + dt` exactly -
     /// ADR-0007. A cancel is the one place that breaks it, because it zeroes the
-    /// timer between two updates; [`Self::spend_pickup_under_autopilot`] raises
+    /// timer between two updates; [`Race::spend_pickup_under_autopilot`] raises
     /// the warning itself there. One consequence is recorded rather than hidden: a pickup armed
     /// with less than a second on it would fire the warning on the original's
     /// first tick and not here, because there is no stale previous value to
     /// cross. No authored `<Weapon type="Autopilot"><Stats time>` is anywhere
     /// near that short.
     pub(super) fn tick_autopilot(&mut self, slot: usize) {
-        let timer = self.core.sim.world.ships[slot].autopilot_timer;
+        let timer = self.sim.world.ships[slot].autopilot_timer;
         if timer <= 0.0 {
             return;
         }
-        let now = timer - self.core.sim.dt;
-        self.core.sim.world.ships[slot].autopilot_timer = now.max(0.0);
+        let now = timer - self.sim.dt;
+        self.sim.world.ships[slot].autopilot_timer = now.max(0.0);
         if now <= 0.0 {
-            self.core.sim.world.ships[slot].handback = false;
+            self.sim.world.ships[slot].handback = false;
         }
         if now < AUTOPILOT_WARNING_SECONDS && timer > AUTOPILOT_WARNING_SECONDS {
             self.raise_disengaging(slot);
@@ -370,14 +370,16 @@ impl Race {
     /// The announcer speaks to a person; an opponent's stint is silent, and so is
     /// another machine's person's: the call is dry, so it would be in this ear.
     fn raise_disengaging(&mut self, slot: usize) {
-        if self.core.sim.world.person_flown(slot) && self.heard_here(slot) {
-            self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+        if self.sim.world.person_flown(slot) && self.heard_here(slot) {
+            self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                 oag_gameplay::cue::Cue::Disengaging,
                 slot,
             ));
         }
     }
+}
 
+impl Race {
     /// A fire or absorb press while `slot`'s Autopilot pickup runs.
     ///
     /// **Absorb cancels it, fire does nothing.** The driver flies the craft, and
@@ -423,7 +425,7 @@ impl Race {
         self.core.sim.world.ships[slot].autopilot_timer = 0.0;
         self.core.sim.world.ships[slot].handback = false;
         if left > AUTOPILOT_WARNING_SECONDS {
-            self.raise_disengaging(slot);
+            self.core.raise_disengaging(slot);
         }
     }
 }
@@ -436,7 +438,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// What the player's own driver would ask of `slot`'s craft now, with the
     /// simulation left exactly as it was.
     ///
@@ -452,16 +454,16 @@ impl Race {
         slot: usize,
         driver: &mut Option<oag_ai::Driver>,
     ) -> oag_physics::ShipControls {
-        let kept = self.core.sim.clone();
+        let kept = self.sim.clone();
         match driver {
-            Some(own) => self.core.sim.world.ships[slot].driver = *own,
-            None => self.core.sim.locate_player_driver(slot),
+            Some(own) => self.sim.world.ships[slot].driver = *own,
+            None => self.sim.locate_player_driver(slot),
         }
         // This project's driver: the original's keeps state outside the
         // world, which the restore below would reset every call.
-        let wants = self.core.sim.our_autopilot_controls(slot);
-        *driver = Some(self.core.sim.world.ships[slot].driver);
-        self.core.sim = kept;
+        let wants = self.sim.our_autopilot_controls(slot);
+        *driver = Some(self.sim.world.ships[slot].driver);
+        self.sim = kept;
         wants
     }
 }
@@ -1277,7 +1279,7 @@ impl Race {
     /// The player's own race position, `1`-based.
     #[must_use]
     pub fn player_place(&self) -> u8 {
-        self.places()[self.player_slot()]
+        self.places()[self.core.player_slot()]
     }
 
     /// Craft against craft, every pair, once a tick.

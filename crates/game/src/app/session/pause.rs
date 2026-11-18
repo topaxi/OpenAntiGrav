@@ -133,7 +133,7 @@ impl super::Session {
             _ => None,
         };
         if let (Some(cue), Stage::Race(stage)) = (cue, &mut self.stage) {
-            stage.race.raise_start_cue(cue);
+            stage.race.core.raise_start_cue(cue);
         }
     }
 }

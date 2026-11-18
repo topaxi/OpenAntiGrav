@@ -58,7 +58,7 @@ pub fn team_key(title: &oag_title::Title, id: &str) -> String {
     oag_title::team::listed_id(title.teams, base).to_string()
 }
 
-/// A grid's team ids (`Race::slot_teams`) as `title`'s string table keys them.
+/// A grid's team ids (`SimRace::slot_teams`) as `title`'s string table keys them.
 #[must_use]
 pub fn team_keys(title: &oag_title::Title, roster: &[String]) -> Vec<String> {
     roster.iter().map(|id| team_key(title, id)).collect()

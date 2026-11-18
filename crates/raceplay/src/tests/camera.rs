@@ -51,7 +51,7 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     // fitted to the window, and nothing else. Built here rather than
     // captured, so the assertion cannot be satisfied by both sides drifting
     // together.
-    let body = &off.ship().physics.body;
+    let body = &off.core.ship().physics.body;
     let expected_deg =
         off.view.chase_params.fov + SPEED_FOV_GAIN_DEG * body.forward().dot(body.linear_velocity);
     let expected = oag_render::camera::projection(
@@ -186,7 +186,7 @@ fn cycling_the_camera_changes_no_simulation_state() {
 
     fn hash(race: &Race) -> u64 {
         let mut hasher = StateHasher::new();
-        hash_state(&mut hasher, &race.ship().physics);
+        hash_state(&mut hasher, &race.core.ship().physics);
         hasher.write_u64(race.core.sim.world.tick);
         hasher.finish()
     }
@@ -273,8 +273,8 @@ fn each_view_frames_the_craft_from_its_own_block() {
     // The geometry, not just the difference: the cockpit eye is *ahead* of the
     // craft and both chase eyes are behind it. A sign error here is the single
     // most likely mistake in the whole feature.
-    let craft = race.ship().physics.body.position;
-    let forward = race.ship().physics.body.forward();
+    let craft = race.core.ship().physics.body.position;
+    let forward = race.core.ship().physics.body.forward();
     race.set_camera_view(CameraView::Internal);
     assert!((race.camera_position() - craft).dot(forward) > 0.0);
     for view in [CameraView::Close, CameraView::Far] {
@@ -311,7 +311,7 @@ fn a_race_starts_on_the_close_chase_block() {
 
     let race = Race::start(setup(Handling::default()));
     assert_eq!(race.camera_view(), CameraView::Close);
-    let craft = race.ship().physics.body.position;
+    let craft = race.core.ship().physics.body.position;
     let distance = (race.camera_position() - craft).length();
     assert!(
         (distance - 4.0_f32.hypot(1.0)).abs() < 0.01,
@@ -540,7 +540,8 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
     let mut race = Race::start(setup(Handling::default()));
     let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
     let still = race.view_unshaken();
-    let forward = race.ship().physics.body.position + race.ship().physics.body.forward() * 20.0;
+    let forward =
+        race.core.ship().physics.body.position + race.core.ship().physics.body.forward() * 20.0;
     let points = [
         forward,
         forward + Vec3::new(8.0, 3.0, -2.0),
@@ -615,7 +616,7 @@ fn the_blur_is_given_the_boost_kicks_own_screen_motion() {
     let view = race.view();
     let map = race.lens_screen_motion(after, before, Mat4::IDENTITY);
     let ndc = |clip: oag_core::math::Vec4| clip.truncate() / clip.w;
-    let body = &race.ship().physics.body;
+    let body = &race.core.ship().physics.body;
     let ahead = body.position + body.forward() * 6.0;
     let side = body.right() * 4.0;
     for point in [

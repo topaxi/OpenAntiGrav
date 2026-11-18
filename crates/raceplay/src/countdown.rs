@@ -52,7 +52,7 @@
 
 use oag_race::COUNTDOWN_TICKS;
 
-use super::Race;
+use super::SimRace;
 use oag_gameplay::cue::{Cue, CueEvent};
 
 /// Ticks from `ready` to `go`: the countdown state's own length.
@@ -67,42 +67,39 @@ pub const GO_TICK: u64 = COUNTDOWN_TICKS - 1;
 /// The `World::tick` `ready` is raised on.
 pub const READY_TICK: u64 = GO_TICK - READY_TO_GO_TICKS;
 
-impl Race {
+impl SimRace {
     /// Raises one of the start voice's cues outside a tick, for a resume
     /// countdown (`oag_game`'s `session::pause`, chosen, not measured): the same
     /// cue the original voices at the start, on a title that voices it, and
     /// nothing on one that does not. Like [`Self::tick_countdown_voice`] it is an
     /// output and no world state.
     pub fn raise_start_cue(&mut self, cue: Cue) {
-        if !self.core.sim.countdown_voice {
+        if !self.sim.countdown_voice {
             return;
         }
         let player = self.player_slot();
-        self.core.sim.cues.push(CueEvent::new(cue, player));
+        self.sim.cues.push(CueEvent::new(cue, player));
     }
 
     /// Raises `ready` and `go` on their ticks, on a title that voices its start.
     ///
-    /// Called from [`Race::tick`] before the step, so `World::tick` is the tick
+    /// Called from [`Race::tick`](super::Race::tick) before the step, so `World::tick` is the tick
     /// being stepped. A cue is a per-tick output and no world state: nothing
     /// here can move a state hash.
     pub(super) fn tick_countdown_voice(&mut self) {
-        if !self.core.sim.countdown_voice {
+        if !self.sim.countdown_voice {
             return;
         }
-        let cue = match self.core.sim.world.tick {
+        let cue = match self.sim.world.tick {
             READY_TICK => Cue::Ready,
             GO_TICK => Cue::Go,
             _ => return,
         };
         let player = self.player_slot();
-        self.core.sim.cues.push(CueEvent::new(cue, player));
+        self.sim.cues.push(CueEvent::new(cue, player));
         // HD plays `HBEAT` beside `ready`, 8 audio ticks (33 ms) after it: the same tick here.
-        if cue == Cue::Ready && self.core.sim.countdown_beat {
-            self.core
-                .sim
-                .cues
-                .push(CueEvent::new(Cue::StartBeat, player));
+        if cue == Cue::Ready && self.sim.countdown_beat {
+            self.sim.cues.push(CueEvent::new(Cue::StartBeat, player));
         }
     }
 }

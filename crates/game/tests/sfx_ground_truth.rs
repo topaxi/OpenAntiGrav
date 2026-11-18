@@ -829,7 +829,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
     let engine_only = voices(&audio);
     assert!(engine_only >= 1, "the engine never opened");
     assert!(
-        !race.craft_is_exploding(),
+        !race.core.craft_is_exploding(),
         "the fixture blew up before the test began"
     );
 
@@ -983,10 +983,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
 /// The shield's two cues through the whole path, which nothing else covers.
 ///
 /// `~SHIELD` is driven by a *level* rather than by an edge - the audio layer
-/// reads `Race::shield_is_up` - so it is the one held voice with no queue entry
+/// reads `SimRace::shield_is_up` - so it is the one held voice with no queue entry
 /// to inspect, and the only way to see it is to watch the pool. The
 /// Autopilot's own pair (`~AUTOPILOT`/`autopilot_eng`) is the same shape,
-/// off `Race::autopilot_is_active` - its own test is in
+/// off `SimRace::autopilot_is_active` - its own test is in
 /// `sfx_weapon_ground_truth.rs`, moved there under the 1,000-line rule.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -1031,7 +1031,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     assert!(idle >= 1, "the engine never opened");
 
     // Set directly: this is the field `oag_physics::damage` drives and the one
-    // `Race::shield_is_up` reads, and granting a real pickup would be testing
+    // `SimRace::shield_is_up` reads, and granting a real pickup would be testing
     // the pad table instead. Ten seconds, so it outlasts the wait below for
     // `shieldactive` to end; a one-second timer used to do, and expired on
     // its own inside that wait once the line played at its real rate.
@@ -1090,7 +1090,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
 /// `~AUTOPILOT` and `autopilot_eng` through the whole path, the same shape
 /// [`the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires`]
 /// already proves for the shield: `Cue::Autopilot` is a level
-/// (`Race::autopilot_is_active`), not a queued edge, so watching the pool is
+/// (`SimRace::autopilot_is_active`), not a queued edge, so watching the pool is
 /// the only way to see it open and close on the right tick.
 #[test]
 #[ignore = "needs a disc image in data/images/"]

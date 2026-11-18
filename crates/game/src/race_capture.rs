@@ -107,7 +107,7 @@ pub struct CaptureOptions {
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
-    /// `--force-quake TICK:SLOT`: see [`Race::force_quake`].
+    /// `--force-quake TICK:SLOT`: see [`SimRace::force_quake`].
     pub force_quake: Option<(u32, usize)>,
     /// `--force-remote-correction`: see [`oag_raceplay::correction::Scene`].
     pub remote_correction: Option<oag_raceplay::correction::Scene>,
@@ -590,9 +590,9 @@ pub fn capture(
         // The race ended inside the requested tick count, so the rest is not
         // driven, as the window stops stepping a finished race - except after the
         // player's own last crossing, which the window steps on
-        // ([`Race::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
+        // ([`SimRace::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
         // Said out loud, so a capture that ran short is not read as a lost tick.
-        if race.core.sim.finished() && !race.runs_on_after_the_end() {
+        if race.core.sim.finished() && !race.core.runs_on_after_the_end() {
             println!(
                 "the race finished on tick {} of the {} asked for; only its cosmetics are driven",
                 race.core.sim.world.tick, options.ticks
@@ -937,7 +937,7 @@ pub fn capture(
     println!(
         "after {} tick(s): {}",
         race.core.sim.world.tick,
-        describe(&race.telemetry())
+        describe(&race.core.telemetry())
     );
 
     // Both tiers follow their settings, because two captures differing only by
@@ -1318,7 +1318,7 @@ pub fn capture(
         let scale = options.hud_scale;
         // Every window that holds a seat shows the board, as the window frame loop does
         // (`RaceStage::draw_end_screens`).
-        match race.results() {
+        match race.core.results() {
             Some(board) => match crate::scoreboard::Overlay::new(&device, &queue, format, &hud) {
                 Ok(mut overlay) => {
                     let observation = describe::observation(&race);

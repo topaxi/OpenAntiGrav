@@ -294,8 +294,8 @@ fn the_original_field_on_a_circuit_without_a_fork_learns_no_speed_plan() {
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.speed_plan().is_none());
-    assert!(race.plan_of(1).is_none());
+    assert!(race.core.speed_plan().is_none());
+    assert!(race.core.plan_of(1).is_none());
 }
 
 /// The plans are learned from the grid, however late the first reader asks:
@@ -324,19 +324,19 @@ fn the_plans_are_the_same_whether_asked_for_before_the_first_tick_or_at_it() {
             race.core.sim.set_autopilot(autopilot);
         }
         assert!(
-            asked.speed_plan().is_some(),
+            asked.core.speed_plan().is_some(),
             "{track} {original} {autopilot}"
         );
         ticked.tick(&PlayerInputs::none());
         assert!(
-            ticked.speed_plan().is_some(),
+            ticked.core.speed_plan().is_some(),
             "{track} {original} {autopilot}"
         );
-        assert_eq!(asked.speed_plan(), ticked.speed_plan(), "{track}");
+        assert_eq!(asked.core.speed_plan(), ticked.core.speed_plan(), "{track}");
         for slot in 1..8 {
             assert_eq!(
-                asked.plan_of(slot),
-                ticked.plan_of(slot),
+                asked.core.plan_of(slot),
+                ticked.core.plan_of(slot),
                 "{track} slot {slot}"
             );
         }

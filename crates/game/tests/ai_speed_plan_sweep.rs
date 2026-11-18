@@ -192,7 +192,7 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
             ..Craft::default()
         })
         .collect();
-    let plan = if race.speed_plan().is_some() {
+    let plan = if race.core.speed_plan().is_some() {
         "plan"
     } else {
         "corner"
@@ -264,7 +264,7 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
                     continue;
                 }
                 let from = bin * width;
-                let plan_min = race.speed_plan().map_or(f32::NAN, |plan| {
+                let plan_min = race.core.speed_plan().map_or(f32::NAN, |plan| {
                     (from..(from + width).min(plan.len()))
                         .map(|i| plan.target(i))
                         .fold(f32::INFINITY, f32::min)

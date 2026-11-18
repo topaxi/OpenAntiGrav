@@ -413,7 +413,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Missile);
     race.tick(&PlayerInputs::single(press(Button::Square)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "firing a missile did not spend the pickup"
     );

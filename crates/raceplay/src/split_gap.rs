@@ -137,7 +137,7 @@ impl super::Race {
         if self.view.split_gap.is_none() {
             return;
         }
-        let player = self.player_slot();
+        let player = self.core.player_slot();
         let now = oag_race::race_clock_ticks(self.core.sim.world.tick) as f32 / 60.0;
         let mut events = GapEvents::default();
         let mut live = 0;

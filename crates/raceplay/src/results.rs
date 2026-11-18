@@ -131,7 +131,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
+impl SimRace {
     /// Whether the player's wreck in a **Single Race** is what ended the race: the
     /// one other ending whose world also goes on under the end-race screens.
     ///
@@ -145,9 +145,9 @@ impl Race {
     /// measured. Zone is not included: it ends the same way but was not looked at.
     #[must_use]
     pub fn runs_on_after_the_wreck(&self) -> bool {
-        self.core.sim.finished()
-            && self.core.sim.world.mode() == Mode::SingleRace
-            && self.core.outcome.wreck_ended_tick.is_some()
+        self.sim.finished()
+            && self.sim.world.mode() == Mode::SingleRace
+            && self.outcome.wreck_ended_tick.is_some()
     }
 
     /// Whether the world goes on being stepped under the end-race screens, for
@@ -156,15 +156,17 @@ impl Race {
     /// ([`Self::runs_on_after_the_wreck`]).
     #[must_use]
     pub fn runs_on_after_the_end(&self) -> bool {
-        self.core.sim.runs_on_after_the_line() || self.runs_on_after_the_wreck()
+        self.sim.runs_on_after_the_line() || self.runs_on_after_the_wreck()
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// One tick of a race that ended another way than the player's crossing:
     /// the world stands still, and only what a player can *see* keeps moving.
     ///
     /// A wreck that ends a Zone run is state 5 (a Single Race's runs the whole
-    /// world, [`Race::runs_on_after_the_wreck`]), and the original goes on running
+    /// world, [`SimRace::runs_on_after_the_wreck`]), and the original goes on running
     /// behind the panels: the state-5 shake, the
     /// wreck's fire, the big explosion 1.5 s on and its shockwave ring, the
     /// screen flashes and the destroy camera's ease. They are all presentation
@@ -201,7 +203,7 @@ impl Race {
     /// neutral input because the panels consume the pad), only the cosmetics
     /// ([`Race::tick_cosmetics`]) after any other ending.
     pub fn tick_finished(&mut self) {
-        if self.runs_on_after_the_end() {
+        if self.core.runs_on_after_the_end() {
             self.tick(&oag_gameplay::PlayerInputs::none());
             self.refresh_results();
         } else {
@@ -209,11 +211,13 @@ impl Race {
             self.tick_cosmetics();
         }
     }
+}
 
+impl SimRace {
     /// The results screens' tallies. See [`RunStats`].
     #[must_use]
     pub fn run_stats(&self) -> RunStats {
-        self.core.outcome.run_stats
+        self.outcome.run_stats
     }
 
     /// The team id each grid slot flew, slot 0 the player's - [`Setup::slot_teams`].
@@ -225,7 +229,7 @@ impl Race {
     /// [`Setup::slot_teams`]: crate::Setup::slot_teams
     #[must_use]
     pub fn slot_teams(&self) -> &[String] {
-        &self.core.outcome.slot_teams
+        &self.outcome.slot_teams
     }
 
     /// Names the person flying each slot, by slot (empty for a slot with none): what the end
@@ -233,14 +237,14 @@ impl Race {
     /// a local one gives seat 1 the stored player name
     /// (`oag_game::split_screen::name_first_seat`). View-only; the simulation never reads it.
     pub fn set_person_names(&mut self, names: Vec<String>) {
-        self.core.outcome.person_names = names;
+        self.outcome.person_names = names;
     }
 
     /// The name of the person who flew each slot ([`Self::set_person_names`]), empty where
     /// the race knows none.
     #[must_use]
     pub fn person_names(&self) -> &[String] {
-        &self.core.outcome.person_names
+        &self.outcome.person_names
     }
 
     /// The results, once there are any.
@@ -252,16 +256,18 @@ impl Race {
     /// finish.
     #[must_use]
     pub fn results(&self) -> Option<&Board> {
-        self.core.outcome.results.as_ref()
+        self.outcome.results.as_ref()
     }
 
     /// How many times the board has been replaced since it was first taken:
     /// what a screen drawn from a copy of it compares to know it is stale.
     #[must_use]
     pub fn results_revision(&self) -> u32 {
-        self.core.outcome.results_revision
+        self.outcome.results_revision
     }
+}
 
+impl Race {
     /// Re-takes the board from the world as it is now, while the field runs on
     /// behind the end screens ([`RaceSim::runs_on_after_the_line`]): a craft that
     /// crosses after the player gets its time and its place, and one still
@@ -318,7 +324,9 @@ impl Race {
         self.core.outcome.results = Some(board);
         self.core.outcome.results_revision = self.core.outcome.results_revision.wrapping_add(1);
     }
+}
 
+impl SimRace {
     /// The player's 1-based place on an Eliminator's end-of-race board, off the standings as
     /// they are now: `oag_race::score::final_places` over each craft's whole points on a score
     /// race, kills on a kill race. The number a campaign cell's medal is read from on a title
@@ -328,28 +336,29 @@ impl Race {
     /// as the first key and again as the tie-break: chosen, not measured.
     #[must_use]
     pub fn eliminator_place(&self) -> u8 {
-        let scored = self.core.sim.score_law.is_some();
-        let field: Vec<oag_race::score::Finisher> =
-            (0..usize::from(self.core.sim.world.ship_count))
-                .map(|slot| {
-                    let standing = &self.core.sim.world.ships[slot].standing;
-                    oag_race::score::Finisher {
-                        points: if scored {
-                            standing.whole_score()
-                        } else {
-                            standing.kills
-                        },
-                        kills: standing.kills,
-                        person: self.core.sim.world.person_flown(slot),
-                    }
-                })
-                .collect();
+        let scored = self.sim.score_law.is_some();
+        let field: Vec<oag_race::score::Finisher> = (0..usize::from(self.sim.world.ship_count))
+            .map(|slot| {
+                let standing = &self.sim.world.ships[slot].standing;
+                oag_race::score::Finisher {
+                    points: if scored {
+                        standing.whole_score()
+                    } else {
+                        standing.kills
+                    },
+                    kills: standing.kills,
+                    person: self.sim.world.person_flown(slot),
+                }
+            })
+            .collect();
         oag_race::score::final_places(&field)
             .get(self.player_slot())
             .copied()
             .unwrap_or(1)
     }
+}
 
+impl Race {
     /// The board off the world as it is now, ended on `tick`.
     fn take_board(&self, tick: u64) -> Board {
         let places = self.places();

@@ -145,7 +145,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, slot)) = options.force_quake
         && at == tick
-        && !race.force_quake(slot)
+        && !race.core.force_quake(slot)
     {
         log::warn!(
             "--force-quake: slot {slot} is not an opponent racing (pass --opponents), a Quake is already up, or the title authors none"
@@ -194,6 +194,6 @@ pub(super) fn advance_one_tick(
             .tick
             .is_multiple_of(u64::from(options.log_every))
     {
-        println!("{}", describe(&race.telemetry()));
+        println!("{}", describe(&race.core.telemetry()));
     }
 }

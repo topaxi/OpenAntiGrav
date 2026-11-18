@@ -75,7 +75,9 @@ impl Race {
     ) -> Reconciled {
         let before: [Vec3; MAX_SHIPS] =
             std::array::from_fn(|slot| self.core.sim.world.ships[slot].physics.body.position);
-        let shield_before = self.core.sim.world.ships[self.player_slot()].physics.shield;
+        let shield_before = self.core.sim.world.ships[self.core.player_slot()]
+            .physics
+            .shield;
         self.restore_sim(authoritative);
         let mut ticks = 0;
         for tick in inputs {
@@ -100,7 +102,7 @@ impl Race {
             // craft's input is known exactly, so what moves it in a correction is an
             // interaction, and a hit that first shows here (shield lost) must not be
             // softened into a glide.
-            let hit = slot == self.player_slot()
+            let hit = slot == self.core.player_slot()
                 && self.core.sim.world.ships[slot].physics.shield < shield_before - HIT_SHIELD;
             #[cfg(feature = "view")]
             if hit {

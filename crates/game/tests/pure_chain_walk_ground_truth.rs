@@ -155,6 +155,7 @@ fn a_time_trial_flown_to_the_line_is_judged_recorded_and_shown() {
         "the autopilot gets round a time trial"
     );
     let tick = race
+        .core
         .player_standing()
         .finish_tick
         .expect("a finished race has a finish tick");
@@ -219,7 +220,7 @@ fn a_tournament_flown_by_the_autopilot_earns_a_rank_and_opens_the_next() {
             fly_to_the_line(&mut race, 60 * 60 * 12),
             "leg {leg} finishes under the autopilot"
         );
-        progress.record_leg(race.results().expect("a finished race has results"));
+        progress.record_leg(race.core.results().expect("a finished race has results"));
         println!(
             "leg {}: place {}, {} points so far",
             leg + 1,

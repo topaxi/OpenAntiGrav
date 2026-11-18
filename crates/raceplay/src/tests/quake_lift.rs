@@ -107,8 +107,8 @@ fn cockpit_view_with(race: &Race, lift: f32) -> Mat4 {
     oag_render::camera::internal::view(
         race.camera_target(),
         &race.view.internal_params,
-        race.ship().physics.roll_phase,
-        race.ship().physics.camera_lean,
+        race.core.ship().physics.roll_phase,
+        race.core.ship().physics.camera_lean,
         lift,
     )
 }

@@ -408,7 +408,7 @@ pub fn draw(
     let (slots, cut) = if race.windowed() {
         (race.window_drawn(window), race.window_cut(window))
     } else if race.viewport_count() <= 1 {
-        (vec![race.player_slot()], race.cut())
+        (vec![race.core.player_slot()], race.cut())
     } else {
         ((0..race.viewport_count()).collect(), race.cut())
     };

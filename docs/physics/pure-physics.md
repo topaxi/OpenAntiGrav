@@ -289,7 +289,7 @@ the end of Vineta K's start straight and stays pinned there, on Pulse's laws and
 On Pulse's laws it crawls at about `10` u/s and still laps inside 7,200 ticks; on Pure's it
 crawls at about `5` and does not.
 
-Pure's pad is now the race's own driver for the player's craft (`Race::autopilot_wants`, as
+Pure's pad is now the race's own driver for the player's craft (`SimRace::autopilot_wants`, as
 `--net-bot` flies). It still records real stick inputs, and its best lap is `2206` ticks on the
 held laws and `2234`-`2250` with the laws on. The tampered stick is still caught at tick `420`.
 Pulse, HD and 2048 keep the bare pad.

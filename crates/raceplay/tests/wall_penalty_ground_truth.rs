@@ -119,7 +119,7 @@ fn speeds(mut race: race::Race, ticks: usize) -> Vec<f32> {
     (0..ticks)
         .map(|_| {
             race.tick(&PlayerInputs::single(held(0.0)));
-            race.ship().physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH
+            race.core.ship().physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH
         })
         .collect()
 }

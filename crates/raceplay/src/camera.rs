@@ -172,11 +172,11 @@ pub(super) fn target_of(ship: &Ship) -> Target {
 impl Race {
     /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
     /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
-    /// move together. The camera follows this machine's seat ([`Self::player_slot`]), not
+    /// move together. The camera follows this machine's seat ([`SimRace::player_slot`]), not
     /// slot 0. A craft in a transit is followed onto its seat and on from there
     /// ([`crate::transit_camera`]).
     pub(super) fn camera_target(&self) -> Target {
-        self.followed(self.player_slot())
+        self.followed(self.core.player_slot())
     }
 
     /// Where the camera is and what it is aimed at, as a view matrix.
@@ -272,15 +272,15 @@ impl Race {
             // see `oag_title::weapons::QuakeHit::lifts_cockpit_eye`; the
             // height itself is computed either way, for the hit gate.
             let quake_lift = if self.core.sim.quake_hit.lifts_cockpit_eye() {
-                self.ship().quake_lift
+                self.core.ship().quake_lift
             } else {
                 0.0
             };
             oag_render::camera::internal::view(
                 target,
                 &self.view.internal_params,
-                self.ship().physics.roll_phase,
-                self.ship().physics.camera_lean,
+                self.core.ship().physics.roll_phase,
+                self.core.ship().physics.camera_lean,
                 quake_lift,
             )
         } else {
@@ -375,7 +375,7 @@ impl Race {
     /// colour. See [`oag_hud::messages`], and `RaceStage::tick_messages` for the
     /// one thing the windowed game raises.
     pub fn raise_message(&mut self, id: &str, good: bool) {
-        let slot = self.player_slot();
+        let slot = self.core.player_slot();
         self.view.huds[slot].messages.push(id, good);
     }
 
@@ -427,7 +427,7 @@ impl Race {
     /// what HD's Speed Lap medal block tests (`Craft_UpdateLapProgress`,
     /// `0x000e553c`). `None` on a title with no lap watch.
     pub fn take_new_best_lap(&mut self) -> Option<u32> {
-        let slot = self.player_slot();
+        let slot = self.core.player_slot();
         self.view.huds[slot].lap_watch.as_mut()?.take_new_best()
     }
 
@@ -435,23 +435,28 @@ impl Race {
     /// ([`oag_title::lap_hud::SpeedLapMedal`]).
     #[must_use]
     pub fn speed_lap_medal_rule(&self) -> Option<oag_title::lap_hud::SpeedLapMedal> {
-        let slot = self.player_slot();
+        let slot = self.core.player_slot();
         self.view.huds[slot].lap_watch.as_ref()?.speed_lap_medal()
     }
+}
 
+#[cfg(feature = "view")]
+impl SimRace {
     /// Queues `cue` for the player, to sound with this tick's.
     pub fn raise_cue(&mut self, cue: oag_gameplay::cue::Cue) {
         let slot = self.player_slot();
-        self.core
-            .sim
+        self.sim
             .cues
             .push(oag_gameplay::cue::CueEvent::new(cue, slot));
     }
+}
 
+#[cfg(feature = "view")]
+impl Race {
     /// Sets the HUD line that stays up for the rest of the race - the best
     /// medal earned so far. See [`oag_hud::messages::MessageBoard::set_standing`].
     pub fn set_standing_message(&mut self, id: &str) {
-        let slot = self.player_slot();
+        let slot = self.core.player_slot();
         self.view.huds[slot].messages.set_standing(id);
     }
 }
@@ -632,7 +637,7 @@ impl Race {
             return Some(slot);
         }
         (self.view.camera_override.is_none() && self.destroy_camera_now().is_some())
-            .then(|| self.player_slot())
+            .then(|| self.core.player_slot())
     }
 }
 
@@ -854,7 +859,9 @@ impl Race {
         // Both speed terms at the draw alpha, so the field widens smoothly
         // between ticks along with the camera - see `super::between_ticks`.
         let forward_speed = self
-            .camera_scalar_between(self.tick_forward_speed(), |previous| previous.forward_speed);
+            .camera_scalar_between(self.core.tick_forward_speed(), |previous| {
+                previous.forward_speed
+            });
         let boost_kick =
             self.camera_scalar_between(self.view.boost_kick, |previous| previous.boost_kick);
         // The destroy camera zooms to frame the wreck, with no speed widen:
@@ -867,7 +874,7 @@ impl Race {
         let authored = setting.apply(widened_deg.to_radians());
         // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
         let offset = self.camera_scalar_between(
-            self.core.sim.extension_fov_offset(self.player_slot()),
+            self.core.sim.extension_fov_offset(self.core.player_slot()),
             |previous| previous.fov_offset,
         );
         finish_vertical_fov(

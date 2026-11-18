@@ -243,7 +243,7 @@ impl Race {
     /// advances used to be, after the shield pool's last writer and after
     /// [`Self::advance_absorb_bursts`].
     pub(super) fn advance_slot_huds(&mut self) {
-        let primary = self.player_slot();
+        let primary = self.core.player_slot();
         let viewed = self.viewport_count();
         let mut raises = std::mem::take(&mut self.view.incoming_raises);
         for slot in 0..MAX_SHIPS {

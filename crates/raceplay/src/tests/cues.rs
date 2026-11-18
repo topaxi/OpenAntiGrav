@@ -137,7 +137,7 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
 #[test]
 fn every_cue_has_something_that_raises_it() {
     // A cue driven from the *level* rather than from an edge: the audio layer
-    // reads `Race::shield_is_up`, `Race::craft_is_exploding`, `RaceSim::finished`
+    // reads `SimRace::shield_is_up`, `SimRace::craft_is_exploding`, `RaceSim::finished`
     // and `Race::sight_state` directly, so these have no entry in the queue by
     // design. `LockOn` is the odd one - it is fired on an *edge*, but the edge
     // is computed in the audio layer from that level rather than pushed here,
@@ -152,7 +152,7 @@ fn every_cue_has_something_that_raises_it() {
     // again, read directly off `race.core.sim.world.leach_beams[0]` instead of a
     // projectile slot - see `SfxVoices::leach_attach`. `Autopilot` and
     // `Engaging` join `Blowup` for the same reason it is here: both are read
-    // off `Race::autopilot_is_active` directly in `Audio::race_tick`'s own
+    // off `SimRace::autopilot_is_active` directly in `Audio::race_tick`'s own
     // level-and-latch match, never pushed.
     //
     // `Magstrip` is neither: it is an edge, raised only on a title that builds

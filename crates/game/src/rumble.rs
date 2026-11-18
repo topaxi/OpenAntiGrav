@@ -210,7 +210,7 @@ impl Rumbler {
                 && race.core.sim.people() <= 1,
         };
         let seats: Vec<Seat> = (0..oag_gameplay::MAX_PLAYERS)
-            .filter(|&slot| race.core.sim.world.person_flown(slot) && race.heard_here(slot))
+            .filter(|&slot| race.core.sim.world.person_flown(slot) && race.core.heard_here(slot))
             .map(|slot| Seat {
                 slot,
                 feed: Feed::new(library.clone(), law, rules),
@@ -291,7 +291,7 @@ fn levels_of(race: &Race, slot: usize) -> Levels {
         leech_beam: race.core.sim.leach_beam_on(slot),
         wrong_way: race.core.sim.wrong_way_for(slot),
         exploding: race.core.sim.craft_destroyed(slot),
-        locked_on: slot == race.player_slot()
+        locked_on: slot == race.core.player_slot()
             && race.sight_state() == oag_race::sight::State::Locked,
     }
 }

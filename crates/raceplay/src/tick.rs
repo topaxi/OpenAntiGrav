@@ -48,7 +48,7 @@ impl Race {
             xp.advance_window();
         }
         let evaluations = self.tick_body(inputs);
-        self.observe_xp();
+        self.core.observe_xp();
         #[cfg(feature = "view")]
         self.note_cues(queued);
         evaluations
@@ -85,13 +85,13 @@ impl Race {
                     let board = &mut self.view.huds[slot].messages;
                     board.advance();
                     let showing = board.just_shown();
-                    shown |= showing && self.heard_here(slot);
+                    shown |= showing && self.core.heard_here(slot);
                 }
             }
             if shown {
                 self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Message,
-                    self.player_slot(),
+                    self.core.player_slot(),
                 ));
             }
         }
@@ -183,16 +183,16 @@ impl Race {
             if self.core.sim.world.person_flown(slot)
                 && self.core.sim.world.ships[slot].transit.is_some()
             {
-                self.tick_autopilot(slot);
+                self.core.tick_autopilot(slot);
             } else if self.core.sim.world.person_flown(slot) {
                 self.spend_pickup(slot, inputs.get(slot));
-                self.tick_autopilot(slot);
+                self.core.tick_autopilot(slot);
             } else if self.core.sim.opponent_autopilot {
-                self.tick_autopilot(slot);
+                self.core.tick_autopilot(slot);
             }
         }
         // The start-of-race voice, on the ticks the original plays it.
-        self.tick_countdown_voice();
+        self.core.tick_countdown_voice();
         // Immediately after both, so the first mine of a cluster is laid on the
         // tick the button was pressed and from where the craft was when it was
         // pressed. A mine never moves again, so this is the only tick that can
@@ -300,7 +300,7 @@ impl Race {
                 .impact_reaching(&impacts, slot)
                 .map(|impact| (impact.owner, impact.kind))
         });
-        self.xp_weapon_hits(&hits, &by);
+        self.core.xp_weapon_hits(&hits, &by);
         // A hit that got through throws the struck hull's own sparks - the
         // victim's `Ship_Damage`, not the weapon. See `race::hit_sparks`.
         #[cfg(feature = "view")]
@@ -547,11 +547,11 @@ impl Race {
             // An *opponent* in a single race never reaches it, because the branch
             // reads a person-flown craft's state alone; an opponent's wreck stays
             // down (the original's state 6, measured live) and ends nothing.
-            if self.core.sim.eliminate_if_wrecked(slot) && slot == self.player_slot() {
+            if self.core.sim.eliminate_if_wrecked(slot) && slot == self.core.player_slot() {
                 self.core.outcome.wreck_ended_tick = Some(self.core.sim.world.tick);
                 // The original plays `~BLOWUP`, hides the HUD and swings the camera
                 // into its mode 5 on the way here. **The sound is built** and is
-                // held on `Race::craft_is_exploding` rather than raised here,
+                // held on `SimRace::craft_is_exploding` rather than raised here,
                 // because case 4 opens a handle rather than firing a one-shot. The
                 // HUD hide and the camera mode are still absent - case 4's own
                 // addresses for both are on zone-mode.md. See
@@ -622,9 +622,9 @@ impl Race {
             let target = self.camera_target();
             // A craft put further round (`Race::move_to`) takes its camera with it, settled:
             // the spring would sweep the eye across the gap.
-            let jumps = self.core.sim.jumps[self.player_slot()];
+            let jumps = self.core.sim.jumps[self.core.player_slot()];
             if std::mem::replace(&mut self.view.camera_jumps, jumps) == jumps {
-                let step = self.camera_step(self.player_slot());
+                let step = self.camera_step(self.core.player_slot());
                 self.view
                     .camera
                     .advance(target, &self.view.chase_params, step);
@@ -666,7 +666,7 @@ impl Race {
             // is a `max` that other things may one day also arm and this must follow
             // the pad specifically.
             if self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF {
-                let boosting = self.core.sim.world.ships[self.player_slot()]
+                let boosting = self.core.sim.world.ships[self.core.player_slot()]
                     .physics
                     .pad_timer
                     > 0.0;
@@ -777,7 +777,7 @@ impl Race {
         // `draws()` is false and there is nothing to draw.
         #[cfg(feature = "view")]
         if self.draws() {
-            let seat = self.player_slot();
+            let seat = self.core.player_slot();
             let seat = if steps[seat].is_some() { seat } else { primary };
             if let Some(step) = &steps[seat] {
                 let evaluated = step.evaluated;
@@ -813,7 +813,7 @@ impl Race {
         // `Shield_Activate` plays `"shieldactive"` one line above the
         // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
         // and differ in shape: a one-shot on this edge, a held voice on the
-        // level the edge starts. The level half is `Race::shield_is_up`, read
+        // level the edge starts. The level half is `SimRace::shield_is_up`, read
         // by the audio layer; the edge is here, with every other cue edge.
         if shielded && !self.view.shield_was_up {
             self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(

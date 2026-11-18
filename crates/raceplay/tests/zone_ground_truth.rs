@@ -981,7 +981,7 @@ fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
         .expect("loading the race");
         let mut race = race::Race::start(loaded.setup);
         race.tick(&PlayerInputs::none());
-        race.ship().physics.hover_rig
+        race.core.ship().physics.hover_rig
     };
     let zone = rig(oag_race::Mode::Zone);
     assert_eq!(zone.count, 4);
@@ -1024,14 +1024,14 @@ fn a_zone_craft_that_falls_short_of_05_tracks_first_jump_follows_the_deck_it_lan
     .expect("loading the race");
     let mut zone = race::Race::start(loaded.setup);
     zone.core.sim.set_autopilot(true);
-    let shield = zone.ship().physics.shield;
+    let shield = zone.core.ship().physics.shield;
     let mut landed_on_route = false;
     for _ in 0..3_000 {
         zone.tick(&PlayerInputs::none());
-        let branching = zone.ship().driver.branching;
+        let branching = zone.core.ship().driver.branching;
         landed_on_route |= branching.route != 0 && branching.entered;
     }
-    let ship = zone.ship();
+    let ship = zone.core.ship();
     assert!(
         landed_on_route,
         "the driver never followed the craft onto a route"
@@ -1064,7 +1064,7 @@ fn an_hd_zone_race_flies_the_racing_rig_with_the_half_gap_ray_and_a_time_trial_d
         .expect("loading the race");
         let mut race = race::Race::start(loaded.setup);
         race.tick(&PlayerInputs::none());
-        race.ship().physics.hover_rig
+        race.core.ship().physics.hover_rig
     };
     let zone = rig(oag_race::Mode::Zone);
     let racing = rig(oag_race::Mode::TimeTrial);

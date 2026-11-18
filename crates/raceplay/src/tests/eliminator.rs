@@ -228,22 +228,25 @@ fn an_eliminator_absorb_spends_the_weapon_on_the_shield_and_pays_no_energy() {
     );
     let mut buttons = Buttons::new();
     race.tick(&PlayerInputs::single(buttons.tick(0)));
-    assert_eq!(race.ship_pickup(), Some(oag_tables::weapons::Weapon::Mine));
+    assert_eq!(
+        race.core.ship_pickup(),
+        Some(oag_tables::weapons::Weapon::Mine)
+    );
     race.core.sim.world.ships[0].physics.shield = 10.0;
 
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
 
     assert_ne!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Mine),
         "the absorb must spend the held weapon"
     );
     assert!(
-        race.ship().physics.shield <= 10.0,
+        race.core.ship().physics.shield <= 10.0,
         "an Eliminator absorb pays nothing into the pool: {}",
-        race.ship().physics.shield
+        race.core.ship().physics.shield
     );
-    let timer = race.ship().physics.shield_pickup_timer;
+    let timer = race.core.ship().physics.shield_pickup_timer;
     assert!(
         timer > 1.25 - 2.0 * race.core.sim.dt() && timer <= 1.25,
         "the Shield must run for its own authored time, timer {timer}"
@@ -263,8 +266,8 @@ fn a_single_race_absorb_still_pays_energy_and_raises_no_shield() {
     race.tick(&PlayerInputs::single(buttons.tick(0)));
     race.core.sim.world.ships[0].physics.shield = 10.0;
     race.tick(&PlayerInputs::single(buttons.tick(CIRCLE)));
-    assert!((race.ship().physics.shield - 27.0).abs() < 1e-4);
-    assert_eq!(race.ship().physics.shield_pickup_timer, 0.0);
+    assert!((race.core.ship().physics.shield - 27.0).abs() < 1e-4);
+    assert_eq!(race.core.ship().physics.shield_pickup_timer, 0.0);
 }
 
 /// A Mine laid by one craft and tripped by another that its blast then finishes
@@ -632,11 +635,11 @@ fn the_player_place_ties_on_points_break_on_fewer_kills_then_the_person() {
     race.core.sim.world.ships[1].standing.score = 177.2;
     race.core.sim.world.ships[0].standing.kills = 4;
     race.core.sim.world.ships[1].standing.kills = 1;
-    assert_eq!(race.eliminator_place(), 2);
+    assert_eq!(race.core.eliminator_place(), 2);
     race.core.sim.world.ships[1].standing.kills = 4;
-    assert_eq!(race.eliminator_place(), 1);
+    assert_eq!(race.core.eliminator_place(), 1);
     race.core.sim.world.ships[1].standing.score = 178.0;
-    assert_eq!(race.eliminator_place(), 2);
+    assert_eq!(race.core.eliminator_place(), 2);
 }
 
 /// A kill race (no score law: Omega's) ranks on kills.
@@ -648,9 +651,9 @@ fn the_player_place_on_a_kill_race_ranks_on_kills() {
     assert!(race.core.sim.score_law.is_none());
     race.core.sim.world.ships[0].standing.kills = 2;
     race.core.sim.world.ships[1].standing.kills = 3;
-    assert_eq!(race.eliminator_place(), 2);
+    assert_eq!(race.core.eliminator_place(), 2);
     race.core.sim.world.ships[0].standing.kills = 3;
-    assert_eq!(race.eliminator_place(), 1);
+    assert_eq!(race.core.eliminator_place(), 1);
 }
 
 /// An opponent reaching the target ends the player's race too (the finished flag is set on
@@ -668,7 +671,7 @@ fn a_player_beaten_to_the_score_target_finishes_second() {
         race.core.sim.finished(),
         "the leader's target ends the player's race"
     );
-    assert_eq!(race.eliminator_place(), 2);
+    assert_eq!(race.core.eliminator_place(), 2);
 }
 
 /// The same on a kill race, Omega's path.
@@ -682,5 +685,5 @@ fn a_player_beaten_to_the_kill_target_finishes_second() {
     race.core.sim.world.ships[1].standing.kills = 5;
     race.tick(&PlayerInputs::none());
     assert!(race.core.sim.finished());
-    assert_eq!(race.eliminator_place(), 2);
+    assert_eq!(race.core.eliminator_place(), 2);
 }

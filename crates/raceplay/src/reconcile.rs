@@ -107,7 +107,7 @@ impl Race {
     ///
     /// - `capture_results`, which writes the scoreboard once, on the first tick
     ///   the race is finished.
-    /// - `wreck_ended_tick`, which `Race::runs_on_after_the_wreck` reads.
+    /// - `wreck_ended_tick`, which `SimRace::runs_on_after_the_wreck` reads.
     ///
     /// **The recording does not hear a replayed tick.** A client recording its
     /// race keeps the inputs it predicted, not the corrected ones; correcting a

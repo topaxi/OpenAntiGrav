@@ -100,7 +100,7 @@ fn a_quake_that_reaches_the_player_throws_the_static() {
     let mut race = race_with_noise(true);
     race.view.camera_view = CameraView::Internal;
     assert!(race.cockpit_hit_strips().is_none());
-    assert!(race.force_quake(1));
+    assert!(race.core.force_quake(1));
     let mut seen = false;
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());

@@ -145,8 +145,8 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     let Some(mut pulse) = loaded("data/images/pulse-psp-usa.chd") else {
         return;
     };
-    pulse.raise_start_cue(Cue::Ready);
-    pulse.raise_start_cue(Cue::Go);
+    pulse.core.raise_start_cue(Cue::Ready);
+    pulse.core.raise_start_cue(Cue::Go);
     let raised: Vec<Cue> = pulse
         .core
         .sim
@@ -156,7 +156,7 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
         .collect();
     assert_eq!(raised, vec![Cue::Ready, Cue::Go]);
     let hash = pulse.core.sim.state_hash();
-    pulse.raise_start_cue(Cue::Go);
+    pulse.core.raise_start_cue(Cue::Go);
     assert_eq!(
         pulse.core.sim.state_hash(),
         hash,
@@ -185,8 +185,8 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     };
     // Pulse's start voice is measured; Pure is lent it (chosen, not measured, commit 7d4a89814),
     // so a resume on Pure voices GO too.
-    pure.raise_start_cue(Cue::Ready);
-    pure.raise_start_cue(Cue::Go);
+    pure.core.raise_start_cue(Cue::Ready);
+    pure.core.raise_start_cue(Cue::Go);
     let raised: Vec<Cue> = pure
         .core
         .sim

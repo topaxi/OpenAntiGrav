@@ -69,7 +69,7 @@ mod tests {
         );
         assert!(
             stage.contains("self.race.eliminator_place()"),
-            "the place is the end-of-race board's, Race::eliminator_place"
+            "the place is the end-of-race board's, SimRace::eliminator_place"
         );
     }
 }

@@ -188,7 +188,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     let handling = loaded.setup.handling;
     let mut race = race::Race::start(loaded.setup);
 
-    let start = race.telemetry();
+    let start = race.core.telemetry();
     assert!(start.position.is_finite(), "{:?}", start.position);
     assert!(
         (start.height_above_spline - race::spawn_height(&handling)).abs() < 0.01,
@@ -197,9 +197,9 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
         race::spawn_height(&handling)
     );
     assert!(
-        race.ship().physics.body.up().y > 0.5,
+        race.core.ship().physics.body.up().y > 0.5,
         "the ship is not the right way up: {}",
-        race.ship().physics.body.up()
+        race.core.ship().physics.body.up()
     );
 
     let mut held = race::HeldButtons::new(Button::Cross.bit());
@@ -207,7 +207,7 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
     for tick in 0..TICKS {
         let snapshot = held.snapshot();
         race.tick(&PlayerInputs::single(snapshot));
-        let telemetry = race.telemetry();
+        let telemetry = race.core.telemetry();
         assert!(
             telemetry.position.is_finite(),
             "tick {tick}: {}",
@@ -218,12 +218,12 @@ fn a_ship_spawns_and_steps_on_the_ps2_disc() {
             "tick {tick}: {bound:.1} units off the spline is off the track: {}",
             race::describe(&telemetry)
         );
-        if race.ship().physics.grounded > 0.0 {
+        if race.core.ship().physics.grounded > 0.0 {
             grounded_ticks += 1;
         }
     }
 
-    let end = race.telemetry();
+    let end = race.core.telemetry();
     println!("after {TICKS} tick(s): {}", race::describe(&end));
     println!("grounded on {grounded_ticks} of {TICKS} tick(s)");
 

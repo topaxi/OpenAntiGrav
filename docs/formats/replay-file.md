@@ -145,7 +145,7 @@ POSE  varint last tick (poses exist for ticks 0..=last)
 - **Tick 0** is the state before the recording's first tick, the same index as `INPT` (`inputs[k]`
   is the tick that moves `k` to `k + 1`) and `Replay::ticks()`; a track's `last` is at most that.
 - **A pose** is what `RaceSim::craft_pose` reads: the position, and the orientation with the barrel roll
-  and the steering lean folded in, exactly as the hull is drawn (`Race::player_pose` is the same
+  and the steering lean folded in, exactly as the hull is drawn (`SimRace::player_pose` is the same
   function for the player).
 - **Position** is quantised to 1/64 unit and coded as the step from the previous key (the first key
   from zero) in each axis, zigzag then LEB128.

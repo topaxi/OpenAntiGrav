@@ -186,11 +186,14 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         "a first tick after the plans landed must not learn them: adopting {adopted:?}, learning {learned:?}"
     );
 
-    assert_eq!(ahead.speed_plan().cloned(), lazy.speed_plan().cloned());
+    assert_eq!(
+        ahead.core.speed_plan().cloned(),
+        lazy.core.speed_plan().cloned()
+    );
     for slot in 0..8 {
         assert_eq!(
-            ahead.plan_of(slot).cloned(),
-            lazy.plan_of(slot).cloned(),
+            ahead.core.plan_of(slot).cloned(),
+            lazy.core.plan_of(slot).cloned(),
             "slot {slot}"
         );
     }

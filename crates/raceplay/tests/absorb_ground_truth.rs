@@ -69,7 +69,7 @@ fn absorb_and_watch(loaded: race::Loaded) -> Vec<u32> {
     race.core.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.tick(&PlayerInputs::single(throttle(Button::Circle.bit())));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         None,
         "the Mine was not absorbed - the press never reached the absorb arm"
     );

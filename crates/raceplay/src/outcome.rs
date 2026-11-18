@@ -20,11 +20,11 @@ pub struct Outcome {
     /// so "which craft is mine" cannot live in the world.
     pub(crate) seat: Option<usize>,
     /// The name of the person flying each slot, by slot, empty for a slot with none
-    /// ([`crate::Race::set_person_names`]): the lobby's in a network race, the stored player name
+    /// ([`crate::SimRace::set_person_names`]): the lobby's in a network race, the stored player name
     /// for seat 1 in a local one. The end screens and the multiplayer tags name people.
     pub(crate) person_names: Vec<String>,
     /// The tick the player's wreck ended the race on, `None` until it does.
-    /// Bookkeeping for [`crate::Race::runs_on_after_the_end`] and the spectator director's
+    /// Bookkeeping for [`crate::SimRace::runs_on_after_the_end`] and the spectator director's
     /// clock; nothing [`RaceSim`](crate::RaceSim) reads.
     pub(crate) wreck_ended_tick: Option<u64>,
     /// The team id each slot flies - [`Setup::slot_teams`](crate::Setup::slot_teams).
@@ -42,7 +42,7 @@ pub struct Outcome {
     /// Not in `World`: it is derived from state the world already holds, so hashing it would
     /// hash the same facts twice, and a replay reproduces it by reaching the same tick.
     pub(crate) results: Option<crate::scoreboard::Board>,
-    /// Boards taken or replaced so far, for [`crate::Race::results_revision`].
+    /// Boards taken or replaced so far, for [`crate::SimRace::results_revision`].
     pub(crate) results_revision: u32,
     /// The tallies the Zone results screen reports - see
     /// [`RunStats`](crate::results::RunStats).

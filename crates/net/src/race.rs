@@ -260,7 +260,7 @@ pub fn check_title(params: &RaceParams, opened: &str) -> Result<()> {
 /// confirmed state, and [`Board::same_race_as`] compares the two.
 #[must_use]
 pub fn final_board(race: &Race, names: &[Option<String>]) -> Board {
-    let Some(board) = race.results() else {
+    let Some(board) = race.core.results() else {
         return Board::default();
     };
     let ships = &race.core.sim.world.ships;

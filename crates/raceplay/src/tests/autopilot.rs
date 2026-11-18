@@ -54,7 +54,7 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Autopilot)
     );
     assert!(
@@ -63,7 +63,11 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     );
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert_eq!(race.ship_pickup(), None, "firing must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "firing must spend the pickup"
+    );
     assert!(
         race.core.sim.flown_for_the_player(0),
         "the craft was not handed over"
@@ -159,7 +163,11 @@ fn race_under_autopilot() -> (Race, Buttons) {
         race.core.sim.flown_for_the_player(0),
         "the Autopilot did not arm"
     );
-    assert_eq!(race.ship_pickup(), None, "arming must spend the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "arming must spend the pickup"
+    );
     // Released first: both buttons are edge-triggered, so a second press
     // without a gap is not a press at all.
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
@@ -184,7 +192,11 @@ fn absorbing_under_autopilot_cancels_it_with_an_empty_slot() {
         "absorb did not cancel it"
     );
     assert_eq!(race.core.sim.world.ships[0].autopilot_timer, 0.0);
-    assert_eq!(race.ship_pickup(), None, "the cancel invented a pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        None,
+        "the cancel invented a pickup"
+    );
 }
 
 /// Under the Autopilot the driver's controls fly the press tick and the
@@ -228,7 +240,7 @@ fn absorbing_under_autopilot_keeps_a_held_pickup() {
         !race.core.sim.flown_for_the_player(0),
         "absorb did not cancel it"
     );
-    assert_eq!(race.ship_pickup(), held, "the cancel spent the pickup");
+    assert_eq!(race.core.ship_pickup(), held, "the cancel spent the pickup");
     assert_eq!(
         race.core.sim.world.ships[0].physics.shield, 50.0,
         "the cancel paid the pickup out"
@@ -248,7 +260,7 @@ fn firing_under_autopilot_does_nothing() {
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
     assert!(race.core.sim.flown_for_the_player(0), "firing cancelled it");
-    assert_eq!(race.ship_pickup(), held, "the press fired the pickup");
+    assert_eq!(race.core.ship_pickup(), held, "the press fired the pickup");
     assert_eq!(
         race.core.sim.world.projectiles.live(),
         0,
@@ -268,7 +280,11 @@ fn a_held_autopilot_cannot_be_fired_into_a_running_one() {
     let timer = race.core.sim.world.ships[0].autopilot_timer;
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | SQUARE)));
-    assert_eq!(race.ship_pickup(), held, "the press spent the held pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        held,
+        "the press spent the held pickup"
+    );
     let now = race.core.sim.world.ships[0].autopilot_timer;
     assert!(
         (now - (timer - race.core.sim.dt())).abs() < 1e-5,
@@ -289,7 +305,7 @@ fn no_pad_grant_while_the_autopilot_runs() {
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert!(race.core.sim.flown_for_the_player(0));
-    assert_eq!(race.ship_pickup(), None, "a pad granted mid-stint");
+    assert_eq!(race.core.ship_pickup(), None, "a pad granted mid-stint");
     assert!(
         race.core.sim.weapon_pad_refresh_left[0] > 0.0,
         "the pad was not stamped: the entry never happened"
@@ -311,7 +327,11 @@ fn absorbing_under_autopilot_does_not_cancel_it_where_the_title_has_no_cancel() 
         race.core.sim.flown_for_the_player(0),
         "a title with no cancel cancelled"
     );
-    assert_eq!(race.ship_pickup(), held, "the absorb reached the pickup");
+    assert_eq!(
+        race.core.ship_pickup(),
+        held,
+        "the absorb reached the pickup"
+    );
     assert_eq!(race.core.sim.world.ships[0].physics.shield, 50.0);
 }
 
@@ -326,7 +346,7 @@ fn a_title_whose_pads_grant_mid_stint_still_hands_one_over() {
 
     race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
     assert_eq!(
-        race.ship_pickup(),
+        race.core.ship_pickup(),
         Some(oag_tables::weapons::Weapon::Autopilot)
     );
 }
@@ -382,7 +402,7 @@ fn an_eliminator_absorb_arms_the_shield_and_cancels_the_autopilot() {
         !race.core.sim.flown_for_the_player(0),
         "the absorb did not cancel it"
     );
-    assert_eq!(race.ship_pickup(), None, "the held weapon was kept");
+    assert_eq!(race.core.ship_pickup(), None, "the held weapon was kept");
 }
 
 /// The player's engine bits under the Autopilot come from the title's own law,
@@ -492,11 +512,14 @@ fn a_machine_flying_both_seats_hears_both_calls() {
 fn the_held_autopilot_voice_follows_the_seat() {
     let mut race = two_people(Some(0), true);
     race.core.sim.world.ships[1].autopilot_timer = 3.0;
-    assert!(!race.autopilot_is_active(), "another person's Autopilot");
+    assert!(
+        !race.core.autopilot_is_active(),
+        "another person's Autopilot"
+    );
     race.core.sim.world.ships[0].autopilot_timer = 3.0;
-    assert!(race.autopilot_is_active(), "this seat's own");
+    assert!(race.core.autopilot_is_active(), "this seat's own");
 
     let mut race = two_people(None, false);
     race.core.sim.world.ships[1].autopilot_timer = 3.0;
-    assert!(race.autopilot_is_active(), "a second local seat's");
+    assert!(race.core.autopilot_is_active(), "a second local seat's");
 }

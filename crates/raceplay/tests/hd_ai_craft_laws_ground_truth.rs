@@ -193,13 +193,14 @@ fn lone_opponent(environment: &str) {
     for slot in (0..8).filter(|&slot| slot != 1) {
         race.core.sim.world.ships[slot].active = false;
     }
-    let plan = if race.speed_plan().is_some() {
+    let plan = if race.core.speed_plan().is_some() {
         "followed"
     } else {
         "corner model"
     };
     let run = runs_of(&mut race, &[1], TICKS).remove(0);
     let tight = race
+        .core
         .speed_plan()
         .map_or(0, oag_ai::SpeedPlan::tight_samples);
     println!(

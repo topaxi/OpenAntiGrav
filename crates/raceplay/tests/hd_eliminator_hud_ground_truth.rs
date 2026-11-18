@@ -337,7 +337,7 @@ fn sweep_score_changes() {
                 ));
             }
         }
-        if race.results().is_some() {
+        if race.core.results().is_some() {
             break;
         }
     }
@@ -358,7 +358,7 @@ struct Outcome {
 /// The board an Eliminator leaves is the score's: every row carries the points its craft ended on
 /// and the rows run highest first, so `EndRace Results` can draw a `POINTS` column in that order.
 fn assert_board_ranked_on_points(race: &oag_raceplay::Race) {
-    let board = race.results().expect("the race reached its target");
+    let board = race.core.results().expect("the race reached its target");
     assert!(board.scored(), "a score race's board ranks on points");
     let world = &race.core.sim.world;
     for row in &board.rows {
@@ -381,7 +381,7 @@ fn assert_board_ranked_on_points(race: &oag_raceplay::Race) {
     assert_eq!(places, (1..=8).collect::<Vec<u8>>());
     // The place a campaign cell's medal is read from is the player's row on this board.
     let player = board.player().expect("the player's row");
-    assert_eq!(race.eliminator_place(), player.place);
+    assert_eq!(race.core.eliminator_place(), player.place);
 }
 
 /// The laps the opponent with the most points has completed.
@@ -428,7 +428,7 @@ fn race_to_target(
     race.core.sim.set_autopilot(true);
     for tick in 0..60_000u64 {
         race.tick_sim_only(&PlayerInputs::none());
-        if race.results().is_some() {
+        if race.core.results().is_some() {
             assert_board_ranked_on_points(&race);
             return Outcome {
                 laps: leader_laps(&race),

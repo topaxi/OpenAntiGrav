@@ -501,7 +501,7 @@ fn the_lobby_forks_a_real_race_and_the_clients_reconnect_to_it_and_come_back() {
                 race.core.sim.finished(),
                 "person {who}'s own state has every person finished"
             );
-            let board = race.results().expect("a finished race has a board");
+            let board = race.core.results().expect("a finished race has a board");
             assert_eq!(board.laps_target, Some(1));
             assert!(
                 board

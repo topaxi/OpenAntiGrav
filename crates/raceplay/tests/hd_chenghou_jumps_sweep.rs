@@ -90,7 +90,7 @@ fn chenghou_jumps_per_tick() {
             oag_gameplay::PlayerInputs::none()
         };
         race.tick_sim_only(&inputs);
-        let t = race.telemetry();
+        let t = race.core.telemetry();
         let body = &race.core.sim.world.ships[0].physics.body;
         let v = body.linear_velocity;
         let f = body.orientation * Vec3::NEG_Z;
