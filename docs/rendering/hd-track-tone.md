@@ -1769,8 +1769,9 @@ The Modesto banners lose some saturation (right box 35.1 to 24.7) but are not th
 **Claim**: HD's race scene renders into an 8-bit target holding sRGB-encoded bytes, as the
 original's does, and the bloom resolve reads it through an sRGB view in one hardware tap; the
 half-float target stays as an opt-in. **True: the pairs stay put (14 pairs, every metric within
-0.015 of a level of mean grey), the opt-in is byte-identical to the build before, and the resolve is
-a third of its cost on the dGPU.** The Steam Deck's numbers are open (below).
+0.015 of a level of mean grey), the opt-in is byte-identical to the build before, and the resolve
+costs 28 % of what it did on the Steam Deck (3.88 to 1.10 ms at 4K) and a third on the dGPU; the
+Deck's whole-race GPU p50 falls 6 % at 800p, 10 % at 1080p and 13 % at 4K.**
 
 **Evidence the original is 8-bit** (read, not re-derived here): the race's scene target is
 `A8R8G8B8`, two samples, `SET_SHADER_PACKER` 1 (this page, "HD's blends combine encoded values";

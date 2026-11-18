@@ -2,7 +2,7 @@
 status: measure
 titles: [hd, pulse]
 updated: 2026-11-18
-summary: "HD native 4K still misses 60 Hz on the Deck: 8-bit scene landed (Deck unmeasured); shadow redraw, craft pass and f16 left"
+summary: "HD native 4K still misses 60 Hz on the Deck (18 ms p50 after the 8-bit scene): shadow redraw, craft pass and f16 left"
 categories: [rendering, tooling]
 ---
 
@@ -27,11 +27,9 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
      composites on encoded values, so shadowed pixels move: a rendering change with a pair check,
      not a speed lane. Measure: the `track solid, shaded` span, same command as the page.
   2. ~~**The bloom resolve, 3.85 ms at 4K.**~~ Landed 2026-11-18 (`hd-scene-8bit`): HD's scene is
-     8-bit by default (`graphics.scene_precision`), the resolve one sRGB-view tap; NVIDIA 4K resolve
-     556 to 208 us, whole-race GPU p50 -16.8 %, pairs unchanged (`docs/rendering/hires-gpu-levers.md`,
-     "HD's scene in 8 bits"). **Open: the Deck's numbers** (ssh could not authenticate that lane).
-     Measure: the Deck commands in that section, `--scene-precision float` as before against the
-     default, 800p, 1080p, 4K, interleaved, clock recorded.
+     8-bit by default (`graphics.scene_precision`), the resolve one sRGB-view tap; Deck 4K resolve
+     3.88 to 1.10 ms, whole-race GPU p50 18.3 to 16.0 ms, pairs unchanged
+     (`docs/rendering/hires-gpu-levers.md`, "HD's scene in 8 bits").
   3. **The craft pass, 3.08 ms at 4K**, 4.5 ns a fragment against the circuit's 1.4. Not opened:
      its overdraw is unmeasured, and the `lit_by_rig` fold is not applied to it because a craft
      draws under a scene block of its own (`ship_scene`), which needs an audit first.
@@ -71,8 +69,8 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
 
 ## Next Steps
 
-1. Run the Deck half of item 2, then decide item 1 (it moves the shadowed pixels toward the
-   console's own structure); it is worth more at 4K than every exact cut left.
+1. Decide item 1 (it moves the shadowed pixels toward the console's own structure); it is worth
+   more at 4K than every exact cut left.
 2. Only docked 4K still gains from the GPU (`docs/rendering/hires-gpu-levers.md`, "The Deck's verdict"):
    f16 in `lit_texel`, and fewer than about 104 VGPRs on HD's rich pipelines for more waves than 8
    (the plain pipeline is already at 40 VGPRs, 24 waves).

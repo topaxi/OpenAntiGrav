@@ -860,12 +860,40 @@ frames both, load 2.1 to 3.4), before to after, ms:
 | GPU p95 | 1.87 to 1.77 (-5.2 %) | 3.23 to 2.99 (-7.5 %) | 9.94 to 8.64 (-13.2 %) |
 | frame p50 | 2.12 to 2.06 | 2.94 to 2.74 | 8.03 to 6.72 (-16.3 %) |
 
-**The Steam Deck is not measured.** The lane's ssh to the Deck could not authenticate (the
-workstation's agent did not sign), so the claim's Deck half (resolve 3.85 ms at 4K before, about
-1.2 ms expected) is open. The binary is the `oag-appimage-build:bookworm` container's release
-`perf-probe` build with `-C target-cpu=znver2`; the commands are this page's "Method" (spans) and
-`scripts/bench-render.py run hd --binary ./oag-game --size WxH`, before as `--scene-precision
-float` (byte-identical to the build before) and after as the default, interleaved.
+**Result on the Steam Deck.** The resolve falls to 28 % of its cost at every size (3.88 to 1.10 ms
+at 4K, against about 1.2 ms the lever's estimate expected), the bloom downsample by 30 %, and the
+whole race's GPU time by 6 % at 800p, 10 % at 1080p and 13 % at 4K on the median.
+
+Method: `RADV VANGOGH`, AC, GPU clock unpinned and sampled with `amdgpu_top --json` beside every
+run (spans at a busy median of 1,040 MHz, whole races at 1,600 MHz for 130 to 145 of about 160
+one-second samples at 4K), Deck load 0.8 to 2.8, offscreen over ssh under the Deck's lock. One
+binary, the `oag-appimage-build:bookworm` container's release `perf-probe` build with `-C
+target-cpu=znver2`; **before is the same binary with `--scene-precision float`** (byte-identical
+to the build before on every HD pair), after is the default. Spans: this page's "Method" command,
+the two arms interleaved (ABBA), 2 rounds, which agree within 0.3 %.
+
+| us, Deck | 1280x800 float / 8-bit | 1920x1080 | 3840x2160 |
+| --- | --- | --- | --- |
+| `hd encode` (the resolve) | 448 / 130 | 984 / 284 | 3,881 / 1,104 (-72 %) |
+| `hd bloom downsample` | 157 / 118 | 320 / 228 | 1,108 / 776 |
+| `track solid, shaded` | 2,057 / 2,018 | 3,489 / 3,468 | 10,524 / 10,490 |
+| craft, weapons, shields | 678 / 674 | 1,091 / 1,090 | 3,084 / 3,077 |
+| sum of spans | 5,876 / 5,412 | 8,749 / 7,943 | 23,026 / 19,866 (-13.7 %) |
+| pipelined per frame | 5,754 / 5,695 (CPU bound) | 6,651 / 6,124 | 16,249 / 14,138 (-13.0 %) |
+
+Whole race, `scripts/bench-render.py run hd --binary <arm> --size WxH`, 7,019 frames in every run,
+ms, float to 8-bit; the 4K pair was run twice (float, 8-bit, float, 8-bit), and the two agree:
+
+| Deck | 1280x800 | 1920x1080 | 3840x2160, run 1 | 3840x2160, run 2 |
+| --- | --- | --- | --- | --- |
+| GPU p50 | 3.76 to 3.53 (-6.0 %) | 6.00 to 5.42 (-9.7 %) | 18.33 to 15.97 (-12.9 %) | 18.48 to 15.98 (-13.5 %) |
+| GPU p95 | 4.63 to 4.40 (-5.1 %) | 7.95 to 7.34 (-7.7 %) | 26.62 to 24.36 (-8.5 %) | 26.98 to 24.38 (-9.6 %) |
+| frame p50 | 5.56 to 5.51 | 7.76 to 7.28 (-6.2 %) | 20.43 to 18.06 (-11.6 %) | 20.37 to 18.04 (-11.5 %) |
+| frame p95 | 7.01 to 6.88 | 9.95 to 9.33 (-6.3 %) | 28.47 to 26.30 (-7.6 %) | 28.76 to 26.34 (-8.4 %) |
+
+The float arm reproduces the page's earlier 4K figures (GPU p50 18.36 ms after the `lit_by_rig` fold,
+above), so the float arm is the before. Native 4K on the Deck still misses 60 Hz (frame p50 18.1 ms,
+p95 26.3).
 
 ### Not landed: opaque draws writing through an sRGB attachment view
 
