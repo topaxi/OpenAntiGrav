@@ -27,8 +27,9 @@ impl Race {
     /// The inertia is the title's box tensor (`crate::launch_hover::craft_inertia`, Pulse's
     /// [`box_inertia`] for `None`); see that function for why a derived tensor is used at all.
     #[must_use]
-    pub fn start(setup: Setup) -> Self {
-        let Setup {
+    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
+    pub fn start(setup: SimSetup, view: ViewSetup, modules: crate::extensions::Prepared) -> Self {
+        let SimSetup {
             mode,
             eliminator_kill_target,
             laps_override,
@@ -39,12 +40,6 @@ impl Race {
             opponents,
             no_opponents,
             people,
-            #[cfg(feature = "view")]
-            trail_sparks,
-            #[cfg(feature = "view")]
-            request,
-            #[cfg(feature = "view")]
-            campaign_event,
             seed,
             zone,
             ai,
@@ -57,55 +52,15 @@ impl Race {
             weapon_counts,
             opponent_weapon_counts,
             chase,
-            #[cfg(feature = "view")]
-            chase_close,
-            #[cfg(feature = "view")]
-            internal,
-            #[cfg(feature = "view")]
-            nozzles,
             muzzles,
-            #[cfg(feature = "view")]
-            engine_lights,
-            #[cfg(feature = "view")]
-            spu_vertex_lights,
-            #[cfg(feature = "view")]
-            hull_points,
-            #[cfg(feature = "view")]
-            spark_anchors,
-            #[cfg(feature = "view")]
-            collision_fx,
-            #[cfg(feature = "view")]
-            scenery_fx,
-            #[cfg(feature = "view")]
-            effects,
-            #[cfg(feature = "view")]
-            handles,
-            #[cfg(feature = "view")]
-            sounds,
-            #[cfg(feature = "view")]
-            track_emitters,
-            #[cfg(feature = "view")]
-            announcer,
-            #[cfg(feature = "view")]
-            class_announcer,
-            #[cfg(feature = "view")]
-            rumble,
             zone_stages,
             countdown_voice,
             countdown_beat,
             launch_hover,
             hover_rig,
             craft_laws,
-            #[cfg(feature = "view")]
-            hull_shake,
-            #[cfg(not(feature = "view"))]
-                hull_shake: _,
             autopilot_engine,
             opponent_autopilot,
-            #[cfg(feature = "view")]
-            zoom_ring,
-            #[cfg(feature = "view")]
-            zoom_borrowed,
             weapon_pad_glow,
             leach_drain,
             blast_push,
@@ -135,83 +90,75 @@ impl Race {
             wall_restitution,
             pose_override,
             field_poses,
-            #[cfg(feature = "view")]
-            capture_hud,
-            #[cfg(feature = "view")]
-            now_playing,
-            #[cfg(feature = "view")]
-            world_clock_offset,
-            #[cfg(feature = "view")]
-            gantry_seconds,
-            #[cfg(feature = "view")]
-            camera_override,
-            #[cfg(feature = "view")]
-            hd_trail,
-            #[cfg(feature = "view")]
-            ps2_trail,
-            #[cfg(feature = "view")]
-            shield_palette,
-            #[cfg(feature = "view")]
-            shield_targets,
-            #[cfg(feature = "view")]
-            hd_plasma_blast,
-            #[cfg(feature = "view")]
-            plasma_blast_law,
-            #[cfg(feature = "view")]
-            disruptor_halo_law,
-            #[cfg(feature = "view")]
-            disruptor_craft_law,
-            #[cfg(feature = "view")]
-            hd_bomb_blast,
-            #[cfg(feature = "view")]
-            bomb_shockwave_fades,
-            #[cfg(feature = "view")]
-            hd_missile_blast,
-            #[cfg(feature = "view")]
-            pulse_laid_pose,
-            #[cfg(feature = "view")]
-            laid_pose_scaled,
             laid_from_rear,
             grid_frame_from_sample,
-            #[cfg(feature = "view")]
-            screen_flash,
-            #[cfg(feature = "view")]
-            quake_flash,
-            #[cfg(feature = "view")]
-            absorb_burst,
-            #[cfg(feature = "view")]
-            absorb_anchors,
-            #[cfg(feature = "view")]
-            hit_spark_anchors,
-            #[cfg(feature = "view")]
-            weapon_spark_anchors,
-            #[cfg(feature = "view")]
-            cockpit_hit_noise,
-            #[cfg(feature = "view")]
-            wreck_anchors,
-            #[cfg(feature = "view")]
-            wreck_shockwave,
-            #[cfg(feature = "view")]
-            magstrip_wake,
-            #[cfg(feature = "view")]
-            magstrip_pob,
-            #[cfg(feature = "view")]
-            leach_strip,
-            #[cfg(feature = "view")]
-            missile_trail,
-            #[cfg(feature = "view")]
-            wingtip,
-            #[cfg(feature = "view")]
-            destroy_stations,
-            #[cfg(feature = "view")]
-            intro_camera,
-            #[cfg(feature = "view")]
-            intro_voice,
             slot_teams,
             sight,
-            extensions,
-            ..
+            capture_zone,
+            foreign: _,
         } = setup;
+        #[cfg(feature = "view")]
+        let ViewSetup {
+            trail_sparks,
+            request,
+            campaign_event,
+            chase_close,
+            internal,
+            nozzles,
+            engine_lights,
+            spu_vertex_lights,
+            hull_points,
+            spark_anchors,
+            collision_fx,
+            scenery_fx,
+            effects,
+            handles,
+            sounds,
+            track_emitters,
+            announcer,
+            class_announcer,
+            rumble,
+            hull_shake,
+            zoom_ring,
+            zoom_borrowed,
+            capture_hud,
+            now_playing,
+            world_clock_offset,
+            gantry_seconds,
+            camera_override,
+            hd_trail,
+            ps2_trail,
+            shield_palette,
+            shield_targets,
+            hd_plasma_blast,
+            plasma_blast_law,
+            disruptor_halo_law,
+            disruptor_craft_law,
+            hd_bomb_blast,
+            bomb_shockwave_fades,
+            hd_missile_blast,
+            pulse_laid_pose,
+            laid_pose_scaled,
+            screen_flash,
+            quake_flash,
+            absorb_burst,
+            absorb_anchors,
+            hit_spark_anchors,
+            weapon_spark_anchors,
+            cockpit_hit_noise,
+            wreck_anchors,
+            wreck_shockwave,
+            magstrip_wake,
+            magstrip_pob,
+            leach_strip,
+            missile_trail,
+            wingtip,
+            destroy_stations,
+            intro_camera,
+            intro_voice,
+            airbrake_graphics,
+            sight: view_sight,
+        } = view;
         let score_pace = crate::score_pace::ScorePace::of(score_law, difficulty);
 
         // The mode gate, applied once at construction rather than on every tick,
@@ -634,8 +581,7 @@ impl Race {
             ship.muzzle = muzzles.get(slot).copied().flatten();
         }
 
-        #[cfg(feature = "view")]
-        if let Some(zone) = capture_hud.and_then(|hud| hud.zone) {
+        if let Some(zone) = capture_zone {
             // A Zone capture's counters, so the readout, the grade and the sphere read the
             // original's zone (`CaptureZone`).
             let race = &mut world.race[0];
@@ -678,7 +624,7 @@ impl Race {
         let race = Self {
             core: SimRace {
                 sim: RaceSim {
-                    extensions: crate::extensions::Extensions::new(extensions),
+                    extensions: crate::extensions::Extensions::new(modules),
                     racing_line: Arc::new(line),
                     ai_order: order.into(),
                     routes: routes.into(),
@@ -1018,14 +964,14 @@ impl Race {
                 // zero-guard), and a full-pool reading would arm the flash on a
                 // false "drop" from 100% to whatever the first real tick measures.
                 huds: std::array::from_fn(|_| crate::slot_hud::SlotHud {
-                    sight: sight.view_sight(),
+                    sight: view_sight.view_sight(),
                     ..Default::default()
                 }),
                 pair_spoil: [false; MAX_SHIPS],
                 split_gap: None,
                 incoming_raises: Vec::new(),
-                sight_screens: (sight.view_screen, sight.columns_screen),
-                sight: sight.view_sight(),
+                sight_screens: (view_sight.view_screen, view_sight.columns_screen),
+                sight: view_sight.view_sight(),
                 sight_state: sight::State::Absent,
                 sight_aim: None,
                 sight_fov: oag_display::display::Fov::AUTHORED,
@@ -1037,7 +983,7 @@ impl Race {
                 boost_kick: 0.0,
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
                 flaps: [[0.0; 2]; MAX_SHIPS],
-                flap_graphics: setup.airbrake_graphics,
+                flap_graphics: airbrake_graphics,
             }),
             #[cfg(feature = "view")]
             replay: replay::ReplayState::requested(request),

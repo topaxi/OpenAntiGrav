@@ -226,7 +226,7 @@ impl SimRace {
     /// rebuilt from the catalogue, because the roster is a seeded draw (see
     /// `race::load::roster`) and only the race that drew it knows its seed.
     ///
-    /// [`Setup::slot_teams`]: crate::Setup::slot_teams
+    /// [`SimSetup::slot_teams`]: crate::SimSetup::slot_teams
     #[must_use]
     pub fn slot_teams(&self) -> &[String] {
         &self.outcome.slot_teams
