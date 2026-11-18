@@ -54,9 +54,9 @@ fn two_views_leave_a_block_each_holding_their_own_eye() {
         &mut [],
     );
     let eye_of = |slot| {
-        race.set_viewpoint(slot);
+        race.view.set_viewpoint(&race.core, slot);
         let eye = race.view.camera_position(&race.core).to_array();
-        race.reset_viewpoint();
+        race.view.reset_viewpoint();
         eye
     };
     let (eye0, eye1) = (eye_of(0), eye_of(1));

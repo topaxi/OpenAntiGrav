@@ -946,7 +946,8 @@ impl Race {
             // would restart on every round and never reach a lit phase.
             #[cfg(feature = "view")]
             if remaining + 1 == rounds {
-                self.note_incoming_fire(slot, oag_tables::weapons::Weapon::Cannon);
+                self.view
+                    .note_incoming_fire(&self.core, slot, oag_tables::weapons::Weapon::Cannon);
             }
         }
     }

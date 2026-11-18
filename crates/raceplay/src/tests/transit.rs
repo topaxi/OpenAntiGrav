@@ -223,14 +223,14 @@ fn a_seat_reports_its_own_camera_cut_not_the_players() {
             race.tick(&PlayerInputs::none());
             for (view, slot) in [(0, 0), (1, 1)] {
                 if slot == 0 {
-                    race.reset_viewpoint();
+                    race.view.reset_viewpoint();
                 } else {
-                    race.set_viewpoint(slot);
+                    race.view.set_viewpoint(&race.core, slot);
                 }
                 assert_eq!(race.view.viewed_slot(&race.core), slot);
                 seen[view].push(race.viewed_camera_cut());
             }
-            race.reset_viewpoint();
+            race.view.reset_viewpoint();
         }
         assert_eq!(
             seen[moved],

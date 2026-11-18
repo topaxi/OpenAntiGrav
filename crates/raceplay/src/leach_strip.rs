@@ -124,8 +124,6 @@ impl RaceSim {
     }
 }
 
-impl Race {}
-
 impl RaceSim {
     /// The beams the strip draws: locked and not broken, in pool order.
     fn leach_beams_live(&self) -> impl Iterator<Item = oag_weapons::projectile::leach_beam::Beam> {

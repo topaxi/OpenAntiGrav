@@ -1,3 +1,5 @@
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 use oag_gameplay::PlayerInputs;
 use oag_replay::header::GhostInfo;
 use oag_replay::{GhostLap, Header, Pose, PoseRecorder, Recorder, Replay};
@@ -300,7 +302,7 @@ impl Race {
         self.view
             .camera
             .advance(target, &self.view.chase_params, self.core.sim.dt);
-        self.advance_viewpoints();
+        self.view.advance_viewpoints(&self.core);
         self.tick_cosmetics();
     }
 }
@@ -314,63 +316,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
-    /// Everything the recording and the ghost do after a tick has run: the
-    /// last thing [`Race::tick`] calls.
-    pub(crate) fn record_tick(&mut self, inputs: &PlayerInputs) {
-        let Some(recording) = self.replay.recording.as_mut() else {
-            return;
-        };
-        let sim = &self.core.sim;
-        recording.recorder.record(inputs, || sim.state_hash());
-
-        let pose = self.core.player_pose();
-        let grid = self.core.sim.grid_poses();
-        let standing = *self.core.player_standing();
-        let tick = self.core.sim.world.tick;
-        let Some(recording) = self.replay.recording.as_mut() else {
-            return;
-        };
-        recording.poses.push(pose);
-        recording.track.push(&grid);
-
-        let crossed = standing.lap_start_tick != recording.last_start;
-        let completed = crossed && standing.lap > recording.last_lap;
-        if completed
-            && recording.ghosts
-            && let (Some(start), Some(end)) = (recording.last_start, standing.lap_start_tick)
-            && let Some(lap) = recording.slice(start, end)
-        {
-            let info = GhostInfo {
-                lap: recording.last_lap,
-                start_tick: start,
-                lap_ticks: lap.lap_ticks,
-            };
-            if lap.beats(recording.best.as_ref().map(|(_, best)| best)) {
-                recording.best = Some((info, lap.clone()));
-                recording.best_unsaved = true;
-            }
-            // Raced from the next lap on when it beats the ghost too - see
-            // ADR-0055, "it improves within a run". Drawn as the player's own
-            // hull from then on, since it is the player's lap.
-            if lap.beats(self.replay.ghost.as_ref().map(|g| &g.lap)) {
-                self.replay.ghost = Some(Ghost {
-                    lap,
-                    team: recording.recorder.header().team.clone(),
-                });
-            }
-        }
-        let Some(recording) = self.replay.recording.as_mut() else {
-            return;
-        };
-        if crossed && let Some(start) = standing.lap_start_tick {
-            recording.trim_before(start);
-        }
-        recording.last_lap = standing.lap;
-        recording.last_start = standing.lap_start_tick;
-        debug_assert_eq!(recording.base + recording.poses.len() as u64, tick + 1);
-    }
-}
+impl Race {}
 
 impl Recording {
     /// The poses of world ticks `start..=end`, as a lap of `end - start`
@@ -488,5 +434,64 @@ impl GhostCapture {
             path.display()
         );
         Ok(())
+    }
+}
+
+#[cfg(feature = "view")]
+impl Stage<'_> {
+    /// Everything the recording and the ghost do after a tick has run: the
+    /// last thing [`Race::tick`] calls.
+    pub(crate) fn record_tick(&mut self, core: &SimRace, inputs: &PlayerInputs) {
+        let Some(recording) = self.replay.recording.as_mut() else {
+            return;
+        };
+        let sim = &core.sim;
+        recording.recorder.record(inputs, || sim.state_hash());
+
+        let pose = core.player_pose();
+        let grid = core.sim.grid_poses();
+        let standing = *core.player_standing();
+        let tick = core.sim.world.tick;
+        let Some(recording) = self.replay.recording.as_mut() else {
+            return;
+        };
+        recording.poses.push(pose);
+        recording.track.push(&grid);
+
+        let crossed = standing.lap_start_tick != recording.last_start;
+        let completed = crossed && standing.lap > recording.last_lap;
+        if completed
+            && recording.ghosts
+            && let (Some(start), Some(end)) = (recording.last_start, standing.lap_start_tick)
+            && let Some(lap) = recording.slice(start, end)
+        {
+            let info = GhostInfo {
+                lap: recording.last_lap,
+                start_tick: start,
+                lap_ticks: lap.lap_ticks,
+            };
+            if lap.beats(recording.best.as_ref().map(|(_, best)| best)) {
+                recording.best = Some((info, lap.clone()));
+                recording.best_unsaved = true;
+            }
+            // Raced from the next lap on when it beats the ghost too - see
+            // ADR-0055, "it improves within a run". Drawn as the player's own
+            // hull from then on, since it is the player's lap.
+            if lap.beats(self.replay.ghost.as_ref().map(|g| &g.lap)) {
+                self.replay.ghost = Some(Ghost {
+                    lap,
+                    team: recording.recorder.header().team.clone(),
+                });
+            }
+        }
+        let Some(recording) = self.replay.recording.as_mut() else {
+            return;
+        };
+        if crossed && let Some(start) = standing.lap_start_tick {
+            recording.trim_before(start);
+        }
+        recording.last_lap = standing.lap;
+        recording.last_start = standing.lap_start_tick;
+        debug_assert_eq!(recording.base + recording.poses.len() as u64, tick + 1);
     }
 }

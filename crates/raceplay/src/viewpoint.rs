@@ -120,8 +120,6 @@ impl Viewpoints {
     }
 }
 
-impl Race {}
-
 impl RaceSim {
     /// How many people fly this race, across every window ([`SimSetup::people`](super::SimSetup::people)).
     /// Not [`crate::RaceView::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
@@ -372,62 +370,6 @@ impl Race {
         count
     }
 
-    /// Steps every extra camera one tick, from this tick's craft poses. A no-op
-    /// with no split. Called from the tick right after the player's own camera.
-    pub(super) fn advance_viewpoints(&mut self) {
-        let params = self.view.chase_far;
-        let dt = self.core.sim.dt;
-        let kicks = self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
-        for slot in 0..MAX_SHIPS {
-            let boosting = self.core.sim.world.ships[slot].physics.pad_timer > 0.0;
-            let respawns = self.core.sim.placements_of(slot);
-            let target = self.view.followed(&self.core, slot);
-            let step = self.camera_step(slot);
-            let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
-                continue;
-            };
-            if respawns != cam.respawns {
-                cam.chase = Chase::snapped(target, &params);
-                cam.respawns = respawns;
-            } else {
-                cam.chase.advance(target, &params, step);
-            }
-            if kicks {
-                cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
-            }
-            cam.previous = cam.current;
-            cam.current = cam.chase.view(target, &params);
-        }
-    }
-
-    /// Draws the next [`Scene::render`](super::Scene::render) from slot `slot`'s
-    /// camera. The player's own slot is the ordinary view, exactly.
-    ///
-    /// **Put back with [`Self::reset_viewpoint`]** once the views are drawn: it
-    /// is draw-side state behind a shared reference, and anything that reads the
-    /// camera afterwards - the HUD's reticle, the next tick's audio listener -
-    /// means the player's.
-    pub fn set_viewpoint(&self, slot: usize) {
-        let extra = (slot != self.core.player_slot() && self.view.viewpoints.cams[slot].is_some())
-            .then(|| u8::try_from(slot).unwrap_or(0));
-        self.view.viewpoints.drawing.set(extra);
-    }
-
-    /// The eye of every extra view, from the camera of the last tick.
-    pub(super) fn viewpoint_eyes(&self) -> impl Iterator<Item = Vec3> + '_ {
-        self.view
-            .viewpoints
-            .cams
-            .iter()
-            .flatten()
-            .map(|cam| cam.current.inverse().w_axis.truncate())
-    }
-
-    /// The player's own view again. See [`Self::set_viewpoint`].
-    pub fn reset_viewpoint(&self) {
-        self.view.viewpoints.drawing.set(None);
-    }
-
     /// How many times the picture being drawn has jumped to a different shot - what a camera
     /// history watches to throw its previous frame away. The player's view is
     /// [`crate::RaceView::camera_cuts`]; an extra seat's chase camera jumps when that craft respawns, and
@@ -458,14 +400,6 @@ impl Race {
         self.view
             .extra_viewpoint()
             .map(|slot| self.view.viewpoints.view(slot, self.view.draw_alpha()))
-    }
-
-    /// Steps every extra seat's shake one tick, as the player's is. See
-    /// [`Self::advance_seat_contact_fx`](super::tick).
-    pub(super) fn advance_seat_shakes(&mut self, dt: f32) {
-        for fx in self.view.viewpoints.contact.iter_mut().flatten() {
-            fx.shake.advance(dt);
-        }
     }
 }
 
@@ -557,6 +491,68 @@ impl RaceView {
         match (self.extra_viewpoint(), self.photo.as_ref()) {
             (None, Some(photo)) => photo.subject(),
             _ => self.viewed_slot(core),
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Steps every extra camera one tick, from this tick's craft poses. A no-op
+    /// with no split. Called from the tick right after the player's own camera.
+    pub(super) fn advance_viewpoints(&mut self, core: &SimRace) {
+        let params = self.chase_far;
+        let dt = core.sim.dt;
+        let kicks = self.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
+        for slot in 0..MAX_SHIPS {
+            let boosting = core.sim.world.ships[slot].physics.pad_timer > 0.0;
+            let respawns = core.sim.placements_of(slot);
+            let target = self.followed(core, slot);
+            let step = self.camera_step(core, slot);
+            let Some(cam) = self.viewpoints.cams[slot].as_mut() else {
+                continue;
+            };
+            if respawns != cam.respawns {
+                cam.chase = Chase::snapped(target, &params);
+                cam.respawns = respawns;
+            } else {
+                cam.chase.advance(target, &params, step);
+            }
+            if kicks {
+                cam.boost_kick = super::tick::step_boost_kick(cam.boost_kick, boosting, dt);
+            }
+            cam.previous = cam.current;
+            cam.current = cam.chase.view(target, &params);
+        }
+    }
+    /// Draws the next [`Scene::render`](super::Scene::render) from slot `slot`'s
+    /// camera. The player's own slot is the ordinary view, exactly.
+    ///
+    /// **Put back with [`Self::reset_viewpoint`]** once the views are drawn: it
+    /// is draw-side state behind a shared reference, and anything that reads the
+    /// camera afterwards - the HUD's reticle, the next tick's audio listener -
+    /// means the player's.
+    pub fn set_viewpoint(&self, core: &SimRace, slot: usize) {
+        let extra = (slot != core.player_slot() && self.viewpoints.cams[slot].is_some())
+            .then(|| u8::try_from(slot).unwrap_or(0));
+        self.viewpoints.drawing.set(extra);
+    }
+    /// The eye of every extra view, from the camera of the last tick.
+    pub(super) fn viewpoint_eyes(&self) -> impl Iterator<Item = Vec3> + '_ {
+        self.viewpoints
+            .cams
+            .iter()
+            .flatten()
+            .map(|cam| cam.current.inverse().w_axis.truncate())
+    }
+    /// The player's own view again. See [`Self::set_viewpoint`].
+    pub fn reset_viewpoint(&self) {
+        self.viewpoints.drawing.set(None);
+    }
+    /// Steps every extra seat's shake one tick, as the player's is. See
+    /// [`Self::advance_seat_contact_fx`](super::tick).
+    pub(super) fn advance_seat_shakes(&mut self, dt: f32) {
+        for fx in self.viewpoints.contact.iter_mut().flatten() {
+            fx.shake.advance(dt);
         }
     }
 }

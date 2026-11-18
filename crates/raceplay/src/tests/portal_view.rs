@@ -348,10 +348,10 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
     assert!(race.ship_drawn(0) && race.ship_flown_in_view(0));
     // A second seat's view of the same race.
     assert_eq!(race.set_viewport_count(2), 2);
-    race.set_viewpoint(1);
+    race.view.set_viewpoint(&race.core, 1);
     assert_eq!(race.view.viewed_slot(&race.core), 1);
     assert!(!race.ship_drawn(0), "no other view draws it");
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     // 30 units a second, and 19 ticks since the tick the seat was opened on: the camera and
     // the hull are 9.5 units on from the seat, and the pair is seen from where the camera
     // would stand had it stayed on it.
@@ -827,12 +827,12 @@ fn a_split_screen_draws_one_extra_scene_a_frame_for_all_its_seats() {
         );
         assert_eq!(scene.frame_work().portal_views, frame);
     }
-    race.set_viewpoint(1);
+    race.view.set_viewpoint(&race.core, 1);
     assert!(
         scene.portal_engine_of(&race).is_none(),
         "the second seat falls back"
     );
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert!(scene.portal_engine_of(&race).is_some());
 }
 

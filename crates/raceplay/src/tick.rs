@@ -73,9 +73,9 @@ impl Race {
         // `oag_render::camera::shake`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_now_playing();
+            self.view.advance_now_playing();
             self.view.contact.shake.advance(self.core.sim.dt);
-            self.advance_seat_shakes(self.core.sim.dt);
+            self.view.advance_seat_shakes(self.core.sim.dt);
             if !self.view.camera_shake_on {
                 self.view.contact.shake.cancel();
             }
@@ -525,7 +525,7 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.view.advance_craft_flashes(&self.core);
-            self.advance_destroy_camera();
+            self.view.advance_destroy_camera(&self.core);
         }
 
         self.core.sim.world.tick += 1;
@@ -586,7 +586,7 @@ impl Race {
         self.core.sim.update_standings();
         #[cfg(feature = "view")]
         if self.draws() {
-            self.tick_split_gap();
+            self.view.tick_split_gap(&self.core);
         }
 
         // **After the standings**, so the wave's own proximity test reads
@@ -630,13 +630,13 @@ impl Race {
 
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_transit_seats();
+            self.view.advance_transit_seats(&self.core);
             let target = self.view.camera_target(&self.core);
             // A craft put further round (`Race::move_to`) takes its camera with it, settled:
             // the spring would sweep the eye across the gap.
             let jumps = self.core.sim.jumps[self.core.player_slot()];
             if std::mem::replace(&mut self.view.camera_jumps, jumps) == jumps {
-                let step = self.camera_step(self.core.player_slot());
+                let step = self.view.camera_step(&self.core, self.core.player_slot());
                 self.view
                     .camera
                     .advance(target, &self.view.chase_params, step);
@@ -644,10 +644,10 @@ impl Race {
                 self.view.camera = Chase::snapped(target, &self.view.chase_params);
             }
             // The split-screen views' own cameras, view-side: a no-op with one view.
-            self.advance_viewpoints();
+            self.view.advance_viewpoints(&self.core);
             // After the chase camera and before the eye is read: behind the end-race panels the
             // spectator director's pose replaces it. A no-op until the player has finished.
-            self.advance_finish_camera();
+            self.view.advance_finish_camera(&self.core);
             // After the camera, so the flash's falloff measures from this tick's eye.
             let eye = self.view.camera_position(&self.core);
             if let Some(flash) = &mut self.view.screen_flash {
@@ -749,7 +749,7 @@ impl Race {
         self.core.sim.advance_locks();
         #[cfg(feature = "view")]
         if self.draws() {
-            self.update_sight();
+            self.view.update_sight(&self.core);
         }
 
         // After every writer of the shield pool this tick has run - the wall
@@ -760,7 +760,7 @@ impl Race {
         // viewed slot: see `Self::advance_slot_huds`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.advance_slot_huds();
+            self.view.advance_slot_huds(&self.core);
         } else {
             self.view.incoming_raises.clear();
         }
@@ -797,10 +797,12 @@ impl Race {
             let seat = if steps[seat].is_some() { seat } else { primary };
             if let Some(step) = &steps[seat] {
                 let evaluated = step.evaluated;
-                self.advance_contact_fx(seat, &evaluated);
+                self.core.lending_cues(|core, cues| {
+                    self.view.advance_contact_fx(core, cues, seat, &evaluated)
+                });
             }
-            self.advance_seat_contact_fx(&steps, seat);
-            self.advance_field_sparks();
+            self.view.advance_seat_contact_fx(&self.core, &steps, seat);
+            self.view.advance_field_sparks(&self.core);
         }
 
         // Last, after every write this tick makes: the recording stores the
@@ -809,74 +811,9 @@ impl Race {
         // `start_recording` was called - see `race::replay`.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.record_tick(inputs);
+            crate::stage::stage!(self).record_tick(&self.core, inputs);
         }
         Evaluations::new(&steps, primary)
-    }
-
-    #[cfg(feature = "view")]
-    /// The seat's collision sparks, the shake a hit arms and the shield edge, for its wall
-    /// contact this tick (`slot`, `evaluated`). The two contact sounds are raised for every
-    /// flown slot in [`Race::tick`].
-    ///
-    /// Everything [`Race::tick`] draws on a wall contact, in one place so
-    /// [`Race::tick_sim_only`] can skip it whole. The one piece of
-    /// simulation state in it is `contact_cue_cooldown`, which the sim-only
-    /// path advances itself.
-    fn advance_contact_fx(&mut self, slot: usize, evaluated: &Evaluated) {
-        let shielded = self.core.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
-        // The announcer, on the shield coming up and not on it being up.
-        // `Shield_Activate` plays `"shieldactive"` one line above the
-        // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
-        // and differ in shape: a one-shot on this edge, a held voice on the
-        // level the edge starts. The level half is `SimRace::shield_is_up`, read
-        // by the audio layer; the edge is here, with every other cue edge.
-        if shielded && !self.view.shield_was_up {
-            self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                oag_gameplay::cue::Cue::ShieldActive,
-                slot,
-            ));
-        }
-        self.view.shield_was_up = shielded;
-        let model_matrix = self.view.ship_model_matrix_of(&self.core, slot);
-        self.view.contact.advance(
-            &self.view.handles,
-            &self.view.collision_fx,
-            &self.core.sim.world.ships[slot],
-            model_matrix,
-            self.core.sim.dt,
-            super::contact_fx::Touch {
-                evaluated,
-                pair: self.view.pair_contacts[slot],
-            },
-        );
-    }
-
-    #[cfg(feature = "view")]
-    /// Every other local person's sparks and shake, from their own craft's wall contact.
-    /// A split screen's or a window's extra seat has a [`ContactFx`](super::contact_fx::ContactFx)
-    /// beside its camera; the seat `own` is the one [`Self::advance_contact_fx`] ran.
-    fn advance_seat_contact_fx(&mut self, steps: &[Option<PlayerStep>], own: usize) {
-        for (slot, step) in steps.iter().enumerate() {
-            let Some(step) = step else { continue };
-            if slot == own || self.view.viewpoints.contact[slot].is_none() {
-                continue;
-            }
-            let model_matrix = self.view.ship_model_matrix_of(&self.core, slot);
-            if let Some(fx) = self.view.viewpoints.contact[slot].as_mut() {
-                fx.advance(
-                    &self.view.handles,
-                    &self.view.collision_fx,
-                    &self.core.sim.world.ships[slot],
-                    model_matrix,
-                    self.core.sim.dt,
-                    super::contact_fx::Touch {
-                        evaluated: &step.evaluated,
-                        pair: self.view.pair_contacts[slot],
-                    },
-                );
-            }
-        }
     }
 }
 
@@ -899,5 +836,83 @@ pub(super) fn step_boost_kick(kick: f32, boosting: bool, dt: f32) -> f32 {
         0.0
     } else {
         kick
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    #[cfg(feature = "view")]
+    /// The seat's collision sparks, the shake a hit arms and the shield edge, for its wall
+    /// contact this tick (`slot`, `evaluated`). The two contact sounds are raised for every
+    /// flown slot in [`Race::tick`].
+    ///
+    /// Everything [`Race::tick`] draws on a wall contact, in one place so
+    /// [`Race::tick_sim_only`] can skip it whole. The one piece of
+    /// simulation state in it is `contact_cue_cooldown`, which the sim-only
+    /// path advances itself.
+    fn advance_contact_fx(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        evaluated: &Evaluated,
+    ) {
+        let shielded = core.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
+        // The announcer, on the shield coming up and not on it being up.
+        // `Shield_Activate` plays `"shieldactive"` one line above the
+        // `Sound_PlayLooping` that opens `~SHIELD`, so the two share an instant
+        // and differ in shape: a one-shot on this edge, a held voice on the
+        // level the edge starts. The level half is `SimRace::shield_is_up`, read
+        // by the audio layer; the edge is here, with every other cue edge.
+        if shielded && !self.shield_was_up {
+            cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::ShieldActive,
+                slot,
+            ));
+        }
+        self.shield_was_up = shielded;
+        let model_matrix = self.ship_model_matrix_of(core, slot);
+        self.contact.advance(
+            &self.handles,
+            &self.collision_fx,
+            &core.sim.world.ships[slot],
+            model_matrix,
+            core.sim.dt,
+            super::contact_fx::Touch {
+                evaluated,
+                pair: self.pair_contacts[slot],
+            },
+        );
+    }
+    #[cfg(feature = "view")]
+    /// Every other local person's sparks and shake, from their own craft's wall contact.
+    /// A split screen's or a window's extra seat has a [`ContactFx`](super::contact_fx::ContactFx)
+    /// beside its camera; the seat `own` is the one [`Self::advance_contact_fx`] ran.
+    fn advance_seat_contact_fx(
+        &mut self,
+        core: &SimRace,
+        steps: &[Option<PlayerStep>],
+        own: usize,
+    ) {
+        for (slot, step) in steps.iter().enumerate() {
+            let Some(step) = step else { continue };
+            if slot == own || self.viewpoints.contact[slot].is_none() {
+                continue;
+            }
+            let model_matrix = self.ship_model_matrix_of(core, slot);
+            if let Some(fx) = self.viewpoints.contact[slot].as_mut() {
+                fx.advance(
+                    &self.handles,
+                    &self.collision_fx,
+                    &core.sim.world.ships[slot],
+                    model_matrix,
+                    core.sim.dt,
+                    super::contact_fx::Touch {
+                        evaluated: &step.evaluated,
+                        pair: self.pair_contacts[slot],
+                    },
+                );
+            }
+        }
     }
 }

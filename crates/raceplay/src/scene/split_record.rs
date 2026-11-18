@@ -518,7 +518,7 @@ impl Scene {
 
     /// Points the scene's per-view cells at view `index` of a split, following `slot`.
     pub(super) fn enter_view(&self, race: &Race, index: usize, slot: usize) {
-        race.set_viewpoint(slot);
+        race.view.set_viewpoint(&race.core, slot);
         // This seat's own camera history: the previous view-projection its velocity is
         // measured against and the shake the blur takes out, never another view's.
         self.history.set(motion::split_history(slot));

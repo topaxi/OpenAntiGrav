@@ -23,7 +23,7 @@ fn with_a_station() -> Race {
 
 fn set_player(race: &mut Race, state: CraftState) {
     race.core.sim.world.ships[0].physics.craft_state = state;
-    race.advance_destroy_camera();
+    race.view.advance_destroy_camera(&race.core);
 }
 
 /// State 4 cuts the picture to the station's eye; the chase camera comes back
@@ -58,7 +58,7 @@ fn the_destroy_camera_zooms_to_frame_the_wreck() {
         .vertical_fov(&race.core, 16.0 / 9.0, Fov::AUTHORED);
     set_player(&mut race, CraftState::Destroyed);
     for _ in 0..300 {
-        race.advance_destroy_camera();
+        race.view.advance_destroy_camera(&race.core);
     }
     let zoomed = race
         .view
@@ -87,7 +87,7 @@ fn an_opponents_wreck_leaves_the_players_camera_alone() {
     let mut race = with_a_station();
     let chase_eye = race.view.camera_position(&race.core);
     race.core.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
-    race.advance_destroy_camera();
+    race.view.advance_destroy_camera(&race.core);
     assert!((race.view.camera_position(&race.core) - chase_eye).length() < 1e-3);
 }
 

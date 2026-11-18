@@ -139,7 +139,7 @@ impl Race {
     pub fn tick_confirmed(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         let evaluations = self.tick_sim_only(inputs);
         #[cfg(feature = "view")]
-        self.record_tick(inputs);
+        crate::stage::stage!(self).record_tick(&self.core, inputs);
         evaluations
     }
 

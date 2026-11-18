@@ -103,20 +103,40 @@ pub(super) fn focus_rate(class: &str) -> f32 {
     destroy::FOCUS_RATE_BY_CLASS[index]
 }
 
-impl Race {
+impl Race {}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The camera, while it has the picture.
+    #[must_use]
+    pub(super) fn destroy_camera_now(&self) -> Option<&Destroy> {
+        self.destroy_camera.active.as_ref()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The player's craft is in state 6: the camera stops following it.
+    pub(super) fn hold_destroy_camera(&mut self) {
+        self.destroy_camera.held = true;
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Takes the camera over when the player's craft is destroyed, moves it
     /// while the wreck is out of the race and lets it go when the craft is
     /// racing again. Once a tick, after the craft's state has settled.
-    pub(super) fn advance_destroy_camera(&mut self) {
-        let player = self.core.player_slot();
-        let ship = &self.core.sim.world.ships[player];
+    pub(super) fn advance_destroy_camera(&mut self, core: &SimRace) {
+        let player = core.player_slot();
+        let ship = &core.sim.world.ships[player];
         let state = ship.physics.craft_state;
         let subject = ship.physics.body.position;
         let out = matches!(
             state,
             oag_physics::CraftState::Destroyed | oag_physics::CraftState::Eliminated
         );
-        let camera = &mut self.view.destroy_camera;
+        let camera = &mut self.destroy_camera;
         if !out {
             if camera.active.take().is_some() {
                 camera.cuts = camera.cuts.wrapping_add(1);
@@ -136,22 +156,5 @@ impl Race {
                 }
             }
         }
-    }
-}
-
-#[cfg(feature = "view")]
-impl RaceView {
-    /// The camera, while it has the picture.
-    #[must_use]
-    pub(super) fn destroy_camera_now(&self) -> Option<&Destroy> {
-        self.destroy_camera.active.as_ref()
-    }
-}
-
-#[cfg(feature = "view")]
-impl RaceView {
-    /// The player's craft is in state 6: the camera stops following it.
-    pub(super) fn hold_destroy_camera(&mut self) {
-        self.destroy_camera.held = true;
     }
 }

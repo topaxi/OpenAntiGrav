@@ -107,7 +107,7 @@ impl Scene {
                 self.portal_engine.set(Some((slot, held)));
                 return None;
             }
-            race.set_viewpoint(slot);
+            race.view.set_viewpoint(&race.core, slot);
             let aspect = rect.2.max(1.0) / rect.3.max(1.0);
             let projection = race
                 .view
@@ -126,7 +126,7 @@ impl Scene {
         if self.portal_engine.get().is_none()
             && let Some((slot, request, shot, pass)) = wanted
         {
-            race.set_viewpoint(slot);
+            race.view.set_viewpoint(&race.core, slot);
             self.encode_portal_view(device, queue, race, &shot, pass, settings);
             self.portal_engine
                 .set(Some((slot, shot.engine_view_projection)));
@@ -138,7 +138,7 @@ impl Scene {
                 });
             }
         }
-        race.set_viewpoint(drawing);
+        race.view.set_viewpoint(&race.core, drawing);
     }
 
     /// Whether the viewed seat's own visible sets (the ones its scene pass is masked with) leave

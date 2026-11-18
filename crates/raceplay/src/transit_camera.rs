@@ -47,35 +47,7 @@ pub(super) struct Seat {
     left: u16,
 }
 
-impl crate::Race {
-    /// Steps every craft's seat one tick: opened when its transit starts, dropped when it ends.
-    /// Before the cameras advance.
-    pub(super) fn advance_transit_seats(&mut self) {
-        for slot in 0..oag_gameplay::MAX_SHIPS {
-            let ship = &self.core.sim.world.ships[slot];
-            let seat = match (ship.transit, self.view.transit_seats[slot]) {
-                (None, _) => None,
-                (Some(transit), Some(seat)) if transit.ticks_left < seat.left => Some(Seat {
-                    share: (seat.share + 1.0 / SEAT_TICKS).min(1.0),
-                    ticks: seat.ticks + 1.0,
-                    left: transit.ticks_left,
-                    ..seat
-                }),
-                (Some(transit), _) => self.core.sim.transit_seat(slot, transit),
-            };
-            self.view.transit_seats[slot] = seat;
-        }
-    }
-
-    /// The step the spring of `slot`'s camera takes this tick: the tick's own, or
-    /// [`SEAT_SPRING`] of them while it is closing on a seat.
-    pub(super) fn camera_step(&self, slot: usize) -> f32 {
-        match self.view.transit_seats.get(slot) {
-            Some(Some(_)) => self.core.sim.dt * SEAT_SPRING,
-            _ => self.core.sim.dt,
-        }
-    }
-}
+impl crate::Race {}
 
 impl crate::RaceSim {
     /// The seat of `slot`'s craft as its transit starts. `None` with no course or road to
@@ -242,5 +214,35 @@ impl RaceView {
         Some(crate::drawable::posed_model_matrix(
             &self.followed(core, slot),
         ))
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Steps every craft's seat one tick: opened when its transit starts, dropped when it ends.
+    /// Before the cameras advance.
+    pub(super) fn advance_transit_seats(&mut self, core: &SimRace) {
+        for slot in 0..oag_gameplay::MAX_SHIPS {
+            let ship = &core.sim.world.ships[slot];
+            let seat = match (ship.transit, self.transit_seats[slot]) {
+                (None, _) => None,
+                (Some(transit), Some(seat)) if transit.ticks_left < seat.left => Some(Seat {
+                    share: (seat.share + 1.0 / SEAT_TICKS).min(1.0),
+                    ticks: seat.ticks + 1.0,
+                    left: transit.ticks_left,
+                    ..seat
+                }),
+                (Some(transit), _) => core.sim.transit_seat(slot, transit),
+            };
+            self.transit_seats[slot] = seat;
+        }
+    }
+    /// The step the spring of `slot`'s camera takes this tick: the tick's own, or
+    /// [`SEAT_SPRING`] of them while it is closing on a seat.
+    pub(super) fn camera_step(&self, core: &SimRace, slot: usize) -> f32 {
+        match self.transit_seats.get(slot) {
+            Some(Some(_)) => core.sim.dt * SEAT_SPRING,
+            _ => core.sim.dt,
+        }
     }
 }

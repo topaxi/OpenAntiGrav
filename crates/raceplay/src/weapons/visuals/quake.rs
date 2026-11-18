@@ -29,8 +29,6 @@ fn surface_wave(left: Vec3, right: Vec3, up: Vec3, age: f32) -> oag_mesh::mesh_r
     }
 }
 
-impl Race {}
-
 #[cfg(feature = "view")]
 impl RaceView {
     /// Keeps [`Trigger::Quake`] and its own transform riding the travelling

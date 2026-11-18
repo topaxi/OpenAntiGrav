@@ -127,9 +127,6 @@ impl Race {
 }
 
 #[cfg(feature = "view")]
-impl Race {}
-
-#[cfg(feature = "view")]
 impl RaceView {
     /// Keeps each live Repulser's three particle instances where the original
     /// keeps them, and releases them when it retires.

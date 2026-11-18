@@ -475,9 +475,9 @@ fn a_demo_watched_in_three_windows_follows_three_craft_and_moves_no_hash() {
     let views: Vec<_> = drawn
         .iter()
         .map(|seats| {
-            watched.set_viewpoint(seats[0]);
+            watched.view.set_viewpoint(&watched.core, seats[0]);
             let view = watched.view.view(&watched.core);
-            watched.reset_viewpoint();
+            watched.view.reset_viewpoint();
             view
         })
         .collect();

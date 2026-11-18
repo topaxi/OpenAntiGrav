@@ -126,9 +126,9 @@ fn another_seats_view_wears_none() {
     race.force_weapon_hit(0);
     race.tick(&PlayerInputs::none());
     assert!(race.cockpit_hit_strips().is_some());
-    race.set_viewpoint(1);
+    race.view.set_viewpoint(&race.core, 1);
     assert!(race.cockpit_hit_strips().is_none());
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert!(race.cockpit_hit_strips().is_some());
 }
 

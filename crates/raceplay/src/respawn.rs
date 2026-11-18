@@ -442,7 +442,7 @@ impl Race {
         self.reseat(slot, pose.position);
 
         #[cfg(feature = "view")]
-        self.flash_player_reset(slot);
+        self.view.flash_player_reset(&self.core, slot);
         self.core.sim.respawns[slot] += 1;
         self.core.sim.respawns_in_a_row[slot] += 1;
         self.core.sim.respawn_cooldown[slot] = self.core.sim.reset_triggers.cooldown_ticks;

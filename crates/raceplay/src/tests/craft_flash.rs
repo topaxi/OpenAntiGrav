@@ -108,10 +108,10 @@ fn the_big_explosion_follows_after_the_dwell_and_is_white_for_the_player() {
 #[test]
 fn only_the_local_players_reset_washes_the_screen() {
     let mut race = with_flash();
-    race.flash_player_reset(3);
+    race.view.flash_player_reset(&race.core, 3);
     assert_eq!(drawn(&mut race), None, "an opponent's reset is not seen");
 
-    race.flash_player_reset(0);
+    race.view.flash_player_reset(&race.core, 0);
     let colour = drawn(&mut race).expect("the player's reset washes");
     assert!(colour[..3].iter().all(|c| *c > 0.97), "white: {colour:?}");
 }

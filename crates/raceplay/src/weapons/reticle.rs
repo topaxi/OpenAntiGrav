@@ -15,106 +15,6 @@ use super::*;
 
 impl Race {
     #[cfg(feature = "view")]
-    /// One tick of the lock-on reticle, and the tone state that goes with it.
-    ///
-    /// **Recovered** from `HudSight_Update` (`0x0881dbcc`) - the law itself is
-    /// in [`oag_race::sight`], and this is only what feeds it. See
-    /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
-    ///
-    /// # Which craft it points at
-    ///
-    /// The one `Ship_AcquireLock` would pick for the weapon the player is
-    /// **holding**, recomputed every tick. The original runs that function per
-    /// frame and stores the winner on the entity; running it here reaches the
-    /// same answer without storing the target. What *is* stored, per slot and in
-    /// the simulation, is the lock the hold has taken on it
-    /// ([`RaceSim::advance_locks`]).
-    ///
-    /// # The lock is not decided here
-    ///
-    /// This advances the reticle the player sees: it projects the target through
-    /// the camera on screen and runs the law over it, so the brackets close on
-    /// the craft as drawn. The lock, the red and the tone are the simulation's
-    /// and the reticle is told them with [`sight::Sight::follow`].
-    ///
-    /// **Both lockable weapons drive it.** `Ship_AcquireLock` (`0x08844784`) is
-    /// one function serving two: it takes the Missile's window from
-    /// `stats+0x50`/`+0x54` and the LeachBeam's from `+0x114`/`+0x118`, and
-    /// everything after that switch - the `0.9` cone, the along-track screen,
-    /// the nearest-by-longitudinal-distance tie-break - is shared. So the two
-    /// differ by two numbers, and this reaches them through
-    /// `oag_weapons::projectile::missile::lock_window`.
-    ///
-    /// The **art** differs too, and that is carried on the reticle rather than
-    /// here: [`sight::Sight::set_held`] records which of the two is up, and the
-    /// HUD draws the Missile's four brackets plus its inner box, or the
-    /// LeachBeam's four arrowheads and no inner.
-    ///
-    /// # The gate is ours
-    ///
-    /// The original guards its projection with a condition this project has
-    /// read and not understood - see the page's "The gate is the one part not
-    /// read". This uses "the held weapon locks, and something is lockable",
-    /// which is what the weapon plays like.
-    pub(crate) fn update_sight(&mut self) {
-        // The reticle is the primary person's; every other person-flown slot
-        // reads the same lock through [`RaceSim::sight_target`] without one.
-        let primary = self.core.player_slot();
-        if let Some(held) = self.core.sim.sight_held(primary) {
-            self.view.sight.set_held(held);
-        }
-        let target = self.core.sim.sight_target(primary);
-        let screen = self.view.sight.screen();
-        let projected = target.and_then(|slot| {
-            let world = self.core.sim.world.ships[slot as usize]
-                .physics
-                .body
-                .position;
-            self.project_for_sight(world, screen)
-        });
-        self.view.sight_aim = target.zip(projected);
-        // The lock is the simulation's ([`RaceSim::advance_locks`]); this reticle
-        // only puts the brackets on the craft and follows it.
-        let locked = self.core.sim.locks[primary].locked();
-        self.view.sight_state = self.view.sight.follow(self.core.sim.dt, projected, locked);
-        self.update_viewed_sights();
-        self.advance_tag_fades();
-    }
-
-    #[cfg(feature = "view")]
-    /// Where `world` lands on a reticle's `screen`, through the camera being
-    /// drawn (at the tick inside a tick, blended inside a draw).
-    ///
-    /// **The title's own virtual screen, not the window's.** The original
-    /// projects into 480x272 because that *is* its screen; this engine
-    /// letterboxes the same rectangle into whatever the window is, so the two
-    /// agree exactly at the authored shape and drift a little as the display
-    /// aspect is taken away from it. **Ours**, and the alternative - projecting
-    /// at the window aspect - would put the reticle off the craft on an
-    /// authored-size capture, which is the frame every comparison against the
-    /// original is taken at. Off the reticle rather than off a constant,
-    /// because Wipeout HD authors its HUD in 1920x1080 and the PSP titles in
-    /// 480x272.
-    ///
-    /// The far plane is irrelevant here - the reticle's own 250-unit range test
-    /// runs in eye space, before the projection - so this takes a value large
-    /// enough never to clip a craft the sight would otherwise draw.
-    pub(crate) fn project_for_sight(
-        &self,
-        world: Vec3,
-        screen: [f32; 2],
-    ) -> Option<sight::Projected> {
-        let view = self.view.view(&self.core);
-        let projection = self.view.projection(
-            &self.core,
-            screen[0] / screen[1],
-            SIGHT_FAR,
-            self.view.sight_fov,
-        );
-        sight::project(view, projection * view, world, screen)
-    }
-
-    #[cfg(feature = "view")]
     /// `slot`'s reticle as this draw shows it.
     ///
     /// The reticle's law runs once a tick ([`Self::update_sight`]) off the
@@ -139,18 +39,20 @@ impl Race {
         };
         let drawing = self.view.extra_viewpoint();
         if primary {
-            self.reset_viewpoint();
+            self.view.reset_viewpoint();
         } else {
-            self.set_viewpoint(slot);
+            self.view.set_viewpoint(&self.core, slot);
         }
         let world = self
             .view
             .body_between(&self.core, usize::from(target))
             .position;
-        let drawn = self.project_for_sight(world, sight.screen());
+        let drawn = self
+            .view
+            .project_for_sight(&self.core, world, sight.screen());
         match drawing {
-            Some(extra) => self.set_viewpoint(extra),
-            None => self.reset_viewpoint(),
+            Some(extra) => self.view.set_viewpoint(&self.core, extra),
+            None => self.view.reset_viewpoint(),
         }
         match drawn {
             Some(drawn) => sight.shifted([
@@ -158,51 +60,6 @@ impl Race {
                 drawn.screen[1] - at_tick.screen[1],
             ]),
             None => sight,
-        }
-    }
-
-    #[cfg(feature = "view")]
-    /// The reticle of every other slot a split-screen view follows.
-    ///
-    /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in
-    /// that slot's [`SlotHud`](crate::slot_hud::SlotHud), fed by
-    /// [`RaceSim::sight_target`] and projected through that slot's own chase camera
-    /// and field of view, and told the slot's simulation lock exactly as the
-    /// primary's is. A no-op with one view.
-    ///
-    /// Projects at the title's HUD aspect, as the primary's does, and a view
-    /// narrower than that sees a wider vertical field than this assumes
-    /// (`fit_vertical_fov`), so on a tall quadrant the brackets sit a little off
-    /// the craft. **Chosen, not measured.**
-    fn update_viewed_sights(&mut self) {
-        // A network client draws its seat's one view through `self.view.sight`;
-        // the per-slot reticles are for local split screen and windows.
-        if self.core.outcome.seat.is_some() {
-            return;
-        }
-        let primary = self.core.player_slot();
-        for slot in (0..self.view.viewport_count()).filter(|&slot| slot != primary) {
-            if let Some(held) = self.core.sim.sight_held(slot) {
-                self.view.huds[slot].sight.set_held(held);
-            }
-            let target = self.core.sim.sight_target(slot);
-            let screen = self.view.huds[slot].sight.screen();
-            // The camera accessors follow the viewpoint; put the player's back
-            // after, as the draw does.
-            self.set_viewpoint(slot);
-            let projected = target.and_then(|target| {
-                let world = self.core.sim.world.ships[target as usize]
-                    .physics
-                    .body
-                    .position;
-                self.project_for_sight(world, screen)
-            });
-            self.reset_viewpoint();
-            let dt = self.core.sim.dt;
-            let locked = self.core.sim.locks[slot].locked();
-            let hud = &mut self.view.huds[slot];
-            hud.sight_aim = target.zip(projected);
-            hud.sight_state = hud.sight.follow(dt, projected, locked);
         }
     }
 }
@@ -285,5 +142,145 @@ impl RaceSim {
             max,
             self.course.as_deref().map(oag_race::Course::length),
         )
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    #[cfg(feature = "view")]
+    /// One tick of the lock-on reticle, and the tone state that goes with it.
+    ///
+    /// **Recovered** from `HudSight_Update` (`0x0881dbcc`) - the law itself is
+    /// in [`oag_race::sight`], and this is only what feeds it. See
+    /// `docs/ghidra/functions/psp-pulse-usa/lock-sight.md`.
+    ///
+    /// # Which craft it points at
+    ///
+    /// The one `Ship_AcquireLock` would pick for the weapon the player is
+    /// **holding**, recomputed every tick. The original runs that function per
+    /// frame and stores the winner on the entity; running it here reaches the
+    /// same answer without storing the target. What *is* stored, per slot and in
+    /// the simulation, is the lock the hold has taken on it
+    /// ([`RaceSim::advance_locks`]).
+    ///
+    /// # The lock is not decided here
+    ///
+    /// This advances the reticle the player sees: it projects the target through
+    /// the camera on screen and runs the law over it, so the brackets close on
+    /// the craft as drawn. The lock, the red and the tone are the simulation's
+    /// and the reticle is told them with [`sight::Sight::follow`].
+    ///
+    /// **Both lockable weapons drive it.** `Ship_AcquireLock` (`0x08844784`) is
+    /// one function serving two: it takes the Missile's window from
+    /// `stats+0x50`/`+0x54` and the LeachBeam's from `+0x114`/`+0x118`, and
+    /// everything after that switch - the `0.9` cone, the along-track screen,
+    /// the nearest-by-longitudinal-distance tie-break - is shared. So the two
+    /// differ by two numbers, and this reaches them through
+    /// `oag_weapons::projectile::missile::lock_window`.
+    ///
+    /// The **art** differs too, and that is carried on the reticle rather than
+    /// here: [`sight::Sight::set_held`] records which of the two is up, and the
+    /// HUD draws the Missile's four brackets plus its inner box, or the
+    /// LeachBeam's four arrowheads and no inner.
+    ///
+    /// # The gate is ours
+    ///
+    /// The original guards its projection with a condition this project has
+    /// read and not understood - see the page's "The gate is the one part not
+    /// read". This uses "the held weapon locks, and something is lockable",
+    /// which is what the weapon plays like.
+    pub(crate) fn update_sight(&mut self, core: &SimRace) {
+        // The reticle is the primary person's; every other person-flown slot
+        // reads the same lock through [`RaceSim::sight_target`] without one.
+        let primary = core.player_slot();
+        if let Some(held) = core.sim.sight_held(primary) {
+            self.sight.set_held(held);
+        }
+        let target = core.sim.sight_target(primary);
+        let screen = self.sight.screen();
+        let projected = target.and_then(|slot| {
+            let world = core.sim.world.ships[slot as usize].physics.body.position;
+            self.project_for_sight(core, world, screen)
+        });
+        self.sight_aim = target.zip(projected);
+        // The lock is the simulation's ([`RaceSim::advance_locks`]); this reticle
+        // only puts the brackets on the craft and follows it.
+        let locked = core.sim.locks[primary].locked();
+        self.sight_state = self.sight.follow(core.sim.dt, projected, locked);
+        self.update_viewed_sights(core);
+        self.advance_tag_fades(core);
+    }
+    #[cfg(feature = "view")]
+    /// The reticle of every other slot a split-screen view follows.
+    ///
+    /// **Display only, and view-side.** Each is a [`sight::Sight`] of its own in
+    /// that slot's [`SlotHud`](crate::slot_hud::SlotHud), fed by
+    /// [`RaceSim::sight_target`] and projected through that slot's own chase camera
+    /// and field of view, and told the slot's simulation lock exactly as the
+    /// primary's is. A no-op with one view.
+    ///
+    /// Projects at the title's HUD aspect, as the primary's does, and a view
+    /// narrower than that sees a wider vertical field than this assumes
+    /// (`fit_vertical_fov`), so on a tall quadrant the brackets sit a little off
+    /// the craft. **Chosen, not measured.**
+    fn update_viewed_sights(&mut self, core: &SimRace) {
+        // A network client draws its seat's one view through `self.sight`;
+        // the per-slot reticles are for local split screen and windows.
+        if core.outcome.seat.is_some() {
+            return;
+        }
+        let primary = core.player_slot();
+        for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
+            if let Some(held) = core.sim.sight_held(slot) {
+                self.huds[slot].sight.set_held(held);
+            }
+            let target = core.sim.sight_target(slot);
+            let screen = self.huds[slot].sight.screen();
+            // The camera accessors follow the viewpoint; put the player's back
+            // after, as the draw does.
+            self.set_viewpoint(core, slot);
+            let projected = target.and_then(|target| {
+                let world = core.sim.world.ships[target as usize].physics.body.position;
+                self.project_for_sight(core, world, screen)
+            });
+            self.reset_viewpoint();
+            let dt = core.sim.dt;
+            let locked = core.sim.locks[slot].locked();
+            let hud = &mut self.huds[slot];
+            hud.sight_aim = target.zip(projected);
+            hud.sight_state = hud.sight.follow(dt, projected, locked);
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    #[cfg(feature = "view")]
+    /// Where `world` lands on a reticle's `screen`, through the camera being
+    /// drawn (at the tick inside a tick, blended inside a draw).
+    ///
+    /// **The title's own virtual screen, not the window's.** The original
+    /// projects into 480x272 because that *is* its screen; this engine
+    /// letterboxes the same rectangle into whatever the window is, so the two
+    /// agree exactly at the authored shape and drift a little as the display
+    /// aspect is taken away from it. **Ours**, and the alternative - projecting
+    /// at the window aspect - would put the reticle off the craft on an
+    /// authored-size capture, which is the frame every comparison against the
+    /// original is taken at. Off the reticle rather than off a constant,
+    /// because Wipeout HD authors its HUD in 1920x1080 and the PSP titles in
+    /// 480x272.
+    ///
+    /// The far plane is irrelevant here - the reticle's own 250-unit range test
+    /// runs in eye space, before the projection - so this takes a value large
+    /// enough never to clip a craft the sight would otherwise draw.
+    pub(crate) fn project_for_sight(
+        &self,
+        core: &SimRace,
+        world: Vec3,
+        screen: [f32; 2],
+    ) -> Option<sight::Projected> {
+        let view = self.view(core);
+        let projection = self.projection(core, screen[0] / screen[1], SIGHT_FAR, self.sight_fov);
+        sight::project(view, projection * view, world, screen)
     }
 }

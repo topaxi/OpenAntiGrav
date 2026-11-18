@@ -152,7 +152,7 @@ impl Scene {
         shared: bool,
         effects: WindowEffects<'_>,
     ) -> SceneStats {
-        race.set_viewpoint(slot);
+        race.view.set_viewpoint(&race.core, slot);
         self.layer.set(Layer::Window);
         self.reuse_frame_work.set(shared);
         self.begin_split_frame(shared);
@@ -180,7 +180,7 @@ impl Scene {
         self.layer.set(Layer::Whole);
         self.reuse_frame_work.set(false);
         self.history.set(0);
-        race.reset_viewpoint();
+        race.view.reset_viewpoint();
         stats
     }
 
@@ -520,7 +520,7 @@ impl Scene {
         self.layer.set(Layer::Whole);
         self.reuse_frame_work.set(false);
         self.history.set(0);
-        race.reset_viewpoint();
+        race.view.reset_viewpoint();
         // HD's and Omega's chains, one run per view with its own adaptation
         // (`split_exposure`).
         let post_ran =

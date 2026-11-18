@@ -531,9 +531,6 @@ impl RaceSim {
 }
 
 #[cfg(feature = "view")]
-impl Race {}
-
-#[cfg(feature = "view")]
 impl RaceSim {
     /// [`Self::located_sample`] from `index`, where the simulation last had the craft.
     fn located_from(&self, ship: &oag_gameplay::Ship, index: usize) -> Option<usize> {

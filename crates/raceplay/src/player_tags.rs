@@ -5,6 +5,8 @@
 //! view's `SlotHud` and the tags leave as part of the view's `Readout`.
 
 use crate::RaceSim;
+#[cfg(feature = "view")]
+use crate::RaceView;
 use crate::SimRace;
 use oag_gameplay::MAX_SHIPS;
 use oag_hud::PlayerTag;
@@ -17,17 +19,6 @@ impl Race {
     /// readout carries none. Display state, so the frame loop may set it every frame.
     pub fn set_player_tags(&mut self, on: bool) {
         self.view.player_tags_on = on;
-    }
-
-    /// The slots whose view shows tags: the person-flown slots with a view of their own.
-    fn tag_viewers(&self) -> impl Iterator<Item = usize> + '_ {
-        let primary = self.core.player_slot();
-        let own_views = if self.core.outcome.seat.is_some() {
-            0
-        } else {
-            self.view.viewport_count()
-        };
-        std::iter::once(primary).chain((0..own_views).filter(move |&slot| slot != primary))
     }
 }
 
@@ -42,28 +33,7 @@ impl RaceSim {
     }
 }
 
-impl Race {
-    /// One tick of every view's fades: a tagged craft's rises at 1.2 a second, any other is
-    /// held at zero.
-    pub(super) fn advance_tag_fades(&mut self) {
-        if !self.view.player_tags_on {
-            return;
-        }
-        let dt = self.core.sim.dt;
-        let viewers: Vec<usize> = self.tag_viewers().collect();
-        for viewer in viewers {
-            for target in 0..MAX_SHIPS {
-                let fade = self.view.huds[viewer].tag_fade[target];
-                self.view.huds[viewer].tag_fade[target] =
-                    if self.core.sim.tagged_for(viewer, target) {
-                        step_fade(fade, dt)
-                    } else {
-                        0.0
-                    };
-            }
-        }
-    }
-}
+impl Race {}
 
 impl SimRace {
     /// The name over `slot`'s craft: the one [`Self::set_person_names`] gave it (the lobby's in a
@@ -99,9 +69,9 @@ impl Race {
         };
         let drawing = self.view.extra_viewpoint();
         if primary {
-            self.reset_viewpoint();
+            self.view.reset_viewpoint();
         } else {
-            self.set_viewpoint(viewer);
+            self.view.set_viewpoint(&self.core, viewer);
         }
         let tags = (0..MAX_SHIPS)
             .filter(|&target| self.core.sim.tagged_for(viewer, target))
@@ -109,7 +79,7 @@ impl Race {
                 let fade = self.view.huds[viewer].tag_fade[target];
                 let body = self.view.body_between(&self.core, target);
                 let anchor = body.position + body.up() * raise(fade);
-                let projected = self.project_for_sight(anchor, screen)?;
+                let projected = self.view.project_for_sight(&self.core, anchor, screen)?;
                 let alpha = alpha(fade, projected.distance, true);
                 (alpha > 0.0).then(|| PlayerTag {
                     screen: projected.screen,
@@ -119,9 +89,42 @@ impl Race {
             })
             .collect();
         match drawing {
-            Some(extra) => self.set_viewpoint(extra),
-            None => self.reset_viewpoint(),
+            Some(extra) => self.view.set_viewpoint(&self.core, extra),
+            None => self.view.reset_viewpoint(),
         }
         tags
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The slots whose view shows tags: the person-flown slots with a view of their own.
+    fn tag_viewers(&self, core: &SimRace) -> impl Iterator<Item = usize> + '_ {
+        let primary = core.player_slot();
+        let own_views = if core.outcome.seat.is_some() {
+            0
+        } else {
+            self.viewport_count()
+        };
+        std::iter::once(primary).chain((0..own_views).filter(move |&slot| slot != primary))
+    }
+    /// One tick of every view's fades: a tagged craft's rises at 1.2 a second, any other is
+    /// held at zero.
+    pub(super) fn advance_tag_fades(&mut self, core: &SimRace) {
+        if !self.player_tags_on {
+            return;
+        }
+        let dt = core.sim.dt;
+        let viewers: Vec<usize> = self.tag_viewers(core).collect();
+        for viewer in viewers {
+            for target in 0..MAX_SHIPS {
+                let fade = self.huds[viewer].tag_fade[target];
+                self.huds[viewer].tag_fade[target] = if core.sim.tagged_for(viewer, target) {
+                    step_fade(fade, dt)
+                } else {
+                    0.0
+                };
+            }
+        }
     }
 }

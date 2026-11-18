@@ -1316,7 +1316,7 @@ impl crate::Race {
     #[cfg(feature = "view")]
     pub(super) fn draw_extension_effects(&mut self) {
         for (slot, fired) in self.core.sim.extensions.take_effects() {
-            self.play_fired(slot, &fired);
+            self.view.play_fired(&self.core, slot, &fired);
         }
     }
 }

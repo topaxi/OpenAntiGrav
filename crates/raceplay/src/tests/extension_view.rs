@@ -35,9 +35,9 @@ fn a_screen_fill_washes_its_slots_view_alone() {
         )]));
         race.tick(&PlayerInputs::none());
         for view in 0..views {
-            race.set_viewpoint(view);
+            race.view.set_viewpoint(&race.core, view);
             let wash = race.screen_wash();
-            race.reset_viewpoint();
+            race.view.reset_viewpoint();
             let expected = (view == 1).then_some([1.0, 0.0, 0.0, 128.0 / 255.0]);
             assert_eq!(wash, expected, "{views} views, view {view}");
         }
@@ -453,7 +453,8 @@ fn a_fired_mod_effect_leaves_its_craft_along_its_files_axis() {
         let (forward, up) = (body.forward(), body.up());
         let nozzle = body.position
             - forward * (race.core.sim.world.ships[0].handling.dimensions.length * 0.5);
-        race.play_fired(
+        race.view.play_fired(
+            &race.core,
             0,
             &Fired::Own {
                 mod_id: "test.axis".to_string(),

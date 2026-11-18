@@ -33,7 +33,7 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
     // its own craft - so this fails if the view follows the wrong slot, or the
     // player's camera, or nothing.
     for slot in 1..4 {
-        race.set_viewpoint(slot);
+        race.view.set_viewpoint(&race.core, slot);
         let target = target_of(&race.core.sim.world.ships[slot]);
         let params = race.view.chase_far;
         let expected = Chase::snapped(target, &params).view(target, &params);
@@ -52,9 +52,9 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
     }
 
     // Slot 0 is the player's own view, however it is asked for.
-    race.set_viewpoint(0);
+    race.view.set_viewpoint(&race.core, 0);
     assert_eq!(race.view.view(&race.core), own);
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert_eq!(race.view.view(&race.core), own);
     assert_eq!(
         race.view.vertical_fov(
@@ -97,14 +97,14 @@ fn viewports_leave_the_simulation_hash_unchanged() {
         split.tick(&PlayerInputs::none());
         // The draw reads every extra camera in turn, as a frame does.
         for slot in 0..4 {
-            split.set_viewpoint(slot);
+            split.view.set_viewpoint(&split.core, slot);
             let _ = (
                 split.view.view(&split.core),
                 split.view.camera_position(&split.core),
                 split.visibility_sections(),
             );
         }
-        split.reset_viewpoint();
+        split.view.reset_viewpoint();
         assert_eq!(
             plain.core.sim.state_hash(),
             split.core.sim.state_hash(),

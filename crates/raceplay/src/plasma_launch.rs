@@ -39,8 +39,6 @@ pub(crate) fn effect_up(heading: Vec3) -> Vec3 {
     (-heading).try_normalize().unwrap_or(Vec3::Y)
 }
 
-impl Race {}
-
 #[cfg(feature = "view")]
 impl RaceView {
     /// Starts the release effect for every bolt whose wind-up ended this tick, keeps the

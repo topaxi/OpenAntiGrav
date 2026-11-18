@@ -62,34 +62,36 @@ impl FieldSparks {
     }
 }
 
-impl Race {
+impl Race {}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Every local view's eye: the player's and each extra seat's.
-    fn view_eyes(&self) -> Vec<Vec3> {
-        let player = self.view.camera_frame(&self.core).position;
+    fn view_eyes(&self, core: &SimRace) -> Vec<Vec3> {
+        let player = self.camera_frame(core).position;
         std::iter::once(player)
             .chain(self.viewpoint_eyes())
             .collect()
     }
-
     /// Starts, holds or lets go of the spark of every craft no person flies, from the wall
     /// contact `step_opponents` stashed and the pair contact of this tick.
-    pub(super) fn advance_field_sparks(&mut self) {
-        let effect = self.view.handles.get(Trigger::CollisionSpark).cloned();
+    pub(super) fn advance_field_sparks(&mut self, core: &SimRace) {
+        let effect = self.handles.get(Trigger::CollisionSpark).cloned();
         let attached_effect = effect
             .as_deref()
             .is_some_and(|effect| effect.roots().iter().any(|&r| effect.emitters[r].looping));
         let eyes = if attached_effect {
-            self.view_eyes()
+            self.view_eyes(core)
         } else {
             Vec::new()
         };
         for slot in 0..MAX_SHIPS {
-            let ship = &self.core.sim.world.ships[slot];
-            let stepped = slot < self.core.sim.world.ship_count as usize
+            let ship = &core.sim.world.ships[slot];
+            let stepped = slot < core.sim.world.ship_count as usize
                 && ship.in_world()
-                && !self.core.sim.world.person_flown(slot);
-            let wall = self.view.field_sparks.walls[slot].filter(|_| stepped);
-            let pair: Option<PairContact> = self.view.pair_contacts[slot].filter(|_| stepped);
+                && !core.sim.world.person_flown(slot);
+            let wall = self.field_sparks.walls[slot].filter(|_| stepped);
+            let pair: Option<PairContact> = self.pair_contacts[slot].filter(|_| stepped);
             let shielded = ship.physics.shield_pickup_timer > 0.0;
             let position = ship.physics.body.position;
             let seen = eyes.iter().any(|eye| {
@@ -100,7 +102,7 @@ impl Race {
             let asked = attached_effect && seen && !shielded;
             let wall = wall.filter(|_| asked);
             let pair = pair.filter(|_| asked);
-            let held = self.view.field_sparks.held[slot];
+            let held = self.field_sparks.held[slot];
             let rule = attach_rule(
                 held.is_some(),
                 false,
@@ -108,11 +110,11 @@ impl Race {
                 wall.is_some_and(|wall| wall.resolved.is_some()),
                 pair.is_some(),
             );
-            let model = self.view.ship_model_matrix_of(&self.core, slot);
+            let model = self.ship_model_matrix_of(core, slot);
             match (rule, held) {
                 (Attach::Release, Some(held)) => {
-                    self.view.stage.detach(held.playing);
-                    self.view.field_sparks.held[slot] = None;
+                    self.stage.detach(held.playing);
+                    self.field_sparks.held[slot] = None;
                 }
                 (Attach::StartWall | Attach::StartPair, None) => {
                     let Some(effect) = effect.as_ref() else {
@@ -131,14 +133,14 @@ impl Race {
                         (_, _, Some(pair)) => (pair.point, pair.impulse),
                         _ => continue,
                     };
-                    let (anchor, up) = nearest_locator(&self.view.collision_fx, model, point);
+                    let (anchor, up) = nearest_locator(&self.collision_fx, model, point);
                     let velocity = ship.physics.body.linear_velocity;
                     let strength = sparks::attached_strength(velocity.length(), impulse);
                     let at = model.transform_point3(anchor);
-                    if let Some(playing) = self.view.stage.play_riding(effect, at, strength) {
-                        self.view.stage.carry(playing, effect, velocity);
-                        self.view.stage.orient(playing, model.transform_vector3(up));
-                        self.view.field_sparks.held[slot] = Some(Held {
+                    if let Some(playing) = self.stage.play_riding(effect, at, strength) {
+                        self.stage.carry(playing, effect, velocity);
+                        self.stage.orient(playing, model.transform_vector3(up));
+                        self.field_sparks.held[slot] = Some(Held {
                             playing,
                             anchor,
                             up,
@@ -148,15 +150,13 @@ impl Race {
                 (_, Some(held)) => {
                     // A craft taken out of the world lets go of what it carried.
                     if stepped {
-                        self.view
-                            .stage
+                        self.stage
                             .follow(held.playing, model.transform_point3(held.anchor));
-                        self.view
-                            .stage
+                        self.stage
                             .orient(held.playing, model.transform_vector3(held.up));
                     } else {
-                        self.view.stage.detach(held.playing);
-                        self.view.field_sparks.held[slot] = None;
+                        self.stage.detach(held.playing);
+                        self.field_sparks.held[slot] = None;
                     }
                 }
                 _ => {}

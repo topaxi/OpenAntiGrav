@@ -75,15 +75,7 @@ pub(super) struct CraftFlashes {
     blowup: [Option<(f32, Vec3, Mat4)>; MAX_SHIPS],
 }
 
-impl Race {
-    /// The local player was put back on the track: `Ship_SetState` case 3 and
-    /// `Ship_UpdateRespawn` both start kind 6 for `craft+0x368 == 0` only.
-    pub(super) fn flash_player_reset(&mut self, slot: usize) {
-        if slot == self.core.player_slot() {
-            self.view.start_flash(oag_fx::flash::RESET, Vec3::ZERO);
-        }
-    }
-}
+impl Race {}
 
 #[cfg(feature = "view")]
 impl RaceView {
@@ -162,6 +154,17 @@ impl RaceView {
     pub(super) fn start_flash(&mut self, kind: oag_fx::flash::Kind, at: Vec3) {
         if let Some(flash) = &mut self.screen_flash {
             flash.start(kind, at);
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The local player was put back on the track: `Ship_SetState` case 3 and
+    /// `Ship_UpdateRespawn` both start kind 6 for `craft+0x368 == 0` only.
+    pub(super) fn flash_player_reset(&mut self, core: &SimRace, slot: usize) {
+        if slot == core.player_slot() {
+            self.start_flash(oag_fx::flash::RESET, Vec3::ZERO);
         }
     }
 }

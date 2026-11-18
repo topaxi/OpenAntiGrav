@@ -52,10 +52,10 @@ fn push_toward_wall(race: &mut Race, slot: usize) {
 
 /// The shake on `slot`'s view: whether it is the picture's and not the unshaken one's.
 fn view_is_shaken(race: &Race, slot: usize) -> bool {
-    race.set_viewpoint(slot);
+    race.view.set_viewpoint(&race.core, slot);
     let shaken = race.view.view(&race.core) != race.view_unshaken();
     let rotated = race.view_shake_rotation() != Mat4::IDENTITY;
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert_eq!(shaken, rotated, "slot {slot}: the lens map disagrees");
     shaken
 }
@@ -181,9 +181,9 @@ fn a_local_seats_boost_kicks_its_own_field_of_view() {
             race.core.sim.world.ships[seat].physics.pad_timer = 1.0;
             race.tick(&PlayerInputs::none());
             let fov = |view| {
-                race.set_viewpoint(view);
+                race.view.set_viewpoint(&race.core, view);
                 let fov = race.view.extra_vertical_fov(&race.core, 1.6, Fov::AUTHORED);
-                race.reset_viewpoint();
+                race.view.reset_viewpoint();
                 fov
             };
             let kicked = fov(seat).expect("a view");
@@ -205,9 +205,9 @@ fn a_local_seats_boost_pulse_draws_in_its_view_alone() {
                 race.view.advance_zoom(&race.core);
             }
             for view in 0..views {
-                race.set_viewpoint(view);
+                race.view.set_viewpoint(&race.core, view);
                 let boost = race.hd_zoom_frame().expect("a ring").boost;
-                race.reset_viewpoint();
+                race.view.reset_viewpoint();
                 assert_eq!(boost > 0.0, view == seat, "{views} views: {seat} -> {view}");
             }
         }
@@ -251,9 +251,9 @@ fn the_players_screen_wash_does_not_cover_another_seats_view() {
             .expect("a flash")
             .advance(1.0 / 60.0, at);
         for view in 0..views {
-            race.set_viewpoint(view);
+            race.view.set_viewpoint(&race.core, view);
             let wash = race.screen_wash();
-            race.reset_viewpoint();
+            race.view.reset_viewpoint();
             assert_eq!(wash.is_some(), view == 0, "{views} views, view {view}");
         }
     }
