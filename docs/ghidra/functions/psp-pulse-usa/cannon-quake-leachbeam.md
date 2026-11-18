@@ -3661,7 +3661,7 @@ Per struck craft the `Sound_Play` log over a Quake's whole life shows, at the hi
 which `Ship_Damage` calls once per locator it picks (`Psys_RandIntRange` twice, the second skipped
 when the same). The cue is gated by the same `instance + 100` 0.8 s cooldown as the spark, so a
 craft hit again inside 0.8 s hears neither. Ours raises `Cue::Collision` from a wall contact
-(`Race::raise_contact_cue`) and nothing from `throw_hit_spark`.
+(`RaceSim::raise_contact_cue`) and nothing from `throw_hit_spark`.
 
 ### Not a gap, now settled
 
@@ -3706,7 +3706,7 @@ included: `ShipCollisionFx_Trigger` plays it for each surviving kind-0/1 call). 
 whether or not the spark's particle file loaded, and only on a drawn tick (a reconcile replay
 makes no sound). **Chosen, not measured:** the cue is placed on the craft's centre, where the
 original plays it at the locator, and a wall contact keeps its own per-craft gate
-(`Race::raise_contact_cue`), so a contact and a hit inside 0.8 s of each other can both sound.
+(`RaceSim::raise_contact_cue`), so a contact and a hit inside 0.8 s of each other can both sound.
 Evidence on the disc: Pulse USA, `--force-quake`'s wave reaching the player raises one `QUAKEHIT`
 and two `.COLLISIONS` on slot 0 (the original's log shows the same pair), and the whole grid's cues
 equal the sparks thrown. In the dumped WAV the same hit rendered with `Cue::Collision` held back

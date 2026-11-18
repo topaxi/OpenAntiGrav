@@ -808,7 +808,7 @@ fixed.
    for them). A room's value is capped at 20 (Omega's slider) and zeroed in the other modes. `oag-server
    --laps`, `oag-game --online-laps`.
 2. **A leaver held the finish open.** A seat whose person left kept repeating its last input and
-   `Race::finished` still counted it as a person, so the race ran to the tick limit (30 minutes). Now
+   `RaceSim::finished` still counted it as a person, so the race ran to the tick limit (30 minutes). Now
    `TickRecord.retired` (a cumulative seat mask, one byte a record) carries the departure: from the
    record it first appears in, **both ends** set that slot's controller to `Away`, the opponent
    driver below racing pace with the pickup kept (`race::retire`; a returning person is handed the

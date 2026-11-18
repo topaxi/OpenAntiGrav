@@ -19,7 +19,7 @@ fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
     race.force_destroy(0);
     for _ in 0..120 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        if race.finished() {
+        if race.sim.finished() {
             return race;
         }
     }
@@ -108,7 +108,10 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
 #[test]
 fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
     let mut race = a_race_the_wreck_ended();
-    assert!(!race.runs_on_after_the_line(), "the player never crossed");
+    assert!(
+        !race.sim.runs_on_after_the_line(),
+        "the player never crossed"
+    );
     assert!(race.runs_on_after_the_wreck());
     assert!(race.runs_on_after_the_end());
     let tick = race.sim.world.tick;
@@ -116,7 +119,7 @@ fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
         race.tick_finished();
     }
     assert_eq!(race.sim.world.tick, tick + 200, "the world's clock runs on");
-    assert!(race.finished(), "the race stays over");
+    assert!(race.sim.finished(), "the race stays over");
     assert_eq!(
         race.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated,
@@ -317,7 +320,7 @@ fn the_director_starts_240_ticks_after_the_wreck_call() {
     race.force_destroy(0);
     let called = race.sim.world.tick;
     for _ in 0..600 {
-        if race.finished() {
+        if race.sim.finished() {
             race.tick_finished();
         } else {
             race.tick(&oag_gameplay::PlayerInputs::none());

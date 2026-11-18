@@ -227,7 +227,7 @@ impl Race {
             .filter(|&slot| slot < self.viewport_count())
             .collect();
         let flyby = self.in_intro() && !seats.is_empty();
-        if flyby || (!seats.is_empty() && self.finished()) {
+        if flyby || (!seats.is_empty() && self.sim.finished()) {
             vec![player]
         } else {
             seats
@@ -328,7 +328,7 @@ impl Race {
         if self.windowed() {
             return self.window_drawn(0).len().max(1);
         }
-        if self.in_intro() || self.finished() {
+        if self.in_intro() || self.sim.finished() {
             1
         } else {
             self.viewport_count()

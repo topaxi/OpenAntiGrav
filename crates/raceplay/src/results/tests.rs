@@ -24,7 +24,7 @@ fn finish(race: &mut Race, slot: usize, tick: u64) {
 fn a_race_in_progress_has_no_results() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
-    assert!(!race.finished());
+    assert!(!race.sim.finished());
     assert!(race.results().is_none());
 }
 
@@ -133,17 +133,20 @@ fn a_race_with_two_people_ends_when_both_have_finished() {
     race.sim.world.race[0].finished = true;
     race.tick(&PlayerInputs::none());
     assert!(
-        !race.finished(),
+        !race.sim.finished(),
         "the race ended with a person still racing"
     );
-    assert!(!race.runs_on_after_the_line());
+    assert!(!race.sim.runs_on_after_the_line());
     assert!(race.results().is_none(), "the board was taken early");
 
     finish(&mut race, 1, 1_200);
     race.sim.world.race[1].finished = true;
     race.tick(&PlayerInputs::none());
-    assert!(race.finished(), "both people finished and the race did not");
-    assert!(race.runs_on_after_the_line());
+    assert!(
+        race.sim.finished(),
+        "both people finished and the race did not"
+    );
+    assert!(race.sim.runs_on_after_the_line());
     let board = race.results().expect("the last person finished");
     let players: Vec<u8> = board
         .rows
@@ -162,7 +165,7 @@ fn the_second_person_finishing_first_does_not_end_the_race() {
     let mut race = race_with_a_grid();
     race.sim.world.controllers[1] = oag_gameplay::Controller::Local;
     race.sim.world.race[1].finished = true;
-    assert!(!race.finished());
+    assert!(!race.sim.finished());
 }
 
 /// Two people on the straight, split in two, the first having crossed the line on
@@ -183,7 +186,7 @@ fn first_person_finished(tick: u64) -> Race {
 #[test]
 fn a_person_who_has_finished_sees_it_while_the_other_races_on() {
     let race = first_person_finished(5_000);
-    assert!(!race.finished(), "the second person is still racing");
+    assert!(!race.sim.finished(), "the second person is still racing");
     assert_eq!(race.views_drawn(), 2, "the split stays until the race ends");
 
     let line = |readout: &oag_hud::Readout| {
@@ -224,7 +227,7 @@ fn the_end_screens_sit_over_one_view_and_the_split_is_kept() {
     finish(&mut race, 1, 5_300);
     race.sim.world.race[1].finished = true;
     race.tick(&PlayerInputs::none());
-    assert!(race.finished());
+    assert!(race.sim.finished());
     assert_eq!(race.views_drawn(), 1);
     assert_eq!(race.viewport_count(), 2);
 }
@@ -277,7 +280,7 @@ fn player_won() -> Race {
     finish(&mut race, 0, 1_000);
     race.sim.world.primary_race_mut().finished = true;
     race.tick(&PlayerInputs::none());
-    assert!(race.runs_on_after_the_line());
+    assert!(race.sim.runs_on_after_the_line());
     assert!(race.results().is_some());
     race
 }
@@ -397,7 +400,7 @@ fn a_race_that_did_not_end_on_the_line_keeps_its_board() {
     race.sim.world.primary_race_mut().finished = true;
     race.tick(&PlayerInputs::none());
     assert!(race.results().is_some());
-    assert!(!race.runs_on_after_the_line());
+    assert!(!race.sim.runs_on_after_the_line());
     let (held, revision) = (race.results().cloned(), race.results_revision());
     finish(&mut race, 3, 1_200);
     race.refresh_results();

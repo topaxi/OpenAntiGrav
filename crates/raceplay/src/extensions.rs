@@ -1230,7 +1230,7 @@ impl crate::Race {
     }
 
     /// The call's `transit` and `probe-clearance` commands, in module then reply order: a
-    /// transit the race refuses ([`Race::begin_transit`]) faults its module, but for a craft
+    /// transit the race refuses ([`RaceSim::begin_transit`](crate::RaceSim::begin_transit)) faults its module, but for a craft
     /// an earlier module's transit took first, which is dropped; a probe's answer waits for
     /// the next call's `clearance` event.
     #[cfg(feature = "extensions")]
@@ -1256,7 +1256,9 @@ impl crate::Race {
                     distance,
                     exit_factor,
                 } => {
-                    if let Err(why) = self.begin_transit(slot.index(), ticks, distance, exit_factor)
+                    if let Err(why) =
+                        self.sim
+                            .begin_transit(slot.index(), ticks, distance, exit_factor)
                     {
                         on::fault(&mut self.sim, index, format!("transit refused: {why}"));
                     }
@@ -1266,7 +1268,7 @@ impl crate::Race {
                     distance,
                     radius,
                 } => {
-                    let answer = self.clearance(slot.index(), distance, radius);
+                    let answer = self.sim.clearance(slot.index(), distance, radius);
                     self.sim.extensions.on.clearance[index][slot.index()] = Some(answer);
                 }
                 oag_ext_abi::Command::FireModEffectAhead {
@@ -1297,10 +1299,10 @@ impl crate::Race {
         own: u16,
         distance: oag_ext_abi::Distance,
     ) {
-        let Ok((exit, _)) = self.exit_ahead(slot, distance) else {
+        let Ok((exit, _)) = self.sim.exit_ahead(slot, distance) else {
             return;
         };
-        let Some((_, up, at, _)) = self.road_frame(exit) else {
+        let Some((_, up, at, _)) = self.sim.road_frame(exit) else {
             return;
         };
         self.sim

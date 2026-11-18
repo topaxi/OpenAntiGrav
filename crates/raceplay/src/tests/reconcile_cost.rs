@@ -130,7 +130,7 @@ fn reconcile_cost_sweep() {
         );
         for _ in 0..oag_race::COUNTDOWN_TICKS + 600 {
             race.tick(&inputs);
-            race.drain_cues();
+            race.sim.drain_cues();
         }
         let ships = race.ship_count();
         let s0 = race.snapshot_sim();
@@ -174,7 +174,7 @@ fn reconcile_cost_sweep() {
                     } else {
                         race.tick(&inputs);
                     }
-                    race.drain_cues();
+                    race.sim.drain_cues();
                 }
                 let us = t.elapsed().as_secs_f64() * 1e6 / f64::from(TICKS);
                 if first_quiet {
@@ -204,14 +204,14 @@ fn reconcile_cost_sweep() {
                     race.tick_sim_only(&inputs);
                 }
                 quiet.push(t.elapsed().as_secs_f64() * 1e3);
-                race.drain_cues();
+                race.sim.drain_cues();
                 let t = Instant::now();
                 race.restore_sim(&s0);
                 for _ in 0..window {
                     race.tick(&inputs);
                 }
                 normal.push(t.elapsed().as_secs_f64() * 1e3);
-                race.drain_cues();
+                race.sim.drain_cues();
             }
             let (n, nmin, nmax) = spread(&mut normal);
             let (q, qmin, qmax) = spread(&mut quiet);

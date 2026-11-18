@@ -227,6 +227,7 @@ fn a_craft_with_three_mines_lays_three() {
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
     for _ in 0..120 {
         laid += race
+            .sim
             .drain_cues()
             .iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::MineLaunch)

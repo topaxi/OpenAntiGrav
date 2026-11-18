@@ -76,7 +76,7 @@ pub fn resimulate(
                 .with_context(|| format!("an event before tick {}", verifier.tick()))?;
         }
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         if let Err(found) = verifier.after_tick(|| race.sim.state_hash()) {
             desync = Some(found);
             break;

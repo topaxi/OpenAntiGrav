@@ -6,19 +6,20 @@
 //!   it is a lap or a finish on that tick: [`oag_race::Standing::jumped`]). A transit is
 //!   this behind a stay out of the world; a reset is not (it goes back, to a crumb, and
 //!   earns nothing), and shares only the cursor reset, [`Race::reseat`].
-//! - **Entry** ([`Race::begin_transit`]): the exit point is resolved at once
-//!   ([`Race::point_ahead`]: units on, seconds at the speed it has now, a share of the lap,
+//! - **Entry** ([`RaceSim::begin_transit`]): the exit point is resolved at once
+//!   ([`RaceSim::point_ahead`]: units on, seconds at the speed it has now, a share of the lap,
 //!   a place on the lap, or a track trigger); the craft keeps its pose and is frozen there.
 //! - **Out of the world** ([`oag_gameplay::Ship::in_world`]): not stepped (no physics, no
 //!   pads, no triggers, its controls and pickup presses ignored), not drawn, no
 //!   craft-to-craft contact, and `oag_weapons::Craft::active` is false, so no weapon hits,
-//!   drains or locks it. Its reset triggers are held ([`Race::reset_held`]). Its standing
+//!   drains or locks it. Its reset triggers are held ([`RaceSim::reset_held`]). Its standing
 //!   is still updated on the frozen pose, so nothing wraps and the Zone clock runs.
 //! - **Exit** ([`Race::advance_transits`], before the tick reads any craft's controls): on the tick the
 //!   count runs out, the craft is moved to [`oag_gameplay::Transit::to`]
 //!   ([`Race::move_to`]) and stepped from there the same tick, so a crossing of the line in
 //!   the jump, a finish included, is timed at the exit tick.
 
+use crate::RaceSim;
 use oag_core::math::Vec3;
 use oag_gameplay::Transit;
 
@@ -60,7 +61,7 @@ const CLEARANCE_RAYS: usize = 9;
 /// the disc's straight edge is not read as an obstacle. Chosen.
 const CLEARANCE_LIFT: f32 = 0.5;
 
-impl Race {
+impl RaceSim {
     /// Starts slot `slot`'s transit: `ticks` out of the world, then out at `distance`
     /// ([`Self::point_ahead`]) at `exit_factor` times the speed it has now. A refusal names
     /// why and changes nothing: a craft not racing or already in a transit, a tick count
@@ -77,7 +78,7 @@ impl Race {
         distance: Distance,
         exit_factor: f32,
     ) -> Result<(), String> {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         if !ship.active || ship.physics.craft_state != oag_physics::CraftState::Racing {
             return Err(format!("slot {slot} holds no racing craft"));
         }
@@ -96,7 +97,7 @@ impl Race {
         }
         let (exit, _) = self.exit_ahead(slot, distance)?;
         let speed = self.speed_of(slot);
-        self.sim.world.ships[slot].transit = Some(Transit {
+        self.world.ships[slot].transit = Some(Transit {
             ticks_left: ticks,
             to: u32::try_from(exit.to).unwrap_or(u32::MAX),
             route: exit.route,
@@ -106,11 +107,7 @@ impl Race {
     }
 
     fn speed_of(&self, slot: usize) -> f32 {
-        self.sim.world.ships[slot]
-            .physics
-            .body
-            .linear_velocity
-            .length()
+        self.world.ships[slot].physics.body.linear_velocity.length()
     }
 
     /// The course ring point `distance` names, forward of slot `slot`'s craft and less
@@ -133,10 +130,10 @@ impl Race {
     ///
     /// As [`Self::point_ahead`].
     pub fn exit_ahead(&self, slot: usize, distance: Distance) -> Result<(Exit, f32), String> {
-        let Some(course) = &self.sim.course else {
+        let Some(course) = &self.course else {
             return Err("the track has no course to move along".into());
         };
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let hint = ship.standing.course_index.map(|index| index as usize);
         let Some(from) = hint.or_else(|| {
             course
@@ -163,7 +160,6 @@ impl Race {
             }
             Distance::Trigger(index) => {
                 let centre = self
-                    .sim
                     .extensions
                     .trigger_centre(usize::from(index))
                     .ok_or_else(|| format!("the track has no trigger {index}"))?;
@@ -200,15 +196,14 @@ impl Race {
             let (sin, cos) = oag_core::math::sin_cos(angle);
             let direction = lateral * cos + up * sin;
             let ray = oag_physics::collide::Ray::new(centre, direction, radius);
-            oag_physics::collide::Raycaster::raycast(&*self.sim.collision, ray, None, false)
-                .is_some()
+            oag_physics::collide::Raycaster::raycast(&*self.collision, ray, None, false).is_some()
         });
         (!blocked, ahead)
     }
 
     /// Where `exit` is: the ring's point, or the route's point that stands for it.
     pub(crate) fn exit_position(&self, exit: Exit) -> Option<Vec3> {
-        let course = self.sim.course.as_ref()?;
+        let course = self.course.as_ref()?;
         match usize::from(exit.route).checked_sub(1) {
             Some(route) => course.route_point(route, exit.to),
             None => course.position(exit.to),
@@ -218,7 +213,7 @@ impl Race {
     /// The spline sample under `exit`: the route's own deck for a route exit.
     pub(crate) fn road_sample(&self, exit: Exit) -> Option<&oag_vex::track::Sample> {
         let target = self.exit_position(exit)?;
-        self.sim.spline.nearest(target).map(|(_, at, _)| at)
+        self.spline.nearest(target).map(|(_, at, _)| at)
     }
 
     /// The road at `exit`: its lateral and up directions, the middle of its width lifted
@@ -238,7 +233,9 @@ impl Race {
             at.half_width_left + at.half_width_right,
         ))
     }
+}
 
+impl Race {
     /// Counts every transit down by a tick and brings out each craft whose count ran out
     /// ([`Self::relocate`]). Returns the slots that came out, one bit each. Nothing in a
     /// race without a transit.
@@ -270,7 +267,7 @@ impl Race {
     }
 
     /// Puts slot `slot`'s craft at `exit`, a course point forward of it and less than a lap
-    /// on ([`Self::exit_ahead`] gives one), at the width midpoint facing
+    /// on ([`RaceSim::exit_ahead`] gives one), at the width midpoint facing
     /// down the track at the height it flies at (the reset's placement without its drop,
     /// [`crate::breadcrumbs::emerge`]), moving at `speed`. The ground between counts as driven: the lap counters credit a
     /// crossing of the line in it now ([`oag_race::Standing::jumped`],
@@ -284,7 +281,7 @@ impl Race {
             return false;
         };
         let to = exit.to;
-        let Some(target) = self.exit_position(exit) else {
+        let Some(target) = self.sim.exit_position(exit) else {
             return false;
         };
         let Some(relocation) = crate::breadcrumbs::emerge(&self.sim.spline, target, speed) else {
@@ -320,10 +317,12 @@ impl Race {
         }
         true
     }
+}
 
+impl RaceSim {
     /// Whether slot `slot`'s reset triggers are held this tick, whatever their gates: a
     /// craft in a transit is out of the world and nothing may put it back.
     pub(super) fn reset_held(&self, slot: usize) -> bool {
-        self.sim.world.ships[slot].transit.is_some()
+        self.world.ships[slot].transit.is_some()
     }
 }

@@ -585,7 +585,7 @@ pub(crate) fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, o
             race.apply_event(event).expect("applies");
         }
         race.tick(inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         race.sim.state_hash()
     })
 }

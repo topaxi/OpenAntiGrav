@@ -68,7 +68,8 @@ fn drive_until(race: &mut race::Race, limit: u32, done: impl Fn(&race::Race) -> 
 /// lap counters give its exit tick (the world's count after that tick's step).
 fn jump(race: &mut race::Race, ticks: u16) -> u64 {
     let entry = race.sim.world.ships[0].physics.body.position;
-    race.begin_transit(0, ticks, Distance::Lap(0.9), 0.95)
+    race.sim
+        .begin_transit(0, ticks, Distance::Lap(0.9), 0.95)
         .expect("a racing craft on the course");
     for _ in 1..ticks {
         race.tick(&throttle());
@@ -171,8 +172,8 @@ fn a_clearance_probe_reads_the_real_track() {
     drive_until(&mut race, 1200, |r| {
         r.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
-    let (fits, ahead) = race.clearance(0, Distance::Units(200.0), 4.0);
-    let (wide, _) = race.clearance(0, Distance::Units(200.0), 60.0);
+    let (fits, ahead) = race.sim.clearance(0, Distance::Units(200.0), 4.0);
+    let (wide, _) = race.sim.clearance(0, Distance::Units(200.0), 60.0);
     println!("radius 4 fits {fits} at {ahead}; radius 60 fits {wide}");
     assert!(fits, "a small portal fits the road 200 units on");
     assert!(!wide, "a 120-unit-wide one does not");

@@ -371,7 +371,8 @@ fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
         lap = race.sim.world.primary_race().lap;
         let tick = step;
         cues.extend(
-            race.pending_cues()
+            race.sim
+                .pending_cues()
                 .iter()
                 .filter(|e| matches!(e.cue, Cue::PerfectLap | Cue::NewLapRecord))
                 .map(|e| (tick, e.cue, completed)),

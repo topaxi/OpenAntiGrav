@@ -55,7 +55,7 @@ fn agreed() -> (Box<Race>, Box<Race>) {
     for _ in 0..AGREED {
         server.tick_sim_only(&PlayerInputs::none());
         client.tick(&PlayerInputs::none());
-        client.drain_cues();
+        client.sim.drain_cues();
     }
     (server, client)
 }
@@ -70,7 +70,7 @@ fn predict(
     let authoritative = server.snapshot_sim();
     for at in 0..WINDOW {
         client.tick(&window_input(at, guessed_fire));
-        client.drain_cues();
+        client.sim.drain_cues();
     }
     let truth: Vec<PlayerInputs> = (0..WINDOW).map(|at| window_input(at, true)).collect();
     for inputs in &truth {
@@ -95,7 +95,7 @@ fn a_fire_first_seen_in_the_replay_is_started_late() {
         late.oldest_age >= (WINDOW - FIRE_AT - 2) as u32 && late.oldest_age <= WINDOW as u32,
         "the fire is as old as the ticks since it: {late:?}"
     );
-    let raised: Vec<Cue> = client.drain_cues().into_iter().map(|e| e.cue).collect();
+    let raised: Vec<Cue> = client.sim.drain_cues().into_iter().map(|e| e.cue).collect();
     assert_eq!(
         raised,
         vec![Cue::Repulsor],
@@ -111,7 +111,7 @@ fn a_fire_the_client_already_presented_is_not_presented_again() {
     let late = client.take_late_report();
     assert_eq!(late.cues, 0, "{late:?}");
     assert!(late.already_presented >= 1, "{late:?}");
-    assert!(client.drain_cues().is_empty());
+    assert!(client.sim.drain_cues().is_empty());
 }
 
 #[test]
@@ -119,13 +119,13 @@ fn a_second_correction_over_the_same_window_adds_nothing() {
     let (mut server, mut client) = agreed();
     let (authoritative, truth) = predict(&mut server, &mut client, false);
     client.reconcile(&authoritative, truth.clone());
-    client.drain_cues();
+    client.sim.drain_cues();
     let first = client.take_late_report();
     assert_eq!(first.cues, 1);
     client.reconcile(&authoritative, truth);
     let again = client.take_late_report();
     assert_eq!(again.cues, 0, "the same fire started twice: {again:?}");
-    assert!(client.drain_cues().is_empty());
+    assert!(client.sim.drain_cues().is_empty());
 }
 
 #[test]

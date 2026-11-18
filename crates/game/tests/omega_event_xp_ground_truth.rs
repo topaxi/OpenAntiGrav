@@ -55,10 +55,13 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
     let mut run = race::Race::start(loaded.setup);
     run.arm_event_xp(&progress);
     run.sim.set_autopilot(true);
-    while !run.finished() && run.sim.world.tick < 30_000 {
+    while !run.sim.finished() && run.sim.world.tick < 30_000 {
         run.tick(&oag_gameplay::PlayerInputs::none());
     }
-    assert!(run.finished(), "the event did not finish in 30000 ticks");
+    assert!(
+        run.sim.finished(),
+        "the event did not finish in 30000 ticks"
+    );
     let facts = oag_game::endrace::touch::Facts::from_race(&run, progress.objectives);
     let Standing::Place(place) = facts.standing else {
         panic!("a single race comes to a place, not {:?}", facts.standing);

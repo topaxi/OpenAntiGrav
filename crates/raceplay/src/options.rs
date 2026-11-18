@@ -912,7 +912,7 @@ pub struct Setup {
     /// The title's drawn-hull shake, `oag_title::RaceDefaults::hull_shake` ([`crate::hull_shake`]).
     pub hull_shake: Option<oag_title::hull_shake::HullShake>,
     /// The title's Autopilot engine law, `oag_title::RaceDefaults::autopilot_engine`
-    /// (`Race::autopilot_engine_flags`).
+    /// (`RaceSim::autopilot_engine_flags`).
     pub autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
     /// Whether an opponent on this project's driver flies the Autopilot it
     /// holds rather than absorbing it: the title's

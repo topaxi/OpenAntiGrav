@@ -47,7 +47,8 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
     let placements = race.placements_of(1);
     let respawns = race.respawns_of(1);
     let ai_clock = race.sim.world.race.get(1).cloned();
-    race.begin_transit(1, 30, Distance::Units(20.0), 0.5)
+    race.sim
+        .begin_transit(1, 30, Distance::Units(20.0), 0.5)
         .unwrap();
     for tick in 1..30 {
         race.tick(&PlayerInputs::none());
@@ -95,7 +96,8 @@ fn a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at() {
     let mut race = moving();
     let entry = race.sim.world.ships[1].standing.progress;
     assert!(entry.is_some());
-    race.begin_transit(1, 30, Distance::Units(20.0), 0.5)
+    race.sim
+        .begin_transit(1, 30, Distance::Units(20.0), 0.5)
         .unwrap();
     for tick in 1..30 {
         race.tick(&PlayerInputs::none());
@@ -122,15 +124,17 @@ fn a_transit_the_course_or_the_craft_cannot_take_is_refused_and_changes_nothing(
         (30, Distance::Units(10.0), 2.5),
     ] {
         assert!(
-            race.begin_transit(1, ticks, distance, factor).is_err(),
+            race.sim.begin_transit(1, ticks, distance, factor).is_err(),
             "{ticks} {distance:?} {factor}"
         );
         assert_eq!(race.sim.world.ships[1].transit, None);
     }
-    race.begin_transit(1, 30, Distance::Seconds(0.1), 1.0)
+    race.sim
+        .begin_transit(1, 30, Distance::Seconds(0.1), 1.0)
         .unwrap();
     assert!(
-        race.begin_transit(1, 30, Distance::Units(10.0), 1.0)
+        race.sim
+            .begin_transit(1, 30, Distance::Units(10.0), 1.0)
             .is_err(),
         "already in one"
     );
@@ -148,9 +152,10 @@ fn a_transit_to_a_place_on_the_lap_comes_out_there() {
     // a ring point rather than a share of the lap).
     let target = course.progress_at(2).unwrap();
     assert!(target < entry, "{target} behind {entry}");
-    let (to, ahead) = race.point_ahead(1, Distance::Progress(target)).unwrap();
+    let (to, ahead) = race.sim.point_ahead(1, Distance::Progress(target)).unwrap();
     assert!(ahead > course.length() * 0.5, "{ahead} on");
-    race.begin_transit(1, 2, Distance::Progress(target), 1.0)
+    race.sim
+        .begin_transit(1, 2, Distance::Progress(target), 1.0)
         .unwrap();
     race.tick(&PlayerInputs::none());
     race.tick(&PlayerInputs::none());
@@ -170,7 +175,8 @@ fn a_transit_reports_a_camera_cut_on_its_exit_tick_alone() {
         race.set_draw_alpha(alpha);
         assert!(!race.camera_cut(), "before, at alpha {alpha}");
     }
-    race.begin_transit(0, 3, Distance::Units(20.0), 1.0)
+    race.sim
+        .begin_transit(0, 3, Distance::Units(20.0), 1.0)
         .unwrap();
     let mut cuts = Vec::new();
     for _ in 0..5 {
@@ -193,7 +199,8 @@ fn a_seat_reports_its_own_camera_cut_not_the_players() {
     for (moved, other) in [(1, 0), (0, 1)] {
         let mut race = moving();
         assert_eq!(race.set_viewport_count(2), 2);
-        race.begin_transit(moved, 3, Distance::Units(20.0), 1.0)
+        race.sim
+            .begin_transit(moved, 3, Distance::Units(20.0), 1.0)
             .unwrap();
         let mut seen = vec![Vec::new(); 2];
         for _ in 0..5 {
@@ -222,13 +229,14 @@ fn a_seat_reports_its_own_camera_cut_not_the_players() {
 #[test]
 fn a_craft_in_transit_has_its_reset_triggers_held() {
     let mut race = moving();
-    race.begin_transit(1, 100, Distance::Units(20.0), 1.0)
+    race.sim
+        .begin_transit(1, 100, Distance::Units(20.0), 1.0)
         .unwrap();
     let respawns = race.sim.respawns[1];
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
-        assert!(race.reset_held(1));
-        assert!(!race.armed(1, race.sim.reset_triggers.cage));
+        assert!(race.sim.reset_held(1));
+        assert!(!race.sim.armed(1, race.sim.reset_triggers.cage));
     }
     assert_eq!(race.sim.respawns[1], respawns);
     assert_eq!(race.sim.stalled_ticks[1], 0);
@@ -241,7 +249,8 @@ fn a_craft_in_transit_has_its_reset_triggers_held() {
 #[test]
 fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
     let mut race = moving();
-    race.begin_transit(1, 30, Distance::Units(20.0), 1.0)
+    race.sim
+        .begin_transit(1, 30, Distance::Units(20.0), 1.0)
         .unwrap();
     for _ in 0..20 {
         race.tick(&PlayerInputs::none());
@@ -266,11 +275,11 @@ fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
 #[test]
 fn a_clearance_probe_reads_the_width_and_the_geometry() {
     let race = moving();
-    let (fits, ahead) = race.clearance(1, Distance::Units(20.0), 8.0);
+    let (fits, ahead) = race.sim.clearance(1, Distance::Units(20.0), 8.0);
     assert!(fits);
     assert_eq!(ahead, 20.0);
-    assert!(!race.clearance(1, Distance::Units(20.0), 13.0).0);
-    assert_eq!(race.clearance(1, Distance::Lap(1.5), 8.0), (false, 0.0));
+    assert!(!race.sim.clearance(1, Distance::Units(20.0), 13.0).0);
+    assert_eq!(race.sim.clearance(1, Distance::Lap(1.5), 8.0), (false, 0.0));
 }
 
 #[cfg(feature = "extensions")]

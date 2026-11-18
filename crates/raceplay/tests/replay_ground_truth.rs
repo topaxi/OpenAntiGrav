@@ -181,7 +181,7 @@ fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
     for tick in 0..TICKS {
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         if tick + 1 == SHOT_AT {
             shot = race.shot_record(None);
         }
@@ -207,7 +207,7 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
                 .unwrap_or_else(|e| panic!("{title}: {e}"));
         }
         race.tick(inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         race.sim.state_hash()
     })
 }
@@ -385,9 +385,9 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
     for tick in 0..replay.ticks() {
         let inputs = replay.inputs_at(tick);
         plain.tick(&inputs);
-        plain.drain_cues();
+        plain.sim.drain_cues();
         haunted.tick(&inputs);
-        haunted.drain_cues();
+        haunted.sim.drain_cues();
         assert_eq!(
             plain.sim.state_hash(),
             haunted.sim.state_hash(),
@@ -595,7 +595,7 @@ fn mid_race_events(title: &str) {
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     let replay =
         Replay::from_bytes(&race.recorded().expect("recording").to_bytes()).expect("reads");

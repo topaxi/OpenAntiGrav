@@ -221,7 +221,7 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
     let mut shut = 0;
     for _ in 0..300 {
         race.tick(&throttle());
-        let (fits, _) = race.clearance(0, Distance::Units(30.0), 12.0);
+        let (fits, _) = race.sim.clearance(0, Distance::Units(30.0), 12.0);
         shut = if fits { 0 } else { shut + 1 };
         if shut == 2 {
             break;
@@ -338,7 +338,9 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     // On to the last lap by the engine's own jump, then the mod's fire over the line.
     let target = race.sim.world.laps_target().expect("a lap target");
     while ship(&race).standing.lap < target {
-        race.begin_transit(0, 2, Distance::Lap(0.9), 0.95).unwrap();
+        race.sim
+            .begin_transit(0, 2, Distance::Lap(0.9), 0.95)
+            .unwrap();
         for _ in 0..62 {
             race.tick(&throttle());
         }

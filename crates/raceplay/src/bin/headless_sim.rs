@@ -92,8 +92,8 @@ fn main() {
         race.tick(&inputs);
         // The cues a tick emits are an output, never state (ADR-0018). With no
         // audio attached they would otherwise grow without bound.
-        race.drain_cues();
-        race.drain_mod_sounds();
+        race.sim.drain_cues();
+        race.sim.drain_mod_sounds();
     }
 
     let after = race.sim.state_hash();

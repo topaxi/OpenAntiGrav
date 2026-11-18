@@ -126,7 +126,7 @@ impl Facts {
         // page held.
         let mode = race.sim.world.mode();
         let standing = race.player_standing();
-        let finished = race.finished();
+        let finished = race.sim.finished();
         let total = oag_game_ticks(oag_race::race_clock_ticks(
             standing.finish_tick.unwrap_or(race.sim.world.tick),
         ));
@@ -197,11 +197,11 @@ pub fn finished_event(
     let mut race = oag_raceplay::Race::start(loaded.setup);
     race.arm_event_xp(&progress);
     race.sim.set_autopilot(true);
-    while !race.finished() && race.sim.world.tick < cap {
+    while !race.sim.finished() && race.sim.world.tick < cap {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
     anyhow::ensure!(
-        race.finished(),
+        race.sim.finished(),
         "{name} was still running after {cap} ticks"
     );
     let facts = Facts::from_race(&race, progress.objectives);

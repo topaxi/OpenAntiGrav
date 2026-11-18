@@ -56,7 +56,7 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
     assert_eq!(race.sim.world.ships[1].pickup.weapon, Some(Weapon::Turbo));
     assert!(race.sim.flown_for_the_player(1), "the driver has the craft");
     assert_eq!(
-        race.autopilot_engine_flags(1).speedup,
+        race.sim.autopilot_engine_flags(1).speedup,
         None,
         "a hand-back gives no Autopilot boost"
     );
@@ -110,7 +110,7 @@ fn a_real_autopilot_is_not_a_hand_back() {
     let mut race = returning();
     race.sim.world.ships[1].autopilot_timer = 2.0;
     assert!(!race.sim.world.ships[1].handback);
-    assert_eq!(race.autopilot_engine_flags(1).speedup, Some(1.2));
+    assert_eq!(race.sim.autopilot_engine_flags(1).speedup, Some(1.2));
 }
 
 /// The state the recording replays: a re-drive that applies the two events reaches the state

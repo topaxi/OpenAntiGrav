@@ -236,8 +236,8 @@ fn a_draw_alpha_reaches_no_state_hash() {
         );
         drawn.tick(&PlayerInputs::none());
         plain.tick(&PlayerInputs::none());
-        drawn.drain_cues();
-        plain.drain_cues();
+        drawn.sim.drain_cues();
+        plain.sim.drain_cues();
         assert_eq!(
             drawn.sim.state_hash(),
             plain.sim.state_hash(),

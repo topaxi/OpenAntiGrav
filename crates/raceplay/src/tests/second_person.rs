@@ -76,6 +76,7 @@ fn a_second_persons_plasma_charge_and_cue_are_theirs() {
         "slot 1's plasma charge is owned by {owner:?}"
     );
     let cue = race
+        .sim
         .drain_cues()
         .into_iter()
         .find(|e| e.cue == oag_gameplay::cue::Cue::Plasma)

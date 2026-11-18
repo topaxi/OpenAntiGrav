@@ -43,11 +43,11 @@ impl Race {
     /// route's own deck, which leaves the ring's direction at a fork.
     pub(crate) fn portal_frame(&self, exit: Exit, face: Face) -> Option<Mat4> {
         let course = self.sim.course.as_ref()?;
-        let (_, up, centre, _) = self.road_frame(exit)?;
+        let (_, up, centre, _) = self.sim.road_frame(exit)?;
         let along = if exit.route == 0 {
             course.tangent(exit.to)?
         } else {
-            Vec3::from_array(self.road_sample(exit)?.tangent)
+            Vec3::from_array(self.sim.road_sample(exit)?.tangent)
         };
         portal::frame(centre, along, up, face)
     }
@@ -63,6 +63,7 @@ impl Race {
         let course = self.sim.course.as_ref()?;
         let entrance = Exit::ring(course.index_at_progress(request.entrance)?);
         let entrance_section = self
+            .sim
             .road_sample(entrance)
             .map_or(UNPLACED, |sample| sample.section_id);
         let entrance = self.portal_frame(entrance, Face::Oncoming)?;

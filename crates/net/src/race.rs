@@ -183,7 +183,7 @@ fn zone_target(params: &RaceParams) -> Option<u16> {
 
 /// Hands the craft of every seat in `away` (a [`crate::wire::TickRecord::retired`] mask) to the
 /// driver that flies a dropped person's seat: a person who left must not hold the race open
-/// (`Race::finished` counts only people), and the craft crawls round with its pickup kept
+/// (`RaceSim::finished` counts only people), and the craft crawls round with its pickup kept
 /// (`Race::set_away`). Both ends call it with the same mask at the same tick. **Chosen, not
 /// measured**: the original has no network race.
 pub fn retire(race: &mut Race, away: u8) {

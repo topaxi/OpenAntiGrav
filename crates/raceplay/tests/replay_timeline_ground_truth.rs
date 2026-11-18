@@ -152,10 +152,10 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
         write_between_ticks(&mut race, assist, tick);
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         tick += 1;
         watch(&mut run, &race);
-        if finished_at.is_none() && race.finished() {
+        if finished_at.is_none() && race.sim.finished() {
             finished_at = Some(tick);
         }
     }
@@ -289,7 +289,7 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
     for tick in 0..visit_at + 300 {
         write_between_ticks(&mut live, assist, tick);
         live.tick(&run.replay.inputs_at(tick));
-        live.drain_cues();
+        live.sim.drain_cues();
         timeline.keep(&live);
         if tick + 1 == early {
             early_text = format!("{:?}", live.sim);
@@ -392,7 +392,7 @@ fn a_rewind_changes_nothing(title: &str) {
     for tick in 0..visit_at + 300 {
         write_between_ticks(&mut live, assist, tick);
         live.tick(&run.replay.inputs_at(tick));
-        live.drain_cues();
+        live.sim.drain_cues();
         keeper.keep(&live);
         if tick + 1 == visit_at {
             let before = format!("{:?}", live.sim);
@@ -497,7 +497,7 @@ fn a_split_screen_recording_reproduces() {
             inputs.set(slot, snapshot);
         }
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         watch(&mut run, &race);
     }
     let bytes = race.recorded().expect("recording").to_bytes();
@@ -595,7 +595,7 @@ fn dump_the_recordings_for_a_compressor() {
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
     for _ in 0..ticks {
         race.tick(&idle);
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     std::fs::write(
         out.join(format!("{title}-{class}-autopilot.oagr")),

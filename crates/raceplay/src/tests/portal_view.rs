@@ -283,7 +283,8 @@ fn a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_wit
     let ship = &mut race.sim.world.ships[0];
     ship.physics.body.position.z += 2.0;
     ship.physics.body.linear_velocity = Vec3::new(30.0, 0.0, 4.0);
-    race.begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
+    race.sim
+        .begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
         .expect("the player is racing on the course");
     let transit = race.sim.world.ships[0].transit.expect("in a transit");
     for _ in 1..40 {
@@ -329,7 +330,8 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
         let mut race = race_with(&[fill], text);
         race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(30.0, 0.0, 0.0);
         let before = race.view().inverse().w_axis.truncate();
-        race.begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
+        race.sim
+            .begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
             .expect("the player is racing on the course");
         for _ in 0..20 {
             race.tick(&PlayerInputs::none());
@@ -564,7 +566,8 @@ fn a_portal_whose_radius_reaches_a_visible_section_still_draws() {
 
 /// The section of the road sample under a progress.
 fn sample_section_at(race: &Race, progress: f32) -> u8 {
-    race.road_sample(ring_exit(race, progress).expect("on the lap"))
+    race.sim
+        .road_sample(ring_exit(race, progress).expect("on the lap"))
         .expect("a road sample")
         .section_id
 }
@@ -932,7 +935,7 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
     assert_eq!(ring, Exit::ring(exit.to));
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let frame_of = |index: usize, face| {
-        let (_, up, centre, _) = race.road_frame(Exit::ring(index)).unwrap();
+        let (_, up, centre, _) = race.sim.road_frame(Exit::ring(index)).unwrap();
         oag_render::camera::portal::frame(centre, course.tangent(index).unwrap(), up, face).unwrap()
     };
     let entrance = course.index_at_progress(request.entrance).unwrap();

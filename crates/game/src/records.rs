@@ -19,7 +19,7 @@
 //! has not - `escape`, or an unfinished `--race` run quitting outright. That
 //! second path is why this cannot be built as "capture the finish and nothing
 //! else": [`oag_race::Mode::laps_target`] is `None` for `SpeedLap` and
-//! `Zone`, so [`oag_raceplay::Race::finished`] never turns `true` for either
+//! `Zone`, so [`oag_raceplay::RaceSim::finished`] never turns `true` for either
 //! of them - and Speed Lap is the one mode whose entire point is a fast lap
 //! time. Leaving a race is the only exit every mode has in common, so a best
 //! lap set there is captured on the way out rather than never.
@@ -208,7 +208,7 @@ impl Key {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Observation {
     /// Whether the race had reached its own finish condition - never
-    /// re-derived here, always [`oag_raceplay::Race::finished`]'s own answer.
+    /// re-derived here, always [`oag_raceplay::RaceSim::finished`]'s own answer.
     pub finished: bool,
     /// The player's own race position at the moment of capture, from
     /// [`oag_raceplay::Race::places`]. Always `Some` for a race that had a

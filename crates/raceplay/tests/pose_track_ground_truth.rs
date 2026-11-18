@@ -165,7 +165,7 @@ fn respawn(title: &str) {
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         tick += 1;
         truth.push(grid(&race));
         if respawned.is_none() && race.respawns() > 0 {

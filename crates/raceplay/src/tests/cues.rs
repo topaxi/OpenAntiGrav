@@ -28,7 +28,10 @@ pub(super) fn grid_on_a_speed_pad() -> Race {
 #[test]
 fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
     let mut race = grid_on_a_speed_pad();
-    assert!(race.pending_cues().is_empty(), "a cue before any tick ran");
+    assert!(
+        race.sim.pending_cues().is_empty(),
+        "a cue before any tick ran"
+    );
 
     race.tick(&PlayerInputs::none());
     // The same edge, the same tick: `Ship_ApplySpeedupPad` calls
@@ -40,9 +43,12 @@ fn crossing_a_pad_raises_its_cue_on_the_tick_the_flare_is_armed() {
         "the flare did not arm"
     );
     assert!(
-        race.pending_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
+        race.sim
+            .pending_cues()
+            .iter()
+            .any(|e| e.cue == Cue::SpeedupPad),
         "the flare armed and the cue did not: {:?}",
-        race.pending_cues()
+        race.sim.pending_cues()
     );
 }
 
@@ -51,6 +57,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
     let first: Vec<_> = race
+        .sim
         .drain_cues()
         .into_iter()
         .filter(|e| e.cue == Cue::SpeedupPad)
@@ -77,7 +84,11 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        !race.drain_cues().iter().any(|e| e.cue == Cue::SpeedupPad),
+        !race
+            .sim
+            .drain_cues()
+            .iter()
+            .any(|e| e.cue == Cue::SpeedupPad),
         "the pad re-fired while the craft sat on it"
     );
 }
@@ -86,11 +97,11 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
 fn draining_takes_the_queue_and_leaves_it_empty() {
     let mut race = grid_on_a_speed_pad();
     race.tick(&PlayerInputs::none());
-    assert!(!race.pending_cues().is_empty());
-    let drained = race.drain_cues();
+    assert!(!race.sim.pending_cues().is_empty());
+    let drained = race.sim.drain_cues();
     assert!(!drained.is_empty());
     assert!(
-        race.pending_cues().is_empty(),
+        race.sim.pending_cues().is_empty(),
         "a second reader would play the same cue twice"
     );
 }
@@ -100,7 +111,13 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
     let mut race = race_with_pads(Mode::SingleRace, Vec::new());
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
-        assert!(!race.drain_cues().iter().any(|e| e.cue == Cue::SpeedupPad));
+        assert!(
+            !race
+                .sim
+                .drain_cues()
+                .iter()
+                .any(|e| e.cue == Cue::SpeedupPad)
+        );
     }
 }
 
@@ -116,7 +133,7 @@ fn a_track_with_no_pads_raises_no_pad_cue() {
 #[test]
 fn every_cue_has_something_that_raises_it() {
     // A cue driven from the *level* rather than from an edge: the audio layer
-    // reads `Race::shield_is_up`, `Race::craft_is_exploding`, `Race::finished`
+    // reads `Race::shield_is_up`, `Race::craft_is_exploding`, `RaceSim::finished`
     // and `Race::sight_state` directly, so these have no entry in the queue by
     // design. `LockOn` is the odd one - it is fired on an *edge*, but the edge
     // is computed in the audio layer from that level rather than pushed here,
@@ -262,7 +279,7 @@ fn every_cue_has_something_that_raises_it() {
             _ => buttons.tick(0),
         };
         saw_impact |= race.tick(&PlayerInputs::single(snapshot)).wall.impact;
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     assert!(
         saw_impact,
@@ -389,7 +406,7 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -426,7 +443,7 @@ fn rocket_hits_a_craft() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -464,7 +481,7 @@ fn cannon_hits_a_craft() -> std::collections::BTreeSet<Cue> {
         // the press edge.
         let snapshot = buttons.tick(SQUARE);
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -496,7 +513,7 @@ fn cannon_hits_a_wall() -> std::collections::BTreeSet<Cue> {
         // Held the whole run, the same reason `cannon_hits_a_craft` holds it.
         let snapshot = buttons.tick(SQUARE);
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -527,7 +544,7 @@ fn shuriken_bounces_off_a_wall() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -563,7 +580,7 @@ fn quake_hits_a_craft() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -597,7 +614,7 @@ fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }
@@ -722,6 +739,7 @@ fn a_re_press_while_a_quake_wave_travels_still_raises_quakelaunch() {
         race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
         race.tick(&PlayerInputs::single(snapshot));
         launches += race
+            .sim
             .drain_cues()
             .iter()
             .filter(|e| e.cue == Cue::QuakeLaunch)
@@ -772,7 +790,12 @@ fn a_locked_leachbeam_pulses_leachenergy_and_not_every_tick() {
             buttons.tick(0)
         };
         race.tick(&PlayerInputs::single(snapshot));
-        if race.drain_cues().iter().any(|e| e.cue == Cue::LeachEnergy) {
+        if race
+            .sim
+            .drain_cues()
+            .iter()
+            .any(|e| e.cue == Cue::LeachEnergy)
+        {
             pulse_ticks.push(tick);
         }
     }
@@ -812,6 +835,7 @@ fn the_shield_announcer_fires_on_the_edge_and_not_on_the_level() {
         race.sim.world.ships[0].physics.shield_pickup_timer = if tick >= 30 { 1.0 } else { 0.0 };
         race.tick(&PlayerInputs::none());
         announcements += race
+            .sim
             .drain_cues()
             .iter()
             .filter(|e| e.cue == Cue::ShieldActive)
@@ -856,7 +880,7 @@ fn the_class_announcer_fires_on_a_stage_step_and_not_on_every_zone() {
     // Past the start-line countdown, through which the zone machine holds.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 1300 {
         race.tick(&PlayerInputs::none());
-        raised.extend(race.drain_class_announcements());
+        raised.extend(race.sim.drain_class_announcements());
     }
     assert!(
         race.sim.world.primary_race().zone >= 2,
@@ -887,7 +911,7 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
     // Past the start-line countdown, through which the zone machine holds.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 1300 {
         race.tick(&PlayerInputs::none());
-        raised.extend(race.drain_class_announcements());
+        raised.extend(race.sim.drain_class_announcements());
     }
     assert!(
         race.sim.world.primary_race().zone >= 2,
@@ -920,6 +944,7 @@ fn laying_a_mine_raises_its_launch_cue_once_per_charge() {
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         launches += race
+            .sim
             .drain_cues()
             .iter()
             .filter(|e| e.cue == Cue::MineLaunch)
@@ -959,7 +984,7 @@ fn dropping_a_bomb_raises_no_mine_launch_cue() {
     let mut raised = Vec::new();
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
-        raised.extend(race.drain_cues());
+        raised.extend(race.sim.drain_cues());
     }
     assert!(
         !raised.iter().any(|e| e.cue == Cue::MineLaunch),
@@ -980,9 +1005,9 @@ fn raising_a_cue_does_not_move_the_race_hash() {
         without.tick(&PlayerInputs::none());
         // One of the two has its queue drained every tick and the other never
         // does, so by the end they hold different queues entirely.
-        with.drain_cues();
+        with.sim.drain_cues();
     }
-    assert!(!without.pending_cues().is_empty(), "nothing was queued");
-    assert!(with.pending_cues().is_empty());
+    assert!(!without.sim.pending_cues().is_empty(), "nothing was queued");
+    assert!(with.sim.pending_cues().is_empty());
     assert_eq!(with.sim.state_hash(), without.sim.state_hash());
 }

@@ -240,7 +240,7 @@ unchanged (`an_eight_bit_target_still_clamps_a_value_above_one`).
 
 **The camera.** `virtual = exit * rotation_180 * entrance^-1 * main`, the turn about the portal's
 local up, with each portal's `+z` out of the face a craft sees: back along the road at the entrance,
-forward at the exit, up the spline sample's own (banking and all: the same `Race::road_frame` as
+forward at the exit, up the spline sample's own (banking and all: the same `RaceSim::road_frame` as
 `fire-mod-effect-ahead`). A view in a vertical loop is upside down because the road is: Pulse's
 `16_Track` turns over between progress 1750 and 2180. What stands behind the exit's plane is clipped with an oblique
 near plane (`portal::oblique_near`, the 0..1 depth form); the frustum and the sky keep the plain

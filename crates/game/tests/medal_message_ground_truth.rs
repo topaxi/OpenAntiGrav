@@ -300,7 +300,8 @@ fn hd_speed_lap_raises_the_medal_and_its_voice_on_every_new_best_lap() {
                 raised.push((step, tier));
             }
             cues.extend(
-                race.pending_cues()
+                race.sim
+                    .pending_cues()
                     .iter()
                     .filter(|e| Cue::SPEED_LAP_MEDAL.contains(&e.cue))
                     .map(|e| (step, e.cue)),

@@ -49,11 +49,11 @@ fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> 
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     race.sim.set_autopilot(true);
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "the Time Trial never finished in {CAP} ticks"
     );
     assert!(
@@ -143,7 +143,7 @@ fn the_result_is_frozen_at_the_line_while_the_race_runs_on() {
         board,
         "the board taken at the line was revised"
     );
-    assert!(race.finished(), "the race un-finished itself");
+    assert!(race.sim.finished(), "the race un-finished itself");
 }
 
 /// The ten `Camera` nodes of `16_Track` as the original's own camera object held them while

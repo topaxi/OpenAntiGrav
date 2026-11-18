@@ -565,7 +565,7 @@ pub struct RaceSim {
     ///
     /// **A per-tick output, never state** - the shape ADR-0018 requires, and
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
-    /// and one that made every sound must hash alike. See [`Race::drain_cues`].
+    /// and one that made every sound must hash alike. See [`RaceSim::drain_cues`].
     pub(super) cues: Vec<oag_gameplay::cue::CueEvent>,
     /// The mods' own sounds this tick asked for, awaiting a drain: an output like
     /// [`Self::cues`], never hashed.
@@ -582,7 +582,7 @@ pub struct RaceSim {
     /// Speed-class stages reached this tick, awaiting a drain. Same shape as
     /// [`Self::announcements`]; kept apart because the two ladders are
     /// separate title axes that happen to raise on related but distinct
-    /// edges - see [`Race::push_class_announcement`].
+    /// edges - see [`RaceSim::push_class_announcement`].
     pub(super) class_announcements: Vec<u32>,
     /// Seconds before a wall contact may raise a sound cue again.
     ///
@@ -596,7 +596,7 @@ pub struct RaceSim {
     pub(super) contact_impulse: [crate::cues::ContactImpulse; oag_gameplay::MAX_SHIPS],
     /// This tick's wall contact per craft, for the pad: the contact's size and
     /// its side, `None` with no contact. A per-tick output beside
-    /// [`Self::cues`], out of the hash; see [`Race::wall_contact_of`].
+    /// [`Self::cues`], out of the hash; see [`RaceSim::wall_contact_of`].
     pub(super) wall_contact: [Option<WallContactReading>; oag_gameplay::MAX_SHIPS],
 }
 

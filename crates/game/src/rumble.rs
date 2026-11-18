@@ -225,12 +225,12 @@ impl Rumbler {
         let dt = race.dt();
         for seat in &mut self.seats {
             let slot = seat.slot;
-            for event in race.pending_cues() {
+            for event in race.sim.pending_cues() {
                 seat.feed.event(event, slot);
             }
             seat.feed.levels(levels_of(race, slot));
             seat.feed
-                .wall(race.wall_contact_of(slot).map(|c| (c.size, c.side)), dt);
+                .wall(race.sim.wall_contact_of(slot).map(|c| (c.size, c.side)), dt);
             let ship = race.sim.world.ships.get(slot);
             let physics = ship.map(|s| &s.physics);
             // Touching down: grounded now and not on the tick before. The speed
@@ -282,7 +282,7 @@ fn levels_of(race: &Race, slot: usize) -> Levels {
             .ships
             .get(slot)
             .is_some_and(|ship| ship.autopilot_timer > 0.0),
-        leech_beam: race.leach_beam_on(slot),
+        leech_beam: race.sim.leach_beam_on(slot),
         wrong_way: race.wrong_way_for(slot),
         exploding: race.craft_destroyed(slot),
         locked_on: slot == race.player_slot()

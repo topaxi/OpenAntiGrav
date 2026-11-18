@@ -369,9 +369,9 @@ impl Viewer {
             self.advance(race);
             // The tick being replayed already sounded once, and a seek is silent up to its
             // target.
-            drop(race.drain_cues());
-            drop(race.drain_announcements());
-            drop(race.drain_class_announcements());
+            drop(race.sim.drain_cues());
+            drop(race.sim.drain_announcements());
+            drop(race.sim.drain_class_announcements());
         }
         if wanted > target {
             self.at = wanted;

@@ -1181,7 +1181,7 @@ a guess.
   (chosen); the speed plan's reference hull tries the people's craft first, and
   `build_player_speed_plan` builds the primary's (one plan per hull already
   serves every person's autopilot, `adapt_hull_plans` walks every slot).
-  Results: `Race::finished` is every person-flown slot's own `race[slot].finished`
+  Results: `RaceSim::finished` is every person-flown slot's own `race[slot].finished`
   (line crossing and wreck are per slot, the Eliminator's kill target ends all
   persons together), `runs_on_after_the_line` needs every person across the
   line, and the board marks every person's row as the player's
@@ -1193,7 +1193,7 @@ a guess.
   `Race_FinishAllCrafts` (`0x08824e10`), reached only through `FUN_0882461c`
   from `FUN_088dfb90` in the `GriefReport_*` screen code, is the one multiplayer
   finish path found (`race-finish.md`), and it never ran live in Single Race or
-  Time Trial, so `Race::finished` ("every person is done") is chosen, not
+  Time Trial, so `RaceSim::finished` ("every person is done") is chosen, not
   measured. The AI's single player is `AiManager_SnapshotRacers` (`0x088352c0`).
   **Player-visible now:** `--players N` (`oag_game::split_screen`) marks every
   viewed slot `Controller::Local`, so a split-screen race reaches the end-race

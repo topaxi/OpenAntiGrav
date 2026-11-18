@@ -110,7 +110,7 @@ fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_gameplay::cue::Cue)> {
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
         let stepped = race.sim.world.tick - 1;
-        for event in race.drain_cues() {
+        for event in race.sim.drain_cues() {
             if matches!(
                 event.cue,
                 oag_gameplay::cue::Cue::Ready | oag_gameplay::cue::Cue::Go

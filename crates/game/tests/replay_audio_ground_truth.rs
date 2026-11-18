@@ -71,7 +71,7 @@ fn recording(loaded: &race::Loaded) -> oag_replay::Replay {
     race.start_recording(header);
     for _ in 0..RECORDED {
         race.tick(&PlayerInputs::none());
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     race.recorded().expect("recording")
 }
@@ -205,9 +205,9 @@ fn render(
             if reach == Reach::Seek {
                 oag_game::sound::rebuild(&mut audio, &mut race, AT);
             } else {
-                drop(race.drain_cues());
-                drop(race.drain_announcements());
-                drop(race.drain_class_announcements());
+                drop(race.sim.drain_cues());
+                drop(race.sim.drain_announcements());
+                drop(race.sim.drain_class_announcements());
             }
             FROM as usize * FRAMES_PER_TICK * 2
         }

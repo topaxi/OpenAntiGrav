@@ -95,7 +95,7 @@ impl crate::Race {
         .inverse();
         let placed = crate::breadcrumbs::emerge(
             &self.sim.spline,
-            self.exit_position(exit)?,
+            self.sim.exit_position(exit)?,
             transit.exit_speed,
         )?;
         // It flies the exit tick's step before its camera first sees it.

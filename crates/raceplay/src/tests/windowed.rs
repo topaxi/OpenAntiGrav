@@ -103,7 +103,7 @@ fn once_the_race_is_over_every_window_with_a_seat_draws_the_one_end_view() {
     for slot in 0..3 {
         race.sim.world.race[slot].finished = true;
     }
-    assert!(race.finished());
+    assert!(race.sim.finished());
     let player = race.player_slot();
     assert_eq!(race.window_drawn(0), vec![player]);
     assert_eq!(

@@ -16,10 +16,10 @@ The official mod `oag.slipstream` (official-mods submodule `assets/mods/official
 of a portal weapon", and `hooks.md`, "Built for a portal weapon"):
 
 - `Race::move_to` (forward to a course point under a lap, the line crossing credited:
-  `Standing::jumped`, `RaceState::jumped`), `Race::point_ahead` (`Distance`: units,
+  `Standing::jumped`, `RaceState::jumped`), `RaceSim::point_ahead` (`Distance`: units,
   seconds, lap share, progress, trigger).
 - `transit` (command 27) with `transit-end` (event 11), `Ship::transit`, `Ship::in_world`,
-  reset triggers held (`Race::reset_held` in `Race::armed`).
+  reset triggers held (`RaceSim::reset_held` in `RaceSim::armed`).
 - `probe-clearance` (29) and `clearance` (12); `scale-speed` (28).
 - `[[pickup.odds]]` per title and class (`oag_tables::pickup_look::odds_for`).
 - Proof: `transit_ground_truth` (Pulse PSP EU `16_Track`), `tests::transit`,

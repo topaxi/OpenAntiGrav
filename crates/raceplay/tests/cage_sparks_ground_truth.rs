@@ -58,6 +58,7 @@ fn run(eps: f32, cage: bool) -> (u32, usize) {
     for _ in 0..TICKS {
         race.tick(&PlayerInputs::none());
         cues += race
+            .sim
             .drain_cues()
             .into_iter()
             .filter(|cue| cue.cue == oag_gameplay::cue::Cue::Collision)

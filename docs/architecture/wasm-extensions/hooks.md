@@ -62,7 +62,7 @@ does (`oag_physics::forces::Environment::auto_speed`,
 | # | Phase | Today's call site | Events raised | Commands applied |
 | --- | --- | --- | --- | --- |
 | 0 | Grid flags, hover caps | `tick.rs:118` to `:131` | | |
-| 1 | Every person's controls | `Race::player_controls`, `tick.rs:137` to `:142` | | |
+| 1 | Every person's controls | `RaceSim::player_controls`, `tick.rs:137` to `:142` | | |
 | 2 | Pickups spent, autopilot | `Race::spend_pickup`, `tick.rs:166` to `:173` (`crates/raceplay/src/weapons.rs:148`) | `weapon-fired` (person slots) | |
 | 3 | Mines, cannons | `tick.rs:180`, `:186` | | |
 | **C** | **The call** (to be added) | between `tick.rs:186` and `:193` | | commands validated and queued |
@@ -115,7 +115,7 @@ rollback replays it. Names are the README's `event` variants.
   [the track file](../../formats/track-file.md), each a matrix plus
   `_OAG_MIN`/`_OAG_MAX`), tested by the shared sweep (`Race::pad_sweep`,
   `pads.rs:45`) with `contains` and `distance`; and the reset zones
-  `Race::reset_zone_contact` reads (`crates/raceplay/src/respawn.rs:235`). There is
+  `RaceSim::reset_zone_contact` reads (`crates/raceplay/src/respawn.rs:235`). There is
   no generic named volume.
 - **Proposed:** a third node kind with the same box shape, tested in the same
   sweep after the weapon pads, with an entry and an exit edge per craft and the
@@ -190,7 +190,7 @@ Two sources, because a person and an AI craft count laps through two structs:
 
 - `respawned`: `Race::respawn` (`respawn.rs:280`); `reset`: `Race::reset`
   (`respawn.rs:322`); both from the rescue at phase 6 and the reset zones.
-- `eliminated`: `Race::eliminate_if_wrecked` (`player_step.rs:366`, called at
+- `eliminated`: `RaceSim::eliminate_if_wrecked` (`player_step.rs:366`, called at
   `tick.rs:476`) for people and `Race::tick_destroyed_craft`
   (`crates/raceplay/src/eliminator.rs:129`, `tick.rs:439`) for the field.
 
@@ -458,14 +458,14 @@ names no mod). All three are per slot, from a rules or a track module.
 | --- | --- | --- |
 | The primitive: a forward move to a course point under a lap | `Race::move_to`, `crates/raceplay/src/transit.rs` | Pose by the reset's placement without its drop (`breadcrumbs::emerge`: the width midpoint at the hover height, facing down the track) at the ring point or the fork route's point for it; cursors reset through `Race::reseat` (`respawn.rs`), shared with `put_back`, then an exit on a route seats the driver on that route's line (`RaceSim::seat_on_route`). No respawn counted, nothing charged. View-side, the craft's chase camera is seated behind it on that tick (`RaceView::camera_jumps`); through the transit before it the camera flies on along the exit's framing carried back, a `portal-view` of that slot is seen from that seat, and under a backdrop fill the craft is drawn for its own view (`transit_camera`; `mod-shaders.md`, "A craft's own transit") |
 | A crossing of the line in the move | `Standing::jumped`, `crates/race/src/standing.rs:278`; `RaceState::jumped`, `crates/race/src/state.rs:511` | The standing credits it at once (lap, spawn crossing, deficit, finish), unless the lap's half-way gate is still shut (`Standing::gate`), when it is no lap and no finish as for a driven crossing, and a move that lands past half-way has driven both halves of the lap it lands on; the person's clock seeds its previous reading so that tick's `update` reads one forward wrap, and its `Outcome` flows as for a driven crossing |
-| Resolving a distance | `Race::exit_ahead` (`Race::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
-| `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `Race::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
+| Resolving a distance | `RaceSim::exit_ahead` (`RaceSim::point_ahead` without the route), `transit.rs` | Units, seconds at the current speed, lap share, a place on the lap (`Course::index_at_progress`), or a track trigger's centre located on the course; a trigger nearer a fork route's sample than the ring's names that route (`Exit::route`, kept in `Transit::route`), the others are ring points |
+| `transit{slot, ticks, distance, exit_factor}` lands | `Race::run_motion`, `crates/raceplay/src/extensions.rs:891`, after the call | `RaceSim::begin_transit` (`transit.rs`); a refusal faults the module. The host refuses earlier a craft not racing or already out (`modhost/src/reply.rs`) |
 | Out of the world | `Ship::in_world`, `crates/gameplay/src/world.rs:259` | `Craft::active` (weapons), `resolve_craft_pairs`, `fire_law` targeting, the draw (`Race::ship_active`, model matrices, shadow, exhaust), `step_opponents` skip; `step_player` returns an idle step (`player_step.rs:144`); pickup presses unheard (`tick.rs:165`) |
-| Reset triggers held | `Race::reset_held`, `transit.rs`, read by `Race::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
+| Reset triggers held | `RaceSim::reset_held`, `transit.rs`, read by `RaceSim::armed` (`respawn.rs:116`) and `rescue_player` | Independent of each trigger's gates, so cage and airborne are held too; no dwell banks |
 | Exit | `Race::advance_transits`, `transit.rs`, called at `tick.rs:191` before the call | Moved and stepped the same tick; `transit-end{slot}` is in that very call's events |
 | `scale-speed{slot, factor}` | `apply`, `crates/raceplay/src/extensions/on.rs:902` | Velocity times `factor`, once, at the call; before any `transit` of the same tick, so a transit's exit speed is taken after it |
 | A frozen craft's progress | `tracking` in `extensions/on.rs`, `Standing::progress` | `Craft::progress()` is last tick's, and a craft in transit keeps reporting the progress it went in at on every tick of the flight (its standing is frozen); a guest asks for a portal's pair from where the craft stands and may rely on it (`tests::transit::a_craft_in_transit_keeps_reporting_the_progress_it_went_in_at`) |
-| `probe-clearance{slot, distance, radius}` | `Race::clearance`, `transit.rs` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
+| `probe-clearance{slot, distance, radius}` | `RaceSim::clearance`, `transit.rs` | Half disc standing across the track at the width midpoint: width at least `2r`, nine rays centre to rim (`Raycaster::raycast`, Reset volumes skipped). The answer is `clearance{slot, fits, ahead}` at the next call (hashed while pending) |
 | Pad odds for the mod's pickup | `[[pickup.odds]]`, read at `crates/raceplay/src/pads.rs:321` | Every declaring module has its own kind from the start; `oag_weapons::pickup::draw` walks each `Weapon::Extension(kind)` row after the title's weapons, in kind order, so a table without the row draws as ever; an event's weapon set does not reach it; a fault ends it |
 
 ## `race-start`: the grid

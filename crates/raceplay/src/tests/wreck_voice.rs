@@ -27,7 +27,7 @@ fn raised(mode: Mode, voiced: bool, down: &[usize]) -> Vec<(u64, usize)> {
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
         let stepped = race.sim.world.tick - 1;
-        for event in race.drain_cues() {
+        for event in race.sim.drain_cues() {
             if event.cue == Cue::ContElim {
                 out.push((stepped, usize::from(event.slot)));
             }

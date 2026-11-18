@@ -914,7 +914,7 @@ impl Race {
                 .sim
                 .ai_sample_for(slot, index)
                 .map(Spline::track_sample);
-            self.record_track_up(slot, track_sample);
+            self.sim.record_track_up(slot, track_sample);
             let track_sample_next = self
                 .sim
                 .ai_sample_for(slot, index + 1)
@@ -969,7 +969,7 @@ impl Race {
             if self.draws() {
                 self.view.field_sparks.walls[slot] = Some(evaluated.wall);
             }
-            let reset_contact = self.reset_zone_contact(slot, &env, position);
+            let reset_contact = self.sim.reset_zone_contact(slot, &env, position);
             let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
             let cage = oag_gameplay::cage::pass(
                 self.sim.spline.cage(),
@@ -981,7 +981,7 @@ impl Race {
             self.sim.cage_reset[slot] = cage.reset;
             #[cfg(feature = "view")]
             self.throw_cage_sparks(slot, &cage);
-            self.lay_crumb(
+            self.sim.lay_crumb(
                 slot,
                 self.sim
                     .ai_sample_for(slot, index)
@@ -995,7 +995,7 @@ impl Race {
             // hands an opponent a Shield yet - the same gap the shell bulge
             // below records - so the silent branch is unreachable here rather
             // than suppressed.
-            self.raise_wall_cue(slot, &evaluated.wall, false);
+            self.sim.raise_wall_cue(slot, &evaluated.wall, false);
             // The wall counters, on the same footing as the roll ones below:
             // bookkeeping, outside `state_hash`, and the only thing in this
             // project that can see the standard an Ace is held to - lapping
@@ -1055,8 +1055,8 @@ impl Race {
             // spent away. Two `let`s rather than two terms of the `if`, because
             // `||` short-circuits and the second counter would then only advance
             // on ticks the first one happened not to fire.
-            let beneath = self.beneath_too_long(slot);
-            let stalled = self.stalled(slot);
+            let beneath = self.sim.beneath_too_long(slot);
+            let stalled = self.sim.stalled(slot);
             // **Not a wreck.** A destroyed craft is coasting by definition, so
             // the stall dwell would fire on it and `Race::respawn` - whose
             // `place_at` rebuilds the physics state - would put it back on
@@ -1067,12 +1067,12 @@ impl Race {
             // so a craft that comes back stalled is rescued on time.
             let alive =
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-            let reset = self.reset_zone_touched(slot, reset_contact);
-            let airborne = self.airborne_too_long(slot);
-            let located = self.located_sample_of(slot, index);
-            let distant = self.far_from_the_sample(slot, located);
+            let reset = self.sim.reset_zone_touched(slot, reset_contact);
+            let airborne = self.sim.airborne_too_long(slot);
+            let located = self.sim.located_sample_of(slot, index);
+            let distant = self.sim.far_from_the_sample(slot, located);
             let cage = std::mem::take(&mut self.sim.cage_reset[slot])
-                && self.armed(slot, self.sim.reset_triggers.cage);
+                && self.sim.armed(slot, self.sim.reset_triggers.cage);
             if alive && (beneath || stalled || airborne || distant || reset || cage) {
                 let cause = if beneath {
                     respawn::RespawnCause::Beneath
@@ -1365,7 +1365,8 @@ impl Race {
                     // (collision-cues.md, "A pair record has no normal"). The stale normal
                     // that slot otherwise holds is not modelled.
                     for slot in [a, b] {
-                        self.note_contact_impulse(slot, contact.impulse, true, 0.0);
+                        self.sim
+                            .note_contact_impulse(slot, contact.impulse, true, 0.0);
                     }
                     // The original driver reads the record next tick: its lane
                     // planner pushes away from the rival and its rail lets go.

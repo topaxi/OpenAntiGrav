@@ -190,7 +190,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         // `drain_cues`, which is what actually feeds the mixer. Draining
         // here first would starve that call - the same trap
         // `mine_launch_audio_ground_truth.rs` names for its own peek.
-        for event in race.pending_cues() {
+        for event in race.sim.pending_cues() {
             if event.cue == Cue::Plasma {
                 plasma_press_tick.get_or_insert(tick);
             }
@@ -355,7 +355,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
             throttle
         };
         race.tick(&PlayerInputs::single(snapshot));
-        for event in race.pending_cues() {
+        for event in race.sim.pending_cues() {
             if event.cue == Cue::Plasma {
                 plasma_press_tick.get_or_insert(tick);
             }

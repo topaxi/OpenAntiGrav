@@ -123,7 +123,7 @@ fn fly_to_the_line(race: &mut race::Race, ticks: u32) -> bool {
     let inputs = oag_gameplay::PlayerInputs::none();
     for _ in 0..ticks {
         race.tick(&inputs);
-        if race.finished() {
+        if race.sim.finished() {
             return true;
         }
     }

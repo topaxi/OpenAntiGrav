@@ -212,10 +212,10 @@ fn a_quiet_replay_locks_exactly_as_a_normal_tick_does() {
             !quiet.sight().locked() && !quiet.sight().visible(),
             "{weapon:?}: a quiet tick advanced the picture's reticle"
         );
-        normal.drain_announcements();
-        quiet.drain_announcements();
-        normal.drain_class_announcements();
-        quiet.drain_class_announcements();
+        normal.sim.drain_announcements();
+        quiet.sim.drain_announcements();
+        normal.sim.drain_class_announcements();
+        quiet.sim.drain_class_announcements();
         assert_eq!(
             format!("{:?}", normal.sim),
             format!("{:?}", quiet.sim),

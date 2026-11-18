@@ -114,8 +114,8 @@ fn compare(
         }
         normal.tick(&pads_n.tick(tick, false));
         quiet.tick(&pads_q.tick(tick, false));
-        normal.drain_cues();
-        quiet.drain_cues();
+        normal.sim.drain_cues();
+        quiet.sim.drain_cues();
     }
     assert_eq!(normal.sim.state_hash(), quiet.sim.state_hash());
     let ignited_before = quiet.spark_ignitions();
@@ -129,9 +129,9 @@ fn compare(
         }
         normal.tick(&pads_n.tick(tick, fire(step)));
         quiet.tick_sim_only(&pads_q.tick(tick, fire(step)));
-        seen.cues += normal.drain_cues().len();
+        seen.cues += normal.sim.drain_cues().len();
         assert!(
-            quiet.pending_cues().is_empty(),
+            quiet.sim.pending_cues().is_empty(),
             "a quiet tick queued cues on window tick {step}"
         );
         assert_eq!(
@@ -154,8 +154,8 @@ fn compare(
     // counters and dwell timers outside `state_hash`, and a skipped helper that
     // wrote one would pass every check above.
     for race in [&mut normal, &mut quiet] {
-        race.drain_announcements();
-        race.drain_class_announcements();
+        race.sim.drain_announcements();
+        race.sim.drain_class_announcements();
     }
     assert!(
         format!("{:?}", normal.sim) == format!("{:?}", quiet.sim),

@@ -122,6 +122,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     for _ in 0..90 {
         race.tick(&PlayerInputs::single(throttle));
         launches += race
+            .sim
             .pending_cues()
             .iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::MineLaunch)

@@ -50,13 +50,13 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
     // Between the first person's line and the second's: the finished person's view
     // holds and says so, the other's does not, and the split is still drawn.
     let mut held = 0;
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
-        race.drain_cues();
+        race.sim.drain_cues();
         let done: Vec<usize> = (0..2)
             .filter(|&slot| race.sim.world.ships[slot].standing.finished())
             .collect();
-        if done.len() == 1 && !race.finished() {
+        if done.len() == 1 && !race.sim.finished() {
             held += 1;
             let (done, racing) = (done[0], 1 - done[0]);
             assert!(
@@ -71,7 +71,7 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         }
     }
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "still running after {CAP} ticks: slot 0 on lap {}, slot 1 on lap {}",
         race.sim.world.race[0].lap,
         race.sim.world.race[1].lap
@@ -219,10 +219,10 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
     let mut race = race::Race::start(loaded.setup);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Vertical);
     race.sim.set_autopilot(true);
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.finished(), "still running after {CAP} ticks");
+    assert!(race.sim.finished(), "still running after {CAP} ticks");
     let board = race.results().expect("both people finished");
     assert_eq!(
         board.rows.len(),

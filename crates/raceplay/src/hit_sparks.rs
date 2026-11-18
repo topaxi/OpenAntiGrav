@@ -59,7 +59,7 @@
 //! - **The cue is placed on the struck craft's centre.** The original plays it
 //!   at the locator, a few units off the hull's middle.
 //! - **A wall contact on the same locator does not share this gate.** The wall
-//!   cue keeps its own per-craft re-arm (`Race::raise_contact_cue`), so a
+//!   cue keeps its own per-craft re-arm (`RaceSim::raise_contact_cue`), so a
 //!   contact and a hit inside 0.8 s of each other can both sound.
 //! - **The picks come from a view-side generator**, not the simulation's: the
 //!   original draws them from the particle system's own `Psys_RandIntRange`.

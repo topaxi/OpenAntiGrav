@@ -105,10 +105,10 @@ fn the_board_is_ranked_by_total_time_and_names_both_people() {
         return;
     };
     race.sim.set_autopilot(true);
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
-    assert!(race.finished(), "still running after {CAP} ticks");
+    assert!(race.sim.finished(), "still running after {CAP} ticks");
     let board = race.results().expect("both people finished");
     assert_eq!(
         board.rows.len(),

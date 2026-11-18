@@ -156,7 +156,7 @@ fn record_pack(setup: &Setup, ticks: usize) -> (Vec<Vec<InputSnapshot>>, usize) 
     let mut controls = vec![Vec::new(); slots];
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
-        race.drain_cues();
+        race.sim.drain_cues();
         for (slot, log) in controls.iter_mut().enumerate() {
             log.push(race.last_controls[slot]);
         }
@@ -244,7 +244,7 @@ fn record_hand_pack_measured(
             inputs.set(slot, snapshot);
         }
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         let now = race.sim.world.ships[0].physics.body.position;
         travelled += (now - last).length();
         last = now;
@@ -304,7 +304,7 @@ fn run(
 
     for t in 0..sc.ticks() {
         server.tick(&sc.truth(t));
-        server.drain_cues();
+        server.sim.drain_cues();
         let touching = !server.pair_contacts.is_empty();
         for &(a, b) in &server.pair_contacts {
             contact_last[a] = t as i64;

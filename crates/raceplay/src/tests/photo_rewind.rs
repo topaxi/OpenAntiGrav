@@ -42,7 +42,7 @@ fn driven_with_hashes() -> (Box<Race>, Keeper, Vec<String>, Vec<u64>) {
     let mut hashes = vec![race.sim.state_hash()];
     for tick in 0..LIVE {
         race.tick(&inputs(tick));
-        race.drain_cues();
+        race.sim.drain_cues();
         keeper.keep(&race);
         text.push(format!("{:?}", race.sim));
         hashes.push(race.sim.state_hash());

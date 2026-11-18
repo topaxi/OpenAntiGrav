@@ -83,14 +83,14 @@ impl std::ops::Deref for Evaluations {
 /// moved, and want the environment and the position the force law ran against.
 pub(super) struct PlayerStep {
     pub(super) evaluated: Evaluated,
-    /// [`Race::reset_zone_contact`], read before the collision cage moved the craft.
+    /// [`RaceSim::reset_zone_contact`], read before the collision cage moved the craft.
     reset_contact: bool,
     /// The position of the spline sample the craft was located on, the
     /// original's `craft+0xaf0` record.
     located: Option<Vec3>,
 }
 
-impl Race {
+impl RaceSim {
     /// What slot `slot` asks of its craft this tick: the snapshot mapped
     /// through the control scheme, or the driver's answer when the craft is
     /// being flown for the player, then the finish line's cap, a Disruptor's
@@ -104,25 +104,25 @@ impl Race {
         slot: usize,
         snapshot: &InputSnapshot,
     ) -> oag_physics::ShipControls {
-        let flown = self.sim.flown_for_the_player(slot);
+        let flown = self.flown_for_the_player(slot);
         let mut controls = if flown {
-            self.sim.autopilot_controls(slot)
+            self.autopilot_controls(slot)
         } else {
-            self.sim.release_autopilot(slot);
-            let snapshot = if self.sim.flip_law.is_some() {
+            self.release_autopilot(slot);
+            let snapshot = if self.flip_law.is_some() {
                 snapshot.shoulder_flips()
             } else {
                 *snapshot
             };
-            ship_controls(&snapshot, self.sim.scheme)
+            ship_controls(&snapshot, self.scheme)
         };
         // Past the line the original's own law sets the pace - see
         // `race::finished_thrust`.
-        if let Some(cap) = self.sim.finished_thrust_cap(slot) {
+        if let Some(cap) = self.finished_thrust_cap(slot) {
             controls.thrust = controls.thrust.min(cap);
         }
         // The returning person's hand-back is as slow as the driver that held the seat.
-        if self.sim.world.ships[slot].handback && self.sim.world.ships[slot].autopilot_timer > 0.0 {
+        if self.world.ships[slot].handback && self.world.ships[slot].autopilot_timer > 0.0 {
             controls.thrust = controls.thrust.min(super::field::AWAY_THRUST);
         }
         // A Disruptor hit filters whatever the pilot - human or driver -
@@ -130,19 +130,21 @@ impl Race {
         // autopilot's thrust scale. Before the start-line gate below, so a
         // stalled craft on the line is still gated and not doubly so. See
         // `oag_weapons::disruption`.
-        controls = self.sim.disrupted_controls(slot, controls, flown);
+        controls = self.disrupted_controls(slot, controls, flown);
         // The start-line countdown: measured, not authored - see
         // `RaceState::thrust_gated` for the live capture this reproduces. Only
         // thrust was held and recorded, so only thrust is gated; steering stays
         // live through the countdown, which is unmeasured either way but costs
         // nothing to leave alone. Autopilot is gated too - the capture measured
         // the engine's own gate, not a distinction between input sources.
-        if RaceState::thrust_gated(self.sim.world.tick) {
+        if RaceState::thrust_gated(self.world.tick) {
             controls.thrust = 0.0;
         }
         controls
     }
+}
 
+impl Race {
     /// Steps slot `slot`'s craft: locate it on the track, run the pads, and
     /// run the force law with `controls`.
     pub(super) fn step_player(
@@ -177,7 +179,7 @@ impl Race {
         let located = nearest.map(|(_, sample, _)| Vec3::from_array(sample.pos));
         let track_sample = nearest.map(|(_, sample, _)| Spline::track_sample(sample));
         let crumb_flags = nearest.map(|(_, sample, _)| sample.flags);
-        self.record_track_up(slot, track_sample);
+        self.sim.record_track_up(slot, track_sample);
         // The neighbour is the next entry in table order, which at the end of a
         // path is the *next path's* first sample rather than the geometric
         // successor through a junction. The original follows the junction graph;
@@ -242,7 +244,7 @@ impl Race {
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();
         let pilot_assist = self.sim.pilot_assist_input(slot);
-        let engine_flags = self.autopilot_engine_flags(slot);
+        let engine_flags = self.sim.autopilot_engine_flags(slot);
         let ship = &mut self.sim.world.ships[slot];
         let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
         // `Ship_UpdateEngine`'s read-and-reset of `craft+0x31c`: the beam's
@@ -290,7 +292,7 @@ impl Race {
             &*self.sim.collision,
             self.sim.dt,
         );
-        let reset_contact = self.reset_zone_contact(slot, &env, before);
+        let reset_contact = self.sim.reset_zone_contact(slot, &env, before);
         let eliminator_route = self.sim.world.mode() == oag_race::Mode::Eliminator;
         let ship = &mut self.sim.world.ships[slot];
         let cage = oag_gameplay::cage::pass(
@@ -303,7 +305,7 @@ impl Race {
         self.sim.cage_reset[slot] = cage.reset;
         #[cfg(feature = "view")]
         self.throw_cage_sparks(slot, &cage);
-        self.lay_crumb(slot, crumb_flags);
+        self.sim.lay_crumb(slot, crumb_flags);
         self.sim
             .count_wall_contact(slot, was_racing, &evaluated.wall, env_damage_rules);
         // The contact half of the same edge as the blast one, and the one a
@@ -319,7 +321,9 @@ impl Race {
             located,
         }
     }
+}
 
+impl RaceSim {
     /// The two engine bits the original's local-player status update writes
     /// (`PlayerStatus_Update`, `0x0883b3b8`; [`oag_physics::engine::EngineFlags`]):
     /// both while the Autopilot flies the craft, the uncapped one alone past the
@@ -332,10 +336,10 @@ impl Race {
     /// which differs only for a pickup that runs out after the finish (chosen,
     /// not measured, and capped by the finished craft's own thrust law anyway).
     pub(crate) fn autopilot_engine_flags(&self, slot: usize) -> oag_physics::engine::EngineFlags {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let autopilot =
-            (ship.autopilot_timer > 0.0 && !ship.handback) || self.sim.autopilot_flies(slot);
-        let law = self.sim.autopilot_engine;
+            (ship.autopilot_timer > 0.0 && !ship.handback) || self.autopilot_flies(slot);
+        let law = self.autopilot_engine;
         oag_physics::engine::EngineFlags {
             uncapped: (autopilot && law.uncapped.value) || ship.standing.finished(),
             speedup: autopilot.then_some(law.speedup.value),
@@ -351,17 +355,19 @@ impl Race {
         slot: usize,
         sample: Option<oag_physics::TrackSample>,
     ) {
-        self.sim.world.ships[slot].track_up = sample
-            .filter(|_| self.sim.launch_normal_is_track_up)
+        self.world.ships[slot].track_up = sample
+            .filter(|_| self.launch_normal_is_track_up)
             .map(|sample| sample.normal());
     }
+}
 
+impl Race {
     /// The player's off-track, airborne and reset-zone rescue for slot `slot`,
     /// after the tick's craft have all moved.
     pub(super) fn rescue_player(&mut self, slot: usize, step: &PlayerStep) {
         self.sim.respawn_cooldown[slot] = self.sim.respawn_cooldown[slot].saturating_sub(1);
         // Held in a transit: no trigger reads, so no dwell is banked out of the world.
-        if self.reset_held(slot) {
+        if self.sim.reset_held(slot) {
             return;
         }
         // **Not a wreck**, the same gate `step_opponents` applies: in an
@@ -370,11 +376,11 @@ impl Race {
         // with an empty pool. In a single race the ending has already fired.
         let alive =
             self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-        let reset = self.reset_zone_touched(slot, step.reset_contact);
-        let airborne = self.airborne_too_long(slot);
-        let distant = self.far_from_the_sample(slot, step.located);
+        let reset = self.sim.reset_zone_touched(slot, step.reset_contact);
+        let airborne = self.sim.airborne_too_long(slot);
+        let distant = self.sim.far_from_the_sample(slot, step.located);
         let cage = std::mem::take(&mut self.sim.cage_reset[slot])
-            && self.armed(slot, self.sim.reset_triggers.cage);
+            && self.sim.armed(slot, self.sim.reset_triggers.cage);
         if alive && (airborne || distant || reset || cage) {
             let cause = if airborne {
                 respawn::RespawnCause::Airborne
@@ -403,18 +409,22 @@ impl Race {
             self.sim.respawns_in_a_row[slot] = 0;
         }
     }
+}
 
+impl RaceSim {
     /// Ends slot `slot`'s race when its craft finished blowing up this tick, and
     /// says whether it did.
     ///
     /// Checked every tick because [`RaceState::eliminate`] is what makes it
     /// idempotent. See the comment at the call for what reaches it.
     pub(super) fn eliminate_if_wrecked(&mut self, slot: usize) -> bool {
-        self.sim.world.mode() != Mode::Eliminator
-            && self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Eliminated
-            && self.sim.world.race[slot].eliminate()
+        self.world.mode() != Mode::Eliminator
+            && self.world.ships[slot].physics.craft_state == oag_physics::CraftState::Eliminated
+            && self.world.race[slot].eliminate()
     }
+}
 
+impl Race {
     /// Runs the race rules on slot `slot`'s own [`RaceState`], from the position
     /// its step produced, and pays what they earn: Zone's shield recharge, the
     /// free Time Trial turbo, the Eliminator's lap refill.
@@ -474,7 +484,7 @@ impl Race {
         // anything to say" split `raise_contact_cue` and `Banks::pick`
         // already keep. See `oag_title::ZoneAnnouncer`.
         if primary && outcome.zone_advanced {
-            self.push_announcement(self.sim.world.race[slot].zone);
+            self.sim.push_announcement(self.sim.world.race[slot].zone);
         }
 
         // The speed-class announcer's own trigger, on a title whose
@@ -495,7 +505,7 @@ impl Race {
             if let Some(stage_after) = stages.stage_for(after)
                 && Some(stage_after) != stages.stage_for(before)
             {
-                self.push_class_announcement(stage_after);
+                self.sim.push_class_announcement(stage_after);
             }
         }
 

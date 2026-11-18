@@ -197,10 +197,10 @@ pub fn race_tick_keeping(
 /// rebuilt from the race as it stands at `tick` (`Audio::rebuild_race_sfx`). The cues of the
 /// ticks the seek ran are dropped, so nothing that sounded before the target sounds late.
 pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
-    drop(race.drain_cues());
-    drop(race.drain_mod_sounds());
-    drop(race.drain_announcements());
-    drop(race.drain_class_announcements());
+    drop(race.sim.drain_cues());
+    drop(race.sim.drain_mod_sounds());
+    drop(race.sim.drain_announcements());
+    drop(race.sim.drain_class_announcements());
     audio.rebuild_race_sfx(
         frame_of(race, Vec::new(), Vec::new(), Vec::new(), Vec::new()),
         tick,
@@ -212,10 +212,10 @@ pub fn rebuild(audio: &mut Audio, race: &mut Race, tick: u64) {
 /// 1X they are rebuilt from the state at `at` (`muted` remembers it), not started cold.
 pub fn viewer_step(audio: &mut Audio, race: &mut Race, normal: bool, muted: &mut bool, at: u64) {
     if !normal {
-        drop(race.drain_cues());
-        drop(race.drain_mod_sounds());
-        drop(race.drain_announcements());
-        drop(race.drain_class_announcements());
+        drop(race.sim.drain_cues());
+        drop(race.sim.drain_mod_sounds());
+        drop(race.sim.drain_announcements());
+        drop(race.sim.drain_class_announcements());
         audio.stop_race_sfx();
         *muted = true;
     } else if std::mem::take(muted) {
@@ -247,10 +247,10 @@ fn tick_effects(
         (Vec::new(), Vec::new(), Vec::new(), Vec::new())
     } else {
         (
-            race.drain_cues(),
-            race.drain_mod_sounds(),
-            race.drain_announcements(),
-            race.drain_class_announcements(),
+            race.sim.drain_cues(),
+            race.sim.drain_mod_sounds(),
+            race.sim.drain_announcements(),
+            race.sim.drain_class_announcements(),
         )
     };
     cues.retain(|event| keep(event));
@@ -280,7 +280,7 @@ fn frame_of<'a>(
         class_announcer: race.class_announcer(),
         cues,
         mod_sounds,
-        mod_loops: race.mod_sound_loops(),
+        mod_loops: race.sim.mod_sound_loops(),
         announcements,
         class_announcements,
         listener: listener_of(race),
@@ -301,7 +301,7 @@ fn frame_of<'a>(
         // Read after `Race::tick` has already run, so a bolt that ended this
         // tick is already back to `Projectile::default()` here.
         projectiles: race.sim.world.projectiles.slots,
-        running: !race.finished(),
+        running: !race.sim.finished(),
         shielded: race.shield_is_up(),
         exploding: race.craft_is_exploding(),
         autopilot_active: race.autopilot_is_active(),

@@ -5,7 +5,7 @@
 //! `scripts/check-file-size.py` - a move, with no behaviour change. This is
 //! also the seam `oag_game::records`'s own module doc points at as "the
 //! other capture site": [`Session::escape`] is where a race that never calls
-//! [`oag_raceplay::Race::finished`] - Speed Lap and Zone, since
+//! [`oag_raceplay::RaceSim::finished`] - Speed Lap and Zone, since
 //! [`oag_race::Mode::laps_target`] is `None` for both - still gets its
 //! result recorded, on the way out rather than on a finish transition that
 //! for those two modes never comes. See
@@ -219,7 +219,7 @@ impl Session {
         // **The other capture site** - see `oag_game::records`'s own module
         // doc for why there have to be two. This one exists for the three
         // modes `Session::frame`'s finish-transition arm can never reach:
-        // `SpeedLap` and `Zone` never set `Race::finished` at all, and an
+        // `SpeedLap` and `Zone` never set `RaceSim::finished` at all, and an
         // abandoned `TimeTrial` leaves through here too. Guarded by
         // `result_saved` the same way the other site is, so a race that
         // already saved on finishing and is *then* escaped from its own

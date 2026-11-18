@@ -477,7 +477,7 @@ fn replay_timeline_cost_sweep() {
         if [617, 5117, 9017].contains(&now) {
             probes.push((now, race.snapshot_sim()));
         }
-        if finished_at.is_none() && race.finished() {
+        if finished_at.is_none() && race.sim.finished() {
             finished_at = Some(now);
         }
         track
@@ -592,7 +592,7 @@ fn replay_timeline_cost_sweep() {
                     race.tick_sim_only(&idle);
                 } else {
                     race.tick(&idle);
-                    race.drain_cues();
+                    race.sim.drain_cues();
                 }
             }
             let us = t.elapsed().as_secs_f64() * 1e6 / 240.0;

@@ -465,7 +465,7 @@ impl Session {
             // rule: a mouse cannot lift player 2's pause inside their timeout.
             if self.photo.is_none()
                 && !self.in_demo()
-                && matches!(&self.stage, Stage::Race(stage) if !stage.race.finished())
+                && matches!(&self.stage, Stage::Race(stage) if !stage.race.sim.finished())
             {
                 let paused = matches!(self.pause, oag_game::pause::State::Paused { .. });
                 let click = pointer.clicked && paused;
@@ -519,7 +519,7 @@ impl Session {
             if self.photo.is_none()
                 && matches!(&self.stage, Stage::Race(stage)
             if crate::race_stage::endrace::results_table_takes_confirm(
-                stage.race.finished(),
+                stage.race.sim.finished(),
                 stage.endrace.is_some(),
             )) && [Button::Cross, Button::Start]
                 .into_iter()
@@ -839,7 +839,7 @@ impl Session {
                         break;
                     }
                 }
-                Stage::Race(stage) if stage.race.finished() => {
+                Stage::Race(stage) if stage.race.sim.finished() => {
                     // The built-in results table waits for cross or start
                     // and draws nothing to aim at, so a click is the press -
                     // the rising edge the block above this match reads next
@@ -881,7 +881,7 @@ impl Session {
                     // player's standing was fixed at the line; the board keeps
                     // up with the rest of the field finishing, and the tables
                     // that list it are rebuilt from it. See
-                    // `Race::runs_on_after_the_line` and `Race::refresh_results`.
+                    // `RaceSim::runs_on_after_the_line` and `Race::refresh_results`.
                     //
                     // A Single Race wreck steps the whole world too
                     // (`Race::runs_on_after_the_wreck`); any other ending (a Zone
@@ -1016,7 +1016,7 @@ impl Session {
                     // A server that ends a race nobody had finished (the host left, a link
                     // died) leaves a frozen world: after a second of it, back to the menus.
                     match self.net.as_ref().and_then(oag_game::net_play::NetPlay::over) {
-                        Some(why) if !stage.race.finished() => {
+                        Some(why) if !stage.race.sim.finished() => {
                             self.net_over_ticks += 1;
                             if self.net_over_ticks == NET_OVER_TICKS {
                                 log::error!("the network race ended before the finish: {why}");
@@ -1074,7 +1074,7 @@ impl Session {
             }
             let campaign_title = self.campaign_title();
             if let Stage::Race(stage) = &mut self.stage
-                && stage.race.finished()
+                && stage.race.sim.finished()
                 && !stage.result_saved
                 // A split screen's result is nobody's record: the results are
                 // slot 0's, which a second person was racing.

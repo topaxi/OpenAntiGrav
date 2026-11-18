@@ -617,7 +617,7 @@ Ours raises `Cue::Disengaging` from the cancel when more than a second was left.
 
 **Known one-tick difference, not fixed here.** The timer zeroes on the press tick, as
 the original's does on its frame 22, and the controls are the person's on the next tick
-(`the_craft_is_handed_back_on_the_tick_after_the_absorb`). But `Race::autopilot_engine_flags`
+(`the_craft_is_handed_back_on_the_tick_after_the_absorb`). But `RaceSim::autopilot_engine_flags`
 reads the timer inside `step_player`, which runs after `spend_pickup`, so ours drops the
 x1.2 and uncapped engine bits on the press tick, where the original's frame 22 still read
 `0xd` and dropped them on frame 23. The old fire-cancel had the same one-tick shape. In the

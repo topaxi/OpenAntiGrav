@@ -23,7 +23,7 @@ fn run(race: &mut Race, probes: &[bool]) -> Vec<(usize, usize)> {
         blend = ramp(blend, hit);
         race.sim.world.ships[SLOT].physics.mag_lock_blend = blend;
         race.advance_magstrip_wake();
-        let cues = race.drain_cues();
+        let cues = race.sim.drain_cues();
         let count = |cue| {
             cues.iter()
                 .filter(|e| e.cue == cue && usize::from(e.slot) == SLOT)

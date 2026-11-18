@@ -88,7 +88,7 @@ impl RespawnCause {
     }
 }
 
-impl Race {
+impl RaceSim {
     /// Whether this opponent has stayed on the ground beneath its driver's line
     /// for [`RESCUE_TICKS`]: the invented rescue for a road under the circuit, see
     /// [`BENEATH_LINE`]. Far from the line is the original's distance trigger
@@ -109,58 +109,53 @@ impl Race {
     pub(super) fn beneath_too_long(&mut self, slot: usize) -> bool {
         let under = self.beneath_the_line(slot);
         if !under {
-            let ship = &self.sim.world.ships[slot];
+            let ship = &self.world.ships[slot];
             let outside = self
-                .sim
                 .line_of(slot)
                 .outside_the_corridor(ship.driver.index as usize, ship.physics.body.position);
             // On the road a craft is wide or it is not; in the air it stays
             // wide if it took off wide, wherever the flight carries it.
-            self.sim.beneath_wide[slot] =
-                outside || (self.sim.beneath_wide[slot] && ship.physics.time_airborne > 0.0);
+            self.beneath_wide[slot] =
+                outside || (self.beneath_wide[slot] && ship.physics.time_airborne > 0.0);
         }
-        let beneath = under && self.sim.beneath_wide[slot];
-        self.sim.beneath_ticks[slot] = if beneath {
-            self.sim.beneath_ticks[slot].saturating_add(1)
+        let beneath = under && self.beneath_wide[slot];
+        self.beneath_ticks[slot] = if beneath {
+            self.beneath_ticks[slot].saturating_add(1)
         } else {
             0
         };
         // The same two guards `reset_zone_touched` applies, applied *after* the
         // counter so the dwell is still measured while they hold.
-        !self.sim.racing_line.is_empty()
-            && self.armed(slot, self.sim.reset_triggers.beneath)
-            && self.sim.beneath_ticks[slot] >= self.sim.reset_triggers.beneath_ticks
+        !self.racing_line.is_empty()
+            && self.armed(slot, self.reset_triggers.beneath)
+            && self.beneath_ticks[slot] >= self.reset_triggers.beneath_ticks
     }
 
     /// Whether `trigger` may fire for this craft now: on, and past the gates it honours.
     /// Every trigger reads its gates here.
     pub(super) fn armed(&self, slot: usize, trigger: oag_race::recovery::Trigger) -> bool {
         !self.reset_held(slot)
-            && trigger.armed(
-                self.sim.respawn_cooldown[slot],
-                self.sim.respawn_disabled[slot],
-            )
+            && trigger.armed(self.respawn_cooldown[slot], self.respawn_disabled[slot])
     }
 
     /// Whether this opponent is on the ground more than [`BENEATH_LINE`] below
     /// its driver's line point, measured along that sample's own up.
     pub(super) fn beneath_the_line(&self, slot: usize) -> bool {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let index = ship.driver.index as usize;
         // Off the ground nothing is "on" a road, and over a gap the line arcs
         // through the air: a craft that comes down early lands beneath it on
         // the road it was always going to land on (`25_Track` reversed,
         // samples 690-740, 77 ticks in the census).
-        let line = self.sim.line_of(slot);
+        let line = self.line_of(slot);
         if ship.physics.time_airborne > 0.0 || line.is_unsupported(index) {
             return false;
         }
-        let Some(sample) = self.sim.ai_sample_for(slot, index) else {
+        let Some(sample) = self.ai_sample_for(slot, index) else {
             return false;
         };
         let up = -Vec3::from_array(sample.down).normalize_or_zero();
-        (line.point(index) - ship.physics.body.position).dot(up)
-            > self.sim.reset_triggers.beneath_line
+        (line.point(index) - ship.physics.body.position).dot(up) > self.reset_triggers.beneath_line
     }
 
     /// Whether this opponent has been stopped, while asking to move, for long
@@ -181,7 +176,7 @@ impl Race {
     /// is the longest apparent stall on the whole disc and is not a stall at all.
     /// And the speed itself excludes one merely cornering slowly.
     pub(super) fn stalled(&mut self, slot: usize) -> bool {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         // `ShipState::thrust` is the commanded throttle on the original's `0..=100`
         // scale, written by `oag_physics::controls::update` from the controls the
         // driver returned this tick - so this reads what the craft asked for, not
@@ -191,9 +186,9 @@ impl Race {
         // stopped opponents boosting once.
         let stopped = ship.physics.thrust > 0.0
             && !ship.standing.finished()
-            && ship.physics.body.linear_velocity.length() < self.sim.reset_triggers.stall_speed;
-        self.sim.stalled_ticks[slot] = if stopped {
-            self.sim.stalled_ticks[slot].saturating_add(1)
+            && ship.physics.body.linear_velocity.length() < self.reset_triggers.stall_speed;
+        self.stalled_ticks[slot] = if stopped {
+            self.stalled_ticks[slot].saturating_add(1)
         } else {
             0
         };
@@ -202,9 +197,9 @@ impl Race {
         // check on the racing line here: unlike `beneath_too_long` this
         // measures nothing that comes off it - but the respawn it leads to does,
         // so the guard stays where it is needed.
-        !self.sim.racing_line.is_empty()
-            && self.armed(slot, self.sim.reset_triggers.stalled)
-            && self.sim.stalled_ticks[slot] >= self.sim.reset_triggers.stall_ticks
+        !self.racing_line.is_empty()
+            && self.armed(slot, self.reset_triggers.stalled)
+            && self.stalled_ticks[slot] >= self.reset_triggers.stall_ticks
     }
 
     /// Whether a `Reset` contact this tick (`contact`, [`Self::reset_zone_contact`])
@@ -213,7 +208,7 @@ impl Race {
     /// Suppressed while the cooldown runs and once respawning has given up, so
     /// the two guards live in one place rather than at the call site.
     pub(super) fn reset_zone_touched(&self, slot: usize, contact: bool) -> bool {
-        self.armed(slot, self.sim.reset_triggers.reset_zone) && contact
+        self.armed(slot, self.reset_triggers.reset_zone) && contact
     }
 
     /// Whether this tick's step ended in contact with `Reset` geometry.
@@ -223,17 +218,11 @@ impl Race {
     /// `Body_StepWorld`, and the cage (`oag_gameplay::cage::pass`) runs after it, in
     /// the entity update that then reads the contact ring.
     pub(super) fn reset_zone_contact(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         // The same `env` the force law just ran with, so the self-collider
         // exclusion cannot differ between the two.
-        oag_physics::reset::contact(
-            &ship.physics,
-            &ship.handling,
-            env,
-            &self.sim.collision,
-            before,
-        )
-        .is_some()
+        oag_physics::reset::contact(&ship.physics, &ship.handling, env, &self.collision, before)
+            .is_some()
     }
 
     /// Whether this craft has gone longer without a hover contact than the
@@ -241,12 +230,11 @@ impl Race {
     /// `0x08841d30`. See [`oag_race::recovery::AIRBORNE_RESET_SECONDS`].
     ///
     /// No dwell counter of its own: the clock is the physics state's, and
-    /// [`Self::respawn`] rebuilds that state, so a craft put back starts again
+    /// [`Race::respawn`] rebuilds that state, so a craft put back starts again
     /// from zero.
     pub(super) fn airborne_too_long(&self, slot: usize) -> bool {
-        self.armed(slot, self.sim.reset_triggers.airborne)
-            && self.sim.world.ships[slot].physics.time_airborne
-                > self.sim.reset_triggers.airborne_seconds
+        self.armed(slot, self.reset_triggers.airborne)
+            && self.world.ships[slot].physics.time_airborne > self.reset_triggers.airborne_seconds
     }
 
     /// The position of the spline sample opponent `slot` is located on, for
@@ -258,17 +246,15 @@ impl Race {
     /// driver's believed index lags a craft that has left the line, and the
     /// distance is meant to be the craft's own.
     pub(super) fn located_sample_of(&self, slot: usize, index: usize) -> Option<Vec3> {
-        let position = self.sim.world.ships[slot].physics.body.position;
+        let position = self.world.ships[slot].physics.body.position;
         let believed = self
-            .sim
             .ai_sample_for(slot, index)
             .map(|sample| Vec3::from_array(sample.pos));
-        let units = self.sim.reset_triggers.distance_units;
+        let units = self.reset_triggers.distance_units;
         if believed.is_some_and(|at| at.distance_squared(position) <= units * units) {
             return believed;
         }
-        self.sim
-            .spline
+        self.spline
             .nearest(position)
             .map(|(_, sample, _)| Vec3::from_array(sample.pos))
     }
@@ -285,24 +271,26 @@ impl Race {
     /// (`alive`), applied after the counter as the original skips only the
     /// state change.
     pub(super) fn far_from_the_sample(&mut self, slot: usize, located: Option<Vec3>) -> bool {
-        let units = self.sim.reset_triggers.distance_units;
+        let units = self.reset_triggers.distance_units;
         let far = located.is_some_and(|sample| {
-            self.sim.world.ships[slot]
+            self.world.ships[slot]
                 .physics
                 .body
                 .position
                 .distance_squared(sample)
                 > units * units
         });
-        self.sim.distant_ticks[slot] = if far {
-            self.sim.distant_ticks[slot].saturating_add(1)
+        self.distant_ticks[slot] = if far {
+            self.distant_ticks[slot].saturating_add(1)
         } else {
             0
         };
-        self.armed(slot, self.sim.reset_triggers.distance)
-            && self.sim.distant_ticks[slot] >= self.sim.reset_triggers.distance_ticks
+        self.armed(slot, self.reset_triggers.distance)
+            && self.distant_ticks[slot] >= self.reset_triggers.distance_ticks
     }
+}
 
+impl Race {
     /// Puts the ship back at rest on the racing line, at the spline sample
     /// `sample_index`: this project's own rescues (`LostCircuit`, `Beneath`,
     /// `Stalled`, `OffTrack`) and the Eliminator's return.
@@ -340,14 +328,16 @@ impl Race {
         let pose = Pose::on_racing_line(&sample, height);
         self.put_back(slot, pose, Vec3::ZERO);
     }
+}
 
+impl RaceSim {
     /// After this tick's step: lay a crumb where the craft now is and latch
     /// its speed, on the terms [`crate::breadcrumbs::Breadcrumbs::lay`] reads.
     /// `flags` is the spline record the craft was located on this tick, `None`
     /// on a track with nothing to locate on.
     pub(super) fn lay_crumb(&mut self, slot: usize, flags: Option<u8>) {
-        let physics = &self.sim.world.ships[slot].physics;
-        self.sim.breadcrumbs[slot].lay(
+        let physics = &self.world.ships[slot].physics;
+        self.breadcrumbs[slot].lay(
             physics.body.position,
             physics.body.linear_velocity.length(),
             physics.grounded,
@@ -365,12 +355,12 @@ impl Race {
     /// weapons off and a running Shield pickup absorbs it, as `Ship_Damage` does.
     /// Mode `6`'s fixed `10` is not ported (that mode has no counterpart here).
     fn charge_the_reset(&mut self, slot: usize) {
-        if !self.sim.world.person_flown(slot) {
+        if !self.world.person_flown(slot) {
             return;
         }
-        let rules = self.sim.damage_rules();
-        let ship = &mut self.sim.world.ships[slot];
-        let charge = (ship.physics.shield - 1.0).clamp(0.0, self.sim.reset_triggers.shield_charge);
+        let rules = self.damage_rules();
+        let ship = &mut self.world.ships[slot];
+        let charge = (ship.physics.shield - 1.0).clamp(0.0, self.reset_triggers.shield_charge);
         if charge > 0.0 {
             oag_physics::damage::apply_weapon(
                 &mut ship.physics,
@@ -380,7 +370,9 @@ impl Race {
             );
         }
     }
+}
 
+impl Race {
     /// Puts the ship back the way the original's reset state does, after a
     /// `Reset` contact or the airborne clock: on the oldest of its grounded
     /// crumbs, at the track's width midpoint five up, launched down the track
@@ -390,7 +382,7 @@ impl Race {
     /// Falls back to [`Self::respawn`] at `sample_index` on a track with no
     /// samples to locate on.
     pub(super) fn reset(&mut self, slot: usize, sample_index: Option<usize>) {
-        self.charge_the_reset(slot);
+        self.sim.charge_the_reset(slot);
         let crumbs = &mut self.sim.breadcrumbs[slot];
         let speed = crumbs.launch_speed();
         let crumb = crumbs.take_oldest();

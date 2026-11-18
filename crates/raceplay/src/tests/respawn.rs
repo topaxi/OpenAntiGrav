@@ -165,7 +165,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
 /// records that measurement and, separately, that `05_Track` and `07_Track`
 /// at novice still make almost no progress - a *bounce-in-place* failure the
 /// sustained-dwell counter cannot see by construction, and which is not
-/// closed. So this drives [`Race::stalled`] directly rather than through a
+/// closed. So this drives [`RaceSim::stalled`] directly rather than through a
 /// real circuit either way: it proves the dwell counter itself does what it
 /// was built to do, which was never in question - the open question is a
 /// craft that never describes the state the counter watches for, and no
@@ -179,9 +179,12 @@ fn a_stopped_opponent_is_flagged_after_the_dwell() {
     ship.physics.body.linear_velocity = Vec3::ZERO;
 
     for _ in 0..STALL_TICKS - 1 {
-        assert!(!race.stalled(1), "flagged before the dwell elapsed");
+        assert!(!race.sim.stalled(1), "flagged before the dwell elapsed");
     }
-    assert!(race.stalled(1), "the dwell elapsed and nothing happened");
+    assert!(
+        race.sim.stalled(1),
+        "the dwell elapsed and nothing happened"
+    );
 }
 
 /// **The control**: a craft asking nothing of the throttle is never flagged,
@@ -197,7 +200,7 @@ fn an_opponent_holding_no_throttle_never_stalls() {
 
     for _ in 0..STALL_TICKS * 3 {
         assert!(
-            !race.stalled(1),
+            !race.sim.stalled(1),
             "a craft holding no throttle was flagged as stalled"
         );
     }
@@ -672,17 +675,17 @@ fn place_opponent(race: &mut Race, depth: f32, across: f32) {
 #[test]
 fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
     let mut race = opponent_beneath(0.0, CORRIDOR + 8.0, true);
-    assert!(!race.beneath_too_long(1));
+    assert!(!race.sim.beneath_too_long(1));
     place_opponent(&mut race, BENEATH_LINE + 5.0, CORRIDOR + 8.0);
-    assert!(race.beneath_the_line(1));
+    assert!(race.sim.beneath_the_line(1));
     for _ in 0..RESCUE_TICKS - 1 {
         assert!(
-            !race.beneath_too_long(1),
+            !race.sim.beneath_too_long(1),
             "flagged before the dwell elapsed"
         );
     }
     assert!(
-        race.beneath_too_long(1),
+        race.sim.beneath_too_long(1),
         "the dwell elapsed and nothing happened"
     );
 }
@@ -695,12 +698,12 @@ fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
 #[test]
 fn an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost() {
     let mut race = opponent_beneath(0.0, 0.0, true);
-    assert!(!race.beneath_too_long(1));
+    assert!(!race.sim.beneath_too_long(1));
     place_opponent(&mut race, BENEATH_LINE + 6.0, 0.0);
-    assert!(race.beneath_the_line(1));
+    assert!(race.sim.beneath_the_line(1));
     for _ in 0..RESCUE_TICKS * 3 {
         assert!(
-            !race.beneath_too_long(1),
+            !race.sim.beneath_too_long(1),
             "a craft inside its corridor was rescued from the road under the line"
         );
     }
@@ -712,17 +715,17 @@ fn an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost() {
 #[test]
 fn a_craft_slightly_below_airborne_or_under_a_gap_is_not_beneath_its_line() {
     let race = opponent_beneath(BENEATH_LINE - 5.0, 0.0, true);
-    assert!(!race.beneath_the_line(1));
+    assert!(!race.sim.beneath_the_line(1));
     let mut race = opponent_beneath(BENEATH_LINE + 5.0, 0.0, true);
     race.sim.world.ships[1].physics.time_airborne = 0.5;
-    assert!(!race.beneath_the_line(1));
+    assert!(!race.sim.beneath_the_line(1));
     let race = opponent_beneath(BENEATH_LINE + 5.0, 0.0, false);
     assert!(
         race.sim
             .racing_line
             .is_unsupported(race.sim.world.ships[1].driver.index as usize)
     );
-    assert!(!race.beneath_the_line(1));
+    assert!(!race.sim.beneath_the_line(1));
 }
 
 /// A craft no tick has located is placed where it stands, so a posed capture's visible set is its section's and not

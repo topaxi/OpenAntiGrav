@@ -758,7 +758,7 @@ of Omega's copies the runtime serves is unmeasured.
 ## The field keeps finishing behind `Results` (2026-11-08, `endrace-live-board`)
 
 **The fault**: the race runs on behind the end screens once the player crosses the line
-(`Race::runs_on_after_the_line`), but the results board was taken once, on the player's finish
+(`RaceSim::runs_on_after_the_line`), but the results board was taken once, on the player's finish
 tick, so every craft still racing then read `RACING` on the screen for good.
 
 **The original most likely refreshes** (confidence 60): `0x0022e680`, the slot of

@@ -130,7 +130,7 @@ fn a_craft_over_a_magstrip_draws_the_arc_wake() {
     let mut drawn = None;
     for tick in 0..2400_u64 {
         race.tick(&PlayerInputs::none());
-        race.drain_cues();
+        race.sim.drain_cues();
         let (atlas, _) = race.magstrip_wake_vertices();
         if (0..slots).any(|slot| race.over_magstrip(slot)) && !atlas.is_empty() {
             drawn = Some(tick);

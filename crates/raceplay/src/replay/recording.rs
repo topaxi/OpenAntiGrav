@@ -170,7 +170,7 @@ impl Race {
     #[must_use]
     pub fn ghost_pose(&self) -> Option<(Pose, Pose)> {
         let ghost = self.replay.ghost.as_ref()?;
-        if self.finished() || self.replay.ghost_hidden {
+        if self.sim.finished() || self.replay.ghost_hidden {
             return None;
         }
         let ticks = self.player_standing().lap_ticks(self.sim.world.tick)?;

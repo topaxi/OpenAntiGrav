@@ -116,6 +116,7 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
     for tick in 0..600u32 {
         race.tick(&PlayerInputs::single(buttons.tick(CROSS)));
         let raised = race
+            .sim
             .drain_cues()
             .into_iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
@@ -335,14 +336,15 @@ fn a_title_whose_pads_grant_mid_stint_still_hands_one_over() {
 #[test]
 fn cancelling_with_time_left_says_disengaging_and_the_last_second_does_not() {
     let disengaging = |race: &mut Race| {
-        race.drain_cues()
+        race.sim
+            .drain_cues()
             .into_iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
             .count()
     };
 
     let (mut race, mut buttons) = race_under_autopilot();
-    race.drain_cues();
+    race.sim.drain_cues();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
     assert_eq!(
         disengaging(&mut race),
@@ -356,7 +358,7 @@ fn cancelling_with_time_left_says_disengaging_and_the_last_second_does_not() {
 
     let (mut race, mut buttons) = race_under_autopilot();
     race.sim.world.ships[0].autopilot_timer = 0.5;
-    race.drain_cues();
+    race.sim.drain_cues();
     race.tick(&PlayerInputs::single(buttons.tick(CROSS | CIRCLE)));
     assert!(!race.sim.flown_for_the_player(0));
     assert_eq!(disengaging(&mut race), 0, "the last second was announced");
@@ -394,7 +396,7 @@ fn the_autopilot_engine_bits_follow_the_titles_law() {
         race.sim.autopilot_engine, MEASURED,
         "the synthetic setup carries the measured law"
     );
-    let flags = race.autopilot_engine_flags(0);
+    let flags = race.sim.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, Some(1.2));
     assert!(flags.uncapped);
 
@@ -402,12 +404,12 @@ fn the_autopilot_engine_bits_follow_the_titles_law() {
         speedup: Sourced::chosen(1.5),
         uncapped: Sourced::chosen(false),
     };
-    let flags = race.autopilot_engine_flags(0);
+    let flags = race.sim.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, Some(1.5));
     assert!(!flags.uncapped);
 
     race.sim.world.ships[0].autopilot_timer = 0.0;
-    let flags = race.autopilot_engine_flags(0);
+    let flags = race.sim.autopilot_engine_flags(0);
     assert_eq!(flags.speedup, None, "no pickup, no multiplier");
 }
 
@@ -445,7 +447,8 @@ fn disengaging_from(race: &mut Race, slot: usize) -> Vec<usize> {
     for _ in 0..120 {
         race.tick(&PlayerInputs::none());
         raised.extend(
-            race.drain_cues()
+            race.sim
+                .drain_cues()
                 .into_iter()
                 .filter(|e| e.cue == oag_gameplay::cue::Cue::Disengaging)
                 .map(|e| usize::from(e.slot)),

@@ -126,7 +126,7 @@ impl Session {
                 }
             }
             Stage::Race(stage) if stage.demo.is_some() => {
-                let finished = stage.race.finished();
+                let finished = stage.race.sim.finished();
                 let length = self.demo_timing(title).length;
                 let frozen = self.pause.frozen();
                 let Stage::Race(stage) = &mut self.stage else {

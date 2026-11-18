@@ -145,7 +145,7 @@ impl Race {
         let mut controls = [oag_physics::ShipControls::default(); MAX_PLAYERS];
         for (slot, slot_controls) in controls.iter_mut().enumerate() {
             if self.sim.world.person_flown(slot) {
-                *slot_controls = self.player_controls(slot, inputs.get(slot));
+                *slot_controls = self.sim.player_controls(slot, inputs.get(slot));
             }
         }
         self.sim.tick_flips(inputs, &mut controls);
@@ -534,7 +534,7 @@ impl Race {
             // An *opponent* in a single race never reaches it, because the branch
             // reads a person-flown craft's state alone; an opponent's wreck stays
             // down (the original's state 6, measured live) and ends nothing.
-            if self.eliminate_if_wrecked(slot) && slot == self.player_slot() {
+            if self.sim.eliminate_if_wrecked(slot) && slot == self.player_slot() {
                 self.view.wreck_ended_tick = Some(self.sim.world.tick);
                 // The original plays `~BLOWUP`, hides the HUD and swings the camera
                 // into its mode 5 on the way here. **The sound is built** and is
@@ -744,12 +744,12 @@ impl Race {
             .filter_map(|(slot, step)| step.as_ref().map(|step| (slot, step.evaluated)))
         {
             let shielded = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
-            self.raise_wall_cue(slot, &evaluated.wall, shielded);
-            self.note_wall_contact(slot, &evaluated.wall);
+            self.sim.raise_wall_cue(slot, &evaluated.wall, shielded);
+            self.sim.note_wall_contact(slot, &evaluated.wall);
         }
         // After every contact of the tick is noted: the opponents' walls
         // (`step_opponents`), the craft pairs (`resolve_craft_pairs`) and the walls above.
-        self.raise_impulse_cues();
+        self.sim.raise_impulse_cues();
         // The sparks, the shake and the shield edge are the seat's own: the
         // craft this machine's person flies, which is `primary_slot` except on a
         // network client seated elsewhere. Every other local person has their own

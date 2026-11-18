@@ -59,11 +59,11 @@ fn autopiloted_hd_race() -> Option<race::Race> {
 }
 
 fn race_to_the_flag(race: &mut race::Race) {
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "the race was still running after {CAP} ticks; the player reached lap {} of {:?}",
         race.sim.world.primary_race().lap,
         race.sim.world.laps_target()
@@ -258,7 +258,7 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
     };
     race_to_the_flag(&mut race);
     assert!(
-        race.runs_on_after_the_line(),
+        race.sim.runs_on_after_the_line(),
         "the autopilot crossed the line"
     );
     let first = race.results().expect("a finished race has results").clone();

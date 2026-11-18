@@ -78,7 +78,7 @@ fn image() -> Option<PathBuf> {
 #[derive(Debug, Default)]
 struct Solo {
     /// The longest unbroken run of ticks meeting the stall condition exactly as
-    /// [`race::Race::stalled`] tests it: stopped, asking to move, not finished.
+    /// [`race::RaceSim::stalled`] tests it: stopped, asking to move, not finished.
     longest_stall: u32,
     /// Laps reached.
     lap: u32,
@@ -115,7 +115,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             continue;
         }
-        // The same three terms `Race::stalled` applies, restated here rather than
+        // The same three terms `RaceSim::stalled` applies, restated here rather than
         // reached through it: a test that called the private predicate would pass
         // whatever that predicate did, including nothing.
         //

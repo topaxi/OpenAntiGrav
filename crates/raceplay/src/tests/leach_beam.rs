@@ -77,7 +77,7 @@ fn a_leach_beam_press_at_the_limit_spends_the_pickup_and_fires_nothing() {
     buttons.tick(0);
     race.tick(&PlayerInputs::single(buttons.tick(SQUARE)));
     assert_eq!(race.sim.world.leach_beams_live(), 1);
-    race.drain_cues();
+    race.sim.drain_cues();
 
     race.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::LeachBeam);
     let before = race.sim.world.leach_beams;
@@ -95,7 +95,7 @@ fn a_leach_beam_press_at_the_limit_spends_the_pickup_and_fires_nothing() {
         before[1..],
         "no further entry arms"
     );
-    let fired = race.drain_cues().into_iter().any(|cue| {
+    let fired = race.sim.drain_cues().into_iter().any(|cue| {
         matches!(
             cue.cue,
             oag_gameplay::cue::Cue::Leach | oag_gameplay::cue::Cue::LeachFail

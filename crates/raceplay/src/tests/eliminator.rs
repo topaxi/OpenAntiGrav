@@ -16,7 +16,7 @@ fn a_completed_lap_gives_back_a_fifth_of_the_maximum_and_plays_absorb() {
     let mut race = eliminator();
     let maximum = race.sim.world.ships[0].handling.dimensions.shield;
     race.sim.world.ships[0].physics.shield = maximum * 0.3;
-    race.drain_cues();
+    race.sim.drain_cues();
 
     race.eliminator_lap_health_refill(0);
 
@@ -25,7 +25,10 @@ fn a_completed_lap_gives_back_a_fifth_of_the_maximum_and_plays_absorb() {
         maximum * 0.3 + maximum * LAP_REFILL_FRACTION
     );
     assert!(
-        race.pending_cues().iter().any(|cue| cue.cue == Cue::Absorb),
+        race.sim
+            .pending_cues()
+            .iter()
+            .any(|cue| cue.cue == Cue::Absorb),
         "the refill must play the absorb feedback"
     );
 }
@@ -88,7 +91,7 @@ fn a_destroyed_opponent_in_a_single_race_never_comes_back() {
     assert_eq!(race.sim.world.ships[1].physics.shield, 0.0);
     assert_eq!(race.sim.world.ships[1].standing.deaths, 0);
     assert!(
-        !race.finished(),
+        !race.sim.finished(),
         "an opponent's death must not end the player's race"
     );
 }
@@ -107,7 +110,7 @@ fn the_players_destruction_in_a_single_race_still_ends_it() {
         race.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated
     );
-    assert!(race.finished());
+    assert!(race.sim.finished());
 }
 
 /// Two craft in play, `victim` recorded as last struck by `killer`, its last
@@ -598,10 +601,10 @@ mod flip {
             })
         };
         let mut armed = racing(LAW);
-        let controls = armed.player_controls(0, shoulder().get(0));
+        let controls = armed.sim.player_controls(0, shoulder().get(0));
         assert_eq!(controls.airbrake_left, 0.0);
         let mut plain = racing(None);
-        let controls = plain.player_controls(0, shoulder().get(0));
+        let controls = plain.sim.player_controls(0, shoulder().get(0));
         assert_eq!(controls.airbrake_left, 1.0);
     }
 }
@@ -646,10 +649,10 @@ fn a_player_beaten_to_the_score_target_finishes_second() {
     race.sim.world.ship_count = 2;
     race.sim.world.ships[0].standing.score = 120.0;
     race.sim.world.ships[1].standing.score = 201.0;
-    assert!(!race.finished());
+    assert!(!race.sim.finished());
     race.tick(&PlayerInputs::none());
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "the leader's target ends the player's race"
     );
     assert_eq!(race.eliminator_place(), 2);
@@ -665,6 +668,6 @@ fn a_player_beaten_to_the_kill_target_finishes_second() {
     race.sim.world.ships[0].standing.kills = 2;
     race.sim.world.ships[1].standing.kills = 5;
     race.tick(&PlayerInputs::none());
-    assert!(race.finished());
+    assert!(race.sim.finished());
     assert_eq!(race.eliminator_place(), 2);
 }

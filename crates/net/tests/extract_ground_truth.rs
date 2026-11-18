@@ -67,7 +67,7 @@ fn hashes(
     while out.len() < ticks && after < 60 {
         race.tick_sim_only(&none);
         out.push(race.sim.state_hash());
-        if to_the_finish && race.finished() {
+        if to_the_finish && race.sim.finished() {
             after += 1;
         }
     }

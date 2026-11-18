@@ -143,7 +143,12 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     };
     pulse.raise_start_cue(Cue::Ready);
     pulse.raise_start_cue(Cue::Go);
-    let raised: Vec<Cue> = pulse.pending_cues().iter().map(|event| event.cue).collect();
+    let raised: Vec<Cue> = pulse
+        .sim
+        .pending_cues()
+        .iter()
+        .map(|event| event.cue)
+        .collect();
     assert_eq!(raised, vec![Cue::Ready, Cue::Go]);
     let hash = pulse.sim.state_hash();
     pulse.raise_start_cue(Cue::Go);
@@ -154,15 +159,15 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     );
     // The session raises GO at the top of the tick that lets the race move; that
     // tick must not drop it before the sound step drains it.
-    let queued = pulse.pending_cues().len();
+    let queued = pulse.sim.pending_cues().len();
     pulse.tick(&PlayerInputs::none());
     assert!(
-        pulse.pending_cues().len() >= queued,
+        pulse.sim.pending_cues().len() >= queued,
         "a tick dropped a raised cue: {:?}",
-        pulse.pending_cues()
+        pulse.sim.pending_cues()
     );
     assert_eq!(
-        pulse.pending_cues()[..queued]
+        pulse.sim.pending_cues()[..queued]
             .iter()
             .map(|event| event.cue)
             .collect::<Vec<_>>(),
@@ -177,7 +182,12 @@ fn the_start_voice_cues_are_raised_on_every_title_that_voices_the_start() {
     // so a resume on Pure voices GO too.
     pure.raise_start_cue(Cue::Ready);
     pure.raise_start_cue(Cue::Go);
-    let raised: Vec<Cue> = pure.pending_cues().iter().map(|event| event.cue).collect();
+    let raised: Vec<Cue> = pure
+        .sim
+        .pending_cues()
+        .iter()
+        .map(|event| event.cue)
+        .collect();
     assert_eq!(
         raised,
         vec![Cue::Ready, Cue::Go],

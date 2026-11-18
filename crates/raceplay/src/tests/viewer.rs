@@ -45,7 +45,7 @@ fn recording(ticks: u64) -> (Replay, Vec<String>) {
     let mut text = vec![format!("{:?}", race.sim)];
     for tick in 0..ticks {
         race.tick(&inputs(tick));
-        race.drain_cues();
+        race.sim.drain_cues();
         text.push(format!("{:?}", race.sim));
     }
     (race.recorded().expect("recording"), text)
@@ -192,7 +192,7 @@ fn clocks(ticks: u64) -> Vec<(u64, u64)> {
     let mut clocks = vec![at(&race)];
     for tick in 0..ticks {
         race.tick(&inputs(tick));
-        race.drain_cues();
+        race.sim.drain_cues();
         clocks.push(at(&race));
     }
     clocks

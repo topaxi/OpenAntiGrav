@@ -946,7 +946,7 @@ so the faster craft also holds the line harder. That is the "snap" a player
 feels.
 
 **Built** as `oag_physics::engine::EngineFlags`, set by
-`Race::autopilot_engine_flags` for a person's craft. The pickup and
+`RaceSim::autopilot_engine_flags` for a person's craft. The pickup and
 `--autopilot` set both bits. Past the line only the uncapped bit is set. A
 Disruptor's autopilot effect sets neither, because it never sets the running
 bit. Chosen, not measured: past the line the original keeps `0x4` as the last
@@ -3833,7 +3833,7 @@ question, and it is the next one.
 
 ##### Built 2026-08-17: a second dwell, on speed rather than distance
 
-`Race::stalled` counts consecutive ticks on which a craft is **stopped, asking to
+`RaceSim::stalled` counts consecutive ticks on which a craft is **stopped, asking to
 move, and has not finished**, and puts it back after `STALL_TICKS`. All three
 terms are load-bearing and each excludes a craft that is stationary for a good
 reason.
@@ -4852,7 +4852,7 @@ row is meant to say is - no `idstring`, no `string`, content unread.
 | Difficulty selection | 2026-08-12 | `oag_ai::Difficulty`, and one `[ai] difficulty` key in `settings.rs` |
 | A livery that is not the player's | 2026-08-15 | `crates/livery/src/lib.rs` |
 | **A lap time of its own** | **2026-08-17** | `oag_race::Standing::best_lap_ticks` |
-| **Being recovered when it stops** | **2026-08-17** | `Race::stalled`, `race::STALL_SPEED` |
+| **Being recovered when it stops** | **2026-08-17** | `RaceSim::stalled`, `race::STALL_SPEED` |
 | **Reaction latency** | **2026-08-26** | [Reaction latency](#reaction-latency-a-driver-takes-time-to-notice) |
 | **Coming back from a wreck in a single race** | **2026-09-16** | `Race::tick_destroyed_craft`, `race::eliminator::AI_RESPAWN_WAIT` |
 
@@ -5840,7 +5840,7 @@ way and fixed [below](#the-races-beneath-rescue-asks-the-same-2026-11-16).
 
 #### The race's beneath rescue asks the same (2026-11-16)
 
-Lane `arena-rescue`. `Race::beneath_too_long` (`crates/raceplay/src/respawn.rs`)
+Lane `arena-rescue`. `RaceSim::beneath_too_long` (`crates/raceplay/src/respawn.rs`)
 now counts a craft under its line only if it **left the line's corridor to get
 there**. That is the plan's own latch, shared as `oag_ai::Line::outside_the_corridor`:
 the craft was outside the corridor when it was last on the ground and not

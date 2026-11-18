@@ -261,7 +261,7 @@ mod race {
         for _ in 0..ticks {
             race.tick(&PlayerInputs::none());
             rumbler.tick(&race, false, &mut out);
-            race.drain_cues();
+            race.sim.drain_cues();
         }
         let fired = rumbler.fired();
         rumbler.stop(&mut out);

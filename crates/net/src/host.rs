@@ -831,10 +831,10 @@ impl Host {
         dropped
     }
 
-    /// Whether every person's craft has finished ([`Race::finished`]).
+    /// Whether every person's craft has finished ([`RaceSim::finished`](oag_raceplay::RaceSim::finished)).
     #[must_use]
     pub fn finished(&self) -> bool {
-        self.race.finished()
+        self.race.sim.finished()
     }
 
     /// Whether a seat that was seated has left (a refused or closed connection, an end).

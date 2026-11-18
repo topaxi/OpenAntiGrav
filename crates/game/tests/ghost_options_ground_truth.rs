@@ -46,7 +46,7 @@ fn a_hidden_ghost_is_raced_but_reports_no_pose_to_draw() {
     let mut hidden_ticks = 0;
     for tick in 0..2_400 {
         race.tick(&input);
-        race.drain_cues();
+        race.sim.drain_cues();
         race.set_ghost_visible(true);
         visible_ticks += usize::from(race.ghost_pose().is_some());
         race.set_ghost_visible(false);

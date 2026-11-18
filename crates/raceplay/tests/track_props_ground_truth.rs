@@ -248,6 +248,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
                 push: ship.physics.pad_direction.length(),
                 plume: race.exhaust().boost_timer(),
                 pad_sounds: race
+                    .sim
                     .drain_cues()
                     .iter()
                     .filter(|c| c.cue == oag_gameplay::cue::Cue::SpeedupPad && c.slot == 0)
@@ -515,7 +516,9 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     );
 
     // A trigger the track does not have is a refusal that names it.
-    let refused = race.begin_transit(0, 2, race::transit::Distance::Trigger(9), 1.0);
+    let refused = race
+        .sim
+        .begin_transit(0, 2, race::transit::Distance::Trigger(9), 1.0);
     assert!(
         refused.unwrap_err().contains("no trigger 9"),
         "named by its index"

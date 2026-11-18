@@ -406,7 +406,7 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
     let max = run.sim.world.ships[0].handling.dimensions.shield;
     let (mut lap, mut shield, mut damaged) = (run.sim.world.race[0].lap, max, false);
     let (mut perfect, mut full) = (0, 0);
-    while !run.finished() && run.sim.world.tick < 30_000 {
+    while !run.sim.finished() && run.sim.world.tick < 30_000 {
         run.tick(&oag_gameplay::PlayerInputs::none());
         let now = run.sim.world.ships[0].physics.shield;
         damaged |= now < shield;
@@ -420,7 +420,10 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
             shield = max;
         }
     }
-    assert!(run.finished(), "the event did not finish in 30000 ticks");
+    assert!(
+        run.sim.finished(),
+        "the event did not finish in 30000 ticks"
+    );
     let tally = run.xp_tally().expect("armed");
     let column = progress.xp_column;
     assert!(

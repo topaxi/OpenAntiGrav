@@ -798,7 +798,7 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         println!("{}: zone {zone} after 15200 ticks", file.display());
         assert!(zone >= 24, "{}: zone {zone}", file.display());
         assert_eq!(race.respawns_of(0), 0, "{}", file.display());
-        assert!(!race.finished(), "{}", file.display());
+        assert!(!race.sim.finished(), "{}", file.display());
     }
 }
 
