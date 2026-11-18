@@ -33,7 +33,7 @@ impl Race {
         let count = self.core.sim.world.ship_count as usize;
         for (slot, &was) in before.iter().enumerate().take(count) {
             if self.core.sim.world.ships[slot].physics.roll_payout_timer > was {
-                self.boost_plume(slot);
+                crate::stage::stage!(self).boost_plume(slot);
                 self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
                     oag_gameplay::cue::Cue::Turbo,
                     slot,

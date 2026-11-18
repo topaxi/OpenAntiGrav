@@ -22,6 +22,8 @@
 
 use super::*;
 use crate::player_step::Evaluations;
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 
 impl Race {
     /// A restorable copy of everything that decides what happens next.
@@ -147,12 +149,15 @@ impl Race {
     pub(super) fn draws(&self) -> bool {
         cfg!(feature = "view") && !self.quiet
     }
+}
 
+#[cfg(feature = "view")]
+impl Stage<'_> {
     /// A shell bulge on `slot`, if this tick is drawn. View-only.
     #[cfg_attr(not(feature = "view"), allow(unused_variables))]
-    pub(super) fn shield_hit(&mut self, slot: usize) {
+    pub(super) fn shield_hit(&mut self, core: &SimRace, slot: usize) {
         #[cfg(feature = "view")]
-        self.note_shield_hit(slot);
+        self.note_shield_hit(core, slot);
         #[cfg(feature = "view")]
         if self.draws()
             && let Some(shell) = self.view.shield.get_mut(slot)
@@ -160,7 +165,6 @@ impl Race {
             shell.hit();
         }
     }
-
     /// `slot`'s shield coming up, if this tick is drawn. View-only.
     #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_activate(&mut self, slot: usize) {
@@ -169,7 +173,6 @@ impl Race {
             self.view.shield[slot].activate();
         }
     }
-
     /// `slot`'s boost plume lighting, if this tick is drawn. View-only.
     #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn boost_plume(&mut self, slot: usize) {

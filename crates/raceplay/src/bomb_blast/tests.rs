@@ -12,7 +12,7 @@ use crate::tests::race_with_a_grid;
 fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
     let mut race = race_with_a_grid();
     let at = Vec3::new(1.0, 2.0, 3.0);
-    race.spawn_bomb_blast_model(at, Quat::IDENTITY);
+    race.view.spawn_bomb_blast_model(at, Quat::IDENTITY);
 
     let draws = race.bomb_blast_draws();
     assert_eq!(
@@ -43,7 +43,7 @@ fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
 #[test]
 fn the_hemisphere_hides_well_before_the_shockwave_does() {
     let mut race = race_with_a_grid();
-    race.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
+    race.view.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
 
     let dt = 1.0 / 60.0;
     let ticks = (HEMISPHERE_HIDE_AT_SECONDS / dt).ceil() as u32 + 2;
@@ -67,7 +67,8 @@ fn the_hemisphere_hides_well_before_the_shockwave_does() {
 fn a_full_pool_drops_a_new_spawn_rather_than_evicting_one() {
     let mut race = race_with_a_grid();
     for slot in 0..BOMB_BLAST_SLOTS {
-        race.spawn_bomb_blast_model(Vec3::splat(slot as f32), Quat::IDENTITY);
+        race.view
+            .spawn_bomb_blast_model(Vec3::splat(slot as f32), Quat::IDENTITY);
     }
     assert_eq!(
         race.bomb_blast_draws().iter().flatten().count(),
@@ -75,7 +76,7 @@ fn a_full_pool_drops_a_new_spawn_rather_than_evicting_one() {
     );
 
     let dropped = Vec3::splat(BOMB_BLAST_SLOTS as f32 + 1000.0);
-    race.spawn_bomb_blast_model(dropped, Quat::IDENTITY);
+    race.view.spawn_bomb_blast_model(dropped, Quat::IDENTITY);
     let draws = race.bomb_blast_draws();
     assert_eq!(
         draws.iter().flatten().count(),
@@ -98,7 +99,7 @@ fn a_full_pool_drops_a_new_spawn_rather_than_evicting_one() {
 #[test]
 fn the_shockwave_only_starts_growing_after_its_own_delay() {
     let mut race = race_with_a_grid();
-    race.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
+    race.view.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
 
     let dt = 1.0 / 60.0;
     // One tick, well inside the 0.1s gate.
@@ -222,7 +223,7 @@ fn the_basis_is_orthonormal_and_puts_dir_in_the_y_column() {
 #[test]
 fn the_draw_carries_the_age_the_texture_tracks_play_at() {
     let mut race = race_with_a_grid();
-    race.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
+    race.view.spawn_bomb_blast_model(Vec3::ZERO, Quat::IDENTITY);
     assert_eq!(race.bomb_blast_draws()[0].expect("live").age, 0.0);
 
     let dt = 1.0 / 60.0;

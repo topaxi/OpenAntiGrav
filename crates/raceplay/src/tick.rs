@@ -50,7 +50,7 @@ impl Race {
         let evaluations = self.tick_body(inputs);
         self.core.observe_xp();
         #[cfg(feature = "view")]
-        self.note_cues(queued);
+        crate::stage::stage!(self).note_cues(&self.core, queued);
         evaluations
     }
 
@@ -286,8 +286,9 @@ impl Race {
         );
         self.core.sim.extensions.weapon_hits(&hits);
         for (slot, hit) in hits.iter().enumerate() {
+            #[cfg(feature = "view")]
             if hit.absorbed {
-                self.shield_hit(slot);
+                crate::stage::stage!(self).shield_hit(&self.core, slot);
             }
             if hit.landed {
                 self.core.sim.note_weapon_hit(slot);
@@ -332,7 +333,8 @@ impl Race {
             }
             self.core.sim.credit_blast(impact, &hits);
             #[cfg(feature = "view")]
-            self.note_blast(
+            crate::stage::stage!(self).note_blast(
+                &self.core,
                 impact.kind,
                 impact.point,
                 impact.struck.map(usize::from),
@@ -344,7 +346,8 @@ impl Race {
             if let Some(at) =
                 self.plasma_craft_hit_blast_point(impact.kind, impact.struck.map(usize::from))
             {
-                self.note_blast(
+                crate::stage::stage!(self).note_blast(
+                    &self.core,
                     impact.kind,
                     at,
                     impact.struck.map(usize::from),

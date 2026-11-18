@@ -300,47 +300,6 @@ pub(super) struct PlasmaBlastDraw {
 }
 
 impl Race {
-    /// Starts a render-side blast at `position`, in the first free slot -
-    /// dropped silently if all [`PLASMA_BLAST_SLOTS`] are already live, the
-    /// same "no evicting a running effect" rule
-    /// [`weapons::visuals::advance_one_flare`]'s own flare-stage fallback
-    /// takes. The hemispheres' frame is read off the track here, see
-    /// [`RaceSim::track_frame_at`].
-    ///
-    /// Called from [`Race::ignite_blast`] for every Plasma detonation - a
-    /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
-    /// teardown pass does not branch on which ended the bolt.
-    pub(crate) fn spawn_plasma_blast_model(&mut self, position: Vec3) {
-        // A title with neither mechanism has no blast to play.
-        if !self.view.hd_plasma_blast && self.view.plasma_blast_law.is_none() {
-            return;
-        }
-        let frame = self.core.sim.track_frame_at(position);
-        if let Some(slot) = self.view.plasma_blasts.iter().position(Option::is_none) {
-            self.view.plasma_blasts[slot] = Some(PlasmaBlast {
-                position,
-                age: 0.0,
-                frame,
-                ease: [0.0; 3],
-            });
-        }
-    }
-
-    /// Starts a Disruptor explosion halo at `position`, in the first free slot,
-    /// when the title authors one; dropped when the pool is full.
-    pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
-        if self.view.disruptor_halo_law.is_none() {
-            return;
-        }
-        if let Some(slot) = self.view.disruptor_halos.iter().position(Option::is_none) {
-            self.view.disruptor_halos[slot] = Some(DisruptorHaloBlast {
-                position,
-                age: 0.0,
-                ease: 0.0,
-            });
-        }
-    }
-
     /// Ages every live Disruptor halo one tick, steps its scale ease and
     /// retires it at its law's life.
     fn advance_disruptor_halos(&mut self, dt: f32) {
@@ -681,3 +640,46 @@ fn facing_away(matrix: Mat4) -> Mat4 {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Starts a render-side blast at `position`, in the first free slot -
+    /// dropped silently if all [`PLASMA_BLAST_SLOTS`] are already live, the
+    /// same "no evicting a running effect" rule
+    /// [`weapons::visuals::advance_one_flare`]'s own flare-stage fallback
+    /// takes. The hemispheres' frame is read off the track here, see
+    /// [`RaceSim::track_frame_at`].
+    ///
+    /// Called from [`Race::ignite_blast`] for every Plasma detonation - a
+    /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
+    /// teardown pass does not branch on which ended the bolt.
+    pub(crate) fn spawn_plasma_blast_model(&mut self, core: &SimRace, position: Vec3) {
+        // A title with neither mechanism has no blast to play.
+        if !self.hd_plasma_blast && self.plasma_blast_law.is_none() {
+            return;
+        }
+        let frame = core.sim.track_frame_at(position);
+        if let Some(slot) = self.plasma_blasts.iter().position(Option::is_none) {
+            self.plasma_blasts[slot] = Some(PlasmaBlast {
+                position,
+                age: 0.0,
+                frame,
+                ease: [0.0; 3],
+            });
+        }
+    }
+    /// Starts a Disruptor explosion halo at `position`, in the first free slot,
+    /// when the title authors one; dropped when the pool is full.
+    pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
+        if self.disruptor_halo_law.is_none() {
+            return;
+        }
+        if let Some(slot) = self.disruptor_halos.iter().position(Option::is_none) {
+            self.disruptor_halos[slot] = Some(DisruptorHaloBlast {
+                position,
+                age: 0.0,
+                ease: 0.0,
+            });
+        }
+    }
+}

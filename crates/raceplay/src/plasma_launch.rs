@@ -55,7 +55,10 @@ impl Race {
                 continue;
             };
             let owner = usize::from(projectile.owner);
-            let at = self.muzzle_of(owner).unwrap_or(projectile.position);
+            let at = self
+                .view
+                .muzzle_of(&self.core, owner)
+                .unwrap_or(projectile.position);
             // The node's own matrix: the hull's, whose `+Y` is the craft's up.
             let up = self.core.sim.world.ships[owner].physics.body.up();
             if let Some(playing) = self.view.stage.play_riding(effect, at, 1.0) {
@@ -74,7 +77,7 @@ impl Race {
                 self.view.stage.detach(playing);
                 return false;
             }
-            if let Some(at) = self.muzzle_of(owner) {
+            if let Some(at) = self.view.muzzle_of(&self.core, owner) {
                 self.view.stage.follow(playing, at);
                 self.view.stage.orient(playing, ship.physics.body.up());
             }

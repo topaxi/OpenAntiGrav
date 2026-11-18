@@ -26,6 +26,8 @@
 //! - **An opponent's boost.** The original's pulse is the viewing craft's: a local person's
 //!   other seat fires its own pulse for its own view, and nobody else's draws in it.
 
+use crate::SimRace;
+use crate::stage::Stage;
 use oag_post::hd_zoom::{Frame, Tuning};
 
 use crate::Race;
@@ -100,25 +102,6 @@ impl Race {
         borrowed.or_else(|| Some(self.view.photo.as_ref()?.speed_blur()?.0))
     }
 
-    /// The boost pulse, for a person's own speed pad or Turbo: the player's, or the local seat
-    /// flying `slot` in a split or a window. A pulse is a view's own, so it only draws in the
-    /// view that follows the craft that fired it.
-    pub(super) fn fire_zoom_boost(&mut self, slot: usize) {
-        if !self.draws() {
-            return;
-        }
-        let pulse = if slot == self.core.player_slot() {
-            self.view.zoom.as_mut()
-        } else if self.core.sim.world.person_flown(slot) {
-            self.view.viewpoints.zoom[slot].as_mut()
-        } else {
-            None
-        };
-        if let Some(pulse) = pulse {
-            pulse.fire_boost();
-        }
-    }
-
     /// One tick of the pulses.
     pub(super) fn advance_zoom(&mut self) {
         let dt = self.core.sim.dt;
@@ -127,6 +110,28 @@ impl Race {
             .flatten()
         {
             pulse.advance(dt);
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl Stage<'_> {
+    /// The boost pulse, for a person's own speed pad or Turbo: the player's, or the local seat
+    /// flying `slot` in a split or a window. A pulse is a view's own, so it only draws in the
+    /// view that follows the craft that fired it.
+    pub(super) fn fire_zoom_boost(&mut self, core: &SimRace, slot: usize) {
+        if !self.draws() {
+            return;
+        }
+        let pulse = if slot == core.player_slot() {
+            self.view.zoom.as_mut()
+        } else if core.sim.world.person_flown(slot) {
+            self.view.viewpoints.zoom[slot].as_mut()
+        } else {
+            None
+        };
+        if let Some(pulse) = pulse {
+            pulse.fire_boost();
         }
     }
 }

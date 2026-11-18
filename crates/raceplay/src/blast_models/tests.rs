@@ -12,7 +12,7 @@ use crate::tests::race_with_a_grid;
 fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
     let mut race = race_with_a_grid();
     let at = Vec3::new(1.0, 2.0, 3.0);
-    race.spawn_plasma_blast_model(at);
+    race.view.spawn_plasma_blast_model(&race.core, at);
 
     let draws = race.plasma_blast_draws(Mat4::IDENTITY);
     assert!(
@@ -47,7 +47,8 @@ fn a_blast_ages_and_retires_at_the_hardcoded_lifetime() {
 fn a_full_pool_drops_a_new_spawn_rather_than_evicting_one() {
     let mut race = race_with_a_grid();
     for slot in 0..PLASMA_BLAST_SLOTS {
-        race.spawn_plasma_blast_model(Vec3::splat(slot as f32));
+        race.view
+            .spawn_plasma_blast_model(&race.core, Vec3::splat(slot as f32));
     }
     assert_eq!(
         race.plasma_blast_draws(Mat4::IDENTITY)
@@ -60,7 +61,7 @@ fn a_full_pool_drops_a_new_spawn_rather_than_evicting_one() {
     // One more spawn, with the pool already full - well outside the
     // `0..PLASMA_BLAST_SLOTS` fill above so it cannot alias one of those.
     let dropped = Vec3::splat(PLASMA_BLAST_SLOTS as f32 + 1000.0);
-    race.spawn_plasma_blast_model(dropped);
+    race.view.spawn_plasma_blast_model(&race.core, dropped);
     let draws = race.plasma_blast_draws(Mat4::IDENTITY);
     assert_eq!(
         draws.iter().flatten().count(),
@@ -135,7 +136,7 @@ fn an_hd_blast_draws_with_its_age_as_the_model_clock_and_pulse_with_none() {
     for hd in [true, false] {
         let mut race = race_with_a_grid();
         race.view.hd_plasma_blast = hd;
-        race.spawn_plasma_blast_model(Vec3::ZERO);
+        race.view.spawn_plasma_blast_model(&race.core, Vec3::ZERO);
         for _ in 0..30 {
             race.advance_plasma_blast_models(dt);
         }
@@ -167,7 +168,8 @@ fn pulse_law() -> oag_title::weapons::PlasmaBlastLaw {
 fn pulse_blast_after(ticks: u32) -> (Race, PlasmaBlastDraw) {
     let mut race = race_with_a_grid();
     race.view.hd_plasma_blast = false;
-    race.spawn_plasma_blast_model(Vec3::new(292.1, -42.7, -194.4));
+    race.view
+        .spawn_plasma_blast_model(&race.core, Vec3::new(292.1, -42.7, -194.4));
     for _ in 0..ticks {
         race.advance_plasma_blast_models(DT);
     }
@@ -362,7 +364,7 @@ fn a_pure_blast_lives_two_seconds_with_dropped_hemispheres() {
     let mut race = race_with_a_grid();
     race.view.plasma_blast_law = Some(pure_law());
     let at = Vec3::new(1.0, 2.0, 3.0);
-    race.spawn_plasma_blast_model(at);
+    race.view.spawn_plasma_blast_model(&race.core, at);
     for _ in 0..90 {
         race.advance_plasma_blast_models(DT);
     }
@@ -415,7 +417,7 @@ fn pure_halo_law() -> oag_title::weapons::DisruptorHalo {
 #[test]
 fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
     let mut race = race_with_a_grid();
-    race.spawn_disruptor_halo(Vec3::ZERO);
+    race.view.spawn_disruptor_halo(Vec3::ZERO);
     assert!(
         race.view.disruptor_halos.iter().all(Option::is_none),
         "no law, no halo"
@@ -423,7 +425,7 @@ fn a_disruptor_halo_eases_fades_and_retires_at_one_second() {
 
     race.view.disruptor_halo_law = Some(pure_halo_law());
     let at = Vec3::new(4.0, 5.0, 6.0);
-    race.spawn_disruptor_halo(at);
+    race.view.spawn_disruptor_halo(at);
     for _ in 0..30 {
         race.advance_plasma_blast_models(DT);
     }

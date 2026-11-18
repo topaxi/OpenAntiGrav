@@ -1239,20 +1239,6 @@ impl Race {
         )
     }
 
-    /// One craft's `Ship Muzzle` locator in **world** space, through the same model
-    /// matrix as [`Self::nozzle_of`]; `None` when its hull authors none. The
-    /// locator is the simulation's (`oag_gameplay::world::Ship::muzzle`, where the
-    /// bolt itself is released); the drawn matrix adds the display roll and lean.
-    #[must_use]
-    pub fn muzzle_of(&self, slot: usize) -> Option<Vec3> {
-        let local = self.core.sim.world.ships.get(slot)?.muzzle?;
-        Some(
-            self.view
-                .ship_model_matrix_of(&self.core, slot)
-                .transform_point3(local),
-        )
-    }
-
     /// The `engine_flare` locator in **model space** - the pivot a transform
     /// composed with the craft's own matrix wants, where [`Self::nozzle_of`]
     /// is the world-space point the trail is laid from. Mixing the two up
@@ -1307,5 +1293,21 @@ impl std::ops::Deref for SpriteQuad {
 
     fn deref(&self) -> &Self::Target {
         self.0.as_ref().map_or(&[], |quad| &quad[..])
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One craft's `Ship Muzzle` locator in **world** space, through the same model
+    /// matrix as [`Self::nozzle_of`]; `None` when its hull authors none. The
+    /// locator is the simulation's (`oag_gameplay::world::Ship::muzzle`, where the
+    /// bolt itself is released); the drawn matrix adds the display roll and lean.
+    #[must_use]
+    pub fn muzzle_of(&self, core: &SimRace, slot: usize) -> Option<Vec3> {
+        let local = core.sim.world.ships.get(slot)?.muzzle?;
+        Some(
+            self.ship_model_matrix_of(core, slot)
+                .transform_point3(local),
+        )
     }
 }

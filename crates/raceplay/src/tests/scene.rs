@@ -540,7 +540,8 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     let impact = Vec3::new(5.0, 1.0, -3.0);
 
     assert_eq!(
-        race.blast_for(Weapon::Rocket, impact, None),
+        race.view
+            .blast_for(&race.core, Weapon::Rocket, impact, None),
         Some((Trigger::TrackBlast, impact)),
         "no craft struck means the track effect, where the rocket struck"
     );
@@ -550,7 +551,8 @@ fn a_hull_blast_sits_under_the_craft_and_a_track_blast_where_it_struck() {
     let craft = Vec3::new(-20.0, 4.0, 11.0);
     race.core.sim.world.ships[struck].physics.body.position = craft;
     assert_eq!(
-        race.blast_for(Weapon::Rocket, impact, Some(struck)),
+        race.view
+            .blast_for(&race.core, Weapon::Rocket, impact, Some(struck)),
         Some((
             Trigger::CraftBlast,
             craft - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP
@@ -581,34 +583,37 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
     let point = Vec3::new(1.0, 2.0, 3.0);
 
     assert_eq!(
-        race.blast_for(Weapon::Missile, point, None),
+        race.view
+            .blast_for(&race.core, Weapon::Missile, point, None),
         Some((Trigger::MissileExplo, point)),
         "the Missile's own explosion, at the impact point, whatever it hit"
     );
     assert_eq!(
-        race.blast_for(Weapon::Mine, point, None),
+        race.view.blast_for(&race.core, Weapon::Mine, point, None),
         Some((Trigger::MineExplo, point)),
         "the Mine's own explosion (Mine_SpawnExplosion), at the impact point"
     );
     assert_eq!(
-        race.blast_for(Weapon::Plasma, point, None),
+        race.view.blast_for(&race.core, Weapon::Plasma, point, None),
         Some((Trigger::PlasmaBlast, point)),
         "the Plasma's own detonation (Plasma_SpawnDetonation), at the impact \
          point, whatever it hit"
     );
     assert_eq!(
-        race.blast_for(Weapon::Plasma, point, Some(2)),
+        race.view
+            .blast_for(&race.core, Weapon::Plasma, point, Some(2)),
         Some((Trigger::PlasmaBlast, point)),
         "one file for every ending - the teardown pass does not branch on \
          what was struck, unlike the Rocket's"
     );
     assert_eq!(
-        race.blast_for(Weapon::Disruptor, point, None),
+        race.view
+            .blast_for(&race.core, Weapon::Disruptor, point, None),
         Some((Trigger::DisruptorExplo, point)),
         "the Disruptor's own explosion (DisruptorExplo_Construct), at a hit and at the timeout"
     );
     assert_eq!(
-        race.blast_for(Weapon::Bomb, point, None),
+        race.view.blast_for(&race.core, Weapon::Bomb, point, None),
         Some((Trigger::BombSmokering, point)),
         "the Bomb's own smoke ring (BombBlast_Construct), at the impact \
          point - one third of the detonation; the other two are the \
@@ -616,7 +621,8 @@ fn each_weapon_plays_only_its_own_recovered_explosion() {
          separately, see `bomb_blast`"
     );
     assert_eq!(
-        race.blast_for(Weapon::Shuriken, point, None),
+        race.view
+            .blast_for(&race.core, Weapon::Shuriken, point, None),
         Some((Trigger::ShurikenExpire, point)),
         "the blade's teardown (FUN_08870c78) plays WO_SHURIKEN_EXPIRE at the \
          blade, on a fuse running out and on a craft hit alike"
@@ -652,12 +658,13 @@ fn a_cannon_round_sparks_on_a_wall_and_silently_on_a_craft() {
     let point = Vec3::new(4.0, 0.5, -1.0);
 
     assert_eq!(
-        race.blast_for(Weapon::Cannon, point, None),
+        race.view.blast_for(&race.core, Weapon::Cannon, point, None),
         Some((Trigger::CannonSparks, point)),
         "no craft struck means the wall/track spark, at the impact point"
     );
     assert_eq!(
-        race.blast_for(Weapon::Cannon, point, Some(1)),
+        race.view
+            .blast_for(&race.core, Weapon::Cannon, point, Some(1)),
         None,
         "a craft hit applies damage and a sound cue but throws no spark"
     );

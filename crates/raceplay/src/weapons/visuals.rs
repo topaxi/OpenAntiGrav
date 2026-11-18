@@ -368,190 +368,6 @@ impl Race {
         oag_fx::beam::build(ribbon, &frame, &|p| spline.tube_frame(p))
     }
 
-    /// Plays the explosion a weapon that just went off authored - its own,
-    /// not another weapon's.
-    ///
-    /// **Recovered for the Rocket, the Missile, the Mine and the Bomb.** See
-    /// [`Race::blast_for`] for the map and the reading behind each arm.
-    /// `orientation` is the frozen pose a laid charge detonated with
-    /// ([`oag_weapons::projectile::mine::frozen_pose`]) - unused by every
-    /// arm but the Bomb's, which needs it to place its own two `.vex`
-    /// models; see [`Self::spawn_bomb_blast_model`].
-    ///
-    /// Nothing is drawn when the effect did not load, or when [`blast_for`]
-    /// says this kind has none. That is deliberate and it is the rule for
-    /// every effect here: an authored particle system is not something to
-    /// approximate with billboards, and reusing *another* weapon's file is
-    /// the same invention wearing a real asset - see [`Self::advance_projectile_flares`]'s
-    /// doc comment for the flare bug this was the blast-side twin of. Drawing puffs,
-    /// smoke billboards, or the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast`
-    /// for every kind would all be invention; [`blast_for`] takes the `kind`.
-    ///
-    /// [`RaceView::sparks`] is deliberately not reused for it: that system
-    /// re-anchors to the hull every tick, so a burst ignited at an impact
-    /// would emit from the craft instead. It is one hull-mounted emitter, and
-    /// this is why the stage exists alongside it.
-    ///
-    /// [`blast_for`]: Race::blast_for
-    pub(crate) fn ignite_blast(
-        &mut self,
-        kind: oag_tables::weapons::Weapon,
-        point: Vec3,
-        struck: Option<usize>,
-        orientation: Quat,
-    ) -> Option<psys::Playing> {
-        self.ignite_blast_aged(kind, point, struck, orientation, 0)
-    }
-
-    /// [`Self::ignite_blast`] for a detonation `age_ticks` ago, which a network client first
-    /// learns of late (`crate::catch_up`): the screen flash joins its ramp at that age. The
-    /// particle effect is returned fresh for the caller to pre-age.
-    pub(crate) fn ignite_blast_aged(
-        &mut self,
-        kind: oag_tables::weapons::Weapon,
-        point: Vec3,
-        struck: Option<usize>,
-        orientation: Quat,
-        age_ticks: u32,
-    ) -> Option<psys::Playing> {
-        let (trigger, at) = self.blast_for(kind, point, struck)?;
-        // The Plasma's own three-model detonation - `Trigger::PlasmaBlast`
-        // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
-        // halo and two hemispheres are their own `.vex` models with their
-        // own render-side pool, on the same terms as the Rocket's, the
-        // Mine's and the Bomb's own bodies. See `blast_models` module doc
-        // comment for why that pool lives on `self.view` and is advanced
-        // independently of this effect stage.
-        if kind == oag_tables::weapons::Weapon::Plasma {
-            self.spawn_plasma_blast_model(at);
-        }
-        if kind == oag_tables::weapons::Weapon::Disruptor {
-            self.spawn_disruptor_halo(at);
-        }
-        // The Bomb's own two-model detonation - `Trigger::BombSmokering`
-        // below is one third of it, the psys smoke ring; the hemisphere and
-        // the shockwave are their own `.vex` models, on `bomb_blast`'s own
-        // render-side pool, the same shape as the Plasma's own three above.
-        if kind == oag_tables::weapons::Weapon::Bomb {
-            self.spawn_bomb_blast_model(at, orientation);
-        }
-        // HD's Missile explosion model: entered only when the missile reaches
-        // a craft, at that craft - `missile_blast`.
-        if let (oag_tables::weapons::Weapon::Missile, Some(slot)) = (kind, struck) {
-            let ship = &self.core.sim.world.ships[slot];
-            self.spawn_hd_missile_blast(ship.physics.body.position, ship.physics.body.orientation);
-        }
-        // Each detonation's own `ScreenFlash_Start`, whether or not its
-        // effect loaded - see [`flash_for`] and `oag_fx::flash`.
-        if let (Some(kind), Some(flash)) = (
-            flash_for(kind, struck.is_some()),
-            &mut self.view.screen_flash,
-        ) {
-            #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
-            flash.start_aged(kind, at, age_ticks as f32 * self.core.sim.dt);
-        }
-        let effect = self.view.handles.get(trigger).cloned()?;
-        // Neutral severity: the field the collision sparks derive from an
-        // impulse is the *hull's*, and nothing on the rocket path has been
-        // read as feeding it. See `oag_fx::sparks::severity`.
-        self.view.stage.play(&effect, at, 1.0)
-    }
-
-    /// Which explosion a hit plays and where, or `None` for a weapon with no
-    /// recovered detonation effect - split out from [`Race::ignite_blast`] so
-    /// the recovered part can be asserted without a disc to load the effect
-    /// from.
-    ///
-    /// - **`Rocket`**: [`Trigger::TrackBlast`] from `Rocket_Update`'s
-    ///   (`0x0885d2a8`) two collision branches, [`Trigger::CraftBlast`] from
-    ///   `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
-    ///   A craft hit is drawn at the *struck craft's* own position dropped by
-    ///   [`oag_title::engine_effects::CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
-    ///   has since gone inactive falls back to the impact point rather than
-    ///   reading a stale pose.
-    /// - **`Missile`**: [`Trigger::MissileExplo`] always, whatever it struck -
-    ///   see that constant's doc comment for why there is one file and no
-    ///   drop offset, unlike the Rocket's.
-    /// - **`Mine`**: [`Trigger::MineExplo`] always, whatever it struck, the
-    ///   same shape as the Missile's - see that constant's doc comment for
-    ///   `Mine_SpawnExplosion`.
-    /// - **`Cannon`**: [`Trigger::CannonSparks`] when `struck` is `None` - a
-    ///   wall or track hit - and nothing when it is `Some`. `Cannon_UpdateRound`
-    ///   (`0x0886593c`) only calls `Psys_Spawn_q` off its own world-collision
-    ///   raycast; the separate craft-proximity test that produces a `Some`
-    ///   `struck` here (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a
-    ///   sound cue but never spawns a particle effect. See
-    ///   `oag_weapons::projectile::cannon`'s module doc for the full read.
-    /// - **`Plasma`**: [`Trigger::PlasmaBlast`] always, whatever it struck, the
-    ///   same shape as the Missile's and the Mine's. `Plasmas_Update`
-    ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
-    ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
-    ///   bolt's own position for each - a wall hit and a timed-out bolt reach
-    ///   it identically, so there is no split to mirror. **On HD,
-    ///   [`Trigger::PlasmaLightningExpand`] instead** - a different
-    ///   executable's own file; see that constant's doc
-    ///   comment.
-    /// - **`Bomb`**: [`Trigger::BombSmokering`] always, whatever it struck -
-    ///   `Bomb_Detonate` (`0x088640c8`) calls `BombBlast_Construct`
-    ///   unconditionally on `play_visual`, which every caller in this
-    ///   engine's own fuse/trip paths sets. That is one third of the
-    ///   detonation: the other two are `explosion_hemisphere.vex` and
-    ///   `Bomb_Shockwave.vex`, their own `.vex` models this function cannot
-    ///   carry - [`Self::ignite_blast`]'s own Bomb branch spawns those into
-    ///   `bomb_blast`'s render-side pool alongside this effect. See
-    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md` ("the blast's own per-tick animator").
-    /// - **Everything else**: `None`. Guessing here - playing the Mine's
-    ///   file, or the Rocket's, is exactly the invention `CLAUDE.md` forbids.
-    pub(crate) fn blast_for(
-        &self,
-        kind: oag_tables::weapons::Weapon,
-        point: Vec3,
-        struck: Option<usize>,
-    ) -> Option<(Trigger, Vec3)> {
-        match kind {
-            oag_tables::weapons::Weapon::Rocket => Some(match struck {
-                Some(slot) if self.core.sim.world.ships[slot].active => (
-                    Trigger::CraftBlast,
-                    self.core.sim.world.ships[slot].physics.body.position
-                        - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP,
-                ),
-                // A craft that has gone inactive since the hit falls back to
-                // the impact point rather than reading a stale pose - still
-                // its own effect, because what was struck is what chose the
-                // file.
-                Some(_) => (Trigger::CraftBlast, point),
-                None => (Trigger::TrackBlast, point),
-            }),
-            oag_tables::weapons::Weapon::Missile => Some((Trigger::MissileExplo, point)),
-            oag_tables::weapons::Weapon::Mine => Some((Trigger::MineExplo, point)),
-            oag_tables::weapons::Weapon::Bomb => Some((Trigger::BombSmokering, point)),
-            // `DisruptorExplo_Construct` (`0x0885a2c8`) at the hit matrix, at a hit and at the
-            // bolt's timeout alike (`psp-pure-usa/weapon-effects.md`). A title whose table
-            // answers no such trigger plays nothing.
-            oag_tables::weapons::Weapon::Disruptor => Some((Trigger::DisruptorExplo, point)),
-            // `FUN_08870c78`, the blade's teardown: a fuse running out and a
-            // craft hit both reach it.
-            oag_tables::weapons::Weapon::Shuriken => Some((Trigger::ShurikenExpire, point)),
-            oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
-                Some((Trigger::CannonSparks, point))
-            }
-            // HD plays its own file, `WO_PLASMA_LIGHTNING_EXPAND` -
-            // `WeaponExplosions_Start`, not `Plasma_SpawnDetonation`'s
-            // `WO_PLASMA_FLASH`. `WO_PLASMA_LIGHTNING_COLLAPSE`, the other
-            // half of HD's pair, fires later and is not from here - see
-            // `Race::advance_plasma_blast_models`.
-            oag_tables::weapons::Weapon::Plasma => Some((
-                if self.view.hd_plasma_blast {
-                    Trigger::PlasmaLightningExpand
-                } else {
-                    Trigger::PlasmaBlast
-                },
-                point,
-            )),
-            _ => None,
-        }
-    }
-
     /// The second detonation a Pulse Plasma craft hit spawns, at the struck
     /// craft's body position, or `None` when the hit has no second one.
     ///
@@ -742,7 +558,8 @@ impl Race {
                     if head_rides_owner && projectile.charge > 0.0 =>
                 {
                     (
-                        self.muzzle_of(usize::from(projectile.owner))
+                        self.view
+                            .muzzle_of(&self.core, usize::from(projectile.owner))
                             .unwrap_or(projectile.position),
                         None,
                     )
@@ -1204,4 +1021,191 @@ impl Race {
 /// at a track gap of `gap`.
 fn leach_ball_fraction(elapsed: f32, gap: f32) -> f32 {
     (elapsed / oag_weapons::projectile::leach_beam::trip::period(gap)).clamp(0.0, 1.0)
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Plays the explosion a weapon that just went off authored - its own,
+    /// not another weapon's.
+    ///
+    /// **Recovered for the Rocket, the Missile, the Mine and the Bomb.** See
+    /// [`Race::blast_for`] for the map and the reading behind each arm.
+    /// `orientation` is the frozen pose a laid charge detonated with
+    /// ([`oag_weapons::projectile::mine::frozen_pose`]) - unused by every
+    /// arm but the Bomb's, which needs it to place its own two `.vex`
+    /// models; see [`Self::spawn_bomb_blast_model`].
+    ///
+    /// Nothing is drawn when the effect did not load, or when [`blast_for`]
+    /// says this kind has none. That is deliberate and it is the rule for
+    /// every effect here: an authored particle system is not something to
+    /// approximate with billboards, and reusing *another* weapon's file is
+    /// the same invention wearing a real asset - see [`Self::advance_projectile_flares`]'s
+    /// doc comment for the flare bug this was the blast-side twin of. Drawing puffs,
+    /// smoke billboards, or the *Rocket's* `Trigger::TrackBlast`/`Trigger::CraftBlast`
+    /// for every kind would all be invention; [`blast_for`] takes the `kind`.
+    ///
+    /// [`RaceView::sparks`] is deliberately not reused for it: that system
+    /// re-anchors to the hull every tick, so a burst ignited at an impact
+    /// would emit from the craft instead. It is one hull-mounted emitter, and
+    /// this is why the stage exists alongside it.
+    ///
+    /// [`blast_for`]: Race::blast_for
+    pub(crate) fn ignite_blast(
+        &mut self,
+        core: &SimRace,
+        kind: oag_tables::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+        orientation: Quat,
+    ) -> Option<psys::Playing> {
+        self.ignite_blast_aged(core, kind, point, struck, orientation, 0)
+    }
+    /// [`Self::ignite_blast`] for a detonation `age_ticks` ago, which a network client first
+    /// learns of late (`crate::catch_up`): the screen flash joins its ramp at that age. The
+    /// particle effect is returned fresh for the caller to pre-age.
+    pub(crate) fn ignite_blast_aged(
+        &mut self,
+        core: &SimRace,
+        kind: oag_tables::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+        orientation: Quat,
+        age_ticks: u32,
+    ) -> Option<psys::Playing> {
+        let (trigger, at) = self.blast_for(core, kind, point, struck)?;
+        // The Plasma's own three-model detonation - `Trigger::PlasmaBlast`
+        // below is `WO_PLASMA_FLASH`, a separate `.pob` particle system; the
+        // halo and two hemispheres are their own `.vex` models with their
+        // own render-side pool, on the same terms as the Rocket's, the
+        // Mine's and the Bomb's own bodies. See `blast_models` module doc
+        // comment for why that pool lives on `(*self)` and is advanced
+        // independently of this effect stage.
+        if kind == oag_tables::weapons::Weapon::Plasma {
+            self.spawn_plasma_blast_model(core, at);
+        }
+        if kind == oag_tables::weapons::Weapon::Disruptor {
+            self.spawn_disruptor_halo(at);
+        }
+        // The Bomb's own two-model detonation - `Trigger::BombSmokering`
+        // below is one third of it, the psys smoke ring; the hemisphere and
+        // the shockwave are their own `.vex` models, on `bomb_blast`'s own
+        // render-side pool, the same shape as the Plasma's own three above.
+        if kind == oag_tables::weapons::Weapon::Bomb {
+            self.spawn_bomb_blast_model(at, orientation);
+        }
+        // HD's Missile explosion model: entered only when the missile reaches
+        // a craft, at that craft - `missile_blast`.
+        if let (oag_tables::weapons::Weapon::Missile, Some(slot)) = (kind, struck) {
+            let ship = &core.sim.world.ships[slot];
+            self.spawn_hd_missile_blast(ship.physics.body.position, ship.physics.body.orientation);
+        }
+        // Each detonation's own `ScreenFlash_Start`, whether or not its
+        // effect loaded - see [`flash_for`] and `oag_fx::flash`.
+        if let (Some(kind), Some(flash)) =
+            (flash_for(kind, struck.is_some()), &mut self.screen_flash)
+        {
+            #[expect(clippy::cast_precision_loss, reason = "at most a few seconds of ticks")]
+            flash.start_aged(kind, at, age_ticks as f32 * core.sim.dt);
+        }
+        let effect = self.handles.get(trigger).cloned()?;
+        // Neutral severity: the field the collision sparks derive from an
+        // impulse is the *hull's*, and nothing on the rocket path has been
+        // read as feeding it. See `oag_fx::sparks::severity`.
+        self.stage.play(&effect, at, 1.0)
+    }
+    /// Which explosion a hit plays and where, or `None` for a weapon with no
+    /// recovered detonation effect - split out from [`Race::ignite_blast`] so
+    /// the recovered part can be asserted without a disc to load the effect
+    /// from.
+    ///
+    /// - **`Rocket`**: [`Trigger::TrackBlast`] from `Rocket_Update`'s
+    ///   (`0x0885d2a8`) two collision branches, [`Trigger::CraftBlast`] from
+    ///   `Rocket_SpawnCraftExplosion_q` (`0x0886ed34`) on the craft-hit path.
+    ///   A craft hit is drawn at the *struck craft's* own position dropped by
+    ///   [`oag_title::engine_effects::CRAFT_BLAST_DROP`], not at the rocket's impact point; a craft that
+    ///   has since gone inactive falls back to the impact point rather than
+    ///   reading a stale pose.
+    /// - **`Missile`**: [`Trigger::MissileExplo`] always, whatever it struck -
+    ///   see that constant's doc comment for why there is one file and no
+    ///   drop offset, unlike the Rocket's.
+    /// - **`Mine`**: [`Trigger::MineExplo`] always, whatever it struck, the
+    ///   same shape as the Missile's - see that constant's doc comment for
+    ///   `Mine_SpawnExplosion`.
+    /// - **`Cannon`**: [`Trigger::CannonSparks`] when `struck` is `None` - a
+    ///   wall or track hit - and nothing when it is `Some`. `Cannon_UpdateRound`
+    ///   (`0x0886593c`) only calls `Psys_Spawn_q` off its own world-collision
+    ///   raycast; the separate craft-proximity test that produces a `Some`
+    ///   `struck` here (`FUN_088579a8`/`FUN_08857f2c`) applies damage and a
+    ///   sound cue but never spawns a particle effect. See
+    ///   `oag_weapons::projectile::cannon`'s module doc for the full read.
+    /// - **`Plasma`**: [`Trigger::PlasmaBlast`] always, whatever it struck, the
+    ///   same shape as the Missile's and the Mine's. `Plasmas_Update`
+    ///   (`0x0886b490`) runs one teardown pass over every bolt carrying the
+    ///   destroy bit and calls `Plasma_SpawnDetonation` (`0x0886ac88`) with the
+    ///   bolt's own position for each - a wall hit and a timed-out bolt reach
+    ///   it identically, so there is no split to mirror. **On HD,
+    ///   [`Trigger::PlasmaLightningExpand`] instead** - a different
+    ///   executable's own file; see that constant's doc
+    ///   comment.
+    /// - **`Bomb`**: [`Trigger::BombSmokering`] always, whatever it struck -
+    ///   `Bomb_Detonate` (`0x088640c8`) calls `BombBlast_Construct`
+    ///   unconditionally on `play_visual`, which every caller in this
+    ///   engine's own fuse/trip paths sets. That is one third of the
+    ///   detonation: the other two are `explosion_hemisphere.vex` and
+    ///   `Bomb_Shockwave.vex`, their own `.vex` models this function cannot
+    ///   carry - [`Self::ignite_blast`]'s own Bomb branch spawns those into
+    ///   `bomb_blast`'s render-side pool alongside this effect. See
+    ///   `docs/ghidra/functions/psp-pulse-usa/mine.md` ("the blast's own per-tick animator").
+    /// - **Everything else**: `None`. Guessing here - playing the Mine's
+    ///   file, or the Rocket's, is exactly the invention `CLAUDE.md` forbids.
+    pub(crate) fn blast_for(
+        &self,
+        core: &SimRace,
+        kind: oag_tables::weapons::Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+    ) -> Option<(Trigger, Vec3)> {
+        match kind {
+            oag_tables::weapons::Weapon::Rocket => Some(match struck {
+                Some(slot) if core.sim.world.ships[slot].active => (
+                    Trigger::CraftBlast,
+                    core.sim.world.ships[slot].physics.body.position
+                        - Vec3::Y * oag_title::engine_effects::CRAFT_BLAST_DROP,
+                ),
+                // A craft that has gone inactive since the hit falls back to
+                // the impact point rather than reading a stale pose - still
+                // its own effect, because what was struck is what chose the
+                // file.
+                Some(_) => (Trigger::CraftBlast, point),
+                None => (Trigger::TrackBlast, point),
+            }),
+            oag_tables::weapons::Weapon::Missile => Some((Trigger::MissileExplo, point)),
+            oag_tables::weapons::Weapon::Mine => Some((Trigger::MineExplo, point)),
+            oag_tables::weapons::Weapon::Bomb => Some((Trigger::BombSmokering, point)),
+            // `DisruptorExplo_Construct` (`0x0885a2c8`) at the hit matrix, at a hit and at the
+            // bolt's timeout alike (`psp-pure-usa/weapon-effects.md`). A title whose table
+            // answers no such trigger plays nothing.
+            oag_tables::weapons::Weapon::Disruptor => Some((Trigger::DisruptorExplo, point)),
+            // `FUN_08870c78`, the blade's teardown: a fuse running out and a
+            // craft hit both reach it.
+            oag_tables::weapons::Weapon::Shuriken => Some((Trigger::ShurikenExpire, point)),
+            oag_tables::weapons::Weapon::Cannon if struck.is_none() => {
+                Some((Trigger::CannonSparks, point))
+            }
+            // HD plays its own file, `WO_PLASMA_LIGHTNING_EXPAND` -
+            // `WeaponExplosions_Start`, not `Plasma_SpawnDetonation`'s
+            // `WO_PLASMA_FLASH`. `WO_PLASMA_LIGHTNING_COLLAPSE`, the other
+            // half of HD's pair, fires later and is not from here - see
+            // `Race::advance_plasma_blast_models`.
+            oag_tables::weapons::Weapon::Plasma => Some((
+                if self.hd_plasma_blast {
+                    Trigger::PlasmaLightningExpand
+                } else {
+                    Trigger::PlasmaBlast
+                },
+                point,
+            )),
+            _ => None,
+        }
+    }
 }

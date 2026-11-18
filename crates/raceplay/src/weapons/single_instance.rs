@@ -209,7 +209,8 @@ impl Race {
             // `ignite_blast`'s `orientation` is unused by every arm but the
             // Bomb's.
             #[cfg(feature = "view")]
-            self.note_blast(
+            crate::stage::stage!(self).note_blast(
+                &self.core,
                 oag_tables::weapons::Weapon::Mine,
                 point,
                 None,
@@ -318,8 +319,9 @@ impl Race {
         // A swallowed hit is the only thing that makes the target's shell
         // visibly react - the same out-parameter `Race::advance_quake` spends
         // on `self.view.shield[slot].hit()`, narrowed to the beam's one victim.
+        #[cfg(feature = "view")]
         if report.absorbed {
-            self.shield_hit(beam.target as usize);
+            crate::stage::stage!(self).shield_hit(&self.core, beam.target as usize);
         }
         if report.asked > 0.0 {
             let mut hits = [oag_weapons::projectile::WeaponHit::default(); MAX_SHIPS];

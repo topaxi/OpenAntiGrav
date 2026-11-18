@@ -329,44 +329,6 @@ pub(super) struct BombBlastDraw {
 }
 
 impl Race {
-    /// Starts a render-side blast at `position`, oriented by `orientation` -
-    /// dropped silently if all [`BOMB_BLAST_SLOTS`] are already live, the
-    /// same "no evicting a running effect" rule
-    /// [`Race::spawn_plasma_blast_model`] takes.
-    ///
-    /// Called from [`Race::ignite_blast`] for every Bomb detonation.
-    pub(crate) fn spawn_bomb_blast_model(&mut self, position: Vec3, orientation: Quat) {
-        // HD's blast is its own object with its own pool - see [`hd`].
-        if self.view.hd_bomb_blast {
-            let up = orientation * Vec3::Y;
-            log::debug!("HD bomb blast starts at {position:?}");
-            if let Some(slot) = self.view.hd_bomb_blasts.iter().position(Option::is_none) {
-                self.view.hd_bomb_blasts[slot] = Some(hd::HdBlast::new(position, up));
-            }
-            return;
-        }
-        let Some(slot) = self.view.bomb_blasts.iter().position(Option::is_none) else {
-            return;
-        };
-        // `Vec3::Y`, not `NEG_Z`: `oag-view --mesh` on both `.vex` files
-        // shows a dome resting pole-up and a ring lying flat, both on their
-        // own local Y - see this module's own doc comment for why that
-        // settles which axis this substitutes for the unlocated
-        // `entity+0x60` row, and `mine::frozen_pose`'s own hedge for why the
-        // substitution itself (the frozen craft orientation standing in for
-        // the rear emitter's own transform) carries no confidence score.
-        let dir = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
-        self.view.bomb_blasts[slot] = Some(BombBlast {
-            kind: BlastKind::Bomb,
-            position,
-            dir,
-            age: 0.0,
-            hemisphere_scale: HEMISPHERE_SCALE.start,
-            shockwave_scale: SHOCKWAVE_SCALE.start,
-            shockwave_alpha: SHOCKWAVE_ALPHA.start,
-        });
-    }
-
     /// Starts a ship explosion's shockwave at `position` (the craft's own, not the explosion
     /// effect's dropped one) with the craft's up as `dir` - see this module's doc comment.
     /// Dropped silently when every slot is live, like [`Self::spawn_bomb_blast_model`].
@@ -570,3 +532,44 @@ pub(super) mod hd;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Starts a render-side blast at `position`, oriented by `orientation` -
+    /// dropped silently if all [`BOMB_BLAST_SLOTS`] are already live, the
+    /// same "no evicting a running effect" rule
+    /// [`Race::spawn_plasma_blast_model`] takes.
+    ///
+    /// Called from [`Race::ignite_blast`] for every Bomb detonation.
+    pub(crate) fn spawn_bomb_blast_model(&mut self, position: Vec3, orientation: Quat) {
+        // HD's blast is its own object with its own pool - see [`hd`].
+        if self.hd_bomb_blast {
+            let up = orientation * Vec3::Y;
+            log::debug!("HD bomb blast starts at {position:?}");
+            if let Some(slot) = self.hd_bomb_blasts.iter().position(Option::is_none) {
+                self.hd_bomb_blasts[slot] = Some(hd::HdBlast::new(position, up));
+            }
+            return;
+        }
+        let Some(slot) = self.bomb_blasts.iter().position(Option::is_none) else {
+            return;
+        };
+        // `Vec3::Y`, not `NEG_Z`: `oag-view --mesh` on both `.vex` files
+        // shows a dome resting pole-up and a ring lying flat, both on their
+        // own local Y - see this module's own doc comment for why that
+        // settles which axis this substitutes for the unlocated
+        // `entity+0x60` row, and `mine::frozen_pose`'s own hedge for why the
+        // substitution itself (the frozen craft orientation standing in for
+        // the rear emitter's own transform) carries no confidence score.
+        let dir = (orientation * Vec3::Y).try_normalize().unwrap_or(Vec3::Y);
+        self.bomb_blasts[slot] = Some(BombBlast {
+            kind: BlastKind::Bomb,
+            position,
+            dir,
+            age: 0.0,
+            hemisphere_scale: HEMISPHERE_SCALE.start,
+            shockwave_scale: SHOCKWAVE_SCALE.start,
+            shockwave_alpha: SHOCKWAVE_ALPHA.start,
+        });
+    }
+}

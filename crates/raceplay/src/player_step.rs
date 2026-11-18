@@ -327,8 +327,9 @@ impl Race {
         // player meets first: scraping a wall behind a shield costs nothing
         // and bulges the shell. The original's contact loop takes exactly this
         // branch instead of its hull-damage call.
+        #[cfg(feature = "view")]
         if evaluated.shield.absorbed {
-            self.shield_hit(slot);
+            crate::stage::stage!(self).shield_hit(&self.core, slot);
         }
         PlayerStep {
             evaluated,

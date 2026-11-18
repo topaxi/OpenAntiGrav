@@ -19,6 +19,7 @@
 //!
 //! Chosen, not measured: every constant below.
 
+use crate::stage::Stage;
 use std::collections::VecDeque;
 
 use oag_gameplay::cue::{Cue, CueEvent};
@@ -138,63 +139,6 @@ pub(crate) struct Journal {
 }
 
 impl Race {
-    fn record(&mut self, what: What) {
-        let entry = Entry {
-            tick: u32::try_from(self.core.sim.world.tick).unwrap_or(0),
-            what,
-        };
-        if self.quiet {
-            if self.journal.missed.len() >= MISSED_CAP {
-                self.journal.missed.remove(0);
-            }
-            self.journal.missed.push(entry);
-        } else {
-            self.journal.presented.push_back(entry);
-        }
-    }
-
-    /// Logs the weapon cues raised since the queue was `queued` long: presented on a drawn tick,
-    /// missed on a replayed one.
-    pub(super) fn note_cues(&mut self, queued: usize) {
-        let raised: Vec<CueEvent> = self
-            .core
-            .sim
-            .cues
-            .get(queued..)
-            .unwrap_or(&[])
-            .iter()
-            .copied()
-            .filter(|event| is_weapon_cue(event.cue))
-            .collect();
-        for event in raised {
-            self.record(What::Cue(event));
-        }
-    }
-
-    /// A weapon's blast: played on a drawn tick, journalled on a replayed one.
-    pub(super) fn note_blast(
-        &mut self,
-        kind: Weapon,
-        point: Vec3,
-        struck: Option<usize>,
-        orientation: Quat,
-    ) {
-        if self.draws() {
-            self.ignite_blast(kind, point, struck, orientation);
-        }
-        self.record(What::Blast {
-            kind,
-            point,
-            struck,
-            orientation,
-        });
-    }
-
-    /// A shield bulge: journalled whichever kind of tick it was; [`Self::shield_hit`] draws it.
-    pub(super) fn note_shield_hit(&mut self, slot: usize) {
-        self.record(What::ShieldHit(slot));
-    }
-
     /// Matches what the quiet ticks since the last call raised against what drawn ticks
     /// presented, starts now what had not been presented, at its age, and leaves what had.
     ///
@@ -255,7 +199,9 @@ impl Race {
             } if age <= BLAST_MAX_AGE => {
                 late.blasts += 1;
                 late.oldest_age = late.oldest_age.max(age);
-                if let Some(playing) = self.ignite_blast_aged(kind, point, struck, orientation, age)
+                if let Some(playing) =
+                    self.view
+                        .ignite_blast_aged(&self.core, kind, point, struck, orientation, age)
                 {
                     let dt = self.core.sim.dt;
                     self.view
@@ -281,5 +227,66 @@ impl Race {
     /// What the corrections since the last call started late, and resets it.
     pub fn take_late_report(&mut self) -> LateReport {
         std::mem::take(&mut self.journal.late)
+    }
+}
+
+#[cfg(feature = "view")]
+impl Stage<'_> {
+    fn record(&mut self, core: &SimRace, what: What) {
+        let entry = Entry {
+            tick: u32::try_from(core.sim.world.tick).unwrap_or(0),
+            what,
+        };
+        if !self.draws() {
+            if self.journal.missed.len() >= MISSED_CAP {
+                self.journal.missed.remove(0);
+            }
+            self.journal.missed.push(entry);
+        } else {
+            self.journal.presented.push_back(entry);
+        }
+    }
+    /// Logs the weapon cues raised since the queue was `queued` long: presented on a drawn tick,
+    /// missed on a replayed one.
+    pub(super) fn note_cues(&mut self, core: &SimRace, queued: usize) {
+        let raised: Vec<CueEvent> = core
+            .sim
+            .cues
+            .get(queued..)
+            .unwrap_or(&[])
+            .iter()
+            .copied()
+            .filter(|event| is_weapon_cue(event.cue))
+            .collect();
+        for event in raised {
+            self.record(core, What::Cue(event));
+        }
+    }
+    /// A weapon's blast: played on a drawn tick, journalled on a replayed one.
+    pub(super) fn note_blast(
+        &mut self,
+        core: &SimRace,
+        kind: Weapon,
+        point: Vec3,
+        struck: Option<usize>,
+        orientation: Quat,
+    ) {
+        if self.draws() {
+            self.view
+                .ignite_blast(core, kind, point, struck, orientation);
+        }
+        self.record(
+            core,
+            What::Blast {
+                kind,
+                point,
+                struck,
+                orientation,
+            },
+        );
+    }
+    /// A shield bulge: journalled whichever kind of tick it was; [`Self::shield_hit`] draws it.
+    pub(super) fn note_shield_hit(&mut self, core: &SimRace, slot: usize) {
+        self.record(core, What::ShieldHit(slot));
     }
 }

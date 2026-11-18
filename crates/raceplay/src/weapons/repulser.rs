@@ -105,9 +105,10 @@ impl Race {
             self.core.sim.world.repulsers[index] = alive.then_some(repulser);
         }
         self.core.sim.extensions.weapon_hits(&hits);
+        #[cfg(feature = "view")]
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
-                self.shield_hit(slot);
+                crate::stage::stage!(self).shield_hit(&self.core, slot);
             }
         }
         #[cfg(feature = "view")]

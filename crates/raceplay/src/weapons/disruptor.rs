@@ -8,6 +8,8 @@
 //! `docs/ghidra/functions/psp-pure-usa/weapons.md`.
 
 use super::*;
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 
 impl Race {
     /// Fires one Disruptor from `slot`, returning whether a bolt left.
@@ -81,29 +83,9 @@ impl Race {
             .fire_disruptor(position, velocity, up, slot as u8, target, effect);
         #[cfg(feature = "view")]
         if fired {
-            self.play_disruptor_launch(slot);
+            crate::stage::stage!(self).play_disruptor_launch(&self.core, slot);
         }
         fired
-    }
-
-    /// `WO_DISRUPTOR_LAUNCH` at the firing craft's `Ship Muzzle` node, played once.
-    ///
-    /// `DisruptorPool_Fire` (`0x0884fc14`) spawns it only when `*(craft+0xe0)` is
-    /// non-zero, and that is the node `ShipMuzzle_Importer` builds from the hull's
-    /// own locator: a hull that authors none (`Ship::muzzle` is `None`) plays nothing
-    /// (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
-    #[cfg(feature = "view")]
-    pub(crate) fn play_disruptor_launch(&mut self, slot: usize) {
-        if !self.draws() {
-            return;
-        }
-        let Some(at) = self.muzzle_of(slot) else {
-            return;
-        };
-        let Some(effect) = self.view.handles.get(Trigger::DisruptorLaunch).cloned() else {
-            return;
-        };
-        self.view.stage.play(&effect, at, 1.0);
     }
 
     /// Fires an opponent's Disruptor, if its driver wants to: two gates, the
@@ -152,5 +134,28 @@ impl RaceSim {
             controls.thrust *= scale;
         }
         controls
+    }
+}
+
+#[cfg(feature = "view")]
+impl Stage<'_> {
+    /// `WO_DISRUPTOR_LAUNCH` at the firing craft's `Ship Muzzle` node, played once.
+    ///
+    /// `DisruptorPool_Fire` (`0x0884fc14`) spawns it only when `*(craft+0xe0)` is
+    /// non-zero, and that is the node `ShipMuzzle_Importer` builds from the hull's
+    /// own locator: a hull that authors none (`Ship::muzzle` is `None`) plays nothing
+    /// (`docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+    #[cfg(feature = "view")]
+    pub(crate) fn play_disruptor_launch(&mut self, core: &SimRace, slot: usize) {
+        if !self.draws() {
+            return;
+        }
+        let Some(at) = self.view.muzzle_of(core, slot) else {
+            return;
+        };
+        let Some(effect) = self.view.handles.get(Trigger::DisruptorLaunch).cloned() else {
+            return;
+        };
+        self.view.stage.play(&effect, at, 1.0);
     }
 }

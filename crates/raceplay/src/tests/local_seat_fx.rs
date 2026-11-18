@@ -200,7 +200,7 @@ fn a_local_seats_boost_pulse_draws_in_its_view_alone() {
     for views in VIEWS {
         for seat in 0..views {
             let mut race = local_people(views, true);
-            race.fire_zoom_boost(seat);
+            crate::stage::stage!(race).fire_zoom_boost(&race.core, seat);
             for _ in 0..6 {
                 race.advance_zoom();
             }

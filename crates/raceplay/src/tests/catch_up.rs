@@ -159,7 +159,8 @@ fn a_blast_first_seen_in_the_replay_is_started_at_its_age_and_a_played_one_is_no
     // Called between ticks, so `quiet` (set for the length of a replayed tick) is set by hand.
     let blast = |race: &mut Race, quiet: bool| {
         race.quiet = quiet;
-        race.note_blast(
+        crate::stage::stage!(race).note_blast(
+            &race.core,
             oag_tables::weapons::Weapon::Rocket,
             Vec3::ZERO,
             None,
@@ -197,7 +198,8 @@ fn a_blast_first_seen_late_starts_its_screen_flash_aged() {
     let hit = |race: &mut Race, quiet: bool| {
         race.quiet = quiet;
         // A Rocket that reached a craft: screen flash kind 0.
-        race.note_blast(
+        crate::stage::stage!(race).note_blast(
+            &race.core,
             oag_tables::weapons::Weapon::Rocket,
             Vec3::ZERO,
             Some(1),

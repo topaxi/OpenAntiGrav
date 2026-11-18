@@ -1210,7 +1210,7 @@ impl crate::Race {
             self.run_warnings();
             let gave = self.core.sim.extensions.take_shield_gives();
             for slot in (0..oag_gameplay::MAX_SHIPS).filter(|slot| gave & (1 << slot) != 0) {
-                self.shield_activate(slot);
+                crate::stage::stage!(self).shield_activate(slot);
             }
         }
         #[cfg(not(feature = "extensions"))]

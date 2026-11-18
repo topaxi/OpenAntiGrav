@@ -333,7 +333,8 @@ impl Race {
             && self.core.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0
         {
             self.core.sim.world.ships[slot].physics.shield_pickup_timer = time;
-            self.shield_activate(slot);
+            #[cfg(feature = "view")]
+            crate::stage::stage!(self).shield_activate(slot);
         }
     }
 }

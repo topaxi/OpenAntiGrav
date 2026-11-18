@@ -1053,8 +1053,9 @@ impl Race {
             // opponent a Shield yet - the AI has no fire decision for one - so
             // this is unreachable today and is here because the alternative is a
             // rival shield that silently has no visual the day it arrives.
+            #[cfg(feature = "view")]
             if evaluated.shield.absorbed {
-                self.shield_hit(slot);
+                crate::stage::stage!(self).shield_hit(&self.core, slot);
             }
             // **The same recovery the player gets**, and it is not a nicety.
             // Without it an opponent that leaves the geometry keeps going: the
@@ -1425,7 +1426,7 @@ impl Race {
                         {
                             self.view.pair_spoil[slot] |= racing && !shielded;
                             if racing && shielded {
-                                self.shield_hit(slot);
+                                crate::stage::stage!(self).shield_hit(&self.core, slot);
                             }
                         }
                         #[cfg(not(feature = "view"))]

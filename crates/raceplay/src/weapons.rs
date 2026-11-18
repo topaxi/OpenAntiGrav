@@ -278,9 +278,10 @@ impl Race {
                         oag_gameplay::cue::Cue::Turbo,
                         slot,
                     ));
-                    self.boost_plume(slot);
                     #[cfg(feature = "view")]
-                    self.fire_zoom_boost(slot);
+                    crate::stage::stage!(self).boost_plume(slot);
+                    #[cfg(feature = "view")]
+                    crate::stage::stage!(self).fire_zoom_boost(&self.core, slot);
                 }
                 oag_tables::weapons::Weapon::Shield => {
                     let Some(simple) = weapons.simple(weapon) else {
@@ -301,7 +302,8 @@ impl Race {
                     // nothing having happened, and here something did.
                     if self.core.sim.world.ships[slot].physics.shield_pickup_timer <= 0.0 {
                         self.core.sim.world.ships[slot].physics.shield_pickup_timer = simple.time;
-                        self.shield_activate(slot);
+                        #[cfg(feature = "view")]
+                        crate::stage::stage!(self).shield_activate(slot);
                     }
                 }
                 oag_tables::weapons::Weapon::Autopilot => {
