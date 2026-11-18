@@ -80,7 +80,10 @@
   folds, Intel iGPU 1080p HD track shaded -51 %, Pulse -47 %, the Deck not run),
   the blur skip and the 1080p gamescope window were measured and dropped; 2026-11-18: the Deck's 4K
   frame pass by pass, the `lit_by_rig` fold (HD circuit shading -7.4 % at 4K, whole-race GPU -2.4 %),
-  seven cuts measured and dropped, and the internal resolution that holds 60 Hz (HD 67 %) - see
+  seven cuts measured and dropped, and the internal resolution that holds 60 Hz (HD 67 %); later
+  the same day, circuit shading's exact cuts and HD's vertex curve in the vertex stage (Deck 4K
+  `track solid, shaded` HD -17.6 %, 2048 -23.3 %, Omega -24.6 %) and the
+  `graphics.circuit_lighting` rung, which buys about 5 % of render scale - see
   [`hires-gpu-levers.md`](hires-gpu-levers.md)
 - **Where the frame thread's CPU goes** (2026-10-21): `--frame-log` prints a per-phase line; a
   paused race costs nearly what a racing one does, about half of it in wgpu's submit, and two

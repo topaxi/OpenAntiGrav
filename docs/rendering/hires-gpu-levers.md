@@ -1149,3 +1149,214 @@ The settings file said `pause_on_focus_loss = false`. The trace landed in `/tmp`
 `<binary>_<date>_frame401.rgp` (30 MB): Omega at 1080p, on the build after the blended split. It
 is not committed (it is a capture of game content). The race at frame 401 is early in its first
 lap, and nothing above is read from it.
+
+## Circuit shading: exact cuts, the vertex curve and a lighting rung (2026-11-18, `circuit-lighting-rungs`)
+
+The question: what of the circuit's shading (`track solid, shaded`, the biggest pass on HD, 2048
+and Omega at 4K) can go exactly, in the original's own order, and what a player-chosen cheaper
+lighting saves against a lower render scale. **Chosen workload, not measured against any
+original.**
+
+**Result.** Seven exact cuts (and the original's own order for the vertex light curve) take the
+Deck's `track solid, shaded` at 4K from 10.49 to 8.65 ms on HD (-17.6 %), 6.71 to 5.15 on 2048 (-23.3 %)
+and 8.38 to 6.32 on Omega (-24.6 %), and Omega's `track blended` from 2.55 to 1.64; the pictures are
+byte-identical except HD's vertex-lit chunks, which the original's order moves. One option landed,
+**`graphics.circuit_lighting`** (`original`, the default, or `simplified`): a further 20 % of HD's
+circuit shading and 8 % of Omega's at 4K on the Deck, for a flatter, matte track; at a 4K output
+that buys about 5 % of render scale, and exact lighting at the scale that costs the same looks
+better. The second
+option the brief named, approximated light curves, is not a speed option on this hardware and was
+not added.
+
+### Method
+
+As "The 4K frame on the Deck pass by pass" above: `RADV VANGOGH`, AC, GPU clock unpinned (the
+serialised span bench sits at 1,040 MHz, recorded per run with `amdgpu_top`), offscreen over ssh,
+Deck load 1.3 to 2.5. Release `-C target-cpu=znver2 --features perf-probe` builds from the
+`oag-appimage-build:bookworm` container, one binary per step. Spans: `OAG_RENDER_GPU_BENCH=100
+OAG_RENDER_PERF=1 oag-game <image> --race --mode single_race --seed 1 --autopilot --no-audio
+--size WxH --ticks 2500 --render-scale 100 --screenshot out.png`, the arms of each comparison
+interleaved (order reversed every other round), 2 rounds; rounds agree to 0.1 to 0.5 %. HD is
+Talon's Junction, 2048 Altima, Omega Tech de Ra (each title's default). `--mode time_trial` for
+the one-craft frame. Whole races: `scripts/bench-render.py run hd 2048 omega --binary ./oag-game
+--size WxH`. The dGPU is this notebook's NVIDIA RTX PRO 2000, host release build, same commands,
+host load recorded (1.5 to 27; read its numbers as direction, not as tenths). Pixels: every pair
+of screenshots of one comparison diffed, on the Deck at three sizes and on NVIDIA.
+
+### The exact cuts, Deck `track solid, shaded`, us, 1280x800 / 1920x1080 / 3840x2160
+
+| step | HD | 2048 | Omega | pixels |
+|---|---|---|---|---|
+| main (`b85b19789`) | 2,016 / 3,467 / 10,492 | 1,036 / 1,935 / 6,712 | 2,351 / 3,340 / 8,382 | |
+| 1. craft-shadow loop ends at the last drawn record | 2,033 to 1,953 / 3,468 to 3,269 / 10,495 to 9,731 (-7.3 %) | flat (no shadows) | flat (no shadows) | identical |
+| 1, time trial frame | 2,241 to 2,127 / 3,928 to 3,711 / 12,518 to 11,700 (-6.5 %) | | | identical |
+| 5. fog runs one curve; rig, lit and `nova_vertex` folds | 1,961 to 1,868 / 3,283 to 3,160 / 9,791 to 9,244 | 1,041 to 986 / 1,948 to 1,831 / 6,791 to 6,313 (-7.0 %) | 2,349 to 2,142 / 3,359 to 3,016 / 8,423 to 7,502 (-10.9 %) | identical |
+| A. the vertex curve in the vertex stage (default, the original's order) | 1,883 to 1,895 / 3,137 to 3,098 / 9,144 to 8,835 (-3.4 %) | 975 to 941 / 1,809 to 1,730 / 6,226 to 5,903 (-5.2 %) | 2,129 to 2,109 / 2,991 to 2,924 / 7,403 to 7,133 (-3.6 %) | HD moves, below |
+| 4. no second-texture fetch where nothing reads it | 1,895 to 1,773 / 3,098 to 2,955 / 8,835 to 8,651 (-2.1 %) | flat | flat | identical |
+| 6. no generic specular at a zero scale; no tangent branch without tangents | flat (1,775 to 1,768 / 2,961 to 2,956 / 8,656 to 8,647) | 940 to 857 / 1,731 to 1,540 / 5,909 to 5,145 (-12.9 %) | 2,107 to 2,025 / 2,928 to 2,708 / 7,143 to 6,320 (-11.5 %) | identical |
+| all, main to final | 2,016 to 1,768 / 3,467 to 2,956 / 10,492 to 8,647 (-17.6 %) | 1,036 to 857 / 1,935 to 1,540 / 6,712 to 5,145 (-23.3 %) | 2,351 to 2,025 / 3,340 to 2,708 / 8,382 to 6,320 (-24.6 %) | HD's vertex-lit chunks only |
+
+Omega's `track blended` (its road decals, plain blended pipelines): 2,555 to 1,637 us at 4K
+(-36 %), from cuts 5, A, 4 and 6. Pipelined per frame at 4K, main to final: HD 14.10 to 12.65
+ms, 2048 8.67 to 7.36, Omega 13.50 to 11.54. Each row is its own interleaved pair (the step
+before it against it), so rows measured on different days of the stack do not add exactly.
+
+What each is:
+
+1. **The craft-shadow loop ends at the last drawn record.** `oag_render::shadow::map::Map::
+   receiver_shadows` packs the records whose square was drawn (in sight, with geometry) to the
+   front in slot order, and `craft_shadow_coverage` breaks at the first empty one. Exact: a record
+   left out read a cleared square, a factor of `1 - 0`, and the kept ones multiply in the same
+   order. It pays in a full pack too (-7.3 % at 4K): craft out of sight leave their record.
+2. **(Cut 5) Fog runs one curve; three weights fold.** `fogged` branches on `scene.fog.curve`
+   (0 or 1 on every title) instead of computing both factors and mixing them; under `lit_by_rig`
+   the rig and `lit` weights are the constant one the override already promises; a
+   `nova_vertices` override (an OR over the model's vertices) folds 2048's vertex-lit test
+   elsewhere. Omega gained most (its fog factor work was the larger share).
+3. **A. HD's `IleVertex` curve runs per vertex.** The original's vertex program computes
+   `pow(colourSet, prelitBias) * prelitScaleSpecular` and interpolates it
+   ([renderer.md](../ghidra/functions/ps3-hdfury-eu/renderer.md), "The vertex curve is per
+   vertex", confidence 90), so this is the original's order and the default. Three `pow` a pixel
+   fewer; 2048 and Omega gain too, since their pixels no longer compute the HD curve the select
+   threw away. The picture: 9,083 of 1,024,000 HD pixels move by up to 19 levels; against the 13
+   HD race pairs, 7 move toward the original, 5 away (the page above has the table).
+4. **(Cut 4) The second texture is fetched only where something reads it.** `second_read` is 0 on
+   a plain pipeline whose draws carry none of the role bits that read it (albedo or alpha from
+   it, the facing-ramp sheen), name no emissive row (the pane and twin programs) and have no glow
+   mask sourced from it (`mesh_render::specialise::reads_second`). On HD's default circuit no
+   plain draw reads it.
+5. **(Cut 6) The generic specular where the rig's scale is zero, and the tangent branch where no
+   vertex has a tangent.** 2048's and Omega's circuits author `specular x0.00`, so the generic
+   specular is a product with zero; `BuildCacheScope::lit_by` pins `rig_specular` to 0 there.
+   `tangents_present` (an OR over the model's vertices) folds the normal-map branches. Found
+   because the lighting rung below saved 18 % on 2048 with no pixel changed.
+
+**Measured and dropped:**
+
+- **Cut 3, the sunless encode only where a shadow covers the pixel**: byte-identical, but slower
+  on the Deck (HD 4K 9,721 to 9,800 us, time trial 11,680 to 11,764). The deferred values stay
+  live across the shadow lookup. Intel (the brief's worry): 3,412 / 3,074 to 3,184 / 3,093 us at
+  1080p, no regression, no gain.
+- **An `unlit_plain` fold** (a plain pipeline every vertex of which has `lit` 0 skips the rig's
+  block): byte-identical, flat everywhere (HD 4K 8,649 to 8,650 us).
+- **Cut 2, the `programs_present` override for the rich pipelines: not built.** A throwaway arm
+  that skips the rich half's draws altogether bounds it: HD 4K 9,139 to 8,565 us (575 us, 6 %),
+  Omega 7,401 to 6,606 (795 us), 2048 nothing. The override would recover a fraction of that; the
+  craft pass (3 ms at 4K, all rich) is where it would pay more, and is left open.
+
+### The circuit lighting rung: `graphics.circuit_lighting`
+
+`simplified` drops three things on a circuit's plain pipelines (the `simplified_lighting`
+override, through `BuildCacheScope::simplified_lighting`, where the rig is on): the specular, the
+normal map, and Wipeout HD's SPU vertex lights (the rig's per-vertex lights). It keeps the
+albedo, the baked light (lightmap or colour set), the ambient, the sun on the surface's own normal
+(so the craft shadow still takes out exactly the sun), glows, fog and shadows. **A departure from
+the original's look, off by default**; a fresh and an existing profile stay `original`. Settings
+key `[render_profiles.<title>] circuit_lighting`, `--circuit-lighting`, and the CIRCUIT LIGHTING
+row under the graphics page, dropped on Pulse and Pure.
+
+Deck `track solid, shaded`, us, exact to `simplified`, on the final exact build:
+
+| | 1280x800 | 1920x1080 | 3840x2160 | pixels changed (4K) |
+|---|---|---|---|---|
+| HD | 1,768 to 1,459 | 2,956 to 2,400 | 8,647 to 6,940 (-19.7 %) | 30 % (2,507,308), up to 238 levels |
+| Omega | 2,025 to 1,899 | 2,708 to 2,518 | 6,320 to 5,830 (-7.8 %); blended 1,637 to 1,502 | 0.2 % (18,691), up to 41 |
+| 2048 | 857 to 788 | 1,540 to 1,426 | 5,145 to 4,784 (-7.0 %) | none |
+
+On the build before cut 6 the rung read: HD 1,778 to 1,459 / 2,963 to 2,397 / 8,650 to 6,974 us
+(-19.4 %), Omega 2,090 to 1,928 / 2,927 to 2,554 / 7,133 to 5,929 (-16.9 %) and its blended road
+decals 2,026 to 1,504, 2048 942 to 795 / 1,730 to 1,441 / 5,906 to 4,833 with no pixel changed:
+dead work, most of which cut 6 now takes exactly; the 7 % left on 2048 still changes no pixel
+(open, below). Skipping the SPU sum in the
+vertex stage as well (a vertex-stage constant, which the prepass sharing `vs_main` rules out for a
+committed form) measured the same as skipping its use in the fragment stage.
+
+**What a player sees.** On Talon's Junction (a tunnel) the ceiling and wall panels lose their
+white glints and the road its sheen; the metal reads flatter and a little darker, and the circuit
+is plainly the same. On a sunny circuit the loss is larger: Modesto Heights loses the sun's glare
+on the road and the bright metal at the side, and the road turns matte grey-blue. Against the 13
+HD race pairs it moves away from the original on 9 (Modesto Heights whole-frame error 3.12 to
+5.77, Anulpha Pass 2.94 to 5.16), and stays level on Talon's Junction and The Amphiseum. Omega
+changes only where its draws carry a specular or normal map (0.2 % of the frame).
+
+**Titles.** HD and Omega share the shader family and are wired. 2048 is wired and changes nothing:
+its circuits author no specular, carry no tangents on the plain draws and no SPU lights. Pulse and
+Pure: skipped, the row is dropped (`Definition::drop_unavailable_circuit_lighting`, keyed on
+`Looks::material_render_state`); their circuits have no authored rig to simplify.
+
+### Approximated light curves: not added
+
+A throwaway arm replaced the lightmap curve's `pow` with a cubic (`x^2 (0.9 x + 0.1)`, wrong
+pictures on purpose, a cost bound for any polynomial fit): Deck 4K HD 8,655 to 8,506 us (-1.7 %),
+2048 5,919 to 6,043 (+2.1 %), Omega 7,135 to 7,229 (+1.3 %); 1080p HD -1.0 %, 2048 +1.9 %. On
+RDNA2 a `v_log_f32`/`v_exp_f32` pair is quarter rate, so a `pow` is about nine cycles, and a fit
+that holds an authored exponent within a level costs as much. Its picture moves 79 % of HD's
+pixels by up to 44 levels. A rung that changes the look for no speed was not added; the brief's
+claim is false on this hardware.
+
+### Whole race and the equal-cost comparison
+
+Deck, `scripts/bench-render.py`, frame p50 / p95 and GPU p50 / p95, ms; every run finished at the
+same tick with the same state hash (HD 7,020 `94a2261ef5045e63`, 2048 13,041 `570a234b8d1de611`,
+Omega 6,777 `8967e698d2f4bb3b`), Deck load 0.7 to 2.5. HD's exact row is the build before cut 6
+(cut 6 does not change HD's shading, above); 2048's and Omega's include it.
+
+| | main | exact, final | `simplified` |
+|---|---|---|---|
+| HD 1280x800 | 5.52 / 6.89 (3.50 / 4.31) | 5.47 / 6.82 (3.42 / 4.26) | 5.47 / 6.74 (3.31 / 4.25) |
+| HD 1920x1080 | 7.21 / 9.24 (5.33 / 7.16) | 6.88 / 8.95 (5.08 / 6.83) | 6.62 / 8.73 (4.82 / 6.60) |
+| HD 3840x2160 | 17.76 / 25.54 (15.70 / 23.57) | 16.58 / 23.85 (14.59 / 21.93) | 15.54 / 23.26 (13.61 / 21.33) |
+| 2048 1280x800 | 2.51 / 3.06 (1.42 / 1.93) | 2.56 / 3.10 (1.23 / 1.73) | |
+| 2048 1920x1080 | 3.00 / 3.78 (2.01 / 2.67) | 2.84 / 3.53 (1.75 / 2.40) | |
+| 2048 3840x2160 | 8.30 / 10.89 (5.96 / 8.48) | 7.11 / 9.37 (4.79 / 6.94) | 6.85 / 9.18 (4.57 / 6.68) |
+| Omega 1280x800 | 4.34 / 5.58 (2.56 / 4.03) | 4.38 / 5.50 (2.34 / 3.86) | |
+| Omega 1920x1080 | 5.63 / 7.07 (3.69 / 4.99) | 5.17 / 6.62 (3.22 / 4.54) | |
+| Omega 3840x2160 | 12.93 / 15.89 (9.37 / 12.40) | 11.14 / 13.54 (7.68 / 10.06) | 10.90 / 13.18 (7.40 / 9.67) |
+
+At 800p all three titles are bound by the CPU: the GPU drops, the frame does not. HD at a 4K output
+still misses 60 Hz natively (16.6 ms p50); Omega is now under the line on p95 (13.5 ms offscreen;
+a presented output adds about 1 ms), and 2048 has room.
+
+**Equal cost.** Exact lighting at lower render scales (offscreen targets of the scaled size, which
+is what the scale draws before the upscale), HD / Omega frame p50 / p95, ms:
+
+| scale | HD exact | Omega exact |
+|---|---|---|
+| 67 % (2573x1447) | 9.52 / 13.03 | 7.21 / 8.78 |
+| 75 % (2880x1620) | 10.91 / 15.04 | 8.17 / 9.85 |
+| 80 % (3072x1728) | 11.89 / 16.64 | 8.82 / 10.66 |
+| 85 % (3264x1836) | 13.00 / 18.51 | 9.58 / 11.55 |
+| 90 % (3456x1944) | 14.11 / 20.09 | 10.35 / 12.57 |
+| 100 % | 16.58 / 23.85 | 11.80 / 14.49 (before cut 6) |
+| `simplified` at 100 % | 15.54 / 23.26 | 10.90 / 13.18 |
+
+`simplified` at native 4K costs what exact lighting costs at about 95 % scale on HD (p50 between
+the 90 % and 100 % rows, p95 near 100 %), and the same on Omega. **Exact lighting at 90 %, cheaper
+than the rung, looks better than the rung at native**: crops at 1:1 of the 4K output (Talon's
+Junction, tick 2,500, NVIDIA, `--render-scale 90` against `--circuit-lighting simplified`) show
+the 90 % frame a touch softer on the edges and otherwise the same picture as native, while the rung
+loses every white glint on the tunnel ribs and panels. The rung is a poor trade at a 4K output;
+render scale is the better lever there. Where the rung could still matter is a fixed output on a
+GPU-bound machine with no upscaler, which this lane did not find.
+
+
+### B and D, recorded
+
+- **B, the albedo decode through an sRGB view** (three `pow` a pixel, the analysis's ~0.5 ms at
+  4K): a lane only behind the HD pairs. A hardware view decodes before the filter and the
+  original after it (`hd-track-tone.md`, "The texture unit's decode is the sRGB curve"), so it
+  moves every textured pixel; worth one small lane that measures both the span and the 13 pairs.
+- **D, a trilinear sampler for the lightmap unit** (0.1 to 0.3 ms by the analysis): first read
+  the original's lightmap unit filter state in an RPCS3 dump. Only if the original is not
+  anisotropic there is it a lane (then it is fidelity and speed together).
+
+### Left open
+
+- The rich pipelines (`programs_present`, cut 2 above) and the craft pass, which runs only rich
+  pipelines (3 ms at 4K on HD).
+- 2048's rung saving left after cut 6 (7 % at 4K, no pixel changed): `tangents_present` is an
+  OR over the whole model, so one textured hull-like draw keeps the branch for every plain
+  pixel; a per-list OR, as `slots_present` has, is the next try.
+- Omega's rung saving after cut 6 (7.8 % at 4K for 0.2 % of the pixels): most of that work is
+  shown on few pixels. A census of which plain Omega draws carry the specular or normal map would say whether
+  those draws want a pipeline of their own.
