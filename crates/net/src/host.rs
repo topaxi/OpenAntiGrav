@@ -61,7 +61,8 @@ pub const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 pub const SEAT_GRACE: Duration = Duration::from_secs(30);
 
 /// How long a seat that came back to a running race may take to load it again and say it is
-/// ready before [`Host::drop_silent`] gives it up. Chosen, not measured.
+/// ready, and then to catch up to the race and send its first input, before
+/// [`Host::drop_silent`] gives it up (each stretch has the whole grace). Chosen, not measured.
 pub const RELOAD_GRACE: Duration = Duration::from_secs(60);
 
 /// One person's connection and input stream.
@@ -82,8 +83,11 @@ pub struct Seat {
     /// Why the seat left, once it has, and when.
     left: Option<String>,
     left_at: Option<Instant>,
-    /// When anything last arrived from the seat.
+    /// When anything last arrived from the seat; a returning seat's Ready counts too.
     heard: Instant,
+    /// A returning seat has said ready and not yet sent an input: it is resimulating the ticks
+    /// it missed, which is silent for as long as the machine needs ([`RELOAD_GRACE`]).
+    catching_up: bool,
     /// When a resend request was last answered.
     resent: Option<Instant>,
     counts: SeatCounts,
@@ -137,6 +141,7 @@ pub struct Host {
     seats: Vec<Option<Seat>>,
     joining: Vec<(Box<dyn Link>, Instant)>,
     hello_timeout: Duration,
+    reload_grace: Duration,
     /// One warning a second about refused connections.
     refusals: LogLimit,
     history: Vec<TickRecord>,
@@ -216,6 +221,7 @@ impl Host {
             seats: (0..people).map(|_| None).collect(),
             joining: Vec::new(),
             hello_timeout: HELLO_TIMEOUT,
+            reload_grace: RELOAD_GRACE,
             refusals: LogLimit::default(),
             history: Vec::new(),
             phase: Phase::Lobby,
@@ -329,6 +335,11 @@ impl Host {
         self.joining.len()
     }
 
+    /// Sets the grace a returning seat has to load and catch up ([`RELOAD_GRACE`]).
+    pub fn set_reload_grace(&mut self, grace: Duration) {
+        self.reload_grace = grace;
+    }
+
     /// Sets how long a connection may stay silent before its hello ([`HELLO_TIMEOUT`]).
     pub fn set_hello_timeout(&mut self, timeout: Duration) {
         self.hello_timeout = timeout;
@@ -375,6 +386,10 @@ impl Host {
                     }) if theirs == fingerprint => {
                         log::info!("net: seat {slot} ({}) is ready", seat.name);
                         seat.ready = true;
+                        if racing {
+                            seat.catching_up = true;
+                            seat.heard = Instant::now();
+                        }
                         // A person who came back to a running race has missed its start.
                         if racing {
                             seat.link.send_control(&Control::Start { lead_ticks: 0 });
@@ -422,6 +437,7 @@ impl Host {
                         if usize::from(from) == slot =>
                     {
                         seat.heard = Instant::now();
+                        seat.catching_up = false;
                         #[cfg(not(target_arch = "wasm32"))]
                         let signed = match self.fair.as_ref() {
                             Some(fair) => match fair.seat_keys.get(slot).filter(|k| **k != [0; 32])
@@ -592,6 +608,7 @@ impl Host {
                     left: None,
                     left_at: None,
                     heard: Instant::now(),
+                    catching_up: false,
                     resent: None,
                     log: LogLimit::default(),
                     counts: SeatCounts::default(),
@@ -652,6 +669,7 @@ impl Host {
         seat.left = None;
         seat.left_at = None;
         seat.ready = false;
+        seat.catching_up = false;
         seat.inputs.clear();
         seat.signed.clear();
         seat.newest = None;
@@ -808,12 +826,14 @@ impl Host {
         let mut dropped = 0;
         for (slot, seat) in self.seats.iter_mut().enumerate() {
             let Some(seat) = seat.as_mut() else { continue };
-            // A person who came back is loading the race again and says nothing until it is
-            // ready, which on a slow machine is longer than the silence a flying seat may keep.
-            let allowed = if seat.ready {
+            // A person who came back is loading the race again, then resimulating what it missed,
+            // and sends no input until that is done: longer than the silence a flying seat may
+            // keep on a slow machine. The grace runs from reseat, then from Ready, to the first
+            // input, and is capped by `RELOAD_GRACE` each time.
+            let allowed = if seat.ready && !seat.catching_up {
                 after
             } else {
-                after.max(RELOAD_GRACE)
+                after.max(self.reload_grace)
             };
             if seat.left.is_none() && seat.heard.elapsed() > allowed {
                 let why = format!("no input for {after:?}");
