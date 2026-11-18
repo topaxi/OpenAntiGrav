@@ -52,7 +52,7 @@ fn tucked_in_a_rivals_trail(loaded: race::Loaded) -> race::Race {
     race.sim.world.ships[1].physics.body.orientation = lead.orientation;
     race.sim.world.ships[1].physics.body.position = lead.position - forward * 8.0;
     let velocities = [forward * 60.0; 2];
-    let ticks = race.field_warm_up_ticks();
+    let ticks = race.sim.field_warm_up_ticks();
     race.warm_up_field(&velocities, ticks, None);
     race
 }

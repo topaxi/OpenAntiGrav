@@ -284,7 +284,7 @@ fn pad_map() {
     .expect("loading");
     let race = race::Race::start(loaded.setup);
     let line = race.sim.racing_line();
-    for pad in race.speedup_pads() {
+    for pad in race.sim.speedup_pads() {
         let c = Vec3::from_array(pad.centre());
         let i = (0..line.len())
             .min_by(|&a, &b| {

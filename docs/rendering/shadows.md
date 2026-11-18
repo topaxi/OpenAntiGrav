@@ -1480,7 +1480,7 @@ the maintainer's profile of 4x MSAA and high motion blur):
 2. *Not a placement jump.* Per tick the hull's area, centroid, strength and
    height are smooth (area 27.3-27.7 over 40 ticks; the centroid moves 0.03
    units at a seam).
-3. *The polygon is buried.* `Race::floor_above` casts from each polygon point
+3. *The polygon is buried.* `RaceSim::floor_above` casts from each polygon point
    along the normal into the circuit's own floor. In Zone, late in a lap
    (ticks 6000-6060), an unconformed polygon sat up to **0.70 units** under the
    road at `LIFT` 0.05, on **22 of 60 ticks**; at 3000 ticks 0.28 on 9 of 60;
@@ -1503,7 +1503,7 @@ the maintainer's profile of 4x MSAA and high motion blur):
 
 - `oag_render::shadow::conform_to_floor` splits each hull triangle once at its
   edge midpoints and moves every vertex to `LIFT` above the circuit's floor
-  under it (`Race::floor_above`: a unit above, two below, nearest hoverable
+  under it (`RaceSim::floor_above`: a unit above, two below, nearest hoverable
   hit). A flat triangle over a concave road is buried between its own vertices
   however well they are placed - fitting vertices alone left 0.12 at a
   triangle's centre, one split brought it to 0.056.
@@ -1520,7 +1520,7 @@ whether PPSSPP's software renderer shows the same blink, and Pulse's stencil
 volume is depth-tested against the visible road, so it plausibly cannot bury
 at all. The plume covers most of the shadow at the default chase camera, so
 the blink reads as a flicker at the craft's tail rather than a shape; the
-frames are in the lane's scratch report. `Race::floor_above` runs about 240
+frames are in the lane's scratch report. `RaceSim::floor_above` runs about 240
 casts per craft per frame at `original`, and is **the whole cost of the hull
 gather**: on Pulse's eight-craft Single Race grid (release build, 300 ticks)
 the placement rays took 10 us a tick, `hull_triangles` 20 us and

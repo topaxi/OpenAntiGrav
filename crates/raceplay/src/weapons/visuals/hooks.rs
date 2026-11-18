@@ -20,7 +20,7 @@ impl Race {
     /// Puts a locked LeachBeam from `owner` on `target` into the world, off the
     /// race's own weapon table: a verification aid (`--force-leach-lock`, and
     /// the disc-backed tests), and nothing the game itself calls. A slot that
-    /// is not racing is left alone, as [`Race::force_destroy`] leaves one, and
+    /// is not racing is left alone, as [`RaceSim::force_destroy`] leaves one, and
     /// so is a title that authors no LeachBeam; both answer `false`.
     pub fn force_leach_lock(&mut self, owner: u8, target: u8) -> bool {
         if !self.ship_active(usize::from(owner)) || !self.ship_active(usize::from(target)) {

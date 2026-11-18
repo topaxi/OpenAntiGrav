@@ -133,7 +133,7 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
             (ship.body.linear_velocity, ship.thrust)
         })
         .collect();
-    let ticks = warm.field_warm_up_ticks();
+    let ticks = warm.sim.field_warm_up_ticks();
     warm.warm_up_field(&velocities, ticks, None);
     for (slot, (position, orientation)) in poses.into_iter().enumerate() {
         let body = &warm.sim.world.ships[slot].physics.body;
@@ -189,7 +189,7 @@ fn a_field_warm_up_arms_the_players_boost_at_its_age_and_nobody_elses() {
     let velocities = vec![Vec3::new(0.0, 0.0, 100.0); 8];
 
     let mut plain = start();
-    let ticks = plain.field_warm_up_ticks();
+    let ticks = plain.sim.field_warm_up_ticks();
     plain.warm_up_field(&velocities, ticks, None);
     assert_eq!(plain.exhaust_of(0).boost_timer(), 0.0, "no age, no boost");
 

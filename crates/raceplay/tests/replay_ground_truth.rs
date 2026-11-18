@@ -203,7 +203,8 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
         .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
     Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
         for event in events {
-            race.apply_event(event)
+            race.sim
+                .apply_event(event)
                 .unwrap_or_else(|e| panic!("{title}: {e}"));
         }
         race.tick(inputs);

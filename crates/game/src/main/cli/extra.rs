@@ -209,7 +209,7 @@ pub(crate) struct WreckArgs {
     /// A verification aid, there because a wreck is hard to produce at a chosen
     /// place and moment. It enters the state `Ship_Damage`'s depletion does, so
     /// the sequence that follows is the simulation's own. See
-    /// [`oag_raceplay::Race::force_destroy`].
+    /// [`oag_raceplay::RaceSim::force_destroy`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wreck: Option<String>,
 
@@ -227,7 +227,7 @@ pub(crate) struct WreckArgs {
     /// for a seat's wall sparks, shake and contact sound, there because a
     /// headless run flies no person into a wall (it meets one where the circuit has a wall on
     /// that side). The wall contact that follows
-    /// is the simulation's own. See [`oag_raceplay::Race::force_wall_slide`].
+    /// is the simulation's own. See [`oag_raceplay::RaceSim::force_wall_slide`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_wall_slide: Option<String>,
 

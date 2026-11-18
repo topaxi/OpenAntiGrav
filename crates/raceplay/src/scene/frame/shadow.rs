@@ -382,7 +382,7 @@ impl super::super::Scene {
     fn rank_references(&self, race: &Race, points: &mut Vec<Vec3>) {
         points.clear();
         points.push(race.camera_position());
-        if race.people() > 1 {
+        if race.sim.people() > 1 {
             points.extend(
                 race.sim
                     .world

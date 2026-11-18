@@ -905,15 +905,19 @@ impl Race {
             }
         }
     }
+}
 
+impl RaceSim {
     /// Ticks of exhaust history a race shot's warm-up lays down: the intensity's full climb
     /// ([`exhaust::INTENSITY_RISE`] per second from cold) plus a full HD tube, so the plume has
     /// reached the level a craft already racing holds and both ribbons are full.
     #[must_use]
     pub fn field_warm_up_ticks(&self) -> u32 {
-        (1.0 / exhaust::INTENSITY_RISE / self.sim.dt).ceil() as u32 + exhaust::hd::SAMPLES as u32
+        (1.0 / exhaust::INTENSITY_RISE / self.dt).ceil() as u32 + exhaust::hd::SAMPLES as u32
     }
+}
 
+impl Race {
     /// Gives every craft the exhaust history of a craft that has been flying at `velocities[slot]`
     /// - `--field-warmup`, for a race shot of a mid-race frame of the original.
     ///
@@ -1056,18 +1060,21 @@ impl Race {
     pub fn craft_is_exploding(&self) -> bool {
         self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
+}
 
+impl RaceSim {
     /// Whether `slot`'s craft is blowing up: the level the pad's explosion
     /// pattern rises on.
     #[must_use]
     pub fn craft_destroyed(&self, slot: usize) -> bool {
-        self.sim
-            .world
+        self.world
             .ships
             .get(slot)
             .is_some_and(|ship| ship.physics.craft_state == oag_physics::CraftState::Destroyed)
     }
+}
 
+impl Race {
     /// Whether an Autopilot pickup is currently active under a person this
     /// machine's speakers are for ([`Self::heard_here`]).
     ///
@@ -1161,14 +1168,16 @@ impl Race {
     pub fn shield_is_up(&self) -> bool {
         self.ship().physics.shield_pickup_timer > 0.0
     }
+}
 
+impl RaceSim {
     /// The track's speed-pad trigger volumes.
     ///
     /// Empty on a track that authors none, which is an ordinary state rather than
     /// a failure - see [`Setup::speedup_pads`].
     #[must_use]
     pub fn speedup_pads(&self) -> &[oag_vex::pads::PadVolume] {
-        &self.sim.speedup_pads
+        &self.speedup_pads
     }
 
     /// Seconds each weapon pad has left before it can hand out another
@@ -1183,9 +1192,11 @@ impl Race {
     /// here with that list's `i`-th vertex range.
     #[must_use]
     pub fn weapon_pad_refresh_left(&self) -> &[f32] {
-        &self.sim.weapon_pad_refresh_left
+        &self.weapon_pad_refresh_left
     }
+}
 
+impl Race {
     /// The player's `engine_flare` locator in **world** space, or `None` when the
     /// ship model carries no `Engine Flare` node.
     ///

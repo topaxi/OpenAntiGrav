@@ -62,7 +62,7 @@ pub(super) fn advance_one_tick(
                 .as_deref()
                 .expect("matched by the guard");
             for event in record.replay.events_at(u64::from(tick)) {
-                if let Err(why) = race.apply_event(event) {
+                if let Err(why) = race.sim.apply_event(event) {
                     log::warn!("--from-png: {why}");
                 }
             }
@@ -115,7 +115,7 @@ pub(super) fn advance_one_tick(
     if let Some((at, slot)) = options.force_wreck
         && at == tick
     {
-        race.force_destroy(slot);
+        race.sim.force_destroy(slot);
     }
     if let Some((at, slot)) = options.force_hit
         && at == tick
@@ -125,7 +125,7 @@ pub(super) fn advance_one_tick(
     if let Some((at, slot)) = options.force_wall_slide
         && at == tick
     {
-        race.force_wall_slide(slot);
+        race.sim.force_wall_slide(slot);
     }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick

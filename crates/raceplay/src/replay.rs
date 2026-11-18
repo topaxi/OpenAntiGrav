@@ -3,7 +3,7 @@
 //! The format and the reasoning are [ADR-0055] and `oag_replay`.
 //!
 //! **Rebuilding and re-driving build without the `view` feature** ([`rebuild`], [`Launch`],
-//! [`Race::apply_event`]), so a host with no renderer can verify a replay (dependency rule 6).
+//! [`RaceSim::apply_event`]), so a host with no renderer can verify a replay (dependency rule 6).
 //! The other half watches a live [`Race`] and draws from it (`recording`, `view` only). Its two
 //! independent pieces:
 //!
@@ -29,7 +29,7 @@
 //! before.
 //!
 //! [`Race`]: crate::Race
-//! [`Race::apply_event`]: crate::Race::apply_event
+//! [`RaceSim::apply_event`]: crate::RaceSim::apply_event
 //! [`Race::start_recording`]: crate::Race::start_recording
 //! [`RaceView`]: crate::RaceView
 //! [`RaceSim`]: crate::RaceSim

@@ -974,7 +974,7 @@ the circuit's animated nodes), so no view's map draws the static circuit at all 
 [shadows.md](shadows.md), step 7. Not re-measured on the iGPU.
 
 *The floor rays ask the road once per point* (2026-10-13, `shadow-floor-rays`). The hull gather's
-cost was `conform_to_floor`: one `Race::floor_above` ray (a `raycast_all` over the circuit's BVH)
+cost was `conform_to_floor`: one `RaceSim::floor_above` ray (a `raycast_all` over the circuit's BVH)
 per output vertex, twelve per coarse hull triangle. A triangle has six distinct points (three
 corners, three midpoints), each shared by three or four of the twelve, and the ear-clipped fan of
 a hull ring shares its corners and diagonals across neighbouring triangles, so most rays repeated

@@ -89,8 +89,8 @@ impl crate::Race {
             route: transit.route,
         };
         let back = through(
-            self.portal_frame(entrance, Face::Oncoming)?,
-            self.portal_frame(exit, Face::Departing)?,
+            self.sim.portal_frame(entrance, Face::Oncoming)?,
+            self.sim.portal_frame(exit, Face::Departing)?,
         )
         .inverse();
         let placed = crate::breadcrumbs::emerge(

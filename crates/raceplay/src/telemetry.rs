@@ -78,20 +78,24 @@ impl Race {
     /// round: a spurious warning is worse than a missing one.
     #[must_use]
     pub fn wrong_way(&self) -> bool {
-        self.wrong_way_for(self.player_slot())
+        self.sim.wrong_way_for(self.player_slot())
     }
+}
 
-    /// [`Self::wrong_way`] for the craft in `slot`.
+impl RaceSim {
+    /// [`Race::wrong_way`] for the craft in `slot`.
     #[must_use]
     pub fn wrong_way_for(&self, slot: usize) -> bool {
-        let ship = &self.sim.world.ships[slot];
-        let Some((_, sample, _)) = self.sim.spline.nearest(ship.physics.body.position) else {
+        let ship = &self.world.ships[slot];
+        let Some((_, sample, _)) = self.spline.nearest(ship.physics.body.position) else {
             return false;
         };
         let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
         ship.physics.body.forward().dot(tangent) < 0.0
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// What the HUD shows, as of the last tick.
     ///
@@ -130,7 +134,7 @@ impl Race {
         // lap counter holds at the target, the clocks at the moment they finished,
         // and a standing line says so. See `Self::finished_view`.
         let finished = self.finished_view(slot);
-        let held = self.held_for_hud(slot);
+        let held = self.sim.held_for_hud(slot);
         let mut readout = oag_hud::Readout {
             speed_kmh: ship.physics.body.linear_velocity.length() * oag_fx::exhaust::SPEED_TO_KMH,
             // The ship's own pool, which wall contact spends and absorbing a
@@ -159,7 +163,7 @@ impl Race {
             // arithmetic rather than a standing, and the widget group is omitted
             // the same way the lap group is on a track that cannot count.
             place: if counted && self.sim.world.ship_count > 1 {
-                self.field_place(slot)
+                self.sim.field_place(slot)
             } else {
                 0
             },
@@ -190,7 +194,7 @@ impl Race {
             },
             // Facing back is the move here: no frame of the original's flips shows the
             // warning (`docs/ghidra/functions/ps3-hdfury-eu/eliminator-flip.md`, "Ours").
-            wrong_way: self.sim.flip_law.is_none() && self.wrong_way_for(slot),
+            wrong_way: self.sim.flip_law.is_none() && self.sim.wrong_way_for(slot),
             zone: race.zone.into(),
             score: race.score,
             // The colour grade lives on `crate::Scene`, not on the
@@ -202,13 +206,13 @@ impl Race {
             // A running Autopilot keeps its icon up when nothing else is held:
             // `PlayerStatus_Update` forces the icon id to the Autopilot's while the
             // running bit is set and the held id maps to none. The timer under it is
-            // `Self::sub_weapon`.
+            // `RaceSim::sub_weapon`.
             pickup: held,
             ext: oag_hud::ext_draws::Outputs {
                 pickup_look: hud.pickup_look.clone(),
                 ..self.sim.extensions.hud(slot, self.sim.world.tick)
             },
-            sub_weapon: self.sub_weapon(slot),
+            sub_weapon: self.sim.sub_weapon(slot),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed
@@ -245,7 +249,7 @@ impl Race {
             kill_tags: self.kill_tags(slot),
             score_rows: self.sim.score_law.is_some()
                 && self.sim.world.mode() == oag_race::Mode::Eliminator,
-            race_line: self.race_line(slot),
+            race_line: self.sim.race_line(slot),
             player_tags: self.player_tags_for(slot),
             kill_target: if self.sim.world.mode() == oag_race::Mode::Eliminator {
                 self.sim.eliminator_kill_target
@@ -336,7 +340,9 @@ impl Race {
                 .unwrap_or(0),
         })
     }
+}
 
+impl RaceSim {
     #[cfg(feature = "view")]
     /// The `SubWeapon` line for `slot`'s craft: the Cannon's rounds left, else the
     /// Autopilot's seconds left, else nothing - see [`oag_hud::SubWeapon`].
@@ -351,12 +357,11 @@ impl Race {
     /// `0` until then, so the unarmed counter reads as the authored count here, which
     /// is what the original has in it.
     fn sub_weapon(&self, slot: usize) -> Option<oag_hud::SubWeapon> {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         // A hand-back's countdown reads over a held Cannon's rounds.
         let handing_back = ship.handback && ship.autopilot_timer > 0.0;
         if ship.pickup.weapon == Some(oag_tables::weapons::Weapon::Cannon) && !handing_back {
             let cannon = self
-                .sim
                 .weapons
                 .as_deref()
                 .and_then(oag_tables::weapons::WeaponStats::cannon)?;
@@ -368,7 +373,9 @@ impl Race {
         }
         (ship.autopilot_timer > 0.0).then_some(oag_hud::SubWeapon::Autopilot(ship.autopilot_timer))
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// The Eliminator's kill column, top row first, in the order the original
     /// draws it - see [`oag_hud::kill_tags`]. Empty in every other mode, and
@@ -405,7 +412,9 @@ impl Race {
             })
             .collect()
     }
+}
 
+impl RaceSim {
     #[cfg(feature = "view")]
     /// The Eliminator's race line: each craft's distance round the lap as a fraction, the
     /// player's first. `None` outside an Eliminator and on a track with no closed ring.
@@ -413,11 +422,11 @@ impl Race {
     /// The fraction is [`oag_race::Standing::distance`] wrapped into one lap, so a craft still
     /// behind the line on the grid reads just under 1 (`oag_hud::race_line`).
     fn race_line(&self, player: usize) -> Option<oag_hud::RaceLine> {
-        let world = &self.sim.world;
+        let world = &self.world;
         if world.mode() != oag_race::Mode::Eliminator {
             return None;
         }
-        let course = self.sim.course.as_deref()?;
+        let course = self.course.as_deref()?;
         let length = course.length();
         let fraction = |slot: usize| {
             let distance = world.ships[slot].standing.distance(course);
@@ -429,9 +438,9 @@ impl Race {
         };
         Some(oag_hud::RaceLine {
             player: fraction(player),
-            player_turned: self.sim.facing_back(player),
+            player_turned: self.facing_back(player),
             others: others().map(fraction).collect(),
-            others_turned: others().map(|slot| self.sim.facing_back(slot)).collect(),
+            others_turned: others().map(|slot| self.facing_back(slot)).collect(),
         })
     }
 
@@ -443,13 +452,15 @@ impl Race {
     /// results keep reading [`Self::places`] as they always did.
     fn field_place(&self, slot: usize) -> u32 {
         let places = self.places();
-        let world = &self.sim.world;
+        let world = &self.world;
         let empty_ahead = (0..oag_gameplay::MAX_SHIPS)
             .filter(|&other| !world.ships[other].active && places[other] < places[slot])
             .count();
         u32::from(places[slot]) - u32::try_from(empty_ahead).unwrap_or(0)
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// Head2Head's gap readout: the unwrapped-progress difference between the
     /// player and the one opponent, and who leads. `None` outside Head2Head.

@@ -202,7 +202,7 @@ fn a_position_off_the_track_refuses_to_name_a_section() {
     let on_line = Vec3::from_array(sample.pos);
 
     assert_eq!(
-        race.section_of(4, on_line),
+        race.sim.section_of(4, on_line),
         sample.section_id,
         "a craft on the racing line names its own section"
     );
@@ -213,22 +213,24 @@ fn a_position_off_the_track_refuses_to_name_a_section() {
     let half_width = 12.0 * OFF_TRACK_HALF_WIDTHS;
     let lateral = Vec3::from_array(sample.lateral);
     assert_eq!(
-        race.section_of(4, on_line + lateral * (half_width - 1.0)),
+        race.sim
+            .section_of(4, on_line + lateral * (half_width - 1.0)),
         sample.section_id,
         "still on the track at just under the gate"
     );
     assert_eq!(
-        race.section_of(4, on_line + lateral * (half_width + 1.0)),
+        race.sim
+            .section_of(4, on_line + lateral * (half_width + 1.0)),
         UNPLACED,
         "just past the gate, nothing may be culled on this position's word"
     );
     assert_eq!(
-        race.section_of(4, on_line + Vec3::Y * 200.0),
+        race.sim.section_of(4, on_line + Vec3::Y * 200.0),
         UNPLACED,
         "far above the track - airborne over a gap, or fallen through"
     );
     assert_eq!(
-        race.section_of(9_999, on_line),
+        race.sim.section_of(9_999, on_line),
         UNPLACED,
         "a sample index the table does not have"
     );

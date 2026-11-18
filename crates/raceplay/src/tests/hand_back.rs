@@ -128,13 +128,14 @@ fn presence_events_reproduce_the_change() {
     let applied = |values: &[u32]| {
         let mut race = returning();
         for &value in values {
-            race.apply_event(&oag_replay::Event::new(
-                0,
-                1,
-                oag_replay::Kind::Presence,
-                value,
-            ))
-            .expect("applies");
+            race.sim
+                .apply_event(&oag_replay::Event::new(
+                    0,
+                    1,
+                    oag_replay::Kind::Presence,
+                    value,
+                ))
+                .expect("applies");
         }
         race.sim.state_hash()
     };
@@ -144,6 +145,7 @@ fn presence_events_reproduce_the_change() {
     assert_ne!(live(1), returning().sim.state_hash());
     assert!(
         returning()
+            .sim
             .apply_event(&oag_replay::Event::new(0, 1, oag_replay::Kind::Presence, 2))
             .is_err()
     );

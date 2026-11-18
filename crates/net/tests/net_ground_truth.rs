@@ -782,7 +782,7 @@ fn a_dropped_link_returns_to_its_craft_and_its_pickup() {
     let mut again = holding_turbo(&params, &source);
     let found = oag_replay::Verifier::run(&replay, again.sim.state_hash(), |due, inputs| {
         for event in due {
-            again.apply_event(event).expect("applies");
+            again.sim.apply_event(event).expect("applies");
         }
         again.tick_sim_only(inputs);
         again.sim.state_hash()

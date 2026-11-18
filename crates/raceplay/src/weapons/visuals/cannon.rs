@@ -61,7 +61,8 @@ impl Race {
         };
         use oag_fx::weapon_quads::{geometry, random};
         let tick = self.sim.world.tick as u32;
-        self.flashing_cannon_rounds()
+        self.sim
+            .flashing_cannon_rounds()
             .filter_map(|(slot, projectile)| {
                 let (position, axes) = self.cannon_muzzle_matrix(draw, projectile)?;
                 let (_, half_size, _) =
@@ -129,7 +130,7 @@ impl Race {
                 None => geometry::bolt_vertices(prev, curr, right, up),
             });
         }
-        for (slot, projectile) in self.flashing_cannon_rounds() {
+        for (slot, projectile) in self.sim.flashing_cannon_rounds() {
             let (centre, (rotation, half_size, alpha)) = match draw.look {
                 Some(look) => {
                     let Some((position, _)) = self.cannon_muzzle_matrix(draw, projectile) else {
@@ -145,14 +146,15 @@ impl Race {
             ));
         }
     }
+}
 
+impl RaceSim {
     /// Every live Cannon round still inside the flash window, with its slot.
     fn flashing_cannon_rounds(
         &self,
     ) -> impl Iterator<Item = (usize, &oag_weapons::projectile::Projectile)> {
         use oag_fx::weapon_quads::geometry::FLASH_WINDOW_SECONDS;
-        self.sim
-            .world
+        self.world
             .projectiles
             .slots
             .iter()
@@ -163,7 +165,9 @@ impl Race {
                         < FLASH_WINDOW_SECONDS
             })
     }
+}
 
+impl Race {
     /// The muzzle a round left from, in world space: its position and its
     /// three unit axes, orthonormalised the way `CannonBullet`'s update does
     /// before it scales them (`0x001320e8`: X normalised, Y made orthogonal

@@ -72,7 +72,8 @@ pub fn resimulate(
             break;
         };
         for event in verifier.events_due() {
-            race.apply_event(event)
+            race.sim
+                .apply_event(event)
                 .with_context(|| format!("an event before tick {}", verifier.tick()))?;
         }
         race.tick(&inputs);

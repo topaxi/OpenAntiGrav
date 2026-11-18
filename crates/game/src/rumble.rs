@@ -206,7 +206,7 @@ impl Rumbler {
         }
         let rules = Rules {
             set,
-            drop_position: Mode::from_name(token) == Some(Mode::Original) && race.people() <= 1,
+            drop_position: Mode::from_name(token) == Some(Mode::Original) && race.sim.people() <= 1,
         };
         let seats: Vec<Seat> = (0..oag_gameplay::MAX_PLAYERS)
             .filter(|&slot| race.sim.world.person_flown(slot) && race.heard_here(slot))
@@ -283,8 +283,8 @@ fn levels_of(race: &Race, slot: usize) -> Levels {
             .get(slot)
             .is_some_and(|ship| ship.autopilot_timer > 0.0),
         leech_beam: race.sim.leach_beam_on(slot),
-        wrong_way: race.wrong_way_for(slot),
-        exploding: race.craft_destroyed(slot),
+        wrong_way: race.sim.wrong_way_for(slot),
+        exploding: race.sim.craft_destroyed(slot),
         locked_on: slot == race.player_slot()
             && race.sight_state() == oag_race::sight::State::Locked,
     }

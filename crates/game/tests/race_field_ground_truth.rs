@@ -129,7 +129,7 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
         "the disc's hull authors an Engine Flare node, so every craft has a nozzle"
     );
     assert!(
-        !race.speedup_pads().is_empty(),
+        !race.sim.speedup_pads().is_empty(),
         "the third claim needs a track with authored speed pads"
     );
 

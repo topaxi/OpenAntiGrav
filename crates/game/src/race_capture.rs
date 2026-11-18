@@ -93,11 +93,11 @@ pub struct CaptureOptions {
     /// Where the flyby's voice-over is read from. See [`crate::sound::prepare_intro_voice`].
     pub music_discs: oag_sound::MusicDiscs,
     /// `--force-wreck TICK:SLOT`: that craft is destroyed at the end of that
-    /// tick. See [`Race::force_destroy`].
+    /// tick. See [`RaceSim::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
-    /// `--force-wall-slide TICK:SLOT`: see [`Race::force_wall_slide`].
+    /// `--force-wall-slide TICK:SLOT`: see [`RaceSim::force_wall_slide`].
     pub force_wall_slide: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: see [`Race::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
@@ -486,7 +486,7 @@ pub fn capture(
         .and(options.pose_boost)
         .filter(|_| options.ticks == 0);
     if let Some(velocities) = &options.field_warmup {
-        race.warm_up_field(velocities, race.field_warm_up_ticks(), warmed_boost);
+        race.warm_up_field(velocities, race.sim.field_warm_up_ticks(), warmed_boost);
         race.warm_up_contact_sparks(velocities, &options.pose_sparks);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,

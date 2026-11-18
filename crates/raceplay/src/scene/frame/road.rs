@@ -67,7 +67,8 @@ impl Scene {
         // reproduces. Gameplay state, driven off `seconds` like the scenery.
         if let Some(weapon_pads) = &self.weapon_pads {
             pads_ready.extend(
-                race.weapon_pad_refresh_left()
+                race.sim
+                    .weapon_pad_refresh_left()
                     .iter()
                     .map(|&left| left <= 0.0),
             );

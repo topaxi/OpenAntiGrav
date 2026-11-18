@@ -448,7 +448,7 @@ pub(crate) fn write_trace(
         .and(cli.pose_boost)
         .filter(|_| cli.ticks == 0);
     if let Some(velocities) = field_warmup_velocities(cli)? {
-        race.warm_up_field(&velocities, race.field_warm_up_ticks(), warmed_boost);
+        race.warm_up_field(&velocities, race.sim.field_warm_up_ticks(), warmed_boost);
     }
 
     // Built from the world rather than from `Telemetry`, which carries a summary

@@ -336,7 +336,7 @@ impl Viewer {
 
     fn advance(&mut self, race: &mut Race) {
         for event in self.replay.events_at(self.at) {
-            if race.apply_event(event).is_err() {
+            if race.sim.apply_event(event).is_err() {
                 // The pass refuses an event this build does not apply before the prefix reaches
                 // it, so a played tick never meets one.
                 break;

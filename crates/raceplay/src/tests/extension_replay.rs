@@ -91,7 +91,7 @@ fn a_modded_race_records_and_names_its_module() {
     let mut again = grid(on::prepared(&[on::module("test.names", "i32.const 0")]));
     let found = Verifier::run(&read, again.sim.state_hash(), |events, inputs| {
         for event in events {
-            again.apply_event(event).unwrap();
+            again.sim.apply_event(event).unwrap();
         }
         again.tick(inputs);
         again.sim.state_hash()

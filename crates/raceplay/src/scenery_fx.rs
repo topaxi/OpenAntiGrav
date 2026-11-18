@@ -326,7 +326,7 @@ impl super::Race {
         let Some((index, _, _)) = self.sim.spline.nearest(point) else {
             return false;
         };
-        let section = self.section_of(index, point);
+        let section = self.sim.section_of(index, point);
         section != oag_render::pvs::UNPLACED
             && self
                 .view

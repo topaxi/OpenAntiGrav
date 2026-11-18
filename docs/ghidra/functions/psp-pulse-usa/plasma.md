@@ -1766,7 +1766,7 @@ too large and, being behind every road pixel, drew nothing.
 - **`hemisphere1` and `hemisphere2` share one world-fixed frame** (both models' rows agree at the
   first dump). The frame's axes are the track's at the detonation: heading `(0.995, 0.095, 0)`, up
   `(-0.093, 0.968, 0.234)`, right `(0.022, -0.232, 0.972)`. Ours is read off the nearest spline
-  sample (`Race::track_frame_at`: tangent, the sample's up, `heading x up`); on the matched pair its
+  sample (`RaceSim::track_frame_at`: tangent, the sample's up, `heading x up`); on the matched pair its
   up is `(-0.063, 0.970, 0.233)` against the dumps' (the 0.233 z component agrees) and its heading is
   11 degrees from the dump's, which our early detonation point (x 282 against 292) accounts for. That
   the original's frame is the track fit `PlasmaBlast_Construct` builds is **inferred**.

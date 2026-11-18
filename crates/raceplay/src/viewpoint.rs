@@ -126,15 +126,19 @@ impl Race {
     pub fn viewport_count(&self) -> usize {
         self.view.viewpoints.count.max(1)
     }
+}
 
+impl RaceSim {
     /// How many people fly this race, across every window ([`Setup::people`](super::Setup::people)).
-    /// Not [`Self::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
+    /// Not [`Race::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
     /// has two people.
     #[must_use]
     pub fn people(&self) -> usize {
-        usize::from(self.sim.people.max(1))
+        usize::from(self.people.max(1))
     }
+}
 
+impl Race {
     /// Which way the screen is cut: the one answer the scene's view rectangles
     /// ([`Self::view_rects`]) and the HUD's placements both read, so a vertical scene cannot
     /// get a horizontal HUD. Only two views can be cut left and right

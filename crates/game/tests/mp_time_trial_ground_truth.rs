@@ -173,7 +173,7 @@ fn two_windows_are_the_multiplayer_time_trial_too() {
     assert_eq!(world.ship_count, 2, "two craft");
     assert_eq!(world.human_slots().count(), 2, "both flown by a person");
     assert!(race.windowed());
-    assert_eq!(race.people(), 2);
+    assert_eq!(race.sim.people(), 2);
     assert_eq!(race.viewport_count(), 2, "the views the records gate reads");
 
     let apart = |race: &mut race::Race| {

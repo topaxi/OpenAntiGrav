@@ -967,7 +967,7 @@ fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
             race.sim.world.ships[0].pickup.weapon = None;
         }
         assert_eq!(
-            race.weapon_pad_refresh_left(),
+            race.sim.weapon_pad_refresh_left(),
             [0.0],
             "an unstamped pad greyed"
         );

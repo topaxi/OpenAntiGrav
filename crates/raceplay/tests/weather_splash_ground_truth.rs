@@ -150,8 +150,9 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
                 "{point:?} is a splash under a roof"
             );
             let above = enhanced
+                .sim
                 .floor_above(point, Vec3::Y)
-                .or_else(|| enhanced.floor_above(point, -Vec3::Y));
+                .or_else(|| enhanced.sim.floor_above(point, -Vec3::Y));
             assert!(above.is_some(), "{point:?} is not on a floor");
         }
     }

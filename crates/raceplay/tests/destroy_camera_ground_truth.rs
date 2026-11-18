@@ -72,7 +72,7 @@ fn a_wrecked_player_is_seen_from_the_circuits_own_camera() {
     }
     let chase_eye = race.camera_position();
 
-    race.force_destroy(0);
+    race.sim.force_destroy(0);
     for _ in 0..200 {
         race.tick(&PlayerInputs::none());
     }

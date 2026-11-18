@@ -110,7 +110,7 @@ hand-made setup (`*_replays_reproduce...`).
 
 ADR-0055's rule is that anything that changes the race outside `Race::tick` must become an input
 or be recorded. An `Event` is `(tick, seat, kind, value)`, applied **before** tick `tick` runs, by
-whoever re-drives the file (`Verifier::events_due`, then `Race::apply_event`). A seek applies them
+whoever re-drives the file (`Verifier::events_due`, then `RaceSim::apply_event`). A seek applies them
 the same way, between the same two ticks ([the timeline](../architecture/replay-timeline.md)).
 
 | Kind | Code | Value | Writer |

@@ -12,7 +12,7 @@ rewind (stage 6, through `Keeper` and `Rewind`: [photo mode](../ui/photo-mode.md
 
 A `Timeline` owns a **probe**, a `Race` of its own, and moves it with `restore_sim` and
 `tick_sim_only`. It builds without the `view` feature, as do `oag_raceplay::replay::rebuild`,
-`Launch` and `Race::apply_event`; the half of `replay` that watches a live race and draws a ghost
+`Launch` and `RaceSim::apply_event`; the half of `replay` that watches a live race and draws a ghost
 does not. It holds no reference to a live race and takes one only as `&Race`.
 
 | Call | What it does |
@@ -98,7 +98,7 @@ tick.
   seats `Header::slots`. Pulse only.
 
 **Found by the text, not by a hash:** `change_pilot_assist` writes the level to all eight seats and
-records the person-flown ones, and `Race::apply_event` applied each event to its own seat, so a seek
+records the person-flown ones, and `RaceSim::apply_event` applied each event to its own seat, so a seek
 read `[Normal, Off, Off, ...]` against the live race's eight `Normal`. Nothing reads a seat nobody
 flies, so no hash could show it. The applier now does what the writer does.
 

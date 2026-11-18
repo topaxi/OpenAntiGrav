@@ -721,7 +721,7 @@ fn the_pad_before_the_jump() {
         })
     };
     let line = race.sim.racing_line();
-    for (n, pad) in race.speedup_pads().iter().enumerate() {
+    for (n, pad) in race.sim.speedup_pads().iter().enumerate() {
         let centre =
             oag_core::math::Vec3::new(pad.to_world[12], pad.to_world[13], pad.to_world[14]);
         let index = line.nearest(centre, 0, line.len());

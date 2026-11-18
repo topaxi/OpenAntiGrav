@@ -412,7 +412,7 @@ impl Timeline {
             return Ok(());
         };
         for event in replay.events_at(self.at) {
-            self.probe.apply_event(event)?;
+            self.probe.sim.apply_event(event)?;
         }
         self.probe.tick_sim_only(&replay.inputs_at(self.at));
         self.at += 1;
@@ -545,7 +545,7 @@ fn run_pass(shared: &Shared, replay: &Replay, setup: Setup) {
             return;
         }
         for event in verifier.events_due() {
-            if let Err(why) = race.apply_event(event) {
+            if let Err(why) = race.sim.apply_event(event) {
                 shared.built().pass = Pass::Refused(why);
                 return;
             }

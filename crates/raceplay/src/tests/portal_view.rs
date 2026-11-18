@@ -518,6 +518,7 @@ fn a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view() {
     assert!(!scene.has_portal_target());
     let request = race.extension_portal_view(0).expect("the guest asked");
     let at = race
+        .sim
         .portal_frame(
             ring_exit(&race, request.entrance).expect("on the lap"),
             oag_render::camera::portal::Face::Oncoming,
@@ -636,13 +637,14 @@ fn chunked_scene(gpu: &Gpu, race: &Race, track: Model, sees: &[usize]) -> Scene 
 
 /// Where the fixture's entrance stands.
 fn entrance_centre(race: &Race, request: &crate::extensions::PortalRequest) -> Vec3 {
-    race.portal_frame(
-        ring_exit(race, request.entrance).expect("on the lap"),
-        oag_render::camera::portal::Face::Oncoming,
-    )
-    .expect("a frame")
-    .w_axis
-    .truncate()
+    race.sim
+        .portal_frame(
+            ring_exit(race, request.entrance).expect("on the lap"),
+            oag_render::camera::portal::Face::Oncoming,
+        )
+        .expect("a frame")
+        .w_axis
+        .truncate()
 }
 
 /// What `frames` counts of a race over a chunk partition, with the portal's draws as given
@@ -897,7 +899,9 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
         route_point.distance(ring_point)
     );
 
-    let frame = race.portal_frame(exit, oag_render::camera::portal::Face::Departing);
+    let frame = race
+        .sim
+        .portal_frame(exit, oag_render::camera::portal::Face::Departing);
     let centre = frame.expect("a frame").w_axis.truncate();
     assert!(
         centre.distance(route_point) < 5.0,

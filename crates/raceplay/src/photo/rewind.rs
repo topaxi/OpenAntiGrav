@@ -136,7 +136,7 @@ impl Rewind {
 
     fn advance(&mut self, race: &mut Race, replay: &Replay) -> bool {
         for event in replay.events_at(self.at) {
-            if race.apply_event(event).is_err() {
+            if race.sim.apply_event(event).is_err() {
                 return false;
             }
         }

@@ -58,7 +58,7 @@ fn pure_throws_hit_sparks_and_the_wreck_node_effects_and_its_own_big_blast() {
         race.hit_sparks_started_for_tests() > 0,
         "a weapon hit threw no spark on Pure"
     );
-    race.force_destroy(0);
+    race.sim.force_destroy(0);
     for _ in 0..60 {
         race.tick(&PlayerInputs::single(snapshot(0)));
     }

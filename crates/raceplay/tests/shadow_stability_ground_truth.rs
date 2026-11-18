@@ -83,7 +83,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
         );
         if conform {
             oag_render::shadow::conform_to_floor(&mut v, 0, |at, normal| {
-                race.floor_above(at, normal)
+                race.sim.floor_above(at, normal)
             });
         }
         let mut points: Vec<Vec3> = v.iter().map(|x| Vec3::from_array(x.position)).collect();
@@ -96,7 +96,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
         let mut deepest = 0.0f32;
         for at in points {
             // The floor above a point, measured along the polygon's own normal.
-            if let Some(above) = race.floor_above(at, p.normal) {
+            if let Some(above) = race.sim.floor_above(at, p.normal) {
                 deepest = deepest.max(above);
             }
         }

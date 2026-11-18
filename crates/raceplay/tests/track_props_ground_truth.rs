@@ -231,7 +231,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     race.sim.set_autopilot(true);
-    let pads = race.speedup_pads().to_vec();
+    let pads = race.sim.speedup_pads().to_vec();
     let mut input = oag_gameplay::input::Input::new();
     let ticks = (0..TICKS)
         .map(|_| {
@@ -289,7 +289,7 @@ fn a_pads_authored_boost_doubles_that_pad_alone() {
     let file = hillside(Some(pad), "double").unwrap();
     let (modded, race) = run(&file, vec![pad_reader(pad)]).unwrap();
     assert!(race.is_modded());
-    let pads = race.speedup_pads();
+    let pads = race.sim.speedup_pads();
     let unit = |p: usize| {
         let d = pads[p].direction().unwrap();
         (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()

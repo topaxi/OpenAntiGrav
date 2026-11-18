@@ -4,6 +4,7 @@
 //! **Display only.** Nothing here is read by the simulation or hashed: the fade lives in each
 //! view's `SlotHud` and the tags leave as part of the view's `Readout`.
 
+use crate::RaceSim;
 use oag_gameplay::MAX_SHIPS;
 use oag_hud::PlayerTag;
 use oag_hud::player_tags::{alpha, raise, step_fade};
@@ -27,16 +28,20 @@ impl Race {
         };
         std::iter::once(primary).chain((0..own_views).filter(move |&slot| slot != primary))
     }
+}
 
+impl RaceSim {
     /// Whether `target` is tagged in `viewer`'s view: another person's craft on the grid.
     /// **Chosen, not measured:** an AI craft is not tagged.
     fn tagged_for(&self, viewer: usize, target: usize) -> bool {
         target != viewer
             && target < MAX_SHIPS
-            && self.sim.world.person_flown(target)
-            && self.sim.world.ships[target].active
+            && self.world.person_flown(target)
+            && self.world.ships[target].active
     }
+}
 
+impl Race {
     /// One tick of every view's fades: a tagged craft's rises at 1.2 a second, any other is
     /// held at zero.
     pub(super) fn advance_tag_fades(&mut self) {
@@ -48,7 +53,7 @@ impl Race {
         for viewer in viewers {
             for target in 0..MAX_SHIPS {
                 let fade = self.view.huds[viewer].tag_fade[target];
-                self.view.huds[viewer].tag_fade[target] = if self.tagged_for(viewer, target) {
+                self.view.huds[viewer].tag_fade[target] = if self.sim.tagged_for(viewer, target) {
                     step_fade(fade, dt)
                 } else {
                     0.0
@@ -93,7 +98,7 @@ impl Race {
             self.set_viewpoint(viewer);
         }
         let tags = (0..MAX_SHIPS)
-            .filter(|&target| self.tagged_for(viewer, target))
+            .filter(|&target| self.sim.tagged_for(viewer, target))
             .filter_map(|target| {
                 let fade = self.view.huds[viewer].tag_fade[target];
                 let body = self.body_between(target);

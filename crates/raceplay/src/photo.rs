@@ -1030,7 +1030,12 @@ impl Race {
     /// among those still in the race, as photo mode's do (`step_among`). `false` when there was
     /// nothing to change to.
     pub fn step_followed(&mut self, forward: bool) -> bool {
-        let live: Vec<usize> = self.spectator_subjects().iter().map(|s| s.slot).collect();
+        let live: Vec<usize> = self
+            .sim
+            .spectator_subjects()
+            .iter()
+            .map(|s| s.slot)
+            .collect();
         let now = self.player_slot();
         match step_among(&live, now, forward) {
             Some(next) if next != now => {
@@ -1057,7 +1062,12 @@ impl Race {
 
     /// One tick of photo mode, and the pose it leaves. [`Action::None`] when it is not open.
     pub fn photo_step(&mut self, pad: Pad) -> Action {
-        let live: Vec<usize> = self.spectator_subjects().iter().map(|s| s.slot).collect();
+        let live: Vec<usize> = self
+            .sim
+            .spectator_subjects()
+            .iter()
+            .map(|s| s.slot)
+            .collect();
         let Some(photo) = self.view.photo.as_mut() else {
             return Action::None;
         };
