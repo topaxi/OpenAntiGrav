@@ -221,7 +221,7 @@ are unmoved.
 ### 6. One "in the world" predicate for a craft (sweep item 5) - done
 
 **Done** with the portal pieces: `Ship::in_world` (`active` and not in a transit) is what
-`Craft::active` returns and what the draw (`Race::ship_active`, model matrices, shadow,
+`Craft::active` returns and what the draw (`RaceSim::ship_active`, model matrices, shadow,
 exhaust), `resolve_craft_pairs`, `fire_law` targeting and the mine and cannon loops ask.
 The per-craft reset hold item 1 left open is `RaceSim::reset_held`, read by `RaceSim::armed`.
 The reading below is kept for the evidence.

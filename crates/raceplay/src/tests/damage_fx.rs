@@ -43,7 +43,7 @@ fn the_shield_left_picks_which_smoke_plays() {
     hit_leaving(&mut race, 90.0, false);
     assert_eq!(race.damage_smokes_started_for_tests(), 1, "mild");
 
-    let ticks = (crate::damage_fx::HOLD / race.dt()) as usize + 2;
+    let ticks = (crate::damage_fx::HOLD / race.sim.dt()) as usize + 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }
@@ -70,7 +70,7 @@ fn a_repeat_inside_the_hold_is_silent_and_a_change_is_not() {
     hit_leaving(&mut race, 65.0, false);
     assert_eq!(race.damage_smokes_started_for_tests(), 2, "state changed");
 
-    let ticks = (crate::damage_fx::HOLD / race.dt()) as usize + 2;
+    let ticks = (crate::damage_fx::HOLD / race.sim.dt()) as usize + 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
     }
@@ -221,7 +221,7 @@ fn the_damage_smoke_carries_the_crafts_velocity() {
         for _ in 0..10 {
             race.view
                 .stage
-                .advance(race.dt(), &mut oag_core::Rng::new(1));
+                .advance(race.sim.dt(), &mut oag_core::Rng::new(1));
         }
         let (additive, _) = race.view.stage.vertices(Vec3::X, Vec3::Y);
         assert!(!additive.is_empty(), "the smoke drew nothing");

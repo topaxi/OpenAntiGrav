@@ -71,14 +71,14 @@ fn start() -> Option<race::Race> {
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
-    assert_eq!(race.ship_count(), 8, "the field is not eight craft");
+    assert_eq!(race.sim.ship_count(), 8, "the field is not eight craft");
     race.sim.world.controllers[1] = Controller::Remote;
     Some(race)
 }
 
 /// What each slot's craft and rules look like, as text.
 fn slots(race: &race::Race) -> Vec<String> {
-    (0..usize::from(race.ship_count()))
+    (0..usize::from(race.sim.ship_count()))
         .map(|slot| {
             format!(
                 "{:?} {:?}",

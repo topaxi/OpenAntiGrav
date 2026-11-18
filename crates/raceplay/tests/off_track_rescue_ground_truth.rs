@@ -80,7 +80,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
     race.sim.set_autopilot(true);
 
     let mut solo = Solo {
-        half_width: race.spline().max_half_width(),
+        half_width: race.sim.spline().max_half_width(),
         ..Solo::default()
     };
     let mut stall = 0u32;
@@ -88,7 +88,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
         race.tick(&PlayerInputs::none());
         let ship = &race.sim.world.ships[0];
         let position = ship.physics.body.position;
-        if let Some(distance) = race.spline().distance_to(position) {
+        if let Some(distance) = race.sim.spline().distance_to(position) {
             solo.peak = solo.peak.max(distance);
         }
         let stopped = ship.physics.thrust > 0.0
@@ -98,7 +98,7 @@ fn solo_player(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Sol
         solo.longest_stall = solo.longest_stall.max(stall);
     }
     solo.laps = race.sim.world.ships[0].standing.lap;
-    solo.respawns = race.respawns();
+    solo.respawns = race.sim.respawns();
     Some(solo)
 }
 
@@ -134,7 +134,7 @@ fn shoved_player(track: &str, index: usize, degrees: f32, speed: f32, ticks: u64
         race.tick(&PlayerInputs::single(throttle));
     }
     let height = oag_gameplay::spawn::spawn_height(&race.sim.world.ships[0].handling);
-    let sample = race.spline().sample(index).copied()?;
+    let sample = race.sim.spline().sample(index).copied()?;
     let mut pose = oag_gameplay::Pose::from_sample(&sample, sample.racing_line, height);
     let up = pose.orientation * oag_core::math::Vec3::Y;
     pose.orientation =
@@ -144,19 +144,19 @@ fn shoved_player(track: &str, index: usize, degrees: f32, speed: f32, ticks: u64
     race.sim.world.ships[0].physics.body.linear_velocity = forward * speed;
 
     let mut solo = Solo {
-        half_width: race.spline().max_half_width(),
+        half_width: race.sim.spline().max_half_width(),
         ..Solo::default()
     };
-    let before = race.respawns();
+    let before = race.sim.respawns();
     for _ in 0..ticks {
         race.tick(&PlayerInputs::single(throttle));
         let position = race.sim.world.ships[0].physics.body.position;
-        if let Some(distance) = race.spline().distance_to(position) {
+        if let Some(distance) = race.sim.spline().distance_to(position) {
             solo.peak = solo.peak.max(distance);
         }
     }
     solo.laps = race.sim.world.ships[0].standing.lap;
-    solo.respawns = race.respawns() - before;
+    solo.respawns = race.sim.respawns() - before;
     Some(solo)
 }
 
@@ -270,16 +270,16 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
     for _ in 0..600 {
         race.tick(&PlayerInputs::none());
         let position = race.sim.world.ships[0].physics.body.position;
-        if let Some(distance) = race.spline().distance_to(position) {
+        if let Some(distance) = race.sim.spline().distance_to(position) {
             peak = peak.max(distance);
         }
     }
     let position = race.sim.world.ships[0].physics.body.position;
-    let distance = race.spline().distance_to(position).expect("a sample");
+    let distance = race.sim.spline().distance_to(position).expect("a sample");
     println!(
         "thrown from {from:?}: peak {peak:.1}, back within {distance:.1}, \
          respawns {}",
-        race.respawns()
+        race.sim.respawns()
     );
 
     // **The collision cage holds it in** (2026-10-20): thrown sideways and up at
@@ -287,7 +287,7 @@ fn a_player_thrown_off_a_real_circuit_at_speed_comes_back() {
     // falls back with no rescue at all, peaking about 35 off the line. A rescue
     // is only owed when the craft actually got away.
     assert!(
-        race.respawns() > 0 || peak < 50.0,
+        race.sim.respawns() > 0 || peak < 50.0,
         "nothing put the craft back (peak {peak:.1})"
     );
     assert!(

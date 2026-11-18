@@ -228,7 +228,8 @@ fn start(circuit: &str) -> Option<race::Race> {
 }
 
 fn cage_of(race: &race::Race) -> &dyn Containment {
-    race.spline()
+    race.sim
+        .spline()
         .cage()
         .expect("Pulse runs the cage on this circuit")
 }
@@ -279,13 +280,13 @@ fn update(
         &mut world.projectiles,
         &mut world.ships[..count],
         dt,
-        race.collision(),
+        race.sim.collision(),
         cage,
-        race.weapon_stats(),
+        race.sim.weapon_stats(),
         "VENOM",
-        race.floor_arms(),
-        race.own_craft_probe(),
-        race.plasma_release(),
+        race.sim.floor_arms(),
+        race.sim.own_craft_probe(),
+        race.sim.plasma_release(),
         BlastPush::Posted,
         oag_physics::DamageRules::default(),
         &mut hits,
@@ -537,7 +538,7 @@ fn an_hd_plasma_bolt_rides_the_located_tracks_up() {
     // HD's own floor arms are unread, so it keeps the parallel turn
     // (`Weapons::floor_arms_steer_to_ride_point`).
     assert_eq!(
-        race.floor_arms(),
+        race.sim.floor_arms(),
         oag_weapons::projectile::FloorArms::ParallelToFloor
     );
     plasma_rides_the_located_up(race, 100, |track_up| {
@@ -558,6 +559,7 @@ fn plasma_rides_the_located_up(
     craft_up: impl Fn(Vec3) -> Vec3,
 ) -> Vec3 {
     let sample = *race
+        .sim
         .spline()
         .sample(sample)
         .expect("the circuit has the sample");
@@ -628,7 +630,7 @@ fn rocket_velocity_after_one_update(race: &race::Race, ahead: f32) -> Vec3 {
     let craft = world.ships[0].physics.body;
     let above = craft.position + craft.forward() * ahead;
     let floor = oag_physics::Raycaster::raycast(
-        race.collision(),
+        race.sim.collision(),
         oag_physics::Ray::new(above, -craft.up(), 20.0),
         None,
         false,
@@ -662,7 +664,7 @@ fn the_grid_craft_hides_the_floor_from_its_own_first_probes_on_pulse() {
         -body.right()
     );
     assert_eq!(
-        race.own_craft_probe(),
+        race.sim.own_craft_probe(),
         oag_weapons::projectile::OwnCraftProbe::CraftBox
     );
     let inside = rocket_velocity_after_one_update(&race, 3.0);
@@ -690,7 +692,7 @@ fn the_grid_craft_holds_its_own_first_probes_on_pure() {
     .expect("loading the race");
     let race = race::Race::start(loaded.setup);
     assert_eq!(
-        race.own_craft_probe(),
+        race.sim.own_craft_probe(),
         oag_weapons::projectile::OwnCraftProbe::CraftBoxHolds
     );
     let diving = |ahead: f32| {
@@ -699,7 +701,7 @@ fn the_grid_craft_holds_its_own_first_probes_on_pure() {
         let craft = world.ships[0].physics.body;
         let above = craft.position + craft.forward() * ahead;
         let floor = oag_physics::Raycaster::raycast(
-            race.collision(),
+            race.sim.collision(),
             oag_physics::Ray::new(above, -craft.up(), 20.0),
             None,
             false,

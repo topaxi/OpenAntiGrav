@@ -99,7 +99,7 @@ fn start(image: &str, track: &str) -> Option<race::Race> {
 /// judging each tick it is in the air.
 fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
     let mut race = start(title.0, title.1)?;
-    let craft_box = race.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
+    let craft_box = race.sim.own_craft_probe() == oag_weapons::projectile::OwnCraftProbe::CraftBox;
     let mut input: Option<Input> = None;
     let mut next_shot = 200;
     let mut out = Ride::default();
@@ -169,7 +169,7 @@ fn ride(title: (&str, &str), weapon: Weapon, ticks: u32) -> Option<Ride> {
                         None,
                     ),
             );
-            let Some(floor) = race.collision().raycast(
+            let Some(floor) = race.sim.collision().raycast(
                 Ray::new(shot.position, -shot.surface, reach),
                 None,
                 false,

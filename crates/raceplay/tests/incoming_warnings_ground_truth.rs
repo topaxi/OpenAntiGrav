@@ -74,7 +74,7 @@ fn watch(weapon: Weapon) -> (usize, usize) {
     race.sim.set_fire_law(oag_raceplay::FireLaw::Ours);
     let (icon, low, high) = oag_hud::incoming::window(weapon).expect("a weapon with a window");
 
-    let opponents = 1..usize::from(race.ship_count());
+    let opponents = 1..usize::from(race.sim.ship_count());
     let length = race.sim.course().map(oag_race::Course::length);
     let (mut judged_in, mut judged_out) = (0, 0);
     // The next tick's check on a fire just seen: whether the icon must be lit, and the gap

@@ -32,9 +32,12 @@ fn two_beams(options: race::Options) {
     }
     let shield = |race: &race::Race, slot: usize| race.sim.world.ships[slot].physics.shield;
     let before = (shield(&race, 1), shield(&race, 3));
-    assert!(race.force_leach_lock(0, 1), "the title authors a LeachBeam");
     assert!(
-        race.force_leach_lock(2, 3),
+        race.sim.force_leach_lock(0, 1),
+        "the title authors a LeachBeam"
+    );
+    assert!(
+        race.sim.force_leach_lock(2, 3),
         "a second beam must arm beside the first"
     );
     assert_eq!(race.sim.world.leach_beams_live(), 2);

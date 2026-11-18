@@ -91,7 +91,7 @@ fn overlapped_plans_are_the_serial_plans_on_2048_altima() {
 /// thread's start and the hand-over.
 fn launch_setters(race: &mut Race) {
     race.sim.set_autopilot(false);
-    race.set_control_scheme(crate::ControlScheme::default());
+    race.sim.set_control_scheme(crate::ControlScheme::default());
     race.sim.set_ai_tuning(oag_ai::Difficulty::tune_at_scale(
         0.5,
         &oag_ai::Tuning::default(),

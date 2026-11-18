@@ -1153,7 +1153,7 @@ impl Race {
     ///
     /// Inactive slots are placed too - they are at the start line and last,
     /// which is where a slot with no craft in it belongs. A caller that cares
-    /// reads [`Self::ship_count`] first.
+    /// reads [`RaceSim::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
         self.sim.places()

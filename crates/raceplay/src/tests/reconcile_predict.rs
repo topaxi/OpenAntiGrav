@@ -129,7 +129,8 @@ fn held_only(last: &InputSnapshot) -> InputSnapshot {
 /// A race with every grid slot flown by an input stream, none by the AI.
 fn person_race(setup: &Setup) -> Race {
     let mut race = Race::start(setup.clone());
-    race.set_control_scheme(oag_gameplay::ControlScheme::Veteran);
+    race.sim
+        .set_control_scheme(oag_gameplay::ControlScheme::Veteran);
     for slot in 0..race.sim.world.ship_count as usize {
         race.sim.world.controllers[slot] = Controller::Remote;
     }

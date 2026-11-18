@@ -25,14 +25,14 @@
 //!   respawns, laps and `lost_at`; shield was not in it, and where shield *has*
 //!   been read by hand it mixes barrel-roll charge and shield-pad pickups into
 //!   the wall term. That is why `07_Track` was the only circuit whose wall
-//!   attrition could be read at all. [`Race::wall_contact_ticks_of`] and
-//!   [`Race::wall_shield_charged_of`] separate the two structurally rather
+//!   attrition could be read at all. [`RaceSim::wall_contact_ticks_of`] and
+//!   [`RaceSim::wall_shield_charged_of`] separate the two structurally rather
 //!   than by subtraction - see their doc comments.
 //! - **Team.** [`yaw_ceiling_by_team_and_class`] below, which is a table read
 //!   rather than a sweep.
 //!
-//! [`Race::wall_contact_ticks_of`]: oag_raceplay::Race::wall_contact_ticks_of
-//! [`Race::wall_shield_charged_of`]: oag_raceplay::Race::wall_shield_charged_of
+//! [`RaceSim::wall_contact_ticks_of`]: oag_raceplay::RaceSim::wall_contact_ticks_of
+//! [`RaceSim::wall_shield_charged_of`]: oag_raceplay::RaceSim::wall_shield_charged_of
 
 use std::path::PathBuf;
 
@@ -156,13 +156,13 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
     let mut clusters = vec![0.0f32; (line_len / CLUSTER + 2) as usize];
     let mut charged = 0.0f32;
     for tick in 0..TICKS {
-        let before = race.respawns_of(LONE);
+        let before = race.sim.respawns_of(LONE);
         let was_at = race.sim.world.ships[LONE].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.respawns_of(LONE) != before {
+        if race.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
-        let now_charged = race.wall_shield_charged_of(LONE);
+        let now_charged = race.sim.wall_shield_charged_of(LONE);
         if now_charged > charged {
             // Charged against where the craft *entered* the tick, which is the
             // index a reader casts from when they go looking - the same
@@ -199,18 +199,18 @@ fn solo_on(track: &str, class: &str, tuning: Option<oag_ai::Tuning>) -> Option<S
 
     Some(Solo {
         best,
-        respawns: race.respawns_of(LONE),
+        respawns: race.sim.respawns_of(LONE),
         laps: lap,
         finished: lap.saturating_sub(1) >= target,
         state: race.sim.world.ships[LONE].physics.craft_state,
         end_shield: race.sim.world.ships[LONE].physics.shield,
         per_lap,
-        contact_ticks: race.wall_contact_ticks_of(LONE),
-        inbound_ticks: race.wall_inbound_ticks_of(LONE),
+        contact_ticks: race.sim.wall_contact_ticks_of(LONE),
+        inbound_ticks: race.sim.wall_inbound_ticks_of(LONE),
         wall_charged: charged,
         worst_cluster,
         line_len,
-        racing_ticks: race.racing_ticks_of(LONE),
+        racing_ticks: race.sim.racing_ticks_of(LONE),
     })
 }
 
@@ -670,7 +670,7 @@ fn what_the_airbrakes_do_through_a_hairpin() {
         if index < first || index > last {
             continue;
         }
-        let now = race.wall_shield_charged_of(LONE);
+        let now = race.sim.wall_shield_charged_of(LONE);
         let hit = now > charged;
         charged = now;
         let state = &ship.physics;

@@ -127,7 +127,7 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
             .map(|&slot| {
                 (
                     race.sim.world.ships[slot].physics.shield,
-                    race.wall_shield_charged_of(slot),
+                    race.sim.wall_shield_charged_of(slot),
                 )
             })
             .collect();
@@ -135,7 +135,7 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
         for (i, &slot) in slots.iter().enumerate() {
             let ship = &race.sim.world.ships[slot];
             let lost = before[i].0 - ship.physics.shield;
-            let charged = race.wall_shield_charged_of(slot) - before[i].1;
+            let charged = race.sim.wall_shield_charged_of(slot) - before[i].1;
             if lost > 1.0 && charged <= 0.0 {
                 runs[i].off_wall_hits.push((tick, ship.driver.index, lost));
             }
@@ -144,15 +144,15 @@ fn runs_of(race: &mut Race, slots: &[usize], ticks: u64) -> Vec<Run> {
             if now != lap {
                 runs[i].laps.push(Lap {
                     ticks: tick - started,
-                    contacts: race.wall_contact_ticks_of(slot) - contacts,
-                    respawns: race.respawns_of(slot) - respawns,
+                    contacts: race.sim.wall_contact_ticks_of(slot) - contacts,
+                    respawns: race.sim.respawns_of(slot) - respawns,
                     shield: race.sim.world.ships[slot].physics.shield,
                 });
                 mark[i] = (
                     now,
                     tick,
-                    race.wall_contact_ticks_of(slot),
-                    race.respawns_of(slot),
+                    race.sim.wall_contact_ticks_of(slot),
+                    race.sim.respawns_of(slot),
                 );
             }
         }
@@ -174,10 +174,10 @@ fn print_run(race: &Race, slot: usize, run: &Run, ticks: u64) {
     println!(
         "    end of run ({ticks} ticks): wall-contact ticks {}  respawns {}  shield {:.1}  \
          wall-charged {:.1}  shield spent off walls (barrel rolls: tick, line index, cost) {:?}",
-        race.wall_contact_ticks_of(slot),
-        race.respawns_of(slot),
+        race.sim.wall_contact_ticks_of(slot),
+        race.sim.respawns_of(slot),
         race.sim.world.ships[slot].physics.shield,
-        race.wall_shield_charged_of(slot),
+        race.sim.wall_shield_charged_of(slot),
         run.off_wall_hits
     );
 }
@@ -215,7 +215,7 @@ fn lone_opponent(environment: &str) {
     // closely and the Ace holds the plan's line into it (`docs/gameplay/ai.md`,
     // "Tight corners"); Talon's Junction scraped 6 ticks without that.
     assert_eq!(
-        race.wall_contact_ticks_of(1),
+        race.sim.wall_contact_ticks_of(1),
         0,
         "{environment}: the lone Ace touched a wall"
     );
@@ -265,8 +265,8 @@ fn field(environment: &str, seed: u64) {
     for (run, &slot) in runs.iter().zip(&slots) {
         println!("{environment} seed {seed} slot {slot}");
         print_run(&race, slot, run, TICKS);
-        contacts += race.wall_contact_ticks_of(slot);
-        charged += race.wall_shield_charged_of(slot);
+        contacts += race.sim.wall_contact_ticks_of(slot);
+        charged += race.sim.wall_shield_charged_of(slot);
         lost += 95.0 - race.sim.world.ships[slot].physics.shield;
         // Flying laps only: the first is the standing start.
         for lap in run.laps.iter().skip(1) {

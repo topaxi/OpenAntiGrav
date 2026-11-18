@@ -79,7 +79,7 @@ fn a_destroyed_opponent_in_a_single_race_never_comes_back() {
 
     // Past state 5's 1.5 s, state 6's 0.8 s, the Eliminator's longest return
     // (2.5 s) and then the 13 s the live capture watched.
-    let ticks = ((DESTROYED_DWELL + 0.8 + 2.5 + 13.0) / race.dt()).round() as usize;
+    let ticks = ((DESTROYED_DWELL + 0.8 + 2.5 + 13.0) / race.sim.dt()).round() as usize;
     for tick in 0..ticks {
         race.tick(&PlayerInputs::none());
         assert_eq!(
@@ -244,7 +244,7 @@ fn an_eliminator_absorb_spends_the_weapon_on_the_shield_and_pays_no_energy() {
     );
     let timer = race.ship().physics.shield_pickup_timer;
     assert!(
-        timer > 1.25 - 2.0 * race.dt() && timer <= 1.25,
+        timer > 1.25 - 2.0 * race.sim.dt() && timer <= 1.25,
         "the Shield must run for its own authored time, timer {timer}"
     );
 }

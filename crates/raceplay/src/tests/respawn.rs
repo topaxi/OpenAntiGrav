@@ -77,7 +77,7 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
         vec![plane(1, -40.0, oag_physics::Surface::Reset, 0)],
     );
     let mut race = Race::start(setup);
-    assert_eq!(race.respawns(), 0);
+    assert_eq!(race.sim.respawns(), 0);
 
     // Throw it off the track. No gravity in this fixture, so nothing else can
     // move it and the only thing under test is the reset path.
@@ -89,19 +89,23 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
 
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());
-        if race.respawns() > 0 {
+        if race.sim.respawns() > 0 {
             break;
         }
     }
 
-    assert_eq!(race.respawns(), 1, "the reset plane never triggered");
+    assert_eq!(race.sim.respawns(), 1, "the reset plane never triggered");
 
     let body = race.sim.world.ships[0].physics.body;
     // Back on the track: near a spline sample, above it, and launched down
     // it, read on the tick it was put back. Never fully grounded here, so no
     // speed was latched and the launch is the reset's bare `50`
     // (`crate::breadcrumbs`); the straight runs `+x`.
-    let distance = race.spline().distance_to(body.position).expect("a sample");
+    let distance = race
+        .sim
+        .spline()
+        .distance_to(body.position)
+        .expect("a sample");
     assert!(distance < 20.0, "respawned {distance} from the spline");
     assert!(body.position.y > 0.0, "respawned at {:?}", body.position);
     assert!(
@@ -130,7 +134,7 @@ fn falling_through_any_other_class_does_not_respawn() {
         for _ in 0..10 {
             race.tick(&PlayerInputs::none());
         }
-        assert_eq!(race.respawns(), 0, "{surface:?} respawned the ship");
+        assert_eq!(race.sim.respawns(), 0, "{surface:?} respawned the ship");
     }
 }
 
@@ -148,7 +152,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
         race.sim.world.ships[0].physics.body.position = inside;
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.respawns(), 0, "a craft on the track was recovered");
+    assert_eq!(race.sim.respawns(), 0, "a craft on the track was recovered");
 }
 
 /// **The other dwell, on an opponent rather than the player.**
@@ -313,7 +317,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     let mut race = Race::start(setup);
-    let dt = race.dt();
+    let dt = race.sim.dt();
 
     let push_toward_wall = |race: &mut Race| {
         let body = &mut race.sim.world.ships[0].physics.body;
@@ -369,7 +373,7 @@ fn a_recovery_pose_inside_a_reset_volume_gives_up_instead_of_looping() {
     }
 
     assert_eq!(
-        race.respawns(),
+        race.sim.respawns(),
         RESPAWN_GIVE_UP,
         "respawning did not stop after {RESPAWN_GIVE_UP} tries"
     );
@@ -389,10 +393,14 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
 
     let mut race = Race::start(setup);
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.respawns(), 1);
+    assert_eq!(race.sim.respawns(), 1);
     for _ in 0..(RESPAWN_COOLDOWN_TICKS - 1) {
         race.tick(&PlayerInputs::none());
-        assert_eq!(race.respawns(), 1, "respawned again inside the cooldown");
+        assert_eq!(
+            race.sim.respawns(),
+            1,
+            "respawned again inside the cooldown"
+        );
     }
 }
 
@@ -501,7 +509,7 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
 
     // Held against the wall: one attachment, not one per tick and not one
     // per cooldown - a chattering scrape must not go dark waiting to re-arm.
-    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.dt()).ceil() as usize + 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.sim.dt()).ceil() as usize + 2;
     for _ in 0..ticks {
         push_toward_wall(&mut race);
         race.tick(&PlayerInputs::none());

@@ -657,7 +657,7 @@ impl Stage {
             campaign_skill: None,
             skill_level: None,
         };
-        race.apply_launch(&launch);
+        race.sim.apply_launch(&launch);
         if let Some(progress) = campaign_2048_event.as_ref() {
             race.arm_event_xp(progress);
         }

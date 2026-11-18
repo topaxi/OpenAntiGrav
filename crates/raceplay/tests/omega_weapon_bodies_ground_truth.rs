@@ -126,7 +126,7 @@ fn a_craft_over_a_magstrip_draws_the_arc_wake() {
     let mut race = oag_raceplay::Race::start(loaded.setup);
     race.sim.set_autopilot(true);
     assert!(race.has_magstrip_wake(), "Omega builds the wake");
-    let slots = usize::from(race.ship_count());
+    let slots = usize::from(race.sim.ship_count());
     let mut drawn = None;
     for tick in 0..2400_u64 {
         race.tick(&PlayerInputs::none());

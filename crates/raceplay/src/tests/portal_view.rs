@@ -160,7 +160,7 @@ fn open_sections() -> crate::visibility::TrackVisibility {
 fn bare_scene(gpu: &Gpu, race: &Race) -> Scene {
     let mut track = triangle();
     track.radius = 500.0;
-    let liveries: Vec<_> = (0..race.ship_count()).map(|_| livery()).collect();
+    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| livery()).collect();
     scene_over_post(
         &gpu.0,
         &gpu.1,
@@ -339,7 +339,7 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
         (race, before)
     };
     let (mut race, before) = flown(BEHIND);
-    assert!(!race.ship_active(0), "out of the world");
+    assert!(!race.sim.ship_active(0), "out of the world");
     assert!(race.ship_drawn(0) && race.ship_flown_in_view(0));
     // A second seat's view of the same race.
     assert_eq!(race.set_viewport_count(2), 2);
@@ -617,7 +617,7 @@ fn chunked_track(draws: &[(u32, Vec3)]) -> Model {
 
 /// A scene over `track`, the chunk partition a cell at the craft sees `sees` of.
 fn chunked_scene(gpu: &Gpu, race: &Race, track: Model, sees: &[usize]) -> Scene {
-    let liveries: Vec<_> = (0..race.ship_count()).map(|_| livery()).collect();
+    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| livery()).collect();
     let scene = scene_over_post(
         &gpu.0,
         &gpu.1,

@@ -151,11 +151,11 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
     let slots: Vec<usize> = if field {
-        (1..race.ship_count() as usize).collect()
+        (1..race.sim.ship_count() as usize).collect()
     } else {
         vec![1]
     };
-    for slot in 0..race.ship_count() as usize {
+    for slot in 0..race.sim.ship_count() as usize {
         if !slots.contains(&slot) {
             race.sim.world.ships[slot].active = false;
         }
@@ -180,12 +180,12 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
             let body = &ship.physics.body;
             let speed = body.linear_velocity.dot(body.forward()).max(0.0);
             let index = ship.driver.index;
-            if race.respawns_of(slot) != respawns[k] {
-                respawns[k] = race.respawns_of(slot);
+            if race.sim.respawns_of(slot) != respawns[k] {
+                respawns[k] = race.sim.respawns_of(slot);
                 recovered[k] = true;
             }
-            let contact = race.wall_contact_ticks_of(slot) != contacts[k];
-            contacts[k] = race.wall_contact_ticks_of(slot);
+            let contact = race.sim.wall_contact_ticks_of(slot) != contacts[k];
+            contacts[k] = race.sim.wall_contact_ticks_of(slot);
             let h = &mut history[k];
             h.push(speed);
             let from = h.len().saturating_sub(STOP_WITHIN);

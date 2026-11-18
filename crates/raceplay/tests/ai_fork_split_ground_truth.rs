@@ -43,7 +43,7 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = race::Race::start(setup);
     race.sim.set_autopilot(true);
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     assert!(count >= 2, "{track}: no field to split");
     let routes = race.sim.route_count();
     let mut forks = Forks::default();
@@ -92,7 +92,7 @@ fn run(source: &str, track: &str, ticks: u32, ribbon: bool) -> Option<(Forks, us
             "{track}: slot {slot} lap {} route {} respawns {} state {:?} progress {:?} index {}",
             ship.standing.lap,
             ship.driver.branching.route,
-            race.respawns_of(slot),
+            race.sim.respawns_of(slot),
             ship.physics.craft_state,
             ship.standing.progress,
             ship.driver.index

@@ -197,7 +197,7 @@ fn a_local_search_that_misses_reports_a_distance_the_caller_will_reject() {
 #[test]
 fn a_position_off_the_track_refuses_to_name_a_section() {
     let race = Race::start(setup(Handling::default()));
-    let spline = race.spline();
+    let spline = race.sim.spline();
     let sample = *spline.sample(4).expect("a sample");
     let on_line = Vec3::from_array(sample.pos);
 

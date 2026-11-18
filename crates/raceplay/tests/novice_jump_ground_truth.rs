@@ -136,7 +136,7 @@ fn what_the_jumps_approach_looks_like() {
                 );
                 logged += 1;
             }
-            if (started && index >= 26) || race.respawns_of(LONE) > 0 {
+            if (started && index >= 26) || race.sim.respawns_of(LONE) > 0 {
                 break;
             }
         }
@@ -179,12 +179,12 @@ fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
             landing_index = ship.driver.index;
         }
         was_airborne = airborne_now;
-        if race.respawns_of(LONE) > 0 {
+        if race.sim.respawns_of(LONE) > 0 {
             break;
         }
     }
     (
-        race.respawns_of(LONE),
+        race.sim.respawns_of(LONE),
         race.sim.world.ships[LONE].standing.lap,
         liftoff_speed,
         landing_index,
@@ -317,7 +317,7 @@ fn flight_row(
         accel.y,
         ship.physics.brake,
         ship.physics.wall_contact_prev,
-        race.respawns_of(slot),
+        race.sim.respawns_of(slot),
     )
 }
 
@@ -386,11 +386,11 @@ fn log_first_passes(label: &str, race: &mut race::Race, arcs: &[f32], slots: &[u
             if inside {
                 entered[slot] = true;
             }
-            if entered[slot] && (inside || race.respawns_of(slot) > 0) {
+            if entered[slot] && (inside || race.sim.respawns_of(slot) > 0) {
                 println!("{}", flight_row(label, race, arcs, slot, previous[slot]));
             }
             previous[slot] = Some(race.sim.world.ships[slot].physics.body.linear_velocity);
-            if race.respawns_of(slot) > 0 {
+            if race.sim.respawns_of(slot) > 0 {
                 after_respawn[slot] += 1;
             }
             if entered[slot] && (index >= 70 || after_respawn[slot] > 60) {
@@ -450,14 +450,14 @@ fn the_parked_field_is_put_back_where_the_original_puts_it() {
         // tick ends. Rebuilt from outside, a slowed craft read 0.15 u/s short
         // a tick (2026-10-19, once opponents absorbed). The latch itself is
         // `breadcrumbs::tests::the_launch_speed_latches_on_every_fully_grounded_tick`'s.
-        let launch: [f32; 8] = std::array::from_fn(|slot| race.reset_launch_speed_of(slot));
+        let launch: [f32; 8] = std::array::from_fn(|slot| race.sim.reset_launch_speed_of(slot));
         race.tick(&PlayerInputs::none());
         for (slot, seen) in seen.iter_mut().enumerate().skip(1) {
             let ship = &race.sim.world.ships[slot];
-            if race.respawns_of(slot) == *seen {
+            if race.sim.respawns_of(slot) == *seen {
                 continue;
             }
-            *seen = race.respawns_of(slot);
+            *seen = race.sim.respawns_of(slot);
             let index = ship.driver.index as usize;
             assert!(
                 (2936..=2955).contains(&index),
@@ -510,10 +510,11 @@ fn the_parked_field_at_the_jump() {
         race.tick(&PlayerInputs::none());
         for slot in 1..8 {
             let ship = &race.sim.world.ships[slot];
-            let respawns = race.respawns_of(slot);
+            let respawns = race.sim.respawns_of(slot);
             if respawns > counts[slot] {
                 counts[slot] = respawns;
                 let cause = race
+                    .sim
                     .last_respawn_cause_of(slot)
                     .map_or("?", |cause| cause.label());
                 let (lost, speed, y) = before[slot];

@@ -86,7 +86,7 @@ fn fly(drop_edges: bool, audio: Option<&mut oag_sound::Audio>) -> (Log, Vec<i16>
     let mut audio = audio;
     let mut log = Log::default();
     let mut was = [false; 8];
-    let n = usize::from(race.ship_count());
+    let n = usize::from(race.sim.ship_count());
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
         let raised = race.sim.pending_cues().to_vec();

@@ -1013,7 +1013,7 @@ call `oag_net::race::prepare`, the one function that already forced Pilot Assist
 - turns barrel rolls off for every craft, the AI included (`RaceSim::set_barrel_rolls`, read as
   `Environment::barrel_rolls` in `oag_physics::forces`; the gesture is never read, so no roll arms
   and no shield is spent);
-- gives a Zone race its ending (`Race::set_zone_target`, `RaceState::zone_target`: the race ends
+- gives a Zone race its ending (`RaceSim::set_zone_target`, `RaceState::zone_target`: the race ends
   on the step that reaches the target zone; a zone is 600 ticks). **Chosen, not measured**:
   Omega's slider is the only zone target a race ever has, and the original's own Zone ends only on
   destruction. `RaceState::zone_target` is hashed only while set, so every race without one keeps

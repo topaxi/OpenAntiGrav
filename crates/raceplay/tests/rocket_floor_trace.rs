@@ -255,19 +255,19 @@ fn trace_a_rocket_volley_along_the_floor() {
     };
     let mut race = race::Race::start(loaded.setup);
     race.sim.set_autopilot(true);
-    let dt = race.dt();
+    let dt = race.sim.dt();
 
-    let (up, down, flat) = floor_winding(race.collision());
+    let (up, down, flat) = floor_winding(race.sim.collision());
     let mut log = String::new();
     writeln!(
         log,
         "# {title} {} floor triangles: {up} normal.y>0, {down} normal.y<0, {flat} degenerate; \
          max half-width {:.2}",
         track.unwrap_or("(default)"),
-        race.spline().max_half_width()
+        race.sim.spline().max_half_width()
     )
     .unwrap();
-    let stats = race.rocket_stats().expect("the disc authors a Rocket");
+    let stats = race.sim.rocket_stats().expect("the disc authors a Rocket");
     let cruise = stats.speed_for_named("VENOM").unwrap_or(0.0) / 3.6;
     writeln!(
         log,
@@ -308,8 +308,9 @@ fn trace_a_rocket_volley_along_the_floor() {
                 predicted[slot] = Some(replicate(
                     p,
                     dt,
-                    race.collision(),
-                    race.spline()
+                    race.sim.collision(),
+                    race.sim
+                        .spline()
                         .cage()
                         .map(|c| c as &dyn oag_physics::cage::Containment),
                     &race.sim.world.ships[..count],
@@ -338,8 +339,9 @@ fn trace_a_rocket_volley_along_the_floor() {
                         replicate(
                             &now,
                             dt,
-                            race.collision(),
-                            race.spline()
+                            race.sim.collision(),
+                            race.sim
+                                .spline()
                                 .cage()
                                 .map(|c| c as &dyn oag_physics::cage::Containment),
                             &race.sim.world.ships[..count],
@@ -426,7 +428,7 @@ fn trace_a_rocket_volley_along_the_floor() {
         )
         .unwrap();
     }
-    writeln!(summary, "# player respawns {}", race.respawns()).unwrap();
+    writeln!(summary, "# player respawns {}", race.sim.respawns()).unwrap();
     println!("{}", log.lines().take(2).collect::<Vec<_>>().join("\n"));
     println!("{summary}");
     std::fs::write(&out, format!("{log}{summary}")).expect("writing the log");

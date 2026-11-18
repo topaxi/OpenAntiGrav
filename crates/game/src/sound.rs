@@ -351,14 +351,13 @@ fn craft_positions(
 ) -> [Option<(Vec3, f32)>; oag_gameplay::MAX_SHIPS] {
     std::array::from_fn(|slot| {
         let ship = race.sim.world.ships.get(slot)?;
-        (slot < race.ship_count() as usize && (ship.in_world() || in_transit && ship.active)).then(
-            || {
+        (slot < race.sim.ship_count() as usize && (ship.in_world() || in_transit && ship.active))
+            .then(|| {
                 (
                     ship.physics.body.position,
                     ship.physics.body.linear_velocity.length(),
                 )
-            },
-        )
+            })
     })
 }
 

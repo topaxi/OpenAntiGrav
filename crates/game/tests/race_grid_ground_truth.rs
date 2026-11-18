@@ -239,7 +239,11 @@ fn the_whole_grid_lands_on_the_track() {
     let colliders = loaded.setup.collision.clone();
     let race = race::Race::start(loaded.setup);
 
-    assert_eq!(race.ship_count(), 8, "16_Track should field a full grid");
+    assert_eq!(
+        race.sim.ship_count(),
+        8,
+        "16_Track should field a full grid"
+    );
     let ships: Vec<_> = race.sim.world.ships.iter().filter(|s| s.active).collect();
     assert_eq!(ships.len(), 8);
 
@@ -259,7 +263,7 @@ fn the_whole_grid_lands_on_the_track() {
     // midpoint, the even slots on the node's side (`grid.md`). Two units: the
     // midpoint is read at the nearest resampled point, not the walked one.
     let off_midpoint = |p: Vec3| {
-        let (_, s, _) = race.spline().nearest(p).expect("has samples");
+        let (_, s, _) = race.sim.spline().nearest(p).expect("has samples");
         let lateral =
             (p - Vec3::from_array(s.pos)).dot(Vec3::from_array(s.lateral).normalize_or_zero());
         lateral - 0.5 * (s.ai_bound_left + s.ai_bound_right)
@@ -284,6 +288,7 @@ fn the_whole_grid_lands_on_the_track() {
     for (index, ship) in ships.iter().enumerate() {
         let position = ship.physics.body.position;
         let distance = race
+            .sim
             .spline()
             .distance_to(position)
             .expect("the track has samples");
@@ -340,7 +345,7 @@ fn our_grid_is_the_originals_grid() {
         return;
     };
     let race = race::Race::start(loaded.setup);
-    assert_eq!(race.ship_count(), 8);
+    assert_eq!(race.sim.ship_count(), 8);
 
     // Array index 0 is the player and grid slot 8; indices 1..=7 are slots 1..=7.
     let slot_of = |index: usize| if index == 0 { 8 } else { index };

@@ -189,7 +189,7 @@ pub struct RaceSim {
     pub(super) jumps: [u32; oag_gameplay::MAX_SHIPS],
     /// Which trigger fired the most recent respawn of each craft, `None` before
     /// the first. Bookkeeping outside `state_hash`, read by survey tests through
-    /// [`Race::last_respawn_cause_of`].
+    /// [`RaceSim::last_respawn_cause_of`].
     pub(super) last_respawn_cause: [Option<respawn::RespawnCause>; oag_gameplay::MAX_SHIPS],
     /// The collision cage asked for each craft's reset this tick
     /// (`oag_physics::cage::CageResponse::reset`). Set by the craft's step and

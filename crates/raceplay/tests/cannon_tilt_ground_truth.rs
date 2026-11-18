@@ -49,7 +49,7 @@ fn residuals(disc: &str, track: &str) -> Option<Fired> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    let dt = race.dt();
+    let dt = race.sim.dt();
     let mut input: Option<Input> = None;
     let mut seen = [None::<u32>; oag_weapons::projectile::MAX_PROJECTILES];
     let mut out = Vec::new();
@@ -179,7 +179,10 @@ fn a_missile_fired_on_a_bank_is_born_riding_the_located_tracks_up() {
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
     race.sim.set_autopilot(true);
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
     let mut input: Option<Input> = None;
     for _ in 0..4_000_u32 {
         let snap = snapshot(Button::Cross.bit(), input.as_ref());

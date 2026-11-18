@@ -751,7 +751,7 @@ impl Race {
 
     /// One craft's exhaust animation state.
     ///
-    /// Indexed by ship slot, the player at 0. A slot past [`Self::ship_count`]
+    /// Indexed by ship slot, the player at 0. A slot past [`RaceSim::ship_count`]
     /// holds a cold `Exhaust` that nothing advances - drawn, it would be an
     /// invisible flare at whatever pose an unused ship slot carries, so a caller
     /// iterating the field bounds itself by `ship_count` the way the hull draw

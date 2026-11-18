@@ -253,7 +253,7 @@ pub(crate) struct WreckArgs {
     /// at the end of a tick: `TICK:SLOT`, e.g. `600:1`. A verification aid for
     /// the Bomb's detonation, there because a headless run has no rival that
     /// drives over it. The next tick's own trip test does the rest. See
-    /// [`oag_raceplay::Race::force_bomb_trip`].
+    /// [`oag_raceplay::RaceSim::force_bomb_trip`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_bomb_trip: Option<String>,
 
@@ -283,7 +283,7 @@ pub(crate) struct WreckArgs {
     /// fired at the end of a tick: `TICK:SLOT`, e.g. `330:1`. The same aid
     /// `--force-bomb-trip` is, for the Missile's explosion: a headless run's
     /// rivals drive away from the shot. The next tick's own hit test does the
-    /// rest. See [`oag_raceplay::Race::force_missile_hit`].
+    /// rest. See [`oag_raceplay::RaceSim::force_missile_hit`].
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_missile_hit: Option<String>,
 

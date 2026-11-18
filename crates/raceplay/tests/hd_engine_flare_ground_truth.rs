@@ -698,7 +698,7 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         "the viewing player's craft never gets the sprite"
     );
     let far = hd::SPRITE_FADEOUT_DIST + hd::SPRITE_FADEOUT_RANGE;
-    for slot in 1..race.ship_count() as usize {
+    for slot in 1..race.sim.ship_count() as usize {
         let nozzle = race
             .nozzle_of(slot)
             .expect("every HD hull authors a nozzle");

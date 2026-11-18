@@ -143,7 +143,7 @@ impl Race {
                 Some(shader) => self.view.handles.shaders().place(mod_id, shader),
             };
             let in_world = |slot: usize| {
-                usize::from(self.ship_count()) > slot && self.sim.world.ships[slot].in_world()
+                usize::from(self.sim.ship_count()) > slot && self.sim.world.ships[slot].in_world()
             };
             let (Some(place), true) = (place, in_world(beam.from) && in_world(beam.to)) else {
                 continue;

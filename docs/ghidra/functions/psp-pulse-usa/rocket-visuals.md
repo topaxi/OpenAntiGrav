@@ -1205,7 +1205,7 @@ collider index (`sp - 0x40`) and kind (`sp - 0x38`). Two loads of the same state
 volley to 0.2 unit and the same ending update.
 
 Ours was then run two ways from those records (a scratch harness on `oag_weapons::projectile::step`
-and `Race::collision`, not kept): **one update of ours from each of the original's states** with the
+and `RaceSim::collision`, not kept): **one update of ours from each of the original's states** with the
 original's own `dt`, compared with the original's next state, which isolates a law; and a **free
 flight** from the original's first state at `1/60`.
 

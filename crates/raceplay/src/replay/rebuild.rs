@@ -146,7 +146,7 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
         anyhow::anyhow!("the replay's simulation modules are not this race's: {why}")
     })?;
     let launch = Launch::from_table(&header.options)?;
-    race.apply_launch(&launch);
+    race.sim.apply_launch(&launch);
     for &slot in &header.slots {
         if let Some(controller) = race.sim.world.controllers.get_mut(usize::from(slot)) {
             *controller = Controller::Local;
@@ -154,7 +154,7 @@ pub fn apply_recorded(race: &mut Race, header: &Header) -> Result<()> {
     }
     // After the seats: an online room's people are remote, not local.
     if let Some(room) = super::Room::from_table(&header.options)? {
-        race.apply_room(&room);
+        race.sim.apply_room(&room);
     }
     // After the seats, as the session applies the AI choice: which driver flies reads who is
     // human.

@@ -41,7 +41,7 @@ fn start() -> Option<race::Race> {
     let mut moving = 0;
     for _ in 0..SETTLE + 2000 {
         race.tick(&PlayerInputs::none());
-        let racing = (1..race.ship_count() as usize).any(|s| {
+        let racing = (1..race.sim.ship_count() as usize).any(|s| {
             race.sim.world.ships[s]
                 .physics
                 .body
@@ -97,7 +97,7 @@ fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
     let (a, b) = (1, 2);
     let before = targets(&forced, a, b);
     assert_eq!(before, targets(&control, a, b), "the two runs diverged");
-    let contacts_before = forced.pair_contact_ticks_of(a);
+    let contacts_before = forced.sim.pair_contact_ticks_of(a);
 
     let placed = force_side_by_side(&mut forced, a, b);
     // The side the push reads is the rival's at the contact, not at the placement: closing
@@ -106,12 +106,12 @@ fn two_opponents_forced_side_by_side_push_their_lanes_apart() {
     for _ in 0..WATCH {
         forced.tick(&PlayerInputs::none());
         control.tick(&PlayerInputs::none());
-        if side.is_none() && forced.pair_contact_ticks_of(a) > contacts_before {
+        if side.is_none() && forced.sim.pair_contact_ticks_of(a) > contacts_before {
             side = Some(side_of(&forced, a, b));
         }
     }
     let side = side.unwrap_or(placed);
-    let contact_ticks = forced.pair_contact_ticks_of(a) - contacts_before;
+    let contact_ticks = forced.sim.pair_contact_ticks_of(a) - contacts_before;
     assert!(
         contact_ticks > 0,
         "the forced placement never made a pair contact"

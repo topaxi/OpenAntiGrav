@@ -132,7 +132,7 @@ fn reconcile_cost_sweep() {
             race.tick(&inputs);
             race.sim.drain_cues();
         }
-        let ships = race.ship_count();
+        let ships = race.sim.ship_count();
         let s0 = race.snapshot_sim();
 
         // M3: a snapshot, whole and track half, in time and in resident bytes.

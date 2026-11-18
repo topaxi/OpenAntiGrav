@@ -110,7 +110,10 @@ fn a_missile_turns_toward_the_craft_it_locked() {
         body.position += left * 4.0;
     }
 
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
 
     // Slot 0 sits at the back of the grid, so everybody is ahead of it. Fire by
     // hand rather than through a pad, because which weapon a pad hands out is a
@@ -210,7 +213,10 @@ fn a_missile_never_locks_its_own_firer() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
 
     // Slot 0 is the one candidate `RaceSim::fire_missile` additionally gates on
     // `Race::sight` - see its doc comment - so without this the loop below
@@ -275,7 +281,10 @@ fn a_missile_glances_off_the_circuits_barriers() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
     let launch_kmh = stats.launch_speed;
 
     // Aimed across the track from the player's craft, sweeping the whole circle
@@ -429,7 +438,10 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
 
     for slot in 0..race.sim.world.ship_count as usize {
         assert!(

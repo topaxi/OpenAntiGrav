@@ -87,8 +87,8 @@ fn watch(run: &mut Run, race: &Race) {
     let tick = run.hashes.len() as u64;
     run.hashes.push(race.sim.state_hash());
     run.truth.push(
-        (0..usize::from(race.ship_count()))
-            .map(|slot| race.craft_pose(slot))
+        (0..usize::from(race.sim.ship_count()))
+            .map(|slot| race.sim.craft_pose(slot))
             .collect(),
     );
     let readout = race.readout();
@@ -126,7 +126,7 @@ pub(crate) fn record(title: &str, ticks: Option<u64>) -> Option<(std::path::Path
     let loaded = race::load(&single_race(&source)).expect("loading the race");
     let seed = loaded.setup.seed;
     let mut race = Race::start(loaded.setup);
-    race.apply_launch(&launch());
+    race.sim.apply_launch(&launch());
     race.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&race);
     let mut run = Run {
@@ -280,7 +280,7 @@ fn a_visit_changes_nothing(title: &str, setup: race::Setup, run: &Run) {
     let visit_at = 1_500;
     let seed = setup.seed;
     let mut live = Race::start(setup.clone());
-    live.apply_launch(&launch());
+    live.sim.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&live);
     let mut timeline = Timeline::live(setup, &live);
@@ -384,7 +384,7 @@ fn a_rewind_changes_nothing(title: &str) {
     let setup = file_setup(&source, &run);
     let seed = setup.seed;
     let mut live = Race::start(setup.clone());
-    live.apply_launch(&launch());
+    live.sim.apply_launch(&launch());
     live.start_recording(header_of(title, oag_race::Mode::SingleRace, seed));
     let assist = assist_level(&live);
     let mut keeper = Keeper::new(setup, &live);
@@ -470,7 +470,7 @@ fn a_split_screen_recording_reproduces() {
     let seed = setup.seed;
     let mut race = Race::start(setup.clone());
     let unseated = race.sim.state_hash();
-    race.apply_launch(&launch());
+    race.sim.apply_launch(&launch());
     assert_eq!(race.set_viewport_count(2), 2);
     for slot in 0..2 {
         race.sim.world.controllers[slot] = Controller::Local;
@@ -589,7 +589,7 @@ fn dump_the_recordings_for_a_compressor() {
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
     let mut race = Race::start(loaded.setup);
-    race.apply_launch(&launch());
+    race.sim.apply_launch(&launch());
     race.start_recording(header_of(&title, oag_race::Mode::SingleRace, seed));
     race.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());

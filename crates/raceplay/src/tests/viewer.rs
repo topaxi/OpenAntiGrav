@@ -372,9 +372,9 @@ fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
     );
     assert_eq!(viewer.state(), State::PoseEnded);
     assert!(!viewer.pose_track_is_short());
-    let slots = usize::from(race.ship_count());
+    let slots = usize::from(race.sim.ship_count());
     for slot in 0..slots {
-        let shown = race.craft_pose(slot);
+        let shown = race.sim.craft_pose(slot);
         let recorded = track.pose(slot, TICKS as f64).expect("a pose");
         assert!(
             (shown.position - recorded.position).length() < 1e-3,
@@ -387,7 +387,7 @@ fn past_the_last_agreeing_second_a_pose_track_plays_in_pose_view() {
     viewer.seek(&mut race, 350);
     assert_eq!(viewer.at(), 350);
     assert_eq!(viewer.state(), State::PoseView);
-    let shown = race.craft_pose(0);
+    let shown = race.sim.craft_pose(0);
     let recorded = track.pose(0, 350.0).expect("a pose");
     assert!((shown.position - recorded.position).length() < 1e-3);
 }
@@ -421,9 +421,9 @@ fn a_tick_zero_mismatch_with_a_pose_track_opens_in_pose_view() {
     viewer.seek(&mut race, 250);
     assert_eq!(viewer.at(), 250);
     assert_eq!(viewer.state(), State::PoseView);
-    for slot in 0..usize::from(race.ship_count()) {
+    for slot in 0..usize::from(race.sim.ship_count()) {
         let recorded = track.pose(slot, 250.0).expect("a pose");
-        assert!((race.craft_pose(slot).position - recorded.position).length() < 1e-3);
+        assert!((race.sim.craft_pose(slot).position - recorded.position).length() < 1e-3);
     }
     viewer.seek(&mut race, TICKS);
     assert_eq!(viewer.state(), State::PoseEnded);

@@ -65,7 +65,7 @@ fn recording(loaded: &race::Loaded) -> oag_replay::Replay {
         skill_level: None,
     };
     let mut race = Race::start(loaded.setup.clone());
-    race.apply_launch(&launch);
+    race.sim.apply_launch(&launch);
     let mut header = Header::new("pulse", "default", "time_trial", "venom", "default", 7);
     header.options = launch.to_table();
     race.start_recording(header);

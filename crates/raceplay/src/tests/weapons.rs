@@ -256,7 +256,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     // forty-sixth read still sees a live boost. Harmless - a sixtieth of a
     // second - and pinned rather than tolerated so that a change to the
     // ordering shows up here.
-    let whole = (FIXTURE_TURBO_TIME / fired.dt()).round() as u32;
+    let whole = (FIXTURE_TURBO_TIME / fired.sim.dt()).round() as u32;
     assert_eq!(
         ticks,
         whole + 1,
@@ -295,7 +295,8 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
     // counted off - the countdown runs after the damage path reads it, which
     // is what protects the tick a shield is fired on.
     assert!(
-        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.dt())).abs() < 1e-5,
+        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.sim.dt())).abs()
+            < 1e-5,
         "expected the authored {FIXTURE_SHIELD_TIME} less one tick, got {}",
         race.ship().physics.shield_pickup_timer
     );
@@ -310,7 +311,7 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
         ticks += 1;
         assert!(ticks < 600, "the shield never expired");
     }
-    let whole = (FIXTURE_SHIELD_TIME / race.dt()).round() as u32;
+    let whole = (FIXTURE_SHIELD_TIME / race.sim.dt()).round() as u32;
     assert_eq!(
         ticks,
         whole + 1,
@@ -353,7 +354,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     );
     // Two ticks have passed since the first arm, so the timer must have fallen
     // by exactly those two - not been reset to the authored duration.
-    let expected = after_first - 2.0 * race.dt();
+    let expected = after_first - 2.0 * race.sim.dt();
     assert!(
         (race.ship().physics.shield_pickup_timer - expected).abs() < 1e-5,
         "the second Shield refreshed the timer: expected {expected}, got {}",

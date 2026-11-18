@@ -99,11 +99,11 @@ pub struct CaptureOptions {
     pub force_hit: Option<(u32, usize)>,
     /// `--force-wall-slide TICK:SLOT`: see [`RaceSim::force_wall_slide`].
     pub force_wall_slide: Option<(u32, usize)>,
-    /// `--force-leach-lock TICK:TARGET`: see [`Race::force_leach_lock`].
+    /// `--force-leach-lock TICK:TARGET`: see [`RaceSim::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--leach-path FILE`, parsed: see [`Race::force_leach_path`].
     pub leach_path: Option<Vec<oag_core::math::Vec3>>,
-    /// `--force-bomb-trip TICK:SLOT`: see [`Race::force_bomb_trip`].
+    /// `--force-bomb-trip TICK:SLOT`: see [`RaceSim::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
@@ -522,7 +522,7 @@ pub fn capture(
     let best_lap = previous.and_then(|r| r.best_lap_ticks);
     race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
-    race.apply_launch(&oag_raceplay::Launch {
+    race.sim.apply_launch(&oag_raceplay::Launch {
         scheme: options.scheme,
         difficulty,
         autopilot: options.autopilot,

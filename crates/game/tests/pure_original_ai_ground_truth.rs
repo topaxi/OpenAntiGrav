@@ -286,7 +286,7 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
              end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.respawns_of(slot),
+            race.sim.respawns_of(slot),
             ship.physics.shield
         );
     }
@@ -301,9 +301,9 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
             wrecks += 1;
         }
         assert!(
-            race.respawns_of(slot) <= respawns,
+            race.sim.respawns_of(slot) <= respawns,
             "{track}: slot {slot} respawned {} times",
-            race.respawns_of(slot)
+            race.sim.respawns_of(slot)
         );
     }
     assert!(

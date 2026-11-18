@@ -66,7 +66,7 @@ fn sitting_on_a_pad_raises_the_cue_once_and_not_every_tick() {
     // single race raises eight - each carrying its own slot, which is what the
     // audio layer places it by. Before positional audio the seven opponents
     // were dropped at the point of raising and this asserted `1`.
-    assert_eq!(first.len(), race.ship_count() as usize);
+    assert_eq!(first.len(), race.sim.ship_count() as usize);
     let mut slots: Vec<_> = first.iter().map(|e| e.slot).collect();
     slots.sort_unstable();
     slots.dedup();

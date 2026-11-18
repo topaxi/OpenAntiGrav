@@ -7317,7 +7317,7 @@ Whether the original's relaunched craft clears this jump is not measured.
 original's law measured live on Pulse PSP
 ([contact-response.md](../ghidra/functions/psp-pulse-usa/contact-response.md#measured-2026-11-11-an-unshielded-craft-to-craft-bump-charges-the-energy-pool),
 confidence 92), through `oag_physics::damage::apply_pair`. The AI pays it as the player does; nothing exempts a
-rival. `Race::pair_shield_lost_of` counts what bumps took per slot, beside `wall_shield_charged_of`.
+rival. `RaceSim::pair_shield_lost_of` counts what bumps took per slot, beside `wall_shield_charged_of`.
 
 **What it did to the de Konstruct board** (`ai_dekonstruct_black_ground_truth.rs`, `ai_dekonstruct_black_board`,
 `OAG_SWEEP=1 OAG_SEEDS=23`, seven Aces, the player parked, 18,000 ticks, weapons on; the charge switched off
@@ -7416,7 +7416,7 @@ seven opponents, the player parked on the grid (no input; never the Autopilot), 
 (`Difficulty::Novice`, skill the load's ambient value; the two skill scales were not compared). A **contact
 tick** is a tick an opponent has at least one craft-to-craft contact: on the original, at least one kind-`1`
 record in its ring at the `AiManager_Update` stop (`0x08834b14`, before any driver reads the ring); in ours, the
-slot in at least one resolved pair (`Race::pair_contact_ticks_of`). The two agree on a separating pair: the
+slot in at least one resolved pair (`RaceSim::pair_contact_ticks_of`). The two agree on a separating pair: the
 original's `Body_ResolveContactPair` returns before `Body_RecordPairContact` when the pair separates faster
 than `0.5`, and `oag_physics::pair::resolve` returns `None` at the same gate, so neither counts that tick. Counted from GO (the first frame an opponent
 moves faster than 5 u/s). Per opponent, mean over the field:

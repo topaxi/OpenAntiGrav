@@ -44,7 +44,7 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
         setup.reset_triggers.beneath.enabled = false;
     }
     let mut race = race::Race::start(setup);
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     race.sim.world.ships[0].active = false;
     let laps_target = race.sim.world.laps_target().unwrap_or(3) as usize;
     let mut out = Run {
@@ -80,9 +80,9 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
             {
                 running += 1;
             }
-            if race.respawns_of(slot) != respawns[slot] {
-                respawns[slot] = race.respawns_of(slot);
-                let cause = race.last_respawn_cause_of(slot);
+            if race.sim.respawns_of(slot) != respawns[slot] {
+                respawns[slot] = race.sim.respawns_of(slot);
+                let cause = race.sim.last_respawn_cause_of(slot);
                 let index = ship.driver.index;
                 out.respawns
                     .push(format!("slot {slot} lap {lap} {cause:?}@{index}"));
@@ -112,7 +112,7 @@ fn run(source: &std::path::Path, track: &str, class: &str) -> Run {
                     ship.physics.body.linear_velocity.length(),
                     ship.physics.time_airborne,
                     ship.physics.craft_state,
-                    race.respawn_given_up_of(slot)
+                    race.sim.respawn_given_up_of(slot)
                 ));
             }
         }
@@ -276,7 +276,7 @@ fn beneath_census_all_titles() {
             }
         };
         let mut race = race::Race::start(loaded.setup);
-        let count = race.ship_count() as usize;
+        let count = race.sim.ship_count() as usize;
         race.sim.world.ships[0].active = false;
         let mut respawns = vec![0u32; count];
         let mut wide = vec![false; count];
@@ -296,9 +296,9 @@ fn beneath_census_all_titles() {
                 if !ship.standing.finished() {
                     running += 1;
                 }
-                if race.respawns_of(slot) != respawns[slot] {
-                    respawns[slot] = race.respawns_of(slot);
-                    let cause = race.last_respawn_cause_of(slot);
+                if race.sim.respawns_of(slot) != respawns[slot] {
+                    respawns[slot] = race.sim.respawns_of(slot);
+                    let cause = race.sim.last_respawn_cause_of(slot);
                     let mut event = format!("{cause:?}@{}t{tick}", ship.driver.index);
                     if cause == Some(RespawnCause::Beneath) {
                         event.push_str(&format!(

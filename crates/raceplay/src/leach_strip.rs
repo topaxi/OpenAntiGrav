@@ -177,7 +177,7 @@ impl Race {
             return;
         };
         for slot in 0..usize::from(self.sim.world.ship_count).min(MAX_SHIPS) {
-            if !self.ship_active(slot) {
+            if !self.sim.ship_active(slot) {
                 continue;
             }
             let record = self.leach_record(&strip.anchors, slot);

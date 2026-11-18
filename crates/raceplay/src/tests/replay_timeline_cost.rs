@@ -438,14 +438,14 @@ fn replay_timeline_cost_sweep() {
     println!(
         "start: Race::start(setup.clone()) {start_ms:.0} ms first, {copy_ms:.0} ms second; \
          ships {}; size_of RaceSim {} bytes, Race {} bytes",
-        race.ship_count(),
+        race.sim.ship_count(),
         std::mem::size_of::<RaceSim>(),
         std::mem::size_of::<Race>(),
     );
 
     race.sim.set_autopilot(true);
     let idle = PlayerInputs::single(oag_gameplay::InputSnapshot::default());
-    let slots = usize::from(race.ship_count());
+    let slots = usize::from(race.sim.ship_count());
 
     let before_run = Split::of(&race.sim);
     let constants_at_start = constant_part(&race.sim);

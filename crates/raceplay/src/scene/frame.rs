@@ -345,7 +345,7 @@ impl Scene {
             &self.weapon_quads.draw,
             projection,
             view_projection,
-            usize::from(race.ship_count()),
+            usize::from(race.sim.ship_count()),
         );
         let prev_vp = prev.view_projection;
         // The lens's own screen motion (the shake and the field of view), for the
@@ -694,7 +694,7 @@ impl Scene {
         // here down: the scene always holds a full grid's worth of drawables and a
         // time trial fields one craft.
         oag_gpu::perfprobe::mark("sky+track-write");
-        let drawn = usize::from(race.ship_count());
+        let drawn = usize::from(race.sim.ship_count());
         self.write_hull_uniforms(
             queue,
             race,
@@ -747,7 +747,7 @@ impl Scene {
             let Some(shell) = shell else {
                 continue;
             };
-            if !race.ship_active(slot) || !shell_visible(race, slot) {
+            if !race.sim.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
             let state = race.shield_of(slot);
@@ -912,8 +912,8 @@ impl Scene {
                 continue;
             };
             // An inactive slot has nothing current to sample - its craft is
-            // out of the race, not merely hidden. See `Race::ship_active`.
-            if !race.ship_active(slot) {
+            // out of the race, not merely hidden. See `RaceSim::ship_active`.
+            if !race.sim.ship_active(slot) {
                 continue;
             }
             // Two reveals, per source. HD's plume has **no** visibility gate:
@@ -1046,8 +1046,8 @@ impl Scene {
             // Per craft, unlike the nozzle check below - an inactive slot is
             // out of the race regardless of what its model authors. `continue`
             // rather than `break`: the slots after it can still be racing.
-            // See `Race::ship_active`.
-            if !race.ship_active(slot) {
+            // See `RaceSim::ship_active`.
+            if !race.sim.ship_active(slot) {
                 continue;
             }
             // No locator, nothing drawn - rather than a flare at the origin.
@@ -1286,7 +1286,7 @@ impl Scene {
             let Some(boost) = boost else {
                 continue;
             };
-            if !race.ship_active(slot) {
+            if !race.sim.ship_active(slot) {
                 continue;
             }
             if !race.exhaust_of(slot).plume_visible() {
@@ -1310,7 +1310,7 @@ impl Scene {
             let Some(shell) = shell else {
                 continue;
             };
-            if !race.ship_active(slot) || !shell_visible(race, slot) {
+            if !race.sim.ship_active(slot) || !shell_visible(race, slot) {
                 continue;
             }
             draws.mesh(shell);

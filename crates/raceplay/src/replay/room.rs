@@ -2,18 +2,18 @@
 //! so a recording of a network race rebuilds as that race and not as a local one.
 //!
 //! **One mechanism for writing and rebuilding**, as [`super::Launch`]: `oag-net` builds a
-//! [`Room`] from the room's parameters, applies it to its race ([`Race::apply_room`]) and writes
+//! [`Room`] from the room's parameters, applies it to its race ([`RaceSim::apply_room`]) and writes
 //! [`Room::to_table`] into the recording's header; [`super::apply_recorded`] reads the table back
 //! and applies it the same way. Without it the rebuild seats every person as local, and
 //! `World::controllers` is hashed, so the tick-zero hash would refuse the file.
 
+use crate::RaceSim;
 use std::collections::BTreeMap;
 
 use oag_gameplay::Controller;
 use oag_physics::pilot_assist::Level;
 
 use super::UnknownOption;
-use crate::Race;
 
 /// The rules of an online room that change the race and are not in a launch request.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,20 +91,19 @@ impl Room {
     }
 }
 
-impl Race {
+impl RaceSim {
     /// Applies an online room's rules to a race just started: its people are remote, each flies
     /// the assist level they asked for, and the barrel-roll and zone rules are the room's. What
     /// the network race and the rebuild of its recording both call.
     pub fn apply_room(&mut self, room: &Room) {
         let seats = usize::from(room.people).min(oag_gameplay::MAX_PLAYERS);
-        for controller in self.sim.world.controllers.iter_mut().take(seats) {
+        for controller in self.world.controllers.iter_mut().take(seats) {
             *controller = Controller::Remote;
         }
         for slot in 0..seats {
-            self.sim
-                .set_pilot_assist_seat(slot, room.assists.get(slot).copied().unwrap_or_default());
+            self.set_pilot_assist_seat(slot, room.assists.get(slot).copied().unwrap_or_default());
         }
-        self.sim.set_barrel_rolls(room.barrel_rolls);
+        self.set_barrel_rolls(room.barrel_rolls);
         self.set_zone_target(room.zone_target);
     }
 }

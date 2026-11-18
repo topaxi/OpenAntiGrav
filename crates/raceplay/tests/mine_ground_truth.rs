@@ -148,7 +148,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
         race.tick(&PlayerInputs::single(throttle));
     }
 
-    let stats = race.mine_stats().expect("the disc authors a Mine");
+    let stats = race.sim.mine_stats().expect("the disc authors a Mine");
     let speed = race.sim.world.ships[0]
         .physics
         .body
@@ -247,7 +247,7 @@ fn a_mine_is_laid_at_the_crafts_own_position() {
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
     }
-    race.mine_stats().expect("the disc authors a Mine");
+    race.sim.mine_stats().expect("the disc authors a Mine");
 
     let origin = race.sim.world.ships[0].physics.body.position;
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
@@ -288,7 +288,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
     }
-    let stats = race.mine_stats().expect("the disc authors a Mine");
+    let stats = race.sim.mine_stats().expect("the disc authors a Mine");
 
     race.sim.world.ships[0].pickup.weapon = Some(Weapon::Mine);
     race.sim.world.ships[0]
@@ -370,7 +370,7 @@ fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
 
     // Launch a wave from where the first mine lies, travelling forward, so the
     // mine sits inside its radius on the very next tick.
-    let stats = race.quake_stats().expect("the disc authors a Quake");
+    let stats = race.sim.quake_stats().expect("the disc authors a Quake");
     let progress = race
         .sim
         .course()
@@ -425,8 +425,8 @@ fn a_bomb_is_one_static_charge_at_the_crafts_own_position() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let bomb = race.mine_stats().expect("a Mine");
-    let stats = race.bomb_stats().expect("the disc authors a Bomb");
+    let bomb = race.sim.mine_stats().expect("a Mine");
+    let stats = race.sim.bomb_stats().expect("the disc authors a Bomb");
     // Pulse's Bomb has a fuse; Pure's does not (`BombStats::timetodie`), and
     // this test drives the Pulse disc.
     let fuse = stats.timetodie.expect("Pulse's Bomb authors a timetodie");
@@ -512,7 +512,7 @@ fn a_bomb_hits_harder_than_a_mine_at_the_same_spot() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    race.bomb_stats().expect("the disc authors a Bomb");
+    race.sim.bomb_stats().expect("the disc authors a Bomb");
     let victim = 1;
     assert!(
         race.sim.world.ships[victim].active,

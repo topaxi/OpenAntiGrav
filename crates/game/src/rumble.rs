@@ -222,7 +222,7 @@ impl Rumbler {
     /// One simulation tick. Call it after `Race::tick` and before the sound
     /// drains the cues.
     pub fn tick(&mut self, race: &Race, paused: bool, out: &mut dyn MotorOutput) {
-        let dt = race.dt();
+        let dt = race.sim.dt();
         for seat in &mut self.seats {
             let slot = seat.slot;
             for event in race.sim.pending_cues() {

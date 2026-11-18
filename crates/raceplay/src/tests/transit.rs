@@ -44,8 +44,8 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
     let length = race.sim.course.as_ref().unwrap().length();
     assert!(entry_speed > 1.0, "slot 1 is moving: {entry_speed}");
     let drawn = race.ship_model_matrices().len();
-    let placements = race.placements_of(1);
-    let respawns = race.respawns_of(1);
+    let placements = race.sim.placements_of(1);
+    let respawns = race.sim.respawns_of(1);
     let ai_clock = race.sim.world.race.get(1).cloned();
     race.sim
         .begin_transit(1, 30, Distance::Units(20.0), 0.5)
@@ -55,7 +55,7 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
         let ship = &race.sim.world.ships[1];
         assert!(ship.transit.is_some(), "tick {tick}");
         assert_eq!(ship.physics.body.position, entry, "frozen on tick {tick}");
-        assert!(!race.ship_active(1), "not drawn");
+        assert!(!race.sim.ship_active(1), "not drawn");
         assert!(
             !oag_weapons::Craft::active(ship),
             "nothing hits or locks it"
@@ -67,11 +67,11 @@ fn a_craft_in_transit_is_out_of_the_world_then_comes_out_further_round() {
     let ship = &race.sim.world.ships[1];
     assert_eq!(ship.transit, None, "out on the 30th tick");
     // A cut for the cameras and the between-ticks blend, and not a respawn.
-    assert_eq!(race.placements_of(1), placements + 1);
-    assert_eq!(race.respawns_of(1), respawns);
+    assert_eq!(race.sim.placements_of(1), placements + 1);
+    assert_eq!(race.sim.respawns_of(1), respawns);
     // An AI slot's own clock is never run, so the move leaves it alone.
     assert_eq!(race.sim.world.race.get(1).cloned(), ai_clock);
-    assert!(race.ship_active(1));
+    assert!(race.sim.ship_active(1));
     // Twenty units further round, give or take the ring's point spacing and a tick.
     let on = (ship.standing.progress.unwrap() - entry_progress).rem_euclid(length);
     assert!(

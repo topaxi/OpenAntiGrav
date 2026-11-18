@@ -905,7 +905,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // profile starts on `OPT_CLOSE`), so the view this was written for is named.
     race.set_camera_view(oag_display::display::CameraView::Far);
     assert!(
-        race.ship_count() > 1,
+        race.sim.ship_count() > 1,
         "the fixture raced alone, so nothing below is testing anything"
     );
 
@@ -937,10 +937,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         .saturating_sub(audio.ambient_voices());
     assert_eq!(
         voices,
-        race.ship_count() as usize,
+        race.sim.ship_count() as usize,
         "one engine per craft is what `ExhaustFlare_Init` builds; got {voices} \
          for {} craft",
-        race.ship_count()
+        race.sim.ship_count()
     );
 
     // **Rendered, not inspected.** A pan that is stored and never applied is

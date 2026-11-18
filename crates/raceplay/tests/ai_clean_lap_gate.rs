@@ -412,9 +412,9 @@ fn solo(setup: race::Setup) -> Solo {
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     for tick in 0..TICKS {
-        let before = race.respawns_of(LONE);
+        let before = race.sim.respawns_of(LONE);
         race.tick_sim_only(&PlayerInputs::none());
-        if race.respawns_of(LONE) != before {
+        if race.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
         let now = race.sim.world.ships[LONE].standing.lap;
@@ -431,7 +431,7 @@ fn solo(setup: race::Setup) -> Solo {
 
     Solo {
         best,
-        contact_ticks: race.wall_contact_ticks_of(LONE),
+        contact_ticks: race.sim.wall_contact_ticks_of(LONE),
         state: race.sim.world.ships[LONE].physics.craft_state,
         deaths: race.sim.world.ships[LONE].standing.deaths,
     }

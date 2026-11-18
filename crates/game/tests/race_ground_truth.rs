@@ -309,7 +309,7 @@ fn a_ship_stays_on_the_track_for_ten_seconds() {
         "worst spline distance {worst_distance:.1} of {bound:.1} at tick {worst_at}, \
          top speed {top_speed:.1}, grounded on {grounded_ticks} of 600, \
          {} respawn(s)",
-        race.respawns()
+        race.sim.respawns()
     );
     assert!(
         worst_distance < bound,
@@ -520,10 +520,10 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     let mut recovered_this_lap = false;
     let mut lost_at = Vec::new();
     for tick in 0..18_000u64 {
-        let before = race.respawns_of(1);
+        let before = race.sim.respawns_of(1);
         let was_at = race.sim.world.ships[1].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.respawns_of(1) != before {
+        if race.sim.respawns_of(1) != before {
             recovered_this_lap = true;
             lost_at.push(was_at);
         }
@@ -542,7 +542,7 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     }
     Solo {
         best,
-        respawns: race.respawns_of(1),
+        respawns: race.sim.respawns_of(1),
         laps: lap,
         lost_at,
         line_len: race.sim.racing_line().len() as u32,
@@ -696,7 +696,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         let race = race::Race::start(loaded.setup);
         checked += 1;
 
-        for slot in 1..race.ship_count() as usize {
+        for slot in 1..race.sim.ship_count() as usize {
             let ship = &race.sim.world.ships[slot];
             let sample = race
                 .sim

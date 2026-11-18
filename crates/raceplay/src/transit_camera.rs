@@ -190,11 +190,11 @@ impl crate::Race {
     }
 
     /// Whether `slot`'s hull is drawn in the view being drawn: a craft in the world
-    /// ([`Self::ship_active`]), or the view's own craft flown through a backdrop
+    /// ([`RaceSim::ship_active`](crate::RaceSim::ship_active)), or the view's own craft flown through a backdrop
     /// ([`Self::ship_flown_in_view`]).
     #[must_use]
     pub fn ship_drawn(&self, slot: usize) -> bool {
-        self.ship_active(slot) || self.ship_flown_in_view(slot)
+        self.sim.ship_active(slot) || self.ship_flown_in_view(slot)
     }
 
     /// The rigid frame of the craft the view being drawn follows, in the world: its right, up

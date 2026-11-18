@@ -178,8 +178,8 @@ fn every_craft_lays_its_own_ribbon() {
 fn the_players_flicker_does_not_depend_on_the_field_behind_it() {
     let mut alone = race_with_pads(Mode::TimeTrial, Vec::new());
     let mut field = race_with_a_grid();
-    assert_eq!(alone.ship_count(), 1);
-    assert_eq!(field.ship_count(), 8);
+    assert_eq!(alone.sim.ship_count(), 1);
+    assert_eq!(field.sim.ship_count(), 8);
 
     for tick in 0..30 {
         alone.tick(&PlayerInputs::none());

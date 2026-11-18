@@ -16,7 +16,9 @@ impl Race {
             .map_or(0, |effect| self.view.stage.alive_of_effect(effect));
         (self.view.leach_beam_effect[0], alive)
     }
+}
 
+impl RaceSim {
     /// Puts a locked LeachBeam from `owner` on `target` into the world, off the
     /// race's own weapon table: a verification aid (`--force-leach-lock`, and
     /// the disc-backed tests), and nothing the game itself calls. A slot that
@@ -27,15 +29,14 @@ impl Race {
             return false;
         }
         let Some(stats) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(oag_tables::weapons::WeaponStats::leach_beam)
         else {
             return false;
         };
-        let beam = self.sim.locked_leach_beam(owner, target, &stats);
-        self.sim.arm_leach_beam(beam)
+        let beam = self.locked_leach_beam(owner, target, &stats);
+        self.arm_leach_beam(beam)
     }
 
     /// Puts craft `slot` on the first laid Bomb another craft owns, for
@@ -56,7 +57,9 @@ impl Race {
     pub fn force_missile_hit(&mut self, slot: usize) -> bool {
         self.put_craft_on_projectile(oag_tables::weapons::Weapon::Missile, slot)
     }
+}
 
+impl Race {
     /// Launches craft `slot`'s Quake with its bump centred on the player, for
     /// `--force-quake`: the wave reaches the player on the next tick and the
     /// ordinary hit path runs (the cue, the lift, the slowdown, the hull's
@@ -70,7 +73,7 @@ impl Race {
     /// aid and nothing else.
     pub fn force_quake(&mut self, slot: usize) -> bool {
         let player = self.player_slot();
-        if slot == player || !self.ship_active(slot) || self.sim.world.quake.is_some() {
+        if slot == player || !self.sim.ship_active(slot) || self.sim.world.quake.is_some() {
             return false;
         }
         let Some(stats) = self
@@ -92,13 +95,14 @@ impl Race {
         ));
         true
     }
+}
 
+impl RaceSim {
     fn put_craft_on_projectile(&mut self, kind: oag_tables::weapons::Weapon, slot: usize) -> bool {
         if !self.ship_active(slot) {
             return false;
         }
         let Some(at) = self
-            .sim
             .world
             .projectiles
             .slots
@@ -108,10 +112,12 @@ impl Race {
         else {
             return false;
         };
-        self.sim.world.ships[slot].physics.body.position = at;
+        self.world.ships[slot].physics.body.position = at;
         true
     }
+}
 
+impl Race {
     /// The loaded particle effect a trigger plays, for tests.
     #[doc(hidden)]
     #[must_use]

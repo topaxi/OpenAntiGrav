@@ -145,7 +145,7 @@ fn solo(level: oag_ai::Difficulty, track: &str, ticks: u64) -> Option<Solo> {
         solo.longest_stall = solo.longest_stall.max(run);
     }
     solo.lap = race.sim.world.ships[1].standing.lap;
-    solo.respawns = race.respawns_of(1);
+    solo.respawns = race.sim.respawns_of(1);
     Some(solo)
 }
 

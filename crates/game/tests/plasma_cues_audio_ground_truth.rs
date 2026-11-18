@@ -123,7 +123,7 @@ fn firing_a_plasma_sounds_its_press_travel_and_ending_cues_and_writes_it_out() {
         println!("{line}");
     }
     let mut race = race::Race::start(loaded.setup);
-    race.plasma_stats().expect("the disc authors a Plasma");
+    race.sim.plasma_stats().expect("the disc authors a Plasma");
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
@@ -309,7 +309,7 @@ fn firing_a_plasma_at_a_craft_sounds_plasmahitship_not_plasmahitwall() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.plasma_stats().expect("the disc authors a Plasma");
+    race.sim.plasma_stats().expect("the disc authors a Plasma");
     assert!(
         race.sim.world.ship_count > 1,
         "a Single Race needs at least one opponent to repurpose as a target"

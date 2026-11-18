@@ -326,7 +326,7 @@ impl Race {
         let moved =
             |a: Vec3, b: Vec3| !a.is_finite() || !b.is_finite() || a.distance(b) > SNAP_DISTANCE;
         let model = self.drawn_model(slot);
-        (from.key == self.ship_key(slot)
+        (from.key == self.sim.ship_key(slot)
             && !moved(from.model.w_axis.truncate(), model.w_axis.truncate())
             && !moved(from.position, self.drawn_position(slot)))
         .then_some(from.model)
@@ -359,7 +359,7 @@ impl Race {
                     orientation: ship.physics.body.orientation,
                     flaps: self.view.flaps[slot],
                     shield_swell: self.view.shield[slot].swell(),
-                    key: self.ship_key(slot),
+                    key: self.sim.ship_key(slot),
                 }
             }),
         };
@@ -391,15 +391,19 @@ impl Race {
             overridden: self.view.camera_override.is_some(),
         }
     }
+}
 
+impl RaceSim {
     fn ship_key(&self, slot: usize) -> ShipKey {
         ShipKey {
             respawns: self.placements_of(slot),
             // Out of the world in a transit: not drawn, and a change either way is a cut.
-            active: self.sim.world.ships[slot].in_world(),
+            active: self.world.ships[slot].in_world(),
         }
     }
+}
 
+impl Race {
     /// The previous tick's camera and the alpha to blend it by, `None` where
     /// this read is the current tick exactly.
     fn camera_between(&self) -> Option<(&CameraPose, f32)> {
@@ -429,11 +433,9 @@ impl Race {
         let Some(slot) = self.extra_viewpoint() else {
             return self.camera_cut();
         };
-        self.view
-            .poses
-            .previous
-            .as_ref()
-            .is_some_and(|previous| previous.ships[slot].key.respawns != self.placements_of(slot))
+        self.view.poses.previous.as_ref().is_some_and(|previous| {
+            previous.ships[slot].key.respawns != self.sim.placements_of(slot)
+        })
     }
 
     /// A view matrix at the draw alpha: `current` is this tick's, `previous`
@@ -481,7 +483,7 @@ impl Race {
     fn ship_alpha(&self, slot: usize) -> Option<f32> {
         let poses = &self.view.poses;
         let previous = poses.previous.as_ref()?;
-        (poses.alpha < 1.0 && previous.ships[slot].key == self.ship_key(slot))
+        (poses.alpha < 1.0 && previous.ships[slot].key == self.sim.ship_key(slot))
             .then_some(poses.alpha)
     }
 
@@ -615,9 +617,9 @@ impl Race {
     /// blended toward `now`, while the world is stepping.
     #[must_use]
     pub fn ghost_draw_matrix(&self, now: &oag_replay::Pose, before: &oag_replay::Pose) -> Mat4 {
-        let current = Self::ghost_model_matrix(now);
+        let current = RaceSim::ghost_model_matrix(now);
         match self.world_alpha() {
-            Some(alpha) => blend_transform(Self::ghost_model_matrix(before), current, alpha),
+            Some(alpha) => blend_transform(RaceSim::ghost_model_matrix(before), current, alpha),
             None => current,
         }
     }

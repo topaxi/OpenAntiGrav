@@ -142,7 +142,10 @@ fn moving(loaded: race::Loaded) -> (race::Race, oag_gameplay::InputSnapshot) {
 fn the_discs_shuriken_block_decodes_with_its_blast_pair() {
     let Some(loaded) = single_race() else { return };
     let race = race::Race::start(loaded.setup);
-    let shuriken = race.shuriken_stats().expect("the disc authors a Shuriken");
+    let shuriken = race
+        .sim
+        .shuriken_stats()
+        .expect("the disc authors a Shuriken");
 
     assert!(shuriken.blastdamage > 0.0, "no blastdamage: {shuriken:?}");
     assert!(shuriken.blastradius > 0.0, "no blastradius");
@@ -221,7 +224,10 @@ fn a_thrown_blade_bounces_off_a_real_circuit_and_dies_on_its_fuse() {
     for ship in &mut race.sim.world.ships[1..] {
         ship.active = false;
     }
-    let shuriken = race.shuriken_stats().expect("the disc authors a Shuriken");
+    let shuriken = race
+        .sim
+        .shuriken_stats()
+        .expect("the disc authors a Shuriken");
     let speed = race.sim.world.ships[0]
         .physics
         .body

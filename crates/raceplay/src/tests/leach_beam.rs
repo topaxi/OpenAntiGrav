@@ -45,8 +45,8 @@ fn a_leach_beam_fired_at_nobody_is_spent_and_expires_on_its_own_clock() {
     // Past the 0.75-second fizzle the unlocked arm runs on - which is an engine
     // literal rather than this fixture's `active_time`, so the loop is sized on
     // the constant itself rather than on the table.
-    let ticks = (oag_weapons::projectile::leach_beam::UNLOCKED_FIZZLE_SECONDS / race.dt()).ceil()
-        as usize
+    let ticks = (oag_weapons::projectile::leach_beam::UNLOCKED_FIZZLE_SECONDS / race.sim.dt())
+        .ceil() as usize
         + 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::single(buttons.tick(0)));

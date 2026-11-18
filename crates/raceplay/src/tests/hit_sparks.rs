@@ -72,7 +72,7 @@ fn a_landed_hit_sparks_one_or_two_locators_and_they_rest_for_0_8_s() {
 
     // Every locator hit on every tick for a little under the gate: no
     // locator may fire twice, so at most six can have started.
-    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.dt()) as usize - 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.sim.dt()) as usize - 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
         race.throw_hit_sparks(&landed_on_player(), false);
@@ -108,7 +108,7 @@ fn each_hit_spark_plays_one_collision_cue_behind_the_same_gate() {
     assert_eq!(first as u32, race.hit_sparks_started_for_tests());
 
     let mut heard = first;
-    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.dt()) as usize - 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.sim.dt()) as usize - 2;
     for _ in 0..ticks {
         race.tick(&PlayerInputs::none());
         let _ = race.sim.drain_cues();

@@ -71,7 +71,7 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     // The authored `time` less the one tick the countdown has already run.
     let armed = race.sim.world.ships[0].autopilot_timer;
     assert!(
-        (armed - (FIXTURE_AUTOPILOT_TIME - race.dt())).abs() < 1e-5,
+        (armed - (FIXTURE_AUTOPILOT_TIME - race.sim.dt())).abs() < 1e-5,
         "expected {FIXTURE_AUTOPILOT_TIME} less one tick, got {armed}"
     );
 
@@ -91,9 +91,9 @@ fn a_fired_autopilot_flies_the_craft_for_its_authored_duration() {
     // duration divided by `dt` and rounded up, plus the one the arm itself
     // consumed, and pinning that arithmetic tests the rounding rather than the
     // duration. What matters is that it ran for what the file says.
-    let flown = ticks as f32 * race.dt();
+    let flown = ticks as f32 * race.sim.dt();
     assert!(
-        flown >= FIXTURE_AUTOPILOT_TIME && flown < FIXTURE_AUTOPILOT_TIME + 2.0 * race.dt(),
+        flown >= FIXTURE_AUTOPILOT_TIME && flown < FIXTURE_AUTOPILOT_TIME + 2.0 * race.sim.dt(),
         "flew for {flown} s against the file's {FIXTURE_AUTOPILOT_TIME}"
     );
 }
@@ -133,9 +133,9 @@ fn the_autopilot_warns_once_a_second_before_it_lets_go() {
     let at = at.expect("no warning at all");
     // The crossing is `now < 1.0 && now + dt > 1.0`, so the remainder at the
     // warning lands inside one tick below a second - never above it.
-    let remaining = FIXTURE_AUTOPILOT_TIME - (at + 2) as f32 * race.dt();
+    let remaining = FIXTURE_AUTOPILOT_TIME - (at + 2) as f32 * race.sim.dt();
     assert!(
-        remaining > 1.0 - 2.0 * race.dt() && remaining <= 1.0,
+        remaining > 1.0 - 2.0 * race.sim.dt() && remaining <= 1.0,
         "warned with {remaining} s left, not one"
     );
 }
@@ -269,7 +269,7 @@ fn a_held_autopilot_cannot_be_fired_into_a_running_one() {
     assert_eq!(race.ship_pickup(), held, "the press spent the held pickup");
     let now = race.sim.world.ships[0].autopilot_timer;
     assert!(
-        (now - (timer - race.dt())).abs() < 1e-5,
+        (now - (timer - race.sim.dt())).abs() < 1e-5,
         "the timer was re-armed or cancelled: {timer} then {now}"
     );
 }

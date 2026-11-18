@@ -149,7 +149,7 @@ impl Race {
             if !wakes.arcs {
                 continue;
             }
-            if !self.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
+            if !self.sim.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
                 continue;
             }
             let Some(craft) = self.wake_craft(slot, anchor) else {
@@ -169,7 +169,7 @@ impl Race {
         let Some(handles) = wakes.pob.as_mut() else {
             return;
         };
-        let live = over && self.ship_active(slot);
+        let live = over && self.sim.ship_active(slot);
         match (handles[slot], live) {
             (None, true) => {
                 let trigger = if self.sim.world.mode() == Mode::Zone {
@@ -298,7 +298,7 @@ impl Race {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;
             };
-            if !self.ship_active(slot) || wakes.wakes[slot].live() == 0 {
+            if !self.sim.ship_active(slot) || wakes.wakes[slot].live() == 0 {
                 continue;
             }
             let craft = self.wake_pose(slot, anchor);

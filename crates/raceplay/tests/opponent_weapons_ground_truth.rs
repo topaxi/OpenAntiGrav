@@ -93,7 +93,7 @@ fn hand_out_once(weapon: Weapon, ticks: usize) -> Option<(usize, usize)> {
         race.tick(&PlayerInputs::none());
     }
 
-    let opponents = 1..usize::from(race.ship_count());
+    let opponents = 1..usize::from(race.sim.ship_count());
     let count = opponents.len();
     for slot in opponents.clone() {
         race.sim.world.ships[slot].pickup.weapon = Some(weapon);
@@ -271,7 +271,7 @@ fn a_field_racing_with_real_pads_does_not_mine_itself_to_death() {
         .expect("loading the race");
         let mut race = race::Race::start(loaded.setup);
 
-        let opponents = 1..usize::from(race.ship_count());
+        let opponents = 1..usize::from(race.sim.ship_count());
         let full: f32 = race.sim.world.ships[1].handling.dimensions.shield;
         assert!(full > 0.0, "the fixture has no energy pool to measure");
 

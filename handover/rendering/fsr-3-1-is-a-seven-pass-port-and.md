@@ -231,7 +231,7 @@ counts in findings 4 and 5 are work removed, not a profile.
   ghost trail behind a dark object is where it would show.
 - ~~**A camera cut does not reset the history.**~~ Fixed 2026-09-05:
   `scene::motion::CutWatch` observes `Race::camera_view()` and the player's
-  own `Race::respawns()` once a frame and reports a cut whenever either has
+  own `RaceSim::respawns()` once a frame and reports a cut whenever either has
   moved since the last observation - a `SELECT`-cycled view change or the
   player's craft being put back after a `Reset` contact - and
   `record_frame` now reads `reset: phase == 0 || cut`. Pinned by four unit

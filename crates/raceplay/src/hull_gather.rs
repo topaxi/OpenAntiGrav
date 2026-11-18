@@ -84,7 +84,8 @@ impl HullGather {
                 },
             );
         }
-        models.extend((0..usize::from(race.ship_count())).map(|slot| race.ship_tick_model(slot)));
+        models
+            .extend((0..usize::from(race.sim.ship_count())).map(|slot| race.ship_tick_model(slot)));
         Self {
             generation: race.pose_generations().current,
             models,

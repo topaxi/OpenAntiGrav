@@ -198,24 +198,24 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
     };
     for tick in 0..ticks() {
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
-            craft.respawns_before = race.respawns_of(slot);
+            craft.respawns_before = race.sim.respawns_of(slot);
         }
         race.tick(&PlayerInputs::none());
         let mut live = false;
         for (craft, &slot) in crafts.iter_mut().zip(&measured) {
-            if race.respawns_of(slot) != craft.respawns_before {
+            if race.sim.respawns_of(slot) != craft.respawns_before {
                 craft.recovered = true;
                 if std::env::var_os("OAG_SWEEP_CAUSES").is_some() {
                     let ship = &race.sim.world.ships[slot];
                     eprintln!(
                         "respawn {id} {class} slot {slot} tick {tick} index {} cause {:?}",
                         ship.driver.index,
-                        race.last_respawn_cause_of(slot)
+                        race.sim.last_respawn_cause_of(slot)
                     );
                 }
             }
             let ship = &race.sim.world.ships[slot];
-            let contacts = race.wall_contact_ticks_of(slot);
+            let contacts = race.sim.wall_contact_ticks_of(slot);
             if let Some(width) = profile_bin()
                 && craft.lap > 1
                 && !ship.standing.finished()
@@ -316,8 +316,8 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
             fmt(best),
             fmt(mean),
             fmt(any),
-            race.wall_contact_ticks_of(slot),
-            race.respawns_of(slot),
+            race.sim.wall_contact_ticks_of(slot),
+            race.sim.respawns_of(slot),
             ship.standing.deaths,
             u8::from(
                 ship.physics.craft_state != oag_physics::CraftState::Racing

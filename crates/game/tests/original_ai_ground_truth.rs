@@ -146,8 +146,8 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
         println!(
             "slot {slot}: lap {} respawns {} wall-contact ticks {} shield at each crossing {:?}, end {:.1}",
             ship.standing.lap,
-            race.respawns_of(slot),
-            race.wall_contact_ticks_of(slot),
+            race.sim.respawns_of(slot),
+            race.sim.wall_contact_ticks_of(slot),
             shields,
             ship.physics.shield
         );
@@ -156,7 +156,7 @@ fn the_original_field_gets_round_talons_junction_without_a_respawn() {
             "slot {slot} on lap {}",
             ship.standing.lap
         );
-        assert_eq!(race.respawns_of(slot), 0, "slot {slot}");
+        assert_eq!(race.sim.respawns_of(slot), 0, "slot {slot}");
     }
 }
 

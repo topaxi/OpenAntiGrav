@@ -234,7 +234,7 @@ fn measure_airtime(
     let mut clean_laps = 0u32;
 
     let mut respawn_ticks: Vec<u64> = Vec::new();
-    let mut prev_respawns = race.respawns_of(LONE);
+    let mut prev_respawns = race.sim.respawns_of(LONE);
 
     let mut raw: Vec<RawWindow> = Vec::new();
     let mut was_airborne = false;
@@ -243,7 +243,7 @@ fn measure_airtime(
     for tick in 0..TICKS {
         race.tick(&PlayerInputs::none());
 
-        let now_respawns = race.respawns_of(LONE);
+        let now_respawns = race.sim.respawns_of(LONE);
         if now_respawns != prev_respawns {
             respawn_ticks.push(tick);
             prev_respawns = now_respawns;
@@ -304,7 +304,7 @@ fn measure_airtime(
         discarded,
         clean_laps,
         laps: lap,
-        respawns: race.respawns_of(LONE),
+        respawns: race.sim.respawns_of(LONE),
     })
 }
 

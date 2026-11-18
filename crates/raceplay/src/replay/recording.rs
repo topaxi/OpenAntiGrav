@@ -93,8 +93,8 @@ impl Race {
         header.setup = self.replay.request.clone();
         let recorder = Recorder::new(header, self.sim.state_hash());
         let standing = self.player_standing();
-        let mut track = PoseRecorder::new(usize::from(self.ship_count()));
-        track.push(&self.grid_poses());
+        let mut track = PoseRecorder::new(usize::from(self.sim.ship_count()));
+        track.push(&self.sim.grid_poses());
         self.replay.recording = Some(Recording {
             recorder,
             track,
@@ -181,7 +181,9 @@ impl Race {
             .unwrap_or(now);
         Some((now, before))
     }
+}
 
+impl RaceSim {
     /// The model matrix a ghost pose draws a hull at: [`model_matrix_of`]'s
     /// own composition, from a stored pose instead of a live craft.
     #[must_use]
@@ -190,7 +192,9 @@ impl Race {
             * Mat4::from_rotation_y(MODEL_YAW)
             * Mat4::from_scale(Vec3::splat(oag_fx::exhaust::CRAFT_ROW_SCALE))
     }
+}
 
+impl Race {
     /// The best lap this run has set since the last call, as a replay ready
     /// to save: the inputs and hashes up to the end of that lap, and its
     /// poses. `None` when no lap has improved on it since.
@@ -243,15 +247,17 @@ impl Race {
     /// the barrel roll and the steering lean folded in exactly as [`model_matrix_of`]
     /// folds them.
     fn player_pose(&self) -> Pose {
-        self.craft_pose(self.player_slot())
+        self.sim.craft_pose(self.player_slot())
     }
+}
 
+impl RaceSim {
     /// Grid slot `slot`'s craft as the pose it is drawn at: its position, and its orientation
     /// with the barrel roll and the steering lean folded in. What the pose track records for
     /// every craft and the ghost for the player's.
     #[must_use]
     pub fn craft_pose(&self, slot: usize) -> Pose {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         let roll = oag_render::roll::display_rotation(
             Vec3::NEG_Z,
             ship.physics.roll_phase,
@@ -262,14 +268,16 @@ impl Race {
             rotation: ship.physics.body.orientation * roll,
         }
     }
+}
 
+impl Race {
     /// Puts every craft the track holds at its recorded pose at tick `at` and steps the picture
     /// (the view's poses, shake and stage) without the simulation: POSE VIEW, past the last
     /// second a build reproduces. The race is a picture from here on, never run again: the
     /// positions are written over its state, the roll and lean are zero because the pose already
     /// has them folded in, and the craft's velocity is zero.
     pub fn show_poses(&mut self, track: &oag_replay::PoseTrack, at: f64) {
-        let count = usize::from(self.ship_count()).min(track.crafts());
+        let count = usize::from(self.sim.ship_count()).min(track.crafts());
         for (slot, ship) in self.sim.world.ships.iter_mut().enumerate().take(count) {
             let Some(pose) = track.pose(slot, at) else {
                 continue;
@@ -289,14 +297,18 @@ impl Race {
         self.advance_viewpoints();
         self.tick_cosmetics();
     }
+}
 
+impl RaceSim {
     /// Every craft on the grid, in slot order.
     fn grid_poses(&self) -> Vec<Pose> {
         (0..usize::from(self.ship_count()))
             .map(|slot| self.craft_pose(slot))
             .collect()
     }
+}
 
+impl Race {
     /// Everything the recording and the ghost do after a tick has run: the
     /// last thing [`Race::tick`] calls.
     pub(crate) fn record_tick(&mut self, inputs: &PlayerInputs) {
@@ -307,7 +319,7 @@ impl Race {
         recording.recorder.record(inputs, || sim.state_hash());
 
         let pose = self.player_pose();
-        let grid = self.grid_poses();
+        let grid = self.sim.grid_poses();
         let standing = *self.player_standing();
         let tick = self.sim.world.tick;
         let Some(recording) = self.replay.recording.as_mut() else {

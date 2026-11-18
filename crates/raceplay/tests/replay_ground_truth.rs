@@ -479,7 +479,7 @@ fn recorded_at_tick_zero(
         campaign_skill: None,
         skill_level: None,
     };
-    race.apply_launch(&launch);
+    race.sim.apply_launch(&launch);
     let mut header = Header::new(title, "default", mode.name(), "venom", "default", seed);
     header.options = launch.to_table();
     race.start_recording(header);
@@ -515,7 +515,7 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
         )
     });
     assert_eq!(rebuilt.sim.pilot_assist_level(), launch.pilot_assist);
-    assert_eq!(rebuilt.control_scheme(), launch.scheme);
+    assert_eq!(rebuilt.sim.control_scheme(), launch.scheme);
 
     // The request is what rebuilds it: the same file with another mode in it is another race,
     // refused at tick zero. Once per title (a third load), on its first mode.

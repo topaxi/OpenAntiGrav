@@ -112,17 +112,17 @@ fn scheme(params: &RaceParams) -> Result<oag_gameplay::ControlScheme> {
 ///
 /// A control scheme this build does not know.
 pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
-    race.set_control_scheme(scheme(params)?);
+    race.sim.set_control_scheme(scheme(params)?);
     race.sim.set_autopilot(false);
     // Off for everybody unless the room allowed it, in which case each seat flies the level
     // that person asked for: the same list on both ends, so the physics agrees.
     race.sim
         .set_pilot_assist(oag_physics::pilot_assist::Level::Off);
-    race.apply_room(&room(params));
+    race.sim.apply_room(&room(params));
     Ok(())
 }
 
-/// What `params` holds fixed beyond [`options`], for [`Race::apply_room`] and a recording's header.
+/// What `params` holds fixed beyond [`options`], for [`RaceSim::apply_room`](oag_raceplay::RaceSim::apply_room) and a recording's header.
 #[must_use]
 pub fn room(params: &RaceParams) -> oag_raceplay::replay::Room {
     let people = params

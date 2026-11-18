@@ -257,8 +257,8 @@ struct Watch {
 /// [`solo`].
 fn watch(race: &race::Race, slot: usize, tick: u32, w: &mut Watch, tally: &mut [Tally]) {
     let route = race.sim.world.ships[slot].driver.branching.route;
-    let contacts = race.wall_contact_ticks_of(slot);
-    let respawns = race.respawns_of(slot);
+    let contacts = race.sim.wall_contact_ticks_of(slot);
+    let respawns = race.sim.respawns_of(slot);
     match w.open {
         None if route != 0 => w.open = Some((route, tick, contacts, respawns)),
         Some((line, from, c0, r0)) if route != line => {
@@ -277,7 +277,7 @@ fn watch(race: &race::Race, slot: usize, tick: u32, w: &mut Watch, tally: &mut [
 /// to its fork.
 fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tally {
     let mut race = with_plans(setup, plans);
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     for other in 0..count {
         if other != slot {
             race.sim.world.ships[other].active = false;
@@ -301,10 +301,10 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
                 branching.pending = want;
             }
         }
-        let before = race.wall_contact_ticks_of(slot);
+        let before = race.sim.wall_contact_ticks_of(slot);
         race.tick(&PlayerInputs::none());
         if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some()
-            && race.wall_contact_ticks_of(slot) > before
+            && race.sim.wall_contact_ticks_of(slot) > before
         {
             let ship = &race.sim.world.ships[slot];
             let speed = ship.physics.body.linear_velocity.length();
@@ -325,7 +325,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
                 ship.standing.lap,
                 ship.physics.body.linear_velocity.length(),
                 ship.physics.craft_state,
-                race.respawns_of(slot),
+                race.sim.respawns_of(slot),
             ));
         }
         if std::env::var_os("OAG_ROUTE_BOARD_WHERE").is_some() {
@@ -363,7 +363,7 @@ fn solo(setup: &race::Setup, plans: &race::Race, slot: usize, want: u16) -> Tall
 fn field(setup: &race::Setup, plans: &race::Race) -> (Vec<Tally>, Vec<u32>, u32) {
     let mut race = with_plans(setup, plans);
     fly_ours(&mut race);
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     let mut tally = vec![Tally::default(); race.sim.route_count() + 1];
     let mut watches: Vec<Watch> = (0..count).map(|_| Watch { open: None }).collect();
     for tick in 0..FIELD_TICKS {
@@ -634,7 +634,7 @@ fn report_route(
             use oag_physics::{Ray, Raycaster};
             let along = start.velocity.normalize_or_zero();
             let mut out = [None; 8];
-            let count = race.collision().raycast_all(
+            let count = race.sim.collision().raycast_all(
                 Ray::new(start.position, along, 30.0),
                 None,
                 true,
@@ -711,7 +711,7 @@ fn floor_along(
     for i in from..to.min(probe.line.len()) {
         let p = probe.line.point(i);
         let mut out = [None; 8];
-        let count = race.collision().raycast_all(
+        let count = race.sim.collision().raycast_all(
             Ray::new(p + Vec3::Y * 30.0, -Vec3::Y, 60.0),
             None,
             true,
@@ -745,11 +745,11 @@ fn floor_along(
             let ring_path = race
                 .sim
                 .ai_sample_index(j)
-                .and_then(|s| race.spline().path_of(s));
+                .and_then(|s| race.sim.spline().path_of(s));
             let route_path = probe
                 .order
                 .get(i)
-                .and_then(|&s| race.spline().path_of(s as usize));
+                .and_then(|&s| race.sim.spline().path_of(s as usize));
             emit(&format!(
                 "ring\t{label}\troute={k}\t{i}({})\tpaths route {route_path:?} ring {ring_path:?}\tnearest ring {j}\tdistance={d:.1}\tdy={:.1}\tring=({:.1},{:.1},{:.1})",
                 where_on(probe, i as u32),
@@ -761,11 +761,11 @@ fn floor_along(
             continue;
         }
         let spline_index = probe.order.get(i).map_or(0, |&s| s as usize);
-        let sample = race.spline().sample(spline_index);
+        let sample = race.sim.spline().sample(spline_index);
         emit(&format!(
             "floor\t{label}\troute={k}\t{i}({})\tspline={spline_index}\tpath={:?}\tsample_y={:.1}\twidth={:?}\tai={:?}\tline_offset={:?}\tsection={:?}\tflags={:?}\tp=({:.1},{:.1},{:.1})\t{}",
             where_on(probe, i as u32),
-            race.spline().path_of(spline_index),
+            race.sim.spline().path_of(spline_index),
             sample.map_or(f32::NAN, |s| s.pos[1]),
             sample.map(|s| (s.half_width_left, s.half_width_right)),
             sample.map(|s| (s.ai_bound_left, s.ai_bound_right)),
@@ -796,9 +796,10 @@ fn across(race: &race::Race, label: &str, k: usize, probe: &race::RouteProbe, i:
     let mut row = String::new();
     for o in (-30..=30).step_by(2) {
         let q = p + lateral * o as f32;
-        let hit = race
-            .collision()
-            .raycast(Ray::new(q + Vec3::Y * 6.0, -Vec3::Y, 8.5), None, true);
+        let hit =
+            race.sim
+                .collision()
+                .raycast(Ray::new(q + Vec3::Y * 6.0, -Vec3::Y, 8.5), None, true);
         row.push(match hit.map(|h| h.surface) {
             Some(Surface::Wall) => 'W',
             Some(Surface::MagFloor) => 'M',
@@ -849,7 +850,7 @@ fn route_original_probe() {
                     continue;
                 };
                 let mut race = race::Race::start(setup);
-                for other in 1..race.ship_count() as usize {
+                for other in 1..race.sim.ship_count() as usize {
                     race.sim.world.ships[other].active = false;
                 }
                 if std::env::var_os("OAG_ROUTE_BOARD_OURS").is_some() {
@@ -895,7 +896,7 @@ fn route_original_probe() {
                         b.position.y - p.y,
                         b.linear_velocity.length(),
                         u8::from(ship.physics.time_airborne > 0.0),
-                        race.respawns_of(0),
+                        race.sim.respawns_of(0),
                         ship.standing.lap,
                         ship.physics.craft_state,
                     ));

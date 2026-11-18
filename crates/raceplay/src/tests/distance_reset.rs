@@ -9,7 +9,7 @@ fn far_race() -> (Race, Vec3) {
     let mut race = Race::start(setup(hulled_handling()));
     let away = Vec3::new(20.0, 6.0, 5_000.0);
     assert!(
-        race.spline().distance_to(away).expect("a sample") > DISTANCE_RESET_UNITS,
+        race.sim.spline().distance_to(away).expect("a sample") > DISTANCE_RESET_UNITS,
         "the fixture does not put the craft beyond the distance"
     );
     race.sim.world.ships[0].physics.body.position = away;
@@ -25,11 +25,11 @@ fn a_craft_held_beyond_200_units_for_30_ticks_resets_and_not_at_29() {
         race.tick(&PlayerInputs::none());
         race.sim.world.ships[0].physics.body.position = away;
     }
-    assert_eq!(race.respawns(), 0, "reset before the 30th tick");
+    assert_eq!(race.sim.respawns(), 0, "reset before the 30th tick");
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.respawns(), 1, "not reset on the 30th tick");
+    assert_eq!(race.sim.respawns(), 1, "not reset on the 30th tick");
     assert_eq!(
-        race.last_respawn_cause_of(0),
+        race.sim.last_respawn_cause_of(0),
         Some(RespawnCause::Distance),
         "something else put the craft back"
     );
@@ -92,7 +92,7 @@ fn a_disabled_distance_trigger_never_resets_the_craft() {
         race.tick(&PlayerInputs::none());
         race.sim.world.ships[0].physics.body.position = away;
     }
-    assert_eq!(race.respawns(), 0);
+    assert_eq!(race.sim.respawns(), 0);
     assert!(race.sim.distant_ticks[0] >= DISTANCE_RESET_TICKS);
 }
 

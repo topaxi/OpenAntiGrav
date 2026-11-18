@@ -90,19 +90,21 @@ impl Race {
     pub fn ship_model_matrix_of(&self, slot: usize) -> Mat4 {
         self.ship_between(slot, self.drawn_model(slot))
     }
+}
 
+impl RaceSim {
     /// How many craft are in play, the player included.
     #[must_use]
     pub fn ship_count(&self) -> u8 {
-        self.sim.world.ship_count
+        self.world.ship_count
     }
 
     /// Whether the craft in this slot is still racing.
     ///
-    /// The slot-indexed counterpart to [`Self::ship_model_matrix_of`], for the
+    /// The slot-indexed counterpart to [`Race::ship_model_matrix_of`], for the
     /// same reason: a caller walking `0..ship_count()` needs to skip an
     /// inactive slot without losing slot alignment, which
-    /// [`Self::ship_model_matrices`]' filter-then-collect cannot give it. Every
+    /// [`Race::ship_model_matrices`]' filter-then-collect cannot give it. Every
     /// per-craft loop in `Scene::render` that writes or draws by slot should
     /// test this before it does either - see the four sites this joins.
     ///
@@ -118,9 +120,11 @@ impl Race {
     #[must_use]
     pub fn ship_active(&self, slot: usize) -> bool {
         // In the world: a craft in a transit is not drawn (`crate::transit`).
-        self.sim.world.ships[slot].in_world()
+        self.world.ships[slot].in_world()
     }
+}
 
+impl Race {
     /// The word a craft's hull-light scale is written to the model uniform as -
     /// `oag_mesh::mesh_render::pack_hull_scale` of the ambient and directional
     /// bytes the spline blends under the craft (`Craft_ApplyHullLightScale`,
@@ -207,7 +211,9 @@ impl Race {
             .accumulated([at.x, at.y, at.z], seconds, [point, spot]);
         pass.at([ambient, directional], points)
     }
+}
 
+impl RaceSim {
     /// Where a craft's environment probes are blended: its body, one tick back.
     ///
     /// The original's SPU job takes the previous frame's position (one tick fits best
@@ -219,11 +225,13 @@ impl Race {
     /// If `slot` is not a ship slot.
     #[must_use]
     pub fn ship_probe_position(&self, slot: usize) -> [f32; 3] {
-        let body = &self.sim.world.ships[slot].physics.body;
+        let body = &self.world.ships[slot].physics.body;
         let at = body.position - body.linear_velocity * (PROBE_LAG_TICKS / 60.0);
         at.to_array()
     }
+}
 
+impl Race {
     /// One model matrix per craft in play, the player's first.
     ///
     /// The player is index 0 and the seven opponents follow, which is the array

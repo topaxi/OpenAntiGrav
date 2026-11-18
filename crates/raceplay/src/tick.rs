@@ -254,9 +254,9 @@ impl Race {
         #[cfg(feature = "view")]
         let orientations_before: [Quat; oag_weapons::projectile::MAX_PROJECTILES] =
             std::array::from_fn(|slot| self.sim.world.projectiles.slots[slot].orientation);
-        let floor_arms = self.floor_arms();
-        let own_craft = self.own_craft_probe();
-        let plasma_release = self.plasma_release();
+        let floor_arms = self.sim.floor_arms();
+        let own_craft = self.sim.own_craft_probe();
+        let plasma_release = self.sim.plasma_release();
         let impacts = oag_weapons::projectile::step(
             &mut self.sim.world.projectiles,
             &mut self.sim.world.ships[..self.sim.world.ship_count as usize],

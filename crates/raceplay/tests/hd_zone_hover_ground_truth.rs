@@ -41,6 +41,7 @@ fn height(race: &Race) -> f32 {
     let body = &race.ship().physics.body;
     let down = -body.up();
     let hit = race
+        .sim
         .collision()
         .raycast(Ray::new(body.position, down, 20.0), None, false)
         .expect("a floor under the craft");

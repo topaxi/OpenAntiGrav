@@ -319,7 +319,7 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
             // Distance to the spline is the honest measure of "on the circuit":
             // these tracks climb and bank, so comparing height against the start
             // would read a hill as a fall.
-            if let Some(distance) = race.spline().distance_to(at) {
+            if let Some(distance) = race.sim.spline().distance_to(at) {
                 furthest_from_spline = furthest_from_spline.max(distance);
             }
             travelled = travelled.max(at.distance(start));
@@ -329,8 +329,8 @@ fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
         println!(
             "{label}: travelled {travelled:.0} units, furthest from the spline \
              {furthest_from_spline:.1}, resting {:.1} out, respawns {}",
-            race.spline().distance_to(resting).unwrap_or(-1.0),
-            race.respawns()
+            race.sim.spline().distance_to(resting).unwrap_or(-1.0),
+            race.sim.respawns()
         );
 
         assert!(

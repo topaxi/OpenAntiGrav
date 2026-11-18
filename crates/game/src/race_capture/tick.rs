@@ -129,7 +129,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, slot)) = options.force_bomb_trip
         && at == tick
-        && !race.force_bomb_trip(slot)
+        && !race.sim.force_bomb_trip(slot)
     {
         log::warn!(
             "--force-bomb-trip: no Bomb laid by another craft yet, or slot {slot} is not racing (pass --opponents)"
@@ -137,7 +137,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, slot)) = options.force_missile_hit
         && at == tick
-        && !race.force_missile_hit(slot)
+        && !race.sim.force_missile_hit(slot)
     {
         log::warn!(
             "--force-missile-hit: no Missile in flight from another craft yet, or slot {slot} is not racing (pass --opponents)"
@@ -153,7 +153,7 @@ pub(super) fn advance_one_tick(
     }
     if let Some((at, target)) = options.force_leach_lock
         && at == tick
-        && !race.force_leach_lock(0, target as u8)
+        && !race.sim.force_leach_lock(0, target as u8)
     {
         log::warn!(
             "--force-leach-lock: slot {target} is not racing (pass --opponents), or the title authors no LeachBeam"

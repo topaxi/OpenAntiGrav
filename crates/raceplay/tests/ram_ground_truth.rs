@@ -141,7 +141,7 @@ fn watch_one_race(image: &Path, seed: u64) -> Vec<Shift> {
     // level with each other. A parked player is a race with seven craft in it.
     race.sim.set_autopilot(true);
 
-    let ships = race.ship_count() as usize;
+    let ships = race.sim.ship_count() as usize;
     let mut shifting = [false; 8];
     // Where each craft stood at the end of last tick, which is what the driver saw when it
     // decided.

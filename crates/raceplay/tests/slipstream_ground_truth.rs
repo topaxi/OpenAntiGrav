@@ -253,7 +253,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let mut flying = 0;
     while ship(&race).transit.is_none() {
         assert!(ship(&race).in_world(), "still flying at {flying}");
-        assert!(race.ship_active(0), "still drawn at {flying}");
+        assert!(race.sim.ship_active(0), "still drawn at {flying}");
         race.tick(&throttle());
         flying += 1;
         assert!(flying < 60, "never reached the portal");
@@ -275,7 +275,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let mut out = 1;
     while ship(&race).transit.is_some() {
         assert_eq!(ship(&race).physics.body.position, entry, "frozen at {out}");
-        assert!(!race.ship_active(0), "not drawn");
+        assert!(!race.sim.ship_active(0), "not drawn");
         assert!(!ship(&race).in_world(), "out of the world: untouchable");
         race.tick(&throttle());
         out += 1;
@@ -297,7 +297,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
         (0.8..0.97).contains(&(exit_speed / speed)),
         "a slight loss: {speed} -> {exit_speed}"
     );
-    assert!(race.respawns() == 0, "no rescue");
+    assert!(race.sim.respawns() == 0, "no rescue");
 }
 
 #[test]

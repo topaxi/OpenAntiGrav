@@ -374,7 +374,7 @@ fn a_rocket_fired_on_a_real_track_flies_and_detonates() {
 
     // The reap in ticks, so a shot that ended on geometry is the one that
     // ended sooner than it.
-    let reap = (oag_weapons::projectile::MAX_FLIGHT_SECONDS / race.dt()) as usize;
+    let reap = (oag_weapons::projectile::MAX_FLIGHT_SECONDS / race.sim.dt()) as usize;
     let stopped = last_alive.iter().filter(|&&t| t < reap).count();
 
     // The middle shot is aimed down the craft's own forward axis, so it is

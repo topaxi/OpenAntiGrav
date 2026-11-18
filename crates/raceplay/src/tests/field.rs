@@ -230,7 +230,7 @@ fn a_craft_on_the_grid_can_see_somebody() {
 #[test]
 fn the_opponents_are_driven_rather_than_parked() {
     let mut race = race_with_a_grid();
-    assert_eq!(race.ship_count(), 8);
+    assert_eq!(race.sim.ship_count(), 8);
     for _ in 0..oag_race::COUNTDOWN_TICKS + u64::from(STALL_TICKS / 2) {
         race.tick(&PlayerInputs::none());
     }
@@ -260,7 +260,7 @@ fn the_opponents_are_driven_rather_than_parked() {
 fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.respawns_of(1), 0);
+    assert_eq!(race.sim.respawns_of(1), 0);
 
     // Straight up and far away, which no reset volume in this fixture
     // covers - the point being that geometry cannot catch this.
@@ -271,7 +271,7 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     // leap over a gap would teleport it mid-flight.
     race.tick(&PlayerInputs::none());
     assert_eq!(
-        race.respawns_of(1),
+        race.sim.respawns_of(1),
         0,
         "one tick away is a jump, not a craft that is gone"
     );
@@ -280,13 +280,13 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
     // out on the tick after the rescue would measure the shove, not the
     // recovery.
     for _ in 0..RESCUE_TICKS {
-        if race.respawns_of(1) > 0 {
+        if race.sim.respawns_of(1) > 0 {
             break;
         }
         race.sim.world.ships[1].physics.body.position = away;
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.respawns_of(1), 1, "the craft was never recovered");
+    assert_eq!(race.sim.respawns_of(1), 1, "the craft was never recovered");
 
     // Back on the line, and - the part that is easy to get wrong - its
     // driver knows where it was put. A driver left pointing at the old index
@@ -304,7 +304,11 @@ fn an_opponent_that_flies_off_the_circuit_is_put_back_on_it() {
 
     // And nobody else was touched.
     for slot in [0usize, 2, 3] {
-        assert_eq!(race.respawns_of(slot), 0, "craft {slot} was recovered too");
+        assert_eq!(
+            race.sim.respawns_of(slot),
+            0,
+            "craft {slot} was recovered too"
+        );
     }
 }
 
@@ -326,9 +330,13 @@ fn giving_up_on_one_craft_leaves_the_others_recoverable() {
         race.tick(&PlayerInputs::none());
     }
 
-    assert_eq!(race.respawns_of(1), 0, "a craft given up on was recovered");
     assert_eq!(
-        race.respawns_of(2),
+        race.sim.respawns_of(1),
+        0,
+        "a craft given up on was recovered"
+    );
+    assert_eq!(
+        race.sim.respawns_of(2),
         1,
         "giving up on craft 1 switched off craft 2's recovery"
     );

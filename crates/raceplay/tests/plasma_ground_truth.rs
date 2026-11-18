@@ -140,7 +140,7 @@ fn moving_with(cage: bool) -> Option<(race::Race, oag_gameplay::InputSnapshot)> 
 fn the_discs_plasma_block_decodes_as_a_projectile() {
     let Some(loaded) = single_race() else { return };
     let race = race::Race::start(loaded.setup);
-    let plasma = race.plasma_stats().expect("the disc authors a Plasma");
+    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
 
     assert!(plasma.damage > 0.0, "no authored damage: {plasma:?}");
     assert!(plasma.blastradius > 0.0, "no authored blastradius");
@@ -169,7 +169,7 @@ fn the_discs_plasma_block_decodes_as_a_projectile() {
 
     // Harder than a rocket and slower to arrive is the shipped relationship on
     // both Pulse tables; asserting the *direction* keeps the number off the page.
-    let rocket = race.rocket_stats().expect("the disc authors a Rocket");
+    let rocket = race.sim.rocket_stats().expect("the disc authors a Rocket");
     assert!(
         plasma.damage > rocket.damage,
         "the plasma is not the heavier hit, which is what says these are two \
@@ -196,7 +196,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     let Some((mut race, throttle)) = moving() else {
         return;
     };
-    let plasma = race.plasma_stats().expect("the disc authors a Plasma");
+    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
     let speed = race.sim.world.ships[0]
         .physics
         .body
@@ -388,7 +388,7 @@ fn a_plasma_fired_on_a_real_track_is_one_bolt_and_it_flies() {
     // and are still reachable. A weapon that reaches an impact with no authored
     // numbers is a bug in `pickup::IMPLEMENTED`, per `projectile::blast_stats`.
     assert!(
-        race.plasma_stats().is_some(),
+        race.sim.plasma_stats().is_some(),
         "the table went away mid-race"
     );
     assert!(
@@ -442,7 +442,7 @@ fn a_plasma_bolt_that_times_out_far_above_the_track_hurts_nobody_below_it() {
     let Some((mut race, throttle)) = moving_with(false) else {
         return;
     };
-    let plasma = race.plasma_stats().expect("the disc authors a Plasma");
+    let plasma = race.sim.plasma_stats().expect("the disc authors a Plasma");
     assert!(
         plasma.blastradius > 0.0,
         "a zero radius reaches nobody anyway"

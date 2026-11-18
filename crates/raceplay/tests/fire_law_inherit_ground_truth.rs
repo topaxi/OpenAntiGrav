@@ -63,7 +63,7 @@ fn opponents_fire_under_the_original_driver(mut race: race::Race) -> (u32, Vec<b
         race.sim.use_original_ai(None, 1),
         "the original driver flies"
     );
-    let count = usize::from(race.ship_count());
+    let count = usize::from(race.sim.ship_count());
     let mut held = vec![0usize; count];
     let mut fired = 0;
     let mut beams = Vec::new();

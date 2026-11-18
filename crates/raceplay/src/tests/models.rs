@@ -1,4 +1,4 @@
-//! `Race::ship_model_matrix_of` and `Race::ship_active`: the slot-indexed
+//! `Race::ship_model_matrix_of` and `RaceSim::ship_active`: the slot-indexed
 //! accessors `Scene::render`'s per-craft loops use instead of `zip`ping onto
 //! [`Race::ship_model_matrices`]' filtered, gap-closed list.
 //!
@@ -21,16 +21,16 @@ fn deactivate(race: &mut Race, slot: usize) {
 #[test]
 fn ship_active_reports_only_the_slot_that_went_inactive() {
     let mut race = race_with_a_grid();
-    assert_eq!(race.ship_count(), 8);
+    assert_eq!(race.sim.ship_count(), 8);
     for slot in 0..8 {
-        assert!(race.ship_active(slot), "slot {slot} starts active");
+        assert!(race.sim.ship_active(slot), "slot {slot} starts active");
     }
 
     deactivate(&mut race, 3);
 
-    assert!(!race.ship_active(3));
+    assert!(!race.sim.ship_active(3));
     for slot in [0, 1, 2, 4, 5, 6, 7] {
-        assert!(race.ship_active(slot), "slot {slot} is unaffected");
+        assert!(race.sim.ship_active(slot), "slot {slot} is unaffected");
     }
 }
 

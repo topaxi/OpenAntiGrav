@@ -236,15 +236,15 @@ fn fly_at(
         race.tick_sim_only(&PlayerInputs::none());
         let tick = race.sim.world.tick;
         for slot in 1..8 {
-            let now_walls = race.wall_contact_ticks_of(slot);
+            let now_walls = race.sim.wall_contact_ticks_of(slot);
             let ship = &race.sim.world.ships[slot];
             if shield[slot] - ship.physics.shield >= HIT && now_walls == walls[slot] {
                 last_hit[slot] = Some(tick);
             }
             shield[slot] = ship.physics.shield;
             walls[slot] = now_walls;
-            if race.respawns_of(slot) > respawned[slot] {
-                respawned[slot] = race.respawns_of(slot);
+            if race.sim.respawns_of(slot) > respawned[slot] {
+                respawned[slot] = race.sim.respawns_of(slot);
                 assert!(
                     field_respawns > 0
                         && last_hit[slot].is_some_and(|hit| tick - hit <= hit_window),
@@ -266,7 +266,7 @@ fn fly_at(
              end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.respawns_of(slot),
+            race.sim.respawns_of(slot),
             ship.physics.shield
         );
     }
@@ -287,7 +287,7 @@ fn fly_at(
         destroyed <= field_destroyed,
         "{track}: {destroyed} opponent(s) destroyed"
     );
-    let total: u32 = (1..8).map(|slot| race.respawns_of(slot)).sum();
+    let total: u32 = (1..8).map(|slot| race.sim.respawns_of(slot)).sum();
     assert!(
         total <= field_respawns,
         "{track}: {total} respawns in the field"

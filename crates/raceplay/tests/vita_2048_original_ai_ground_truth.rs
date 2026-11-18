@@ -279,8 +279,8 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
             "  slot {slot}: finished {} lap {} respawns {} wall-contact ticks {} per-lap shield {shields:?}, end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.respawns_of(slot),
-            race.wall_contact_ticks_of(slot),
+            race.sim.respawns_of(slot),
+            race.sim.wall_contact_ticks_of(slot),
             ship.physics.shield
         );
     }
@@ -303,9 +303,9 @@ fn fly_at(event: &str, respawns: u32, offset: f32) {
             ship.standing.lap
         );
         assert!(
-            race.respawns_of(slot) <= respawns,
+            race.sim.respawns_of(slot) <= respawns,
             "{event}: slot {slot} respawned {} times",
-            race.respawns_of(slot)
+            race.sim.respawns_of(slot)
         );
     }
 }
@@ -431,7 +431,7 @@ fn the_super_phantom_field_runs_square_clean() {
         println!(
             "slot {slot}: lap {} respawns {} per-lap shield {:?}, end-of-run shield {:.1}",
             ship.standing.lap,
-            race.respawns_of(slot),
+            race.sim.respawns_of(slot),
             shields,
             ship.physics.shield
         );
@@ -442,7 +442,7 @@ fn the_super_phantom_field_runs_square_clean() {
         // (median 0, max 2), laws on `1 2 0 1 4 2 0 0 0` (median 1, max 4): inside the bar.
         // In the unperturbed run slot 1 respawns twice (per-lap shield `[88.7, 130.7]`,
         // end-of-run shield `114.6`).
-        assert!(race.respawns_of(slot) <= 2, "slot {slot}");
+        assert!(race.sim.respawns_of(slot) <= 2, "slot {slot}");
         assert!(
             ship.standing.lap >= 3,
             "slot {slot} laps at a Super Phantom pace"

@@ -834,7 +834,7 @@ impl Session {
                 }
             },
             // The scheme the *next* race starts with. Not applied to a race
-            // already running: `Race::set_control_scheme` is called once before
+            // already running: `RaceSim::set_control_scheme` is called once before
             // the first tick, and swapping mid-race would leave a half-finished
             // gesture armed in `ShipState`.
             "controls.scheme" => match text.parse::<ControlScheme>() {

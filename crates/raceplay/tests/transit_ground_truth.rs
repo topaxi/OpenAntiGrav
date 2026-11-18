@@ -77,7 +77,7 @@ fn jump(race: &mut race::Race, ticks: u16) -> u64 {
             race.sim.world.ships[0].physics.body.position, entry,
             "frozen"
         );
-        assert!(!race.ship_active(0), "not drawn");
+        assert!(!race.sim.ship_active(0), "not drawn");
     }
     race.tick(&throttle());
     let exit = race.sim.world.tick;
@@ -105,7 +105,7 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     }
     let ship = |r: &race::Race| r.sim.world.ships[0];
     assert_eq!(ship(&race).standing.lap, 1);
-    let respawns = race.respawns();
+    let respawns = race.sim.respawns();
 
     let exit = jump(&mut race, 60);
     let standing = ship(&race).standing;
@@ -135,7 +135,7 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     let kmh = after.physics.body.linear_velocity.length() * oag_core::math::SPEED_TO_KMH;
     assert!(kmh > 100.0, "driving at {kmh} km/h");
     assert!(after.standing.progress.unwrap() > progress, "further round");
-    assert_eq!(race.respawns(), respawns, "no rescue after the exit");
+    assert_eq!(race.sim.respawns(), respawns, "no rescue after the exit");
 
     // On to the last lap, then over the line by a transit: the finish is the exit tick.
     let target = race.sim.world.laps_target().expect("a lap target");
@@ -159,7 +159,7 @@ fn a_transit_over_the_line_is_a_lap_and_a_finish_on_its_exit_tick() {
     println!(
         "laps {:?}, finish at {exit}, respawns {}",
         standing.lap_splits,
-        race.respawns()
+        race.sim.respawns()
     );
 }
 
@@ -230,11 +230,11 @@ fn an_exit_on_a_forks_route_seats_the_craft_and_its_driver_on_the_route() {
     );
 
     // It drives the detour: still the route's driver a second on, never back at the ring.
-    let respawns = race.respawns();
+    let respawns = race.sim.respawns();
     for _ in 0..60 {
         race.tick(&throttle());
     }
-    assert_eq!(race.respawns(), respawns, "no rescue");
+    assert_eq!(race.sim.respawns(), respawns, "no rescue");
     let driver = race.sim.world.ships[0].driver;
     assert_eq!(usize::from(driver.branching.route), route + 1);
     let (on_route, on_ring) = offsets(&race, route);
