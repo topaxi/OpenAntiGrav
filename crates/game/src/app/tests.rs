@@ -1,0 +1,526 @@
+//! What the composition root in [`super`] is asserted to do: trace-row poses,
+//! the backdrop playhead and picture carried into the menus, and the
+//! conversion-state flag.
+//!
+//! Its own file rather than a `#[cfg(test)]` block at the end of `main.rs`, and
+//! `main/tests.rs` rather than the `crates/game/tests/` beside it: **an
+//! integration test links the library, not the binary**, so nothing under
+//! `crates/game/tests/` can see `pose_from_trace`, `menu_playhead` or
+//! `parse_progress` at all. This is `crates/physics/src/airbrake.rs`'s
+//! arrangement - `#[cfg(test)] mod tests;` and a `tests.rs` in the module's own
+//! directory - which `main.rs` could not use until the 2026-08-16 split gave a
+//! crate root a directory. See `scripts/check-file-size.py`, the rule as a gate.
+
+use super::*;
+
+/// A two-row capture in exactly the shape `psp-trace.py --camera` writes:
+/// the required columns plus the all-or-nothing camera group. Hand-authored
+/// like `oag_trace::trace`'s own fixtures - a real capture cannot be
+/// committed.
+const FIXTURE: &str = "\
+tick,dt,grounded,throttle,brake,steer,airbrake_l,airbrake_r,speed_cached,\
+right_x,right_y,right_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,\
+pos_x,pos_y,pos_z,vel_x,vel_y,vel_z,speed,\
+cam_right_x,cam_right_y,cam_right_z,cam_up_x,cam_up_y,cam_up_z,\
+cam_fwd_x,cam_fwd_y,cam_fwd_z,cam_pos_x,cam_pos_y,cam_pos_z
+5,0.016683,1,100,0,0,0,0,22,1,0,0,0,1,0,0,0,1,10,2.5,-30,0,0,22,22,1,0,0,0,1,0,0,0,1,10,8,-45
+6,0.016683,1,100,0,0,0,0,22,1,0,0,0,1,0,0,0,1,10,2.5,-29.6,0,0,22,22,1,0,0,0,1,0,0,0,1,10,8,-44.6
+";
+
+fn fixture_file(name: &str, text: &str) -> std::path::PathBuf {
+    let path = std::env::temp_dir().join(format!("oag-game-pose-from-{name}.csv"));
+    std::fs::write(&path, text).expect("a writable temp dir");
+    path
+}
+
+#[test]
+fn a_pose_from_a_trace_row_is_exact_and_carries_the_camera() {
+    let path = fixture_file("carries-camera", FIXTURE);
+    let (pose, camera) = pose_from_trace(&path, 5, false, Some(70.0)).expect("the fixture row");
+    let race::PoseRequest::Exact(pose) = pose else {
+        panic!("--pose-from must not re-derive the pose from the spline");
+    };
+    assert_eq!(pose.position, oag_core::math::Vec3::new(10.0, 2.5, -30.0));
+    let camera = camera.expect("the fixture has camera columns");
+    assert_eq!(camera.eye, oag_core::math::Vec3::new(10.0, 8.0, -45.0));
+    assert_eq!(camera.fov_deg, Some(70.0));
+}
+
+#[test]
+fn no_camera_keeps_the_chase_camera_even_when_the_capture_has_one() {
+    let path = fixture_file("no-camera", FIXTURE);
+    let (_, camera) = pose_from_trace(&path, 5, true, None).expect("the fixture row");
+    assert!(camera.is_none());
+}
+
+const FIELD: &str = "\
+slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z
+1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30
+2,Qirex,0,0,-1,0,1,0,1,0,0,-5,3,8
+";
+
+#[test]
+fn a_field_row_is_an_exact_pose_and_names_its_team() {
+    let path = fixture_file("field", FIELD);
+    let field = pose::field_from_csv(&path).expect("the fixture field");
+    assert!(field.player.is_none(), "no slot 0 row, no player pose");
+    let field = field.opponents;
+    assert_eq!(field.len(), 2);
+    assert_eq!(field[0].team, "Feisar");
+    assert_eq!(field[1].team, "Qirex");
+    assert_eq!(
+        field[1].pose.position,
+        oag_core::math::Vec3::new(-5.0, 3.0, 8.0)
+    );
+    // The same reading `--pose-from` gives a row of the same basis.
+    let frame_pose = oag_trace::replay::orientation_of_rows(
+        oag_core::math::Vec3::X,
+        oag_core::math::Vec3::Y,
+        oag_core::math::Vec3::Z,
+        oag_trace::replay::Basis::LeftUpForward,
+    );
+    assert_eq!(field[0].pose.orientation, frame_pose);
+}
+
+#[test]
+fn a_field_rows_lean_and_roll_phase_are_read_when_both_columns_exist() {
+    let text = format!("{},steer_lean,roll_phase\n1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30,0.5,-0.25\n2,Qirex,0,0,-1,0,1,0,1,0,0,-5,3,8,-0.1,0.0\n", FIELD.lines().nth(1).map(|_| "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z").unwrap());
+    let path = fixture_file("field-lean", &text);
+    let leans = pose::field_from_csv(&path)
+        .expect("a field with lean columns")
+        .leans();
+    assert_eq!(leans.len(), 2);
+    let first = leans[0].expect("slot 1 carries its lean");
+    assert_eq!((first.steer_lean, first.roll_phase), (0.5, -0.25));
+    assert_eq!(leans[1].expect("slot 2").steer_lean, -0.1);
+    let plain = pose::field_from_csv(&fixture_file("field-nolean", FIELD)).expect("an old field");
+    assert_eq!(
+        plain.leans(),
+        vec![None, None],
+        "an old file has no lean, not a zero one"
+    );
+}
+
+#[test]
+fn a_slot_zero_row_is_the_players_exact_pose() {
+    let text = FIELD.replace(
+        "\n1,Feisar",
+        "\n0,Player,0,0,-1,0,1,0,1,0,0,7,8,9\n1,Feisar",
+    );
+    let path = fixture_file("field-player", &text);
+    let field = pose::field_from_csv(&path).expect("a field with a player row");
+    let player = field.player.expect("slot 0 is the player");
+    assert_eq!(player.position, oag_core::math::Vec3::new(7.0, 8.0, 9.0));
+    assert_eq!(field.opponents.len(), 2, "the player is not an opponent");
+    assert_eq!(field.opponents[0].team, "Feisar");
+}
+
+#[test]
+fn a_field_of_the_player_alone_is_a_field() {
+    // A Zone run has no opponents; `--field-warmup` still warms the player's exhaust.
+    let text = "slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z\n\
+                0,Assegai,0,0,-1,0,1,0,1,0,0,7,8,9,10,0,0\n";
+    let path = fixture_file("field-player-alone", text);
+    let field = pose::field_from_csv(&path).expect("a player-only field");
+    assert!(field.opponents.is_empty());
+    assert_eq!(
+        field.velocities().expect("the player's velocity"),
+        vec![oag_core::math::Vec3::new(10.0, 0.0, 0.0)]
+    );
+}
+
+#[test]
+fn a_field_with_a_gap_in_its_slots_is_refused() {
+    let text = FIELD.replace("\n2,Qirex", "\n3,Qirex");
+    let path = fixture_file("field-gap", &text);
+    let error = pose::field_from_csv(&path).expect_err("slot 3 follows slot 1");
+    assert!(format!("{error:#}").contains("in order"), "{error:#}");
+}
+
+#[test]
+fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
+    let hud = pose::parse_hud_state("6,1,30.0,31.5").expect("four values");
+    assert_eq!(
+        hud,
+        race::CaptureHud {
+            place: 6,
+            lap: 1,
+            lap_ticks: 1800,
+            race_ticks: 1890,
+            speed_kmh: None,
+            shield_percent: None,
+            best_lap_ticks: None,
+            best_lap_centiseconds: None,
+            boost_phase: None,
+            autopilot_seconds: None,
+            zone: None,
+        }
+    );
+    assert_eq!(
+        hud.autopilot_seconds, None,
+        "the Autopilot countdown is its own flag, not a column"
+    );
+    let full = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0").expect("six values");
+    assert_eq!(
+        (full.speed_kmh, full.shield_percent),
+        (Some(571.5), Some(99.0))
+    );
+    let best = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.25").expect("seven values");
+    assert_eq!(best.best_lap_ticks, Some(3375));
+    // The original keeps a best lap in whole centiseconds, which a 60 Hz tick count cannot hold:
+    // `56.34` is 3380.4 ticks, and the frame printed `0.56.34`.
+    let hundredth = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,56.34").expect("seven values");
+    assert_eq!(hundredth.best_lap_centiseconds, Some(5634));
+    let zone = pose::parse_hud_state("1,1,0,0,500.0,99.0,0,12,151921,2.5").expect("ten values");
+    assert_eq!(
+        zone.zone,
+        Some(race::CaptureZone {
+            zone: 12,
+            score: Some(151_921),
+            timer_seconds: Some(2.5)
+        })
+    );
+    assert_eq!(best.zone, None);
+    let none = pose::parse_hud_state("5,2,21.0,31.0,571.5,99.0,0").expect("seven values");
+    assert_eq!(none.best_lap_ticks, None);
+    assert!(pose::parse_hud_state("6,1,30.0").is_err());
+    assert!(pose::parse_hud_state("0,1,3,3").is_err());
+    assert!(pose::parse_hud_state("1,1,-3,3").is_err());
+}
+
+/// One frame of the PSP's backdrop, to the nanosecond.
+const BACKDROP_FRAME: f64 = 1001.0 / 30_000.0;
+
+#[test]
+fn the_menus_open_on_the_playhead_the_front_end_was_running() {
+    // The bug this is here for: the boot sequence handed over a backdrop
+    // that was 400 frames into its loop and the menus started a new one at
+    // zero, so the picture jumped back to the start of the movie the instant
+    // START was pressed.
+    let mut running = frontend::Player::new(270, true, frontend::FRAME_RATE);
+    for _ in 0..400 {
+        running.update(BACKDROP_FRAME);
+    }
+    assert_eq!(running.position(), 400);
+
+    let opened = menu_playhead(Some(running), 270, frontend::FRAME_RATE);
+    assert_eq!(
+        opened.position(),
+        400,
+        "the menus continue the playback rather than restarting it"
+    );
+    assert_eq!(opened.frame(), 400 % 270, "and it is mid-loop, not at zero");
+    assert!(!opened.is_finished());
+}
+
+#[test]
+fn a_playhead_carried_across_keeps_running_from_where_it_was() {
+    // Not just the position at the handoff: the next frame after it has to
+    // be the next frame of the same playback, wrap included.
+    let mut running = frontend::Player::new(270, true, frontend::FRAME_RATE);
+    for _ in 0..269 {
+        running.update(BACKDROP_FRAME);
+    }
+    let mut opened = menu_playhead(Some(running), 270, frontend::FRAME_RATE);
+    opened.update(BACKDROP_FRAME);
+    assert_eq!(opened.position(), 270);
+    assert_eq!(opened.frame(), 0, "it wraps rather than ending");
+}
+
+#[test]
+fn with_nothing_to_carry_the_menus_start_the_loop_themselves() {
+    // Leaving a race: the stage that owned the playhead is gone, and
+    // `open_menus` restarts the feed to match this. See `menu_playhead`.
+    let fresh = menu_playhead(None, 270, frontend::FRAME_RATE);
+    assert_eq!(fresh.position(), 0);
+    assert_eq!(fresh.frames(), 270);
+    assert!(!fresh.is_finished(), "270 frames of loop are not an ending");
+}
+
+/// A `HeldFrame` distinguishable from any other by its index alone - the
+/// picture is never inspected by [`backdrop_seed`], only carried.
+fn held(index: usize) -> HeldFrame {
+    HeldFrame {
+        index,
+        picture: movie::VideoFrame::default(),
+    }
+}
+
+/// Task #8: `escape` -> menus used to show one to three black frames while a
+/// freshly restarted feed produced its first picture, because nothing carried
+/// a picture across the race the way the boot path already carried one from
+/// the front end. `backdrop_seed` is the decision at the heart of the fix;
+/// `Session::open_menus` is the GPU-touching caller around it, which is why
+/// the assertions are on this pure core rather than on a live `Session`.
+#[test]
+fn escape_seeds_the_menus_from_the_race_side_backdrop_not_the_frontend_side_one() {
+    let from_frontend = held(11);
+    let from_race = held(22);
+    let seeded = backdrop_seed(Some(&from_frontend), true, Some(&from_race))
+        .expect("a race that carried a picture seeds one");
+    assert_eq!(
+        seeded.index, 22,
+        "escape reads held_menu_backdrop, not the frontend's held_backdrop, \
+         which is stale or absent once a race has run"
+    );
+}
+
+#[test]
+fn booting_into_the_menus_seeds_from_the_frontend_side_backdrop() {
+    let from_frontend = held(11);
+    let seeded = backdrop_seed(Some(&from_frontend), false, None)
+        .expect("the boot path seeds from the front end's held frame");
+    assert_eq!(seeded.index, 11);
+}
+
+#[test]
+fn a_source_with_no_backdrop_seeds_nothing_on_either_path() {
+    assert!(
+        backdrop_seed(None, false, None).is_none(),
+        "no front-end picture, boot path"
+    );
+    assert!(
+        backdrop_seed(None, true, None).is_none(),
+        "no held race picture, escape path"
+    );
+}
+
+/// The two figures, and the three fields that follow from them.
+#[test]
+fn a_stated_conversion_state_is_read_as_the_worker_would_report_it() {
+    let midway = parse_progress("37/115").expect("37 of 115");
+    assert!(!midway.planning, "a stated total means planning is over");
+    assert!(!midway.finished);
+    assert_eq!((midway.done, midway.total), (37, 115));
+    assert!(midway.current.is_some(), "something is converting");
+
+    let done = parse_progress("115/115").expect("all of them");
+    assert!(done.finished);
+    assert_eq!(done.fraction(), 1.0);
+    assert_eq!(done.current, None, "nothing is converting any more");
+}
+
+/// Every rejection names what to write instead, because the flag is typed
+/// by hand and the shape is not guessable.
+#[test]
+fn a_state_that_is_not_two_numbers_is_refused() {
+    for spec in ["37", "37/", "a/b", "37 115", ""] {
+        let error = parse_progress(spec).expect_err("{spec} is not a state");
+        assert!(error.to_string().contains("DONE/TOTAL"), "{spec}: {error}");
+    }
+    let error = parse_progress("200/115").expect_err("more than all of them");
+    assert!(error.to_string().contains("more than all"), "{error}");
+}
+
+#[test]
+fn a_missing_tick_is_an_error_that_names_the_range() {
+    let path = fixture_file("missing-tick", FIXTURE);
+    let error = pose_from_trace(&path, 99, false, None).expect_err("tick 99 is not there");
+    assert!(error.to_string().contains("no tick 99"), "{error}");
+}
+
+/// `--icon-size` is `requires = "write_icon"` with its own `default_value_t`,
+/// which is the exact clap footgun where a defaulted arg counts as "present"
+/// for requirement validation and every ordinary run - none of which pass
+/// `--write-icon` - refuses to start. Clap 4 scopes `requires` to arguments
+/// actually seen on the command line, so this passes today; it exists to
+/// catch a clap upgrade (or a copy-pasted `requires` on some future flag)
+/// that changes that.
+#[test]
+fn the_icon_flags_do_not_make_themselves_required() {
+    Cli::try_parse_from(["oag-game"]).expect("no flags at all must still parse");
+}
+
+/// A one-page, one-row definition whose row is a binding for `button` -
+/// [`menu::tests::an_unbound_button_draws_the_word_rather_than_nothing`]'s
+/// fixture shape, reused here for `Session::maybe_begin_binding` rather than
+/// for drawing.
+fn binding_menu(button: &str) -> menu::Menu {
+    let definition = menu::Definition::parse(
+        &format!(
+            r#"
+            toml-schema = {{ location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }}
+            root = "main"
+            [[page]]
+            id = "main"
+            [[page.entry]]
+            kind = "binding"
+            label = "ROW"
+            button = "{button}"
+            "#
+        ),
+        &language::StringTable::default(),
+    )
+    .expect("a one-row binding definition parses");
+    menu::Menu::new(definition)
+}
+
+#[test]
+fn confirming_a_binding_row_starts_a_capture_for_its_button() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    let mut awaiting = None;
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Cross));
+}
+
+#[test]
+fn confirming_with_start_works_the_same_as_cross() {
+    let menu = binding_menu("up");
+    let mut controls = Controls::without_pad();
+    let mut awaiting = None;
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Start.bit());
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Up));
+}
+
+#[test]
+fn nothing_pressed_leaves_the_capture_closed() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    let mut awaiting = None;
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, None);
+}
+
+/// A capture already open must not be disturbed by a second confirm - holding
+/// Cross down through the capture must not restart it against whatever row
+/// the cursor has since moved to.
+#[test]
+fn a_capture_already_open_is_left_alone() {
+    let menu = binding_menu("up");
+    let mut controls = Controls::without_pad();
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let mut awaiting = Some(oag_gameplay::input::Button::Circle);
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Circle));
+}
+
+/// `app.rs` diverts every keyboard event away from `Controls::set_key` for as
+/// long as a capture is open, so the key that confirmed this row never gets
+/// to report its own release - the same failure `Keyboard::release_all`'s own
+/// doc comment describes for a window losing focus while a key is held.
+/// Without the release in `maybe_begin_binding`, Cross would still read held
+/// on the very next tick's snapshot, with nobody touching a keyboard.
+#[test]
+fn opening_a_capture_releases_whatever_confirmed_it() {
+    let menu = binding_menu("cross");
+    let mut controls = Controls::without_pad();
+    controls.set_key(&winit::keyboard::Key::Character("x".into()), true);
+    controls
+        .buttons_mut()
+        .begin_frame(oag_gameplay::input::Button::Cross.bit());
+    let mut awaiting = None;
+
+    Session::maybe_begin_binding(&mut awaiting, &mut controls, &menu);
+    assert_eq!(awaiting, Some(oag_gameplay::input::Button::Cross));
+
+    let next_tick = controls.snapshot();
+    assert!(
+        !next_tick
+            .buttons
+            .is_held(oag_gameplay::input::Button::Cross),
+        "the swallowed key-up must not leave Cross stuck held"
+    );
+}
+
+#[test]
+fn a_warm_up_needs_every_velocity_and_never_guesses_one() {
+    let path = fixture_file("field-novel", FIELD);
+    let field = pose::field_from_csv(&path).expect("a field without velocities");
+    assert!(field.velocities().is_err(), "no vel columns, no warm-up");
+
+    let text = "\
+slot,team,left_x,left_y,left_z,up_x,up_y,up_z,fwd_x,fwd_y,fwd_z,pos_x,pos_y,pos_z,vel_x,vel_y,vel_z
+0,Player,0,0,-1,0,1,0,1,0,0,7,8,9,1,2,3
+1,Feisar,1,0,0,0,1,0,0,0,1,10,2.5,-30,4,5,6
+";
+    let path = fixture_file("field-vel", text);
+    let velocities = pose::field_from_csv(&path)
+        .and_then(|field| field.velocities())
+        .expect("a complete field");
+    assert_eq!(
+        velocities,
+        [
+            oag_core::math::Vec3::new(1.0, 2.0, 3.0),
+            oag_core::math::Vec3::new(4.0, 5.0, 6.0)
+        ]
+    );
+}
+
+#[cfg(feature = "dev-cli")]
+#[test]
+fn a_development_build_accepts_seed_and_give() {
+    let cli = Cli::try_parse_from(["oag-game", "--race", "--seed", "7", "--give", "rocket"])
+        .expect("dev-cli builds take --seed and --give");
+    assert_eq!(cli.seed(), Some(7));
+    assert_eq!(cli.give(), Some("rocket"));
+}
+
+#[cfg(not(feature = "dev-cli"))]
+#[test]
+fn a_release_build_rejects_seed_and_give() {
+    for flag in [["--seed", "7"], ["--give", "rocket"]] {
+        let error = Cli::try_parse_from(["oag-game", "--race", flag[0], flag[1]])
+            .expect_err("a build without dev-cli has no such flag");
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::UnknownArgument,
+            "{flag:?}"
+        );
+    }
+}
+
+#[test]
+fn pose_parses_in_every_build() {
+    Cli::try_parse_from(["oag-game", "--race", "--pose", "0,0,0"])
+        .expect("--pose is a capture flag");
+}
+
+#[test]
+fn a_run_with_no_window_opens_no_gamepad() {
+    assert!(!handler::controls_for(true).pad().is_available());
+}
+
+/// The first-run name prompt opens only for a person at a plain launch: every capture, script,
+/// trace, comparison or race flag is automation and never gets it.
+#[test]
+fn only_a_plain_launch_is_interactive() {
+    assert!(
+        Cli::try_parse_from(["oag-game"])
+            .expect("parses")
+            .is_interactive()
+    );
+    for flags in [
+        &["--screenshot", "x.png"][..],
+        &["--original-menu"],
+        &["--race"],
+        &["--dry-run"],
+        &["--trace"],
+        &["--script", "1:down"],
+        &["--preseat"],
+        &["--prefetch"],
+        &["--probe-pad"],
+        &["--until", "Home"],
+    ] {
+        let mut args = vec!["oag-game"];
+        args.extend_from_slice(flags);
+        let cli = Cli::try_parse_from(&args).expect("parses");
+        assert!(!cli.is_interactive(), "{flags:?} is automation");
+    }
+}

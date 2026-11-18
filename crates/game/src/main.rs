@@ -35,17 +35,19 @@
 //!
 //! See [`oag_game::launcher`] and `just launch`.
 //!
-//! This file is only `main` itself: read the command line, resolve everything
-//! that can fail before anything is loaded, and hand off to one of the runs in
-//! [`headless`] or to the window in [`app`]. **"Everything that can fail" no
-//! longer includes the source on the windowed route**: which disc image a run
-//! opens may be a screen away, so the load that depends on it lives in
-//! [`prepare`] and runs either here or from `Session::finish_launcher`. The
-//! rest of the binary is the modules declared below; everything that can be
-//! tested without a GPU is in [`oag_game`] rather than in any of them.
+//! This file is only the process entry: everything else, from reading the
+//! command line to the window, is [`oag_game::app`].
 
-// The body is shared with the Android library (`android.rs`, the `oag_android`
-// example in Cargo.toml) by `include!` rather than by pointing two targets at
-// this one file, which Cargo warns about on every build. The rustdoc header
-// above stays here because an included file may not carry inner attributes.
-include!("main_body.rs");
+/// The counting allocator behind `oag-render`'s off-by-default `perf-probe`
+/// feature, and the reason it is installed here rather than in a test: it has
+/// to be the process's allocator to see the frame path's allocations at all.
+///
+/// Absent entirely without the feature - not merely inert - so a default build
+/// keeps the system allocator with no wrapper in front of it.
+#[cfg(feature = "perf-probe")]
+#[global_allocator]
+static ALLOCATOR: oag_gpu::perfprobe::Counting = oag_gpu::perfprobe::Counting;
+
+fn main() -> anyhow::Result<()> {
+    oag_game::app::main()
+}
