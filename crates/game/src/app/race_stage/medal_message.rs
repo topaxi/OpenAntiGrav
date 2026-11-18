@@ -68,7 +68,7 @@ mod tests {
             "campaign_tier must take an Elimination cell's value from medal_watch"
         );
         assert!(
-            stage.contains("self.race.eliminator_place()"),
+            stage.contains("self.race.core.eliminator_place()"),
             "the place is the end-of-race board's, SimRace::eliminator_place"
         );
     }
