@@ -36,8 +36,7 @@ pub const CHECKPOINT_EVERY: u32 = 60;
 /// challenge: a minute, far past the second a checkpoint takes and the lobby's round trip.
 pub const LEDGER_TICKS: u32 = 3600;
 
-/// The bytes of one proof part on the lobby link, well under the stream's 256 KiB message.
-pub const PART_BYTES: usize = 128 << 10;
+pub use crate::wire::online::REPORT_PART_BYTES as PART_BYTES;
 
 /// The most bytes a proof may have whatever the race: 30 minutes of twelve seats.
 pub const MAX_PROOF_BYTES: usize = 28 << 20;
@@ -405,12 +404,6 @@ impl Proof {
         }
         Ok(held)
     }
-}
-
-/// Splits a proof's bytes into the parts the lobby link carries.
-#[must_use]
-pub fn parts(bytes: &[u8]) -> Vec<Vec<u8>> {
-    bytes.chunks(PART_BYTES).map(<[u8]>::to_vec).collect()
 }
 
 /// Whether `datagram`, the host's answer to a challenge, is a signed input datagram of `seat`

@@ -93,6 +93,16 @@ pub fn run(args: &Args) -> Result<()> {
         join_timeout: Duration::from_secs(args.join_timeout),
         max_ticks: args.max_ticks.unwrap_or(Limits::default().max_ticks),
     };
+    // The lobby re-simulates a reported player-hosted race from the job it issued, with the
+    // same load a race child does (no renderer: `oag-raceplay` without `view`).
+    let referee_images = images.clone();
+    let referee: oag_net::online::race_proc::Loader = std::sync::Arc::new(move |params| {
+        let (_, image) = referee_images
+            .iter()
+            .find(|(title, _)| *title == params.title)
+            .ok_or_else(|| anyhow::anyhow!("no image for {}", params.title))?;
+        oag_net::race::load(params, image).map(|(race, _)| race)
+    });
     let runner = ChildRunner {
         program: std::env::current_exe().context("finding this binary to run races with")?,
         images,
@@ -117,6 +127,7 @@ pub fn run(args: &Args) -> Result<()> {
         },
         Box::new(runner),
     )?;
+    server.set_referee(referee);
     println!("lobby listening on {}", server.local_addr());
     println!("race port {}", args.race_listen.port());
     println!("lobby cert-hash {}", server.cert_hash_hex());

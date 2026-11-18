@@ -17,14 +17,14 @@ use crate::loopback::headless;
 use crate::online::{Lab, Racer, config, fly_once, settings, thread_runner};
 
 /// The host's sign of life to the lobby, once a second, as a hosting game sends it.
-fn alive(lab: &mut Lab, owner: usize, room: u32, last: &mut std::time::Instant) {
+pub(crate) fn alive(lab: &mut Lab, owner: usize, room: u32, last: &mut std::time::Instant) {
     if last.elapsed() >= Duration::from_secs(1) {
         *last = std::time::Instant::now();
         lab.people[owner].host_up(room);
     }
 }
 
-fn player_host(max_ticks: u32) -> PlayerHost {
+pub(crate) fn player_host(max_ticks: u32) -> PlayerHost {
     PlayerHost::bind(
         "127.0.0.1:0".parse().expect("addr"),
         Limits {
@@ -45,8 +45,24 @@ fn offer_room(lab: &mut Lab, who: usize, host: &PlayerHost, key: &PlayerKey) {
 /// `owner` hosts a room on `host`, `guest` joins it, both pick, the owner presses START, the
 /// host loads the lobby's job and says it is up. Returns the room.
 fn hosted_room_starts(lab: &mut Lab, owner: usize, guest: usize, host: &mut PlayerHost) -> u32 {
-    let key = PlayerKey::generate().expect("a key");
-    offer_room(lab, owner, host, &key);
+    hosted_room_starts_keyed(
+        lab,
+        owner,
+        guest,
+        host,
+        &PlayerKey::generate().expect("a key"),
+    )
+}
+
+/// [`hosted_room_starts`] with the owner's offer signed by `key`.
+pub(crate) fn hosted_room_starts_keyed(
+    lab: &mut Lab,
+    owner: usize,
+    guest: usize,
+    host: &mut PlayerHost,
+    key: &PlayerKey,
+) -> u32 {
+    offer_room(lab, owner, host, key);
     lab.until("the hosted room", |lab| lab.people[owner].room.is_some());
     let room = lab.people[owner].room.as_ref().expect("room").id;
     lab.people[guest].join(room);

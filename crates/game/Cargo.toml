@@ -198,6 +198,9 @@ oag-shader-check.workspace = true
 workspace = true
 
 [dev-dependencies]
+# The tests' own build of the game hosts with a cheat when `OAG_TEST_CHEAT` asks
+# (`oag_net::host::Cheat`), so `net_anticheat_ground_truth` can prove it caught.
+oag-net = { workspace = true, features = ["client", "test-cheats"] }
 oag-bytes.workspace = true
 oag-testdata.workspace = true
 oag-pob.workspace = true

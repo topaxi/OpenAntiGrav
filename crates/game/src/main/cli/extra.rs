@@ -710,6 +710,9 @@ impl NetArgs {
             name: format!("oag-game {}", std::process::id()),
             token: String::new(),
             lobby: None,
+            params: [0; 32],
+            host_key: [0; 32],
+            signer: None,
         }))
     }
 

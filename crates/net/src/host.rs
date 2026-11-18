@@ -174,8 +174,9 @@ pub enum Cheat {
     /// An honest host.
     #[default]
     None,
-    /// From [`CHEAT_AT`] on, the host's own craft (seat 0) flies 5 percent faster than the
-    /// simulation says, every tick.
+    /// From [`CHEAT_AT`] on, the host's own craft (seat 0) is moved 0.05 world units a tick
+    /// further than the simulation moves it: a speed hack, which alters the state whether
+    /// or not the craft is under way.
     Speed,
     /// At [`CHEAT_AT`], seat 1 is confirmed an input it never sent.
     Forge,
@@ -722,7 +723,7 @@ impl Host {
         self.race.tick_sim_only(&inputs);
         #[cfg(feature = "test-cheats")]
         if self.cheat == Cheat::Speed && tick >= CHEAT_AT {
-            self.race.sim.world.ships[0].physics.body.linear_velocity *= 1.05;
+            self.race.sim.world.ships[0].physics.body.position.z += 0.05;
         }
         self.history.push(TickRecord {
             hash: self.race.sim.state_hash(),

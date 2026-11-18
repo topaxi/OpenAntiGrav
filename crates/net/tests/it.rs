@@ -12,6 +12,7 @@
 // Tests index several parallel slot arrays with one slot; clippy 1.100 flags that.
 #![allow(clippy::needless_range_loop)]
 
+mod anticheat;
 mod extract_ground_truth;
 mod lobby;
 mod loopback;

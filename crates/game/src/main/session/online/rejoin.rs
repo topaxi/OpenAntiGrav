@@ -105,6 +105,8 @@ impl Session {
                 cert_hash: rejoin.cert_hash,
                 token: rejoin.token,
                 name: rejoin.name,
+                params: [0; 32],
+                host_key: [0; 32],
             },
         );
         let hint = self.online_say("OAG_ONLINE_CONNECTING", "CONNECTING...");

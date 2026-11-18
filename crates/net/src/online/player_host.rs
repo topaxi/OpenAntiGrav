@@ -93,8 +93,9 @@ impl PlayerHost {
             thread: Some(thread),
             key: None,
             ledger: SharedLedger::default(),
+            // A test arms a host in another process through the environment.
             #[cfg(feature = "test-cheats")]
-            cheat: crate::host::Cheat::None,
+            cheat: crate::host::Cheat::from_env(),
         })
     }
 

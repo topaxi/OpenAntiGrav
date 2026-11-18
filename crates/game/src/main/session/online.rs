@@ -97,6 +97,9 @@ pub(crate) struct Online {
     hosting: Option<oag_game::online::Hosting>,
     /// The lobby's address as the link reached it: its family is the hosting port's.
     lobby_peer: Option<std::net::IpAddr>,
+    /// The profile's key (`oag_game::identity`): named in the lobby hello, it signs this
+    /// player's inputs in a player-hosted race and a hosted race's checkpoints.
+    key: Option<std::sync::Arc<oag_net::online::hostkey::PlayerKey>>,
 }
 
 enum Step {
@@ -165,6 +168,7 @@ impl Session {
             host_wanted: false,
             hosting: None,
             lobby_peer: None,
+            key: None,
         });
         if !self.begin_rejoin_offer() {
             self.open_online_prompt(Field::Address);
@@ -366,8 +370,12 @@ impl Session {
             .lobby
             .as_mut()
             .ok_or_else(|| anyhow::anyhow!("not connected to a lobby"))?;
-        let hosting = oag_game::online::Hosting::open(source, port, peer)?;
-        let key = oag_game::identity::load_or_create()?;
+        let key = match &online.key {
+            Some(key) => key.clone(),
+            None => std::sync::Arc::new(oag_game::identity::load_or_create()?),
+        };
+        let mut hosting = oag_game::online::Hosting::open(source, port, peer)?;
+        hosting.sign_with(key.clone());
         info!("online: hosting on UDP port {}", hosting.port());
         hosting.offer(lobby, &lobby_hash, &key, settings)?;
         online.hosting = Some(hosting);
@@ -883,6 +891,12 @@ impl Session {
             }
             // The room closed under a race that is being flown (its host left, or was banned):
             // the race ends with the lobby's reason, and the menus show it when they reopen.
+            // A case against the race's host goes to the lobby, which judges it.
+            if let (Some(net), Some(room)) = (&self.net, lobby.room.as_ref().map(|room| room.id))
+                && let Some(proof) = net.take_report()
+            {
+                lobby.queue_report(room, &proof.encode());
+            }
             if let (Some(net), Some(reason)) = (&self.net, &lobby.left)
                 && matches!(online.step, Step::Waiting(_) | Step::Dialing(..))
             {
@@ -926,11 +940,19 @@ impl Session {
             Step::Connecting(mut task) if task.is_finished() => match task.join() {
                 Some(Ok(Ok(link))) => {
                     online.lobby_peer = Some(link.peer().ip());
-                    online.lobby = Some(LobbyClient::connect(
+                    online.key = match oag_game::identity::load_or_create() {
+                        Ok(key) => Some(std::sync::Arc::new(key)),
+                        Err(e) => {
+                            warn!("online: no player key, a player-hosted race will refuse this seat's inputs: {e:#}");
+                            None
+                        }
+                    };
+                    online.lobby = Some(LobbyClient::connect_keyed(
                         Box::new(link),
                         &online.name,
                         &online.editions,
                         "",
+                        online.key.as_ref().map_or([0; 32], |key| key.public()),
                     ));
                     Step::Hello
                 }
@@ -962,7 +984,7 @@ impl Session {
                         name: handoff.name.clone(),
                         token: handoff.token.clone(),
                     };
-                    Step::Waiting(Box::new(Pending::new(
+                    let mut pending = Pending::new(
                         Box::new(link),
                         &handoff.name,
                         &online.team,
@@ -970,7 +992,9 @@ impl Session {
                         self.net_bot,
                         "the online race",
                         Some((rejoin, None)),
-                    )))
+                    );
+                    pending.guard(handoff.params, handoff.host_key, online.key.clone());
+                    Step::Waiting(Box::new(pending))
                 }
                 other => {
                     let why = match other {

@@ -48,6 +48,9 @@ pub struct Watch {
     kept: BTreeMap<u32, [u8; 32]>,
     pending: BTreeMap<u32, Checkpoint>,
     sent: BTreeMap<u32, Held>,
+    /// The first tick this client sent an input for: before it (a game that came back to its
+    /// race in a new process), what was sent is unknown and nothing is judged.
+    first_sent: Option<u32>,
     last_own: Held,
     mismatch: Option<u32>,
     forged: Option<u32>,
@@ -73,6 +76,7 @@ impl Watch {
             kept: BTreeMap::new(),
             pending: BTreeMap::new(),
             sent: BTreeMap::new(),
+            first_sent: None,
             last_own: Held::default(),
             mismatch: None,
             forged: None,
@@ -113,6 +117,7 @@ impl Watch {
         if let Some(held) = inputs.last() {
             let tick = first.saturating_add(u32::try_from(inputs.len() - 1).unwrap_or(0));
             self.sent.insert(tick, *held);
+            self.first_sent.get_or_insert(tick);
             while self.sent.len() > MAX_SENT {
                 self.sent.pop_first();
             }
@@ -135,8 +140,11 @@ impl Watch {
             while self.sent.first_key_value().is_some_and(|(&t, _)| t < tick) {
                 self.sent.pop_first();
             }
-            if let Some(sent) = self.sent.remove(&tick)
-                && !same(own, sent)
+            // A host applies what this client sent for the tick, or repeats the tick before
+            // when nothing arrived (or this client sent nothing: its present skipped the tick).
+            let sent = self.sent.remove(&tick);
+            if self.first_sent.is_some_and(|first| tick >= first)
+                && sent.is_none_or(|sent| !same(own, sent))
                 && !same(own, self.last_own)
                 && self.forged.is_none()
             {

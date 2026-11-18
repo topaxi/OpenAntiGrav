@@ -330,7 +330,7 @@ pub enum Message {
         room: u32,
     },
     /// Client to lobby: one part of a case against a player host (`crate::fair::Proof`'s bytes
-    /// in [`crate::fair::PART_BYTES`] parts, in order).
+    /// in [`REPORT_PART_BYTES`] parts, in order).
     Report {
         /// The room whose race it is.
         room: u32,
@@ -426,6 +426,11 @@ pub enum Message {
         text: String,
     },
 }
+
+/// The most bytes one [`Message::Report`] part carries: well under the reliable stream's
+/// 256 KiB message, and one a poll keeps a long proof inside a lobby link's 1 MiB send queue.
+/// Chosen.
+pub const REPORT_PART_BYTES: usize = 128 << 10;
 
 /// What the lobby tells a race process it brought up: the race, and who sits where with
 /// the token each person must say in their race hello. Written to the child's standard

@@ -53,6 +53,8 @@ pub struct LobbyClient {
     launch: Option<(u32, RaceJob)>,
     /// Inputs the lobby asked this machine, as a room's host, to show: `(room, seat, tick)`.
     challenges: Vec<(u32, u8, u32)>,
+    /// Report parts still to send, one a poll, so a long proof never fills the link's queue.
+    outgoing: std::collections::VecDeque<Message>,
 }
 
 /// Challenges a host keeps unanswered at most; past it the oldest is dropped.
@@ -87,6 +89,7 @@ impl LobbyClient {
             refused: None,
             launch: None,
             challenges: Vec::new(),
+            outgoing: std::collections::VecDeque::new(),
         }
     }
 
@@ -99,6 +102,9 @@ impl LobbyClient {
         // Read before the queue: a message that lands after this is read on the next poll,
         // never lost behind a close seen after it.
         let closed = self.link.closed();
+        if let Some(part) = self.outgoing.pop_front() {
+            self.link.send_lobby(&part);
+        }
         while let Some(message) = self.link.recv_lobby() {
             match message {
                 Ok(Message::Welcome {
@@ -214,6 +220,29 @@ impl LobbyClient {
             tick,
             datagram,
         });
+    }
+
+    /// Sends the lobby a case against the host of `room`'s race (a `crate::fair::Proof`'s
+    /// bytes), one part each [`Self::poll`].
+    pub fn queue_report(&mut self, room: u32, proof: &[u8]) {
+        let parts: Vec<&[u8]> = proof
+            .chunks(crate::wire::online::REPORT_PART_BYTES)
+            .collect();
+        let count = u16::try_from(parts.len()).unwrap_or(u16::MAX);
+        for (part, bytes) in parts.into_iter().enumerate().take(usize::from(count)) {
+            self.outgoing.push_back(Message::Report {
+                room,
+                part: u16::try_from(part).unwrap_or(u16::MAX),
+                parts: count,
+                bytes: bytes.to_vec(),
+            });
+        }
+    }
+
+    /// Whether report parts are still waiting to be sent.
+    #[must_use]
+    pub fn reporting(&self) -> bool {
+        !self.outgoing.is_empty()
     }
 
     /// Sends the lobby one part of a case against the host of `room`'s race.

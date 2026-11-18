@@ -151,7 +151,6 @@ fn a_proof_round_trips_and_a_malformed_or_oversized_one_is_refused_without_a_pan
         let noise: Vec<u8> = (0..len).map(|i| (i * 37 % 251) as u8).collect();
         let _ = Proof::decode(&noise, 2, 60);
     }
-    assert_eq!(parts(&vec![0; PART_BYTES * 2 + 1]).len(), 3);
 }
 
 #[test]

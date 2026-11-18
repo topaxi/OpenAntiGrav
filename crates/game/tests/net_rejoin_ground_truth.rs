@@ -163,9 +163,15 @@ impl Lab {
 
     /// An `oag-game` of `who`'s profile with `args`, its output in `<who><log>.log`.
     fn game(&self, who: &str, log: &str, args: &[&str]) -> Proc {
+        self.game_env(who, log, args, &[])
+    }
+
+    /// [`Self::game`] with `env` set as well.
+    fn game_env(&self, who: &str, log: &str, args: &[&str], env: &[(&str, &str)]) -> Proc {
         let profile = self.dir.join(who);
         let out = File::create(self.dir.join(format!("{log}.log"))).expect("a log");
         let child = Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .envs(env.iter().copied())
             .arg(&self.image)
             .args(["--no-audio", "--no-intro", "--net-bot"])
             .args(args)
@@ -191,6 +197,17 @@ impl Lab {
 
     /// [`Self::client`] with `extra` arguments as well.
     pub(crate) fn client_with(&self, who: &str, create: bool, extra: &[&str]) -> Proc {
+        self.client_env(who, create, extra, &[])
+    }
+
+    /// [`Self::client_with`] with `env` set as well.
+    pub(crate) fn client_env(
+        &self,
+        who: &str,
+        create: bool,
+        extra: &[&str],
+        env: &[(&str, &str)],
+    ) -> Proc {
         let shot = self.dir.join(format!("{who}.png"));
         let mut args = vec![
             "--online",
@@ -218,7 +235,7 @@ impl Lab {
             ]);
         }
         args.extend(extra);
-        self.game(who, who, &args)
+        self.game_env(who, who, &args, env)
     }
 
     /// The relaunch of `who`: the menus, then ONLINE, then `rest` of the script.
