@@ -157,6 +157,6 @@ RUST_LOG=warn,calloop=warn oag-game ...              # put back the key-repeat n
 RUST_LOG=error oag-game ...                          # only what the player loses
 ```
 
-The defaults live in `init_logging` in `crates/game/src/main.rs` (which carries
+The defaults live in `init_logging` in `crates/game/src/app.rs` (which carries
 the reasoning for `calloop`), `crates/view/src/logging.rs` and
 `crates/trace/src/logging.rs`; the file's is `oag_log::tool::FILE_FILTER`.

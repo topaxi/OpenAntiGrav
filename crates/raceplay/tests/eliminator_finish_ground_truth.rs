@@ -170,7 +170,7 @@ fn a_respawned_craft_keeps_its_place_in_the_race() {
     let mut respawns = 0;
     for _ in 0..4000 {
         race.tick(&parked);
-        let course = race.course().expect("a closed circuit").clone();
+        let course = race.sim.course().expect("a closed circuit").clone();
         for (slot, down) in down.iter_mut().enumerate().take(slots).skip(1) {
             let ship = &race.sim.world.ships[slot];
             let distance = ship.standing.distance(&course);

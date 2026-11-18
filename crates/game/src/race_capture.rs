@@ -59,17 +59,17 @@ pub struct CaptureOptions {
     ///
     /// **The only way a capture can reach a finished race**, so the only way `--screenshot`
     /// shows the results table: `--hold cross` drives into the first wall. See
-    /// [`Race::set_autopilot`], a verification aid.
+    /// [`RaceSim::set_autopilot`](oag_raceplay::RaceSim::set_autopilot), a verification aid.
     pub autopilot: bool,
     /// `--demo`: nobody is in the race ([`Race::fly_as_demo`]).
     pub demo: bool,
     /// `--wallpaper`: a demo nobody can press a button in, so its screen is not drawn.
     pub wallpaper: bool,
-    /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
+    /// `--pilot-assist`: the player's Pilot Assist ([`RaceSim::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
-    /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
+    /// `--autopilot-pilot`: a named pilot, not the baseline. See [`RaceSim::set_autopilot_pilot`].
     pub autopilot_pilot: Option<oag_ai::Pilot>,
-    /// `--autopilot-skill`: a stated AI skill. See [`Race::set_autopilot_tuning`].
+    /// `--autopilot-skill`: a stated AI skill. See [`RaceSim::set_autopilot_tuning`].
     pub autopilot_skill: Option<oag_ai::Difficulty>,
     /// `--ai`. See [`crate::ai_choice`].
     pub ai_choice: crate::ai_choice::AiChoice,
@@ -93,17 +93,17 @@ pub struct CaptureOptions {
     /// Where the flyby's voice-over is read from. See [`crate::sound::prepare_intro_voice`].
     pub music_discs: oag_sound::MusicDiscs,
     /// `--force-wreck TICK:SLOT`: that craft is destroyed at the end of that
-    /// tick. See [`Race::force_destroy`].
+    /// tick. See [`RaceSim::force_destroy`].
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
-    /// `--force-wall-slide TICK:SLOT`: see [`Race::force_wall_slide`].
+    /// `--force-wall-slide TICK:SLOT`: see [`RaceSim::force_wall_slide`].
     pub force_wall_slide: Option<(u32, usize)>,
-    /// `--force-leach-lock TICK:TARGET`: see [`Race::force_leach_lock`].
+    /// `--force-leach-lock TICK:TARGET`: see [`RaceSim::force_leach_lock`].
     pub force_leach_lock: Option<(u32, usize)>,
     /// `--leach-path FILE`, parsed: see [`Race::force_leach_path`].
     pub leach_path: Option<Vec<oag_core::math::Vec3>>,
-    /// `--force-bomb-trip TICK:SLOT`: see [`Race::force_bomb_trip`].
+    /// `--force-bomb-trip TICK:SLOT`: see [`RaceSim::force_bomb_trip`].
     pub force_bomb_trip: Option<(u32, usize)>,
     /// `--force-missile-hit TICK:SLOT`.
     pub force_missile_hit: Option<(u32, usize)>,
@@ -486,7 +486,7 @@ pub fn capture(
         .and(options.pose_boost)
         .filter(|_| options.ticks == 0);
     if let Some(velocities) = &options.field_warmup {
-        race.warm_up_field(velocities, race.field_warm_up_ticks(), warmed_boost);
+        race.warm_up_field(velocities, race.sim.field_warm_up_ticks(), warmed_boost);
         race.warm_up_contact_sparks(velocities, &options.pose_sparks);
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
@@ -522,7 +522,7 @@ pub fn capture(
     let best_lap = previous.and_then(|r| r.best_lap_ticks);
     race.watch_laps(&hud, best_lap);
     race.set_camera_view(options.camera_view);
-    race.apply_launch(&oag_raceplay::Launch {
+    race.sim.apply_launch(&oag_raceplay::Launch {
         scheme: options.scheme,
         difficulty,
         autopilot: options.autopilot,
@@ -533,17 +533,18 @@ pub fn capture(
     });
     campaign_2048_event
         .iter()
-        .for_each(|event| race.arm_event_xp(event));
+        .for_each(|event| race.sim.arm_event_xp(event));
     if options.demo {
         crate::demo::hand_over(&mut race, &title.demo, options.window_layout.len());
     }
     if options.autopilot {
         let skill = options.autopilot_skill.unwrap_or(difficulty);
         if let Some(pilot) = options.autopilot_pilot {
-            race.set_autopilot_pilot(pilot, skill);
+            race.sim.set_autopilot_pilot(pilot, skill);
         }
         if let Some(skill) = options.autopilot_skill {
-            race.set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
+            race.sim
+                .set_autopilot_tuning(skill.tune(&oag_ai::Tuning::default()));
         }
     }
 
@@ -586,7 +587,7 @@ pub fn capture(
         // player's own last crossing, which the window steps on
         // ([`Race::runs_on_after_the_end`]); its cosmetics go on ([`Race::tick_cosmetics`]).
         // Said out loud, so a capture that ran short is not read as a lost tick.
-        if race.finished() && !race.runs_on_after_the_end() {
+        if race.sim.finished() && !race.runs_on_after_the_end() {
             println!(
                 "the race finished on tick {} of the {} asked for; only its cosmetics are driven",
                 race.sim.world.tick, options.ticks

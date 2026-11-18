@@ -5,6 +5,7 @@
 //! **A writer that bypasses these is invisible to a replay.** ADR-0055's rule, now with a place
 //! to be recorded: a new out-of-tick writer gets a [`Kind`] and a method here.
 
+use crate::RaceSim;
 use oag_physics::pilot_assist::Level;
 use oag_replay::{Event, Kind};
 use oag_tables::weapons::{ModKind, Weapon};
@@ -51,7 +52,7 @@ impl Race {
     /// for each person-flown seat so the recording reproduces: the level changes the player's
     /// physics, so a recording that did not hear of the change would desync at the next hash.
     pub fn change_pilot_assist(&mut self, level: Level) {
-        self.set_pilot_assist(level);
+        self.sim.set_pilot_assist(level);
         let seats: Vec<usize> = self.sim.world.human_slots().collect();
         for seat in seats {
             self.record_event(seat, Kind::PilotAssist, ordinal(&Level::ALL, level));
@@ -62,7 +63,7 @@ impl Race {
     /// Hands `slot` the `weapon` when its pickup slot is empty (the capture flag `--give`),
     /// recording the top-up. Returns whether it wrote.
     pub fn give_weapon(&mut self, slot: usize, weapon: Weapon) -> bool {
-        if !self.write_weapon(slot, weapon) {
+        if !self.sim.write_weapon(slot, weapon) {
             return false;
         }
         self.record_event(slot, Kind::Give, ordinal(&STORED_WEAPONS, weapon));
@@ -99,7 +100,7 @@ impl Race {
     /// The driver is seeded from the race seed and the slot and placed on the line where the
     /// craft is, the same on every peer; the person's own driver state was never used.
     pub fn set_away(&mut self, slot: usize) -> bool {
-        let changed = self.write_away(slot);
+        let changed = self.sim.write_away(slot);
         #[cfg(feature = "view")]
         if changed {
             self.record_event(slot, Kind::Presence, 0);
@@ -112,27 +113,29 @@ impl Race {
     /// pickup held before the drop stays held. Absorb cancels the countdown (a recorded
     /// input). Recorded as a [`Kind::Presence`] event. Returns whether the seat changed.
     pub fn hand_back(&mut self, slot: usize) -> bool {
-        let changed = self.write_hand_back(slot);
+        let changed = self.sim.write_hand_back(slot);
         #[cfg(feature = "view")]
         if changed {
             self.record_event(slot, Kind::Presence, 1);
         }
         changed
     }
+}
 
+impl RaceSim {
     fn write_away(&mut self, slot: usize) -> bool {
-        let Some(have) = self.sim.world.controllers.get_mut(slot) else {
+        let Some(have) = self.world.controllers.get_mut(slot) else {
             return false;
         };
         if !have.is_human() {
             return false;
         }
         *have = oag_gameplay::Controller::Away;
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.world.ships[slot];
         ship.autopilot_timer = 0.0;
         ship.handback = false;
         ship.driver = oag_ai::Driver::for_slot(
-            self.sim.race_seed,
+            self.race_seed,
             u32::try_from(oag_gameplay::MAX_SHIPS + slot).unwrap_or(u32::MAX),
         );
         self.locate_player_driver(slot);
@@ -140,20 +143,22 @@ impl Race {
     }
 
     fn write_hand_back(&mut self, slot: usize) -> bool {
-        let Some(have) = self.sim.world.controllers.get_mut(slot) else {
+        let Some(have) = self.world.controllers.get_mut(slot) else {
             return false;
         };
         if *have != oag_gameplay::Controller::Away {
             return false;
         }
         *have = oag_gameplay::Controller::Remote;
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.world.ships[slot];
         ship.autopilot_timer = HAND_BACK_SECONDS;
         ship.handback = true;
         self.locate_player_driver(slot);
         true
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// How many events the recording holds so far, or `None` when this race records nothing.
     #[must_use]
@@ -163,7 +168,9 @@ impl Race {
             .as_ref()
             .map(|recording| recording.recorder.events().len())
     }
+}
 
+impl RaceSim {
     /// Applies a recorded `event`, the way its writer made the change live. A re-drive calls
     /// this for each [`oag_replay::Verifier::events_due`] before it runs the tick.
     ///
@@ -201,7 +208,7 @@ impl Race {
                     _ => return Err(bad),
                 };
                 // Idempotent, as the others: an event a seek applies twice leaves the same seat.
-                if let Some(have) = self.sim.world.controllers.get_mut(seat) {
+                if let Some(have) = self.world.controllers.get_mut(seat) {
                     *have = controller;
                 }
             }
@@ -221,7 +228,7 @@ impl Race {
 
     /// Fills `slot`'s empty pickup slot with `weapon`.
     fn write_weapon(&mut self, slot: usize, weapon: Weapon) -> bool {
-        let Some(ship) = self.sim.world.ships.get_mut(slot) else {
+        let Some(ship) = self.world.ships.get_mut(slot) else {
             return false;
         };
         if ship.pickup.weapon.is_some() {
@@ -230,7 +237,9 @@ impl Race {
         ship.pickup.weapon = Some(weapon);
         true
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     fn record_event(&mut self, seat: usize, kind: Kind, value: u32) {
         let (Some(recording), Ok(seat)) = (self.replay.recording.as_mut(), u8::try_from(seat))

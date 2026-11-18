@@ -112,7 +112,7 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     if let Some(pilot) = pilot {
         // Tempered here rather than in the caller, so a sweep across tiers is
         // asking about the same character at four levels.
-        race.set_ai_pilot(LONE, level.temper(&pilot));
+        race.sim.set_ai_pilot(LONE, level.temper(&pilot));
     }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else - the same isolation `race_ground_truth.rs`'s solo benchmark
@@ -131,9 +131,9 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     let mut airborne_ticks = 0u64;
     let mut was_airborne = false;
     for tick in 0..TICKS {
-        let before = race.respawns_of(LONE);
+        let before = race.sim.respawns_of(LONE);
         race.tick_sim_only(&PlayerInputs::none());
-        if race.respawns_of(LONE) != before {
+        if race.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
         let now = race.sim.world.ships[LONE].standing.lap;
@@ -158,12 +158,12 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
     }
 
     Some(Rolls {
-        armed: race.rolls_armed_of(LONE),
-        spent: race.roll_shield_spent_of(LONE),
+        armed: race.sim.rolls_armed_of(LONE),
+        spent: race.sim.roll_shield_spent_of(LONE),
         shield: race.sim.world.ships[LONE].physics.shield,
         capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
         laps: lap,
-        respawns: race.respawns_of(LONE),
+        respawns: race.sim.respawns_of(LONE),
         best,
         airborne_windows,
         longest_airborne,
@@ -229,7 +229,7 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Ve
     })
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
-    let opponents: Vec<usize> = (1..usize::from(race.ship_count())).collect();
+    let opponents: Vec<usize> = (1..usize::from(race.sim.ship_count())).collect();
     measure_grid(&mut race, &opponents)
 }
 
@@ -265,9 +265,10 @@ fn grid_rolls_mixed_on(
     })
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
-    let opponents: Vec<usize> = (1..usize::from(race.ship_count())).collect();
+    let opponents: Vec<usize> = (1..usize::from(race.sim.ship_count())).collect();
     for (slot, &tier) in opponents.iter().zip(tiers.iter()) {
-        race.set_ai_pilot(*slot, tier.temper(&oag_ai::Pilot::BALANCED));
+        race.sim
+            .set_ai_pilot(*slot, tier.temper(&oag_ai::Pilot::BALANCED));
     }
     let rolls = measure_grid(&mut race, &opponents)?;
     Some(
@@ -299,10 +300,10 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
     let mut was_airborne = vec![false; width];
 
     for tick in 0..TICKS {
-        let before: Vec<u32> = slots.iter().map(|&s| race.respawns_of(s)).collect();
+        let before: Vec<u32> = slots.iter().map(|&s| race.sim.respawns_of(s)).collect();
         race.tick_sim_only(&PlayerInputs::none());
         for (i, &slot) in slots.iter().enumerate() {
-            if race.respawns_of(slot) != before[i] {
+            if race.sim.respawns_of(slot) != before[i] {
                 recovered_this_lap[slot] = true;
             }
             let now = race.sim.world.ships[slot].standing.lap;
@@ -331,12 +332,12 @@ fn measure_grid(race: &mut race::Race, slots: &[usize]) -> Option<Vec<Rolls>> {
         slots
             .iter()
             .map(|&slot| Rolls {
-                armed: race.rolls_armed_of(slot),
-                spent: race.roll_shield_spent_of(slot),
+                armed: race.sim.rolls_armed_of(slot),
+                spent: race.sim.roll_shield_spent_of(slot),
                 shield: race.sim.world.ships[slot].physics.shield,
                 capacity: race.sim.world.ships[slot].handling.dimensions.shield,
                 laps: lap[slot],
-                respawns: race.respawns_of(slot),
+                respawns: race.sim.respawns_of(slot),
                 best: best[slot],
                 airborne_windows: airborne_windows[slot],
                 longest_airborne: longest_airborne[slot],

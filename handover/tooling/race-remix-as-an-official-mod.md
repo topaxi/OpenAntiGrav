@@ -69,18 +69,18 @@ and the LAN fingerprint counts every mod that is on.
    (`pub struct Remix`: `track_title`, `track`, `craft_title`, `team`, `variant`).
    `crates/game/src/settings.rs:128` (`pub remix: Remix`) and the flat keys at
    `settings.rs:1087-1091`. Apply is a match on the string key:
-   `crates/game/src/main/session/apply.rs:771-787`. No generic `mod.<id>.*` table
+   `crates/game/src/app/session/apply.rs:771-787`. No generic `mod.<id>.*` table
    exists. The only mod-keyed table is `[mods] disabled` (ADR-0078).
 5. **LAN fingerprint counts every mod that is on (new, blocks the replay/lobby
    verdict).** `crates/game/src/mods.rs:503-511` (`content_fingerprint`) hashes
    `id@version` of every `player()` mod that is on, skipping only mods under
-   `oag_mod::EXAMPLES`. Callers: `crates/game/src/main/session/online.rs:147-149`,
-   `session/lan.rs:176`, `main/cli/extra.rs:719-721`. `oag_net::discovery::content_fingerprint`
+   `oag_mod::EXAMPLES`. Callers: `crates/game/src/app/session/online.rs:147-149`,
+   `session/lan.rs:176`, `app/cli/extra.rs:719-721`. `oag_net::discovery::content_fingerprint`
    (`crates/net/src/discovery.rs:168`) is what a LAN host compares. So a machine
    with `oag.remix` on and one with it off fingerprint differently, and a join is
    refused. **A menu-only mod would gate multiplayer.** Verified: a LAN row with
    `Compat::OtherContent` is unselectable and shows "DIFFERENT MODS OR CONTENT"
-   (`crates/game/src/main/session/lan.rs:491-505`, `crates/game/src/lan_list.rs:26`),
+   (`crates/game/src/app/session/lan.rs:491-505`, `crates/game/src/lan_list.rs:26`),
    and the online rooms refuse it too (`crates/net/src/online/rooms.rs:294`).
    Today's examples are simulation or track mods, so this does not show yet.
 
@@ -95,15 +95,15 @@ and the LAN fingerprint counts every mod that is on.
 
 | Piece | Where | Verdict |
 | --- | --- | --- |
-| Session pickers and launch | `crates/game/src/main/session/remix.rs` (609 lines) | Remix policy; moves into the mod's vocabulary |
-| Supply/apply call sites | `crates/game/src/main/session/menus.rs` (41 `remix` lines), `apply.rs` (17) | Remix policy |
+| Session pickers and launch | `crates/game/src/app/session/remix.rs` (609 lines) | Remix policy; moves into the mod's vocabulary |
+| Supply/apply call sites | `crates/game/src/app/session/menus.rs` (41 `remix` lines), `apply.rs` (17) | Remix policy |
 | Settings | `crates/game/src/settings/race.rs:183-199`, `settings.rs:128,1087-1091` | Moves to a mod namespace |
 | Catalogue of a title's circuits and roster | `crates/game/src/remix.rs` (143 lines) | Reads `oag_source::remix::Remix`; becomes the generic `TracksOf`/`TeamsOf` source, stays (lane 8b) |
 | Source pair | `crates/source/src/remix.rs` (`Remix::{Single,Split}`, `open` :46, `open_server` :68) | **Stays** (plumbing) |
 | Two-source load | `crates/raceplay/src/load.rs:61-124` (`open` :75, `open_server` :114-115) | **Stays** |
 | Speed-class union | `crates/title/src/speed.rs:223-240` (`is_offered_outside_remix`, `union`) | Title data (ADR-0058); name says Remix, rename later |
-| 2048 REMIX tile | `crates/ui/src/frontend/touch.rs:120-121` (`Remix` variant), `crates/game/src/main/session/launch2048.rs:44` (`push_page("remix")`), `crates/game/src/boot/campaign2048.rs:200-208` (hardcoded `["racebox","remix","multiplayer"]`) | **Engine-coded**; must become mod-driven |
-| Page-id hooks | `crates/game/src/main/session/custom_tracks.rs:103` (`page.id == "remix"`), `crates/game/src/capture/menu_page.rs:188` | Engine-coded by id |
+| 2048 REMIX tile | `crates/ui/src/frontend/touch.rs:120-121` (`Remix` variant), `crates/game/src/app/session/launch2048.rs:44` (`push_page("remix")`), `crates/game/src/boot/campaign2048.rs:200-208` (hardcoded `["racebox","remix","multiplayer"]`) | **Engine-coded**; must become mod-driven |
+| Page-id hooks | `crates/game/src/app/session/custom_tracks.rs:103` (`page.id == "remix"`), `crates/game/src/capture/menu_page.rs:188` | Engine-coded by id |
 | Strings | `assets/ui/strings/english.toml:69-70,206-211` (`OAG_MENU_REMIX*`, `OAG_REMIX_*`), the same 8 ids in `german.toml`, `french.toml`, `portuguesebr.toml` | Move with the page into the mod's `strings/` |
 
 Counting `remix` mentions is not a measure of what leaves. Most of the
@@ -116,7 +116,7 @@ is generalised by lanes 6 and 7, not deleted. No line count is claimed for the m
   `mode`, `class`, `team`, `seed`, `options` (a free map). No remix or source
   field. Filled by `crates/game/src/ghosts.rs:80-81` from a records `Key`.
   **No mod id is needed.**
-- **Records and ghost key** (`crates/game/src/main/stage.rs:528-534`): `title.name`,
+- **Records and ghost key** (`crates/game/src/app/stage.rs:528-534`): `title.name`,
   the circuit, the mode and the class. Reading, not traced to the binding: the
   comment at `load.rs:112` says the title is the track's, so a remix record files
   under the track's title and the craft's title is not recorded. **Unchanged by the

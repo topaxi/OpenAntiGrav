@@ -30,12 +30,12 @@ pub(crate) const AWAY_THRUST: f32 = 0.5;
 /// handler rather than anything the disc authors.
 const AUTOPILOT_WARNING_SECONDS: f32 = 1.0;
 
-impl Race {
+impl RaceSim {
     /// Replaces what the opponents are flown with, mid-race.
     ///
     /// **For measurement, and it is the only way to sweep a knob across a
     /// circuit.** The tuning is otherwise decided once at
-    /// [`Self::start`] from the difficulty, which is right for a race and
+    /// [`Race::start`] from the difficulty, which is right for a race and
     /// useless for finding out what a number is worth: a sweep that had to
     /// recompile between points could not be a test, and a tuning fitted on the
     /// one circuit that happens to be the default is how this page got a grip
@@ -43,12 +43,12 @@ impl Race {
     ///
     /// It is not a difficulty setting and nothing in the game calls it.
     pub fn set_ai_tuning(&mut self, tuning: oag_ai::Tuning) {
-        self.sim.ai_tuning = tuning;
+        self.ai_tuning = tuning;
     }
 
     /// Races a campaign cell at its resolved skill scale (`AI_ResolveSkillScale`'s cell branch,
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`): the field's tuning at that
-    /// position ([`oag_ai::Difficulty::tune_at_scale`], which replaces the one [`Self::start`]
+    /// position ([`oag_ai::Difficulty::tune_at_scale`], which replaces the one [`Race::start`]
     /// took from the difficulty) and the finished player's thrust, which reads the same scale.
     /// Before the first tick; both are simulation state a recording's rebuild must repeat
     /// ([`crate::Launch::campaign_skill`]).
@@ -70,19 +70,19 @@ impl Race {
     /// *aggressive* one therefore had no way to ask, and would have read one
     /// character's numbers as the field's.
     ///
-    /// The pilot is taken as given: [`Self::start`] has already run the level's
+    /// The pilot is taken as given: [`Race::start`] has already run the level's
     /// `Difficulty::temper` over the roster, so a caller sweeping tiers has to
     /// temper it too. It is not a difficulty setting and nothing in the game
     /// calls it.
     pub fn set_ai_pilot(&mut self, slot: usize, pilot: oag_ai::Pilot) {
-        if let Some(entry) = Arc::make_mut(&mut self.sim.ai_pilots).get_mut(slot) {
+        if let Some(entry) = Arc::make_mut(&mut self.ai_pilots).get_mut(slot) {
             *entry = pilot;
         }
     }
 
     /// Flies every opponent as `entry`, tempered by `difficulty` (and a score race's
     /// `crate::score_pace`) - a mod
-    /// campaign event's pilot (ADR-0077), set once after [`Self::start`] and
+    /// campaign event's pilot (ADR-0077), set once after [`Race::start`] and
     /// before the first tick. The pilot's digest replaces each opponent's in
     /// the world, so the state hash names the pilot as `start`'s own deal does.
     pub fn set_opponent_pilot(
@@ -91,14 +91,14 @@ impl Race {
         difficulty: oag_ai::Difficulty,
     ) {
         let tempered = crate::score_pace::ScorePace::temper_opponent(
-            self.sim.score_pace,
+            self.score_pace,
             difficulty,
             &entry.pilot,
         );
-        for pilot in Arc::make_mut(&mut self.sim.ai_pilots).iter_mut().skip(1) {
+        for pilot in Arc::make_mut(&mut self.ai_pilots).iter_mut().skip(1) {
             *pilot = tempered;
         }
-        let world = &mut self.sim.world;
+        let world = &mut self.world;
         for ship in 1..usize::from(world.ship_count) {
             if world.controllers.get(ship).is_some_and(|c| c.is_human()) {
                 continue;
@@ -111,7 +111,7 @@ impl Race {
     /// Tempers `pilot` by `skill` and assigns it to the player's slot, for
     /// `--autopilot-pilot`.
     ///
-    /// The same temper [`Self::start`] runs over an opponent's roster entry,
+    /// The same temper [`Race::start`] runs over an opponent's roster entry,
     /// so naming `aggressive` here is the same character a grid slot could
     /// actually draw at that skill - not a stronger or weaker claim than the
     /// roster makes. `skill` is `--autopilot-skill`'s choice, or the race's
@@ -128,10 +128,10 @@ impl Race {
     /// neither. Logged, because the autopilot otherwise flies the original
     /// on every title ([`Self::autopilot_controls`]).
     fn fly_our_autopilot(&mut self, flag: &str) {
-        if !self.sim.autopilot_ours {
+        if !self.autopilot_ours {
             log::info!("autopilot: {flag} flies this project's driver, not the original's");
         }
-        self.sim.autopilot_ours = true;
+        self.autopilot_ours = true;
     }
 
     /// Overrides the tuning [`Self::autopilot_controls`] flies with, for
@@ -144,7 +144,7 @@ impl Race {
     /// numbers against the field a real race deals, not to replace the
     /// field's own setting mid-race.
     pub fn set_autopilot_tuning(&mut self, tuning: oag_ai::Tuning) {
-        self.sim.autopilot_tuning = Some(tuning);
+        self.autopilot_tuning = Some(tuning);
         self.fly_our_autopilot("--autopilot-skill");
     }
 
@@ -160,7 +160,7 @@ impl Race {
     /// It replaces the mapped input snapshot outright rather than blending with
     /// it, so a run under autopilot is a run nobody is steering. It is flown with
     /// the *player's* recovery, not the opponents', because it is still a person's
-    /// craft going through [`Self::tick`]. That is the same net a human gets, which is what makes a
+    /// craft going through [`Race::tick`]. That is the same net a human gets, which is what makes a
     /// measurement taken under it mean anything about a hand-driven lap.
     ///
     /// **Not the Autopilot pickup**, and the distinction is worth keeping:
@@ -190,7 +190,7 @@ impl Race {
     /// player's craft is flown by the baseline driver rather than by a character
     /// drawn for a slot the roster never dealt.
     pub fn set_autopilot(&mut self, on: bool) {
-        self.sim.autopilot = on;
+        self.autopilot = on;
         if on {
             for slot in 0..oag_gameplay::MAX_PLAYERS {
                 if self.autopilot_flies(slot) {
@@ -204,7 +204,7 @@ impl Race {
     ///
     /// `Race::start` seeds a `Driver` for every opponent slot and none for
     /// slot 0, which has always been a person's. With a person in another slot
-    /// and slot 0 set to `Ai`, [`Self::step_opponents`] drives slot 0 and its
+    /// and slot 0 set to `Ai`, [`Race::step_opponents`] drives slot 0 and its
     /// driver would still be [`oag_ai::Driver::default`]: the plain
     /// line-follower with its line index at zero, which steers at the piece of
     /// line it thinks it is on (the windowed-search trap
@@ -218,11 +218,10 @@ impl Race {
     /// give the seedless default), and the pilot stays the neutral
     /// [`oag_ai::Pilot::BALANCED`] `Race::start` leaves in `ai_pilots[0]`.
     pub(super) fn seed_vacated_driver(&mut self, slot: usize) {
-        if slot != 0 || self.sim.world.ships[0].driver != oag_ai::Driver::default() {
+        if slot != 0 || self.world.ships[0].driver != oag_ai::Driver::default() {
             return;
         }
-        self.sim.world.ships[0].driver =
-            oag_ai::Driver::for_slot(self.sim.race_seed, MAX_SHIPS as u32);
+        self.world.ships[0].driver = oag_ai::Driver::for_slot(self.race_seed, MAX_SHIPS as u32);
         self.locate_player_driver(0);
     }
 
@@ -233,15 +232,14 @@ impl Race {
     /// left at index zero steers at the piece of line it thinks it is on, for
     /// the windowed-search reason [`Self::set_autopilot`] spells out.
     pub(super) fn locate_player_driver(&mut self, slot: usize) {
-        if self.sim.racing_line.is_empty() {
+        if self.racing_line.is_empty() {
             return;
         }
-        let position = self.sim.world.ships[slot].physics.body.position;
+        let position = self.world.ships[slot].physics.body.position;
         let index = self
-            .sim
             .racing_line
-            .nearest(position, 0, self.sim.racing_line.len());
-        let ring = self.sim.racing_line.point(index).distance_squared(position);
+            .nearest(position, 0, self.racing_line.len());
+        let ring = self.racing_line.point(index).distance_squared(position);
         // A craft on a route's own samples is located on that route's line:
         // the ring's nearest point there can be another deck (Pulse
         // `05_Track`, 55 units above; `docs/gameplay/ai.md`).
@@ -251,7 +249,7 @@ impl Race {
         match route {
             Some((route, at, _)) => self.seat_on_route_line(slot, route, at),
             None => {
-                let ship = &mut self.sim.world.ships[slot];
+                let ship = &mut self.world.ships[slot];
                 ship.driver.index = u32::try_from(index).unwrap_or(0);
                 // Located on the ring, so it is on the ring. See
                 // `oag_ai::branch::Branching::on_ring`.
@@ -264,9 +262,8 @@ impl Race {
     /// index in `Course::routes`), at the line's sample nearest the craft. Nothing for a
     /// route the AI has no line for.
     pub(super) fn seat_on_route(&mut self, slot: usize, course_route: usize) {
-        let position = self.sim.world.ships[slot].physics.body.position;
+        let position = self.world.ships[slot].physics.body.position;
         let found = self
-            .sim
             .routes
             .iter()
             .enumerate()
@@ -284,10 +281,10 @@ impl Race {
 
     /// Slot `slot`'s driver at sample `at` of route line `route` (`k + 1`).
     fn seat_on_route_line(&mut self, slot: usize, route: u16, at: usize) {
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.world.ships[slot];
         ship.driver.index = u32::try_from(at).unwrap_or(0);
         ship.driver.branching =
-            self.sim.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
+            self.routes[usize::from(route) - 1].entered(ship.driver.branching, route);
     }
 
     /// Whether slot `slot` is being flown for its person this tick, by any of
@@ -313,9 +310,9 @@ impl Race {
     #[must_use]
     pub fn flown_for_the_player(&self, slot: usize) -> bool {
         self.autopilot_flies(slot)
-            || self.sim.world.ships[slot].standing.finished()
-            || self.sim.world.ships[slot].autopilot_timer > 0.0
-            || self.sim.world.ships[slot]
+            || self.world.ships[slot].standing.finished()
+            || self.world.ships[slot].autopilot_timer > 0.0
+            || self.world.ships[slot]
                 .disruption
                 .autopilot_thrust_scale()
                 .is_some()
@@ -327,13 +324,15 @@ impl Race {
     /// race ends when every person has). A remote slot is somebody else's craft
     /// and is never taken. With one person this is `slot == primary`, as it was.
     pub(super) fn autopilot_flies(&self, slot: usize) -> bool {
-        self.sim.autopilot
-            && (slot == self.sim.world.primary_slot()
+        self.autopilot
+            && (slot == self.world.primary_slot()
                 || (slot < oag_gameplay::MAX_PLAYERS
-                    && self.sim.world.controllers[slot] == oag_gameplay::Controller::Local
-                    && self.sim.world.person_flown(slot)))
+                    && self.world.controllers[slot] == oag_gameplay::Controller::Local
+                    && self.world.person_flown(slot)))
     }
+}
 
+impl Race {
     /// Counts the Autopilot pickup down and lets go of the craft at zero.
     ///
     /// `Autopilot_Update` (`0x08861404`), ported: subtract `dt`, raise the
@@ -426,13 +425,17 @@ impl Race {
             self.raise_disengaging(slot);
         }
     }
+}
 
+impl RaceSim {
     /// Whether the player's craft is being driven for them.
     #[must_use]
     pub fn autopilot(&self) -> bool {
-        self.sim.autopilot
+        self.autopilot
     }
+}
 
+impl Race {
     /// What the player's own driver would ask of `slot`'s craft now, with the
     /// simulation left exactly as it was.
     ///
@@ -451,16 +454,18 @@ impl Race {
         let kept = self.sim.clone();
         match driver {
             Some(own) => self.sim.world.ships[slot].driver = *own,
-            None => self.locate_player_driver(slot),
+            None => self.sim.locate_player_driver(slot),
         }
         // This project's driver: the original's keeps state outside the
         // world, which the restore below would reset every call.
-        let wants = self.our_autopilot_controls(slot);
+        let wants = self.sim.our_autopilot_controls(slot);
         *driver = Some(self.sim.world.ships[slot].driver);
         self.sim = kept;
         wants
     }
+}
 
+impl RaceSim {
     /// What the player's own driver wants this tick: the original's
     /// ([`Self::original_autopilot_controls`]) on every title whose AI tables
     /// read, whatever the opponents fly, else this project's
@@ -469,7 +474,7 @@ impl Race {
     /// `Ai_Update` with the player's branches: lane `0`, thrust `100`, the
     /// rail kept through contact. See `oag_ai::original::Autopilot`.
     pub(super) fn autopilot_controls(&mut self, slot: usize) -> oag_physics::ShipControls {
-        if !self.sim.autopilot_ours
+        if !self.autopilot_ours
             && let Some(controls) = self.original_autopilot_controls(slot, true)
         {
             return controls;
@@ -489,44 +494,44 @@ impl Race {
         slot: usize,
         relocate: bool,
     ) -> Option<oag_physics::ShipControls> {
-        if self.sim.original_tables.is_none() || self.sim.racing_line.is_empty() {
+        if self.original_tables.is_none() || self.racing_line.is_empty() {
             return None;
         }
-        if self.sim.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
+        if self.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing {
             self.release_autopilot(slot);
             return Some(oag_physics::ShipControls::default());
         }
         // A stint that starts mid-race finds the craft wherever it is, for
         // the windowed-search reason `Self::set_autopilot` gives.
         if relocate
-            && self.sim.autopilots[slot]
+            && self.autopilots[slot]
                 .as_ref()
                 .is_none_or(|autopilot| autopilot.is_cold())
         {
             self.locate_player_driver(slot);
         }
         self.steer_branching(slot, true);
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.world.ships[slot];
         let position = ship.physics.body.position;
         let route = ship.driver.branching.route;
         // This project's driver only locates the craft on the line, as for an
         // original opponent: the original's reads its own sample through it.
         ship.driver.locate(
-            super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
+            super::routes::line_for(&self.routes, &self.racing_line, route),
             position,
         );
         let output = self.drive_original_autopilot(slot)?;
-        self.sim.autopilot_rail[slot] = output.rail;
+        self.autopilot_rail[slot] = output.rail;
         Some(output.controls)
     }
 
     /// The craft went back to its pilot: the next autopilot stint starts
     /// warm again, and no rail write is left queued.
     pub(super) fn release_autopilot(&mut self, slot: usize) {
-        if let Some(autopilot) = self.sim.autopilots.get_mut(slot).and_then(Option::as_mut) {
+        if let Some(autopilot) = self.autopilots.get_mut(slot).and_then(Option::as_mut) {
             autopilot.release();
         }
-        if let Some(rail) = self.sim.autopilot_rail.get_mut(slot) {
+        if let Some(rail) = self.autopilot_rail.get_mut(slot) {
             *rail = None;
         }
     }
@@ -540,7 +545,7 @@ impl Race {
     /// hits more walls and, on HD, gets rescued more (`docs/gameplay/ai.md`,
     /// "An opponent's Autopilot, wired below PHANTOM").
     pub fn set_opponent_autopilot(&mut self, on: bool) {
-        self.sim.opponent_autopilot = on;
+        self.opponent_autopilot = on;
     }
 
     /// Hands opponent `slot` to the original's player driver for the
@@ -550,14 +555,10 @@ impl Race {
     pub fn engage_opponent_autopilot(&mut self, slot: usize) -> bool {
         // The original's own field never fires it outside an Eliminator
         // (`WeaponAi_Update`'s default arm): it keeps the absorb.
-        if !self.sim.opponent_autopilot
-            || self.sim.world.person_flown(slot)
-            || self.original_ai_active()
-        {
+        if !self.opponent_autopilot || self.world.person_flown(slot) || self.original_ai_active() {
             return false;
         }
         let Some(time) = self
-            .sim
             .weapons
             .as_deref()
             .and_then(|weapons| weapons.simple(oag_tables::weapons::Weapon::Autopilot))
@@ -565,7 +566,7 @@ impl Race {
         else {
             return false;
         };
-        self.sim.world.ships[slot].autopilot_timer = time;
+        self.world.ships[slot].autopilot_timer = time;
         true
     }
 
@@ -579,21 +580,21 @@ impl Race {
         oag_physics::ShipControls,
         Option<oag_ai::original::RailCorrection>,
     )> {
-        if !self.sim.opponent_autopilot {
+        if !self.opponent_autopilot {
             return None;
         }
-        let route = self.sim.world.ships[slot].driver.branching.route;
-        let line = super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route);
+        let route = self.world.ships[slot].driver.branching.route;
+        let line = super::routes::line_for(&self.routes, &self.racing_line, route);
         // A jump's run-up is flown by this project's driver, which takes it
         // at the plan's clearing speed: chosen, `docs/gameplay/ai.md`.
-        if self.sim.world.ships[slot].autopilot_timer <= 0.0
-            || self.sim.world.ships[slot].driver.on_run_up(line)
+        if self.world.ships[slot].autopilot_timer <= 0.0
+            || self.world.ships[slot].driver.on_run_up(line)
         {
             self.release_autopilot(slot);
             return None;
         }
         let controls = self.original_autopilot_controls(slot, false)?;
-        Some((controls, self.sim.autopilot_rail[slot].take()))
+        Some((controls, self.autopilot_rail[slot].take()))
     }
 
     /// The wall counters for `slot` after its step: bookkeeping outside
@@ -612,14 +613,14 @@ impl Race {
         if !was_racing {
             return;
         }
-        self.sim.wall_racing_ticks[slot] += 1;
+        self.wall_racing_ticks[slot] += 1;
         if wall.contacts > wall.floor_contacts {
-            self.sim.wall_contact_ticks[slot] += 1;
-            self.sim.extensions.wall_contact(slot);
+            self.wall_contact_ticks[slot] += 1;
+            self.extensions.wall_contact(slot);
             if wall.impact {
-                self.sim.wall_inbound_ticks[slot] += 1;
+                self.wall_inbound_ticks[slot] += 1;
             }
-            self.sim.wall_damage[slot] +=
+            self.wall_damage[slot] +=
                 oag_physics::damage::contact_damage(wall.impulse_sum, damage_rules);
         }
     }
@@ -630,7 +631,7 @@ impl Race {
     /// the same view of the field - through slot 0's own [`oag_ai::Driver`],
     /// which is on the ship like everyone else's and so inside the world
     /// snapshot. A wrecked craft is released rather than driven, for the
-    /// reason [`Self::step_opponents`] gives.
+    /// reason [`Race::step_opponents`] gives.
     ///
     /// **The tuning is the one exception.** [`RaceSim::autopilot_tuning`], not
     /// [`RaceSim::ai_tuning`], when `--autopilot-skill` set it - see
@@ -639,9 +640,9 @@ impl Race {
         self.steer_branching(slot, false);
         let places = self.places();
         let field = self.field_for(slot, &places);
-        let pilot = self.sim.ai_pilots[slot];
-        let tuning = self.sim.autopilot_tuning.unwrap_or(self.sim.ai_tuning);
-        let ship = &mut self.sim.world.ships[slot];
+        let pilot = self.ai_pilots[slot];
+        let tuning = self.autopilot_tuning.unwrap_or(self.ai_tuning);
+        let ship = &mut self.world.ships[slot];
         if ship.physics.craft_state != oag_physics::CraftState::Racing {
             return oag_physics::ShipControls::default();
         }
@@ -652,16 +653,16 @@ impl Race {
         ship.driver.drive(
             &ship.physics,
             &oag_ai::Context {
-                line: super::routes::line_for(&self.sim.routes, &self.sim.racing_line, route),
+                line: super::routes::line_for(&self.routes, &self.racing_line, route),
                 tuning: &tuning,
                 pilot: &pilot,
                 field: &field,
                 yaw_ceiling: Some(yaw_ceiling),
                 air_trim: oag_ai::air_trim(&ship.handling, ship.physics.air_pitch_bias),
                 plan: super::routes::plan_for(
-                    &self.sim.routes,
-                    self.sim.speed_plan.as_deref(),
-                    super::speed_plan::hull_of(&self.sim.hull_plans, self.sim.ship_plan[slot]),
+                    &self.routes,
+                    self.speed_plan.as_deref(),
+                    super::speed_plan::hull_of(&self.hull_plans, self.ship_plan[slot]),
                     route,
                 ),
             },
@@ -678,7 +679,7 @@ impl Race {
     /// driving badly, and those two have nothing in common as bugs.
     #[must_use]
     pub fn racing_line(&self) -> &oag_ai::Line {
-        &self.sim.racing_line
+        &self.racing_line
     }
 
     /// The spline sample a driver's index stands on.
@@ -693,13 +694,13 @@ impl Race {
     #[must_use]
     pub fn ai_sample(&self, ai_index: usize) -> Option<&Sample> {
         self.sample_index_of(ai_index)
-            .and_then(|index| self.sim.spline.sample(index))
+            .and_then(|index| self.spline.sample(index))
     }
 
     /// The same lookup, as an index into [`RaceSim::spline`].
     ///
     /// For the one caller that needs the number rather than the sample:
-    /// [`Self::respawn`] takes a *sample* index, because the player reaches it
+    /// [`Race::respawn`] takes a *sample* index, because the player reaches it
     /// from `Spline::nearest` and an opponent from its driver, and a single
     /// parameter carrying two index spaces depending on the caller is the bug
     /// this pair of accessors exists to make impossible to write.
@@ -707,10 +708,10 @@ impl Race {
     /// [`Self::ai_sample_index`] is the public half, for a diagnostic that
     /// needs the number rather than the sample.
     pub(super) fn sample_index_of(&self, ai_index: usize) -> Option<usize> {
-        if self.sim.ai_order.is_empty() {
+        if self.ai_order.is_empty() {
             return None;
         }
-        Some(self.sim.ai_order[ai_index % self.sim.ai_order.len()] as usize)
+        Some(self.ai_order[ai_index % self.ai_order.len()] as usize)
     }
 
     /// Which spline sample a racing-line index maps to.
@@ -723,7 +724,9 @@ impl Race {
     pub fn ai_sample_index(&self, ai_index: usize) -> Option<usize> {
         self.sample_index_of(ai_index)
     }
+}
 
+impl Race {
     /// Drives and steps every craft that is not the player's.
     ///
     /// Slot order, and only slot order: iteration here feeds simulation state, so
@@ -741,7 +744,7 @@ impl Race {
     /// truth for long enough to mislead: pads of both classes, a standing that
     /// counts *and times* its laps, an `Exhaust`, a livery, a pickup it can spend
     /// ([`Self::spend_opponent_pickup`]), a target for what it fires
-    /// (`Race::opponent_decides`), and two ways of being put back - the
+    /// (`RaceSim::opponent_decides`), and two ways of being put back - the
     /// authored reset volumes and, below, the two dwell counters for a craft that
     /// has left the circuit or stopped on it.
     ///
@@ -753,7 +756,7 @@ impl Race {
         let places = self.places();
         // The campaign's original field, when on: its round robin advances
         // once a tick before any driver, as `AiManager_Update` does.
-        let lane_slot = self.original_ai_begin_tick();
+        let lane_slot = self.sim.original_ai_begin_tick();
         #[cfg(feature = "view")]
         {
             self.view.field_sparks.walls = [None; oag_gameplay::MAX_SHIPS];
@@ -766,7 +769,7 @@ impl Race {
             if !self.sim.world.ships[slot].in_world() || self.sim.world.person_flown(slot) {
                 continue;
             }
-            self.seed_vacated_driver(slot);
+            self.sim.seed_vacated_driver(slot);
 
             // **A wrecked opponent stops driving, and is still stepped.** A single
             // race runs with `Damage` on - see `oag_gameplay::damage_rules` - so
@@ -784,8 +787,8 @@ impl Race {
             // original's state 6 does (measured live). See
             // `oag_physics::damage::CraftState` and `crate::eliminator`.
             let pilot = self.sim.ai_pilots[slot];
-            let field = self.field_for(slot, &places);
-            self.steer_branching(slot, false);
+            let field = self.sim.field_for(slot, &places);
+            self.sim.steer_branching(slot, false);
             let ship = &mut self.sim.world.ships[slot];
             let route = ship.driver.branching.route;
             let handling = ship.handling;
@@ -796,7 +799,7 @@ impl Race {
             let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
             let mut rail = None;
             let flown = if was_racing && lane_slot.is_none() {
-                self.opponent_autopilot_controls(slot)
+                self.sim.opponent_autopilot_controls(slot)
             } else {
                 None
             };
@@ -832,7 +835,7 @@ impl Race {
                     air_trim: 0.0,
                     plan: None,
                 });
-                let output = self.drive_original(slot, lane_slot, &places);
+                let output = self.sim.drive_original(slot, lane_slot, &places);
                 rail = output.and_then(|output| output.rail);
                 output.map_or_else(oag_physics::ShipControls::default, |output| output.controls)
             } else if was_racing {
@@ -878,10 +881,10 @@ impl Race {
                 controls.thrust = 0.0;
             }
             // An Eliminator leader waits for the pack; only ever a reduction.
-            controls.thrust *= self.eliminator_pack_scale(slot);
+            controls.thrust *= self.sim.eliminator_pack_scale(slot);
             // An opponent under a Disruptor: always AI-driven, so the Stall
-            // passes it by and the rest apply. See `Race::disrupted_controls`.
-            controls = self.disrupted_controls(slot, controls, true);
+            // passes it by and the rest apply. See `RaceSim::disrupted_controls`.
+            controls = self.sim.disrupted_controls(slot, controls, true);
             // A person's seat whose link has dropped crawls round: the driver in their
             // place must never be a shortcut (`Race::set_away`).
             let away = self.sim.world.controllers[slot] == oag_gameplay::Controller::Away;
@@ -907,9 +910,13 @@ impl Race {
             // The driver just located itself, and the line is index-parallel to
             // `ai_order`, so this costs a lookup rather than a search.
             let index = self.sim.world.ships[slot].driver.index as usize;
-            let track_sample = self.ai_sample_for(slot, index).map(Spline::track_sample);
-            self.record_track_up(slot, track_sample);
+            let track_sample = self
+                .sim
+                .ai_sample_for(slot, index)
+                .map(Spline::track_sample);
+            self.sim.record_track_up(slot, track_sample);
             let track_sample_next = self
+                .sim
                 .ai_sample_for(slot, index + 1)
                 .map(Spline::track_sample)
                 .or(track_sample);
@@ -962,7 +969,7 @@ impl Race {
             if self.draws() {
                 self.view.field_sparks.walls[slot] = Some(evaluated.wall);
             }
-            let reset_contact = self.reset_zone_contact(slot, &env, position);
+            let reset_contact = self.sim.reset_zone_contact(slot, &env, position);
             let eliminator_route = self.sim.world.mode() == Mode::Eliminator;
             let cage = oag_gameplay::cage::pass(
                 self.sim.spline.cage(),
@@ -974,19 +981,21 @@ impl Race {
             self.sim.cage_reset[slot] = cage.reset;
             #[cfg(feature = "view")]
             self.throw_cage_sparks(slot, &cage);
-            self.lay_crumb(
+            self.sim.lay_crumb(
                 slot,
-                self.ai_sample_for(slot, index).map(|sample| sample.flags),
+                self.sim
+                    .ai_sample_for(slot, index)
+                    .map(|sample| sample.flags),
             );
             if lane_slot.is_some() {
-                self.original_ai_contacts(slot, &evaluated.wall);
+                self.sim.original_ai_contacts(slot, &evaluated.wall);
             }
             // **An opponent's hull sounds too**, on its own 0.8-second re-arm
             // and off its own emitter. `shielded` is `false` because nothing
             // hands an opponent a Shield yet - the same gap the shell bulge
             // below records - so the silent branch is unreachable here rather
             // than suppressed.
-            self.raise_wall_cue(slot, &evaluated.wall, false);
+            self.sim.raise_wall_cue(slot, &evaluated.wall, false);
             // The wall counters, on the same footing as the roll ones below:
             // bookkeeping, outside `state_hash`, and the only thing in this
             // project that can see the standard an Ace is held to - lapping
@@ -1006,7 +1015,8 @@ impl Race {
             // ticks against 328 before a tuning change that *halved* what the
             // walls charged it, and `07_Track` charged 122.05 against a pool of
             // 95.00. Both are the wreck, not the driving.
-            self.count_wall_contact(slot, was_racing, &evaluated.wall, damage_rules);
+            self.sim
+                .count_wall_contact(slot, was_racing, &evaluated.wall, damage_rules);
             // Bookkeeping for the deviation, not state the race reads back: our
             // opponents barrel-roll and the original's never do, so what an
             // opponent spends on them has to be countable on the disc's own
@@ -1038,15 +1048,15 @@ impl Race {
             // sample the craft was on before the step - the last place it is
             // known to have been on the track. Mapped out of the driver's index
             // space, because [`Self::respawn`] speaks the sample table's.
-            let last_good = self.sample_index_of(index);
+            let last_good = self.sim.sample_index_of(index);
             self.sim.respawn_cooldown[slot] = self.sim.respawn_cooldown[slot].saturating_sub(1);
             // Unconditionally, and before the `||` could skip it: **both** dwell
             // counters have to see every tick or a craft banks time it never
             // spent away. Two `let`s rather than two terms of the `if`, because
             // `||` short-circuits and the second counter would then only advance
             // on ticks the first one happened not to fire.
-            let beneath = self.beneath_too_long(slot);
-            let stalled = self.stalled(slot);
+            let beneath = self.sim.beneath_too_long(slot);
+            let stalled = self.sim.stalled(slot);
             // **Not a wreck.** A destroyed craft is coasting by definition, so
             // the stall dwell would fire on it and `Race::respawn` - whose
             // `place_at` rebuilds the physics state - would put it back on
@@ -1057,12 +1067,12 @@ impl Race {
             // so a craft that comes back stalled is rescued on time.
             let alive =
                 self.sim.world.ships[slot].physics.craft_state == oag_physics::CraftState::Racing;
-            let reset = self.reset_zone_touched(slot, reset_contact);
-            let airborne = self.airborne_too_long(slot);
-            let located = self.located_sample_of(slot, index);
-            let distant = self.far_from_the_sample(slot, located);
+            let reset = self.sim.reset_zone_touched(slot, reset_contact);
+            let airborne = self.sim.airborne_too_long(slot);
+            let located = self.sim.located_sample_of(slot, index);
+            let distant = self.sim.far_from_the_sample(slot, located);
             let cage = std::mem::take(&mut self.sim.cage_reset[slot])
-                && self.armed(slot, self.sim.reset_triggers.cage);
+                && self.sim.armed(slot, self.sim.reset_triggers.cage);
             if alive && (beneath || stalled || airborne || distant || reset || cage) {
                 let cause = if beneath {
                     respawn::RespawnCause::Beneath
@@ -1090,9 +1100,11 @@ impl Race {
             }
         }
         // The race manager's field-wide writes the next tick's drivers read.
-        self.original_ai_end_tick(&places);
+        self.sim.original_ai_end_tick(&places);
     }
+}
 
+impl RaceSim {
     /// Advances every active craft's [`oag_race::Standing`].
     ///
     /// Slot order, and slot order only: this feeds the finishing order, which is
@@ -1110,14 +1122,14 @@ impl Race {
         // cloning a `Course` once a tick to satisfy the borrow checker would be
         // a `Vec` copy per frame for nothing.
         let finished_before: [bool; oag_gameplay::MAX_PLAYERS] =
-            std::array::from_fn(|slot| self.sim.world.ships[slot].standing.finished());
+            std::array::from_fn(|slot| self.world.ships[slot].standing.finished());
         let laps_before: [u32; MAX_SHIPS] =
-            std::array::from_fn(|slot| self.sim.world.ships[slot].standing.lap);
-        if let Some(course) = &self.sim.course {
-            advance_standings(&mut self.sim.world, course);
+            std::array::from_fn(|slot| self.world.ships[slot].standing.lap);
+        if let Some(course) = &self.course {
+            advance_standings(&mut self.world, course);
         }
         for (slot, &before) in laps_before.iter().enumerate() {
-            if self.sim.world.ships[slot].standing.lap > before {
+            if self.world.ships[slot].standing.lap > before {
                 self.credit_lap_points(slot);
             }
         }
@@ -1126,25 +1138,29 @@ impl Race {
         // put it on the piece of line the craft is actually on, for the
         // windowed-search reason `Self::set_autopilot` spells out.
         for (slot, &was_finished) in finished_before.iter().enumerate() {
-            if self.sim.world.person_flown(slot)
+            if self.world.person_flown(slot)
                 && !was_finished
-                && self.sim.world.ships[slot].standing.finished()
+                && self.world.ships[slot].standing.finished()
             {
                 self.locate_player_driver(slot);
             }
         }
     }
+}
 
+impl Race {
     /// Every craft's race position, `1`-based, in slot order.
     ///
     /// Inactive slots are placed too - they are at the start line and last,
     /// which is where a slot with no craft in it belongs. A caller that cares
-    /// reads [`Self::ship_count`] first.
+    /// reads [`RaceSim::ship_count`] first.
     #[must_use]
     pub fn places(&self) -> [u8; MAX_SHIPS] {
         self.sim.places()
     }
+}
 
+impl RaceSim {
     /// What slot `slot` can see of the rest of the grid.
     ///
     /// **`Field::EMPTY` when the track has no closed ring.** `Standing::distance`
@@ -1161,10 +1177,10 @@ impl Race {
     /// times a tick to get the same answer.
     #[must_use]
     pub(super) fn field_for(&self, slot: usize, places: &[u8; MAX_SHIPS]) -> oag_ai::Field {
-        let Some(course) = &self.sim.course else {
+        let Some(course) = &self.course else {
             return oag_ai::Field::EMPTY;
         };
-        let mine = &self.sim.world.ships[slot];
+        let mine = &self.world.ships[slot];
         if !mine.in_world() {
             return oag_ai::Field::EMPTY;
         }
@@ -1182,8 +1198,8 @@ impl Race {
         let (mut best_ahead, mut best_behind, mut best_alongside) =
             (f32::INFINITY, f32::INFINITY, f32::INFINITY);
 
-        let ship_count = self.sim.world.ship_count as usize;
-        for (other, them) in self.sim.world.ships.iter().enumerate().take(ship_count) {
+        let ship_count = self.world.ship_count as usize;
+        for (other, them) in self.world.ships.iter().enumerate().take(ship_count) {
             if other == slot || !them.in_world() {
                 continue;
             }
@@ -1235,9 +1251,11 @@ impl Race {
     /// The lap counter's ring, for a caller that wants to measure against it.
     #[must_use]
     pub fn course(&self) -> Option<&Course> {
-        self.sim.course.as_deref()
+        self.course.as_deref()
     }
+}
 
+impl Race {
     /// The player's own race position, `1`-based.
     #[must_use]
     pub fn player_place(&self) -> u8 {
@@ -1347,12 +1365,13 @@ impl Race {
                     // (collision-cues.md, "A pair record has no normal"). The stale normal
                     // that slot otherwise holds is not modelled.
                     for slot in [a, b] {
-                        self.note_contact_impulse(slot, contact.impulse, true, 0.0);
+                        self.sim
+                            .note_contact_impulse(slot, contact.impulse, true, 0.0);
                     }
                     // The original driver reads the record next tick: its lane
                     // planner pushes away from the rival and its rail lets go.
                     for slot in [a, b] {
-                        self.original_ai_pair_contact(slot, contact.point);
+                        self.sim.original_ai_pair_contact(slot, contact.point);
                     }
                     for slot in [a, b] {
                         let ship = &mut self.sim.world.ships[slot];

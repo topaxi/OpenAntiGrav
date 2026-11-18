@@ -102,7 +102,7 @@ impl Scene {
         }
         let drawing = race.viewed_slot();
         let wanted = views.iter().find_map(|&(slot, rect)| {
-            let request = race.extension_portal_view(slot)?;
+            let request = race.sim.extension_portal_view(slot)?;
             if let Some(held) = self.held_snapshot(slot, &request) {
                 self.portal_engine.set(Some((slot, held)));
                 return None;

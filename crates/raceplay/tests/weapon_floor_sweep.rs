@@ -64,8 +64,8 @@ fn field_run(seed: u64, tuning: oag_ai::Tuning) -> Option<FieldRun> {
     let level = options.difficulty;
     let loaded = race::load(&options).ok()?;
     let mut race = race::Race::start(loaded.setup);
-    race.set_ai_tuning(level.tune(&tuning));
-    let opponents = 1..usize::from(race.ship_count());
+    race.sim.set_ai_tuning(level.tune(&tuning));
+    let opponents = 1..usize::from(race.sim.ship_count());
     let full = race.sim.world.ships[1].handling.dimensions.shield;
     for _ in 0..3_600 {
         race.tick(&PlayerInputs::none());
@@ -121,11 +121,11 @@ fn lap_completion_run(seed: u64, tuning: oag_ai::Tuning) -> Option<(usize, usize
     let level = options.difficulty;
     let loaded = race::load(&options).ok()?;
     let mut race = race::Race::start(loaded.setup);
-    race.set_ai_tuning(level.tune(&tuning));
+    race.sim.set_ai_tuning(level.tune(&tuning));
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
     }
-    let lapped: Vec<usize> = (1..usize::from(race.ship_count()))
+    let lapped: Vec<usize> = (1..usize::from(race.sim.ship_count()))
         .filter(|&slot| race.sim.world.ships[slot].standing.lap >= 2)
         .collect();
     let untimed = lapped

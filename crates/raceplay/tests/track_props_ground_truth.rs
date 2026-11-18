@@ -230,8 +230,8 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
-    let pads = race.speedup_pads().to_vec();
+    race.sim.set_autopilot(true);
+    let pads = race.sim.speedup_pads().to_vec();
     let mut input = oag_gameplay::input::Input::new();
     let ticks = (0..TICKS)
         .map(|_| {
@@ -248,6 +248,7 @@ fn run(track: &Path, with: Vec<race::extensions::Source>) -> Option<(Vec<Tick>, 
                 push: ship.physics.pad_direction.length(),
                 plume: race.exhaust().boost_timer(),
                 pad_sounds: race
+                    .sim
                     .drain_cues()
                     .iter()
                     .filter(|c| c.cue == oag_gameplay::cue::Cue::SpeedupPad && c.slot == 0)
@@ -287,8 +288,8 @@ fn a_pads_authored_boost_doubles_that_pad_alone() {
     let (entry, pad) = first_pad(&vanilla);
     let file = hillside(Some(pad), "double").unwrap();
     let (modded, race) = run(&file, vec![pad_reader(pad)]).unwrap();
-    assert!(race.is_modded());
-    let pads = race.speedup_pads();
+    assert!(race.sim.is_modded());
+    let pads = race.sim.speedup_pads();
     let unit = |p: usize| {
         let d = pads[p].direction().unwrap();
         (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
@@ -345,7 +346,7 @@ fn a_slot_held_at_zero_gets_no_push_plume_or_sound_and_still_hears_each_pad() {
     let (held, race) = run(&plain, vec![pad_holder()]).unwrap();
     let vanilla_entries = entries(&vanilla).len();
     let heard = u32::from_le_bytes(
-        race.extension_state(0).expect("the module ran")[..4]
+        race.sim.extension_state(0).expect("the module ran")[..4]
             .try_into()
             .unwrap(),
     );
@@ -422,7 +423,7 @@ fn portal() -> race::extensions::Source {
 
 /// The course ring point nearest `at`, and its position.
 fn ring_point_at(race: &race::Race, progress: f32) -> Vec3 {
-    let course = race.course().expect("a course");
+    let course = race.sim.course().expect("a course");
     let index = course.index_at_progress(progress).expect("on the lap");
     course.position(index).expect("a ring point")
 }
@@ -445,7 +446,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
         })
         .expect("loading the race");
         let race = race::Race::start(loaded.setup);
-        let length = race.course().expect("a course").length();
+        let length = race.sim.course().expect("a course").length();
         (
             ring_point_at(&race, 150.0),
             ring_point_at(&race, length * 0.6),
@@ -465,7 +466,7 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     let mut input = oag_gameplay::input::Input::new();
     let mut tick = |race: &mut race::Race| {
         input.begin_frame(Button::Cross.bit());
@@ -485,7 +486,12 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     }
     let before = before.expect("the craft entered the first trigger and the module answered");
     let went = race.sim.world.ships[0].transit.expect("in transit");
-    let to = race.course().unwrap().position(went.to as usize).unwrap();
+    let to = race
+        .sim
+        .course()
+        .unwrap()
+        .position(went.to as usize)
+        .unwrap();
     assert!(
         to.distance(exit) < 5.0,
         "the exit is the course point at the second trigger's centre"
@@ -510,7 +516,9 @@ fn a_transit_to_a_trigger_comes_out_where_the_trigger_stands() {
     );
 
     // A trigger the track does not have is a refusal that names it.
-    let refused = race.begin_transit(0, 2, race::transit::Distance::Trigger(9), 1.0);
+    let refused = race
+        .sim
+        .begin_transit(0, 2, race::transit::Distance::Trigger(9), 1.0);
     assert!(
         refused.unwrap_err().contains("no trigger 9"),
         "named by its index"

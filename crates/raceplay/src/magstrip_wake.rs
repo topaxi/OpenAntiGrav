@@ -149,14 +149,14 @@ impl Race {
             if !wakes.arcs {
                 continue;
             }
-            if !self.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
+            if !self.sim.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
                 continue;
             }
             let Some(craft) = self.wake_craft(slot, anchor) else {
                 continue;
             };
             let from = self.sim.world.ships[slot].physics.body.position;
-            let walk = |ahead: f32| self.walk_track(from, ahead);
+            let walk = |ahead: f32| self.sim.walk_track(from, ahead);
             wakes.wakes[slot].advance(dt, over, &craft, &walk);
         }
         self.view.magstrip_wake = Some(wakes);
@@ -169,7 +169,7 @@ impl Race {
         let Some(handles) = wakes.pob.as_mut() else {
             return;
         };
-        let live = over && self.ship_active(slot);
+        let live = over && self.sim.ship_active(slot);
         match (handles[slot], live) {
             (None, true) => {
                 let trigger = if self.sim.world.mode() == Mode::Zone {
@@ -238,12 +238,14 @@ impl Race {
         }
         Some(craft)
     }
+}
 
+impl RaceSim {
     /// The track `ahead` units along the spline from the sample nearest `from`,
     /// negative for behind, as [`Placement`]. **Chosen, not measured** - the
     /// original walks its AI-track data; see `oag_fx::magstrip`.
     fn walk_track(&self, from: Vec3, ahead: f32) -> Option<Placement> {
-        let spline = &self.sim.spline;
+        let spline = &self.spline;
         let (mut index, _, _) = spline.nearest(from)?;
         let path = spline.path_of(index);
         let step: isize = if ahead >= 0.0 { 1 } else { -1 };
@@ -275,7 +277,9 @@ impl Race {
             half_width_right: sample.half_width_right,
         })
     }
+}
 
+impl Race {
     /// This frame's wake geometry, `(atlas batch, contact batch)`, seen from the
     /// camera. Empty on a title without the class, and for a craft out of play.
     #[must_use]
@@ -294,7 +298,7 @@ impl Race {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;
             };
-            if !self.ship_active(slot) || wakes.wakes[slot].live() == 0 {
+            if !self.sim.ship_active(slot) || wakes.wakes[slot].live() == 0 {
                 continue;
             }
             let craft = self.wake_pose(slot, anchor);

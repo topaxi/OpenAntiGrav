@@ -91,7 +91,7 @@ fn an_opponents_wreck_leaves_the_players_camera_alone() {
 #[test]
 fn a_tick_with_the_player_destroyed_cuts_to_the_circuits_camera() {
     let mut race = with_a_station();
-    race.force_destroy(0);
+    race.sim.force_destroy(0);
     race.tick(&oag_gameplay::PlayerInputs::none());
     assert!((race.camera_position() - station().eye).length() < 1e-3);
 }

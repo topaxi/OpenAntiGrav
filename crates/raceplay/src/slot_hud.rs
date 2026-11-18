@@ -216,12 +216,12 @@ impl SlotHud {
     }
 }
 
-impl Race {
+impl RaceSim {
     /// The weapon `slot`'s pickup icon shows: the one held, or a running Autopilot's when
     /// nothing is held (`PlayerStatus_Update` forces the icon id to the Autopilot's while its
     /// running bit is set and the held id maps to none).
     pub(super) fn held_for_hud(&self, slot: usize) -> Option<oag_tables::weapons::Weapon> {
-        let ship = &self.sim.world.ships[slot];
+        let ship = &self.world.ships[slot];
         // A mod's own pickup (`Weapon::Extension`) is held as itself: the HUD draws the icon
         // and backdrop its look names (`crate::extension_pickup`), none on a mod that
         // declares none.
@@ -233,7 +233,9 @@ impl Race {
             (ship.autopilot_timer > 0.0).then_some(oag_tables::weapons::Weapon::Autopilot)
         })
     }
+}
 
+impl Race {
     /// One tick of the HUD bars of every slot a view is drawn for: the primary
     /// always, and with a split the other viewed slots too.
     ///
@@ -255,7 +257,7 @@ impl Race {
             let fraction = oag_hud::shield_fraction(pool, max);
             let thrust = ship.physics.thrust.clamp(0.0, 100.0);
             let absorbing = self.absorb_window_active(slot);
-            let held = self.held_for_hud(slot);
+            let held = self.sim.held_for_hud(slot);
             let look = match held {
                 Some(oag_tables::weapons::Weapon::Extension(kind)) => {
                     self.sim.extensions.pickup_look(slot, kind)
@@ -263,7 +265,7 @@ impl Race {
                 _ => None,
             };
             let acting = ship.physics.pilot_assist.acting;
-            let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
+            let (shown, dt) = (self.sim.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
             if look.is_some() {

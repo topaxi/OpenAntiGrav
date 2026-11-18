@@ -131,7 +131,7 @@ fn a_craft_scraping_a_wall_is_slower_with_the_curse() {
     let Some(cursed) = race_with(vec![source]) else {
         return;
     };
-    assert!(cursed.is_modded(), "the module loaded");
+    assert!(cursed.sim.is_modded(), "the module loaded");
     let plain = race_with(Vec::new()).unwrap();
     const TICKS: usize = 900;
     let (cursed, plain) = (speeds(cursed, TICKS), speeds(plain, TICKS));
@@ -183,7 +183,7 @@ fn a_modded_race_hashes_the_same_on_either_engine() {
     let Some(cursed) = race_with(vec![source]) else {
         return;
     };
-    assert!(cursed.is_modded(), "the module loaded");
+    assert!(cursed.sim.is_modded(), "the module loaded");
     let want = if cfg!(feature = "wasm-interpreter") {
         "Pulley"
     } else {

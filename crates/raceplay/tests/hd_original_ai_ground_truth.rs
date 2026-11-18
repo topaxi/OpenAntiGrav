@@ -32,7 +32,7 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = oag_raceplay::Race::start(setup);
     assert!(
-        race.use_original_ai(Some(skill), level),
+        race.sim.use_original_ai(Some(skill), level),
         "HD flies the original driver"
     );
     Some(race)
@@ -54,7 +54,7 @@ fn held(level: usize, skill: f32, from: f32, to: f32) -> Option<Vec<(u8, f32)>> 
         race.tick_sim_only(&PlayerInputs::none());
         if time(&race) >= from {
             let places = race.places();
-            let field = race.original_ai_field().expect("the field is on");
+            let field = race.sim.original_ai_field().expect("the field is on");
             out.extend((1..8).map(|s| (places[s], field.drivers[s].held_thrust)));
         }
     }
@@ -199,8 +199,8 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
         println!(
             "slot {slot}: lap {} respawns {} wall-contact ticks {} per-lap shield {:?}, end-of-run shield {:.1}",
             ship.standing.lap,
-            race.respawns_of(slot),
-            race.wall_contact_ticks_of(slot),
+            race.sim.respawns_of(slot),
+            race.sim.wall_contact_ticks_of(slot),
             shields,
             ship.physics.shield
         );
@@ -209,7 +209,7 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
             "slot {slot} on lap {}",
             ship.standing.lap
         );
-        assert_eq!(race.respawns_of(slot), 0, "slot {slot}");
+        assert_eq!(race.sim.respawns_of(slot), 0, "slot {slot}");
     }
 }
 
@@ -230,8 +230,8 @@ fn ubermall(class: &str) -> Option<Option<(f32, f32)>> {
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
     let mut race = oag_raceplay::Race::start(setup);
-    assert!(race.use_original_ai(Some(2.0), 1));
-    Some(race.original_ai_field()?.laws().halved_lookahead)
+    assert!(race.sim.use_original_ai(Some(2.0), 1));
+    Some(race.sim.original_ai_field()?.laws().halved_lookahead)
 }
 
 #[test]

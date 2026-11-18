@@ -4,7 +4,7 @@
 //! every recognised key filled in, so the file on disk always documents what
 //! it can hold rather than starting empty or silently dropping a key an older
 //! version never wrote. A CLI flag still wins over whatever is on disk for
-//! that one run; see `--anisotropy` in `main.rs`.
+//! that one run; see `--anisotropy` in `app.rs`.
 //!
 //! # Display against graphics against render profiles
 //!
@@ -258,7 +258,7 @@ pub struct Ai {
     /// A **token**, not a typed enum, for the reason [`Race::mode`] is: a bad
     /// value here must not fail the boot, so a profile written by a build with
     /// a level this one does not have still races. The fallback is reported and
-    /// ignored, in `main.rs`.
+    /// ignored, in `app.rs`.
     #[serde(default = "default_difficulty")]
     pub difficulty: String,
 }
@@ -908,7 +908,7 @@ pub fn default_seeds(
 
 /// What Wipeout 2048's settings panels hold on a fresh install, read off [`fresh`] and put in
 /// the panels' own terms (list indices, percentages). The inverse of the mapping
-/// `main/session/frame.rs` applies when a panel moves.
+/// `app/session/frame.rs` applies when a panel moves.
 #[must_use]
 pub fn option_defaults() -> oag_ui::frontend::OptionDefaults {
     use oag_display::display::CameraView;

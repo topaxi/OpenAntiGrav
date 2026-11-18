@@ -386,7 +386,7 @@ mode icon, the last lit dot ending at x 443 of 1920). `LoadingScreen_Draw` light
 `floor(Fill::shown)` (`loading::fill`), so the counts compare directly. 32 is below the first target (33.2, `0x002b9a28`),
 so the bar had only eased at 0.1 column a frame and no load stage had landed: a state ours reaches without a load.
 
-**`--loading-screen DONE/TOTAL` does not state it.** On `--loading-step race` the counts are zeroed (`main/headless.rs`),
+**`--loading-screen DONE/TOTAL` does not state it.** On `--loading-step race` the counts are zeroed (`app/headless.rs`),
 so the stated state is the tick: `lit = floor(0.1 t)`, capped at 33. `t = 10 n + 5` lights `n` columns with half a column of
 margin either side of the f32 sum's edge at `10 n` (ticks 320 to 330 all light 32; 319 lights 31, 331 lights 33). A
 `--loading-live` capture instead runs a real load, whose stage timing and finish vary run to run (two consecutive

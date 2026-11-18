@@ -5,9 +5,9 @@ use oag_gameplay::input::Button;
 
 use oag_gameplay::MAX_PLAYERS;
 
-use super::{Race, RaceState};
+use super::{RaceSim, RaceState};
 
-impl Race {
+impl RaceSim {
     /// Starts and advances each person's flip. A craft out of the race or on the grid may not
     /// start one; steering is dropped while one runs.
     pub(super) fn tick_flips(
@@ -15,18 +15,18 @@ impl Race {
         inputs: &oag_gameplay::PlayerInputs,
         controls: &mut [oag_physics::ShipControls; MAX_PLAYERS],
     ) {
-        let Some(law) = self.sim.flip_law else {
+        let Some(law) = self.flip_law else {
             return;
         };
-        let dt = self.sim.dt;
-        let racing = !RaceState::thrust_gated(self.sim.world.tick);
+        let dt = self.dt;
+        let racing = !RaceState::thrust_gated(self.world.tick);
         for (slot, slot_controls) in controls.iter_mut().enumerate() {
-            if !self.sim.world.person_flown(slot) {
+            if !self.world.person_flown(slot) {
                 continue;
             }
             let pressed = inputs.get(slot).buttons.is_pressed(Button::Flip);
             let may_flip = racing && self.may_use_pickup(slot);
-            let physics = &mut self.sim.world.ships[slot].physics;
+            let physics = &mut self.world.ships[slot].physics;
             if pressed && may_flip {
                 let lean = physics.steer_lean_follower;
                 physics.flip.start(law, &physics.body, lean);

@@ -216,7 +216,11 @@ fn timeline(image: &str, mode: oag_race::Mode, class: &str) -> Option<Vec<Beat>>
     let mut beats = Vec::new();
     for _ in 0..oag_race::COUNTDOWN_TICKS + 30 {
         race.tick(&PlayerInputs::none());
-        let go = race.pending_cues().iter().any(|event| event.cue == Cue::Go);
+        let go = race
+            .sim
+            .pending_cues()
+            .iter()
+            .any(|event| event.cue == Cue::Go);
         oag_game::sound::race_tick(&mut audio, &mut race);
         beats.push(Beat {
             go,

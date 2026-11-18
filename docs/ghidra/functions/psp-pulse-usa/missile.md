@@ -524,7 +524,7 @@ rather than a misread. Not load-bearing: nothing here plays a cue on that path.
 **2026-09-23: `MISSILE`, `~MISSILETVL` and `MISSILEEXPWALL` wired.**
 `Cue::Missile`, `Cue::MissileTravel` and `Cue::MissileHitWall` are in
 `crates/sound/src/sfx/cue.rs`. `Cue::Missile` fires from
-`Race::fire_missile`, the one call site both the player's press and an
+`RaceSim::fire_missile`, the one call site both the player's press and an
 opponent's own shot reach, on a **chosen** emitter - this section's own
 `Missile_Init` reading names the two cues but not either call's emitter
 argument. `Cue::MissileHitWall` fires on **every bounce**, the same edge

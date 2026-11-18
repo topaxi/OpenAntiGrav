@@ -16,7 +16,7 @@
 //! The finish is reached with the operator's `--autopilot`, which is then switched
 //! off, so what flies the craft afterwards is the finish-line rule and nothing the
 //! test left on. Falsifier: with the `standing.finished()` term removed from
-//! `Race::flown_for_the_player` the craft is left to a released pad and every test
+//! `RaceSim::flown_for_the_player` the craft is left to a released pad and every test
 //! below fails.
 
 use std::path::PathBuf;
@@ -48,19 +48,19 @@ fn finished_time_trial_at(difficulty: oag_ai::Difficulty) -> Option<race::Race> 
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
-    while !race.finished() && race.sim.world.tick < CAP {
+    race.sim.set_autopilot(true);
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "the Time Trial never finished in {CAP} ticks"
     );
     assert!(
         race.sim.world.ships[0].standing.finished(),
         "the lone craft ended the race by something other than the line"
     );
-    race.set_autopilot(false);
+    race.sim.set_autopilot(false);
     Some(race)
 }
 
@@ -79,7 +79,7 @@ fn the_craft_goes_on_lapping_with_no_input_after_the_line() {
         return;
     };
     assert!(
-        race.flown_for_the_player(0),
+        race.sim.flown_for_the_player(0),
         "the finish line did not hand the craft to the driver"
     );
     let at_line = race.sim.world.ships[0].physics.body.position;
@@ -143,7 +143,7 @@ fn the_result_is_frozen_at_the_line_while_the_race_runs_on() {
         board,
         "the board taken at the line was revised"
     );
-    assert!(race.finished(), "the race un-finished itself");
+    assert!(race.sim.finished(), "the race un-finished itself");
 }
 
 /// The ten `Camera` nodes of `16_Track` as the original's own camera object held them while
@@ -251,7 +251,7 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
 /// Easy, Talon's Junction, the original's throttle word after a first place reads `56.7`
 /// on most frames and never more, and the craft covered `3,500-3,900` units in the 35 s
 /// logged. A lone Time Trial craft is first, and Easy is `Novice` here. Falsifier:
-/// without `Race::finished_thrust_cap` in the tick the throttle reads the driver's own
+/// without `RaceSim::finished_thrust_cap` in the tick the throttle reads the driver's own
 /// `100` and the first assertion on it fails. The distance is a sanity band only: at
 /// `Novice` the driver's own pace lands inside it too.
 #[test]
@@ -261,6 +261,7 @@ fn the_finished_craft_flies_at_the_originals_post_finish_thrust() {
         return;
     };
     let cap = race
+        .sim
         .finished_thrust_cap(0)
         .expect("Venom's AIRaceStats and 16_Track's stats.xml are on the disc");
     assert!(

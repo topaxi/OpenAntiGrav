@@ -76,6 +76,7 @@ fn a_second_persons_plasma_charge_and_cue_are_theirs() {
         "slot 1's plasma charge is owned by {owner:?}"
     );
     let cue = race
+        .sim
         .drain_cues()
         .into_iter()
         .find(|e| e.cue == oag_gameplay::cue::Cue::Plasma)
@@ -155,7 +156,7 @@ fn the_missiles_reticle_hold_follows_the_primary_slot() {
             .find(|p| p.kind == Some(Weapon::Missile) && p.owner == owner)
             .map(|p| p.target)
     };
-    assert!(race.fire_missile(1, &stats));
+    assert!(race.sim.fire_missile(1, &stats));
     assert_eq!(
         target_of(&race, 1),
         Some(None),
@@ -173,19 +174,19 @@ fn the_rubber_band_reads_the_best_placed_person() {
     places[1] = 1;
     places[2] = 2;
     assert_eq!(
-        race.rubber_band_reference(&places),
+        race.sim.rubber_band_reference(&places),
         0,
         "one person: the AI in first place is nobody to chase"
     );
     race.sim.world.controllers[1] = Controller::Local;
     race.sim.world.controllers[2] = Controller::Local;
-    assert_eq!(race.rubber_band_reference(&places), 1);
+    assert_eq!(race.sim.rubber_band_reference(&places), 1);
     places[0] = 1;
     places[1] = 2;
-    assert_eq!(race.rubber_band_reference(&places), 0);
+    assert_eq!(race.sim.rubber_band_reference(&places), 0);
     places[1] = 1;
     assert_eq!(
-        race.rubber_band_reference(&places),
+        race.sim.rubber_band_reference(&places),
         0,
         "a tie takes the lowest slot"
     );
@@ -197,11 +198,11 @@ fn the_rubber_band_reads_the_best_placed_person() {
 fn the_original_fields_opponents_are_the_craft_nobody_flies() {
     let mut race = race_with_a_grid();
     let count = race.sim.world.ship_count as usize;
-    let (list, n) = race.ai_flown_slots();
+    let (list, n) = race.sim.ai_flown_slots();
     assert_eq!(&list[..n], &(1..count).collect::<Vec<_>>()[..]);
     race.sim.world.controllers[0] = Controller::Ai;
     race.sim.world.controllers[2] = Controller::Local;
-    let (list, n) = race.ai_flown_slots();
+    let (list, n) = race.sim.ai_flown_slots();
     let expected: Vec<usize> = (0..count).filter(|&s| s != 2).collect();
     assert_eq!(&list[..n], &expected[..]);
 }
@@ -215,12 +216,12 @@ fn no_person_seeks_a_weapon_pad() {
     race.sim.weapon_pad_line = vec![Some((6, 0.0))].into();
     race.sim.weapon_pad_refresh_left = vec![0.0];
     assert!(
-        race.pad_for(1).is_some(),
+        race.sim.pad_for(1).is_some(),
         "the AI craft sees the pad: fixture is too weak"
     );
     race.sim.world.controllers[1] = Controller::Local;
     assert!(
-        race.pad_for(1).is_none(),
+        race.sim.pad_for(1).is_none(),
         "a second person was sent for a pad"
     );
 }
@@ -272,6 +273,7 @@ fn the_weapon_ai_sees_a_second_person_ahead() {
     progress(&mut race, 2, 40.0);
     progress(&mut race, 1, 70.0);
     let situation = race
+        .sim
         .fire_situation(2, Weapon::Rocket, true)
         .expect("a rocket with odds and a course has a situation");
     let gap = situation.player_gap.expect("two people are on the grid");

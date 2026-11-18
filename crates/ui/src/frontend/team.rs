@@ -73,7 +73,7 @@
 //! [`oag_2048::race::NATIVE_TEAMS`]`[team]` into `settings.race.team` and
 //! [`oag_title::TeamVariant::suffix`] into `settings.race.variant` at the
 //! same point it already applies the picked language - see
-//! `crate::main::session::frame`'s own comment for why that is the one
+//! `crate::app::session::frame`'s own comment for why that is the one
 //! place both can land before the menus first read either. From there the
 //! existing [`oag_title::RaceDefaults::team_variants_for`]/`combine_variant`
 //! machinery `Session::launch_race` and the RACE page and a mod's race page already use

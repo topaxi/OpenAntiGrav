@@ -263,6 +263,7 @@ fn the_grid_lands_on_the_track(
     for (index, ship) in ships.iter().enumerate() {
         let position = ship.physics.body.position;
         let distance = race
+            .sim
             .spline()
             .distance_to(position)
             .expect("the track has samples");

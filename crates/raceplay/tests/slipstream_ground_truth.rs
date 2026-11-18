@@ -131,7 +131,7 @@ fn race_with_hud(
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some((race, loaded.hud))
 }
 
@@ -161,7 +161,10 @@ fn give(race: &mut race::Race, slot: usize) {
 }
 
 fn no_fault(race: &race::Race) -> bool {
-    race.extension_reports().iter().all(|r| r.faulted.is_none())
+    race.sim
+        .extension_reports()
+        .iter()
+        .all(|r| r.faulted.is_none())
 }
 
 fn ship(race: &race::Race) -> oag_gameplay::world::Ship {
@@ -221,7 +224,7 @@ fn a_press_where_the_portal_does_not_fit_keeps_the_pickup() {
     let mut shut = 0;
     for _ in 0..300 {
         race.tick(&throttle());
-        let (fits, _) = race.clearance(0, Distance::Units(30.0), 12.0);
+        let (fits, _) = race.sim.clearance(0, Distance::Units(30.0), 12.0);
         shut = if fits { 0 } else { shut + 1 };
         if shut == 2 {
             break;
@@ -253,7 +256,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let mut flying = 0;
     while ship(&race).transit.is_none() {
         assert!(ship(&race).in_world(), "still flying at {flying}");
-        assert!(race.ship_active(0), "still drawn at {flying}");
+        assert!(race.sim.ship_active(0), "still drawn at {flying}");
         race.tick(&throttle());
         flying += 1;
         assert!(flying < 60, "never reached the portal");
@@ -275,7 +278,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
     let mut out = 1;
     while ship(&race).transit.is_some() {
         assert_eq!(ship(&race).physics.body.position, entry, "frozen at {out}");
-        assert!(!race.ship_active(0), "not drawn");
+        assert!(!race.sim.ship_active(0), "not drawn");
         assert!(!ship(&race).in_world(), "out of the world: untouchable");
         race.tick(&throttle());
         out += 1;
@@ -297,7 +300,7 @@ fn a_fire_is_a_second_out_of_the_world_and_four_seconds_on_at_a_slower_speed() {
         (0.8..0.97).contains(&(exit_speed / speed)),
         "a slight loss: {speed} -> {exit_speed}"
     );
-    assert!(race.respawns() == 0, "no rescue");
+    assert!(race.sim.respawns() == 0, "no rescue");
 }
 
 #[test]
@@ -310,7 +313,7 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     drive_until(&mut race, 3000, |r| {
         r.sim.world.ships[0].standing.lap_start_tick.is_some()
     });
-    let length = race.course().expect("a course").length();
+    let length = race.sim.course().expect("a course").length();
     // Near the end of the lap: a fire there crosses the line.
     drive_until(&mut race, 6000, |r| progress(r) > length - 150.0);
     give(&mut race, 0);
@@ -338,7 +341,9 @@ fn a_fire_over_the_line_is_a_lap_and_on_the_last_lap_a_finish_on_the_exit_tick()
     // On to the last lap by the engine's own jump, then the mod's fire over the line.
     let target = race.sim.world.laps_target().expect("a lap target");
     while ship(&race).standing.lap < target {
-        race.begin_transit(0, 2, Distance::Lap(0.9), 0.95).unwrap();
+        race.sim
+            .begin_transit(0, 2, Distance::Lap(0.9), 0.95)
+            .unwrap();
         for _ in 0..62 {
             race.tick(&throttle());
         }
@@ -465,7 +470,7 @@ fn a_craft_behind_that_comes_out_ahead_of_the_viewer_lights_its_rear_warning_and
         return;
     };
     race.watch_laps(&hud, None);
-    let length = race.course().expect("a course").length();
+    let length = race.sim.course().expect("a course").length();
     let count = usize::from(race.sim.world.ship_count);
     let gap = |from: f32, to: f32| {
         let delta = to - from;
@@ -571,7 +576,7 @@ fn loads_it(mode: oag_race::Mode, weapons: bool) -> Option<bool> {
         .iter()
         .any(|l| l.contains("oag.slipstream") && l.contains("not run in this race"));
     assert_eq!(modded, !declined, "{:?}", loaded.report);
-    assert_eq!(race::Race::start(loaded.setup).is_modded(), modded);
+    assert_eq!(race::Race::start(loaded.setup).sim.is_modded(), modded);
     Some(modded)
 }
 

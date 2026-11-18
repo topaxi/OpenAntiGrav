@@ -1,8 +1,8 @@
 //! Runs Wipeout Pulse from the user's own disc image: the composition root.
 //!
-//! The binary is a thin shell around this library. Everything except the window
-//! and the event loop lives here, so the boot sequence, the state machine, the
-//! screen model and the headless capture can all be exercised from tests.
+//! The binary is a few lines around this library: the window, the event loop and
+//! the session state machine are [`app`], and the boot sequence, the screen model
+//! and the headless capture sit beside it, all exercised from tests.
 //!
 //! Boots into `LogoFMV`, which is what the disc's own boot reaches and what
 //! plays `Data\Movies\Intro.PMF`: the movie runs straight through, START or X
@@ -26,6 +26,7 @@
 
 pub mod adapter;
 pub mod ai_choice;
+pub mod app;
 pub mod boot;
 pub mod campaign;
 pub mod capture;
@@ -53,7 +54,7 @@ pub mod web_fault;
 /// The abstract button layer, which lives in `oag-gameplay` because the
 /// simulation owns the input snapshot type and everything that produces one
 /// depends on it. Re-exported here so call sites that predate `oag-ui`
-/// (`main/*`, and this crate's own modules) still read `crate::input`;
+/// (`app/*`, and this crate's own modules) still read `crate::input`;
 /// `oag-ui` itself names `oag_gameplay::input` directly, since it has no
 /// `oag-game` re-export to reach through.
 pub use oag_gameplay::input;

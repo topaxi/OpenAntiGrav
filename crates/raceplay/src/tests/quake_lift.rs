@@ -24,7 +24,8 @@ fn quake_race() -> Race {
 }
 
 fn quake_hits(race: &mut Race) -> usize {
-    race.drain_cues()
+    race.sim
+        .drain_cues()
         .into_iter()
         .filter(|e| e.cue == Cue::QuakeHit && e.slot == 0)
         .count()
@@ -46,7 +47,7 @@ fn wave_on_the_player(race: &Race, age: f32) -> Wave {
 #[test]
 fn a_wave_reaching_the_player_lifts_it_and_hits_once() {
     let mut race = quake_race();
-    let _ = race.drain_cues();
+    let _ = race.sim.drain_cues();
     race.sim.world.quake = Some(wave_on_the_player(&race, 0.3));
     let mut hits = 0;
     let mut peak = 0.0f32;
@@ -116,7 +117,7 @@ fn fly_wave_in_the_cockpit(law: QuakeHit) -> Flown {
     let mut race = quake_race();
     race.sim.quake_hit = law;
     race.view.camera_view = oag_display::display::CameraView::Internal;
-    let _ = race.drain_cues();
+    let _ = race.sim.drain_cues();
     race.sim.world.quake = Some(wave_on_the_player(&race, 0.3));
     let mut flown = Flown {
         hits: 0,

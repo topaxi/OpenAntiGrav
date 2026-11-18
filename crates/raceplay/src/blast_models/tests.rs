@@ -242,7 +242,7 @@ fn the_tints_are_the_dumps_three_linear_ramps() {
 fn the_hemispheres_are_world_fixed_and_the_halo_follows_the_cameras_orientation() {
     let (race, _) = pulse_blast_after(5);
     let blast = Vec3::new(292.1, -42.7, -194.4);
-    let [heading, up, right] = race.track_frame_at(blast);
+    let [heading, up, right] = race.sim.track_frame_at(blast);
     // The camera's world transform: local -Z is the way it looks.
     let camera = |eye: Vec3, look: Vec3| {
         let right = look.cross(Vec3::Y).normalize();

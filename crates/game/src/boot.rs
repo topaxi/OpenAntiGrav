@@ -2,7 +2,7 @@
 //!
 //! Everything the front end needs, in the order the original needs it: the
 //! front-end root XML, the language plugins, one language's string table, and
-//! the intro movie. Kept apart from `main.rs` so the load can be exercised
+//! the intro movie. Kept apart from `app.rs` so the load can be exercised
 //! without a window, and apart from [`oag_ui::frontend`] so the sequence itself
 //! stays free of file I/O.
 
@@ -1215,7 +1215,7 @@ pub fn assemble(shell: Shell, media: Media) -> Boot {
     // `FE Screen` that owns that movie. Set here rather than at either call site
     // because this is the one place the frontend and the backdrop are both in
     // hand, and because the window, the offscreen capture and the ground-truth
-    // tests all have to agree about it - `main.rs` takes the backdrop's frames
+    // tests all have to agree about it - `app.rs` takes the backdrop's frames
     // away onto a decode thread immediately after this, so there is no second
     // moment where both halves exist.
     //

@@ -9,9 +9,9 @@ is the decompiled law behind each value; this page does not repeat either.
 Implemented in [`oag_ui_screens::endrace`](../../crates/ui-screens/src/endrace.rs) (model,
 layout, draw, pointer), [`oag_game::endrace`](../../crates/game/src/endrace.rs)
 (the disc read, mirroring [`oag_game::campaign`](../../crates/game/src/campaign.rs)),
-[`crate::race_stage::endrace`](../../crates/game/src/main/race_stage/endrace.rs)
+[`crate::race_stage::endrace`](../../crates/game/src/app/race_stage/endrace.rs)
 (the runtime a finished race holds open) and
-[`crate::main::session::endrace`](../../crates/game/src/main/session/endrace.rs)
+[`crate::app::session::endrace`](../../crates/game/src/app/session/endrace.rs)
 (the flow - advancing screens, `RETURN TO GRID`/`RACE AGAIN`/`VIEW RESULTS AGAIN`).
 This build's own results table
 ([`oag_game::scoreboard`](../../crates/game/src/scoreboard.rs)) stays as the
@@ -25,7 +25,7 @@ below.
 ## Why this draws inside `Stage::Race`, not `Stage::Menu`
 
 The reference frames (`results-01..03.png`) show the three screens over a
-still-visible, darkened race scene - the picture `crate::main::menu_stage`'s
+still-visible, darkened race scene - the picture `crate::app::menu_stage`'s
 own `frozen_race` compositing already gives a *paused* race. This build does
 not reuse that mechanism: a finished race's own scene is already left exactly
 as the finishing tick left it (`RaceStage::draw_hud`'s pre-existing doc, unchanged
@@ -45,7 +45,7 @@ trade against a `Stage::Menu`-based design.
 A Pulse race that ended on the line does not open `EndRace Results` at once. The original sits in `Race End Photo` first
 (measured and written up in [after-the-finish.md](../gameplay/after-the-finish.md)); ours does the same, in
 [`oag_ui_screens::endrace::photo`](../../crates/ui-screens/src/endrace/photo.rs) (timing and draw list) and
-[`race_stage::endrace_flow`](../../crates/game/src/main/race_stage/endrace_flow.rs) (which screen is on top):
+[`race_stage::endrace_flow`](../../crates/game/src/app/race_stage/endrace/endrace_flow.rs) (which screen is on top):
 
 | Part | What ours does | Source |
 | --- | --- | --- |
@@ -102,7 +102,7 @@ ways. This build reuses the same three shared table widgets
 (`lap0.0`..`lap8.2`, `tablehighlight`) the per-lap table above draws,
 through a new model, [`oag_ui_screens::endrace::TournamentResults`]
 (`oag_ui_screens::endrace::tournament_results_draw_list`), built in
-[`crate::race_stage::endrace::tournament_results`](../../crates/game/src/main/race_stage/endrace.rs)
+[`crate::race_stage::endrace::tournament_results`](../../crates/game/src/app/race_stage/endrace.rs)
 off this build's own [`oag_race::tournament`]/[`crate::race::tournament::Progress`]
 (established, not re-derived by this pass) and the leg's own grid roster
 (`crate::race::slot_teams`, recomputed at EndRace-build time - see that
@@ -369,7 +369,7 @@ them from the first frame.
   Results` after a campaign race landed on `Main Menu`.~~ **Root-caused and
   fixed, 2026-09-28 (`pulse-campaign-flow` lane) - and it was not
   `campaign_cell`.** `Session::frame`'s tick loop
-  (`crates/game/src/main/session/frame.rs`) still carried the built-in
+  (`crates/game/src/app/session/frame.rs`) still carried the built-in
   results table's own dismiss block - any Cross/Start rising edge on a
   finished race called `Session::escape`, i.e. `Main Menu` - and it ran
   *before* the finished-race arm that reaches `Session::tick_endrace`, with
@@ -441,7 +441,7 @@ verification found, the same split the rest of this page keeps.
 Implemented in [`oag_ui_screens::endrace::hd`](../../crates/ui-screens/src/endrace/hd.rs)
 (model reuse, draw, pointer), `oag_game::endrace::load_hd`, and the
 title-dispatched `ResultsModel` in
-[`crate::race_stage::endrace`](../../crates/game/src/main/race_stage/endrace.rs).
+[`crate::race_stage::endrace`](../../crates/game/src/app/race_stage/endrace.rs).
 `oag_title::FrontEnd::endrace_entry` is the per-title axis both titles now
 go through.
 
@@ -758,7 +758,7 @@ of Omega's copies the runtime serves is unmeasured.
 ## The field keeps finishing behind `Results` (2026-11-08, `endrace-live-board`)
 
 **The fault**: the race runs on behind the end screens once the player crosses the line
-(`Race::runs_on_after_the_line`), but the results board was taken once, on the player's finish
+(`RaceSim::runs_on_after_the_line`), but the results board was taken once, on the player's finish
 tick, so every craft still racing then read `RACING` on the screen for good.
 
 **The original most likely refreshes** (confidence 60): `0x0022e680`, the slot of

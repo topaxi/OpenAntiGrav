@@ -17,7 +17,7 @@ Any seated player's Start pauses the race, and the pause belongs to them: only
 their Start (or a click, which is slot 0's Start) resumes and only their Circle
 leaves the race. A pause nobody pressed for (the window losing focus) is anyone's
 to lift. Code: `oag_game::pause` (the pure rule) and `session::pause` in
-`crates/game/src/main/session/pause.rs` (the session glue and the line). Written
+`crates/game/src/app/session/pause.rs` (the session glue and the line). Written
 up in [`docs/rendering/split-screen.md`](../../docs/rendering/split-screen.md),
 "Who plays which slot".
 
@@ -59,7 +59,7 @@ Options, to decide before the protocol ADR:
 1. **No race pause online.** Start opens a local overlay (settings, leave race); the
    race and the player's craft keep running. While the overlay is up the craft
    either coasts on neutral input, or the autopilot flies it (decide which; the
-   autopilot already flies any seat, `Race::set_autopilot`). Simplest, and nothing in
+   autopilot already flies any seat, `RaceSim::set_autopilot`). Simplest, and nothing in
    the protocol changes.
 2. **Lobby pause for private races.** The host or a majority vote pauses; a pause has a
    budget per player (count and length) and a hard timeout after which the race

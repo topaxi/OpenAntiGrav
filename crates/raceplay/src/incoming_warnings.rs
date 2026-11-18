@@ -47,7 +47,7 @@ impl Race {
     fn incoming_warnings_drawn(&self) -> bool {
         self.view.huds[self.player_slot()].incoming_enabled
             && self.viewport_count() <= 1
-            && self.people() <= 1
+            && self.sim.people() <= 1
             && self.view.seat.is_none()
             && matches!(
                 self.sim.world.mode(),

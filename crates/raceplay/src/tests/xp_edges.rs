@@ -21,12 +21,12 @@ fn table() -> Awards {
 }
 
 fn armed(mut race: Race) -> Race {
-    race.arm_xp(XpTally::new(table(), Column::Race));
+    race.sim.arm_xp(XpTally::new(table(), Column::Race));
     race
 }
 
 fn paid(race: &Race, index: u32) -> u32 {
-    race.xp_tally().expect("armed").times_paid(index)
+    race.sim.xp_tally().expect("armed").times_paid(index)
 }
 
 fn past_the_countdown(race: &mut Race, ticks: u64) {

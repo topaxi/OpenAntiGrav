@@ -895,7 +895,7 @@ impl Confirm {
 /// awaiting_binding` in the binary, over a `binding` row's confirm press -
 /// is the first caller, and the reason: the raw key that resolves a capture
 /// is decided upstream of this crate entirely, by `crate::rebind::decide` in
-/// `crates/game/src/main/rebind.rs`, off the shared `Input` before it ever
+/// `crates/game/src/app/rebind.rs`, off the shared `Input` before it ever
 /// reaches an abstract button - so there is nothing here for a model to
 /// consume. `text` arrives already resolved, English or a translation, the
 /// same rule [`Keyboard::draw`]'s own doc names for its labels: this module

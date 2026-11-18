@@ -28,7 +28,7 @@ fn fraction(race: &Race, elapsed: f32) -> f32 {
     let gap = oag_weapons::projectile::leach_beam::trip::gap(
         ships[0].standing.progress,
         ships[1].standing.progress,
-        race.leach_course_length(),
+        race.sim.leach_course_length(),
     );
     (elapsed / oag_weapons::projectile::leach_beam::trip::period(gap)).clamp(0.0, 1.0)
 }

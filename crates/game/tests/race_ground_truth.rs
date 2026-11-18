@@ -309,7 +309,7 @@ fn a_ship_stays_on_the_track_for_ten_seconds() {
         "worst spline distance {worst_distance:.1} of {bound:.1} at tick {worst_at}, \
          top speed {top_speed:.1}, grounded on {grounded_ticks} of 600, \
          {} respawn(s)",
-        race.respawns()
+        race.sim.respawns()
     );
     assert!(
         worst_distance < bound,
@@ -505,7 +505,7 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     };
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.set_ai_tuning(tuning);
+        race.sim.set_ai_tuning(tuning);
     }
     // Everyone but one opponent off the track, so nothing it does is about
     // anybody else.
@@ -520,10 +520,10 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     let mut recovered_this_lap = false;
     let mut lost_at = Vec::new();
     for tick in 0..18_000u64 {
-        let before = race.respawns_of(1);
+        let before = race.sim.respawns_of(1);
         let was_at = race.sim.world.ships[1].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.respawns_of(1) != before {
+        if race.sim.respawns_of(1) != before {
             recovered_this_lap = true;
             lost_at.push(was_at);
         }
@@ -542,10 +542,10 @@ fn solo_lap_tuned(level: oag_ai::Difficulty, track: &str, tuning: Option<oag_ai:
     }
     Solo {
         best,
-        respawns: race.respawns_of(1),
+        respawns: race.sim.respawns_of(1),
         laps: lap,
         lost_at,
-        line_len: race.racing_line().len() as u32,
+        line_len: race.sim.racing_line().len() as u32,
     }
 }
 
@@ -696,9 +696,10 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
         let race = race::Race::start(loaded.setup);
         checked += 1;
 
-        for slot in 1..race.ship_count() as usize {
+        for slot in 1..race.sim.ship_count() as usize {
             let ship = &race.sim.world.ships[slot];
             let sample = race
+                .sim
                 .ai_sample_for(slot, ship.driver.index as usize)
                 .expect("the driver stands on a sample");
             let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
@@ -744,7 +745,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 /// scenery. Four circuits complete every lap and never manage a clean one.
 ///
 /// and that gap is the finding. Dropping the paths a lap never drives out of
-/// the AI line ([`race::Race::ai_sample`]) then took *round* to eleven and
+/// the AI line ([`race::RaceSim::ai_sample`]) then took *round* to eleven and
 /// *clean* to six, and the nine circuits it did not touch reproduced their lap
 /// times, respawn counts and loss indices exactly - which is what said the
 /// mapping was right.
@@ -756,7 +757,7 @@ fn every_craft_starts_on_its_line_on_every_circuit() {
 /// 01 keeps two recoveries, one of them on the standing-start lap.
 ///
 /// It took four fixes and none of them were the AI. Dropping the paths a lap
-/// never drives out of the racing line ([`race::Race::ai_sample`]) took *round*
+/// never drives out of the racing line ([`race::RaceSim::ai_sample`]) took *round*
 /// from nine to eleven. Gating the landing response on `rebound_jump_time` took
 /// 01 from eight recoveries to three. Deriving the rear hover probe above
 /// `oag_physics::hover::FAST_PROBE_SPEED` instead of casting it took clean laps
@@ -895,14 +896,14 @@ fn the_racing_line_has_track_under_it_where_it_is_known_to() {
         let reach = loaded.setup.handling.antigrav.ride_height;
         let collision = loaded.setup.collision.clone();
         let race = race::Race::start(loaded.setup);
-        let line = race.racing_line();
+        let line = race.sim.racing_line();
 
         // Two casts per unsupported sample: one probe reach, which is what a
         // craft holds onto, then sixty, which says whether there is a surface
         // down there at all.
         let (mut gaps, mut below) = (Vec::new(), 0u32);
         for index in 0..line.len() {
-            let Some(sample) = race.ai_sample(index) else {
+            let Some(sample) = race.sim.ai_sample(index) else {
                 continue;
             };
             let up = (-Vec3::from_array(sample.down)).normalize_or_zero();

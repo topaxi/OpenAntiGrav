@@ -19,7 +19,7 @@
 //! has not - `escape`, or an unfinished `--race` run quitting outright. That
 //! second path is why this cannot be built as "capture the finish and nothing
 //! else": [`oag_race::Mode::laps_target`] is `None` for `SpeedLap` and
-//! `Zone`, so [`oag_raceplay::Race::finished`] never turns `true` for either
+//! `Zone`, so [`oag_raceplay::RaceSim::finished`] never turns `true` for either
 //! of them - and Speed Lap is the one mode whose entire point is a fast lap
 //! time. Leaving a race is the only exit every mode has in common, so a best
 //! lap set there is captured on the way out rather than never.
@@ -79,7 +79,7 @@
 //! `oag_tables::race_campaign::Cell::evaluate_medal`, not guessed at here;
 //! see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`.
 //! [`Observation::campaign_medal`] is what feeds both: [`RaceStage::observation`]
-//! (`crates/game/src/main/race_stage.rs`) evaluates it once a race carries a
+//! (`crates/game/src/app/race_stage.rs`) evaluates it once a race carries a
 //! [`RaceStage::campaign_cell`], and [`Store::record`] folds it into the
 //! ordinary `[[records]]` row the way every other field is.
 //!
@@ -208,7 +208,7 @@ impl Key {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Observation {
     /// Whether the race had reached its own finish condition - never
-    /// re-derived here, always [`oag_raceplay::Race::finished`]'s own answer.
+    /// re-derived here, always [`oag_raceplay::RaceSim::finished`]'s own answer.
     pub finished: bool,
     /// The player's own race position at the moment of capture, from
     /// [`oag_raceplay::Race::places`]. Always `Some` for a race that had a
@@ -234,7 +234,7 @@ pub struct Observation {
     /// scored met no medal.
     ///
     /// **Fed by a real race.** `RaceStage::observation`
-    /// (`crates/game/src/main/race_stage.rs`) calls `RaceStage::campaign_medal`,
+    /// (`crates/game/src/app/race_stage.rs`) calls `RaceStage::campaign_medal`,
     /// which evaluates a real `oag_tables::race_campaign::Cell` once one is
     /// selected - see that method's own doc for the per-mode law. Still
     /// `None` for a race launched any other way (the ordinary RACE page,

@@ -89,7 +89,7 @@ APU's threads, and the PS2 rows still halve.
 - Every one of the 15 screenshots above is **byte-identical** to `main`'s
   (`cmp`), and a second run of the old binary reproduces its own PNG, so the
   comparison can see a difference.
-- The headless path opens a `race::TextureSink` (`main/headless.rs`), so those
+- The headless path opens a `race::TextureSink` (`app/headless.rs`), so those
   frames went through the GPU upload path the player's load uses.
 - The race load report (`RUST_LOG=oag_raceplay=debug,oag_game=debug`) is
   line-for-line identical on all eight scenarios plus HD's Talon's Junction,

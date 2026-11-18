@@ -15,12 +15,12 @@
 //!
 //! # Why this stops short of `EndRaceRuntime`
 //!
-//! `crate::main::race_stage::endrace::EndRaceRuntime` and
-//! `crate::main::session::endrace::Session::build_endrace` are the binary
-//! crate's own (`crates/game/src/main/`), not `[lib]` `oag_game`'s - a
+//! `crate::app::race_stage::endrace::EndRaceRuntime` and
+//! `crate::app::session::endrace::Session::build_endrace` are the binary
+//! crate's own (`crates/game/src/app/`), not `[lib]` `oag_game`'s - a
 //! `crates/game/tests/*.rs` integration test only ever sees the library, the
 //! same reason every other ground-truth file in this directory reaches for
-//! `oag_raceplay`/`oag_game::endrace` rather than `crate::main::*`. What
+//! `oag_raceplay`/`oag_game::endrace` rather than `crate::app::*`. What
 //! those two hold beyond what this test exercises is thin, GPU-touching
 //! glue: opening a renderer. The `Board` rows become `FieldRow`s in
 //! `oag_game::results_tables`, which has its own fast, disc-free unit tests and
@@ -54,16 +54,16 @@ fn autopiloted_hd_race() -> Option<race::Race> {
     })
     .expect("loading the race");
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     Some(race)
 }
 
 fn race_to_the_flag(race: &mut race::Race) {
-    while !race.finished() && race.sim.world.tick < CAP {
+    while !race.sim.finished() && race.sim.world.tick < CAP {
         race.tick(&PlayerInputs::none());
     }
     assert!(
-        race.finished(),
+        race.sim.finished(),
         "the race was still running after {CAP} ticks; the player reached lap {} of {:?}",
         race.sim.world.primary_race().lap,
         race.sim.world.laps_target()
@@ -258,7 +258,7 @@ fn a_craft_that_crosses_behind_the_results_screen_replaces_racing_with_its_time(
     };
     race_to_the_flag(&mut race);
     assert!(
-        race.runs_on_after_the_line(),
+        race.sim.runs_on_after_the_line(),
         "the autopilot crossed the line"
     );
     let first = race.results().expect("a finished race has results").clone();

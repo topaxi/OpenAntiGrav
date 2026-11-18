@@ -29,7 +29,7 @@ pub struct Options {
     /// `None` is not "no movie" - it means "this leg's own default", resolved
     /// in [`super::load`] once the source's title is known (`screens` is parsed by
     /// then). Before this existed the default was baked into `Options` at
-    /// construction, in `main.rs`, which is exactly where the title is *not*
+    /// construction, in `app.rs`, which is exactly where the title is *not*
     /// yet known - that was fine while every source was Pulse and wrong the
     /// moment Pure could open at all, since Pulse's default names an entry
     /// Pure does not have. `Some(name)` is a request, same as always, and is

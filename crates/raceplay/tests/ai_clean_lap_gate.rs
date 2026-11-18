@@ -292,7 +292,7 @@
 //!
 //! **Regenerated 2026-10-21 for the verified fallback plan** (lane
 //! `ai-rejudge-after-switches`): a hull whose adapted plan fails no longer follows
-//! the reference plan at its yaw share unchecked (`Race::fallback_ring`). Two rows
+//! the reference plan at its yaw share unchecked (`RaceSim::fallback_ring`). Two rows
 //! moved. `06_Track` RAPIER, worst median contact `419` to `154`: the lone Triakis
 //! had followed the reference at `0.774` in 14 of its 45 runs and ground the wall at
 //! samples 800-960, not on Vertica's crest (`docs/gameplay/ai.md`, "The fallback plan
@@ -412,9 +412,9 @@ fn solo(setup: race::Setup) -> Solo {
     let mut started = 0u64;
     let mut recovered_this_lap = false;
     for tick in 0..TICKS {
-        let before = race.respawns_of(LONE);
+        let before = race.sim.respawns_of(LONE);
         race.tick_sim_only(&PlayerInputs::none());
-        if race.respawns_of(LONE) != before {
+        if race.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
         let now = race.sim.world.ships[LONE].standing.lap;
@@ -431,7 +431,7 @@ fn solo(setup: race::Setup) -> Solo {
 
     Solo {
         best,
-        contact_ticks: race.wall_contact_ticks_of(LONE),
+        contact_ticks: race.sim.wall_contact_ticks_of(LONE),
         state: race.sim.world.ships[LONE].physics.craft_state,
         deaths: race.sim.world.ships[LONE].standing.deaths,
     }

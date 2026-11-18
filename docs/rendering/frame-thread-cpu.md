@@ -10,7 +10,7 @@ Deck. Evidence is ratios and shares; the host is several times faster than the D
 
 `oag-game --frame-log` (or `OAG_FRAME_LOG=1`) prints one extra line a second before the
 frame-log line, `frame-phases`, with the mean milliseconds per frame of each stretch of the
-frame thread (`crates/game/src/main/session/phases.rs`). They add up to `total`, which sits close
+frame thread (`crates/game/src/app/session/phases.rs`). They add up to `total`, which sits close
 to `cpu_ms` plus `present_ms` less the acquire wait (the acquire, `draw_screens` and the
 end-of-frame bookkeeping are outside the phases):
 
@@ -841,7 +841,7 @@ Every after-run's profile held `[[records]]` (the finishing frame's save), `[[ca
 save was lost. `records::load` returns the newest copy handed to the background writer (no write, no disk wait), so
 a read right after a save sees it.
 **At exit** the process must join the last background write: `finish_background_saves`
-(`main/app.rs` on exit, `main/drive.rs` at the end of a `--drive` run); any new exit path calls it.
+(`app/handler.rs` on exit, `app/drive.rs` at the end of a `--drive` run); any new exit path calls it.
 
 **Limits.** (1) `--no-audio` is the null output backend: the mixer, cues and music fetch still
 run, and the frame thread's `ticks` phase shows no spike, so the audio work on the frame thread is
@@ -2525,7 +2525,7 @@ candidates, not arena ones.
 
 **The HUD's two plain-reuse candidates, measured in steady state (2026-11-13, `hud-reuse`).** The
 HUD figures above are the capture frame, which builds a fresh `Overlay` and draws it once, so they
-are cold-frame numbers. The race stage builds its `Overlay` once per race (`main/stage.rs`) and
+are cold-frame numbers. The race stage builds its `Overlay` once per race (`app/stage.rs`) and
 draws it every frame, so the steady state is the second frame on. Measured with a temporary patch,
 not landed: `race_capture.rs` draws the same overlay six times before the capture draw
 (`OAG_TMP_HUD_REPEAT=6`, each into its own encoder), `perf-probe` marks read per draw, the last

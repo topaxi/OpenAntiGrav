@@ -570,7 +570,7 @@ after every HUD widget, so its composite adds the haze on top of the HUD.
 **Ours since 2026-10-04.** `post::bloom::Bloom::prepare` runs the bright pass
 and the two blurs after the scene pass. `Scene::composite_bloom` adds the
 result onto the presentation target (or the capture view) after the HUD, in
-`main/session/draw.rs` and `race/capture.rs`. A race parked behind the menus
+`app/session/draw.rs` and `race/capture.rs`. A race parked behind the menus
 composites before the menu rows; the original's order for that case was not
 read. One consequence of our own: motion blur, which the original does not
 have, no longer smears Pulse PSP's haze, since the composite now comes after

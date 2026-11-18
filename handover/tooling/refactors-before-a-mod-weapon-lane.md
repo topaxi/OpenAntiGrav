@@ -61,7 +61,7 @@ are unmoved.
   give_up_gated }`, plus the numbers and `cooldown_ticks`/`shield_charge`) is
   `Sim::reset_triggers`, built at load by `respawn::reset_triggers_for` from
   `Title::reset_enables` (`oag_title::recovery::ResetEnables`, `Sourced<bool>` per row, as
-  `autopilot_pad_grants`). The one gate read is `Race::armed` -> `Trigger::armed`; airborne
+  `autopilot_pad_grants`). The one gate read is `RaceSim::armed` -> `Trigger::armed`; airborne
   keeps `cooldown_gated: false`, cage has neither gate. The constants stay in `recovery.rs`
   with their evidence and build `ResetTriggers::PULSE`. **Open for the mod lane:** a per-craft
   hold/arm (the table is per race), and the `RESPAWN_GIVE_UP` count itself is still a const.
@@ -221,9 +221,9 @@ are unmoved.
 ### 6. One "in the world" predicate for a craft (sweep item 5) - done
 
 **Done** with the portal pieces: `Ship::in_world` (`active` and not in a transit) is what
-`Craft::active` returns and what the draw (`Race::ship_active`, model matrices, shadow,
+`Craft::active` returns and what the draw (`RaceSim::ship_active`, model matrices, shadow,
 exhaust), `resolve_craft_pairs`, `fire_law` targeting and the mine and cannon loops ask.
-The per-craft reset hold item 1 left open is `Race::reset_held`, read by `Race::armed`.
+The per-craft reset hold item 1 left open is `RaceSim::reset_held`, read by `RaceSim::armed`.
 The reading below is kept for the evidence.
 
 - `Craft::active()` (`crates/weapons/src/craft.rs:15`) is the weapons' gate, checked in

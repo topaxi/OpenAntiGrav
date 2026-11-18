@@ -83,7 +83,7 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
     race.sim.respawn_disabled = [true; oag_gameplay::MAX_SHIPS];
     for tick in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
-        for slot in 1..race.ship_count() as usize {
+        for slot in 1..race.sim.ship_count() as usize {
             assert_eq!(
                 race.sim.world.ships[slot].physics.thrust, 0.0,
                 "opponent {slot} was moving on tick {tick}, before the gate released"
@@ -91,7 +91,7 @@ fn opponents_are_held_at_the_line_through_the_gated_span() {
         }
     }
     race.tick(&PlayerInputs::none());
-    for slot in 1..race.ship_count() as usize {
+    for slot in 1..race.sim.ship_count() as usize {
         assert_eq!(
             race.sim.world.ships[slot].physics.thrust,
             oag_physics::controls::CONTROL_RANGE,
@@ -110,7 +110,7 @@ fn voiced_start(countdown_voice: bool) -> Vec<(u64, oag_gameplay::cue::Cue)> {
     for _ in 0..400 {
         race.tick(&PlayerInputs::none());
         let stepped = race.sim.world.tick - 1;
-        for event in race.drain_cues() {
+        for event in race.sim.drain_cues() {
             if matches!(
                 event.cue,
                 oag_gameplay::cue::Cue::Ready | oag_gameplay::cue::Cue::Go

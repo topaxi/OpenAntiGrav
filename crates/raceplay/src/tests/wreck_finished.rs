@@ -16,10 +16,10 @@ fn a_race_the_wreck_ended() -> Race {
 
 fn a_race_the_wreck_ended_in(mode: Mode) -> Race {
     let mut race = a_race_ready_for_a_wreck(mode);
-    race.force_destroy(0);
+    race.sim.force_destroy(0);
     for _ in 0..120 {
         race.tick(&oag_gameplay::PlayerInputs::none());
-        if race.finished() {
+        if race.sim.finished() {
             return race;
         }
     }
@@ -108,7 +108,10 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
 #[test]
 fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
     let mut race = a_race_the_wreck_ended();
-    assert!(!race.runs_on_after_the_line(), "the player never crossed");
+    assert!(
+        !race.sim.runs_on_after_the_line(),
+        "the player never crossed"
+    );
     assert!(race.runs_on_after_the_wreck());
     assert!(race.runs_on_after_the_end());
     let tick = race.sim.world.tick;
@@ -116,7 +119,7 @@ fn a_single_race_wreck_keeps_the_world_running_under_the_results() {
         race.tick_finished();
     }
     assert_eq!(race.sim.world.tick, tick + 200, "the world's clock runs on");
-    assert!(race.finished(), "the race stays over");
+    assert!(race.sim.finished(), "the race stays over");
     assert_eq!(
         race.sim.world.ships[0].physics.craft_state,
         CraftState::Eliminated,
@@ -193,7 +196,7 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
         0.4,
     );
     race.sim.world.ships[1].physics.craft_state = CraftState::Eliminated;
-    race.force_destroy(0);
+    race.sim.force_destroy(0);
 
     let (mut edge, mut blast, mut back, mut opponent_back) = (None, None, None, None);
     for tick in 0..260u32 {
@@ -272,7 +275,7 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
     );
     assert_eq!(
         race.station_camera_section(),
-        Some(race.section_of_slot(0)),
+        Some(race.sim.section_of_slot(0)),
         "the wreck's own section"
     );
     // The director draws whichever craft it was handed: a live opponent after a cut.
@@ -295,7 +298,7 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
         .expect("the director has started");
     assert_eq!(
         race.station_camera_section(),
-        Some(race.section_of_slot(slot))
+        Some(race.sim.section_of_slot(slot))
     );
 }
 
@@ -314,10 +317,10 @@ fn the_director_starts_240_ticks_after_the_wreck_call() {
         0.4,
         SPECTATOR_SEED,
     ));
-    race.force_destroy(0);
+    race.sim.force_destroy(0);
     let called = race.sim.world.tick;
     for _ in 0..600 {
-        if race.finished() {
+        if race.sim.finished() {
             race.tick_finished();
         } else {
             race.tick(&oag_gameplay::PlayerInputs::none());

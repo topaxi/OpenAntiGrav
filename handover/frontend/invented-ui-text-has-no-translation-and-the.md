@@ -23,7 +23,7 @@ hardcoded English-only fallback for when the disc's table has no short mode
 name, `crates/game/src/loading/wording.rs` is an entire module of
 loading-screen prose ("READING THE ARCHIVES", "TRANSCODING MOVIES",
 "{done} / {total} {verb}") that the disc has no string for at all, by its own
-doc comment's admission, and `crates/game/src/main/hints.rs` supplies the
+doc comment's admission, and `crates/game/src/app/hints.rs` supplies the
 window title and stdout key-hint text the same way.
 
 **All four are wired now, one of them (`Mode::fallback_label`) turning out to
@@ -66,7 +66,7 @@ order:
    (`an_id_with_an_override_resolves_to_it`,
    `an_id_with_no_override_falls_back_to_the_current_literal`,
    `one_table_answers_every_call_it_is_passed_to`, and the placeholder tests).
-5. **`main/hints.rs` is wired too**: its eight `pub(crate) const &str` became
+5. **`app/hints.rs` is wired too**: its eight `pub(crate) const &str` became
    functions taking a `&StringTable`, each looked up by an `OAG_HINTS_*` id
    and falling back to the old literal. None of these eight has a disc
    idstring to override - they are window titles and stdout key hints, not
@@ -123,7 +123,7 @@ switch a player just made showed nowhere until the next launch.
 Both fixed: `race::Options` grows a `language` field, threaded from
 `settings::Settings::language` at every launch site and refreshed again in
 `Session::launch_race` so it cannot go stale against a live LANGUAGE-row
-change; `Session::resupply_language` (`crates/game/src/main/session/language.rs`)
+change; `Session::resupply_language` (`crates/game/src/app/session/language.rs`)
 re-runs `boot::load_shell` with the new language and folds the result through
 `Shell::from_boot` - the same function a fresh boot uses - re-supplying the
 open menu's language-scoped rows and the GPU-side fonts without losing cursor

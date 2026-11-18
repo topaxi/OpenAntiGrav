@@ -77,7 +77,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
         println!("{line}");
     }
     let mut race = race::Race::start(loaded.setup);
-    race.mine_stats().expect("the disc authors a Mine");
+    race.sim.mine_stats().expect("the disc authors a Mine");
 
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
@@ -122,6 +122,7 @@ fn laying_a_mine_sounds_minelaunch_and_writes_it_out() {
     for _ in 0..90 {
         race.tick(&PlayerInputs::single(throttle));
         launches += race
+            .sim
             .pending_cues()
             .iter()
             .filter(|e| e.cue == oag_gameplay::cue::Cue::MineLaunch)

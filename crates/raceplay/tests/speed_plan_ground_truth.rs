@@ -73,8 +73,8 @@ fn slice(class: &str, reversed: bool) {
                 let mut setup = loaded.setup.clone();
                 perturb::apply(&mut setup, eps);
                 let race = race::Race::start(setup);
-                let (plan, report) = race.build_player_speed_plan();
-                assert_eq!(plan.len(), race.racing_line().len());
+                let (plan, report) = race.sim.build_player_speed_plan();
+                assert_eq!(plan.len(), race.sim.racing_line().len());
                 (plan, report)
             })
             .collect();
@@ -159,7 +159,7 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
     let mut lazy = race::Race::start(loaded.setup.clone());
     let mut ahead = race::Race::start(loaded.setup);
     assert!(
-        lazy.use_original_ai(None, 1) && ahead.use_original_ai(None, 1),
+        lazy.sim.use_original_ai(None, 1) && ahead.sim.use_original_ai(None, 1),
         "the original driver flies, so only the fork asks for plans"
     );
 
@@ -220,7 +220,7 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
         .map(|&eps| {
             let mut setup = loaded.setup.clone();
             perturb::apply(&mut setup, eps);
-            let (_, report) = race::Race::start(setup).build_player_speed_plan();
+            let (_, report) = race::Race::start(setup).sim.build_player_speed_plan();
             println!(
                 "{track} {class} {eps}: failures {}, respawns {}, lap {:?}, unresolved {:?}",
                 report.verify_failures,

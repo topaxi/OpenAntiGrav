@@ -248,7 +248,7 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
     let race_table = tables(start).expect("the same disc").race;
     let mut race = oag_raceplay::Race::start(loaded.setup);
     assert!(
-        race.use_original_ai(None, 1),
+        race.sim.use_original_ai(None, 1),
         "Pure flies its original driver"
     );
     let mut lap = [1u32; 8];
@@ -258,7 +258,7 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
         race.tick(&PlayerInputs::none());
         if !launch_checked && seconds(&race) > 0.1 {
             launch_checked = true;
-            let field = race.original_ai_field().expect("the field is on");
+            let field = race.sim.original_ai_field().expect("the field is on");
             for slot in 1..8 {
                 let driver = &field.drivers[slot];
                 assert_eq!(
@@ -286,7 +286,7 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
              end-of-run shield {:.1}",
             ship.standing.finished(),
             ship.standing.lap,
-            race.respawns_of(slot),
+            race.sim.respawns_of(slot),
             ship.physics.shield
         );
     }
@@ -301,9 +301,9 @@ fn fly_allowing(track: &str, class: &str, start: PureClass, respawns: u32, destr
             wrecks += 1;
         }
         assert!(
-            race.respawns_of(slot) <= respawns,
+            race.sim.respawns_of(slot) <= respawns,
             "{track}: slot {slot} respawned {} times",
-            race.respawns_of(slot)
+            race.sim.respawns_of(slot)
         );
     }
     assert!(

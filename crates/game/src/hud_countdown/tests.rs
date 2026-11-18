@@ -4,7 +4,7 @@
 //!
 //! **Why this lives here rather than exercising `RaceStage::warm_up`
 //! directly.** The crash this guards
-//! (`crates/game/src/main/race_stage.rs`'s `draw_hud` and `warm_up`, fixed
+//! (`crates/game/src/app/race_stage.rs`'s `draw_hud` and `warm_up`, fixed
 //! alongside this file) needs a loaded circuit to reach through `RaceStage` -
 //! a real `race::Scene` and `race::Race` - which is what a ground-truth test
 //! is for, not a unit test. The validation error itself has nothing to do

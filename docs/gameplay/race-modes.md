@@ -555,7 +555,7 @@ nothing until now.
   `oag_tables::race_campaign::Cell::laps` straight through to
   `oag_race::RaceState::laps_target`, overriding whatever this table would
   have answered - `Session::launch_campaign_cell`
-  (`crates/game/src/main/session/campaign.rs`) is the one caller. **Only for
+  (`crates/game/src/app/session/campaign.rs`) is the one caller. **Only for
   `Time Trial` and `Single Race`**, the two modes this table's own
   `laps_target` already answers `Some` for - `Speed Lap` and `Zone` both
   author a `laps` attribute too (`7` and `0`) that is display convention,
@@ -760,7 +760,7 @@ gold-medal figure, and the values actually used are **10, 7 or 5** - never
 one flat figure. `FEData.wad`'s `10` was one sample of three read as the
 whole population. **A campaign Eliminator launch now fills this in from the
 cell's own gold target, 2026-09-14** -
-`Session::launch_campaign_cell` (`crates/game/src/main/session/campaign.rs`)
+`Session::launch_campaign_cell` (`crates/game/src/app/session/campaign.rs`)
 sets `Options::eliminator_kill_target` to `cell.gold`, so the campaign's own
 `10`/`7`/`5` reach `Race::start` per race rather than one flat figure. A
 Custom Race outside the campaign still has no cell to read, so
@@ -930,7 +930,7 @@ documented readers, `World_CollectNodeLists`, `WeaponPads_TestCraft` and the wea
 the documented callers, not an exhaustive cross-reference. It obeys the player's physics: the
 driver is handed a place in the road, never thrust, speed or shield.
 
-How it works. `Race::pad_for` (`crates/raceplay/src/field/pad_seek.rs`) projects each pad's
+How it works. `RaceSim::pad_for` (`crates/raceplay/src/field/pad_seek.rs`) projects each pad's
 centre onto the AI line once at the start, and each tick hands an empty-slot craft the next armed
 pad within 150 units, as `oag_ai::Field::pad` (distance ahead, offset across the line). Of a pair
 straddling the line it picks the one nearer across to where the craft already is. `Driver::drift`
@@ -957,7 +957,7 @@ racing ticks with an empty slot and wait a median 9.7 s from emptying to the nex
 circuit's nine pads sit up to 19.8 units off the line (two pairs straddle it).
 
 Sweep: parked player, VENOM, kill target 5, six game-minutes, one binary with the steering
-switched per arm (`Race::set_pad_seeking`). Shield lost to walls is the sum over the run of
+switched per arm (`RaceSim::set_pad_seeking`). Shield lost to walls is the sum over the run of
 `wall_shield_charged_of`, per craft-minute of racing. It is not a per-lap figure and not an
 end-of-run shield.
 
@@ -1036,7 +1036,7 @@ before:
 | Absorb | The measured decision's absorb half spends the weapon on the Eliminator's 1 s Shield (`Race::eliminator_absorb`, the player's path) instead of keeping it | The decision and HD's `absorbScale` (`3.6 / 2.6 / 0.6`) are measured ([weapon-ai-fire.md](../ghidra/functions/ps3-hdfury-eu/weapon-ai-fire.md)); keeping the weapon fired it later instead |
 | Hold | The Hard rung (Elite, Ace) keeps a fresh pickup 20 s before spending it in any way (fire, drop, absorb, Turbo, Autopilot), on top of the measured 0.8 s gate | Measured on ours: an Elite opponent spent a Missile 1.5 to 1.8 s after taking it, and scaling the fire odds by 0.2 did not lengthen that. Why is unverified; the window's flat second chance (`rates[4]`, which ignores the odds) is a candidate. A held weapon blocks the next pad, so the hold paces supply. Novice and Skilled absorb enough of theirs |
 | No pad seeking | `PadSeeking::Off` ([Steering for weapon pads](#steering-for-weapon-pads-2026-10-03)) | Tuned for Pulse's five-kill race. Here it doubled the supply |
-| No pack | `Race::eliminator_pack_scale` is `1.0` | Tuned for Pulse's five-kill race. A pack this dense let one Repulser take several kills at once |
+| No pack | `RaceSim::eliminator_pack_scale` is `1.0` | Tuned for Pulse's five-kill race. A pack this dense let one Repulser take several kills at once |
 
 **Before and after.** Measured on Vineta K, Venom, the person under autopilot, seeds 1 to 12.
 Race length is the leading opponent's completed laps when the race ends; a race still running at
@@ -1337,7 +1337,7 @@ onward) scored as one event:
 - **A leg advances when the player picks `Race Again`'s mid-tournament
   sibling, `ER_NEXT_RACE`**, offered on `EndRace Menu` for every leg but
   the last (`endrace-screens.md`) - `Session::advance_tournament_leg`
-  (`crates/game/src/main/session/tournament.rs`) is
+  (`crates/game/src/app/session/tournament.rs`) is
   `Tournament_AdvanceLeg`'s effect, reached through this engine's existing
   relaunch machinery rather than a parallel path.
 - **The campaign medal a finished tournament earns is a threshold on the
@@ -1533,12 +1533,12 @@ Three things happen on that tick, and they are in three layers on purpose:
    something keeps calling it, which is what keeps the trace harness and the
    headless capture honest.
 3. **The composition root stops stepping it - unless the player crossed the line.**
-   `Session::frame` stops calling `tick` once `Race::finished` answers yes, the HUD
+   `Session::frame` stops calling `tick` once `RaceSim::finished` answers yes, the HUD
    is replaced by the results table, and X or escape hands the window back to the
    menus. That is the same place the camera cycle is handled, and for the same
    reason: a race that stopped itself inside `tick` would change what every
    fixed-tick-count caller produces. **Since 2026-10-01 a finish by the line keeps
-   being stepped** (`Race::runs_on_after_the_line`): the original keeps the race
+   being stepped** (`RaceSim::runs_on_after_the_line`): the original keeps the race
    running behind the panels with the player's craft flown by the AI, see
    [after-the-finish.md](after-the-finish.md). A wreck, an Eliminator target and a
    Zone run still stand still, and a Single Race wreck runs on too (2026-10-02, the maintainer's "hold, then results").

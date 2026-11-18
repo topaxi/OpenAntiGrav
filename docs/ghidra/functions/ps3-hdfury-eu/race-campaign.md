@@ -340,7 +340,7 @@ the loader - and that equivalent has not been named on this binary at all.
 **Consequence for this project's own implementation**: `oag_game`'s
 campaign-cell skill-scale resolution
 (`Session::resolve_campaign_ai_skill_scale`,
-`crates/game/src/main/session/campaign.rs`) is wired generically - it runs
+`crates/game/src/app/session/campaign.rs`) is wired generically - it runs
 for any campaign cell, HD's included, since `Cell::skill_for_difficulty`
 already reads `skillMedium`. What is **not** wired is HD's own archive
 path: the resolver only opens `PSP_GAME/USRDIR/FEData.wad`, which does not

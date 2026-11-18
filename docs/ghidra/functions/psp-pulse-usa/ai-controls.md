@@ -672,7 +672,7 @@ the lane point is p50 0.2 to 0.5. **Not read:** whether the
 by `SplitScreenMultiplier` when more than one person races).
 
 **Wired** in `oag_ai::original::Autopilot`, flown by
-`oag_raceplay`'s `Race::autopilot_controls` on every title whose original tables
+`oag_raceplay`'s `RaceSim::autopilot_controls` on every title whose original tables
 read, whatever the opponents fly; see [gameplay/ai.md](../../../gameplay/ai.md#the-autopilot-flies-the-originals-player-driver-2026-10-19).
 
 ## The airborne driver, replayed live (2026-10-19)

@@ -64,7 +64,7 @@ fn pickups_and_empty_ticks(race: &mut race::Race) -> (u32, u32) {
 /// An empty-slot opponent collects measurably more often with the steering on
 /// than with it off: 5.7 pickups per empty craft-minute off and 8.0 on over
 /// seeds 1 to 240 to the finish (2026-10-03). Fails if the channel is dropped
-/// anywhere between `Race::pad_for` and `Driver::drift`, because the two arms
+/// anywhere between `RaceSim::pad_for` and `Driver::drift`, because the two arms
 /// then drive the same race.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -74,11 +74,11 @@ fn an_empty_slot_eliminator_opponent_collects_more_often_steering_for_pads() {
         let Some(mut steering) = eliminator(seed) else {
             return;
         };
-        assert_eq!(steering.pad_seeking(), PadSeeking::EmptySlot);
+        assert_eq!(steering.sim.pad_seeking(), PadSeeking::EmptySlot);
         let (p, e) = pickups_and_empty_ticks(&mut steering);
         on = (on.0 + p, on.1 + e);
         let mut plain = eliminator(seed).expect("loaded once already");
-        plain.set_pad_seeking(PadSeeking::Off);
+        plain.sim.set_pad_seeking(PadSeeking::Off);
         let (p, e) = pickups_and_empty_ticks(&mut plain);
         off = (off.0 + p, off.1 + e);
     }
@@ -110,8 +110,8 @@ fn a_single_race_does_not_steer_for_pads() {
     .expect("loading the race");
     let race = race::Race::start(loaded.setup);
     assert!(
-        !race.weapon_pads().is_empty(),
+        !race.sim.weapon_pads().is_empty(),
         "a Single Race arms its pads"
     );
-    assert_eq!(race.pad_seeking(), PadSeeking::Off);
+    assert_eq!(race.sim.pad_seeking(), PadSeeking::Off);
 }

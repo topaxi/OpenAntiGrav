@@ -469,7 +469,7 @@ pub(super) fn same_planes(a: &Movie, b: &Movie) -> bool {
 /// [`oag_pure::names::FMV_INTRO_MOVIE`]'s own doc comment for what it is, how
 /// its name was found, and what it takes to actually draw it (the other half
 /// of that work, done alongside this function: see `oag_ui::frontend::Frontend`
-/// and `crate::main::FrontendStage` for the rest).
+/// and `crate::app::FrontendStage` for the rest).
 ///
 /// `None`, and nothing attempted at all, for a source whose `screens` has no
 /// `FMV Intro` state - every Pulse source, and any future title this build

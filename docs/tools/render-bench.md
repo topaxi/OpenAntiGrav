@@ -53,7 +53,7 @@ not move (see `docs/rendering/multi-window.md`).
 meets `pulse-2h.json`; `run.case` in the result names the case and a compare of two
 different cases warns. `--size WxH` sets the offscreen target for every case (default
 1280x720; the Steam Deck's panel is 1280x800). Both people fly on `--autopilot`
-(`Race::autopilot_flies` covers every person's slot) and the race ends when the last of them
+(`RaceSim::autopilot_flies` covers every person's slot) and the race ends when the last of them
 has crossed the line.
 
 What a split frame records differs from one view in four ways, all in

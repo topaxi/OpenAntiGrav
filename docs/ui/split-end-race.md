@@ -12,7 +12,7 @@ Code: `crates/raceplay/src/telemetry.rs` (`Race::finished_view`, the held readou
 `crates/ui-screens/src/endrace/split.rs` (`Results Split`), `.../draw.rs`
 (`split_rewards_draw_list`), `.../borrow.rs` (the PSP's borrowed copies),
 `.../table.rs` (the grid geometry), `.../people.rs` (Pulse's one table),
-`.../hd.rs` (HD's grid), `crates/game/src/main/session/endrace.rs` (the split branch of
+`.../hd.rs` (HD's grid), `crates/game/src/app/session/endrace.rs` (the split branch of
 `build_endrace`). Tests: `crates/raceplay/src/results/tests.rs`,
 `crates/game/src/results_tables.rs`, the unit tests in `crates/ui-screens/src/endrace/`
 (`split/tests.rs`, `table/tests.rs`), and the disc-backed
@@ -42,7 +42,7 @@ count) is in the executable and was **not read**.
    layout's last message line (`Info4`) reads `FINISHED` (`OAG_SPLIT_FINISHED`, our
    own text, translated in the four project languages). The other views race on.
    Their craft is flown by the driver as a single-player craft is after the line
-   (`Race::flown_for_the_player`, per slot), at the original's post-finish thrust.
+   (`RaceSim::flown_for_the_player`, per slot), at the original's post-finish thrust.
 2. **When the last person finishes** the race is over. One view is drawn
    (`Race::views_drawn`, not `viewport_count`, which stays the answer to "was this a
    split"), so `Race End Photo` and the panels sit over the one picture a

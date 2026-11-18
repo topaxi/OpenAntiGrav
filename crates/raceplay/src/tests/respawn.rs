@@ -77,7 +77,7 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
         vec![plane(1, -40.0, oag_physics::Surface::Reset, 0)],
     );
     let mut race = Race::start(setup);
-    assert_eq!(race.respawns(), 0);
+    assert_eq!(race.sim.respawns(), 0);
 
     // Throw it off the track. No gravity in this fixture, so nothing else can
     // move it and the only thing under test is the reset path.
@@ -89,19 +89,23 @@ fn a_ship_that_falls_through_a_reset_plane_is_put_back_on_the_track() {
 
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());
-        if race.respawns() > 0 {
+        if race.sim.respawns() > 0 {
             break;
         }
     }
 
-    assert_eq!(race.respawns(), 1, "the reset plane never triggered");
+    assert_eq!(race.sim.respawns(), 1, "the reset plane never triggered");
 
     let body = race.sim.world.ships[0].physics.body;
     // Back on the track: near a spline sample, above it, and launched down
     // it, read on the tick it was put back. Never fully grounded here, so no
     // speed was latched and the launch is the reset's bare `50`
     // (`crate::breadcrumbs`); the straight runs `+x`.
-    let distance = race.spline().distance_to(body.position).expect("a sample");
+    let distance = race
+        .sim
+        .spline()
+        .distance_to(body.position)
+        .expect("a sample");
     assert!(distance < 20.0, "respawned {distance} from the spline");
     assert!(body.position.y > 0.0, "respawned at {:?}", body.position);
     assert!(
@@ -130,7 +134,7 @@ fn falling_through_any_other_class_does_not_respawn() {
         for _ in 0..10 {
             race.tick(&PlayerInputs::none());
         }
-        assert_eq!(race.respawns(), 0, "{surface:?} respawned the ship");
+        assert_eq!(race.sim.respawns(), 0, "{surface:?} respawned the ship");
     }
 }
 
@@ -148,7 +152,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
         race.sim.world.ships[0].physics.body.position = inside;
         race.tick(&PlayerInputs::none());
     }
-    assert_eq!(race.respawns(), 0, "a craft on the track was recovered");
+    assert_eq!(race.sim.respawns(), 0, "a craft on the track was recovered");
 }
 
 /// **The other dwell, on an opponent rather than the player.**
@@ -165,7 +169,7 @@ fn a_player_inside_the_threshold_is_left_alone() {
 /// records that measurement and, separately, that `05_Track` and `07_Track`
 /// at novice still make almost no progress - a *bounce-in-place* failure the
 /// sustained-dwell counter cannot see by construction, and which is not
-/// closed. So this drives [`Race::stalled`] directly rather than through a
+/// closed. So this drives [`RaceSim::stalled`] directly rather than through a
 /// real circuit either way: it proves the dwell counter itself does what it
 /// was built to do, which was never in question - the open question is a
 /// craft that never describes the state the counter watches for, and no
@@ -179,9 +183,12 @@ fn a_stopped_opponent_is_flagged_after_the_dwell() {
     ship.physics.body.linear_velocity = Vec3::ZERO;
 
     for _ in 0..STALL_TICKS - 1 {
-        assert!(!race.stalled(1), "flagged before the dwell elapsed");
+        assert!(!race.sim.stalled(1), "flagged before the dwell elapsed");
     }
-    assert!(race.stalled(1), "the dwell elapsed and nothing happened");
+    assert!(
+        race.sim.stalled(1),
+        "the dwell elapsed and nothing happened"
+    );
 }
 
 /// **The control**: a craft asking nothing of the throttle is never flagged,
@@ -197,7 +204,7 @@ fn an_opponent_holding_no_throttle_never_stalls() {
 
     for _ in 0..STALL_TICKS * 3 {
         assert!(
-            !race.stalled(1),
+            !race.sim.stalled(1),
             "a craft holding no throttle was flagged as stalled"
         );
     }
@@ -310,7 +317,7 @@ fn a_sustained_scrape_refires_after_the_cooldown_elapses() {
         vec![upward_plane(-40.0, oag_physics::Surface::Wall)],
     );
     let mut race = Race::start(setup);
-    let dt = race.dt();
+    let dt = race.sim.dt();
 
     let push_toward_wall = |race: &mut Race| {
         let body = &mut race.sim.world.ships[0].physics.body;
@@ -366,7 +373,7 @@ fn a_recovery_pose_inside_a_reset_volume_gives_up_instead_of_looping() {
     }
 
     assert_eq!(
-        race.respawns(),
+        race.sim.respawns(),
         RESPAWN_GIVE_UP,
         "respawning did not stop after {RESPAWN_GIVE_UP} tries"
     );
@@ -386,10 +393,14 @@ fn a_respawn_is_not_repeated_on_the_very_next_tick() {
 
     let mut race = Race::start(setup);
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.respawns(), 1);
+    assert_eq!(race.sim.respawns(), 1);
     for _ in 0..(RESPAWN_COOLDOWN_TICKS - 1) {
         race.tick(&PlayerInputs::none());
-        assert_eq!(race.respawns(), 1, "respawned again inside the cooldown");
+        assert_eq!(
+            race.sim.respawns(),
+            1,
+            "respawned again inside the cooldown"
+        );
     }
 }
 
@@ -498,7 +509,7 @@ fn a_looping_spark_effect_stops_when_the_contact_does() {
 
     // Held against the wall: one attachment, not one per tick and not one
     // per cooldown - a chattering scrape must not go dark waiting to re-arm.
-    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.dt()).ceil() as usize + 2;
+    let ticks = (oag_gameplay::cue::COLLISION_COOLDOWN / race.sim.dt()).ceil() as usize + 2;
     for _ in 0..ticks {
         push_toward_wall(&mut race);
         race.tick(&PlayerInputs::none());
@@ -635,7 +646,7 @@ fn opponent_beneath(depth: f32, across: f32, supported: bool) -> Race {
         let line = &race.sim.racing_line;
         let frames = (0..line.len())
             .map(|i| oag_ai::Frame {
-                lateral: race.ai_sample(i).map_or(Vec3::ZERO, |s| {
+                lateral: race.sim.ai_sample(i).map_or(Vec3::ZERO, |s| {
                     Vec3::from_array(s.lateral).normalize_or_zero()
                 }),
                 left: -CORRIDOR,
@@ -654,7 +665,7 @@ fn opponent_beneath(depth: f32, across: f32, supported: bool) -> Race {
 /// Moves opponent 1 to `depth` below and `across` its own line point.
 fn place_opponent(race: &mut Race, depth: f32, across: f32) {
     let index = race.sim.world.ships[1].driver.index as usize;
-    let sample = *race.ai_sample(index).expect("a grid race has samples");
+    let sample = *race.sim.ai_sample(index).expect("a grid race has samples");
     let up = -Vec3::from_array(sample.down).normalize_or_zero();
     let lateral = Vec3::from_array(sample.lateral).normalize_or_zero();
     let point = race.sim.racing_line.point(index);
@@ -672,17 +683,17 @@ fn place_opponent(race: &mut Race, depth: f32, across: f32) {
 #[test]
 fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
     let mut race = opponent_beneath(0.0, CORRIDOR + 8.0, true);
-    assert!(!race.beneath_too_long(1));
+    assert!(!race.sim.beneath_too_long(1));
     place_opponent(&mut race, BENEATH_LINE + 5.0, CORRIDOR + 8.0);
-    assert!(race.beneath_the_line(1));
+    assert!(race.sim.beneath_the_line(1));
     for _ in 0..RESCUE_TICKS - 1 {
         assert!(
-            !race.beneath_too_long(1),
+            !race.sim.beneath_too_long(1),
             "flagged before the dwell elapsed"
         );
     }
     assert!(
-        race.beneath_too_long(1),
+        race.sim.beneath_too_long(1),
         "the dwell elapsed and nothing happened"
     );
 }
@@ -695,12 +706,12 @@ fn an_opponent_on_the_ground_well_below_its_line_is_lost_after_the_dwell() {
 #[test]
 fn an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost() {
     let mut race = opponent_beneath(0.0, 0.0, true);
-    assert!(!race.beneath_too_long(1));
+    assert!(!race.sim.beneath_too_long(1));
     place_opponent(&mut race, BENEATH_LINE + 6.0, 0.0);
-    assert!(race.beneath_the_line(1));
+    assert!(race.sim.beneath_the_line(1));
     for _ in 0..RESCUE_TICKS * 3 {
         assert!(
-            !race.beneath_too_long(1),
+            !race.sim.beneath_too_long(1),
             "a craft inside its corridor was rescued from the road under the line"
         );
     }
@@ -712,17 +723,17 @@ fn an_opponent_under_its_line_inside_the_corridor_all_along_is_not_lost() {
 #[test]
 fn a_craft_slightly_below_airborne_or_under_a_gap_is_not_beneath_its_line() {
     let race = opponent_beneath(BENEATH_LINE - 5.0, 0.0, true);
-    assert!(!race.beneath_the_line(1));
+    assert!(!race.sim.beneath_the_line(1));
     let mut race = opponent_beneath(BENEATH_LINE + 5.0, 0.0, true);
     race.sim.world.ships[1].physics.time_airborne = 0.5;
-    assert!(!race.beneath_the_line(1));
+    assert!(!race.sim.beneath_the_line(1));
     let race = opponent_beneath(BENEATH_LINE + 5.0, 0.0, false);
     assert!(
         race.sim
             .racing_line
             .is_unsupported(race.sim.world.ships[1].driver.index as usize)
     );
-    assert!(!race.beneath_the_line(1));
+    assert!(!race.sim.beneath_the_line(1));
 }
 
 /// A craft no tick has located is placed where it stands, so a posed capture's visible set is its section's and not

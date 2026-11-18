@@ -41,7 +41,7 @@ fn press_once(
         }
         let snapshot = buttons.tick(if tick == 1 { SQUARE } else { 0 });
         race.tick(&PlayerInputs::single(snapshot));
-        raised.extend(race.drain_cues().into_iter().map(|e| e.cue));
+        raised.extend(race.sim.drain_cues().into_iter().map(|e| e.cue));
     }
     raised
 }

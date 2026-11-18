@@ -48,7 +48,8 @@ fn push_toward_wall(race: &mut Race, slot: usize) {
 }
 
 fn collisions(race: &Race) -> Vec<usize> {
-    race.pending_cues()
+    race.sim
+        .pending_cues()
         .iter()
         .filter(|cue| cue.cue == Cue::Collision)
         .map(|cue| usize::from(cue.slot))
@@ -114,7 +115,7 @@ fn the_contact_cue_cadence_does_not_depend_on_the_seat() {
             push_toward_wall(&mut race, 3);
             race.tick(&PlayerInputs::none());
             heard.push(collisions(&race).len());
-            race.drain_cues();
+            race.sim.drain_cues();
         }
         (heard, race.sim.contact_cue_cooldown)
     };
@@ -134,7 +135,7 @@ fn the_start_voice_is_the_seats() {
         let mut race = four_people_against_a_wall(Some(seat));
         race.sim.countdown_voice = true;
         race.raise_start_cue(Cue::Ready);
-        assert_eq!(usize::from(race.pending_cues()[0].slot), seat);
+        assert_eq!(usize::from(race.sim.pending_cues()[0].slot), seat);
     }
 }
 

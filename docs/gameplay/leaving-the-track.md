@@ -34,9 +34,9 @@ All four are on [shield.md](../ghidra/functions/psp-pulse-usa/shield.md#state-3-
 (This section used to say three of four triggers were inventions: the airborne
 and distance triggers were not known.) The
 cause of the most recent respawn is now recorded per craft
-(`Race::last_respawn_cause_of`, bookkeeping outside `state_hash`), and a fifth
+(`RaceSim::last_respawn_cause_of`, bookkeeping outside `state_hash`), and a fifth
 value, `Destroyed`, separates a wreck from a fall - without it the `Wrecked` rows
-below read as falls. `Race::respawn_given_up_of` exposes the five-in-a-row give-up.
+below read as falls. `RaceSim::respawn_given_up_of` exposes the five-in-a-row give-up.
 
 ## One table per race
 

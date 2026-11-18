@@ -25,7 +25,7 @@ impl Scene {
         race: &'a Race,
         which: Overlay,
     ) -> impl Iterator<Item = (usize, &'a Drawable, f32)> + 'a {
-        let drawn = usize::from(race.ship_count());
+        let drawn = usize::from(race.sim.ship_count());
         let drawables = match which {
             Overlay::Absorb => &self.absorb_overlay[0],
             Overlay::LeachBeam => &self.absorb_overlay[1],
@@ -36,7 +36,7 @@ impl Scene {
             .take(drawn)
             .filter_map(move |(slot, overlay)| {
                 let overlay = overlay.as_ref()?;
-                if !race.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
+                if !race.sim.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
                     return None;
                 }
                 let pulse = match which {

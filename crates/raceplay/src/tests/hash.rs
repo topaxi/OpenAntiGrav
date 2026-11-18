@@ -28,7 +28,7 @@ fn a_pad_refresh_timer_one_tick_out_moves_the_race_hash() {
 
     // The craft has not moved and nothing it carries has changed - only how
     // long the pad has left to cool down.
-    race.sim.weapon_pad_refresh_left[0] -= race.dt();
+    race.sim.weapon_pad_refresh_left[0] -= race.sim.dt();
     assert_ne!(
         before,
         race.sim.state_hash(),

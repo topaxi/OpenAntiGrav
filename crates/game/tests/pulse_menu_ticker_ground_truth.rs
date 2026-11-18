@@ -11,7 +11,7 @@
 //! `read_footer` reads the ticker for the Race Campaign's screens - but
 //! nothing before this pinned the *real* disc's own `TextInfoIsAlwaysLast`
 //! viewport, the one the ordinary menu pages' own footer now reads too
-//! (`oag_game::boot::screens::read_ticker`, `crate::main::menu_stage::footer`
+//! (`oag_game::boot::screens::read_ticker`, `crate::app::menu_stage::footer`
 //! in the binary). `docs/ui/campaign-screens.md`'s 2026-09-21 pass measured
 //! `OffsetX="85" OffsetY="235" width="370" height="32"` off `pulse-psp-usa`;
 //! this is the test that keeps that number honest against both pressings

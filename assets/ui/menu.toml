@@ -1778,7 +1778,7 @@ title_string_id = "OAG_OPTIONS_CONTROLS"
 # key from whatever button held it before, and the row that used to hold it
 # is left showing whatever it has left, empty included - a real state, not a
 # broken one. See `docs/architecture/menus.md`'s rebinding section and
-# `crates/game/src/main/rebind.rs`, which decides what a raw key press means
+# `crates/game/src/app/rebind.rs`, which decides what a raw key press means
 # while a row is waiting.
 # FIRE PICKUP and ABSORB PICKUP are chosen text, not measured - neither PSP
 # title's front-end XML authors this page at all, see this page's own header.

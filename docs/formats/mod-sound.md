@@ -57,7 +57,7 @@ title cues' poses, drops it). Found by
 runs the real mod in a real Pulse race through `Audio` and counts the loop up and down.
 
 An output: queued on `RaceSim::mod_sounds` beside the cues, drained by the composition root
-(`Race::drain_mod_sounds`), never hashed
+(`RaceSim::drain_mod_sounds`), never hashed
 (`tests::extension_sounds::a_race_that_asks_for_sounds_hashes_like_one_that_asks_for_none`).
 A sound that fails to load plays nothing, and the load report names it
 (`mod <id>: sound <name> left out: <why>; plays nothing`).
@@ -83,7 +83,7 @@ sounds of a replayed tick, as it does cues, and a host that never drains keeps a
 1,024 queued events of any mode.
 
 **A loop is state, not only an event.** The race keeps the loops its modules hold
-(`Race::mod_sound_loops`, the frame's `mod_loops`) and the playing side brings its voices to
+(`RaceSim::mod_sound_loops`, the frame's `mod_loops`) and the playing side brings its voices to
 that set every tick (`oag_sound::sfx::mod_sound::Voices::play`): a loop whose `Loop` was
 never heard is started, one whose `Stop` was never heard is stopped, and one the voice pool
 took back is started again. So a start or a stop raised in a tick that ran silently (a seek, a

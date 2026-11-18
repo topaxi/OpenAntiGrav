@@ -110,7 +110,7 @@ fn the_original_hd_capture_stepped_once_per_row() {
     if let Ok(delta) = std::env::var("OAG_HD_RIDE") {
         handling.antigrav.ride_height += delta.parse::<f32>().unwrap_or(0.0);
     }
-    let world = race.collision();
+    let world = race.sim.collision();
     let term = match std::env::var("OAG_HD_GRAV").as_deref() {
         Ok("ground") => oag_physics::passive::ClassGravityTerm::Grounded,
         _ => oag_physics::passive::ClassGravityTerm::Airborne,

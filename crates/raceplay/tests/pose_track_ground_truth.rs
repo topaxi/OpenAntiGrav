@@ -165,10 +165,10 @@ fn respawn(title: &str) {
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         tick += 1;
         truth.push(grid(&race));
-        if respawned.is_none() && race.respawns() > 0 {
+        if respawned.is_none() && race.sim.respawns() > 0 {
             respawned = Some(tick);
         }
     }
@@ -178,7 +178,7 @@ fn respawn(title: &str) {
     let track = replay.pose_track.as_ref().expect("a pose track");
     println!(
         "{title}: thrown after tick {thrown}, respawned at tick {respawned} ({:?}), {} ticks, {} keys",
-        race.last_respawn_cause_of(0),
+        race.sim.last_respawn_cause_of(0),
         replay.ticks(),
         track.keys(0)
     );
@@ -224,8 +224,8 @@ fn respawn(title: &str) {
 }
 
 fn grid(race: &Race) -> Vec<Pose> {
-    (0..usize::from(race.ship_count()))
-        .map(|slot| race.craft_pose(slot))
+    (0..usize::from(race.sim.ship_count()))
+        .map(|slot| race.sim.craft_pose(slot))
         .collect()
 }
 

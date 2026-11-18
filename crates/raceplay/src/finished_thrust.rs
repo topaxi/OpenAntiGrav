@@ -25,12 +25,11 @@
 //! The campaign's original opponent reads the same file whole, through
 //! `crate::original_tables`.
 
+use crate::RaceSim;
 use oag_tables::ai_race_stats::{self, AiRaceStats};
 use oag_tables::handling::SpeedClass;
 use oag_tables::race_campaign::Difficulty;
 use oag_tables::track_stats::{self, ModeTerm, TrackStats};
-
-use super::Race;
 
 /// The class's thrust table and the race's skill scale.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -153,13 +152,13 @@ pub(super) fn read(
     Some(thrust)
 }
 
-impl Race {
+impl RaceSim {
     /// Replaces the skill scale the finished player's thrust is read at:
     /// a campaign cell's own position on the track's curve, which
     /// `AI_ResolveSkillScale` uses instead of the ambient value. A race with
     /// no table loaded ignores it.
     pub fn set_finished_thrust_skill(&mut self, skill: f32) {
-        if let Some(thrust) = self.sim.finished_thrust.as_mut() {
+        if let Some(thrust) = self.finished_thrust.as_mut() {
             thrust.skill = skill;
         }
     }
@@ -168,8 +167,8 @@ impl Race {
     /// has finished; `None` before the line or with no table loaded.
     #[must_use]
     pub fn finished_thrust_cap(&self, slot: usize) -> Option<f32> {
-        let thrust = self.sim.finished_thrust?;
-        if !self.sim.world.ships[slot].standing.finished() {
+        let thrust = self.finished_thrust?;
+        if !self.world.ships[slot].standing.finished() {
             return None;
         }
         Some(thrust.fraction(self.places()[slot]))

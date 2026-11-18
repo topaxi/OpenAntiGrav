@@ -62,8 +62,8 @@ fn lap(image: &Path, track: &str) -> Option<(race::Race, TrackEmitters)> {
     let emitters = loaded.setup.track_emitters.clone();
     let mut race = race::Race::start(loaded.setup);
     // The player is flown by their own racing line, so the ears go all the way
-    // round rather than into the first wall. See `Race::set_autopilot`.
-    race.set_autopilot(true);
+    // round rather than into the first wall. See `RaceSim::set_autopilot`.
+    race.sim.set_autopilot(true);
     Some((race, emitters))
 }
 

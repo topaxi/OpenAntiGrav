@@ -1,7 +1,7 @@
 //! `prefer-route`: a module names the route a slot's driver takes at its next fork.
 //!
 //! Held for one tick (the module re-sends it each tick it should hold) and read where the
-//! driver moves onto a route, `Race::steer_branching`: the coin has been thrown by then,
+//! driver moves onto a route, `RaceSim::steer_branching`: the coin has been thrown by then,
 //! so the race's random streams are what they would be without it. Hashed, after the
 //! no-module early return, so a race without a module hashes as before.
 

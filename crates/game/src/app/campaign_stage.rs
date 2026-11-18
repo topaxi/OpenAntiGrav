@@ -1,0 +1,1305 @@
+//! The Race Campaign's screens, over the menu stage - the same shape
+//! [`crate::app::picker_stage`] holds the race box's two in. See
+//! `oag_ui_screens::campaign` for the model and the drawing, and
+//! `crate::app::session::campaign` for the flow that opens and closes one.
+//!
+//! **HD/Fury adds a third screen ahead of the other two**: `Campaign
+//! Selection`, picking between the base `Wipeout HD` campaign
+//! (`grid0`..`grid7`) and `Fury` (`grid8`..`grid15`) before either ever pages
+//! a grid tier. Every other title never builds [`Screen::Selection`] at all -
+//! `CampaignStage::new` opens straight on [`Screen::Grid`] the way it always
+//! has when [`CampaignStage::has_selection`] is `false`. See
+//! `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
+//! section.
+
+use oag_tables::race_campaign;
+use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
+
+use crate::campaign::with_opening_difficulty;
+use crate::unlock::{campaign_medal_of, campaign_tier, to_campaign_difficulty};
+
+/// One open campaign screen: `Campaign Selection` (HD and Omega), `Grid
+/// Selection`, or `Cell Selection` over one of its tiers.
+pub(crate) enum Screen {
+    /// See the module doc. Built only for a title whose screen file authors it (HD, Omega).
+    Selection(CampaignSelection),
+    Grid(oag_ui_screens::campaign::GridSelection),
+    /// `which` is the absolute [`CampaignStage::grids`] index the player
+    /// drilled into - what `Event::Back` on `Cell Selection` returns `Grid
+    /// Selection` to. Absolute, not relative to
+    /// [`CampaignStage::grid_range`], so `CampaignStage::grids().get(which)`
+    /// always works regardless of which campaign (if any) is open.
+    Cell {
+        model: oag_ui_screens::campaign::CellSelection,
+        which: usize,
+    },
+}
+
+/// `Cell Selection`'s cursor: **one `(x, y)` slot shared by every grid**, not a
+/// memory per grid.
+///
+/// **Measured** (PPSSPP, `pulse-psp-usa.chd`, two boots,
+/// `docs/ui/campaign-screens.md`'s "Where the cursor lives"): the original
+/// keeps the cursor as the `Selector` widget's own `(x, y)` and re-resolves it
+/// by the *current* grid's name on entry. Left on `grid0_3_2`, entering `grid1`
+/// lands on `grid1_3_2`, not on `grid1`'s first-unlocked default; left on
+/// `grid1_3_1`, entering `grid0` lands on `grid0_3_1`, not on the `grid0_3_2`
+/// it was last left on. The slot is kept only when the new grid has a cell
+/// there that **shows no lock glyph** - the rule the screen draws with
+/// (`Locked` set, no medal of its own, no medalled hex neighbour), which is
+/// the original's own tile-flag test on the lock layer: a play-unlocked cell
+/// (`Locked` still 1, glyph hidden by a medalled neighbour) keeps the cursor,
+/// a glyph-visible one falls to the first-unlocked default (`grid0_2_2` into
+/// `grid1`, and `grid0_2_1` back into `grid0` itself, both measured). It also survives
+/// leaving the campaign altogether, which is why [`Session`] holds it rather
+/// than this stage.
+///
+/// **Chosen, not measured**: that HD/Fury's own `Cell Selection` (which shares
+/// this stage) behaves the same way - only Pulse PSP was observed.
+///
+/// [`Session`]: crate::app::session::Session
+///
+/// **Kept across launches, ours, not the original's**: the slot and the grid
+/// `Grid Selection` was last on live in the records store per campaign
+/// ([`crate::records::CampaignCursor`]), so the same holds after a
+/// relaunch. The original's slot lives in the screen object, which a reboot
+/// resets; whether its `Grid Selection` index survives leaving the campaign
+/// is not measured, and ours keeps it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct CellCursor(crate::records::CampaignCursor);
+
+impl CellCursor {
+    /// The position a campaign's screens last closed on.
+    pub(crate) fn kept(kept: crate::records::CampaignCursor) -> Self {
+        Self(kept)
+    }
+
+    /// Notes `grid` as the one `Grid Selection` last stood on.
+    pub(crate) fn set_grid(&mut self, grid: &str) {
+        if self.0.grid.as_deref() != Some(grid) {
+            self.0.grid = Some(grid.to_string());
+        }
+    }
+
+    /// The kept grid's absolute index in `grids`, when it is there and in
+    /// `range`; a grid a mod campaign dropped answers `None` (the default).
+    pub(crate) fn grid_in<'a>(
+        &self,
+        mut names: impl Iterator<Item = &'a str>,
+        range: &std::ops::Range<usize>,
+    ) -> Option<usize> {
+        let kept = self.0.grid.as_deref()?;
+        names
+            .position(|name| name == kept)
+            .filter(|at| range.contains(at))
+    }
+
+    /// What to write back to the store.
+    pub(crate) fn into_kept(self) -> crate::records::CampaignCursor {
+        self.0
+    }
+
+    /// Records `model`'s selected cell's slot as the cursor. A cell whose
+    /// name carries no `(x, y)` leaves the slot as it was.
+    pub(crate) fn remember(&mut self, model: &oag_ui_screens::campaign::CellSelection) {
+        if let Some(slot) = model.selected().and_then(|cell| cell.grid_coords()) {
+            self.0.slot = Some(slot);
+        }
+    }
+
+    /// Moves `model`'s cursor to the cell at the remembered slot, when this
+    /// grid has one and it shows no lock glyph; otherwise a no-op, which
+    /// keeps `CellSelection::new`'s first-unlocked default.
+    pub(crate) fn restore(&self, model: &mut oag_ui_screens::campaign::CellSelection) {
+        let Some(slot) = self.0.slot else {
+            return;
+        };
+        let Some(target) = model
+            .cells()
+            .iter()
+            .find(|cell| cell.grid_coords() == Some(slot))
+            .map(|cell| cell.name.clone())
+        else {
+            return;
+        };
+        let before = model.selected().map(|cell| cell.name.clone());
+        model.select_by_name(&target);
+        if model.selected_is_locked()
+            && let Some(before) = before
+        {
+            model.select_by_name(&before);
+        }
+    }
+}
+
+/// The whole campaign, read once when it opens.
+///
+/// **Every grid, not only the selected one.** `Grid Selection`'s own honey
+/// counter and page need the full sixteen up front, and confirming a tier
+/// needs that tier's own cells - reading sixteen small XML files once on
+/// open is cheaper than reopening the disc archive on every confirm.
+pub(crate) struct CampaignStage {
+    /// Whether this title's front end blooms ([`oag_title::Campaign::frontend_glow`]).
+    pub(crate) frontend_glow: bool,
+    /// [`oag_title::Campaign::medal_rows`], for `Cell Selection`'s medal icons.
+    medal_tier_rows: [u8; 3],
+    grids: Vec<race_campaign::Grid>,
+    grid_layout: oag_ui_screens::campaign::Layout,
+    cell_layout: oag_ui_screens::campaign::Layout,
+    /// `Campaign Selection`'s own layout and what it offers, both `Some` or both
+    /// `None` together - see `crate::campaign::Campaign`'s own field docs for
+    /// why they can be absent even on a source whose title authors the screen.
+    selection_layout: Option<oag_ui_screens::campaign::Layout>,
+    chooser: Option<oag_ui_screens::campaign::selection::Chooser>,
+    /// Which slice of [`Self::grids`] the current [`Screen::Grid`]/
+    /// [`Screen::Cell`] pages - `0..grids.len()` (every grid) on every title
+    /// but HD once a campaign is chosen, when it narrows to that campaign's
+    /// own eight via [`Self::open_grid_selection`]. Meaningless while
+    /// [`Self::screen`] is [`Screen::Selection`], and reset back to the
+    /// whole list only by [`Self::new`] itself - `open_grid_selection` is
+    /// the only other writer, and it always narrows.
+    grid_range: std::ops::Range<usize>,
+    /// Which campaign [`Self::grid_range`] currently reflects,
+    /// for [`Self::grid_layout`]'s own choice between
+    /// [`Self::grid_layout_fury`] and [`Self::grid_layout`], and for
+    /// [`Self::open_selection`] to restore the right entry on the way back.
+    /// `None` before a campaign is ever chosen this session, and on every
+    /// non-HD title.
+    active_campaign: Option<Campaign>,
+    /// `Cell Selection`'s own `Cell Help` overlay - see
+    /// `crate::campaign::Campaign::cell_help`'s own doc. Drawn as a
+    /// static (non-scrolling) panel while `CellSelection::help_open`, per
+    /// `docs/ui/campaign-screens.md`'s `Open` entry on why not the
+    /// authored `Viewport`/`Animation` scroll timeline.
+    cell_help: Option<oag_ui_screens::campaign::Layout>,
+    /// The front-end root's own `Confirm`/`Back` legend - `None` on a
+    /// source whose `Skin.xml` this pass could not read at all (logged when
+    /// that happens, see `crate::campaign::read_footer`).
+    nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
+    /// The front-end root's own scrolling tip ticker layout - content is
+    /// supplied per frame by [`Self::ticker_tips`], not carried here.
+    ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
+    /// Seconds since this campaign screen opened, advanced by
+    /// [`Self::tick_ticker`] - the ticker's own clock. Never reset between
+    /// `Grid Selection` and `Cell Selection`, unlike `oag_ui_screens::marquee::Timer`:
+    /// the original ticker is not observed to restart on a screen change
+    /// (see `docs/ui/campaign-screens.md`), so this build keeps it running.
+    ticker_elapsed: f32,
+    /// Where `Grid Selection`'s and `Cell Selection`'s `Selector` pulses stand, written back every
+    /// tick and put on each screen as it is built, so a re-entry resumes the phase it was left at
+    /// (`oag_ui_screens::campaign::pulse::SelectorPhases`). Only where the title blooms its front
+    /// end ([`Self::frontend_glow`], Pulse): the other titles keep a fresh phase per screen.
+    selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases,
+    /// `Campaign Selection`'s two cards turning toward the selection, stepped
+    /// by [`Self::tick_cards`]; `None` off that screen, where a card is drawn
+    /// settled.
+    card_swing: Option<crate::flyer::CardSwing>,
+    /// Kept for the render pass, which needs to resolve a per-cell idstring
+    /// (`MSC_EVENT_SR` and friends) that neither screen's own `Layout::read`
+    /// pass can, since which one applies depends on the selected cell's
+    /// mode - read once, the same table `Layout::read` used to resolve every
+    /// fixed label.
+    pub(crate) strings: oag_ui::language::StringTable,
+    /// The front end's own sprite sheet - `hex_filled.mip`/`hex_outline.mip`/
+    /// `pulse_assets.mip`'s lock-and-selector sub-rects all come off it.
+    /// Neither screen needs its own extended sheet the way a picker's
+    /// slideshow does: nothing here is per-entity art.
+    pub(crate) sprites: oag_hud::sprite::Sheet,
+    pub(crate) screen: Screen,
+    /// Why the last confirmed cell did not launch, shown a row above the
+    /// footer until the player does anything else - see
+    /// [`Self::nav_legend_draw`]. `None` the rest of the time.
+    pub(crate) notice: Option<String>,
+    /// [`oag_title::Title::name`], for [`Self::medal_of`] - the same string
+    /// `crate::records::Key::new`'s own `title` takes. Also what
+    /// `crate::app::menu_stage::MenuStage::render` and
+    /// `crate::app::session::pointer::campaign_pointer` dispatch on to
+    /// pick between Pulse's draw/pointer functions and
+    /// [`oag_ui_screens::campaign::hd`]'s own, since both screens share one name.
+    title: String,
+    /// What the campaign rows of [`Self::records`] are filed under:
+    /// [`crate::records::campaign_title`] for the disc's own campaign (which
+    /// differs from [`Self::title`] on a title's second pressing), the
+    /// namespaced `crate::campaign::custom::Custom::records_title` for a
+    /// mod's, so its progress never meets the original's rows. Per-track
+    /// records keep [`Self::title`].
+    campaign_title: String,
+    /// The mod campaign on screen, `None` for the disc's own: its `open` and
+    /// `requires` locks, and its hidden cells.
+    custom: Option<crate::campaign::custom::Custom>,
+    /// The medal tiers: the mod campaign's own list, the standard one on a disc campaign.
+    tiers: race_campaign::MedalTiers,
+    /// [`oag_title::Campaign::dialect`] of the title, the draw list's choice.
+    dialect: oag_title::CampaignDialect,
+    /// **HD only** - Pulse's own `Track Line` never needs this fold (see
+    /// `oag_ui_screens::campaign::draw::track_line`'s own doc), so this is
+    /// `CircuitNames::default()` on every other title and costs nothing to
+    /// carry. `crate::boot::Shell::circuit_names`, read once when the
+    /// campaign opens.
+    circuit_names: oag_ui::language::CircuitNames,
+    /// A snapshot of the player's own saved progress, taken once when the
+    /// campaign opens - the same "read once on open" choice [`Self::grids`]
+    /// already makes, and safe for the same reason: nothing mutates
+    /// `Session::records` while a campaign screen is open, only a finished
+    /// or escaped race does, and reaching one closes this stage first.
+    records: crate::records::Store,
+    /// See [`CellCursor`]'s own doc.
+    cell_cursor: CellCursor,
+    /// **HD only.** The flyer cards `Grid Selection` draws behind its
+    /// widgets - see [`crate::flyer`]. `None` on every other title.
+    pub(crate) flyers: Option<crate::flyer::Flyers>,
+    /// **HD only.** A circuit's emblem for `Cell Selection`, by lowercased id.
+    circuit_emblems: std::collections::HashMap<String, String>,
+    /// The campaign editor, when this stage was opened for it: it takes the screen, the
+    /// pad and the pointer in place of `Grid Selection` and `Cell Selection`.
+    pub(crate) editor: Option<crate::app::campaign_editor_stage::EditorScreen>,
+    /// What the medal hexes are filled with ([`Self::set_medal_art`]).
+    medal_art: oag_ui_screens::campaign::MedalArt,
+}
+
+impl CampaignStage {
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "one call site (`session::campaign::open_campaign`), each a separate fact the \
+                  stage needs to hold open"
+    )]
+    pub(crate) fn new(
+        grids: Vec<race_campaign::Grid>,
+        grid_layout: oag_ui_screens::campaign::Layout,
+        cell_layout: oag_ui_screens::campaign::Layout,
+        selection_layout: Option<oag_ui_screens::campaign::Layout>,
+        chooser: Option<oag_ui_screens::campaign::selection::Chooser>,
+        cell_help: Option<oag_ui_screens::campaign::Layout>,
+        nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
+        ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
+        strings: oag_ui::language::StringTable,
+        sprites: oag_hud::sprite::Sheet,
+        title_ref: &'static oag_title::Title,
+        platform: oag_disc::Platform,
+        circuit_names: oag_ui::language::CircuitNames,
+        records: crate::records::Store,
+        flyers: Option<crate::flyer::Flyers>,
+        circuit_emblems: std::collections::HashMap<String, String>,
+        custom: Option<crate::campaign::custom::Custom>,
+    ) -> Self {
+        let title = title_ref.name.to_string();
+        let campaign_title = custom.as_ref().map_or_else(
+            || crate::records::campaign_title(title_ref, platform),
+            |custom| custom.records_title.clone(),
+        );
+        let tiers = custom.as_ref().map_or_else(
+            || race_campaign::MedalTiers::standard().clone(),
+            |custom| custom.tiers.clone(),
+        );
+        let grid_range = 0..grids.len();
+        let cell_cursor = CellCursor::kept(records.campaign_cursor(&campaign_title));
+        let kept_grid =
+            cell_cursor.grid_in(grids.iter().map(|grid| grid.name.as_str()), &grid_range);
+        // `Campaign Selection` is HD's own screen ahead of `Grid
+        // Selection` - only opened on it when both halves of the pair
+        // actually read (see `Self::has_selection`'s own doc); every other
+        // title, and an HD source missing `DATA06`'s own copy, opens
+        // straight on `Grid Selection` over every grid, the pre-this-pass
+        // behaviour.
+        let screen = if let (Some(_), Some(chooser)) = (&selection_layout, &chooser) {
+            Screen::Selection(
+                match kept_grid.and_then(|which| chooser.campaign_of(which)) {
+                    Some(campaign) => CampaignSelection::at(chooser.clone(), campaign),
+                    None => CampaignSelection::new(chooser.clone()),
+                },
+            )
+        } else {
+            let model = oag_ui_screens::campaign::GridSelection::new(
+                grids
+                    .iter()
+                    .map(|grid| {
+                        Self::grid_summary(grid, &campaign_title, &records, &tiers, custom.as_ref())
+                    })
+                    .collect(),
+            )
+            .with_tiers(tiers.clone());
+            // A mod campaign on HD's screens has no `Campaign Selection` ahead
+            // of it, and HD's grid pages one tier at a time.
+            let mut model = if custom.is_some() && title_ref.campaign.dialect.draws_hd_screens() {
+                model.with_per_page(1)
+            } else {
+                model
+            };
+            if let Some(which) = kept_grid {
+                model.set_index(which);
+            }
+            Screen::Grid(model)
+        };
+        let mut stage = Self {
+            frontend_glow: title_ref.campaign.frontend_glow.is_some(),
+            medal_tier_rows: title_ref.campaign.medal_rows(),
+            grids,
+            grid_layout,
+            cell_layout,
+            selection_layout,
+            chooser,
+            grid_range,
+            active_campaign: None,
+            cell_help,
+            nav_legend,
+            ticker,
+            ticker_elapsed: 0.0,
+            selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases::default(),
+            card_swing: None,
+            strings,
+            sprites,
+            screen,
+            notice: None,
+            title,
+            campaign_title,
+            custom,
+            tiers: tiers.clone(),
+            dialect: title_ref.campaign.dialect,
+            circuit_names,
+            records,
+            cell_cursor,
+            flyers,
+            circuit_emblems,
+            editor: None,
+            medal_art: oag_ui_screens::campaign::MedalArt::default(),
+        };
+        // A one-grid campaign has no grid to choose: it opens on that grid's cells.
+        if stage.skips_grid_selection() && stage.grid_is_unlocked(0) {
+            stage.open_cell_selection(0);
+        }
+        stage
+    }
+
+    /// Fills the medal hexes of the screen open now, and of every screen built after it, with
+    /// `art`.
+    pub(crate) fn set_medal_art(&mut self, art: oag_ui_screens::campaign::MedalArt) {
+        match &mut self.screen {
+            Screen::Grid(model) => model.set_medal_art(art.clone()),
+            Screen::Cell { model, .. } => model.set_medal_art(art.clone()),
+            Screen::Selection(_) => {}
+        }
+        self.medal_art = art;
+    }
+
+    /// Whether `Grid Selection` is left out: a campaign of exactly one grid, with no
+    /// `Campaign Selection` ahead of it, has nothing for it to offer. `Back` from its
+    /// `Cell Selection` closes the campaign instead. The editor builds its own grid and is
+    /// not a campaign being picked.
+    pub(crate) fn skips_grid_selection(&self) -> bool {
+        grid_selection_is_skipped(
+            self.grids.len(),
+            self.has_selection(),
+            self.editor.is_some(),
+        )
+    }
+
+    /// The flyer cards the current screen shows behind its widgets: the
+    /// selected tier's on `Grid Selection`, its back on `Cell Selection`, both
+    /// campaigns' on `Campaign Selection`, none on a tier that names none.
+    pub(crate) fn flyer_shows(&self) -> Vec<crate::flyer::Show> {
+        let Some(flyers) = &self.flyers else {
+            return Vec::new();
+        };
+        match &self.screen {
+            Screen::Grid(model) => model
+                .selected()
+                .and_then(|grid| grid.flyer_name.as_deref())
+                .map(|name| flyers.grid_show(name))
+                .into_iter()
+                .collect(),
+            Screen::Selection(model) => match &self.card_swing {
+                Some(swing) => flyers.swing_shows(swing),
+                None => flyers.selection_shows(model.selected()),
+            },
+            Screen::Cell { which, .. } => self
+                .grids
+                .get(*which)
+                .and_then(|grid| grid.flyer_name.as_deref())
+                .map(crate::flyer::Flyers::cell_show)
+                .into_iter()
+                .collect(),
+        }
+    }
+
+    /// The selected card's rectangle on the HD grid, for the pointer - `None`
+    /// when no card is drawn, which leaves the pointer on its fallback rect.
+    pub(crate) fn flyer_card_rect(&self) -> Option<[f32; 4]> {
+        let show = self.flyer_shows().into_iter().next()?;
+        self.flyers
+            .as_ref()?
+            .card_rect(&show, oag_display::space::Space::HD)
+    }
+
+    /// The rectangle of each campaign's card on the HD grid, in list order, for
+    /// the pointer; empty when the cards are not drawn.
+    pub(crate) fn selection_card_rects(&self) -> Vec<[f32; 4]> {
+        let Some(flyers) = &self.flyers else {
+            return Vec::new();
+        };
+        self.flyer_shows()
+            .iter()
+            .filter_map(|show| flyers.card_rect(show, oag_display::space::Space::HD))
+            .collect()
+    }
+
+    /// Turns `Campaign Selection`'s cards toward the selection, `dt` seconds
+    /// further; called once a frame beside [`Self::tick_ticker`].
+    pub(crate) fn tick_cards(&mut self, dt: f32) {
+        let (Some(flyers), Screen::Selection(model)) = (&self.flyers, &self.screen) else {
+            self.card_swing = None;
+            return;
+        };
+        let selected = model.selected();
+        let swing = self
+            .card_swing
+            .get_or_insert_with(|| flyers.swing_settled(selected));
+        flyers.step_swing(swing, selected, dt);
+    }
+
+    /// Advances the ticker's own clock - called once a frame from
+    /// `MenuStage::tick`, the same place `oag_ui_screens::marquee::Timer` (its
+    /// sibling clock for a menu row's overflowing value) is driven from.
+    pub(crate) fn tick_ticker(&mut self, dt: f32) {
+        self.ticker_elapsed += dt.max(0.0);
+        match &mut self.screen {
+            Screen::Grid(model) => {
+                model.pulse_mut().tick(dt);
+                self.selector_phases.grid = *model.pulse();
+            }
+            Screen::Cell { model, .. } => {
+                model.pulse_mut().tick(dt);
+                self.selector_phases.cell = *model.pulse();
+            }
+            Screen::Selection(_) => {}
+        }
+    }
+
+    /// The open screen's `Selector` clock, when it has one (what `--drive` reports).
+    pub(crate) fn selector_seconds(&self) -> Option<f32> {
+        match &self.screen {
+            Screen::Grid(model) => Some(model.pulse().seconds()),
+            Screen::Cell { model, .. } => Some(model.pulse().seconds()),
+            Screen::Selection(_) => None,
+        }
+    }
+
+    /// Where the pulses stand, for the session to carry to the next `RACE CAMPAIGN`.
+    pub(crate) fn selector_phases(&self) -> oag_ui_screens::campaign::pulse::SelectorPhases {
+        self.selector_phases
+    }
+
+    /// Starts from the pulses a previous campaign left (a cold boot passes the default), and puts
+    /// them on the open screen.
+    pub(crate) fn resume_selector(
+        &mut self,
+        phases: oag_ui_screens::campaign::pulse::SelectorPhases,
+    ) {
+        if self.frontend_glow {
+            self.selector_phases = phases;
+        }
+        self.apply_selector_phase();
+    }
+
+    /// Puts the kept phase on the screen just built; the original's widget keeps it while the
+    /// screen is away.
+    fn apply_selector_phase(&mut self) {
+        if !self.frontend_glow {
+            return;
+        }
+        match &mut self.screen {
+            Screen::Grid(model) => *model.pulse_mut() = self.selector_phases.grid,
+            Screen::Cell { model, .. } => *model.pulse_mut() = self.selector_phases.cell,
+            Screen::Selection(_) => {}
+        }
+    }
+
+    /// The `Confirm`/`Back` legend's own draw list, or empty when this
+    /// source's `Skin.xml` carried none - see
+    /// `oag_ui_screens::campaign::footer::NavigationLegend::draw`, and [`Self::notice`]
+    /// when there is one.
+    pub(crate) fn set_tag(&mut self, tag: &str) {
+        if let Some(legend) = &mut self.nav_legend {
+            legend.set_tag(tag);
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn nav_legend_draw(
+        &self,
+        faces: &oag_ui_screens::picker::FaceScales,
+    ) -> Vec<oag_ui::frontend::Draw> {
+        let Some(legend) = self.nav_legend.as_ref() else {
+            return Vec::new();
+        };
+        let mut draws = legend.draw(faces);
+        draws.extend(
+            self.notice
+                .as_deref()
+                .and_then(|text| legend.notice(text, faces)),
+        );
+        draws
+    }
+
+    /// The ticker's own draw at its current clock - `None` when this source
+    /// authors no ticker at all, nothing is honestly known to rotate
+    /// through yet ([`Self::ticker_tips`]), or the clock is between two
+    /// tips (see `oag_ui_screens::campaign::footer::ticker_draw`'s own doc).
+    #[must_use]
+    pub(crate) fn ticker_draw(
+        &self,
+        faces: &oag_ui_screens::picker::FaceScales,
+        measure: &dyn Fn(&str) -> f32,
+    ) -> Option<oag_ui::frontend::Draw> {
+        oag_ui_screens::campaign::footer::ticker_draw(
+            self.ticker.as_ref()?,
+            self.ticker_elapsed,
+            &self.ticker_tips(),
+            faces,
+            measure,
+        )
+    }
+
+    /// The ticker's own clip window, `(left, right)` in screen space - what
+    /// a caller needs to build `Renderer::render_with`'s `clip` tuple once
+    /// it has found [`Self::ticker_draw`]'s own index in the flattened draw
+    /// list. `None` on a source with no ticker at all.
+    #[must_use]
+    pub(crate) fn ticker_clip_bounds(&self) -> Option<(f32, f32)> {
+        let [x, _, width, _] = self.ticker.as_ref()?.viewport;
+        Some((x, x + width))
+    }
+
+    /// Which tip strings the ticker honestly has to show - see
+    /// `crate::records::ticker_tips`'s own doc for the `TKR_NO*` rotation
+    /// and why it is one shared function rather than three copies:
+    /// `MenuStage`'s own ticker (`crate::app::menu_stage`) and
+    /// `capture::menu_page`'s `--menu-page` still both read the identical
+    /// list off the identical save file.
+    #[must_use]
+    fn ticker_tips(&self) -> Vec<String> {
+        crate::records::ticker_tips(&self.strings, &self.records)
+    }
+
+    /// Keeps `difficulty` as this title's browsed rung in the stage's copy of
+    /// the store, so a cell screen opened later in the same visit starts on
+    /// it; returns the title key and the record form for the caller to
+    /// persist in the session's store.
+    pub(crate) fn remember_difficulty(
+        &mut self,
+        difficulty: race_campaign::Difficulty,
+    ) -> (String, crate::records::Difficulty) {
+        let stored = match difficulty {
+            race_campaign::Difficulty::Easy => crate::records::Difficulty::Easy,
+            race_campaign::Difficulty::Medium => crate::records::Difficulty::Medium,
+            race_campaign::Difficulty::Hard => crate::records::Difficulty::Hard,
+        };
+        self.records
+            .set_campaign_difficulty(&self.campaign_title, stored);
+        (self.campaign_title.clone(), stored)
+    }
+
+    /// Whether this is Wipeout HD/Fury's own campaign - what
+    /// `MenuStage::render`/`session::pointer::campaign_pointer` dispatch
+    /// draw/pointer functions on. See [`Self::title`]'s own doc.
+    #[must_use]
+    pub(crate) fn is_hd(&self) -> bool {
+        self.dialect.draws_hd_screens()
+    }
+
+    /// Whether `Campaign Selection` was read at all - see
+    /// [`crate::campaign::Campaign::selection_layout`]'s own doc for the
+    /// one case (a source missing `DATA06`'s own copy of the screen) where
+    /// this is `false` on an otherwise-HD source.
+    #[must_use]
+    pub(crate) fn has_selection(&self) -> bool {
+        self.selection_layout.is_some() && self.chooser.is_some()
+    }
+
+    #[must_use]
+    pub(crate) fn selection_layout(&self) -> Option<&oag_ui_screens::campaign::Layout> {
+        self.selection_layout.as_ref()
+    }
+
+    #[must_use]
+    pub(crate) fn circuit_names(&self) -> &oag_ui::language::CircuitNames {
+        &self.circuit_names
+    }
+
+    fn grid_summary(
+        grid: &race_campaign::Grid,
+        title: &str,
+        records: &crate::records::Store,
+        tiers: &race_campaign::MedalTiers,
+        custom: Option<&crate::campaign::custom::Custom>,
+    ) -> oag_ui_screens::campaign::GridSummary {
+        let mut summary = oag_ui_screens::campaign::GridSummary::from_grid_with_medals(
+            grid,
+            tiers,
+            &|cell_name| campaign_tier(records.campaign_medal(title, cell_name)?, tiers),
+        );
+        if let Some(custom) = custom {
+            summary.max_points = custom.max_points(grid);
+        }
+        summary
+    }
+
+    /// Every grid this campaign carries - `crate::app::session::endrace`'s
+    /// own `RETURN TO GRID` reads this to find which one a raced cell
+    /// belongs to.
+    #[must_use]
+    pub(crate) fn grids(&self) -> &[race_campaign::Grid] {
+        &self.grids
+    }
+
+    /// Whether the grid at absolute index `which` (into [`Self::grids`]) is
+    /// unlocked - what `crate::app::session::campaign::handle_campaign`
+    /// gates `Grid Selection`'s own Confirm on.
+    ///
+    /// **The recovered law, not `GridSelection::tier_shows_lock`'s own
+    /// display shortcut.** That glyph rule always compares against the
+    /// immediately preceding tile; this instead reimplements
+    /// `Unlock_GridPointsMet` (`oag_tables::race_campaign::grid_points_met`)
+    /// against the grid's own authored `<Unlock Grid="...">` name, which
+    /// only happens to be the previous tile on all sixteen shipped grids -
+    /// see `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "Grid0..
+    /// Grid14: what the gate actually evaluates" and "the tier unlock rule"
+    /// sections for why the two predicates cannot disagree on shipped data.
+    /// `grid.points_earned(medal_of) > 0` is included alongside `!grid.locked`
+    /// for the identical reason `GridSelection_PopulateTiles` clears the
+    /// glyph unconditionally once a grid has scored any points of its own.
+    /// A grid with no `<Unlock Grid="...">` row at all (`grid0`, the one
+    /// grid shipped `Locked="false"`) is always unlocked.
+    #[must_use]
+    pub(crate) fn grid_is_unlocked(&self, which: usize) -> bool {
+        let Some(grid) = self.grids.get(which) else {
+            return false;
+        };
+        let medal_of = campaign_medal_of(&self.records, &self.campaign_title, &self.tiers);
+        if !grid.locked || grid.points_earned(&self.tiers, &medal_of) > 0 {
+            return true;
+        }
+        match grid.unlock_grid.as_deref() {
+            Some(target) => {
+                race_campaign::grid_points_met(&self.grids, &self.tiers, target, &medal_of)
+            }
+            None => true,
+        }
+    }
+
+    /// Each campaign's own `(earned, total)` gold-medal pair, in
+    /// `campaignList` order, for `Campaign Selection`'s own
+    /// `NumMedalsText{HD,Fury}`. `earned` is `0` on a fresh profile, the same
+    /// "player-progress source is optional" reading [`Self::grid_summary`]
+    /// already gives every other number on these screens. `total` is the
+    /// denominator RPCS3's own `Campaign Selection` shows next to it -
+    /// `"0 / 87"` for `Wipeout HD`, `"0 / 80"` for `Fury`
+    /// (`01-right-tap.png`/
+    /// `01-left-tap.png`) - derived, not guessed: a cell on either campaign
+    /// always carries exactly one `<Gold>` target of its own (`PI_Cell`'s
+    /// own `<Gold Target=...>` child, present on every cell in every grid
+    /// measured), so the total gold medals a campaign can ever earn is
+    /// exactly its own cell count, `grid.cells.len()` summed across the
+    /// campaign's own eight grids: `87` for `DATA02`'s own `grid_00`..`grid_07`
+    /// (`6+8+10+10+10+12+14+17`), `80` for `DATA00`'s own `grid_08`..`grid_15`,
+    /// both matching RPCS3 exactly. See `docs/ui/campaign-screens.md`'s
+    /// "Wipeout HD/Fury: the footer's button glyphs, and the `GOLD MEDALS`
+    /// denominator" section for the full count and the `grid_04.xml` defect
+    /// closing it also surfaced and fixed.
+    #[must_use]
+    pub(crate) fn campaign_gold_medals(&self) -> Vec<(u32, u32)> {
+        let Some(chooser) = &self.chooser else {
+            return Vec::new();
+        };
+        chooser
+            .entries()
+            .iter()
+            .map(|entry| {
+                let grids = self.grids.get(entry.grids.clone()).unwrap_or(&[]);
+                let earned = grids
+                    .iter()
+                    .map(|grid| {
+                        Self::grid_summary(
+                            grid,
+                            &self.campaign_title,
+                            &self.records,
+                            &self.tiers,
+                            self.custom.as_ref(),
+                        )
+                        .gold_medals
+                    })
+                    .sum();
+                let total = grids
+                    .iter()
+                    .map(|grid| u32::try_from(grid.cells.len()).unwrap_or(u32::MAX))
+                    .sum();
+                (earned, total)
+            })
+            .collect()
+    }
+
+    /// [`Self::grid_layout`]'s own choice between the base layout and
+    /// the chosen campaign's own `Grid Selection` layout, or the base one
+    /// when none is chosen yet (every title with no chooser, and
+    /// `Screen::Selection` itself never reads this).
+    #[must_use]
+    pub(crate) fn grid_layout(&self) -> &oag_ui_screens::campaign::Layout {
+        self.active_entry()
+            .map_or(&self.grid_layout, |entry| &entry.layout)
+    }
+
+    /// The chooser entry [`Self::active_campaign`] names.
+    fn active_entry(&self) -> Option<&oag_ui_screens::campaign::selection::Entry> {
+        self.chooser.as_ref()?.entry(self.active_campaign?)
+    }
+
+    #[must_use]
+    pub(crate) fn cell_layout(&self) -> &oag_ui_screens::campaign::Layout {
+        &self.cell_layout
+    }
+
+    /// What `--drive` reports: the open level (`selection`, `grid`, `cell`),
+    /// the cursor's index in it, and the name of what it is on.
+    pub(crate) fn drive_focus(&self) -> (&'static str, usize, String) {
+        match &self.screen {
+            Screen::Selection(model) => {
+                let campaign = model.selected();
+                let name = model
+                    .chooser()
+                    .entry(campaign)
+                    .map(|entry| entry.id.clone())
+                    .unwrap_or_default();
+                ("selection", campaign.index(), name)
+            }
+            Screen::Grid(model) => {
+                let name = self
+                    .grids
+                    .get(self.grid_range.start + model.index())
+                    .map_or_else(String::new, |grid| grid.name.clone());
+                ("grid", model.index(), name)
+            }
+            Screen::Cell { model, .. } => {
+                let name = model.selected().map(|cell| cell.name.clone());
+                let index = name
+                    .as_ref()
+                    .and_then(|name| model.cells().iter().position(|cell| &cell.name == name));
+                ("cell", index.unwrap_or(0), name.unwrap_or_default())
+            }
+        }
+    }
+
+    /// Keeps the grid the open screen is on as the cursor's grid, so the next
+    /// `Grid Selection` - this visit, the next, or the next launch - lands on it.
+    fn note_grid(&mut self) {
+        let which = match &self.screen {
+            Screen::Grid(model) => self.grid_range.start + model.index(),
+            Screen::Cell { which, .. } => *which,
+            Screen::Selection(_) => return,
+        };
+        if let Some(grid) = self.grids.get(which) {
+            self.cell_cursor.set_grid(&grid.name);
+        }
+    }
+
+    /// Whether `campaign` is the one whose events are a campaign map (2048's,
+    /// `Campaign2048_Definition.xml`) rather than HD's grids.
+    pub(crate) fn is_map_campaign(&self, campaign: Campaign) -> bool {
+        self.chooser
+            .as_ref()
+            .and_then(|chooser| chooser.entry(campaign))
+            .is_some_and(|entry| entry.tag() == Some("2048"))
+    }
+
+    /// Opens `campaign`'s own `Grid Selection`/`Grid Selection
+    /// Fury`, narrowing [`Self::grid_range`] to that campaign's own eight
+    /// grids - `Campaign Selection`'s own `Event::Confirmed`.
+    ///
+    /// `false`, staying on `Campaign Selection`, when none of the campaign's
+    /// grids is loaded: Omega's 2048 grids (`grid_16`..`grid_18`) author no
+    /// `RequiredPoints` and are skipped by the grid reader; its events are the
+    /// campaign map ([`Self::is_map_campaign`]).
+    pub(crate) fn open_grid_selection(&mut self, campaign: Campaign) -> bool {
+        let Some(entry) = self
+            .chooser
+            .as_ref()
+            .and_then(|chooser| chooser.entry(campaign))
+        else {
+            return false;
+        };
+        if self
+            .grids
+            .get(entry.grids.clone())
+            .is_none_or(<[_]>::is_empty)
+        {
+            return false;
+        }
+        self.grid_range = entry.grids.clone();
+        self.active_campaign = Some(campaign);
+        // `with_per_page(1)` - HD/Fury's own `Grid Selection` pages one
+        // flyer at a time, not Pulse's four-hex page. See
+        // `oag_ui_screens::campaign::GridSelection::per_page`'s own doc.
+        let model = oag_ui_screens::campaign::GridSelection::new(
+            self.grids
+                .get(self.grid_range.clone())
+                .unwrap_or(&[])
+                .iter()
+                .map(|grid| {
+                    Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    )
+                })
+                .collect(),
+        )
+        .with_per_page(1)
+        .with_medal_art(self.medal_art.clone())
+        .with_tiers(self.tiers.clone());
+        let mut model = model;
+        if let Some(which) = self.cell_cursor.grid_in(
+            self.grids.iter().map(|grid| grid.name.as_str()),
+            &self.grid_range,
+        ) {
+            model.set_index(which - self.grid_range.start);
+        }
+        self.screen = Screen::Grid(model);
+        self.apply_selector_phase();
+        true
+    }
+
+    /// Returns to `Campaign Selection` - `Grid Selection`'s own
+    /// `Event::Back`, when [`Self::has_selection`]. Restores whichever
+    /// campaign [`Self::active_campaign`] already names, rather than
+    /// resetting to the screen's own default `Fury` entry, so backing out of
+    /// a chosen `Wipeout HD` lands on `Campaign Selection` still showing
+    /// `Wipeout HD` selected.
+    pub(crate) fn open_selection(&mut self) {
+        self.note_grid();
+        let Some(chooser) = self.chooser.clone() else {
+            return;
+        };
+        let model = match self.active_campaign {
+            Some(campaign) => CampaignSelection::at(chooser, campaign),
+            None => CampaignSelection::new(chooser),
+        };
+        self.screen = Screen::Selection(model);
+    }
+
+    #[must_use]
+    pub(crate) fn cell_help_layout(&self) -> Option<&oag_ui_screens::campaign::Layout> {
+        self.cell_help.as_ref()
+    }
+
+    /// Opens `Cell Selection` on `which`'s own cells - an **absolute**
+    /// index into [`Self::grids`], the same contract this method has always
+    /// had (`crate::app::session::endrace::return_to_campaign` reaches a
+    /// cell this way, off `Self::grids()`'s own flat list, without ever
+    /// touching `Campaign Selection` first). `false` when `which` is out of
+    /// range or the grid carries no cells at all, and the caller stays on
+    /// whatever screen it was on.
+    ///
+    /// **Self-healing for `Self::grid_range`/`Self::active_campaign`**: a
+    /// caller that reopens `Cell Selection` directly - `return_to_campaign`
+    /// is the one that exists - never confirms `Campaign Selection`/`Grid
+    /// Selection` first, so nothing else would narrow either field to the
+    /// campaign `which` actually belongs to. Narrowing it here, on every
+    /// call, keeps [`Self::cell_grid_summary`]'s own `Event NN/MM` counter
+    /// and [`Self::back_to_grid_selection`]'s own return page correct
+    /// regardless of which caller reached this cell - see
+    /// [`Self::open_cell_selection_at_grid_slot`] for the other one, whose
+    /// own index is already relative to a narrowed range.
+    pub(crate) fn open_cell_selection(&mut self, which: usize) -> bool {
+        let Some(grid) = self.grids.get(which) else {
+            return false;
+        };
+        if grid.cells.is_empty() {
+            return false;
+        }
+        if let Some(chooser) = &self.chooser
+            && let Some(campaign) = chooser.campaign_of(which)
+            && let Some(entry) = chooser.entry(campaign)
+        {
+            self.grid_range = entry.grids.clone();
+            self.active_campaign = Some(campaign);
+        }
+        let mut cells = grid.cells.clone();
+        let title = &self.title;
+        let campaign_title = &self.campaign_title;
+        let records = &self.records;
+        let medal_of = campaign_medal_of(records, campaign_title, &self.tiers);
+        let build = |cells: Vec<race_campaign::Cell>| {
+            let by_name = cells.clone();
+            let model = oag_ui_screens::campaign::CellSelection::with_medals_and_records(
+                cells,
+                &medal_of,
+                &|name| Self::saved_record_centiseconds(&by_name, records, title, name),
+            )
+            .with_difficulty(&|name| {
+                records
+                    .campaign_medal(campaign_title, name)?
+                    .best_difficulty
+                    .map(to_campaign_difficulty)
+            })
+            .with_medal_art(self.medal_art.clone())
+            .with_tiers(self.tiers.clone());
+            match &self.custom {
+                Some(custom) => model
+                    .with_fixed_locks(&|name| custom.fixed_lock(name, &medal_of))
+                    .with_tier_targets(&|name| {
+                        Some(custom.event(name)?.tier_targets.flat().to_vec())
+                    }),
+                None => model,
+            }
+        };
+        let mut model = build(cells.clone());
+        // A mod campaign that hides what is not open yet: the cells still
+        // locked are not in the model at all, so the draw, the pad, the
+        // pointer and Confirm cannot reach them. Points stay the whole grid's.
+        if let Some(custom) = &self.custom
+            && custom.reveal(which) == oag_mod::campaign::Reveal::Hidden
+        {
+            let locked = model.locked_names();
+            if !locked.is_empty() && locked.len() < cells.len() {
+                cells.retain(|cell| !locked.contains(&cell.name));
+                model = build(cells);
+            }
+        }
+        let mut model = with_opening_difficulty(model, records, campaign_title, self.is_hd());
+        self.cell_cursor.restore(&mut model);
+        if self.frontend_glow {
+            *model.pulse_mut() = self.selector_phases.cell;
+        }
+        self.screen = Screen::Cell { model, which };
+        if let Some(grid) = self.grids.get(which) {
+            self.cell_cursor.set_grid(&grid.name);
+        }
+        true
+    }
+
+    /// `Line5`'s own value - `Cell_SavedRecord`, in centiseconds. Read off
+    /// the general per-track/mode/class [`crate::records::Store`] rather
+    /// than a per-cell store this build does not keep (see
+    /// [`oag_ui_screens::campaign::CellSelection::records`]'s own doc): a campaign
+    /// race already folds into that same table, keyed by the cell's own
+    /// track/mode/class, so it is the closest available reading of "this
+    /// cell's own saved best" without inventing a new store. **Time Trial**
+    /// reads `best_total_ticks` (a finished race's own total time, the
+    /// quantity `docs/ui/campaign-screens.md`'s own live playthrough found
+    /// under `Campaign record` after a first attempt); **Speed Lap** reads
+    /// `best_lap_ticks` (its only meaningful quantity - it never finishes).
+    /// Every other mode answers `None`: `Race`'s own record is a position,
+    /// not a time, and `Zone`/`Elimination` have no raw count anywhere in
+    /// [`crate::records::Record`] to read at all.
+    fn saved_record_centiseconds(
+        cells: &[race_campaign::Cell],
+        records: &crate::records::Store,
+        title: &str,
+        cell_name: &str,
+    ) -> Option<i64> {
+        let cell = cells.iter().find(|cell| cell.name == cell_name)?;
+        let mode = crate::campaign::race_mode_for_cell(cell.mode.clone())?;
+        let key = crate::records::Key::new(title, cell.track.as_deref(), mode.name(), &cell.class);
+        let record = records.get(&key)?;
+        let ticks = match mode {
+            oag_race::Mode::TimeTrial => record.best_total_ticks,
+            oag_race::Mode::SpeedLap => record.best_lap_ticks.map(u64::from),
+            _ => None,
+        }?;
+        Some(i64::try_from(ticks * 100 / 60).unwrap_or(i64::MAX))
+    }
+
+    /// [`Self::open_cell_selection`], for `slot` relative to
+    /// [`Self::grid_range`] - what `Grid Selection`'s own
+    /// `GridSelection::index()` returns, the call site
+    /// `crate::app::session::campaign::handle_campaign`'s own `Screen::Grid`
+    /// confirm arm has.
+    pub(crate) fn open_cell_selection_at_grid_slot(&mut self, slot: usize) -> bool {
+        match self.grid_range.start.checked_add(slot) {
+            Some(absolute) => self.open_cell_selection(absolute),
+            None => false,
+        }
+    }
+
+    /// **HD only** - the enclosing grid's own index and count, both relative
+    /// to [`Self::grid_range`] (so `Cell Selection`'s own `EventNum`/
+    /// `GridNum` reads `"Event 01/08"` on a Fury cell, not `"Event
+    /// 09/16"`), plus its [`oag_ui_screens::campaign::GridSummary`] and the next grid's `FlyerName`, for
+    /// `oag_ui_screens::campaign::hd::hd_cell_draw_list`'s own counters. `None` off
+    /// `Grid Selection`/`Campaign Selection`, since there is no "enclosing
+    /// grid" there.
+    #[must_use]
+    pub(crate) fn cell_grid_summary(
+        &self,
+    ) -> Option<(
+        usize,
+        usize,
+        oag_ui_screens::campaign::GridSummary,
+        oag_ui_screens::campaign::hd::CellArt<'_>,
+    )> {
+        let Screen::Cell { which, .. } = &self.screen else {
+            return None;
+        };
+        let grid = self.grids.get(*which)?;
+        let next = (which + 1 < self.grid_range.end)
+            .then(|| self.grids.get(which + 1))
+            .flatten()
+            .and_then(|grid| grid.flyer_name.as_deref());
+        Some((
+            which.saturating_sub(self.grid_range.start),
+            self.grid_range.len(),
+            Self::grid_summary(
+                grid,
+                &self.campaign_title,
+                &self.records,
+                &self.tiers,
+                self.custom.as_ref(),
+            ),
+            self.cell_art(next),
+        ))
+    }
+
+    /// What `Cell Selection` draws beyond its screen file and its model.
+    pub(crate) fn cell_art<'a>(
+        &'a self,
+        next_flyer: Option<&'a str>,
+    ) -> oag_ui_screens::campaign::hd::CellArt<'a> {
+        oag_ui_screens::campaign::hd::CellArt {
+            next_flyer,
+            fury: self
+                .active_entry()
+                .is_some_and(|entry| entry.tag() == Some("Fury")),
+            track_emblems: &self.circuit_emblems,
+            medal_tier_rows: self.medal_tier_rows,
+        }
+    }
+
+    /// The cursor as it stands as the campaign closes, for the session to
+    /// carry to the next `RACE CAMPAIGN` (measured: the original's survives
+    /// leaving the campaign, see [`CellCursor`]).
+    pub(crate) fn cursor_on_close(&mut self) -> (String, crate::records::CampaignCursor) {
+        self.note_grid();
+        if let Screen::Cell { model, .. } = &self.screen {
+            self.cell_cursor.remember(model);
+        }
+        (
+            self.campaign_title.clone(),
+            self.cell_cursor.clone().into_kept(),
+        )
+    }
+
+    /// Returns to `Grid Selection`, on the tier `Cell Selection` was opened
+    /// from.
+    pub(crate) fn back_to_grid_selection(&mut self) {
+        self.note_grid();
+        if let Screen::Cell { model, .. } = &self.screen {
+            self.cell_cursor.remember(model);
+        }
+        let index = match &self.screen {
+            Screen::Cell { which, .. } => which.saturating_sub(self.grid_range.start),
+            Screen::Grid(model) => model.index(),
+            // `Cell Selection`'s own `DefaultPrevious` never names
+            // `Campaign Selection`, so this arm is unreached in practice -
+            // kept exhaustive rather than panicking on a screen shape this
+            // function was never meant to see.
+            Screen::Selection(_) => 0,
+        };
+        // Shared by every title - [`Self::has_selection`] is the same "did
+        // `Campaign Selection` read" discriminator [`Self::open_grid_selection`]'s
+        // own doc and `crate::app::session::campaign::handle_campaign`'s
+        // `Back` routing already use, so this rebuild pages the same way
+        // the screen it is returning to just did.
+        let mut model = oag_ui_screens::campaign::GridSelection::new(
+            self.grids
+                .get(self.grid_range.clone())
+                .unwrap_or(&[])
+                .iter()
+                .map(|grid| {
+                    Self::grid_summary(
+                        grid,
+                        &self.campaign_title,
+                        &self.records,
+                        &self.tiers,
+                        self.custom.as_ref(),
+                    )
+                })
+                .collect(),
+        )
+        .with_medal_art(self.medal_art.clone())
+        .with_tiers(self.tiers.clone());
+        if self.has_selection() {
+            model = model.with_per_page(1);
+        }
+        model.set_index(index);
+        self.screen = Screen::Grid(model);
+        self.apply_selector_phase();
+    }
+}
+
+/// [`CampaignStage::skips_grid_selection`]'s decision over its three facts.
+pub(crate) fn grid_selection_is_skipped(grids: usize, has_selection: bool, editing: bool) -> bool {
+    grids == 1 && !has_selection && !editing
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CellCursor, grid_selection_is_skipped};
+    use oag_tables::race_campaign::{Cell, Mode};
+    use oag_ui_screens::campaign::CellSelection;
+
+    fn cell(name: &str) -> Cell {
+        Cell {
+            name: name.to_string(),
+            track: Some("track".to_string()),
+            mode: Mode::Race,
+            class: "Venom".to_string(),
+            weapons: true,
+            damage: true,
+            locked: Some(false),
+            status: None,
+            ai_count: Some(7),
+            skill: None,
+            skill_easy: None,
+            skill_hard: None,
+            laps: Some(3),
+            ship: None,
+            ship_choice: Some(true),
+            gold: 1,
+            silver: 2,
+            bronze: 3,
+            tournament_tracks: Vec::new(),
+            difficulty_targets: None,
+            nitro_elimination_targets: None,
+        }
+    }
+
+    fn selected(model: &CellSelection) -> &str {
+        model.selected().map_or("", |cell| cell.name.as_str())
+    }
+
+    fn locked_cell(name: &str) -> Cell {
+        Cell {
+            locked: None,
+            ..cell(name)
+        }
+    }
+
+    /// The measured cross-grid case: the slot a cursor was left on in one
+    /// grid is where it lands in another, not on the new grid's default and
+    /// not on the cell that other grid was last left on.
+    #[test]
+    fn the_cursor_is_one_slot_shared_by_every_grid() {
+        let grid0 = vec![cell("grid0_3_1"), cell("grid0_3_2")];
+        let grid1 = vec![cell("grid1_3_1"), cell("grid1_3_2")];
+        let mut cursor = CellCursor::default();
+
+        let mut first = CellSelection::new(grid0.clone());
+        first.select_by_name("grid0_3_2");
+        cursor.remember(&first);
+
+        let mut other = CellSelection::new(grid1.clone());
+        assert_eq!(selected(&other), "grid1_3_1");
+        cursor.restore(&mut other);
+        assert_eq!(selected(&other), "grid1_3_2");
+
+        other.select_by_name("grid1_3_1");
+        cursor.remember(&other);
+        let mut back = CellSelection::new(grid0);
+        cursor.restore(&mut back);
+        assert_eq!(selected(&back), "grid0_3_1");
+    }
+
+    /// The kept grid is found by name, so a campaign that dropped or moved it
+    /// (a mod changed) answers the default, never a stale index.
+    #[test]
+    fn the_kept_grid_is_found_by_name_and_a_missing_one_is_the_default() {
+        let grids = ["grid0", "grid1", "grid2"];
+        let names = |count: usize| grids.into_iter().take(count);
+        let mut cursor = CellCursor::default();
+        assert_eq!(cursor.grid_in(names(3), &(0..3)), None, "nothing kept");
+        cursor.set_grid("grid2");
+        assert_eq!(cursor.grid_in(names(3), &(0..3)), Some(2));
+        assert_eq!(
+            cursor.grid_in(names(3), &(0..2)),
+            None,
+            "outside the open range"
+        );
+        assert_eq!(cursor.grid_in(names(2), &(0..2)), None, "the grid is gone");
+        let kept = CellCursor::kept(cursor.into_kept());
+        assert_eq!(
+            kept.grid_in(names(3), &(0..3)),
+            Some(2),
+            "through the store's form"
+        );
+    }
+
+    /// A slot whose cell is locked, or that the grid does not have, falls to
+    /// the first-visit default (`grid0_2_2` into `grid1`, measured).
+    #[test]
+    fn a_locked_or_absent_slot_keeps_the_default() {
+        let mut cursor = CellCursor::default();
+        let mut first = CellSelection::new(vec![cell("grid0_3_1"), cell("grid0_2_2")]);
+        first.select_by_name("grid0_2_2");
+        cursor.remember(&first);
+
+        let mut locked = CellSelection::new(vec![cell("grid1_3_1"), locked_cell("grid1_2_2")]);
+        cursor.restore(&mut locked);
+        assert_eq!(selected(&locked), "grid1_3_1");
+
+        let mut absent = CellSelection::new(vec![cell("grid1_3_1"), cell("grid1_3_2")]);
+        cursor.restore(&mut absent);
+        assert_eq!(selected(&absent), "grid1_3_1");
+    }
+
+    /// A cell whose `Locked` byte is still set but whose glyph a medalled hex
+    /// neighbour hides keeps the cursor (`grid0_2_2` beside the gold
+    /// `grid0_3_2`, measured); one with no medal near it does not (`grid0_2_1`).
+    #[test]
+    fn a_cell_a_neighbouring_medal_unlocked_keeps_the_cursor() {
+        let cells = vec![
+            cell("grid0_3_1"),
+            cell("grid0_3_2"),
+            locked_cell("grid0_2_2"),
+            locked_cell("grid0_2_1"),
+        ];
+        let with_gold = |cells: Vec<Cell>| {
+            CellSelection::with_medals(cells, &|name| {
+                (name == "grid0_3_2").then_some(oag_tables::race_campaign::Medal::Gold)
+            })
+        };
+        let mut cursor = CellCursor::default();
+
+        let mut left = with_gold(cells.clone());
+        left.select_by_name("grid0_2_2");
+        cursor.remember(&left);
+        let mut again = with_gold(cells.clone());
+        cursor.restore(&mut again);
+        assert_eq!(selected(&again), "grid0_2_2");
+
+        left.select_by_name("grid0_2_1");
+        cursor.remember(&left);
+        let mut again = with_gold(cells);
+        cursor.restore(&mut again);
+        assert_eq!(selected(&again), "grid0_3_1");
+    }
+
+    /// Nothing remembered yet is the first-visit default, untouched.
+    #[test]
+    fn a_fresh_cursor_changes_nothing() {
+        let mut model = CellSelection::new(vec![locked_cell("grid0_2_1"), cell("grid0_3_1")]);
+        CellCursor::default().restore(&mut model);
+        assert_eq!(selected(&model), "grid0_3_1");
+    }
+
+    /// One grid with nothing ahead of it skips `Grid Selection`, on any title; several grids,
+    /// HD/Omega's `Campaign Selection`, an empty campaign and the editor keep it.
+    #[test]
+    fn only_a_lone_grid_without_a_chooser_skips_grid_selection() {
+        assert!(grid_selection_is_skipped(1, false, false));
+        assert!(!grid_selection_is_skipped(0, false, false));
+        assert!(!grid_selection_is_skipped(2, false, false));
+        assert!(!grid_selection_is_skipped(16, false, false));
+        assert!(!grid_selection_is_skipped(1, true, false));
+        assert!(!grid_selection_is_skipped(1, false, true));
+    }
+}

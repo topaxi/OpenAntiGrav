@@ -153,14 +153,14 @@ pub(super) fn campaign_page(
     page: CampaignPage,
     archives: &mut oag_assets::Archives,
     strings: &oag_ui::language::StringTable,
-    // The boot's own circuit-name column - the one `crate::main::session::campaign::open_campaign`
+    // The boot's own circuit-name column - the one `crate::app::session::campaign::open_campaign`
     // hands the live session - so `Track` on HD's `Cell Selection` names
     // the circuit rather than falling back to its raw id.
     circuit_names: &oag_ui::language::CircuitNames,
     // **HD/Fury only, `None` on every other title.** The chosen language's
     // own `entries.xml` path - resolves `Campaign Selection`'s own four
     // idstrings off `DATA06`'s copy, the same overlay
-    // `crate::main::session::campaign::open_campaign` applies for a live
+    // `crate::app::session::campaign::open_campaign` applies for a live
     // session; see `oag_game::campaign::hd_selection_string_overlay`'s own
     // doc for why this is not already in `strings`.
     entries_path: Option<&str>,
@@ -185,7 +185,7 @@ pub(super) fn campaign_page(
     // the same "read, never write" rule the `records` `--menu-page` and
     // `crate::race_capture::CaptureOptions::previous_best` both already follow, applied
     // here so a locked/unlocked grid or cell in this still matches what a
-    // live session (`crate::main::campaign_stage::CampaignStage`) would show
+    // live session (`crate::app::campaign_stage::CampaignStage`) would show
     // for the same file, rather than always drawing the fresh-profile
     // reading `GridSummary::from_grid`/`CellSelection::new` give on their
     // own. A capture with no file, or a title/cell this machine has never

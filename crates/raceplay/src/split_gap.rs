@@ -141,7 +141,7 @@ impl super::Race {
         let now = oag_race::race_clock_ticks(self.sim.world.tick) as f32 / 60.0;
         let mut events = GapEvents::default();
         let mut live = 0;
-        let ships = usize::from(self.ship_count());
+        let ships = usize::from(self.sim.ship_count());
         let places = self.places();
         let length = self.sim.course.as_deref().map(oag_race::Course::length);
         let reached: Vec<(usize, usize, f32, bool)> = (0..ships)

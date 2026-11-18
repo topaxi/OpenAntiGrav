@@ -74,7 +74,7 @@ should look like and not what garbage looks like.
   player's team declares. It needs a `string_id` and its English text in
   `assets/ui/strings/english.toml` in the same change or `just check-strings`
   fails the gate, and it wants
-  `crates/game/src/main/session/menus/` - none of which this pass owned.
+  `crates/game/src/app/session/menus/` - none of which this pass owned.
   `--skin` is the caller today.
 
 - **The composed fourth slot is still not reproduced**, and the stored block 4
@@ -136,7 +136,7 @@ should look like and not what garbage looks like.
   comparison, then the six callers above. That converts `--skin` from a chosen
   stand-in into a measured selector, and answers the flag argument in the same
   pass.
-- Add the RACE page's SKIN row (needs `crates/game/src/main/session/menus/`,
+- Add the RACE page's SKIN row (needs `crates/game/src/app/session/menus/`,
   `assets/ui/menu.toml` and `assets/ui/strings/english.toml` together).
 - Diff `Data\Ships\<Team>\zone01.vex` against `Zone.vex` and `Ship.vex`.
   Independent of everything above.

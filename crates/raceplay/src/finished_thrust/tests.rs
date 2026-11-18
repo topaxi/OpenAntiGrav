@@ -36,9 +36,9 @@ fn close(a: f32, b: f32) -> bool {
 #[test]
 fn no_cap_before_the_line_or_without_a_table() {
     let mut race = race_with_a_grid();
-    assert_eq!(race.finished_thrust_cap(0), None, "no table loaded");
+    assert_eq!(race.sim.finished_thrust_cap(0), None, "no table loaded");
     race.sim.finished_thrust = Some(invented());
-    assert_eq!(race.finished_thrust_cap(0), None, "not finished yet");
+    assert_eq!(race.sim.finished_thrust_cap(0), None, "not finished yet");
 }
 
 #[test]
@@ -46,12 +46,12 @@ fn the_cap_reads_the_finishing_place() {
     let mut race = race_with_a_grid();
     race.sim.finished_thrust = Some(invented());
     race.sim.world.ships[0].standing.finish_tick = Some(100);
-    let first = race.finished_thrust_cap(0).expect("finished");
+    let first = race.sim.finished_thrust_cap(0).expect("finished");
     assert!(close(first, 0.7 * 99.0 / 100.0), "{first}");
 
     // Another craft over the line earlier puts the player second.
     race.sim.world.ships[1].standing.finish_tick = Some(50);
-    let second = race.finished_thrust_cap(0).expect("finished");
+    let second = race.sim.finished_thrust_cap(0).expect("finished");
     assert!(close(second, 0.7 * 98.0 / 100.0), "{second}");
 }
 
@@ -60,8 +60,8 @@ fn a_campaign_skill_replaces_the_ambient_one() {
     let mut race = race_with_a_grid();
     race.sim.finished_thrust = Some(invented());
     race.sim.world.ships[0].standing.finish_tick = Some(100);
-    race.set_finished_thrust_skill(3.0);
-    let cap = race.finished_thrust_cap(0).expect("finished");
+    race.sim.set_finished_thrust_skill(3.0);
+    let cap = race.sim.finished_thrust_cap(0).expect("finished");
     assert!(close(cap, (0.7 * 99.0 + 20.0) / 100.0), "{cap}");
 }
 

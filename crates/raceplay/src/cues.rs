@@ -110,7 +110,7 @@ pub(crate) fn decide_contact_cues(
     heard
 }
 
-impl Race {
+impl RaceSim {
     /// Raises `.COLLISIONS` for one craft, on that craft's own re-arm.
     ///
     /// **The timer is per craft**, because the original's gate is: the cooldown
@@ -135,15 +135,15 @@ impl Race {
     /// bulge is the whole of what a shielded contact shows or sounds. See
     /// `docs/ghidra/functions/psp-pulse-usa/shield.md`.
     pub(crate) fn raise_contact_cue(&mut self, slot: usize, impact: bool, shielded: bool) {
-        let Some(cooldown) = self.sim.contact_cue_cooldown.get_mut(slot) else {
+        let Some(cooldown) = self.contact_cue_cooldown.get_mut(slot) else {
             return;
         };
-        *cooldown = (*cooldown - self.sim.dt).max(0.0);
+        *cooldown = (*cooldown - self.dt).max(0.0);
         if !impact || shielded || *cooldown > 0.0 {
             return;
         }
         *cooldown = oag_gameplay::cue::COLLISION_COOLDOWN;
-        self.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+        self.cues.push(oag_gameplay::cue::CueEvent::new(
             oag_gameplay::cue::Cue::Collision,
             slot,
         ));
@@ -160,10 +160,10 @@ impl Race {
         wall: &oag_physics::wall::WallResponse,
         shielded: bool,
     ) {
-        if matches!(self.sim.contact_cues, ContactCues::Rearmed) {
+        if matches!(self.contact_cues, ContactCues::Rearmed) {
             self.raise_contact_cue(slot, wall.impact, shielded);
         } else if wall.impulse_largest > 0.0 {
-            let forward = self.sim.world.ships[slot].physics.body.forward();
+            let forward = self.world.ships[slot].physics.body.forward();
             self.note_contact_impulse(
                 slot,
                 wall.impulse_largest,
@@ -183,10 +183,10 @@ impl Race {
         craft: bool,
         dot: f32,
     ) {
-        if !matches!(self.sim.contact_cues, ContactCues::Impulse(_)) {
+        if !matches!(self.contact_cues, ContactCues::Impulse(_)) {
             return;
         }
-        let Some(state) = self.sim.contact_impulse.get_mut(slot) else {
+        let Some(state) = self.contact_impulse.get_mut(slot) else {
             return;
         };
         if impulse > state.impulse {
@@ -200,30 +200,26 @@ impl Race {
     /// [`ContactCues::Impulse`]; nothing under [`ContactCues::Rearmed`].
     ///
     /// After every contact of the tick has been noted: the craft pairs
-    /// ([`Self::resolve_craft_pairs`]) and the wall contacts of every craft.
+    /// ([`Race::resolve_craft_pairs`]) and the wall contacts of every craft.
     pub(crate) fn raise_impulse_cues(&mut self) {
-        let ContactCues::Impulse(law) = self.sim.contact_cues else {
+        let ContactCues::Impulse(law) = self.contact_cues else {
             return;
         };
-        for slot in 0..self.sim.world.ship_count as usize {
-            if !self.sim.world.ships[slot].in_world() {
+        for slot in 0..self.world.ship_count as usize {
+            if !self.world.ships[slot].in_world() {
                 // Nothing a craft out of the world touched is heard when it returns.
-                let state = &mut self.sim.contact_impulse[slot];
+                let state = &mut self.contact_impulse[slot];
                 (state.impulse, state.craft, state.dot) = (0.0, false, 0.0);
                 continue;
             }
-            let person = self.sim.world.human_slots().any(|human| human == slot);
-            let shield = self.sim.world.ships[slot].physics.shield_pickup_timer > 0.0;
-            let heard = decide_contact_cues(
-                &mut self.sim.contact_impulse[slot],
-                &law.value,
-                person,
-                shield,
-            );
+            let person = self.world.human_slots().any(|human| human == slot);
+            let shield = self.world.ships[slot].physics.shield_pickup_timer > 0.0;
+            let heard =
+                decide_contact_cues(&mut self.contact_impulse[slot], &law.value, person, shield);
             let [hit, grind] = heard;
             let grind = grind.filter(|_| law.value.grind_played);
             for (cue, contact) in hit.into_iter().chain(grind) {
-                self.sim.cues.push(CueEvent::contact(cue, slot, contact));
+                self.cues.push(CueEvent::contact(cue, slot, contact));
             }
         }
     }
@@ -238,11 +234,11 @@ impl Race {
         slot: usize,
         wall: &oag_physics::wall::WallResponse,
     ) {
-        let Some(reading) = self.sim.wall_contact.get_mut(slot) else {
+        let Some(reading) = self.wall_contact.get_mut(slot) else {
             return;
         };
         *reading = wall.resolved.map(|contact| {
-            let ship = &self.sim.world.ships[slot].physics.body;
+            let ship = &self.world.ships[slot].physics.body;
             let wall_on_left = contact.normal.dot(ship.right()) > 0.0;
             crate::sim::WallContactReading {
                 size: wall.impulse_sum,
@@ -254,7 +250,7 @@ impl Race {
     /// `slot`'s wall contact this tick, for the pad.
     #[must_use]
     pub fn wall_contact_of(&self, slot: usize) -> Option<crate::sim::WallContactReading> {
-        self.sim.wall_contact.get(slot).copied().flatten()
+        self.wall_contact.get(slot).copied().flatten()
     }
 
     /// Takes the one-shot sound cues this tick raised, leaving the queue empty.
@@ -269,29 +265,31 @@ impl Race {
     /// second, all of them fixed-size - but the composition root does drain it,
     /// and a headless test that does not is bounded by its own tick count.
     pub fn drain_cues(&mut self) -> Vec<oag_gameplay::cue::CueEvent> {
-        std::mem::take(&mut self.sim.cues)
+        std::mem::take(&mut self.cues)
     }
 
     /// The mods' own sounds asked for since the last drain (`play-mod-sound`), oldest
     /// first. Like [`Self::drain_cues`], an output the composition root drains.
     pub fn drain_mod_sounds(&mut self) -> Vec<oag_gameplay::cue::ModSoundEvent> {
-        std::mem::take(&mut self.sim.mod_sounds)
+        std::mem::take(&mut self.mod_sounds)
     }
 
     /// The loops of the mods' own sounds that are wanted now (`play-mod-sound`'s `Loop` with
     /// no `Stop` since): what plays is brought to this each tick, so a start or a stop raised
-    /// in a tick that ran silently ([`Self::tick_sim_only`]) is still heard.
+    /// in a tick that ran silently ([`Race::tick_sim_only`]) is still heard.
     #[must_use]
     pub fn mod_sound_loops(&self) -> Vec<oag_gameplay::cue::ModSoundLoop> {
-        self.sim.extensions.sound_loops()
+        self.extensions.sound_loops()
     }
 
     /// The cues raised so far and not yet drained, for tests.
     #[must_use]
     pub fn pending_cues(&self) -> &[oag_gameplay::cue::CueEvent] {
-        &self.sim.cues
+        &self.cues
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// The decoded sound banks this race loaded.
     #[must_use]
@@ -312,22 +310,24 @@ impl Race {
     pub fn announcer(&self) -> &oag_sound::sfx::Announcer {
         &self.view.announcer
     }
+}
 
+impl RaceSim {
     /// Raises a Zone milestone announcement, to be drained the same tick.
     ///
     /// Whether `milestone` actually names a loaded cue is
-    /// [`Self::announcer`]'s question, not this call's - see
+    /// [`Race::announcer`]'s question, not this call's - see
     /// [`Self::drain_announcements`] for why the split is the same one
     /// [`Self::raise_contact_cue`] and [`Banks::pick`](oag_sound::sfx::Banks::pick)
     /// already keep.
     pub(crate) fn push_announcement(&mut self, milestone: u16) {
-        self.sim.announcements.push(milestone);
+        self.announcements.push(milestone);
     }
 
     /// Takes the Zone milestone numbers this tick raised, leaving the queue
     /// empty. Same per-tick-output shape as [`Self::drain_cues`].
     pub fn drain_announcements(&mut self) -> Vec<u16> {
-        std::mem::take(&mut self.sim.announcements)
+        std::mem::take(&mut self.announcements)
     }
 
     /// Whether a locked Leech beam is fastened to `slot`, at either end. The
@@ -335,12 +335,14 @@ impl Race {
     /// rumbles is unread (`docs/gameplay/rumble.md`, "Triggers").
     #[must_use]
     pub fn leach_beam_on(&self, slot: usize) -> bool {
-        self.sim.world.leach_beams_iter().any(|beam| {
+        self.world.leach_beams_iter().any(|beam| {
             beam.kind == oag_weapons::projectile::leach_beam::Kind::Locked
                 && (usize::from(beam.owner) == slot || usize::from(beam.target) == slot)
         })
     }
+}
 
+impl Race {
     #[cfg(feature = "view")]
     /// The rumble patterns this race's title ships, for the pad.
     #[must_use]
@@ -354,19 +356,21 @@ impl Race {
     pub fn class_announcer(&self) -> &oag_sound::sfx::ClassAnnouncer {
         &self.view.class_announcer
     }
+}
 
+impl RaceSim {
     /// Raises a Zone speed-class announcement, to be drained the same tick.
     ///
     /// Whether `stage` actually names a loaded cue is
-    /// [`Self::class_announcer`]'s question, not this call's - same split as
+    /// [`Race::class_announcer`]'s question, not this call's - same split as
     /// [`Self::push_announcement`].
     pub(crate) fn push_class_announcement(&mut self, stage: u32) {
-        self.sim.class_announcements.push(stage);
+        self.class_announcements.push(stage);
     }
 
     /// Takes the speed-class stages this tick raised, leaving the queue
     /// empty. Same per-tick-output shape as [`Self::drain_announcements`].
     pub fn drain_class_announcements(&mut self) -> Vec<u32> {
-        std::mem::take(&mut self.sim.class_announcements)
+        std::mem::take(&mut self.class_announcements)
     }
 }

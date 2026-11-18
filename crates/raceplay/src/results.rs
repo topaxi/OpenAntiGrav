@@ -12,8 +12,8 @@
 //! sees a different world than it did. Standing still once the race is over is
 //! the *composition root's* call, on the same argument that keeps the camera
 //! cycle outside the tick: see `Session::frame`, which stops calling `tick` once
-//! [`Race::finished`] answers yes - **unless the player crossed the line**
-//! ([`Race::runs_on_after_the_line`]), where the original keeps the race running
+//! [`RaceSim::finished`] answers yes - **unless the player crossed the line**
+//! ([`RaceSim::runs_on_after_the_line`]), where the original keeps the race running
 //! behind the panels and so does this. The board taken at the line is then kept
 //! current as the rest of the field finishes ([`Race::refresh_results`]).
 
@@ -83,7 +83,7 @@ impl RunStats {
     }
 }
 
-impl Race {
+impl RaceSim {
     /// Whether the race has reached its finish condition.
     ///
     /// **Every person's own condition**, which is what ends the event: the lap
@@ -97,7 +97,7 @@ impl Race {
     /// race ends by crossing the line, by their craft's wreck outside the
     /// Eliminator, or - in the Eliminator, for all of them at once - by the
     /// kill target; so a person who finishes first sees the race run on, their
-    /// craft flown by the driver ([`Race::flown_for_the_player`]), until the
+    /// craft flown by the driver ([`RaceSim::flown_for_the_player`]), until the
     /// last person is done. With one person this is that person's flag, as it
     /// always was.
     ///
@@ -105,7 +105,7 @@ impl Race {
     /// them however long they run. See [`oag_race::Mode::laps_target`].
     #[must_use]
     pub fn finished(&self) -> bool {
-        let world = &self.sim.world;
+        let world = &self.world;
         (0..oag_gameplay::MAX_PLAYERS)
             .filter(|&slot| world.person_flown(slot))
             .all(|slot| world.race[slot].finished)
@@ -113,7 +113,7 @@ impl Race {
 
     /// Whether the world goes on being stepped under the end-race screens: the
     /// player crossed the line for the last time, so the craft is the driver's
-    /// (see [`Race::flown_for_the_player`]) and the rest of the field is still
+    /// (see [`RaceSim::flown_for_the_player`]) and the rest of the field is still
     /// lapping.
     ///
     /// **Only the line.** A race that ended any other way - the player's craft
@@ -126,10 +126,12 @@ impl Race {
     pub fn runs_on_after_the_line(&self) -> bool {
         self.finished()
             && (0..oag_gameplay::MAX_PLAYERS)
-                .filter(|&slot| self.sim.world.person_flown(slot))
-                .all(|slot| self.sim.world.ships[slot].standing.finished())
+                .filter(|&slot| self.world.person_flown(slot))
+                .all(|slot| self.world.ships[slot].standing.finished())
     }
+}
 
+impl Race {
     /// Whether the player's wreck in a **Single Race** is what ended the race: the
     /// one other ending whose world also goes on under the end-race screens.
     ///
@@ -143,18 +145,18 @@ impl Race {
     /// measured. Zone is not included: it ends the same way but was not looked at.
     #[must_use]
     pub fn runs_on_after_the_wreck(&self) -> bool {
-        self.finished()
+        self.sim.finished()
             && self.sim.world.mode() == Mode::SingleRace
             && self.view.wreck_ended_tick.is_some()
     }
 
     /// Whether the world goes on being stepped under the end-race screens, for
     /// either ending that does it: the player's crossing
-    /// ([`Self::runs_on_after_the_line`]) or a Single Race wreck
+    /// ([`RaceSim::runs_on_after_the_line`]) or a Single Race wreck
     /// ([`Self::runs_on_after_the_wreck`]).
     #[must_use]
     pub fn runs_on_after_the_end(&self) -> bool {
-        self.runs_on_after_the_line() || self.runs_on_after_the_wreck()
+        self.sim.runs_on_after_the_line() || self.runs_on_after_the_wreck()
     }
 
     #[cfg(feature = "view")]
@@ -170,7 +172,7 @@ impl Race {
     /// pool, the camera's easing) and none of them reaches
     /// [`RaceSim::state_hash`]; this writes nothing under `self.sim`, `world.tick`
     /// included, so the standings and the board stay frozen exactly as
-    /// [`Race::runs_on_after_the_line`]'s own rows say. In [`Race::tick`]'s order.
+    /// [`RaceSim::runs_on_after_the_line`]'s own rows say. In [`Race::tick`]'s order.
     ///
     /// **Chosen, not measured:** only the player's wreck was looked at, so every
     /// other thing the original's running world does under the panels (the
@@ -195,7 +197,7 @@ impl Race {
     }
 
     /// One tick of a finished race, for whoever drives the frame loop: the
-    /// whole world after the player's last crossing ([`Race::runs_on_after_the_line`],
+    /// whole world after the player's last crossing ([`RaceSim::runs_on_after_the_line`],
     /// neutral input because the panels consume the pad), only the cosmetics
     /// ([`Race::tick_cosmetics`]) after any other ending.
     pub fn tick_finished(&mut self) {
@@ -261,7 +263,7 @@ impl Race {
     }
 
     /// Re-takes the board from the world as it is now, while the field runs on
-    /// behind the end screens ([`Race::runs_on_after_the_line`]): a craft that
+    /// behind the end screens ([`RaceSim::runs_on_after_the_line`]): a craft that
     /// crosses after the player gets its time and its place, and one still
     /// lapping its laps and its running place.
     ///
@@ -276,7 +278,7 @@ impl Race {
     /// Scored races (Eliminator) end on a kill target with no lap target, so
     /// they never run on after the line and their points do not change here.
     pub fn refresh_results(&mut self) {
-        if !self.runs_on_after_the_line() {
+        if !self.sim.runs_on_after_the_line() {
             return;
         }
         let Some(held) = &self.view.results else {
@@ -298,7 +300,7 @@ impl Race {
     /// truth, so the board is taken once more when that finishes. A no-op until
     /// the race in `self.sim` is finished.
     pub fn recapture_results(&mut self) {
-        if self.finished() {
+        if self.sim.finished() {
             self.view.results = None;
             self.capture_results();
         }
@@ -309,7 +311,7 @@ impl Race {
     /// Called at the end of [`Race::tick`], after the standings have been
     /// advanced, so the last crossing is already in the table it reads.
     pub(super) fn capture_results(&mut self) {
-        if !self.finished() || self.view.results.is_some() {
+        if !self.sim.finished() || self.view.results.is_some() {
             return;
         }
         let board = self.take_board(oag_race::race_clock_ticks(self.sim.world.tick));

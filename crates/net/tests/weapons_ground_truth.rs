@@ -118,7 +118,7 @@ fn race_in_mode(
     );
     println!("server, per seat: {:?}", host.take_counts());
     println!("server weapons: {activity:?}");
-    activity.finished = host.race().finished();
+    activity.finished = host.race().sim.finished();
     for (n, total) in totals.iter().enumerate() {
         println!("trigger={weapon_trigger} client {n}: {total:?}");
         assert_eq!(total.hash_mismatches, 0, "client {n}");

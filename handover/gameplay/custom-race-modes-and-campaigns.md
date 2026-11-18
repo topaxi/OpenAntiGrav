@@ -200,7 +200,7 @@ The design notes below are from before v1.0:
 
 What the titles' campaigns already give us: Pulse/HD/Omega grids and Pure's list (both launch
 events as **campaign cells** through one path, record medals in `[[campaign]]` and apply unlocks;
-`crates/game/src/main/session/campaign.rs`, `crates/game/src/campaign/`, the Pure chain in
+`crates/game/src/app/session/campaign.rs`, `crates/game/src/campaign/`, the Pure chain in
 `crates/ui-screens`). What a custom one needs:
 
 1. **A campaign definition file of our own** (`schemas/v1/campaign.tosd`): id, name, the events in
@@ -370,7 +370,7 @@ Turbo". Open:
 The smallest increment that a player feels, ahead of the README's phase 1 and 2: a
 craft that touches a wall slows far more than a normal craft.
 
-- **Event**: `wall-contact`, at `Race::count_wall_contact` (`field.rs:545`, from
+- **Event**: `wall-contact`, at `RaceSim::count_wall_contact` (`field.rs:545`, from
   `step_player` and `step_opponents`), so AI craft are cursed too.
 - **Command**: `scale-thrust{slot, factor}` with `factor` in `[0, 1]` only, written
   into `pending_thrust_scale`, the per-tick slow the Leach Beam already arms

@@ -1438,7 +1438,7 @@ is Pulse's `0.5 s` plus a frame or two. One shared constant, no per-title field.
 `triggered_by(mine, owner, age, slot, position, radius)`; `Projectile::age` (hashed)
 is raised by `advance_laid` (Mine before the trip test, Bomb after, as the two
 originals order it). Tests: `projectile::tests::owner_exempt`. The AI's hazard
-scan (`Race::hazard_for`) skips its own charge only while it is exempt, so it
+scan (`RaceSim::hazard_for`) skips its own charge only while it is exempt, so it
 steers round its own old mine like anyone's.
 
 **Not modelled.** The cube-then-sphere test is the sphere alone here; the

@@ -1,0 +1,170 @@
+//! What the window going away does to a race: the decision, and the pause.
+//!
+//! The simulation never sees any of this. A window event reaches the
+//! composition root, which either parks the race through the very path the
+//! Android Back key uses ([`Session::back`]: the pause menu over a parked race)
+//! or, in a `--race` run that has no menus, sets the freeze the Start button
+//! sets ([`Session::paused`]). Either way only whether `Race::tick` runs
+//! changes, so no state hash, replay or ghost can tell.
+//!
+//! Which events count, and the default of the one setting, are **chosen, not
+//! measured**: no original title was observed on a phone or a desktop window.
+
+use log::debug;
+
+use crate::app::stage::Stage;
+
+use super::Session;
+
+/// A window event that may pause a race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Away {
+    /// Android `Suspended`: home, app switch, screen off.
+    Suspended,
+    /// The desktop window was minimised or fully hidden.
+    Minimized,
+    /// The window lost keyboard focus (alt-tab, the Steam overlay).
+    FocusLost,
+}
+
+/// What the race should do about it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Pause {
+    /// Leave it: not racing, already paused, or focus loss with the setting off.
+    Nothing,
+    /// Open the pause menu over the parked race.
+    Menu,
+    /// Freeze the tick with no menu, for a run that has no menus.
+    Freeze,
+}
+
+/// Which event pauses which state. `running` is an unfinished race on
+/// screen and not frozen by Start; `has_menus` is whether a front end exists
+/// to open.
+pub(crate) fn decide(
+    away: Away,
+    pause_on_focus_loss: bool,
+    running: bool,
+    has_menus: bool,
+) -> Pause {
+    if !running || (away == Away::FocusLost && !pause_on_focus_loss) {
+        Pause::Nothing
+    } else if has_menus {
+        Pause::Menu
+    } else {
+        Pause::Freeze
+    }
+}
+
+/// Whether the audio device should stop for this event. Focus loss leaves it
+/// playing: a player who alt-tabs to a second window still hears the race
+/// menu's music, and nothing is wrong with that.
+pub(crate) fn silences(away: Away) -> bool {
+    matches!(away, Away::Suspended | Away::Minimized)
+}
+
+impl Session {
+    /// The run is ending, whichever way: the rumble stops, the playlist's place, the campaign
+    /// position and the replays are kept, and the background saves are finished.
+    pub(crate) fn wind_down(&mut self) {
+        self.stop_rumble();
+        self.controls.silence_motors();
+        self.save_race_music();
+        self.keep_campaign_position();
+        self.keep_replays();
+        crate::records::finish_background_saves();
+    }
+
+    /// A race that is neither finished nor held by the pause menu.
+    pub(crate) fn race_running(&self) -> bool {
+        matches!(&self.stage, Stage::Race(stage) if !stage.race.sim.finished())
+            && !matches!(self.pause, crate::pause::State::Paused { .. })
+    }
+
+    /// Applies [`decide`] to the live session.
+    pub(crate) fn window_away(&mut self, away: Away) {
+        if matches!(away, Away::Suspended | Away::Minimized) {
+            self.idle.set_hidden(true);
+            self.idle.release();
+        }
+        // A network race is never paused from here: the server's race goes on
+        // whatever this window does, so a frozen client only falls behind it.
+        // Photo mode already holds the race still, and the window going away leaves it.
+        let running = self.race_running()
+            && self.net.is_none()
+            && self.photo.is_none()
+            // A demo is never paused for losing focus: a wallpaper is never focused.
+            && !self.in_demo();
+        let pause = decide(
+            away,
+            self.settings.display.pause_on_focus_loss,
+            running,
+            self.shell.is_some(),
+        );
+        debug!("window away ({away:?}): {pause:?}");
+        self.controls.silence_motors();
+        match pause {
+            Pause::Nothing => {}
+            Pause::Menu => self.back(),
+            Pause::Freeze => {
+                // Nobody pressed for this pause, so anyone may lift it - unless
+                // a player already holds one, which stays theirs. A resume
+                // countdown under way gives way to the same unowned pause
+                // (chosen): a window that was away has not seen it.
+                if !matches!(self.pause, crate::pause::State::Paused { .. }) {
+                    self.pause = crate::pause::State::unowned(self.wall);
+                }
+            }
+        }
+        if silences(away) {
+            self.audio.set_suspended(true);
+        }
+    }
+
+    /// The window is back on screen: the device restarts. A race that was
+    /// paused stays paused.
+    pub(crate) fn window_back(&mut self) {
+        self.idle.set_hidden(false);
+        self.audio.set_suspended(false);
+        // The gap is not a frame anyone presented.
+        self.stalled = true;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn suspend_and_minimise_always_pause_a_running_race() {
+        for away in [Away::Suspended, Away::Minimized] {
+            assert_eq!(decide(away, false, true, true), Pause::Menu);
+            assert_eq!(decide(away, true, true, true), Pause::Menu);
+        }
+    }
+
+    #[test]
+    fn focus_loss_pauses_only_when_the_setting_allows_it() {
+        assert_eq!(decide(Away::FocusLost, true, true, true), Pause::Menu);
+        assert_eq!(decide(Away::FocusLost, false, true, true), Pause::Nothing);
+    }
+
+    #[test]
+    fn nothing_pauses_what_is_not_a_running_race() {
+        for away in [Away::Suspended, Away::Minimized, Away::FocusLost] {
+            assert_eq!(decide(away, true, false, true), Pause::Nothing);
+        }
+    }
+
+    #[test]
+    fn a_run_without_menus_freezes_instead() {
+        assert_eq!(decide(Away::Suspended, true, true, false), Pause::Freeze);
+    }
+
+    #[test]
+    fn only_hidden_windows_silence_the_audio() {
+        assert!(silences(Away::Suspended));
+        assert!(silences(Away::Minimized));
+        assert!(!silences(Away::FocusLost));
+    }
+}

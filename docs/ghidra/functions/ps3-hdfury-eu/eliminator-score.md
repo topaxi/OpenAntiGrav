@@ -155,7 +155,7 @@ original's awards all sit behind `mode == 8`. `Standing::score` enters the state
 zero, so a kill race hashes as before.
 
 Three departures, all stated: a kill's points and the `-5` land when ours first sees the craft down,
-about half a second after the original's tick (`Race::credit_kill`, its existing path); a blast's
+about half a second after the original's tick (`RaceSim::credit_kill`, its existing path); a blast's
 points go to the first impact whose radius reached the craft (`credit_blast`'s owner, chosen);
 `HighlightBar` keeps its authored width, because the HUD's draw list has no font to measure the
 row with, where `Hud_PlaceHighlightBar` fits its left edge to the text.

@@ -50,7 +50,7 @@ table keeps its keys open (ADR-0087 decision 8).
 | --- | --- |
 | top level | the key (`title`, `track`, `mode`, `class`, `team`; the records key, so lower case), `seed` (**the 64 bits as an `i64`**: a TOML integer is signed and a seed is drawn over all of `u64`; a seed above `i64::MAX` written as it stood made the header unreadable), `tick_rate`, `build` (informational, never compared), `hash_interval`, `slots`, `ticks` (the length, written with the file so the REPLAYS list reads it from `HEAD`) |
 | `[finish]` | how the player's craft finished, when the race ended with a result: `place`, `ticks` (written with `ticks`) |
-| `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must), `skill_level`, the rung a campaign cell raced at (`0` Easy to `2` Hard), which picks every craft's shield slot (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot"; absent: the rung `difficulty` stands for, `oag_ai::Difficulty::level`), and `campaign_skill`, a campaign cell's resolved skill scale (a float), written only for a campaign race, whichever driver flies it. It tunes the field (`oag_ai::Difficulty::tune_at_scale`) and the finished player's thrust, both simulation state, so `Race::apply_launch` repeats it before the first tick (`Race::apply_campaign_skill`); it is its own key because a campaign cell is tuned whichever driver flies it, and a 2048 event's driver skill tunes nothing. **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
+| `[options]` | the launch settings: `scheme`, `difficulty`, `autopilot`, `pilot_assist`, and the original driver's request `ai = "original"`, `ai_level`, `ai_skill` (`oag_raceplay::Launch`; the session flies a front-end race's opponents with it, so a rebuild must), `skill_level`, the rung a campaign cell raced at (`0` Easy to `2` Hard), which picks every craft's shield slot (`docs/formats/handling-stats.md`, "Which difficulty picks the shield slot"; absent: the rung `difficulty` stands for, `oag_ai::Difficulty::level`), and `campaign_skill`, a campaign cell's resolved skill scale (a float), written only for a campaign race, whichever driver flies it. It tunes the field (`oag_ai::Difficulty::tune_at_scale`) and the finished player's thrust, both simulation state, so `RaceSim::apply_launch` repeats it before the first tick (`RaceSim::apply_campaign_skill`); it is its own key because a campaign cell is tuned whichever driver flies it, and a 2048 event's driver skill tunes nothing. **Read back** by a rebuild; an absent key is the default, an unknown value is refused by name |
 | `[setup]` | the resolved launch request (`oag_replay::header::Setup`): mode, class, track, team, hull variant, skin, opponent teams, opponents, people, views, lap/weapon/Eliminator overrides, add-on campaign, Zone model. Written by `Race::start_recording` from the request the race was loaded with, so no caller can forget it |
 | `[[mods]]` | the simulation modules the race ran, in the order they ran (`oag_replay::header::ModUse`): `id`, `version`, `module` (path in the mod), `sha256` (of the module's bytes), `abi`, `revision`, `state_bytes`, `picks` (the player's `sim` picks by row). Absent for a vanilla race. A rebuild runs exactly these and `apply_recorded` refuses a missing module, another build, another layout or other picks by name ([wasm-extensions](../architecture/wasm-extensions/determinism-and-state.md#replays)) |
 | `[ghost]` | the lap a file's ghost is; never present in a modded race's file |
@@ -60,7 +60,7 @@ table keeps its keys open (ADR-0087 decision 8).
 
 `oag_raceplay::rebuild(&header, source)` loads the race `[setup]` describes from `source` (the
 reader's own disc image or package for the header's title; it is not in the file), starts it,
-applies `[options]` through `Race::apply_launch`, the same call the composition root makes when it
+applies `[options]` through `RaceSim::apply_launch`, the same call the composition root makes when it
 launches a race, and seats `slots` as local people, which a split screen writes after
 `Race::start` and the state hash reads. **The tick-zero hash is the safety net**: a rebuild that is missing something
 disagrees at tick 0 and `Verifier::new` refuses it by name; a header with no `[setup]` is refused
@@ -110,7 +110,7 @@ hand-made setup (`*_replays_reproduce...`).
 
 ADR-0055's rule is that anything that changes the race outside `Race::tick` must become an input
 or be recorded. An `Event` is `(tick, seat, kind, value)`, applied **before** tick `tick` runs, by
-whoever re-drives the file (`Verifier::events_due`, then `Race::apply_event`). A seek applies them
+whoever re-drives the file (`Verifier::events_due`, then `RaceSim::apply_event`). A seek applies them
 the same way, between the same two ticks ([the timeline](../architecture/replay-timeline.md)).
 
 | Kind | Code | Value | Writer |
@@ -144,7 +144,7 @@ POSE  varint last tick (poses exist for ticks 0..=last)
 
 - **Tick 0** is the state before the recording's first tick, the same index as `INPT` (`inputs[k]`
   is the tick that moves `k` to `k + 1`) and `Replay::ticks()`; a track's `last` is at most that.
-- **A pose** is what `Race::craft_pose` reads: the position, and the orientation with the barrel roll
+- **A pose** is what `RaceSim::craft_pose` reads: the position, and the orientation with the barrel roll
   and the steering lean folded in, exactly as the hull is drawn (`Race::player_pose` is the same
   function for the player).
 - **Position** is quantised to 1/64 unit and coded as the step from the previous key (the first key
@@ -246,7 +246,7 @@ comparable:
 - **The room is in `[options]`** (`oag_raceplay::replay::Room`, keys `room_people`, `room_assists`,
   `room_barrel_rolls`, `room_zone_target`; `oag_net::race::replay_options` writes them with the
   launch keys). A room's people are `Controller::Remote`, which the state hash reads, and the
-  rebuild seats `slots` as local; `Race::apply_room` is the one call `prepare` and the rebuild both
+  rebuild seats `slots` as local; `RaceSim::apply_room` is the one call `prepare` and the rebuild both
   make. Without the keys the rebuild disagrees at tick 0.
 - **`Replay::fingerprint`** (`oag_replay::fingerprint`) hashes what the run is made of: title, circuit,
   mode, class, seed, tick rate, slots, `[options]`, mods, the tick-zero hash, every stored hash, every

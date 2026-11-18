@@ -134,7 +134,7 @@ impl Pad {
         let controls = if let Some(driver) = self.race_driver.as_mut() {
             race.autopilot_wants(slot, driver)
         } else {
-            let line = race.racing_line();
+            let line = race.sim.racing_line();
             let physics = &race.sim.world.ships[slot].physics;
             if !self.seated {
                 let position = physics.body.position;
@@ -181,7 +181,7 @@ fn record(title: &str) -> Option<(race::Race, Replay, oag_replay::ShotRecord)> {
     for tick in 0..TICKS {
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         if tick + 1 == SHOT_AT {
             shot = race.shot_record(None);
         }
@@ -203,11 +203,12 @@ fn verify(title: &str, replay: &Replay) -> Result<u64, oag_replay::Desync> {
         .unwrap_or_else(|e| panic!("{title}: rebuilding from the header: {e:#}"));
     Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
         for event in events {
-            race.apply_event(event)
+            race.sim
+                .apply_event(event)
                 .unwrap_or_else(|e| panic!("{title}: {e}"));
         }
         race.tick(inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         race.sim.state_hash()
     })
 }
@@ -385,9 +386,9 @@ fn ghost_changes_nothing(title: &str, replay: &Replay) {
     for tick in 0..replay.ticks() {
         let inputs = replay.inputs_at(tick);
         plain.tick(&inputs);
-        plain.drain_cues();
+        plain.sim.drain_cues();
         haunted.tick(&inputs);
-        haunted.drain_cues();
+        haunted.sim.drain_cues();
         assert_eq!(
             plain.sim.state_hash(),
             haunted.sim.state_hash(),
@@ -443,7 +444,7 @@ fn a_bare_pad_starts_on_the_line_where_the_grid_is_far_from_sample_zero() {
     let mut pad = Pad::new("pure");
     pad.race_driver = None;
     let _ = pad.inputs(&mut race);
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let gap = line
         .point(pad.driver.index as usize)
         .distance(race.ship().physics.body.position);
@@ -478,7 +479,7 @@ fn recorded_at_tick_zero(
         campaign_skill: None,
         skill_level: None,
     };
-    race.apply_launch(&launch);
+    race.sim.apply_launch(&launch);
     let mut header = Header::new(title, "default", mode.name(), "venom", "default", seed);
     header.options = launch.to_table();
     race.start_recording(header);
@@ -513,8 +514,8 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
             mode.name()
         )
     });
-    assert_eq!(rebuilt.pilot_assist_level(), launch.pilot_assist);
-    assert_eq!(rebuilt.control_scheme(), launch.scheme);
+    assert_eq!(rebuilt.sim.pilot_assist_level(), launch.pilot_assist);
+    assert_eq!(rebuilt.sim.control_scheme(), launch.scheme);
 
     // The request is what rebuilds it: the same file with another mode in it is another race,
     // refused at tick zero. Once per title (a third load), on its first mode.
@@ -578,7 +579,7 @@ fn mid_race_events(title: &str) {
     let give_at = 10;
     let ticks = oag_race::state::COUNTDOWN_TICKS + 420;
     assert!(
-        race.pilot_assist_available(Level::Extreme),
+        race.sim.pilot_assist_available(Level::Extreme),
         "{title}: no Extreme law, so the change would prove nothing"
     );
     let mut pad = Pad::new(title);
@@ -595,7 +596,7 @@ fn mid_race_events(title: &str) {
         }
         let inputs = pad.inputs(&mut race);
         race.tick(&inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
     }
     let replay =
         Replay::from_bytes(&race.recorded().expect("recording").to_bytes()).expect("reads");

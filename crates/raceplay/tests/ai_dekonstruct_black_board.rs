@@ -62,7 +62,7 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     })
     .expect("loading");
     let mut race = race::Race::start(loaded.setup);
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     let slots: Vec<usize> = if field {
         (1..count).collect()
     } else {
@@ -78,7 +78,7 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
             race.sim.world.ships[slot].active = false;
         }
     }
-    let line_len = race.racing_line().len() as u32;
+    let line_len = race.sim.racing_line().len() as u32;
     let mut charge = vec![vec![0.0f32; (line_len / CLUSTER + 2) as usize]; count];
     let mut seen_charge = vec![0.0f32; count];
     let mut seen_resp = vec![0u32; count];
@@ -111,7 +111,7 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
                         .length(),
                     race.sim.world.ships[s].handling.engine.accelcap
                 );
-                landed_ok[s] = Some(race.respawns_of(s));
+                landed_ok[s] = Some(race.sim.respawns_of(s));
                 tk.push((
                     s,
                     tick_no,
@@ -120,17 +120,17 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
                         .body
                         .linear_velocity
                         .length(),
-                    race.respawns_of(s),
+                    race.sim.respawns_of(s),
                 ));
             }
-            let now = race.wall_shield_charged_of(s);
+            let now = race.sim.wall_shield_charged_of(s);
             if now > seen_charge[s] {
                 if let Some(c) = charge[s].get_mut((at[s] / CLUSTER) as usize) {
                     *c += now - seen_charge[s];
                 }
                 seen_charge[s] = now;
             }
-            let r = race.respawns_of(s);
+            let r = race.sim.respawns_of(s);
             if r != seen_resp[s] {
                 seen_resp[s] = r;
                 tally.respawns_at.push(at[s]);
@@ -152,9 +152,9 @@ fn run(entry: &str, class: &str, field: bool, seed: u64, tally: &mut Tally) -> O
     tally.runs += 1;
     for &s in &slots {
         tally.craft += 1;
-        tally.respawns += race.respawns_of(s);
-        tally.contact += race.wall_contact_ticks_of(s);
-        tally.charged += race.wall_shield_charged_of(s);
+        tally.respawns += race.sim.respawns_of(s);
+        tally.contact += race.sim.wall_contact_ticks_of(s);
+        tally.charged += race.sim.wall_shield_charged_of(s);
         tally.end_shield += race.sim.world.ships[s].physics.shield;
         if dead[s] {
             tally.destroyed += 1;
@@ -304,7 +304,7 @@ fn field_trace() {
     })
     .unwrap();
     let mut race = race::Race::start(loaded.setup);
-    let count = race.ship_count() as usize;
+    let count = race.sim.ship_count() as usize;
     for slot in 0..count {
         if slot == 0
             || (lone
@@ -327,6 +327,7 @@ fn field_trace() {
                     continue;
                 }
                 let off = race
+                    .sim
                     .ai_sample_for(s, sh.driver.index as usize)
                     .map_or(0.0, |sm| {
                         let lat = oag_core::math::Vec3::from_array(sm.lateral);
@@ -342,7 +343,7 @@ fn field_trace() {
                     sh.physics.brake,
                     sh.physics.grounded,
                     sh.physics.shield,
-                    race.respawns_of(s)
+                    race.sim.respawns_of(s)
                 ));
             }
             println!("{line}");
@@ -367,7 +368,7 @@ fn line_profile() {
     })
     .unwrap();
     let race = race::Race::start(loaded.setup);
-    let line = race.racing_line();
+    let line = race.sim.racing_line();
     let from: usize = std::env::var("OAG_FROM")
         .ok()
         .and_then(|s| s.parse().ok())

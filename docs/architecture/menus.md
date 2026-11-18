@@ -223,7 +223,7 @@ or one edited by hand. `Menu::supply` only ever moves the widget's
 would show `"venom"` while the race launched on `"vector"` underneath it - a
 menu saying one thing and a race doing another, which is exactly the silent
 mismatch this project's menus forbid. `resolve_race_page_class`
-(`crates/game/src/main/session/menus.rs`) closes that: the ordinary RACE
+(`crates/game/src/app/session/menus.rs`) closes that: the ordinary RACE
 page's launch clamps a stored class the row does not offer to the row's own
 first entry, the same fallback CIRCUIT and TEAM already use for a stored value
 their own source does not have.
@@ -612,14 +612,14 @@ axis). See `OAG_BINDING_CAPTURE_PROMPT`'s own doc comment in
 
 This landed as a `main/`-side change rather than the `menu.rs` one this
 section used to say was blocked, exactly per the option this paragraph named
-before it landed: `MenuStage::render` (in `crates/game/src/main/menu_stage.rs`,
+before it landed: `MenuStage::render` (in `crates/game/src/app/menu_stage.rs`,
 not baselined and nowhere near its own 1,000-line ceiling) gained the
 parameter, and `crate::prompt::message_draw` (in `crates/game/src/prompt.rs`,
 also not baselined) is the shared drawing code - `crates/game/src/menu.rs`,
 which really does sit at its own `BASELINE` ceiling with no headroom, was
 never touched.
 
-`crate::rebind::prompt` sits in `crates/game/src/main/rebind.rs`, next to
+`crate::rebind::prompt` sits in `crates/game/src/app/rebind.rs`, next to
 `decide`, and for the same reason `decide` is a free function at all rather
 than inline in `app.rs`'s winit handler: `Session::draw` needs a live `Gpu` to
 reach, so the one piece of the lookup that is pure - a button and an
@@ -751,7 +751,7 @@ that cannot be reached would be a preview of nothing on screen.
 different ones.** `axis_preview_for` lives in the library crate
 (`oag_raceplay::pilots`) rather than beside `session::pilot_editor`'s other pure
 functions, which are the binary's: `MenuStage::render` (binary,
-`main/menu_stage.rs`) and `capture::menu_page` (library, for
+`app/menu_stage.rs`) and `capture::menu_page` (library, for
 `--menu-page pilots`) both need the same line, and the library cannot depend
 on the binary. `prompt::axis_preview_draw` (`crates/game/src/prompt.rs`) is
 the matching draw-side split - not modal, drawn straight over the page, in the
@@ -864,7 +864,7 @@ resolution and per-class lookup together, and `scoreboard::class_table`/
 `scoreboard::show_total`/`scoreboard::speed_class_choices` are its own
 pieces, each unit-tested with a hand-built class list, `Menu` fixture and
 `Store` - no `Shell`, no `'static oag_title::Title` boot and no window to
-fabricate. `crates/game/src/main/records_page.rs` is now a thin wrapper: its
+fabricate. `crates/game/src/app/records_page.rs` is now a thin wrapper: its
 `table_for` supplies `records_table` with the one thing that differs for the
 live session, a track lookup drawn from `Shell::tracks_for(mode)` (which
 carries a distinct Zone list). `oag_ui_screens::prompt::record_row_draw` is the
@@ -1145,7 +1145,7 @@ letting it drop, and backing all the way out of the menus reaches
 above. A finished race is the one exception: there is a results table behind
 it rather than a track, nothing to resume into, so that one is still
 discarded exactly as every race used to be. See
-`crates/game/src/main/session/menus.rs`.
+`crates/game/src/app/session/menus.rs`.
 
 **And backing into the menus over a parked race now draws it, dimmed,
 rather than the ordinary menu screen.** `Session::draw` (the draw half of
@@ -1164,7 +1164,7 @@ a pause screen to read one off - `Skin.xml`'s `LoadXML` list is exhaustively
 and none of them is a `Pause` definition - and the one HUD string that
 names pausing, `IG_PAUSE_QUIT`, is drawn by nothing (see
 [hud.md](../ui/hud.md)'s "There is no pause"). See `PAUSE_OVERLAY` in
-`crates/game/src/main/menu_stage.rs`. **That held until `InGame_Definition.xml`
+`crates/game/src/app/menu_stage.rs`. **That held until `InGame_Definition.xml`
 was read: it is the 23rd file and carries Pulse's pause screens.** A title with
 `Title::pause_menu` draws the authored tint (`0xe8000000`) instead, on the
 screen [the pause menu](../ui/pause-menu.md) describes; `PAUSE_OVERLAY` stays
@@ -1707,7 +1707,7 @@ moves it out into `Session::held_menu_backdrop` before the outgoing
 outgoing stage supplies, through a small pure function
 (`session::menus::backdrop_seed`) kept separate from the `Renderer`-touching
 code around it precisely so the seeding *decision* is unit-testable without a
-GPU - see `crates/game/src/main/tests.rs`.
+GPU - see `crates/game/src/app/tests.rs`.
 
 **Independently verified on a live capture, 2026-08-19.** The earlier black
 screenshots and unresponsive keys both traced to one cause, not two: this
@@ -2191,7 +2191,7 @@ the string table, the tables built from it and the menu's own faces stayed
 whatever they were at boot, so the switch a player just made showed nowhere
 until the next launch - reported by a maintainer playing Pulse on the PSP,
 alongside a second bug this shares its root with (see below).
-`Session::resupply_language` (`main/session/language.rs`) is the reload, and it
+`Session::resupply_language` (`app/session/language.rs`) is the reload, and it
 runs the LANGUAGE row's own `apply_setting` arm:
 
 - Re-opens the source through `boot::load_shell` - the same "cheap half of the

@@ -15,7 +15,7 @@ use super::Settings;
 /// entries are written - what a fresh file's `[render_profiles]` table
 /// documents regardless of which discs happen to be on this machine.
 ///
-/// **Not [`crate::main::session::Session::titles`]** - that is which titles
+/// **Not [`crate::app::session::Session::titles`]** - that is which titles
 /// *this machine* can currently open a source for; this is which titles
 /// *this build* knows how to boot at all, the same distinction
 /// `render_profiles` itself exists to respect: a profile is not evidence

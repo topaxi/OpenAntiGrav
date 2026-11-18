@@ -15,7 +15,7 @@ below. **2026-09-23: the unlock-points comparison across a whole grid
 (`Unlock_GridPointsMet`) is too** - see
 ["The unlock gate, implemented"](#the-unlock-gate-implemented-grid_points_met)
 below. Picking *which* cell a race is run against, and what value that race
-actually scored, is `crate::main::session::campaign::launch_campaign_cell`'s
+actually scored, is `crate::app::session::campaign::launch_campaign_cell`'s
 job (`oag_game`) - see `docs/architecture/persistence.md`'s "A campaign cell
 now reaches `Observation::campaign_medal` for real".
 
@@ -110,7 +110,7 @@ rule" for why the two are only equivalent by construction on this data.
 
 Picking *which* cell a real race was run against, and what value that race
 actually scored in `evaluate_medal`'s own terms, is
-`crate::main::session::campaign::launch_campaign_cell` and
+`crate::app::session::campaign::launch_campaign_cell` and
 `RaceStage::observation`'s job (`oag_game`) - see
 `docs/architecture/persistence.md`'s "A campaign cell now reaches
 `Observation::campaign_medal` for real" for the full per-mode mapping.

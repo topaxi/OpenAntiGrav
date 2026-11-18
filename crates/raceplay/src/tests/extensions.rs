@@ -53,7 +53,7 @@ const VANILLA_FOLD: u64 = 0x43a3_a21f_8003_8fb0;
 #[test]
 fn a_vanilla_race_hashes_the_same_with_the_feature_on_or_off_and_builds_no_engine() {
     let (race, hashes) = run(grid(crate::extensions::Prepared::default()), 600);
-    assert!(!race.is_modded());
+    assert!(!race.sim.is_modded());
     assert_eq!(fold(&hashes), VANILLA_FOLD, "{:#018x}", fold(&hashes));
     #[cfg(feature = "extensions")]
     assert_eq!(
@@ -192,7 +192,7 @@ pub(super) mod on {
             ship.physics.craft_state,
             oag_physics::damage::CraftState::Destroyed
         );
-        assert_eq!(race.extension_reports()[0].faulted, None);
+        assert_eq!(race.sim.extension_reports()[0].faulted, None);
     }
 
     const EVENTS: i32 = 1024 + oag_ext_abi::EVENTS_AT as i32;
@@ -345,7 +345,7 @@ pub(super) mod on {
         bare.pickup = None;
         let mut race = grid(prepared(&[bare]));
         race.tick(&PlayerInputs::none());
-        let (_, why) = race.extension_reports()[0]
+        let (_, why) = race.sim.extension_reports()[0]
             .faulted
             .clone()
             .expect("a mod with no [pickup] is faulted on its first give-pickup");
@@ -362,7 +362,7 @@ pub(super) mod on {
         let mut race = grid(prepared(&[roll]));
         race.tick(&PlayerInputs::none());
         assert!(
-            race.extension_reports()[0].faulted.is_some(),
+            race.sim.extension_reports()[0].faulted.is_some(),
             "pickup-roll is the same"
         );
     }
@@ -551,14 +551,14 @@ pub(super) mod on {
         // The view outputs reach the race's readers for slot 1 alone, and the quiet race has
         // none: the same equal hashes above show they are never state.
         assert_eq!(
-            loud.extension_fill(1),
+            loud.sim.extension_fill(1),
             Some([16.0 / 255.0, 32.0 / 255.0, 1.0, 128.0 / 255.0])
         );
-        assert_eq!(loud.extension_fill(0), None);
-        assert_eq!(loud.extension_fov_offset(1), 8.0);
-        assert_eq!(loud.extension_fov_offset(0), 0.0);
-        assert_eq!(quiet.extension_fill(1), None);
-        assert_eq!(quiet.extension_fov_offset(1), 0.0);
+        assert_eq!(loud.sim.extension_fill(0), None);
+        assert_eq!(loud.sim.extension_fov_offset(1), 8.0);
+        assert_eq!(loud.sim.extension_fov_offset(0), 0.0);
+        assert_eq!(quiet.sim.extension_fill(1), None);
+        assert_eq!(quiet.sim.extension_fov_offset(1), 0.0);
         let tick = loud.sim.world.tick;
         let hud = loud.sim.extensions.hud(1, tick);
         assert_eq!(
@@ -606,16 +606,16 @@ pub(super) mod on {
         assert!(quiet.sim.extensions.hud(1, tick).is_quiet());
         // The race-wide outputs are held for the view half and absent without a module.
         assert_eq!(
-            loud.extension_sky(),
+            loud.sim.extension_sky(),
             crate::extensions::Sky {
                 rain: Some(0.5),
                 sun: 0.5,
                 grey: 0.25
             }
         );
-        assert_eq!(quiet.extension_sky(), crate::extensions::Sky::default());
+        assert_eq!(quiet.sim.extension_sky(), crate::extensions::Sky::default());
         assert_eq!(
-            grid(Prepared::default()).extension_sky(),
+            grid(Prepared::default()).sim.extension_sky(),
             crate::extensions::Sky::default()
         );
     }
@@ -1005,7 +1005,7 @@ colour = "#ff2010"
     fn a_modded_race_run_twice_hashes_the_same_every_tick_and_the_command_lands() {
         let (first, a) = run(grid(prepared(&[halver()])), 600);
         let (_, b) = run(grid(prepared(&[halver()])), 600);
-        assert!(first.is_modded());
+        assert!(first.sim.is_modded());
         assert_eq!(a, b);
         assert_ne!(fold(&a), VANILLA_FOLD, "the blob is in the hash");
         let (vanilla, _) = run(grid(Prepared::default()), 600);
@@ -1023,7 +1023,7 @@ colour = "#ff2010"
             speed(&vanilla)
         );
         assert_eq!(oag_modhost::engines_created(), 1);
-        let reports = first.extension_reports();
+        let reports = first.sim.extension_reports();
         assert_eq!(reports.len(), 1);
         assert!(reports[0].fuel_used > 0 && reports[0].faulted.is_none());
         assert!(reports[0].memory_bytes > 0 && reports[0].memory_peak >= reports[0].memory_bytes);
@@ -1035,7 +1035,7 @@ colour = "#ff2010"
         let (first, a) = run(grid(prepared(&[runaway(), halver()])), 600);
         let (second, b) = run(grid(prepared(&[runaway(), halver()])), 600);
         assert_eq!(a, b);
-        let reports = first.extension_reports();
+        let reports = first.sim.extension_reports();
         // Id order: `test.halver` runs before `test.runaway`.
         assert_eq!(reports[0].mod_id, "test.halver");
         assert!(
@@ -1045,7 +1045,11 @@ colour = "#ff2010"
         let (tick, why) = reports[1].faulted.clone().expect("the runaway faulted");
         assert_eq!(why, "out of fuel");
         assert_eq!(
-            second.extension_reports()[1].faulted.as_ref().unwrap().0,
+            second.sim.extension_reports()[1]
+                .faulted
+                .as_ref()
+                .unwrap()
+                .0,
             tick
         );
         assert!(
@@ -1184,7 +1188,7 @@ mod triggers {
         assert!(to > from + 10.0, "slot 1 drives along +x: {from} to {to}");
         let props = gate(from + (to - from) * 0.25, from + (to - from) * 0.5);
         let (race, _) = run(grid(prepared_on(&props)), 320);
-        let blob = race.extension_state(0).unwrap();
+        let blob = race.sim.extension_state(0).unwrap();
         assert_eq!(
             blob[..3],
             [1, 1, 1],
@@ -1193,7 +1197,7 @@ mod triggers {
         assert_eq!(blob[4..8], 0.25_f32.to_le_bytes(), "its gate property");
         // A gate the craft never reaches is never entered.
         let (race, _) = run(grid(prepared_on(&gate(to + 1000.0, to + 1010.0))), 320);
-        assert_eq!(race.extension_state(0).unwrap()[..2], [0, 0]);
+        assert_eq!(race.sim.extension_state(0).unwrap()[..2], [0, 0]);
     }
 
     #[test]

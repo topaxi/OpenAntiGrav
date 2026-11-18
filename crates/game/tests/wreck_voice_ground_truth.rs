@@ -54,7 +54,7 @@ fn a_wrecked_opponent_voices_cont_elim_in_a_single_race() {
         }
         race.tick(&PlayerInputs::none());
         let stepped = race.sim.world.tick - 1;
-        for event in race.pending_cues() {
+        for event in race.sim.pending_cues() {
             if event.cue == Cue::ContElim {
                 raised.push((stepped, event.slot));
             }

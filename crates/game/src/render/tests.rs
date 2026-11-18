@@ -53,7 +53,7 @@ fn a_zero_sized_window_does_not_divide_by_zero() {
 /// blends a translucent [`Draw::Fill`] over it, rather than clearing to
 /// black the way [`Renderer::render`] does.
 ///
-/// This is the mechanism [`crate::main::menu_stage`]'s pause overlay
+/// This is the mechanism [`crate::app::menu_stage`]'s pause overlay
 /// stands on: `Session::frame` resolves a parked race's scene into the
 /// presentation target and the menus then have to darken *that* rather
 /// than replace it. Pinned here, at the one new primitive

@@ -63,7 +63,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
         return;
     };
     let mut zone = race::Race::start(loaded.setup);
-    zone.set_autopilot(true);
+    zone.sim.set_autopilot(true);
     let mut lap = zone.sim.world.ships[0].standing.lap;
     let mut lap_shield = Vec::new();
     let mut ticks = 0;
@@ -99,7 +99,7 @@ fn sweep_one(source: &str, track: &str, label: &str) {
         partial,
         speed / ticks as f64,
         ship.standing.lap,
-        zone.respawns_of(0),
+        zone.sim.respawns_of(0),
         lap_shield
             .iter()
             .map(|s| (s * 10.0).round() / 10.0)

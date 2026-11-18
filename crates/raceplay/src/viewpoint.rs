@@ -126,15 +126,19 @@ impl Race {
     pub fn viewport_count(&self) -> usize {
         self.view.viewpoints.count.max(1)
     }
+}
 
+impl RaceSim {
     /// How many people fly this race, across every window ([`Setup::people`](super::Setup::people)).
-    /// Not [`Self::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
+    /// Not [`Race::viewport_count`]: a `--window-seats 1,1` race draws one view per window and
     /// has two people.
     #[must_use]
     pub fn people(&self) -> usize {
-        usize::from(self.sim.people.max(1))
+        usize::from(self.people.max(1))
     }
+}
 
+impl Race {
     /// Which way the screen is cut: the one answer the scene's view rectangles
     /// ([`Self::view_rects`]) and the HUD's placements both read, so a vertical scene cannot
     /// get a horizontal HUD. Only two views can be cut left and right
@@ -227,7 +231,7 @@ impl Race {
             .filter(|&slot| slot < self.viewport_count())
             .collect();
         let flyby = self.in_intro() && !seats.is_empty();
-        if flyby || (!seats.is_empty() && self.finished()) {
+        if flyby || (!seats.is_empty() && self.sim.finished()) {
             vec![player]
         } else {
             seats
@@ -328,7 +332,7 @@ impl Race {
         if self.windowed() {
             return self.window_drawn(0).len().max(1);
         }
-        if self.in_intro() || self.finished() {
+        if self.in_intro() || self.sim.finished() {
             1
         } else {
             self.viewport_count()
@@ -364,7 +368,7 @@ impl Race {
                 chase,
                 previous: view,
                 current: view,
-                respawns: self.placements_of(slot),
+                respawns: self.sim.placements_of(slot),
                 boost_kick: 0.0,
             });
         }
@@ -379,7 +383,7 @@ impl Race {
         let kicks = self.view.boost_fov_kick != oag_display::display::BoostFovKick::OFF;
         for slot in 0..MAX_SHIPS {
             let boosting = self.sim.world.ships[slot].physics.pad_timer > 0.0;
-            let respawns = self.placements_of(slot);
+            let respawns = self.sim.placements_of(slot);
             let target = self.followed(slot);
             let step = self.camera_step(slot);
             let Some(cam) = self.view.viewpoints.cams[slot].as_mut() else {
@@ -458,7 +462,10 @@ impl Race {
     #[must_use]
     pub fn viewed_camera_cuts(&self) -> u32 {
         match self.extra_viewpoint() {
-            Some(slot) => self.placements_of(slot).wrapping_add(self.view.restores),
+            Some(slot) => self
+                .sim
+                .placements_of(slot)
+                .wrapping_add(self.view.restores),
             None => self.camera_cuts(),
         }
     }
@@ -531,7 +538,7 @@ impl Race {
         let kick = self.view.viewpoints.cams[slot].map_or(0.0, |cam| cam.boost_kick);
         Some(super::camera::finish_vertical_fov(
             authored,
-            self.extension_fov_offset(slot),
+            self.sim.extension_fov_offset(slot),
             kick,
             self.view.boost_fov_kick.gain(),
             aspect,

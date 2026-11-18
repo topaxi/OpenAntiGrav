@@ -1409,7 +1409,7 @@ fn options_camera_carries_the_screen_size_control() {
 
 /// `OptionsPilot`'s list starts on its authored `FE_NORMAL` and reports a choice only once
 /// moved: one Right is `FE_SUPER` (2), the law this build runs; see
-/// `crate::main::session::frame` for how each index reaches `[controls] pilot_assist`.
+/// `crate::app::session::frame` for how each index reaches `[controls] pilot_assist`.
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn options_pilot_reports_the_players_choice() {

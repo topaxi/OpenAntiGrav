@@ -30,7 +30,7 @@ faded through on Pulse and Pure in headless captures (`--ghost`/`--record-ghost`
   reports it, 32x128), which suggests Pure shares `MeshNode_Ghost`. HD's
   `MeshNode_Ghost` (`vex-classes.md`) and its `Ghost Ship Visible` option were
   not read.
-- The windowed session's arm/save path (`main/race_stage/ghost.rs`) compiles
+- The windowed session's arm/save path (`app/race_stage/ghost.rs`) compiles
   and shares every piece the capture path exercises, but was not driven in a
   window this pass.
 - A full-race replay viewer: the file format serves it; nothing plays one.

@@ -38,7 +38,7 @@
 //! way [`crate::picker::Picker`] does not launch a race either. Which
 //! campaign modes can actually launch, resolving the cell's own track
 //! against the source, and evaluating the medal a finished race earned all
-//! live in `oag_game`/`crate::main::session::campaign` - see
+//! live in `oag_game`/`crate::app::session::campaign` - see
 //! `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "how a campaign
 //! event launches" and `docs/architecture/persistence.md`.
 //!
@@ -430,7 +430,7 @@ impl GridSelection {
     /// reusing the glyph's own predicate for the refusal is **chosen, not
     /// measured**: the real gate lives in an un-decompiled function
     /// upstream of `GridSelection_CommitSelection`. See
-    /// `crate::main::session::campaign::handle_campaign` in `oag_game`,
+    /// `crate::app::session::campaign::handle_campaign` in `oag_game`,
     /// which is where this is actually applied.
     #[must_use]
     pub fn selected_is_locked(&self) -> bool {
@@ -537,7 +537,7 @@ pub struct CellSelection {
     /// (`oag_game::records::Store`) keeps a lap/total tick count for every
     /// mode, but Zone's zone count and Elimination's kill count have no
     /// field there at all, so a caller building this has nothing honest to
-    /// pass for either - see `crate::main::campaign_stage::CampaignStage`'s
+    /// pass for either - see `crate::app::campaign_stage::CampaignStage`'s
     /// own construction of the closure.
     records: Vec<Option<i64>>,
     /// Parallel to [`Self::cells`] - `difficulties[i]` is `cells[i]`'s own
@@ -566,7 +566,7 @@ pub struct CellSelection {
     pulse: pulse::SelectorPulse,
     /// The rung the `DifficultyButton` widget's square-button prompt
     /// currently shows (built by [`draw::cell_draw_list`]), and what
-    /// `crate::main::session::campaign` (`oag_game`) records alongside a
+    /// `crate::app::session::campaign` (`oag_game`) records alongside a
     /// confirmed cell's own medal on every title - see
     /// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`'s "The
     /// `DifficultyRC` persisted rung" section. On HD it also selects which

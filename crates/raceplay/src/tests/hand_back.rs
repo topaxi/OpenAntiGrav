@@ -54,9 +54,9 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
         Some(SubWeapon::Autopilot(crate::replay::HAND_BACK_SECONDS))
     );
     assert_eq!(race.sim.world.ships[1].pickup.weapon, Some(Weapon::Turbo));
-    assert!(race.flown_for_the_player(1), "the driver has the craft");
+    assert!(race.sim.flown_for_the_player(1), "the driver has the craft");
     assert_eq!(
-        race.autopilot_engine_flags(1).speedup,
+        race.sim.autopilot_engine_flags(1).speedup,
         None,
         "a hand-back gives no Autopilot boost"
     );
@@ -80,7 +80,7 @@ fn a_hand_back_counts_down_as_an_autopilot_over_the_held_pickup() {
     let ship = &race.sim.world.ships[1];
     assert!(!ship.handback);
     assert_eq!(ship.autopilot_timer, 0.0);
-    assert!(!race.flown_for_the_player(1), "the person flies again");
+    assert!(!race.sim.flown_for_the_player(1), "the person flies again");
 }
 
 /// Absorb cancels the countdown on every title, and it does not pay out the held pickup.
@@ -110,7 +110,7 @@ fn a_real_autopilot_is_not_a_hand_back() {
     let mut race = returning();
     race.sim.world.ships[1].autopilot_timer = 2.0;
     assert!(!race.sim.world.ships[1].handback);
-    assert_eq!(race.autopilot_engine_flags(1).speedup, Some(1.2));
+    assert_eq!(race.sim.autopilot_engine_flags(1).speedup, Some(1.2));
 }
 
 /// The state the recording replays: a re-drive that applies the two events reaches the state
@@ -128,13 +128,14 @@ fn presence_events_reproduce_the_change() {
     let applied = |values: &[u32]| {
         let mut race = returning();
         for &value in values {
-            race.apply_event(&oag_replay::Event::new(
-                0,
-                1,
-                oag_replay::Kind::Presence,
-                value,
-            ))
-            .expect("applies");
+            race.sim
+                .apply_event(&oag_replay::Event::new(
+                    0,
+                    1,
+                    oag_replay::Kind::Presence,
+                    value,
+                ))
+                .expect("applies");
         }
         race.sim.state_hash()
     };
@@ -144,6 +145,7 @@ fn presence_events_reproduce_the_change() {
     assert_ne!(live(1), returning().sim.state_hash());
     assert!(
         returning()
+            .sim
             .apply_event(&oag_replay::Event::new(0, 1, oag_replay::Kind::Presence, 2))
             .is_err()
     );

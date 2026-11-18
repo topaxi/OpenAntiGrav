@@ -53,12 +53,15 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
         .expect("an event fills this");
     let awards = progress.xp_awards.clone().expect("Omega's table");
     let mut run = race::Race::start(loaded.setup);
-    run.arm_event_xp(&progress);
-    run.set_autopilot(true);
-    while !run.finished() && run.sim.world.tick < 30_000 {
+    run.sim.arm_event_xp(&progress);
+    run.sim.set_autopilot(true);
+    while !run.sim.finished() && run.sim.world.tick < 30_000 {
         run.tick(&oag_gameplay::PlayerInputs::none());
     }
-    assert!(run.finished(), "the event did not finish in 30000 ticks");
+    assert!(
+        run.sim.finished(),
+        "the event did not finish in 30000 ticks"
+    );
     let facts = oag_game::endrace::touch::Facts::from_race(&run, progress.objectives);
     let Standing::Place(place) = facts.standing else {
         panic!("a single race comes to a place, not {:?}", facts.standing);
@@ -66,18 +69,18 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
 
     let (mut store, _) = records::parse("").expect("an empty file parses");
     assert_eq!(store.xp(), 0);
-    let in_race = run.xp_tally_mut().expect("armed").total();
+    let in_race = run.sim.xp_tally_mut().expect("armed").total();
     // The edges added to the tally for 2048 run in an Omega race too: the lap and place awards.
     let edge_awards: u32 = [5, 44, 21, 22, 23]
         .into_iter()
-        .map(|index| run.xp_tally().expect("armed").times_paid(index))
+        .map(|index| run.sim.xp_tally().expect("armed").times_paid(index))
         .sum();
     assert!(
         edge_awards >= 1,
         "no lap or place award paid in an Omega race"
     );
     let paid = store.bank_event_xp(
-        run.xp_tally_mut().expect("armed"),
+        run.sim.xp_tally_mut().expect("armed"),
         None,
         Some(records::Medal::Bronze),
         Some(place),

@@ -260,7 +260,8 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
             })
     };
     assert_eq!(icon_uv(&race), None, "no icon with the assist off");
-    race.set_pilot_assist(oag_physics::pilot_assist::Level::Extreme);
+    race.sim
+        .set_pilot_assist(oag_physics::pilot_assist::Level::Extreme);
     let uv = icon_uv(&race).expect("the icon is up with Extreme on");
     assert_eq!(&uv[2..], &[256.0, 128.0], "the whole texture: {uv:?}");
 

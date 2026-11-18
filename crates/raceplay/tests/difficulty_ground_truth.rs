@@ -58,7 +58,7 @@ fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)>
         race.tick_sim_only(&PlayerInputs::none());
     }
 
-    let course = race.course().expect("a closed ring");
+    let course = race.sim.course().expect("a closed ring");
     let distance = (1..8)
         .map(|slot| race.sim.world.ships[slot].standing.distance(course))
         .fold(f32::NEG_INFINITY, f32::max);

@@ -25,18 +25,18 @@ pub enum FireLaw {
     Original,
 }
 
-impl Race {
+impl RaceSim {
     /// Overrides the fire law, for the sweep that measures it. `Original`
     /// without a weapon-AI table to read falls back to `Ours`.
     pub fn set_fire_law(&mut self, law: FireLaw) {
-        self.sim.fire_law = law;
+        self.fire_law = law;
     }
 
     /// Which fire law this race runs.
     #[must_use]
     pub fn fire_law(&self) -> FireLaw {
-        if self.sim.weapon_ai.is_some() {
-            self.sim.fire_law
+        if self.weapon_ai.is_some() {
+            self.fire_law
         } else {
             FireLaw::Ours
         }
@@ -48,8 +48,8 @@ impl Race {
     /// would count one twice. Anything else held is [`Decision::Hold`] here;
     /// its own arm in `spend_opponent_pickup` decides.
     pub(crate) fn opponent_decides(&mut self, slot: usize, field: &oag_ai::Field) -> Decision {
-        let weapon = self.sim.world.ships[slot].pickup.weapon;
-        self.sim.world.ships[slot].weapon_ai.tick(weapon.is_some());
+        let weapon = self.world.ships[slot].pickup.weapon;
+        self.world.ships[slot].weapon_ai.tick(weapon.is_some());
         let Some(weapon) = weapon else {
             return Decision::Hold;
         };
@@ -79,7 +79,7 @@ impl Race {
         let Some(situation) = self.fire_situation(slot, weapon, aimed) else {
             return Decision::Hold;
         };
-        let ship = &mut self.sim.world.ships[slot];
+        let ship = &mut self.world.ships[slot];
         let driver = ship.driver;
         ship.weapon_ai.decide_for(&driver, &situation)
     }
@@ -89,13 +89,13 @@ impl Race {
         let context = oag_ai::Context {
             air_trim: 0.0,
             line: self.line_of(slot),
-            tuning: &self.sim.ai_tuning,
-            pilot: &self.sim.ai_pilots[slot],
+            tuning: &self.ai_tuning,
+            pilot: &self.ai_pilots[slot],
             field,
             yaw_ceiling: None,
             plan: None,
         };
-        self.sim.world.ships[slot]
+        self.world.ships[slot]
             .driver
             .wants_to_fire(&context)
             .is_some()
@@ -110,11 +110,11 @@ impl Race {
         weapon: Weapon,
         aimed: bool,
     ) -> Option<Situation> {
-        let odds = self.sim.weapon_ai.as_deref()?.get(weapon)?;
-        let course = self.sim.course.as_deref()?;
+        let odds = self.weapon_ai.as_deref()?.get(weapon)?;
+        let course = self.course.as_deref()?;
         let length = course.length();
-        let count = self.sim.world.ship_count as usize;
-        let ships = &self.sim.world.ships[..count];
+        let count = self.world.ship_count as usize;
+        let ships = &self.world.ships[..count];
         let mine = &ships[slot];
         let my_distance = mine.standing.distance(course);
         let (mut gap_ahead, mut gap_behind, mut player_gap) = (None::<f32>, None::<f32>, None);
@@ -124,7 +124,7 @@ impl Race {
                 continue;
             }
             let gap = fold(them.standing.distance(course) - my_distance, length);
-            if self.sim.world.person_flown(other) {
+            if self.world.person_flown(other) {
                 player_gap = nearer_person(player_gap, gap);
             }
             if gap > 0.0 && gap_ahead.is_none_or(|best| gap < best) {
@@ -156,7 +156,7 @@ impl Race {
         });
         Some(Situation {
             aimed,
-            eliminator: self.sim.world.mode() == oag_race::Mode::Eliminator,
+            eliminator: self.world.mode() == oag_race::Mode::Eliminator,
             gap_ahead,
             gap_behind,
             player_gap,
@@ -167,7 +167,7 @@ impl Race {
                 use_against_ai: odds.use_against_ai,
                 absorb: odds.absorb,
             },
-            law: self.sim.fire_terms,
+            law: self.fire_terms,
         })
     }
 
@@ -176,8 +176,8 @@ impl Race {
     /// for the Plasma (`Plasma_ClassSpeed`) and the Rocket's for everything
     /// else (`0x0885d22c`) - as authored, with no `/ 3.6`.
     fn shot_speed(&self, weapon: Weapon) -> Option<f32> {
-        let weapons = self.sim.weapons.as_deref()?;
-        let class = &self.sim.class;
+        let weapons = self.weapons.as_deref()?;
+        let class = &self.class;
         match weapon {
             Weapon::Missile => weapons.missile()?.speed_for_named(class),
             Weapon::Plasma => weapons.plasma()?.speed_for_named(class),

@@ -122,7 +122,7 @@ impl Race {
         let forced = std::env::var_os(FORCE_ENV).is_some_and(|v| v == "on");
         std::array::from_fn(|slot| {
             if slot >= usize::from(self.sim.world.ship_count)
-                || !self.ship_active(slot)
+                || !self.sim.ship_active(slot)
                 || !(forced || self.view.mag_floor_fx[slot].on)
             {
                 return None;

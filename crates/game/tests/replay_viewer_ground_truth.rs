@@ -582,10 +582,10 @@ pub(crate) fn verify(image: &Path, replay: &oag_replay::Replay) -> Result<u64, o
         oag_raceplay::replay::start_recorded(loaded.setup, &replay.header).expect("starts");
     oag_replay::Verifier::run(replay, race.sim.state_hash(), |events, inputs| {
         for event in events {
-            race.apply_event(event).expect("applies");
+            race.sim.apply_event(event).expect("applies");
         }
         race.tick(inputs);
-        race.drain_cues();
+        race.sim.drain_cues();
         race.sim.state_hash()
     })
 }

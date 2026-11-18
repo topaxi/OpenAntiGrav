@@ -3044,6 +3044,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-bng-import"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "oag-ballisticng",
+ "oag-core",
+ "oag-gameplay",
+ "oag-physics",
+ "oag-race",
+ "oag-testdata",
+ "oag-trackfile",
+ "oag-unity",
+ "oag-vex",
+]
+
+[[package]]
 name = "oag-bytes"
 version = "0.1.0"
 dependencies = [
@@ -3543,7 +3559,7 @@ dependencies = [
  "oag-ai",
  "oag-assets",
  "oag-audio",
- "oag-ballisticng",
+ "oag-bng-import",
  "oag-bytes",
  "oag-core",
  "oag-disc",
@@ -3583,7 +3599,6 @@ dependencies = [
  "oag-trackfile",
  "oag-ui",
  "oag-ui-screens",
- "oag-unity",
  "oag-vex",
  "oag-weapons",
  "png",

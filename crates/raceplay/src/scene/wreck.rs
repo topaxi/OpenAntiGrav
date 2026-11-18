@@ -108,7 +108,7 @@ impl Scene {
     /// out of it, and has a wreck to show.
     pub(super) fn is_wrecked(&self, race: &Race, slot: usize) -> bool {
         self.wrecks.hull.get(slot).is_some_and(Option::is_some)
-            && race.ship_active(slot)
+            && race.sim.ship_active(slot)
             && live_model(race.sim.world.ships[slot].physics.craft_state) == Live::Wreck
     }
 
@@ -127,7 +127,7 @@ impl Scene {
         prev_vp: Mat4,
         prev: &motion::Snapshot,
     ) {
-        for slot in 0..usize::from(race.ship_count()) {
+        for slot in 0..usize::from(race.sim.ship_count()) {
             if !self.is_wrecked(race, slot) {
                 continue;
             }
@@ -157,7 +157,7 @@ impl Scene {
         race: &Race,
         eye: oag_mesh::mesh::LodEye,
     ) {
-        for slot in 0..usize::from(race.ship_count()) {
+        for slot in 0..usize::from(race.sim.ship_count()) {
             if self.is_wrecked(race, slot)
                 && let Some(wreck) = &self.wrecks.hull[slot]
             {
@@ -172,7 +172,7 @@ impl Scene {
         race: &'a Race,
         list: &mut super::record::DrawList<'a>,
     ) {
-        for slot in 0..usize::from(race.ship_count()) {
+        for slot in 0..usize::from(race.sim.ship_count()) {
             if !self.is_wrecked(race, slot) || (slot == 0 && !race.draws_own_ship()) {
                 continue;
             }

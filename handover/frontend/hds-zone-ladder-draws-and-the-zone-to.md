@@ -359,7 +359,7 @@ free:**
 1. **"Would a Zone race with its HUD hidden freeze the colour grade?" - no, on
    this port, and the code says why without needing a toggle that does not
    exist.** `Scene::sync_zone_grade` is called from `RaceStage::render`
-   (`crates/game/src/main/race_stage.rs`) unconditionally, before and
+   (`crates/game/src/app/race_stage.rs`) unconditionally, before and
    independent of `RaceStage::draw_hud` - the HUD only *reads*
    `Scene::zone_stage()` afterwards to print the class name, it never drives
    the sync. The headless `--screenshot` path shows the same split even more

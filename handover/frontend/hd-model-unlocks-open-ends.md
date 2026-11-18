@@ -19,7 +19,7 @@ Docs: `docs/formats/race-setup.md` ("HD-era model unlocks"), evidence
 1. **Split-screen seats past the first** race their model's directory in its own livery:
    `oag_raceplay::SeatPick` carries `hull_variant` and `skin`, no livery, and
    `oag_livery::load` paints only slot 0 from `LoadContext::player_livery`. Wiring: a `livery`
-   on `SeatPick` (built in `crates/game/src/main/session/picker/seat.rs` from the seat's variant id
+   on `SeatPick` (built in `crates/game/src/app/session/picker/seat.rs` from the seat's variant id
    via `oag_title::race::split_livery`), resolved per seat like `load/model_livery.rs` does slot 0.
 2. **The evaluator is unread** on both titles: medal counts are wired as golds over the matching
    campaign's grids (87/80 = those cell counts), loyalty as the named team's total, `grid` as Pulse's

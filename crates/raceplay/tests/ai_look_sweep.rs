@@ -55,7 +55,7 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
     })
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
-    race.set_ai_tuning(tuning);
+    race.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
     }
@@ -68,9 +68,9 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
     let mut per_lap = Vec::new();
     let mut shield_at_lap = race.sim.world.ships[LONE].physics.shield;
     for tick in 0..TICKS {
-        let before = race.respawns_of(LONE);
+        let before = race.sim.respawns_of(LONE);
         race.tick(&PlayerInputs::none());
-        if race.respawns_of(LONE) != before {
+        if race.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
         }
         let now = race.sim.world.ships[LONE].standing.lap;
@@ -90,7 +90,7 @@ fn solo_on(track: &str, tuning: oag_ai::Tuning) -> Option<Solo> {
 
     Some(Solo {
         best,
-        respawns: race.respawns_of(LONE),
+        respawns: race.sim.respawns_of(LONE),
         laps: lap,
         shield: race.sim.world.ships[LONE].physics.shield,
         per_lap,
@@ -136,11 +136,11 @@ fn field_run(measured: oag_ai::Tuning) -> Option<FieldRun> {
     })
     .ok()?;
     let mut race = race::Race::start(lap_times.setup);
-    race.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
+    race.sim.set_ai_tuning(tuned(oag_ai::Difficulty::Ace));
     for _ in 0..9_000 {
         race.tick(&PlayerInputs::none());
     }
-    let lapped: Vec<usize> = (1..usize::from(race.ship_count()))
+    let lapped: Vec<usize> = (1..usize::from(race.sim.ship_count()))
         .filter(|&slot| race.sim.world.ships[slot].standing.lap >= 2)
         .collect();
     let untimed = lapped
@@ -158,8 +158,8 @@ fn field_run(measured: oag_ai::Tuning) -> Option<FieldRun> {
     let level = options.difficulty;
     let mines = race::load(&options).ok()?;
     let mut race = race::Race::start(mines.setup);
-    race.set_ai_tuning(tuned(level));
-    let opponents = 1..usize::from(race.ship_count());
+    race.sim.set_ai_tuning(tuned(level));
+    let opponents = 1..usize::from(race.sim.ship_count());
     let full = race.sim.world.ships[1].handling.dimensions.shield;
     for _ in 0..3_600 {
         race.tick(&PlayerInputs::none());

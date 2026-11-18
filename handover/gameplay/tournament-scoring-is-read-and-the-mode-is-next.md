@@ -11,7 +11,7 @@ summary: "Four RE gaps: DAT_08b30fa0 writer, DAT_08b31158+0xdc meaning, leg-hash
 built: `oag_race::Mode::Tournament`, `oag_race::tournament` (the points
 table and the running standings), `crate::race::tournament::Progress` (the
 game-layer leg list and totals) and the campaign/EndRace wiring
-(`crate::main::session::tournament`, `RaceStage::tournament_final_rank`).
+(`crate::app::session::tournament`, `RaceStage::tournament_final_rank`).
 See [`docs/gameplay/race-modes.md#tournament`](../../docs/gameplay/race-modes.md#tournament)
 for the full picture and
 [`tournament.md`](../../docs/ghidra/functions/psp-pulse-usa/tournament.md)
@@ -140,7 +140,7 @@ Head2Head cell today gets no gap readout.
 
 ## From the HANDOVER.md index (moved 2026-09-25)
 
-2026-09-23. `oag_race::Mode::Tournament` races a leg exactly like a single race; `oag_race::tournament` implements the points table (8/6/5/4/3/2/1/0 by leg placing) and the standings rank (grid-slot tie-break); the campaign session carries the leg list and running totals across a relaunch (`crate::main::session::tournament`), and the final leg's medal compares the standings rank (`RaceStage::tournament_final_rank`), not a leg's own placing. Chosen, not measured: a non-finisher scores 0 (standing in for the original's own destroyed/race-state-7 guard), no save/resume between legs, and no authored standings table (a leg reuses the ordinary results/rewards screens). Open, unforced by the build: Head2Head entirely, `DAT_08b30fa0`'s writer, `DAT_08b31158+0xdc`'s meaning, the leg-hash-to-track resolution, `DAT_08b34320`'s reset condition
+2026-09-23. `oag_race::Mode::Tournament` races a leg exactly like a single race; `oag_race::tournament` implements the points table (8/6/5/4/3/2/1/0 by leg placing) and the standings rank (grid-slot tie-break); the campaign session carries the leg list and running totals across a relaunch (`crate::app::session::tournament`), and the final leg's medal compares the standings rank (`RaceStage::tournament_final_rank`), not a leg's own placing. Chosen, not measured: a non-finisher scores 0 (standing in for the original's own destroyed/race-state-7 guard), no save/resume between legs, and no authored standings table (a leg reuses the ordinary results/rewards screens). Open, unforced by the build: Head2Head entirely, `DAT_08b30fa0`'s writer, `DAT_08b31158+0xdc`'s meaning, the leg-hash-to-track resolution, `DAT_08b34320`'s reset condition
 
 ## Update, 2026-10-08 (pulse-h2h): Head2Head is built, quit returns to Cell Selection
 

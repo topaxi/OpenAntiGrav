@@ -236,8 +236,8 @@ fn a_draw_alpha_reaches_no_state_hash() {
         );
         drawn.tick(&PlayerInputs::none());
         plain.tick(&PlayerInputs::none());
-        drawn.drain_cues();
-        plain.drain_cues();
+        drawn.sim.drain_cues();
+        plain.sim.drain_cues();
         assert_eq!(
             drawn.sim.state_hash(),
             plain.sim.state_hash(),
@@ -349,7 +349,7 @@ fn the_ghost_is_drawn_between_its_two_poses() {
     };
     assert_eq!(
         race.ghost_draw_matrix(&now, &before),
-        Race::ghost_model_matrix(&now)
+        RaceSim::ghost_model_matrix(&now)
     );
     race.set_draw_alpha(0.5);
     let drawn = translation(race.ghost_draw_matrix(&now, &before));

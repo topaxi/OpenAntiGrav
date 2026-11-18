@@ -11,9 +11,9 @@ use oag_gameplay::{Controller, PlayerInputs};
 /// The text every comparison of a whole simulation reads, with the per-tick outputs a
 /// drawn tick leaves queued and a quiet one drops taken out.
 fn text(race: &mut Race) -> String {
-    race.drain_cues();
-    race.drain_announcements();
-    race.drain_class_announcements();
+    race.sim.drain_cues();
+    race.sim.drain_announcements();
+    race.sim.drain_class_announcements();
     format!("{:?}", race.sim)
 }
 

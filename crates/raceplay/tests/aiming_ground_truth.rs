@@ -101,7 +101,7 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
         .map(|ship| ship.physics.body)
         .collect();
     race.tick(&PlayerInputs::none());
-    let read = matrix(race.extension_state(0).expect("the module ran"));
+    let read = matrix(race.sim.extension_state(0).expect("the module ran"));
 
     let mut ahead_centred = 0;
     for (o, from) in bodies.iter().enumerate() {
@@ -135,7 +135,7 @@ fn on_the_starting_grid_a_craft_ahead_reads_ahead_and_centred_and_one_across_doe
         race.sim.world.ships[1].physics.body.position =
             from.position + from.forward() * ahead + from.right() * right;
         race.tick(&PlayerInputs::none());
-        matrix(race.extension_state(0).unwrap())[0][1]
+        matrix(race.sim.extension_state(0).unwrap())[0][1]
     };
     let across = place(&mut race, 4.0, 40.0);
     assert!(

@@ -23,7 +23,7 @@ const ROUTE_PLAN_BUDGET: u64 = 40_000;
 const HULL_PLAN_BUDGET: u64 = 40_000;
 
 /// The step budget checking the reference's ring plan on a hull its adapted
-/// copy failed on ([`Race::fallback_ring`]) gets, on top of
+/// copy failed on ([`RaceSim::fallback_ring`]) gets, on top of
 /// [`HULL_PLAN_BUDGET`]. Two laps at each of [`FALLBACK_SHARES`] is about
 /// 20,000 steps on Pulse. **Chosen, not measured.**
 const FALLBACK_BUDGET: u64 = 40_000;
@@ -35,14 +35,14 @@ const FALLBACK_BUDGET: u64 = 40_000;
 const FALLBACK_SHARES: [f32; 4] = [0.96, 0.9216, 0.884_736, 0.849_346_6];
 
 /// The wall ticks a fallback verification may scrape and still be followed
-/// at its share ([`Race::fallback_ring`]): the clean-lap gate's own contact
+/// at its share ([`RaceSim::fallback_ring`]): the clean-lap gate's own contact
 /// tolerance. Over the gate's 45 perturbed runs a Triakis on the reference at
 /// its yaw share scraped 0-7 ticks on Pulse `07_Track` RAPIER, which the race
 /// drives cleanly (0-8), and 55-94 on `06_Track` RAPIER, which it does not
 /// (260-850). **Chosen, not measured.**
 const FALLBACK_SCRAPE: u32 = 10;
 
-/// What a hull drives round the ring, where [`Race::other_hulls`] decided.
+/// What a hull drives round the ring, where [`RaceSim::other_hulls`] decided.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(super) enum HullRing {
     /// The reference's plan at [`oag_ai::SpeedPlan::share_for`].
@@ -53,7 +53,7 @@ pub(super) enum HullRing {
     Own(Box<oag_ai::SpeedPlan>),
 }
 
-/// One hull's own plans, where [`Race::other_hulls`] made them: the ring's
+/// One hull's own plans, where [`RaceSim::other_hulls`] made them: the ring's
 /// and each route's, `None` where this hull follows the reference's.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(super) struct HullPlans {
@@ -143,11 +143,11 @@ impl RaceSim {
 /// Three stages, each a pure function of the one before, so they finish in the
 /// same plans whatever order the threads run in:
 ///
-/// 1. the ring's plan, which picks the reference hull ([`Race::field_speed_plan`]);
-/// 2. every route's plan on the reference ([`Race::route_speed_plans`]) and every
-///    other hull's ring plan ([`Race::hull_ring_for`]), all at once: neither reads
+/// 1. the ring's plan, which picks the reference hull ([`RaceSim::field_speed_plan`]);
+/// 2. every route's plan on the reference ([`RaceSim::route_speed_plans`]) and every
+///    other hull's ring plan ([`RaceSim::hull_ring_for`]), all at once: neither reads
 ///    the other;
-/// 3. every other hull's copy of each route's plan ([`Race::hull_routes_for`]),
+/// 3. every other hull's copy of each route's plan ([`RaceSim::hull_routes_for`]),
 ///    which needs that route's plan from stage 2.
 ///
 /// Stage 2 learns routes and hulls overlapped;
@@ -155,15 +155,15 @@ impl RaceSim {
 /// speed plan".
 pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
     sim.plans_built = true;
-    sim.speed_plan = Race::field_speed_plan(sim).map(Arc::new);
-    let hulls = Race::other_hulls(sim);
+    sim.speed_plan = RaceSim::field_speed_plan(sim).map(Arc::new);
+    let hulls = RaceSim::other_hulls(sim);
     let (learned, rings) = {
         let shared = &*sim;
         par_join(
-            || Race::route_speed_plans(shared),
+            || RaceSim::route_speed_plans(shared),
             || match (shared.speed_plan.as_ref(), shared.plan_reference) {
                 (Some(reference_plan), Some(_)) => par_map(&hulls.0, |&handling| {
-                    Race::hull_ring_for(shared, reference_plan, handling)
+                    RaceSim::hull_ring_for(shared, reference_plan, handling)
                 }),
                 _ => Vec::new(),
             },
@@ -179,7 +179,7 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
     if sim.speed_plan.is_some() && sim.plan_reference.is_some() {
         let shared = &*sim;
         let routes = par_map(&hulls.0, |&handling| {
-            Race::hull_routes_for(shared, handling)
+            RaceSim::hull_routes_for(shared, handling)
         });
         sim.hull_plans = rings
             .into_iter()
@@ -205,9 +205,9 @@ pub(super) fn learn_speed_plans(sim: &mut RaceSim) {
 #[cfg(test)]
 pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
     sim.plans_built = true;
-    sim.speed_plan = Race::field_speed_plan(sim).map(Arc::new);
+    sim.speed_plan = RaceSim::field_speed_plan(sim).map(Arc::new);
     let learned: Vec<_> = (0..sim.routes.len())
-        .map(|k| Race::route_speed_plan(sim, k))
+        .map(|k| RaceSim::route_speed_plan(sim, k))
         .collect();
     let plan_steps = Arc::make_mut(&mut sim.plan_steps);
     plan_steps.routes = learned.iter().map(|(_, steps)| *steps).collect();
@@ -219,11 +219,11 @@ pub(super) fn learn_speed_plans_serially(sim: &mut RaceSim) {
     let (Some(reference_plan), Some(_)) = (sim.speed_plan.clone(), sim.plan_reference) else {
         return;
     };
-    let (hulls, owner) = Race::other_hulls(sim);
+    let (hulls, owner) = RaceSim::other_hulls(sim);
     let shared = &*sim;
     let hull_plans = par_map(&hulls, |&handling| {
-        let ring = Race::hull_ring_for(shared, &reference_plan, handling);
-        let (routes, route_steps) = Race::hull_routes_for(shared, handling);
+        let ring = RaceSim::hull_ring_for(shared, &reference_plan, handling);
+        let (routes, route_steps) = RaceSim::hull_routes_for(shared, handling);
         HullPlans {
             ring,
             routes,
@@ -292,11 +292,11 @@ pub(super) struct SpeedPlanJob {
 ///
 /// **Not the state hash**: the launch's own
 /// setters move that without touching a plan input. A mod event's pilot writes
-/// each opponent's `driver.pilot` ([`Race::set_opponent_pilot`]), and the
-/// original driver ([`Race::use_original_ai`]) only decides whether a plan is
+/// each opponent's `driver.pilot` ([`RaceSim::set_opponent_pilot`]), and the
+/// original driver ([`RaceSim::use_original_ai`]) only decides whether a plan is
 /// read, which [`Race::ensure_speed_plans`] asks itself. Split seating does
 /// change one (`person_flown`, which orders the reference's candidates in
-/// [`Race::field_speed_plan`]), and so does anything that moves a craft.
+/// [`RaceSim::field_speed_plan`]), and so does anything that moves a craft.
 #[derive(Debug, PartialEq)]
 pub(super) struct PlanInputs {
     ship_count: u8,
@@ -401,7 +401,7 @@ fn adapted_clean(report: &oag_ai::plan::Report) -> bool {
     report.verify_failures == 0 && report.verify_lap_ticks.is_some()
 }
 
-/// Whether a route plan's did: stricter, see [`Race::route_speed_plans`].
+/// Whether a route plan's did: stricter, see [`RaceSim::route_speed_plans`].
 ///
 /// A rescue on the standing lap on the ring stretch before the lead-in (line
 /// index below `kept - SWITCH_SAMPLES`) does not fail it: `cathedral`'s merge
@@ -421,7 +421,7 @@ fn route_clean(report: &oag_ai::plan::Report, kept: usize) -> bool {
         && report.verify_lap_ticks.is_some()
 }
 
-impl Race {
+impl RaceSim {
     /// Builds the speed plan for the craft in `slot`, driven from its own grid
     /// pose with its own handling.
     ///
@@ -447,11 +447,11 @@ impl Race {
     /// scratch.
     #[must_use]
     pub fn build_player_speed_plan(&self) -> (oag_ai::SpeedPlan, oag_ai::plan::Report) {
-        let player = self.sim.world.ships[self.sim.world.primary_slot()].handling;
+        let player = self.world.ships[self.world.primary_slot()].handling;
         Self::with_plan_course_on(
-            &self.sim,
-            &self.sim.racing_line,
-            &self.sim.ai_order,
+            self,
+            &self.racing_line,
+            &self.ai_order,
             1,
             None,
             Some(player),
@@ -473,7 +473,9 @@ impl Race {
             oag_ai::plan::probe::drive(course, craft, &oag_ai::Tuning::default(), speed, ticks, 32)
         })
     }
+}
 
+impl Race {
     /// Route `k`'s reference plan learned again exactly as the race learns it
     /// (the ring's plans first, for their reference hull), its report, and its
     /// verification replayed tick by tick. A diagnostic for a route that is not
@@ -491,7 +493,7 @@ impl Race {
         self.ensure_speed_plans();
         let sim = &self.sim;
         let route = sim.routes.get(k)?;
-        let (plan, report, rows, stages) = Self::with_plan_course_on(
+        let (plan, report, rows, stages) = RaceSim::with_plan_course_on(
             sim,
             &route.line,
             &route.order,
@@ -530,7 +532,7 @@ impl Race {
     #[must_use]
     pub fn probe_ring_plan(&mut self, stuck: Option<u32>) -> RouteProbe {
         self.ensure_speed_plans();
-        let (plan, report, rows) = Self::with_plan_course_on(
+        let (plan, report, rows) = RaceSim::with_plan_course_on(
             &self.sim,
             &self.sim.racing_line,
             &self.sim.ai_order,
@@ -556,22 +558,16 @@ impl Race {
             line: (*self.sim.racing_line).clone(),
         }
     }
+}
 
+impl RaceSim {
     /// The plan's `Course` and `Craft` for slot `slot`, handed to `f`.
     fn with_plan_course<T>(
         &self,
         slot: usize,
         f: impl FnOnce(&oag_ai::plan::Course<'_, CollisionWorld>, &oag_ai::plan::Craft) -> T,
     ) -> T {
-        Self::with_plan_course_on(
-            &self.sim,
-            &self.sim.racing_line,
-            &self.sim.ai_order,
-            slot,
-            None,
-            None,
-            f,
-        )
+        Self::with_plan_course_on(self, &self.racing_line, &self.ai_order, slot, None, None, f)
     }
 
     /// The same on any line and its sample order - the ring's or a route's
@@ -678,15 +674,17 @@ impl Race {
         };
         f(&course, &craft)
     }
+}
 
+impl Race {
     /// Whether anything in this race will read the speed plans: an opponent on
     /// this project's driver (`--ai ours`, a fallback from
-    /// [`Race::use_original_ai`], a mode the original does not fly), the
+    /// [`RaceSim::use_original_ai`], a mode the original does not fly), the
     /// player's autopilot, or a circuit with forks.
     ///
     /// **Forks always build them**, though the original driver reads no plan
     /// of the ring: a route is offered to the coin only when its plan verified
-    /// ([`Race::steer_branching`]), and the route plans are learned on the
+    /// ([`RaceSim::steer_branching`]), and the route plans are learned on the
     /// ring plan's reference hull, so skipping them would change which way an
     /// original opponent goes round a fork. A circuit without one pays nothing
     /// (HD's default track: 3.0 to 3.7 s of a 5.2 to 5.9 s start).
@@ -752,7 +750,7 @@ impl Race {
     /// Starts learning the speed plans on a thread of their own, from a copy of
     /// the simulation as it stands, if anything will read them. For a caller
     /// that has finished setting the race up (the load screen, after
-    /// [`Race::use_original_ai`]) and wants the first tick not to pay for them;
+    /// [`RaceSim::use_original_ai`]) and wants the first tick not to pay for them;
     /// poll [`Self::speed_plans_ready`]. The result is the same one
     /// [`Self::ensure_speed_plans`] would have learned on the frame thread:
     /// one function learns both, on a copy of the same state, and a race that
@@ -793,7 +791,9 @@ impl Race {
             .as_ref()
             .is_none_or(|job| job.task.is_finished())
     }
+}
 
+impl RaceSim {
     /// The plan the field drives, or `None`: the **reference** every other
     /// hull's plans are re-learned from ([`Self::other_hulls`]).
     ///
@@ -1078,7 +1078,7 @@ impl Race {
     /// stalls without touching a wall is neither a failure nor a respawn, and
     /// that is what `07_Track`'s centre ramp does to ours. A route
     /// with no plan is not offered to the coin at all - see
-    /// `Race::steer_branching`.
+    /// `RaceSim::steer_branching`.
     ///
     /// **Started from the route line's own first sample rather than from the
     /// grid**: the grid can sit in the stretch a route bypasses (`05_Track`'s
@@ -1130,7 +1130,9 @@ impl Race {
         );
         (clean.then_some(plan), report.steps)
     }
+}
 
+impl Race {
     /// The plan the field is following, if any, learned first if nothing has
     /// yet ([`Self::ensure_speed_plans`]). For a diagnostic that has to compare
     /// a craft's speed against the target it was given; `None` where the

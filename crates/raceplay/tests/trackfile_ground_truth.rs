@@ -368,16 +368,13 @@ fn every_original_workshop_track_converts_and_reads_back_the_same() {
     };
     let (mut converted, mut refused) = (0, Vec::new());
     for path in items {
-        let Ok(file) = std::fs::read(&path) else {
-            continue;
-        };
-        let Ok(w) = oag_ballisticng::wtrk::Wtrk::parse(&file) else {
+        let Ok(w) = oag_bng_import::header(&path) else {
             continue;
         };
         if !w.has_tag("Original") || w.has_tag("Port/Remake") {
             continue;
         }
-        let mapped = match race::foreign::read(&path) {
+        let mapped = match oag_bng_import::read(&path) {
             Ok(t) => t,
             Err(e) => {
                 refused.push(format!("{}: {e}", w.title));
@@ -418,7 +415,7 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
     let dir = std::env::temp_dir().join(format!("oag-trackfile-lion-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let manifest = dir.join("lions-den.track.toml");
-    oag_trackfile::write(&race::foreign::read(&wtrk).unwrap(), &manifest).unwrap();
+    oag_trackfile::write(&oag_bng_import::read(&wtrk).unwrap(), &manifest).unwrap();
 
     let start = |track: std::path::PathBuf| {
         let o = race::Options {
@@ -510,7 +507,7 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
     let lap = race.sim.world.ships[1].standing.lap;
     println!(
         "{file}: lap {lap} after 7200 ticks, respawns {}",
-        race.respawns_of(1)
+        race.sim.respawns_of(1)
     );
     assert!(lap >= 2, "got round at all: lap {lap}");
 }
@@ -789,7 +786,7 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         );
         assert!(loaded.setup.zone.is_some(), "{}", file.display());
         let mut race = race::Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..15_200 {
             race.tick(&inputs);
@@ -797,8 +794,8 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
         let zone = race.sim.world.race[0].zone;
         println!("{}: zone {zone} after 15200 ticks", file.display());
         assert!(zone >= 24, "{}: zone {zone}", file.display());
-        assert_eq!(race.respawns_of(0), 0, "{}", file.display());
-        assert!(!race.finished(), "{}", file.display());
+        assert_eq!(race.sim.respawns_of(0), 0, "{}", file.display());
+        assert!(!race.sim.finished(), "{}", file.display());
     }
 }
 
@@ -879,7 +876,7 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
             .unwrap_or_else(|| panic!("{image}: no host speed pads line: {:#?}", loaded.report));
         println!("{image}: {pads}");
         let mut race = race::Race::start(loaded.setup);
-        race.set_autopilot(true);
+        race.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..1_800 {
             race.tick(&inputs);

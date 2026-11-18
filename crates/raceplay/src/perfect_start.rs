@@ -20,16 +20,17 @@ use super::*;
 
 use oag_physics::launch::Grade;
 
-impl Race {
+impl RaceSim {
     /// Every slot's launch grade, taken before this tick steps the field.
     pub(super) fn launch_grades(&self) -> [Grade; oag_gameplay::MAX_SHIPS] {
-        self.sim
-            .world
+        self.world
             .ships
             .each_ref()
             .map(|ship| ship.physics.launch.grade)
     }
+}
 
+impl Race {
     /// Fires the perfect-start effect on each human craft whose grade became
     /// [`Grade::Perfect`] this tick. The grade is written once, on the
     /// first-thrust edge, so a change is that edge.

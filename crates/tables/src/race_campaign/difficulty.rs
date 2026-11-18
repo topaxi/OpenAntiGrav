@@ -55,7 +55,7 @@ pub struct DifficultyTargets {
 /// against this module's own [`Medal`], and for the identical reason:
 /// `oag_game::records` stays free of this crate so its own store logic
 /// keeps testing with no disc, no GPU and no simulation step. A caller
-/// crossing the boundary converts explicitly (`crate::main::campaign_stage`'s
+/// crossing the boundary converts explicitly (`crate::app::campaign_stage`'s
 /// own `to_campaign_difficulty` and its inverse), the same shape
 /// `to_campaign_medal` already gives [`Medal`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

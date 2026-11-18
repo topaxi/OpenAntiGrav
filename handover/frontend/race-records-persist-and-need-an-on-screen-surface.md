@@ -86,7 +86,7 @@ surface; `xdotool` is X11-only and finds nothing, and no
 `wtype`/`ydotool`/`wlrctl` is installed), and there is no `SIGTERM` handler
 anywhere in `crates/game/src/main`, so a `kill` bypasses `escape()` rather
 than exercising it. Speed Lap and Zone - the two modes that depend on this
-site entirely, since `Race::finished` never turns `true` for either - have
+site entirely, since `RaceSim::finished` never turns `true` for either - have
 not themselves produced a saved row on a real desktop yet. Run this on one:
 
 ```sh
@@ -130,9 +130,9 @@ exactly that shape and no richer one - see
 carries are left off entirely, since nothing in this project's schema backs
 them - drawing invented values there would be exactly the
 "plausible-looking stand-in" `CLAUDE.md`'s own root doc forbids.
-`crates/game/src/main/records_page.rs` was the module; six unit tests over
+`crates/game/src/app/records_page.rs` was the module; six unit tests over
 its pure half (`held_text`/`show_total`/`build_table`) in
-`crates/game/src/main/records_page/tests.rs`. **The page itself was
+`crates/game/src/app/records_page/tests.rs`. **The page itself was
 captured and read back off `pulse-psp-eu.chd`** via `--menu-page records
 --screenshot`: title "RACE RECORDS", MODE/TRACK/BACK all render correctly,
 nothing overlapping the footer. ~~**The live per-class table was not seen
@@ -148,7 +148,7 @@ small, separate change for whoever next touches that file.~~ **Done,
 2026-09-23** - see "The per-class table now draws in `--menu-page records`
 too" below. The pure resolution moved to `oag_game::scoreboard::records_table`
 so both the live session and `crates/game/src/capture/menu_page.rs` share
-it; `crates/game/src/main/records_page.rs` is now a thin wrapper supplying
+it; `crates/game/src/app/records_page.rs` is now a thin wrapper supplying
 `Shell::tracks_for` as the live session's own track lookup, and its own
 unit tests moved with the code they test into `crates/game/src/scoreboard/
 tests.rs`.

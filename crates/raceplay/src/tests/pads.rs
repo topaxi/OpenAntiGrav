@@ -222,7 +222,7 @@ fn the_flare_outlives_the_force_and_ignores_the_class_tunable() {
     race.tick(&PlayerInputs::none());
     // Armed with the constant, not with the class's `time`.
     assert!(
-        (race.exhaust().boost_timer() - (exhaust::BOOST_SECONDS - race.dt())).abs() < 1e-4,
+        (race.exhaust().boost_timer() - (exhaust::BOOST_SECONDS - race.sim.dt())).abs() < 1e-4,
         "the flare was armed with {} rather than {}",
         race.exhaust().boost_timer(),
         exhaust::BOOST_SECONDS

@@ -72,7 +72,7 @@ fn a_trigger_raises_its_channel_with_no_module_and_a_race_without_one_hashes_as_
     let (race, with) = run(grid(beacons), 320);
     let (_, without) = run(grid(Prepared::default()), 320);
     assert_eq!(with, without, "an emitting trigger moved a hash");
-    assert!(!race.is_modded());
+    assert!(!race.sim.is_modded());
     let started = race.channel_started(any(key("test.track/passed")));
     assert!(
         started.is_some_and(|s| (284.0 / 60.0..320.0 / 60.0).contains(&s)),
@@ -214,7 +214,7 @@ mod with_modules {
     }
 
     fn heard(race: &Race, module: usize) -> Heard {
-        let blob = race.extension_state(module).unwrap();
+        let blob = race.sim.extension_state(module).unwrap();
         let word = |at: usize| u32::from_le_bytes(blob[at..at + 4].try_into().unwrap());
         Heard {
             count: word(0),
@@ -367,10 +367,10 @@ mod with_modules {
             race
         };
         let fine = run_with(&at_cap);
-        assert_eq!(fine.extension_reports()[0].faulted, None);
+        assert_eq!(fine.sim.extension_reports()[0].faulted, None);
         assert_eq!(heard(&fine, 1).count, 4);
         let broken = run_with(&over);
-        let (tick, why) = broken.extension_reports()[0].faulted.clone().unwrap();
+        let (tick, why) = broken.sim.extension_reports()[0].faulted.clone().unwrap();
         assert_eq!(tick, 3);
         assert!(why.contains("emit past the cap of 4"), "{why}");
         assert_eq!(
@@ -389,7 +389,7 @@ mod with_modules {
         for _ in 0..6 {
             race.tick(&PlayerInputs::none());
         }
-        let (tick, why) = race.extension_reports()[0].faulted.clone().unwrap();
+        let (tick, why) = race.sim.extension_reports()[0].faulted.clone().unwrap();
         assert_eq!(tick, 3);
         assert!(
             why.contains("test.a/open") && why.contains("publishes"),

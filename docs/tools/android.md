@@ -116,22 +116,21 @@ question.
 
 ## How it is wired
 
-- **Entry.** `crates/game/src/main_body.rs` carries `android_main`, which hands the
+- **Entry.** `oag_game::app::android_main` (`crates/game/src/app.rs`) hands the
   activity to `oag_mobile::android::prepare` (the storage setup below, and the
-  `AndroidApp` kept for `oag_mobile::android::event_loop`); the glue moved to
-  `crates/mobile` on 2026-10-12 ([ADR-0065](../architecture/adr/0065-one-mobile-crate-for-every-phone-os.md))
-  and the entry could not follow it, for the reason in the next sentence. Two crate roots
-  `include!` it: `main.rs` (the desktop binary, which also keeps the crate's rustdoc
-  header - an included file may not carry inner attributes) and `android.rs`, the
-  `oag_android` example with `crate-type = ["cdylib"]` and
-  `required-features = ["android"]`, which `build-apk.sh` turns on. That is the cost
-  of the windowed `App` living in the binary's own modules: a bin cannot be a cdylib,
-  `cargo rustc` refuses to mix the two crate types, and nothing may depend on
-  `oag-game`. Both roots sit in `src/`, so the body's `#[path = "main/..."]` module
-  paths resolve the same from either. Until 2026-10-07 both targets pointed at
-  `main.rs` itself and Cargo warned "found to be present in multiple build targets"
-  on every invocation. Moving the `App` into the lib would remove the example
-  altogether; that is still open (handover thread).
+  `AndroidApp` kept for `oag_mobile::android::event_loop`); the glue lives in
+  `crates/mobile` ([ADR-0065](../architecture/adr/0065-one-mobile-crate-for-every-phone-os.md)).
+  The `oag_android` example (`crates/game/src/android.rs`, `crate-type = ["cdylib"]`,
+  `required-features = ["android"]`, which `build-apk.sh` turns on) is the cdylib
+  NativeActivity loads: a bin cannot be a cdylib and `cargo rustc` refuses to mix
+  the two crate types, so it is a target of its own. It holds the `#[no_mangle]`
+  `android_main` symbol and one call into the library, so the export does not depend on
+  a symbol in an upstream rlib surviving the link. The windowed `App` and every stage
+  are `oag_game::app`, shared with the desktop binary (`main.rs`) and the browser
+  module ([web.md](web.md)); nothing depends on `oag-game`. The Android target is not
+  in the gate: `cargo check -p oag-game --example oag_android --target
+  aarch64-linux-android --no-default-features --features android,extensions` type-checks it
+  (the target's std installed; `just apk` builds it).
 - **Official mods.** `build-apk.sh` stages `assets/mods/official` into the APK's `assets/`
   with an index, and `android_main` unpacks it to `<files dir>/assets/mods/official` on the
   first launch of a build, where `oag_mod::mods_search_path` already looks
@@ -250,14 +249,14 @@ process stayed alive, and in a race it opened the root menu over the parked race
 There is no QUIT row on Android (2026-10-07, maintainer): a phone app is left with
 the system's home or app switcher, not quit from inside, and the app is suspended
 (race paused) rather than ended. `menu::Definition::drop_quit` removes the row at
-boot (`main/prepare.rs`, `oag_mobile::MOBILE`); desktop keeps it.
+boot (`app/prepare.rs`, `oag_mobile::MOBILE`); desktop keeps it.
 
 ### On-screen racing controls
 
 `oag_input::touch` holds the layout, the finger tracking and the rules, with no
 winit type, so every rule is a unit test; `oag_game::touch_controls` draws it as
 round translucent buttons with a vector glyph each (see "Design pass" below);
-`crates/game/src/main/touch.rs` is the glue. Shown only on Android (or on any
+`crates/game/src/app/touch.rs` is the glue. Shown only on Android (or on any
 platform with `OAG_TOUCH_CONTROLS` set, which is how to look at it on a desktop with
 a touchscreen), only in a running race, and drawn under the pointer in the overlay
 pass.

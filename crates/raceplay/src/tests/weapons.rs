@@ -58,7 +58,7 @@ fn crossing_a_weapon_pad_grants_the_pickup_its_class_weights() {
 /// single-ship modes must grant nothing while standing on a pad forever.
 ///
 /// **About the pad only.** A time trial and a speed lap are handed a free
-/// Turbo of their own on the line crossing - see [`Race::grant_free_turbo`] -
+/// Turbo of their own on the line crossing - see [`RaceSim::grant_free_turbo`] -
 /// which this clears anyway so the 120 ticks that follow are a clean test of
 /// the pad alone.
 #[test]
@@ -188,13 +188,14 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
         Some(oag_tables::weapons::Weapon::Turbo)
     );
 
-    let _ = fired.drain_cues();
+    let _ = fired.sim.drain_cues();
     let boosted = fired.tick(&PlayerInputs::single(fired_buttons.tick(CROSS | SQUARE)));
     let ordinary = plain.tick(&PlayerInputs::single(plain_buttons.tick(CROSS)));
     // `Turbo_Fire` plays `TURBO` through the flare's boost call, as a pad does
     // `SPEEDUPPAD`.
     assert!(
         fired
+            .sim
             .drain_cues()
             .iter()
             .any(|event| event.cue == oag_gameplay::cue::Cue::Turbo),
@@ -255,7 +256,7 @@ fn a_fired_turbo_multiplies_thrust_for_its_authored_duration() {
     // forty-sixth read still sees a live boost. Harmless - a sixtieth of a
     // second - and pinned rather than tolerated so that a change to the
     // ordering shows up here.
-    let whole = (FIXTURE_TURBO_TIME / fired.dt()).round() as u32;
+    let whole = (FIXTURE_TURBO_TIME / fired.sim.dt()).round() as u32;
     assert_eq!(
         ticks,
         whole + 1,
@@ -294,7 +295,8 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
     // counted off - the countdown runs after the damage path reads it, which
     // is what protects the tick a shield is fired on.
     assert!(
-        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.dt())).abs() < 1e-5,
+        (race.ship().physics.shield_pickup_timer - (FIXTURE_SHIELD_TIME - race.sim.dt())).abs()
+            < 1e-5,
         "expected the authored {FIXTURE_SHIELD_TIME} less one tick, got {}",
         race.ship().physics.shield_pickup_timer
     );
@@ -309,7 +311,7 @@ fn a_fired_shield_arms_the_timer_for_its_authored_duration() {
         ticks += 1;
         assert!(ticks < 600, "the shield never expired");
     }
-    let whole = (FIXTURE_SHIELD_TIME / race.dt()).round() as u32;
+    let whole = (FIXTURE_SHIELD_TIME / race.sim.dt()).round() as u32;
     assert_eq!(
         ticks,
         whole + 1,
@@ -352,7 +354,7 @@ fn a_shield_fired_into_a_running_one_is_wasted_rather_than_stacked() {
     );
     // Two ticks have passed since the first arm, so the timer must have fallen
     // by exactly those two - not been reset to the authored duration.
-    let expected = after_first - 2.0 * race.dt();
+    let expected = after_first - 2.0 * race.sim.dt();
     assert!(
         (race.ship().physics.shield_pickup_timer - expected).abs() < 1e-5,
         "the second Shield refreshed the timer: expected {expected}, got {}",
@@ -394,7 +396,7 @@ fn absorbing_a_shield_pays_the_shields_own_absorb() {
 
 /// The free Turbo a time trial and a speed lap get once per lap, which the
 /// disc records twice - in `MSC_EVENT_TT`/`MSC_EVENT_SL` and in
-/// `TimeTrial_HUD.xml`'s lone `TurboIcon`. See [`Race::grant_free_turbo`].
+/// `TimeTrial_HUD.xml`'s lone `TurboIcon`. See [`RaceSim::grant_free_turbo`].
 ///
 /// Driven directly rather than by racing a lap: the *edge* it hangs off is
 /// `oag_race::Outcome::lap_completed`, which `oag-race`'s own tests cover,
@@ -406,7 +408,7 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
 
     for mode in [Mode::TimeTrial, Mode::SpeedLap] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
-        race.grant_free_turbo(0);
+        race.sim.grant_free_turbo(0);
         assert_eq!(
             race.ship_pickup(),
             Some(Weapon::Turbo),
@@ -418,15 +420,15 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     // nothing; a single race has pads instead.
     for mode in [Mode::Zone, Mode::SingleRace] {
         let mut race = race_with_weapon_pads(mode, Vec::new(), 1.0);
-        race.grant_free_turbo(0);
+        race.sim.grant_free_turbo(0);
         assert_eq!(race.ship_pickup(), None, "{mode:?} was given a free turbo");
     }
 
     // A held pickup is kept rather than replaced, so a player who saved last
     // lap's turbo does not lose this lap's for nothing.
     let mut race = race_with_weapon_pads(Mode::TimeTrial, Vec::new(), 1.0);
-    race.grant_free_turbo(0);
-    race.grant_free_turbo(0);
+    race.sim.grant_free_turbo(0);
+    race.sim.grant_free_turbo(0);
     assert_eq!(race.ship_pickup(), Some(Weapon::Turbo));
 
     // And a disc whose weapon table did not load hands out nothing rather
@@ -435,14 +437,14 @@ fn only_the_two_solo_modes_are_given_a_free_turbo_and_never_two_at_once() {
     setup.mode = Mode::TimeTrial;
     setup.weapons = None;
     let mut race = Race::start(setup);
-    race.grant_free_turbo(0);
+    race.sim.grant_free_turbo(0);
     assert_eq!(race.ship_pickup(), None);
 }
 
 /// The original never holds anything in the pickup slot through the
 /// countdown (maintainer side-by-side, 2026-09-07), and nothing at the release
 /// either: the grant is on the line crossing (`0x0882ddd8` and its siblings,
-/// see [`Race::grant_free_turbo`]), so a craft left on the grid holds nothing
+/// see [`RaceSim::grant_free_turbo`]), so a craft left on the grid holds nothing
 /// long after the release - the 2026-09-30 stationary capture shows no pickup
 /// icon in 21 s. Earlier this asserted a Turbo on the release tick.
 #[test]
@@ -966,7 +968,7 @@ fn an_unstamped_pad_pays_on_every_entry_and_never_once_per_tick() {
             race.sim.world.ships[0].pickup.weapon = None;
         }
         assert_eq!(
-            race.weapon_pad_refresh_left(),
+            race.sim.weapon_pad_refresh_left(),
             [0.0],
             "an unstamped pad greyed"
         );

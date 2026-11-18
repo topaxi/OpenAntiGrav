@@ -68,7 +68,9 @@ impl HullGather {
         slots.clear();
         vertices.clear();
         if hulls.iter().any(Option::is_some) {
-            let placements = race.shadow_placements_of(|slot| race.ship_tick_body(slot));
+            let placements = race
+                .sim
+                .shadow_placements_of(|slot| race.ship_tick_body(slot));
             project(
                 race,
                 hulls,
@@ -82,7 +84,8 @@ impl HullGather {
                 },
             );
         }
-        models.extend((0..usize::from(race.ship_count())).map(|slot| race.ship_tick_model(slot)));
+        models
+            .extend((0..usize::from(race.sim.ship_count())).map(|slot| race.ship_tick_model(slot)));
         Self {
             generation: race.pose_generations().current,
             models,
@@ -225,7 +228,7 @@ fn project(
         oag_render::shadow::conform_to_floor_with(
             vertices,
             first,
-            |at, normal| race.floor_above(at, normal),
+            |at, normal| race.sim.floor_above(at, normal),
             scratch,
         );
         slots.push((placement.silhouette, first..vertices.len()));

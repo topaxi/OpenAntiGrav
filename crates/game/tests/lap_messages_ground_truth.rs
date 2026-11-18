@@ -59,7 +59,7 @@ fn drawn(loaded: &oag_raceplay::Loaded, readout: &oag_hud::Readout) -> Vec<Strin
 /// its slot held something else (or nothing) on the tick before.
 fn time_trial_ids(loaded: &oag_raceplay::Loaded, stored_best: Option<u32>) -> (Vec<String>, usize) {
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, stored_best);
     let mut ids: Vec<String> = Vec::new();
     let mut before: [Option<String>; 4] = Default::default();
@@ -139,7 +139,7 @@ fn a_single_race_shows_the_lap_line_gap_in_the_originals_format() {
     };
     let loaded = load(&image, oag_race::Mode::SingleRace);
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     let mut gaps = Vec::new();
     for _ in 0..7000 {
@@ -166,7 +166,7 @@ fn a_single_race_shows_the_lap_line_gap_in_the_originals_format() {
 #[test]
 fn both_game_loops_still_switch_the_lap_lines_on() {
     for source in [
-        include_str!("../src/main/stage.rs"),
+        include_str!("../src/app/stage.rs"),
         include_str!("../src/race_capture.rs"),
     ] {
         assert!(
@@ -211,7 +211,7 @@ fn pure_raises_its_own_keys_white_and_words_the_gap_as_a_sentence() {
         oag_pure::race::DEFAULT_TRACK,
     );
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     let mut sentences = Vec::new();
     let mut lines_seen = 0;
@@ -285,7 +285,7 @@ fn hd_skips_the_record_line_in_time_trial_and_a_lone_craft_stamps_nothing() {
     );
 
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, None);
     for tick in 0..9000 {
         race.tick(&PlayerInputs::none());
@@ -357,7 +357,7 @@ fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
         false,
     );
     let mut race = oag_raceplay::Race::start(loaded.setup.clone());
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     race.watch_laps(&loaded.hud, Some(60 * 600));
     let perfect_id = loaded.hud.art.lap_hud.expect("read").perfect_lap;
     let (mut cues, mut perfect_lines) = (Vec::new(), 0);
@@ -371,7 +371,8 @@ fn lapped(loaded: &oag_raceplay::Loaded, wav: &str, voices: bool) -> Lapped {
         lap = race.sim.world.primary_race().lap;
         let tick = step;
         cues.extend(
-            race.pending_cues()
+            race.sim
+                .pending_cues()
                 .iter()
                 .filter(|e| matches!(e.cue, Cue::PerfectLap | Cue::NewLapRecord))
                 .map(|e| (tick, e.cue, completed)),

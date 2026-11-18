@@ -160,7 +160,7 @@ fn open_sections() -> crate::visibility::TrackVisibility {
 fn bare_scene(gpu: &Gpu, race: &Race) -> Scene {
     let mut track = triangle();
     track.radius = 500.0;
-    let liveries: Vec<_> = (0..race.ship_count()).map(|_| livery()).collect();
+    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| livery()).collect();
     scene_over_post(
         &gpu.0,
         &gpu.1,
@@ -283,7 +283,8 @@ fn a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_wit
     let ship = &mut race.sim.world.ships[0];
     ship.physics.body.position.z += 2.0;
     ship.physics.body.linear_velocity = Vec3::new(30.0, 0.0, 4.0);
-    race.begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
+    race.sim
+        .begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
         .expect("the player is racing on the course");
     let transit = race.sim.world.ships[0].transit.expect("in a transit");
     for _ in 1..40 {
@@ -329,7 +330,8 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
         let mut race = race_with(&[fill], text);
         race.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(30.0, 0.0, 0.0);
         let before = race.view().inverse().w_axis.truncate();
-        race.begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
+        race.sim
+            .begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
             .expect("the player is racing on the course");
         for _ in 0..20 {
             race.tick(&PlayerInputs::none());
@@ -337,7 +339,7 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
         (race, before)
     };
     let (mut race, before) = flown(BEHIND);
-    assert!(!race.ship_active(0), "out of the world");
+    assert!(!race.sim.ship_active(0), "out of the world");
     assert!(race.ship_drawn(0) && race.ship_flown_in_view(0));
     // A second seat's view of the same race.
     assert_eq!(race.set_viewport_count(2), 2);
@@ -475,7 +477,7 @@ fn a_portal_behind_a_wall_draws_nothing() {
     let portals = pair_in_other_sections(&sectioned_race(&[]));
     let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
     let mut race = sectioned_race(&commands);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     assert!(
         !entrance_is_in_the_pvs(&race, &walled_sections(), &request),
         "the fixture puts a wall between them"
@@ -493,7 +495,7 @@ fn a_portal_in_the_main_views_pvs_still_draws() {
     let portals = pair_in_other_sections(&sectioned_race(&[]));
     let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
     let mut race = sectioned_race(&commands);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     assert!(entrance_is_in_the_pvs(&race, &open_sections(), &request));
     let scene = sectioned_scene(&gpu, &race, open_sections());
     assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
@@ -514,8 +516,9 @@ fn a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view() {
     let scene = sectioned_scene(&gpu, &race, walled_sections());
     assert_eq!(frames(&gpu, &scene, &mut race, 4), 0, "behind the wall");
     assert!(!scene.has_portal_target());
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let at = race
+        .sim
         .portal_frame(
             ring_exit(&race, request.entrance).expect("on the lap"),
             oag_render::camera::portal::Face::Oncoming,
@@ -548,7 +551,7 @@ fn a_portal_whose_radius_reaches_a_visible_section_still_draws() {
         40,
     )];
     let mut race = sectioned_race(&commands);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let set = race.visible_set(&walled_sections(), &(projection * race.view()));
@@ -564,7 +567,8 @@ fn a_portal_whose_radius_reaches_a_visible_section_still_draws() {
 
 /// The section of the road sample under a progress.
 fn sample_section_at(race: &Race, progress: f32) -> u8 {
-    race.road_sample(ring_exit(race, progress).expect("on the lap"))
+    race.sim
+        .road_sample(ring_exit(race, progress).expect("on the lap"))
         .expect("a road sample")
         .section_id
 }
@@ -613,7 +617,7 @@ fn chunked_track(draws: &[(u32, Vec3)]) -> Model {
 
 /// A scene over `track`, the chunk partition a cell at the craft sees `sees` of.
 fn chunked_scene(gpu: &Gpu, race: &Race, track: Model, sees: &[usize]) -> Scene {
-    let liveries: Vec<_> = (0..race.ship_count()).map(|_| livery()).collect();
+    let liveries: Vec<_> = (0..race.sim.ship_count()).map(|_| livery()).collect();
     let scene = scene_over_post(
         &gpu.0,
         &gpu.1,
@@ -633,13 +637,14 @@ fn chunked_scene(gpu: &Gpu, race: &Race, track: Model, sees: &[usize]) -> Scene 
 
 /// Where the fixture's entrance stands.
 fn entrance_centre(race: &Race, request: &crate::extensions::PortalRequest) -> Vec3 {
-    race.portal_frame(
-        ring_exit(race, request.entrance).expect("on the lap"),
-        oag_render::camera::portal::Face::Oncoming,
-    )
-    .expect("a frame")
-    .w_axis
-    .truncate()
+    race.sim
+        .portal_frame(
+            ring_exit(race, request.entrance).expect("on the lap"),
+            oag_render::camera::portal::Face::Oncoming,
+        )
+        .expect("a frame")
+        .w_axis
+        .truncate()
 }
 
 /// What `frames` counts of a race over a chunk partition, with the portal's draws as given
@@ -652,7 +657,7 @@ fn chunked_frames(
     let gpu = test_gpu()?;
     let portals = pair_ahead(&race(&[]));
     let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let entrance = entrance_centre(&race, &request);
     let draws: Vec<_> = near
         .iter()
@@ -704,7 +709,7 @@ fn a_portal_reaching_an_unplaced_draw_still_draws() {
     let Some(gpu) = test_gpu() else { return };
     let portals = pair_ahead(&race(&[]));
     let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let at = entrance_centre(&race, &request);
     let mut track = chunked_track(&[(1, at), (1, at)]);
     track.draws[1].chunk = None;
@@ -866,7 +871,7 @@ fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
     }
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     Some((race, request))
 }
 
@@ -894,7 +899,9 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
         route_point.distance(ring_point)
     );
 
-    let frame = race.portal_frame(exit, oag_render::camera::portal::Face::Departing);
+    let frame = race
+        .sim
+        .portal_frame(exit, oag_render::camera::portal::Face::Departing);
     let centre = frame.expect("a frame").w_axis.truncate();
     assert!(
         centre.distance(route_point) < 5.0,
@@ -932,7 +939,7 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
     assert_eq!(ring, Exit::ring(exit.to));
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let frame_of = |index: usize, face| {
-        let (_, up, centre, _) = race.road_frame(Exit::ring(index)).unwrap();
+        let (_, up, centre, _) = race.sim.road_frame(Exit::ring(index)).unwrap();
         oag_render::camera::portal::frame(centre, course.tangent(index).unwrap(), up, face).unwrap()
     };
     let entrance = course.index_at_progress(request.entrance).unwrap();

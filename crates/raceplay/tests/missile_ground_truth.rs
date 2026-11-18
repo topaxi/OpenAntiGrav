@@ -110,13 +110,16 @@ fn a_missile_turns_toward_the_craft_it_locked() {
         body.position += left * 4.0;
     }
 
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
 
     // Slot 0 sits at the back of the grid, so everybody is ahead of it. Fire by
     // hand rather than through a pad, because which weapon a pad hands out is a
     // draw and this test is about the missile rather than about the draw.
     //
-    // **Held for a full second before firing**, since `Race::fire_missile` now
+    // **Held for a full second before firing**, since `RaceSim::fire_missile` now
     // gates slot 0's candidate on `Race::sight`'s own lock - see its doc comment
     // - and that reticle only starts accumulating hold once the pickup is a
     // Missile. A second clears the recovered `sight::HOLD_SECONDS` (0.8) with
@@ -131,7 +134,7 @@ fn a_missile_turns_toward_the_craft_it_locked() {
          full grid - the hold gate would silently turn this test's shot unguided"
     );
     assert!(
-        race.fire_missile(0, &stats),
+        race.sim.fire_missile(0, &stats),
         "nothing on a full grid was lockable from the back of it - the lock's \
          window, cone or along-track screen is refusing everything on real geometry"
     );
@@ -210,9 +213,12 @@ fn a_missile_never_locks_its_own_firer() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
 
-    // Slot 0 is the one candidate `Race::fire_missile` additionally gates on
+    // Slot 0 is the one candidate `RaceSim::fire_missile` additionally gates on
     // `Race::sight` - see its doc comment - so without this the loop below
     // would exercise the self-lock invariant against every opponent slot and
     // never against the player's own. Every other slot's candidate is used as
@@ -224,7 +230,7 @@ fn a_missile_never_locks_its_own_firer() {
 
     let mut locks = 0;
     for slot in 0..race.sim.world.ship_count as usize {
-        if !race.fire_missile(slot, &stats) {
+        if !race.sim.fire_missile(slot, &stats) {
             continue;
         }
         locks += 1;
@@ -275,7 +281,10 @@ fn a_missile_glances_off_the_circuits_barriers() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
     let launch_kmh = stats.launch_speed;
 
     // Aimed across the track from the player's craft, sweeping the whole circle
@@ -387,7 +396,7 @@ fn a_pad_can_hand_out_a_missile_and_firing_one_spends_it() {
     // no longer a refusal, so this asserts the array had room rather than that
     // anything was lockable.
     assert!(
-        race.fire_missile(0, &stats),
+        race.sim.fire_missile(0, &stats),
         "the projectile array was full"
     );
     race.sim.world.projectiles.clear();
@@ -429,11 +438,14 @@ fn a_missile_with_no_lock_still_flies_a_real_circuit_and_ends_itself() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let stats = race.missile_stats().expect("the disc authors a Missile");
+    let stats = race
+        .sim
+        .missile_stats()
+        .expect("the disc authors a Missile");
 
     for slot in 0..race.sim.world.ship_count as usize {
         assert!(
-            race.fire_missile(slot, &stats),
+            race.sim.fire_missile(slot, &stats),
             "slot {slot} put nothing in the air - a press now fires whether or              not anything is lockable, so the only `false` left is a full pool"
         );
     }

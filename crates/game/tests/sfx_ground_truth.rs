@@ -768,7 +768,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
 
     // Forced rather than driven: reaching a real finish is a lap of real
     // circuit, and what is under test is the frame loop's finished-race arm,
-    // not the lap counter. This is the same flag `Race::finished` reads.
+    // not the lap counter. This is the same flag `RaceSim::finished` reads.
     race.sim.world.primary_race_mut().finished = true;
     for _ in 0..600 {
         // Deliberately **not** calling `race.tick` - that is exactly what the
@@ -905,7 +905,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // profile starts on `OPT_CLOSE`), so the view this was written for is named.
     race.set_camera_view(oag_display::display::CameraView::Far);
     assert!(
-        race.ship_count() > 1,
+        race.sim.ship_count() > 1,
         "the fixture raced alone, so nothing below is testing anything"
     );
 
@@ -937,10 +937,10 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
         .saturating_sub(audio.ambient_voices());
     assert_eq!(
         voices,
-        race.ship_count() as usize,
+        race.sim.ship_count() as usize,
         "one engine per craft is what `ExhaustFlare_Init` builds; got {voices} \
          for {} craft",
-        race.ship_count()
+        race.sim.ship_count()
     );
 
     // **Rendered, not inspected.** A pan that is stored and never applied is
@@ -1189,7 +1189,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
         !race.sounds().mod_sounds.is_empty(),
         "the mod's sounds reached the race's banks"
     );
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
 
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),

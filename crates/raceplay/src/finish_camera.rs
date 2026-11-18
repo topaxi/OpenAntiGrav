@@ -518,22 +518,24 @@ fn position_of(live: &[Subject], slot: usize) -> Vec3 {
         .map_or(Vec3::ZERO, |s| s.position)
 }
 
-impl Race {
+impl RaceSim {
     /// Every craft still in the race, as the director sees it.
     pub(super) fn spectator_subjects(&self) -> Vec<Subject> {
-        (0..usize::from(self.sim.world.ship_count))
+        (0..usize::from(self.world.ship_count))
             .filter(|&slot| {
-                let ship = &self.sim.world.ships[slot];
+                let ship = &self.world.ships[slot];
                 ship.active && ship.physics.craft_state != oag_physics::CraftState::Eliminated
             })
             .map(|slot| Subject {
                 slot,
-                position: self.sim.world.ships[slot].physics.body.position,
-                orientation: self.sim.world.ships[slot].physics.body.orientation,
+                position: self.world.ships[slot].physics.body.position,
+                orientation: self.world.ships[slot].physics.body.orientation,
             })
             .collect()
     }
+}
 
+impl Race {
     /// A d-pad press on `Race End Photo`: up and down step the spectator camera's mode, left
     /// and right the craft it watches (see [`FinishCamera::cycle`]). Only after a line finish,
     /// the one way the original reaches that screen (a wreck never does), and only once the
@@ -548,7 +550,7 @@ impl Race {
             return false;
         }
         let slots = usize::from(self.sim.world.ship_count);
-        let live = self.spectator_subjects();
+        let live = self.sim.spectator_subjects();
         let Some(director) = self.view.finish_camera.as_mut() else {
             return false;
         };
@@ -620,7 +622,7 @@ impl Race {
     /// One tick of the director, `since` ticks into its life, imposing its pose.
     fn step_director(&mut self, since: u64, wreck: Option<Wreck>) {
         let player = self.player_slot();
-        let live = self.spectator_subjects();
+        let live = self.sim.spectator_subjects();
         let Some(director) = self.view.finish_camera.as_mut() else {
             return;
         };

@@ -144,7 +144,7 @@ fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_the
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST));
 
     race.tick(&PlayerInputs::none());
-    let reports = race.extension_reports();
+    let reports = race.sim.extension_reports();
     assert!(reports[0].faulted.is_some(), "the roller trapped");
     assert_eq!(
         race.sim.world.ships[0].pickup.weapon,
@@ -157,7 +157,7 @@ fn a_faulted_owner_hands_a_rolled_pickup_back_as_the_weapon_the_pad_drew_and_the
     );
 
     race.tick(&PlayerInputs::none());
-    let reports = race.extension_reports();
+    let reports = race.sim.extension_reports();
     assert_eq!(
         reports[1].faulted, None,
         "the second module is not the dead one's problem"
@@ -181,7 +181,7 @@ fn a_faulted_owners_given_pickup_is_taken_away() {
         Some(Weapon::Extension(oag_tables::weapons::ModKind::FIRST))
     );
     race.tick(&PlayerInputs::none());
-    assert!(race.extension_reports()[0].faulted.is_some());
+    assert!(race.sim.extension_reports()[0].faulted.is_some());
     assert_eq!(
         race.sim.world.ships[1].pickup.weapon, None,
         "a given pickup replaced no weapon: nothing to hand back, and nothing nobody can fire"
@@ -224,7 +224,7 @@ fn a_faulted_modules_held_scale_pad_goes_back_to_one() {
         "held while it runs"
     );
     race.tick(&PlayerInputs::none());
-    assert!(race.extension_reports()[0].faulted.is_some());
+    assert!(race.sim.extension_reports()[0].faulted.is_some());
     assert_eq!(
         race.sim.extensions.pad_factor(1, 0),
         1.0,
@@ -264,20 +264,23 @@ fn a_fault_found_while_applying_lands_none_of_the_modules_commands_that_tick() {
         grid(prepared(&[around(oag_ext_abi::MAX_EMITS_PER_TICK)])),
         ticks,
     );
-    assert_eq!(fine.extension_reports()[0].faulted, None);
-    assert_eq!(fine.extension_state(0).unwrap()[0], 7);
+    assert_eq!(fine.sim.extension_reports()[0].faulted, None);
+    assert_eq!(fine.sim.extension_state(0).unwrap()[0], 7);
     assert_ne!(fine.sim.world.ships, vanilla.sim.world.ships);
     // One emit past it: the module faults and nothing of it lands, before or after.
     let mut bad = grid(prepared(&[around(oag_ext_abi::MAX_EMITS_PER_TICK + 1)]));
     bad.tick(&PlayerInputs::none());
-    let (_, why) = bad.extension_reports()[0].faulted.clone().expect("faulted");
+    let (_, why) = bad.sim.extension_reports()[0]
+        .faulted
+        .clone()
+        .expect("faulted");
     assert!(why.contains("emit past the cap"), "{why}");
     assert!(
         bad.sim.extensions.fired().is_empty(),
         "no emit of it was delivered or noted"
     );
     assert_eq!(
-        bad.extension_state(0).unwrap()[0],
+        bad.sim.extension_state(0).unwrap()[0],
         0,
         "the blob keeps its value from before the call"
     );
@@ -312,12 +315,15 @@ fn a_faulted_module_takes_back_its_own_kind_alone() {
     assert_eq!(race.sim.world.ships[0].pickup.weapon, kind(0));
     assert_eq!(race.sim.world.ships[1].pickup.weapon, kind(1));
     race.tick(&PlayerInputs::none());
-    assert!(race.extension_reports()[0].faulted.is_some(), "a trapped");
+    assert!(
+        race.sim.extension_reports()[0].faulted.is_some(),
+        "a trapped"
+    );
     assert_eq!(race.sim.world.ships[0].pickup.weapon, None, "a's is gone");
     assert_eq!(
         race.sim.world.ships[1].pickup.weapon,
         kind(1),
         "b's is the other mod's and stays"
     );
-    assert_eq!(race.extension_reports()[1].faulted, None);
+    assert_eq!(race.sim.extension_reports()[1].faulted, None);
 }

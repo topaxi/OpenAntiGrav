@@ -10,6 +10,7 @@
 //! pose the tick left behind, rather than being recorded during the step. See
 //! `docs/architecture/determinism.md`.
 
+use crate::RaceSim;
 use oag_bytes::ByteOrder;
 use oag_physics::collide::{Ray, Raycaster, Surface};
 use oag_render::shadow::{self, Placement};
@@ -39,10 +40,13 @@ impl Race {
     /// shadow at its last known height.
     #[must_use]
     pub fn shadow_placements(&self) -> Vec<Placement> {
-        self.shadow_placements_of(|slot| self.body_between(slot))
+        self.sim
+            .shadow_placements_of(|slot| self.body_between(slot))
     }
+}
 
-    /// [`Self::shadow_placements`] with the craft's body read through `body`
+impl RaceSim {
+    /// [`Race::shadow_placements`] with the craft's body read through `body`
     /// instead of the draw alpha: `ship_tick_body` for the placements of this tick
     /// exactly, which is what a cache of the hull gather is built from.
     #[must_use]
@@ -50,9 +54,9 @@ impl Race {
         &self,
         body: impl Fn(usize) -> oag_physics::Body,
     ) -> Vec<Placement> {
-        let mut out = Vec::with_capacity(self.sim.world.ship_count as usize);
-        for slot in 0..self.sim.world.ship_count as usize {
-            let ship = &self.sim.world.ships[slot];
+        let mut out = Vec::with_capacity(self.world.ship_count as usize);
+        for slot in 0..self.world.ship_count as usize {
+            let ship = &self.world.ships[slot];
             if !ship.in_world() {
                 continue;
             }
@@ -84,7 +88,7 @@ impl Race {
             // so there is no self-hit to avoid. See `race::tick`, which leaves
             // `Environment::self_collider` at its default for the same reason.
             let mut hits = [None; MAX_HITS];
-            let found = self.sim.collision.raycast_all(ray, None, false, &mut hits);
+            let found = self.collision.raycast_all(ray, None, false, &mut hits);
             // Nearest *hoverable* hit, not nearest hit. `raycast_all` returns
             // storage order rather than a distance sort - deliberately, see
             // its own docs - so the minimum is taken here.
@@ -138,7 +142,7 @@ impl Race {
         let n = normal.normalize_or_zero();
         let ray = Ray::new(at + n, -n, 3.0);
         let mut hits = [None; MAX_HITS];
-        let found = self.sim.collision.raycast_all(ray, None, false, &mut hits);
+        let found = self.collision.raycast_all(ray, None, false, &mut hits);
         hits.iter()
             .flatten()
             .take(found)

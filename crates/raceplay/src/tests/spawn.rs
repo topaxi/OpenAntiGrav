@@ -65,7 +65,7 @@ fn a_started_race_puts_one_ship_on_the_spline_with_its_mass_set() {
     assert!(race.ship().active);
     assert_eq!(race.ship().physics.body.mass, 7.5);
     assert_eq!(race.ship().handling.physical.mass, 7.5);
-    assert_eq!(race.dt(), 1.0 / 60.0);
+    assert_eq!(race.sim.dt(), 1.0 / 60.0);
 
     // Lifted off the surface line by the height its own suspension holds it at,
     // which is neither `track::HOVER_LIFT` nor the probe's full reach; see

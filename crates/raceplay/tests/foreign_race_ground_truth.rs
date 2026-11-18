@@ -82,9 +82,9 @@ fn solo(track: PathBuf) -> Option<Solo> {
     let (mut best, mut lap, mut started) = (None::<u64>, race.sim.world.ships[1].standing.lap, 0);
     let mut recovered = false;
     for tick in 0..18_000u64 {
-        let before = race.respawns_of(1);
+        let before = race.sim.respawns_of(1);
         race.tick(&PlayerInputs::none());
-        recovered |= race.respawns_of(1) != before;
+        recovered |= race.sim.respawns_of(1) != before;
         let now = race.sim.world.ships[1].standing.lap;
         if now != lap {
             if lap > 1 && !recovered {
@@ -98,7 +98,7 @@ fn solo(track: PathBuf) -> Option<Solo> {
     Some(Solo {
         laps: lap,
         best,
-        respawns: race.respawns_of(1),
+        respawns: race.sim.respawns_of(1),
     })
 }
 
@@ -144,10 +144,7 @@ fn sweep_every_original_track() {
         else {
             continue;
         };
-        let Ok(file) = std::fs::read(&path) else {
-            continue;
-        };
-        let Ok(w) = oag_ballisticng::wtrk::Wtrk::parse(&file) else {
+        let Ok(w) = oag_bng_import::header(&path) else {
             continue;
         };
         if !w.has_tag("Original") || w.has_tag("Port/Remake") {

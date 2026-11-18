@@ -352,7 +352,7 @@ carry every other Pure law and the verified fallback plan
 | Per-lap shield (mean pool at each lap line) | `90.2 -> 89.5` (p `0.33`) | `71.4 -> 72.7` (better) | none |
 | End-of-run shield | `87.2 -> 87.2` (p `0.44`) | `61.7 -> 64.4` (better) | novice `k = 1` |
 
-With the opponents flying their Autopilot pickups (`Race::set_opponent_autopilot`, the sweep's "on" half) the picture is the same: race walls novice
+With the opponents flying their Autopilot pickups (`RaceSim::set_opponent_autopilot`, the sweep's "on" half) the picture is the same: race walls novice
 `757 -> 766`, Ace `1748 -> 1803` (p `0.10`, `k = 1`); laps `+0.2`-`0.3` s (p `0.025`-`0.028`,
 `k = 5`); end-of-run shield novice `87.0 -> 86.8`, Ace `59.5 -> 63.5`.
 

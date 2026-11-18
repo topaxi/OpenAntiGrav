@@ -10,12 +10,32 @@
 //!
 //! # What it is not yet
 //!
-//! This is not a crate, and two fields are why. `cues` and its two companions
-//! are `oag_sound::sfx` types - plain data (a `Cue` and a slot index), but
-//! declared inside a module that reaches `oag_audio`, so they would have to move
-//! down first. Everything else is `oag_gameplay`, `oag_physics`, `oag_ai`,
-//! `oag_race`, `oag_tables`, `oag_vex`, `oag_title` or a primitive, and would
-//! travel as-is.
+//! This is not a crate. The cue queues are not what stands in the way: `cues`,
+//! `mod_sounds`, `announcements` and `class_announcements` are `oag_gameplay::cue` types
+//! and plain integers. What does:
+//!
+//! - **State a tick writes outside this struct.** The fields the lean
+//!   [`RaceView`](super::RaceView) keeps without the `view` feature (the seat, the person
+//!   names, the slot teams, the results board and its revision, the run statistics and
+//!   `wreck_ended_tick`) sit beside `RaceSim`, not in it, and the tick writes some of them.
+//!   ADR-0087 decision 9 rests on two of them, the results capture and the wreck's end tick,
+//!   living outside `RaceSim`.
+//! - **The tick calls the view in the middle.** [`Race::tick`](super::Race::tick) and the
+//!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
+//!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
+//!   message board decides whether a `Cue::Message` is raised. Most methods that read and
+//!   write this half alone are `impl RaceSim` methods, reached as `race.sim.x()`; the ones
+//!   that read a view accessor (the seat's slot, the intro, who hears a cue) stay on `Race`.
+//! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
+//!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
+//!   crate.
+//! - **The load.** `load` builds this struct, and reads `oag-trackfile` to do it, which
+//!   `just check-deps` forbids to a gameplay crate; it also opens the disc through
+//!   `oag-source` and `oag-assets`, which a simulation crate should not need.
+//!
+//! Every other field is an `oag_gameplay`, `oag_physics`, `oag_ai`, `oag_race`,
+//! `oag_tables`, `oag_vex` or `oag_title` type, a primitive, or a type from one of this
+//! crate's simulation modules, and would travel with them.
 //!
 //! # The hash
 //!
@@ -28,8 +48,7 @@ use super::*;
 /// The half of a race that decides what happens next.
 ///
 /// Reached as `Race::sim`. Holds no renderer, audio or windowing type - see the
-/// module doc comment for the two that stand between this and a crate of its
-/// own.
+/// module doc comment for what stands between this and a crate of its own.
 ///
 /// # Why it is `Clone`
 ///
@@ -74,9 +93,9 @@ pub struct RaceSim {
     /// The finished player's thrust table and skill; `None` off the four
     /// Pulse classes. See [`super::finished_thrust`].
     pub(super) finished_thrust: Option<super::finished_thrust::FinishedThrust>,
-    /// The original opponent's tables, for [`super::Race::use_original_ai`].
+    /// The original opponent's tables, for [`super::RaceSim::use_original_ai`].
     pub(super) original_tables: Option<Arc<super::original_tables::OriginalTables>>,
-    /// The campaign's original opponent, when [`super::Race::use_original_ai`]
+    /// The campaign's original opponent, when [`super::RaceSim::use_original_ai`]
     /// switched it on; `None` flies this project's driver. Outside
     /// [`World`], so no state hash and no other mode moves.
     pub(super) original_ai: Option<Box<super::original_ai::OriginalAi>>,
@@ -98,7 +117,7 @@ pub struct RaceSim {
     /// Which spline sample each racing-line index is, in lap order.
     ///
     /// The identity permutation on nine of the disc's twelve circuits. See
-    /// [`ai_order`], and [`Race::ai_sample`] for the lookup itself.
+    /// [`ai_order`], and [`RaceSim::ai_sample`] for the lookup itself.
     pub(super) ai_order: Arc<[u32]>,
     /// One AI line per way round a fork, beside the ring's - see
     /// [`super::routes`]. Empty on a circuit with no fork.
@@ -106,13 +125,13 @@ pub struct RaceSim {
     /// The speed plan the opponents' drivers follow, built at the start from
     /// this line, this collision and the field's handling, or `None` when the
     /// race has no opponents or the plan did not verify clean. See
-    /// [`Race::field_speed_plan`] and `oag_ai::plan`.
+    /// [`RaceSim::field_speed_plan`] and `oag_ai::plan`.
     pub(super) speed_plan: Option<Arc<oag_ai::SpeedPlan>>,
     /// Whether [`Race::ensure_speed_plans`] has run: the plans are learned on
     /// the first tick, not in `Race::start`, so a race whose opponents all fly
     /// the original driver can skip them.
     pub(super) plans_built: bool,
-    /// The handling the speed plans were learned on, see [`Race::field_speed_plan`].
+    /// The handling the speed plans were learned on, see [`RaceSim::field_speed_plan`].
     pub(super) plan_reference: Option<Handling>,
     /// Each other hull on the grid's own ring and route plans, one entry per
     /// distinct handling. See [`Race::adapt_hull_plans`].
@@ -129,20 +148,20 @@ pub struct RaceSim {
     ///
     /// Not world state: it is read-only for the whole race and drawn from the
     /// race seed, so it reproduces without being carried. Slot 0 is the
-    /// player's, and is read only while [`Race::flown_for_the_player`] is -
-    /// by [`Race::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
+    /// player's, and is read only while [`RaceSim::flown_for_the_player`] is -
+    /// by [`RaceSim::set_ai_pilot`] (`--autopilot-pilot`) or the Autopilot
     /// pickup - otherwise inert.
     pub(super) ai_pilots: Arc<[oag_ai::Pilot; oag_gameplay::MAX_SHIPS]>,
-    /// [`Race::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
+    /// [`RaceSim::autopilot_controls`]'s own tuning, for `--autopilot-skill`.
     ///
     /// `None` outside that flag - every ordinary race, and every existing
-    /// `Race::set_autopilot(true)` call - which is what lets
-    /// [`Race::autopilot_controls`] fall back to [`Self::ai_tuning`], the
-    /// field's own. See [`Race::set_autopilot_tuning`] for why this is a
-    /// second field rather than a call to [`Race::set_ai_tuning`].
+    /// `RaceSim::set_autopilot(true)` call - which is what lets
+    /// [`RaceSim::autopilot_controls`] fall back to [`Self::ai_tuning`], the
+    /// field's own. See [`RaceSim::set_autopilot_tuning`] for why this is a
+    /// second field rather than a call to [`RaceSim::set_ai_tuning`].
     pub(super) autopilot_tuning: Option<oag_ai::Tuning>,
     /// Each person's own original driver, the autopilot
-    /// ([`Race::drive_original_autopilot`]), made the first time it flies.
+    /// ([`RaceSim::drive_original_autopilot`]), made the first time it flies.
     /// Outside [`Self::state_hash`] as [`Self::original_ai`] is.
     pub(super) autopilots: [Option<Box<oag_ai::original::Autopilot>>; oag_gameplay::MAX_PLAYERS],
     /// The rail write each person's autopilot asked for this tick, applied
@@ -155,7 +174,7 @@ pub struct RaceSim {
     pub(super) autopilot_ours: bool,
     /// An opponent on this project's driver flies the original's player
     /// driver while it holds an Autopilot, instead of absorbing it
-    /// ([`Race::set_opponent_autopilot`]). Starts as [`Setup::opponent_autopilot`],
+    /// ([`RaceSim::set_opponent_autopilot`]). Starts as [`Setup::opponent_autopilot`],
     /// the title's per-class rule.
     pub(super) opponent_autopilot: bool,
     /// The lap counter's ring, or `None` on a track whose chain does not close.
@@ -189,7 +208,7 @@ pub struct RaceSim {
     pub(super) jumps: [u32; oag_gameplay::MAX_SHIPS],
     /// Which trigger fired the most recent respawn of each craft, `None` before
     /// the first. Bookkeeping outside `state_hash`, read by survey tests through
-    /// [`Race::last_respawn_cause_of`].
+    /// [`RaceSim::last_respawn_cause_of`].
     pub(super) last_respawn_cause: [Option<respawn::RespawnCause>; oag_gameplay::MAX_SHIPS],
     /// The collision cage asked for each craft's reset this tick
     /// (`oag_physics::cage::CageResponse::reset`). Set by the craft's step and
@@ -234,7 +253,7 @@ pub struct RaceSim {
     /// Seconds until `cont_elim` is raised for each wrecked opponent, `0.0`
     /// while the craft is not down and `-1.0` once raised for this wreck.
     /// Bookkeeping for a cue, which is an output: outside the state hash. See
-    /// `Race::tick_wreck_voice`.
+    /// `RaceSim::tick_wreck_voice`.
     pub(super) wreck_voice: [f32; oag_gameplay::MAX_SHIPS],
     /// How many barrel rolls each craft has armed this race, and what they
     /// cost it.
@@ -254,7 +273,7 @@ pub struct RaceSim {
     pub(super) extensions: crate::extensions::Extensions,
     /// How many ticks each craft has spent **in contact with a wall**: every
     /// opponent and every person's craft
-    /// (`Race::count_wall_contact`, from `Race::step_player` as well).
+    /// (`RaceSim::count_wall_contact`, from `Race::step_player` as well).
     ///
     /// Kept here, and outside [`Race::state_hash`], for exactly the reason
     /// [`Self::rolls_armed`] is: bookkeeping, not state the race reads back. It
@@ -461,10 +480,10 @@ pub struct RaceSim {
     /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].
     pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
     /// The level each person-flown slot flies with; the settings decide, and a network room
-    /// sets one per seat (`Race::set_pilot_assist_seat`).
+    /// sets one per seat (`RaceSim::set_pilot_assist_seat`).
     pub(super) pilot_assist_levels: [oag_physics::pilot_assist::Level; oag_gameplay::MAX_PLAYERS],
     /// Whether craft may barrel roll; `false` only in a network room that switched rolls off
-    /// (`Race::set_barrel_rolls`).
+    /// (`RaceSim::set_barrel_rolls`).
     pub(super) barrel_rolls: bool,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
     pub(super) speedup_pads: Arc<[oag_vex::pads::PadVolume]>,
@@ -559,13 +578,13 @@ pub struct RaceSim {
     /// reports and never read back into it, so, like the cue queue, absent from the state hash.
     pub(super) xp: Option<Box<crate::xp_tally::XpTally>>,
     /// Whether the primary slot is being driven by its own [`oag_ai::Driver`] instead of
-    /// by the input snapshot. See [`Race::set_autopilot`].
+    /// by the input snapshot. See [`RaceSim::set_autopilot`].
     pub(super) autopilot: bool,
     /// One-shot sound cues this tick asked for, awaiting a drain.
     ///
     /// **A per-tick output, never state** - the shape ADR-0018 requires, and
     /// deliberately absent from [`Self::state_hash`]: a race that made no sound
-    /// and one that made every sound must hash alike. See [`Race::drain_cues`].
+    /// and one that made every sound must hash alike. See [`RaceSim::drain_cues`].
     pub(super) cues: Vec<oag_gameplay::cue::CueEvent>,
     /// The mods' own sounds this tick asked for, awaiting a drain: an output like
     /// [`Self::cues`], never hashed.
@@ -582,7 +601,7 @@ pub struct RaceSim {
     /// Speed-class stages reached this tick, awaiting a drain. Same shape as
     /// [`Self::announcements`]; kept apart because the two ladders are
     /// separate title axes that happen to raise on related but distinct
-    /// edges - see [`Race::push_class_announcement`].
+    /// edges - see [`RaceSim::push_class_announcement`].
     pub(super) class_announcements: Vec<u32>,
     /// Seconds before a wall contact may raise a sound cue again.
     ///
@@ -596,7 +615,7 @@ pub struct RaceSim {
     pub(super) contact_impulse: [crate::cues::ContactImpulse; oag_gameplay::MAX_SHIPS],
     /// This tick's wall contact per craft, for the pad: the contact's size and
     /// its side, `None` with no contact. A per-tick output beside
-    /// [`Self::cues`], out of the hash; see [`Race::wall_contact_of`].
+    /// [`Self::cues`], out of the hash; see [`RaceSim::wall_contact_of`].
     pub(super) wall_contact: [Option<WallContactReading>; oag_gameplay::MAX_SHIPS],
 }
 

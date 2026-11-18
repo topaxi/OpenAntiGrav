@@ -17,7 +17,7 @@
 //!   `absorbScale` (`0.6`) leaves it absorbing little.
 //! - **Absorb.** The measured decision's absorb half spends the weapon on the Eliminator's Shield,
 //!   the player's own path (`Race::eliminator_absorb`), instead of keeping it.
-//! - **No pad seeking and no pack.** `PadSeeking::EmptySlot` and `Race::eliminator_pack_scale` are
+//! - **No pad seeking and no pack.** `PadSeeking::EmptySlot` and `RaceSim::eliminator_pack_scale` are
 //!   ours, tuned for Pulse's five-kill race; on a 200-point race they doubled the supply and the
 //!   pack's density.
 

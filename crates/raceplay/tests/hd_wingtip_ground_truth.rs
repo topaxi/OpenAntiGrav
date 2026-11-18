@@ -119,7 +119,7 @@ fn a_craft_under_a_speed_pad_lays_two_ribbons_that_fade_out() {
         return;
     };
     let mut race = race::Race::start(loaded.setup);
-    race.set_autopilot(true);
+    race.sim.set_autopilot(true);
     // The autopilot takes the grid up to speed; the pad is held on slot 0 by hand.
     for _ in 0..900 {
         race.tick(&PlayerInputs::none());

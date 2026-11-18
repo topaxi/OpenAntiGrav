@@ -28,8 +28,8 @@ impl Race {
     ///
     /// `DisruptorPool_Fire` passes `craft+0x194` - the lock the sight keeps -
     /// and a locked bolt homes. This engine's sight does not run for a
-    /// Disruptor (`Race::sight_held` answers `None`), so the same lock test
-    /// `Race::fire_missile` runs is run here for both the player and an
+    /// Disruptor (`RaceSim::sight_held` answers `None`), so the same lock test
+    /// `RaceSim::fire_missile` runs is run here for both the player and an
     /// opponent, without the reticle hold; `None` is a bolt that flies
     /// straight, which is what the original fires with no lock. The window is
     /// the Missile's authored one, and a table with no Missile block has no
@@ -106,7 +106,7 @@ impl Race {
     /// has no Disruptor row to read.
     pub(crate) fn fire_opponent_disruptor(&mut self, slot: usize, field: &oag_ai::Field) -> bool {
         let context = oag_ai::Context {
-            line: self.line_of(slot),
+            line: self.sim.line_of(slot),
             tuning: &self.sim.ai_tuning,
             pilot: &self.sim.ai_pilots[slot],
             field,
@@ -123,7 +123,9 @@ impl Race {
         }
         self.fire_disruptor(slot)
     }
+}
 
+impl RaceSim {
     /// The controls `slot` actually gets this tick, after its disruption.
     ///
     /// `ai_driven` is whether an AI produced `controls` - see
@@ -137,7 +139,7 @@ impl Race {
         controls: oag_physics::ShipControls,
         ai_driven: bool,
     ) -> oag_physics::ShipControls {
-        let disruption = self.sim.world.ships[slot].disruption;
+        let disruption = self.world.ships[slot].disruption;
         let mut controls = disruption.filter(controls, ai_driven);
         if let Some(scale) = disruption.autopilot_thrust_scale() {
             controls.thrust *= scale;

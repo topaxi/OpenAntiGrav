@@ -174,7 +174,7 @@ fn a_fill_naming_no_shader_of_the_mods_faults_it_and_draws_nothing() {
     };
     let mut race = race(&[fill]);
     race.tick(&PlayerInputs::none());
-    let (_, why) = race.extension_reports()[0]
+    let (_, why) = race.sim.extension_reports()[0]
         .faulted
         .clone()
         .expect("faulted");

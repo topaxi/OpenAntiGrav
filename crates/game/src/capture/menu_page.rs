@@ -114,7 +114,7 @@ pub(super) fn menu_page(
     source: Option<&str>,
     // The front-end root's own `Confirm`/`Back` legend - `None` on a source
     // whose root authors no `NavigationController` this build reads. See
-    // `crate::main::menu_stage::MenuStage::render`'s own call site for the
+    // `crate::app::menu_stage::MenuStage::render`'s own call site for the
     // identical draw this mirrors.
     nav_legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
     // The `Default`-role face `nav_legend`'s own word half draws through.
@@ -122,7 +122,7 @@ pub(super) fn menu_page(
     // The footer's own scrolling tip ticker layout - `None` on a source
     // whose front-end root authors no `TextInfoIsAlwaysLast` viewport
     // (every title but Pulse today). See
-    // `crate::main::menu_stage::MenuStage::render`'s own call site for the
+    // `crate::app::menu_stage::MenuStage::render`'s own call site for the
     // identical draw this mirrors, at a frozen `elapsed` of `0.0` since a
     // still has no clock of its own to animate the scroll with.
     ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
@@ -428,7 +428,7 @@ pub(super) fn menu_page(
     // outright rather than walking to it (`Menu::open`'s own doc - "a page
     // reached this way was not reached through anything"), so
     // `model.depth()` is always `1` regardless of which page was named.
-    // See `crate::main::menu_stage::MenuStage::render`'s own call site,
+    // See `crate::app::menu_stage::MenuStage::render`'s own call site,
     // which this mirrors, for the live session's own gate.
     let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> =
         nav_legend.map_or_else(Vec::new, |legend| {

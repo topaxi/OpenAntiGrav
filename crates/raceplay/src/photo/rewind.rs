@@ -53,7 +53,7 @@ impl Rewind {
     /// Starts moving `race`, the live race, through its past. `None` when it cannot be: a race
     /// that has finished is on its end screens and keeps its board.
     pub fn begin(keeper: &mut Keeper, race: &mut Race) -> Option<Self> {
-        if race.finished() {
+        if race.sim.finished() {
             return None;
         }
         let live = race.sim.world.tick;
@@ -136,7 +136,7 @@ impl Rewind {
 
     fn advance(&mut self, race: &mut Race, replay: &Replay) -> bool {
         for event in replay.events_at(self.at) {
-            if race.apply_event(event).is_err() {
+            if race.sim.apply_event(event).is_err() {
                 return false;
             }
         }
@@ -145,9 +145,9 @@ impl Rewind {
         }
         race.tick(&replay.inputs_at(self.at));
         // The tick being replayed already sounded once, and a rewind is silent.
-        drop(race.drain_cues());
-        drop(race.drain_announcements());
-        drop(race.drain_class_announcements());
+        drop(race.sim.drain_cues());
+        drop(race.sim.drain_announcements());
+        drop(race.sim.drain_class_announcements());
         self.at += 1;
         if self.follow {
             race.photo_repose();

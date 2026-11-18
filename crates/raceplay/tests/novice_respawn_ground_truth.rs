@@ -124,7 +124,7 @@ fn run(
     .ok()?;
     let mut race = race::Race::start(loaded.setup);
     if let Some(tuning) = tuning {
-        race.set_ai_tuning(tuning);
+        race.sim.set_ai_tuning(tuning);
     }
     for slot in 2..8 {
         race.sim.world.ships[slot].active = false;
@@ -142,10 +142,10 @@ fn run(
     let mut window_ticks = 0u32;
 
     for tick in 0..TICKS {
-        let before = race.respawns_of(LONE);
+        let before = race.sim.respawns_of(LONE);
         let index_before = race.sim.world.ships[LONE].driver.index;
         race.tick(&PlayerInputs::none());
-        if race.respawns_of(LONE) != before {
+        if race.sim.respawns_of(LONE) != before {
             recovered_this_lap = true;
             respawn_indices.push(index_before);
         }
@@ -182,12 +182,12 @@ fn run(
     Some(Record {
         respawn_indices,
         laps: lap,
-        respawns: race.respawns_of(LONE),
+        respawns: race.sim.respawns_of(LONE),
         shield: race.sim.world.ships[LONE].physics.shield,
         capacity: race.sim.world.ships[LONE].handling.dimensions.shield,
         best,
         airborne,
-        line_len: race.racing_line().len() as u32,
+        line_len: race.sim.racing_line().len() as u32,
     })
 }
 

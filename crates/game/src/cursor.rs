@@ -19,7 +19,7 @@
 //! means nothing - during a race, or once a finger has lifted - rather than
 //! whenever the platform feels like hiding it. The window's own cursor is
 //! hidden over the game for the same reason a second one would be worse
-//! than none: see `main/gpu.rs`.
+//! than none: see `app/gpu.rs`.
 //!
 //! # One geometry, five palettes
 //!

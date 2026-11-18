@@ -59,13 +59,13 @@ answer it for them.
 
 | Site | Means | Why |
 | --- | --- | --- |
-| `main/app.rs`, building the first `Framebuffer` | Allocation | `target_size` off the ceiling, before any frame has been drawn |
-| `main/app.rs`, `Stage::race(..., framebuffer.allocation(), ...)` | Allocation | Builds the scene's depth and MSAA attachments, which must match the colour texture |
-| `main/session/frame.rs`, `framebuffer.resize(wanted)` | Allocation | `wanted` is `target_size` off the `render_scale` ceiling |
-| `main/session/frame.rs`, the three `scene.resize(...)` arms and the suspended race | Allocation | Same validation rule: a depth attachment sized for the colour one |
-| `main/session/frame.rs`, `inside` handed to every stage | **Extent** | It is a viewport. Everything downstream that normalises against it - the projection, and [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)'s jitter via `jitter::matrix(frame, (viewport.2, viewport.3))` - inherits the extent for free |
-| `main/session/load.rs`, `build_race_stage(..., allocation, ...)` | Allocation | Builds attachments, as `app.rs` does |
-| `main/session/load.rs`, `warm_up`'s rectangle | **Extent** | It is a viewport. Warming pipelines is keyed on format, not on the size of the attachment they first meet - see ADR-0038 |
+| `app/handler.rs`, building the first `Framebuffer` | Allocation | `target_size` off the ceiling, before any frame has been drawn |
+| `app/handler.rs`, `Stage::race(..., framebuffer.allocation(), ...)` | Allocation | Builds the scene's depth and MSAA attachments, which must match the colour texture |
+| `app/session/frame.rs`, `framebuffer.resize(wanted)` | Allocation | `wanted` is `target_size` off the `render_scale` ceiling |
+| `app/session/frame.rs`, the three `scene.resize(...)` arms and the suspended race | Allocation | Same validation rule: a depth attachment sized for the colour one |
+| `app/session/frame.rs`, `inside` handed to every stage | **Extent** | It is a viewport. Everything downstream that normalises against it - the projection, and [ADR-0039](../architecture/adr/0039-camera-jitter-post-multiplies-onto-the-view-projection.md)'s jitter via `jitter::matrix(frame, (viewport.2, viewport.3))` - inherits the extent for free |
+| `app/session/load.rs`, `build_race_stage(..., allocation, ...)` | Allocation | Builds attachments, as `app.rs` does |
+| `app/session/load.rs`, `warm_up`'s rectangle | **Extent** | It is a viewport. Warming pipelines is keyed on format, not on the size of the attachment they first meet - see ADR-0038 |
 | `upscale.rs`, `resolve_scene`'s `magnifies` test | **Extent** | Whether the *drawn pixels* are fewer than the destination's is what decides whether a magnifier has anything to do |
 | `upscale.rs`, FXAA/SMAA `Frame::size` and FSR 1 `Frame::input` | **Extent**, and see the caveat below | The source rectangle those passes reconstruct |
 | `upscale.rs`, `present`'s UV scale and clamp | **Both** | The ratio `extent / allocation` is the whole point of the split |
@@ -597,7 +597,7 @@ already pinned to.
 
 The TARGET FPS row offers `default` after the fixed rates, stored as the word
 `"default"` in `[render_profiles.<title>]`. It is resolved each frame at
-`Session::render_limits` (`crates/game/src/main/session/draw.rs`) with
+`Session::render_limits` (`crates/game/src/app/session/draw.rs`) with
 `drs::Target::resolve(display.hz())`, so the controller only ever sees a
 rate: the refresh the window's output reports (re-polled about once a second,
 so moving the window to another monitor retargets), or 60 when the platform
@@ -608,7 +608,7 @@ declared for it: its rate is the output's own.
 
 The FRAME LIMIT row ends with the same idea, `refresh_rate` (drawn
 `REFRESH RATE (144)`): `perf::FrameLimit::resolve` in
-`crates/game/src/main/session/pacing.rs` limits the loop to the output's
+`crates/game/src/app/session/pacing.rs` limits the loop to the output's
 rate, or 60 when none is known. The audio buffer sizing at startup reads the
 configured limit before a window exists, so it treats it as unlimited.
 
