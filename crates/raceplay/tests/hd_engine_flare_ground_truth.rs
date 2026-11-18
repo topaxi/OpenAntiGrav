@@ -687,11 +687,11 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         race.tick(&PlayerInputs::none());
     }
     assert!(race.hd_trail_active(), "an HD race draws HD's exhaust");
-    let camera = race.view();
+    let camera = race.view_state().view(&race.core);
     let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
     let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
     let forward = -Vec3::new(camera.x_axis.z, camera.y_axis.z, camera.z_axis.z);
-    let eye = race.camera_position();
+    let eye = race.view_state().camera_position(&race.core);
 
     assert!(
         race.hd_sprite_quad(0, right, up).is_empty(),

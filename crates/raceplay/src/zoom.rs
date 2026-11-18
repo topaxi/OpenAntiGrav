@@ -75,7 +75,7 @@ impl Race {
 
     /// The pulse of the view being drawn: the player's, or the extra seat's own.
     fn viewed_zoom(&self) -> Option<&oag_post::hd_zoom::Pulse> {
-        match self.extra_viewpoint() {
+        match self.view.extra_viewpoint() {
             Some(slot) => self.view.viewpoints.zoom[slot].as_ref(),
             None => self.view.zoom.as_ref(),
         }

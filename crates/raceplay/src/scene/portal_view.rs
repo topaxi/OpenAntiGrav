@@ -109,7 +109,9 @@ impl Scene {
             }
             race.set_viewpoint(slot);
             let aspect = rect.2.max(1.0) / rect.3.max(1.0);
-            let projection = race.projection(aspect, self.far, settings.fov);
+            let projection = race
+                .view
+                .projection(&race.core, aspect, self.far, settings.fov);
             let shot = race.portal_shot(&request, projection)?;
             if self.reach_masked_out(race, &shot.reach, projection, settings) {
                 return None;
@@ -157,7 +159,7 @@ impl Scene {
             return false;
         };
         if visibility.has_sections() {
-            let visible = race.visible_set(visibility, &(projection * race.view()));
+            let visible = race.visible_set(visibility, &(projection * race.view.view(&race.core)));
             if !visible.allows(reach.sections) {
                 return true;
             }

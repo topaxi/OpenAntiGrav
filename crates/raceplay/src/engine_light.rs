@@ -272,7 +272,7 @@ impl Race {
                 let light = self.view.engine_lights.get(slot).copied().flatten()?;
                 let nozzle = self.nozzle_local_of(slot)?;
                 record(
-                    self.ship_model_matrix_of(slot),
+                    self.view.ship_model_matrix_of(&self.core, slot),
                     nozzle,
                     light,
                     Craft {

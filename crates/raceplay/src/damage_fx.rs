@@ -146,7 +146,7 @@ impl Race {
         if !plays(state, fx.last[slot], fx.hold[slot]) {
             return;
         }
-        let at = self.drawn_position(slot);
+        let at = self.view.drawn_position(&self.core, slot);
         let velocity = ship.physics.body.linear_velocity;
         let changed = state != self.view.damage_fx.last[slot];
         let mut any = false;
@@ -187,7 +187,7 @@ impl Race {
         if !ship.in_world() {
             return;
         }
-        let at = self.drawn_position(slot);
+        let at = self.view.drawn_position(&self.core, slot);
         let Some(effect) = self.view.handles.get(Trigger::LeachHitSpark).cloned() else {
             return;
         };
@@ -229,9 +229,10 @@ impl Race {
                 self.view.stage.detach(smoke.playing);
                 return false;
             }
-            self.view
-                .stage
-                .follow(smoke.playing, self.drawn_position(smoke.slot));
+            self.view.stage.follow(
+                smoke.playing,
+                self.view.drawn_position(&self.core, smoke.slot),
+            );
             true
         });
         self.view.damage_fx.riding = riding;

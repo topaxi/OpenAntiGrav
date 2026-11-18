@@ -26,7 +26,7 @@ fn race_with_hd_flares() -> Race {
 /// The camera's right and up, read off the view matrix the way the frame
 /// does.
 fn camera_axes(race: &Race) -> (Vec3, Vec3) {
-    let camera = race.view();
+    let camera = race.view.view(&race.core);
     (
         Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x),
         Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y),

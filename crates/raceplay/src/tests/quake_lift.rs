@@ -91,9 +91,9 @@ fn the_lift_keeps_decaying_after_the_wave_is_gone() {
 fn the_cockpit_view_rises_with_the_lift() {
     let mut race = quake_race();
     race.view.camera_view = oag_display::display::CameraView::Internal;
-    let level = race.tick_view_unshaken();
+    let level = race.view.tick_view_unshaken(&race.core);
     race.core.sim.world.ships[0].quake_lift = 2.0;
-    let lifted = race.tick_view_unshaken();
+    let lifted = race.view.tick_view_unshaken(&race.core);
     assert_ne!(level, lifted, "the cockpit eye ignores the wave height");
 }
 
@@ -109,7 +109,7 @@ struct Flown {
 /// The cockpit rig's view of the player's craft with the Quake lift forced to `lift`.
 fn cockpit_view_with(race: &Race, lift: f32) -> Mat4 {
     oag_render::camera::internal::view(
-        race.camera_target(),
+        race.view.camera_target(&race.core),
         &race.view.internal_params,
         race.core.ship().physics.roll_phase,
         race.core.ship().physics.camera_lean,
@@ -137,7 +137,7 @@ fn fly_wave_in_the_cockpit(law: QuakeHit) -> Flown {
         let lift = race.core.sim.world.ships[0].quake_lift;
         if lift > flown.peak {
             flown.peak = lift;
-            flown.view = race.tick_view_unshaken();
+            flown.view = race.view.tick_view_unshaken(&race.core);
             flown.level = cockpit_view_with(&race, 0.0);
             flown.lifted = cockpit_view_with(&race, lift);
         }

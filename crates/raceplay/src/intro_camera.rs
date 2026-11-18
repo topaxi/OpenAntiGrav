@@ -220,7 +220,7 @@ impl IntroCamera {
         self.phase == Phase::Finished
     }
 
-    /// How many times the picture has jumped. See [`Race::camera_cuts`].
+    /// How many times the picture has jumped. See [`crate::RaceView::camera_cuts`].
     #[must_use]
     pub fn cuts(&self) -> u32 {
         self.cuts
@@ -366,13 +366,6 @@ impl Race {
             .map_or_else(Vec::new, |intro| std::mem::take(&mut intro.cues))
     }
 
-    /// Whether the flyby is still to play or playing - the session steps it instead of the world
-    /// while this holds.
-    #[must_use]
-    pub fn in_intro(&self) -> bool {
-        self.view.intro.as_ref().is_some_and(IntroCamera::playing)
-    }
-
     /// A pointer press on the flyby: skips it as a held Cross does, as soon as the lock lifts.
     /// The pointer's half of the panel's input - the panel itself has no button to press.
     pub fn skip_intro(&mut self) {
@@ -456,3 +449,13 @@ impl Race {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Whether the flyby is still to play or playing - the session steps it instead of the world
+    /// while this holds.
+    #[must_use]
+    pub fn in_intro(&self) -> bool {
+        self.intro.as_ref().is_some_and(IntroCamera::playing)
+    }
+}

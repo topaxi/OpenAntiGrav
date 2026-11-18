@@ -244,7 +244,7 @@ impl Race {
     /// [`Self::advance_absorb_bursts`].
     pub(super) fn advance_slot_huds(&mut self) {
         let primary = self.core.player_slot();
-        let viewed = self.viewport_count();
+        let viewed = self.view.viewport_count();
         let mut raises = std::mem::take(&mut self.view.incoming_raises);
         for slot in 0..MAX_SHIPS {
             if slot != primary && slot >= viewed {

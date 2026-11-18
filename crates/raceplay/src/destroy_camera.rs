@@ -44,7 +44,7 @@ pub(super) struct DestroyCamera {
     active: Option<Destroy>,
     held: bool,
     /// How many times the camera has taken over or let go - see
-    /// [`Race::camera_cuts`].
+    /// [`crate::RaceView::camera_cuts`].
     pub(super) cuts: u32,
 }
 
@@ -142,10 +142,13 @@ impl Race {
     pub(super) fn hold_destroy_camera(&mut self) {
         self.view.destroy_camera.held = true;
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceView {
     /// The camera, while it has the picture.
     #[must_use]
     pub(super) fn destroy_camera_now(&self) -> Option<&Destroy> {
-        self.view.destroy_camera.active.as_ref()
+        self.destroy_camera.active.as_ref()
     }
 }

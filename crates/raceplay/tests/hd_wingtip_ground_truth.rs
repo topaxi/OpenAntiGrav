@@ -136,7 +136,7 @@ fn a_craft_under_a_speed_pad_lays_two_ribbons_that_fade_out() {
     }
     let live = race.wingtip_live();
     assert!(live >= 2, "two ribbons for the held craft, {live} live");
-    let eye = race.camera_position();
+    let eye = race.view_state().camera_position(&race.core);
     let vertices = race.wingtip_vertices(eye);
     assert!(!vertices.is_empty(), "the held craft draws a strip");
     let alpha = vertices.iter().map(|v| v.colour[3]).fold(0.0_f32, f32::max);

@@ -25,13 +25,13 @@ use crate::Race;
 /// player alone, and an opponent's shell is drawn from outside whatever the
 /// player's camera is doing.
 pub(super) fn shell_visible(race: &Race, slot: usize) -> bool {
-    race.shield_of(slot).visible() && (slot != 0 || race.draws_own_ship())
+    race.shield_of(slot).visible() && (slot != 0 || race.view.draws_own_ship())
 }
 
 /// Whether the cockpit sphere is drawn this frame: the player's shield is up
 /// and the camera is inside the hull.
 pub(super) fn cockpit_shield_visible(race: &Race) -> bool {
-    !race.draws_own_ship() && race.shield_of(0).visible() && race.core.sim.ship_active(0)
+    !race.view.draws_own_ship() && race.shield_of(0).visible() && race.core.sim.ship_active(0)
 }
 
 /// The scale HD's flame groups breathe with, about the origin the group is

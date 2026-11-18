@@ -174,7 +174,11 @@ fn two_windows_are_the_multiplayer_time_trial_too() {
     assert_eq!(world.human_slots().count(), 2, "both flown by a person");
     assert!(race.windowed());
     assert_eq!(race.core.sim.people(), 2);
-    assert_eq!(race.viewport_count(), 2, "the views the records gate reads");
+    assert_eq!(
+        race.view_state().viewport_count(),
+        2,
+        "the views the records gate reads"
+    );
 
     let apart = |race: &mut race::Race| {
         let there = race.core.sim.world.ships[0].physics.body.position;

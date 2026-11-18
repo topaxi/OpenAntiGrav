@@ -82,7 +82,7 @@ fn hd_draws_its_model_at_the_muzzle_only_inside_the_flash_window() {
     let draw = hd_draw();
     let matrices = race.cannon_model_matrices(&draw);
     assert_eq!(matrices.len(), 1, "one round just fired, one flash");
-    let ship = race.ship_model_matrix_of(0);
+    let ship = race.view.ship_model_matrix_of(&race.core, 0);
     let at = matrices[0].w_axis.truncate();
     let left = ship.transform_point3(Vec3::new(1.0, 0.5, 0.0));
     let right = ship.transform_point3(Vec3::new(-1.0, 0.5, 0.0));
@@ -115,7 +115,7 @@ fn hd_flash_side_follows_the_side_the_round_left_from() {
         .expect("a live round");
     let on_left = (round.position - body.position).dot(body.right()) < 0.0;
     let at = race.cannon_model_matrices(&hd_draw())[0].w_axis.truncate();
-    let ship = race.ship_model_matrix_of(0);
+    let ship = race.view.ship_model_matrix_of(&race.core, 0);
     let expected = if on_left {
         Vec3::new(1.0, 0.5, 0.0)
     } else {
@@ -135,7 +135,7 @@ fn hd_centres_its_flash_quad_on_the_muzzle_and_draws_none_without_one() {
         .iter()
         .fold(Vec3::ZERO, |sum, v| sum + Vec3::from(v.position))
         / 6.0;
-    let ship = race.ship_model_matrix_of(0);
+    let ship = race.view.ship_model_matrix_of(&race.core, 0);
     let muzzles = [Vec3::new(1.0, 0.5, 0.0), Vec3::new(-1.0, 0.5, 0.0)];
     // The six list vertices repeat two corners, so their mean is not the
     // square's centre; the two diagonal corners' midpoint is.

@@ -192,7 +192,7 @@ impl Race {
         self.advance_scenery_fx(dt);
         self.advance_craft_flashes();
         self.advance_destroy_camera();
-        let eye = self.camera_position();
+        let eye = self.view.camera_position(&self.core);
         if let Some(flash) = &mut self.view.screen_flash {
             flash.advance(dt, eye);
         }

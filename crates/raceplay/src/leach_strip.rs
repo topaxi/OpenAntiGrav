@@ -115,7 +115,7 @@ impl Race {
     /// locator takes the body the same way, as the original's own fallback
     /// does (`0x001169f8`).
     fn leach_anchor(&self, anchors: &[Option<Mat4>; MAX_SHIPS], slot: usize) -> Vec3 {
-        let model = self.ship_model_matrix_of(slot);
+        let model = self.view.ship_model_matrix_of(&self.core, slot);
         match anchors[slot] {
             Some(anchor) => {
                 let node = model * anchor;

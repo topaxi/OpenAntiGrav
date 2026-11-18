@@ -181,7 +181,7 @@ impl Race {
     /// that goes back to one view shows what is left of it.
     #[must_use]
     pub fn now_playing(&self) -> Option<oag_hud::now_playing::Marquee> {
-        if self.viewport_count() > 1 {
+        if self.view.viewport_count() > 1 {
             return None;
         }
         self.view.now_playing.as_ref()?.display.marquee()

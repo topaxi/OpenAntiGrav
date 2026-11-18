@@ -149,7 +149,12 @@ impl Race {
             let (Some(place), true) = (place, in_world(beam.from) && in_world(beam.to)) else {
                 continue;
             };
-            let end = |slot| self.ship_model_matrix_of(slot).w_axis.truncate();
+            let end = |slot| {
+                self.view
+                    .ship_model_matrix_of(&self.core, slot)
+                    .w_axis
+                    .truncate()
+            };
             let at = match surfaces.iter().position(|(at, _)| *at == place) {
                 Some(at) => at,
                 None => {

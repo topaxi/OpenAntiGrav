@@ -319,6 +319,8 @@ mod spline;
 mod spline_table;
 #[cfg(feature = "view")]
 mod split_gap;
+#[cfg(feature = "view")]
+mod stage;
 mod stages;
 mod start;
 mod takeoff_line;
@@ -509,7 +511,7 @@ pub const MODEL_YAW: f32 = std::f32::consts::PI;
 /// The viewport shape every camera value on the disc was authored for.
 ///
 /// The PSP renders into 480x272 and nothing else, so an authored field of view is
-/// only defined at this aspect ratio. [`Race::projection`] is where that matters.
+/// only defined at this aspect ratio. [`crate::RaceView::projection`] is where that matters.
 /// Taken from [`oag_display::space::SCREEN`] rather than written again, because it is
 /// the same screen: the front end lays its widgets out in it and the camera was
 /// framed for it.

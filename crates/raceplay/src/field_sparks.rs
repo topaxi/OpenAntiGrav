@@ -108,7 +108,7 @@ impl Race {
                 wall.is_some_and(|wall| wall.resolved.is_some()),
                 pair.is_some(),
             );
-            let model = self.ship_model_matrix_of(slot);
+            let model = self.view.ship_model_matrix_of(&self.core, slot);
             match (rule, held) {
                 (Attach::Release, Some(held)) => {
                     self.view.stage.detach(held.playing);

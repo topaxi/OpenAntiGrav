@@ -143,7 +143,7 @@ impl Scene {
     ) {
         self.write_caustic(queue, view_projection, prev_vp);
         if let Some(track) = &self.track_shine {
-            let view = race.view();
+            let view = race.view.view(&race.core);
             let seconds = self.anim_clock.get();
             track
                 .drawable
@@ -177,7 +177,7 @@ impl Scene {
             shine.write(
                 queue,
                 view_projection,
-                race.ship_model_matrix_of(slot),
+                race.view.ship_model_matrix_of(&race.core, slot),
                 prev_vp * prev.ship(slot, race),
             );
         }
@@ -186,7 +186,7 @@ impl Scene {
                 .frustum
                 .filter(|_| self.layer.get() == super::viewports::Layer::Whole);
             for (slot, shine) in self.shines(race, mapped) {
-                let ship = race.ship_model_matrix_of(slot);
+                let ship = race.view.ship_model_matrix_of(&race.core, slot);
                 let flaps = race.airbrake_flaps_of(slot);
                 let colour = race.ship_shine_colour(slot, self.anim_clock.get());
                 shine.write_environment_map(queue, ship, flaps, colour, scratch);

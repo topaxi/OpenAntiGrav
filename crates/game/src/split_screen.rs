@@ -348,7 +348,7 @@ pub fn remembered_panes(keys: &[String], saved: &[String]) -> Vec<usize> {
 /// join screen's, a restart's kept seats) takes afterwards. `order` says who sits in each pane
 /// ([`window_slots`]); empty deals the slots in order. A race of one view stays ordinary.
 pub fn deal_windows(race: &mut Race, layout: &[WindowSeats], order: &[usize]) {
-    if race.viewport_count() <= 1 {
+    if race.view_state().viewport_count() <= 1 {
         return;
     }
     let slots = window_slots(layout, order);

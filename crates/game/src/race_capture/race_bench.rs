@@ -183,7 +183,7 @@ pub(super) fn run(stem: &std::path::Path, rig: Rig<'_>) -> Result<()> {
     if race.windowed() {
         bail!("{ENV}: a multi-window race is not benched here, it has one window");
     }
-    let split = race.viewport_count() > 1;
+    let split = race.view_state().viewport_count() > 1;
     let views = if split { race.views_drawn() } else { 1 };
     let cap = if options.ticks > 0 {
         options.ticks

@@ -470,7 +470,7 @@ impl Race {
     /// disc's frames; see [`hd`].
     #[must_use]
     pub(crate) fn hd_bomb_blast_draws(&self) -> [Option<hd::Pieces>; hd::SLOTS] {
-        let view = self.view().inverse();
+        let view = self.view.view(&self.core).inverse();
         let (eye, back) = (view.w_axis.truncate(), view.z_axis.truncate());
         std::array::from_fn(|slot| {
             self.view.hd_bomb_blasts[slot].map(|blast| blast.pieces(eye, back))

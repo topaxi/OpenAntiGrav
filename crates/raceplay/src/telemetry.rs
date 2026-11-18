@@ -322,7 +322,7 @@ impl Race {
     /// that crossing, the place the field gives them (frozen at the finish tick,
     /// see [`oag_race::Standing::finish_tick`]) and a standing line.
     pub(super) fn finished_view(&self, slot: usize) -> Option<FinishedView> {
-        if self.viewport_count() <= 1 || !self.core.sim.world.person_flown(slot) {
+        if self.view.viewport_count() <= 1 || !self.core.sim.world.person_flown(slot) {
             return None;
         }
         let finish = self.core.sim.world.ships[slot].standing.finish_tick?;

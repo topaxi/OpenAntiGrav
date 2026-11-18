@@ -137,7 +137,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
     let rings = oag_render::shadow::hull_triangles(
         &oag_render::shadow::Cast {
             hull,
-            model: race.ship_model_matrix_of(0),
+            model: race.view_state().ship_model_matrix_of(&race.core, 0),
             axis: Vec3::from_array(oag_pulse::shadow::WORLD_AXIS),
             contact: placement.contact,
             normal: placement.normal,
@@ -184,7 +184,7 @@ fn the_projected_hull_lands_on_the_surface_under_the_craft() {
     );
     // The ring itself, in the plane, so a bad *outline* can be told from a bad
     // *fill*: shoelace area against the area of its own convex hull.
-    let model = race.ship_model_matrix_of(0);
+    let model = race.view_state().ship_model_matrix_of(&race.core, 0);
     let world_axis = Vec3::from_array(oag_pulse::shadow::WORLD_AXIS);
     let outline = hull.outline(
         model

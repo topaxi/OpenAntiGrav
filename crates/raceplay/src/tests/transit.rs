@@ -275,7 +275,7 @@ fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
     }
     assert!(race.view.transit_seats[1].is_some(), "the fixture seats it");
     let craft = race.core.sim.world.ships[1].physics.body.position;
-    let flown_on = (race.followed(1).position - craft).length();
+    let flown_on = (race.view.followed(&race.core, 1).position - craft).length();
     assert!(flown_on > 5.0, "the first camera has flown on: {flown_on}");
     // What the seats see when a second transit took the place of the first inside a tick.
     let first = race.core.sim.world.ships[1].transit.unwrap();
@@ -284,7 +284,7 @@ fn a_transit_begun_as_the_last_one_ended_is_followed_from_its_own_seat() {
         ..first
     });
     race.tick(&PlayerInputs::none());
-    let restarted = (race.followed(1).position - craft).length();
+    let restarted = (race.view.followed(&race.core, 1).position - craft).length();
     assert!(restarted < 2.0, "back on the craft: {restarted}");
 }
 

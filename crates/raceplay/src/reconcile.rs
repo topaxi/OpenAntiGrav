@@ -60,7 +60,7 @@ impl Race {
     /// board is read by the screens and the finish camera), so only a viewer that draws the
     /// race needs this. The poses are settled: the next draw shows the restored tick as it
     /// stands, not blended from a tick long gone, and the jump is a camera cut
-    /// ([`Self::camera_cuts`]), so the motion blur does not smear it across the screen.
+    /// ([`crate::RaceView::camera_cuts`]), so the motion blur does not smear it across the screen.
     pub fn restore_for_viewing(&mut self, snapshot: &RaceSim) {
         self.restore_sim(snapshot);
         #[cfg(feature = "view")]

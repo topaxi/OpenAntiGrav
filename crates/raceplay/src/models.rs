@@ -64,7 +64,7 @@ impl Race {
     /// track and buildings behind aligning", and they do not align. Far scenery,
     /// which no mesh scale can move, registers at `1.1195` in the same frame.
     ///
-    /// What is actually missing is in [`Race::projection`], not here: the
+    /// What is actually missing is in [`crate::RaceView::projection`], not here: the
     /// original adds `0.075 * dot(forward, velocity)` **degrees** to both tripod
     /// fovs every frame, so its field widens with speed and ours does not. See
     /// `docs/rendering/projection-vs-the-original.md`.
@@ -73,22 +73,7 @@ impl Race {
     /// to be the whole of it.
     #[must_use]
     pub fn ship_model_matrix(&self) -> Mat4 {
-        self.ship_model_matrix_of(0)
-    }
-
-    /// One craft's model matrix, by ship slot.
-    ///
-    /// [`Self::ship_model_matrices`] gives the same matrices for drawing the
-    /// field, but it *filters* inactive craft, so its indices are not slot
-    /// indices. Anything that has to line a craft's slot up with something else
-    /// held per slot - its plume, its flare - asks for the matrix by slot here.
-    ///
-    /// # Panics
-    ///
-    /// If `slot` is not a ship slot.
-    #[must_use]
-    pub fn ship_model_matrix_of(&self, slot: usize) -> Mat4 {
-        self.ship_between(slot, self.drawn_model(slot))
+        self.view.ship_model_matrix_of(&self.core, 0)
     }
 }
 
@@ -101,7 +86,7 @@ impl RaceSim {
 
     /// Whether the craft in this slot is still racing.
     ///
-    /// The slot-indexed counterpart to [`Race::ship_model_matrix_of`], for the
+    /// The slot-indexed counterpart to [`crate::RaceView::ship_model_matrix_of`], for the
     /// same reason: a caller walking `0..ship_count()` needs to skip an
     /// inactive slot without losing slot alignment, which
     /// [`Race::ship_model_matrices`]' filter-then-collect cannot give it. Every
@@ -147,7 +132,7 @@ impl Race {
     /// craft's own place, [`oag_race::Course::light_scale_at`], or `None` for a
     /// craft the course has not located or a circuit with no course.
     fn hull_light_scale(&self, slot: usize) -> Option<[u8; 4]> {
-        let at = self.ship_model_matrix_of(slot).w_axis;
+        let at = self.view.ship_model_matrix_of(&self.core, slot).w_axis;
         let at = oag_core::math::Vec3::new(at.x, at.y, at.z);
         let course = self.core.sim.course.as_deref()?;
         // A craft no tick has located yet (a posed capture runs none, and a race's first frame is drawn before its first)
@@ -182,7 +167,7 @@ impl Race {
         if self.view.hull_points.is_empty() {
             return Default::default();
         }
-        let at = self.ship_model_matrix_of(slot).w_axis;
+        let at = self.view.ship_model_matrix_of(&self.core, slot).w_axis;
         let [.., point, spot] = self.hull_light_scale(slot).unwrap_or([255; 4]);
         self.view
             .hull_points
@@ -203,7 +188,7 @@ impl Race {
         let Some(pass) = &self.view.hull_points.pass else {
             return [1.0; 3];
         };
-        let at = self.ship_model_matrix_of(slot).w_axis;
+        let at = self.view.ship_model_matrix_of(&self.core, slot).w_axis;
         let [ambient, directional, point, spot] = self.hull_light_scale(slot).unwrap_or([255; 4]);
         let points = self
             .view
@@ -247,7 +232,25 @@ impl Race {
             .take(self.core.sim.world.ship_count as usize)
             .enumerate()
             .filter(|(_, ship)| ship.in_world())
-            .map(|(slot, _)| self.ship_model_matrix_of(slot))
+            .map(|(slot, _)| self.view.ship_model_matrix_of(&self.core, slot))
             .collect()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One craft's model matrix, by ship slot.
+    ///
+    /// [`crate::Race::ship_model_matrices`] gives the same matrices for drawing the
+    /// field, but it *filters* inactive craft, so its indices are not slot
+    /// indices. Anything that has to line a craft's slot up with something else
+    /// held per slot - its plume, its flare - asks for the matrix by slot here.
+    ///
+    /// # Panics
+    ///
+    /// If `slot` is not a ship slot.
+    #[must_use]
+    pub fn ship_model_matrix_of(&self, core: &SimRace, slot: usize) -> Mat4 {
+        self.ship_between(core, slot, self.drawn_model(core, slot))
     }
 }

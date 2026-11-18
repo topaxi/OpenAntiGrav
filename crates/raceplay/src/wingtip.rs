@@ -336,7 +336,7 @@ impl Race {
                 speed: body.linear_velocity.dot(body.forward()).abs(),
             };
             let rows = craft_rows(body.up(), body.forward());
-            let model = self.ship_model_matrix_of(slot);
+            let model = self.view.ship_model_matrix_of(&self.core, slot);
             for index in 0..2 {
                 let Some(local) = contrails.anchors[slot][index] else {
                     continue;

@@ -159,7 +159,7 @@ impl Race {
             let ship = &self.core.sim.world.ships[slot].physics;
             // Where the craft is drawn, so the reach below measures the nozzle against the
             // hull on the same pose while a correction glides out.
-            let position = self.drawn_position(slot);
+            let position = self.view.drawn_position(&self.core, slot);
             let thrust = if self.core.sim.zone.is_some() && ship.grounded > 0.0 {
                 oag_physics::controls::CONTROL_MAX
             } else {
@@ -683,7 +683,7 @@ impl Race {
         // matrix: `right` and `up` are its rows 0 and 1, and for an
         // orthonormal basis row 2 is the camera's own +Z, which looks
         // backward - so the view direction is its negation.
-        let camera = self.view();
+        let camera = self.view.view(&self.core);
         let forward = -Vec3::new(camera.x_axis.z, camera.y_axis.z, camera.z_axis.z);
         let eye = camera.inverse().w_axis.truncate();
         // The hull's axis as this draw places it (`Race::body_between`).
@@ -1147,7 +1147,7 @@ impl Race {
         if self.view.viewpoints.through_portal() {
             return None;
         }
-        let flash = match self.extra_viewpoint() {
+        let flash = match self.view.extra_viewpoint() {
             Some(_) => None,
             None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),
         };
@@ -1232,7 +1232,11 @@ impl Race {
     #[must_use]
     pub fn nozzle_of(&self, slot: usize) -> Option<Vec3> {
         let local = self.nozzle_local_of(slot)?;
-        Some(self.ship_model_matrix_of(slot).transform_point3(local))
+        Some(
+            self.view
+                .ship_model_matrix_of(&self.core, slot)
+                .transform_point3(local),
+        )
     }
 
     /// One craft's `Ship Muzzle` locator in **world** space, through the same model
@@ -1242,7 +1246,11 @@ impl Race {
     #[must_use]
     pub fn muzzle_of(&self, slot: usize) -> Option<Vec3> {
         let local = self.core.sim.world.ships.get(slot)?.muzzle?;
-        Some(self.ship_model_matrix_of(slot).transform_point3(local))
+        Some(
+            self.view
+                .ship_model_matrix_of(&self.core, slot)
+                .transform_point3(local),
+        )
     }
 
     /// The `engine_flare` locator in **model space** - the pivot a transform

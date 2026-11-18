@@ -363,7 +363,7 @@ impl super::RaceSim {
 impl super::Race {
     /// The lens as a world frame: where it is and where its axes point.
     pub(super) fn camera_frame(&self) -> psys::field::Frame {
-        let world = self.view().inverse();
+        let world = self.view.view(&self.core).inverse();
         psys::field::Frame {
             position: world.w_axis.truncate(),
             right: world.x_axis.truncate(),

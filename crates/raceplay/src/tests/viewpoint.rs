@@ -10,9 +10,13 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
-    let own = race.view();
-    let own_fov = race.vertical_fov(AUTHORED_ASPECT, oag_display::display::Fov::AUTHORED);
-    assert_eq!(race.viewport_count(), 1);
+    let own = race.view.view(&race.core);
+    let own_fov = race.view.vertical_fov(
+        &race.core,
+        AUTHORED_ASPECT,
+        oag_display::display::Fov::AUTHORED,
+    );
+    assert_eq!(race.view.viewport_count(), 1);
 
     assert_eq!(
         race.set_viewport_count(4),
@@ -20,7 +24,7 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
         "a full grid fields four craft"
     );
     assert_eq!(
-        race.view(),
+        race.view.view(&race.core),
         own,
         "turning the split on does not move the player's view"
     );
@@ -33,19 +37,31 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
         let target = target_of(&race.core.sim.world.ships[slot]);
         let params = race.view.chase_far;
         let expected = Chase::snapped(target, &params).view(target, &params);
-        assert_eq!(race.view(), expected, "view {slot} follows slot {slot}");
-        assert_ne!(race.view(), own, "view {slot} is not the player's");
-        assert!(race.extra_viewpoint() == Some(slot));
+        assert_eq!(
+            race.view.view(&race.core),
+            expected,
+            "view {slot} follows slot {slot}"
+        );
+        assert_ne!(
+            race.view.view(&race.core),
+            own,
+            "view {slot} is not the player's"
+        );
+        assert!(race.view.extra_viewpoint() == Some(slot));
         assert_eq!(race.viewed_ship().physics.body.position, target.position);
     }
 
     // Slot 0 is the player's own view, however it is asked for.
     race.set_viewpoint(0);
-    assert_eq!(race.view(), own);
+    assert_eq!(race.view.view(&race.core), own);
     race.reset_viewpoint();
-    assert_eq!(race.view(), own);
+    assert_eq!(race.view.view(&race.core), own);
     assert_eq!(
-        race.vertical_fov(AUTHORED_ASPECT, oag_display::display::Fov::AUTHORED),
+        race.view.vertical_fov(
+            &race.core,
+            AUTHORED_ASPECT,
+            oag_display::display::Fov::AUTHORED
+        ),
         own_fov
     );
 }
@@ -83,8 +99,8 @@ fn viewports_leave_the_simulation_hash_unchanged() {
         for slot in 0..4 {
             split.set_viewpoint(slot);
             let _ = (
-                split.view(),
-                split.camera_position(),
+                split.view.view(&split.core),
+                split.view.camera_position(&split.core),
                 split.visibility_sections(),
             );
         }

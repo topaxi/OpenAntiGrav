@@ -18,6 +18,7 @@
 //! Every craft shakes, not only the player's: the calls sit inside the per-ship update and no
 //! player test above them was read.
 
+use crate::RaceView;
 use oag_core::Rng;
 use oag_core::math::{Mat4, Quat, Vec3};
 use oag_title::hull_shake::HullShake as Law;
@@ -151,10 +152,13 @@ impl Race {
                 .advance(&law, dt, speed);
         }
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceView {
     /// `slot`'s shake matrix this tick, identity where there is none.
     pub(super) fn hull_shake_of(&self, slot: usize) -> Mat4 {
-        self.view.hull_shake[slot]
+        self.hull_shake[slot]
             .as_ref()
             .map_or(Mat4::IDENTITY, Shake::local)
     }

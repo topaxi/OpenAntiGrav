@@ -28,7 +28,7 @@ impl super::Scene {
                 continue;
             }
             if let Some(drawable) = self.ships.get(slot) {
-                drawable.select_lod(view, race.ship_model_matrix_of(slot), eye);
+                drawable.select_lod(view, race.view.ship_model_matrix_of(&race.core, slot), eye);
             }
         }
         self.select_wreck_lod(view, race, eye);

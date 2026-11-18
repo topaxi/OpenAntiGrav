@@ -710,7 +710,7 @@ fn a_hull_takes_the_point_light_standing_over_it() {
         [[0.0; 4]; 2],
         "no rig, no slot"
     );
-    let at = race.ship_model_matrix_of(0).w_axis;
+    let at = race.view.ship_model_matrix_of(&race.core, 0).w_axis;
     let over = WorldLight {
         position: [at.x, at.y + 3.0, at.z],
         colour: [1.0, 0.5, 0.0],

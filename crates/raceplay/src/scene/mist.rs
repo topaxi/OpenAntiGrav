@@ -44,7 +44,7 @@ impl Scene {
             .scenery_fx
             .weather()
             .mist()
-            .and_then(|mist| mist.vertices(tan_half_fov, race.draw_alpha()));
+            .and_then(|mist| mist.vertices(tan_half_fov, race.view.draw_alpha()));
         pipeline.upload(queue, vertices.as_ref());
     }
 }

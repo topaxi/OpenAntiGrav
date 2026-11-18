@@ -619,7 +619,7 @@ impl Race {
         #[cfg(feature = "view")]
         if self.draws() {
             self.advance_transit_seats();
-            let target = self.camera_target();
+            let target = self.view.camera_target(&self.core);
             // A craft put further round (`Race::move_to`) takes its camera with it, settled:
             // the spring would sweep the eye across the gap.
             let jumps = self.core.sim.jumps[self.core.player_slot()];
@@ -637,7 +637,7 @@ impl Race {
             // spectator director's pose replaces it. A no-op until the player has finished.
             self.advance_finish_camera();
             // After the camera, so the flash's falloff measures from this tick's eye.
-            let eye = self.camera_position();
+            let eye = self.view.camera_position(&self.core);
             if let Some(flash) = &mut self.view.screen_flash {
                 flash.advance(self.core.sim.dt, eye);
             }
@@ -822,7 +822,7 @@ impl Race {
             ));
         }
         self.view.shield_was_up = shielded;
-        let model_matrix = self.ship_model_matrix_of(slot);
+        let model_matrix = self.view.ship_model_matrix_of(&self.core, slot);
         self.view.contact.advance(
             &self.view.handles,
             &self.view.collision_fx,
@@ -846,7 +846,7 @@ impl Race {
             if slot == own || self.view.viewpoints.contact[slot].is_none() {
                 continue;
             }
-            let model_matrix = self.ship_model_matrix_of(slot);
+            let model_matrix = self.view.ship_model_matrix_of(&self.core, slot);
             if let Some(fx) = self.view.viewpoints.contact[slot].as_mut() {
                 fx.advance(
                     &self.view.handles,

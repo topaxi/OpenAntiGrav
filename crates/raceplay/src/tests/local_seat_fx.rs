@@ -53,7 +53,7 @@ fn push_toward_wall(race: &mut Race, slot: usize) {
 /// The shake on `slot`'s view: whether it is the picture's and not the unshaken one's.
 fn view_is_shaken(race: &Race, slot: usize) -> bool {
     race.set_viewpoint(slot);
-    let shaken = race.view() != race.view_unshaken();
+    let shaken = race.view.view(&race.core) != race.view_unshaken();
     let rotated = race.view_shake_rotation() != Mat4::IDENTITY;
     race.reset_viewpoint();
     assert_eq!(shaken, rotated, "slot {slot}: the lens map disagrees");
@@ -182,7 +182,7 @@ fn a_local_seats_boost_kicks_its_own_field_of_view() {
             race.tick(&PlayerInputs::none());
             let fov = |view| {
                 race.set_viewpoint(view);
-                let fov = race.extra_vertical_fov(1.6, Fov::AUTHORED);
+                let fov = race.view.extra_vertical_fov(&race.core, 1.6, Fov::AUTHORED);
                 race.reset_viewpoint();
                 fov
             };

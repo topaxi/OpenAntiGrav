@@ -185,11 +185,15 @@ impl Race {
                 let Some(effect) = self.view.handles.get(trigger).cloned() else {
                     return;
                 };
-                let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();
+                let at = (self.view.ship_model_matrix_of(&self.core, slot) * anchor)
+                    .w_axis
+                    .truncate();
                 handles[slot] = self.view.stage.play_riding(&effect, at, 1.0);
             }
             (Some(playing), true) => {
-                let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();
+                let at = (self.view.ship_model_matrix_of(&self.core, slot) * anchor)
+                    .w_axis
+                    .truncate();
                 self.view.stage.follow(playing, at);
             }
             (Some(playing), false) => {
@@ -213,7 +217,7 @@ impl Race {
     /// What the wake reads of craft `slot` this frame to draw it. `with_track` and `lateral`
     /// are the spawn's alone: [`Self::wake_craft`] fills them in.
     fn wake_pose(&self, slot: usize, anchor: Mat4) -> Craft {
-        let model = self.ship_model_matrix_of(slot);
+        let model = self.view.ship_model_matrix_of(&self.core, slot);
         let world_anchor = model * anchor;
         Craft {
             anchor: world_anchor.w_axis.truncate(),
@@ -298,7 +302,7 @@ impl Race {
         let Some(wakes) = self.view.magstrip_wake.as_ref().filter(|wakes| wakes.arcs) else {
             return (atlas, contact);
         };
-        let eye = self.camera_position();
+        let eye = self.view.camera_position(&self.core);
         for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;

@@ -25,7 +25,7 @@ impl Race {
         let own_views = if self.core.outcome.seat.is_some() {
             0
         } else {
-            self.viewport_count()
+            self.view.viewport_count()
         };
         std::iter::once(primary).chain((0..own_views).filter(move |&slot| slot != primary))
     }
@@ -97,7 +97,7 @@ impl Race {
         } else {
             self.view.huds[viewer].sight.screen()
         };
-        let drawing = self.extra_viewpoint();
+        let drawing = self.view.extra_viewpoint();
         if primary {
             self.reset_viewpoint();
         } else {

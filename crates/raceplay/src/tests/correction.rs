@@ -44,7 +44,10 @@ fn scene() -> Scene {
 }
 
 fn drawn(race: &Race, slot: usize) -> Vec3 {
-    race.ship_model_matrix_of(slot).w_axis.truncate()
+    race.view
+        .ship_model_matrix_of(&race.core, slot)
+        .w_axis
+        .truncate()
 }
 
 /// A correction moves the simulated craft and not the drawn one: the picture shows
@@ -188,7 +191,12 @@ fn a_seat_one_camera_follows_seat_one() {
     for t in 0..120 {
         client.tick(&sc.truth(START + t.min(59)));
     }
-    let eye = client.tick_view().inverse().w_axis.truncate();
+    let eye = client
+        .view
+        .tick_view(&client.core)
+        .inverse()
+        .w_axis
+        .truncate();
     let own = client.core.sim.world.ships[1].physics.body.position;
     let other = client.core.sim.world.ships[0].physics.body.position;
     println!(
@@ -223,7 +231,7 @@ fn every_seat_camera_follows_its_own_craft() {
             for t in 0..120 {
                 client.tick(&sc.truth(START + t.min(59)));
             }
-            let eye = client.camera_position();
+            let eye = client.view.camera_position(&client.core);
             let ships = &client.core.sim.world.ships;
             let own = (eye - ships[seat].physics.body.position).length();
             for other in (0..ships.len()).filter(|&o| o != seat) {
@@ -246,7 +254,7 @@ fn every_seat_camera_follows_its_own_craft() {
 
 /// The way the chase camera points, as a unit vector in the world.
 fn aim(race: &Race) -> Vec3 {
-    (race.tick_view().inverse().z_axis.truncate()).normalize()
+    (race.view.tick_view(&race.core).inverse().z_axis.truncate()).normalize()
 }
 
 /// Shifts the server's copy of the client's own craft by `by` units sideways and corrects

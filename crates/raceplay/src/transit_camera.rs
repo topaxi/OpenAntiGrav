@@ -19,6 +19,8 @@
 //!
 //! View-side: nothing here is simulation state.
 
+use crate::RaceView;
+use crate::SimRace;
 use oag_core::math::{Mat4, Vec3};
 use oag_race::chase_rig::Target;
 
@@ -117,49 +119,21 @@ impl crate::RaceSim {
 }
 
 impl crate::Race {
-    /// `target`, `slot`'s craft as a camera follows it: for a craft in a transit, eased onto
-    /// its seat and flown on from there; `target` itself for a craft in the world.
-    pub(super) fn seated(&self, slot: usize, target: Target) -> Target {
-        let Some(seat) = self.view.transit_seats.get(slot).copied().flatten() else {
-            return target;
-        };
-        let share = seat.share * seat.share * (3.0 - 2.0 * seat.share);
-        let turned = |from: Vec3, to: Vec3| {
-            let blended = from + (to - from) * share;
-            if blended.length_squared() > 0.0 {
-                blended.normalize()
-            } else {
-                to
-            }
-        };
-        let forward = turned(target.forward, seat.target.forward);
-        let eased = target.position + (seat.target.position - target.position) * share;
-        Target {
-            position: eased + forward * (seat.speed * seat.ticks),
-            forward,
-            up: turned(target.up, seat.target.up),
-        }
-    }
-
-    /// `slot`'s craft as a camera follows it this tick.
-    pub(super) fn followed(&self, slot: usize) -> Target {
-        let mut target = crate::camera::target_of(&self.core.sim.world.ships[slot]);
-        target.position = self.drawn_position(slot);
-        self.seated(slot, target)
-    }
-
     /// How far `slot`'s craft has flown on from its seat at the instant being drawn, and
     /// which way: `None` for a craft in the world.
     fn flown(&self, slot: usize) -> Option<(Vec3, f32)> {
         let seat = self.view.transit_seats.get(slot).copied().flatten()?;
         // A draw between two ticks stands that far short of this tick's distance.
-        let alpha = self.draw_alpha();
+        let alpha = self.view.draw_alpha();
         let ticks = if alpha < 1.0 && seat.ticks >= 1.0 {
             seat.ticks - 1.0 + alpha
         } else {
             seat.ticks
         };
-        Some((self.followed(slot).forward, seat.speed * ticks))
+        Some((
+            self.view.followed(&self.core, slot).forward,
+            seat.speed * ticks,
+        ))
     }
 
     /// The view the pair of the craft being viewed is seen from: [`Self::view`], carried back
@@ -167,16 +141,11 @@ impl crate::Race {
     /// seat.
     pub(crate) fn pair_view(&self) -> Mat4 {
         match self.flown(self.viewed_slot()) {
-            Some((forward, distance)) => self.view() * Mat4::from_translation(forward * distance),
-            None => self.view(),
+            Some((forward, distance)) => {
+                self.view.view(&self.core) * Mat4::from_translation(forward * distance)
+            }
+            None => self.view.view(&self.core),
         }
-    }
-
-    /// The model matrix of `slot`'s craft where its camera follows it in a transit; `None`
-    /// for a craft in the world, which is where the simulation has it.
-    pub(super) fn flown_model(&self, slot: usize) -> Option<Mat4> {
-        self.view.transit_seats.get(slot).copied().flatten()?;
-        Some(crate::drawable::posed_model_matrix(&self.followed(slot)))
     }
 
     /// Whether the view being drawn is `slot`'s own, of a craft in a transit, under a backdrop
@@ -216,8 +185,11 @@ impl crate::Race {
             }
             // The drawn hull's place, which a draw between two ticks blends as the camera's.
             _ => (
-                self.followed(slot),
-                self.ship_model_matrix_of(slot).w_axis.truncate(),
+                self.view.followed(&self.core, slot),
+                self.view
+                    .ship_model_matrix_of(&self.core, slot)
+                    .w_axis
+                    .truncate(),
             ),
         };
         let forward = target.forward.normalize_or_zero();
@@ -229,5 +201,46 @@ impl crate::Race {
             (-forward).extend(0.0),
             place.extend(1.0),
         )
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `target`, `slot`'s craft as a camera follows it: for a craft in a transit, eased onto
+    /// its seat and flown on from there; `target` itself for a craft in the world.
+    pub(super) fn seated(&self, slot: usize, target: Target) -> Target {
+        let Some(seat) = self.transit_seats.get(slot).copied().flatten() else {
+            return target;
+        };
+        let share = seat.share * seat.share * (3.0 - 2.0 * seat.share);
+        let turned = |from: Vec3, to: Vec3| {
+            let blended = from + (to - from) * share;
+            if blended.length_squared() > 0.0 {
+                blended.normalize()
+            } else {
+                to
+            }
+        };
+        let forward = turned(target.forward, seat.target.forward);
+        let eased = target.position + (seat.target.position - target.position) * share;
+        Target {
+            position: eased + forward * (seat.speed * seat.ticks),
+            forward,
+            up: turned(target.up, seat.target.up),
+        }
+    }
+    /// `slot`'s craft as a camera follows it this tick.
+    pub(super) fn followed(&self, core: &SimRace, slot: usize) -> Target {
+        let mut target = crate::camera::target_of(&core.sim.world.ships[slot]);
+        target.position = self.drawn_position(core, slot);
+        self.seated(slot, target)
+    }
+    /// The model matrix of `slot`'s craft where its camera follows it in a transit; `None`
+    /// for a craft in the world, which is where the simulation has it.
+    pub(super) fn flown_model(&self, core: &SimRace, slot: usize) -> Option<Mat4> {
+        self.transit_seats.get(slot).copied().flatten()?;
+        Some(crate::drawable::posed_model_matrix(
+            &self.followed(core, slot),
+        ))
     }
 }

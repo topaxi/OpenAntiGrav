@@ -127,7 +127,7 @@ impl Race {
             {
                 return None;
             }
-            let model = self.ship_model_matrix_of(slot);
+            let model = self.view.ship_model_matrix_of(&self.core, slot);
             let position = self.core.sim.world.ships[slot].physics.body.position;
             let (_, sample, _) = self.core.sim.spline.nearest(position)?;
             Some([

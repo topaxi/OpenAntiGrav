@@ -171,7 +171,7 @@ pub struct FinishCamera {
     /// measured against the node's aim) until a cut gives the picture to the new subject.
     wreck: Option<Subject>,
     /// How many times the picture has jumped: the take-over, a new node while a node camera
-    /// is showing, a new mode and a new craft being watched. What [`Race::camera_cuts`] adds
+    /// is showing, a new mode and a new craft being watched. What [`crate::RaceView::camera_cuts`] adds
     /// so the temporal upscaler's history is dropped across them.
     cuts: u32,
     /// What the last frame showed: the mode, the node when it was a node camera, the craft.
@@ -290,7 +290,7 @@ impl FinishCamera {
         Some(pose)
     }
 
-    /// How many times the picture has jumped to a different shot. See [`Race::camera_cuts`].
+    /// How many times the picture has jumped to a different shot. See [`crate::RaceView::camera_cuts`].
     #[must_use]
     pub fn cuts(&self) -> u32 {
         self.cuts
@@ -599,7 +599,7 @@ impl Race {
             .standing
             .finish_tick
             .is_none())
-        .then(|| self.destroy_camera_now().copied())
+        .then(|| self.view.destroy_camera_now().copied())
         .flatten()
         .map(|destroyed| {
             let body = &self.core.sim.world.ships[player].physics.body;

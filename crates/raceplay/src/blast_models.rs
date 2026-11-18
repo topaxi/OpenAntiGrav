@@ -395,10 +395,13 @@ impl Race {
     pub(crate) fn disruptor_craft_draws(&self) -> [Option<(Mat4, f32)>; MAX_SHIPS] {
         std::array::from_fn(|slot| {
             let live = self.view.disruptor_craft[slot]?;
-            if slot == 0 && !self.draws_own_ship() {
+            if slot == 0 && !self.view.draws_own_ship() {
                 return None;
             }
-            Some((self.ship_model_matrix_of(slot), live.cur.clamp(0.0, 1.0)))
+            Some((
+                self.view.ship_model_matrix_of(&self.core, slot),
+                live.cur.clamp(0.0, 1.0),
+            ))
         })
     }
 

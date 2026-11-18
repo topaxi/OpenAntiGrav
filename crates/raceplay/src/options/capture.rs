@@ -83,7 +83,7 @@ pub struct CaptureZone {
 
 /// A camera pose imposed from outside, replacing the chase camera.
 ///
-/// The one seam is [`Race::view`]: [`Race::camera_position`] derives from the
+/// The one seam is [`Race::view`]: [`crate::RaceView::camera_position`] derives from the
 /// view matrix, so the PVS culling eye and the fog eye follow the override
 /// without knowing it exists.
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -770,13 +770,13 @@ impl Race {
             // SELECT-view cycle sets it on "the player craft" alone - so a
             // charging opponent's bolt reads the byte at its own, forever-zero
             // `+0x6d` and never halves; only a *player-owned* charging bolt can.
-            // `self.draws_own_ship()` is this engine's own reading of that same
+            // `self.view.draws_own_ship()` is this engine's own reading of that same
             // byte (`oag_display::CameraView::draws_own_ship`, confidence 82 -
             // raised from 70 once `shield-pickup.md` found a second, independent
             // consumer), inverted (`craft+0x6d == 1` means *hide* the ship, which
             // is `draws_own_ship() == false`) and race-wide rather than per-craft
             // because only the player's own camera can be internal at all.
-            let cockpit = projectile.owner == 0 && !self.draws_own_ship();
+            let cockpit = projectile.owner == 0 && !self.view.draws_own_ship();
             let scale = plasma_flare_scale(projectile.kind, projectile.charge, cockpit);
             // A shot first drawn mid-flight (a network client learns of another person's
             // fire late) is given its effect where it was fired from, and the effect is aged

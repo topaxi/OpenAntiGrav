@@ -299,7 +299,7 @@ impl RaceStage {
         // `Scene::render_viewports`. The blur runs once per view after the last, its
         // timestamp pair bracketing every chain; no scene timer. Each view jitters on its
         // seat's own sequence, and the upscaler resolves each view with a chain of its own.
-        if self.race.viewport_count() > 1 {
+        if self.race.view_state().viewport_count() > 1 {
             return self.scene.render_viewports(
                 gpu.device(),
                 gpu.queue(),
@@ -897,7 +897,7 @@ impl RaceStage {
                     self.race.window_cut(window),
                 )
             } else {
-                (self.race.viewport_count(), self.race.cut())
+                (self.race.view_state().viewport_count(), self.race.cut())
             };
             let rects = if self.resume_art.is_some() {
                 oag_render::viewport::layout(views, viewport, cut)

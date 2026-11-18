@@ -12,7 +12,7 @@ fn the_anchor_is_pushed_by_the_scaled_row_not_a_unit_one() {
     let mut anchors = [None; MAX_SHIPS];
     anchors[0] = Some(locator);
 
-    let node = race.ship_model_matrix_of(0) * locator;
+    let node = race.view.ship_model_matrix_of(&race.core, 0) * locator;
     let anchor = race.leach_anchor(&anchors, 0);
     let push = (anchor - node.w_axis.truncate()).length();
     assert!(
@@ -26,7 +26,11 @@ fn the_anchor_is_pushed_by_the_scaled_row_not_a_unit_one() {
 fn a_hull_with_no_locator_pushes_a_full_one_point_seven() {
     let race = race_with_a_grid();
     let anchors = [None; MAX_SHIPS];
-    let body = race.ship_model_matrix_of(0).w_axis.truncate();
+    let body = race
+        .view
+        .ship_model_matrix_of(&race.core, 0)
+        .w_axis
+        .truncate();
     let push = (race.leach_anchor(&anchors, 0) - body).length();
     assert!((push - 1.7).abs() < 1e-4, "push {push}");
 }

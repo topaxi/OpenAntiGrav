@@ -328,7 +328,7 @@ fn frame_of<'a>(
 /// craft cues are, and the two must not be allowed to disagree about where the
 /// listener is - see [`TrackEmitters`].
 pub fn listener_of(race: &oag_raceplay::Race) -> oag_audio::Listener {
-    listener_of_view(race.view())
+    listener_of_view(race.view_state().view(&race.core))
 }
 
 /// [`listener_of`] for a world-to-camera matrix. A right-handed camera looks

@@ -84,7 +84,7 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
     // The end: one view over the end screens, the split kept for the records and the
     // restart, and a board that carries both people.
     assert_eq!(race.views_drawn(), 1);
-    assert_eq!(race.viewport_count(), 2);
+    assert_eq!(race.view_state().viewport_count(), 2);
     let board = race.core.results().expect("both people finished");
     assert_eq!(board.persons(), 2);
     let people = oag_game::results_tables::people_rows(Some(board), race.core.slot_teams())

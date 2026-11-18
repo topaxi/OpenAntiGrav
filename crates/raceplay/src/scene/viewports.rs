@@ -197,7 +197,7 @@ impl Scene {
     /// (the caller `begin`s them); empty everywhere but the render bench, which
     /// is the only caller that reads them. A view past the slice's end is untimed.
     ///
-    /// For a race that was never split ([`Race::viewport_count`] of one) this is
+    /// For a race that was never split ([`crate::RaceView::viewport_count`] of one) this is
     /// not the call to make: use [`Scene::render`], which is what keeps a race
     /// without a split exactly as it was.
     #[allow(clippy::too_many_arguments)]

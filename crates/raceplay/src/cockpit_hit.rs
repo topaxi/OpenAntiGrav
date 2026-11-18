@@ -66,7 +66,7 @@ impl Race {
     pub fn cockpit_hit_strips(
         &self,
     ) -> Option<[oag_fx::cockpit_hit::Vertex; oag_fx::cockpit_hit::VERTICES]> {
-        if self.extra_viewpoint().is_some()
+        if self.view.extra_viewpoint().is_some()
             || self.view.viewpoints.through_portal()
             || self.view.camera_view != oag_display::display::CameraView::Internal
         {

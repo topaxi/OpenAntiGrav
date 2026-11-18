@@ -80,7 +80,7 @@ impl Race {
         for slot in 0..self.core.sim.world.ship_count as usize {
             let ship = &self.core.sim.world.ships[slot];
             let state = ship.physics.craft_state;
-            let position = self.drawn_position(slot);
+            let position = self.view.drawn_position(&self.core, slot);
             let was = std::mem::replace(&mut self.view.craft_flashes.previous[slot], state);
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
@@ -98,7 +98,7 @@ impl Race {
                 // destroy camera ([`super::destroy_camera`]); the flash reads
                 // this port's own active camera in the same way.
                 self.start_flash(oag_fx::flash::BLAST, position);
-                let model = self.drawn_model(slot);
+                let model = self.view.drawn_model(&self.core, slot);
                 self.view.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
                 self.throw_wreck_fx(slot);
                 // Every mode, the edge that ends a Single Race or a Zone run

@@ -51,7 +51,7 @@ impl Race {
     /// the original's and a mod's, goes through it.
     fn incoming_warnings_drawn(&self) -> bool {
         self.view.huds[self.core.player_slot()].incoming_enabled
-            && self.viewport_count() <= 1
+            && self.view.viewport_count() <= 1
             && self.core.sim.people() <= 1
             && self.core.outcome.seat.is_none()
             && matches!(

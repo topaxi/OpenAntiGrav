@@ -24,7 +24,7 @@ use super::super::*;
 #[derive(Debug)]
 pub(super) struct MotionState {
     key: FrameKey,
-    /// [`Race::camera_cuts`] as of the last promotion: a change is a cut, and the blur must not
+    /// [`crate::RaceView::camera_cuts`] as of the last promotion: a change is a cut, and the blur must not
     /// read the jump as motion.
     cuts: u32,
     /// [`Race::viewer_restores`] as of the last promotion: a change is a seek, where every
@@ -135,9 +135,9 @@ impl Snapshot {
             view_projection,
             projection,
             shake: race.view_shake_rotation(),
-            camera_translation: Mat4::from_translation(race.camera_position()),
+            camera_translation: Mat4::from_translation(race.view.camera_position(&race.core)),
             ships: (0..drawn)
-                .map(|slot| race.ship_model_matrix_of(slot))
+                .map(|slot| race.view.ship_model_matrix_of(&race.core, slot))
                 .collect(),
             rockets: race.rocket_model_matrices(),
             plasma_balls: race.plasma_ball_model_matrices(),
@@ -156,12 +156,12 @@ impl Snapshot {
         self.ships
             .get(slot)
             .copied()
-            .unwrap_or_else(|| race.ship_model_matrix_of(slot))
+            .unwrap_or_else(|| race.view.ship_model_matrix_of(&race.core, slot))
     }
 }
 
 /// What a frame's poses are a function of: [`Race::motion_tick`] and the bits
-/// of [`Race::draw_alpha`]. Two frames with the same key draw the same poses.
+/// of [`crate::RaceView::draw_alpha`]. Two frames with the same key draw the same poses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct FrameKey {
     tick: u64,
@@ -172,7 +172,7 @@ impl FrameKey {
     fn of(race: &Race) -> Self {
         Self {
             tick: race.motion_tick(),
-            alpha: race.draw_alpha().to_bits(),
+            alpha: race.view.draw_alpha().to_bits(),
         }
     }
 }

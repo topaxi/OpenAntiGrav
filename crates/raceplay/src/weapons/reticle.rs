@@ -104,8 +104,13 @@ impl Race {
         world: Vec3,
         screen: [f32; 2],
     ) -> Option<sight::Projected> {
-        let view = self.view();
-        let projection = self.projection(screen[0] / screen[1], SIGHT_FAR, self.view.sight_fov);
+        let view = self.view.view(&self.core);
+        let projection = self.view.projection(
+            &self.core,
+            screen[0] / screen[1],
+            SIGHT_FAR,
+            self.view.sight_fov,
+        );
         sight::project(view, projection * view, world, screen)
     }
 
@@ -129,10 +134,10 @@ impl Race {
         } else {
             (self.view.huds[slot].sight, self.view.huds[slot].sight_aim)
         };
-        let Some((target, at_tick)) = aim.filter(|_| self.draw_alpha() < 1.0) else {
+        let Some((target, at_tick)) = aim.filter(|_| self.view.draw_alpha() < 1.0) else {
             return sight;
         };
-        let drawing = self.extra_viewpoint();
+        let drawing = self.view.extra_viewpoint();
         if primary {
             self.reset_viewpoint();
         } else {
@@ -173,7 +178,7 @@ impl Race {
             return;
         }
         let primary = self.core.player_slot();
-        for slot in (0..self.viewport_count()).filter(|&slot| slot != primary) {
+        for slot in (0..self.view.viewport_count()).filter(|&slot| slot != primary) {
             if let Some(held) = self.core.sim.sight_held(slot) {
                 self.view.huds[slot].sight.set_held(held);
             }

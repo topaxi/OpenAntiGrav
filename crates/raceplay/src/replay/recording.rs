@@ -296,7 +296,7 @@ impl Race {
             physics.body.linear_velocity = Vec3::ZERO;
         }
         // The chase camera follows the craft where it stands now, as a tick would have moved it.
-        let target = self.camera_target();
+        let target = self.view.camera_target(&self.core);
         self.view
             .camera
             .advance(target, &self.view.chase_params, self.core.sim.dt);

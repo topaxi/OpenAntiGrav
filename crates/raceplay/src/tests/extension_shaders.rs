@@ -105,7 +105,12 @@ fn a_beam_reaches_the_views_surfaces_between_its_two_crafts() {
     let surfaces = race.mod_surfaces(Vec3::X, Vec3::Y, eye);
     let places: Vec<usize> = surfaces.iter().map(|(place, _)| *place).collect();
     assert_eq!(places, [0, 1], "flat, then the mod's first shader");
-    let ends = [1, 2].map(|slot| race.ship_model_matrix_of(slot).w_axis.truncate());
+    let ends = [1, 2].map(|slot| {
+        race.view
+            .ship_model_matrix_of(&race.core, slot)
+            .w_axis
+            .truncate()
+    });
     let (_, flat) = &surfaces[0];
     let first = Vec3::from_array(flat[0].position);
     let last = Vec3::from_array(flat[flat.len() - 2].position);

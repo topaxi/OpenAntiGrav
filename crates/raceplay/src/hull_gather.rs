@@ -110,7 +110,7 @@ impl HullGather {
             hulls,
             axis,
             &placements,
-            |slot| race.ship_model_matrix_of(slot),
+            |slot| race.view.ship_model_matrix_of(&race.core, slot),
             Gathered {
                 vertices: &mut vertices,
                 slots: &mut Vec::new(),
