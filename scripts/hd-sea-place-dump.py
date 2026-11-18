@@ -47,5 +47,6 @@ with Debugger(port=int(port), host=host, timeout=120.0) as g:
     print("pose after dump", pose["pos"])
     json.dump({"pos": pose["pos"], "rows": pose["rows"]}, open(out / "body.json", "w"))
     time.sleep(float(os.environ.get("FLUSH", "3.5")))
-    subprocess.run(["import", "-display", "127.0.0.1:%s" % os.environ["OAG_RPCS3_DISPLAY"], "-window", "root", "-crop", "1920x1080+0+0", str(out / "theirs.png")], check=True)
+    if drive.screenshot(out / "theirs.png", crop="1920x1080+0+0", display="127.0.0.1:%s" % os.environ["OAG_RPCS3_DISPLAY"]) is None:
+        raise SystemExit("the grab of the original failed")
     g.resume()

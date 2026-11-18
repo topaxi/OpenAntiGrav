@@ -149,18 +149,16 @@ class Rpcs3(Emulator):
         self.env = env
         self.remap = {}
 
+    #: Harimau is the standard hull (no `down`): the classic hull is locked on a fresh profile, and the original and ours only need the same hull.
     #: Track Select presses from the first circuit, by pair directory (docs/reverse-engineering/rpcs3-capture.md), and Ship Select's
     #: `right` presses per `--team` (Assegai 7, Harimau 9; `_c1` is the Fury hull, the classic hull is one `down` more).
     CIRCUITS = {"vineta-k": 0, "anulpha-pass": 1, "moa-therma": 2, "chenghou-project": 3, "metropia": 4, "sebenco-climb": 5,
                 "ubermall": 6, "sol-2": 7, "talons": 8, "talons-assegai-c1": 8, "the-amphiseum": 9, "modesto-heights": 10,
                 "tech-de-ra": 11}
-    TEAMS = {"harimau": (9, 1), "Assegai_c1": (7, 0)}
+    TEAMS = {"harimau": (9, 0), "Assegai_c1": (7, 0)}
 
     def prepare(self, rec):
         argv = rec["argv"]
-        state = argv[argv.index("--state") + 1]
-        if not Path(state).is_absolute():  # a recorded repo-relative path (provenance: portable argv)
-            state = str(ce.MAIN / state)
         env = dict(self.env)
         env.pop("OAG_RPCS3_ATTACH", None)
         pair_dir = Path(argv[argv.index("--out") + 1]).name
@@ -177,6 +175,11 @@ class Rpcs3(Emulator):
             path = "cold boot (no savestate): the glass stays clean"
             kind = "cold_boot"
         else:
+            if "--state" not in argv:
+                raise OSError("no --state in the pair's argv and no cold-boot route for it")
+            state = argv[argv.index("--state") + 1]
+            if not Path(state).is_absolute():  # a recorded repo-relative path (provenance: portable argv)
+                state = str(ce.MAIN / state)
             flag = "--pause" if "--field" in argv else "--restart"
             sh([HERE / "emu-restore-state.sh", self.args.lane, state, flag], env=env, timeout=300)
             path = "restored savestate (RPCS3 paints garbage on the glass of a restored state; the original is no reference there)"
@@ -343,6 +346,9 @@ def main():
             for pj in todo:
                 name = str(pj.parent.relative_to(root))
                 rec = json.loads(pj.read_text())
+                if (rec.get("argv") or [""])[0] == "rpcs3-hd-menu-pair.py":
+                    log("skip   %s: a front-end walk, re-made by rpcs3-hd-menu-pair.py itself" % name)
+                    continue
                 t0 = time.time()
                 for attempt in range(1, args.attempts + 1):
                     try:

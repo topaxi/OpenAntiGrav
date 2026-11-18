@@ -186,7 +186,13 @@ pub const TITLE: &Title = &Title {
     // Not tried on Omega: its sun and craft carry-over from HD are unmeasured.
     original_shadows: oag_title::shadow::OriginalShadows::Unbuilt,
     weather: oag_title::weather::Weather::Unplayed,
-    water: oag_title::water::Water::NONE,
+    water: oag_title::water::Water {
+        // The reflective seas of its 2048 circuits (`reflectplane_mid` and its siblings) draw
+        // their two scrolled taps, highlight and reflection weight under `original`
+        // (`oag_mesh::mesh::rcs::psp2::water`); under `off` they are the flat colour.
+        original_differs: true,
+        enhanced: &[],
+    },
     // Measured, confidence 80: the small bytes are summed (`docs/gameplay/rumble.md`).
     rumble: oag_title::rumble::Rumble::Patterns(
         oag_title::rumble::SmallMotor::Sum,

@@ -90,7 +90,10 @@ pub(crate) const WATER_FLAG: f32 = 2.0;
 /// value only while this holds (`docs/rendering/water.md`, "Open"). A law is always drawn on
 /// its own title as `original` (HD's taps are, under `original` on HD), so a borrowed value
 /// becomes true only once a borrower draws it: `Hd` with the lane that borrows HD's law onto
-/// Pulse, Pure, 2048 and Omega. `Enhanced` is drawn by `mesh::vex_water` on the titles that
+/// Pulse, Pure, 2048 and Omega. Omega's own law is drawn on Omega as its `original`
+/// (`mesh::rcs::psp2::water`), and `Omega` stays false until a title borrows it: that needs the
+/// lender's archive opened in the borrower's race load, which nothing does yet
+/// (`docs/rendering/water.md`, "Omega (PS4)"). `Enhanced` is drawn by `mesh::vex_water` on the titles that
 /// name their water surfaces.
 #[must_use]
 pub const fn is_drawn(law: Water) -> bool {
@@ -114,6 +117,68 @@ pub const VITA_WATER_KIND: f32 = 7.0;
 /// `mix(a * vc.x, Opacity, vc.y)`, `a` the map's alpha, `vc` `VertexColour1`; `Opacity` rides the
 /// header's `offset`.
 pub const VITA_EDGE_KIND: f32 = 8.0;
+
+/// `program[1]` of an Omega reflective sea's entry (`reflectplane_mid` and its siblings,
+/// `mesh::rcs::psp2::water`): two `.ag` taps of the wave normal map at `(+-u + K Speed t, v)`,
+/// `Watercolour` times the light, a Phong highlight in `SpecularColour`, and the reflection
+/// weighted by [`Fresnel`] (`docs/rendering/water.md`, "Omega (PS4)").
+pub const OMEGA_SEA_KIND: f32 = 9.0;
+
+/// `program[1]` of Omega's blended sea edge (`reflectplane_edge`): [`OMEGA_SEA_KIND`] with the
+/// alpha `VertexColour1.y * Opacity`; `Opacity` rides the header's `offset`.
+pub const OMEGA_EDGE_KIND: f32 = 10.0;
+
+/// The weight Omega's sea programs give the reflection:
+/// `ReflectivityStrength * (ReflectivityMin + ReflectivityScale * sat(1 - N.V)^ReflectivityPower)`
+/// (`reflectplane_mid` pixel `@0x28c`..`@0x30c` and `@0x380`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fresnel {
+    pub min: f32,
+    pub scale: f32,
+    pub power: f32,
+    pub strength: f32,
+}
+
+impl Fresnel {
+    /// The weight at `facing = sat(1 - N.V)`.
+    #[must_use]
+    pub fn weight(self, facing: f32) -> f32 {
+        self.strength * (self.min + self.scale * facing.clamp(0.0, 1.0).powf(self.power))
+    }
+
+    /// What the entry carries: the constant term and the facing term's factor, each already
+    /// times `ReflectivityStrength` (the program uses only the products), and the power.
+    #[must_use]
+    pub fn lanes(self) -> [f32; 3] {
+        [
+            self.strength * self.min,
+            self.strength * self.scale,
+            self.power,
+        ]
+    }
+}
+
+/// The three glow-table entries of an Omega reflective sea: [`sea_block`]'s layout (`opacity`
+/// in the header's `offset`), with [`Fresnel::lanes`] in the two tap entries' `rate` lanes
+/// (the constant term, the facing factor) and the second tap entry's last `program` lane (the
+/// power).
+#[must_use]
+pub fn reflective_block(
+    kind: f32,
+    colour: [f32; 3],
+    opacity: f32,
+    power: f32,
+    specular: [f32; 3],
+    taps: [&Tap; 2],
+    fresnel: Fresnel,
+) -> Vec<Emissive> {
+    let mut block = sea_block(kind, colour, opacity, power, specular, taps);
+    let [constant, facing, exponent] = fresnel.lanes();
+    block[1].rate = constant;
+    block[2].rate = facing;
+    block[2].program[1] = exponent;
+    block
+}
 
 /// What a classified water slot is drawn as.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -211,6 +276,19 @@ impl Tap {
             },
             second,
         ]
+    }
+
+    /// Omega's reflective sea: both taps at `(sign * u + rate * Speed * t, v)`, summed
+    /// unweighted. `rate` and the two signs are the pixel program's own
+    /// ([`oag_rcs::gcn::SeaTaps`]: `0.05`, `+u` on `NormalMap` and `-u` on `NormalMap1`),
+    /// `speed` the material's `Speed`.
+    #[must_use]
+    pub fn reflective(rate: f32, signs: [f32; 2], speed: f32) -> [Self; 2] {
+        signs.map(|sign| Self {
+            scale: [sign, 1.0],
+            scroll: [rate * speed, 0.0],
+            weight: 1.0,
+        })
     }
 
     /// One of Vineta K's three taps, off the material's own `scale` and `rate`:
@@ -757,6 +835,57 @@ mod tests {
         ] {
             assert_eq!(reading(law) == Reading::Taps, taps, "{law}");
         }
+    }
+
+    /// Omega's sea: both taps move `K * Speed` along `u` per second, the second with `u`
+    /// negated, neither scaled (HD's second tap is `1.15` times; `reflectplane_mid` pixel
+    /// `@0x7c`, `@0x84`), and the reflection's weight is
+    /// `Strength * (Min + Scale * facing^Power)`.
+    #[test]
+    fn the_reflective_sea_is_two_opposite_unscaled_taps_and_a_fresnel_weight() {
+        let [first, second] = Tap::reflective(0.05, [1.0, -1.0], 0.5);
+        assert_eq!(first.at([0.25, 0.75], 2.0), [0.25 + 0.05, 0.75]);
+        assert_eq!(second.at([0.25, 0.75], 2.0), [-0.25 + 0.05, 0.75]);
+        assert_eq!((first.weight, second.weight), (1.0, 1.0));
+        assert_eq!((first.scale, second.scale), ([1.0, 1.0], [-1.0, 1.0]));
+        let fresnel = Fresnel {
+            min: 0.15,
+            scale: 2.0,
+            power: 7.0,
+            strength: 0.7,
+        };
+        assert_eq!(fresnel.weight(0.0), 0.7 * 0.15);
+        assert_eq!(fresnel.weight(1.0), 0.7 * (0.15 + 2.0));
+        assert_eq!(fresnel.weight(0.5), 0.7 * (0.15 + 2.0 * 0.5_f32.powf(7.0)));
+        assert_eq!(fresnel.weight(3.0), fresnel.weight(1.0));
+        // The entry: `sea_block`'s lanes untouched, the weight's two products and the power
+        // in the lanes the tap entries leave free.
+        let block = reflective_block(
+            OMEGA_EDGE_KIND,
+            [0.1, 0.2, 0.3],
+            0.9,
+            250.0,
+            [0.4, 0.5, 0.6],
+            [&first, &second],
+            fresnel,
+        );
+        let plain = sea_block(
+            OMEGA_EDGE_KIND,
+            [0.1, 0.2, 0.3],
+            0.9,
+            250.0,
+            [0.4, 0.5, 0.6],
+            [&first, &second],
+        );
+        assert_eq!(block[0], plain[0]);
+        assert_eq!(block[0].program, [PROGRAM_WATER, 10.0]);
+        assert_eq!((block[0].offset, block[0].scale), (0.9, 250.0));
+        assert_eq!(block[1].tint, [1.0, 1.0, 0.05 * 0.5]);
+        assert_eq!(block[2].tint, [-1.0, 1.0, 0.05 * 0.5]);
+        assert_eq!(block[1].rate, 0.7 * 0.15);
+        assert_eq!(block[2].rate, 0.7 * 2.0);
+        assert_eq!(block[1].program, [0.4, 0.5]);
+        assert_eq!(block[2].program, [0.6, 7.0]);
     }
 
     /// A tap's entry carries its numbers in the order `water.wesl` reads them.

@@ -1426,9 +1426,25 @@ the same one scaled whole, and the receiver reads the atlas's size from the
 texture. **What a player sees**: at `original` the nearest craft's shadow
 shows the hull's notches where it showed a rounded patch, and at `ultra` the
 edge is a pixel wide at 720p and stays clean at 4K. Blob shadows and Pulse's
-hulls do not move with it. Not measured: the cost of `high` and `ultra` on an
-integrated GPU (the 2048-against-1024 run above could not tell them apart at
-that size, and these are larger).
+hulls do not move with it.
+
+**Cost on the Steam Deck (2026-11-18), unproven.** Whole-race HD bench
+(`scripts/bench-render.py run hd --shadow-resolution <r>`, default circuit,
+seed 1, autopilot, a release build from the Debian bookworm container with
+`-C target-cpu=znver2`, commit `21b81bf`), each setting against `original`:
+
+| Size | `high` frame p50 / p95 | `ultra` frame p50 / p95 | `ultra` GPU p50 / p95 |
+| --- | ---: | ---: | ---: |
+| 1280x800 | -0.9 % / -0.2 % | -0.7 % / -0.1 % | -1.9 % / -0.5 % |
+| 1920x1080 | -0.2 % / +0.4 % | +0.6 % / +1.3 % | +0.1 % / +0.0 % |
+| 3840x2160 | +0.5 % / -0.0 % | +0.8 % / +0.2 % | -0.2 % / +0.2 % |
+
+`original` p50 frame times: 5.63 ms, 7.79 ms, 20.75 ms. Every difference is
+inside run-to-run noise. **Not proven to measure the setting**: a headless
+HD frame at tick 400 of the same race was pixel-identical between `original`
+and `ultra`, so the bench pose may draw no shadow edge the setting changes; a
+result file does not record `shadow_resolution` either. Not investigated
+further (the maintainer's call).
 
 **Checked on the other titles.** Pulse's four tiers are pixel-identical before
 and after at one pose (Talon's Junction, tick 600). `mapped` at the default

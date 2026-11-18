@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-17
+updated: 2026-11-18
 summary: "Local half landed (confirmed run saved, room in header, local fingerprint); left: server fingerprint and replay download"
 categories: [frontend]
 ---
@@ -19,10 +19,10 @@ of the predicted run). The comparison is by content, not bytes.
 
 - A client receives every seat's confirmed input for every tick (`crates/net/src/client.rs`,
   the confirmed `TickRecord`s), so it holds everything the server's run is made of.
-- Lane `rec-panic` (in flight on 2026-11-17) changes the online client to record **only
-  confirmed ticks** (predicted ticks pause the recorder), which also fixes a debug panic in
-  `crates/raceplay/src/replay/recording.rs`. With it, the local recording's inputs and hashes
-  are the server-confirmed run. Check its merge before starting here.
+- Lane `rec-panic` merged (`9ba7e3c03`): the online client records **only confirmed ticks**
+  (predicted ticks pause the recorder), which also fixed a debug panic in
+  `crates/raceplay/src/replay/recording.rs`. The local recording's inputs and hashes are the
+  server-confirmed run.
 - `oag_raceplay::replay::resimulate` re-drives a replay's inputs; the server roadmap keeps a
   finished race's journal for a day as a replay
   ([server-roadmap.md](../../docs/networking/server-roadmap.md), "The target version",
@@ -41,11 +41,11 @@ of the predicted run). The comparison is by content, not bytes.
 ## Open
 
 1. **The server's fingerprint.** `End` carries it; the client compares and offers DOWNLOAD REPLAY on
-   a difference (a wire change, `PROTOCOL` 2).
-2. **The download** of the server's journal (item 3 above), bounded like the other limits.
+   a difference (a wire change; `PROTOCOL` is still 1 and edited in place, see Next Steps; `End` carries no fingerprint today).
+2. **The download** of the server's journal (the roadmap keeps it a day), bounded like the other limits.
 3. A seat's retirement is not an `EVNT` entry; a recording across one does not re-drive.
 4. No session-level test arms the recording through the menus (no menu-driven LAN test exists).
 
 ## Next Steps
 
-1. Items 1 and 2 (sonnet `oag-wire`). Not blocked: server-roadmap decision 4 (accepted 2026-11-17) freezes the wire only from the first public deployment, so until then `End` and a download message are edited in place under `PROTOCOL` 1. Item 3 belongs with them (a retirement as an `EVNT` entry).
+1. Open items 1 and 2 (sonnet `oag-wire`). Not blocked: server-roadmap decision 4 (accepted 2026-11-17) freezes the wire only from the first public deployment, so until then `End` and a download message are edited in place under `PROTOCOL` 1. Open item 3 (a retirement as an `EVNT` entry) belongs with them.

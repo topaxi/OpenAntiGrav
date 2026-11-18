@@ -19,6 +19,14 @@ override nova_prelit: f32 = 1.0;
 override light_rig: f32 = 1.0;
 override zone_race: f32 = 1.0;
 
+// 1.0 on a pipeline every pixel of which takes the authored rig's result: its scene's rig is
+// on for the whole race and every vertex it draws has `lit` 1.0, so `lit_texel`'s last mix
+// has a weight of exactly one and the stand-in result it weighs at zero, with the decode of
+// it, is never seen. **0.0, the mix deciding, by default.** Set for a circuit's plain draws
+// (`mesh_render::Prepass::plain`) by `mesh_render::specialise::plain_is_lit` under a scope
+// whose light is an authored rig (`BuildCacheScope::lit_by`).
+override lit_by_rig: f32 = 0.0;
+
 // **Whether `in.colour` is a baked light rather than a tint** - 1.0 only for a
 // Wipeout HD `.rcsmodel`, set from `Model::vertex_colour_is_light`. HD's
 // fragment programs *add* the interpolated colour to the lightmap term before

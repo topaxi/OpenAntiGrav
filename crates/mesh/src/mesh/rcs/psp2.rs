@@ -560,7 +560,14 @@ fn build_planned(
             // The blended water edge's alpha chain reads `VertexColour1.x` and `.y`
             // (`psp2::water`); they ride the second coordinate pair, which that material's
             // vertices use for nothing else.
-            let texcoord2 = match submesh.vita_vertex_colour1.get(i) {
+            // Omega's edge reads the same attribute's `y` (`VertexColour1.y * Opacity`), which
+            // the PS4 loader carries as the submesh's colours.
+            let edge_colours = if ps4 {
+                &submesh.colours
+            } else {
+                &submesh.vita_vertex_colour1
+            };
+            let texcoord2 = match edge_colours.get(i) {
                 Some(&[x, y, ..]) if sea.edge(submesh.material) => {
                     [f32::from(x) / 255.0, f32::from(y) / 255.0]
                 }

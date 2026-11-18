@@ -48,6 +48,23 @@ the same object, the third call) or the hover; **it cannot be patched the same w
 is the step that turns the node into the view matrix: with it overwritten the HUD never came up after Retry (one boot, no
 frame of the race).
 
+## Where the shake's random points are made (recipe for a tripod patch that keeps the call, 2026-11-18, `clock-titles`)
+
+Not tried live. The tripod call cannot be nopped, but its input can be made zero: `HullShake_Update` builds each new spline point from
+`rand()` in three steps (disassembly of `0x811b51bc`), and `Apply` composes whatever the spline gives, so a spline of zeros leaves the node a
+pure view matrix. The sites, Thumb-2:
+
+| Address | Instruction | Role |
+| --- | --- | --- |
+| `0x811b5370` | `vmov.f32 s1, #4.0` | the first point's range, used by `vmul.f32 s22, s2, s1` at `0x811b5380` (`s2 = 0.5 - rand * 2^-30`) |
+| `0x811b5390`, `0x811b5394` | `movw r0,#0x6666`, `movt r0,#0x3fe6` | 1.8, the other two points' range (`vmul.f32 s24, s1, s23` at `0x811b53a4`, `vmul.f32 s4, s21, s23` at `0x811b53ca`) |
+
+Zeroing those three products (or the two constants) in the process's memory before the guest runs them, as `patch_hull_shake` does for the
+two hull calls, shakes neither the hull nor the camera; `Update` still draws `rand` three times a point, so the random stream is unchanged. The
+effect is on every `HullShake` object, not only the ship's (the other `Update` callers `0x810c93ac`, `0x810da8a6`, `0x8113a58c` use their own
+objects). **Confidence 70** (read, not run): the `vmul` encodings were not written; the check is the burst's steadiness metric
+(`original.settled_rmse_vs_first_settled_max`, 0.07 to 0.08 with the hull patched and the camera shaking).
+
 ## Omega
 
 **Checked, applies, not wired.** Omega's base `eboot.bin` (`/omega/eboot-ps4-omega-eu.bin`, v1.00) carries the same function at

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [2048]
-updated: 2026-11-17
+updated: 2026-11-18
 summary: "2048 HUD: layouts, class name, grant, pop-in, release collapse, Zone score centred, XP wired; zone 0 and Omega class table open"
 difficulty: easy (30)
 ---
@@ -90,8 +90,8 @@ PSP's grid, twice the size, right-hand column off screen.
   `Readout::pilot_assist`) and its scale pulse, the zone lights' counter
   `hud+0x73c` past zones 2 and 5 and their class-up blink.
 - **`Laps`/`Position`/`EnergyText`/`TotalTime` are wired, 2026-09-25** - see
-  Next Steps 2. Zone's `SCORE` and `ZONE`/number/class text are not wired;
-  the first bullet above says where they are authored (`Zone_HUD_HD.xml`). The font/language-plugin gap this bullet used to record
+  Next Steps 2. Zone's `SCORE` value and the class name are wired
+  since 2026-11-16 and 2026-11-17 (first bullet above; authored in `Zone_HUD_HD.xml`). The font/language-plugin gap this bullet used to record
   was already closed 2026-09-21 (`oag_title::HudArt::hud_font_role`,
   `2048-hud.md`'s "Resolved 2026-09-21" section) - captions draw in
   `2048_hud.fnt`, not the 5x7 fallback; this line was stale.

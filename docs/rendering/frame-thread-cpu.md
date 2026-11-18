@@ -2388,7 +2388,10 @@ Not built: landing either form would need `SUBGROUP` on the device (`oag-mesh`'s
 `optional_features`), a second pipeline for devices without it and for GL, and the per-quad check,
 for a Deck pass that gets slower.
 
-**Cut 3, decode once into an intermediate: not tried.** It is exact only through an `Rgba32Float`
+**Cut 3, decode once into an intermediate: not tried here; measured since and dropped**
+([hires-gpu-levers.md](hires-gpu-levers.md), "Dropped: the resolve through a decoded copy of the
+scene": an `Rgba16Float` copy gains 0.43 ms of a 4K frame on the Deck and moves 5.4 % of the
+pixels by one level). **As estimated then:** It is exact only through an `Rgba32Float`
 target, which means writing and reading back 16 bytes per texel. That is about 66 MB of traffic
 at 1080p, roughly 0.75 ms at the Deck's 88 GB/s (an estimate, not measured), more than the 0.5 ms
 of decode it would remove. A compute pass with

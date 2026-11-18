@@ -47,7 +47,7 @@ press right --wait 2                      # RACE TYPE: Time Trial
 if [ "$speed" -gt 0 ]; then
   press down --wait 1                     # SPEED CLASS
   for _ in $(seq 1 "$speed"); do press right --wait 1; done
-  import -display "127.0.0.1:${OAG_RPCS3_DISPLAY}" -window root "$W/class-$name.png"
+  $drive grab "$W/class-$name.png" --display "127.0.0.1:${OAG_RPCS3_DISPLAY}"
   press up --wait 1                       # back to RACE TYPE, where `cross` was measured to go on
 fi
 press cross --wait 3                      # Track Select (the screen reads `Track Creation`)
@@ -63,5 +63,5 @@ sleep 12
 for _ in 1 2 3; do press cross --wait 4; done   # START RACE
 sleep 8
 grep -a "Loading World" "${XDG_CACHE_HOME:-$W/xdg/cache}/rpcs3/TTY.log" | tail -1 || { echo "no race loaded: $(screen)" >&2; exit 3; }
-import -display "127.0.0.1:${OAG_RPCS3_DISPLAY}" -window root "$W/state-$name.png"
+$drive grab "$W/state-$name.png" --display "127.0.0.1:${OAG_RPCS3_DISPLAY}"
 MENU_OPEN=0 "$repo/scripts/emu-save-state.sh" "$lane" "$name"

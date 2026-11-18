@@ -553,7 +553,8 @@ unrecoverable.
 **Confidence 92**, measured 2026-09-02 while settling the main menu's tab
 corner.
 
-`scripts/rpcs3-drive.py`'s `screenshot()` grabs the X root window, which is what
+`scripts/rpcs3-drive.py`'s `screenshot()` (a wrapper over `grab_with_clock`, which also writes the world clock to
+`<stem>.clock.json`; `docs/tools/compare-page.md`, "The world clock and random craft motion, per title") grabs the X root window, which is what
 every capture in `data/reference/` up to now used. What that returns is
 whatever the emulator *presented into its own window*, and on a bare Xvfb with
 no window manager that window is **1280x720 and stays there** - `Start games in

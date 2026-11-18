@@ -329,9 +329,12 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
     assert_eq!(super::scope_constants(), Vec::new());
     drop(scope);
 
+    assert!(!super::scope_rig_is_on(), "no scope, no rig");
     let scope = Scope::open();
+    assert!(!super::scope_rig_is_on(), "a scope told of no light");
     scope.lit_by(&authored);
     assert_eq!(super::scope_constants(), vec![("nova_prelit", 0.0)]);
+    assert!(super::scope_rig_is_on(), "an authored rig is on");
     drop(scope);
 
     // A stand-in light has no rig at all, so that path goes as well.
@@ -341,6 +344,7 @@ fn lit_by_compiles_the_nova_curve_out_only_under_a_rig_that_never_takes_it() {
         super::scope_constants(),
         vec![("nova_prelit", 0.0), ("light_rig", 0.0)]
     );
+    assert!(!super::scope_rig_is_on(), "a stand-in is no rig");
     drop(scope);
     assert_eq!(
         super::scope_constants(),

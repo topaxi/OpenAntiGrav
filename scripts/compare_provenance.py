@@ -39,7 +39,14 @@ RULES = {
     "autopilot_timer": "an armed Autopilot's timer was not the authored one at the grab (the HUD shows it), or a race or "
                        "zone state, always flown on the Autopilot, did not record it",
     "unknown_lag": "the presented-frame lag is unknown, so the pose and the picture may be different ticks",
+    "hd_world_clock": "an HD race, scenery or zone pair records the original's world (scenery) clock at the grab "
+                      "(original.world_clock_offset_s), a menu or loading pair says why it has none (original.world_clock_note)",
 }
+
+#: HD pairs made before the world clock was recorded with every grab (`rpcs3_hd_field.world_clock_record`), by pair id
+#: (the directory under the pair dir). Empty: every HD pair records its clock; an entry is never added.
+HD_CLOCK_BASELINE = frozenset()
+NO_RACE_CLOCK_NOTE = "no race running: the scenery clock does not run on a menu or loading screen"
 
 #: A path to somewhere that is reaped: another lane's worktree, or the scratch directory.
 OFFENDER = re.compile(r"OpenAntiGrav-worktrees/|data/scratch/")
@@ -72,6 +79,24 @@ def refusals(prov, profile, pair_kind=None):
         out.append(("unknown_lag", "presented_lag %s" % json.dumps(lag)))
     accepted = {o.get("rule") for o in prov.get("overrides", []) if o.get("reason")}
     return [(r, d) for r, d in out if r not in accepted]
+
+
+def world_clock_problem(rec):
+    """`None`, or why an HD pair's original does not record its world clock (rule `hd_world_clock`); other titles pass."""
+    if rec.get("profile") != "hd-fury":
+        return None
+    original = rec.get("original", {})
+    prov = original.get("provenance") or {}
+    kind = prov.get("pair_kind", "scenery")
+    accepted = {o.get("rule") for o in prov.get("overrides", []) if o.get("reason")}
+    if "hd_world_clock" in accepted:
+        return None
+    if kind in ("menu", "loading"):
+        return None if original.get("world_clock_note") else "a %s pair has no original.world_clock_note" % kind
+    offset = original.get("world_clock_offset_s")
+    if isinstance(offset, (int, float)) and not isinstance(offset, bool):
+        return None
+    return "a %s pair has no original.world_clock_offset_s (rpcs3-hd-pair.py records it from the grab's clock)" % kind
 
 
 def path_offenders(obj, where=""):
@@ -165,6 +190,8 @@ def build(pair, args, kind, capture_kind, state_file=None, lag=None):
             sys.exit("--accept-provenance wants RULE=REASON with RULE one of %s" % ", ".join(RULES))
         overrides.append({"rule": rule, "reason": reason})
     emulator = rec["original"].get("emulator", {})
+    if kind in ("menu", "loading") and plat.get("profile", rec.get("profile")) == "hd-fury":
+        rec["original"].setdefault("world_clock_note", NO_RACE_CLOCK_NOTE)
     rec["original"]["provenance"] = {
         "schema": SCHEMA, "pair_kind": kind, "basis": "recorded by the pair script",
         "capture_path": {"kind": capture_kind, "state_file": state_file},
@@ -187,6 +214,9 @@ def finish(pair):
         for rule in RULES:
             if rule in broken:
                 pair.check("provenance: " + rule, False, "%s; override with --accept-provenance %s=REASON" % (broken[rule], rule))
+        problem = world_clock_problem(pair.rec)
+        if problem:
+            pair.check("provenance: hd_world_clock", False, "%s; override with --accept-provenance hd_world_clock=REASON" % problem)
         for o in prov.get("overrides", []):
             pair.caveat("provenance rule %s overridden: %s" % (o["rule"], o["reason"]))
     pair.rec.update(portable(pair.rec))
@@ -324,6 +354,14 @@ def scan(d, strict=False):
         for where, s in path_offenders(rec):
             print("PATH   %s %s = %s" % (f, where, s[:90]))
             bad += 1
+        pair_id = str(f.parent.relative_to(d))
+        problem = world_clock_problem(rec)
+        if problem and pair_id not in HD_CLOCK_BASELINE:
+            print("CLOCK  %s: %s" % (pair_id, problem))
+            bad += 1
+        elif not problem and pair_id in HD_CLOCK_BASELINE and rec.get("profile") == "hd-fury":
+            print("STALE  %s now records its world clock: remove it from HD_CLOCK_BASELINE" % pair_id)
+            bad += 1
         prov = rec.get("original", {}).get("provenance")
         if prov is None:
             print("MISSING %s has no original.provenance" % f)
@@ -392,8 +430,10 @@ def selftest():
     sys.path.insert(0, str(HERE))
     import compare_env as ce
     with tempfile.TemporaryDirectory() as tmp:
-        def finished(profile, kind, capture, autopilot=None, extra=()):
+        def finished(profile, kind, capture, autopilot=None, extra=(), clock=True):
             pair = ce.Pair(profile, tmp)
+            if clock:
+                pair.rec["original"]["world_clock_offset_s"] = 1.0
             ns = types.SimpleNamespace(autopilot=autopilot, autopilot_timer=1e9 if autopilot == "timer" else None, ram_write=[],
                                        accept_provenance=list(extra))
             build(pair, ns, kind, capture, None, {"value": 1, "unit": "ticks", "basis": "measured", "what": "t"})
@@ -406,10 +446,20 @@ def selftest():
         assert code == 3 and rec["refused"], "Pair.finish must exit 3 on an HD scenery pair from a restore"
         assert finished("hd-fury", "scenery", "cold_boot", "off")[0] == 0, "a clean cold pair passes through Pair.finish"
         assert finished("hd-fury", "race", "savestate_restore", "authored")[0] == 0, "the race exception passes"
+        assert finished("hd-fury", "scenery", "cold_boot", "off", clock=False)[0] == 3, "an HD pair with no world clock refuses"
         assert finished("pulse-psp", "race", "savestate_restore", "timer")[0] == 3, "a huge Autopilot timer refuses"
         code, rec = finished("pulse-psp", "race", "savestate_restore", "timer", ["autopilot_timer=looked at, state predates the flag"])
         assert code == 0 and rec["original"]["provenance"]["overrides"][0]["rule"] == "autopilot_timer", "the override is recorded in the pair"
-    print("selftest ok: 3 refusal rules, the exception, the override and the path rule")
+    hd = {"profile": "hd-fury", "original": {"provenance": {"pair_kind": "scenery"}}}
+    assert world_clock_problem(hd), "an HD scenery pair with no clock must be refused"
+    assert world_clock_problem(dict(hd, original={"world_clock_offset_s": None, "provenance": {"pair_kind": "race"}})), "a null clock is no clock"
+    assert world_clock_problem(dict(hd, original={"world_clock_offset_s": 12.5, "provenance": {"pair_kind": "zone"}})) is None
+    assert world_clock_problem(dict(hd, original={"provenance": {"pair_kind": "menu"}})), "a menu pair needs its note"
+    assert world_clock_problem(dict(hd, original={"world_clock_note": NO_RACE_CLOCK_NOTE, "provenance": {"pair_kind": "loading"}})) is None
+    assert world_clock_problem(dict(hd, profile="pulse-psp")) is None, "the rule is HD's alone"
+    over = {"profile": "hd-fury", "original": {"provenance": {"pair_kind": "scenery", "overrides": [{"rule": "hd_world_clock", "reason": "x"}]}}}
+    assert world_clock_problem(over) is None
+    print("selftest ok: 4 refusal rules, the exception, the override and the path rule")
     return 0
 
 

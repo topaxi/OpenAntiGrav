@@ -590,6 +590,103 @@ def boot_and_walk(s, args):
     sys.exit("STALLED waiting for the HUD after the flyby; last frame %s" % (s.frames / "walk-hud.png"))
 
 
+#: A scenery node of 2048 keeps its running time twice, 0x40 apart (`node + 0x80` and `node + 0xc0` in the nodes read, Vita3K, 2026-11-18): the clock
+#: is the value that about a thousand such pairs share (`docs/ghidra/functions/vita-2048-eu-v104/world-clock.md`).
+CLOCK_PAIR_STRIDE = 0x40
+#: How many nodes of the dominant group a cache keeps, as on HD (`rpcs3_hd_field.CLOCK_SAMPLE`).
+CLOCK_SAMPLE = 24
+#: The fewest pairs a value must head to be taken for the clock (the race load has some 1000; constants repeat in tens).
+CLOCK_MIN_NODES = 200
+
+
+def scan_scenery_clock(pid, exclude=()):
+    """The guest addresses of the scenery nodes' running time and its value: every float of 1 to 100000 that is not a whole number and is
+    repeated bit for bit 0x40 bytes on, counted by value across the guest's read-write memory; the most common value is the clock (a
+    constant repeats in tens of nodes, the clock in about a thousand; the values in `exclude`, float bit patterns of clocks of freed nodes,
+    are left out). `groups` lists every value that heads at least `CLOCK_MIN_NODES` pairs. Returns `{"time_s", "nodes", "total", "addresses"}` or None. Needs numpy
+    and a Vita3K that is this process's child (reads `/proc/<pid>/mem`, 2 to 10 s)."""
+    import numpy as np
+    from collections import Counter
+    mem = open("/proc/%d/mem" % pid, "rb", 0)
+    counts = Counter()
+    where = {}
+    chunk = 1 << 24
+    for line in open("/proc/%d/maps" % pid):
+        span, perms = line.split()[:2]
+        lo, hi = (int(v, 16) for v in span.split("-"))
+        if not perms.startswith("rw") or not HOST_WINDOW[0] <= lo < HOST_WINDOW[1]:
+            continue
+        for start in range(lo, hi, chunk):
+            try:
+                mem.seek(start)
+                data = mem.read(min(chunk + CLOCK_PAIR_STRIDE, hi - start))
+            except OSError:
+                continue
+            u = np.frombuffer(data[: len(data) // 4 * 4], dtype="<u4")
+            n = len(u) - CLOCK_PAIR_STRIDE // 4
+            if n <= 0:
+                continue
+            f = u.view("<f4")[:n]
+            with np.errstate(all="ignore"):
+                m = (u[:n] == u[CLOCK_PAIR_STRIDE // 4:CLOCK_PAIR_STRIDE // 4 + n]) & np.isfinite(f) & (f > 1.0) & (f < 1e5) & (f != np.floor(f))
+            idx = np.nonzero(m)[0]
+            if not len(idx):
+                continue
+            vals, cnt = np.unique(u[idx], return_counts=True)
+            for v, c in zip(vals.tolist(), cnt.tolist()):
+                counts[v] += c
+            for i in idx[:4096].tolist():
+                bucket = where.setdefault(int(u[i]), [])
+                if len(bucket) < CLOCK_SAMPLE:
+                    bucket.append(start + 4 * i - HOST_WINDOW[0])
+    if not counts:
+        return None
+    for bits in exclude:
+        counts.pop(bits, None)
+    if not counts:
+        return None
+    value, n = counts.most_common(1)[0]
+    if n < CLOCK_MIN_NODES:
+        return None
+    import struct
+    return {"time_s": struct.unpack("<f", struct.pack("<I", value))[0], "nodes": n, "total": sum(counts.values()), "addresses": where[value],
+            "groups": sorted(v for v, c in counts.items() if c >= CLOCK_MIN_NODES)}
+
+
+def read_scenery_clock(pid, cache, rescan=True):
+    """The scenery clock now, from the nodes `scan_scenery_clock` found (`cache`: a dict the caller keeps; `cache["stale"]` the bit patterns of the
+    clocks that were running before a Retry): re-reads their `CLOCK_SAMPLE` addresses (milliseconds). A Retry frees the old race's nodes, whose
+    last time stays in memory and still agrees, and loads a new scene whose clock starts again, so the clock to read is the group that is not
+    in `stale`. Without nodes that agree (none found yet, or freed) and with `rescan`, the nodes are scanned for again (seconds; at most 8
+    scans). Returns the time or None."""
+    import struct
+    from collections import Counter
+
+    def reread():
+        if not cache.get("addresses"):
+            return None
+        with open("/proc/%d/mem" % pid, "rb", 0) as mem:
+            vals = []
+            for a in cache["addresses"]:
+                mem.seek(HOST_WINDOW[0] + a)
+                vals.append(mem.read(4))
+                mem.seek(HOST_WINDOW[0] + a + CLOCK_PAIR_STRIDE)
+                vals.append(mem.read(4))
+        (raw, n), = Counter(vals).most_common(1)
+        t = struct.unpack("<f", raw)[0]
+        return t if n >= 0.8 * len(vals) and t > 0.0 else None
+
+    t = reread()
+    if t is None and rescan and cache.get("scans", 0) < 8:
+        found = scan_scenery_clock(pid, cache.get("stale", ()))
+        cache["scans"] = cache.get("scans", 0) + 1
+        cache.pop("addresses", None)
+        if found:
+            cache.update(found)
+        t = reread()
+    return t
+
+
 def parse_ram_reads(items):
     """`--ram-read NAME=ADDR:TYPE` into `[(name, address, type)]`. TYPE is `f32`, `u32`, `u8` or `hexN` (N bytes as hex); ADDR is a hex
     guest address, or `[PTR]+OFF` for OFF bytes past the u32 stored at PTR."""
@@ -677,9 +774,10 @@ def poke_guest(pid, pokes, grab):
     return done
 
 
-def restart_and_burst(s, count, tag, sample=None):
+def restart_and_burst(s, count, tag, sample=None, state=None):
     """Pause, Retry, and grab `count` frames back to back; returns `[(t, path)]`, t seconds from the confirm tap. `sample`, when given, is
-    called with the grab's index before each grab and its result is returned as a third element, `[(t, path, sample(i))]`."""
+    called with the grab's index before each grab and its result is returned as a third element, `[(t, path, sample(i))]`. `state`, a dict, gets
+    `hud_seen` before each call, so a sample can tell the card and the countdown from the race's own HUD."""
     s.key("Return")
     time.sleep(1.5)
     s.tap(PAUSE_RETRY)
@@ -691,6 +789,8 @@ def restart_and_burst(s, count, tag, sample=None):
     last_tap = t0
     for i in range(count):
         path = s.frames / ("%s%03d.png" % (tag, i))
+        if state is not None:
+            state["hud_seen"] = hud_seen
         got = sample(i) if sample else None
         s.drive.screenshot(s.display, s.wid, path)
         out.append((time.monotonic() - t0, path) + ((got,) if sample else ()))
@@ -1037,10 +1137,27 @@ def main():
     if (reads or pokes) and not args.walk:
         sys.exit("--ram-read, --ram-poke and --ram-fill need --walk: the memory is only open to a Vita3K this script launched")
 
+    clock_cache = {}
+    burst_state = {}
+    if args.walk and args.vita_pid:
+        # every clock running before the Retry belongs to the race that is about to be freed
+        before = scan_scenery_clock(args.vita_pid)
+        clock_cache["stale"] = list((before or {}).get("groups", []))
+        clock_cache["before_retry_s"] = (before or {}).get("time_s")
+        print("scenery clock before the Retry: %s (%d groups held back)" % (clock_cache["before_retry_s"], len(clock_cache["stale"])),
+              file=sys.stderr, flush=True)
+
     def sample(i):
         poked = poke_guest(args.vita_pid, pokes, i) if pokes else {}
-        return {**read_guest(args.vita_pid, reads), **({"poked": poked} if pokes else {})}
-    burst = restart_and_burst(s, args.burst, "burst", sample if reads or pokes else None)
+        got = {**read_guest(args.vita_pid, reads), **({"poked": poked} if pokes else {})} if reads or pokes else {}
+        if args.walk and args.vita_pid:
+            # before the race's HUD is up (the Retry's mode card holds the countdown) a stale read may rescan; from the HUD on, never: the
+            # countdown is 3 s and a scan seconds
+            got["_world_clock_s"] = read_scenery_clock(args.vita_pid, clock_cache, rescan=not burst_state.get("hud_seen"))
+            print("scenery clock grab %d: %s (hud %s, scans %s, nodes %s)" % (i, got["_world_clock_s"], burst_state.get("hud_seen"),
+                                                                         clock_cache.get("scans"), clock_cache.get("nodes")), file=sys.stderr, flush=True)
+        return got
+    burst = restart_and_burst(s, args.burst, "burst", sample if reads or pokes or (args.walk and args.vita_pid) else None, burst_state)
     picked = pick_grid_frame(burst, args.grid_seconds)
     pair.check("the countdown's HUD came up after Retry", picked is not None,
                "first HUD frame at %s" % (("%.2f s" % picked[2]) if picked else "none of %d frames" % len(burst)))
@@ -1058,6 +1175,17 @@ def main():
     pair.check("the original's memory was only read, never written by --ram-poke or --ram-fill (a probe is not a reference)", not pokes,
                "%d write(s) per grab" % len(pokes))
     (out / "theirs.png").write_bytes(Path(frame).read_bytes())
+    world_clock = burst[pick_i][2].get("_world_clock_s") if len(burst[pick_i]) > 2 else None
+    if args.walk and args.vita_pid:
+        series = [b[2].get("_world_clock_s") for b in burst[hud_i:] if len(b) > 2]
+        pair.check("the scenery clock was read at the grid frame (%d nodes agree)" % (clock_cache.get("nodes") or 0),
+                   world_clock is not None, "world clock %s at the grid frame" % world_clock)
+        steps = [(y - x) for x, y in zip(series, series[1:]) if x is not None and y is not None]
+        advanced = sum(steps)
+        if advanced <= 0.5:
+            pair.caveat("the scenery clock stood still (%.3f s over %d grabs) from the Retry's HUD on: the picture is at that clock" % (advanced, len(steps)))
+        pair.rec["original"]["world_clock"] = {"method": "the value ~%d scenery nodes share 0x40 bytes apart, scanned from /proc/<pid>/mem and re-read each grab" % (clock_cache.get("nodes") or 0),
+                                               "scans": clock_cache.get("scans"), "advanced_over_burst_s": advanced, "before_retry_s": clock_cache.get("before_retry_s"), "series_s": series}
     pair.rec["original"]["emulator"] = dict(plat["emulator"])
     pair.rec["original"]["hull_shake"] = (
         {"state": "patched out", "camera_tripod_shake": "on", **args.hull_shake} if args.hull_shake else "on")
@@ -1097,6 +1225,13 @@ def main():
     pair.check("ours renders before GO", ticks < ce.go_tick(plat), "tick %d, GO at tick %d" % (ticks, ce.go_tick(plat)))
     pair.rec["ours"]["binary"] = ce.binary_record(args.oag_game)
     base = [args.oag_game, args.source, "--race"] + which + ["--ticks", ticks] + ce.ours_flags(plat)
+    if world_clock is not None:
+        # the race clock reads zero for the whole countdown, so the world clock is its own offset; ours' clock is ticks / 60 plus the offset
+        ours_offset = world_clock - ticks / 60
+        base += ["--world-clock-offset", "%.3f" % ours_offset]
+        pair.rec["original"]["world_clock_s"] = world_clock
+        pair.rec["original"]["world_clock_offset_s"] = world_clock
+        pair.rec["ours"]["world_clock_offset_s"] = ours_offset
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]]
     run(base + ["--screenshot", out / "ours.png"], stdout=subprocess.DEVNULL, env=env)
     if original_pose:

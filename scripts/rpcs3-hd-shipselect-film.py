@@ -44,6 +44,7 @@ def main():
          str(args.fps), "-video_size", "2000x1200", "-i", ":" + drive.DISPLAY.split(":")[-1],
          "-c:v", "ffv1", "-t", str(args.duration), str(out / "film.mkv")])
     print("ffmpeg pid", ff.pid, flush=True)
+    drive.record_clock(out / "film.mkv")
     t0 = time.time()
     events = []
     for at, button in plan:

@@ -31,6 +31,17 @@ fn resolve(
     params: Params,
     level: impl Fn(u32, u32) -> f32,
 ) -> Vec<u8> {
+    resolve_over(device, queue, params, VIEWPORT, level)
+}
+
+/// [`resolve`] over a rectangle of `viewport`.
+fn resolve_over(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    params: Params,
+    viewport: (u32, u32),
+    level: impl Fn(u32, u32) -> f32,
+) -> Vec<u8> {
     let format = wgpu::TextureFormat::Rgba8Unorm;
     let chain =
         Chain::new(device, format, SIZE, params, Glow::Suppressed).expect("pipelines build");
@@ -38,7 +49,7 @@ fn resolve(
     let output = frame(device);
     let target = output.create_view(&Default::default());
     let mut encoder = device.create_command_encoder(&Default::default());
-    chain.run(queue, &mut encoder, &target, (0.0, 0.0), VIEWPORT, None);
+    chain.run(queue, &mut encoder, &target, (0.0, 0.0), viewport, None);
     queue.submit(Some(encoder.finish()));
     read_red(device, queue, &output)
 }
@@ -89,5 +100,28 @@ fn without_the_tap_the_checker_reaches_the_screen_texel_for_texel() {
     for (x, y, byte) in interior(&plain) {
         let want = if (x + y).is_multiple_of(2) { 0 } else { 255 };
         assert_eq!(byte, want, "pixel ({x}, {y})");
+    }
+}
+
+/// A whole picture's last row and column read the edge texel twice, as a clamped sampler
+/// does, and not a texel past the target: a flat scene resolves flat to its last pixel.
+#[test]
+fn a_whole_pictures_last_row_and_column_keep_their_light() {
+    let Some((device, queue)) = device() else {
+        return;
+    };
+    let red = resolve_over(
+        &device,
+        &queue,
+        params(true, SceneStore::Encoded),
+        SIZE,
+        |_, _| 0.5,
+    );
+    let inside = red[(10 * SIZE.0 + 10) as usize];
+    for y in 0..SIZE.1 {
+        for x in 0..SIZE.0 {
+            let byte = red[(y * SIZE.0 + x) as usize];
+            assert_eq!(byte, inside, "pixel ({x}, {y}) of a flat scene");
+        }
     }
 }

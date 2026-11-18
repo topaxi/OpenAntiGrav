@@ -12,9 +12,9 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
-import package::shading_modes::{colour_is_light, light_rig, nova_prelit, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
-import package::water::{enhanced_water, water_kind, water_normal, water_specular_colour, water_tap_uv};
+import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
 import package::types::{VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
@@ -164,7 +164,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // with `Watercolour` for the colour (the entry's tint) and `SpecularColour` for the highlight,
     // no gloss from the map's alpha; kind 8, the blended edge, also takes the alpha chain below.
     let vita_fc17 = water_raw > 6.5;
-    let vita_edge = water_raw > 7.5;
+    let vita_edge = water_raw > 7.5 && water_raw < 8.5;
+    // **Omega's reflective sea** (kinds 9 and 10, `mesh::rcs::psp2::water`): the same generic
+    // lit path, `Watercolour` for the colour and `SpecularColour` for a Phong highlight, with
+    // two `.ag` taps and the reflection added below; kind 10, the blended edge, takes its
+    // alpha from `VertexColour1.y * Opacity`.
+    let omega_sea = water_raw > 8.5;
+    let omega_edge = water_raw > 9.5;
     let water = select(water_raw, 0.0, vita_water);
     let n = normalize(in.normal);
     // **Omega's panel-map road** (`Emissive::program` mode 15, `mesh::rcs::psp2::panel_map`): the
@@ -1239,6 +1245,15 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             let highlight = select(vec3<f32>(1.0), water_specular_colour(water_entry), vita_fc17);
             specular = scene.light.sun * (pow(facing, row_scale.x) * select(gloss, 1.0, vita_fc17) * mask * rig_on * in.lit)
                 * highlight;
+            // Omega's sea: `liveLighting0specular * SpecularColour * sat(R.L)^SpecularPower`
+            // (`reflectplane_mid` pixel `@0x314`..`@0x380`), the light's own specular colour.
+            // The program's `reflectiveBlurCoeffs.z` lane, which would widen the lobe, reads 0
+            // live (`panel-displacement.md`, "Frame constants read live"), so the lobe is the
+            // plain power.
+            if omega_sea {
+                specular = scene.light.sun_specular.rgb * (pow(facing, row_scale.x) * mask * rig_on * in.lit)
+                    * highlight;
+            }
         }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it
@@ -1324,6 +1339,16 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             let glint_weight = select(gate, 0.2 * gate + 0.4, row_tint.w > 0.5);
             let weight = select(select(in.colour.rgb, vec3<f32>(glint_weight), water > 3.5), vec3<f32>(row_tint.w), water < 2.5);
             sky_reflection = select(sky, encode(sky), water < 1.5) * weight;
+        }
+
+        // **Omega's reflective sea** (kinds 9 and 10): the program adds
+        // `weight * tex(screenSpaceReflectionTex)`, the planar target, which is not drawn. The
+        // sky at the mapped normal stands in for it (chosen, not measured), read as the
+        // panel-map road below reads Omega's sky: the first level, linear.
+        if omega_sea {
+            let r = reflect(-to_eye, n_lit);
+            let sky = textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb;
+            sky_reflection = sky * reflective_sea_weight(water_entry, n_lit, to_eye);
         }
 
         // **The panel-map road's sun lobe and sky sheen** (mode 15, `mesh::rcs::psp2::panel_map`),
@@ -1574,15 +1599,27 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         flame = vec4<f32>(flame_rgb, flame_alpha * in.colour.a);
     }
 
+    // Omega's edge (kind 10; `reflectplane_edge` vertex `@0x194`, pixel `@0x46c`) is
+    // `VertexColour1.y * Opacity` alone.
     // **The blended water edge's alpha** (kind 8; `fc17_..._wateredge_vertexcol` fragment `@27` to
     // `@29`): `x = a * vc.x`, `alpha = vc.y * (Opacity - x) + x`, `a` the first tap's alpha,
     // `vc` `VertexColour1` (the vertex's second coordinate pair), `Opacity` the entry's offset.
     let edge_map = material_sample(MATERIAL_PAD_MASK, water_tap_uv(water_entry, water_raw, 0u, in.texcoord)).a;
     let edge_x = edge_map * in.lightmap_texcoord.z;
     let edge_alpha = in.lightmap_texcoord.w * (row_tint.w - edge_x) + edge_x;
+    // The rig's result alone where the weight is one for every pixel of the pipeline
+    // (`lit_by_rig`): `mix(a, b, 1.0)` is `b`, and `a` then goes uncomputed.
+    var shaded_rgb = authored_rgb;
+    if lit_by_rig == 0.0 {
+        shaded_rgb = mix(plain_rgb, authored_rgb, rig_on * in.lit);
+    }
     let shaded = vec4<f32>(
-        mix(plain_rgb, authored_rgb, rig_on * in.lit),
-        select(texel.a * in.colour.a, edge_alpha, vita_edge),
+        shaded_rgb,
+        select(
+            select(texel.a * in.colour.a, edge_alpha, vita_edge),
+            in.lightmap_texcoord.w * row_tint.w,
+            omega_edge,
+        ),
     );
     // **The facing-ramp combine replaces the generic rig entirely**, the
     // same shape `flame` below already takes: block #7 computes its own

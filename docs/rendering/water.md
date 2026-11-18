@@ -17,13 +17,13 @@ map is the sky"), [the 2048 pass page](../ghidra/functions/vita-2048-eu-v104/ref
 | --- | --- | --- | --- | ---: |
 | Pulse PSP (disc) | textured meshes (`NewSeaTest`, `sea`, `water`, `NWaterfall*`) | authored texture-offset tracks where a material has one, not surveyed per surface | none | 85 |
 | Pulse, Vostok Reef (PS2 disc, PSP download) | the above plus a **caustic pass**: flagged batches redrawn with a ripple texture projected from above | 16 frames at 30 fps | none | 75 (PSP code), 90 (which data) |
-| Pure | textured meshes; Vineta K's `.vex` embeds 16 caustic frames | not read | none | 60 |
+| Pure | textured meshes, and on Vineta K the **caustic pass** (Pulse's, from the 16 frames embedded in the `.vex`: 352 of 1,335 batches flagged) | 16 frames at 30 fps | none | 85 (code is Pulse's), 90 (which data), 70 (picture, no GE list) |
 | HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3: a 960 x 540 R5G6B5 target drawn under the main camera mirrored about y = -25 (Moa Therma, read live) | 85 (program), 88 (which chunks), 90 (target, camera, constants) |
 | HD Vineta K (`water_test_2`, `water_noref`) | vertex colour times light, three wave taps | three scales and rates per material | `paraboloidReflectionTex` (the sky) | 90 |
 | HD Amphiseum (`water`) | flat colour, two wave taps | as the sea, in the fragment program | `paraboloidReflectionTex` | 85 |
 | 2048 own circuits (`fc15`/`fc17_effects_vscroll_water`) | flat colour, **one** wave normal map (RGB, through the tangent frame), sun diffuse and Phong specular weighted by the map's alpha | `u + 0.05 t` (`fc15`); `v + Speed t` (`fc17`) | none | 85 (`fc15`), 85 (`fc17` colour, specular, scroll, alpha chain), 75 (which lanes feed it, below) |
 | 2048 HD circuits | HD's programs, recompiled | as HD | Moa Therma and Ubermall: planar | 80 |
-| Omega 2048 circuits (`reflectplane_mid`, `_edge`, `_pond`, ...) | two wave normal maps, sun specular, Fresnel-weighted **planar reflection** | `Speed` parameter (0.5 on Altima) | `screenSpaceReflectionTex`, fed by `wohdmeshreflect` meshes | 75 |
+| Omega 2048 circuits (`reflectplane_mid`, `_edge`, `_pond`, `_dc_seawater_new`, `_dc_seawater_tow`) | `Watercolour` times light, two `.ag` taps of the wave normal map, Phong sun highlight, Fresnel-weighted **planar reflection** | `u + 0.05 Speed t` and `-u + 0.05 Speed t` (`Speed` 0.5 or 0.6) | `screenSpaceReflectionTex` at weight `Strength (Min + Scale (1 - N.V)^Power)`, fed by `wohdmeshreflect` meshes | 90 (taps, scroll), 85 (decode, light, highlight, weight), 80 (projection as read) |
 | Omega HD circuits | HD's materials | as HD | as HD; Amphiseum reads a cube instead | 75 |
 
 The maintainer's from-play description ("HD has a simple wavy effect") is the
@@ -112,6 +112,13 @@ Amphiseum `water` 2 / 229; Sebenco `rt_snow_ref` (the pond, where HD has
 Omega's `trackZone` models keep the Vita's materials
 (`fc17_effects_vscroll_wateredge_vertexcol`, `fc06_lambert_alpha`).
 
+**The patch re-ships the sea materials** (2026-11-18, `water-omega`): `reflectplane_mid`,
+`_edge` and the others are in the base `data04.psarc` (212,120 bytes for Altima's
+`reflectplane_mid`), again in the patch's `data05.psarc` (212,600) and again in its
+`data08.psarc` (231,480), each a different compile, plus a `_1` file beside each (the PS4 Pro
+compile, [gcn.md](../formats/gcn.md)). A patched game loads the newest; a census or a reading
+of the base archive alone reads a file the game does not draw with.
+
 ### Pulse (PSP EU disc, PS2 EU disc)
 
 By embedded texture name, PSP `Data.wad`: `03_Track` (Moa Therma) `NewSeaTest`,
@@ -132,8 +139,9 @@ By embedded texture name: Vineta K `AAdc_Water`, `AAdc_WaterDark`,
 `AAdc_waterFoam`, `AAdc_Seabed*`, plus **16 caustic frames**
 (`Z:\data\Tex\caustics\save.NN.tga`, the odd numbers 01 to 31); Blue Ridge
 `Water`, `Waterfall_Ani`, `Waterfall_Ani_Noalpha`, `Waterfall_static`,
-`WaterTunnelLightA_BLEND_GLOW`. The sweep's batch walk does not decode Pure's
-version-4 batches, so the caustic bit is unread on Pure. A GE list already
+`WaterTunnelLightA_BLEND_GLOW`. Read with Pure's own mesh class (`0x11e`; the sweep once walked
+version 6's `0x125` and saw no batch), the caustic bit is set on **352 of Vineta K's 1,335 batches and
+on no other Pure `.vex`**. A GE list already
 showed Vineta's layered water plane at `y = -50` drawn with material ambient
 `(107, 216, 255)` and `(128, 128, 128)`
 ([hull-shine.md](../ghidra/functions/psp-pure-usa/hull-shine.md)).
@@ -156,14 +164,17 @@ the moving ripple web, `off` draws the plain surface. The PS2 frames are `save.N
 PSP disc has no flagged batch. Lineage: Pulse-only, not applicable to 2048/Omega; HD's
 `data/tex/caustics/` consumer is not looked for.
 
-### Pure: not read
+### Pure: Vineta K's caustic pass
 
-Hypothesis, confidence 45, no rename: Pure's Vineta K plays the 16 embedded
-caustic frames as a texture swap on its tunnel floor, the mechanism Pulse later
-moved into a global pass. What to read: the frames' `Texture` nodes in
-`01_Vineta_K`'s `.vex` (which material binds them, and whether an
-`Anim Transform` or a frame index drives the swap), then a PPSSPP GE list in
-the tunnel.
+**Drawn** under `original` (the same `mesh::caustic_pass`; test
+`vineta_ks_seabed_draws_its_embedded_caustics_and_they_follow_the_clock`): Pure's executable
+carries Pulse's four pass functions with the same constants (tint `0.2, 1.0, 0.8`, scale `0.014`,
+quarter turn, state `0x202`) and the batch sort on byte 3 `& 4`
+([caustic-pass.md](../ghidra/functions/psp-pure-usa/caustic-pass.md), confidence 85). The hypothesis
+that Vineta K swaps a texture on its tunnel floor was wrong: the 16 `save.NN.tga` frames are
+embedded in the `.vex` and the pass binds them, the frames are in no archive entry. 279 of the 352
+flagged batches draw, 73 sit under animated nodes. `off` draws the plain seabed. Not taken: a PPSSPP
+GE list in the tunnel (what would raise the picture from 70). Lineage: Pure and Pulse only.
 
 ### HD/Fury: `reflectplane_dc_seawater`
 
@@ -416,7 +427,9 @@ lerp (`@25`, `@26`). Confidence 85 on those.
   `N`+vc.y at `o8`, `V`+fog at `o12` and the fragment #5's `pa0.w`/`pa4.w` land on the
   same two lanes), which is what pins the pairing: they could be swapped only by a
   compiler that reorders the same source differently in two permutations. No iterator
-  table in the container confirms the pairing, so this stays 75, not 90.
+  table in the container confirms the pairing, so this stayed 75. **Raised to 88 on
+  2026-11-18:** Omega's compile of the same material names its vertex inputs and exports the
+  two lanes with the same partners ("Omega (PS4)", "The Zone models' `fc17` edge").
 - **The vertex colour is `VertexColour1`, type 4, on the Vita** (four unsigned normalised
   bytes at offset 24 of Altima's 32-byte edge vertex). `oag_rcs::rcsmodel::psp2::SubMesh::
   colours` never carried it (`vertex_colour1` filters the PS4's type 11), so the loader gains
@@ -461,21 +474,158 @@ samplers and are not matched. A PS4 model is never matched: its programs are not
 
 ### Omega (PS4)
 
-`crates/rcs --example gcn_dump` on the materials' GCN programs (declared
-interface only, no instruction read; confidence 75):
+**Read instruction by instruction, 2026-11-18 (`water-omega`).** `cargo run -p oag-rcs
+--example gcn_dump -- <archive.psarc> <material> [--at 0xOFFSET]` prints a material's GCN
+programs with each constant load named. The reference listing is Altima's `reflectplane_mid`
+in the base `data04.psarc`, the plain lit pixel program at `Shdr @0x3bc4` (232 instructions)
+with its vertex program `@0x35c4`; offsets below are in that program's code.
 
-- `reflectplane_mid` (Altima): `NormalMap`, `NormalMap1`,
-  `screenSpaceReflectionTex`, `reflectProject`, `distortion`, `time`, `Speed`,
-  `Watercolour`, `SpecularColour`, `SpecularPower`, and four Fresnel-shaped
-  weights `ReflectivityMin`, `ReflectivityPower`, `ReflectivityScale`,
-  `ReflectivityStrength`. Authored on Altima: `Watercolour` `(0.0546, 0.0546,
-  0.0546)`, `SpecularColour` `(0.673, 0.659, 0.470)`, `SpecularPower` 250,
-  `Speed` 0.5, `ReflectivityMin` 0, `ReflectivityPower` 4, `ReflectivityScale`
-  1, `ReflectivityStrength` 0.8. How the four combine is unread.
-- `reflectplane_dc_seawater` (Moa Therma): HD's interface exactly
+```text
+s  = time * Speed                                        @0x44 v_mov v6, Speed; @0x50 v_mul_f32 v6, time, v6
+A  = (u + 0.05 s, v)   -> NormalMap                      @0x7c v_madmk_f32 v5, v6, 0x3d4ccccd, v7; sample @0x98, dmask 0xa
+B  = (0.05 s - u, v)   -> NormalMap1                     @0x20 s_mov_b32 s15, 0x3d4ccccd; @0x84 v_mad_f32 v7, s15, v6, -v7; sample @0xa0
+n_i = (2 a_i - 1, 2 g_i - 1, sqrt(1 - x_i^2 - y_i^2))    @0x1b4..@0x1fc (v_mad 2.0, x, -1.0; v_sub 1.0; v_sqrt)
+N  = (x1 + x2) T + (y1 + y2) Bv + (z1 + z2) Nv           @0x204..@0x278, normalised @0x298..@0x2c0
+Nf = N + (y1 + y2) cross(Nv, T)                          @0xf8..@0x128 (the cross), @0x21c..@0x240
+F  = sat(1 - Nf.V / (|Nf| |V|)) ^ ReflectivityPower      @0x244..@0x28c (v_mad -v19, v17, 1.0 clamp), @0x2a0 log, @0x2b0 mul, @0x2b8 exp
+w  = ReflectivityStrength * (ReflectivityMin + ReflectivityScale * F)   @0x308, @0x30c, @0x380
+q  = reflectProject * (V.x + distortion.z N.x, V.y, V.z + distortion.z N.z, 1)   @0x2c8..@0x300
+R  = tex(screenSpaceReflectionTex, 0.5 + q.xy / max(0.1, q.w))          @0x394..@0x3a8, sample @0x3cc
+Rv = 2 (N.V) N - V                                       @0x314..@0x340 (v_mac ... mul:2)
+spec = liveLighting0specular * SpecularColour
+       * sat(Rv.L) ^ (SpecularPower (1 - 0.75 b)) * 0.0698 / max(0.0698, 0.1745 b)   @0x15c..@0x198, @0x348..@0x3c4
+light = constantAmbientColour + liveLighting0diffuse * sat(N.L)          @0x364, @0x3b4, @0x3dc..@0x3ec
+rgb = lerp(fogColour, spec + w * R + Watercolour * light, fog)           @0x414..@0x454
+```
+
+`T`, `Bv`, `Nv` are the interpolated tangent, bitangent and normal (the vertex program builds
+`Bv = cross(Nv, T) * tangent.w * worldScaleInv`, `@0x120`..`@0x188`), `V` is
+`eyePositionWorldSpace - P` unnormalised (vertex `@0x174`..`@0x17c`), `L` is
+`liveLighting0direction`, `b` is `reflectiveBlurCoeffs.z`, and `fog` the vertex program's fog
+factor. `x` is read from the map's alpha and `y` from its green, as HD's sea reads
+`dc_waternormalmap`; the output is linear half floats (`v_cvt_pkrtz_f16_f32`), alpha 0.
+
+| Reading | Confidence | Why |
+| --- | ---: | --- |
+| Two taps, `+u` and `-u`, both scrolled `0.05 * Speed * time`, no `1.15` on the second | 90 | found by data flow (`oag_rcs::gcn::sea`: the register that addresses each map's sample back to its writer, the product back to the constants `time` and `Speed`) in all 8 screen-space pixel variants of each of the 5 materials, in the base compile and in the patch's (`the_reflective_sea_programs_carry_the_two_opposite_taps_in_every_variant`); HD's `1.15` literal (`0x3f933333`) is in none of them and in 27 places of Park's `reflectplane_dc_seawater` |
+| `.ag` decode, rebuilt `z`, summed through the frame | 85 | one program read by hand, the patch's compile (`@0x198`..`@0x23c` of its `@0x3ea4`) the same |
+| The weight `Strength * (Min + Scale * F)` | 85 | read by hand in three compiles of two materials (`reflectplane_mid` base and patch, `reflectplane_pond`); the same shape, with `ReflectivityAmount` for `ReflectivityStrength`, as the panel-map road's ([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md)) |
+| `Nf`, the Fresnel's own normal, carries the bitangent term twice where `tangent.w` is +1 | 85 | read; the road's program does the same |
+| Phong highlight in `liveLighting0specular * SpecularColour`, no `sat(8 N.L)` gate | 85 | read; `b` = `reflectiveBlurCoeffs.z` reads **0** live ([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), "Frame constants read live"), so the lobe is the plain power |
+| `reflectProject` is applied to `V + distortion.z (N.x, 0, N.z)`, `V = eye - P`, and the coordinate is `0.5 + q.xy / w` with no halving | 80 | read; HD's program hands it the world point and halves. What Omega's matrix holds is **not checkable here** (a live Omega value) |
+| The lightmapped and shadowed variants' light (`novaScaleBiasPower`, `shadowCoeffs`, `shadowLightSpecularDiffuse`) | not taken apart | their taps and weight are the plain variant's (the data-flow reader covers them); their light is Omega's generic lightmapped light, which the engine's lit path already draws |
+
+**The siblings.** `reflectplane_dc_seawater_new` (Mall, Bridge) is `reflectplane_mid`'s program
+with `Speed` and `time` in the other order in the buffer (a diff of the two listings shows
+three lines). `reflectplane_pond` (Square) and `reflectplane_dc_seawater_tow` (Tower) multiply
+the highlight by one more parameter, `SpecularStrength` (`s32 * s35 * s40` at `@0x3b4`..`@0x3bc`
+of the pond's `@0x3bc4`), confidence 85. `reflectplane_edge` (Altima's shore, blended) names
+its colour `Watercolour1` and writes an alpha: its vertex programs fetch `VertexColour1` and
+export `VertexColour1.y * Opacity` (`@0x194 v_mul_f32 v17, s0, v17`, `s0` = `Opacity`), which
+the pixel program writes out untouched (`@0x46c`), confidence 85. `reflectplane_rt_seawateredging`
+(the shore strip) reads no reflection and is not this law (`GradientTexture`, two pictures,
+`backwardsWaveTimeMult`); it was not taken apart. `reflectplane_dc_seawater` (Park, and the HD
+circuits) is HD's interface with HD's literals `0.05` and `1.15`: **checked against HD:
+applies**, not wired (below).
+
+Authored, in each circuit's `track.final.rcsmodel` (the base archives' models; the patch re-ships the programs, and for Altima no model):
+
+| Circuit, material | `Watercolour` | `SpecularColour`, power | `Speed` | `Min`, `Scale`, `Power`, `Strength` | `SpecularStrength` |
+| --- | --- | --- | ---: | --- | ---: |
+| Altima `reflectplane_mid`, `_edge` (`Opacity` 1) | `(0.0546, 0.0546, 0.0546)` | `(0.673, 0.659, 0.470)`, 250 | 0.5 | 0, 1, 4, 0.8 | n/a |
+| Mall `_dc_seawater_new` | `(0.0368, 0.0553, 0.0793)` | `(0.924, 0.339, 0.122)`, 133.2 | 0.6 | 0.15, 2, 7, 1.0 | n/a |
+| Bridge `_dc_seawater_new` | `(0.0156, 0.0235, 0.0337)` | `(0.925, 0.481, 0.276)`, 133.2 | 0.6 | 0.15, 2, 7, 1.0 | n/a |
+| Tower `_dc_seawater_tow` | `(0.0370, 0.0546, 0.0781)` | `(1.0, 0.535, 0.291)`, 250 | 0.5 | 0.15, 2, 7, 0.7 | 6.0 |
+| Square `reflectplane_pond` | `(0.0203, 0.0299, 0.0437)` | `(0.991, 0.715, 0.302)`, 92.2 | 0.5 | 0.103, 1, 8.19, 3.0 | 17.05 |
+
+Every instance binds one file, `dc_waternormalmap.gnf`, to both `NormalMap` and `NormalMap1`.
+Each also authors a `time` (1.0; Tower 0.29): the engine's clock has that name, so the authored
+number is taken to be an export leftover the engine overwrites (confidence 70, not read in the
+executable). Whether `time` is in seconds is not recorded (ours is).
+
+**Drawn** (`mesh::rcs::psp2::water`, kinds `OMEGA_SEA_KIND` 9 and `OMEGA_EDGE_KIND` 10 of the
+water entry, `shade.wesl`'s `omega_sea`): classified by the PS4 programs' declared names and
+taps, never by material name; the entry is `sea_block`'s with the weight's two products and
+its power in the lanes the tap rows leave free (`mesh::rcs::water::Fresnel::lanes`), the
+edge's `Opacity` in the header and `VertexColour1.xy` in the vertex's second coordinate pair.
+Three things are not the program's:
+
+- **The reflection is the sky, chosen, not measured.** The planar target is not drawn in this
+  engine, so `w * sky(reflect(-V, N))` stands in for `w * R`, as HD's sea does. It is read as
+  the panel-map road reads Omega's sky (`skyCube.gnf`'s first level, linear), not encoded as
+  HD's is: Omega's targets are linear half floats.
+- **The Fresnel takes the lighting normal `N`**, not `Nf` (the road does the same).
+- **`distortion` and `reflectProject` are unused** until the planar pass exists.
+
+Pinned by `omega_sea_lit_path` (a triangle through the pipeline: the two taps swap at a quarter
+of the map and go flat at a half, `Speed` scales the clock, the second tap is summed and its
+`u` negated; six routes to one reflection weight read the same and it is zero where the
+program's is; the edge's alpha), `mesh::rcs::water::tests::the_reflective_sea_is_two_opposite_
+unscaled_taps_and_a_fresnel_weight`, and the batch counts in `omega_transparency_ground_truth`'s
+circuit walk (`omegas_reflective_seas_are_the_two_tap_batches`): **Altima 10 (5 the blended
+edge), Mall 8, Tower 5, Square 7, Bridge 13, 43 in all, every one drawn, none on any other
+circuit model.**
+
+**The Zone models' `fc17` edge (2026-11-18, `water-omega`).** Omega's
+`fc17_effects_vscroll_wateredge_vertexcol` (Altima's `trackZone.rcsmodel`, 5 / 815) is 2048's
+law recompiled, read in its lit program `@0x4544` with vertex `@0x3ea4`: the scroll
+`v + time * Speed` (`@0x1a0 v_mac_f32 v17, s0, v22`; found by data flow in all 72 vertex
+variants, `oag_rcs::gcn::scrolled_edge`), the map decoded `2t - 1` on all of `.xyz` through
+`T`, `B`, `N`, `(ambient + diffuse sat(N.L)) * Watercolour`, the `SpecularColour` Phong
+highlight, and the alpha `vc.y * Opacity + (1 - vc.y) * a * vc.x` (`@0x158 v_mul_f32 v13, v8,
+v22`; `@0x2e4 v_mad_f32 v2, Opacity, v11, v13`; `@0x2f4 v_mac_f32 v2, v13, -v11`), confidence
+85. Two things differ from the Vita:
+
+- **Omega authors `Watercolour` on the edge**, `(0.1332, 0.1726, 0.2176)`, where the Vita
+  authors none; the Vita edge's chosen stand-in (the pond's `ColourConstant`,
+  `(0.133, 0.173, 0.219)`) agrees with it to the third digit.
+- **The lit program adds `Reflectivity * cubeReflectionTex(Rv)`** (two layers of a cube array
+  mixed by the blur lanes, `@0x1c4`..`@0x350`; `Reflectivity` 1.0), a term the Vita program
+  does not have. Read, not drawn.
+
+Its fetch table also settles the Vita reading's open pairing: `VertexColour1.x` is exported
+with the bitangent (`exp param1 v11, v12, v10, v20`) and `.y` with the view vector (`exp param2
+v22, v2, v1, v21`), the lanes the pixel program reads as `attr1.w` and `attr2.w`. That is the
+pairing the Vita programs were read to have, now from a second binary with named inputs:
+the Vita claim rises from 75 to 88.
+
+**A Zone race draws the edge through its Zone permutation** (`@0x178c4`: the samplers are
+`NormalMap`, `zoneGrowingTexture` and the Zone palette; the map is fetched with `dmask:0x8`,
+its alpha alone), so what a Zone model shows of this law is the scrolled alpha chain over the
+Zone colour, lit by the vertex normal, with no highlight. **That reading is what is wired**
+(kind `VITA_EDGE_KIND` with both taps weighing nothing in the normal and no specular colour;
+5 of 5 batches on Altima's Zone model, pinned in the same walk). **Not seen on a frame:** this
+engine's Zone race on an Omega 2048 circuit loads the circuit's race model, not
+`trackZone.rcsmodel`, so no frame shows these batches yet.
+
+**The 2048 side (maintainer rule: an Omega finding is checked against 2048).**
+
+- *The reflective sea as the `omega` choice on 2048's own circuits:* **checked, applies, not
+  wired.** The Vita meshes Omega re-materials carry what the law reads (a tangent, `uv1`, and
+  on the edge `VertexColour1`), and Omega's instance for the same circuit authors every number.
+  What is missing is not the law: **nothing in the engine opens a lender's archive during a
+  race load** (no borrowed water law is drawn on any title yet), and a 2048 race has no sky
+  map for the stand-in (`psp2::sky_reflection` loads `skyCube.gnf` for a PS4 model only) and no
+  sun specular colour. `mesh::rcs::water::is_drawn(Water::Omega)` therefore stays false, and
+  the `omega` value is offered nowhere. Recipe: open the lender through `oag_source` in
+  `oag_raceplay`'s load, read Omega's `Data/environments2048/<circuit>/track.final.rcsmodel`
+  material table, hand `psp2::build_circuit` the reflective instance for the circuit's
+  `fc15`/`fc17` materials (Altima `reflectplane_mid` and `_edge`, Mall `_dc_seawater_new`,
+  Tower `_tow`, Square `_pond`; Park's Omega material is HD's law, not this one) and Omega's
+  `dc_waternormalmap.gnf`, cast a sky map from 2048's `skycube.rcsmodel`
+  (`sky_paraboloid::from_mesh`), and gate the offer per borrower, not per law.
+- *The Zone edge:* **ported** in the sense above (2048's law, Omega's own program read, its
+  own batches pinned); 2048's Zone models draw kind 8 with the mapped normal and highlight,
+  which is the lit program's reading, and whether the Vita's Zone permutation drops them as
+  Omega's does is **not checked** (the Vita material's Zone permutations were not read).
+
+**Still declared-interface only** (`gcn_dump --summary`, confidence 75):
+
+- `reflectplane_dc_seawater` (Moa Therma, Park): HD's interface exactly
   (`DiffuseTexture`, `DiffuseTexture1`, `screenSpaceReflectionTex`,
   `reflectProject`, `distortion`, `ColourConstant`, `Reflectivity`,
-  `SpecularColour`, `SpecularPower`, `time`). **Checked against HD: applies.**
+  `SpecularColour`, `SpecularPower`, `time`), and HD's two literals are in the code.
+  **Checked against HD: applies.**
 - `water` (Amphiseum): `NormalTexture`, `NormalTexture2`, `ColourConstant`,
   `Reflectivity`, `time`, and `cubeReflectionTex` where HD reads the
   paraboloid. **Checked against HD: differs** in the probe.
@@ -483,7 +633,7 @@ interface only, no instruction read; confidence 75):
   Therma 268, Ubermall 73. Omega gives 2048's circuits the planar reflection
   the Vita does not have. **Checked against 2048: differs.**
 
-**Not checkable here:** a live Omega value (`distortion`, the reflection
+**Not checkable here:** a live Omega value (`distortion`, `reflectProject`, the reflection
 camera); the executable is in Ghidra and `TrackPass_FilterSubmesh` kind 1 is
 the place to start.
 
@@ -499,7 +649,9 @@ the place to start.
 | HD `water` (Amphiseum) | under `original`: the two taps, `light * ColourConstant + Reflectivity * probeTint(sky)`; under `off`, generic | nothing known |
 | 2048 `fc15_effects_vscroll_water` | under `original`: the constant colour times light through one RGB normal map scrolled `u + 0.05 t` and the tangent frame, plus the map-alpha-weighted Phong highlight (`mesh::rcs::psp2::water`, kind `VITA_SEA_KIND`, HD's `sea_block` layout with the second tap at weight zero); under `off`, the flat colour | the program's `liveLighting0specular` is the scene sun here, not read per circuit |
 | 2048 `fc17_*` (Altima's lavender sheets, Park) | under `original`: the constant `Watercolour` (the edge's a chosen stand-in) times light through the normal map scrolled `v + Speed t`, plus `SpecularColour` Phong; the edge blended by `vc.y * Opacity + (1 - vc.y) a vc.x` (`mesh::rcs::psp2::water`, kinds 7 and 8); under `off`, the normal map drawn as a picture (`VITA_FAULTS`) | the Vita3K frame of the original (4a) |
-| Omega seas | the constant colour times light, flat (`psp2::lighting_only`) on the families whose instance is 2048's; `reflectplane_*` unread | normals, scroll, specular, reflection |
+| Omega reflective seas (`reflectplane_mid`, `_edge`, `_pond`, `_dc_seawater_new`, `_tow`) | under `original`: `Watercolour` times light through the two `.ag` taps scrolled `+-u + 0.05 Speed t`, the `SpecularColour` Phong highlight in the sun's specular colour, the sky at the mapped normal times the program's Fresnel weight, the edge blended by `VertexColour1.y * Opacity` (`mesh::rcs::psp2::water`, kinds 9 and 10); under `off`, what was drawn before (a flat sheet in the colour slot's map) | the planar reflection (the sky stands in), the Fresnel's own normal `Nf` |
+| Omega Zone models' `fc17` edge | under `original`: the Zone permutation's alpha chain over the scrolled map's alpha (kind 8, no mapped normal, no highlight); built and pinned, not seen on a frame (the Zone race does not load `trackZone.rcsmodel`) | the lit program's `Reflectivity * cubeReflectionTex` |
+| Omega `reflectplane_dc_seawater` (Park, HD circuits), `water`, `reflectplane_rt_seawateredging` | the constant colour times light, flat (`psp2::lighting_only`) on the families whose instance is 2048's | HD's law through `psp2` (checked, applies, not wired) |
 | Refraction target (Vineta K glass) | drawn on HD, 2048 and Omega | n/a; it is the pattern the reflection target follows |
 
 What already exists and the water can reuse: the sky as a dual paraboloid with
@@ -649,7 +801,8 @@ this change on Pulse PSP, Pulse PS2, Pure and HD (Moa Therma's sea pose).
 **The row.** WATER is shown on a title only when something in it changes the picture: its own
 `original` differs from `off` (`Title::water.original_differs`: HD) or a value past those two
 is offered (`enhanced` on a title that lists a sea, or a borrowed law that is drawn and whose
-disc is present). Today that hides it on 2048 and Omega and shows it on Pulse, Pure and HD.
+disc is present). Today it is shown on every title: Pulse and Pure offer `enhanced`, and HD,
+2048 and Omega each draw their own law under `original`.
 `oag_game::water_setting::row_changes_picture`.
 
 Open: whether the glint and the sky are right beside an original frame (nothing to compare
@@ -689,13 +842,33 @@ and the glint only. `off` is **pixel-identical** to a build of the parent commit
 pixels at Altima's `100,200,1100` pose, 300 ticks, and Park's `1000,200,-3500` pose, 120
 ticks).
 
+**What a player sees on Omega (2026-11-18, `water-omega`, headless `--screenshot`, 1280x720,
+debug build, the patched extraction).** *Queens Mall's harbour* (`mall`, camera
+`800,120,1800` looking `0,-0.3,0.954`, `--pvs false`, ticks 300 and 420): under `off` the sea
+is a flat salmon sheet, the colour of sand, with the buildings standing in it as if on a beach.
+Under `original` it is a dark harbour with fine ripples and the low sun's orange glitter path
+running across it toward the camera, and the glitter shows through the glass floor in the
+foreground; between the two ticks the ripples and the glitter move (112,499 pixels differ by
+more than 8 levels). *Altima's pond shore* (`--pose=-250,-8,1372 --pose-hold`, camera
+`200,14,1330` looking `-0.16,-0.56,0.81`): under `off` grey translucent sheets lie over the
+pebbles and a white blot covers the right of the frame; under `original` the pond is dark
+rippled water that fades out over the pebbles at the shore (the edge's alpha), carrying
+blotches of reflected sky that drift between the ticks (275,758 pixels over 8 levels against
+20,915 under `off`, whose difference is the HUD clock and the exposure settling). The
+blotches are hard edged: the stand-in mirrors a sky cube whose canyon walls and bright sky
+alternate as the normal tilts, where the original would show the mirrored scenery. `off` is
+**pixel-identical to main** on both circuits (0 differing pixels: Altima at ticks 300 and 420,
+Mall at 300, against a build of the parent commit). Not compared against the original: no
+frame of Omega's own sea was taken (shadPS4 was not run in this lane).
+
 ## Lineage, per finding
 
 | Finding | 2048 | Omega | HD |
 | --- | --- | --- | --- |
 | Sea law (two taps, planar reflection) | checked, applies on its HD circuits (`reflectplane_dc_seawater` declares `screenSpaceReflectionTex` and `time`), not wired: its draw goes through `psp2`, which classifies by the GXP program's interface and has no tap reader; the `0.05` and `1.15` literals are not checked in the GXP | checked, applies (HD's interface exactly), not wired: same `psp2` path, the literals unread in the GCN program | taps drawn without the planar term (`mesh::rcs::water`) |
 | Reflect set (bit 3 / `wohdmeshreflect`) | checked, applies (name tag, 353 and 52), not wired | checked, applies (268 and 73), not wired | measured here |
-| 2048 own water (`fc15`/`fc17`) | `fc15` and `fc17` measured and drawn here | **checked, differs**: Omega's 2048 mode replaces both with `reflectplane_*` (two taps, Fresnel planar reflection) on the same meshes, its programs are GCN, and the build matches GXP only; Omega's Zone models keep `fc17` and no `fc15` ships there: **checked, applies, not wired** for `fc17` - the build classifies GXP programs only and `water::plan` returns on a PS4 source, so the edge draws as before (flat constant, normal map unread); the law (same material name and, if the instance record matches, the same `Opacity`/`Speed`/`SpecularColour` parameters) would apply once the GCN program is read, which this lane did not do | not applicable |
+| 2048 own water (`fc15`/`fc17`) | `fc15` and `fc17` measured and drawn here | **checked, differs**: Omega's 2048 mode replaces both with `reflectplane_*` on the same meshes, read and drawn ("Omega (PS4)"); Omega's Zone models keep `fc17`'s edge and no `fc15` ships there: **ported** as its Zone permutation's reading (the GCN programs read, 5 batches pinned, not seen on a frame) | not applicable |
+| Omega reflective sea (`reflectplane_mid` and siblings) | **checked, applies, not wired** as the `omega` choice: the meshes carry what the law reads, but no lender's archive is opened in a race load and 2048 has no sky map or sun specular ("Omega (PS4)", "The 2048 side") | measured and drawn here | not applicable (HD's sea is the older law: `1.15` on the second tap, a constant `Reflectivity`, a `sat(8 N.L)` gate) |
 | Amphiseum `water` | not checked (the Vita's Amphiseum shows no water material by name) | checked, differs (cube probe) | drawn (`mesh::rcs::water`) |
 | Vineta K scroll table | checked, differs (`dc_seawater`) | checked, applies (`water_test_2_castnoshipshadows`), `water_noref` replaced by `temp_water`, not wired | drawn (`mesh::rcs::water`) |
 | `enhanced` (own generated map, Pulse and Pure only) | checked, differs: nothing is offered (`Title::water.enhanced` empty); its seas are drawn through `psp2`, no `.vex` batches | checked, differs: same, and Omega's own law is the planned one | not applicable (HD's `original` is the law `enhanced` follows) |
@@ -708,14 +881,36 @@ ticks).
    read off live frames", with the recipe for these).
 2. Vostok Reef on PCSX2 or PPSSPP (with the download pack): a frame of the
    caustic pass to compare against ours (batch state `0x202`'s blend is read: additive by alpha).
-3. Pure's caustic frames on Vineta K.
-4. Omega's `Reflectivity*` combine and `Speed` law (a GCN instruction read),
-   (2048's `fc17` edge program is read whole, "2048 (Vita)": its `Watercolour` is unauthored
-   and drawn as the pond's `ColourConstant`, chosen; Omega's Zone `fc17` is not wired).
+4. Omega: what `reflectProject` holds (the program hands it `eye - P`), `distortion`, and the
+   reflection camera (a live value, or `TrackPass_FilterSubmesh` kind 1 in Ghidra); a frame of
+   Omega's own sea to set the stand-in against; HD's law through `psp2` for
+   `reflectplane_dc_seawater` (Park and the HD circuits); the shore strip
+   `reflectplane_rt_seawateredging`; the `omega` choice on 2048's circuits (recipe in "Omega
+   (PS4)"); loading `trackZone.rcsmodel` in a Zone race, which is what would show the Zone edge.
+   (2048's `fc17` edge: its `Watercolour` is unauthored and drawn as the pond's
+   `ColourConstant`, chosen; Omega authors `(0.1332, 0.1726, 0.2176)` on the same material.)
 4a. No Vita3K frame of Altima's sea exists: the look of `fc15` and `fc17` is not compared against the
    original (`water-fc17` did not take the 45-minute capture; the edge's stand-in `Watercolour`
    and the lane pairing of `pa0.w`/`pa4.w`, 75, are what a frame would test: walk Empire Climb in
    `scripts/vita3k-drive.py race`, hold position at the pond, `shot` and compare the shore wedges).
+   **Attempted 2026-11-18 (`water-2048cmp`): no pair; the original shows no fc15/fc17 water from its racing line
+   on either circuit (seen once per circuit, one boot each, sparse samples).** (1) Ours at the grids of Altima and
+   Park (`--race --track ...\altima\track.vex`, tick 240, 960x544) shows no water (a stadium floor, a brick road);
+   the pond is about 1,270 units from Altima's grid. (2) Zone route: the HD Campaign's Zone event renamed to Altima
+   (`vita-2048-pair.py --walk --game-mode hd --node 600 395 --node-recentred 527 297 --rename-track Vineta_K altima
+   --zone-capture 70`, 37 samples): **Zone mode posterises every frame into flat colour bands**, so ripple scale,
+   glint and edge colour are unreadable there, and ours draws no Zone grade on a native circuit. (3) Race-cell
+   route: the same walk with `--node-recentred 440 240` (the wing-icon node of Uplift's first cluster) and
+   `--rename-track Vineta_K altima` or `park` loads and races in the Race cell (card "39_Track", Pilot Assist on; the
+   first Altima boot stuck at 94 % on the loading screen, the second ran; Park loaded first time), then
+   `vita3k-drive.py --display N hold e 1.5` plus `shot` in a loop with Pilot Assist flying the craft: 64 frames of
+   Altima (0:13 to 2:33, a full lap and the start of lap 2) and 70 of Park (0:12 to 2:14, lap 1 and the start of
+   lap 2), read as contact sheets. **No pond, shore wedge or sea is in view in any frame**: Altima's cyan hexagon
+   floor at 0:47 to 0:50 is a glowing track-side deck, not water; Park shows grass, brick and the same deck. The
+   samples are 2 to 3 s apart (about 150 to 300 units), so a short glimpse could fall between them, and ours' pond
+   and sea poses (`-250,-8,1372` and `1000,200,-3500`) are free cameras no craft flight reproduces. A comparison
+   needs the teleport (never built, [vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft
+   teleport) or a denser sample around where the spline passes the water.
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.

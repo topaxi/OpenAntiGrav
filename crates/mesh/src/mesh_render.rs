@@ -479,6 +479,9 @@ pub fn build_with(
             "emissive_rows",
             f64::from(specialise::emissive_rows(plain.present)),
         ));
+        if pipeline_cache::scope_rig_is_on() && specialise::plain_is_lit(model, &plain.draws) {
+            constants.push(("lit_by_rig", 1.0));
+        }
         constants
     });
 
