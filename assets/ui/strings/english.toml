@@ -9,7 +9,7 @@
 #   - giving a translatable home to text this project invented:
 #     `assets/ui/menu.toml`'s `string_id`/`title_string_id`,
 #     `oag_race::Mode::fallback_label`, `crates/game/src/loading/wording.rs`
-#     and `crates/game/src/main/hints.rs` all look an id up here instead of
+#     and `crates/game/src/app/hints.rs` all look an id up here instead of
 #     holding a literal `&str`.
 #
 # **This is the base language, and it is enforced, not aspirational.**
@@ -367,7 +367,7 @@ OAG_MENU_BACK = { text = "BACK", human = false }
 # `%s` is the button's own name, upper-cased, from `oag_gameplay::input::
 # Button`'s `Display` impl. **Chosen, not authored**: neither PSP title's
 # front-end XML defines a rebind prompt to read one off - the same search
-# `PAUSE_OVERLAY`'s own doc comment in `crates/game/src/main/menu_stage.rs`
+# `PAUSE_OVERLAY`'s own doc comment in `crates/game/src/app/menu_stage.rs`
 # describes turned up nothing for a pause screen either, and a per-row key
 # capture is not on the original's own CONTROLS-equivalent page at all (its
 # `Control_Type = "custom"` rebinds abstract-button-to-action, not
@@ -432,7 +432,7 @@ OAG_PILOT_DELETE_BUILT_IN = { text = "%s IS BUILT IN AND YOUR FILE REPLACES IT. 
 OAG_PILOT_DELETE_YES = { text = "DELETE", human = false }
 OAG_PILOT_DELETE_NO = { text = "KEEP", human = false }
 
-# Window titles and the key hints printed under them - `crates/game/src/main/hints.rs`.
+# Window titles and the key hints printed under them - `crates/game/src/app/hints.rs`.
 # Read by Rust, not by a `menu.toml` `string_id`: none of these has a disc
 # idstring to override, so what they needed was somewhere translatable to
 # live rather than an override.
@@ -468,7 +468,7 @@ OAG_LOADING_COUNTS_FAILED_SUFFIX = { text = ", {failed} failed", human = false }
 # The line Cell Selection shows when a confirmed cell cannot launch - a mode
 # this build cannot run yet, or a circuit this disc does not carry. Ours, not
 # the disc's: nothing authored says either, and saying nothing left the cell
-# looking dead. `crates/game/src/main/campaign_stage.rs`.
+# looking dead. `crates/game/src/app/campaign_stage.rs`.
 OAG_CAMPAIGN_MODE_UNSUPPORTED = { text = "THIS EVENT'S MODE CANNOT BE RACED IN THIS BUILD YET", human = false }
 OAG_CAMPAIGN_TRACK_UNAVAILABLE = { text = "THIS EVENT'S CIRCUIT IS NOT ON THIS DISC", human = false }
 # The end-of-race award line for a tier a campaign mod declares that the title has no phrase for
@@ -535,7 +535,7 @@ OAG_EDITOR_PROGRESSION_FLAT = { text = "FLAT", human = false }
 OAG_EDITOR_PROGRESSION_RAMP = { text = "RAMP", human = false }
 
 # Wipeout Pure's SINGLE PLAYER chain: our own wording around the disc's circuit,
-# tournament, class and mode names. `crates/game/src/main/pure_chain_stage.rs`.
+# tournament, class and mode names. `crates/game/src/app/pure_chain_stage.rs`.
 OAG_MENU_SINGLE_PLAYER = { text = "SINGLE PLAYER", human = false }
 OAG_MENU_SINGLE_PLAYER_SUBTITLE = { text = "Arcade, tournaments, time trials and Zone, class by class", human = false }
 OAG_MEDAL_GOLD = { text = "GOLD", human = false }
@@ -571,7 +571,7 @@ OAG_MODS_SENDS = { text = "SENDS", human = false }
 OAG_MODS_HEARS = { text = "HEARS", human = false }
 OAG_MODS_NO_ONE_SENDS = { text = "NO ONE SENDS", human = false }
 
-# The line under a split race's pause - `crates/game/src/main/session/pause.rs`.
+# The line under a split race's pause - `crates/game/src/app/session/pause.rs`.
 # Read by Rust, not by a `menu.toml` row. `%s` is substituted left to right: the
 # player's number, then the time left as `m:ss`. **Chosen, not measured**: the
 # original has no split screen and no pause ownership to word.
