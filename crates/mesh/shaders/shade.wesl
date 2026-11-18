@@ -126,7 +126,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // Under `lit_by_rig` the rig is on and every vertex has `lit` 1.0 (what that override
     // promises), so both weights are the constant one and the driver folds their multiplies.
     let rig_on = select(select(0.0, scene.light.enabled, light_rig != 0.0), 1.0, lit_by_rig != 0.0);
-    in.lit = select(raw.lit, 1.0, lit_by_rig != 0.0);
+    in.lit_light.x = select(raw.lit_light.x, 1.0, lit_by_rig != 0.0);
     let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
     // **A chunk a Zone race draws on its plain program** (`slots::ZONE_PLAIN`, the speed and weapon
     // pads, signs and screens; `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`): none of
@@ -414,13 +414,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         //
         // No sRGB predecode here, unlike `prelit` above: the colour-set vertex
         // program reads `v[3]` raw (`LG2 -> MUL -> EX2 -> MUL`), not through the
-        // lightmap's `pow(_, 2.2)` step. `EMISSIVE` chunks (`no_ambient &&
+        // lightmap's `pow(_, 2.2)` step, and per vertex: `vs_main` curves it and the
+        // interpolated result arrives in `lit_light.yzw`. `EMISSIVE` chunks (`no_ambient &&
         // no_sun`) are excluded from the curve below - this is additive to that
         // branch, not a rewrite of it.
         // A 2048 vertex-lit surface's curve is its vertex program's `scale * rgb + bias`
         // (no power), the Nova triple the lightmapped programs read as well.
         let vertex_light_curved = select(
-            scene.light.prelit_scale * pow(vertex_light, scene.light.prelit_power),
+            select(vec3<f32>(0.0), in.lit_light.yzw, colour_is_light > 0.5),
             scene.light.prelit_scale * vertex_light + vec3<f32>(scene.light.prelit_bias),
             nova_vertex,
         );
@@ -1229,7 +1230,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         }
         var specular = scene.light.sun
             * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
-                * rig_on * in.lit * select(1.0, 0.0, emissive))
+                * rig_on * in.lit_light.x * select(1.0, 0.0, emissive))
             * specular_tint
             * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
             * select(1.0, 0.0, no_specular);
@@ -1252,7 +1253,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             let reflected = reflect(-to_eye, n_lit);
             let facing = clamp(dot(reflected, scene.light.direction), 0.0, 1.0);
             let highlight = select(vec3<f32>(1.0), water_specular_colour(water_entry), vita_fc17);
-            specular = scene.light.sun * (pow(facing, row_scale.x) * select(gloss, 1.0, vita_fc17) * mask * rig_on * in.lit)
+            specular = scene.light.sun * (pow(facing, row_scale.x) * select(gloss, 1.0, vita_fc17) * mask * rig_on * in.lit_light.x)
                 * highlight;
             // Omega's sea: `liveLighting0specular * SpecularColour * sat(R.L)^SpecularPower`
             // (`reflectplane_mid` pixel `@0x314`..`@0x380`), the light's own specular colour.
@@ -1260,7 +1261,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             // live (`panel-displacement.md`, "Frame constants read live"), so the lobe is the
             // plain power.
             if omega_sea {
-                specular = scene.light.sun_specular.rgb * (pow(facing, row_scale.x) * mask * rig_on * in.lit)
+                specular = scene.light.sun_specular.rgb * (pow(facing, row_scale.x) * mask * rig_on * in.lit_light.x)
                     * highlight;
             }
         }
@@ -1432,8 +1433,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // already multiplied, and a glow is not itself lit.
         //
         // **`glow_linear` belongs here, not only on `plain`**: this fragment
-        // resolves `mix(plain_rgb, authored_rgb, enabled * in.lit)` and HD's rig is
-        // always enabled, so every `in.lit == 1` chunk - the track, the tubes, the
+        // resolves `mix(plain_rgb, authored_rgb, enabled * in.lit_light.x)` and HD's rig is
+        // always enabled, so every `in.lit_light.x == 1` chunk - the track, the tubes, the
         // signs, everything near the camera - would drop a glow added to `plain`
         // alone. Only the far background and the hull would see it, and HD's
         // emissive layer would be very nearly invisible.
@@ -1497,7 +1498,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // Pulse-shaped asset authors, so the linear round-trip above would
     // re-shade what is already shaded. On the linear target its gamma result
     // is decoded, so `post::hd_bloom`'s encode returns it byte-for-byte.
-    let light = mix(vec3<f32>(1.0), stand_in, in.lit);
+    let light = mix(vec3<f32>(1.0), stand_in, in.lit_light.x);
     // **The vertex colour is a tint here and a light term on the authored
     // path, so this multiply must not see HD's.** Without the guard, any HD
     // draw that binds `Light::stand_in` - the front end, or a circuit whose
@@ -1620,7 +1621,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // (`lit_by_rig`): `mix(a, b, 1.0)` is `b`, and `a` then goes uncomputed.
     var shaded_rgb = authored_rgb;
     if lit_by_rig == 0.0 {
-        shaded_rgb = mix(plain_rgb, authored_rgb, rig_on * in.lit);
+        shaded_rgb = mix(plain_rgb, authored_rgb, rig_on * in.lit_light.x);
     }
     let shaded = vec4<f32>(
         shaded_rgb,
@@ -2066,7 +2067,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             && flame_shading == 0.0
             && absorb_shading == 0.0;
         if generic_combine && rig_on != 0.0 {
-            sun_delta = rig_on * in.lit * sun_removed;
+            sun_delta = rig_on * in.lit_light.x * sun_removed;
             sun_known = 1.0;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every

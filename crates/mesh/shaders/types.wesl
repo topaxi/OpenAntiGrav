@@ -340,7 +340,12 @@ struct VertexOutput {
     @location(0) normal: vec3<f32>,
     @location(1) colour: vec4<f32>,
     @location(2) texcoord: vec2<f32>,
-    @location(3) lit: f32,
+    // `x` the vertex's `lit`; `yzw` Wipeout HD's `IleVertex` curve of its colour set,
+    // `prelit_scale * pow(colour, prelit_power)`, which the original's vertex program computes
+    // per vertex and interpolates (`LG2`/`MUL`/`EX2`/`MUL` into `o[TC0]`,
+    // docs/ghidra/functions/ps3-hdfury-eu/renderer.md, "The vertex curve is per vertex").
+    // One location for both: all fifteen are taken.
+    @location(3) lit_light: vec4<f32>,
     @location(4) world: vec3<f32>,
     // `xy` the lightmap's coordinate, `zw` the second diffuse set
     // (`GpuVertex::texcoord2`): carried in the one location rather than a
