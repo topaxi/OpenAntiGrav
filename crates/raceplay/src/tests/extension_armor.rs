@@ -373,7 +373,7 @@ fn a_race_without_a_module_hashes_the_same_run_twice_and_an_unshielded_craft_tak
         step(&mut plain, &mut buttons, tick == 0);
         assert_eq!(plain.sim.state_hash(), *hash);
     }
-    assert!(!race.is_modded());
+    assert!(!race.sim.is_modded());
     assert_eq!(
         energy(&race),
         100.0 - ROCKET_DAMAGE,

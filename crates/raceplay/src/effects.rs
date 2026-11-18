@@ -1144,7 +1144,7 @@ impl Race {
             None => self.view.screen_flash.as_ref().and_then(|f| f.colour()),
         };
         // A module's `screen-fill` is the view's own slot's, so a seat wears its own.
-        let fill = self.extension_fill(self.viewed_slot());
+        let fill = self.sim.extension_fill(self.viewed_slot());
         match (flash, fill) {
             (flash, None) => flash,
             (None, fill) => fill,

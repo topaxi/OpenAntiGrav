@@ -51,7 +51,7 @@ fn a_vanilla_race_keeps_the_lap_it_drove_as_a_ghost() {
 fn a_modded_race_sets_and_offers_no_ghost() {
     let source = on::module("test.ghost", "i32.const 0");
     let mut race = two_crossings(grid(on::prepared(&[source])));
-    assert!(race.is_modded() && race.recording());
+    assert!(race.sim.is_modded() && race.recording());
     assert!(race.take_new_best_ghost().is_none());
     assert!(race.ghost().is_none(), "none raced either");
     assert!(race.recorded().expect("recording").ghost.is_none());
@@ -197,7 +197,7 @@ fn the_preflight_refuses_a_missing_module_and_another_build_by_name() {
 
     let source = on::module("test.keep", "i32.const 0");
     let race = grid(on::prepared(std::slice::from_ref(&source)));
-    let recorded = race.mods_used().to_vec();
+    let recorded = race.sim.mods_used().to_vec();
     assert_eq!(recorded.len(), 1);
     let offered = |extensions: Vec<crate::extensions::Source>, recorded| Options {
         extensions,

@@ -42,7 +42,7 @@ fn a_craft_ahead_reads_ahead_and_centred_one_beside_reads_across_and_the_view_is
     // The identity body faces -Z with +X to its right and +Y above it.
     race.sim.world.ships[1].physics.body.position = Vec3::new(0.0, 0.0, -60.0);
     race.tick(&PlayerInputs::none());
-    let row = row_of(race.extension_state(0).unwrap());
+    let row = row_of(race.sim.extension_state(0).unwrap());
     let ahead = row[1];
     assert!(ahead.forward > 0 && ahead.in_cone(200.0, 0.2), "{ahead:?}");
     assert_eq!((ahead.right, ahead.up), (0, 0), "centred");
@@ -51,7 +51,7 @@ fn a_craft_ahead_reads_ahead_and_centred_one_beside_reads_across_and_the_view_is
     // Across the track: 40 to the right and 4 ahead is no target in front.
     race.sim.world.ships[1].physics.body.position = Vec3::new(40.0, 0.0, -4.0);
     race.tick(&PlayerInputs::none());
-    let beside = row_of(race.extension_state(0).unwrap())[1];
+    let beside = row_of(race.sim.extension_state(0).unwrap())[1];
     assert!(
         beside.right > 0 && !beside.in_cone(200.0, 0.2),
         "{beside:?}"
@@ -60,9 +60,9 @@ fn a_craft_ahead_reads_ahead_and_centred_one_beside_reads_across_and_the_view_is
     // Behind it, and turned to face the other way: the same offset is now ahead.
     race.sim.world.ships[1].physics.body.position = Vec3::new(0.0, 0.0, 60.0);
     race.tick(&PlayerInputs::none());
-    assert!(row_of(race.extension_state(0).unwrap())[1].forward < 0);
+    assert!(row_of(race.sim.extension_state(0).unwrap())[1].forward < 0);
     race.sim.world.ships[0].physics.body.orientation =
         oag_core::math::Quat::from_rotation_y(std::f32::consts::PI);
     race.tick(&PlayerInputs::none());
-    assert!(row_of(race.extension_state(0).unwrap())[1].in_cone(200.0, 0.2));
+    assert!(row_of(race.sim.extension_state(0).unwrap())[1].in_cone(200.0, 0.2));
 }

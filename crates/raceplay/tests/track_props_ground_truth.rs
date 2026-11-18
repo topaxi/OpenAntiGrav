@@ -288,7 +288,7 @@ fn a_pads_authored_boost_doubles_that_pad_alone() {
     let (entry, pad) = first_pad(&vanilla);
     let file = hillside(Some(pad), "double").unwrap();
     let (modded, race) = run(&file, vec![pad_reader(pad)]).unwrap();
-    assert!(race.is_modded());
+    assert!(race.sim.is_modded());
     let pads = race.sim.speedup_pads();
     let unit = |p: usize| {
         let d = pads[p].direction().unwrap();
@@ -346,7 +346,7 @@ fn a_slot_held_at_zero_gets_no_push_plume_or_sound_and_still_hears_each_pad() {
     let (held, race) = run(&plain, vec![pad_holder()]).unwrap();
     let vanilla_entries = entries(&vanilla).len();
     let heard = u32::from_le_bytes(
-        race.extension_state(0).expect("the module ran")[..4]
+        race.sim.extension_state(0).expect("the module ran")[..4]
             .try_into()
             .unwrap(),
     );

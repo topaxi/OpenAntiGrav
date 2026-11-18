@@ -659,7 +659,7 @@ impl Stage {
         };
         race.sim.apply_launch(&launch);
         if let Some(progress) = campaign_2048_event.as_ref() {
-            race.arm_event_xp(progress);
+            race.sim.arm_event_xp(progress);
         }
         if autopilot {
             info!("--autopilot: the player's craft is being flown for them");

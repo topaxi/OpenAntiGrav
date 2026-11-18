@@ -16,7 +16,7 @@ fn armed_zone_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
     let mut race = Race::start(setup);
-    race.arm_xp(XpTally::new(
+    race.sim.arm_xp(XpTally::new(
         Awards::parse(XML).expect("fixture"),
         Column::Zone,
     ));
@@ -38,7 +38,7 @@ fn each_zone_step_pays_perfect_zone_until_a_wall_is_touched() {
         zones >= 2,
         "sanity: two zone steps in 1300 ticks, got {zones}"
     );
-    let tally = race.xp_tally().expect("armed");
+    let tally = race.sim.xp_tally().expect("armed");
     assert_eq!(tally.times_paid(10), zones);
     assert_eq!(tally.times_paid(9), 0);
     let perfect = Awards::parse(XML).expect("fixture").xp(10, Column::Zone);
@@ -51,7 +51,7 @@ fn a_zone_with_a_wall_contact_pays_the_plain_zone_award() {
     run_past_the_countdown(&mut race, 100);
     race.sim.world.race[0].zone_dirty = true;
     run_past_the_countdown(&mut race, 600);
-    let tally = race.xp_tally().expect("armed");
+    let tally = race.sim.xp_tally().expect("armed");
     assert_eq!(tally.times_paid(9), 1, "the dirty zone");
 }
 
@@ -60,7 +60,7 @@ fn a_kill_pays_once_and_only_after_the_countdown() {
     let mut race = armed_zone_race();
     race.sim.world.ships[0].standing.kills = 1;
     run_past_the_countdown(&mut race, 5);
-    assert_eq!(race.xp_tally().expect("armed").times_paid(6), 1);
+    assert_eq!(race.sim.xp_tally().expect("armed").times_paid(6), 1);
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn an_unarmed_race_gathers_nothing() {
     setup.mode = Mode::Zone;
     let mut race = Race::start(setup);
     run_past_the_countdown(&mut race, 700);
-    assert!(race.xp_tally().is_none());
+    assert!(race.sim.xp_tally().is_none());
 }
 
 fn progress(awards: Option<Awards>) -> crate::Campaign2048Progress {
@@ -86,10 +86,10 @@ fn progress(awards: Option<Awards>) -> crate::Campaign2048Progress {
 #[test]
 fn an_event_with_a_table_arms_the_tally_in_its_column_and_one_without_does_not() {
     let mut race = Race::start(setup(hulled_handling()));
-    race.arm_event_xp(&progress(None));
-    assert!(race.xp_tally().is_none());
-    race.arm_event_xp(&progress(Awards::parse(XML)));
-    assert!(race.xp_tally().is_some());
+    race.sim.arm_event_xp(&progress(None));
+    assert!(race.sim.xp_tally().is_none());
+    race.sim.arm_event_xp(&progress(Awards::parse(XML)));
+    assert!(race.sim.xp_tally().is_some());
 }
 
 /// The HUD's `RaceXP` reads the tally: a kill raises the readout by the parsed award's value, and

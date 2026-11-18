@@ -195,7 +195,7 @@ pub fn finished_event(
         .clone()
         .context("the event carries no progress")?;
     let mut race = oag_raceplay::Race::start(loaded.setup);
-    race.arm_event_xp(&progress);
+    race.sim.arm_event_xp(&progress);
     race.sim.set_autopilot(true);
     while !race.sim.finished() && race.sim.world.tick < cap {
         race.tick(&oag_gameplay::PlayerInputs::none());
@@ -213,7 +213,7 @@ pub fn finished_event(
     let mut profile = crate::records::Store::default();
     profile.bank_xp(prior_xp);
     let place = Some(race.player_place());
-    let banked = race.xp_tally_mut().map(|tally| {
+    let banked = race.sim.xp_tally_mut().map(|tally| {
         let earned = profile.bank_event_xp(tally, prior_medal, medal, place);
         XpBanked {
             earned,

@@ -104,8 +104,8 @@ fn a_fov_offset_reaches_its_slots_view_alone() {
     race.sim.extensions =
         crate::extensions::Extensions::new(prepared(&[scripted("test.fov", "", &[offset], &[])]));
     race.tick(&PlayerInputs::none());
-    assert_eq!(race.extension_fov_offset(1), 12.0);
-    assert_eq!(race.extension_fov_offset(0), 0.0);
+    assert_eq!(race.sim.extension_fov_offset(1), 12.0);
+    assert_eq!(race.sim.extension_fov_offset(0), 0.0);
 }
 
 #[test]
@@ -404,7 +404,7 @@ fn an_icon_the_mod_does_not_declare_faults_the_module_naming_it() {
         true,
     );
     race.tick(&PlayerInputs::none());
-    let (_, why) = race.extension_reports()[0]
+    let (_, why) = race.sim.extension_reports()[0]
         .faulted
         .clone()
         .expect("faulted");

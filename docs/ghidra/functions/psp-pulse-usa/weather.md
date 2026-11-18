@@ -260,7 +260,7 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   place counts as open, chosen), each live drop's last move in the
   world (`[p - wind, p]`, `oag_fx::psys::System::world_positions` and the pool's wind
   step) is cast against the circuit's collision with the same read-only floor cast the
-  blob shadows use (`Race::floor_crossing`, hoverable surfaces, from above). The pool is
+  blob shadows use (`RaceSim::floor_crossing`, hoverable surfaces, from above). The pool is
   not touched and the simulation never knows.
 - **Rain**: a ring flat on the road, fading over 0.35 s, and three droplets thrown up
   and back under a chosen gravity. Sizes (chosen; a quarter of the first version's, on the

@@ -170,7 +170,7 @@ fn holding_fire_boosts_on_shield_and_an_absorb_pays_back_at_most_half() {
         return;
     };
     let mut carried = race_with(Some(&source), true).unwrap();
-    assert!(boosted.is_modded());
+    assert!(boosted.sim.is_modded());
     const FIRE: std::ops::Range<u32> = 360..480;
     let a = drive(&mut boosted, 0..480, FIRE, None);
     let b = drive(&mut carried, 0..480, 0..0, None);
@@ -439,7 +439,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
     let mut modded = race::Race::start(loaded.setup);
-    assert!(modded.is_modded());
+    assert!(modded.sim.is_modded());
     modded.start_recording(oag_replay::Header::new(
         "pulse",
         TRACK,
@@ -534,7 +534,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     let ran = race::replay::resimulate(&vanilla, &image, &[], std::slice::from_ref(&source))
         .expect("builds");
     assert!(
-        !ran.race.is_modded(),
+        !ran.race.sim.is_modded(),
         "the recording named no module, so none runs"
     );
 }

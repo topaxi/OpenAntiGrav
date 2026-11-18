@@ -859,10 +859,10 @@ impl Race {
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
         // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
-        let offset = self
-            .camera_scalar_between(self.extension_fov_offset(self.player_slot()), |previous| {
-                previous.fov_offset
-            });
+        let offset = self.camera_scalar_between(
+            self.sim.extension_fov_offset(self.player_slot()),
+            |previous| previous.fov_offset,
+        );
         finish_vertical_fov(
             authored,
             offset,

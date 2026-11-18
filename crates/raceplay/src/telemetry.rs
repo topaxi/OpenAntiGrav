@@ -232,7 +232,7 @@ impl Race {
             pickup_releasing: hud
                 .pickup_last
                 .filter(|_| held.is_none() && hud.pickup_pop[1] > 0.0),
-            race_xp: self.xp_tally().map(crate::xp_tally::XpTally::total),
+            race_xp: self.sim.xp_tally().map(crate::xp_tally::XpTally::total),
             pickup_fade: hud.pickup_fade,
             thrust_chase_percent: hud.thrust_chase_percent,
             thrust_percent: ship.physics.thrust.max(0.0),

@@ -296,7 +296,7 @@ impl super::Race {
         let hits: Vec<(Vec3, Vec3)> = weather
             .drop_segments()
             .into_iter()
-            .filter_map(|(from, to)| self.floor_crossing(from, to))
+            .filter_map(|(from, to)| self.sim.floor_crossing(from, to))
             .filter(|&(at, _)| !self.point_is_under_cover(at))
             .collect();
         let wet = self.view.scenery_fx.weather().wet_road();
@@ -334,7 +334,9 @@ impl super::Race {
                 .weather()
                 .section_is_covered(i32::from(section))
     }
+}
 
+impl super::RaceSim {
     /// Where the segment `from..to` crosses a floor from above, and that
     /// floor's normal: the same read-only cast the blob shadows make.
     fn floor_crossing(&self, from: Vec3, to: Vec3) -> Option<(Vec3, Vec3)> {
@@ -346,12 +348,9 @@ impl super::Race {
         }
         let direction = along / length;
         let mut hits = [None; 4];
-        let found = self.sim.collision.raycast_all(
-            Ray::new(from, direction, length),
-            None,
-            false,
-            &mut hits,
-        );
+        let found =
+            self.collision
+                .raycast_all(Ray::new(from, direction, length), None, false, &mut hits);
         hits.iter()
             .flatten()
             .take(found)
@@ -359,7 +358,9 @@ impl super::Race {
             .min_by(|a, b| a.distance.total_cmp(&b.distance))
             .map(|hit| (hit.point, hit.normal))
     }
+}
 
+impl super::Race {
     /// The lens as a world frame: where it is and where its axes point.
     pub(super) fn camera_frame(&self) -> psys::field::Frame {
         let world = self.view().inverse();

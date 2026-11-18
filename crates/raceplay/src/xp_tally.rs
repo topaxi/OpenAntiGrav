@@ -322,10 +322,10 @@ impl Completion {
     }
 }
 
-impl crate::Race {
+impl crate::RaceSim {
     /// Starts counting this race's in-race XP into `tally`.
     pub fn arm_xp(&mut self, tally: XpTally) {
-        self.sim.xp = Some(Box::new(tally));
+        self.xp = Some(Box::new(tally));
     }
 
     /// Arms the tally an event's own `XPAwards.xml` and mode column call for; nothing when the
@@ -339,14 +339,16 @@ impl crate::Race {
     /// The race's XP tally, when the event pays XP.
     #[must_use]
     pub fn xp_tally(&self) -> Option<&XpTally> {
-        self.sim.xp.as_deref()
+        self.xp.as_deref()
     }
 
     /// The race's XP tally, to bank it at the finish.
     pub fn xp_tally_mut(&mut self) -> Option<&mut XpTally> {
-        self.sim.xp.as_deref_mut()
+        self.xp.as_deref_mut()
     }
+}
 
+impl crate::Race {
     /// Whether the player's in-race awards count this tick: the tally is armed and the player is
     /// racing (`FUN_8100d2a6` is false on the grid and after the finish). The boost start and the
     /// N-seconds-ahead awards skip this gate in the original and do not ask it.

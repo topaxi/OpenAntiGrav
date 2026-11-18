@@ -212,7 +212,7 @@ fn a_key_the_manifest_lacks_faults_the_module_naming_it_and_the_table() {
     for (kind, heading, command) in wrong {
         let mut race = grid(prepared(&[manifest(&[command], &BEFORE)]));
         race.tick(&PlayerInputs::none());
-        let (_, why) = race.extension_reports()[0]
+        let (_, why) = race.sim.extension_reports()[0]
             .faulted
             .clone()
             .unwrap_or_else(|| panic!("{kind}: the module did not fault"));

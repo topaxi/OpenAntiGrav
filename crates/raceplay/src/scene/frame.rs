@@ -673,7 +673,7 @@ impl Scene {
                 prev_vp * prev.camera_translation,
                 crate::drawable::HullLayers {
                     // `grade-sky`: `0.0` unless a track module sent it.
-                    sky_grey: race.extension_sky().grey,
+                    sky_grey: race.sim.extension_sky().grey,
                     ..Default::default()
                 },
             );

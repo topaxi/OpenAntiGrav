@@ -1205,7 +1205,7 @@ impl crate::Race {
         #[cfg(feature = "extensions")]
         {
             on::tick(&mut self.sim, inputs, transited);
-            self.run_motion();
+            self.sim.run_motion();
             #[cfg(feature = "view")]
             self.run_warnings();
             let gave = self.sim.extensions.take_shield_gives();
@@ -1228,16 +1228,18 @@ impl crate::Race {
             }
         }
     }
+}
 
+impl crate::RaceSim {
     /// The call's `transit` and `probe-clearance` commands, in module then reply order: a
     /// transit the race refuses ([`RaceSim::begin_transit`](crate::RaceSim::begin_transit)) faults its module, but for a craft
     /// an earlier module's transit took first, which is dropped; a probe's answer waits for
     /// the next call's `clearance` event.
     #[cfg(feature = "extensions")]
     fn run_motion(&mut self) {
-        let motion = std::mem::take(&mut self.sim.extensions.on.motion);
+        let motion = std::mem::take(&mut self.extensions.on.motion);
         for (index, command) in motion {
-            if on::faulted(&self.sim, index) {
+            if on::faulted(self, index) {
                 continue;
             }
             // Not moved by a module: a craft that may not use its pickup (a wreck), and one
@@ -1245,7 +1247,7 @@ impl crate::Race {
             // could have shown the later one.
             if let oag_ext_abi::Command::Transit { slot, .. } = command
                 && (!self.may_use_pickup(slot.index())
-                    || self.sim.world.ships[slot.index()].transit.is_some())
+                    || self.world.ships[slot.index()].transit.is_some())
             {
                 continue;
             }
@@ -1256,11 +1258,9 @@ impl crate::Race {
                     distance,
                     exit_factor,
                 } => {
-                    if let Err(why) =
-                        self.sim
-                            .begin_transit(slot.index(), ticks, distance, exit_factor)
+                    if let Err(why) = self.begin_transit(slot.index(), ticks, distance, exit_factor)
                     {
-                        on::fault(&mut self.sim, index, format!("transit refused: {why}"));
+                        on::fault(self, index, format!("transit refused: {why}"));
                     }
                 }
                 oag_ext_abi::Command::ProbeClearance {
@@ -1268,15 +1268,15 @@ impl crate::Race {
                     distance,
                     radius,
                 } => {
-                    let answer = self.sim.clearance(slot.index(), distance, radius);
-                    self.sim.extensions.on.clearance[index][slot.index()] = Some(answer);
+                    let answer = self.clearance(slot.index(), distance, radius);
+                    self.extensions.on.clearance[index][slot.index()] = Some(answer);
                 }
                 oag_ext_abi::Command::FireModEffectAhead {
                     slot,
                     effect,
                     distance,
                 } => {
-                    let own = self.sim.extensions.on.slots[index]
+                    let own = self.extensions.on.slots[index]
                         .names
                         .effect(effect.as_str());
                     if let Some(own) = own {
@@ -1299,18 +1299,17 @@ impl crate::Race {
         own: u16,
         distance: oag_ext_abi::Distance,
     ) {
-        let Ok((exit, _)) = self.sim.exit_ahead(slot, distance) else {
+        let Ok((exit, _)) = self.exit_ahead(slot, distance) else {
             return;
         };
-        let Some((_, up, at, _)) = self.sim.road_frame(exit) else {
+        let Some((_, up, at, _)) = self.road_frame(exit) else {
             return;
         };
-        self.sim
-            .extensions
-            .on
-            .fire_effect_at(module, slot, own, at, up);
+        self.extensions.on.fire_effect_at(module, slot, own, at, up);
     }
+}
 
+impl crate::Race {
     /// The modules' `fire-effect`s, each at its craft's nozzle (the hull's back end),
     /// played from the title's own effect for that trigger or the mod's own effect file;
     /// one that is absent draws nothing (the load report names every one).
@@ -1320,14 +1319,16 @@ impl crate::Race {
             self.play_fired(slot, &fired);
         }
     }
+}
 
+impl crate::RaceSim {
     /// `slot`'s view's `screen-fill` this tick as straight-alpha `RGBA` in `0..=1`, or
     /// `None` with none (and in a race without a module).
     #[must_use]
     pub fn extension_fill(&self, slot: usize) -> Option<[f32; 4]> {
         #[cfg(feature = "extensions")]
         {
-            let (rgba, shader) = (*self.sim.extensions.on.fill.get(slot)?)?;
+            let (rgba, shader) = (*self.extensions.on.fill.get(slot)?)?;
             (shader.is_none() && rgba.a > 0).then(|| unit(rgba))
         }
         #[cfg(not(feature = "extensions"))]
@@ -1345,7 +1346,7 @@ impl crate::Race {
     pub(crate) fn extension_shaded_fill(&self, slot: usize) -> Option<(&str, u16, [f32; 4])> {
         #[cfg(feature = "extensions")]
         {
-            let on = &self.sim.extensions.on;
+            let on = &self.extensions.on;
             let (rgba, shader) = (*on.fill.get(slot)?)?;
             let (module, shader) = shader?;
             Some((on.module_id(module), shader, unit(rgba)))
@@ -1362,7 +1363,7 @@ impl crate::Race {
     pub(crate) fn extension_beams(&self) -> impl Iterator<Item = (&str, Beam)> {
         #[cfg(feature = "extensions")]
         {
-            let on = &self.sim.extensions.on;
+            let on = &self.extensions.on;
             on.beams
                 .iter()
                 .map(|(module, beam)| (on.module_id(*module), *beam))
@@ -1378,7 +1379,7 @@ impl crate::Race {
     pub(crate) fn extension_portal_view(&self, slot: usize) -> Option<PortalRequest> {
         #[cfg(feature = "extensions")]
         {
-            self.sim.extensions.on.portal_views[slot]
+            self.extensions.on.portal_views[slot]
         }
         #[cfg(not(feature = "extensions"))]
         {
@@ -1395,7 +1396,7 @@ impl crate::Race {
     ) -> impl Iterator<Item = (&str, u16, u8, f32)> {
         #[cfg(feature = "extensions")]
         {
-            let on = &self.sim.extensions.on;
+            let on = &self.extensions.on;
             on.shader_params
                 .iter()
                 .filter(move |sent| sent.slot == slot)
@@ -1420,7 +1421,7 @@ impl crate::Race {
     pub fn extension_fov_offset(&self, slot: usize) -> f32 {
         #[cfg(feature = "extensions")]
         {
-            self.sim.extensions.on.fov.get(slot).copied().unwrap_or(0.0)
+            self.extensions.on.fov.get(slot).copied().unwrap_or(0.0)
         }
         #[cfg(not(feature = "extensions"))]
         {
@@ -1433,21 +1434,23 @@ impl crate::Race {
     /// `set-weather`): [`Sky::default`] in a race without a module.
     #[must_use]
     pub fn extension_sky(&self) -> Sky {
-        self.sim.extensions.sky()
+        self.extensions.sky()
     }
 
     /// The modules' numbers for the dev overlay ([`Report`]).
     #[must_use]
     pub fn extension_reports(&self) -> Vec<Report> {
-        self.sim.extensions.reports()
+        self.extensions.reports()
     }
 
     /// Module `index`'s state blob ([`Extensions::state`]).
     #[must_use]
     pub fn extension_state(&self, index: usize) -> Option<&[u8]> {
-        self.sim.extensions.state(index)
+        self.extensions.state(index)
     }
+}
 
+impl crate::Race {
     /// The world-clock reading at which `start.channel` (`oag_ext_abi::channel_key`) last
     /// fired, with `start.value` if it names one (any value if not), the clock the scenery's animations ride: `None` before it has fired.
     #[cfg(feature = "view")]
@@ -1456,17 +1459,19 @@ impl crate::Race {
         let tick = self.sim.extensions.last_fired(start.channel, start.value)?;
         Some(tick as f32 / 60.0 + self.flyby_seconds() + self.world_clock_offset())
     }
+}
 
+impl crate::RaceSim {
     /// Whether a simulation module runs in this race (MODDED: no ghost, no lap record; the
     /// input recording is kept and names the modules, README 4.4).
     #[must_use]
     pub fn is_modded(&self) -> bool {
-        self.sim.extensions.any()
+        self.extensions.any()
     }
 
     /// The simulation modules this race runs, as a replay names them.
     #[must_use]
     pub fn mods_used(&self) -> &[oag_replay::header::ModUse] {
-        self.sim.extensions.uses()
+        self.extensions.uses()
     }
 }

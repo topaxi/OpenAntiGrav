@@ -1138,7 +1138,7 @@ impl Session {
                         observation.campaign_medal,
                         None,
                     );
-                    let banked = stage.race.xp_tally_mut().map(|tally| {
+                    let banked = stage.race.sim.xp_tally_mut().map(|tally| {
                         let earned = self.records.bank_event_xp(
                             tally,
                             prior,

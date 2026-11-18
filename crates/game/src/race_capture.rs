@@ -533,7 +533,7 @@ pub fn capture(
     });
     campaign_2048_event
         .iter()
-        .for_each(|event| race.arm_event_xp(event));
+        .for_each(|event| race.sim.arm_event_xp(event));
     if options.demo {
         crate::demo::hand_over(&mut race, &title.demo, options.window_layout.len());
     }

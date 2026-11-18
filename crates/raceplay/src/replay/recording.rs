@@ -77,12 +77,12 @@ impl Race {
     /// the caller needs to rebuild this race; its slots are replaced by the
     /// slots a person flies here.
     ///
-    /// A MODDED race ([`Self::is_modded`]) records its inputs like any other, and its header
+    /// A MODDED race ([`RaceSim::is_modded`]) records its inputs like any other, and its header
     /// names each simulation module ([`Header::mods`]) so a rebuild runs the same ones or is
     /// refused by name. It sets no ghost and offers none to save: a module changes the run, so
     /// no lap of it is a lap to race against (`docs/architecture/wasm-extensions/README.md`, 4.4).
     pub fn start_recording(&mut self, mut header: Header) {
-        header.mods = self.mods_used().to_vec();
+        header.mods = self.sim.mods_used().to_vec();
         header.slots = self
             .sim
             .world
@@ -102,7 +102,7 @@ impl Race {
             base: self.sim.world.tick,
             last_lap: standing.lap,
             last_start: standing.lap_start_tick,
-            ghosts: !self.is_modded(),
+            ghosts: !self.sim.is_modded(),
             best: None,
             best_unsaved: false,
         });

@@ -348,7 +348,7 @@ impl Race {
                 unshaken: self.tick_view_unshaken(),
                 forward_speed: self.tick_forward_speed(),
                 boost_kick: self.view.boost_kick,
-                fov_offset: self.extension_fov_offset(self.player_slot()),
+                fov_offset: self.sim.extension_fov_offset(self.player_slot()),
                 key: self.camera_key(),
             },
             ships: std::array::from_fn(|slot| {

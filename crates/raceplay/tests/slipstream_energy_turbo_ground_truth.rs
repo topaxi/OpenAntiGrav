@@ -56,7 +56,7 @@ fn both_mods_hand_out_and_use_their_own_pickups_in_one_race_with_no_fault() {
     let mut race = race::Race::start(loaded.setup);
     race.sim.set_autopilot(true);
     assert_eq!(
-        race.extension_reports().len(),
+        race.sim.extension_reports().len(),
         2,
         "both mods are on: {:?}",
         loaded.report
@@ -105,7 +105,7 @@ fn both_mods_hand_out_and_use_their_own_pickups_in_one_race_with_no_fault() {
     assert!(handed[1] > 0, "the slipstream was handed out");
     assert!(transits > 0, "a slipstream was used by its mod");
     assert!(boost_ticks > 0, "an energy turbo was used by its mod");
-    let reports = race.extension_reports();
+    let reports = race.sim.extension_reports();
     assert!(
         reports.iter().all(|r| r.faulted.is_none()),
         "no fault: {reports:?}"

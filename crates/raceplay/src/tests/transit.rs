@@ -338,8 +338,8 @@ mod guest {
             race.tick(&PlayerInputs::none());
             out += u32::from(race.sim.world.ships[1].transit.is_some());
         }
-        let blob = race.extension_state(0).unwrap().to_vec();
-        assert_eq!(race.extension_reports()[0].faulted, None);
+        let blob = race.sim.extension_state(0).unwrap().to_vec();
+        assert_eq!(race.sim.extension_reports()[0].faulted, None);
         assert_eq!(blob[11], 1, "transit-end was sent: {blob:?}");
         assert_eq!(blob[12], 1, "clearance was sent: {blob:?}");
         assert_eq!(race.sim.world.ships[1].transit, None);
@@ -379,8 +379,8 @@ mod guest {
             race.tick(&PlayerInputs::none());
         }
         let (listened, probed) = (
-            race.extension_state(0).unwrap().to_vec(),
-            race.extension_state(1).unwrap().to_vec(),
+            race.sim.extension_state(0).unwrap().to_vec(),
+            race.sim.extension_state(1).unwrap().to_vec(),
         );
         assert_eq!(probed[12], 1, "the prober has its answer: {probed:?}");
         assert_eq!(listened[12], 0, "and nobody else has it: {listened:?}");
@@ -397,10 +397,10 @@ mod guest {
         for _ in 0..600 {
             race.tick(&PlayerInputs::none());
         }
-        let reports = race.extension_reports();
+        let reports = race.sim.extension_reports();
         assert_eq!(reports[0].faulted, None);
         assert_eq!(reports[1].faulted, None, "the craft was already out");
-        assert_eq!(race.extension_state(1).unwrap()[11], 1, "it still runs");
+        assert_eq!(race.sim.extension_state(1).unwrap()[11], 1, "it still runs");
     }
 
     /// Every call stops slot 1 dead (`scale-speed` 0): it keeps only the one tick of
@@ -420,7 +420,7 @@ mod guest {
         );
         let (vanilla, _) = super::super::extensions::run(grid(Prepared::default()), 600);
         let (stopped, _) = super::super::extensions::run(grid(prepared(&[stopper])), 600);
-        assert_eq!(stopped.extension_reports()[0].faulted, None);
+        assert_eq!(stopped.sim.extension_reports()[0].faulted, None);
         let (v, s) = (speed(&vanilla, 1), speed(&stopped, 1));
         assert!(v > 1.0 && s < v * 0.1, "{s} against {v}");
     }

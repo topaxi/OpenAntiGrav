@@ -315,7 +315,7 @@ fn load_event_wires_2048_event_6s_own_weapon_set_onto_setup() {
 /// race's in-race tally (a kill, a perfect zone) plus the completion award of its tier plus
 /// `Finished Nth`, in the event's mode column, each counted once. Expected values come from the
 /// parsed disc table, through the same `Store::bank_event_xp` the session's finish site calls,
-/// and the tally the race itself arms (`Race::arm_xp`).
+/// and the tally the race itself arms (`RaceSim::arm_xp`).
 #[test]
 #[ignore = "needs the extracted package under data/extracted/vita/"]
 fn a_finished_event_raises_the_stored_xp_by_the_authored_award() {
@@ -401,7 +401,7 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
     let progress = loaded.campaign_2048_event.clone().expect("an event");
     let awards = progress.xp_awards.clone().expect("the table loads");
     let mut run = race::Race::start(loaded.setup);
-    run.arm_event_xp(&progress);
+    run.sim.arm_event_xp(&progress);
     run.sim.set_autopilot(true);
     let max = run.sim.world.ships[0].handling.dimensions.shield;
     let (mut lap, mut shield, mut damaged) = (run.sim.world.race[0].lap, max, false);
@@ -424,7 +424,7 @@ fn an_autopiloted_event_pays_the_lap_and_place_awards_the_table_authors() {
         run.sim.finished(),
         "the event did not finish in 30000 ticks"
     );
-    let tally = run.xp_tally().expect("armed");
+    let tally = run.sim.xp_tally().expect("armed");
     let column = progress.xp_column;
     assert!(
         awards.xp(5, column) > 0 && awards.xp(44, column) > 0 && awards.xp(21, column) > 0,

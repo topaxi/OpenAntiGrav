@@ -161,7 +161,10 @@ fn give(race: &mut race::Race, slot: usize) {
 }
 
 fn no_fault(race: &race::Race) -> bool {
-    race.extension_reports().iter().all(|r| r.faulted.is_none())
+    race.sim
+        .extension_reports()
+        .iter()
+        .all(|r| r.faulted.is_none())
 }
 
 fn ship(race: &race::Race) -> oag_gameplay::world::Ship {
@@ -573,7 +576,7 @@ fn loads_it(mode: oag_race::Mode, weapons: bool) -> Option<bool> {
         .iter()
         .any(|l| l.contains("oag.slipstream") && l.contains("not run in this race"));
     assert_eq!(modded, !declined, "{:?}", loaded.report);
-    assert_eq!(race::Race::start(loaded.setup).is_modded(), modded);
+    assert_eq!(race::Race::start(loaded.setup).sim.is_modded(), modded);
     Some(modded)
 }
 

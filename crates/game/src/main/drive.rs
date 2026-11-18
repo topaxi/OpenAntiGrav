@@ -427,7 +427,7 @@ fn resolved(session: &Session) -> Option<Resolved> {
     };
     Some(Resolved {
         mods: race.map_or_else(Vec::new, |race| {
-            race.extension_reports().into_iter().map(|r| r.mod_id).collect()
+            race.sim.extension_reports().into_iter().map(|r| r.mod_id).collect()
         }),
         pickup: race.and_then(|race| {
             let slot = (0..usize::from(race.sim.world.ship_count))

@@ -477,7 +477,7 @@ fn a_portal_behind_a_wall_draws_nothing() {
     let portals = pair_in_other_sections(&sectioned_race(&[]));
     let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
     let mut race = sectioned_race(&commands);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     assert!(
         !entrance_is_in_the_pvs(&race, &walled_sections(), &request),
         "the fixture puts a wall between them"
@@ -495,7 +495,7 @@ fn a_portal_in_the_main_views_pvs_still_draws() {
     let portals = pair_in_other_sections(&sectioned_race(&[]));
     let commands = [portal_view(0, portals, ViewUpdate::Continuous, 0)];
     let mut race = sectioned_race(&commands);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     assert!(entrance_is_in_the_pvs(&race, &open_sections(), &request));
     let scene = sectioned_scene(&gpu, &race, open_sections());
     assert_eq!(frames(&gpu, &scene, &mut race, 5), 5);
@@ -516,7 +516,7 @@ fn a_snapshot_behind_a_wall_is_not_spent_until_the_entrance_is_in_view() {
     let scene = sectioned_scene(&gpu, &race, walled_sections());
     assert_eq!(frames(&gpu, &scene, &mut race, 4), 0, "behind the wall");
     assert!(!scene.has_portal_target());
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let at = race
         .sim
         .portal_frame(
@@ -551,7 +551,7 @@ fn a_portal_whose_radius_reaches_a_visible_section_still_draws() {
         40,
     )];
     let mut race = sectioned_race(&commands);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let set = race.visible_set(&walled_sections(), &(projection * race.view()));
@@ -657,7 +657,7 @@ fn chunked_frames(
     let gpu = test_gpu()?;
     let portals = pair_ahead(&race(&[]));
     let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let entrance = entrance_centre(&race, &request);
     let draws: Vec<_> = near
         .iter()
@@ -709,7 +709,7 @@ fn a_portal_reaching_an_unplaced_draw_still_draws() {
     let Some(gpu) = test_gpu() else { return };
     let portals = pair_ahead(&race(&[]));
     let mut race = race(&[portal_view(0, portals, ViewUpdate::Continuous, 0)]);
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     let at = entrance_centre(&race, &request);
     let mut track = chunked_track(&[(1, at), (1, at)]);
     track.draws[1].chunk = None;
@@ -871,7 +871,7 @@ fn forked_race(exit: oag_ext_abi::Distance) -> Option<(Race, crate::extensions::
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
     }
-    let request = race.extension_portal_view(0).expect("the guest asked");
+    let request = race.sim.extension_portal_view(0).expect("the guest asked");
     Some((race, request))
 }
 
