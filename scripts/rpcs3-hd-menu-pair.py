@@ -39,6 +39,13 @@ import compare_provenance as cp  # noqa: E402
 drive = importlib.import_module("rpcs3-drive")
 walk = importlib.import_module("rpcs3-hd-menu-walk")
 
+
+def prepare_profile(plat, profile, safe_area, front_end_style, race):
+    """Ours' private profile: the compare settings, the front-end styling, the race selection and `[dev] unlock_everything = false`
+    (a debug build unlocks everything; the walk starts from a profile with its locks, and Ship Select's grid shows them)."""
+    ce.write_ours_settings(plat, profile, safe_area)
+    cm.extra_settings(profile, front_end_style, race, locked=True)
+
 #: The walk. A string is a button (`name` or `name:SETTLE_SECONDS`); a dict is a photograph. `pair` fields: `id`, `title`,
 #: `screen` (HD's own name, from TTY.log), `page` (ours' `--menu-page`), `drawn_from` (`xml` or `menu.toml`), `xml` (the
 #: disc file that drives ours' page), `selection` (the highlighted row on each side), `race` (the selection ours' picker
@@ -179,8 +186,7 @@ def main():
             pair.rec["original"]["capture_path"] = "cold boot, walked (no savestate)"
             profile = pdir / "ours-profile" / "profile"
             safe_area = ce.record_safe_area(pair)
-            ce.write_ours_settings(plat, profile, safe_area)
-            cm.extra_settings(profile, args.front_end_style, item.get("race"))
+            prepare_profile(plat, profile, safe_area, args.front_end_style, item.get("race"))
             args.accept_provenance = list(args.accept_provenance)
             cp.build(pair, args, "loading", "cold_boot", None,
                      {"value": None, "unit": None, "basis": "not applicable: a loading screen is a still, the bar's fill is not locked"})
@@ -216,8 +222,7 @@ def main():
         pair.rec["original"]["capture_path"] = "cold boot, walked (no savestate)"
         profile = pdir / "ours-profile" / "profile"
         safe_area = ce.record_safe_area(pair)
-        ce.write_ours_settings(plat, profile, safe_area)
-        cm.extra_settings(profile, args.front_end_style, item.get("race"))
+        prepare_profile(plat, profile, safe_area, args.front_end_style, item.get("race"))
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk's taps left it"
         args.accept_provenance = list(args.accept_provenance)
         cp.build(pair, args, "menu", "cold_boot", None,
