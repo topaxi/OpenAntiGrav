@@ -68,6 +68,20 @@ read the resident set while `stage=race` (poll every 20 ms), not from a
 sample taken after the next state line. The pause-menu value drifts between runs
 for the same reason.
 
+**Is the first race itself bigger than a week ago?** No change beyond noise. A
+build of `c476dee64` (2026-11-11, same walk, iGPU, two runs) reads 1194 and 1021
+MiB in race 1 and 1221/1149 and 1667/1534 in races 2 and 3; this branch before
+the fix read 1046 to 1255 in race 1. The old commit grows the same way.
+
+**Does the lag track the growth?** Not in what the headless walk can measure.
+The unthrottled sim in the walk runs 3000 ticks in 0.23 to 0.26 s in race 1, 2, 3
+and 4 both before and after the fix (about 12000 ticks/s, load 3 to 5; a
+Single Race with `slipstream` takes 0.7 to 1.0 s for its first 3000 ticks, wasm
+module and opponents, and then 0.24 s in the Time Trials that follow). The
+frame time and the input latency of a presented frame need a window and were
+not measured on the Deck; an input is sampled once per tick into the
+`InputSnapshot`, which does not depend on the heap.
+
 ## Open
 
 - A race holds about 1.1 GB in play on this build (debug, opt-level 2 for
