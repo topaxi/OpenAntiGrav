@@ -316,6 +316,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         ps4: true,
         tone: None,
     }),
+    team_hex_fade: None,
 };
 
 /// The file Omega's front end lights its models with. Omega always runs the HD style, so the

@@ -117,10 +117,9 @@ pub struct HexGrid {
     pub scale: f32,
     pub hex: u32,
     pub hex_fade: u32,
-    /// Columns out at which a cell has faded all the way to `hex_fade`; `0`
-    /// for a grid whose cells do not fade with distance (`Team Selection`'s,
-    /// as measured).
-    pub fade_columns: usize,
+    /// How a cell's fill eases from `hex` to `hex_fade` with its column's distance from the
+    /// selected one; `None` for a grid whose cells do not fade.
+    pub fade: Option<oag_title::HexFade>,
     pub selected_column: u32,
     pub selected_lock: u32,
     pub selected_lock_fade: u32,
@@ -136,6 +135,8 @@ pub struct Cell {
     /// Visible hexagon, `[x, y, width, height]`.
     pub rect: [f32; 4],
     pub distance: usize,
+    /// The column's signed offset from the selected one: negative to its left.
+    pub offset: i64,
     /// How much of the cell shows: `1.0` for every column but the two that
     /// slide in and out of the grid's edge while it is panned.
     pub weight: f32,
@@ -164,7 +165,10 @@ impl HexGrid {
             scale: 1.0,
             hex: HEX_COL,
             hex_fade: HEX_COL_FADE,
-            fade_columns: 4,
+            fade: Some(oag_title::HexFade {
+                columns: 4.0,
+                span: None,
+            }),
             selected_column: SELECTED_COL,
             selected_lock: LOCK_COL,
             selected_lock_fade: LOCK_COL_FADE,
@@ -220,6 +224,7 @@ impl HexGrid {
                         HEX_SIZE[1] * self.scale,
                     ],
                     distance: offset.unsigned_abs() as usize,
+                    offset,
                     weight,
                 });
             }
@@ -251,6 +256,33 @@ pub fn variant_at(picker: &Picker, cell: &Cell) -> Option<usize> {
 fn lerp_colour(from: u32, to: u32, t: f32) -> [f32; 4] {
     let (a, b) = (argb_to_rgba(from), argb_to_rgba(to));
     std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
+}
+
+/// A cell's hexagon fill: one colour, or - where the fade has a `span` - a colour at each
+/// of the sprite's two edges, so it runs from the value toward the selected column to the
+/// value away from it, as the original's per-vertex colours do. The sprite is the whole 128
+/// texel texture, its visible hexagon centred on [`HEX_CENTRE`].
+fn fill(grid: &HexGrid, cell: &Cell, placed: Placed, rect: [f32; 4]) -> Draw {
+    let Some(fade) = grid.fade else {
+        return sprite(placed, rect, lerp_colour(grid.hex, grid.hex_fade, 0.0));
+    };
+    let colour_at = |columns: f32| {
+        let t = (columns / fade.columns).clamp(0.0, 1.0);
+        lerp_colour(grid.hex, grid.hex_fade, t)
+    };
+    let Some(span) = fade.span else {
+        return sprite(placed, rect, colour_at(cell.distance as f32));
+    };
+    // Columns of fade at a texel `x` right of the centre: it grows away from the selected
+    // column, so rightward on a cell right of it and leftward on one left of it.
+    let away = cell.offset.signum() as f32;
+    let at = |x: f32| colour_at((cell.distance as f32 + away * x / span).max(0.0));
+    Draw::GradientSprite {
+        rect,
+        uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
+        left: at(-HEX_CENTRE[0]),
+        right: at(placed.width as f32 - HEX_CENTRE[0]),
+    }
 }
 
 fn sprite(placed: Placed, rect: [f32; 4], color: [f32; 4]) -> Draw {
@@ -312,16 +344,7 @@ pub(super) fn draw_cells(
                 out.push(sprite(placed, rect, red));
                 out.push(sprite(placed, rect, red));
             } else {
-                let fade = if grid.fade_columns == 0 {
-                    0.0
-                } else {
-                    (cell.distance as f32 / grid.fade_columns as f32).min(1.0)
-                };
-                out.push(sprite(
-                    placed,
-                    rect,
-                    lerp_colour(grid.hex, grid.hex_fade, fade),
-                ));
+                out.push(fill(grid, &cell, placed, rect));
             }
         }
         match face(&cell) {
