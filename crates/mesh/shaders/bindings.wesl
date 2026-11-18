@@ -163,14 +163,16 @@ fn emissive_tint(entry: u32) -> vec4<f32> {
     return emissives.tint_offset[entry];
 }
 
-// What the sun added to the colour `lit_texel` last returned, in that colour's
-// own space: the amount the track's shadowed redraw takes back out. Written by
-// `shade::lit_texel` and read by `shadow::shadowed` within one fragment, so it
-// is per-invocation state and not a binding. Zero wherever the authored rig did
-// not shade the fragment, which makes `shadowed` fall back to its multiply.
-var<private> sun_delta: vec3<f32>;
+// What `shadow::sun_delta` needs to say what the sun added to the colour `lit_texel` last
+// returned, in that colour's own space (the amount the track's shadowed redraw takes back out):
+// the authored colour, the same light without the sun before its encode, and the rig's weight.
+// Written by `shade::lit_texel` and read by `shadow::shadowed` within one fragment, so they are
+// per-invocation state and not bindings; the encode runs only where a shadow covers the pixel.
+var<private> sun_authored: vec3<f32>;
+var<private> sun_sunless: vec3<f32>;
+var<private> sun_weight: f32;
 
-// Whether `sun_delta` was written for the colour `lit_texel` returned: set only
+// Whether the `sun_*` values were written for the colour `lit_texel` returned: set only
 // where that colour is the generic combine's, so a special combine (the glass
 // floor's facing ramp, the magstrip floor, a light cone) is never charged a sun
 // term it did not contain. Zero otherwise, per invocation.

@@ -1,6 +1,7 @@
 // Shadow, sun-occlusion and self-shadow terms.
 
-import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_exempt, shadow_sampler, shadow_tex, sun_delta, sun_known, sun_occlusion_tex, uniforms};
+import package::bindings::{scene, self_shadow_tex, shadow_depth_sampler, shadow_depth_tex, shadow_exempt, shadow_sampler, shadow_tex, sun_authored, sun_known, sun_occlusion_tex, sun_sunless, sun_weight, uniforms};
+import oag_shaders::target::linear_out;
 
 // Which shadow maps this model's surfaces may read: 0 reads none, 1 reads the
 // `mapped` tier's depth map, 2 reads that *and* Wipeout HD's coverage map.
@@ -289,13 +290,26 @@ fn sun_occlusion(world: vec3<f32>) -> f32 {
 // them and not one: a race draws through the `_velocity` pair, so a version of
 // this that only reached `fs_main` shadowed the scenery a blended material drew
 // and left the road untouched. That is exactly what the first cut did.
+// What the sun added to the colour `lit_texel` last returned, in that colour's own space: the
+// authored colour less the same light without the sun, each in the output's encoding.
+fn sun_delta() -> vec3<f32> {
+    let sunless_encoded = pow(clamp(sun_sunless, vec3<f32>(0.0), vec3<f32>(1.0)), vec3<f32>(1.0 / 2.2));
+    return sun_weight * (sun_authored - mix(sunless_encoded, sun_sunless, linear_out));
+}
+
 fn shadowed(colour: vec3<f32>, world: vec3<f32>) -> vec3<f32> {
     if shadow_exempt > 0.5 {
         return colour;
     }
     let coverage = shadow_coverage(world);
     if scene.shadow.mode < 1.5 && sun_known > 0.5 {
-        return max(colour - coverage * sun_delta, vec3<f32>(0.0));
+        // Uncovered, the subtraction takes away `0 * delta`, which is nothing: the sun's
+        // share and its encode are computed only where they are taken out.
+        var delta = vec3<f32>(0.0);
+        if coverage > 0.0 {
+            delta = sun_delta();
+        }
+        return max(colour - coverage * delta, vec3<f32>(0.0));
     }
     return colour * (1.0 - coverage * scene.shadow.strength);
 }
