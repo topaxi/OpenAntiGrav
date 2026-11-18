@@ -12,7 +12,7 @@ import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
 import oag_shaders::target::{decode, encode, encoded_out, linear_out};
-import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, simplified_lighting, zone_race};
+import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
@@ -134,6 +134,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // promises), so both weights are the constant one and the driver folds their multiplies.
     let rig_on = select(select(0.0, scene.light.enabled, light_rig != 0.0), 1.0, lit_by_rig != 0.0);
     in.lit_light.x = select(raw.lit_light.x, 1.0, lit_by_rig != 0.0);
+    in.tangent = select(raw.tangent, vec4<f32>(0.0), tangents_present == 0.0);
     let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
     // **A chunk a Zone race draws on its plain program** (`slots::ZONE_PLAIN`, the speed and weapon
     // pads, signs and screens; `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`): none of
@@ -1239,12 +1240,15 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             specular_mask = 1.0;
             specular_tint = decode(material_sample(MATERIAL_PAD_MASK, in.texcoord).rgb);
         }
-        var specular = scene.light.sun
-            * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
-                * rig_on * in.lit_light.x * select(1.0, 0.0, emissive))
-            * specular_tint
-            * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
-            * select(1.0, 0.0, no_specular);
+        var specular = vec3<f32>(0.0);
+        if rig_specular != 0.0 {
+            specular = scene.light.sun
+                * (pow(ndh, specular_exponent) * ndl_spec * mask * specular_mask * scene.light.specular_scale
+                    * rig_on * in.lit_light.x * select(1.0, 0.0, emissive))
+                * specular_tint
+                * select(vec3<f32>(1.0), in.colour.rgb, colour_factor)
+                * select(1.0, 0.0, no_specular);
+        }
         // The sea's own specular: `sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)`
         // times the bake's sun mask (`@0x2d`..`@0x5b` of its lit block), the colour in the tap
         // entries' `program` lanes and the power in `scale`. The pool and `water_test_2` have none; `water_noref`

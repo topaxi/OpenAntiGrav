@@ -79,6 +79,12 @@ pub(super) fn reads_second(
         })
 }
 
+/// Whether any vertex of `model` carries a tangent (`GpuVertex::tangent`'s `xyz` bytes not all
+/// zero, the test `vs_main` makes): `false` lets its pipelines fold the normal-map branches.
+pub(super) fn tangents_present(model: &Model) -> bool {
+    model.vertices.iter().any(|v| v.tangent & 0x00ff_ffff != 0)
+}
+
 /// Whether any vertex of `model` is a 2048 vertex-lit one (`sun_mask` 2 or above, read by
 /// `shade.wesl` as `>= 1.5`): `false` lets its pipelines fold `nova_vertex` to false. An
 /// interpolated `sun_mask` never exceeds its vertices', so a model none of whose vertices

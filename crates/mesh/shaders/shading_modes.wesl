@@ -32,6 +32,18 @@ override lit_by_rig: f32 = 0.0;
 // `nova_vertex` is the constant false; 1.0, the vertex deciding, by default.
 override nova_vertices: f32 = 1.0;
 
+// **Whether any vertex this pipeline draws carries a tangent** (`mesh_render::specialise::
+// tangents_present`): 0.0 where none does, so every tangent the fragment stage reads is the zero
+// vector `vs_main` leaves and the normal-map branches on it go; 1.0, the varying deciding, by
+// default.
+override tangents_present: f32 = 1.0;
+
+// **Whether the scene's rig has a generic specular at all**: 0.0 where its `specular_scale` is
+// zero for the whole race (`BuildCacheScope::lit_by`; 2048's and Omega's circuits author none),
+// so `lit_texel`'s generic specular, a product with that scale, is the zero it would compute.
+// 1.0, computed, by default.
+override rig_specular: f32 = 1.0;
+
 // **1.0 on a circuit's plain pipeline when the player chose CIRCUIT LIGHTING `simplified`**
 // (`oag_display::display::CircuitLighting`, `BuildCacheScope::simplified_lighting`): a departure
 // from the original for speed. No specular, no normal map, no Wipeout HD SPU vertex lights; the

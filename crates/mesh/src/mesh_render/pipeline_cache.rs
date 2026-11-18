@@ -145,6 +145,9 @@ impl Scope {
         if light.enabled == 0.0 {
             self.constant("light_rig");
         }
+        if light.specular_scale == 0.0 {
+            self.constant("rig_specular");
+        }
         // The other end of the same fact: a rig that is on stays on (a Zone grade carries
         // the flag), which lets a pipeline whose vertices are all lit drop the stand-in
         // result its last mix weighs at zero (`specialise::plain_is_lit`).
