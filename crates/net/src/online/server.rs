@@ -38,7 +38,7 @@ pub const MAX_PER_ADDRESS: usize = 16;
 mod hosting;
 mod referee;
 pub use hosting::{HOST_ASK_INTERVAL, MAX_HOSTED_PER_ADDRESS, MAX_HOSTED_ROOMS, MAX_PROBES};
-pub use referee::{CHALLENGE_TIMEOUT, JUDGE_TIME, MAX_ASSEMBLING, Ruling};
+pub use referee::{CHALLENGE_TIMEOUT, JUDGE_TIME, MAX_ASSEMBLING, MAX_HELD_BYTES, Ruling};
 
 /// What the service is built from.
 #[derive(Debug, Clone)]

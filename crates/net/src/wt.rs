@@ -382,6 +382,10 @@ impl Link for WtLink {
     fn max_datagram(&self) -> usize {
         self.max_datagram
     }
+    fn unsent(&self) -> Option<usize> {
+        Some(self.queued.load(Ordering::Relaxed))
+    }
+
     fn path(&self) -> Option<PathStats> {
         // `Session` derefs to quinn's `Connection`, whose `stats()` the session's own
         // shadows; the connection's carries the counters.

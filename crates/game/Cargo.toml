@@ -198,9 +198,6 @@ oag-shader-check.workspace = true
 workspace = true
 
 [dev-dependencies]
-# The tests' own build of the game hosts with a cheat when `OAG_TEST_CHEAT` asks
-# (`oag_net::host::Cheat`), so `net_anticheat_ground_truth` can prove it caught.
-oag-net = { workspace = true, features = ["client", "test-cheats"] }
 oag-bytes.workspace = true
 oag-testdata.workspace = true
 oag-pob.workspace = true
@@ -213,6 +210,13 @@ oag-weapons.workspace = true
 # there; no test runs on wasm32.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 oag-schema = { workspace = true, features = ["validate"] }
+
+# The tests' own build of the game hosts with a cheat when `OAG_TEST_CHEAT` asks
+# (`oag_net::host::Cheat`), so `net_hosted_ground_truth` can prove one is caught. Cargo
+# builds an example's dev-dependencies too, and `oag_android` and `oag_web` are shipped
+# examples, so the feature is kept off every target they build for.
+[target.'cfg(not(any(target_os = "android", target_os = "ios", target_arch = "wasm32")))'.dev-dependencies]
+oag-net = { workspace = true, features = ["client", "test-cheats"] }
 
 # The Android entry point: the binary's own body again (`src/android.rs`
 # `include!`s `src/main_body.rs`, as `src/main.rs` does), as the cdylib the

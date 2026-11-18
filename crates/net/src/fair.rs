@@ -33,8 +33,18 @@ use crate::wire::{Confirmed, Datagram, Held, Malformed, RaceParams, TickRecord};
 pub const CHECKPOINT_EVERY: u32 = 60;
 
 /// Ticks of applied inputs a host keeps the signed datagram of, to show the lobby on a
-/// challenge: a minute, far past the second a checkpoint takes and the lobby's round trip.
-pub const LEDGER_TICKS: u32 = 3600;
+/// challenge: two minutes, about 2 MB a seat.
+pub const LEDGER_TICKS: u32 = 7200;
+
+/// Whether a forgery claim on `tick` is too old to put to the host, `ticks_since_up` ticks of
+/// wall clock after the host said its race was up (no race has run more ticks than that). An
+/// honest client claims within a second or two of the tick; past half the ledger, an honest host
+/// may no longer hold the datagram by the time the challenge's answer is due, and a claim it
+/// cannot answer would ban it wrongly.
+#[must_use]
+pub fn too_old_to_challenge(ticks_since_up: u32, tick: u32) -> bool {
+    ticks_since_up > tick.saturating_add(LEDGER_TICKS / 2)
+}
 
 pub use crate::wire::online::REPORT_PART_BYTES as PART_BYTES;
 

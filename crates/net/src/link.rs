@@ -43,6 +43,12 @@ pub trait Link: Send {
         None
     }
 
+    /// Bytes queued for the peer and not yet written, on a link that counts them; `None`
+    /// elsewhere. A sender of something long paces itself by it.
+    fn unsent(&self) -> Option<usize> {
+        None
+    }
+
     /// Sends a [`Control`] message.
     fn send_control(&mut self, message: &Control) {
         self.send_reliable(message.encode());
@@ -96,6 +102,9 @@ impl<L: Link + ?Sized> Link for Box<L> {
     }
     fn path(&self) -> Option<PathStats> {
         (**self).path()
+    }
+    fn unsent(&self) -> Option<usize> {
+        (**self).unsent()
     }
 }
 
@@ -418,6 +427,10 @@ impl<L: Link> Link for Shim<L> {
     }
     /// The inner link's counters with the shim's conditions on them: the round trip
     /// QUIC reports is the socket's alone, the delay being added above it.
+    fn unsent(&self) -> Option<usize> {
+        self.inner.unsent()
+    }
+
     fn path(&self) -> Option<PathStats> {
         let mut path = self.inner.path().unwrap_or_default();
         path.shim = Some(ShimStats {

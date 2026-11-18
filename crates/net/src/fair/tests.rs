@@ -234,6 +234,39 @@ fn a_forgery_claim_needs_an_input_that_is_not_a_repeat_and_a_signed_answer_settl
 }
 
 #[test]
+fn a_game_back_from_its_record_signs_for_the_race_it_is_welcomed_to() {
+    let key = Arc::new(PlayerKey::generate().expect("a key"));
+    let mut watch = Watch::new([0; 32], [0; 32], Some(key.clone()));
+    let p = params(4);
+    assert!(
+        watch.check_welcome(&p).is_ok(),
+        "no race issued: nothing to refuse"
+    );
+    watch.start(1, 7);
+    let inputs = [held(0, 1)];
+    let signature = watch.sign(0, &inputs).expect("signed with the key");
+    let datagram = Datagram::Inputs {
+        seat: 1,
+        first: 0,
+        inputs: inputs.to_vec(),
+        signature: Some(signature),
+    };
+    assert!(inputs_signed(&datagram, &params_hash(&p), 1, &key.public()));
+}
+
+#[test]
+fn a_forgery_claim_older_than_half_the_ledger_is_not_put_to_the_host() {
+    assert!(!too_old_to_challenge(400, 300), "a fresh claim");
+    assert!(
+        !too_old_to_challenge(300 + LEDGER_TICKS / 2, 300),
+        "at the edge"
+    );
+    assert!(too_old_to_challenge(301 + LEDGER_TICKS / 2, 300), "past it");
+    // Half the ledger plus the challenge's own time is still inside what the host keeps.
+    assert!(LEDGER_TICKS / 2 + 600 < LEDGER_TICKS);
+}
+
+#[test]
 fn a_watch_refuses_another_race_and_reports_an_input_it_never_sent_once_a_checkpoint_covers_it() {
     let host = PlayerKey::generate().expect("a key");
     let p = params(9);

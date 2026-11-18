@@ -65,7 +65,8 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
    2026-11-18). Measured: 0.87 s and about 35 MiB to judge a five-minute two-person Pulse race
    (`server-roadmap.md`, "Anti-cheat: what it costs"). Still open: decision 8's resync (a
    client reports at its first covered mismatch instead), item 5 (withheld inputs, report
-   only), a REJOIN RACE game keeps no watch (the record has no params hash or host key), no
+   only), a REJOIN RACE game signs its inputs but keeps no watch on the host (the record has
+   no params hash or host key), no
    report row on the room screen, a TTL or prune for the ban file (the dates are there for it),
    and a server race's seed is still predictable from the room id.
 6. **Lobby and race boundary.** Already split in code (`rooms.rs` has no I/O, the `Runner`

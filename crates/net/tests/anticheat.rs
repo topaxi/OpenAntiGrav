@@ -301,3 +301,30 @@ fn a_malformed_or_oversized_report_is_refused_without_judging_and_the_race_goes_
     assert!(race.lab.people[BOB].left.is_none(), "the room stays open");
     assert_eq!(race.racers[1].mismatches, 0);
 }
+
+#[test]
+fn a_guest_that_claims_a_forgery_of_an_input_it_sent_is_dismissed_and_bans_nobody() {
+    let mut race = hosted(Cheat::None, 100_000, None);
+    race.racers[1].client.lie_from(240);
+    let started = std::time::Instant::now();
+    let judged = loop {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "no ruling: {:?}",
+            race.lab.server.rulings()
+        );
+        race.step();
+        if let Some(ruling) = race.judged().into_iter().find(|(who, _)| who == "bob") {
+            break ruling.1;
+        }
+    };
+    match judged {
+        Verdict::Dismissed(why) => assert!(why.contains("showed seat 1's signed input"), "{why}"),
+        other => panic!("an honest host is not convicted: {other:?}"),
+    }
+    for _ in 0..60 {
+        race.step();
+    }
+    assert!(race.lab.people[BOB].left.is_none(), "the room stays open");
+    assert_eq!(race.lab.server.judgements(), 0, "no re-simulation");
+}

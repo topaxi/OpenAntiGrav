@@ -351,6 +351,15 @@ impl Client {
         self.watch.as_mut()?.take_report()
     }
 
+    /// Makes this client lie to the lobby (tests only): from `tick` on, it claims the first
+    /// input of its own that is not a repeat was forged, though it sent it.
+    #[cfg(all(feature = "test-cheats", not(target_arch = "wasm32")))]
+    pub fn lie_from(&mut self, tick: u32) {
+        if let Some(watch) = &mut self.watch {
+            watch.lie_from(tick);
+        }
+    }
+
     /// What the watch on the host has seen ([`Self::guard`]).
     #[cfg(not(target_arch = "wasm32"))]
     #[must_use]
@@ -418,7 +427,7 @@ impl Client {
                     #[cfg(not(target_arch = "wasm32"))]
                     if let Some(Err(reason)) = self
                         .watch
-                        .as_ref()
+                        .as_mut()
                         .map(|watch| watch.check_welcome(&params))
                     {
                         log::warn!("net: {reason}");

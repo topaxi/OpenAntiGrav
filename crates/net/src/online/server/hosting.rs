@@ -308,6 +308,9 @@ impl Server {
             return;
         }
         race.up = true;
+        if let Some(case) = self.referee.races.get_mut(&room) {
+            case.up = Some(Instant::now());
+        }
         let seats: Vec<ClientId> = race.seats.iter().map(|(seat, _, _)| *seat).collect();
         for seat in seats {
             if let (Some(message), Some(client)) =

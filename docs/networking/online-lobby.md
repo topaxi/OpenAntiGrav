@@ -1362,18 +1362,27 @@ the race, is the referee. Every value here is **chosen, not measured**; the cost
 4. **Signed inputs.** A hosted race's job names each seat's player key (from the lobby hello's
    `key`). Each client signs every input datagram (`Datagram::Inputs` with a signature, tag
    `0x12`, over `"OAG-INPUT-1" | params | seat | first | inputs`); the host drops one not signed
-   by the seat's key, and keeps the signed datagram behind each input it applied for 60 s
-   (`fair::Ledger`). From the first tick it sent, a client that sees an input confirmed for its
+   by the seat's key, and keeps the signed datagram behind each input it applied for two
+   minutes (`fair::Ledger`). A client signs whenever it has a key, server races included (the
+   server ignores it), so a game that came back to a player-hosted race from its record, which
+   keeps no host key, is still heard; it signs for the race its welcome names. From the first tick it sent, a client that sees an input confirmed for its
    seat that is neither what it sent nor a repeat of the tick before (a host repeats a seat's
    last input when none arrived) reports it once a checkpoint covers it. The lobby checks it is
    not a repeat in the signed records, and asks the host `ShowInput { room, seat, tick }`; the
    host answers `InputShown { room, seat, tick, datagram }`. A datagram signed by the seat's key
    with that input at that tick dismisses the report; none, a wrong one, or no answer in 10 s is
-   proven, with the same ban.
+   proven, with the same ban. What would convict an honest host is ruled out: a claim on a tick
+   older than half the ledger, counted from when the host said its race was up
+   (`fair::too_old_to_challenge`), is not checkable, and so is a host that left the lobby before
+   the answer was due (an honest `--online` host exits after its race).
 
 Bounds on what a reporter controls: one report a seat a race (the host's own seat reports
-nothing), two assembling and four waiting at once, one re-simulation at a time with 60 s to
-finish, a report taken up to 60 s after its race ended. Item 5 (withheld inputs) is not built:
+nothing), two assembling and four waiting at once, at most 64 MiB of proofs held in all
+(`MAX_HELD_BYTES`, a decoded one counted at twice its bytes), one re-simulation at a time with
+60 s to finish, a report taken up to 60 s after its race ended. A client sends a report's next
+part only once its link has written all but one part of the last (`Link::unsent`). A
+re-simulation over an extraction that missed a read the race made is not checkable, never
+proven (`oag_assets::record::take_misses`, as the race child warns of). Item 5 (withheld inputs) is not built:
 the client already measures how long its inputs take to come back confirmed
 (`Stats::confirm_sum_ms`), but nothing reports it.
 
@@ -1427,8 +1436,10 @@ may not host on this lobby: altered a race`.
   forged input the host cannot show signed, proven without a re-simulation; a host racing
   another seed refused at the welcome; an honest race with no report, every checkpoint verified
   and every input signed; a malformed and an oversized report refused without judging, the race
-  going on. `fair::tests`: the chain, the proof codec and its refusals, the judge (honest,
-  altered, another start, out of time), the forgery rule, the client's watch.
+  going on; a lying guest that claims a forgery of an input it sent is dismissed when the host
+  shows the signed datagram, banning nobody. `fair::tests`: the chain, the proof codec and its
+  refusals, the judge (honest, altered, another start, out of time), the forgery rule and its
+  age limit, the client's watch, a rejoined game's signatures.
 
 ### Open
 
@@ -1438,8 +1449,9 @@ may not host on this lobby: altered a race`.
   ADR-0092's later steps.
 - A host whose lobby link drops loses its room; the host's own record of the race is not kept
   apart from a server race's (no records are shared yet either way).
-- Anti-cheat: a game that came back to its race in a new process (REJOIN RACE) keeps no watch
-  on it (the record holds no params hash or host key); decision 8's resync is not built; a
+- Anti-cheat: a game that came back to its race in a new process (REJOIN RACE) signs its inputs
+  but keeps no watch on the host (the record holds no params hash or host key); decision 8's
+  resync is not built; a
   report has no row on the room screen; item 5 (withheld inputs) is not reported; the HOST GAME
   path of the menus is wired but only `--online-host` is driven end to end.
 

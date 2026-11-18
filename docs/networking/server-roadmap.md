@@ -694,9 +694,11 @@ Measured 2026-11-18 on the desktop, `oag-net`'s test build (opt-level 2), load a
 | The lobby's decode and chain check of it | 13 ms | measured |
 | Loading the race to re-simulate | 0.42 s | measured |
 | Re-simulating 18,000 ticks | 0.87 s | measured |
-| Lobby memory for one judgement | +33 to +36 MiB RSS while it runs (one race, as a race child), plus the proof; one at a time | measured |
+| Lobby memory for one judgement | +33 to +36 MiB RSS while it runs (one race, as a race child) | measured |
+| Lobby memory for reports, worst case | 64 MiB of proofs held at once (`MAX_HELD_BYTES`), so about 100 MB with the race being judged | chosen bound |
 | Ed25519 check of one signed input datagram | 32 microseconds; 660 a second for eleven guests is about 2 % of a core on the host | measured |
-| Signed inputs, up | +64 bytes a datagram (167 to 231 at eight inputs), +3.84 KB/s a client at 60 Hz | arithmetic, datagram size asserted in `wire::tests` |
+| Signed inputs, up | +64 bytes a datagram (167 to 231 at eight inputs), +3.84 KB/s a client at 60 Hz, on server races too (a client signs whenever it has a key) | arithmetic, datagram size asserted in `wire::tests` |
+| Host memory for the signed inputs it keeps | two minutes a seat, about 2 MB | arithmetic |
 | Checkpoints, down | 101 bytes a second a seat (plus the stream's 4-byte length) | arithmetic |
 | The lobby's bounds | one report a seat a race; 2 assembling, 4 queued, 1 judging; a proof no longer than the ticks the race can have run plus 600; 60 s to re-simulate; 10 s to answer a challenge | chosen |
 

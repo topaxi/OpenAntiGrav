@@ -57,6 +57,10 @@ pub struct Watch {
     report: Option<Proof>,
     reported: bool,
     stats: WatchStats,
+    /// A lying client (tests only): claims the first input of its own from this tick on that
+    /// is not a repeat, which it did send.
+    #[cfg(feature = "test-cheats")]
+    lie_from: Option<u32>,
 }
 
 impl Watch {
@@ -83,20 +87,35 @@ impl Watch {
             report: None,
             reported: false,
             stats: WatchStats::default(),
+            #[cfg(feature = "test-cheats")]
+            lie_from: None,
         }
+    }
+
+    /// Makes this client lie (tests only): from `tick` on, the first input of its own that is
+    /// not a repeat is claimed forged, though it sent it.
+    #[cfg(feature = "test-cheats")]
+    pub fn lie_from(&mut self, tick: u32) {
+        self.lie_from = Some(tick);
     }
 
     fn player_hosted(&self) -> bool {
         self.host != [0; 32]
     }
 
-    /// Whether the host's welcome names the race the lobby issued.
+    /// Whether the host's welcome names the race the lobby issued. With none issued (a game
+    /// that came back to its race from its record), the welcome's race is the one its inputs
+    /// are signed for.
     ///
     /// # Errors
     ///
     /// The line a player reads: the host offered another race.
-    pub fn check_welcome(&self, params: &RaceParams) -> Result<(), String> {
-        if self.params == [0; 32] || params_hash(params) == self.params {
+    pub fn check_welcome(&mut self, params: &RaceParams) -> Result<(), String> {
+        if self.params == [0; 32] {
+            self.params = params_hash(params);
+            return Ok(());
+        }
+        if params_hash(params) == self.params {
             return Ok(());
         }
         Err(format!(
@@ -122,7 +141,9 @@ impl Watch {
                 self.sent.pop_first();
             }
         }
-        let key = self.signer.as_ref().filter(|_| self.player_hosted())?;
+        // Signed whenever there is a key, so a game that came back to a player-hosted race from
+        // its record (which keeps no host key) is still heard; a server ignores the signature.
+        let key = self.signer.as_ref()?;
         self.stats.inputs_signed += 1;
         Some(key.sign(&input_statement(&self.params, self.seat, first, inputs)))
     }
@@ -143,6 +164,13 @@ impl Watch {
             // A host applies what this client sent for the tick, or repeats the tick before
             // when nothing arrived (or this client sent nothing: its present skipped the tick).
             let sent = self.sent.remove(&tick);
+            #[cfg(feature = "test-cheats")]
+            if self.lie_from.is_some_and(|from| tick >= from)
+                && !same(own, self.last_own)
+                && self.forged.is_none()
+            {
+                self.forged = Some(tick);
+            }
             if self.first_sent.is_some_and(|first| tick >= first)
                 && sent.is_none_or(|sent| !same(own, sent))
                 && !same(own, self.last_own)

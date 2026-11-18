@@ -102,7 +102,14 @@ impl LobbyClient {
         // Read before the queue: a message that lands after this is read on the next poll,
         // never lost behind a close seen after it.
         let closed = self.link.closed();
-        if let Some(part) = self.outgoing.pop_front() {
+        // The next part only once the link has written most of the last: a long proof on a slow
+        // uplink must not fill the link's send queue, which closes the link.
+        if self
+            .link
+            .unsent()
+            .is_none_or(|bytes| bytes < crate::wire::online::REPORT_PART_BYTES)
+            && let Some(part) = self.outgoing.pop_front()
+        {
             self.link.send_lobby(&part);
         }
         while let Some(message) = self.link.recv_lobby() {

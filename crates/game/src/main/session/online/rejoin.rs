@@ -94,6 +94,13 @@ impl Session {
             return;
         };
         online.address.clone_from(&rejoin.addr);
+        // A player-hosted race takes this seat's inputs only signed with the profile's key.
+        if online.key.is_none() {
+            online.key = oag_game::identity::load_or_create()
+                .map(std::sync::Arc::new)
+                .map_err(|e| warn!("online: no player key for the rejoined race: {e:#}"))
+                .ok();
+        }
         online.name.clone_from(&rejoin.name);
         online.team.clone_from(&rejoin.team);
         online.rejoined = true;

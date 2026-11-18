@@ -47,6 +47,11 @@ const TICK_SLACK: u32 = 600;
 /// Rulings kept for [`Server::rulings`].
 const MAX_RULINGS: usize = 256;
 
+/// The most proof bytes the lobby holds at once, reports being received and decoded ones
+/// waiting or being judged together (a decoded proof counted at twice its bytes): with one
+/// race being re-simulated, about 100 MB at the worst.
+pub const MAX_HELD_BYTES: usize = 64 << 20;
+
 /// What became of one report.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ruling {
@@ -81,6 +86,8 @@ pub(super) struct RaceCase {
     /// `(client, name, player key)` by seat.
     pub(super) seats: Vec<(ClientId, String, [u8; 32])>,
     pub(super) launched: Instant,
+    /// When the host said its race was loaded: no race has run more ticks than the time since.
+    pub(super) up: Option<Instant>,
     ended: Option<Instant>,
     reported: Vec<ClientId>,
 }
@@ -101,9 +108,17 @@ impl RaceCase {
             params,
             seats,
             launched: Instant::now(),
+            up: None,
             ended: None,
             reported: Vec::new(),
         }
+    }
+
+    /// Ticks of wall clock since the host said the race was up, 0 before.
+    fn ticks_since_up(&self) -> u32 {
+        self.up.map_or(0, |up| {
+            u32::try_from(up.elapsed().as_millis() * 60 / 1000).unwrap_or(u32::MAX)
+        })
     }
 
     /// The most ticks the race can have run.
@@ -147,6 +162,7 @@ struct Challenge {
 struct Judging {
     case: Case,
     verdict: mpsc::Receiver<Verdict>,
+    bytes: usize,
 }
 
 /// The lobby's reports, challenges and re-simulations.
@@ -155,7 +171,8 @@ pub(super) struct Referee {
     load: Option<Loader>,
     pub(super) races: BTreeMap<u32, RaceCase>,
     assembling: Vec<Assembling>,
-    queue: VecDeque<(Case, Proof)>,
+    /// Desync cases waiting, each with the bytes of its proof.
+    queue: VecDeque<(Case, Proof, usize)>,
     judging: Option<Judging>,
     challenges: Vec<Challenge>,
     judgements: u32,
@@ -238,13 +255,22 @@ impl Server {
             if race.reported.contains(&id) {
                 return self.refuse_report(id, room, &reporter, "one report a race".into());
             }
-            if self.referee.assembling.len() >= MAX_ASSEMBLING {
+            let held = self
+                .referee
+                .assembling
+                .iter()
+                .map(|a| a.max_bytes)
+                .sum::<usize>()
+                + 2 * self.referee.queue.iter().map(|(_, _, b)| b).sum::<usize>()
+                + 2 * self.referee.judging.as_ref().map_or(0, |j| j.bytes);
+            if self.referee.assembling.len() >= MAX_ASSEMBLING || held >= MAX_HELD_BYTES {
                 let why = "the lobby is receiving other reports: try later".into();
                 return self.refuse_report(id, room, &reporter, why);
             }
             let max_bytes = (200
                 + race.ticks_so_far() as usize * Confirmed::record_bytes(race.seats.len()))
-            .min(MAX_PROOF_BYTES);
+            .min(MAX_PROOF_BYTES)
+            .min(MAX_HELD_BYTES - held);
             if usize::from(parts.max(1) - 1) * PART_BYTES >= max_bytes {
                 let why = format!("{parts} parts is more than the race can have run");
                 return self.refuse_report(id, room, &reporter, why);
@@ -318,7 +344,7 @@ impl Server {
                     let why = "the lobby is judging other reports: try later".into();
                     return self.refuse_report(id, room, &case.reporter, why);
                 }
-                self.referee.queue.push_back((case, proof));
+                self.referee.queue.push_back((case, proof, bytes.len()));
             }
             Claim::Forged { tick, seat } => self.challenge(case, &proof, seat, tick),
         }
@@ -334,6 +360,10 @@ impl Server {
             Some(Verdict::NotCheckable("the seat signs no inputs".into()))
         } else if !self.clients.contains_key(&case.race.host) {
             Some(Verdict::NotCheckable("the host has left the lobby".into()))
+        } else if crate::fair::too_old_to_challenge(case.race.ticks_since_up(), tick) {
+            Some(Verdict::NotCheckable(format!(
+                "tick {tick} is older than the host is asked to keep its inputs"
+            )))
         } else {
             match proof.forged_input(seat, tick) {
                 Err(why) => Some(Verdict::Dismissed(why)),
@@ -411,13 +441,18 @@ impl Server {
                 self.referee.challenges.push(challenge);
                 continue;
             }
-            let why = format!(
-                "the host did not show seat {}'s signed input of tick {} within {} s",
-                challenge.case.seat,
-                challenge.tick,
-                CHALLENGE_TIMEOUT.as_secs()
-            );
-            self.decide(&challenge.case, Verdict::Proven(why));
+            // A host whose link closed cannot answer: an honest one exits after its race.
+            let verdict = if self.clients.contains_key(&challenge.case.race.host) {
+                Verdict::Proven(format!(
+                    "the host did not show seat {}'s signed input of tick {} within {} s",
+                    challenge.case.seat,
+                    challenge.tick,
+                    CHALLENGE_TIMEOUT.as_secs()
+                ))
+            } else {
+                Verdict::NotCheckable("the host left before it answered".into())
+            };
+            self.decide(&challenge.case, verdict);
         }
         if let Some(judging) = &self.referee.judging {
             let verdict = match judging.verdict.try_recv() {
@@ -431,7 +466,7 @@ impl Server {
             self.referee.judging = None;
             self.decide(&case, verdict);
         }
-        let Some((case, proof)) = self.referee.queue.pop_front() else {
+        let Some((case, proof, bytes)) = self.referee.queue.pop_front() else {
             return;
         };
         let Some(load) = self.referee.load.clone() else {
@@ -447,18 +482,33 @@ impl Server {
             .name("oag-referee".into())
             .spawn(move || {
                 let deadline = Instant::now() + JUDGE_TIME;
+                // A server running from an extraction answers a read it lacks with an absence,
+                // which can change the race: a judgement over one is no proof. Only the referee
+                // loads races in the lobby's process, so the misses are its own.
+                let _ = oag_assets::record::take_misses();
                 let verdict = match load(&params) {
                     Ok(mut race) => crate::fair::judge(&mut race, &proof, deadline),
                     Err(e) => {
                         Verdict::NotCheckable(format!("the lobby cannot load the race: {e:#}"))
                     }
                 };
+                let missed = oag_assets::record::take_misses();
+                let verdict = match (verdict, missed.first()) {
+                    (Verdict::Proven(_), Some(miss)) => Verdict::NotCheckable(format!(
+                        "the lobby's copy lacks a read the race made ({miss})"
+                    )),
+                    (verdict, _) => verdict,
+                };
                 let _ = tx.send(verdict);
             });
         match spawned {
             Ok(_) => {
                 self.referee.judgements += 1;
-                self.referee.judging = Some(Judging { case, verdict });
+                self.referee.judging = Some(Judging {
+                    case,
+                    verdict,
+                    bytes,
+                });
             }
             Err(e) => self.decide(&case, Verdict::NotCheckable(format!("no thread: {e}"))),
         }
