@@ -44,16 +44,8 @@ RULES = {
 }
 
 #: HD pairs made before the world clock was recorded with every grab (`rpcs3_hd_field.world_clock_record`), by pair id
-#: (the directory under the pair dir). Frozen: an entry may be removed when its pair is re-made, never added.
-HD_CLOCK_BASELINE = frozenset({
-    "hd/talons-assegai-c1",
-    "hd/loading-loading",
-    "hd/menu-campaign-select",
-    "hd/menu-cell-select",
-    "hd/menu-grid-select",
-    "hd/menu-ship-select",
-    "hd/menu-track-select",
-})
+#: (the directory under the pair dir). Empty: every HD pair records its clock; an entry is never added.
+HD_CLOCK_BASELINE = frozenset()
 NO_RACE_CLOCK_NOTE = "no race running: the scenery clock does not run on a menu or loading screen"
 
 #: A path to somewhere that is reaped: another lane's worktree, or the scratch directory.

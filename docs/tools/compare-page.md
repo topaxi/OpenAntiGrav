@@ -580,9 +580,7 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
   Two checks: `just check-hd-clock-grab` (`scripts/check-hd-clock-grab.py`) fails an RPCS3/HD script that shells out to `import`, `xwd`,
   `grim` or `x11grab` itself, and a helper that stopped writing the sidecar; `check-pair-provenance` (rule `hd_world_clock`, in
   `compare_provenance.py`) fails an HD race, scenery or zone pair without a numeric `original.world_clock_offset_s`, and a menu or loading pair
-  without `original.world_clock_note`; `Pair.finish` refuses it at make time too (override: `--accept-provenance hd_world_clock=REASON`). Pairs
-  made before are frozen in `HD_CLOCK_BASELINE` (7: `hd/talons-assegai-c1`, `hd/loading-loading` and five `hd/menu-*`); an entry that
-  now complies fails the scan until it is removed, so the list only shrinks. Other titles: not covered, see the rows above.
+  without `original.world_clock_note`; `Pair.finish` refuses it at make time too (override: `--accept-provenance hd_world_clock=REASON`). `HD_CLOCK_BASELINE` is empty since the re-capture below: every HD pair records its clock (or the no-race note), and an entry may not be added. Other titles: not covered, see the rows above.
 - **Open, 2048, Omega, Pure world clocks.** No `MeshImporter` equivalent is located: the 2048 and Omega executables carry no
   `MeshImporter` string, and `find_similar_functions_fuzzy` of HD's `MeshImporter_AdvanceTime` (`0x002be9c0`) into the 2048 eboot at
   threshold 0.5 returns nothing (PPC to Thumb-2). Pure's `BOOT.BIN` is not in the open Ghidra (`/pulse` and `/omega`, `/2048`, `/hdfury` are),
@@ -601,6 +599,70 @@ from the original's body (`--pose`, the field file, `--read-pose`); only post-bo
   extracted `EBOOT.elf`, which is not under `data/extracted`.
 - **The re-render keeps a recorded offset.** `compare-rerender-ours.py` now adds `--world-clock-offset` from `ours.world_clock_offset_s`
   when a stored pair's flags lack it (any title).
+
+## Every HD/Fury pair re-captured through the clock-recording grab (2026-11-18, `hd-reclock`)
+
+Maintainer, 2026-11-18: "redo all HD/Fury screenshots with the correct clock". All 19 Time Trial, menu and loading pairs under
+`data/reference/compare-page/hd/` were re-made in one session by `just compare-rerender-all --platform rpcs3` (cold boot, hull shake patched out by
+`rpcs3-hd-no-hull-shake.py`) plus two hand runs of `rpcs3-hd-menu-pair.py` (the menu walk and `--walk loading`), every grab going through
+`grab_with_clock`. Each `pair.json` now carries the original's `world_clock_offset_s` (race pairs) or the no-race `world_clock_note` (menu and
+loading), ours is re-rendered at that offset with `--no-hull-shake`, and `HD_CLOCK_BASELINE` is empty. **`hd-race/talons-pack` was not re-made**
+(below); it already records a numeric offset, read in the same pause as its frame.
+
+| Pair | Clock offset now (s) | Before (s) | Mean grey difference | Edge NCC |
+| --- | --- | --- | --- | --- |
+| `hd-race/talons-pack` | 66.58 | 66.58 | 23.09 to 23.09 | 0.09 to 0.09 |
+| `hd/anulpha-pass` | 21.34 | 37.52 | 3.62 to 4.36 | 0.43 to 0.44 |
+| `hd/chenghou-project` | 21.34 | 35.13 | 2.58 to 2.9 | 0.4 to 0.39 |
+| `hd/loading-loading` | null (menu or loading) | none | 1.73 to 2.07 | 0.49 to 0.48 |
+| `hd/menu-campaign-select` | null (menu or loading) | none | 3.76 to 5.09 | 0.24 to 0.23 |
+| `hd/menu-cell-select` | null (menu or loading) | none | 4.81 to 5.07 | 0.46 to 0.46 |
+| `hd/menu-grid-select` | null (menu or loading) | none | 7.94 to 7.69 | 0.32 to 0.31 |
+| `hd/menu-ship-select` | null (menu or loading) | none | 8.68 to 5.69 | 0.41 to 0.41 |
+| `hd/menu-track-select` | null (menu or loading) | none | 10.42 to 11.54 | 0.36 to 0.35 |
+| `hd/metropia` | 35.46 | 34.66 | 3.12 to 3.67 | 0.45 to 0.45 |
+| `hd/moa-therma` | 32.61 | 40.47 | 4.46 to 6.36 | 0.46 to 0.45 |
+| `hd/modesto-heights` | 34.80 | 40.09 | 5.41 to 4.99 | 0.41 to 0.42 |
+| `hd/sebenco-climb` | 35.18 | 35.01 | 5.12 to 5.01 | 0.39 to 0.39 |
+| `hd/sol-2` | 29.65 | 34.75 | 4.53 to 6.45 | 0.43 to 0.43 |
+| `hd/talons-assegai-c1` | 33.68 | none | 3.1 to 4.94 | 0.43 to 0.41 |
+| `hd/talons` | 34.15 | 39.72 | 3.03 to 3.49 | 0.43 to 0.43 |
+| `hd/tech-de-ra` | 34.24 | 31.39 | 5.42 to 4.69 | 0.44 to 0.45 |
+| `hd/the-amphiseum` | 35.96 | 40.04 | 4.68 to 6.28 | 0.43 to 0.41 |
+| `hd/ubermall` | 34.39 | 38.36 | 3.8 to 4.54 | 0.45 to 0.45 |
+| `hd/vineta-k` | 33.26 | 40.16 | 2.77 to 3.39 | 0.44 to 0.43 |
+
+The offset moved by up to 8 s between two boots of the same circuit and hull (Anulpha 37.5 to 21.3, Moa Therma 40.5 to 32.6): the world clock at the
+start of a Time Trial is not a constant of the track, which is why a stored offset is never reused. Side by side, every Time Trial pair lines up
+(craft, HUD, moving props, the Moa Therma airship, signs); the grey difference moved by under 2 and edge NCC by under 0.03 on all 13 Time Trial pairs.
+Menu mean grey 5 to 12 (before 4 to 10) is the same order. Maintainer, 2026-11-18: re-making "does not have to reuse the same ship/craft/skin, as long
+as ours also uses the same in the end" - both changes below follow that.
+
+- **Harimau is the standard hull now.** The classic hull (the `down` on Ship Select) is locked on this machine's profile
+  (padlock on the third hex of the column), so the cold-boot walk stops on Team Selection. `compare-rerender-all.py`'s `Rpcs3.TEAMS` is `(9, 0)`;
+  RAM's team name is `harimau` either way and the pair's own `the player's craft (RAM) is the craft ours draws` check passes. The 12 pairs'
+  captions say "Harimau (standard hull)". `talons-assegai-c1` (`(7, 0)`) was already the unlocked hull.
+- **The original's Menu Style must be FURY for a menu or loading pair.** This profile boots the front end in the HD (white) style and ours' `--menu-page`
+  draws only the Fury one whatever `display.front_end_style` says (mean grey 115 to 240 against 4 to 10 on the first try), so the original is switched: `Main Menu` ->
+  `OPTIONS` -> `GAME`, down 8 rows to `MENU STYLE`, `right`, **`cross`** to confirm (`circle` cancels and the style reverts), back with `circle`.
+  The choice then survives a reboot of the same private config. Presses on this emulator drop about one in three, so every step reads the screen
+  (`rpcs3-drive.py status`) or the frame's brightness (below 0.3 on a Fury menu) before the next.
+- **`compare-rerender-all.py` now skips a front-end walk** (`rpcs3-hd-menu-pair.py` pairs are re-made by that script itself, in one walk: its argv has no
+  state to restore) and refuses a pair with no `--state` that has no cold-boot route by name instead of a `ValueError`.
+- **Cold boots fail more often than 1 in 6 on a first pass**: `anulpha-pass`, `chenghou-project` and `metropia` failed in the walk on the first
+  pass (a dropped press, then a stall), `sol-2` was refused by the capture parity check ("capture has no camera"); a second and third pass
+  (`--resume`, `--attempts 3`) made all four.
+- **The Oct 20 savestates on the second workstation do not load here**: restoring `hd-timetrial-*-harimau-classic-start` crashes this RPCS3 build
+  (`0.0.42-19777`) in `ppu_load_prx` ("Verification failed ... errno=2"), so a savestate cannot stand in for a cold boot on a profile with the classic hull locked.
+
+### Why `hd-race/talons-pack` stayed
+
+Two re-makes from the local `hd-race-talons-venom-pack` state (the restore with `--pause` lands at a variable game time) came out at lap 1, 0:33 at 460
+km/h in a banked turn, not the stored pair's lap 2, 0:07: ours draws the craft small and centred where the original's is large at the bottom left (edge NCC
+0.09 before, 0.03 and 0.04 after; mean grey 23 before, 46 and 48), the craft-pose-versus-presented-frame lag of "A moving HD craft" above, worse at that speed, and the
+pair's caption still says lap 2. The stored pair's clock (offset 66.58, world clock 73.9, lap clock 7.3 s, equal to the HUD's 0:07.2) was read in
+the same pause as its frame, so it keeps its place; a re-make wants the state it was made from (a 140 MB state dated 2026-11-10 on the second
+workstation, which stopped answering ssh before it could be fetched) and a stop at a calm moment.
 
 ## Pad seats: two agents' emulators at once (2026-11-16, `seat-pads`)
 
