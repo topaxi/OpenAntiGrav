@@ -368,16 +368,13 @@ fn every_original_workshop_track_converts_and_reads_back_the_same() {
     };
     let (mut converted, mut refused) = (0, Vec::new());
     for path in items {
-        let Ok(file) = std::fs::read(&path) else {
-            continue;
-        };
-        let Ok(w) = oag_ballisticng::wtrk::Wtrk::parse(&file) else {
+        let Ok(w) = oag_bng_import::header(&path) else {
             continue;
         };
         if !w.has_tag("Original") || w.has_tag("Port/Remake") {
             continue;
         }
-        let mapped = match race::foreign::read(&path) {
+        let mapped = match oag_bng_import::read(&path) {
             Ok(t) => t,
             Err(e) => {
                 refused.push(format!("{}: {e}", w.title));
@@ -418,7 +415,7 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
     let dir = std::env::temp_dir().join(format!("oag-trackfile-lion-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let manifest = dir.join("lions-den.track.toml");
-    oag_trackfile::write(&race::foreign::read(&wtrk).unwrap(), &manifest).unwrap();
+    oag_trackfile::write(&oag_bng_import::read(&wtrk).unwrap(), &manifest).unwrap();
 
     let start = |track: std::path::PathBuf| {
         let o = race::Options {

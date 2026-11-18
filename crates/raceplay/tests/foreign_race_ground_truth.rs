@@ -144,10 +144,7 @@ fn sweep_every_original_track() {
         else {
             continue;
         };
-        let Ok(file) = std::fs::read(&path) else {
-            continue;
-        };
-        let Ok(w) = oag_ballisticng::wtrk::Wtrk::parse(&file) else {
+        let Ok(w) = oag_bng_import::header(&path) else {
             continue;
         };
         if !w.has_tag("Original") || w.has_tag("Port/Remake") {

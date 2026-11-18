@@ -1,0 +1,38 @@
+[package]
+name = "oag-bng-import"
+description = "Maps a BallisticNG Workshop track (.wtrk, read by oag-ballisticng) into this project's own track model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+# One integration-test binary instead of one per `tests/*.rs`; see `tests/it.rs`.
+autotests = false
+
+[dependencies]
+oag-ballisticng.workspace = true
+oag-core.workspace = true
+oag-race.workspace = true
+oag-trackfile.workspace = true
+oag-unity.workspace = true
+oag-vex.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+oag-gameplay.workspace = true
+oag-physics.workspace = true
+oag-testdata.workspace = true
+
+[features]
+# The disc-backed mapping ground truth (`tests/foreign_ground_truth.rs`). Off by
+# default, so `just test-data` neither compiles nor runs it; `just check-ballisticng`
+# compiles and lints it.
+ground-truth = []
+
+[lints]
+workspace = true
+
+[[test]]
+name = "it"
+path = "tests/it.rs"

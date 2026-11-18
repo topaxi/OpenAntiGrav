@@ -14,16 +14,16 @@ use oag_vex::collision::{
 use oag_vex::pads::PadVolume;
 use oag_vex::track::{AiTrack, Junction, Path, SHORT_POINT_VERSION, SplinePoint, StartPosition};
 
-use super::choice::{
+use crate::choice::{
     AI_CORRIDOR_FRACTION, AI_CORRIDOR_MARGIN, JUMP_FACTOR, PAD_ABOVE, PAD_BELOW, WORLD_SCALE,
 };
-use super::frame::{Frame, mirror, world};
+use crate::frame::{Frame, mirror, world};
 
 /// Triangles per collision mesh: a collision mesh indexes its vertices with
 /// `u16` and a foreign triangle list is not indexed, so three vertices each.
 const TRIANGLES_PER_MESH: usize = 21_845;
 
-pub(super) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
+pub(crate) fn map(wtrk: &Wtrk, track: &Track) -> anyhow::Result<OagTrack> {
     let mut report = Vec::new();
     report.push(format!(
         "foreign track {:?} (Workshop item {}), tags {}",

@@ -89,34 +89,30 @@ pub fn listing(path: &Path) -> Listing {
     };
     #[cfg(feature = "ballisticng")]
     if kind == Kind::Workshop {
-        match std::fs::read(path) {
-            Ok(file) => match oag_ballisticng::wtrk::Wtrk::parse(&file) {
-                Ok(wtrk) => {
-                    out.id = format!("foreign:{}", wtrk.workshop_id);
-                    if !wtrk.title.trim().is_empty() {
-                        out.title = wtrk.title.trim().to_string();
-                    }
-                    out.tags = wtrk.tags;
+        match oag_bng_import::header(path) {
+            Ok(header) => {
+                out.id = format!("foreign:{}", header.workshop_id);
+                if !header.title.trim().is_empty() {
+                    out.title = header.title.trim().to_string();
                 }
-                Err(e) => {
-                    log::warn!("{}: {e}", path.display());
-                    // A file with the wrapper's own opening is a damaged track
-                    // and says how; anything else was never one.
-                    out.problem = Some(
-                        if file
-                            .get(1..)
-                            .is_some_and(|f| f.starts_with(b"Workshop Track"))
-                        {
-                            short(&root_cause(&anyhow::anyhow!("{e}")), "damaged track file")
-                        } else {
-                            "not a track file".to_string()
-                        },
-                    );
-                    return out;
-                }
-            },
-            Err(e) => {
-                out.problem = Some(format!("unreadable: {}", e.kind()));
+                out.tags = header.tags;
+            }
+            Err(oag_bng_import::HeaderError::Refused { reason, damaged }) => {
+                log::warn!("{}: {reason}", path.display());
+                // A file with the wrapper's own opening is a damaged track
+                // and says how; anything else was never one.
+                out.problem = Some(if damaged {
+                    short(
+                        &root_cause(&anyhow::anyhow!("{reason}")),
+                        "damaged track file",
+                    )
+                } else {
+                    "not a track file".to_string()
+                });
+                return out;
+            }
+            Err(oag_bng_import::HeaderError::Unreadable(io_kind)) => {
+                out.problem = Some(format!("unreadable: {io_kind}"));
                 return out;
             }
         }

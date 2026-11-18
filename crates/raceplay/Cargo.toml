@@ -24,7 +24,7 @@ oag-2048.workspace = true
 oag-ai.workspace = true
 oag-assets.workspace = true
 oag-core.workspace = true
-oag-ballisticng = { workspace = true, optional = true }
+oag-bng-import = { workspace = true, optional = true }
 oag-disc.workspace = true
 oag-display.workspace = true
 oag-bytes.workspace = true
@@ -60,7 +60,6 @@ oag-thread.workspace = true
 oag-title.workspace = true
 oag-trace.workspace = true
 oag-trackfile.workspace = true
-oag-unity = { workspace = true, optional = true }
 oag-ui = { workspace = true, optional = true }
 oag-ui-screens = { workspace = true, optional = true }
 oag-vex.workspace = true
@@ -106,10 +105,10 @@ view = [
     "dep:winit",
 ]
 # BallisticNG Workshop tracks (`.wtrk`) as foreign circuits, through
-# `oag-ballisticng` and `oag-unity`. Off by default and enabled by no build
+# `oag-bng-import`. Off by default and enabled by no build
 # (maintainer, 2026-10-27: it does not render enough to ship); `just check`
 # builds it so it does not rot. Own-format track files need none of it.
-ballisticng = ["dep:oag-ballisticng", "dep:oag-unity"]
+ballisticng = ["dep:oag-bng-import"]
 # Simulation mods: WebAssembly modules called once per tick through `oag-modhost`
 # (wasmtime). Off here; `oag-game` turns it on by default (not on the web or iOS).
 # Off, nothing of wasmtime is compiled or linked and a race offered a module says it
