@@ -13,7 +13,7 @@ difficulty: medium (55)
 2026-11-17, lane `water-re` (measure). The recovered laws, the census and the
 confidence scores are in [water.md](../../docs/rendering/water.md) and
 [caustic-pass.md](../../docs/ghidra/functions/psp-pulse-usa/caustic-pass.md).
-This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting), 5 in part (2048's `fc15` sea, below), 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) and Pulse PS2's caustic pass have landed.
+This thread is the plan. Steps 1 (HD's taps, without the planar term), 2 (the setting), 5 in part (2048's `fc15` sea, below), 10 (own-design `enhanced` on Pulse and Pure, with the row hidden where nothing changes) and Pulse PS2's and Pure's (Vineta K) caustic pass have landed.
 
 ## The maintainer's request
 
@@ -27,7 +27,7 @@ and TBD.
 | Choice | Law | Assets it needs | Offered when |
 | --- | --- | --- | --- |
 | `off` | the surface's constant colour or texture, lit, no wave normal, no scroll, no reflection, no caustic pass (what is drawn today on every title) | none | always |
-| `original` | the title's own law (water.md): Pulse textures plus Vostok Reef's caustic pass; Pure textures; HD taps plus planar or sky reflection; 2048 one scrolled tap; Omega two taps plus Fresnel planar reflection | the title's own disc | always |
+| `original` | the title's own law (water.md): Pulse textures plus Vostok Reef's caustic pass; Pure textures plus Vineta K's caustic pass; HD taps plus planar or sky reflection; 2048 one scrolled tap; Omega two taps plus Fresnel planar reflection | the title's own disc | always |
 | `HD` | HD's sea law: two `dc_waternormalmap` taps at `u + 0.05 t` and `1.15 (-u + 0.05 t)`, sun diffuse and specular, reflection | HD's `dc_waternormalmap.gtf` (and `waves2.gtf` for Vineta K) | the HD image is present, and the title is not HD |
 | `2048` | 2048's `fc15` law: one `water_lapping_waves2_n` tap at `u + 0.05 t`, sun diffuse and specular, no reflection | 2048's `water_lapping_waves2_n.gxt` | the 2048 package is present, and the title is not 2048 |
 | `Omega` | Omega's `reflectplane_mid` law (read, water.md "Omega (PS4)"): two `.ag` taps at `+-u + 0.05 Speed t`, Phong highlight, reflection at `Strength (Min + Scale (1 - N.V)^Power)` | Omega's `dc_waternormalmap.gnf` and its instance numbers for the circuit | the Omega package is present, the title is not Omega, **and a borrower draws it** (none does: lane 8's lender loader) |
@@ -173,8 +173,7 @@ map.**
   drawn as the pond's `ColourConstant` (chosen; Omega authors `(0.1332, 0.1726, 0.2176)` on the
   same material, which agrees to the third digit, and its named vertex inputs raise the lane
   pairing to 88). No Vita3K frame of Altima's or Park's sea exists: attempted 2026-11-18 (`water-2048cmp`), the original shows no `fc15`/`fc17` water from its racing line and Zone mode posterises; a pair needs a 2048 teleport (water.md, Open 4a).
-- Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
-  Pure's version-4 batches.
+- Pure's caustic pass on Vineta K landed (2026-11-18, `pure-caustics`; [caustic-pass.md](../../docs/ghidra/functions/psp-pure-usa/caustic-pass.md)): Pulse's law from the 16 frames embedded in the `.vex`, 352 of 1,335 batches flagged, no other Pure circuit. Open: a PPSSPP GE list of the tunnel seabed (the picture is confidence 70), and the `(int)(t * 30) & 0xf` binder in Pure's executable.
 - Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
   disc data or the PSP download pack.
 - Blue Ridge's embedded `Water` texture is bound by no batch; unread.

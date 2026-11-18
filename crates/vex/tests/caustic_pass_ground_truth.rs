@@ -3,7 +3,8 @@
 //! byte the pass scales its tint by (`mesh_caustic_scale`).
 //!
 //! `docs/ghidra/functions/psp-pulse-usa/caustic-pass.md`, "Answer": the PSP
-//! disc has no such batch, and the PS2 disc has them on Vostok Reef alone.
+//! disc has no such batch, and the PS2 disc has them on Vostok Reef alone. Pure's version-4 files
+//! are read by their own mesh class (`0x11e`): Vineta K alone flags batches there.
 
 use std::collections::BTreeMap;
 
@@ -27,7 +28,12 @@ fn census(image: &str, archive: &str) -> Option<Census> {
             continue;
         };
         let (mut flagged, mut total) = (0, 0);
-        for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+        let mesh_class = vex::version(&bytes)
+            .ok()
+            .and_then(vex::classes::for_version)
+            .and_then(|c| c.mesh)
+            .unwrap_or(vex::CLASS_MESH);
+        for node in nodes.iter().filter(|n| n.class_id == mesh_class) {
             let range = node.payload();
             if range.end > bytes.len() {
                 continue;
@@ -80,4 +86,20 @@ fn no_psp_batch_carries_the_caustic_bit() {
         return;
     };
     assert!(found.is_empty(), "{found:?}");
+}
+
+#[test]
+#[ignore = "needs the Pure PSP EU disc image"]
+fn only_vineta_k_carries_the_caustic_bit_on_pure() {
+    let Some((found, scales)) = census("pure-psp-eu.chd", "PSP_GAME/USRDIR/Data.wad") else {
+        return;
+    };
+    let counts: Vec<(usize, usize)> = found.values().copied().collect();
+    assert_eq!(
+        found.keys().copied().collect::<Vec<_>>(),
+        [833],
+        "Vineta K's track.vex alone, {found:?}"
+    );
+    assert_eq!(counts, [(352, 1335)]);
+    assert!(scales.iter().any(|&b| b != 0), "the tint byte is authored");
 }

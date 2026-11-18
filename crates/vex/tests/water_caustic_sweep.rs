@@ -60,7 +60,12 @@ fn caustic_bit_and_water_textures_per_vex() {
                 let mut vertices = 0usize;
                 let mut y = (f32::MAX, f32::MIN);
                 let mut by_node: BTreeMap<String, usize> = BTreeMap::new();
-                for node in nodes.iter().filter(|n| n.class_id == vex::CLASS_MESH) {
+                let mesh_class = vex::version(bytes)
+                    .ok()
+                    .and_then(vex::classes::for_version)
+                    .and_then(|c| c.mesh)
+                    .unwrap_or(vex::CLASS_MESH);
+                for node in nodes.iter().filter(|n| n.class_id == mesh_class) {
                     let range = node.payload();
                     if range.end > bytes.len() {
                         continue;

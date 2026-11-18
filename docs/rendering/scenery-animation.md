@@ -449,6 +449,23 @@ original frame was not re-taken: RPCS3 was held back by a running render benchma
   `wohdtrack_0011_4Shape`, `polySurfaceShape27395`, `ship_glass_2aShape`, `ship_glass3aShape` and `windowShape`
   (glass and a window pane, the loader report's "5 addressed no chunk"). The reflect tag keeps a mesh in the
   main view (`psp2::refraction_only::REFLECT_TAG`), so nothing culls them.
+- **Why the 5 draw nothing (2026-11-18, `pure-caustics`, confidence 85 that no chunk exists on the disc, 50 on why):** each is a
+  class `0x125` mesh node whose payload hash (`0xa07ad4de`, `0x3df9d70d`, `0xfc68c231`, `0xfa437a29`, `0xc96de476`) is no chunk of
+  `track.rcsmodel` (the loader's `model.mesh_index(hash)` finds nothing; the node's box and transform are there, the geometry is
+  not). A parse of the mesh directory of all 623 readable `.rcsmodel` files of the disc (`oag_rcs::rcsmodel::Model::parse`, every
+  chunk hash) finds **four of the five in no file at all**, so no other file holds them (not the sibling `fe/track03.rcsmodel`, not
+  a ship). `wohdtrack_0011_4Shape`'s hash is a chunk of Chenghou's and Anulpha Pass's `track.rcsmodel`: the same Maya shape name
+  in other circuits' exports, which is a different circuit's geometry, not Moa Therma's, so it is not drawn. Not a skipped class
+  (the five are class `0x125` like the 472 that resolve), not an LOD (no `LOD` group names them), not a view filter (the
+  behind-the-glass and isolate tests come after the chunk lookup and are counted apart). Hypothesis, no rename: the exporter left
+  the nodes in the tree after merging their geometry into the lightmap-combined meshes (`lmaps/ile_mesh_combine*`) or deleting
+  it, so the yacht's glass is part of a `wohdmeshreflect__` hull chunk if it is drawn at all. **The same on every HD circuit:**
+  of the 28 circuit `.vex` files (forward and reversed), 22 carry nodes with no chunk in their own `.rcsmodel`: 284 (circuit,
+  hash) pairs (Talons Junction 56 and 55, Ubermall reversed 30, Moa Therma reversed 29, Amphiseum 16 and 10, Metropia 7 and 10,
+  Tech de Ra 10 and 10, the rest fewer than 10; the zones one or two), 60 of whose hashes are a chunk of another circuit's file
+  (Talons' skycars and tankers resolve in Amphiseum's `track.rcsmodel`: shared Maya names again, not wired). The counting recipe
+  is a one-line print at the chunk lookup in `mesh::rcs` (`model.mesh_index(hash)` returning `None`), run over each
+  `/data/environments/<circuit>/track[_reversed].vex`.
 - They move on `Anim Transform` tracks. `oag-game --race --track /data/environments/03_track/track.vex
   --camera-pose=209.615,38.304,-367.677,0.0128,-0.1133,-0.9935,0.0013,0.9936,-0.1133 --camera-fov 60.0144
   --size 640x360 --ticks 10 --anim-seconds T` shows open sea at T = 0, 5, 10, 90 and 150, a yacht entering from the

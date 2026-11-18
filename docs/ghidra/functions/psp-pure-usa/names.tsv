@@ -314,3 +314,11 @@
 0x0885e348	function	Plasma_Update	84	own-craft-box.md
 0x08822e28	function	Collision_AddBoxCollider	82	own-craft-box.md
 0x08827038	function	Collider_SetBoxDimensions	84	own-craft-box.md
+0x0886e460	function	Mesh_BeginCausticPass	80	caustic-pass.md
+0x0886e5d0	function	Mesh_SetCausticNodeState	80	caustic-pass.md
+0x0886e91c	function	Mesh_EndCausticPass	80	caustic-pass.md
+0x0886e884	function	Mesh_SetCausticBatchState	75	caustic-pass.md
+0x0886dfd4	function	Mesh_DrawCausticNode	78	caustic-pass.md
+0x0886d414	function	Texture_LoadEffectSurfaces	78	caustic-pass.md
+0x08a8f500	data	g_caustic_tint	75	caustic-pass.md
+0x08a8f50c	data	g_caustic_uv_scale	80	caustic-pass.md
