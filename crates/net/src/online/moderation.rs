@@ -51,7 +51,7 @@ pub const STRIKES_TO_BAN: usize = 2;
 /// month apart that some unknown fault made disagree do not add up to a ban.
 pub const STRIKE_WINDOW: Duration = Duration::from_secs(7 * 24 * 3600);
 
-/// How long a key's first ban lasts; each later one doubles it. Maintainer's rule.
+/// How long a key's first ban lasts; each later one doubles it (ADR-0092, decision 6).
 pub const FIRST_BAN: Duration = Duration::from_secs(3600);
 
 /// The longest ban the lobby makes itself. Chosen: reached at the eleventh ban (1 h doubled
