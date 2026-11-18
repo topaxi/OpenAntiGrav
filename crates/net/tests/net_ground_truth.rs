@@ -843,3 +843,120 @@ fn wait(what: &str, mut done: impl FnMut() -> bool) {
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
 }
+
+/// The lobby's cost to judge a five-minute player-hosted race (18,000 ticks of two people on
+/// Pulse's circuit 01): the load, the re-simulation, the proof's bytes and the memory, printed
+/// for `docs/networking/server-roadmap.md` ("Anti-cheat: what it costs"). A sweep: it asserts
+/// only that an honest race is dismissed.
+#[test]
+#[ignore = "a sweep: OAG_SWEEP=1, needs a disc image"]
+fn sweep_what_judging_a_five_minute_hosted_race_costs_the_lobby() {
+    use oag_net::fair::{Chain, Checkpoint, Claim, Proof, Verdict, judge, params_hash};
+    use oag_net::wire::{Held, TickRecord};
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let source = image.display().to_string();
+    let params = params();
+    let rss = || -> u64 {
+        std::fs::read_to_string("/proc/self/status")
+            .ok()
+            .and_then(|s| {
+                s.lines()
+                    .find(|l| l.starts_with("VmRSS:"))?
+                    .split_whitespace()
+                    .nth(1)?
+                    .parse()
+                    .ok()
+            })
+            .unwrap_or(0)
+    };
+    const TICKS: u32 = 18_000;
+    let (mut race, _) = oag_net::race::load(&params, &source).expect("loads");
+    let fingerprint = oag_net::race::fingerprint(&race);
+    let mut edges = vec![oag_gameplay::input::Input::new(); 2];
+    let cross = oag_gameplay::input::Button::Cross.bit();
+    let records: Vec<TickRecord> = (0..TICKS)
+        .map(|tick| {
+            let inputs: Vec<Held> = (0..2u32)
+                .map(|seat| Held {
+                    buttons: cross,
+                    stick_x: ((tick / 30 + seat) % 9) as f32 / 8.0 - 0.5,
+                    ..Held::default()
+                })
+                .collect();
+            let mut snapshots = oag_gameplay::PlayerInputs::none();
+            for (slot, held) in inputs.iter().enumerate() {
+                snapshots.set(slot, held.snapshot(&mut edges[slot]));
+            }
+            oag_net::race::presence(&mut race, 0);
+            race.tick_sim_only(&snapshots);
+            TickRecord {
+                hash: race.sim.state_hash(),
+                inputs,
+                retired: 0,
+            }
+        })
+        .collect();
+    drop(race);
+    let key = oag_net::online::hostkey::PlayerKey::generate().expect("a key");
+    let hash = params_hash(&params);
+    let mut chain = Chain::new(&hash, fingerprint);
+    for record in &records {
+        chain.push(record);
+    }
+    let proof = Proof {
+        claim: Claim::Desync,
+        fingerprint,
+        checkpoint: Checkpoint::sign(&key, &hash, &chain),
+        records,
+    };
+    let bytes = proof.encode();
+    let before = rss();
+    let started = std::time::Instant::now();
+    let decoded = Proof::decode(&bytes, 2, TICKS).expect("decodes");
+    decoded.check_signed(&hash, &key.public()).expect("signed");
+    let checked = started.elapsed();
+    let started = std::time::Instant::now();
+    let (mut race, _) = oag_net::race::load(&params, &source).expect("loads");
+    let loaded = started.elapsed();
+    let after_load = rss();
+    let started = std::time::Instant::now();
+    let verdict = judge(
+        &mut race,
+        &decoded,
+        std::time::Instant::now() + std::time::Duration::from_secs(600),
+    );
+    let judged = started.elapsed();
+    println!(
+        "judge: {TICKS} ticks, proof {} bytes; decode and chain check {checked:?}; race load \
+         {loaded:?}; re-simulation {judged:?}; RSS {} KiB before the load, {} KiB after it, {} \
+         KiB after the re-simulation",
+        bytes.len(),
+        before,
+        after_load,
+        rss()
+    );
+    assert!(matches!(verdict, Verdict::Dismissed(_)), "{verdict:?}");
+    // What a host pays per input datagram it takes: one Ed25519 verification.
+    let inputs = decoded.records[..8].iter().map(|r| r.inputs[1]).collect::<Vec<_>>();
+    let statement = oag_net::fair::input_statement(&hash, 1, 0, &inputs);
+    let datagram = oag_net::wire::Datagram::Inputs {
+        seat: 1,
+        first: 0,
+        inputs,
+        signature: Some(key.sign(&statement)),
+    };
+    let started = std::time::Instant::now();
+    for _ in 0..10_000 {
+        assert!(oag_net::fair::inputs_signed(&datagram, &hash, 1, &key.public()));
+    }
+    println!(
+        "verify: {:?} per signed input datagram of {} bytes",
+        started.elapsed() / 10_000,
+        datagram.encode().len()
+    );
+}

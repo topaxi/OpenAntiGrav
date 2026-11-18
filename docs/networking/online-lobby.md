@@ -1329,6 +1329,58 @@ host is now banned is closed with the reason. Every registration, refusal, launc
 `host-log:` line in the lobby's log with the first 16 digits of the key, the address, the name,
 the room and its settings.
 
+### Anti-cheat (built 2026-11-18)
+
+ADR-0092 decision 7, items 1 to 4. A player host is the authority, so the lobby, which issued
+the race, is the referee. Every value here is **chosen, not measured**; the costs are measured in
+[the server roadmap](server-roadmap.md#anti-cheat-what-it-costs).
+
+1. **The race the lobby issued.** The lobby draws a hosted race's seed at random. The hand-off
+   carries `params`, SHA-256 of the job's `RaceParams` wire bytes (`oag_net::fair::params_hash`),
+   and `host_key`, the host's public key (all zero for a server race). A client whose host
+   welcomes it to another race (another seed, circuit or setting) refuses it at the welcome:
+   `the host offered a race the lobby did not issue (circuit ..., seed ...): refused`.
+2. **Signed checkpoints.** Host and client fold every confirmed record (state hash, away mask,
+   inputs) into a running SHA-256 (`fair::Chain`, seeded with the params hash and the tick-0
+   hash). Once a second, and at the end, the host sends `Control::Checkpoint { ticks, chain,
+   signature }`, signed with its player key over `"OAG-CHECK-1" | params | ticks | chain`. A
+   client checks the signature and its own chain; a checkpoint signed over records other than
+   the ones it was sent is logged, as evidence only.
+3. **Fraud proof.** A client keeps every confirmed record of a player-hosted race. Once a
+   verified checkpoint covers the first tick whose state hash it could not reproduce, it sends
+   the lobby `Report { room, part, parts, bytes }`: the records from tick 0 to the checkpoint and
+   the checkpoint (`fair::Proof`), in 128 KiB parts, one a lobby poll so the link's 1 MiB send
+   queue never fills. The lobby checks the length against the ticks the race can have run before
+   it reads a record, checks the signature and folds the chain again, then re-simulates the
+   records from the job on a thread of its own (`fair::judge`, the client's confirmed path:
+   away mask, held-stream edges, one simulation tick, the hash). A hash the host's own inputs do
+   not give is proven: the host's key is banned with a dated line in the ban file, its room is
+   closed with `the lobby closed this game: its host was caught cheating (...)`, and a
+   `host-log:` line names the reporter, the key and the address. A start state the lobby cannot
+   reproduce (content it lacks, mods) or a re-simulation out of time is "not checkable", kept as
+   evidence, never a ban. A report that reproduces is dismissed.
+4. **Signed inputs.** A hosted race's job names each seat's player key (from the lobby hello's
+   `key`). Each client signs every input datagram (`Datagram::Inputs` with a signature, tag
+   `0x12`, over `"OAG-INPUT-1" | params | seat | first | inputs`); the host drops one not signed
+   by the seat's key, and keeps the signed datagram behind each input it applied for 60 s
+   (`fair::Ledger`). From the first tick it sent, a client that sees an input confirmed for its
+   seat that is neither what it sent nor a repeat of the tick before (a host repeats a seat's
+   last input when none arrived) reports it once a checkpoint covers it. The lobby checks it is
+   not a repeat in the signed records, and asks the host `ShowInput { room, seat, tick }`; the
+   host answers `InputShown { room, seat, tick, datagram }`. A datagram signed by the seat's key
+   with that input at that tick dismisses the report; none, a wrong one, or no answer in 10 s is
+   proven, with the same ban.
+
+Bounds on what a reporter controls: one report a seat a race (the host's own seat reports
+nothing), two assembling and four waiting at once, one re-simulation at a time with 60 s to
+finish, a report taken up to 60 s after its race ended. Item 5 (withheld inputs) is not built:
+the client already measures how long its inputs take to come back confirmed
+(`Stats::confirm_sum_ms`), but nothing reports it.
+
+The test cheats are `oag_net::host::Cheat`, compiled only with `oag-net`'s `test-cheats`
+feature, which only dev-dependencies turn on (`cargo tree -p oag-game -e normal,features -i
+oag-net` shows `client` alone), and armed by `OAG_TEST_CHEAT=speed|forge|seed`.
+
 ### Run it locally
 
 ```sh
@@ -1367,7 +1419,16 @@ may not host on this lobby: altered a race`.
 - `oag-net` `hostkey`, `moderation`, the wire round trip; `oag-game` `identity` (made on first
   use, the same key after, owner-only, a broken file left alone) and `online_screen` (the mark
   and its line).
-- `oag-game` `net_hosted_ground_truth` (`#[ignore]`d, real processes): the three runs above.
+- `oag-game` `net_hosted_ground_truth` (`#[ignore]`d, real processes): the three runs above,
+  and a host whose game cheats (`OAG_TEST_CHEAT=speed`) reported by the guest, proven by the
+  lobby's re-simulation ("after tick 300 the host claimed state ..."), its key banned with a
+  dated line and the guest told why, in about 14 s.
+- `oag-net` `anticheat::` (no disc, real sockets): an altered simulation proven and banned; a
+  forged input the host cannot show signed, proven without a re-simulation; a host racing
+  another seed refused at the welcome; an honest race with no report, every checkpoint verified
+  and every input signed; a malformed and an oversized report refused without judging, the race
+  going on. `fair::tests`: the chain, the proof codec and its refusals, the judge (honest,
+  altered, another start, out of time), the forgery rule, the client's watch.
 
 ### Open
 
@@ -1377,5 +1438,8 @@ may not host on this lobby: altered a race`.
   ADR-0092's later steps.
 - A host whose lobby link drops loses its room; the host's own record of the race is not kept
   apart from a server race's (no records are shared yet either way).
-- The anti-cheat path of ADR-0092 decision 7 is design only.
+- Anti-cheat: a game that came back to its race in a new process (REJOIN RACE) keeps no watch
+  on it (the record holds no params hash or host key); decision 8's resync is not built; a
+  report has no row on the room screen; item 5 (withheld inputs) is not reported; the HOST GAME
+  path of the menus is wired but only `--online-host` is driven end to end.
 

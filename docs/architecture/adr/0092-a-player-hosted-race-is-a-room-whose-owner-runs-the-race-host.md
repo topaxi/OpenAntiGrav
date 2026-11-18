@@ -115,9 +115,15 @@ Later: a REPORT row on a player-hosted room (a count without a proof is weak evi
 waits for decision 7 below), `oag-server` subcommands over a control socket, an account-bound key
 if a new key per ban becomes a problem (outside the roadmap).
 
-### 7. The anti-cheat path (design only)
+### 7. The anti-cheat path
 
-State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes it needs:
+State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes it needs. Items 1
+to 4 are built (2026-11-18; [the online lobby](../../networking/online-lobby.md#anti-cheat-built-2026-11-18)
+has the messages, bounds and tests); item 5 is not. Two details the build settled: a client
+reports at the first mismatch a verified checkpoint covers, since decision 8's resync is not
+built; and a client judges an input "never sent" from the first tick it sent, so a game that
+skipped a tick (its present behind) still sees a forgery there, and one that came back in a new
+process judges nothing before it sent.
 
 1. **The lobby is the reference for the race.** It issues the job, so the hand-off carries a hash
    of the job's `RaceParams` and a client refuses a host whose welcome differs. This also settles
@@ -149,7 +155,7 @@ State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes
 | Mark | list and room, one line | region and round trip to the host |
 | Host leaves | race ends with a reason | the journal moves to another host |
 | Moderation | ban file, host log | report, operator commands |
-| Anti-cheat | hash comparison every tick (already there) | params hash, signed checkpoints, fraud proof, signed inputs |
+| Anti-cheat | params hash, signed checkpoints, fraud proof and re-simulation, signed inputs (built 2026-11-18) | withheld-input statistics as evidence, commit-reveal seed for a race with no lobby |
 
 ## Consequences
 
@@ -158,8 +164,10 @@ State verification with fraud proofs, as agreed 2026-11-17, with the wire shapes
   a refusal that names the port.
 - The other players' addresses are visible to the host and the host's to them. A server race
   shows a player's address to the server only.
-- A host that cheats in the simulation is noticed by every honest client and nothing more happens
-  in version one than a logged bad hash: the mark is the whole defence.
+- A host that alters the simulation, forges a guest's input or races another job than the lobby
+  issued is caught: the client refuses the job, or the lobby proves the case from the client's
+  records and the host's signed checkpoint and bans the key. Proving needs the lobby to have the
+  content; without it a report is evidence only.
 - A banned player makes a new key; the address ban is a speed bump. Accepted by the maintainer.
 - The lobby now dials out (the probe). It is bounded and aims only at the registrant, but it is a
   new kind of traffic for the server's firewall.

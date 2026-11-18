@@ -1,7 +1,7 @@
 ---
 status: blocked-maintainer
 titles: [all]
-updated: 2026-11-17
+updated: 2026-11-18
 summary: "Online server roadmap: three versions (reconnect, several rooms with crash resume, cheaper rooms) wait on eight ranked decisions"
 categories: [tooling]
 ---
@@ -58,6 +58,16 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
    twice during the load (`crates/raceplay/src/load/track_inputs.rs`). Measure with
    `/proc/<pid>/status` `VmHWM` of `oag-server --image <extraction> --listen 127.0.0.1:0` once
    it prints `listening on`.
+7. **Anti-cheat for player-hosted races (landed on `net-anticheat`, 2026-11-18).** ADR-0092
+   decision 7 items 1 to 4: the params hash in the hand-off, signed checkpoints, the client's
+   fraud proof and the lobby's re-simulation, signed inputs and the host's challenge; a proven
+   host is banned with a dated ban line (dates are required in the ban file now, maintainer
+   2026-11-18). Measured: 0.87 s and about 35 MiB to judge a five-minute two-person Pulse race
+   (`server-roadmap.md`, "Anti-cheat: what it costs"). Still open: decision 8's resync (a
+   client reports at its first covered mismatch instead), item 5 (withheld inputs, report
+   only), a REJOIN RACE game keeps no watch (the record has no params hash or host key), no
+   report row on the room screen, a TTL or prune for the ban file (the dates are there for it),
+   and a server race's seed is still predictable from the room id.
 6. **Lobby and race boundary.** Already split in code (`rooms.rs` has no I/O, the `Runner`
    seam, the job on standard input, the hand-off with port and hash); tied to one machine
    by a hand-off with no host, pipes, the lobby opening the images, one slot. The page's

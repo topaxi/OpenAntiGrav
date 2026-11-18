@@ -1360,7 +1360,11 @@ paths.
       rematch (2026-10-16 to 2026-10-19,
       [online lobby](../networking/online-lobby.md#8-the-online-menus-2026-10-16)),
       and weapons and Eliminator online (2026-10-19,
-      [ADR-0071](../architecture/adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md));
+      [ADR-0071](../architecture/adr/0071-weapons-are-predicted-simulation-with-a-discrete-state-correction-trigger.md)),
+      player-hosted races listed by the lobby (2026-11-17) and the anti-cheat path
+      that proves and bans a host that alters its race or forges an input
+      (2026-11-18, [ADR-0092](../architecture/adr/0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md),
+      [online lobby](../networking/online-lobby.md#anti-cheat-built-2026-11-18));
       raced over the internet on Pulse only; no web client; spectate, chat,
       invite-only and quick match unbuilt
 - [x] **Wipeout Pure: intro to menu into a Time Trial** (2026-08-12)
