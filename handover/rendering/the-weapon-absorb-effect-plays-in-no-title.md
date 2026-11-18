@@ -8,7 +8,7 @@ summary: "Open: Pure templates held off, Pure ground ring, HD shell tint (nibble
 # The weapon-absorb effect: built on every title, what a player still sees differently
 
 The user, who plays the originals, reported on 2026-09-17 that the absorb effect did not play in any title. It does
-now: the burst on every title (`oag_raceplay::absorb`, `Race::play_absorb_feedback`), Pulse's hull overlay
+now: the burst on every title (`oag_raceplay::absorb`, `RaceView::play_absorb_feedback`), Pulse's hull overlay
 (`oag_fx::hull_overlay`), HD's absorb shell (`oag_fx::absorb_shell`), Pulse's HUD flash. The first matched pairs of a
 real absorb on the player's craft were taken on 2026-11-09 (Pulse, Pure, HD); method, tables, frames and the ranked
 differences are in [`weapon-absorb-pairs.md`](../../docs/rendering/weapon-absorb-pairs.md). The older frames this

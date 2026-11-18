@@ -28,7 +28,7 @@ impl Scene {
             .take(drawn)
             .filter_map(move |(slot, shell)| {
                 let shell = shell.as_ref()?;
-                if !race.core.sim.ship_active(slot) || (slot == 0 && !race.draws_own_ship()) {
+                if !race.core.sim.ship_active(slot) || (slot == 0 && !race.view.draws_own_ship()) {
                     return None;
                 }
                 Some((slot, shell, race.absorb_shell_fader(slot)?))
@@ -51,7 +51,7 @@ impl Scene {
             shell.write(
                 queue,
                 view_projection,
-                race.ship_model_matrix_of(slot),
+                race.view.ship_model_matrix_of(&race.core, slot),
                 prev_vp * prev.ship(slot, race),
             );
             shell.tint(queue, [1.0, 1.0, 1.0, fade], scratch);

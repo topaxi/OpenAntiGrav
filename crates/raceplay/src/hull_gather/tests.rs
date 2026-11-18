@@ -103,7 +103,7 @@ fn a_craft_with_no_matching_previous_hull_is_gathered_live() {
 }
 
 /// A craft that jumps past the snap distance in one tick is drawn where it lands,
-/// as `Race::ship_model_matrix_of` does, not swept across the jump.
+/// as `RaceView::ship_model_matrix_of` does, not swept across the jump.
 #[test]
 fn a_teleporting_craft_draws_its_current_gather() {
     let mut race = gliding_race();

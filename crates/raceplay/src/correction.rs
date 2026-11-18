@@ -9,7 +9,7 @@
 //! craft's drawn position is kept where it was by an offset (`before - after`), and
 //! the offset shrinks by a fixed fraction every drawn tick, so the craft glides onto
 //! the corrected timeline instead of jumping. The offset is added where a craft is
-//! drawn ([`Race::drawn_model`], [`Race::drawn_position`]) and nowhere the
+//! drawn ([`crate::RaceView::drawn_model`], [`crate::RaceView::drawn_position`]) and nowhere the
 //! simulation reads, so the state hash is the same with it on or off
 //! (`tests::correction`). It leaves the orientation alone: a position pop is the one
 //! a player sees as a rival teleporting, and a yaw error of the size a few ticks of
@@ -109,7 +109,7 @@ impl Race {
                 // The shake that tick would have armed had the hit been predicted: once, here,
                 // where the hit is drawn. **Chosen, not measured:** a weapon hit's, since a
                 // correction cannot tell what struck (the replay is quiet).
-                self.arm_weapon_hit_shake(slot);
+                self.view.arm_weapon_hit_shake(&self.core, slot);
             }
             if self.view.correction_smoothing && remote && !hit && *pop <= SNAP_DISTANCE {
                 self.view.correction[slot] += moved;
@@ -134,38 +134,6 @@ impl Race {
     #[must_use]
     pub fn correction_offset_of(&self, slot: usize) -> Vec3 {
         self.view.correction[slot]
-    }
-
-    /// One drawn tick of the glide: every offset loses its share. Not run by a
-    /// replay, which is not drawn.
-    pub(super) fn decay_corrections(&mut self) {
-        let keep = 0.5f32.powf(1.0 / HALF_LIFE_TICKS);
-        for offset in &mut self.view.correction {
-            *offset *= keep;
-            if offset.length_squared() < 1.0e-6 {
-                *offset = Vec3::ZERO;
-            }
-        }
-    }
-
-    /// `slot`'s craft model matrix as drawn at this tick: the simulation's, moved by
-    /// the correction glide.
-    pub(super) fn drawn_model(&self, slot: usize) -> Mat4 {
-        // A craft in a transit is where its camera follows it (`crate::transit_camera`).
-        if let Some(flown) = self.flown_model(slot) {
-            return flown;
-        }
-        let model =
-            shaken_model_matrix_of(&self.core.sim.world.ships[slot], self.hull_shake_of(slot));
-        match self.view.correction[slot] {
-            offset if offset == Vec3::ZERO => model,
-            offset => Mat4::from_translation(offset) * model,
-        }
-    }
-
-    /// `slot`'s body position as drawn at this tick.
-    pub(super) fn drawn_position(&self, slot: usize) -> Vec3 {
-        self.core.sim.world.ships[slot].physics.body.position + self.view.correction[slot]
     }
 }
 
@@ -386,6 +354,43 @@ impl Scene {
                     "late presentation at tick {tick}: {:?}",
                     race.take_late_report()
                 );
+            }
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `slot`'s craft model matrix as drawn at this tick: the simulation's, moved by
+    /// the correction glide.
+    pub(super) fn drawn_model(&self, core: &SimRace, slot: usize) -> Mat4 {
+        // A craft in a transit is where its camera follows it (`crate::transit_camera`).
+        if let Some(flown) = self.flown_model(core, slot) {
+            return flown;
+        }
+        let model = shaken_model_matrix_of(&core.sim.world.ships[slot], self.hull_shake_of(slot));
+        match self.correction[slot] {
+            offset if offset == Vec3::ZERO => model,
+            offset => Mat4::from_translation(offset) * model,
+        }
+    }
+
+    /// `slot`'s body position as drawn at this tick.
+    pub(super) fn drawn_position(&self, core: &SimRace, slot: usize) -> Vec3 {
+        core.sim.world.ships[slot].physics.body.position + self.correction[slot]
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One drawn tick of the glide: every offset loses its share. Not run by a
+    /// replay, which is not drawn.
+    pub(super) fn decay_corrections(&mut self) {
+        let keep = 0.5f32.powf(1.0 / HALF_LIFE_TICKS);
+        for offset in &mut self.correction {
+            *offset *= keep;
+            if offset.length_squared() < 1.0e-6 {
+                *offset = Vec3::ZERO;
             }
         }
     }

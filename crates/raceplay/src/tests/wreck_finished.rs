@@ -67,7 +67,9 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
     let hash = race.core.sim.state_hash();
     let tick = race.core.sim.world.tick;
-    let fov = race.vertical_fov(16.0 / 9.0, oag_display::display::Fov::AUTHORED);
+    let fov = race
+        .view
+        .vertical_fov(&race.core, 16.0 / 9.0, oag_display::display::Fov::AUTHORED);
 
     let mut shaken = 0;
     for _ in 0..30 {
@@ -95,7 +97,8 @@ fn a_zone_wreck_plays_out_under_the_results_without_moving_the_world() {
         "and shakes the camera again"
     );
     assert_ne!(
-        race.vertical_fov(16.0 / 9.0, oag_display::display::Fov::AUTHORED),
+        race.view
+            .vertical_fov(&race.core, 16.0 / 9.0, oag_display::display::Fov::AUTHORED),
         fov,
         "the destroy camera keeps easing in"
     );
@@ -223,14 +226,14 @@ fn the_eliminators_wait_holds_the_destroy_camera_through_the_explosion() {
         if blast.is_none() && race.wreck_explosion_at_for_tests().is_some() {
             blast = Some(tick);
             assert!(
-                race.destroy_camera_now().is_some(),
+                race.view.destroy_camera_now().is_some(),
                 "the camera is on the wreck as the explosion goes off"
             );
         }
         if back.is_none() && edge.is_some() && state == CraftState::Racing {
             back = Some(tick);
             assert!(
-                race.destroy_camera_now().is_none(),
+                race.view.destroy_camera_now().is_none(),
                 "and lets go as it returns"
             );
         }
@@ -286,14 +289,18 @@ fn zone_grid(mode: Mode) -> Race {
 #[test]
 fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
     let race = race_with_a_grid();
-    assert_eq!(race.station_camera_section(), None, "the chase camera");
+    assert_eq!(
+        race.view.station_camera_section(&race.core),
+        None,
+        "the chase camera"
+    );
     let mut race = a_race_the_wreck_ended();
     assert!(
-        race.destroy_camera_now().is_some(),
+        race.view.destroy_camera_now().is_some(),
         "the destroy camera has the picture"
     );
     assert_eq!(
-        race.station_camera_section(),
+        race.view.station_camera_section(&race.core),
         Some(race.core.sim.section_of_slot(0)),
         "the wreck's own section"
     );
@@ -316,7 +323,7 @@ fn a_station_camera_is_masked_by_the_section_of_the_craft_it_draws() {
         .and_then(crate::finish_camera::FinishCamera::drawn_slot)
         .expect("the director has started");
     assert_eq!(
-        race.station_camera_section(),
+        race.view.station_camera_section(&race.core),
         Some(race.core.sim.section_of_slot(slot))
     );
 }
@@ -370,7 +377,7 @@ fn photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station()
         race.tick_finished();
     }
     assert!(
-        race.station_camera_section().is_some(),
+        race.view.station_camera_section(&race.core).is_some(),
         "the director's mask"
     );
     assert!(race.photo_begin(false, false, None));
@@ -382,9 +389,9 @@ fn photo_mode_over_the_directors_camera_is_not_masked_by_the_directors_station()
         .photo()
         .map(crate::photo::Photo::subject)
         .expect("open");
-    assert_eq!(race.framed_slot(), subject);
+    assert_eq!(race.view.framed_slot(&race.core), subject);
     assert_eq!(
-        race.station_camera_section(),
+        race.view.station_camera_section(&race.core),
         None,
         "the photo's own camera"
     );

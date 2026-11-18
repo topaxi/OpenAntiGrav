@@ -1093,7 +1093,7 @@ decompile-only and so also capped at 84:**
    to check the resulting phase against.
 
 **Ported** as `oag_hud::Readout::shield_absorbing` (wired off
-`Race::absorb_window_active`, which reuses `Race::view.absorb_overlay`
+`RaceView::absorb_window_active`, which reuses `Race::view.absorb_overlay`
 rather than a second timer - the same `0.0 <= elapsed <= WINDOW` test
 `HullOverlay_AbsorbWindowActive` itself is), `Readout::shield_blinking`/
 `shield_blink_phase_on` for point 2, and `oag_hud::draw::draw_list`'s
@@ -1235,7 +1235,7 @@ complete xref list) and the silence (both gates on
 `LAP_REFILL_FRACTION` (`0.2`) of the maximum through `oag_physics::damage::add`
 on the racing gate and raises `Cue::Absorb`; the absorb handler's own `ABSORB`
 is raised on the same cue. **The staggered `WO_WEAPON_ABSORB` burst is drawn
-as of 2026-09-23**: both paths call `Race::play_absorb_feedback`
+as of 2026-09-23**: both paths call `RaceView::play_absorb_feedback`
 (`oag_raceplay::absorb`), which raises the cue and attaches one instance per
 `Ship Collision Fx` node on the stagger below. One departure, stated on the port: it refills every craft's lap,
 not the player's alone, so a field of opponents that the player never shoots

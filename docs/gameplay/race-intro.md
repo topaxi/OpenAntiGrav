@@ -93,8 +93,8 @@ and both settle at 2 s; a Cross held at 1 s (the earliest the lock allows) leave
 | in a multi-window race every window that holds a seat plays it full window and switches to its own seats when it ends (view-side, **chosen, not measured**; see [multi-window.md](../rendering/multi-window.md)) | `Race::window_drawn` |
 | the panel: read at race load (`race/load/intro.rs`: the circuit's `PI_Track` id off its directory and `Reversed`, the two strings off the language table, `hex_bg.mip`, the `Menu` and `Default` faces), laid out by `oag_ui_screens::track_panel`, drawn by `oag_game::track_panel::Overlay` in `RaceStage::draw_hud` and in `race/capture.rs`. Its clock is `Race::track_panel_progress`: the flyby's ticks, then the world's ticks after it | `track_panel.rs` |
 | a pointer press skips the flyby as a held Cross does, the moment the lock lifts (a tap is one tick, the lock is 60, so the request is kept until it can act: **chosen, not measured**; the original has no pointer. Checked in a window: a click 3 s in ended it at tick 161) | `Race::skip_intro`, `session/frame.rs` |
-| each one-frame key pair, and the end, count as a cut: the temporal upscaler drops its history, and **the motion blur's previous view becomes the post-cut camera** (it also now does so for the destroy and spectator cameras and a respawn, which smeared before). The blur's snapshot is keyed on `Race::motion_tick`, the world's tick plus the flyby's, because the world sits at tick 0 under it | `Race::camera_cuts`, `scene/motion.rs` |
-| the player's own craft is drawn on the grid whatever view they saved | `Race::draws_own_ship` |
+| each one-frame key pair, and the end, count as a cut: the temporal upscaler drops its history, and **the motion blur's previous view becomes the post-cut camera** (it also now does so for the destroy and spectator cameras and a respawn, which smeared before). The blur's snapshot is keyed on `Race::motion_tick`, the world's tick plus the flyby's, because the world sits at tick 0 under it | `RaceView::camera_cuts`, `scene/motion.rs` |
+| the player's own craft is drawn on the grid whatever view they saved | `RaceView::draws_own_ship` |
 | the flyby begins when the race scene is handed over, before the first frame is drawn; a race resumed from the menus does not replay it; ours has no RESTART RACE row (a relaunch builds a new race) | `session/load.rs` |
 | `--no-intro` skips it; `--intro-ticks N --screenshot` photographs tick `N` of it | CLI |
 | a headless run, a capture and every test drive `Race::tick` from tick 0 and never see it | by construction |
@@ -427,7 +427,7 @@ the code path; their flyby's mask is unmeasured. Whether HD authors coplanar cop
 censused, because the fix takes no tie rule that could reach it. Pure declares no sections. PS2 Pulse
 has them, and its flyby is off (`PRE_RACE.on`).
 
-The weather reads the same global (`Weather_Update`); `Race::advance_weather` does not take the
+The weather reads the same global (`Weather_Update`); `RaceView::advance_weather` does not take the
 flyby's section, and that is left as it was.
 
 ## What the original plays under the flyby (watched 2026-11-02, lane `pulse-flyby-audio-capture`)

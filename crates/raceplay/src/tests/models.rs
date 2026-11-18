@@ -1,4 +1,4 @@
-//! `Race::ship_model_matrix_of` and `RaceSim::ship_active`: the slot-indexed
+//! `RaceView::ship_model_matrix_of` and `RaceSim::ship_active`: the slot-indexed
 //! accessors `Scene::render`'s per-craft loops use instead of `zip`ping onto
 //! [`Race::ship_model_matrices`]' filtered, gap-closed list.
 //!
@@ -41,13 +41,15 @@ fn ship_active_reports_only_the_slot_that_went_inactive() {
 #[test]
 fn ship_model_matrix_of_does_not_move_when_another_slot_goes_inactive() {
     let mut race = race_with_a_grid();
-    let before: Vec<Mat4> = (0..8).map(|slot| race.ship_model_matrix_of(slot)).collect();
+    let before: Vec<Mat4> = (0..8)
+        .map(|slot| race.view.ship_model_matrix_of(&race.core, slot))
+        .collect();
 
     deactivate(&mut race, 3);
 
     for (slot, matrix) in before.into_iter().enumerate() {
         assert_eq!(
-            race.ship_model_matrix_of(slot),
+            race.view.ship_model_matrix_of(&race.core, slot),
             matrix,
             "slot {slot}'s own matrix must not change because slot 3 went inactive"
         );
@@ -60,7 +62,7 @@ fn ship_model_matrix_of_does_not_move_when_another_slot_goes_inactive() {
 /// hold slot 3's matrix now holds slot 4's. `zip`ping that list onto
 /// slot-indexed drawables (`self.ships[3]`, `self.ships[4]`, ...) would have
 /// written slot 4's pose into drawable 3 and shifted every craft after it by
-/// one - which is exactly why the fix reads [`Race::ship_model_matrix_of`] by
+/// one - which is exactly why the fix reads [`RaceView::ship_model_matrix_of`] by
 /// slot instead. `Race::ship_model_matrices` itself is unchanged; it still
 /// filters, and callers that do not need slot alignment - none left in
 /// `Scene::render`, but the accessor is still public - can still use it.
@@ -74,18 +76,18 @@ fn the_filtered_matrix_list_closes_the_gap_left_by_an_inactive_slot() {
 
     // Positions before the gap still line up with their own slot.
     for (slot, matrix) in filtered.iter().enumerate().take(3) {
-        assert_eq!(*matrix, race.ship_model_matrix_of(slot));
+        assert_eq!(*matrix, race.view.ship_model_matrix_of(&race.core, slot));
     }
     // Position 3 has closed over the gap: it is slot 4's matrix now, not
     // slot 3's - the misalignment a positional `zip` would draw.
     assert_eq!(
         filtered[3],
-        race.ship_model_matrix_of(4),
+        race.view.ship_model_matrix_of(&race.core, 4),
         "position 3 of the filtered list now holds slot 4's matrix"
     );
     assert_ne!(
         filtered[3],
-        race.ship_model_matrix_of(3),
+        race.view.ship_model_matrix_of(&race.core, 3),
         "and it is not slot 3's own matrix, which was dropped by the filter"
     );
 }

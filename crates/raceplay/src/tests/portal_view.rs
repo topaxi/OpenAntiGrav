@@ -38,7 +38,7 @@ fn pair_ahead(race: &Race) -> (f32, f32) {
 
 /// [`pair_ahead`] with the entrance `distance` units ahead of the camera and the exit 25 on.
 fn pair_ahead_by(race: &Race, distance: f32) -> (f32, f32) {
-    let camera = race.view().inverse();
+    let camera = race.view.view(&race.core).inverse();
     let eye = camera.w_axis.truncate();
     let forward = -camera.z_axis.truncate();
     (
@@ -237,14 +237,14 @@ fn the_view_stands_behind_the_exit_and_looks_down_the_road() {
         update: ViewUpdate::Continuous,
         generation: 0,
     };
-    let projection = race.projection(1.0, 2000.0, Fov::AUTHORED);
+    let projection = race.view.projection(&race.core, 1.0, 2000.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let course = race.core.sim.course.as_ref().unwrap();
     let at = |progress| {
         let index = course.index_at_progress(progress).unwrap();
         course.position(index).unwrap()
     };
-    let main = race.view().inverse();
+    let main = race.view.view(&race.core).inverse();
     let camera = shot.view.inverse();
     let moved = at(exit) - at(entrance);
     assert!(
@@ -264,7 +264,7 @@ fn the_view_stands_behind_the_exit_and_looks_down_the_road() {
         shot.exit_plane.w < 0.0,
         "the eye is behind the exit's plane"
     );
-    let main_clip = projection * race.view();
+    let main_clip = projection * race.view.view(&race.core);
     let engine = shot.engine_view_projection.to_cols_array();
     assert!(
         engine
@@ -306,12 +306,12 @@ fn a_view_through_a_transits_own_pair_ends_on_the_camera_the_craft_comes_out_wit
         update: ViewUpdate::Continuous,
         generation: 0,
     };
-    let projection = race.projection(1.0, 2000.0, Fov::AUTHORED);
+    let projection = race.view.projection(&race.core, 1.0, 2000.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let through = shot.view.inverse();
     race.tick(&PlayerInputs::none());
     assert_eq!(race.core.sim.world.ships[0].transit, None, "out");
-    let out = race.view().inverse();
+    let out = race.view.view(&race.core).inverse();
     let apart = through.w_axis.truncate().distance(out.w_axis.truncate());
     assert!(apart < 0.25, "the eyes stand {apart} apart");
     let turned = through.z_axis.truncate().distance(out.z_axis.truncate());
@@ -333,7 +333,7 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
     let flown = |text: &'static str| {
         let mut race = race_with(&[fill], text);
         race.core.sim.world.ships[0].physics.body.linear_velocity = Vec3::new(30.0, 0.0, 0.0);
-        let before = race.view().inverse().w_axis.truncate();
+        let before = race.view.view(&race.core).inverse().w_axis.truncate();
         race.core
             .sim
             .begin_transit(0, 40, crate::transit::Distance::Units(25.0), 0.9)
@@ -348,19 +348,23 @@ fn a_craft_in_a_transit_is_flown_and_drawn_for_its_own_view_under_a_backdrop() {
     assert!(race.ship_drawn(0) && race.ship_flown_in_view(0));
     // A second seat's view of the same race.
     assert_eq!(race.set_viewport_count(2), 2);
-    race.set_viewpoint(1);
-    assert_eq!(race.viewed_slot(), 1);
+    race.view.set_viewpoint(&race.core, 1);
+    assert_eq!(race.view.viewed_slot(&race.core), 1);
     assert!(!race.ship_drawn(0), "no other view draws it");
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     // 30 units a second, and 19 ticks since the tick the seat was opened on: the camera and
     // the hull are 9.5 units on from the seat, and the pair is seen from where the camera
     // would stand had it stayed on it.
-    let eye = race.view().inverse().w_axis.truncate();
+    let eye = race.view.view(&race.core).inverse().w_axis.truncate();
     assert!(
         eye.x - before.x > 8.0,
         "the camera flew on: {before} to {eye}"
     );
-    let hull = race.ship_model_matrix_of(0).w_axis.truncate();
+    let hull = race
+        .view
+        .ship_model_matrix_of(&race.core, 0)
+        .w_axis
+        .truncate();
     let frozen = race.core.sim.world.ships[0].physics.body.position;
     assert!(
         hull.x - frozen.x > 8.0,
@@ -447,7 +451,7 @@ fn a_portal_behind_the_camera_draws_nothing() {
     for _ in 0..90 {
         race.tick(&PlayerInputs::none());
     }
-    let eye = race.camera_position();
+    let eye = race.view.camera_position(&race.core);
     assert!(eye.x > 30.0, "the camera followed: {eye}");
     let scene = scene_for(&gpu, &race);
     assert_eq!(frames(&gpu, &scene, &mut race, 3), 0);
@@ -468,9 +472,9 @@ fn entrance_is_in_the_pvs(
     visibility: &crate::visibility::TrackVisibility,
     request: &crate::extensions::PortalRequest,
 ) -> bool {
-    let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
+    let projection = race.view.projection(&race.core, 1.0, 500.0, Fov::AUTHORED);
     let shot = race.portal_shot(request, projection).expect("in the view");
-    let set = race.visible_set(visibility, &(projection * race.view()));
+    let set = race.visible_set(visibility, &(projection * race.view.view(&race.core)));
     set.allows(shot.reach.sections)
 }
 
@@ -574,9 +578,12 @@ fn a_portal_whose_radius_reaches_a_visible_section_still_draws() {
         .sim
         .extension_portal_view(0)
         .expect("the guest asked");
-    let projection = race.projection(1.0, 500.0, Fov::AUTHORED);
+    let projection = race.view.projection(&race.core, 1.0, 500.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
-    let set = race.visible_set(&walled_sections(), &(projection * race.view()));
+    let set = race.visible_set(
+        &walled_sections(),
+        &(projection * race.view.view(&race.core)),
+    );
     assert!(
         !set.allows(1u64 << sample_section_at(&race, request.entrance)),
         "the entrance's own section is behind a wall"
@@ -820,12 +827,12 @@ fn a_split_screen_draws_one_extra_scene_a_frame_for_all_its_seats() {
         );
         assert_eq!(scene.frame_work().portal_views, frame);
     }
-    race.set_viewpoint(1);
+    race.view.set_viewpoint(&race.core, 1);
     assert!(
         scene.portal_engine_of(&race).is_none(),
         "the second seat falls back"
     );
-    race.reset_viewpoint();
+    race.view.reset_viewpoint();
     assert!(scene.portal_engine_of(&race).is_some());
 }
 
@@ -965,7 +972,7 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
         frame.z_axis.truncate().dot(along)
     );
 
-    let projection = race.projection(1.0, 4000.0, Fov::AUTHORED);
+    let projection = race.view.projection(&race.core, 1.0, 4000.0, Fov::AUTHORED);
     let shot = race.portal_shot(&request, projection).expect("in the view");
     let eye = shot.view.inverse().w_axis.truncate();
     assert!(
@@ -991,7 +998,7 @@ fn a_portal_view_to_a_forks_route_is_framed_from_the_route() {
         frame_of(entrance, oag_render::camera::portal::Face::Oncoming),
         frame_of(exit.to, oag_render::camera::portal::Face::Departing),
     );
-    let view = oag_render::camera::portal::view(race.view(), through);
+    let view = oag_render::camera::portal::view(race.view.view(&race.core), through);
     assert_eq!(
         shot.view.to_cols_array().map(f32::to_bits),
         view.to_cols_array().map(f32::to_bits)

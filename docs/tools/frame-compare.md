@@ -33,7 +33,7 @@ columns, all-or-nothing, negated-eye already undone at capture time - and the
 transposed-store reconciliation lives in one place,
 `oag_trace::replay::camera_orientation_of`. `--pose-from` in `oag-game` applies
 the row's ship basis through the same `Basis::LeftUpForward` reading every
-comparison uses, and the recorded camera through a `Race::view()` override that
+comparison uses, and the recorded camera through a `RaceView::view()` override that
 the PVS eye and the fog eye follow automatically.
 
 ## A targeted screenshot, end to end

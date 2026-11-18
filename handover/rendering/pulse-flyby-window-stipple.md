@@ -27,7 +27,7 @@ The stipple itself is fixed: the flyby is masked by the section under its camera
   ([batch-cull.md](../../docs/rendering/batch-cull.md)); two front copies a ULP apart (nodes 868 and
   929) still draw twice there, identical, so harmless.
 - **The weather under the flyby**: `Weather_Update` reads the same published section, and
-  `Race::advance_weather` does not take the flyby's. Unmeasured whether a player can tell.
+  `RaceView::advance_weather` does not take the flyby's. Unmeasured whether a player can tell.
 
 ## Next Steps
 

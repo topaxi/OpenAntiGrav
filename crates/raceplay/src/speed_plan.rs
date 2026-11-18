@@ -363,6 +363,7 @@ fn par_map<T: Sync, R: Send>(items: &[T], f: impl Fn(&T) -> R + Sync) -> Vec<R> 
                 .collect()
         })
     }
+
     #[cfg(target_arch = "wasm32")]
     items.iter().map(f).collect()
 }
@@ -381,6 +382,7 @@ fn par_join<A: Send, B: Send>(
             (a.join().expect("a speed plan build panicked"), b)
         })
     }
+
     #[cfg(target_arch = "wasm32")]
     (a(), b())
 }

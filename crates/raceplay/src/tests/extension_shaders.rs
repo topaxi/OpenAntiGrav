@@ -105,7 +105,12 @@ fn a_beam_reaches_the_views_surfaces_between_its_two_crafts() {
     let surfaces = race.mod_surfaces(Vec3::X, Vec3::Y, eye);
     let places: Vec<usize> = surfaces.iter().map(|(place, _)| *place).collect();
     assert_eq!(places, [0, 1], "flat, then the mod's first shader");
-    let ends = [1, 2].map(|slot| race.ship_model_matrix_of(slot).w_axis.truncate());
+    let ends = [1, 2].map(|slot| {
+        race.view
+            .ship_model_matrix_of(&race.core, slot)
+            .w_axis
+            .truncate()
+    });
     let (_, flat) = &surfaces[0];
     let first = Vec3::from_array(flat[0].position);
     let last = Vec3::from_array(flat[flat.len() - 2].position);
@@ -253,7 +258,8 @@ fn an_effect_naming_a_shader_lands_on_its_list_when_fired() {
     )]));
     race.tick(&PlayerInputs::none());
     let at = race.core.sim.world.ships[0].physics.body.position;
-    race.play_fired(
+    race.view.play_fired(
+        &race.core,
         0,
         &Fired::OwnAt {
             mod_id: "test.shaders".to_string(),
@@ -314,16 +320,16 @@ fn a_stopped_effect_ends_its_surfaces_for_that_slot_alone() {
     };
     for (slot, index) in [(0, 0), (1, 0), (0, 1)] {
         let (slot, fired) = placed(slot, index);
-        race.play_fired(slot, &fired);
+        race.view.play_fired(&race.core, slot, &fired);
     }
     assert_eq!(standing(&mut race), 3);
-    race.play_fired(0, &stop(0));
+    race.view.play_fired(&race.core, 0, &stop(0));
     assert_eq!(standing(&mut race), 2, "slot 0's first effect is gone");
-    race.play_fired(0, &stop(0));
+    race.view.play_fired(&race.core, 0, &stop(0));
     assert_eq!(standing(&mut race), 2, "none standing is not a fault");
-    race.play_fired(1, &stop(1));
+    race.view.play_fired(&race.core, 1, &stop(1));
     assert_eq!(standing(&mut race), 2, "another effect of the slot stands");
-    race.play_fired(1, &stop(0));
-    race.play_fired(0, &stop(1));
+    race.view.play_fired(&race.core, 1, &stop(0));
+    race.view.play_fired(&race.core, 0, &stop(1));
     assert_eq!(standing(&mut race), 0);
 }

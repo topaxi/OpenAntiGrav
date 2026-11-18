@@ -320,7 +320,7 @@ fn frame_of<'a>(
 /// The negation is there because the camera stores a *negated* eye beside a
 /// world-to-camera rotation whose world axes are its columns - a split
 /// `docs/.../camera.md` measured from the rendering side and this reads back
-/// from the audio side. Inverting `Race::view` recovers both halves at once:
+/// from the audio side. Inverting `RaceView::view` recovers both halves at once:
 /// the camera's world matrix, whose translation is the eye and whose first
 /// column is the right axis the pan projects onto.
 ///
@@ -328,7 +328,7 @@ fn frame_of<'a>(
 /// craft cues are, and the two must not be allowed to disagree about where the
 /// listener is - see [`TrackEmitters`].
 pub fn listener_of(race: &oag_raceplay::Race) -> oag_audio::Listener {
-    listener_of_view(race.view())
+    listener_of_view(race.view_state().view(&race.core))
 }
 
 /// [`listener_of`] for a world-to-camera matrix. A right-handed camera looks

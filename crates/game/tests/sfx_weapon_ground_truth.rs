@@ -538,7 +538,7 @@ fn quake_hit_render(drop_collisions: bool) -> (Vec<i16>, usize) {
 /// The `.COLLISIONS` pair is heard, not only raised: the same Quake hit
 /// rendered with the cue held back is sample-identical until the wave reaches
 /// the player and louder with it after. Dropping `Cue::Collision` from
-/// `Race::throw_hit_spark` makes the two renders identical.
+/// `Stage::throw_hit_spark` makes the two renders identical.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn a_quake_hit_is_louder_with_its_collision_pair() {

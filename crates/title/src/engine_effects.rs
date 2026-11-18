@@ -33,7 +33,7 @@ pub const ROCKET_FLARE_EFFECT: &str = "WO_ROCKET_FLARE";
 /// flight line at a constant rate, so no locator is needed:
 /// `weapons::missile_flare_anchors` derives both from the projectile's tracked
 /// position and velocity (confidence 80, formula and open points in its doc);
-/// `Race::advance_projectile_flares` attaches and follows the two instances.
+/// `RaceView::advance_projectile_flares` attaches and follows the two instances.
 pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 
 /// The effect the original attaches to every plasma bolt at launch.
@@ -50,7 +50,7 @@ pub const MISSILE_FLARE_EFFECT: &str = "WO_MISSILE_HEAD";
 /// the charge fraction during the wind-up second.
 ///
 /// **This engine gets the riding and the scale ramp.**
-/// `Race::advance_projectile_flares` attaches it to every live projectile of the
+/// `RaceView::advance_projectile_flares` attaches it to every live projectile of the
 /// kind and follows it; a charging bolt is a live projectile reseated on the
 /// nose by `Projectiles::advance`, which is the re-parenting arrived at from the
 /// other end. `weapons::visuals::plasma_flare_scale` ports `Plasma_UpdateCharge`'s
@@ -105,8 +105,8 @@ pub const PLASMA_LIGHTNING_EXPAND_EFFECT: &str = "WO_PLASMA_LIGHTNING_EXPAND";
 /// fourcc `'PLCE'`, plasma.md). Internal name confirmed as for
 /// [`PLASMA_LIGHTNING_EXPAND_EFFECT`]: `wo_plasma_lightning_collapse.pob` names
 /// itself `WO_PLASMA_LIGHTNING_COLLAPSE`. Played from
-/// `Race::advance_plasma_blast_models`, 1.3 s after detonation, not from
-/// `Race::ignite_blast`.
+/// `RaceView::advance_plasma_blast_models`, 1.3 s after detonation, not from
+/// `RaceView::ignite_blast`.
 pub const PLASMA_LIGHTNING_COLLAPSE_EFFECT: &str = "WO_PLASMA_LIGHTNING_COLLAPSE";
 
 /// What HD/Fury plays on a Plasma bolt while it winds up, beside its head.
@@ -192,7 +192,7 @@ pub const CRAFT_BLAST_EFFECT: &str = "WO_ROCKET_EXPLO";
 ///
 /// **One file for every ending**, unlike the Rocket's track/craft split:
 /// `docs/formats/pob.md`'s 35-name list has one `WO_MISSILE_EXPLO`. So
-/// `Race::blast_for` does not drop the struck craft's position as
+/// `RaceView::blast_for` does not drop the struck craft's position as
 /// [`CRAFT_BLAST_DROP`] does for the Rocket: no such offset has been read for the
 /// Missile and an invented one is what CLAUDE.md forbids. It plays at the impact.
 pub const MISSILE_EXPLO_EFFECT: &str = "WO_MISSILE_EXPLO";
@@ -206,8 +206,8 @@ pub const MISSILE_EXPLO_EFFECT: &str = "WO_MISSILE_EXPLO";
 /// reaches [`MISSILE_EXPLO_EFFECT`]
 /// (`docs/ghidra/functions/psp-pulse-usa/missile.md#the-flight-model-the-rockets-with-one-literal-changed`).
 ///
-/// **A burst, not a riding instance**: `Race::ignite_missile_bounces` plays it
-/// with `psys::Stage::play`, as `Race::ignite_blast` does.
+/// **A burst, not a riding instance**: `RaceView::ignite_missile_bounces` plays it
+/// with `psys::Stage::play`, as `RaceView::ignite_blast` does.
 pub const MISSILE_BOUNCE_EFFECT: &str = "WO_MISSILE_BOUNCE";
 
 /// The explosion a mine plays, whenever and however it detonates.
@@ -224,7 +224,7 @@ pub const MISSILE_BOUNCE_EFFECT: &str = "WO_MISSILE_BOUNCE";
 ///
 /// **The Bomb is not this.** `Bomb_Detonate` is a distinct function on a distinct
 /// pool cursor (`+0xc4`/cap 32 against the Mine's `+0x164`/`+0x64`) and plays its
-/// own three-piece detonation ([`BOMB_SMOKERING_EFFECT`], `Race::blast_for`).
+/// own three-piece detonation ([`BOMB_SMOKERING_EFFECT`], `RaceView::blast_for`).
 pub const MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO";
 
 /// The smoke ring one third of the Bomb's detonation plays: `BombBlast_Construct`
@@ -281,7 +281,7 @@ pub const ENGINE_FLARE_EFFECT: &str = "WO_SHIP_ENGINEFLARE";
 /// **Read out of `.rodata` at confidence 88**, not inferred from the fourcc
 /// `'QUAK'` beside it (`WO_QUAKE\0` verbatim at the name pointer's address).
 /// Spawned once per wave instance, then re-positioned to the midpoint and
-/// re-scaled to the track's width each frame (`Race::advance_quake_visual`;
+/// re-scaled to the track's width each frame (`RaceView::advance_quake_visual`;
 /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`, "What
 /// `Quake_Update` builds from those two points").
 pub const QUAKE_EFFECT: &str = "WO_QUAKE";
@@ -292,7 +292,7 @@ pub const QUAKE_EFFECT: &str = "WO_QUAKE";
 /// called from `Repulser_Init`, spawns this (`0x08a7cd18`, fourcc `REP3`) at the
 /// entity's matrix `+0x1a0`, which `Repulser_UpdateFieldModel` rebuilds from the
 /// firer's node every tick; `Repulser_Reset` releases it
-/// (`docs/ghidra/functions/psp-pulse-usa/repulser.md`, `Race::advance_repulser_visual`).
+/// (`docs/ghidra/functions/psp-pulse-usa/repulser.md`, `RaceView::advance_repulser_visual`).
 pub const REPULSER_BLAST_EFFECT: &str = "WO_REPULSER_BLAST";
 
 /// One Repulser wave, riding its centre.
@@ -328,10 +328,10 @@ pub const LEACHBEAM_ENERGY_EFFECT: &str = "WO_LEACHBEAM_ENERGY";
 /// **A craft hit does not reach this call**: the struck hull throws its own damage
 /// sparks from `Ship_Damage` (`race::hit_sparks`); see
 /// `oag_weapons::projectile::cannon`'s module doc, "The wall hit spawns a spark
-/// effect; the craft hit does not". `Race::blast_for` mirrors that split:
+/// effect; the craft hit does not". `RaceView::blast_for` mirrors that split:
 /// `Weapon::Cannon` reaches this only when `struck` is `None`.
 ///
-/// **A burst**, played through `Race::ignite_blast` like every detonation burst.
+/// **A burst**, played through `RaceView::ignite_blast` like every detonation burst.
 pub const CANNON_SPARKS_EFFECT: &str = "WO_CANNON_SPARKS";
 
 /// What a craft *holding* a LeachBeam draws, before it fires anything.
@@ -354,7 +354,7 @@ pub const LEACHBEAM_CHARGING_EFFECT: &str = "WO_LEACHBEAM_CHARGING";
 /// [`PLASMA_LIGHTNING_EXPAND_EFFECT`] is.
 ///
 /// **Played as a one-shot burst**: the original allocates a fresh instance at every
-/// wrap, the shape of `Race::ignite_blast`'s bursts. Chosen over
+/// wrap, the shape of `RaceView::ignite_blast`'s bursts. Chosen over
 /// [`LEACHBEAM_ENERGY_EFFECT`]'s attach-and-follow because the decompile reads no
 /// "same instance kept alive" requirement.
 pub const LEACHBEAM_ABSORB_EFFECT: &str = "WO_LEACHBEAM_ABSORB";

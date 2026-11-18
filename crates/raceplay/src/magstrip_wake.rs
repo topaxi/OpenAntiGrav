@@ -117,89 +117,6 @@ impl Wakes {
 }
 
 impl Race {
-    /// One tick of every craft's wake, after the simulation. Called from
-    /// [`Race::tick`] beside [`Race::advance_mag_floor_fx`], and for the same
-    /// reason not from `tick_cosmetics`: a frozen world freezes its wake.
-    pub(crate) fn advance_magstrip_wake(&mut self) {
-        let Some(mut wakes) = self.view.magstrip_wake.take() else {
-            return;
-        };
-        let dt = self.core.sim.dt;
-        for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
-            let blend = self.core.sim.world.ships[slot].physics.mag_lock_blend;
-            let was_over = wakes.over[slot];
-            let over = super::mag_floor_fx::contact_this_tick(wakes.previous_blend[slot], blend);
-            wakes.previous_blend[slot] = blend;
-            wakes.over[slot] = over;
-            let (edge, armed) = sound_edge(wakes.armed[slot], was_over, over);
-            wakes.armed[slot] = armed;
-            match edge {
-                Some(SoundEdge::Start) => {
-                    self.core.sim.cues.push(CueEvent::new(Cue::Magstrip, slot))
-                }
-                Some(SoundEdge::Stop) => {
-                    self.core
-                        .sim
-                        .cues
-                        .push(CueEvent::new(Cue::MagstripStop, slot));
-                }
-                None => {}
-            }
-            let Some(anchor) = wakes.anchors[slot] else {
-                continue;
-            };
-            if wakes.pob.is_some() {
-                self.advance_magstrip_pob(&mut wakes, slot, over, anchor);
-            }
-            if !wakes.arcs {
-                continue;
-            }
-            if !self.core.sim.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
-                continue;
-            }
-            let Some(craft) = self.wake_craft(slot, anchor) else {
-                continue;
-            };
-            let from = self.core.sim.world.ships[slot].physics.body.position;
-            let walk = |ahead: f32| self.core.sim.walk_track(from, ahead);
-            wakes.wakes[slot].advance(dt, over, &craft, &walk);
-        }
-        self.view.magstrip_wake = Some(wakes);
-    }
-
-    /// One craft's `.pob` magstrip effect: started riding the anchor on contact,
-    /// followed while over the strip, detached on leaving or when the craft is
-    /// out of play. Nothing plays when the effect did not load.
-    fn advance_magstrip_pob(&mut self, wakes: &mut Wakes, slot: usize, over: bool, anchor: Mat4) {
-        let Some(handles) = wakes.pob.as_mut() else {
-            return;
-        };
-        let live = over && self.core.sim.ship_active(slot);
-        match (handles[slot], live) {
-            (None, true) => {
-                let trigger = if self.core.sim.world.mode() == Mode::Zone {
-                    Trigger::MagstripZone
-                } else {
-                    Trigger::MagstripSparks
-                };
-                let Some(effect) = self.view.handles.get(trigger).cloned() else {
-                    return;
-                };
-                let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();
-                handles[slot] = self.view.stage.play_riding(&effect, at, 1.0);
-            }
-            (Some(playing), true) => {
-                let at = (self.ship_model_matrix_of(slot) * anchor).w_axis.truncate();
-                self.view.stage.follow(playing, at);
-            }
-            (Some(playing), false) => {
-                self.view.stage.detach(playing);
-                handles[slot] = None;
-            }
-            (None, false) => {}
-        }
-    }
-
     /// The `.pob` effect craft `slot` has playing now, for tests and telemetry.
     #[must_use]
     pub fn magstrip_pob_of(&self, slot: usize) -> Option<psys::Playing> {
@@ -208,40 +125,6 @@ impl Race {
             .as_ref()
             .and_then(|wakes| wakes.pob.as_ref())
             .and_then(|handles| handles.get(slot).copied().flatten())
-    }
-
-    /// What the wake reads of craft `slot` this frame to draw it. `with_track` and `lateral`
-    /// are the spawn's alone: [`Self::wake_craft`] fills them in.
-    fn wake_pose(&self, slot: usize, anchor: Mat4) -> Craft {
-        let model = self.ship_model_matrix_of(slot);
-        let world_anchor = model * anchor;
-        Craft {
-            anchor: world_anchor.w_axis.truncate(),
-            position: model.w_axis.truncate(),
-            forward: model.z_axis.truncate().normalize_or_zero(),
-            up: world_anchor.y_axis.truncate().normalize_or_zero(),
-            speed: self.core.sim.world.ships[slot]
-                .physics
-                .body
-                .linear_velocity
-                .length(),
-            with_track: true,
-            lateral: 0.0,
-        }
-    }
-
-    /// [`Self::wake_pose`] with the spawn's `with_track` and `lateral`, left at their neutral
-    /// values when the track has no sample under the craft.
-    fn wake_craft(&self, slot: usize, anchor: Mat4) -> Option<Craft> {
-        let mut craft = self.wake_pose(slot, anchor);
-        let position = self.core.sim.world.ships[slot].physics.body.position;
-        if let Some((_, sample, _)) = self.core.sim.spline.nearest(position) {
-            let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
-            let across = Vec3::from_array(sample.lateral).normalize_or_zero();
-            craft.with_track = craft.forward.dot(tangent) >= 0.0;
-            craft.lateral = (position - Vec3::from_array(sample.pos)).dot(across);
-        }
-        Some(craft)
     }
 }
 
@@ -298,7 +181,7 @@ impl Race {
         let Some(wakes) = self.view.magstrip_wake.as_ref().filter(|wakes| wakes.arcs) else {
             return (atlas, contact);
         };
-        let eye = self.camera_position();
+        let eye = self.view.camera_position(&self.core);
         for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
             let Some(anchor) = wakes.anchors[slot] else {
                 continue;
@@ -306,7 +189,7 @@ impl Race {
             if !self.core.sim.ship_active(slot) || wakes.wakes[slot].live() == 0 {
                 continue;
             }
-            let craft = self.wake_pose(slot, anchor);
+            let craft = self.view.wake_pose(&self.core, slot, anchor);
             wakes.wakes[slot].build(&craft, eye, &mut atlas, &mut contact);
         }
         (atlas, contact)
@@ -343,3 +226,133 @@ impl Race {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One tick of every craft's wake, after the simulation. Called from
+    /// [`Race::tick`] beside [`crate::RaceView::advance_mag_floor_fx`], and for the same
+    /// reason not from `tick_cosmetics`: a frozen world freezes its wake.
+    pub(crate) fn advance_magstrip_wake(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+    ) {
+        let Some(mut wakes) = self.magstrip_wake.take() else {
+            return;
+        };
+        let dt = core.sim.dt;
+        for slot in 0..usize::from(core.sim.world.ship_count).min(MAX_SHIPS) {
+            let blend = core.sim.world.ships[slot].physics.mag_lock_blend;
+            let was_over = wakes.over[slot];
+            let over = super::mag_floor_fx::contact_this_tick(wakes.previous_blend[slot], blend);
+            wakes.previous_blend[slot] = blend;
+            wakes.over[slot] = over;
+            let (edge, armed) = sound_edge(wakes.armed[slot], was_over, over);
+            wakes.armed[slot] = armed;
+            match edge {
+                Some(SoundEdge::Start) => cues.push(CueEvent::new(Cue::Magstrip, slot)),
+                Some(SoundEdge::Stop) => {
+                    cues.push(CueEvent::new(Cue::MagstripStop, slot));
+                }
+                None => {}
+            }
+            let Some(anchor) = wakes.anchors[slot] else {
+                continue;
+            };
+            if wakes.pob.is_some() {
+                self.advance_magstrip_pob(core, &mut wakes, slot, over, anchor);
+            }
+            if !wakes.arcs {
+                continue;
+            }
+            if !core.sim.ship_active(slot) || !(over || wakes.wakes[slot].live() > 0) {
+                continue;
+            }
+            let Some(craft) = self.wake_craft(core, slot, anchor) else {
+                continue;
+            };
+            let from = core.sim.world.ships[slot].physics.body.position;
+            let walk = |ahead: f32| core.sim.walk_track(from, ahead);
+            wakes.wakes[slot].advance(dt, over, &craft, &walk);
+        }
+        self.magstrip_wake = Some(wakes);
+    }
+
+    /// One craft's `.pob` magstrip effect: started riding the anchor on contact,
+    /// followed while over the strip, detached on leaving or when the craft is
+    /// out of play. Nothing plays when the effect did not load.
+    fn advance_magstrip_pob(
+        &mut self,
+        core: &SimRace,
+        wakes: &mut Wakes,
+        slot: usize,
+        over: bool,
+        anchor: Mat4,
+    ) {
+        let Some(handles) = wakes.pob.as_mut() else {
+            return;
+        };
+        let live = over && core.sim.ship_active(slot);
+        match (handles[slot], live) {
+            (None, true) => {
+                let trigger = if core.sim.world.mode() == Mode::Zone {
+                    Trigger::MagstripZone
+                } else {
+                    Trigger::MagstripSparks
+                };
+                let Some(effect) = self.handles.get(trigger).cloned() else {
+                    return;
+                };
+                let at = (self.ship_model_matrix_of(core, slot) * anchor)
+                    .w_axis
+                    .truncate();
+                handles[slot] = self.stage.play_riding(&effect, at, 1.0);
+            }
+            (Some(playing), true) => {
+                let at = (self.ship_model_matrix_of(core, slot) * anchor)
+                    .w_axis
+                    .truncate();
+                self.stage.follow(playing, at);
+            }
+            (Some(playing), false) => {
+                self.stage.detach(playing);
+                handles[slot] = None;
+            }
+            (None, false) => {}
+        }
+    }
+
+    /// What the wake reads of craft `slot` this frame to draw it. `with_track` and `lateral`
+    /// are the spawn's alone: [`Self::wake_craft`] fills them in.
+    fn wake_pose(&self, core: &SimRace, slot: usize, anchor: Mat4) -> Craft {
+        let model = self.ship_model_matrix_of(core, slot);
+        let world_anchor = model * anchor;
+        Craft {
+            anchor: world_anchor.w_axis.truncate(),
+            position: model.w_axis.truncate(),
+            forward: model.z_axis.truncate().normalize_or_zero(),
+            up: world_anchor.y_axis.truncate().normalize_or_zero(),
+            speed: core.sim.world.ships[slot]
+                .physics
+                .body
+                .linear_velocity
+                .length(),
+            with_track: true,
+            lateral: 0.0,
+        }
+    }
+
+    /// [`Self::wake_pose`] with the spawn's `with_track` and `lateral`, left at their neutral
+    /// values when the track has no sample under the craft.
+    fn wake_craft(&self, core: &SimRace, slot: usize, anchor: Mat4) -> Option<Craft> {
+        let mut craft = self.wake_pose(core, slot, anchor);
+        let position = core.sim.world.ships[slot].physics.body.position;
+        if let Some((_, sample, _)) = core.sim.spline.nearest(position) {
+            let tangent = Vec3::from_array(sample.tangent).normalize_or_zero();
+            let across = Vec3::from_array(sample.lateral).normalize_or_zero();
+            craft.with_track = craft.forward.dot(tangent) >= 0.0;
+            craft.lateral = (position - Vec3::from_array(sample.pos)).dot(across);
+        }
+        Some(craft)
+    }
+}

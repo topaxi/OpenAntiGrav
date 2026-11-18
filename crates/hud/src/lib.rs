@@ -682,7 +682,7 @@ pub struct Readout {
     /// `Hud_UpdateShieldReadout`. See `Race::advance_shield_flash_whole`.
     pub shield_flashing_whole: bool,
     /// Whether the player is inside the one-second window after absorbing a
-    /// pickup this frame - `Race::absorb_window_active(player_slot)`, the
+    /// pickup this frame - `RaceView::absorb_window_active(player_slot)`, the
     /// same state [`oag_fx::hull_overlay`] draws off.
     ///
     /// `Hud_UpdateEnergyBar` (`0x0881c638`) calls

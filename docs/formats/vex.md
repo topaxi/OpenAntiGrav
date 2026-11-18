@@ -445,7 +445,7 @@ at eight distances.
 Each frame the race scene switches the circuit and every craft in play,
 **the player's own included** - the original's function does not know whose
 hull it is on - from the unjittered view matrix and the vertical field of
-view the projection is built from, in degrees (`Race::vertical_fov`, which
+view the projection is built from, in degrees (`RaceView::vertical_fov`, which
 includes the recovered speed widen). The ghost switches at its own pose.
 Anything nobody switches keeps its finest tier: the shadow casters, the
 weapon models, `oag-view` (it has no race camera), a `mesh::merge`.

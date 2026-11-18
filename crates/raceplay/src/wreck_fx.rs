@@ -128,122 +128,6 @@ impl WreckFx {
 }
 
 impl Race {
-    /// `FUN_0883e064`'s node loop for `slot`, on the tick it reaches state 5.
-    pub(super) fn throw_wreck_fx(&mut self, slot: usize) {
-        // The explosion first and the sparks second, per node, as the
-        // original's loop spawns them.
-        self.ride_wreck_nodes(slot, &[Trigger::WreckNode, Trigger::WreckSparks], MAX_NODES);
-    }
-
-    /// Each of `triggers` at the first `cap` wreck locators of `slot`, node by node.
-    fn ride_wreck_nodes(&mut self, slot: usize, triggers: &[Trigger], cap: usize) {
-        let nodes = self.view.wreck_fx.anchors.get(slot).map_or(0, Vec::len);
-        let model = model_matrix_of(&self.core.sim.world.ships[slot]);
-        for node in 0..nodes.min(cap) {
-            for &trigger in triggers {
-                let Some(effect) = self.view.handles.get(trigger).cloned() else {
-                    continue;
-                };
-                let anchor = self.view.wreck_fx.anchors[slot][node];
-                let at = model.transform_point3(anchor.position);
-                let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
-                let Some(playing) = self.view.stage.play_riding(&effect, at, 1.0) else {
-                    continue;
-                };
-                self.view.stage.orient(playing, up);
-                self.view
-                    .stage
-                    .set_frame_scale(playing, oag_fx::exhaust::CRAFT_ROW_SCALE);
-                let fx = &mut self.view.wreck_fx;
-                fx.riding.push(Riding {
-                    slot,
-                    node,
-                    playing,
-                });
-                fx.started += 1;
-            }
-        }
-    }
-
-    /// What the wreck throws when its state times out, `model` being the matrix the craft was
-    /// wrecked with (a wreck lies still, so it is the one the original reads 1.5 s on; a craft
-    /// put back on the track in between is not where the blast goes). A source with no wreck
-    /// read throws nothing.
-    ///
-    /// Pulse (`FUN_088407b0`): `WO_SHIP_EXPLOSION` in the world, `EXPLOSION_DROP` rows below the
-    /// origin, and the ship shockwave. Pure (`FUN_089258b8`): the big blast at each of the first
-    /// eight locators, and the debris and smoke at the matrix itself, no drop and no shockwave
-    /// read. Each is thrown when its title's table names it.
-    pub(super) fn throw_wreck_explosion(&mut self, slot: usize, model: Mat4) {
-        if self.view.wreck_fx.anchors.get(slot).is_none() {
-            return;
-        }
-        if self.view.wreck_fx.shockwave {
-            // The shockwave is built from the matrix before its translation is moved, and is
-            // its own `.vex`, so it does not wait on the particle effect having loaded.
-            self.spawn_ship_shockwave(
-                model.w_axis.truncate(),
-                model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y),
-            );
-        }
-        let up = model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y);
-        if let Some(effect) = self.view.handles.get(Trigger::WreckExplosion).cloned() {
-            let at = model.transform_point3(Vec3::new(0.0, -EXPLOSION_DROP, 0.0));
-            // Chosen, not measured: scale `1.0`, as for the node effects.
-            if self.play_wreck_world_effect(&effect, at, up) {
-                self.view.wreck_fx.last_explosion_at = Some(at);
-            }
-        }
-        self.ride_wreck_nodes(slot, &[Trigger::WreckBigNode], BIG_BLAST_NODES);
-        for trigger in [Trigger::WreckDebris, Trigger::WreckSmoke] {
-            if let Some(effect) = self.view.handles.get(trigger).cloned() {
-                self.play_wreck_world_effect(&effect, model.w_axis.truncate(), up);
-            }
-        }
-    }
-
-    /// One wreck effect placed in the world and let go; whether it started.
-    fn play_wreck_world_effect(
-        &mut self,
-        effect: &std::sync::Arc<psys::Effect>,
-        at: Vec3,
-        up: Vec3,
-    ) -> bool {
-        let Some(playing) = self.view.stage.play(effect, at, 1.0) else {
-            return false;
-        };
-        self.view.stage.orient(playing, up);
-        self.view
-            .stage
-            .set_frame_scale(playing, oag_fx::exhaust::CRAFT_ROW_SCALE);
-        self.view.wreck_fx.started += 1;
-        true
-    }
-
-    /// Keeps every emitting wreck effect on its locator, letting go once it
-    /// stops emitting. Before `Stage::advance`, like the hit sparks.
-    pub(super) fn advance_wreck_fx(&mut self) {
-        let mut riding = std::mem::take(&mut self.view.wreck_fx.riding);
-        riding.retain(|fx| {
-            let ship = &self.core.sim.world.ships[fx.slot];
-            if !ship.active || !self.view.stage.is_emitting(fx.playing) {
-                self.view.stage.detach(fx.playing);
-                return false;
-            }
-            let anchor = self.view.wreck_fx.anchors[fx.slot][fx.node];
-            let model = model_matrix_of(ship);
-            self.view
-                .stage
-                .follow(fx.playing, model.transform_point3(anchor.position));
-            self.view.stage.orient(
-                fx.playing,
-                model.transform_vector3(anchor.up).normalize_or(Vec3::Y),
-            );
-            true
-        });
-        self.view.wreck_fx.riding = riding;
-    }
-
     /// How many are still riding a locator, for tests.
     #[doc(hidden)]
     #[must_use]
@@ -263,5 +147,126 @@ impl Race {
     #[must_use]
     pub fn wreck_fx_started_for_tests(&self) -> u32 {
         self.view.wreck_fx.started
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `FUN_0883e064`'s node loop for `slot`, on the tick it reaches state 5.
+    pub(super) fn throw_wreck_fx(&mut self, core: &SimRace, slot: usize) {
+        // The explosion first and the sparks second, per node, as the
+        // original's loop spawns them.
+        self.ride_wreck_nodes(
+            core,
+            slot,
+            &[Trigger::WreckNode, Trigger::WreckSparks],
+            MAX_NODES,
+        );
+    }
+
+    /// Each of `triggers` at the first `cap` wreck locators of `slot`, node by node.
+    fn ride_wreck_nodes(&mut self, core: &SimRace, slot: usize, triggers: &[Trigger], cap: usize) {
+        let nodes = self.wreck_fx.anchors.get(slot).map_or(0, Vec::len);
+        let model = model_matrix_of(&core.sim.world.ships[slot]);
+        for node in 0..nodes.min(cap) {
+            for &trigger in triggers {
+                let Some(effect) = self.handles.get(trigger).cloned() else {
+                    continue;
+                };
+                let anchor = self.wreck_fx.anchors[slot][node];
+                let at = model.transform_point3(anchor.position);
+                let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
+                let Some(playing) = self.stage.play_riding(&effect, at, 1.0) else {
+                    continue;
+                };
+                self.stage.orient(playing, up);
+                self.stage
+                    .set_frame_scale(playing, oag_fx::exhaust::CRAFT_ROW_SCALE);
+                let fx = &mut self.wreck_fx;
+                fx.riding.push(Riding {
+                    slot,
+                    node,
+                    playing,
+                });
+                fx.started += 1;
+            }
+        }
+    }
+
+    /// What the wreck throws when its state times out, `model` being the matrix the craft was
+    /// wrecked with (a wreck lies still, so it is the one the original reads 1.5 s on; a craft
+    /// put back on the track in between is not where the blast goes). A source with no wreck
+    /// read throws nothing.
+    ///
+    /// Pulse (`FUN_088407b0`): `WO_SHIP_EXPLOSION` in the world, `EXPLOSION_DROP` rows below the
+    /// origin, and the ship shockwave. Pure (`FUN_089258b8`): the big blast at each of the first
+    /// eight locators, and the debris and smoke at the matrix itself, no drop and no shockwave
+    /// read. Each is thrown when its title's table names it.
+    pub(super) fn throw_wreck_explosion(&mut self, core: &SimRace, slot: usize, model: Mat4) {
+        if self.wreck_fx.anchors.get(slot).is_none() {
+            return;
+        }
+        if self.wreck_fx.shockwave {
+            // The shockwave is built from the matrix before its translation is moved, and is
+            // its own `.vex`, so it does not wait on the particle effect having loaded.
+            self.spawn_ship_shockwave(
+                model.w_axis.truncate(),
+                model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y),
+            );
+        }
+        let up = model.transform_vector3(Vec3::Y).normalize_or(Vec3::Y);
+        if let Some(effect) = self.handles.get(Trigger::WreckExplosion).cloned() {
+            let at = model.transform_point3(Vec3::new(0.0, -EXPLOSION_DROP, 0.0));
+            // Chosen, not measured: scale `1.0`, as for the node effects.
+            if self.play_wreck_world_effect(&effect, at, up) {
+                self.wreck_fx.last_explosion_at = Some(at);
+            }
+        }
+        self.ride_wreck_nodes(core, slot, &[Trigger::WreckBigNode], BIG_BLAST_NODES);
+        for trigger in [Trigger::WreckDebris, Trigger::WreckSmoke] {
+            if let Some(effect) = self.handles.get(trigger).cloned() {
+                self.play_wreck_world_effect(&effect, model.w_axis.truncate(), up);
+            }
+        }
+    }
+
+    /// One wreck effect placed in the world and let go; whether it started.
+    fn play_wreck_world_effect(
+        &mut self,
+        effect: &std::sync::Arc<psys::Effect>,
+        at: Vec3,
+        up: Vec3,
+    ) -> bool {
+        let Some(playing) = self.stage.play(effect, at, 1.0) else {
+            return false;
+        };
+        self.stage.orient(playing, up);
+        self.stage
+            .set_frame_scale(playing, oag_fx::exhaust::CRAFT_ROW_SCALE);
+        self.wreck_fx.started += 1;
+        true
+    }
+
+    /// Keeps every emitting wreck effect on its locator, letting go once it
+    /// stops emitting. Before `Stage::advance`, like the hit sparks.
+    pub(super) fn advance_wreck_fx(&mut self, core: &SimRace) {
+        let mut riding = std::mem::take(&mut self.wreck_fx.riding);
+        riding.retain(|fx| {
+            let ship = &core.sim.world.ships[fx.slot];
+            if !ship.active || !self.stage.is_emitting(fx.playing) {
+                self.stage.detach(fx.playing);
+                return false;
+            }
+            let anchor = self.wreck_fx.anchors[fx.slot][fx.node];
+            let model = model_matrix_of(ship);
+            self.stage
+                .follow(fx.playing, model.transform_point3(anchor.position));
+            self.stage.orient(
+                fx.playing,
+                model.transform_vector3(anchor.up).normalize_or(Vec3::Y),
+            );
+            true
+        });
+        self.wreck_fx.riding = riding;
     }
 }

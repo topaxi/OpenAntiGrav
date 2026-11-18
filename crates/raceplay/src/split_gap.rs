@@ -10,6 +10,10 @@
 //! are the title's ([`oag_title::lap_hud::SplitGapRule`]). Render-side, out of
 //! every hash.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_hud::time_gap::{GapEvents, TimeGap};
 use oag_title::lap_hud::SplitGapRule;
 
@@ -129,29 +133,28 @@ impl SplitGap {
     }
 }
 
-impl super::Race {
+#[cfg(test)]
+mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// Folds this tick's lap-line and split crossings into the split table and
     /// steps the gap display. After `update_standings`, so every craft's count
     /// is fresh.
-    pub(super) fn tick_split_gap(&mut self) {
-        if self.view.split_gap.is_none() {
+    pub(super) fn tick_split_gap(&mut self, core: &SimRace) {
+        if self.split_gap.is_none() {
             return;
         }
-        let player = self.core.player_slot();
-        let now = oag_race::race_clock_ticks(self.core.sim.world.tick) as f32 / 60.0;
+        let player = core.player_slot();
+        let now = oag_race::race_clock_ticks(core.sim.world.tick) as f32 / 60.0;
         let mut events = GapEvents::default();
         let mut live = 0;
-        let ships = usize::from(self.core.sim.ship_count());
-        let places = self.core.places();
-        let length = self
-            .core
-            .sim
-            .course
-            .as_deref()
-            .map(oag_race::Course::length);
+        let ships = usize::from(core.sim.ship_count());
+        let places = core.places();
+        let length = core.sim.course.as_deref().map(oag_race::Course::length);
         let reached: Vec<(usize, usize, f32, bool)> = (0..ships)
             .map(|slot| {
-                let ship = &self.core.sim.world.ships[slot];
+                let ship = &core.sim.world.ships[slot];
                 if ship.active && ship.physics.craft_state != oag_physics::CraftState::Eliminated {
                     live += 1;
                 }
@@ -169,10 +172,10 @@ impl super::Race {
             })
             .collect();
         let timed = matches!(
-            self.core.sim.world.mode(),
+            core.sim.world.mode(),
             oag_race::Mode::TimeTrial | oag_race::Mode::SpeedLap
         );
-        let Some(split) = self.view.split_gap.as_mut() else {
+        let Some(split) = self.split_gap.as_mut() else {
             return;
         };
         for (slot, count, fraction, finished) in reached {
@@ -198,7 +201,7 @@ impl super::Race {
             }
         }
         split.display.advance(
-            self.core.sim.dt,
+            core.sim.dt,
             now,
             events,
             live,
@@ -207,6 +210,3 @@ impl super::Race {
         );
     }
 }
-
-#[cfg(test)]
-mod tests;

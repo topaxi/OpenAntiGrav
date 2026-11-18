@@ -77,7 +77,7 @@ fn the_rotation_reproduces_the_shaken_basis_the_original_wrote() {
     }
 }
 
-/// The same through the view matrix `Race::view` hands the renderer: a view
+/// The same through the view matrix `RaceView::view` hands the renderer: a view
 /// built from the original's basis, shaken with [`Shake::apply`], has the
 /// original's shaken basis for its up and forward, and the eye does not move.
 #[test]

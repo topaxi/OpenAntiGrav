@@ -1,8 +1,8 @@
 //! Which screen flash a weapon's detonation starts.
 
 /// The `ScreenFlash_Start` kind a weapon's detonation starts, or `None` for
-/// one that starts none - split out of [`Race::ignite_blast`] so every row is
-/// asserted without a disc, the way [`Race::blast_for`] is.
+/// one that starts none - split out of [`crate::RaceView::ignite_blast`] so every row is
+/// asserted without a disc, the way [`crate::RaceView::blast_for`] is.
 ///
 /// Each row is one caller of `ScreenFlash_Start` (`0x088f00c0`), read:
 ///
@@ -16,10 +16,10 @@
 /// - **Bomb**: kind 3 from `BombBlast_Construct` (`0x08872078`).
 /// - **Mine**: kind 8 from `Mine_SpawnExplosion` (`0x08867f1c`).
 /// - **Cannon, Quake, the rest**: none from here. The Quake flashes from its
-///   own per-tick update ([`Race::advance_quake_visual`]).
+///   own per-tick update ([`crate::RaceView::advance_quake_visual`]).
 ///
 /// The Repulser's kind 2 comes from `Repulser_SpawnWaves` (`0x08876300`) when
-/// its waves start, which `Race::advance_repulser_visual` raises.
+/// its waves start, which `RaceView::advance_repulser_visual` raises.
 pub(crate) fn flash_for(
     kind: oag_tables::weapons::Weapon,
     struck: bool,

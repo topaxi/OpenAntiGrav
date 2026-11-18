@@ -386,7 +386,8 @@ fn a_plasma_craft_hit_spawns_two_blasts_at_the_bolt_and_the_craft() {
 
     let race = second_person_holding(Weapon::Plasma, one_plasma_table());
     assert_eq!(
-        race.plasma_craft_hit_blast_point(Weapon::Plasma, None),
+        race.view
+            .plasma_craft_hit_blast_point(&race.core, Weapon::Plasma, None),
         None,
         "a wall hit has no second blast"
     );

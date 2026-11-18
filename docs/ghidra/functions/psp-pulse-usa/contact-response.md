@@ -2283,7 +2283,7 @@ the last 0.6 s and tests each call's instance gate (`instance + 100`) against th
   (`0x0883df38`), so a cage contact spawns `WO_SHIP_COLL_SPARK_NODAMAGE` through the same ring loop,
   past the shield branch (`0x0884255c`) and with no `Ship_Damage` (that call is behind the same friction
   test, `0x08842648`). Static; no live cage spark caught.
-- **Ported:** `oag_raceplay::Race::throw_contact_spark` (the locator nearest the contact, the locator's
+- **Ported:** `oag_raceplay::Stage::throw_contact_spark` (the locator nearest the contact, the locator's
   0.8 s gate shared with a weapon hit, severity `intensity * 2 + 0.4`, the `.COLLISIONS` cue inside the
   gate, nothing for a shielded craft, whose shell bulges instead, below), called for both hulls of every `oag_physics::pair` contact (the
   contact point is the box-centre midpoint, `PairContact::point`) and for every `oag_physics::cage`
@@ -2332,7 +2332,7 @@ discarded, as for a wall). The cage's record carries friction `0`, so a cage con
 (`Cage` row above). Not read: `ShipShield(entity->0x8c8)->active` is the shell object's own byte; the port's
 `ShipShield::hit` has the same no-op guard.
 
-**Port:** `Race::resolve_craft_pairs` raises `Race::shield_hit` for each hull of a pair contact that is
+**Port:** `Race::resolve_craft_pairs` raises `Stage::shield_hit` for each hull of a pair contact that is
 racing with `shield_pickup_timer > 0`, the complement of the lap-spoil bit it already sets for an
 unshielded one (`pair_spoil`). `oag_physics` is untouched (the shell is a view-side output), so no state
 hash moves. Tests: `tests::shield_hits` (both shells, one shell, a craft that is not racing). Drawn: a

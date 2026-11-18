@@ -25,7 +25,7 @@ live and ported: `oag_physics::cage`, `oag_gameplay::cage`, run by
 - ~~**Cage contacts make no spark or sound in ours.**~~ **Landed 2026-10-26.** The cage's
   contact goes through the ring loop's dispatch with friction `0`: the no-damage spark from the
   nearest locator and `.COLLISIONS` inside the locator's gate, nothing for a shielded craft
-  (`Race::throw_cage_sparks`; `cage_sparks_ground_truth`). A craft-to-craft contact now sparks
+  (`Stage::throw_cage_sparks`; `cage_sparks_ground_truth`). A craft-to-craft contact now sparks
   both hulls the same way, live-read on `talons-boost`
   ([contact-response.md](../../docs/ghidra/functions/psp-pulse-usa/contact-response.md#live-2026-10-26-a-craft-to-craft-contact-sparks-both-hulls-and-the-dispatch-has-no-distance-gate)).
   The shape of the burst against the original's spokes is open: [compare-page.md](../../docs/tools/compare-page.md).

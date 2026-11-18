@@ -38,7 +38,7 @@
 //!   reading under which the executable's own output is a camera-facing frame
 //!   (the bloom disc's normal comes out as `-d`, towards the eye). Confidence
 //!   65. The frames differ per viewport in the original; this draws for the
-//!   one camera [`Race::camera_position`] names.
+//!   one camera [`crate::RaceView::camera_position`] names.
 //! - **Chosen, not measured.** `up`: the original takes the bomb entity's own
 //!   matrix row, which this engine's frozen-pose substitute stands in for, on
 //!   the same footing as Pulse's (`bomb_blast_basis`). The two point lights the

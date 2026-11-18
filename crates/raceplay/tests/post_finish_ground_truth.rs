@@ -217,7 +217,7 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
     let mut last_eye = None;
     for since in 1..=1500_u64 {
         race.tick(&PlayerInputs::none());
-        let eye = race.camera_position();
+        let eye = race.view_state().camera_position(&race.core);
         if since < race::finish_camera::START_TICKS {
             assert!(
                 nodes.iter().all(|node| (*node - eye).length() > 1.0),
@@ -243,7 +243,7 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
     );
     println!(
         "{cuts} eye changes in 1500 frames, {} camera cuts",
-        race.camera_cuts()
+        race.view_state().camera_cuts(&race.core)
     );
 }
 

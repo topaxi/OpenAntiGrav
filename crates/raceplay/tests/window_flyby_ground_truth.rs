@@ -47,7 +47,7 @@ fn every_window_plays_the_flyby_and_then_its_own_seats() {
     let player = race.core.player_slot();
     let area = (0.0, 0.0, 1280.0, 720.0);
     let mut ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         for window in 0..2 {
             assert_eq!(
                 race.window_drawn(window),
@@ -97,7 +97,7 @@ fn a_skip_ends_the_flyby_in_every_window_at_once() {
     assert_eq!(race.window_drawn(1), vec![race.core.player_slot()]);
     race.skip_intro();
     let mut ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&PlayerInputs::none());
         ticks += 1;
         assert!(ticks < 60 * 60, "a skip ends the flyby");
@@ -139,7 +139,7 @@ fn a_second_persons_held_cross_skips_the_flyby() {
         },
     );
     let mut ticks = 0;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&held);
         ticks += 1;
         assert!(ticks < 3000, "window 2's held Cross did not end the flyby");

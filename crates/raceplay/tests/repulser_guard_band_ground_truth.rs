@@ -40,13 +40,13 @@ fn no_wave_start_quad_leaves_the_guard_band() {
     let mut checked = 0;
     for tick in 0..70 {
         race.tick(&PlayerInputs::none());
-        let view = race.view();
+        let view = race.view_state().view(&race.core);
         let (right, up) = (
             Vec3::new(view.x_axis.x, view.y_axis.x, view.z_axis.x),
             Vec3::new(view.x_axis.y, view.y_axis.y, view.z_axis.y),
         );
         let guard = GuardBand {
-            eye: race.camera_position(),
+            eye: race.view_state().camera_position(&race.core),
             right,
             up,
             forward: right.cross(up).normalize() * -1.0,

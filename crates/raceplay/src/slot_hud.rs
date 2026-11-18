@@ -7,7 +7,7 @@
 //!
 //! The primary slot's entry is exactly what the fields it replaced were, advanced
 //! at the same point of the tick; the other slots' entries are advanced only while
-//! a split is drawn ([`Race::advance_slot_huds`]), so a race with one view does
+//! a split is drawn ([`crate::RaceView::advance_slot_huds`]), so a race with one view does
 //! what it always did.
 
 use super::*;
@@ -235,53 +235,6 @@ impl RaceSim {
     }
 }
 
-impl Race {
-    /// One tick of the HUD bars of every slot a view is drawn for: the primary
-    /// always, and with a split the other viewed slots too.
-    ///
-    /// Called from [`Self::tick`] at the place the primary's four separate
-    /// advances used to be, after the shield pool's last writer and after
-    /// [`Self::advance_absorb_bursts`].
-    pub(super) fn advance_slot_huds(&mut self) {
-        let primary = self.core.player_slot();
-        let viewed = self.viewport_count();
-        let mut raises = std::mem::take(&mut self.view.incoming_raises);
-        for slot in 0..MAX_SHIPS {
-            if slot != primary && slot >= viewed {
-                continue;
-            }
-            let ship = &self.core.sim.world.ships[slot];
-            let pool = ship.physics.shield;
-            let max = ship.handling.dimensions.shield;
-            let percent = oag_physics::damage::percent(pool, max);
-            let fraction = oag_hud::shield_fraction(pool, max);
-            let thrust = ship.physics.thrust.clamp(0.0, 100.0);
-            let absorbing = self.absorb_window_active(slot);
-            let held = self.core.sim.held_for_hud(slot);
-            let look = match held {
-                Some(oag_tables::weapons::Weapon::Extension(kind)) => {
-                    self.core.sim.extensions.pickup_look(slot, kind)
-                }
-                _ => None,
-            };
-            let acting = ship.physics.pilot_assist.acting;
-            let (shown, dt) = (self.core.sim.pilot_assist_shown(slot), self.core.sim.dt);
-            let hud = &mut self.view.huds[slot];
-            hud.advance(percent, fraction, thrust, absorbing, held, dt);
-            if look.is_some() {
-                hud.pickup_look = look;
-            }
-            hud.assist_indicator.advance(shown, acting, dt);
-            if slot == primary {
-                for icon in raises.drain(..) {
-                    hud.incoming.raise(icon);
-                }
-            }
-            hud.incoming.advance(dt);
-        }
-    }
-}
-
 /// The shield bar's post-hit flash, one tick of `Hud_UpdateEnergyBar`'s own
 /// `hud+0x118`/`hud+0x11c` pair.
 ///
@@ -339,6 +292,54 @@ pub(super) fn shield_blink_step(timer: f32, blinking: bool, dt: f32) -> f32 {
     }
     let timer = timer + dt;
     if timer > 1.0 { 0.0 } else { timer }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One tick of the HUD bars of every slot a view is drawn for: the primary
+    /// always, and with a split the other viewed slots too.
+    ///
+    /// Called from [`crate::Race::tick`] at the place the primary's four separate
+    /// advances used to be, after the shield pool's last writer and after
+    /// [`Self::advance_absorb_bursts`].
+    pub(super) fn advance_slot_huds(&mut self, core: &SimRace) {
+        let primary = core.player_slot();
+        let viewed = self.viewport_count();
+        let mut raises = std::mem::take(&mut self.incoming_raises);
+        for slot in 0..MAX_SHIPS {
+            if slot != primary && slot >= viewed {
+                continue;
+            }
+            let ship = &core.sim.world.ships[slot];
+            let pool = ship.physics.shield;
+            let max = ship.handling.dimensions.shield;
+            let percent = oag_physics::damage::percent(pool, max);
+            let fraction = oag_hud::shield_fraction(pool, max);
+            let thrust = ship.physics.thrust.clamp(0.0, 100.0);
+            let absorbing = self.absorb_window_active(slot);
+            let held = core.sim.held_for_hud(slot);
+            let look = match held {
+                Some(oag_tables::weapons::Weapon::Extension(kind)) => {
+                    core.sim.extensions.pickup_look(slot, kind)
+                }
+                _ => None,
+            };
+            let acting = ship.physics.pilot_assist.acting;
+            let (shown, dt) = (core.sim.pilot_assist_shown(slot), core.sim.dt);
+            let hud = &mut self.huds[slot];
+            hud.advance(percent, fraction, thrust, absorbing, held, dt);
+            if look.is_some() {
+                hud.pickup_look = look;
+            }
+            hud.assist_indicator.advance(shown, acting, dt);
+            if slot == primary {
+                for icon in raises.drain(..) {
+                    hud.incoming.raise(icon);
+                }
+            }
+            hud.incoming.advance(dt);
+        }
+    }
 }
 
 #[cfg(test)]

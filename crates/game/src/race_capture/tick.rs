@@ -45,7 +45,7 @@ pub(super) fn advance_one_tick(
     let snapshot = held.snapshot();
     // Before the tick, so `spend_pickup` can fire it on this tick's edge.
     // Every viewed slot, which is slot 0 alone without a split.
-    for slot in 0..race.viewport_count() {
+    for slot in 0..race.view_state().viewport_count() {
         if let Some(weapon) = options.give {
             race.give_weapon(slot, weapon);
         }

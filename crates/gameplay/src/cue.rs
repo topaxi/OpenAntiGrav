@@ -582,7 +582,7 @@ pub enum Cue {
     /// construction: over the strip and armed, start and disarm; on the falling
     /// edge, stop and re-arm. Shape 80, arguments 55 -
     /// `docs/ghidra/functions/ps4-omega-eu/ships-effects.md`, "2026-10-05,
-    /// magstrip-omega-law lane". Raised by `Race::advance_magstrip_wake`, on a
+    /// magstrip-omega-law lane". Raised by `RaceView::advance_magstrip_wake`, on a
     /// title that builds the class only.
     ///
     /// Held: the cue is the start and [`Self::MagstripStop`] the end, so it never

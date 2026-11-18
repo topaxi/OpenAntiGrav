@@ -88,7 +88,7 @@ impl super::super::Scene {
     /// place rather than copied; otherwise they are in `out`, emptied first.
     pub(super) fn original_hulls(&self, race: &Race, axis: Vec3, out: &mut Vec<GpuVertex>) -> bool {
         out.clear();
-        let alpha = race.draw_alpha();
+        let alpha = race.view.draw_alpha();
         let generation = race.pose_generations();
         let models =
             || (0..usize::from(race.core.sim.ship_count())).map(|slot| race.ship_tick_model(slot));

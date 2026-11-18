@@ -536,7 +536,7 @@ fn the_sprite_flares_constants_are_the_discs_own() {
 
 /// **The two `WO_TRAIL_HITSHIP` systems are on the disc and load.**
 ///
-/// What `Race::advance_trail_hits` plays when a craft flies into a trail. The
+/// What `RaceView::advance_trail_hits` plays when a craft flies into a trail. The
 /// loader reports one line per effect and says "will not be drawn" when a name
 /// is not in the mounted archives, so the report is the evidence - the same
 /// line a screenshot could not tell apart from "the effect never fired".
@@ -564,7 +564,7 @@ fn the_trail_hit_effects_are_on_the_disc_and_load(loaded: &race::Loaded) {
 /// **Every HD hull authors `Ship Collision Fx` locators**, which is what the
 /// trail-hit burst is anchored to.
 ///
-/// Without them `Race::spark_anchor_of` answers `None` on every craft and the
+/// Without them `RaceView::spark_anchor_of` answers `None` on every craft and the
 /// burst silently falls back to a derived point clear of the hull - the exact
 /// failure a player reported. So this asserts the data is there rather than
 /// trusting the fallback never to be reached.
@@ -607,7 +607,8 @@ fn a_craft_inside_a_trail_sparks_from_its_leading_half() {
 
     let craft = race.core.sim.world.ships[1].physics.body;
     let anchor = race
-        .spark_anchor_of(1, 0)
+        .view_state()
+        .spark_anchor_of(&race.core, 1, 0)
         .expect("slot 1 authors spark anchors and slot 0 has a ribbon");
     let ahead = (anchor - craft.position).dot(craft.forward());
     println!("anchor {ahead:.2} units ahead of the hull centre");
@@ -642,7 +643,12 @@ fn the_anchor_test_fires_later_than_the_sphere_it_replaced() {
         let across = step as f32 * 0.1;
         race.core.sim.world.ships[1].physics.body.position =
             lead.position - lead.forward() * 12.0 + lead.up() * across;
-        if race.spark_anchor_of(1, 0).is_some() && race.trail_touches_for_tests(1, 0) {
+        if race
+            .view_state()
+            .spark_anchor_of(&race.core, 1, 0)
+            .is_some()
+            && race.trail_touches_for_tests(1, 0)
+        {
             anchor_edge = across;
         }
     }
@@ -687,11 +693,11 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
         race.tick(&PlayerInputs::none());
     }
     assert!(race.hd_trail_active(), "an HD race draws HD's exhaust");
-    let camera = race.view();
+    let camera = race.view_state().view(&race.core);
     let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
     let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
     let forward = -Vec3::new(camera.x_axis.z, camera.y_axis.z, camera.z_axis.z);
-    let eye = race.camera_position();
+    let eye = race.view_state().camera_position(&race.core);
 
     assert!(
         race.hd_sprite_quad(0, right, up).is_empty(),
@@ -700,7 +706,8 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     let far = hd::SPRITE_FADEOUT_DIST + hd::SPRITE_FADEOUT_RANGE;
     for slot in 1..race.core.sim.ship_count() as usize {
         let nozzle = race
-            .nozzle_of(slot)
+            .view_state()
+            .nozzle_of(&race.core, slot)
             .expect("every HD hull authors a nozzle");
         let body = race.core.sim.world.ships[slot].physics.body;
         let distance = (nozzle - eye).length();
@@ -733,7 +740,10 @@ fn the_sprite_flare_skips_the_players_craft_and_fades_the_rest_by_the_law() {
     let lead = race.core.sim.world.ships[0].physics.body;
     race.core.sim.world.ships[1].physics.body.orientation = lead.orientation;
     race.core.sim.world.ships[1].physics.body.position = lead.position + lead.forward() * 8.0;
-    let nozzle = race.nozzle_of(1).expect("slot 1's nozzle");
+    let nozzle = race
+        .view_state()
+        .nozzle_of(&race.core, 1)
+        .expect("slot 1's nozzle");
     let quad = race.hd_sprite_quad(1, right, up);
     assert_eq!(quad.len(), 6, "an opponent 8 units ahead is one quad");
     let alpha = quad[0].colour[3];

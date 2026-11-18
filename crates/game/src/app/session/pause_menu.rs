@@ -28,7 +28,7 @@ impl Session {
     /// one, and the race has one view and is not a network race.
     pub(crate) fn pause_screen_applies(&self, stage: &RaceStage) -> bool {
         self.net.is_none()
-            && stage.race.viewport_count() <= 1
+            && stage.race.view_state().viewport_count() <= 1
             && !stage.race.windowed()
             && self
                 .shell

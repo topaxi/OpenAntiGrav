@@ -35,7 +35,9 @@ fn hit_leaving(race: &mut Race, shield: f32, leach: bool) {
     race.core.sim.world.ships[0].physics.shield = shield;
     let mut hits = [WeaponHit::default(); MAX_SHIPS];
     hits[0].landed = true;
-    race.throw_hit_sparks(&hits, leach);
+    race.core.lending_cues(|core, cues| {
+        crate::stage::stage!(race).throw_hit_sparks(core, cues, &hits, leach)
+    });
 }
 
 #[test]
@@ -95,7 +97,7 @@ fn the_smoke_rides_the_drawn_pose() {
             .iter()
             .all(|at| (*at - (sim_at + offset)).length() < 1e-3)
     );
-    race.advance_damage_smoke();
+    race.view.advance_damage_smoke(&race.core);
     let followed = race.damage_smoke_anchors_for_tests();
     assert!(
         followed

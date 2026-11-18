@@ -48,7 +48,8 @@ fn the_rocket_light_is_the_literals_the_update_loads() {
 fn a_live_missile_blast_reaches_the_frame_list() {
     let mut race = hd_race();
     let before = race.hd_spu_lights().len();
-    race.spawn_hd_missile_blast(Vec3::new(7.0, 8.0, 9.0), Quat::IDENTITY);
+    race.view
+        .spawn_hd_missile_blast(Vec3::new(7.0, 8.0, 9.0), Quat::IDENTITY);
     let lights = race.hd_spu_lights();
     assert_eq!(lights.len(), before + 1);
     let light = lights.last().unwrap();
@@ -59,7 +60,7 @@ fn a_live_missile_blast_reaches_the_frame_list() {
 #[test]
 fn the_circuits_switch_silences_the_weapons_too() {
     let mut race = hd_race();
-    race.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
+    race.view.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
     race.view.spu_vertex_lights = false;
     assert!(race.hd_spu_lights().is_empty());
     race.view.spu_vertex_lights = true;
@@ -109,7 +110,7 @@ fn a_live_bomb_blast_reaches_the_frame_list() {
 fn the_verification_switch_drops_the_weapons_alone() {
     let mut race = hd_race();
     let engines = race.hd_engine_lights().len();
-    race.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
+    race.view.spawn_hd_missile_blast(Vec3::ZERO, Quat::IDENTITY);
     race.set_weapon_lights(false);
     assert_eq!(race.hd_spu_lights().len(), engines);
     race.set_weapon_lights(true);

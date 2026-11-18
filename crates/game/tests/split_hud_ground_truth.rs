@@ -79,7 +79,7 @@ fn draws<'a>(
     race: &race::Race,
     hud: &'a oag_hud::Assets,
 ) -> Vec<oag_game::hud_overlay::ViewDraw<'a>> {
-    let readouts: Vec<Readout> = (0..race.viewport_count())
+    let readouts: Vec<Readout> = (0..race.view_state().viewport_count())
         .map(|slot| race.readout_for(slot))
         .collect();
     oag_game::hud_views::view_draws(

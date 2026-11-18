@@ -61,7 +61,7 @@ fn check_flakes_show_before_passed(
         6 * splashes.len(),
         "snow draws one quad a flake"
     );
-    let body = race.ship_tick_body(0);
+    let body = race.view_state().ship_tick_body(&race.core, 0);
     let forward = body.linear_velocity.normalize_or_zero();
     for (point, quad) in splashes.points().zip(drawn.chunks(6)) {
         let ahead = (point - body.position).dot(forward);
@@ -146,7 +146,9 @@ fn compare(track: &str, ticks: u32) -> Option<Census> {
         for point in splashes.points() {
             census.spawned_points += 1;
             assert!(
-                !enhanced.point_is_under_cover(point),
+                !enhanced
+                    .view_state()
+                    .point_is_under_cover(&enhanced.core, point),
                 "{point:?} is a splash under a roof"
             );
             let above = enhanced
@@ -226,7 +228,11 @@ fn a_hit_in_a_covered_section_is_rejected_and_an_open_one_is_not() {
         if spline.sample(nearest).map(|s| s.section_id) != Some(sample.section_id) {
             continue;
         }
-        assert_eq!(race.point_is_under_cover(point), under, "sample {index}");
+        assert_eq!(
+            race.view_state().point_is_under_cover(&race.core, point),
+            under,
+            "sample {index}"
+        );
         if under {
             covered += 1;
         } else {
@@ -418,8 +424,14 @@ fn the_craft_throws_spray_on_wet_open_road_only() {
                 enhanced.scenery_fx().weather().splash_cell()
             );
         }
-        let under = enhanced.point_is_under_cover(enhanced.ship_tick_body(0).position);
-        let emitters = enhanced.spray_emitters();
+        let under = enhanced.view_state().point_is_under_cover(
+            &enhanced.core,
+            enhanced
+                .view_state()
+                .ship_tick_body(&enhanced.core, 0)
+                .position,
+        );
+        let emitters = enhanced.view_state().spray_emitters(&enhanced.core);
         if under {
             covered_ticks += 1;
             assert!(mist <= mist_before, "tick {tick}: mist thrown under a roof");

@@ -197,20 +197,6 @@ pub(super) fn field_basis(lateral: Vec3, down: Vec3) -> (Vec3, Vec3, Vec3) {
 }
 
 impl Race {
-    /// Steps every live Repulser's field model one tick, starting one on the
-    /// tick its slot fills and dropping it when the slot empties. Called from
-    /// [`Race::advance_repulser_visual`].
-    pub(crate) fn advance_repulser_fields(&mut self) {
-        for index in 0..POOL_SIZE {
-            let Some(repulser) = self.core.sim.world.repulsers[index] else {
-                self.view.repulser_fields[index] = None;
-                continue;
-            };
-            let field = self.view.repulser_fields[index].get_or_insert_with(Field::new);
-            field.step(repulser.age, repulser.fronts.is_some());
-        }
-    }
-
     /// This tick's model matrix, alpha and the Repulser's age (the texture
     /// track's time: `Repulser_Init` seeds the model with
     /// `Node_SetAnimTimeTree(0.0)`) for every pool slot with a live field and
@@ -238,3 +224,20 @@ impl Race {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Steps every live Repulser's field model one tick, starting one on the
+    /// tick its slot fills and dropping it when the slot empties. Called from
+    /// [`crate::RaceView::advance_repulser_visual`].
+    pub(crate) fn advance_repulser_fields(&mut self, core: &SimRace) {
+        for index in 0..POOL_SIZE {
+            let Some(repulser) = core.sim.world.repulsers[index] else {
+                self.repulser_fields[index] = None;
+                continue;
+            };
+            let field = self.repulser_fields[index].get_or_insert_with(Field::new);
+            field.step(repulser.age, repulser.fronts.is_some());
+        }
+    }
+}

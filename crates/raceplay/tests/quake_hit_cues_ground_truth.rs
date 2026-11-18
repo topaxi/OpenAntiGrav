@@ -9,7 +9,7 @@
 //! until the sparks' gate also raised `Cue::Collision`.
 //!
 //! The rival's wave is launched with `SimRace::force_quake`, the same aid
-//! `--force-quake` is. Dropping the cue from `Race::throw_hit_spark` takes the
+//! `--force-quake` is. Dropping the cue from `Stage::throw_hit_spark` takes the
 //! `.COLLISIONS` count to zero here.
 //!
 //! **`#[ignore]`d and never run in CI**: it needs a disc image.

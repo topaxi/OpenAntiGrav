@@ -113,9 +113,9 @@ impl Scene {
     }
 
     /// Whether the hull is left undrawn for `slot`: the player's own in the
-    /// cockpit view (`Race::draws_own_ship`), or any craft whose wreck is live.
+    /// cockpit view (`RaceView::draws_own_ship`), or any craft whose wreck is live.
     pub(super) fn hull_skipped(&self, race: &Race, slot: usize) -> bool {
-        (slot == 0 && !race.draws_own_ship()) || self.is_wrecked(race, slot)
+        (slot == 0 && !race.view.draws_own_ship()) || self.is_wrecked(race, slot)
     }
 
     /// Writes every live wreck's pose, as the hull's own is written.
@@ -135,7 +135,7 @@ impl Scene {
                 wreck.write_hull(
                     queue,
                     view_projection,
-                    race.ship_model_matrix_of(slot),
+                    race.view.ship_model_matrix_of(&race.core, slot),
                     prev_vp * prev.ship(slot, race),
                     HullLayers {
                         sun_occlusion: self.sun_occlusion_layer(slot),
@@ -161,7 +161,7 @@ impl Scene {
             if self.is_wrecked(race, slot)
                 && let Some(wreck) = &self.wrecks.hull[slot]
             {
-                wreck.select_lod(view, race.ship_model_matrix_of(slot), eye);
+                wreck.select_lod(view, race.view.ship_model_matrix_of(&race.core, slot), eye);
             }
         }
     }
@@ -173,7 +173,7 @@ impl Scene {
         list: &mut super::record::DrawList<'a>,
     ) {
         for slot in 0..usize::from(race.core.sim.ship_count()) {
-            if !self.is_wrecked(race, slot) || (slot == 0 && !race.draws_own_ship()) {
+            if !self.is_wrecked(race, slot) || (slot == 0 && !race.view.draws_own_ship()) {
                 continue;
             }
             if let Some(wreck) = &self.wrecks.hull[slot] {

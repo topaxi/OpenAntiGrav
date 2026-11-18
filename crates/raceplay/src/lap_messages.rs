@@ -12,6 +12,10 @@
 //!
 //! Render-side: nothing here is in the hashed world.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_title::lap_hud::LapHud;
 
 /// What a tick's lap update said, as far as these lines care.
@@ -130,19 +134,24 @@ fn centis(ticks: u32) -> u64 {
     u64::from(ticks) * 100 / 60
 }
 
+#[cfg(test)]
+mod tests;
+
 #[cfg(feature = "view")]
-impl super::Race {
+impl RaceView {
     /// Raises the lap-crossing lines for this tick's lap update. `hit` is a wall
     /// scrape nothing absorbed (the original's `0x20` bit is set on the
     /// collision-damage path and not on the shield's, `shield-pickup.md`).
     pub(super) fn raise_lap_messages(
         &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
         slot: usize,
         outcome: &oag_race::Outcome,
         hit: bool,
     ) {
-        let state = self.core.sim.world.race[slot];
-        let Some(watch) = self.view.huds[slot].lap_watch.as_mut() else {
+        let state = core.sim.world.race[slot];
+        let Some(watch) = self.huds[slot].lap_watch.as_mut() else {
             return;
         };
         let edge = LapEdge {
@@ -153,26 +162,16 @@ impl super::Race {
             lap_ticks: outcome.lap_ticks,
             best_lap_ticks: state.best_lap_ticks,
         };
-        let time_trial = self.core.sim.world.mode() == oag_race::Mode::TimeTrial;
+        let time_trial = core.sim.world.mode() == oag_race::Mode::TimeTrial;
         let raised = watch.observe(hit, time_trial, edge);
         for id in raised {
             // The voice is queued on the crossing tick, not when the slot gate
             // lets the line show: both originals play it where the bit is read
             // (Pulse `FUN_08829778`, HD's drain), chosen per seat.
-            if let Some(cue) = self.view.huds[slot]
-                .lap_watch
-                .as_ref()
-                .and_then(|w| w.voice(id))
-            {
-                self.core
-                    .sim
-                    .cues
-                    .push(oag_gameplay::cue::CueEvent::new(cue, slot));
+            if let Some(cue) = self.huds[slot].lap_watch.as_ref().and_then(|w| w.voice(id)) {
+                cues.push(oag_gameplay::cue::CueEvent::new(cue, slot));
             }
-            self.view.huds[slot].messages.push(id, true);
+            self.huds[slot].messages.push(id, true);
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

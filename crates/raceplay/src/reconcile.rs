@@ -22,6 +22,8 @@
 
 use super::*;
 use crate::player_step::Evaluations;
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 
 impl Race {
     /// A restorable copy of everything that decides what happens next.
@@ -60,7 +62,7 @@ impl Race {
     /// board is read by the screens and the finish camera), so only a viewer that draws the
     /// race needs this. The poses are settled: the next draw shows the restored tick as it
     /// stands, not blended from a tick long gone, and the jump is a camera cut
-    /// ([`Self::camera_cuts`]), so the motion blur does not smear it across the screen.
+    /// ([`crate::RaceView::camera_cuts`]), so the motion blur does not smear it across the screen.
     pub fn restore_for_viewing(&mut self, snapshot: &RaceSim) {
         self.restore_sim(snapshot);
         #[cfg(feature = "view")]
@@ -137,7 +139,7 @@ impl Race {
     pub fn tick_confirmed(&mut self, inputs: &oag_gameplay::PlayerInputs) -> Evaluations {
         let evaluations = self.tick_sim_only(inputs);
         #[cfg(feature = "view")]
-        self.record_tick(inputs);
+        crate::stage::stage!(self).record_tick(&self.core, inputs);
         evaluations
     }
 
@@ -147,13 +149,13 @@ impl Race {
     pub(super) fn draws(&self) -> bool {
         cfg!(feature = "view") && !self.quiet
     }
+}
 
+#[cfg(feature = "view")]
+impl Stage<'_> {
     /// A shell bulge on `slot`, if this tick is drawn. View-only.
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
-    pub(super) fn shield_hit(&mut self, slot: usize) {
-        #[cfg(feature = "view")]
-        self.note_shield_hit(slot);
-        #[cfg(feature = "view")]
+    pub(super) fn shield_hit(&mut self, core: &SimRace, slot: usize) {
+        self.note_shield_hit(core, slot);
         if self.draws()
             && let Some(shell) = self.view.shield.get_mut(slot)
         {
@@ -162,18 +164,14 @@ impl Race {
     }
 
     /// `slot`'s shield coming up, if this tick is drawn. View-only.
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn shield_activate(&mut self, slot: usize) {
-        #[cfg(feature = "view")]
         if self.draws() {
             self.view.shield[slot].activate();
         }
     }
 
     /// `slot`'s boost plume lighting, if this tick is drawn. View-only.
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
     pub(super) fn boost_plume(&mut self, slot: usize) {
-        #[cfg(feature = "view")]
         if self.draws() {
             self.view.exhaust[slot].boost(exhaust::BOOST_SECONDS);
         }

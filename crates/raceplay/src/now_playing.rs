@@ -9,6 +9,8 @@
 //! `None` gets no [`View`], and a layout or font that will not read leaves it out with a line in
 //! the load report. Nothing stands in. See `docs/formats/now-playing.md`.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
 use oag_hud::now_playing::{Display, geometry};
 
 use crate::Race;
@@ -166,13 +168,6 @@ impl Race {
         }
     }
 
-    /// One tick of the marquee.
-    pub(super) fn advance_now_playing(&mut self) {
-        if let Some(view) = self.view.now_playing.as_mut() {
-            view.display.step();
-        }
-    }
-
     /// The marquee as this tick draws it. **None in a split screen**: HD's
     /// `RaceManager_ShowNowPlaying` shows the display only while `g_GameState+0xe4`, the count of
     /// human entrants (1 in single player, 2 in split screen), is 1, and its split-screen layouts
@@ -181,9 +176,19 @@ impl Race {
     /// that goes back to one view shows what is left of it.
     #[must_use]
     pub fn now_playing(&self) -> Option<oag_hud::now_playing::Marquee> {
-        if self.viewport_count() > 1 {
+        if self.view.viewport_count() > 1 {
             return None;
         }
         self.view.now_playing.as_ref()?.display.marquee()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One tick of the marquee.
+    pub(super) fn advance_now_playing(&mut self) {
+        if let Some(view) = self.now_playing.as_mut() {
+            view.display.step();
+        }
     }
 }

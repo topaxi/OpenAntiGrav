@@ -319,6 +319,8 @@ mod spline;
 mod spline_table;
 #[cfg(feature = "view")]
 mod split_gap;
+#[cfg(feature = "view")]
+mod stage;
 mod stages;
 mod start;
 mod takeoff_line;
@@ -509,7 +511,7 @@ pub const MODEL_YAW: f32 = std::f32::consts::PI;
 /// The viewport shape every camera value on the disc was authored for.
 ///
 /// The PSP renders into 480x272 and nothing else, so an authored field of view is
-/// only defined at this aspect ratio. [`Race::projection`] is where that matters.
+/// only defined at this aspect ratio. [`crate::RaceView::projection`] is where that matters.
 /// Taken from [`oag_display::space::SCREEN`] rather than written again, because it is
 /// the same screen: the front end lays its widgets out in it and the camera was
 /// framed for it.
@@ -772,10 +774,13 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 /// Most methods that read and write the simulation alone are `impl RaceSim` methods,
 /// reached as `race.core.sim.x()` ([`RaceSim::state_hash`] among them), and those that
 /// also read the race's outcome or the speed-plan job are `impl SimRace` methods, reached
-/// as `race.core.x()` ([`SimRace::results`], [`SimRace::player_slot`]). The methods on
-/// `Race` read both halves - drawing an exhaust needs a ship's position, and raising a
-/// cue needs the bank - or one of the fields beside them, and that is what `Race` is
-/// for.
+/// as `race.core.x()` ([`SimRace::results`], [`SimRace::player_slot`]). The view work the
+/// tick does (effects, camera, HUD, the recording) is `impl RaceView` methods, or methods
+/// on the [`Stage`](stage::Stage) of view-side fields where it also reads the recording,
+/// the journal or whether the tick draws; each takes the [`SimRace`] it reads as an
+/// argument, and the tick calls it where the statement stood ([`stage`]). The methods on
+/// `Race` run the simulation and hand the view its work, or read both halves for a caller
+/// outside the tick, or one of the fields beside them, and that is what `Race` is for.
 ///
 /// Neither half is a crate yet. See [`sim`] for what stands between `RaceSim` and
 /// being one.

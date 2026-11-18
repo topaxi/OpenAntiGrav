@@ -16,6 +16,8 @@
 //! [`PlayerInputs`]: oag_gameplay::PlayerInputs
 
 use super::*;
+#[cfg(feature = "view")]
+use crate::stage::Stage;
 use oag_gameplay::MAX_PLAYERS;
 
 /// What one tick's player step produced for each slot a person flies.
@@ -316,7 +318,9 @@ impl Race {
         );
         self.core.sim.cage_reset[slot] = cage.reset;
         #[cfg(feature = "view")]
-        self.throw_cage_sparks(slot, &cage);
+        self.core.lending_cues(|core, cues| {
+            crate::stage::stage!(self).throw_cage_sparks(core, cues, slot, &cage)
+        });
         self.core.sim.lay_crumb(slot, crumb_flags);
         self.core
             .sim
@@ -325,8 +329,9 @@ impl Race {
         // player meets first: scraping a wall behind a shield costs nothing
         // and bulges the shell. The original's contact loop takes exactly this
         // branch instead of its hull-damage call.
+        #[cfg(feature = "view")]
         if evaluated.shield.absorbed {
-            self.shield_hit(slot);
+            crate::stage::stage!(self).shield_hit(&self.core, slot);
         }
         PlayerStep {
             evaluated,
@@ -539,7 +544,10 @@ impl Race {
         if outcome.lap_completed || outcome.first_crossing {
             self.core.sim.grant_free_turbo(slot);
         }
-        self.observe_lap(slot, &outcome, evaluated);
+        #[cfg(feature = "view")]
+        self.core.lending_cues(|core, cues| {
+            crate::stage::stage!(self).observe_lap(core, cues, slot, &outcome, evaluated)
+        });
         if outcome.lap_completed {
             // Eliminator's own per-lap mechanic, a no-op on every other
             // mode - see `Race::eliminator_lap_health_refill`.
@@ -560,26 +568,6 @@ impl SimRace {
     }
 }
 
-impl Race {
-    /// Feeds each local person's craft to its own lap watch. A replayed tick
-    /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
-    /// already did. **Chosen, not measured.**
-    #[cfg_attr(not(feature = "view"), allow(unused_variables))]
-    pub(super) fn observe_lap(
-        &mut self,
-        slot: usize,
-        outcome: &oag_race::Outcome,
-        evaluated: &Evaluated,
-    ) {
-        #[cfg(feature = "view")]
-        let pair = std::mem::take(&mut self.view.pair_spoil[slot]);
-        #[cfg(feature = "view")]
-        if self.draws() && self.core.watches_laps_of(slot) {
-            self.raise_lap_messages(slot, outcome, pair || lap_spoiling_contact(evaluated));
-        }
-    }
-}
-
 #[cfg(feature = "view")]
 /// Whether this tick's contact sets the original's `0x20` bit of `craft+0x860`
 /// (`contact-response.md`, reaction #2): the hull-damage branch of
@@ -590,4 +578,30 @@ impl Race {
 /// A craft-to-craft contact counts too, through `RaceView::pair_spoil`.
 fn lap_spoiling_contact(evaluated: &Evaluated) -> bool {
     evaluated.wall.resolved.is_some() && !evaluated.shield.absorbed
+}
+
+#[cfg(feature = "view")]
+impl Stage<'_> {
+    /// Feeds each local person's craft to its own lap watch. A replayed tick
+    /// (`tick_sim_only`) does not feed it, because the predicted tick it re-runs
+    /// already did. **Chosen, not measured.**
+    pub(super) fn observe_lap(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        outcome: &oag_race::Outcome,
+        evaluated: &Evaluated,
+    ) {
+        let pair = std::mem::take(&mut self.view.pair_spoil[slot]);
+        if self.draws() && core.watches_laps_of(slot) {
+            self.view.raise_lap_messages(
+                core,
+                cues,
+                slot,
+                outcome,
+                pair || lap_spoiling_contact(evaluated),
+            );
+        }
+    }
 }

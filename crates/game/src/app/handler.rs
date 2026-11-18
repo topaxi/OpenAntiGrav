@@ -396,9 +396,9 @@ impl App {
         // pad on the next slot in connection order. Chosen, not measured; the
         // join screen (`Session::open_join`) seats by who pressed instead.
         if let Stage::Race(stage) = &stage
-            && stage.race.viewport_count() > 1
+            && stage.race.view_state().viewport_count() > 1
         {
-            controls.seat_default(stage.race.viewport_count());
+            controls.seat_default(stage.race.view_state().viewport_count());
         }
         // The pad's own preferences, which belong to the device rather than to
         // a race - so they are applied once here and then only by the menu row

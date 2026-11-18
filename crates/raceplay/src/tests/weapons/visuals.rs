@@ -19,7 +19,7 @@ use oag_fx::psys::streak::Kept;
 /// a fire riding a charge from the moment it landed, reported from play
 /// against real Pulse and impossible to reproduce headlessly because the
 /// test harness's `psys::Library` carries no loaded effects (see
-/// `Race::advance_projectile_flares`'s doc comment for why the gate itself,
+/// `RaceView::advance_projectile_flares`'s doc comment for why the gate itself,
 /// rather than the attach, is what is tested here).
 #[test]
 fn each_projectile_rides_only_its_own_flare() {
@@ -244,7 +244,7 @@ fn the_plasma_flare_scale_follows_the_charge() {
 
 /// The cockpit-view half of `craft+0x6d`'s reading: `Plasma_UpdateCharge`
 /// halves the glow again when the firing craft's own flag is set, and this
-/// engine's `cockpit` parameter is the caller's `!Race::draws_own_ship()` -
+/// engine's `cockpit` parameter is the caller's `!RaceView::draws_own_ship()` -
 /// see `plasma_flare_scale`'s own doc comment for the two independent
 /// consumers (`camera.md`, `shield-pickup.md`) that put the reading at
 /// confidence 82.

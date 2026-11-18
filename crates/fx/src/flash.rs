@@ -94,7 +94,7 @@ pub const PLASMA: Kind = kind(
 );
 
 /// Kind 2: `Repulser_SpawnWaves` (`0x08876300`), at the firer, the tick the
-/// waves start - `oag_game`'s `Race::advance_repulser_visual`.
+/// waves start - `oag_game`'s `RaceView::advance_repulser_visual`.
 pub const REPULSER: Kind = kind(
     0.4,
     100.0,

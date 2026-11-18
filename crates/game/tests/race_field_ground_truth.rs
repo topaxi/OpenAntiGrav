@@ -158,7 +158,11 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
     }
 
     let nozzles: Vec<Vec3> = (0..8)
-        .map(|slot| race.nozzle_of(slot).expect("every craft has a nozzle"))
+        .map(|slot| {
+            race.view_state()
+                .nozzle_of(&race.core, slot)
+                .expect("every craft has a nozzle")
+        })
         .collect();
     for (slot, lit) in lit.iter().enumerate().skip(1) {
         let exhaust = race.exhaust_of(slot);
@@ -180,7 +184,7 @@ fn every_craft_burns_trails_and_boosts_on_its_own() {
 
         // The head sits on the rim of a cross centred on the craft's own nozzle,
         // so the nearest nozzle is that craft's; a shared `Exhaust` would fail.
-        let law = race.trail_law();
+        let law = race.view_state().trail_law();
         let head = Vec3::from_array(exhaust.trail_vertices(Vec3::X, Vec3::Y, law)[0].position);
         let nearest = (0..8)
             .min_by(|a, b| {

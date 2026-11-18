@@ -2583,7 +2583,7 @@ say what the beam's own scene node tracks.
 call "read and discarded". `oag_fx::beam::Ribbon::advance` (see the
 2026-09-23 ribbon re-read just below) returns a `bool` for the cursor's own
 wrap to zero - the pulse block - and
-`crate::race::weapons::visuals::Race::advance_leach_beam_ribbon` now pushes a
+`crate::race::weapons::visuals::RaceView::advance_leach_beam_ribbon` now pushes a
 `Cue::LeachEnergy` `CueEvent::at_point` on that same edge, at the ribbon's own
 `energy_point` (the pulse block's `WO_LEACHBEAM_ENERGY` re-spawn target, not
 `LeachAttach`'s owner/target midpoint). Verified against a real disc rather
@@ -3699,7 +3699,7 @@ the same `Ship_Damage` shape by the shared engine, **checked, applies, not captu
 
 Rows 1 and 2 of the table above are closed in ours; row 3 (the slowdown) stays open.
 
-**`.COLLISIONS` on a weapon hit.** `Race::throw_hit_spark` (`oag_raceplay::hit_sparks`) raises
+**`.COLLISIONS` on a weapon hit.** `Stage::throw_hit_spark` (`oag_raceplay::hit_sparks`) raises
 `Cue::Collision` on the struck craft with each spark it throws, behind the same per-locator 0.8 s
 gate, for every weapon that reaches `Ship_Damage`'s `source == 2` block (the LeachBeam's kind 1
 included: `ShipCollisionFx_Trigger` plays it for each surviving kind-0/1 call). It is raised
@@ -3717,7 +3717,7 @@ against 5.20 M over the 40 ticks after the launch, `a_quake_hit_is_louder_with_i
 an arm while running ignored), the strips' geometry (`Node::strips`, eight vertices in the
 original's triangle-strip order) and the pipeline (alpha-over, repeat sampler, no depth, drawn
 beside the screen flash in `Drawer::draw_flash`). `oag_raceplay::cockpit_hit` arms it in
-`Race::arm_weapon_hit_shake` (so the hit sparks' and the correction's sites, every weapon, the
+`RaceView::arm_weapon_hit_shake` (so the hit sparks' and the correction's sites, every weapon, the
 player's craft only) and draws it in the internal view of the player's own view. The texture is
 `WeaponModels::cockpit_hit`, title data with provenance. The first frame after a hit is `p = 0`
 (width 288 of 480, "at the hit"), the 36th is `p = 35/36`, the 37th draws nothing. **Chosen, not

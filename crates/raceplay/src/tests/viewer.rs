@@ -290,15 +290,23 @@ fn a_seek_is_a_camera_cut() {
     // The first update starts playback, which is a seek to the start.
     viewer.update(&mut race);
     viewer.seek(&mut race, 200);
-    let before = (race.camera_cuts(), race.viewed_camera_cuts());
+    let before = (race.view.camera_cuts(&race.core), race.viewed_camera_cuts());
     let restores = race.viewer_restores();
     viewer.seek(&mut race, 300);
     assert_ne!(race.viewer_restores(), restores, "every pose jumped");
-    assert_ne!(race.camera_cuts(), before.0, "the player's view");
+    assert_ne!(
+        race.view.camera_cuts(&race.core),
+        before.0,
+        "the player's view"
+    );
     assert_ne!(race.viewed_camera_cuts(), before.1, "the view being drawn");
-    let after = race.camera_cuts();
+    let after = race.view.camera_cuts(&race.core);
     viewer.update(&mut race);
-    assert_eq!(race.camera_cuts(), after, "playing on is not a cut");
+    assert_eq!(
+        race.view.camera_cuts(&race.core),
+        after,
+        "playing on is not a cut"
+    );
     assert_eq!(race.viewer_restores(), restores.wrapping_add(1));
 }
 

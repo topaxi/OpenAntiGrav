@@ -34,7 +34,7 @@ fn settled_eye(race: &mut Race) -> Vec3 {
     race.core.sim.world.ships[1].physics.body.position = Vec3::new(20.0, 0.0, 900.0);
     race.core.sim.world.ships[2].physics.body.position = Vec3::new(20.0, 0.0, 950.0);
     race.tick(&PlayerInputs::none());
-    race.camera_frame().position
+    race.view.camera_frame(&race.core).position
 }
 
 /// Slots 1 and 2 touching head on at `centre`, 20 units a second each.

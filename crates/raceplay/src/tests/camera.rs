@@ -38,8 +38,12 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
         off.tick(&PlayerInputs::none());
     }
 
-    let open = kicked.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
-    let plain = off.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED);
+    let open = kicked
+        .view
+        .projection(&kicked.core, 16.0 / 9.0, 1000.0, Fov::AUTHORED);
+    let plain = off
+        .view
+        .projection(&off.core, 16.0 / 9.0, 1000.0, Fov::AUTHORED);
     assert!(
         x_scale(open) < x_scale(plain),
         "a wider field means a smaller x scale, and this one did not move"
@@ -82,9 +86,11 @@ fn the_boost_kick_widens_the_view_and_turning_it_off_changes_nothing() {
     }
     assert_eq!(
         kicked
-            .projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
+            .view
+            .projection(&kicked.core, 16.0 / 9.0, 1000.0, Fov::AUTHORED)
             .to_cols_array(),
-        off.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED)
+        off.view
+            .projection(&off.core, 16.0 / 9.0, 1000.0, Fov::AUTHORED)
             .to_cols_array(),
         "the kick never fully closed"
     );
@@ -101,7 +107,8 @@ fn the_field_widens_with_forward_speed_and_narrows_when_moving_backwards() {
     fn vertical_fov_deg(race: &Race) -> f32 {
         // m11 = 1 / tan(fov/2) at the authored aspect, which this window is.
         let m11 = race
-            .projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED)
+            .view
+            .projection(&race.core, AUTHORED_ASPECT, 1000.0, Fov::AUTHORED)
             .to_cols_array()[5];
         2.0 * (1.0 / m11).atan().to_degrees()
     }
@@ -154,7 +161,10 @@ fn a_stronger_tier_widens_the_view_further() {
         for _ in 0..30 {
             race.tick(&PlayerInputs::none());
         }
-        x_scale(race.projection(16.0 / 9.0, 1000.0, Fov::AUTHORED))
+        x_scale(
+            race.view
+                .projection(&race.core, 16.0 / 9.0, 1000.0, Fov::AUTHORED),
+        )
     };
 
     let scales: Vec<f32> = BoostFovKick::OFFERED
@@ -239,7 +249,10 @@ fn cycling_the_camera_changes_no_simulation_state() {
     assert_ne!(cycled.camera_view(), control.camera_view());
     // And the two cameras really are looking at different things, so the
     // hashes above are equal despite a genuinely different picture.
-    assert_ne!(control.view(), cycled.view());
+    assert_ne!(
+        control.view.view(&control.core),
+        cycled.view.view(&cycled.core)
+    );
 }
 
 /// The three views have to be three *different* cameras. A dispatch that fell
@@ -258,10 +271,11 @@ fn each_view_frames_the_craft_from_its_own_block() {
     let mut fovs = Vec::new();
     for view in CameraView::ALL {
         race.set_camera_view(view);
-        eyes.push((view, race.camera_position()));
+        eyes.push((view, race.view.camera_position(&race.core)));
         fovs.push((
             view,
-            race.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
+            race.view
+                .projection(&race.core, AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
         ));
     }
 
@@ -288,28 +302,28 @@ fn each_view_frames_the_craft_from_its_own_block() {
     let craft = race.core.ship().physics.body.position;
     let forward = race.core.ship().physics.body.forward();
     race.set_camera_view(CameraView::Internal);
-    assert!((race.camera_position() - craft).dot(forward) > 0.0);
+    assert!((race.view.camera_position(&race.core) - craft).dot(forward) > 0.0);
     for view in [CameraView::Close, CameraView::Far] {
         race.set_camera_view(view);
         assert!(
-            (race.camera_position() - craft).dot(forward) < 0.0,
+            (race.view.camera_position(&race.core) - craft).dot(forward) < 0.0,
             "{view} is in front of the craft"
         );
     }
     // And close is closer than far, which is what the two names mean.
     race.set_camera_view(CameraView::Close);
-    let close = (race.camera_position() - craft).length();
+    let close = (race.view.camera_position(&race.core) - craft).length();
     race.set_camera_view(CameraView::Far);
-    assert!(close < (race.camera_position() - craft).length());
+    assert!(close < (race.view.camera_position(&race.core) - craft).length());
 
     // The hull is drawn in both external views and in neither of the other
     // states, which is the one thing `Scene::render` branches on.
     for view in [CameraView::Close, CameraView::Far] {
         race.set_camera_view(view);
-        assert!(race.draws_own_ship(), "{view}");
+        assert!(race.view.draws_own_ship(), "{view}");
     }
     race.set_camera_view(CameraView::Internal);
-    assert!(!race.draws_own_ship());
+    assert!(!race.view.draws_own_ship());
 }
 
 /// A race starts on the nearer chase block, as a fresh profile of the original
@@ -328,7 +342,7 @@ fn a_race_starts_on_the_close_chase_block() {
     );
     assert_eq!(race.camera_view(), CameraView::Close);
     let craft = race.core.ship().physics.body.position;
-    let distance = (race.camera_position() - craft).length();
+    let distance = (race.view.camera_position(&race.core) - craft).length();
     assert!(
         (distance - 4.0_f32.hypot(1.0)).abs() < 0.01,
         "eye is {distance} from the craft, the close block's is {}",
@@ -410,11 +424,11 @@ fn a_camera_override_moves_the_view_and_the_derived_eye_together() {
     });
     let race = Race::start(setup, view, crate::extensions::Prepared::default());
 
-    assert!((race.camera_position() - eye).length() < 1e-4);
+    assert!((race.view.camera_position(&race.core) - eye).length() < 1e-4);
     // The view maps the eye to the origin and world axes into camera axes:
     // a point one unit along the camera's own -Z lands on (0, 0, -1).
     let ahead = eye + orientation * Vec3::NEG_Z;
-    let mapped = race.view().transform_point3(ahead);
+    let mapped = race.view.view(&race.core).transform_point3(ahead);
     assert!((mapped - Vec3::NEG_Z).length() < 1e-4, "{mapped}");
 }
 
@@ -457,8 +471,12 @@ fn a_camera_fov_override_stands_in_for_the_authored_fov() {
     );
 
     assert_eq!(
-        overridden.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
-        authored.projection(AUTHORED_ASPECT, 1000.0, Fov::AUTHORED)
+        overridden
+            .view
+            .projection(&overridden.core, AUTHORED_ASPECT, 1000.0, Fov::AUTHORED),
+        authored
+            .view
+            .projection(&authored.core, AUTHORED_ASPECT, 1000.0, Fov::AUTHORED)
     );
 }
 
@@ -475,7 +493,9 @@ fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_
         crate::extensions::Prepared::default(),
     );
     let aspect = AUTHORED_ASPECT;
-    let authored = race.projection(aspect, 1000.0, Fov::AUTHORED);
+    let authored = race
+        .view
+        .projection(&race.core, aspect, 1000.0, Fov::AUTHORED);
 
     // The projection's first column scales x by `1 / (tan(fov/2) * aspect)`,
     // so a wider field is a *smaller* number there. Read off the matrix
@@ -484,11 +504,11 @@ fn the_field_of_view_setting_widens_the_projection_and_defaults_to_the_authored_
     let wide: Fov = "150".parse().expect("parse");
     let narrow: Fov = "75".parse().expect("parse");
     assert!(
-        x_scale(race.projection(aspect, 1000.0, wide)) < x_scale(authored),
+        x_scale(race.view.projection(&race.core, aspect, 1000.0, wide)) < x_scale(authored),
         "150 % has to show more"
     );
     assert!(
-        x_scale(race.projection(aspect, 1000.0, narrow)) > x_scale(authored),
+        x_scale(race.view.projection(&race.core, aspect, 1000.0, narrow)) > x_scale(authored),
         "75 % has to show less"
     );
 
@@ -522,14 +542,14 @@ fn an_active_shake_never_moves_the_camera_eye() {
         crate::tests::fixture_view(),
         crate::extensions::Prepared::default(),
     );
-    let before = race.camera_position();
+    let before = race.view.camera_position(&race.core);
 
     race.view.contact.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Ahead,
         &mut Rng::new(1),
     );
-    let just_armed = race.camera_position();
+    let just_armed = race.view.camera_position(&race.core);
     assert!(
         (before - just_armed).length() < 1e-4,
         "before={before}, just_armed={just_armed}"
@@ -538,7 +558,7 @@ fn an_active_shake_never_moves_the_camera_eye() {
     // And through the decay, not only at the moment of arming.
     for _ in 0..20 {
         race.view.contact.shake.advance(1.0 / 60.0);
-        let during = race.camera_position();
+        let during = race.view.camera_position(&race.core);
         assert!(
             (before - during).length() < 1e-4,
             "before={before}, during={during}"
@@ -556,14 +576,14 @@ fn an_active_shake_does_rotate_the_view() {
         crate::tests::fixture_view(),
         crate::extensions::Prepared::default(),
     );
-    let level = race.view();
+    let level = race.view.view(&race.core);
 
     race.view.contact.shake.arm(
         1.0,
         oag_render::camera::shake::Side::Elsewhere,
         &mut Rng::new(1),
     );
-    assert_ne!(race.view(), level);
+    assert_ne!(race.view.view(&race.core), level);
 }
 
 /// The map the motion blur is given must take the shake's own screen motion
@@ -581,7 +601,12 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
         crate::tests::fixture_view(),
         crate::extensions::Prepared::default(),
     );
-    let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
+    let projection = race.view.projection(
+        &race.core,
+        1.7,
+        1000.0,
+        oag_display::display::Fov::default(),
+    );
     let still = race.view_unshaken();
     let forward =
         race.core.ship().physics.body.position + race.core.ship().physics.body.forward() * 20.0;
@@ -600,7 +625,7 @@ fn the_blur_is_given_the_shakes_own_screen_motion() {
     );
     for tick in 0..4 {
         let previous_view = previous_shake * still;
-        let current = projection * race.view();
+        let current = projection * race.view.view(&race.core);
         let map = race.lens_screen_motion(projection, projection, previous_shake);
         assert_ne!(
             map,
@@ -636,7 +661,12 @@ fn no_shake_gives_the_blur_exactly_the_identity() {
         crate::tests::fixture_view(),
         crate::extensions::Prepared::default(),
     );
-    let projection = race.projection(1.7, 1000.0, oag_display::display::Fov::default());
+    let projection = race.view.projection(
+        &race.core,
+        1.7,
+        1000.0,
+        oag_display::display::Fov::default(),
+    );
     assert_eq!(
         race.lens_screen_motion(projection, projection, Mat4::IDENTITY),
         Mat4::IDENTITY
@@ -660,11 +690,15 @@ fn the_blur_is_given_the_boost_kicks_own_screen_motion() {
     );
     race.set_boost_fov_kick(BoostFovKick::OFFERED[3]);
     let aspect = 16.0 / 9.0;
-    let before = race.projection(aspect, 1000.0, Fov::AUTHORED);
+    let before = race
+        .view
+        .projection(&race.core, aspect, 1000.0, Fov::AUTHORED);
     race.force_boost_kick(0.15);
-    let after = race.projection(aspect, 1000.0, Fov::AUTHORED);
+    let after = race
+        .view
+        .projection(&race.core, aspect, 1000.0, Fov::AUTHORED);
     assert_ne!(before, after, "the forced kick did not widen the field");
-    let view = race.view();
+    let view = race.view.view(&race.core);
     let map = race.lens_screen_motion(after, before, Mat4::IDENTITY);
     let ndc = |clip: oag_core::math::Vec4| clip.truncate() / clip.w;
     let body = &race.core.ship().physics.body;

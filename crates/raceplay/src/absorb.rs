@@ -2,7 +2,7 @@
 //! played at the hull's own authored locators on a stagger.
 //!
 //! The sound (`Cue::Absorb`) was always raised; this is the picture that goes
-//! with it. Both are one call in the original, so [`Race::play_absorb_feedback`]
+//! with it. Both are one call in the original, so [`crate::RaceView::play_absorb_feedback`]
 //! raises both, and both absorb paths call it: `Race::spend_pickup`'s absorb
 //! arm and the Eliminator lap refill.
 //!
@@ -80,115 +80,6 @@ pub(super) struct PendingAbsorb {
 }
 
 impl Race {
-    /// `Ship_PlayAbsorbFeedback`: the `ABSORB` cue, then the staggered burst.
-    ///
-    /// The cue is raised unconditionally, as it was before the burst existed;
-    /// only the picture depends on the hull carrying locators.
-    ///
-    /// `pickup` is the absorb handler's own call, which also starts the hull
-    /// overlay: `FUN_08844ec4` stores the craft's clock into `+0x878` just
-    /// before it calls the feedback (`0x088455ac..b4`), and the Eliminator's
-    /// `Ship_RefillLapShield` does not - so a lap refill bursts and never
-    /// lights the hull. See `oag_fx::hull_overlay`.
-    ///
-    /// HD's shell timer is stamped on **every** call, the lap refill included:
-    /// `FUN_000d9398` stores `craft+0x7a5c` after all of its branches. It only
-    /// draws on a craft whose livery loaded a shell, so the stamp is harmless
-    /// on every other title.
-    pub(super) fn play_absorb_feedback(&mut self, slot: usize, pickup: bool) {
-        if pickup && let Some(elapsed) = self.view.absorb_overlay.get_mut(slot) {
-            *elapsed = Some(0.0);
-        }
-        if let Some(shell) = self.view.absorb_shell.get_mut(slot) {
-            shell.stamp();
-        }
-        self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
-            oag_gameplay::cue::Cue::Absorb,
-            slot,
-        ));
-        let Some(burst) = self.view.absorb_burst else {
-            return;
-        };
-        let nodes = self.view.absorb_anchors.get(slot).map_or(0, Vec::len);
-        for (node, delay) in burst.schedule(nodes) {
-            self.view.absorb_bursts.push(PendingAbsorb {
-                slot,
-                node,
-                delay,
-                playing: None,
-            });
-        }
-    }
-
-    /// Counts every scheduled burst down, starts the ones that are due, and
-    /// keeps every started one on its locator.
-    ///
-    /// Before `Stage::advance`, so a burst started this tick emits this tick
-    /// from where its locator is now.
-    pub(super) fn advance_absorb_bursts(&mut self) {
-        // The craft's own clock, `+0x830 += dt` in `FUN_088418e0`, read
-        // against the stamp; past the window there is nothing left to draw.
-        for elapsed in &mut self.view.absorb_overlay {
-            *elapsed = elapsed
-                .map(|seconds| seconds + self.core.sim.dt)
-                .filter(|seconds| *seconds <= oag_fx::hull_overlay::WINDOW);
-        }
-        for shell in &mut self.view.absorb_shell {
-            shell.advance(self.core.sim.dt);
-        }
-        if self.view.absorb_bursts.is_empty() {
-            return;
-        }
-        let effect = self.view.handles.get(Trigger::ShieldAbsorb).cloned();
-        let dt = self.core.sim.dt;
-        let mut bursts = std::mem::take(&mut self.view.absorb_bursts);
-        bursts.retain_mut(|burst| {
-            let ship = &self.core.sim.world.ships[burst.slot];
-            let local = self
-                .view
-                .absorb_anchors
-                .get(burst.slot)
-                .and_then(|anchors| anchors.get(burst.node));
-            let (true, Some(local)) = (ship.in_world(), local) else {
-                if let Some(playing) = burst.playing {
-                    self.view.stage.detach(playing);
-                }
-                return false;
-            };
-            // `FUN_08915cdc`: a positive delay is spent before the system
-            // runs at all, one frame's worth at a time.
-            if burst.delay > 0.0 {
-                burst.delay -= dt;
-                return true;
-            }
-            let at = model_matrix_of(ship).transform_point3(*local);
-            match burst.playing {
-                // Riding rather than fired: the original parents the system to
-                // the locator, so the emitters ride the hull for as long as
-                // they run. Only a stage with every slot attached refuses it.
-                None => {
-                    let Some(effect) = effect.as_ref() else {
-                        return false;
-                    };
-                    burst.playing = self.view.stage.play_riding(effect, at, 1.0);
-                    self.view.absorb_started += u32::from(burst.playing.is_some());
-                    burst.playing.is_some()
-                }
-                Some(playing) if self.view.stage.is_emitting(playing) => {
-                    self.view.stage.follow(playing, at);
-                    true
-                }
-                // Done emitting: hand the slot back and let the last
-                // particles finish where they are.
-                Some(playing) => {
-                    self.view.stage.detach(playing);
-                    false
-                }
-            }
-        });
-        self.view.absorb_bursts = bursts;
-    }
-
     /// The hull overlay's pulse on `slot` this tick - see
     /// [`oag_fx::hull_overlay::pulse`] - or `None` when it draws nothing.
     #[must_use]
@@ -199,29 +90,6 @@ impl Race {
             .copied()
             .flatten()
             .and_then(oag_fx::hull_overlay::pulse)
-    }
-
-    /// Whether `slot` is inside its one-second absorb window this tick -
-    /// `HullOverlay_AbsorbWindowActive(craft)`, `0.0 <= elapsed <= 1.0` on the
-    /// same clock the hull overlay reads.
-    ///
-    /// Reuses [`Self::absorb_overlay_pulse`]'s own state
-    /// (`self.view.absorb_overlay`) rather than a second timer: that `Vec`
-    /// already holds `Some(elapsed)` exactly while `0.0 <= elapsed <= WINDOW`
-    /// ([`advance_absorb_bursts`](Self::advance_absorb_bursts) filters it),
-    /// and `HullOverlay_AbsorbFade`/`HullOverlay_AbsorbWindowActive` were
-    /// read as the same window test in a float and a bool shape - see
-    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
-    /// "Absorb". `Hud_UpdateEnergyBar` calls the bool form on the player's
-    /// own craft every frame; this is that call.
-    #[must_use]
-    pub fn absorb_window_active(&self, slot: usize) -> bool {
-        self.view
-            .absorb_overlay
-            .get(slot)
-            .copied()
-            .flatten()
-            .is_some()
     }
 
     /// HD's absorb shell fade on `slot` this tick - the `ShieldColour` its
@@ -249,5 +117,142 @@ impl Race {
             .filter_map(|burst| burst.playing)
             .filter(|playing| self.view.stage.is_emitting(*playing))
             .count()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `Ship_PlayAbsorbFeedback`: the `ABSORB` cue, then the staggered burst.
+    ///
+    /// The cue is raised unconditionally, as it was before the burst existed;
+    /// only the picture depends on the hull carrying locators.
+    ///
+    /// `pickup` is the absorb handler's own call, which also starts the hull
+    /// overlay: `FUN_08844ec4` stores the craft's clock into `+0x878` just
+    /// before it calls the feedback (`0x088455ac..b4`), and the Eliminator's
+    /// `Ship_RefillLapShield` does not - so a lap refill bursts and never
+    /// lights the hull. See `oag_fx::hull_overlay`.
+    ///
+    /// HD's shell timer is stamped on **every** call, the lap refill included:
+    /// `FUN_000d9398` stores `craft+0x7a5c` after all of its branches. It only
+    /// draws on a craft whose livery loaded a shell, so the stamp is harmless
+    /// on every other title.
+    pub(super) fn play_absorb_feedback(
+        &mut self,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        pickup: bool,
+    ) {
+        if pickup && let Some(elapsed) = self.absorb_overlay.get_mut(slot) {
+            *elapsed = Some(0.0);
+        }
+        if let Some(shell) = self.absorb_shell.get_mut(slot) {
+            shell.stamp();
+        }
+        cues.push(oag_gameplay::cue::CueEvent::new(
+            oag_gameplay::cue::Cue::Absorb,
+            slot,
+        ));
+        let Some(burst) = self.absorb_burst else {
+            return;
+        };
+        let nodes = self.absorb_anchors.get(slot).map_or(0, Vec::len);
+        for (node, delay) in burst.schedule(nodes) {
+            self.absorb_bursts.push(PendingAbsorb {
+                slot,
+                node,
+                delay,
+                playing: None,
+            });
+        }
+    }
+
+    /// Counts every scheduled burst down, starts the ones that are due, and
+    /// keeps every started one on its locator.
+    ///
+    /// Before `Stage::advance`, so a burst started this tick emits this tick
+    /// from where its locator is now.
+    pub(super) fn advance_absorb_bursts(&mut self, core: &SimRace) {
+        // The craft's own clock, `+0x830 += dt` in `FUN_088418e0`, read
+        // against the stamp; past the window there is nothing left to draw.
+        for elapsed in &mut self.absorb_overlay {
+            *elapsed = elapsed
+                .map(|seconds| seconds + core.sim.dt)
+                .filter(|seconds| *seconds <= oag_fx::hull_overlay::WINDOW);
+        }
+        for shell in &mut self.absorb_shell {
+            shell.advance(core.sim.dt);
+        }
+        if self.absorb_bursts.is_empty() {
+            return;
+        }
+        let effect = self.handles.get(Trigger::ShieldAbsorb).cloned();
+        let dt = core.sim.dt;
+        let mut bursts = std::mem::take(&mut self.absorb_bursts);
+        bursts.retain_mut(|burst| {
+            let ship = &core.sim.world.ships[burst.slot];
+            let local = self
+                .absorb_anchors
+                .get(burst.slot)
+                .and_then(|anchors| anchors.get(burst.node));
+            let (true, Some(local)) = (ship.in_world(), local) else {
+                if let Some(playing) = burst.playing {
+                    self.stage.detach(playing);
+                }
+                return false;
+            };
+            // `FUN_08915cdc`: a positive delay is spent before the system
+            // runs at all, one frame's worth at a time.
+            if burst.delay > 0.0 {
+                burst.delay -= dt;
+                return true;
+            }
+            let at = model_matrix_of(ship).transform_point3(*local);
+            match burst.playing {
+                // Riding rather than fired: the original parents the system to
+                // the locator, so the emitters ride the hull for as long as
+                // they run. Only a stage with every slot attached refuses it.
+                None => {
+                    let Some(effect) = effect.as_ref() else {
+                        return false;
+                    };
+                    burst.playing = self.stage.play_riding(effect, at, 1.0);
+                    self.absorb_started += u32::from(burst.playing.is_some());
+                    burst.playing.is_some()
+                }
+                Some(playing) if self.stage.is_emitting(playing) => {
+                    self.stage.follow(playing, at);
+                    true
+                }
+                // Done emitting: hand the slot back and let the last
+                // particles finish where they are.
+                Some(playing) => {
+                    self.stage.detach(playing);
+                    false
+                }
+            }
+        });
+        self.absorb_bursts = bursts;
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Whether `slot` is inside its one-second absorb window this tick -
+    /// `HullOverlay_AbsorbWindowActive(craft)`, `0.0 <= elapsed <= 1.0` on the
+    /// same clock the hull overlay reads.
+    ///
+    /// Reuses [`crate::Race::absorb_overlay_pulse`]'s own state
+    /// (`self.absorb_overlay`) rather than a second timer: that `Vec`
+    /// already holds `Some(elapsed)` exactly while `0.0 <= elapsed <= WINDOW`
+    /// ([`advance_absorb_bursts`](Self::advance_absorb_bursts) filters it),
+    /// and `HullOverlay_AbsorbFade`/`HullOverlay_AbsorbWindowActive` were
+    /// read as the same window test in a float and a bool shape - see
+    /// `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
+    /// "Absorb". `Hud_UpdateEnergyBar` calls the bool form on the player's
+    /// own craft every frame; this is that call.
+    #[must_use]
+    pub fn absorb_window_active(&self, slot: usize) -> bool {
+        self.absorb_overlay.get(slot).copied().flatten().is_some()
     }
 }

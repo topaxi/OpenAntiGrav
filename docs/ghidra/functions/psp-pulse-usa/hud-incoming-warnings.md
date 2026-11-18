@@ -135,7 +135,7 @@ held-weapon id (Mine 8, Bomb 9); the remap is [mine.md](mine.md)'s.
 
 `oag_hud::incoming` holds the table and the blink (`Warnings::raise`, the one entry
 point, then `advance` once per drawn tick: the raise frame is unlit, then eight lit
-phases). `oag_raceplay`'s `Race::note_incoming_fire(slot, weapon)` judges a fire once, at
+phases). `oag_raceplay`'s `RaceView::note_incoming_fire(slot, weapon)` judges a fire once, at
 the moment it happens, from `Craft::progress()` folded by `missile::wrapped_gap`, and
 queues the icon for the viewer's HUD; it is out of `World` and out of the hash. Fire
 sites: `spend_opponent_pickup`'s common tail (Rocket, Missile, Plasma, Shuriken, Quake,

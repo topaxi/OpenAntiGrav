@@ -110,6 +110,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
     {
         load_view(sim, options)
     }
+
     #[cfg(not(feature = "view"))]
     {
         without_view(sim)

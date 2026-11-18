@@ -150,18 +150,42 @@ mod race_wiring {
         let (mut race, mut evaluated) = watched();
         evaluated.wall.resolved = Some(contact());
         evaluated.wall.impact = false;
-        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(dirty(&race));
     }
 
     #[test]
     fn a_shielded_contact_and_no_contact_leave_it_clean() {
         let (mut race, mut evaluated) = watched();
-        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(!dirty(&race), "no contact");
         evaluated.wall.resolved = Some(contact());
         evaluated.shield.absorbed = true;
-        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(!dirty(&race), "absorbed by a shield");
     }
 
@@ -171,9 +195,25 @@ mod race_wiring {
         let (mut race, mut evaluated) = watched();
         race.set_seat(Some(1));
         evaluated.wall.resolved = Some(contact());
-        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(!dirty(&race), "slot 0 is someone else's craft");
-        race.observe_lap(1, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                1,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(dirty_of(&race, 1));
     }
 
@@ -192,12 +232,32 @@ mod race_wiring {
         };
         race.core.sim.world.race[0].lap = 2;
         race.core.sim.world.race[1].lap = 2;
-        race.observe_lap(0, &oag_race::Outcome::default(), &clean);
-        race.observe_lap(1, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &clean,
+            )
+        });
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                1,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(!dirty_of(&race, 0));
         assert!(dirty_of(&race, 1), "seat 1 scraped");
-        race.observe_lap(0, &done, &clean);
-        race.observe_lap(1, &done, &clean);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(core, cues, 0, &done, &clean)
+        });
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(core, cues, 1, &done, &clean)
+        });
         let has = |slot: usize| {
             let mut board = race.view.huds[slot].messages.clone();
             board.advance();
@@ -226,8 +286,24 @@ mod race_wiring {
         race.core.sim.world.controllers[1] = oag_gameplay::Controller::Local;
         overlap_slots_0_and_1(&mut race);
         race.resolve_craft_pairs();
-        race.observe_lap(0, &oag_race::Outcome::default(), &clean);
-        race.observe_lap(1, &oag_race::Outcome::default(), &clean);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &clean,
+            )
+        });
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                1,
+                &oag_race::Outcome::default(),
+                &clean,
+            )
+        });
         assert!(dirty_of(&race, 0) && dirty_of(&race, 1));
     }
 
@@ -238,8 +314,24 @@ mod race_wiring {
         race.core.sim.world.ships[1].physics.shield_pickup_timer = 1.0;
         overlap_slots_0_and_1(&mut race);
         race.resolve_craft_pairs();
-        race.observe_lap(0, &oag_race::Outcome::default(), &clean);
-        race.observe_lap(1, &oag_race::Outcome::default(), &clean);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &clean,
+            )
+        });
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                1,
+                &oag_race::Outcome::default(),
+                &clean,
+            )
+        });
         assert!(dirty_of(&race, 0) && !dirty_of(&race, 1));
     }
 
@@ -249,7 +341,15 @@ mod race_wiring {
         let (mut race, mut evaluated) = watched();
         evaluated.wall.resolved = Some(contact());
         race.quiet = true;
-        race.observe_lap(0, &oag_race::Outcome::default(), &evaluated);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(
+                core,
+                cues,
+                0,
+                &oag_race::Outcome::default(),
+                &evaluated,
+            )
+        });
         assert!(!dirty(&race));
     }
 
@@ -267,7 +367,9 @@ mod race_wiring {
             lap_ticks: Some(3600),
             ..Default::default()
         };
-        race.observe_lap(0, &done, &clean);
+        race.core.lending_cues(|core, cues| {
+            crate::stage::stage!(race).observe_lap(core, cues, 0, &done, &clean)
+        });
         race.core
             .sim
             .drain_cues()

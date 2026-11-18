@@ -56,13 +56,20 @@ fn run(hz: u64, alpha: impl Fn(&TickClock) -> f32) -> Option<Run> {
             race.tick(&PlayerInputs::single(held.snapshot()));
         }
         race.set_draw_alpha(alpha(&clock));
-        let drawn = race.ship_model_matrix_of(0).w_axis.truncate();
-        let eye = race.camera_position();
+        let drawn = race
+            .view_state()
+            .ship_model_matrix_of(&race.core, 0)
+            .w_axis
+            .truncate();
+        let eye = race.view_state().camera_position(&race.core);
         race.set_draw_alpha(1.0);
         // At alpha 1 the accessor is the tick itself, bit for bit.
         let body = race.core.sim.world.ships[0].physics.body;
         assert_eq!(
-            race.ship_model_matrix_of(0).w_axis.truncate(),
+            race.view_state()
+                .ship_model_matrix_of(&race.core, 0)
+                .w_axis
+                .truncate(),
             body.position,
             "frame {frame}: alpha 1 drew something other than the tick"
         );

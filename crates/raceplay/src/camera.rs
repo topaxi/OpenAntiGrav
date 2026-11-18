@@ -170,70 +170,6 @@ pub(super) fn target_of(ship: &Ship) -> Target {
 
 #[cfg(feature = "view")]
 impl Race {
-    /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
-    /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
-    /// move together. The camera follows this machine's seat ([`SimRace::player_slot`]), not
-    /// slot 0. A craft in a transit is followed onto its seat and on from there
-    /// ([`crate::transit_camera`]).
-    pub(super) fn camera_target(&self) -> Target {
-        self.followed(self.core.player_slot())
-    }
-
-    /// Where the camera is and what it is aimed at, as a view matrix.
-    ///
-    /// This is the one place a [`CameraOverride`] takes effect: everything else
-    /// that needs the camera - the PVS eye, the fog eye - derives from this
-    /// matrix through [`Self::camera_position`], so overriding here overrides
-    /// everywhere at once, and a consumer that read the chase camera directly
-    /// instead would silently miss the override.
-    ///
-    /// [`RaceView::shake`] applies to both the external and the internal view and
-    /// not to an override: `Camera_ArmShake`'s `camera` argument is the
-    /// per-craft camera object both tripods share, not a property of one view,
-    /// but an override exists to reproduce a captured pose exactly and the
-    /// shake's phase is randomised, so a matched-pose comparison must not see
-    /// it. See `oag_render::camera::shake`.
-    ///
-    /// The shake turns the camera about its own up and forward as it stands in
-    /// `base` this tick, in the original's own order and sense: see
-    /// `oag_render::camera::shake`, measured against the running original.
-    ///
-    /// Inside the window's draw this is blended from the previous tick toward
-    /// this one by the draw alpha - see [`super::between_ticks`]. Everywhere
-    /// else it is this tick's camera exactly.
-    #[must_use]
-    pub fn view(&self) -> Mat4 {
-        if let Some(view) = self.extra_view() {
-            return view;
-        }
-        self.lens_sampled(self.view_between(self.tick_view(), |previous| previous.view))
-    }
-
-    /// `view` through the lens sample an accumulated depth of field frame is drawn with
-    /// ([`crate::photo::LensShift`]), or `view` itself with none.
-    fn lens_sampled(&self, view: Mat4) -> Mat4 {
-        match self
-            .view
-            .photo
-            .as_ref()
-            .and_then(crate::photo::Photo::shift)
-        {
-            Some(shift) => shift.apply(view),
-            None => view,
-        }
-    }
-
-    /// [`Self::view`] as this tick leaves it, never blended.
-    pub(super) fn tick_view(&self) -> Mat4 {
-        let base = self.tick_view_unshaken();
-        if self.view.camera_override.is_some() {
-            return base;
-        }
-        // The camera turned about its own up and forward, the eye fixed:
-        // see `oag_render::camera::shake::Shake::apply`.
-        self.view.contact.shake.apply(base)
-    }
-
     /// [`Self::view`] without the impact shake: where the camera is really
     /// pointed this tick.
     ///
@@ -246,46 +182,11 @@ impl Race {
         if let Some(view) = self.extra_view_unshaken() {
             return view;
         }
-        self.lens_sampled(
-            self.view_between(self.tick_view_unshaken(), |previous| previous.unshaken),
-        )
-    }
-
-    /// [`Self::view_unshaken`] as this tick leaves it, never blended.
-    pub(super) fn tick_view_unshaken(&self) -> Mat4 {
-        if let Some(over) = &self.view.camera_override {
-            // A view matrix is the inverse of the camera's world transform.
-            return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
-        }
-        // The player's destroyed craft: the circuit's own camera, not a rig on
-        // the craft - see `race::destroy_camera`.
-        if let Some(destroyed) = self.destroy_camera_now() {
-            return destroyed.view();
-        }
-        let target = self.camera_target();
-        if self.view.camera_view == oag_display::display::CameraView::Internal {
-            // Rigid, so there is no per-tick state to advance and nothing to
-            // snap: the cockpit is bolted to the hull. The roll phase rides
-            // along so the cockpit view rolls with the manoeuvre too - see
-            // `oag_render::camera::internal::view`. A Quake's smoothed wave
-            // height lifts the eye only where the title's law says it does -
-            // see `oag_title::weapons::QuakeHit::lifts_cockpit_eye`; the
-            // height itself is computed either way, for the hit gate.
-            let quake_lift = if self.core.sim.quake_hit.lifts_cockpit_eye() {
-                self.core.ship().quake_lift
-            } else {
-                0.0
-            };
-            oag_render::camera::internal::view(
-                target,
-                &self.view.internal_params,
-                self.core.ship().physics.roll_phase,
-                self.core.ship().physics.camera_lean,
-                quake_lift,
-            )
-        } else {
-            self.view.camera.view(target, &self.view.chase_params)
-        }
+        self.view.lens_sampled(self.view.view_between(
+            &self.core,
+            self.view.tick_view_unshaken(&self.core),
+            |previous| previous.unshaken,
+        ))
     }
 
     /// The impact shake as a rotation in view space, `view() * view_unshaken()^-1`:
@@ -294,7 +195,7 @@ impl Race {
     /// not reach.
     #[must_use]
     pub fn view_shake_rotation(&self) -> Mat4 {
-        let shaking = match self.extra_viewpoint() {
+        let shaking = match self.view.extra_viewpoint() {
             Some(slot) => self
                 .view
                 .viewpoints
@@ -305,7 +206,7 @@ impl Race {
         if !shaking {
             return Mat4::IDENTITY;
         }
-        self.view() * self.view_unshaken().inverse()
+        self.view.view(&self.core) * self.view_unshaken().inverse()
     }
 
     /// How far the camera's lens moved the picture since the previous frame, as
@@ -315,7 +216,7 @@ impl Race {
     /// `shake` is this tick's [`Self::view_shake_rotation`] and the two
     /// `previous_` matrices are what the last frame stored. The lens is the
     /// impact shake and the field of view: the boost kick and the speed widen
-    /// of [`Self::vertical_fov`], and the player's own setting.
+    /// of [`crate::RaceView::vertical_fov`], and the player's own setting.
     /// [`Mat4::IDENTITY`] exactly when neither tick shook and the projection did
     /// not change.
     ///
@@ -492,17 +393,6 @@ impl RaceSim {
 
 #[cfg(feature = "view")]
 impl Race {
-    /// The camera's own world position, from the view matrix it produces.
-    ///
-    /// A view matrix is the inverse of the camera's world transform, so
-    /// inverting it back and taking the translation column is the camera's
-    /// position. Read out rather than tracked separately so it cannot drift
-    /// from what is actually being rendered.
-    #[must_use]
-    pub fn camera_position(&self) -> Vec3 {
-        self.view().inverse().w_axis.truncate()
-    }
-
     /// The authored sections the craft and the camera are in, for PVS culling.
     ///
     /// [`UNPLACED`] means "do not trust this", which the visibility set turns
@@ -530,7 +420,7 @@ impl Race {
         // The viewed craft's, because this places the camera being drawn: the seat's on a
         // network client, not slot 0's. An opponent recovering across the circuit must not
         // blank the shot.
-        let slot = self.viewed_slot();
+        let slot = self.view.viewed_slot(&self.core);
         if self.core.sim.respawn_cooldown[slot] > 0 {
             return (UNPLACED, UNPLACED);
         }
@@ -549,14 +439,14 @@ impl Race {
         // samples away in the same table. See `Spline::nearest_within` for why
         // a local search is allowed to miss.
         let camera = match self.core.sim.spline.nearest_within(
-            self.camera_position(),
+            self.view.camera_position(&self.core),
             index,
             CAMERA_SEARCH_SAMPLES,
         ) {
             Some((camera_index, _, _)) => self
                 .core
                 .sim
-                .section_of(camera_index, self.camera_position()),
+                .section_of(camera_index, self.view.camera_position(&self.core)),
             None => UNPLACED,
         };
         (craft, camera)
@@ -566,7 +456,7 @@ impl Race {
     /// and over the director's camera too: a shot must not lose scenery to a visibility set
     /// that was authored for a craft in a race (the draws still go through the frustum test).
     /// Otherwise the one row of the section a station camera is placed by
-    /// ([`Self::station_camera_section`]) or the pre-race flyby's camera stands in
+    /// ([`crate::RaceView::station_camera_section`]) or the pre-race flyby's camera stands in
     /// ([`Self::flyby_camera_section`]), or the craft's and the camera's own sections with
     /// padding for every other camera ([`Self::visibility_sections`]), narrowed to the view.
     pub(super) fn visible_set(
@@ -578,7 +468,8 @@ impl Race {
             return VisibleSet::everything();
         }
         match self
-            .station_camera_section()
+            .view
+            .station_camera_section(&self.core)
             .or_else(|| self.flyby_camera_section())
         {
             Some(section) => visibility.set_exact(section, view_projection),
@@ -587,25 +478,6 @@ impl Race {
                 visibility.set(craft, camera, view_projection)
             }
         }
-    }
-
-    /// The one section the draws are masked with when the camera stands on an authored station
-    /// rather than on the craft, `None` for every other camera.
-    ///
-    /// `Camera_UpdateSpectatorView` publishes the section of the craft in `cam+0x1e4`
-    /// (`cam+0x1e8`, through `FUN_08878644`) in every mode, and the visible set the draws are
-    /// masked with is that section's row alone (`FUN_0891e908`; no padding, no second source).
-    /// The destroy camera and the director's cameras sit hundreds of units from the craft,
-    /// where the camera's own section cannot be told from the craft's spline window and was
-    /// falling to [`UNPLACED`], which draws everything: Talon's Junction's station 0 sits
-    /// inside a tube whose inside the original's mask leaves out.
-    #[must_use]
-    pub fn station_camera_section(&self) -> Option<u8> {
-        if self.extra_viewpoint().is_some() || self.view.photo.is_some() {
-            return None;
-        }
-        self.drawn_craft_of_a_station_camera()
-            .map(|slot| self.core.sim.section_of_slot(slot))
     }
 
     /// The section the draws are masked with during the pre-race flyby: that of the spline
@@ -620,24 +492,15 @@ impl Race {
     /// section under its camera").
     #[must_use]
     pub fn flyby_camera_section(&self) -> Option<u8> {
-        if !self.in_intro() {
+        if !self.view.in_intro() {
             return None;
         }
-        let (_, sample, _) = self.core.sim.spline.nearest(self.camera_position())?;
+        let (_, sample, _) = self
+            .core
+            .sim
+            .spline
+            .nearest(self.view.camera_position(&self.core))?;
         Some(sample.section_id)
-    }
-
-    /// The craft the camera draws when it stands on an authored station: the destroy camera's
-    /// wreck (the player) or the director's drawn craft. `None` for every other camera.
-    fn drawn_craft_of_a_station_camera(&self) -> Option<usize> {
-        if let Some(director) = &self.view.finish_camera
-            && director.is_imposed()
-            && let Some(slot) = director.drawn_slot()
-        {
-            return Some(slot);
-        }
-        (self.view.camera_override.is_none() && self.destroy_camera_now().is_some())
-            .then(|| self.core.player_slot())
     }
 }
 
@@ -664,34 +527,6 @@ impl RaceSim {
     /// road): that stays *draw everything*, as [`Race::visibility_sections`] documents.
     fn located_sample(&self, ship: &oag_gameplay::Ship) -> Option<usize> {
         self.located_from(ship, usize::from(ship.segment))
-    }
-}
-
-#[cfg(feature = "view")]
-impl Race {
-    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
-    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
-    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
-    /// to the sample table, is where the simulation has it (photo mode's subject is usually
-    /// one).
-    pub(super) fn section_of_framed(&self) -> u8 {
-        let slot = self.framed_slot();
-        let ship = &self.core.sim.world.ships[slot];
-        let index = if self.core.sim.world.person_flown(slot) {
-            self.core.sim.located_sample(ship)
-        } else {
-            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
-            self.core.sim.located_from(
-                ship,
-                self.core
-                    .sim
-                    .sample_index_for(slot, line)
-                    .unwrap_or(usize::MAX),
-            )
-        };
-        index.map_or(UNPLACED, |index| {
-            self.core.sim.section_of(index, ship.physics.body.position)
-        })
     }
 }
 
@@ -728,6 +563,181 @@ impl RaceSim {
 
 #[cfg(feature = "view")]
 impl Race {
+    /// The camera the per-frame `LodGroup` switch runs from this frame: the
+    /// unjittered view, the field [`crate::RaceView::projection`] is built from in
+    /// degrees, and the player's preset. See `oag_mesh::mesh::LodEye`.
+    #[must_use]
+    pub fn lod_eye(
+        &self,
+        aspect: f32,
+        setting: oag_display::display::Fov,
+    ) -> oag_mesh::mesh::LodEye {
+        oag_mesh::mesh::LodEye {
+            view: self.view.view(&self.core),
+            fov_degrees: self
+                .view
+                .vertical_fov(&self.core, aspect, setting)
+                .to_degrees(),
+            detail: self.view.model_detail,
+        }
+    }
+
+    /// The original's `g_camera_fov_degrees` for this view: the authored field plus the speed
+    /// widen, before the player's setting and the window's fit. `ViewCull_ViewDepth` multiplies
+    /// every list-B depth by this over 65 (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`,
+    /// "The list-B queue key").
+    #[must_use]
+    pub fn camera_fov_degrees(&self) -> f32 {
+        self.view
+            .vertical_fov(
+                &self.core,
+                AUTHORED_ASPECT,
+                oag_display::display::Fov::AUTHORED,
+            )
+            .to_degrees()
+    }
+}
+
+/// The last two steps of every view's vertical field of view: the boost kick, then the fit to
+/// the window's aspect. `authored` has already passed the player's setting.
+///
+/// The kick is composed *after* the setting, so a player who has widened the field gets the
+/// same proportional kick rather than a fixed number of degrees. The zero case returns the
+/// input untouched rather than through `atan(tan(x))`, for the reason `Fov::apply` gives:
+/// every capture taken before this effect existed has to stay bit-identical.
+#[cfg(feature = "view")]
+pub(super) fn finish_vertical_fov(
+    authored: f32,
+    offset_deg: f32,
+    kick: f32,
+    gain: f32,
+    aspect: f32,
+) -> f32 {
+    // A module's `fov-offset`: zero skips the arithmetic, so a race with none is bit-identical.
+    let authored = if offset_deg == 0.0 {
+        authored
+    } else {
+        (authored + offset_deg.to_radians())
+            .clamp(FOV_GUARD_DEG.0.to_radians(), FOV_GUARD_DEG.1.to_radians())
+    };
+    let kicked = if kick == 0.0 {
+        authored
+    } else {
+        let widen = 1.0 + kick * gain;
+        2.0 * ((authored * 0.5).tan() * widen).atan()
+    };
+    oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The craft the chase camera follows, at the pose it is drawn at: the simulation's plus
+    /// the correction glide ([`crate::correction`]), so the hull and the camera that frames it
+    /// move together. The camera follows this machine's seat ([`SimRace::player_slot`]), not
+    /// slot 0. A craft in a transit is followed onto its seat and on from there
+    /// ([`crate::transit_camera`]).
+    pub(super) fn camera_target(&self, core: &SimRace) -> Target {
+        self.followed(core, core.player_slot())
+    }
+
+    /// Where the camera is and what it is aimed at, as a view matrix.
+    ///
+    /// This is the one place a [`CameraOverride`] takes effect: everything else
+    /// that needs the camera - the PVS eye, the fog eye - derives from this
+    /// matrix through [`Self::camera_position`], so overriding here overrides
+    /// everywhere at once, and a consumer that read the chase camera directly
+    /// instead would silently miss the override.
+    ///
+    /// [`RaceView::shake`] applies to both the external and the internal view and
+    /// not to an override: `Camera_ArmShake`'s `camera` argument is the
+    /// per-craft camera object both tripods share, not a property of one view,
+    /// but an override exists to reproduce a captured pose exactly and the
+    /// shake's phase is randomised, so a matched-pose comparison must not see
+    /// it. See `oag_render::camera::shake`.
+    ///
+    /// The shake turns the camera about its own up and forward as it stands in
+    /// `base` this tick, in the original's own order and sense: see
+    /// `oag_render::camera::shake`, measured against the running original.
+    ///
+    /// Inside the window's draw this is blended from the previous tick toward
+    /// this one by the draw alpha - see [`super::between_ticks`]. Everywhere
+    /// else it is this tick's camera exactly.
+    #[must_use]
+    pub fn view(&self, core: &SimRace) -> Mat4 {
+        if let Some(view) = self.extra_view() {
+            return view;
+        }
+        self.lens_sampled(self.view_between(core, self.tick_view(core), |previous| previous.view))
+    }
+
+    /// `view` through the lens sample an accumulated depth of field frame is drawn with
+    /// ([`crate::photo::LensShift`]), or `view` itself with none.
+    fn lens_sampled(&self, view: Mat4) -> Mat4 {
+        match self.photo.as_ref().and_then(crate::photo::Photo::shift) {
+            Some(shift) => shift.apply(view),
+            None => view,
+        }
+    }
+
+    /// [`Self::view`] as this tick leaves it, never blended.
+    pub(super) fn tick_view(&self, core: &SimRace) -> Mat4 {
+        let base = self.tick_view_unshaken(core);
+        if self.camera_override.is_some() {
+            return base;
+        }
+        // The camera turned about its own up and forward, the eye fixed:
+        // see `oag_render::camera::shake::Shake::apply`.
+        self.contact.shake.apply(base)
+    }
+
+    /// [`crate::Race::view_unshaken`] as this tick leaves it, never blended.
+    pub(super) fn tick_view_unshaken(&self, core: &SimRace) -> Mat4 {
+        if let Some(over) = &self.camera_override {
+            // A view matrix is the inverse of the camera's world transform.
+            return Mat4::from_rotation_translation(over.orientation, over.eye).inverse();
+        }
+        // The player's destroyed craft: the circuit's own camera, not a rig on
+        // the craft - see `race::destroy_camera`.
+        if let Some(destroyed) = self.destroy_camera_now() {
+            return destroyed.view();
+        }
+        let target = self.camera_target(core);
+        if self.camera_view == oag_display::display::CameraView::Internal {
+            // Rigid, so there is no per-tick state to advance and nothing to
+            // snap: the cockpit is bolted to the hull. The roll phase rides
+            // along so the cockpit view rolls with the manoeuvre too - see
+            // `oag_render::camera::internal::view`. A Quake's smoothed wave
+            // height lifts the eye only where the title's law says it does -
+            // see `oag_title::weapons::QuakeHit::lifts_cockpit_eye`; the
+            // height itself is computed either way, for the hit gate.
+            let quake_lift = if core.sim.quake_hit.lifts_cockpit_eye() {
+                core.ship().quake_lift
+            } else {
+                0.0
+            };
+            oag_render::camera::internal::view(
+                target,
+                &self.internal_params,
+                core.ship().physics.roll_phase,
+                core.ship().physics.camera_lean,
+                quake_lift,
+            )
+        } else {
+            self.camera.view(target, &self.chase_params)
+        }
+    }
+
+    /// The camera's own world position, from the view matrix it produces.
+    ///
+    /// A view matrix is the inverse of the camera's world transform, so
+    /// inverting it back and taking the translation column is the camera's
+    /// position. Read out rather than tracked separately so it cannot drift
+    /// from what is actually being rendered.
+    #[must_use]
+    pub fn camera_position(&self, core: &SimRace) -> Vec3 {
+        self.view(core).inverse().w_axis.truncate()
+    }
+
     /// The projection for a viewport of the given aspect ratio, with the
     /// player's field-of-view setting applied.
     ///
@@ -779,34 +789,19 @@ impl Race {
     /// Pass the fov computed from that tick's own forward velocity. A
     /// fixed fov instead misregisters by 1.12-1.26x depending on the tick's speed.
     #[must_use]
-    pub fn projection(&self, aspect: f32, far: f32, setting: oag_display::display::Fov) -> Mat4 {
-        oag_render::camera::projection(self.vertical_fov(aspect, setting), aspect, NEAR_PLANE, far)
-    }
-
-    /// The camera the per-frame `LodGroup` switch runs from this frame: the
-    /// unjittered view, the field [`Self::projection`] is built from in
-    /// degrees, and the player's preset. See `oag_mesh::mesh::LodEye`.
-    #[must_use]
-    pub fn lod_eye(
+    pub fn projection(
         &self,
+        core: &SimRace,
         aspect: f32,
+        far: f32,
         setting: oag_display::display::Fov,
-    ) -> oag_mesh::mesh::LodEye {
-        oag_mesh::mesh::LodEye {
-            view: self.view(),
-            fov_degrees: self.vertical_fov(aspect, setting).to_degrees(),
-            detail: self.view.model_detail,
-        }
-    }
-
-    /// The original's `g_camera_fov_degrees` for this view: the authored field plus the speed
-    /// widen, before the player's setting and the window's fit. `ViewCull_ViewDepth` multiplies
-    /// every list-B depth by this over 65 (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`,
-    /// "The list-B queue key").
-    #[must_use]
-    pub fn camera_fov_degrees(&self) -> f32 {
-        self.vertical_fov(AUTHORED_ASPECT, oag_display::display::Fov::AUTHORED)
-            .to_degrees()
+    ) -> Mat4 {
+        oag_render::camera::projection(
+            self.vertical_fov(core, aspect, setting),
+            aspect,
+            NEAR_PLANE,
+            far,
+        )
     }
 
     /// The vertical field of view, in radians, that [`Self::projection`] is
@@ -818,8 +813,13 @@ impl Race {
     /// setting and the authored aspect is this value in degrees. See
     /// `oag_mesh::mesh::LodGroups::child_at`.
     #[must_use]
-    pub fn vertical_fov(&self, aspect: f32, setting: oag_display::display::Fov) -> f32 {
-        if let Some(fov) = self.extra_vertical_fov(aspect, setting) {
+    pub fn vertical_fov(
+        &self,
+        core: &SimRace,
+        aspect: f32,
+        setting: oag_display::display::Fov,
+    ) -> f32 {
+        if let Some(fov) = self.extra_vertical_fov(core, aspect, setting) {
             return fov;
         }
         // An overridden fov stands in for the authored one and still passes
@@ -832,13 +832,12 @@ impl Race {
         // the live one is whichever perspective is being rendered - a cockpit
         // framed with the chase view's field would be the wrong picture with the
         // right camera.
-        let view_fov = if self.view.camera_view == oag_display::display::CameraView::Internal {
-            self.view.internal_params.fov
+        let view_fov = if self.camera_view == oag_display::display::CameraView::Internal {
+            self.internal_params.fov
         } else {
-            self.view.chase_params.fov
+            self.chase_params.fov
         };
         let authored_fov = self
-            .view
             .camera_override
             .as_ref()
             .and_then(|over| over.fov_deg)
@@ -858,64 +857,97 @@ impl Race {
         // forward velocity.
         // Both speed terms at the draw alpha, so the field widens smoothly
         // between ticks along with the camera - see `super::between_ticks`.
-        let forward_speed = self
-            .camera_scalar_between(self.core.tick_forward_speed(), |previous| {
+        let forward_speed =
+            self.camera_scalar_between(core, core.tick_forward_speed(), |previous| {
                 previous.forward_speed
             });
         let boost_kick =
-            self.camera_scalar_between(self.view.boost_kick, |previous| previous.boost_kick);
+            self.camera_scalar_between(core, self.boost_kick, |previous| previous.boost_kick);
         // The destroy camera zooms to frame the wreck, with no speed widen:
         // `FUN_08880c04` writes `g_camera_fov_degrees` from its own field.
         let widened_deg = match self.destroy_camera_now() {
-            Some(destroyed) if self.view.camera_override.is_none() => destroyed.fov,
+            Some(destroyed) if self.camera_override.is_none() => destroyed.fov,
             _ => authored_fov + SPEED_FOV_GAIN_DEG * forward_speed,
         }
         .clamp(FOV_GUARD_DEG.0, FOV_GUARD_DEG.1);
         let authored = setting.apply(widened_deg.to_radians());
         // At the draw alpha with the speed terms, so a module's ramp does not step at the tick.
         let offset = self.camera_scalar_between(
-            self.core.sim.extension_fov_offset(self.core.player_slot()),
+            core,
+            core.sim.extension_fov_offset(core.player_slot()),
             |previous| previous.fov_offset,
         );
         finish_vertical_fov(
             authored,
             offset,
             boost_kick,
-            self.view.boost_fov_kick.gain(),
+            self.boost_fov_kick.gain(),
             aspect,
         )
     }
 }
 
-/// The last two steps of every view's vertical field of view: the boost kick, then the fit to
-/// the window's aspect. `authored` has already passed the player's setting.
-///
-/// The kick is composed *after* the setting, so a player who has widened the field gets the
-/// same proportional kick rather than a fixed number of degrees. The zero case returns the
-/// input untouched rather than through `atan(tan(x))`, for the reason `Fov::apply` gives:
-/// every capture taken before this effect existed has to stay bit-identical.
 #[cfg(feature = "view")]
-pub(super) fn finish_vertical_fov(
-    authored: f32,
-    offset_deg: f32,
-    kick: f32,
-    gain: f32,
-    aspect: f32,
-) -> f32 {
-    // A module's `fov-offset`: zero skips the arithmetic, so a race with none is bit-identical.
-    let authored = if offset_deg == 0.0 {
-        authored
-    } else {
-        (authored + offset_deg.to_radians())
-            .clamp(FOV_GUARD_DEG.0.to_radians(), FOV_GUARD_DEG.1.to_radians())
-    };
-    let kicked = if kick == 0.0 {
-        authored
-    } else {
-        let widen = 1.0 + kick * gain;
-        2.0 * ((authored * 0.5).tan() * widen).atan()
-    };
-    oag_render::camera::fit_vertical_fov(kicked, AUTHORED_ASPECT, aspect)
+impl RaceView {
+    /// The section of the craft the picture frames ([`Self::framed_slot`]), [`UNPLACED`] where
+    /// it cannot be told. A person's craft is located by the tick in `Ship::segment`; an
+    /// opponent's `segment` is never written, and its driver's index on its own line, mapped
+    /// to the sample table, is where the simulation has it (photo mode's subject is usually
+    /// one).
+    pub(super) fn section_of_framed(&self, core: &SimRace) -> u8 {
+        let slot = self.framed_slot(core);
+        let ship = &core.sim.world.ships[slot];
+        let index = if core.sim.world.person_flown(slot) {
+            core.sim.located_sample(ship)
+        } else {
+            let line = usize::try_from(ship.driver.index).unwrap_or(usize::MAX);
+            core.sim.located_from(
+                ship,
+                core.sim.sample_index_for(slot, line).unwrap_or(usize::MAX),
+            )
+        };
+        index.map_or(UNPLACED, |index| {
+            core.sim.section_of(index, ship.physics.body.position)
+        })
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The one section the draws are masked with when the camera stands on an authored station
+    /// rather than on the craft, `None` for every other camera.
+    ///
+    /// `Camera_UpdateSpectatorView` publishes the section of the craft in `cam+0x1e4`
+    /// (`cam+0x1e8`, through `FUN_08878644`) in every mode, and the visible set the draws are
+    /// masked with is that section's row alone (`FUN_0891e908`; no padding, no second source).
+    /// The destroy camera and the director's cameras sit hundreds of units from the craft,
+    /// where the camera's own section cannot be told from the craft's spline window and was
+    /// falling to [`UNPLACED`], which draws everything: Talon's Junction's station 0 sits
+    /// inside a tube whose inside the original's mask leaves out.
+    #[must_use]
+    pub fn station_camera_section(&self, core: &SimRace) -> Option<u8> {
+        if self.extra_viewpoint().is_some() || self.photo.is_some() {
+            return None;
+        }
+        self.drawn_craft_of_a_station_camera(core)
+            .map(|slot| core.sim.section_of_slot(slot))
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// The craft the camera draws when it stands on an authored station: the destroy camera's
+    /// wreck (the player) or the director's drawn craft. `None` for every other camera.
+    fn drawn_craft_of_a_station_camera(&self, core: &SimRace) -> Option<usize> {
+        if let Some(director) = &self.finish_camera
+            && director.is_imposed()
+            && let Some(slot) = director.drawn_slot()
+        {
+            return Some(slot);
+        }
+        (self.camera_override.is_none() && self.destroy_camera_now().is_some())
+            .then(|| core.player_slot())
+    }
 }
 
 #[cfg(test)]

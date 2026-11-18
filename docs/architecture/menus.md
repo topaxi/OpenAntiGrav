@@ -1967,7 +1967,7 @@ Two honest limitations, both recorded rather than papered over:
 `GRAPHICS -> FIELD OF VIEW` is a **percentage of the field the disc's own data
 authored**, not an angle, and that is a deliberate refusal rather than a
 simplification. `<ExternalCameraFar fov>` comes off the disc and **its unit is
-unrecovered** - `Race::projection` reads it as degrees and says so in the load
+unrecovered** - `RaceView::projection` reads it as degrees and says so in the load
 report. A row that let a player type `90` would be quietly asserting a unit this
 project has not established; a multiplier says what it does - wider or narrower
 than the game frames it - without claiming to know what the number underneath
