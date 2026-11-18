@@ -302,7 +302,10 @@ fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
     let at = drawn_scene(uv) * size - 0.5;
     let first = floor(at);
     let weight = at - first;
-    let last = floor(constants.scene_max * size);
+    // The drawn rectangle's last texel. A whole picture's clamp is the target's far edge
+    // itself (`sub_rectangle_at`), one texel past the last, and a load from there reads
+    // nothing: the bottom row and the right column came out at half their light.
+    let last = min(floor(constants.scene_max * size), size - 1.0);
     let low = vec2<i32>(max(first, vec2<f32>(0.0)));
     let high = vec2<i32>(min(first + 1.0, last));
     let a = scene_tap(textureLoad(source_tex, vec2<i32>(low.x, low.y), 0)).rgb;
