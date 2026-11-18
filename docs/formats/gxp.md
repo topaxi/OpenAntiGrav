@@ -950,6 +950,50 @@ Other circuits' grids, before against after (1280x720, tick 100): Altima 4.5 % o
 de Ra 13; Square, Subway and Moa Therma 0 (the family is out of view there), Mall, which has
 none, 0.
 
+## Which instance entry a program's uniform takes: the record before a program (2026-11-18, `w2048-fc17`)
+
+Inside a `.rcsmaterial` a `0x30`-byte record sits before a program and says where each of its
+uniforms and samplers comes from. Offsets in it are relative to the payload base, the `u32` at
+file `+0x0c` (`0x1400` on the two files read by hand):
+
+```text
++0x00 u32  hash-shaped, unread
++0x04 u32  the program's size, rounded up
++0x08 u16  count of uniforms and samplers      +0x0a u16  count of attributes
++0x0c u32  the program
++0x10 u32  one (u16 source, u16 register) pair per uniform or sampler
++0x14 u32  their names, ~crc32(name), in the same order
++0x18 u32  the attributes' pairs               +0x1c u32  the attributes' names
+```
+
+`register` is the uniform's `resource_index`, or `0x8000 | unit` for a sampler. `source` is
+`0xffff` for what the engine supplies (`fogColour`, `liveLighting0diffuse`, `occlusionMap`),
+`0x4000` on `time`, and otherwise **the index of an entry in the model's material instance
+table** ([2048-material-params.md](2048-material-params.md)). On Altima's
+`fc17_effects_vscroll_wateredge_vertexcol`, fragment program #14:
+
+```text
+NormalMap 0 -> unit 0     lightmap 1 -> unit 1     occlusionMap, shadowMap ffff -> units 2, 3
+Opacity 2 -> sa0          SpecularPower 4 -> sa12  Watercolour 6 -> sa14   SpecularColour 3 -> sa16
+```
+
+and the instance's table in `altima/track.rcsmodel` lists, in order, `NormalMap`, `lightmap`,
+`Opacity`, `SpecularColour`, `SpecularPower`, `Speed`, `Watercolour`, `time`. Park's
+`fc17_effects_vscroll_water` has no `Opacity`: its records say `SpecularColour` 2,
+`SpecularPower` 3, `Speed` 4, `Watercolour` 5, and Park's instance lists exactly that order.
+So a program's `Watercolour` is the instance's entry of that name, by position, and both
+tables carry the name's hash.
+
+**How far it is checked.** Taking the record to be the `0x30` bytes before the program (its
+`+0x0c` points at the program and its size fits), it is found on 24,866 of the 44,536 programs
+in the 693 material files of the base `data.psarc`; on every one of those the two counts are
+the program's own and the name hashes are the program's uniform and sampler names. The other
+19,680 records are not at that distance (a program that follows another's tables) and were not
+located; the variant table that would say where is not read. Confidence 75 for the layout
+where found, 70 for `source` as the instance entry's index (two material files against two
+instances, entry for entry; not read in the executable). **Omega: not checked** (its container
+around the GCN programs is a different one, `gcn_dump` reads the programs' own reflection).
+
 ## The composite family, and the Zone one
 
 *Read 2026-08-30, against the base build. Blob indices below are that build's;

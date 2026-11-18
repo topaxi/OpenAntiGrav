@@ -829,8 +829,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         picture = vec4<f32>(encode(linear), picture.a);
         coverage = vec4<f32>(decode(vec3<f32>(first.r)).r * holo.z);
     }
-    if vita_fc17 {
-        picture = vec4<f32>(row_tint.rgb, picture.a);
+    if vita_water {
+        // **2048's seas multiply the light by the uniform as it is** (`fc15` lit fragment `@22`
+        // and `fc17` `@23`, lightmapped `@24`: `mul light.xyz, ColourConstant` or `Watercolour`),
+        // where a picture is squared first: `encode` hands the entry's constant to the `decode`
+        // every picture takes below, which returns it unchanged (`docs/rendering/water.md`,
+        // "2048 (Vita)", "The constant is not squared"). Omega's seas (kinds 9 and 10) keep the
+        // decoded constant.
+        picture = vec4<f32>(select(encode(row_tint.rgb), row_tint.rgb, omega_sea), picture.a);
     }
     let texel = vec4<f32>(picture.rgb, coverage[(in.slots >> 3u) & 3u]);
 

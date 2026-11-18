@@ -140,9 +140,17 @@ fn altimas_sea_draws_its_law_under_original_and_nothing_under_off() {
         "the edge's Opacity rides the header's offset"
     );
     assert_eq!(edge.scale, 250.0, "the edge's SpecularPower");
-    assert_ne!(
-        edge.tint, [0.0; 3],
-        "Watercolour is not authored: the pond's colour stands in"
+    // The edge's own `Watercolour`, three halves; the pond's `ColourConstant` beside it differs
+    // in the third digit (`0.1735`, `0.2195`).
+    assert_eq!(
+        edge.tint,
+        [0.133_178_71, 0.172_607_42, 0.217_651_37],
+        "the edge's authored Watercolour"
+    );
+    assert_eq!(
+        sea.tint,
+        [0.133_178_71, 0.173_461_91, 0.219_482_42],
+        "the pond's ColourConstant"
     );
     assert_eq!(on.vertices.len(), off.vertices.len());
 }
