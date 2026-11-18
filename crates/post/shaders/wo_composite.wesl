@@ -186,33 +186,52 @@ fn fs_composite(in: VignetteOutput) -> @location(0) vec4<f32> {
 
 @group(1) @binding(0) var<storage, read_write> state: State;
 
-var<workgroup> partial: array<vec2<f32>, 64>;
+const READBACK_LANES: u32 = 256u;
+
+var<workgroup> partial: array<u32, 256>;
+
+// One sampled pixel's alpha byte, or 0 past the end of the sample grid.
+fn readback_byte(i: u32, n: u32, columns: u32) -> u32 {
+    if i >= n {
+        return 0u;
+    }
+    let at = vec2<u32>(i % columns, i / columns) * 4u;
+    return u32(round(textureLoad(source_tex, at, 0).a * 255.0));
+}
 
 // The mean of every fourth pixel of every fourth row of the gate target's alpha
 // byte, times 1/64 (0x3c800000), as Exposure_AdaptFromReadback reads it. The
-// 64 invocations each take every 64th sampled row and then add up.
+// sampled grid is flattened and dealt to 256 invocations, four independent
+// loads in flight per step, then summed in a tree. Every sum is a whole number
+// held in a `u32`, so the order of the additions cannot change the mean.
 fn readback(lane: u32) -> f32 {
-    var sum = 0.0;
-    var count = 0.0;
-    for (var y = lane * 4u; y < params.quarter_pixels.y; y = y + 256u) {
-        for (var x = 0u; x < params.quarter_pixels.x; x = x + 4u) {
-            sum = sum + round(textureLoad(source_tex, vec2<u32>(x, y), 0).a * 255.0);
-            count = count + 1.0;
-        }
+    let columns = (params.quarter_pixels.x + 3u) / 4u;
+    let rows = (params.quarter_pixels.y + 3u) / 4u;
+    let n = columns * rows;
+    var sum = vec4<u32>(0u);
+    for (var i = lane; i < n; i = i + 4u * READBACK_LANES) {
+        sum = sum + vec4<u32>(
+            readback_byte(i, n, columns),
+            readback_byte(i + READBACK_LANES, n, columns),
+            readback_byte(i + 2u * READBACK_LANES, n, columns),
+            readback_byte(i + 3u * READBACK_LANES, n, columns),
+        );
     }
-    partial[lane] = vec2<f32>(sum, count);
+    partial[lane] = sum.x + sum.y + sum.z + sum.w;
     workgroupBarrier();
-    var total = vec2<f32>(0.0);
-    for (var k = 0u; k < 64u; k = k + 1u) {
-        total = total + partial[k];
+    for (var stride = READBACK_LANES / 2u; stride > 0u; stride = stride / 2u) {
+        if lane < stride {
+            partial[lane] = partial[lane] + partial[lane + stride];
+        }
+        workgroupBarrier();
     }
-    return total.x / max(total.y, 1.0) * (1.0 / 64.0);
+    return f32(partial[0]) / max(f32(n), 1.0) * (1.0 / 64.0);
 }
 
 // Exposure_AdaptFromReadback: above a readback of 0.01,
 // `E += (ExposureScale / a - E) * ExposureSpeed`, then `E = min(E, ExposureMax)`.
 // Once a frame, not scaled by the frame's length.
-@compute @workgroup_size(64)
+@compute @workgroup_size(256)
 fn cs_adapt(@builtin(local_invocation_index) lane: u32) {
     let a = readback(lane);
     if lane != 0u {
@@ -229,7 +248,7 @@ fn cs_adapt(@builtin(local_invocation_index) lane: u32) {
 // `min(ExposureScale / a, ExposureMax)` rather than walked there from the reset
 // value: a single captured frame would otherwise show an exposure no player
 // sees once the race is a second old. Chosen, not measured.
-@compute @workgroup_size(64)
+@compute @workgroup_size(256)
 fn cs_prime(@builtin(local_invocation_index) lane: u32) {
     let a = readback(lane);
     if lane != 0u {

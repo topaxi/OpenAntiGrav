@@ -47,6 +47,8 @@ pub(super) struct Drawable {
     /// One pair per equation this model's own file authors - see
     /// `mesh_render::Built::authored_pipelines`. Empty on a Pulse model.
     authored_pipelines: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
+    /// `mesh_render::Built::plain_blend`.
+    plain_blend: Option<mesh_render::PlainBlend>,
     /// The depth prepass pair, for the one drawable built with it - Wipeout
     /// HD's circuit. See `mesh_render::Prepass`.
     prepass: Option<mesh_render::Prepass>,
@@ -258,6 +260,7 @@ impl Drawable {
             additive_pipeline,
             unblended_pipeline,
             authored_pipelines,
+            plain_blend,
             stamp_pipeline,
             foliage,
             bind_group: _placeholder,
@@ -381,6 +384,7 @@ impl Drawable {
             additive_pipeline,
             unblended_pipeline,
             authored_pipelines,
+            plain_blend,
             stamp_pipeline,
             foliage,
             prepass,

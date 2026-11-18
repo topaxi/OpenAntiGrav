@@ -236,6 +236,7 @@ fn capture_pixels(
         stamp_pipeline: _,
         foliage: _,
         plain_draws: _,
+        plain_blend: _,
         prepass: _,
         culled: _,
         unwritten: _,

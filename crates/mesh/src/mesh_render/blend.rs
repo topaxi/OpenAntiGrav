@@ -114,3 +114,36 @@ impl<'a> TransparentPipelines<'a> {
         &set[usize::from(draw.culled)]
     }
 }
+
+/// The transparent pipelines again, specialised to the draws of a circuit's blended list that
+/// name no emissive row and no weapon role (`specialise::plain_transparent_draws`), as
+/// [`super::Prepass::plain`] is for its opaque list. Each such draw's `slots` are a subset of
+/// what these pipelines are told, so the picture is the model-wide pipelines'.
+#[derive(Debug, Clone)]
+pub struct PlainBlend {
+    /// Per entry of `Model::transparent_draws`, whether it draws through these.
+    pub draws: Vec<bool>,
+    pub alpha_over: [wgpu::RenderPipeline; 2],
+    pub additive: [wgpu::RenderPipeline; 2],
+    pub unblended: [wgpu::RenderPipeline; 2],
+    pub authored: Vec<((wgpu::BlendState, bool), [wgpu::RenderPipeline; 2])>,
+}
+
+impl PlainBlend {
+    /// These pipelines as a set to [`TransparentPipelines::select`] from.
+    #[must_use]
+    pub fn pipelines(&self) -> TransparentPipelines<'_> {
+        TransparentPipelines {
+            alpha_over: &self.alpha_over,
+            additive: &self.additive,
+            unblended: &self.unblended,
+            authored: &self.authored,
+        }
+    }
+
+    /// Whether transparent draw `index` draws through these.
+    #[must_use]
+    pub fn takes(&self, index: usize) -> bool {
+        self.draws.get(index) == Some(&true)
+    }
+}
