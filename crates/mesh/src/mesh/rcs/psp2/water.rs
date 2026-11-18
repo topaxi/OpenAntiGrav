@@ -16,10 +16,11 @@
 //!
 //! **`fc17`** (Park's `fc17_effects_vscroll_water`, Altima's blended
 //! `fc17_effects_vscroll_wateredge_vertexcol`, `docs/rendering/water.md`, "2048 (Vita)") shares
-//! that frame and light, takes its colour from `Watercolour`, multiplies the highlight by
-//! `SpecularColour` with no gloss from the map's alpha, and scrolls `v` by `Speed * time`. The
-//! edge adds an alpha chain over `Opacity`, the map's alpha and the two vertex colour lanes
-//! `VertexColour1.x` and `.y`, which ride the vertex's second coordinate pair.
+//! that frame and light, takes its colour from `Watercolour` (the uniform as it is, not squared
+//! as a picture is), multiplies the highlight by `SpecularColour` with no gloss from the map's
+//! alpha, and scrolls `v` by `Speed * time`. The edge adds an alpha chain over `Opacity`, the
+//! map's alpha and the two vertex colour lanes `VertexColour1.x` and `.y`, which ride the
+//! vertex's second coordinate pair.
 //!
 //! **Omega's reflective seas** (`reflectplane_mid`, `_edge`, `_pond`, `_dc_seawater_new`,
 //! `_dc_seawater_tow`; `docs/rendering/water.md`, "Omega (PS4)") replace those materials on the
@@ -249,14 +250,6 @@ pub(super) fn plan(
                 .clone()
         })
         .collect();
-    // The edge authors no `Watercolour` (Altima's does not): it borders the same circuit's
-    // `fc15` pond and takes that pond's `ColourConstant`. Chosen, not measured.
-    let pond_colour = decoded
-        .materials
-        .iter()
-        .zip(&laws)
-        .filter(|(_, law)| matches!(law, Some(Law::Pond)))
-        .find_map(|(m, _)| m.param(COLOUR_CONSTANT));
     // Per material: whether it was laid.
     let mut laid_before: Vec<Option<bool>> = vec![None; decoded.materials.len()];
     let mut pictures: std::collections::HashMap<&str, Option<Arc<ModelTexture>>> =
@@ -288,8 +281,7 @@ pub(super) fn plan(
                     })
                     .clone()
             });
-            let (Some(block), Some(map)) = (block(law, material, pond_colour.as_deref()), map)
-            else {
+            let (Some(block), Some(map)) = (block(law, material), map) else {
                 return false;
             };
             let Some(at) = lay(&mut glow.emissive, &block) else {
@@ -325,11 +317,7 @@ pub(super) fn plan(
 
 /// The glow-table entries of one sea material, or `None` where it does not author what its
 /// programs read.
-fn block(
-    law: &Law,
-    material: &psp2::material::Material,
-    pond_colour: Option<&[f32]>,
-) -> Option<Vec<Emissive>> {
+fn block(law: &Law, material: &psp2::material::Material) -> Option<Vec<Emissive>> {
     let scalar = |hash| material.param(hash).and_then(|v| v.first().copied());
     let rgb = |hash| {
         let value = material.param(hash)?;
@@ -352,16 +340,10 @@ fn block(
             ))
         }
         Law::Water | Law::Edge => {
-            let colour = rgb(WATERCOLOUR).or_else(|| {
-                let &[r, g, b] = pond_colour.filter(|_| *law == Law::Edge)?.get(..3)? else {
-                    return None;
-                };
-                Some([r, g, b])
-            })?;
             let taps = Tap::vita_water(scalar(SPEED)?);
             Some(sea_block(
                 law.kind(),
-                colour,
+                rgb(WATERCOLOUR)?,
                 scalar(OPACITY).unwrap_or(1.0),
                 power,
                 rgb(SPECULAR_COLOUR)?,
