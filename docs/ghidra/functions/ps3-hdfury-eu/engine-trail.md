@@ -460,7 +460,7 @@ attaches to *that* craft's hull either way.
 **Implemented 2026-08-24**, and the split is deliberate. `oag_fx::psys`
 plays the disc's own `.POB` - both variants load from the HD archives, pinned
 by `crates/raceplay/tests/hd_engine_flare_ground_truth.rs` - and
-`oag_raceplay::Race::advance_trail_hits` fires it. **Nothing about the effect
+`oag_raceplay::RaceView::advance_trail_hits` fires it. **Nothing about the effect
 is invented; only the moment it fires is.** Three things there are this
 engine's and are named in that method's own doc rather than buried: the
 geometric test (**any of the craft's own authored `Ship Collision Fx` locators
@@ -676,7 +676,7 @@ the craft's velocity the same way. Our HD collision sparks are not carried.
 (`0x494c5254`, `0x524c5254`). It spawns through `FUN_017136d0` with no scale, writes
 the craft's velocity times `0.016666668`, and stores `1.0 - param_1` into the same two
 slots. The strings `WO_TRAIL_HITSHIP(_RED)(.POB)` are at `0x01837a37`-`0x01837b50`.
-Ours is title-generic in `Race::advance_trail_hits`; an Omega race was not run here.
+Ours is title-generic in `RaceView::advance_trail_hits`; an Omega race was not run here.
 
 ## The trail-hit burst as a matched pair (2026-11-08, `hd-trail-hit-fidelity`)
 

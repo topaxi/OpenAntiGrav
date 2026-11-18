@@ -334,7 +334,7 @@ the billboard fallback it replaces, and a regression by CLAUDE.md's own
 (`false`) now gates the ring/sphere/halo trio's *draw* off while every other
 Plasma line here keeps running unaffected: the bolt's own head, both
 `WO_PLASMA_LIGHTNING_EXPAND`/`_COLLAPSE` triggers, and this trio's own
-age/ease tracking (`Race::advance_plasma_blast_models`) - so the next reader
+age/ease tracking (`RaceView::advance_plasma_blast_models`) - so the next reader
 only has to flip the constant once the scale composition above is
 understood. The load report now says so explicitly on an HD source: "HD
 plasma explosion models loaded, not drawn: the recovered scale ease

@@ -68,9 +68,9 @@ after the player's, from slot `i`'s craft. Camera state is view-side: no tick re
 it back, and a unit test pins `RaceSim::state_hash` equal with and without a split
 while every camera is read.
 
-The draw selects a view with `Race::set_viewpoint(slot)` (a `Cell`, because
+The draw selects a view with `RaceView::set_viewpoint(slot)` (a `Cell`, because
 `Scene::render` takes `&Race`) and every camera accessor - view, field of view,
-visibility sections, LOD eye, the chunk set - follows it. `Race::reset_viewpoint`
+visibility sections, LOD eye, the chunk set - follows it. `RaceView::reset_viewpoint`
 puts the player's back. Chosen, not measured:
 
 - Every extra view flies the **player's own `<ExternalCameraFar>` rig**, whatever
@@ -82,9 +82,9 @@ puts the player's back. Chosen, not measured:
   effects (the shake and its phase draw, the spark pool, the cooldown and the hull anchor): the
   player's is `RaceView::contact`, an extra view's sits beside its chase camera in
   `Viewpoints::contact` and is stepped by the same `ContactFx::advance` from that seat's craft
-  and wall contact. The seat's camera takes its shake when drawn (`Race::extra_view`,
+  and wall contact. The seat's camera takes its shake when drawn (`RaceView::extra_view`,
   `view_shake_rotation`, so the blur takes it out of its velocities); every spark pool is drawn
-  in every view, as particles in the world. Routed to the seat by `Race::seat_contact_mut`:
+  in every view, as particles in the world. Routed to the seat by `RaceView::seat_contact_mut`:
   the weapon-hit shake, the explosion shakes and the shake cancel on the seat's own craft.
   The field of view's speed widen **and the boost kick** follow the viewed craft (`Cam::boost_kick`,
   the player's rule from that craft's `pad_timer`), the borrowed boost zoom pulse is the seat's
@@ -103,7 +103,7 @@ puts the player's back. Chosen, not measured:
   shows neither, and with no hit the frames are `cmp`-identical to before for one, two and
   four views.
 - **The flyby plays full screen and the split starts when it ends**
-  (`Race::views_drawn` is one while `Race::in_intro`), with the track panel over the
+  (`Race::views_drawn` is one while `RaceView::in_intro`), with the track panel over the
   whole screen as in a one-player race. The extra cameras keep stepping through the
   flyby, so each is settled on its craft when the split appears. A flyby that never
   begins (a headless capture without `--intro-ticks`) leaves the split alone.
@@ -946,7 +946,7 @@ are `cmp` equal to main's, and the `mapped` redraw per view is the same code on 
 per point").
 
 *The `mapped` map per view.* The depth map is fitted on the craft its view follows
-(`Race::viewed_slot`), not on slot 0 for every view: each later view redraws the map itself, in
+(`RaceView::viewed_slot`), not on slot 0 for every view: each later view redraws the map itself, in
 its own encoder (each view is its own submission, and a queue write lands before the submission
 that follows it, so no view's fit reaches another's draws). The alternative, one map that fits
 every viewed craft, loses texels as the craft spread (a 140 unit box becomes the whole spread

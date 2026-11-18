@@ -201,7 +201,7 @@ the stage and the expendable rule are title-blind, and their burst rate is uncha
 
 With `graphics.trail_hits` on, the lent `WO_TRAIL_HITSHIP` is redrawn in the hue of the ribbon
 the craft was struck in, at the burst's own brightness (`oag_fx::psys::Tint`,
-`Race::trail_hit_tint`). **A derivation, not a measurement.** HD picks its burst by the ribbon's
+`RaceView::trail_hit_tint`). **A derivation, not a measurement.** HD picks its burst by the ribbon's
 owner: `WO_TRAIL_HITSHIP` in a blue ribbon, `_RED` in a red one
 (`docs/ghidra/functions/ps3-hdfury-eu/engine-trail.md`, the call-site table: the variant byte is the owner's `+0x7d2c`).
 Pulse and Pure author no burst, so the lent one would otherwise be HD's regardless of their

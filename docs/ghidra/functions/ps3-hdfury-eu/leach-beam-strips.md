@@ -368,7 +368,7 @@ and 0.96 below the body origin on the Mirage). The Airbrake nodes scale the same
 
 **What was wrong.** `0x001169f8` multiplies the raw world row 1 by -1.7 (see the disassembly:
 no normalise), so the push is `1.7 * 0.75 = 1.275`. Ours normalised the row and pushed 1.7.
-Fixed (`Race::leach_anchor`): the push uses the model matrix's own scaled row. The no-locator
+Fixed (`RaceView::leach_anchor`): the push uses the model matrix's own scaled row. The no-locator
 fallback uses the body's `+0x1e0`, unit length, so it keeps 1.7 (tests
 `oag_raceplay::leach_strip::tests`, `oag_fx::leach_strip::tests`). The shift is 0.425 units,
 along the hull's up axis, at the near end of every beam.

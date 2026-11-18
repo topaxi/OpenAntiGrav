@@ -79,7 +79,7 @@ Frames are in a scratch directory, not kept (gitignored):
 - ~~**`CockpitHitFx_Arm_q` (`0x088eeaf8`) is not drawn.**~~ Read and drawn 2026-10-26
   (`oag_fx::cockpit_hit`, see `docs/ghidra/functions/psp-pulse-usa/cannon-quake-leachbeam.md`,
   "Wired 2026-10-26 (quake-feel-wire lane)"). `Camera_ArmShake` on weapon hits
-  (`Ship_Damage`, same block) is ported too (`Race::arm_weapon_hit_shake`).
+  (`Ship_Damage`, same block) is ported too (`RaceView::arm_weapon_hit_shake`).
 - **HD:**
   - The Cannon sparks from the weapon side. `Cannon_ApplyCraftHit`
     (`0x0010f730`) calls `Ship_DispatchCollisionFx(..., 1)`, which spawns

@@ -233,7 +233,7 @@ lane's report is not reproduced: this matched-pose pair gives 25.5 % against
 
 What was built and reverted, 2026-10-01, for the PS2 source only: `oag_display::space::camera_authored_aspect`
 returns `640/448` for the PS2 and the PSP's `480/272` for everything else, and
-`Race::vertical_fov` fits to it. It changes only a window **narrower than the
+`RaceView::vertical_fov` fits to it. It changes only a window **narrower than the
 PSP's shape** (`fit_vertical_fov` keeps the authored vertical field at or above
 it, whichever constant is used), so the default presentation, a `30:17`
 viewport, is unchanged and still shows the hull at `0.81` of the original's

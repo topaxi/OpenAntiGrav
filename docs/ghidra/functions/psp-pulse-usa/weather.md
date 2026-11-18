@@ -254,7 +254,7 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
 
 - **Hits.** Once a tick, in the open only (no hits while the box sits at a covered
   section's anchor, as the original's cover says, and **none whose own point lies in a
-  covered section**: `Race::point_is_under_cover` takes the section of the spline sample
+  covered section**: `RaceView::point_is_under_cover` takes the section of the spline sample
   nearest the hit and tests it with `Section_IsCovered`'s mask, so the drops the open
   box throws past a tunnel mouth splash nowhere under the roof; a point the spline cannot
   place counts as open, chosen), each live drop's last move in the
@@ -293,7 +293,7 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   measured. At `original` `Fog::wet` is exactly `0.0`; the shader takes a branch on it, so
   the frame is byte-identical (8 of 8 `cmp` on `14_Track` and `07_Track` at ticks 600,
   1000, 1500 and 2000).
-- **The road spray** (`scenery_fx::spray`, `Race::spray_emitters`). The original's craft
+- **The road spray** (`scenery_fx::spray`, `RaceView::spray_emitters`). The original's craft
   throw no spray off a wet road either; ours (chosen, not measured, no confidence score).
   At `enhanced` every racing craft, player and AI, throws small translucent droplets from
   the road under its two rear corners (a ray along its own down axis within 2.5 hull
@@ -302,7 +302,7 @@ touch geometry (`Modifier_WrapBox` only wraps and blows them), so it has no spla
   Droplets are born anywhere along the path the craft covered that tick, carry a tenth of
   its speed and are stopped by drag, kick up 1 to 3 units a second and live 0.35 s at
   0.15 half-size and at most 0.4 alpha: a fine mist, not a cloud. Dry road (rain not yet
-  fallen, snow, or a covered section by `Race::point_is_under_cover`) throws nothing.
+  fallen, snow, or a covered section by `RaceView::point_is_under_cover`) throws nothing.
   Capped at `spray::CAPACITY` (320 droplets, 1,920 vertices against the particle buffer's
   49,152), own random stream, drawn through the splash art's dot cell into the alpha list
   from the craft's between-ticks pose; nothing runs at `original`. The spawn is stepped per

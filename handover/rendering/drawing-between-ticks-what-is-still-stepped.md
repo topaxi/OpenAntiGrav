@@ -103,8 +103,8 @@ what happened to it. "Landed" means it draws between ticks now.
 | --- | --- | --- | --- | --- |
 | Camera view (chase spring, cockpit, flyby override, destroy and spectator cameras, impact shake) | `Race::tick`, `tick_intro`, `tick_cosmetics` | `Race::view`, `view_unshaken`, so every camera reader | continuous | landed |
 | Camera cut, view cycle, pose imposed or lifted | `camera_cuts`, `set_camera_view`, `camera_override` | snap keys | discrete | snaps |
-| FOV speed widen and boost kick | body velocity, `boost_kick` | `Race::vertical_fov` | continuous | landed |
-| Craft model matrix | physics | `Race::ship_model_matrix_of` | continuous | landed |
+| FOV speed widen and boost kick | body velocity, `boost_kick` | `RaceView::vertical_fov` | continuous | landed |
+| Craft model matrix | physics | `RaceView::ship_model_matrix_of` | continuous | landed |
 | Craft respawn, active | `sim.respawns`, `ships[].active` | snap keys | discrete | snaps |
 | Blob shadow ray | body pose | `Race::shadow_placements` | continuous | landed (`body_between`) |
 | Exhaust flare sprite, HD sprite position | `nozzle_of` | exhaust gather | continuous | landed (nozzle on the blended hull) |

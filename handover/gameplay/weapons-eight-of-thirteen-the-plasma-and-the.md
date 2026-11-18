@@ -724,7 +724,7 @@ still open, most player-visible first:
 **Fixed 2026-08-26: a laid mine or bomb rode the Rocket's flare from the
 moment it landed.** Reported from play as "the mines are animating the
 explosion when dropped, instead of when detonating (only tested via
-pulse)". `Race::advance_projectile_flares` (`crates/raceplay/src/weapons.rs`)
+pulse)". `RaceView::advance_projectile_flares` (`crates/raceplay/src/weapons.rs`)
 gated on `projectile.kind.is_none()` - true for *any* live projectile - to
 decide who rides a [`ROCKET_FLARE_EFFECT`] (`WO_ROCKET_FLARE`) instance. That
 effect's emitters are looping (see `mine.md`'s neighbour reading on
@@ -758,7 +758,7 @@ Missile carries no located model or locator set here the way the Rocket's
 `WO_MISSILE_EXPLO` and `WO_MISSILE_BOUNCE` reasons in
 `crates/raceplay/tests/psys_inventory_ground_truth.rs` were also stale ("the
 Missile fires nothing yet" - it does) and are corrected to name the real gap:
-`Race::ignite_blast` reuses the Rocket's own explosion pair for every
+`RaceView::ignite_blast` reuses the Rocket's own explosion pair for every
 detonating projectile rather than reading which file each weapon authors.
 
 ## 2026-09-08: the LeachBeam built - thirteen of thirteen, less the deferred Repulser
@@ -968,7 +968,7 @@ find the consumer rather than to argue about the recollection.
 `Plasma_SpawnDetonation` (`0x0886ac88`) at the bolt's position;
 `PlasmaBlast_Construct` (`0x0885fd90`) spawns the file with the fourcc `PLFL`
 and **also loads three models** - `pulse_plasma_halo1.vex` and two
-`pulse_plasma_hemisphere*.vex` - orienting them to the track. `Race::blast_for`
+`pulse_plasma_hemisphere*.vex` - orienting them to the track. `RaceView::blast_for`
 plays the particle system; **the three models are recorded and not drawn**, and
 that is the honest partial rather than a substitute.
 
@@ -1102,7 +1102,7 @@ unresolved vector math.
 
 **Drawn.** `crates/raceplay/src/blast_models.rs` (new module) tracks a
 render-side pool of live blasts - position and age only, `RaceView` state,
-never hashed - spawned from `Race::ignite_blast` on every Plasma
+never hashed - spawned from `RaceView::ignite_blast` on every Plasma
 detonation and aged in `Race::tick`. `crates/raceplay/src/scene.rs` and
 `crates/raceplay/src/scene/weapon_models.rs` load and draw
 `PLASMA_BLAST_HALO_MODEL_ENTRY`/`_HEMISPHERE1_/_HEMISPHERE2_MODEL_ENTRY`
@@ -1204,9 +1204,9 @@ suite (931 passed).
     Bomb's teardown function is a distinct one from `Mine_SpawnExplosion`'s
     and has not been read.
 - ~~**Give the Missile its own detonation and bounce effects.**~~ **Done
-  2026-08-26.** `Race::blast_for` now takes `kind` and maps `Missile` to
+  2026-08-26.** `RaceView::blast_for` now takes `kind` and maps `Missile` to
   `MISSILE_EXPLO_EFFECT` (`WO_MISSILE_EXPLO`, one file whatever it hit -
-  `Missile_SpawnExplosion`, `0x08868d50`); `Race::ignite_missile_bounces`
+  `Missile_SpawnExplosion`, `0x08868d50`); `RaceView::ignite_missile_bounces`
   reads a before/after snapshot of `Projectile::bounces` (a bounce never
   reaches `Impact`, so there is nothing else to hang the trigger off) and
   plays `WO_MISSILE_BOUNCE` on every wall glance, per `missile.md`'s
@@ -1320,7 +1320,7 @@ correct consequence of the authored blend mode, not an override. The whitening
 term removed from `psys.wgsl` on 2026-08-12 is confirmed still removed; palette
 RGB is sampled with alpha from the separate alpha channel rather than the
 palette's own alpha byte; blend classes map 2 -> Additive and 3 -> AlphaOver;
-and `Race::advance_quake_visual`'s `(right - left).length() / 50.0` matches
+and `RaceView::advance_quake_visual`'s `(right - left).length() / 50.0` matches
 `Quake_Update`'s own recovered scale formula.
 
 **One gap recorded rather than glossed:** at distance (`/tmp/quake-fix-t40.png`,
@@ -1863,7 +1863,7 @@ tests; `Pipeline` half modelled on `exhaust::Pipeline` but far smaller - one
 texture, one blend, no trail/HD complexity), loaded in
 `race::assets::leach_beam_texture` on the same "absence is reported, not
 fatal" terms every optional asset here follows, and wired into
-`Scene`/`RaceView`/`Race::advance_leach_beam_ribbon` the same way the
+`Scene`/`RaceView`/`RaceView::advance_leach_beam_ribbon` the same way the
 exhaust ribbon and its own `Rng` are. Verified as a player would: headless
 `--race --mode single_race --give leachbeam --hold cross --press square`
 captures at several tick counts show a locked beam's ribbon as a bright

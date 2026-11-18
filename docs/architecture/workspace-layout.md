@@ -325,6 +325,23 @@ builds. The view phase checks, in a debug build, that the HUD's lock grid and la
 the drawn far chase rig and `vex_geometry` equal what the sim phase gave the
 simulation.
 
+**The view work the tick calls (2026-11-18).** Every method the tick reaches that does
+view work (effects, camera, sparks, exhausts, trails, blasts, shield flashes, HUD
+messages, the reticle, the recording and the presentation journal) is a `RaceView`
+method, or a `Stage` method where it also reads the recording, the journal or whether
+the tick draws (`stage.rs`: `Stage` is the view, the recording and the journal borrowed
+apart from `SimRace`, built with `stage!`). Each takes the `SimRace` it reads as an
+argument and is called at the statement the old `Race` method or inline view block
+stood at; the view statements that stood inline are named hooks in `stage/hooks.rs`.
+Cues stay the simulation's output: a view method that raises one takes the tick's queue
+as `cues`, lent by `SimRace::lending_cues`, and the two view decisions that raise a cue
+(the HUD message boards, the seat's shield edge) return it for the tick to queue.
+`before_projectile_step` reads the projectile pool off `World` before the step for the
+drawn bounce and blast. No simulation statement moved: the golden hashes, the ADR-0087
+restore sweep and a 59-artefact headless set (Pulse PSP, HD and 2048 frames with their
+`state_hash`, WAV dumps and a ghost) are identical before and after. Other crates read
+the view through `Race::view_state()`, e.g. `race.view_state().camera_position(&race.core)`.
+
 ## Which GPU the tests use
 
 Every in-process GPU test but the capture ones below gets its adapter from

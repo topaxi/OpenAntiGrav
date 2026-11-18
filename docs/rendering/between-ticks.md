@@ -38,10 +38,10 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
 
   | Accessor | What follows it |
   | --- | --- |
-  | `Race::view`, `Race::view_unshaken` | every camera reader: the sky, the fog and PVS eye, opaque sorting, billboard axes, the lock-on reticle, the LOD eye, the motion blur's shake term |
-  | `Race::vertical_fov` (the speed widen and the boost kick) | the projection and the LOD switch |
-  | `Race::ship_model_matrix_of` | hull, shield shell and cockpit sphere, engine flame, boost plume, absorb overlays, wrecks, shine, the shadow map's casters and blob silhouettes, the exhaust nozzle, HD's engine lights |
-  | `Race::body_between` | the blob shadow's ray, which reads the body's own pose (no barrel roll, no model yaw) |
+  | `RaceView::view`, `Race::view_unshaken` | every camera reader: the sky, the fog and PVS eye, opaque sorting, billboard axes, the lock-on reticle, the LOD eye, the motion blur's shake term |
+  | `RaceView::vertical_fov` (the speed widen and the boost kick) | the projection and the LOD switch |
+  | `RaceView::ship_model_matrix_of` | hull, shield shell and cockpit sphere, engine flame, boost plume, absorb overlays, wrecks, shine, the shadow map's casters and blob silhouettes, the exhaust nozzle, HD's engine lights |
+  | `RaceView::body_between` | the blob shadow's ray, which reads the body's own pose (no barrel roll, no model yaw) |
   | `Race::projectile_between` (inside the weapon model matrices) and the billboard fallback | every live projectile body, HD's rocket point lights |
   | `Race::ghost_draw_matrix` | the replay ghost |
   | `Race::trail_head_of` | the PSP ribbon and the HD tube: the nozzle as drawn at age 0, every older sample at its fractional age (below) |
@@ -77,7 +77,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   the simulation's (`RaceSim::locks`). Each tick keeps which craft the reticle
   followed and where the tick projected it; a draw between ticks projects that
   craft again with the blended camera and the blended body
-  (`Race::body_between`) and moves the whole reticle by the difference
+  (`RaceView::body_between`) and moves the whole reticle by the difference
   (`Sight::shifted`, a draw-only copy). A locked reticle, whose centre is the
   target's projection, so sits on the craft as drawn; the law's own chase while
   it seeks still steps per tick, and the law's one-tick lead (`2 * new - old`)
@@ -90,7 +90,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   shell's and cockpit sphere's swell (`Race::shield_scale_of`; the shell's
   flicker is a per-frame random draw in the original and stays stepped) and
   the HD sprite flare's nozzle axis (`Race::hd_sprite_quad` reads
-  `Race::body_between`). The previous tick's flap levels and swell ride in the
+  `RaceView::body_between`). The previous tick's flap levels and swell ride in the
   craft's captured pose. The cannon muzzle flash stays stepped: a flash, drawn
   for a tick where it fires.
 - **Particles move between ticks on the GPU** (2026-10-27). Every `.pob`
@@ -103,7 +103,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
   nothing per frame (`crates/fx/src/psys/between_ticks.rs`). A particle born
   this tick draws at its spawn point at every alpha and one that died this tick
   is gone: spawns and deaths stay discrete. Every tick path first zeroes every
-  pool's move (`Race::hold_particles_still`), so a pool the path does not
+  pool's move (`RaceView::hold_particles_still`), so a pool the path does not
   advance (the flyby, the cosmetic ticks) draws still rather than replaying a
   stale move. A move past 64 units draws where it lands. A `from_spawn` streak's
   tail stays on its spawn point. Size, colour, sprite frame and roll still step
@@ -119,7 +119,7 @@ Code: `crates/raceplay/src/between_ticks.rs`. Tests: its unit tests in
 
 A blend is skipped, and the current tick drawn as it is, across:
 
-- for the camera: a cut (`Race::camera_cuts`: the player's respawn, the destroy
+- for the camera: a cut (`RaceView::camera_cuts`: the player's respawn, the destroy
   and spectator cameras, the flyby's shots), a view cycle, or a pose imposed or
   lifted (the flyby starting and ending);
 - for a craft: its own respawn, or a change of whether it is racing;

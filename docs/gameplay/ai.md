@@ -4743,7 +4743,7 @@ and no committed hash moved - this sweep only reads.
 and nothing on screen: seven craft drove the whole circuit dark.
 
 `Race::exhaust` is now `[Exhaust; MAX_SHIPS]`, advanced per craft in
-`Race::advance_exhausts` off *that* craft's thrust and *that* craft's speed - so
+`RaceView::advance_exhausts` off *that* craft's thrust and *that* craft's speed - so
 an opponent lifting for a corner dims while the leader on the straight does not.
 Each craft also lays its own ribbon from its own `engine_flare` locator, carried
 through its own pose, and arms its own boost plume: at the speed pad

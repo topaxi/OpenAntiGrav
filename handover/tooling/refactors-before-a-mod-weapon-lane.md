@@ -198,7 +198,7 @@ are unmoved.
 ### 5. One camera FOV chain (sweep item 6)
 
 - **Where.** The boost-kick widen is written twice, identically:
-  `crates/raceplay/src/camera.rs:744` (in `Race::vertical_fov`, `:683`) and
+  `crates/raceplay/src/camera.rs:744` (in `RaceView::vertical_fov`, `:683`) and
   `crates/raceplay/src/viewpoint.rs:467` (in `extra_vertical_fov`, `:449`):
   `2.0 * ((authored * 0.5).tan() * widen).atan()`. Both then call
   `oag_render::camera::fit_vertical_fov` (`crates/render/src/camera/mod.rs:75`).

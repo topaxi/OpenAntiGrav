@@ -504,7 +504,7 @@ effort on either contradiction above.
 
 **1. Do not apply any further factor to `ship_model_matrix`.** The mesh is right.
 
-**2. `Race::projection` implements the term, as of 2026-08-09.**
+**2. `RaceView::projection` implements the term, as of 2026-08-09.**
 `SPEED_FOV_GAIN_DEG` in `crates/raceplay/src/lib.rs`, added to the authored degrees
 before the player's fov setting, which is where `Ship_UpdateCameraRigs` adds it.
 It composes with `BoostFovKick` - still this project's own invention - and does

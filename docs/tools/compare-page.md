@@ -1410,7 +1410,7 @@ player's nose and the craft ahead's tail, a craft-to-craft hit five ticks before
 Ours drew nothing there for two reasons: a pair contact threw no sparks at all (only wall contacts did),
 and a posed frame runs no tick, so a hit that happened before the frame cannot happen in it.
 
-- **Pair contacts spark now** (`Race::throw_contact_spark`), so a race that runs ticks shows them with no flag.
+- **Pair contacts spark now** (`Stage::throw_contact_spark`), so a race that runs ticks shows them with no flag.
 - **A posed capture is seeded, not re-simulated.** `scripts/psp-contact-fx-read.py` loads the state, runs
   to the pair's `--target-clock` (the pair script's own functions) and logs the original's
   `ShipCollisionFx_Trigger` calls over the last 0.6 s, keeping those whose instance gate had opened (the

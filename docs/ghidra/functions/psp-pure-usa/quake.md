@@ -88,7 +88,7 @@ wash. Now, through `oag_title::Effects`:
 - **`extents`** lists `WO_QUAKE` (the HD mechanism, `crates/hd/src/effects.rs`): the three
   emitters spread edge to edge across the road at their authored size.
 - **`quake_look`** (new, `oag_title::QuakeLook`): `up: World`, `lift: 10.0`, `flash: true`,
-  `Origin::Measured`. `Race::advance_quake_visual` takes the frame's `Y` and the anchor lift
+  `Origin::Measured`. `RaceView::advance_quake_visual` takes the frame's `Y` and the anchor lift
   from it; every other title keeps the track's up and no lift (`QuakeLook::track`).
 - **The wash** is `oag_fx::flash::QUAKE` through a `ScreenFlash::only(QUAKE)`: a Pure race
   draws no other flash (its Rocket, Bomb and Mine kinds are unread), so the flash node
