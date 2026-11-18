@@ -288,11 +288,17 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // (`oag_mesh::mesh::factor_sun_mask`); only a hull (`receives_shadow` not 2, the
     // track's) reads it as one - the track keeps the additive reading until it is
     // measured against its own references.
-    let marked = in.sun_mask < 0.0;
+    //
+    // **Both flags are tested half a unit inside their range, not on the boundary.** The mask
+    // is interpolated across the triangle, and a surface whose every vertex is fully occluded
+    // carries exactly `2.0` (nova) or `-1.0` (marked), so rounding in the interpolation lands
+    // either side of a boundary test pixel by pixel: the occluded surface then reads as lit
+    // wherever it falls on the wrong side, a binary speckle on a smooth surface.
+    let marked = in.sun_mask < -0.5;
     let colour_factor = marked && receives_shadow != 2.0;
     // `sun_mask` at 2 or above marks a 2048 vertex-lit surface (`NOVAColor`): `colour` is its
     // baked light and `sun_mask - 2` the sun's mask (oag_mesh::mesh::rcs::psp2).
-    let nova_vertex = in.sun_mask >= 2.0;
+    let nova_vertex = in.sun_mask >= 1.5;
     let sun_mask = select(
         select(in.sun_mask, -1.0 - in.sun_mask, marked),
         in.sun_mask - 2.0,
