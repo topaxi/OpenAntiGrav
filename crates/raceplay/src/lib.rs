@@ -756,14 +756,20 @@ pub use oag_gameplay::spawn::{box_inertia, capped_spawn_height, rig_spawn_height
 
 /// A race in progress: the world, the track it is on, and the camera behind it.
 ///
-/// **Two halves and nothing else.** [`RaceSim`] decides what happens;
-/// [`RaceView`] exists so it can be seen and heard, so no renderer handle can reach the simulation. The eighteen `impl Race` blocks are unchanged and stay
-/// here: most of them read both halves - drawing an exhaust needs a ship's
-/// position, and raising a cue needs the bank - and that is what `Race` is for.
-/// The one that did not, [`RaceSim::state_hash`], moved.
+/// **Two halves, and the few things that are neither.** [`RaceSim`] decides what
+/// happens; [`RaceView`] exists so it can be seen and heard, so no renderer handle can
+/// reach the simulation. Beside them sit the recording, the replay's presentation
+/// journal, the speed-plan job and the quiet flag of [`Race::tick_sim_only`]: none is
+/// either half's state.
 ///
-/// Neither half is a crate yet. See [`sim`] for the two fields standing between
-/// `RaceSim` and being one.
+/// A method that reads and writes the simulation alone is an `impl RaceSim` method,
+/// reached as `race.sim.x()` ([`RaceSim::state_hash`] among them). The methods on
+/// `Race` read both halves - drawing an exhaust needs a ship's position, and raising a
+/// cue needs the bank - or one of the fields beside them, and that is what `Race` is
+/// for.
+///
+/// Neither half is a crate yet. See [`sim`] for what stands between `RaceSim` and
+/// being one.
 #[derive(Debug)]
 pub struct Race {
     /// Everything that decides what happens next: the world, the track, the

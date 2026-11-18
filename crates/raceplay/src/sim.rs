@@ -10,12 +10,31 @@
 //!
 //! # What it is not yet
 //!
-//! This is not a crate, and two fields are why. `cues` and its two companions
-//! are `oag_sound::sfx` types - plain data (a `Cue` and a slot index), but
-//! declared inside a module that reaches `oag_audio`, so they would have to move
-//! down first. Everything else is `oag_gameplay`, `oag_physics`, `oag_ai`,
-//! `oag_race`, `oag_tables`, `oag_vex`, `oag_title` or a primitive, and would
-//! travel as-is.
+//! This is not a crate. The cue queues are not what stands in the way: `cues`,
+//! `mod_sounds`, `announcements` and `class_announcements` are `oag_gameplay::cue` types
+//! and plain integers. What does:
+//!
+//! - **State a tick writes outside this struct.** The fields the lean
+//!   [`RaceView`](super::RaceView) keeps without the `view` feature (the seat, the person
+//!   names, the slot teams, the results board and its revision, the run statistics and
+//!   `wreck_ended_tick`) sit beside `RaceSim`, not in it, and the tick writes some of them.
+//!   ADR-0087 decision 9 rests on two of them, the results capture and the wreck's end tick,
+//!   living outside `RaceSim`.
+//! - **The tick calls the view in the middle.** [`Race::tick`](super::Race::tick) and the
+//!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
+//!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
+//!   message board decides whether a `Cue::Message` is raised. The methods that read and
+//!   write this half alone are `impl RaceSim` methods, reached as `race.sim.x()`; the rest
+//!   stay on `Race`.
+//! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
+//!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
+//!   crate.
+//! - **The load.** `load` builds this struct, and reads `oag-trackfile`, `oag-source` and
+//!   `oag-assets` to do it; a gameplay crate may depend on none of them.
+//!
+//! Every other field is an `oag_gameplay`, `oag_physics`, `oag_ai`, `oag_race`,
+//! `oag_tables`, `oag_vex` or `oag_title` type, a primitive, or a type from one of this
+//! crate's simulation modules, and would travel with them.
 //!
 //! # The hash
 //!
@@ -28,8 +47,7 @@ use super::*;
 /// The half of a race that decides what happens next.
 ///
 /// Reached as `Race::sim`. Holds no renderer, audio or windowing type - see the
-/// module doc comment for the two that stand between this and a crate of its
-/// own.
+/// module doc comment for what stands between this and a crate of its own.
 ///
 /// # Why it is `Clone`
 ///

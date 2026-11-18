@@ -245,9 +245,9 @@ headless verification possible.
 
 `oag-raceplay` has a default-on **`view`** feature. Off, the crate is the
 simulation half of a race and nothing else: `load` reads what the simulation
-reads, `Race::start` builds the `RaceSim` and a `RaceView` of five fields (the
-results board, the slot teams, the seat, the wreck's end tick, the run
-statistics), and every tick runs the way `Race::tick_sim_only` runs one
+reads, `Race::start` builds the `RaceSim` and a `RaceView` of the few fields a
+headless host still reads (the results board and its revision, the slot teams,
+the seat, the person names, the wreck's end tick, the run statistics), and every tick runs the way `Race::tick_sim_only` runs one
 (`Race::draws()` is `cfg!(feature = "view") && !quiet`). `oag-render`, `oag-fx`,
 `oag-gpu`, `oag-hud`, `oag-input`, `oag-livery`, `oag-mesh`, `oag-post`,
 `oag-present`, `oag-sound`, `oag-ui`, `oag-ui-screens`, `wgpu`, `winit` and
