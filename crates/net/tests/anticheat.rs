@@ -23,8 +23,8 @@ use oag_net::online::server::Ruling;
 use web_time::Duration;
 
 use crate::loopback::headless;
-use crate::online::config;
 use crate::online::{Lab, Racer, fly_once, thread_runner};
+use crate::online::{config, edition};
 use crate::player_host::{alive, hosted_room_starts_keyed, offer_room, player_host};
 use oag_net::wire::online::Refusal;
 
@@ -57,6 +57,17 @@ fn hosted_by(
     ban_file: Option<std::path::PathBuf>,
     keys: [Arc<PlayerKey>; 2],
 ) -> Hosted {
+    hosted_built(cheat, max_ticks, ban_file, keys, &edition().build)
+}
+
+/// [`hosted_by`] with the build Ann and Bob run given; the lobby's own is [`edition`]'s.
+fn hosted_built(
+    cheat: Cheat,
+    max_ticks: u32,
+    ban_file: Option<std::path::PathBuf>,
+    keys: [Arc<PlayerKey>; 2],
+    build: &str,
+) -> Hosted {
     let mut lab = Lab::with_config(
         oag_net::online::server::Config {
             ban_file,
@@ -64,6 +75,12 @@ fn hosted_by(
         },
         thread_runner(60),
     );
+    lab.edition.build = build.to_string();
+    if build != edition().build {
+        // The hello refuses another build of a pressing the lobby races (`Rooms::connect`), so
+        // the host's other build is of a pressing the lobby does not.
+        lab.edition.platform = "PS2".into();
+    }
     lab.server
         .set_referee(Arc::new(|params| Ok(headless(params))));
     assert_eq!(lab.join_keyed("ann", keys[ANN].public()), ANN);
@@ -449,4 +466,74 @@ fn a_guest_that_claims_a_forgery_of_an_input_it_sent_is_dismissed_and_bans_nobod
     }
     assert!(race.lab.people[BOB].left.is_none(), "the room stays open");
     assert_eq!(race.lab.server.judgements(), 0, "no re-simulation");
+}
+
+const OTHER_BUILD: &str = "0.2 (def)";
+
+/// Steps until Bob's report on the host is judged, and returns the verdict.
+fn bobs_verdict(race: &mut Hosted) -> Verdict {
+    let started = std::time::Instant::now();
+    loop {
+        assert!(
+            started.elapsed() < Duration::from_secs(30),
+            "no ruling: {:?}",
+            race.lab.server.rulings()
+        );
+        race.step();
+        if let Some(ruling) = race.judged().into_iter().find(|(who, _)| who == "bob") {
+            return ruling.1;
+        }
+    }
+}
+
+#[test]
+fn a_host_of_another_build_than_the_lobby_is_not_judged_by_a_re_simulation_and_not_struck() {
+    let file = ban_file("other-build");
+    let keys = [
+        Arc::new(PlayerKey::generate().expect("a key")),
+        Arc::new(PlayerKey::generate().expect("a key")),
+    ];
+    let mut race = hosted_built(Cheat::Speed, 100_000, Some(file.clone()), keys, OTHER_BUILD);
+    match bobs_verdict(&mut race) {
+        Verdict::NotCheckable(why) => assert!(
+            why.contains("the host runs another build") && why.contains(OTHER_BUILD),
+            "{why}"
+        ),
+        other => panic!("a build difference is not proof: {other:?}"),
+    }
+    assert_eq!(race.lab.server.judgements(), 0, "no re-simulation spent");
+    for _ in 0..60 {
+        race.step();
+    }
+    assert!(race.lab.people[BOB].left.is_none(), "the room stays open");
+    let text = std::fs::read_to_string(&file).unwrap_or_default();
+    assert!(
+        lines_on(&file, "strike", &race.keys[ANN]).is_empty(),
+        "no strike: {text}"
+    );
+    assert!(
+        lines_on(&file, "key", &race.keys[ANN]).is_empty(),
+        "no ban: {text}"
+    );
+}
+
+#[test]
+fn a_host_of_another_build_that_hides_a_signed_input_is_still_struck() {
+    let mut race = hosted_built(
+        Cheat::Forge,
+        100_000,
+        None,
+        [
+            Arc::new(PlayerKey::generate().expect("a key")),
+            Arc::new(PlayerKey::generate().expect("a key")),
+        ],
+        OTHER_BUILD,
+    );
+    let reason = race.until_closed();
+    assert!(reason.contains("its host was caught cheating"), "{reason}");
+    assert!(
+        matches!(bobs_verdict(&mut race), Verdict::Proven(_)),
+        "{:?}",
+        race.judged()
+    );
 }

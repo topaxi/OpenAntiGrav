@@ -148,7 +148,10 @@ process judges nothing before it sent.
    resync sends the lobby the tick records since tick 0 and the signed checkpoint.
 3. **The lobby re-simulates** from the job it issued (about a second for a five-minute race) and
    strikes the host's key on a proven mismatch (decision 6 turns strikes into a ban). Where it lacks the content, agreeing reports from several members
-   are evidence, not proof.
+   are evidence, not proof. The same holds when the host's build (the hello's `Edition::build`)
+   differs from the lobby's: the lobby's re-simulation is of its own build, so a determinism
+   difference between builds must never strike an honest host. A forged-input challenge (item 4)
+   needs no re-simulation and still strikes.
 4. **Player-signed inputs.** Each client signs each input datagram with its own key (one
    signature per datagram, about 4 KB/s up). A client that sees an input confirmed for its seat
    that it never sent and that is not a repeat reports the tick; the host must show the signed

@@ -74,6 +74,8 @@ pub(crate) fn thread_runner(max_ticks: u32) -> Box<ThreadRunner> {
 pub(crate) struct Lab {
     pub(crate) server: Server,
     pub(crate) people: Vec<LobbyClient>,
+    /// The edition every person joins with.
+    pub(crate) edition: Edition,
 }
 
 impl Lab {
@@ -88,6 +90,7 @@ impl Lab {
         Self {
             server: Server::bind(config, runner).expect("binds"),
             people: Vec::new(),
+            edition: edition(),
         }
     }
 
@@ -105,7 +108,7 @@ impl Lab {
         self.people.push(LobbyClient::connect_keyed(
             Box::new(link) as Box<dyn Link>,
             name,
-            &[edition()],
+            std::slice::from_ref(&self.edition),
             "",
             key,
         ));
