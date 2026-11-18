@@ -5,17 +5,17 @@
 
 use oag_gpu::formats::SceneStore;
 
-/// Whether a render-target format holds linear light rather than
-/// gamma-encoded colour.
+/// Whether a render target holds linear light rather than gamma-encoded colour.
 ///
-/// **The format is the statement.** Wipeout HD's race draws into
-/// [`oag_gpu::formats::SCENE_FORMAT`] because its bloom gate reads
-/// pre-exposure luminance above 1.0, and every shader in this crate that can
-/// draw into that target switches to linear output when built against it -
-/// no per-drawable flag exists to fall out of step with the attachment.
+/// **The format, with what the scene stores, is the statement.** A race under a post
+/// chain draws into [`oag_gpu::formats::SCENE_FORMAT`], or Wipeout HD's into the 8-bit
+/// [`oag_gpu::formats::SCENE_FORMAT_8BIT`] holding encoded values, and every shader in
+/// this crate that can draw into it switches to linear output when built against it -
+/// no per-drawable flag exists to fall out of step with the attachment. See
+/// [`oag_gpu::formats::is_scene_target`].
 #[must_use]
-pub fn is_linear_target(format: wgpu::TextureFormat) -> bool {
-    format == oag_gpu::formats::SCENE_FORMAT
+pub fn is_linear_target(format: wgpu::TextureFormat, store: SceneStore) -> bool {
+    oag_gpu::formats::is_scene_target(format, store)
 }
 
 /// The pipeline-constant list that switches a shader's `linear_out` override
@@ -30,7 +30,7 @@ pub fn linear_constants(
     format: wgpu::TextureFormat,
     store: SceneStore,
 ) -> &'static [(&'static str, f64)] {
-    match (is_linear_target(format), store) {
+    match (is_linear_target(format, store), store) {
         (true, SceneStore::Encoded) => &[("linear_out", 1.0), ("encoded_out", 1.0)],
         (true, SceneStore::Squared) => &[("linear_out", 1.0), ("square_decode", 1.0)],
         (true, SceneStore::SrgbTexels) => &[("linear_out", 1.0), ("srgb_texels", 1.0)],
@@ -73,5 +73,23 @@ mod tests {
         assert!(
             linear_constants(wgpu::TextureFormat::Rgba8Unorm, SceneStore::SrgbTexels).is_empty()
         );
+    }
+
+    /// HD's 8-bit scene switches its draws to linear output with the encode, and an
+    /// `Rgba8Unorm` target that stores anything else stays a gamma target.
+    #[test]
+    fn the_8bit_scene_is_linear_only_when_it_stores_encoded_values() {
+        let eight = oag_gpu::formats::SCENE_FORMAT_8BIT;
+        assert_eq!(
+            linear_constants(eight, SceneStore::Encoded),
+            linear_constants(oag_gpu::formats::SCENE_FORMAT, SceneStore::Encoded)
+        );
+        for store in [
+            SceneStore::Computed,
+            SceneStore::Squared,
+            SceneStore::SrgbTexels,
+        ] {
+            assert!(linear_constants(eight, store).is_empty(), "{store:?}");
+        }
     }
 }

@@ -618,9 +618,22 @@ impl Scene {
         let (hd, format, caller_format) = hd_chain::build(device, format, size, hd_bloom);
         // What the scene target stores, which every pipeline drawing into it is
         // built for: HD's chain says (`oag_gpu::formats::SceneStore`).
-        let (omega, format) =
-            hd_chain::build_omega(device, format, caller_format, size, omega_tonemap);
-        let (wo, format) = hd_chain::build_wo(device, format, caller_format, size, wo_composite);
+        let (omega, format) = hd_chain::build_omega(
+            device,
+            format,
+            caller_format,
+            hd.is_some(),
+            size,
+            omega_tonemap,
+        );
+        let (wo, format) = hd_chain::build_wo(
+            device,
+            format,
+            caller_format,
+            hd.is_some() || omega.is_some(),
+            size,
+            wo_composite,
+        );
         // What the scene target stores, which every pipeline drawing into it is
         // built for: HD's chain or 2048's says (`oag_gpu::formats::SceneStore`).
         let store = hd_chain::store(hd.as_ref(), omega.as_ref(), wo.is_some());

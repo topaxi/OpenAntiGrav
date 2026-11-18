@@ -122,6 +122,11 @@ pub struct Options {
     /// The player's `graphics.shadow_resolution`: how many texels the shadow maps get, read
     /// when the scene is built. See `oag_render::shadow::map::Resolution`.
     pub shadow_resolution: oag_display::display::ShadowResolution,
+    /// The player's `graphics.scene_precision`: whether Wipeout HD's scene is drawn into the
+    /// original's 8-bit target or a float one, read when the scene is built. A title whose
+    /// scene does not store encoded values ignores it. See
+    /// [`oag_display::display::ScenePrecision`].
+    pub scene_precision: oag_display::display::ScenePrecision,
     /// Team id, which selects both the handling stats and the model, or `None`
     /// for the source's own.
     ///

@@ -1309,6 +1309,24 @@ string_id = "OAG_GRAPHICS_SHADOW_RESOLUTION"
 setting = "graphics.shadow_resolution"
 values = ["original", "high", "ultra"]
 
+# What Wipeout HD's scene target keeps of each pixel. `original` is the default
+# and the original's own: an 8-bit target holding sRGB-encoded bytes, each blend
+# clamped as the console's `A8R8G8B8` target clamps it, and the bloom resolve
+# reads it through an sRGB view in one hardware tap. `float` keeps the same
+# encoded values in half floats, unrounded and clamped only where the post chain
+# reads them: this project's own, a little smoother in the darkest gradients and
+# slower on an integrated GPU. Only a title whose scene stores encoded values
+# (HD) has a choice; the row is dropped elsewhere
+# (`Definition::drop_unavailable_scene_precision`). Read when a race builds its
+# scene. See `docs/rendering/hd-track-tone.md`, "The scene target is 8-bit by
+# default".
+[[page.entry]]
+kind = "choice"
+label = "SCENE PRECISION"
+string_id = "OAG_GRAPHICS_SCENE_PRECISION"
+setting = "graphics.scene_precision"
+values = ["original", "float"]
+
 
 # Which law draws a sea, a lake or a pool: `off` is the surface's constant
 # colour or texture, lit, with no wave normal, scroll or reflection; `original`

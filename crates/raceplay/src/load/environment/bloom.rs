@@ -105,6 +105,7 @@ pub fn hd_bloom_params(
         tone_darkening_clamp: env.scalar(TONE_DARKENING_CLAMP)?,
         tone_maximum_brightness: env.scalar(TONE_MAXIMUM_BRIGHTNESS)?,
         final_half_texel: false,
+        eight_bit: false,
         zoom: None,
         store: oag_gpu::formats::SceneStore::Computed,
     })
@@ -173,6 +174,7 @@ mod tests {
             tone_darkening_clamp: 1.0,
             tone_maximum_brightness: 1.0,
             final_half_texel: false,
+            eight_bit: false,
             zoom: None,
             store: oag_gpu::formats::SceneStore::Computed,
         }

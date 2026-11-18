@@ -773,7 +773,7 @@ pub(super) fn staging(
         .then(|| envsettings_exposure(archives, track, report))
         .flatten();
     // The circuit's `HDR and Bloom` block, which is what turns the HD race
-    // onto the linear float scene target and the read FunkLayerBloom chain -
+    // onto its own scene target and the read FunkLayerBloom chain -
     // see `oag_post::hd_bloom` for what of that is the microcode's
     // and what is this project's. Gated to the PS3 path like the fog above.
     let hd_bloom = (ps3_geometry && !wo_title)

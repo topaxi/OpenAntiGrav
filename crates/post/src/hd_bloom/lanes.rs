@@ -24,6 +24,7 @@ pub const MAX_SEATS: usize = 8;
 /// What a lane's passes read that is not its own: the chain's shared views and buffers.
 #[derive(Debug, Clone)]
 pub(super) struct LaneInputs {
+    /// The scene as the resolve reads it: the 8-bit target's sRGB view, or the target.
     pub scene: wgpu::TextureView,
     pub quarter_a: wgpu::TextureView,
     pub quarter_b: wgpu::TextureView,

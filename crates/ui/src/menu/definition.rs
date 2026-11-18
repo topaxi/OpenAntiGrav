@@ -569,6 +569,19 @@ impl Definition {
         }
     }
 
+    /// Drops the SCENE PRECISION row on a title whose scene does not store encoded values
+    /// (`oag_title::Looks::blends_encoded`): every title but Wipeout HD, which draw into a
+    /// gamma target or a float one of their own, so the row would change nothing. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
+    pub fn drop_unavailable_scene_precision(&mut self, title: &oag_title::Title) {
+        if title.looks.blends_encoded.applies_everywhere() {
+            return;
+        }
+        for page in &mut self.pages {
+            page.retain_rows(|entry| entry.setting() != Some("graphics.scene_precision"));
+        }
+    }
+
     /// Drops the TRAIL HITS row on a title whose original plays the trail-hit burst by itself
     /// (`oag_title::Effects::plays_trail_hits_natively`): Wipeout HD alone. 2048 and Omega author
     /// the burst but never fire it, so they keep the row, as Pulse and Pure do. Same

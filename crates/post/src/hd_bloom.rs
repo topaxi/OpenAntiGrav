@@ -65,8 +65,8 @@
 //! the race pass attaches, and [`Chain::run`] is everything between it and
 //! the caller's own surface.
 //!
-//! **That target is a float one here and an 8-bit one on the disc, and the
-//! difference is corrected rather than kept.** This header used to say the
+//! **That target is the original's 8-bit one by default** ([`Params::eight_bit`],
+//! `graphics.scene_precision`), and a float one as an opt-in. This header used to say the
 //! gate "only produces the reference frame's glow when the weighted luminance
 //! runs over 1.0", i.e. that it reads an HDR scene. It does not: the original's
 //! scene surface and all seven of `FUN_003af980`'s ladder buffers are
@@ -74,11 +74,12 @@
 //! at eight call sites of the render-target factory `FUN_005a6ce0`; exactly one
 //! `F_W16Z16Y16X16` surface exists in the executable and it is neither the
 //! scene nor in the ladder). The gate's `(0.3, 0.59, 0.11) * 3` weights put its
-//! knee at luma ~1/3, which is what an LDR bright pass looks like. Our target
-//! stays [`SCENE_FORMAT`] because 8 bits of *linear* light bands in the darks,
-//! and `hd_bloom.wesl`'s `surface()` applies the hardware's clamp at the three
-//! points the chain samples the scene instead - see its own comment for the
-//! measurement.
+//! knee at luma ~1/3, which is what an LDR bright pass looks like. A scene that
+//! stores encoded values goes into the 8-bit target; the float one holds the
+//! same encoded values unrounded, and `hd_bloom.wesl`'s `surface()` applies the
+//! hardware's clamp at the three points the chain samples the scene - see its
+//! own comment for the measurement. A scene holding linear light stays float:
+//! 8 bits of *linear* light band in the darks.
 
 use anyhow::Result;
 use oag_gpu::formats::{SCENE_FORMAT, SceneStore};
@@ -183,6 +184,19 @@ pub struct Params {
     /// [`SceneStore::Encoded`] the two taps of the scene itself (the first
     /// downsample and the resolve) decode it back to linear light.
     pub store: SceneStore,
+    /// Whether a scene that stores encoded values is drawn into the original's 8-bit
+    /// target ([`oag_gpu::formats::SCENE_FORMAT_8BIT`]) rather than the float one. Ignored
+    /// unless [`Self::store`] is [`SceneStore::Encoded`]: see
+    /// [`oag_gpu::formats::scene_format`].
+    pub eight_bit: bool,
+}
+
+impl Params {
+    /// These parameters with [`Self::eight_bit`] set: the player's scene precision.
+    #[must_use]
+    pub fn with_eight_bit(self, eight_bit: bool) -> Self {
+        Self { eight_bit, ..self }
+    }
 }
 
 /// Whether this chain's glow reaches the resolve.
@@ -209,16 +223,83 @@ pub enum Glow {
     Suppressed,
 }
 
+/// The scene target's format and how the two passes that read it decode it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SceneRead {
+    /// [`SCENE_FORMAT`], holding linear light: read as it is.
+    Float,
+    /// [`SCENE_FORMAT`] holding encoded values: each tap decoded in the shader.
+    FloatEncoded,
+    /// The 8-bit target read through its sRGB view: the texture unit decodes and filters,
+    /// one hardware tap.
+    EightBitSrgbView,
+    /// The 8-bit target where a view of another format is not offered (wgpu's GL backend,
+    /// best effort): read as stored, each tap decoded in the shader.
+    EightBitDecoded,
+}
+
+impl SceneRead {
+    fn of(device: &wgpu::Device, params: &Params) -> Self {
+        let format = oag_gpu::formats::scene_format(params.store, params.eight_bit);
+        match (format == SCENE_FORMAT, params.store == SceneStore::Encoded) {
+            (true, false) => Self::Float,
+            (true, true) => Self::FloatEncoded,
+            (false, _) if device.adapter_info().backend == wgpu::Backend::Gl => {
+                Self::EightBitDecoded
+            }
+            (false, _) => Self::EightBitSrgbView,
+        }
+    }
+
+    fn format(self) -> wgpu::TextureFormat {
+        match self {
+            Self::Float | Self::FloatEncoded => SCENE_FORMAT,
+            Self::EightBitSrgbView | Self::EightBitDecoded => oag_gpu::formats::SCENE_FORMAT_8BIT,
+        }
+    }
+
+    /// The pipeline constants of the first downsample, which reads the target as stored
+    /// on every title: a bilinear tap of the encoded values, decoded after. Its view is
+    /// the target's own, never the sRGB one, so its law is the float target's
+    /// (`docs/rendering/hd-track-tone.md`, "The scene target is 8-bit by default").
+    fn downsample_constants(self) -> &'static [(&'static str, f64)] {
+        match self {
+            Self::Float => &[],
+            Self::FloatEncoded | Self::EightBitDecoded | Self::EightBitSrgbView => {
+                &[("scene_encoded", 1.0)]
+            }
+        }
+    }
+
+    /// The pipeline constants of the resolve.
+    fn resolve_constants(self) -> &'static [(&'static str, f64)] {
+        match self {
+            Self::Float => &[],
+            Self::FloatEncoded | Self::EightBitDecoded => &[("scene_encoded", 1.0)],
+            Self::EightBitSrgbView => &[("scene_srgb_view", 1.0)],
+        }
+    }
+}
+
 /// A scratch colour buffer: sampled by the next pass, drawn into by this one.
 #[derive(Debug)]
 struct Target {
-    #[cfg_attr(not(test), expect(dead_code, reason = "held so the view stays valid"))]
     texture: wgpu::Texture,
     view: wgpu::TextureView,
 }
 
 impl Target {
-    fn new(device: &wgpu::Device, label: &str, (width, height): (u32, u32)) -> Self {
+    fn new(device: &wgpu::Device, label: &str, size: (u32, u32)) -> Self {
+        Self::with_format(device, label, size, SCENE_FORMAT, &[])
+    }
+
+    fn with_format(
+        device: &wgpu::Device,
+        label: &str,
+        (width, height): (u32, u32),
+        format: wgpu::TextureFormat,
+        view_formats: &[wgpu::TextureFormat],
+    ) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
             size: wgpu::Extent3d {
@@ -229,7 +310,7 @@ impl Target {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: SCENE_FORMAT,
+            format,
             // A test writes its scene texels directly.
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::TEXTURE_BINDING
@@ -238,7 +319,7 @@ impl Target {
                 } else {
                     wgpu::TextureUsages::empty()
                 },
-            view_formats: &[],
+            view_formats,
         });
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self { texture, view }
@@ -379,6 +460,8 @@ struct Sized {
 #[derive(Debug)]
 pub struct Chain {
     params: Params,
+    /// How the scene target is stored and read.
+    read: SceneRead,
     glow: Glow,
     copy: wgpu::RenderPipeline,
     /// `copy` for the first downsample, the one that reads the scene target.
@@ -497,18 +580,14 @@ impl Chain {
                 cache: None,
             })
         };
-        let encoded: &[(&str, f64)] = if params.store == SceneStore::Encoded {
-            &[("scene_encoded", 1.0)]
-        } else {
-            &[]
-        };
+        let read = SceneRead::of(device, &params);
         let copy = pipeline("hd bloom copy", "fs_copy", SCENE_FORMAT, None, &[]);
         let copy_scene = pipeline(
             "hd bloom copy scene",
             "fs_copy",
             SCENE_FORMAT,
             None,
-            encoded,
+            read.downsample_constants(),
         );
         let reduce_first = pipeline(
             "hd bloom reduce first",
@@ -536,12 +615,13 @@ impl Chain {
             "fs_encode",
             surface_format.remove_srgb_suffix(),
             None,
-            encoded,
+            read.resolve_constants(),
         );
-        let sized = Self::sized(device, &layout, &sampler, size, params);
-        let zoom = Self::zoom_for(device, &params, &sized)?;
+        let sized = Self::sized(device, &layout, &sampler, size, params, read);
+        let zoom = Self::zoom_for(device, &params, &sized, read.format())?;
         Ok(Self {
             params,
+            read,
             glow,
             copy,
             copy_scene,
@@ -569,7 +649,14 @@ impl Chain {
         self.params.store
     }
 
-    /// The float scene target the race pass draws into.
+    /// The format of the scene target the race pass draws into: every pipeline drawing
+    /// there is built against it.
+    #[must_use]
+    pub fn scene_format(&self) -> wgpu::TextureFormat {
+        self.read.format()
+    }
+
+    /// The scene target the race pass draws into.
     #[must_use]
     pub fn scene_view(&self) -> &wgpu::TextureView {
         &self.sized.scene.view
@@ -584,8 +671,15 @@ impl Chain {
     /// Rebuilds the targets for a new viewport size. The adaptation state
     /// restarts from zero, which the next frame's rate-1 jump re-seeds.
     pub fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
-        self.sized = Self::sized(device, &self.layout, &self.sampler, size, self.params);
-        self.zoom = Self::zoom_for(device, &self.params, &self.sized)
+        self.sized = Self::sized(
+            device,
+            &self.layout,
+            &self.sampler,
+            size,
+            self.params,
+            self.read,
+        );
+        self.zoom = Self::zoom_for(device, &self.params, &self.sized, self.read.format())
             .ok()
             .flatten();
         // The uniform buffers are new and hold the whole rectangle, so whatever was last
@@ -601,11 +695,34 @@ impl Chain {
         sampler: &wgpu::Sampler,
         (width, height): (u32, u32),
         params: Params,
+        read: SceneRead,
     ) -> Sized {
         let (width, height) = (width.max(1), height.max(1));
         let half = ((width / 2).max(1), (height / 2).max(1));
         let quarter = ((width / 4).max(1), (height / 4).max(1));
-        let scene = Target::new(device, "hd scene", (width, height));
+        let srgb = [oag_gpu::formats::SCENE_READ_8BIT];
+        let scene = Target::with_format(
+            device,
+            "hd scene",
+            (width, height),
+            read.format(),
+            if read == SceneRead::EightBitSrgbView {
+                &srgb
+            } else {
+                &[]
+            },
+        );
+        // What the resolve samples: the sRGB view of the 8-bit target, which decodes on
+        // fetch, or the target itself. The first downsample reads the target itself.
+        let scene_sampled = if read == SceneRead::EightBitSrgbView {
+            scene.texture.create_view(&wgpu::TextureViewDescriptor {
+                label: Some("hd scene, sRGB read"),
+                format: Some(oag_gpu::formats::SCENE_READ_8BIT),
+                ..Default::default()
+            })
+        } else {
+            scene.view.clone()
+        };
         let half_target = Target::new(device, "hd bloom half", half);
         let quarter_a = Target::new(device, "hd bloom quarter a", quarter);
         let quarter_b = Target::new(device, "hd bloom quarter b", quarter);
@@ -682,7 +799,7 @@ impl Chain {
         }
         let mean = reductions.last().map_or(&quarter_a.view, |(r, _)| &r.view);
         let inputs = LaneInputs {
-            scene: scene.view.clone(),
+            scene: scene_sampled,
             quarter_a: quarter_a.view.clone(),
             quarter_b: quarter_b.view.clone(),
             mean: mean.clone(),

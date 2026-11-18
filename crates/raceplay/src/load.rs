@@ -1365,7 +1365,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         authored_fog,
         #[cfg(feature = "view")]
-        hd_bloom,
+        hd_bloom: hd_bloom.map(|p| p.with_eight_bit(options.scene_precision.is_eight_bit())),
         #[cfg(feature = "view")]
         omega_tonemap,
         #[cfg(feature = "view")]
