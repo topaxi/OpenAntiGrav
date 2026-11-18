@@ -61,7 +61,7 @@ FILTER = re.compile(r"^package\(([\w-]+)\) & test\(/\^\(([\w|]+)\)::/\)$")
 # capture marker, or by no test.
 OPENERS = {
     "crates/game/src/adapter.rs": "the game's adapter choice, reached by spawning the game",
-    "crates/game/src/main/gpu.rs": "the game's window renderer, reached by spawning the game",
+    "crates/game/src/app/gpu.rs": "the game's window renderer, reached by spawning the game",
     "crates/gpu/src/test_adapter.rs": "the test adapter policy itself",
     "crates/mesh/src/capture.rs": "capture_pixels_from, the capture marker",
     "crates/view/src/main.rs": "oag-view, spawned by no test",

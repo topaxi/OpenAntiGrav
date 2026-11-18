@@ -31,8 +31,8 @@ Allowed reach points, never counted:
   `oag-2048`) and `oag-title`, which is where a title's data is typed;
 - the registry in `crates/source/src/title.rs`, the one place a disc image becomes
   a `Title`;
-- `crates/game/src/main.rs` (with `main_body.rs`, which it and `android.rs`
-  `include!`) and `crates/game/src/bin/`, the composition root's entry.
+- `crates/game/src/main.rs`, `android.rs`, the root of `oag_game::app`
+  (`crates/game/src/app.rs`) and `crates/game/src/bin/`, the composition root's entry.
 
 `python3 scripts/check-title-reach.py --list` prints every counted site.
 """
@@ -50,7 +50,7 @@ SKIPPED_DIRS = {"tests", "examples", "benches"}
 ALLOWED_FILES = {
     "crates/source/src/title.rs",
     "crates/game/src/main.rs",
-    "crates/game/src/main_body.rs",
+    "crates/game/src/app.rs",
     "crates/game/src/android.rs",
 }
 ALLOWED_PREFIXES = ("crates/game/src/bin/",)
@@ -73,12 +73,12 @@ BASELINE: dict[str, int] = {
     "crates/game/src/endrace/touch.rs": 6,
     "crates/game/src/loading.rs": 1,
     "crates/game/src/loading/assets.rs": 1,
-    "crates/game/src/main/args.rs": 1,
-    "crates/game/src/main/race_stage.rs": 4,
-    "crates/game/src/main/race_stage/hd_loyalty.rs": 1,
-    "crates/game/src/main/session/campaign.rs": 1,
-    "crates/game/src/main/session/pilot_editor.rs": 4,
-    "crates/game/src/main/session/placeholder.rs": 5,
+    "crates/game/src/app/args.rs": 1,
+    "crates/game/src/app/race_stage.rs": 4,
+    "crates/game/src/app/race_stage/hd_loyalty.rs": 1,
+    "crates/game/src/app/session/campaign.rs": 1,
+    "crates/game/src/app/session/pilot_editor.rs": 4,
+    "crates/game/src/app/session/placeholder.rs": 5,
     "crates/game/src/prefetch.rs": 1,
     "crates/game/src/preview.rs": 1,
     "crates/game/src/settings/render_profile.rs": 5,
