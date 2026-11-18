@@ -306,10 +306,14 @@ fn warm(staged: Staged) -> Built {
 /// A thread that will not spawn drops its closure, and the stage with it,
 /// right here: a hitch rather than a leak.
 pub(crate) fn drop_off_thread(stage: Box<RaceStage>) {
+    #[cfg(not(target_arch = "wasm32"))]
     drop_then_release(stage);
+    // The web build has no thread to drop it on.
+    #[cfg(target_arch = "wasm32")]
+    drop(stage);
 }
 
-/// See [`drop_off_thread`]. Also hands the heap the race freed back to the system, on the same
+/// The native half of [`drop_off_thread`]. Also hands the heap the race freed back to the system, on the same
 /// thread: the build's transients and the stage's own buffers are what a second race in the
 /// same session would otherwise sit on top of (`crate::heap`). Returns the thread so a test can
 /// wait for it.
@@ -332,15 +336,6 @@ pub(crate) fn drop_then_release<T: Send + 'static>(
             None
         }
     }
-}
-
-/// See the native twin above: the web build has no thread to drop it on.
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn drop_then_release<T: Send + 'static>(
-    value: T,
-) -> Option<std::thread::JoinHandle<()>> {
-    drop(value);
-    None
 }
 
 #[cfg(test)]
