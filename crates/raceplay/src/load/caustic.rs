@@ -29,6 +29,21 @@ fn frame(archives: &mut oag_assets::Archives, index: usize) -> Result<Arc<ModelT
     }))
 }
 
+/// Frame `index` among the circuit's own embedded textures, which is where Pure keeps them: the
+/// `.vex` embeds `Z:\\data\\Tex\\caustics\\save.NN.tga` and a model texture's label is the file
+/// name alone (`docs/ghidra/functions/psp-pure-usa/caustic-pass.md`).
+fn embedded_frame(
+    textures: &[Option<Arc<ModelTexture>>],
+    index: usize,
+) -> Option<Arc<ModelTexture>> {
+    let wanted = format!("save.{:02}.tga", index * 2 + 1);
+    textures
+        .iter()
+        .flatten()
+        .find(|t| t.label.eq_ignore_ascii_case(&wanted))
+        .cloned()
+}
+
 /// Gives the circuit's flagged batches their frames, or drops them. Silent for a circuit that
 /// flags none; otherwise the loader report says what was drawn, or why nothing is. `enabled` is
 /// the geometry being the `.vex`'s and the player's `graphics.water` not being `off`; the title's rule
@@ -44,7 +59,13 @@ pub(super) fn attach(
     }
     let enabled = enabled && title.looks.track_caustic.applies(archives.layout.platform);
     if enabled {
-        match (0..FRAMES).map(|i| frame(archives, i)).collect() {
+        let found = (0..FRAMES)
+            .map(|i| {
+                frame(archives, i)
+                    .or_else(|first| embedded_frame(&loaded.track_model.textures, i).ok_or(first))
+            })
+            .collect();
+        match found {
             Ok(frames) => loaded.track_model.caustic.frames = frames,
             Err(e) => loaded.report.push(format!(
                 "caustic pass: not drawn, a frame did not load ({e})"

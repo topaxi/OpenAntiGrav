@@ -261,6 +261,15 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The caustic pass is Pulse's call for call: `FUN_0886dfd4` sorts batches whose byte 3 has
+    // `0x04`, `FUN_0886e5d0` is `Mesh_SetCausticNodeState` with the same tint, `0.014` scale,
+    // quarter turn and state `0x202`, and the sixteen frames are embedded in Vineta K's `.vex`
+    // (`docs/ghidra/functions/psp-pure-usa/caustic-pass.md`). Vineta K is the only circuit that
+    // flags batches.
+    track_caustic: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::Measured,
+    },
     // Pure runs Pulse's bloom class over Pulse's stencil mask: its Modesto GE list draws the
     // bright pass, the 1,320-vertex blur pair (weights 20/30/40/50/64/64/64/50/40/30/20) and the
     // `FIXA 0xaf` composite, and stamps ref 4 on ordinary batches and the texture's glow byte

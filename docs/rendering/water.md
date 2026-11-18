@@ -17,7 +17,7 @@ map is the sky"), [the 2048 pass page](../ghidra/functions/vita-2048-eu-v104/ref
 | --- | --- | --- | --- | ---: |
 | Pulse PSP (disc) | textured meshes (`NewSeaTest`, `sea`, `water`, `NWaterfall*`) | authored texture-offset tracks where a material has one, not surveyed per surface | none | 85 |
 | Pulse, Vostok Reef (PS2 disc, PSP download) | the above plus a **caustic pass**: flagged batches redrawn with a ripple texture projected from above | 16 frames at 30 fps | none | 75 (PSP code), 90 (which data) |
-| Pure | textured meshes; Vineta K's `.vex` embeds 16 caustic frames | not read | none | 60 |
+| Pure | textured meshes, and on Vineta K the **caustic pass** (Pulse's, from the 16 frames embedded in the `.vex`: 352 of 1,335 batches flagged) | 16 frames at 30 fps | none | 85 (code is Pulse's), 90 (which data), 70 (picture, no GE list) |
 | HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3: a 960 x 540 R5G6B5 target drawn under the main camera mirrored about y = -25 (Moa Therma, read live) | 85 (program), 88 (which chunks), 90 (target, camera, constants) |
 | HD Vineta K (`water_test_2`, `water_noref`) | vertex colour times light, three wave taps | three scales and rates per material | `paraboloidReflectionTex` (the sky) | 90 |
 | HD Amphiseum (`water`) | flat colour, two wave taps | as the sea, in the fragment program | `paraboloidReflectionTex` | 85 |
@@ -139,8 +139,9 @@ By embedded texture name: Vineta K `AAdc_Water`, `AAdc_WaterDark`,
 `AAdc_waterFoam`, `AAdc_Seabed*`, plus **16 caustic frames**
 (`Z:\data\Tex\caustics\save.NN.tga`, the odd numbers 01 to 31); Blue Ridge
 `Water`, `Waterfall_Ani`, `Waterfall_Ani_Noalpha`, `Waterfall_static`,
-`WaterTunnelLightA_BLEND_GLOW`. The sweep's batch walk does not decode Pure's
-version-4 batches, so the caustic bit is unread on Pure. A GE list already
+`WaterTunnelLightA_BLEND_GLOW`. Read with Pure's own mesh class (`0x11e`; the sweep once walked
+version 6's `0x125` and saw no batch), the caustic bit is set on **352 of Vineta K's 1,335 batches and
+on no other Pure `.vex`**. A GE list already
 showed Vineta's layered water plane at `y = -50` drawn with material ambient
 `(107, 216, 255)` and `(128, 128, 128)`
 ([hull-shine.md](../ghidra/functions/psp-pure-usa/hull-shine.md)).
@@ -163,14 +164,17 @@ the moving ripple web, `off` draws the plain surface. The PS2 frames are `save.N
 PSP disc has no flagged batch. Lineage: Pulse-only, not applicable to 2048/Omega; HD's
 `data/tex/caustics/` consumer is not looked for.
 
-### Pure: not read
+### Pure: Vineta K's caustic pass
 
-Hypothesis, confidence 45, no rename: Pure's Vineta K plays the 16 embedded
-caustic frames as a texture swap on its tunnel floor, the mechanism Pulse later
-moved into a global pass. What to read: the frames' `Texture` nodes in
-`01_Vineta_K`'s `.vex` (which material binds them, and whether an
-`Anim Transform` or a frame index drives the swap), then a PPSSPP GE list in
-the tunnel.
+**Drawn** under `original` (the same `mesh::caustic_pass`; test
+`vineta_ks_seabed_draws_its_embedded_caustics_and_they_follow_the_clock`): Pure's executable
+carries Pulse's four pass functions with the same constants (tint `0.2, 1.0, 0.8`, scale `0.014`,
+quarter turn, state `0x202`) and the batch sort on byte 3 `& 4`
+([caustic-pass.md](../ghidra/functions/psp-pure-usa/caustic-pass.md), confidence 85). The hypothesis
+that Vineta K swaps a texture on its tunnel floor was wrong: the 16 `save.NN.tga` frames are
+embedded in the `.vex` and the pass binds them, the frames are in no archive entry. 279 of the 352
+flagged batches draw, 73 sit under animated nodes. `off` draws the plain seabed. Not taken: a PPSSPP
+GE list in the tunnel (what would raise the picture from 70). Lineage: Pure and Pulse only.
 
 ### HD/Fury: `reflectplane_dc_seawater`
 
@@ -877,7 +881,6 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    read off live frames", with the recipe for these).
 2. Vostok Reef on PCSX2 or PPSSPP (with the download pack): a frame of the
    caustic pass to compare against ours (batch state `0x202`'s blend is read: additive by alpha).
-3. Pure's caustic frames on Vineta K.
 4. Omega: what `reflectProject` holds (the program hands it `eye - P`), `distortion`, and the
    reflection camera (a live value, or `TrackPass_FilterSubmesh` kind 1 in Ghidra); a frame of
    Omega's own sea to set the stand-in against; HD's law through `psp2` for

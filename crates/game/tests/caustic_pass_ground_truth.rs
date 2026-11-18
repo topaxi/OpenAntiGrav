@@ -1,4 +1,5 @@
-//! Pulse's caustic pass reaches the frame a player sees, on Vostok Reef's PS2 circuit.
+//! Pulse's caustic pass reaches the frame a player sees, on Vostok Reef's PS2 circuit, and Pure's
+//! on Vineta K (sixteen frames embedded in the circuit's `.vex`, not read off an archive entry).
 //!
 //! **`#[ignore]`d and never run in CI.** It needs the Pulse PS2 EU disc image under
 //! `data/images/` and a GPU adapter.
@@ -27,22 +28,31 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const VOSTOK: &str = r"Data\Environments\08_Track\track.vex";
+const VINETA: &str = r"Data\Environments\01_Vineta_K\track.vex";
+/// Over a flagged seabed batch (`polySurfaceShape1557`), below Vineta K's water plane.
+const OVER_THE_SEABED: &str = "--camera-pose=-747,-95,330,0,-0.8,0.6,0,0.6,0.8";
 const OVER_THE_FLOOR: &str = "--camera-pose=-37,80,-640,0,-0.8,0.6,0,0.6,0.8";
 
-/// A settings directory whose Pulse PS2 profile says `water`.
-fn config(scratch: &Path, water: &str) -> PathBuf {
+/// A settings directory whose `profile` says `water`.
+fn config(scratch: &Path, profile: &str, water: &str) -> PathBuf {
     let dir = scratch.join(format!("config-{water}")).join("oag");
     std::fs::create_dir_all(&dir).expect("creating the config directory");
     std::fs::write(
         dir.join("settings.toml"),
-        format!("[render_profiles.\"Wipeout Pulse (PS2)\"]\nwater = \"{water}\"\n"),
+        format!("[render_profiles.\"{profile}\"]\nwater = \"{water}\"\n"),
     )
     .expect("writing the settings");
     dir.parent().expect("has a parent").to_path_buf()
 }
 
-fn capture(image: &Path, scratch: &Path, water: &str, clock: &str) -> Vec<u8> {
-    let out = scratch.join(format!("vostok-{water}-{clock}.png"));
+/// One headless capture of `track` under `pose` on a disc whose settings profile is `profile`.
+fn capture(
+    (image, profile): (&Path, &str),
+    scratch: &Path,
+    (track, pose): (&str, &str),
+    (water, clock): (&str, &str),
+) -> Vec<u8> {
+    let out = scratch.join(format!("caustic-{water}-{clock}.png"));
     let status = Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
         .args(["--race", "--no-audio", "--size", "480x272"])
@@ -55,11 +65,11 @@ fn capture(image: &Path, scratch: &Path, water: &str, clock: &str) -> Vec<u8> {
             "off",
         ])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
-        .args(["--track", VOSTOK, "--ticks", "3", "--camera-fov", "70"])
-        .args(["--anim-seconds", clock, OVER_THE_FLOOR])
+        .args(["--track", track, "--ticks", "3", "--camera-fov", "70"])
+        .args(["--anim-seconds", clock, pose])
         .arg("--screenshot")
         .arg(&out)
-        .env("XDG_CONFIG_HOME", config(scratch, water))
+        .env("XDG_CONFIG_HOME", config(scratch, profile, water))
         .env("XDG_STATE_HOME", scratch.join("state"))
         .env("XDG_DATA_HOME", scratch.join("data"))
         .status()
@@ -76,11 +86,19 @@ fn vostok_reefs_floor_draws_its_caustics_and_they_follow_the_clock() {
     };
     let scratch = std::env::temp_dir().join(format!("oag-caustic-{}", std::process::id()));
     std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
-    let off = capture(&image, &scratch, "off", "1.01");
-    let off_again = capture(&image, &scratch, "off", "1.01");
-    let on = capture(&image, &scratch, "original", "1.01");
-    let later = capture(&image, &scratch, "original", "1.0767");
-    std::fs::remove_dir_all(&scratch).ok();
+    let disc = (image.as_path(), "Wipeout Pulse (PS2)");
+    let at = (VOSTOK, OVER_THE_FLOOR);
+    check_pass(disc, &scratch, at);
+}
+
+/// `off` twice is one picture, `original` differs from it, and `original` two frames later differs
+/// again.
+fn check_pass(disc: (&Path, &str), scratch: &Path, at: (&str, &str)) {
+    let off = capture(disc, scratch, at, ("off", "1.01"));
+    let off_again = capture(disc, scratch, at, ("off", "1.01"));
+    let on = capture(disc, scratch, at, ("original", "1.01"));
+    let later = capture(disc, scratch, at, ("original", "1.0767"));
+    std::fs::remove_dir_all(scratch).ok();
 
     assert_eq!(off, off_again, "nothing but the pass moves between runs");
     assert_ne!(
@@ -88,4 +106,16 @@ fn vostok_reefs_floor_draws_its_caustics_and_they_follow_the_clock() {
         "original draws the caustic pass where off does not"
     );
     assert_ne!(on, later, "the frame follows the world clock");
+}
+
+#[test]
+#[ignore = "needs the Pure PSP EU disc image in data/images/ and a GPU adapter"]
+fn vineta_ks_seabed_draws_its_embedded_caustics_and_they_follow_the_clock() {
+    let Some(image) = oag_testdata::image("data/images/pure-psp-eu.chd") else {
+        return;
+    };
+    let scratch = std::env::temp_dir().join(format!("oag-caustic-pure-{}", std::process::id()));
+    std::fs::create_dir_all(&scratch).expect("creating the scratch directory");
+    let disc = (image.as_path(), "Wipeout Pure (PSP)");
+    check_pass(disc, &scratch, (VINETA, OVER_THE_SEABED));
 }
