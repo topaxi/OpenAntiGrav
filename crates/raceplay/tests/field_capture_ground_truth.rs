@@ -54,7 +54,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        race::Race::start(loaded.setup)
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
     };
 
     let race = start(field.clone(), Some(hud));
@@ -109,7 +109,7 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
             ..race::Options::default()
         })
         .expect("loading the race");
-        race::Race::start(loaded.setup)
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
     };
     let velocities = vec![Vec3::new(0.0, 0.0, 100.0); 8];
 
@@ -187,7 +187,7 @@ fn a_field_warm_up_arms_the_players_boost_at_its_age_and_nobody_elses() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        race::Race::start(loaded.setup)
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
     };
     let velocities = vec![Vec3::new(0.0, 0.0, 100.0); 8];
 

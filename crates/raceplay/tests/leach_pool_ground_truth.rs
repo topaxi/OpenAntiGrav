@@ -26,7 +26,7 @@ fn throttle() -> oag_gameplay::InputSnapshot {
 
 fn two_beams(options: race::Options) {
     let loaded = race::load(&options).expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle()));
     }

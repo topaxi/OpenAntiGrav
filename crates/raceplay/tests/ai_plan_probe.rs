@@ -56,7 +56,7 @@ fn plan_probe() {
         ..race::Options::default()
     })
     .expect("loading");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let rows = race
         .core
         .sim
@@ -139,7 +139,7 @@ fn line_surface() {
         ..race::Options::default()
     })
     .expect("loading");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let line = race.core.sim.racing_line();
     let world = race.core.sim.collision();
     println!("index\tx\ty\tz\tunsupported\ttakeoff\tleft\tright\thits_below");
@@ -203,7 +203,7 @@ fn race_probe() {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let slot: usize = var("OAG_LONE_SLOT", 1);
     for s in 0..race.core.sim.ship_count() as usize {
         if s != slot {
@@ -285,7 +285,7 @@ fn pad_map() {
         ..race::Options::default()
     })
     .expect("loading");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let line = race.core.sim.racing_line();
     for pad in race.core.sim.speedup_pads() {
         let c = Vec3::from_array(pad.centre());
@@ -332,7 +332,7 @@ fn floor_grid() {
         ..race::Options::default()
     })
     .expect("loading");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let line = race.core.sim.racing_line();
     let from: usize = var("OAG_FROM", 140);
     let to: usize = var("OAG_TO", 240);
@@ -388,7 +388,7 @@ fn field_takeoffs() {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].active = false;
     let count = race.core.sim.ship_count() as usize;
     let line = race.core.sim.racing_line().clone();
@@ -485,7 +485,7 @@ fn beneath_census() {
             ..race::Options::default()
         })
         .unwrap();
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let count = race.core.sim.ship_count() as usize;
         for s in 0..count {
             if s == 0 || (lone && s != 1) {

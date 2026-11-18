@@ -474,6 +474,8 @@ impl Stage {
     ) -> Result<Box<RaceStage>> {
         let race::Loaded {
             setup,
+            view,
+            modules,
             title,
             hud,
             track_panel,
@@ -597,20 +599,19 @@ impl Stage {
             gpu.device(),
             gpu.queue(),
             gpu.format(),
-            setup
-                .scenery_fx
+            view.scenery_fx
                 .weather
                 .as_ref()
                 .and_then(|weather| weather.mist_texture.as_ref()),
         );
-        scene.attach_bloom_order(setup.scenery_fx.bloom_under_hud);
+        scene.attach_bloom_order(view.scenery_fx.bloom_under_hud);
         scene.attach_lens_flare(
             gpu.device(),
             gpu.queue(),
             gpu.format(),
-            setup.scenery_fx.lens_flare.as_deref(),
+            view.scenery_fx.lens_flare.as_deref(),
         );
-        scene.attach_mod_shaders(gpu.device(), gpu.queue(), setup.handles.shaders().list());
+        scene.attach_mod_shaders(gpu.device(), gpu.queue(), view.handles.shaders().list());
         // Time Trial and Speed Lap race a ghost - see `crate::ghosts`.
         scene.prepare_ghost(
             gpu.device(),
@@ -633,12 +634,13 @@ impl Stage {
         let difficulty = setup.difficulty;
         let (mode, seed) = (setup.mode, setup.seed);
         // Photo mode's rewind starts a second race from this when it is first used.
-        let keeper_setup = crate::photo::SAVES.then(|| setup.clone());
+        let keeper_setup =
+            crate::photo::SAVES.then(|| (setup.clone(), view.clone(), modules.clone()));
         // Started on the web's load worker already, from a copy of the same
         // setup (`race::Loaded::started`).
         let mut race = match started {
             Some(race) => race,
-            None => Box::new(race::Race::start(setup)),
+            None => Box::new(race::Race::start(setup, view, modules)),
         };
         race.set_boost_fov_kick(settings.graphics.boost_fov_kick);
         // The reticle projects through the same field the picture is drawn at.
@@ -689,7 +691,9 @@ impl Stage {
             seed,
             launch.to_table(),
         );
-        let keeper = keeper_setup.map(|setup| Box::new(race::timeline::Keeper::new(setup, &race)));
+        let keeper = keeper_setup.map(|(setup, view, modules)| {
+            Box::new(race::timeline::Keeper::new(setup, view, modules, &race))
+        });
         Ok(Box::new(RaceStage {
             scene,
             race,

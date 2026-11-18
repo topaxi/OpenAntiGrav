@@ -81,7 +81,7 @@ fn load_from(source: &Path, track: Option<&str>) -> Option<race::Loaded> {
 /// The body of what [`touching_a_real_reset_volume_respawns_the_ship`] always
 /// did, lifted out so a second title can be put through the identical check
 /// rather than a similar one.
-fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
+fn fly_through_first_reset(setup: race::SimSetup) -> Option<f32> {
     let reset = setup
         .collision
         .colliders()
@@ -99,7 +99,11 @@ fn fly_through_first_reset(setup: race::Setup) -> Option<f32> {
         .expect("the first reset triangle is degenerate");
     println!("reset collider {collider}, triangle at {centroid:?}, normal {normal:?}");
 
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(
+        setup,
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     assert_eq!(race.core.sim.respawns(), 0);
 
     // Clear of the trigger and straight through it. Which side it starts on does
@@ -177,7 +181,7 @@ fn pures_reset_surface_respawns_the_ship_too() {
     );
 
     let max_half_width = {
-        let race = race::Race::start(setup.clone());
+        let race = race::Race::start(setup.clone(), loaded.view, loaded.modules);
         race.core.sim.spline().max_half_width()
     };
     let distance = fly_through_first_reset(setup)
@@ -268,7 +272,7 @@ fn touching_a_real_reset_volume_respawns_the_ship() {
         .expect("the first reset triangle is degenerate");
     println!("reset collider {collider}, triangle at {centroid:?}, normal {normal:?}");
 
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     assert_eq!(race.core.sim.respawns(), 0);
 
     // Put the ship clear of the trigger and fire it straight through. Which side

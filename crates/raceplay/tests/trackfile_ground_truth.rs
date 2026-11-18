@@ -238,7 +238,11 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
             native_hull.enabled(),
             "{track}: the circuit lights its hulls"
         );
-        let mut native = race::Race::start(native_loaded.setup);
+        let mut native = race::Race::start(
+            native_loaded.setup,
+            native_loaded.view,
+            native_loaded.modules,
+        );
         let mut from_file = {
             let mut o = native_options.clone();
             o.track = None;
@@ -311,7 +315,7 @@ fn a_lone_craft_races_a_disc_circuit_and_its_exported_file_identically() {
                 "{:#?}",
                 time_trial.report
             );
-            race::Race::start(loaded.setup)
+            race::Race::start(loaded.setup, loaded.view, loaded.modules)
         };
         for race in [&mut native, &mut from_file] {
             for slot in 2..8 {
@@ -433,7 +437,7 @@ fn lions_den_races_the_same_converted_as_loaded_directly() {
             ..race::Options::default()
         };
         let loaded = race::load(&o).expect("loads");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for slot in 2..8 {
             race.core.sim.world.ships[slot].active = false;
         }
@@ -510,7 +514,7 @@ fn lone_craft_gets_round(file: &str, id: &str, title: &str, art: &[&str]) {
         assert!(!report.contains(miss), "report has {miss:?}:\n{report}");
     }
     assert_eq!(loaded.setup.foreign.as_deref(), Some(id));
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
     }
@@ -800,7 +804,7 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
             "the title's Zone ramp is read: {report}"
         );
         assert!(loaded.setup.zone.is_some(), "{}", file.display());
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         race.core.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..15_200 {
@@ -890,7 +894,7 @@ fn a_zone_race_on_a_track_file_loads_and_climbs_on_every_title() {
             .find(|l| l.starts_with("host speed pads:"))
             .unwrap_or_else(|| panic!("{image}: no host speed pads line: {:#?}", loaded.report));
         println!("{image}: {pads}");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         race.core.sim.set_autopilot(true);
         let inputs = oag_gameplay::PlayerInputs::none();
         for _ in 0..1_800 {

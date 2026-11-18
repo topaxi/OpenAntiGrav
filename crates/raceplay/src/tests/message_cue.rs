@@ -10,7 +10,11 @@ use oag_gameplay::cue::Cue;
 fn a_message_line_showing_raises_the_message_cue_once() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.tick(&PlayerInputs::none());
     race.core.sim.drain_cues();
     race.tick(&PlayerInputs::none());

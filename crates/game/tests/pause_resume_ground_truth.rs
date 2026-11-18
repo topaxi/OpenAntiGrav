@@ -31,7 +31,7 @@ fn loaded(image: &str) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// One frame of the session's loop: the pause rule, then a tick if it allows one.

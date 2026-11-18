@@ -86,7 +86,7 @@ fn pures_default_track_names_no_gantry_and_no_billboard_location_and_lights_its_
 /// line.
 fn sun_flare_is_the_circuits_own(loaded: &race::Loaded) {
     let flare = loaded
-        .setup
+        .view
         .scenery_fx
         .lens_flare
         .as_ref()

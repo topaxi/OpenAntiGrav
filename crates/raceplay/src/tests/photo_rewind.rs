@@ -35,9 +35,18 @@ fn driven() -> (Box<Race>, Keeper, Vec<String>) {
 
 fn driven_with_hashes() -> (Box<Race>, Keeper, Vec<String>, Vec<u64>) {
     // Boxed: a `Race` is large, and a test thread's stack holds the few that a debug build copies.
-    let mut race = Box::new(Race::start(fixture()));
+    let mut race = Box::new(Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
-    let mut keeper = Keeper::new(fixture(), &race);
+    let mut keeper = Keeper::new(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &race,
+    );
     let mut text = vec![format!("{:?}", race.core.sim)];
     let mut hashes = vec![race.core.sim.state_hash()];
     for tick in 0..LIVE {
@@ -141,8 +150,17 @@ fn a_race_that_goes_on_after_a_rewind_hashes_as_one_that_was_not_visited() {
 /// A race that records nothing has no inputs to play: a seek stops at a whole keyframe.
 #[test]
 fn with_no_recording_a_seek_stops_at_the_keyframe_before_it() {
-    let mut race = Box::new(Race::start(fixture()));
-    let mut keeper = Keeper::new(fixture(), &race);
+    let mut race = Box::new(Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
+    let mut keeper = Keeper::new(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &race,
+    );
     for tick in 0..LIVE {
         race.tick(&inputs(tick));
         keeper.keep(&race);

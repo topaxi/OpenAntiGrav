@@ -28,7 +28,11 @@ fn grid_on_a_speed_pad() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// A speed pad is a pad for everybody, which it was not until 2026-08-11:
@@ -177,7 +181,11 @@ fn the_class_gravity_scale_reaches_the_grounded_half_of_gravity() {
             vec![plane(1, 0.0, oag_physics::Surface::Floor, 0)],
         );
         setup.class_gravity_scale = scale;
-        let mut race = Race::start(setup);
+        let mut race = Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        );
 
         // Several ticks, not one: gravity reads the *previous* frame's
         // groundedness, so the first tick sees zero contacts however solidly

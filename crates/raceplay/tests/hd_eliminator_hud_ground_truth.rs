@@ -35,7 +35,7 @@ fn an_eliminator_draws_the_race_line_with_every_craft_on_it() {
     })
     .expect("loading an HD Eliminator");
     let context = loaded.hud.context().expect("HD's layout parses");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.tick(&PlayerInputs::none());
     let readout = race.readout();
 
@@ -117,7 +117,7 @@ fn a_single_race_carries_no_race_line() {
         loaded.setup.score_law, None,
         "the awards are the Eliminator's alone"
     );
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.tick(&PlayerInputs::none());
     assert_eq!(race.readout().race_line, None);
 }
@@ -189,7 +189,7 @@ fn a_racebox_eliminator_is_scored_to_the_slider_target() {
     );
 
     let context = loaded.hud.context().expect("HD's layout parses");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.tick(&PlayerInputs::none());
     let readout = race.readout();
     assert!(readout.score_rows);
@@ -218,7 +218,7 @@ fn an_opponents_first_lap_pays_through_the_tick() {
     .expect("loading an HD Eliminator");
     let law = loaded.setup.score_law.expect("HD's Eliminator is scored");
     let pay = law.lap * law.opponent_scale;
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let snapshot = |race: &oag_raceplay::Race| {
         let world = &race.core.sim.world;
         std::array::from_fn::<_, 8, _>(|slot| {
@@ -296,7 +296,7 @@ fn sweep_score_changes() {
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     let mut out =
         String::from("t,craft,score,kills,w6f78,shield,lap,lap2,state,attacker,dmgcause,lastdmg\n");
@@ -419,7 +419,7 @@ fn race_to_target(
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
         race.core.sim.pad_seeking(),
         oag_raceplay::PadSeeking::Off,

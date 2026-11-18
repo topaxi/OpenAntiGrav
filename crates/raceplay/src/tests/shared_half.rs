@@ -161,7 +161,13 @@ fn crosses_on_a_fork(source: &std::path::Path, track: &str) {
         ..Options::default()
     })
     .expect("loading the circuit");
-    let start = || Race::start(loaded.setup.clone());
+    let start = || {
+        Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        )
+    };
     assert!(!start().core.sim.routes.is_empty(), "{track} has a fork");
     crosses_the_first_tick(&start, 240, &one_person_on_the_throttle);
 }

@@ -36,7 +36,7 @@ fn omega() -> Option<(race::Race, oag_sound::Audio, usize)> {
     })
     .expect("an Omega race loads");
     loaded.setup.countdown_voice = false;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),

@@ -126,7 +126,7 @@ fn the_four_travel_voices_open_together_and_close_together() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         race.core.sim.ship_count() > 1,
         "the fixture raced alone, so the LeachBeam below has no target"
@@ -240,7 +240,7 @@ fn a_quake_wave_holds_its_travel_loop_for_as_long_as_it_lasts() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
@@ -305,7 +305,7 @@ fn the_autopilot_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // loops, and the start voice has its own file
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
@@ -393,7 +393,10 @@ fn race_and_audio() -> (race::Race, oag_sound::Audio) {
         oag_audio::MIN_BUFFER,
         false,
     );
-    (race::Race::start(loaded.setup), audio)
+    (
+        race::Race::start(loaded.setup, loaded.view, loaded.modules),
+        audio,
+    )
 }
 
 fn sounding(audio: &oag_sound::Audio) -> usize {

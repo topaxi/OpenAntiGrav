@@ -120,7 +120,7 @@ fn moving_with(cage: bool) -> Option<(race::Race, oag_gameplay::InputSnapshot)> 
     if !cage {
         loaded.setup.spline = loaded.setup.spline.with_cage(None);
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -140,7 +140,7 @@ fn moving_with(cage: bool) -> Option<(race::Race, oag_gameplay::InputSnapshot)> 
 #[ignore = "needs a disc image in data/images/"]
 fn the_discs_plasma_block_decodes_as_a_projectile() {
     let Some(loaded) = single_race() else { return };
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let plasma = race
         .core
         .sim

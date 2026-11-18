@@ -124,7 +124,7 @@ fn reconcile_cost_sweep() {
             ..crate::Options::default()
         })
         .expect("loading the race");
-        let mut race = Race::start(loaded.setup);
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
         let inputs = PlayerInputs::single(
             HeldButtons::new(oag_gameplay::input::Button::Cross.bit()).snapshot(),
         );

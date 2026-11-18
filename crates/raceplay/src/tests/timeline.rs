@@ -24,7 +24,11 @@ fn inputs(tick: u64) -> PlayerInputs {
 /// A recorded run with Pilot Assist changed on a keyframe's tick and between two keyframes, and
 /// its text at every tick.
 fn recording(ticks: u64, events: &[(u64, Level)]) -> (Replay, Vec<String>) {
-    let mut race = Race::start(fixture());
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
     let mut text = vec![format!("{:?}", race.core.sim)];
     for tick in 0..ticks {
@@ -53,7 +57,13 @@ fn same_as_recorded(timeline: &Timeline, recorded: &str, tick: u64) {
 }
 
 fn opened(replay: Replay) -> Timeline {
-    let mut timeline = Timeline::open(fixture(), replay).expect("the race it records");
+    let mut timeline = Timeline::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    )
+    .expect("the race it records");
     assert_eq!(timeline.wait(), Pass::Complete);
     timeline
 }
@@ -123,7 +133,13 @@ fn a_desync_ends_the_prefix_at_the_last_agreeing_hash() {
     let flipped = &mut replay.inputs[0][200];
     flipped.stick_x = if flipped.stick_x > 0.0 { -1.0 } else { 1.0 };
     let (expected, _) = (replay.hashes[3], ());
-    let mut timeline = Timeline::open(fixture(), replay).expect("agrees at tick zero");
+    let mut timeline = Timeline::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    )
+    .expect("agrees at tick zero");
     let Pass::Desynced(desync) = timeline.wait() else {
         panic!("{:?}", timeline.pass());
     };
@@ -139,7 +155,12 @@ fn the_wrong_race_is_refused_at_tick_zero() {
     let (mut replay, _) = recording(10, &[]);
     replay.initial_hash ^= 1;
     replay.pose_track = None;
-    let Err(OpenError::NoPoseTrack(desync)) = Timeline::open(fixture(), replay) else {
+    let Err(OpenError::NoPoseTrack(desync)) = Timeline::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+    ) else {
         panic!("another race must be refused");
     };
     assert_eq!(desync.tick, 0);
@@ -156,9 +177,22 @@ fn the_wrong_race_is_refused_at_tick_zero() {
 #[test]
 fn past_the_ceiling_the_interval_doubles_and_a_seek_still_arrives() {
     let (replay, text) = recording(TICKS, &[]);
-    let one = Race::start(fixture()).core.sim.snapshot_bytes();
-    let mut timeline =
-        Timeline::open_within(fixture(), replay, 4 * one + one / 2).expect("the race it records");
+    let one = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
+    .core
+    .sim
+    .snapshot_bytes();
+    let mut timeline = Timeline::open_within(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay,
+        4 * one + one / 2,
+    )
+    .expect("the race it records");
     assert_eq!(timeline.wait(), Pass::Complete);
     assert_eq!(timeline.interval(), 2 * KEYFRAME_TICKS);
     assert_eq!(timeline.keyframes(), 4, "ticks 0, 120, 240 and 360");
@@ -188,12 +222,21 @@ fn a_keyframe_holds_the_shared_half_not_a_copy_of_it() {
 #[test]
 fn a_visit_leaves_the_live_race_as_it_found_it() {
     let start = || {
-        let mut race = Race::start(fixture());
+        let mut race = Race::start(
+            fixture(),
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        );
         race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
         race
     };
     let (mut alone, mut visited) = (start(), start());
-    let mut timeline = Timeline::live(fixture(), &visited);
+    let mut timeline = Timeline::live(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &visited,
+    );
     for tick in 0..TICKS {
         alone.tick(&inputs(tick));
         alone.core.sim.drain_cues();
@@ -224,8 +267,17 @@ fn a_visit_leaves_the_live_race_as_it_found_it() {
 /// With nothing recorded there are no inputs to resimulate, so a seek stops at a keyframe.
 #[test]
 fn a_race_that_records_nothing_rewinds_to_whole_keyframes() {
-    let mut race = Race::start(fixture());
-    let mut timeline = Timeline::live(fixture(), &race);
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut timeline = Timeline::live(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &race,
+    );
     for tick in 0..130 {
         race.tick(&inputs(tick));
         race.core.sim.drain_cues();
@@ -245,7 +297,11 @@ fn a_race_that_records_nothing_rewinds_to_whole_keyframes() {
 fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
     use oag_gameplay::Controller;
     let at = 330;
-    let mut race = Race::start(fixture());
+    let mut race = Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.controllers[1] = Controller::Local;
     race.start_recording(Header::new("fixture", "t", "m", "c", "d", 0));
     for tick in 0..TICKS {
@@ -268,7 +324,13 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
     assert_eq!(replay.events.len(), 1);
     assert_eq!(replay.events[0].tick, at);
 
-    let mut whole = Timeline::open(fixture(), replay.clone()).expect("rebuilds");
+    let mut whole = Timeline::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        replay.clone(),
+    )
+    .expect("rebuilds");
     assert_eq!(whole.wait(), Pass::Complete, "with the event it reproduces");
     // A seek past it holds the seat the driver has.
     whole.seek(TICKS - 1).expect("in the prefix");
@@ -276,7 +338,13 @@ fn a_seat_handed_to_the_driver_reproduces_and_without_its_event_desyncs() {
 
     let mut stripped = replay;
     stripped.events.clear();
-    let mut cut = Timeline::open(fixture(), stripped).expect("rebuilds");
+    let mut cut = Timeline::open(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        stripped,
+    )
+    .expect("rebuilds");
     assert!(
         matches!(cut.wait(), Pass::Desynced(desync) if desync.tick == 360),
         "without it the first stored hash after tick {at} disagrees"

@@ -70,7 +70,7 @@ fn start() -> Option<race::Race> {
     .expect("loading the race");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     assert_eq!(
         race.core.sim.ship_count(),
         8,

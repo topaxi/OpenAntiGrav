@@ -149,7 +149,7 @@ fn measure(id: &str, class: &str, field: bool, difficulty: oag_ai::Difficulty) -
     .unwrap_or_else(|error| panic!("loading {id} at {class}: {error}"));
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup);
+    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
     let slots: Vec<usize> = if field {
         (1..race.core.sim.ship_count() as usize).collect()
     } else {

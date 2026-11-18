@@ -911,7 +911,11 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
     // Control: accelerate held throughout, the same shape
     // `race_ground_truth.rs`'s driving tests use. This is the sanity check
     // that the mechanism itself works in this port at all.
-    let mut held_race = race::Race::start(loaded.setup.clone());
+    let mut held_race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     let mut held = race::HeldButtons::new(Button::Cross.bit());
     for _ in 0..TICKS {
         held_race.tick(&PlayerInputs::single(held.snapshot()));
@@ -926,7 +930,7 @@ fn zone_speed_is_automatic_and_exhaust_intensity_now_follows_it_too() {
 
     // The case in question: accelerate never pressed. Zone's auto-speed does
     // not need it, so this is a normal way to play the mode.
-    let mut coasting_race = race::Race::start(loaded.setup);
+    let mut coasting_race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..TICKS {
         coasting_race.tick(&PlayerInputs::none());
     }
@@ -979,7 +983,7 @@ fn a_pulse_zone_race_flies_the_four_corner_hover_and_a_time_trial_does_not() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         race.tick(&PlayerInputs::none());
         race.core.ship().physics.hover_rig
     };
@@ -1022,7 +1026,7 @@ fn a_zone_craft_that_falls_short_of_05_tracks_first_jump_follows_the_deck_it_lan
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut zone = race::Race::start(loaded.setup);
+    let mut zone = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     zone.core.sim.set_autopilot(true);
     let shield = zone.core.ship().physics.shield;
     let mut landed_on_route = false;
@@ -1062,7 +1066,7 @@ fn an_hd_zone_race_flies_the_racing_rig_with_the_half_gap_ray_and_a_time_trial_d
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         race.tick(&PlayerInputs::none());
         race.core.ship().physics.hover_rig
     };

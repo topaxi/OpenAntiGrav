@@ -98,7 +98,7 @@ fn compare(id: &str, positions: [[f32; 3]; 8], forwards: Option<[[f32; 3]; 8]>) 
         return (0.0, 0.0);
     };
     let loaded = race::load(&options).expect("load");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut worst_position = 0.0f32;
     let mut worst_heading = 0.0f32;
     for (index, ship) in race

@@ -131,7 +131,7 @@ fn a_held_turbo_draws_its_own_authored_green_on_a_real_race() {
         .context()
         .expect("Pure's arcade layout parses; a context is buildable");
 
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Turbo);
     race.tick(&PlayerInputs::none());
 
@@ -186,7 +186,7 @@ fn the_speed_gauge_is_three_models_drawn_flat_where_the_original_draws_them() {
     use oag_ui::frontend::Draw;
     let Some(loaded) = single_race() else { return };
     let context = loaded.hud.context().expect("a context is buildable");
-    let mut readout = race::Race::start(loaded.setup).readout();
+    let mut readout = race::Race::start(loaded.setup, loaded.view, loaded.modules).readout();
     readout.shield_max = 100.0;
     readout.shield = 100.0;
     let rects = |speed: f32, shield: f32| -> Vec<[f32; 4]> {
@@ -272,7 +272,11 @@ fn each_held_weapon_draws_its_own_glyph_in_its_own_colour_at_the_top_middle() {
     ];
     let mut masks: Vec<(W, Vec<bool>)> = Vec::new();
     for (weapon, rgb) in weapons {
-        let mut race = race::Race::start(loaded.setup.clone());
+        let mut race = race::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        );
         race.core.sim.world.ships[0].pickup.weapon = Some(weapon);
         race.tick(&PlayerInputs::none());
         let frame = oag_hud::draw_list(&context, &race.readout());

@@ -25,7 +25,11 @@ fn four_people_against_a_wall(seat: Option<usize>) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     for slot in 1..4 {
         race.core.sim.world.controllers[slot] = Controller::Local;
         assert!(

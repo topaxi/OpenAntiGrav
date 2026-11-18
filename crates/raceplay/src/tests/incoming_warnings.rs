@@ -23,7 +23,11 @@ fn grid_in(mode: Mode, weapon: Weapon, table: oag_tables::weapons::WeaponStats, 
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.weapons = Some(Arc::new(table));
     for _ in 0..5 {
         race.tick(&PlayerInputs::none());

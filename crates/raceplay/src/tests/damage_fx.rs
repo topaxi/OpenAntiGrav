@@ -17,17 +17,18 @@ fn race_with_smoke(smoke: bool) -> Race {
 fn race_with_smoke_inheriting(smoke: bool, inherit: f32) -> Race {
     let mut handling = hulled_handling();
     handling.dimensions.shield = 100.0;
-    let mut setup = setup(handling);
+    let setup = setup(handling);
+    let mut view = crate::tests::fixture_view();
     if smoke {
         for trigger in [DamageMild, DamageModerate, DamageCritical] {
             let blob = super::respawn::one_emitter_pob(super::respawn::trigger_name(trigger), 0);
             let mut effect = oag_fx::psys::Effect::parse(&blob, oag_fx::psys::ColourScale::Full)
                 .expect("the hand-laid effect parses");
             effect.emitters[0].velocity_inherit = inherit;
-            setup.handles.insert(trigger, effect);
+            view.handles.insert(trigger, effect);
         }
     }
-    Race::start(setup)
+    Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
 fn hit_leaving(race: &mut Race, shield: f32, leach: bool) {

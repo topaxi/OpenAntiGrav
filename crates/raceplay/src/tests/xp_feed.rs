@@ -15,7 +15,11 @@ const XML: &str = r#"<XPAwards>
 fn armed_zone_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.arm_xp(XpTally::new(
         Awards::parse(XML).expect("fixture"),
         Column::Zone,
@@ -67,7 +71,11 @@ fn a_kill_pays_once_and_only_after_the_countdown() {
 fn an_unarmed_race_gathers_nothing() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     run_past_the_countdown(&mut race, 700);
     assert!(race.core.sim.xp_tally().is_none());
 }
@@ -85,7 +93,11 @@ fn progress(awards: Option<Awards>) -> crate::Campaign2048Progress {
 
 #[test]
 fn an_event_with_a_table_arms_the_tally_in_its_column_and_one_without_does_not() {
-    let mut race = Race::start(setup(hulled_handling()));
+    let mut race = Race::start(
+        setup(hulled_handling()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.arm_event_xp(&progress(None));
     assert!(race.core.sim.xp_tally().is_none());
     race.core.sim.arm_event_xp(&progress(Awards::parse(XML)));
@@ -107,5 +119,14 @@ fn a_kill_raises_the_readouts_xp_by_the_authored_amount() {
 
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
-    assert_eq!(Race::start(setup).readout().race_xp, None);
+    assert_eq!(
+        Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default()
+        )
+        .readout()
+        .race_xp,
+        None
+    );
 }

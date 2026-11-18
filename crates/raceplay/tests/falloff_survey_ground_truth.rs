@@ -127,7 +127,7 @@ fn measure(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let slot = if population == "ai" { LONE } else { 0 };
     for other in 0..8 {
         if other != slot {
@@ -407,7 +407,7 @@ fn grid_slots_spawn_over_a_floor() {
             }) else {
                 return;
             };
-            let mut race = race::Race::start(loaded.setup);
+            let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
             for other in 0..8 {
                 if other != slot {
                     race.core.sim.world.ships[other].active = false;
@@ -509,7 +509,7 @@ fn shove_sweep() {
         }) else {
             return;
         };
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for other in 1..8 {
             race.core.sim.world.ships[other].active = false;
         }
@@ -655,7 +655,7 @@ fn edge_profile() {
         }) else {
             return;
         };
-        let race = race::Race::start(loaded.setup);
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let collision = race.core.sim.collision();
         let label = format!("{}{}", circuit.id, if circuit.reversed { "r" } else { "" });
         let len = race.core.sim.spline().len();
@@ -812,7 +812,7 @@ fn shove_trial_trace() {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for other in 1..8 {
         race.core.sim.world.ships[other].active = false;
     }
@@ -978,7 +978,7 @@ fn window_trace() {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for other in 0..8 {
         race.core.sim.world.ships[other].active = other == slot;
     }

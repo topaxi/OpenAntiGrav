@@ -37,7 +37,10 @@ fn started_in(track: &str, mode: oag_race::Mode) -> Option<(Race, Vec<String>)> 
     })
     .expect("loading the race");
     let report = loaded.report.clone();
-    Some((Race::start(loaded.setup), report))
+    Some((
+        Race::start(loaded.setup, loaded.view, loaded.modules),
+        report,
+    ))
 }
 
 fn cross(down: bool) -> PlayerInputs {

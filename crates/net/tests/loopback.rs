@@ -6,7 +6,7 @@ use oag_net::client::{Client, Phase, Stats};
 use oag_net::host::Host;
 use oag_net::link::{Clock, Conditions, Link, Loopback, Shim};
 use oag_net::wire::RaceParams;
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup};
 
 /// What a test client flies with: a function of the tick, so every run is the
 /// same and the two clients differ.
@@ -165,10 +165,11 @@ pub(crate) fn params(people: u8) -> RaceParams {
 }
 
 pub(crate) fn headless(params: &RaceParams) -> Box<Race> {
-    let mut race = Box::new(Race::start(Setup::headless(
-        oag_race::Mode::SingleRace,
-        params.seed,
-    )));
+    let mut race = Box::new(Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, params.seed),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    ));
     oag_net::race::prepare(&mut race, params).expect("prepares");
     race
 }

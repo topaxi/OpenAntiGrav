@@ -22,7 +22,11 @@ pub(super) fn grid_on_a_speed_pad() -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 #[test]
@@ -192,7 +196,11 @@ fn every_cue_has_something_that_raises_it() {
     setup.mode = Mode::SingleRace;
     setup.speedup_pads = enveloping_pad();
     setup.weapons = Some(wall_fixture_weapons_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut buttons = Buttons::new();
     let mut raised = std::collections::BTreeSet::new();
@@ -389,7 +397,11 @@ fn plasma_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_plasma_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -426,7 +438,11 @@ fn rocket_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_rocket_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -463,7 +479,11 @@ fn cannon_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -506,7 +526,11 @@ fn cannon_hits_a_wall() -> std::collections::BTreeSet<Cue> {
     );
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_cannon_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Cannon);
 
     let mut buttons = Buttons::new();
@@ -534,7 +558,11 @@ fn shuriken_bounces_off_a_wall() -> std::collections::BTreeSet<Cue> {
     );
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_shuriken_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Shuriken);
 
     let mut buttons = Buttons::new();
@@ -569,7 +597,11 @@ fn quake_hits_a_craft() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -600,7 +632,11 @@ fn leach_fires_locked() -> std::collections::BTreeSet<Cue> {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_leach_beam_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -722,7 +758,11 @@ fn a_re_press_while_a_quake_wave_travels_still_raises_quakelaunch() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_quake_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ships[0].pickup.weapon = Some(oag_tables::weapons::Weapon::Quake);
 
     let mut buttons = Buttons::new();
@@ -776,7 +816,11 @@ fn a_locked_leachbeam_pulses_leachenergy_and_not_every_tick() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(one_leach_beam_table());
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -867,7 +911,11 @@ fn zone_race() -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Zone;
     setup.zone_stages = Some(&TEST_ZONE_STAGES);
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// The speed-class announcer's own trigger: it fires on a stage *boundary*,
@@ -913,7 +961,11 @@ fn a_title_with_no_zone_stages_never_raises_a_class_announcement() {
     // The default `setup()` fixture already leaves this `None` - restated
     // here so the test does not depend on that staying true by accident.
     setup.zone_stages = None;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let mut raised = Vec::new();
     // Past the start-line countdown, through which the zone machine holds.

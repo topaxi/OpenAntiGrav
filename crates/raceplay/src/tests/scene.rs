@@ -112,6 +112,7 @@ fn each_craft_s_exhaust_follows_its_own_throttle() {
 #[test]
 fn every_craft_lays_its_own_ribbon() {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
     setup.start_position = Some(oag_vex::track::StartPosition {
         position: [0.0, 0.0, 0.0],
@@ -125,8 +126,8 @@ fn every_craft_lays_its_own_ribbon() {
     // what the test needs is only that the eight are far enough apart to tell
     // one craft's ribbon from another's, and the grid's own 19.79-unit step
     // is 25 times this.
-    setup.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
-    let mut race = Race::start(setup);
+    view.nozzles = vec![Some(Vec3::new(0.0, 0.0, -0.8)); MAX_SHIPS];
+    let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
     // `Exhaust::trail_ready` gates the ribbon on a full ring, which is the
     // original's own gate, so this needs one tick per sample.
     for _ in 0..oag_fx::exhaust::TRAIL_SAMPLES {

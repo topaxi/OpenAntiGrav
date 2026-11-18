@@ -52,7 +52,7 @@ fn a_finished_omega_event_raises_the_stored_xp_by_the_authored_award() {
         .clone()
         .expect("an event fills this");
     let awards = progress.xp_awards.clone().expect("Omega's table");
-    let mut run = race::Race::start(loaded.setup);
+    let mut run = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     run.core.sim.arm_event_xp(&progress);
     run.core.sim.set_autopilot(true);
     while !run.core.sim.finished() && run.core.sim.world.tick < 30_000 {

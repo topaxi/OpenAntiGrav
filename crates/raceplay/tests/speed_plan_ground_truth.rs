@@ -72,7 +72,11 @@ fn slice(class: &str, reversed: bool) {
             .map(|&eps| {
                 let mut setup = loaded.setup.clone();
                 perturb::apply(&mut setup, eps);
-                let race = race::Race::start(setup);
+                let race = race::Race::start(
+                    setup,
+                    oag_raceplay::ViewSetup::headless(),
+                    oag_raceplay::extensions::Prepared::default(),
+                );
                 let (plan, report) = race.core.sim.build_player_speed_plan();
                 assert_eq!(plan.len(), race.core.sim.racing_line().len());
                 (plan, report)
@@ -156,8 +160,12 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         ..race::Options::default()
     })
     .expect("loading 07_Track");
-    let mut lazy = race::Race::start(loaded.setup.clone());
-    let mut ahead = race::Race::start(loaded.setup);
+    let mut lazy = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    let mut ahead = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         lazy.core.sim.use_original_ai(None, 1) && ahead.core.sim.use_original_ai(None, 1),
         "the original driver flies, so only the fork asks for plans"
@@ -227,7 +235,14 @@ fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> boo
         .map(|&eps| {
             let mut setup = loaded.setup.clone();
             perturb::apply(&mut setup, eps);
-            let (_, report) = race::Race::start(setup).core.sim.build_player_speed_plan();
+            let (_, report) = race::Race::start(
+                setup,
+                oag_raceplay::ViewSetup::headless(),
+                oag_raceplay::extensions::Prepared::default(),
+            )
+            .core
+            .sim
+            .build_player_speed_plan();
             println!(
                 "{track} {class} {eps}: failures {}, respawns {}, lap {:?}, unresolved {:?}",
                 report.verify_failures,

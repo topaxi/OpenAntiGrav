@@ -149,7 +149,11 @@ impl LoadWorker {
                 // the scene build; see `Loaded::started`.
                 #[cfg(target_arch = "wasm32")]
                 let loaded = loaded.map(|mut loaded| {
-                    loaded.started = Some(Box::new(crate::Race::start(loaded.setup.clone())));
+                    loaded.started = Some(Box::new(crate::Race::start(
+                        loaded.setup.clone(),
+                        loaded.view.clone(),
+                        loaded.modules.clone(),
+                    )));
                     loaded
                 });
                 // Natively, so the speed plans learn beside the scene build

@@ -93,7 +93,7 @@ fn the_pad_force_time_takes_two_elements_and_releasing_it_lets_them_go() {
     let Some(loaded) = loaded() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..10 {
         race.tick(&PlayerInputs::none());
     }
@@ -118,7 +118,7 @@ fn a_craft_under_a_speed_pad_lays_two_ribbons_that_fade_out() {
     let Some(loaded) = loaded() else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     // The autopilot takes the grid up to speed; the pad is held on slot 0 by hand.
     for _ in 0..900 {
@@ -220,7 +220,7 @@ fn the_lineage_titles_lay_the_contrail_under_a_pad_too() {
             ),
             "{image}: labelled inherited from HD"
         );
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..10 {
             race.tick(&PlayerInputs::none());
         }
@@ -287,7 +287,7 @@ fn the_psp_titles_lay_hds_contrail_only_with_the_setting_on() {
                 .any(|l| l.contains("an enhancement of this project's")),
             "{image}: the report names it an enhancement"
         );
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..10 {
             race.tick(&PlayerInputs::none());
         }

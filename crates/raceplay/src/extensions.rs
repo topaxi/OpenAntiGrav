@@ -417,7 +417,7 @@ pub fn prepare(
         }
         Prepared {
             beacons,
-            ..Prepared::default()
+            ..crate::extensions::Prepared::default()
         }
     }
     #[cfg(feature = "extensions")]
@@ -425,7 +425,7 @@ pub fn prepare(
         if sources.is_empty() {
             return Prepared {
                 beacons,
-                ..Prepared::default()
+                ..crate::extensions::Prepared::default()
             };
         }
         let region = match track::encode(track) {
@@ -440,7 +440,7 @@ pub fn prepare(
                 );
                 return Prepared {
                     beacons,
-                    ..Prepared::default()
+                    ..crate::extensions::Prepared::default()
                 };
             }
         };

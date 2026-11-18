@@ -75,7 +75,7 @@ fn fly(pose: ([f32; 3], f32), ticks: usize) -> Option<(Vec<Option<Vec3>>, f32)> 
         ..race::Options::default()
     })
     .expect("loading Talon's Junction");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let rest = (
         race.core.sim.world.ships[0].physics.body.position,
         race.core.sim.world.ships[0].physics.body.orientation,

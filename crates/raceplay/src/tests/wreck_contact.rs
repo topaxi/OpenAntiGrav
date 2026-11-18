@@ -18,7 +18,11 @@ fn grid(mode: Mode) -> Race {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    Race::start(setup)
+    Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    )
 }
 
 /// Slot 1 on top of slot 0 and closing, `down` the state slot 1 is in. Returns how far the pass

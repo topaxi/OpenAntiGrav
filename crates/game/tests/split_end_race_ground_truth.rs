@@ -43,7 +43,7 @@ fn two_people_reach_the_end_with_both_results_and_one_view() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     race.core.sim.set_autopilot(true);
 
@@ -216,7 +216,7 @@ fn head_to_head_people_end_on_a_board_of_two_with_a_winner() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Vertical);
     race.core.sim.set_autopilot(true);
     while !race.core.sim.finished() && race.core.sim.world.tick < CAP {

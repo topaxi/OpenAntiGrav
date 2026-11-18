@@ -157,7 +157,7 @@ fn run(scenario: &str, id: &str, entry: &str, reversed: bool, class: &str) -> (S
         eprintln!("skipping {entry} at {class}: it does not load");
         return (String::new(), String::new());
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // `player`: the field with slot 0 flown by the operator's autopilot at the
     // top level, standing in for a human who keeps up; the opponents are still
     // the measured craft. Otherwise slot 0 sits out.
@@ -479,7 +479,7 @@ fn plan_floor_report() {
             }) else {
                 continue;
             };
-            let race = race::Race::start(loaded.setup);
+            let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
             let (plan, report) = race.core.sim.build_speed_plan(1);
             let mut runs: Vec<(usize, usize, f32)> = Vec::new();
             for i in 0..plan.len() {
@@ -541,7 +541,7 @@ fn takeoff_census() {
                 eprintln!("skipping {entry}: it does not load");
                 continue;
             };
-            let race = race::Race::start(loaded.setup);
+            let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
             let line = race.core.sim.racing_line();
             let n = line.len();
             for lip in 0..n {

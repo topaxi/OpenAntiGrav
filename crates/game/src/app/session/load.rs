@@ -1009,7 +1009,11 @@ impl Session {
                 oag_raceplay::loader_log::lines(&loaded.report);
                 // The viewer's timeline starts its own race from the same setup.
                 if let Some(watching) = self.watching.as_mut() {
-                    watching.setup = Some(loaded.setup.clone());
+                    watching.setup = Some((
+                        loaded.setup.clone(),
+                        loaded.view.clone(),
+                        loaded.modules.clone(),
+                    ));
                 }
                 let request = crate::app::race_build::Request {
                     gpu: self.gpu.handles(),

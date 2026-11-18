@@ -26,7 +26,7 @@
 //! ```
 
 use oag_gameplay::{Controller, PlayerInputs};
-use oag_raceplay::{Race, Setup};
+use oag_raceplay::{Race, SimSetup, ViewSetup};
 
 /// Ticks to run when the command line says nothing.
 const DEFAULT_TICKS: u32 = 120;
@@ -49,7 +49,11 @@ fn main() {
             std::process::exit(2);
         });
 
-    let mut race = Race::start(Setup::headless(oag_race::Mode::SingleRace, SEED));
+    let mut race = Race::start(
+        SimSetup::headless(oag_race::Mode::SingleRace, SEED),
+        ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
 
     // Three people and five drivers. Written here rather than by `Race::start`
     // because the front end is what decides how many people are racing, and

@@ -187,8 +187,7 @@ fn duel(extensions: Prepared) -> Race {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SingleRace;
     setup.weapons = Some(table());
-    setup.extensions = extensions;
-    let mut race = Race::start(setup);
+    let mut race = Race::start(setup, crate::tests::fixture_view(), extensions);
     race.core.sim.world.ship_count = 2;
     race.core.sim.world.ships[1].active = true;
     race.core.sim.world.ships[1].handling = hulled_handling();
@@ -361,14 +360,14 @@ fn a_shield_the_module_holds_outlasts_its_timer_and_ends_once_it_stops() {
 
 #[test]
 fn a_race_without_a_module_hashes_the_same_run_twice_and_an_unshielded_craft_takes_the_rocket() {
-    let mut race = duel(Prepared::default());
+    let mut race = duel(crate::extensions::Prepared::default());
     let mut buttons = Buttons::new();
     let mut hashes = Vec::new();
     for tick in 0..90 {
         step(&mut race, &mut buttons, tick == 0);
         hashes.push(race.core.sim.state_hash());
     }
-    let mut plain = duel(Prepared::default());
+    let mut plain = duel(crate::extensions::Prepared::default());
     let mut buttons = Buttons::new();
     for (tick, hash) in hashes.iter().enumerate() {
         step(&mut plain, &mut buttons, tick == 0);

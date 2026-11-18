@@ -5,7 +5,6 @@
 
 use super::extensions::grid;
 use super::*;
-use crate::extensions::Prepared;
 use crate::transit::Distance;
 use oag_gameplay::PlayerInputs;
 
@@ -13,7 +12,7 @@ use oag_gameplay::PlayerInputs;
 /// grid slot is past the end, where the ring closes on itself), run until it has a fix,
 /// then given 30 units a second down the track (it sits through the countdown).
 fn moving() -> Race {
-    let mut race = grid(Prepared::default());
+    let mut race = grid(crate::extensions::Prepared::default());
     let ship = &mut race.core.sim.world.ships[1];
     ship.physics.body.position.x = 10.0;
     ship.physics.body.position.z = 0.0;
@@ -444,7 +443,8 @@ mod guest {
                 c = REPLY + 4,
             ),
         );
-        let (vanilla, _) = super::super::extensions::run(grid(Prepared::default()), 600);
+        let (vanilla, _) =
+            super::super::extensions::run(grid(crate::extensions::Prepared::default()), 600);
         let (stopped, _) = super::super::extensions::run(grid(prepared(&[stopper])), 600);
         assert_eq!(stopped.core.sim.extension_reports()[0].faulted, None);
         let (v, s) = (speed(&vanilla, 1), speed(&stopped, 1));

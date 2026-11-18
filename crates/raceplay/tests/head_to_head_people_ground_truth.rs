@@ -24,7 +24,7 @@ fn two_people(opponents: bool) -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(race.set_viewport_count(2), 2);
     race.set_cut(Cut::Vertical);
     for slot in 0..2 {
@@ -81,7 +81,7 @@ fn one_person_races_one_ai_opponent() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let race = Race::start(loaded.setup);
+        let race = Race::start(loaded.setup, loaded.view, loaded.modules);
         assert_eq!(race.core.sim.world.ship_count, 2, "hatch: {opponents}");
         assert_eq!(
             race.core.sim.world.controllers[1],
@@ -185,7 +185,7 @@ fn one_persons_head_to_head_is_the_same_race_with_or_without_the_hatch() {
             ..race::Options::default()
         })
         .expect("loading the race");
-        let mut race = Race::start(loaded.setup);
+        let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
         race.core.sim.set_autopilot(true);
         for _ in 0..600 {
             race.tick(&PlayerInputs::none());

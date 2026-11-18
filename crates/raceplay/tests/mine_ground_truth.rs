@@ -112,7 +112,7 @@ fn laid(race: &race::Race) -> Vec<oag_weapons::projectile::Projectile> {
 /// there.
 fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
     let loaded = single_race()?;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -139,7 +139,7 @@ fn moving() -> Option<(race::Race, oag_gameplay::InputSnapshot)> {
 #[ignore = "needs a disc image in data/images/"]
 fn one_press_lays_a_cluster_spread_along_the_track() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // Enough ticks under full throttle that the craft is genuinely moving before
     // the drop starts - a stationary craft lays five mines in one place and
     // every gap assertion below passes for the wrong reason. See
@@ -243,7 +243,7 @@ fn one_press_lays_a_cluster_spread_along_the_track() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_mine_is_laid_at_the_crafts_own_position() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -284,7 +284,7 @@ fn a_mine_is_laid_at_the_crafts_own_position() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));
@@ -347,7 +347,7 @@ fn a_cluster_trips_on_a_rival_and_not_on_its_own_dropper() {
 #[ignore = "needs a disc image in data/images/"]
 fn a_quake_wave_under_a_mine_sets_it_off_quietly() {
     let Some(loaded) = single_race() else { return };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let throttle = held(Button::Cross);
     for _ in 0..WARM_UP_TICKS {
         race.tick(&PlayerInputs::single(throttle));

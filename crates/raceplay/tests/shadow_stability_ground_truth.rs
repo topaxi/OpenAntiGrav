@@ -53,7 +53,7 @@ fn measure(mode: oag_race::Mode, warm: u64, conform: bool) -> Option<Window> {
     })
     .expect("loading the race");
     let hull = loaded.shadows.hulls[0].clone().expect("an authored hull");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     for _ in 0..warm {
         race.tick(&PlayerInputs::none());

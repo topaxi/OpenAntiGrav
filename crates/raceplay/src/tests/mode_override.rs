@@ -18,7 +18,11 @@ fn laps_override_wins_over_the_per_class_table_for_time_trial() {
     setup.mode = Mode::TimeTrial;
     setup.class = "VENOM".to_string();
     setup.laps_override = Some(5);
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(race.core.sim.world.laps_target(), Some(5));
 }
 
@@ -30,7 +34,11 @@ fn laps_override_wins_over_the_per_class_table_for_single_race() {
     setup.mode = Mode::SingleRace;
     setup.class = "VENOM".to_string();
     setup.laps_override = Some(7);
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(race.core.sim.world.laps_target(), Some(7));
 }
 
@@ -42,7 +50,11 @@ fn no_override_leaves_the_per_class_table_in_charge() {
     setup.mode = Mode::TimeTrial;
     setup.class = "VENOM".to_string();
     setup.laps_override = None;
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
         race.core.sim.world.laps_target(),
         Some(Mode::TIME_TRIAL_LAPS_BY_CLASS[SpeedClass::VENOM.index()])
@@ -74,7 +86,11 @@ fn an_override_would_still_apply_to_speed_lap_which_is_exactly_why_the_caller_mu
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::SpeedLap;
     setup.laps_override = Some(2);
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
         race.core.sim.world.laps_target(),
         Some(2),
@@ -90,7 +106,11 @@ fn eliminator_kill_target_overrides_the_default() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Eliminator;
     setup.eliminator_kill_target = Some(7);
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(race.core.sim.eliminator_kill_target, 7);
 }
 
@@ -101,7 +121,11 @@ fn no_eliminator_kill_target_falls_back_to_the_default() {
     let mut setup = setup(hulled_handling());
     setup.mode = Mode::Eliminator;
     setup.eliminator_kill_target = None;
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
         race.core.sim.eliminator_kill_target,
         Mode::ELIMINATOR_KILL_TARGET_DEFAULT
@@ -119,7 +143,11 @@ fn a_single_race_with_weapons_off_has_no_pads_and_no_weapon_damage() {
         setup.mode = mode;
         setup.weapon_pads = enveloping_pad();
         setup.weapons_override = weapons_override;
-        Race::start(setup)
+        Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )
     };
 
     let on = race_with(Mode::SingleRace, None);
@@ -160,7 +188,15 @@ fn a_class_with_no_driver_fields_no_opponents() {
             forward: [1.0, 0.0, 0.0],
         });
         setup.no_opponents = no_opponents;
-        Race::start(setup).core.sim.world.ship_count
+        Race::start(
+            setup,
+            crate::tests::fixture_view(),
+            crate::extensions::Prepared::default(),
+        )
+        .core
+        .sim
+        .world
+        .ship_count
     };
     assert_eq!(grid(false), 8);
     assert_eq!(grid(true), 1);

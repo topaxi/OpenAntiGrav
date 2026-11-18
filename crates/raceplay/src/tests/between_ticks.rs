@@ -227,8 +227,16 @@ fn settling_draws_the_current_tick() {
 /// between every tick, as the window does, moves no state hash.
 #[test]
 fn a_draw_alpha_reaches_no_state_hash() {
-    let mut drawn = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
-    let mut plain = Race::start(Setup::headless(Mode::SingleRace, 0xC0FFEE));
+    let mut drawn = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
+    let mut plain = Race::start(
+        SimSetup::headless(Mode::SingleRace, 0xC0FFEE),
+        crate::ViewSetup::headless(),
+        crate::extensions::Prepared::default(),
+    );
     for tick in 0..120u32 {
         drawn.set_draw_alpha((tick % 7) as f32 / 7.0);
         let _ = (

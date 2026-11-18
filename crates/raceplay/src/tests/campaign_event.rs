@@ -11,9 +11,22 @@ use super::*;
 #[test]
 fn the_setups_campaign_event_reaches_the_readout() {
     let mut setup = setup(hulled_handling());
+    let mut view = crate::tests::fixture_view();
     setup.mode = Mode::SingleRace;
-    assert!(!Race::start(setup.clone()).readout().campaign_event);
+    assert!(
+        !Race::start(
+            setup.clone(),
+            view.clone(),
+            crate::extensions::Prepared::default()
+        )
+        .readout()
+        .campaign_event
+    );
 
-    setup.campaign_event = true;
-    assert!(Race::start(setup).readout().campaign_event);
+    view.campaign_event = true;
+    assert!(
+        Race::start(setup, view, crate::extensions::Prepared::default())
+            .readout()
+            .campaign_event
+    );
 }

@@ -143,7 +143,7 @@ fn respawn(title: &str) {
     };
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
-    let mut race = Race::start(loaded.setup);
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
     race.start_recording(oag_replay::Header::new(
         title,
         "default",

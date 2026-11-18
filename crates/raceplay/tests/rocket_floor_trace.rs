@@ -253,7 +253,7 @@ fn trace_a_rocket_volley_along_the_floor() {
     let Some(loaded) = load(title, track) else {
         return;
     };
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
     let dt = race.core.sim.dt();
 

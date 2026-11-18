@@ -64,7 +64,11 @@ fn recording(loaded: &race::Loaded) -> oag_replay::Replay {
         campaign_skill: None,
         skill_level: None,
     };
-    let mut race = Race::start(loaded.setup.clone());
+    let mut race = Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     race.core.sim.apply_launch(&launch);
     let mut header = Header::new("pulse", "default", "time_trial", "venom", "default", 7);
     header.options = launch.to_table();
@@ -122,8 +126,18 @@ fn render(
         .join(name);
     std::fs::create_dir_all(path.parent().expect("a directory")).expect("a scratch directory");
     let mut audio = audio(&path);
-    let mut viewer = Viewer::open(loaded.setup.clone(), replay.clone()).expect("rebuilds");
-    let mut race = Box::new(Race::start(loaded.setup.clone()));
+    let mut viewer = Viewer::open(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+        replay.clone(),
+    )
+    .expect("rebuilds");
+    let mut race = Box::new(Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    ));
     viewer.begin(&mut race).expect("the launch settings");
     while viewer.built().is_none() {
         std::thread::sleep(std::time::Duration::from_millis(2));

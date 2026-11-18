@@ -59,8 +59,8 @@ fn lap(image: &Path, track: &str) -> Option<(race::Race, TrackEmitters)> {
     .expect("loading the race");
     // Parsed by `race::load` itself, off the same `.vex` it builds the circuit
     // from - so this measures what a real race carries, not a second decode.
-    let emitters = loaded.setup.track_emitters.clone();
-    let mut race = race::Race::start(loaded.setup);
+    let emitters = loaded.view.track_emitters.clone();
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // The player is flown by their own racing line, so the ears go all the way
     // round rather than into the first wall. See `RaceSim::set_autopilot`.
     race.core.sim.set_autopilot(true);

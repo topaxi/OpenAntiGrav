@@ -52,7 +52,11 @@ fn an_extra_view_follows_its_own_craft_and_the_players_is_untouched() {
 
 #[test]
 fn the_count_is_clamped_to_the_craft_fielded() {
-    let mut solo = Race::start(setup(Handling::default()));
+    let mut solo = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(
         solo.set_viewport_count(4),
         1,

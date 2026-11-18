@@ -90,7 +90,7 @@ fn start(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let race = race::Race::start(loaded.setup);
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert_eq!(
         race.core.sim.route_count(),
         1,

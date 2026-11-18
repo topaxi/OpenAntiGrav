@@ -68,7 +68,7 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<()> {
         ..race::Options::default()
     })
     .expect("loading");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].active = false;
     let count = race.core.sim.ship_count() as usize;
     let mut c = vec![Craft::default(); count];

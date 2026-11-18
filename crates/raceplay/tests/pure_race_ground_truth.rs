@@ -299,7 +299,7 @@ fn every_pure_circuit_decodes_geometry_collision_and_a_spline() {
 fn a_craft_under_power_drives_a_pure_circuit_and_a_wall_stops_it() {
     for (label, image) in images() {
         let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for slot in 1..oag_gameplay::MAX_SHIPS {
             race.core.sim.world.ships[slot].active = false;
         }
@@ -499,10 +499,10 @@ fn a_pure_race_loads_its_own_plasma_blast_trio() {
             );
         }
         assert!(
-            loaded.setup.disruptor_craft_law.is_some(),
+            loaded.view.disruptor_craft_law.is_some(),
             "{label}: the on-craft Disruptor law is Pure's"
         );
-        let law = loaded.setup.plasma_blast_law.expect("Pure's blast law");
+        let law = loaded.view.plasma_blast_law.expect("Pure's blast law");
         assert_eq!(law.life, 2.0, "{label}");
         assert_eq!(law.hemisphere_drop, 3.5, "{label}");
         assert!(law.halo_hide_at.is_none(), "{label}");
@@ -547,7 +547,7 @@ fn a_pure_race_loads_the_effects_its_weapons_play() {
                     .effect_on(*trigger)
                     .unwrap_or_else(|| panic!("{label}: Pure's table has no {trigger:?}"));
                 assert!(
-                    loaded.setup.effects.get(spec.effect).is_some(),
+                    loaded.view.effects.get(spec.effect).is_some(),
                     "{label}: {group} {trigger:?} ({}) did not decode: {:#?}",
                     spec.effect,
                     loaded.report
@@ -591,7 +591,7 @@ fn pure_crafts_fly_without_the_pitch_gate_and_pulse_crafts_with_it() {
             ..race::Options::default()
         })
         .unwrap_or_else(|e| panic!("{label}: loading its default race: {e:#}"));
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let count = race.core.sim.world.ship_count as usize;
         assert!(count > 1, "{label}: a single race seats a field");
         for slot in 0..count {

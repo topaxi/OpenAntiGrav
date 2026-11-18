@@ -288,7 +288,7 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
         ..oag_raceplay::Options::default()
     })
     .expect("an Omega race loads");
-    let sounds = &loaded.setup.sounds;
+    let sounds = &loaded.view.sounds;
     let report: Vec<&String> = sounds
         .report
         .iter()

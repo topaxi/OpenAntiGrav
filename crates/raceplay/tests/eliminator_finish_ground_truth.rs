@@ -26,7 +26,7 @@ fn loaded_eliminator_seeded(kill_target: Option<u32>, seed: Option<u64>) -> Opti
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(race::Race::start(loaded.setup))
+    Some(race::Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 /// The field, left alone, credits kills to its craft and reaches the original's

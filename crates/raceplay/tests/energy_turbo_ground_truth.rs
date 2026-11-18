@@ -94,7 +94,7 @@ fn race_on(
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // This project's driver steers (a scripted stick finds the first bend's wall); the
     // buttons below still reach the pickup and the mod.
     race.core.sim.set_autopilot(true);
@@ -442,7 +442,7 @@ fn a_modded_race_records_its_module_and_its_shot_resimulates_only_with_it() {
     };
     let loaded = race::load(&options).expect("loading the race");
     let seed = loaded.setup.seed;
-    let mut modded = race::Race::start(loaded.setup);
+    let mut modded = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(modded.core.sim.is_modded());
     modded.start_recording(oag_replay::Header::new(
         "pulse",

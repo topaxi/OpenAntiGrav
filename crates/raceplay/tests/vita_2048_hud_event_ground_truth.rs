@@ -53,7 +53,7 @@ fn options(source: &Path) -> oag_raceplay::Options {
 /// Every `HUD`-font string the loaded race's first frame draws, and whether the layout authors
 /// the two widgets at all.
 fn first_frame(loaded: oag_raceplay::Loaded) -> (Vec<String>, bool, bool) {
-    let race = oag_raceplay::Race::start(loaded.setup);
+    let race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let readout = race.readout();
     let context = loaded.hud.context().expect("the layout parses");
     let authored = (
@@ -79,7 +79,7 @@ fn a_campaign_event_draws_xp_and_no_objective() {
     let Some(source) = source() else { return };
     let loaded = oag_raceplay::load_event(&options(&source), "2048 - Event 1").expect("it loads");
     assert!(loaded.campaign_2048_event.is_some());
-    assert!(loaded.setup.campaign_event);
+    assert!(loaded.view.campaign_event);
     let (text, xp_authored, objective_authored) = first_frame(loaded);
     assert!(xp_authored && objective_authored, "the layout authors both");
     assert!(text.iter().any(|text| text == "XP"), "{text:?}");
@@ -105,7 +105,7 @@ fn a_dlc_circuit_raced_with_no_event_draws_neither() {
     .expect("the DLC circuit loads");
     the_pack_copy_sets_the_exposure_held_for_a_comparison(&loaded);
     assert!(loaded.campaign_2048_event.is_none());
-    assert!(!loaded.setup.campaign_event);
+    assert!(!loaded.view.campaign_event);
     let (text, xp_authored, objective_authored) = first_frame(loaded);
     assert!(xp_authored && objective_authored, "the layout authors both");
     assert!(!text.iter().any(|text| text == "XP"), "{text:?}");
@@ -249,7 +249,7 @@ fn pilot_assist_draws_its_icon_whole_and_the_total_reads_hundredths() {
     })
     .expect("the DLC circuit loads");
     let context = loaded.hud.context().expect("the layout parses");
-    let mut race = oag_raceplay::Race::start(loaded.setup);
+    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let icon_uv = |race: &oag_raceplay::Race| {
         oag_hud::draw_list(&context, &race.readout())
             .sprites

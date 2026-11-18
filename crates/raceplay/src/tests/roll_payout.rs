@@ -10,10 +10,14 @@ use oag_gameplay::cue::Cue;
 fn rolled_and_falling(turbotime: f32) -> Race {
     let mut handling = hulled_handling();
     handling.roll_turbotime = turbotime;
-    let mut race = Race::start(setup_with(
-        handling,
-        vec![upward_plane(0.0, oag_physics::Surface::Floor)],
-    ));
+    let mut race = Race::start(
+        setup_with(
+            handling,
+            vec![upward_plane(0.0, oag_physics::Surface::Floor)],
+        ),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     // Past the countdown: the grid holds a craft in place until the green light.
     for _ in 0..oag_race::COUNTDOWN_TICKS + 2 {
         race.tick(&PlayerInputs::none());

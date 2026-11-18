@@ -26,7 +26,7 @@ fn no_wave_start_quad_leaves_the_guard_band() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     for _ in 0..oag_race::COUNTDOWN_TICKS + 5 {
         race.tick(&PlayerInputs::none());
     }

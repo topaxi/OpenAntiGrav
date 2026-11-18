@@ -92,7 +92,7 @@ mod race {
 
     fn weather_after(track: &str, ticks: u32) -> Option<(bool, bool, usize)> {
         let loaded = load(track)?;
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..ticks {
             race.tick(&PlayerInputs::none());
         }
@@ -141,13 +141,13 @@ mod race {
         let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
             return;
         };
-        let setup: Setup = loaded.setup.scenery_fx.weather.clone().expect("weather");
+        let setup: Setup = loaded.view.scenery_fx.weather.clone().expect("weather");
         let covered = setup.anchors.first().expect("an anchor").section;
         let open = (0..64u8)
             .find(|s| !setup.anchors.iter().any(|a| a.section == *s))
             .expect("an open section");
         let mut weather = Weather::new(Some(setup));
-        let library = &loaded.setup.effects;
+        let library = &loaded.view.effects;
         let camera = Frame::IDENTITY;
         let step = |weather: &mut Weather, section: u8| {
             weather.advance(library, 1.0 / 60.0, camera, i32::from(section));
@@ -178,13 +178,13 @@ mod race {
         let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
             return;
         };
-        let setup: Setup = loaded.setup.scenery_fx.weather.clone().expect("weather");
+        let setup: Setup = loaded.view.scenery_fx.weather.clone().expect("weather");
         let covered = setup.anchors.first().expect("an anchor").section;
         let open = (0..64u8)
             .find(|s| !setup.anchors.iter().any(|a| a.section == *s))
             .expect("an open section");
         let mut weather = Weather::new(Some(setup));
-        let library = &loaded.setup.effects;
+        let library = &loaded.view.effects;
         let camera = Frame::IDENTITY;
         let dt = 1.0 / 60.0;
         for _ in 0..90 {
@@ -222,11 +222,11 @@ mod race {
         let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
             return;
         };
-        let setup: Setup = loaded.setup.scenery_fx.weather.clone().expect("weather");
+        let setup: Setup = loaded.view.scenery_fx.weather.clone().expect("weather");
         let open = (0..64u8)
             .find(|s| !setup.anchors.iter().any(|a| a.section == *s))
             .expect("an open section");
-        let library = &loaded.setup.effects;
+        let library = &loaded.view.effects;
         let (camera, dt) = (Frame::IDENTITY, 1.0 / 60.0);
         let mut plain = Weather::new(Some(setup.clone()));
         let mut told_off = Weather::new(Some(setup.clone()));
@@ -273,7 +273,7 @@ mod race {
         let Some(loaded) = load(r"14_Track\track_reversed.vex") else {
             return;
         };
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..300 {
             race.tick(&PlayerInputs::none());
         }
@@ -283,7 +283,7 @@ mod race {
         assert!(mist.vertices(0.6249, 1.0).is_some());
 
         let loaded = load(r"07_Track\track.vex").expect("image");
-        let mut race = race::Race::start(loaded.setup);
+        let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         for _ in 0..300 {
             race.tick(&PlayerInputs::none());
         }

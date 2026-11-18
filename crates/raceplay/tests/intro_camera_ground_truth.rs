@@ -40,7 +40,7 @@ fn started() -> Option<Race> {
         "the loader reports a 25 s flyby: {:?}",
         loaded.report
     );
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn cross() -> PlayerInputs {

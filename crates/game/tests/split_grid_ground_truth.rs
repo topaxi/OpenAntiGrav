@@ -31,7 +31,11 @@ fn grid_of(image: &str, people: u8) -> Option<Vec<usize>> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(back_to_front(&race::Race::start(loaded.setup)))
+    Some(back_to_front(&race::Race::start(
+        loaded.setup,
+        loaded.view,
+        loaded.modules,
+    )))
 }
 
 /// 2048 is not here: the only 2048 source this checkout has is a PFS-encrypted `.pkg`, which

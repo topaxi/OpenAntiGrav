@@ -14,7 +14,11 @@ fn held(race: &mut Race, ticks: u32) {
 
 #[test]
 fn the_bar_rises_at_140_a_second_and_falls_at_100() {
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }
@@ -45,7 +49,11 @@ fn the_bar_rises_at_140_a_second_and_falls_at_100() {
 /// the full figure the moment the physics reaches it.
 #[test]
 fn hds_thrust_percent_is_the_craft_throttle_with_no_chase() {
-    let mut race = Race::start(setup(Handling::default()));
+    let mut race = Race::start(
+        setup(Handling::default()),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     for _ in 0..oag_race::COUNTDOWN_TICKS {
         race.tick(&PlayerInputs::none());
     }

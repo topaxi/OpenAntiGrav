@@ -81,7 +81,11 @@ fn what_the_jumps_approach_looks_like() {
         ..race::Options::default()
     })
     .expect("loading 13_Track");
-    let probe = race::Race::start(loaded.setup.clone());
+    let probe = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     let line = probe.core.sim.racing_line();
     println!("\ncurvature (span 4.0) and corridor by index, 0..55 on {TRACK_ID}:");
     for index in 0..55 {
@@ -103,7 +107,11 @@ fn what_the_jumps_approach_looks_like() {
             lateral_accel: oag_ai::Tuning::default().lateral_accel * grip,
             ..novice
         };
-        let mut race = race::Race::start(loaded.setup.clone());
+        let mut race = race::Race::start(
+            loaded.setup.clone(),
+            loaded.view.clone(),
+            loaded.modules.clone(),
+        );
         race.core.sim.set_ai_tuning(tuning);
         for slot in 2..8 {
             race.core.sim.world.ships[slot].active = false;
@@ -151,13 +159,17 @@ fn what_the_jumps_approach_looks_like() {
 /// `liftoff_speed` is the forward speed at the first tick the driver is found
 /// airborne and `first_landing_index` is the driver-line index where the
 /// first airborne window ends.
-fn run_grip(setup: &race::Setup, grip: f32) -> (u32, u32, f32, u32) {
+fn run_grip(setup: &race::SimSetup, grip: f32) -> (u32, u32, f32, u32) {
     let novice = oag_ai::Difficulty::Novice.tune(&oag_ai::Tuning::default());
     let tuning = oag_ai::Tuning {
         lateral_accel: oag_ai::Tuning::default().lateral_accel * grip,
         ..novice
     };
-    let mut race = race::Race::start(setup.clone());
+    let mut race = race::Race::start(
+        setup.clone(),
+        oag_raceplay::ViewSetup::headless(),
+        oag_raceplay::extensions::Prepared::default(),
+    );
     race.core.sim.set_ai_tuning(tuning);
     for slot in 2..8 {
         race.core.sim.world.ships[slot].active = false;
@@ -350,7 +362,7 @@ fn the_jump_flown_tick_by_tick() {
 
     println!("{FLIGHT_HEADER}");
     let novice = race::load(&options(oag_ai::Difficulty::Novice)).expect("loading 13_Track");
-    let mut lone = race::Race::start(novice.setup);
+    let mut lone = race::Race::start(novice.setup, novice.view, novice.modules);
     for slot in (0..8).filter(|&slot| slot != LONE) {
         lone.core.sim.world.ships[slot].active = false;
     }
@@ -358,7 +370,7 @@ fn the_jump_flown_tick_by_tick() {
     log_first_passes("novice", &mut lone, &arcs, &[LONE], 18_000);
 
     let field = race::load(&options(race::Options::default().difficulty)).expect("loading");
-    let mut parked = race::Race::start(field.setup);
+    let mut parked = race::Race::start(field.setup, field.view, field.modules);
     assert!(
         parked.core.sim.use_original_ai(None, 1),
         "VENOM's AI tables read"
@@ -405,7 +417,7 @@ fn log_first_passes(label: &str, race: &mut race::Race, arcs: &[f32], slots: &[u
 
 /// Loads the parked-player scenario `the_jump_flown_tick_by_tick` runs: the
 /// original driver's field of seven, VENOM, seed 1, single race.
-fn parked_field() -> Option<(race::Setup, race::Race)> {
+fn parked_field() -> Option<(race::SimSetup, race::Race)> {
     let entry = entry_for(TRACK_ID)?;
     let image = image()?;
     let loaded = race::load(&race::Options {
@@ -417,7 +429,11 @@ fn parked_field() -> Option<(race::Setup, race::Race)> {
         ..race::Options::default()
     })
     .expect("loading 13_Track");
-    let mut race = race::Race::start(loaded.setup.clone());
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     assert!(
         race.core.sim.use_original_ai(None, 1),
         "VENOM's AI tables read"
@@ -685,7 +701,7 @@ fn the_flag_bit_zero_census() {
         }) else {
             continue;
         };
-        let race = race::Race::start(loaded.setup);
+        let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
         let line = race.core.sim.racing_line();
         let flagged = runs_of(line.len(), |index| {
             race.core

@@ -22,7 +22,11 @@ use oag_gameplay::PlayerInputs;
 /// disc image.
 #[test]
 fn a_field_of_one_reports_no_place() {
-    let race = Race::start(setup(Handling::ZERO));
+    let race = Race::start(
+        setup(Handling::ZERO),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     assert_eq!(race.core.sim.world.ship_count, 1);
 
     let readout = race.readout();
@@ -59,7 +63,11 @@ fn a_started_race_puts_one_ship_on_the_spline_with_its_mass_set() {
     };
     let setup = setup(handling);
     let start = *setup.spline.start().expect("a first sample");
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     assert_eq!(race.core.sim.world.ship_count, 1);
     assert!(race.core.ship().active);
@@ -297,7 +305,11 @@ fn a_ship_over_nothing_falls_and_stays_finite() {
         },
         ..Handling::ZERO
     };
-    let mut race = Race::start(setup(handling));
+    let mut race = Race::start(
+        setup(handling),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
     let start = race.core.ship().physics.body.position;
 
     let mut held = HeldButtons::new(0);
@@ -331,7 +343,11 @@ fn a_slot_facing_back_down_its_own_track_is_turned_round() {
         up: [0.0, 1.0, 0.0],
         forward: [-1.0, 0.0, 0.0],
     });
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let forward = race.core.ship().physics.body.forward();
     assert!(
@@ -368,7 +384,11 @@ fn a_solo_mode_starts_on_slot_one_not_slot_eight() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     assert_eq!(
         race.core.sim.world.ship_count, 1,
@@ -394,7 +414,11 @@ fn a_full_grid_still_starts_the_player_on_slot_eight() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     assert_eq!(
         race.core.sim.world.ship_count, 8,
@@ -421,7 +445,11 @@ fn head2head_fields_the_player_plus_one_opponent_on_places_one_and_two() {
         up: [0.0, 1.0, 0.0],
         forward: [1.0, 0.0, 0.0],
     });
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     assert_eq!(
         race.core.sim.world.ship_count, 2,
@@ -470,7 +498,11 @@ fn a_slot_that_agrees_keeps_its_own_heading() {
     };
     let mut setup = setup(hulled_handling());
     setup.start_position = Some(angled);
-    let race = Race::start(setup);
+    let race = Race::start(
+        setup,
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    );
 
     let forward = race.core.ship().physics.body.forward();
     assert!(

@@ -164,7 +164,7 @@ mod tests {
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the race");
-            let mut race = oag_raceplay::Race::start(loaded.setup);
+            let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
             arm_in(
                 Some(&root),
                 &mut race,

@@ -34,7 +34,7 @@ fn started(mode: oag_race::Mode) -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup))
+    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
 }
 
 fn thrust() -> PlayerInputs {

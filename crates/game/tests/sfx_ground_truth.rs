@@ -736,7 +736,7 @@ fn the_engine_sounds_while_a_race_runs_and_stops_when_it_finishes() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
 
     // `Some(dump)` forces the null backend, which is what makes this runnable
     // on a machine with no sound card and on CI - see `Audio::open`.
@@ -810,7 +810,7 @@ fn a_destroyed_craft_sounds_and_stops_sounding() {
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
@@ -892,13 +892,13 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // positions of their own - so leaving them in would make a claim about one
     // rival's stereo position into a claim about wherever the start line
     // happens to be. `track_audio_ground_truth` is where they are tested.
-    loaded.setup.track_emitters = oag_sound::sfx::TrackEmitters::default();
+    loaded.view.track_emitters = oag_sound::sfx::TrackEmitters::default();
     // **The start-of-race voice is dropped from this fixture.** `ready` opens
     // voices from tick 91 and this counts them; what it counts is the held
     // loops, and the start voice has its own file
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     // The pan ratio below is calibrated against the far chase view: the player's own
     // engine sits at the listener's feet and its share of the energy grows as the
     // eye nears it. The default became the close view on 2026-10-01 (a fresh Pulse
@@ -1004,7 +1004,7 @@ fn the_shield_opens_a_held_voice_and_closes_it_when_the_pickup_expires() {
     // loops, and the start voice has its own file
     // (`countdown_voice_ground_truth`).
     loaded.setup.countdown_voice = false;
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     let mut audio = oag_sound::Audio::open(
         &oag_sound::settings::Settings::default(),
         Some(std::path::PathBuf::from("/dev/null")),
@@ -1122,10 +1122,7 @@ fn a_loaded_race_reports_what_its_banks_did() {
         Cue::ALL.len() + Cue::COUNTDOWN.len() + Cue::LAP_VOICES.len(),
         "the load report is incomplete"
     );
-    assert!(
-        !loaded.setup.sounds.is_empty(),
-        "a real disc loaded no cues"
-    );
+    assert!(!loaded.view.sounds.is_empty(), "a real disc loaded no cues");
 }
 
 /// Slipstream (`assets/mods/official/slipstream`) heard through the whole pipeline: the
@@ -1184,7 +1181,7 @@ fn slipstream_pass(path: &Path, fire: bool) -> Option<(usize, (u64, u64))> {
             "{name} is in the loader report:\n{report}"
         );
     }
-    let mut race = race::Race::start(loaded.setup);
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     assert!(
         !race.sounds().mod_sounds.is_empty(),
         "the mod's sounds reached the race's banks"
