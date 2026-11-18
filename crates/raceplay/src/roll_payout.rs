@@ -16,16 +16,17 @@
 
 use super::*;
 
-impl Race {
+impl RaceSim {
     /// Every slot's roll turbo timer, taken before this tick steps the field.
     pub(super) fn roll_payout_timers(&self) -> [f32; oag_gameplay::MAX_SHIPS] {
-        self.sim
-            .world
+        self.world
             .ships
             .each_ref()
             .map(|ship| ship.physics.roll_payout_timer)
     }
+}
 
+impl Race {
     /// Lights the flare and raises `TURBO` for each craft whose roll payout was
     /// armed this tick.
     pub(super) fn fire_roll_payouts(&mut self, before: &[f32; oag_gameplay::MAX_SHIPS]) {

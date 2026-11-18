@@ -513,7 +513,7 @@ fn tick_zero(title: &str, mode: oag_race::Mode) {
             mode.name()
         )
     });
-    assert_eq!(rebuilt.pilot_assist_level(), launch.pilot_assist);
+    assert_eq!(rebuilt.sim.pilot_assist_level(), launch.pilot_assist);
     assert_eq!(rebuilt.control_scheme(), launch.scheme);
 
     // The request is what rebuilds it: the same file with another mode in it is another race,
@@ -578,7 +578,7 @@ fn mid_race_events(title: &str) {
     let give_at = 10;
     let ticks = oag_race::state::COUNTDOWN_TICKS + 420;
     assert!(
-        race.pilot_assist_available(Level::Extreme),
+        race.sim.pilot_assist_available(Level::Extreme),
         "{title}: no Extreme law, so the change would prove nothing"
     );
     let mut pad = Pad::new(title);

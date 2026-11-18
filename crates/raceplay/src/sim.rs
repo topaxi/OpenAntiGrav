@@ -461,10 +461,10 @@ pub struct RaceSim {
     /// Pilot Assist's laws for this class - see [`Setup::pilot_assist`].
     pub(super) pilot_assist: oag_physics::pilot_assist::Laws,
     /// The level each person-flown slot flies with; the settings decide, and a network room
-    /// sets one per seat (`Race::set_pilot_assist_seat`).
+    /// sets one per seat (`RaceSim::set_pilot_assist_seat`).
     pub(super) pilot_assist_levels: [oag_physics::pilot_assist::Level; oag_gameplay::MAX_PLAYERS],
     /// Whether craft may barrel roll; `false` only in a network room that switched rolls off
-    /// (`Race::set_barrel_rolls`).
+    /// (`RaceSim::set_barrel_rolls`).
     pub(super) barrel_rolls: bool,
     /// The track's speed-pad trigger volumes - see [`Setup::speedup_pads`].
     pub(super) speedup_pads: Arc<[oag_vex::pads::PadVolume]>,

@@ -404,7 +404,7 @@ fn state_of(session: &mut Session) -> State {
         });
         state.hash = Some(format!("{:016x}", stage.race.sim.state_hash()));
         state.sim_tick = Some(stage.race.sim.world.tick);
-        state.pilot_assist = Some(stage.race.pilot_assist_level().name().to_string());
+        state.pilot_assist = Some(stage.race.sim.pilot_assist_level().name().to_string());
         state.ghost_visible = Some(stage.race.ghost_visible());
         state.recorded_events = stage.race.recorded_event_count();
         state.humans = Some(stage.race.sim.world.human_slots().count());

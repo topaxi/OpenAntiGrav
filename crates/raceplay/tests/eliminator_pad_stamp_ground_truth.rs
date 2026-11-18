@@ -28,7 +28,7 @@ fn refresh(source: &std::path::Path, track: Option<&str>, mode: Mode) -> f32 {
     let refresh = loaded.setup.weapon_pad_refresh;
     if mode == Mode::Eliminator {
         assert!(
-            !race::Race::start(loaded.setup).weapon_pads().is_empty(),
+            !race::Race::start(loaded.setup).sim.weapon_pads().is_empty(),
             "the circuit has pads, so the stamp is live"
         );
     }

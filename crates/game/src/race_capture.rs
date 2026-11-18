@@ -65,7 +65,7 @@ pub struct CaptureOptions {
     pub demo: bool,
     /// `--wallpaper`: a demo nobody can press a button in, so its screen is not drawn.
     pub wallpaper: bool,
-    /// `--pilot-assist`: the player's Pilot Assist ([`Race::set_pilot_assist`]).
+    /// `--pilot-assist`: the player's Pilot Assist ([`RaceSim::set_pilot_assist`]).
     pub pilot_assist: oag_physics::pilot_assist::Level,
     /// `--autopilot-pilot`: a named pilot, not the baseline. See [`Race::set_autopilot_pilot`].
     pub autopilot_pilot: Option<oag_ai::Pilot>,

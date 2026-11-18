@@ -421,7 +421,7 @@ fn race_to_target(
     .expect("loading an HD Eliminator");
     let mut race = oag_raceplay::Race::start(loaded.setup);
     assert_eq!(
-        race.pad_seeking(),
+        race.sim.pad_seeking(),
         oag_raceplay::PadSeeking::Off,
         "a score Eliminator's opponents steer for no pad"
     );

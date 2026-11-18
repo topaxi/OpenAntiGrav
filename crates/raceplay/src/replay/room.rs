@@ -101,9 +101,10 @@ impl Race {
             *controller = Controller::Remote;
         }
         for slot in 0..seats {
-            self.set_pilot_assist_seat(slot, room.assists.get(slot).copied().unwrap_or_default());
+            self.sim
+                .set_pilot_assist_seat(slot, room.assists.get(slot).copied().unwrap_or_default());
         }
-        self.set_barrel_rolls(room.barrel_rolls);
+        self.sim.set_barrel_rolls(room.barrel_rolls);
         self.set_zone_target(room.zone_target);
     }
 }

@@ -442,7 +442,7 @@ the backstop for a guest written without the SDK.
 
 Pilot Assist on Pulse and Pure is the planned oracle (bit-identical replay hashes
 against the built-in law, `pilot_assist_ground_truth.rs`). The built-in law is fed
-through `Environment::pilot_assist`, which `Race::pilot_assist_input`
+through `Environment::pilot_assist`, which `RaceSim::pilot_assist_input`
 (`crates/raceplay/src/pilot_assist.rs`, called at `player_step.rs:219`) builds from
 the person's controls and the craft's pose. A module version needs a command that
 lands there, for person slots, before the step, carrying what

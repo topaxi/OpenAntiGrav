@@ -936,7 +936,7 @@ interface types {
     record hold-ticks { slot: u8, ticks: u32 }
     record shield-delta { slot: u8, amount: f32 }
     record give-pickup { slot: u8, weapon: weapon, custom: option<string> }
-    /// What Race::pilot_assist_input computes today: the correction the
+    /// What RaceSim::pilot_assist_input computes today: the correction the
     /// built-in law would feed Environment::pilot_assist (the phase 2 proof).
     record assist { slot: u8, steer: f32, pitch: f32, lateral: f32 }
     record standing-key { slot: u8, key: f32 }
@@ -1004,7 +1004,7 @@ weapon module: the firing slot and the slots its use names). Numbers marked
 | `hold-mag-lock{slot, ticks}` | the maglock's engage input for the slot (`crates/physics/src/maglock.rs`), so `mag_lock_blend` ramps in as on a magstrip; holds only where a magnetic floor is under the craft | `ticks` in `[1, 600]` (proposed) | none beyond the input |
 | `shield-delta{slot, amount}` | `ShipState::shield` through the damage path (`crates/physics/src/damage.rs`), so the shield flash, the absorb window and the wreck threshold behave as a hit does | `amount` in `[-shield-max, +shield-max]`; never above `shield-max` | none |
 | `give-pickup{slot, weapon}` / `clear-pickup{slot}` | `Ship::pickup` (`world.rs:114`, `oag_weapons::pickup::Held`); `custom` requires an id this mod declares | refused in a mode with weapons off (`oag_race::Mode`) | a custom arm of `Weapon` for a mod weapon (section 7.5) |
-| `assist{slot, ...}` | `Environment::pilot_assist` for a person's slot, before the step: what `Race::pilot_assist_input` (`crates/raceplay/src/pilot_assist.rs`, called at `player_step.rs:219`) computes today | each term in the built-in law's range; a slot the race did not grant an assist to is refused | the command's sink (the phase 2 proof has no other) |
+| `assist{slot, ...}` | `Environment::pilot_assist` for a person's slot, before the step: what `RaceSim::pilot_assist_input` (`crates/raceplay/src/pilot_assist.rs`, called at `player_step.rs:219`) computes today | each term in the built-in law's range; a slot the race did not grant an assist to is refused | the command's sink (the phase 2 proof has no other) |
 | `set-finished{slot}` | `Standing::finish_tick` for every craft and `RaceState::finished` for a person's slot, at phases 8 and 9 of the same tick; a mode that finishes by mod passes `laps_target: None` to both | once per slot per race; never un-finished | none: `laps_target: None` already means "never ends on its own" (`crates/race/src/state.rs:154`) |
 | `set-standing-key{slot, key}` | a per-slot key the ordering `oag_race::places` sorts before progress and time (`standing.rs:322`) | finite `f32` | `places` takes standings and the course only today |
 | `publish{key, value}` | an **output**, not state: the module's HUD channel, queued beside `self.sim.cues` and drained by the view half, so a sim-only replay drops it and it never enters the hash | at most 32 keys per mod, keys at most 32 bytes, text at most 64 bytes (proposed) | the channel |

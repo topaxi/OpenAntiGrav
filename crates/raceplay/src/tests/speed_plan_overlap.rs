@@ -96,7 +96,7 @@ fn launch_setters(race: &mut Race) {
         0.5,
         &oag_ai::Tuning::default(),
     ));
-    race.set_finished_thrust_skill(0.5);
+    race.sim.set_finished_thrust_skill(0.5);
     // What `set_opponent_pilot` writes into the world.
     for slot in 1..usize::from(race.sim.world.ship_count) {
         race.sim.world.ships[slot].driver.pilot ^= 0x5a5a;

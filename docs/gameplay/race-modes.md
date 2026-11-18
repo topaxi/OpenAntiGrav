@@ -930,7 +930,7 @@ documented readers, `World_CollectNodeLists`, `WeaponPads_TestCraft` and the wea
 the documented callers, not an exhaustive cross-reference. It obeys the player's physics: the
 driver is handed a place in the road, never thrust, speed or shield.
 
-How it works. `Race::pad_for` (`crates/raceplay/src/field/pad_seek.rs`) projects each pad's
+How it works. `RaceSim::pad_for` (`crates/raceplay/src/field/pad_seek.rs`) projects each pad's
 centre onto the AI line once at the start, and each tick hands an empty-slot craft the next armed
 pad within 150 units, as `oag_ai::Field::pad` (distance ahead, offset across the line). Of a pair
 straddling the line it picks the one nearer across to where the craft already is. `Driver::drift`
@@ -957,7 +957,7 @@ racing ticks with an empty slot and wait a median 9.7 s from emptying to the nex
 circuit's nine pads sit up to 19.8 units off the line (two pairs straddle it).
 
 Sweep: parked player, VENOM, kill target 5, six game-minutes, one binary with the steering
-switched per arm (`Race::set_pad_seeking`). Shield lost to walls is the sum over the run of
+switched per arm (`RaceSim::set_pad_seeking`). Shield lost to walls is the sum over the run of
 `wall_shield_charged_of`, per craft-minute of racing. It is not a per-lap figure and not an
 end-of-run shield.
 

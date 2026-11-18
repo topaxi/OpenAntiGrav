@@ -138,7 +138,7 @@ impl Session {
         let Some(parked) = self.suspended_race.as_mut() else {
             return;
         };
-        if parked.race.pilot_assist_level() == level {
+        if parked.race.sim.pilot_assist_level() == level {
             return;
         }
         // Applied and recorded together: the recording keeps going and the change is an

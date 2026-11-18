@@ -1173,7 +1173,7 @@ impl Race {
 
     /// Seconds each weapon pad has left before it can hand out another
     /// pickup - `0.0` (or less) means armed and ready. Empty on a track with
-    /// no weapon pads, or when the mode disarms them (`Race::weapon_pads`'s
+    /// no weapon pads, or when the mode disarms them (`RaceSim::weapon_pads`'s
     /// own doc comment has why an empty list is the disarmed state rather
     /// than a per-tick check).
     ///

@@ -123,7 +123,9 @@ impl Race {
         }
         self.fire_disruptor(slot)
     }
+}
 
+impl RaceSim {
     /// The controls `slot` actually gets this tick, after its disruption.
     ///
     /// `ai_driven` is whether an AI produced `controls` - see
@@ -137,7 +139,7 @@ impl Race {
         controls: oag_physics::ShipControls,
         ai_driven: bool,
     ) -> oag_physics::ShipControls {
-        let disruption = self.sim.world.ships[slot].disruption;
+        let disruption = self.world.ships[slot].disruption;
         let mut controls = disruption.filter(controls, ai_driven);
         if let Some(scale) = disruption.autopilot_thrust_scale() {
             controls.thrust *= scale;

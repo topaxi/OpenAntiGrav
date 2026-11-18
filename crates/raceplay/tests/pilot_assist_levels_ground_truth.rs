@@ -95,7 +95,7 @@ fn load(
 fn laws(path: &str, class: &str) -> Option<(Laws, Vec<String>)> {
     let source = oag_testdata::exact(path).or_else(|| oag_testdata::image(path))?;
     let (race, report) = load(&source, class, None, true);
-    Some((race.pilot_assist_laws(), report))
+    Some((race.sim.pilot_assist_laws(), report))
 }
 
 const CLASSES: [&str; 4] = ["VENOM", "FLASH", "RAPIER", "PHANTOM"];
@@ -153,7 +153,7 @@ fn titles_without_a_level_run_2048s_and_labelled_so() {
     };
     for class in CLASSES {
         let (reference, report) = load(&v2048, class, None, true);
-        let reference = reference.pilot_assist_laws();
+        let reference = reference.sim.pilot_assist_laws();
         assert!(
             report
                 .iter()
@@ -233,7 +233,7 @@ fn demo(title: &str, path: &str, track: Option<&str>) {
     let mut results = Vec::new();
     for level in Level::ALL {
         let (mut race, _) = load(&source, "VENOM", track, false);
-        race.set_pilot_assist(level);
+        race.sim.set_pilot_assist(level);
         let (ticks, contacts, progress, peak) = fly(&mut race);
         let ran = race.sim.world.ships[0].physics.pilot_assist != Default::default();
         println!(
@@ -269,7 +269,7 @@ fn pulse_levels_off_normal_extreme() {
     let mut results = Vec::new();
     for level in Level::ALL {
         let (mut race, _) = load(&source, "VENOM", None, false);
-        race.set_pilot_assist(level);
+        race.sim.set_pilot_assist(level);
         let (ticks, contacts, progress, peak) = fly(&mut race);
         let ran = race.sim.world.ships[0].physics.pilot_assist != Default::default();
         println!(
@@ -300,7 +300,7 @@ fn no_opponent_ever_gets_either_level() {
         })
         .unwrap();
         let mut race = Race::start(loaded.setup);
-        race.set_pilot_assist(level);
+        race.sim.set_pilot_assist(level);
         let inputs = thrust();
         for _ in 0..900 {
             race.tick_sim_only(&inputs);

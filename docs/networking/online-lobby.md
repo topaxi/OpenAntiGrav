@@ -1007,10 +1007,10 @@ Wire v1 was edited in place. The lobby validates (`Rooms::validate`: a zone targ
 raised or lowered into 15 to 55) and builds the params at launch (`launch_for`). Both ends then
 call `oag_net::race::prepare`, the one function that already forced Pilot Assist off, which now:
 
-- sets each seat's level from `assists` (`Race::set_pilot_assist_seat`; the level is per slot in the
+- sets each seat's level from `assists` (`RaceSim::set_pilot_assist_seat`; the level is per slot in the
   sim now, `Sim::pilot_assist_levels`), which is the lobby's gate: with the room's assist off,
   every entry is `0`;
-- turns barrel rolls off for every craft, the AI included (`Race::set_barrel_rolls`, read as
+- turns barrel rolls off for every craft, the AI included (`RaceSim::set_barrel_rolls`, read as
   `Environment::barrel_rolls` in `oag_physics::forces`; the gesture is never read, so no roll arms
   and no shield is spent);
 - gives a Zone race its ending (`Race::set_zone_target`, `RaceState::zone_target`: the race ends

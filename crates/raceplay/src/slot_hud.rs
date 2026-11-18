@@ -263,7 +263,7 @@ impl Race {
                 _ => None,
             };
             let acting = ship.physics.pilot_assist.acting;
-            let (shown, dt) = (self.pilot_assist_shown(slot), self.sim.dt);
+            let (shown, dt) = (self.sim.pilot_assist_shown(slot), self.sim.dt);
             let hud = &mut self.view.huds[slot];
             hud.advance(percent, fraction, thrust, absorbing, held, dt);
             if look.is_some() {

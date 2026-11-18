@@ -251,7 +251,7 @@ fn the_spectator_camera_takes_over_sixty_one_frames_after_the_line() {
 /// Easy, Talon's Junction, the original's throttle word after a first place reads `56.7`
 /// on most frames and never more, and the craft covered `3,500-3,900` units in the 35 s
 /// logged. A lone Time Trial craft is first, and Easy is `Novice` here. Falsifier:
-/// without `Race::finished_thrust_cap` in the tick the throttle reads the driver's own
+/// without `RaceSim::finished_thrust_cap` in the tick the throttle reads the driver's own
 /// `100` and the first assertion on it fails. The distance is a sanity band only: at
 /// `Novice` the driver's own pace lands inside it too.
 #[test]
@@ -261,6 +261,7 @@ fn the_finished_craft_flies_at_the_originals_post_finish_thrust() {
         return;
     };
     let cap = race
+        .sim
         .finished_thrust_cap(0)
         .expect("Venom's AIRaceStats and 16_Track's stats.xml are on the disc");
     assert!(

@@ -191,7 +191,7 @@ impl Race {
     pub fn apply_launch(&mut self, launch: &Launch) {
         self.set_control_scheme(launch.scheme);
         self.set_autopilot(launch.autopilot);
-        self.set_pilot_assist(launch.pilot_assist);
+        self.sim.set_pilot_assist(launch.pilot_assist);
         if let Some(scale) = launch.campaign_skill {
             self.apply_campaign_skill(scale);
         }

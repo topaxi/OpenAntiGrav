@@ -98,9 +98,9 @@ impl Race {
         // Before anything steps, so the perfect start's edge is a change
         // across this tick - see `race::perfect_start`.
         #[cfg(feature = "view")]
-        let launch_grades = self.launch_grades();
+        let launch_grades = self.sim.launch_grades();
         #[cfg(feature = "view")]
-        let roll_payouts = self.roll_payout_timers();
+        let roll_payouts = self.sim.roll_payout_timers();
         // Every craft is in the original's grid state until the green light:
         // `Race_PlaceGrid` puts the field in state 0 and `Race_StartRacing`
         // moves it to state 1. Derived from the one countdown clock rather than
@@ -132,7 +132,7 @@ impl Race {
             ship.physics.four_corner = four_corner;
         }
         self.sim.set_wrong_way_kill();
-        self.set_hover_caps();
+        self.sim.set_hover_caps();
         // A transit whose count ran out puts its craft further round before anything
         // reads where it is: its controls, its autopilot's lane snap, the modules' call
         // (whose `transit-end` this is) and its step all see it out.

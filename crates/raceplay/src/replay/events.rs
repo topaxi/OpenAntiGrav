@@ -51,7 +51,7 @@ impl Race {
     /// for each person-flown seat so the recording reproduces: the level changes the player's
     /// physics, so a recording that did not hear of the change would desync at the next hash.
     pub fn change_pilot_assist(&mut self, level: Level) {
-        self.set_pilot_assist(level);
+        self.sim.set_pilot_assist(level);
         let seats: Vec<usize> = self.sim.world.human_slots().collect();
         for seat in seats {
             self.record_event(seat, Kind::PilotAssist, ordinal(&Level::ALL, level));
@@ -185,7 +185,7 @@ impl Race {
                     .ok_or(bad)?;
                 // Every seat, as the writer does: no hash reads a seat nobody flies, and only
                 // this keeps the `RaceSim` of a seek equal to the recorded one as text.
-                self.set_pilot_assist(*level);
+                self.sim.set_pilot_assist(*level);
             }
             Some(Kind::Give) => {
                 let weapon = usize::try_from(event.value)

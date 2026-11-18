@@ -215,12 +215,12 @@ fn no_person_seeks_a_weapon_pad() {
     race.sim.weapon_pad_line = vec![Some((6, 0.0))].into();
     race.sim.weapon_pad_refresh_left = vec![0.0];
     assert!(
-        race.pad_for(1).is_some(),
+        race.sim.pad_for(1).is_some(),
         "the AI craft sees the pad: fixture is too weak"
     );
     race.sim.world.controllers[1] = Controller::Local;
     assert!(
-        race.pad_for(1).is_none(),
+        race.sim.pad_for(1).is_none(),
         "a second person was sent for a pad"
     );
 }

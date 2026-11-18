@@ -118,7 +118,7 @@ impl Race {
         };
         // Past the line the original's own law sets the pace - see
         // `race::finished_thrust`.
-        if let Some(cap) = self.finished_thrust_cap(slot) {
+        if let Some(cap) = self.sim.finished_thrust_cap(slot) {
             controls.thrust = controls.thrust.min(cap);
         }
         // The returning person's hand-back is as slow as the driver that held the seat.
@@ -130,7 +130,7 @@ impl Race {
         // autopilot's thrust scale. Before the start-line gate below, so a
         // stalled craft on the line is still gated and not doubly so. See
         // `oag_weapons::disruption`.
-        controls = self.disrupted_controls(slot, controls, flown);
+        controls = self.sim.disrupted_controls(slot, controls, flown);
         // The start-line countdown: measured, not authored - see
         // `RaceState::thrust_gated` for the live capture this reproduces. Only
         // thrust was held and recorded, so only thrust is gated; steering stays
@@ -241,7 +241,7 @@ impl Race {
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.sim.damage_rules();
-        let pilot_assist = self.pilot_assist_input(slot);
+        let pilot_assist = self.sim.pilot_assist_input(slot);
         let engine_flags = self.autopilot_engine_flags(slot);
         let ship = &mut self.sim.world.ships[slot];
         let was_racing = ship.physics.craft_state == oag_physics::CraftState::Racing;

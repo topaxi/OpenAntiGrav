@@ -367,7 +367,7 @@ fn started_race(loaded: race::Loaded, cli: &Cli, scheme: ControlScheme) -> race:
         oag_game::ai_choice::Source::Free(difficulty),
     );
     race.set_control_scheme(scheme);
-    race.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
+    race.sim.set_pilot_assist(cli.driver.pilot_assist.unwrap_or_default());
     race
 }
 

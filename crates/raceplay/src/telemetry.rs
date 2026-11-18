@@ -232,7 +232,7 @@ impl Race {
             pickup_fade: hud.pickup_fade,
             thrust_chase_percent: hud.thrust_chase_percent,
             thrust_percent: ship.physics.thrust.max(0.0),
-            pilot_assist: self.pilot_assist_shown(slot),
+            pilot_assist: self.sim.pilot_assist_shown(slot),
             assist: hud.assist_indicator.readout(),
             mode: self.sim.world.mode(),
             // Not this struct's to know: it needs the campaign cell and the

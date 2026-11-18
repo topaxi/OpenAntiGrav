@@ -116,7 +116,8 @@ pub fn prepare(race: &mut Race, params: &RaceParams) -> Result<()> {
     race.set_autopilot(false);
     // Off for everybody unless the room allowed it, in which case each seat flies the level
     // that person asked for: the same list on both ends, so the physics agrees.
-    race.set_pilot_assist(oag_physics::pilot_assist::Level::Off);
+    race.sim
+        .set_pilot_assist(oag_physics::pilot_assist::Level::Off);
     race.apply_room(&room(params));
     Ok(())
 }

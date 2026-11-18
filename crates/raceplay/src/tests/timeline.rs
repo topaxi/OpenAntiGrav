@@ -87,10 +87,10 @@ fn an_event_on_a_keyframes_own_tick_applies_after_it() {
     let (replay, _) = recording(TICKS, &[(at, Level::Extreme)]);
     let mut timeline = opened(replay);
     timeline.seek(at).expect("in the prefix");
-    let before = timeline.probe().pilot_assist_level();
+    let before = timeline.probe().sim.pilot_assist_level();
     timeline.seek(at + 1).expect("in the prefix");
-    assert_ne!(before, timeline.probe().pilot_assist_level());
-    assert_eq!(timeline.probe().pilot_assist_level(), Level::Extreme);
+    assert_ne!(before, timeline.probe().sim.pilot_assist_level());
+    assert_eq!(timeline.probe().sim.pilot_assist_level(), Level::Extreme);
 }
 
 #[test]

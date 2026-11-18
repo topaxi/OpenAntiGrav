@@ -57,7 +57,7 @@ impl Race {
             scale,
             &oag_ai::Tuning::default(),
         ));
-        self.set_finished_thrust_skill(scale);
+        self.sim.set_finished_thrust_skill(scale);
     }
 
     /// Replaces the character one slot is flying, mid-race.
@@ -880,8 +880,8 @@ impl Race {
             // An Eliminator leader waits for the pack; only ever a reduction.
             controls.thrust *= self.eliminator_pack_scale(slot);
             // An opponent under a Disruptor: always AI-driven, so the Stall
-            // passes it by and the rest apply. See `Race::disrupted_controls`.
-            controls = self.disrupted_controls(slot, controls, true);
+            // passes it by and the rest apply. See `RaceSim::disrupted_controls`.
+            controls = self.sim.disrupted_controls(slot, controls, true);
             // A person's seat whose link has dropped crawls round: the driver in their
             // place must never be a shortcut (`Race::set_away`).
             let away = self.sim.world.controllers[slot] == oag_gameplay::Controller::Away;
@@ -1176,7 +1176,7 @@ impl Race {
         let mut field = oag_ai::Field {
             place: places[slot],
             hazard: self.hazard_for(slot, forward, right),
-            pad: self.pad_for(slot),
+            pad: self.sim.pad_for(slot),
             ..oag_ai::Field::EMPTY
         };
         let (mut best_ahead, mut best_behind, mut best_alongside) =

@@ -7,7 +7,7 @@
 //! a place in the road, never thrust, speed or shield.
 //!
 //! Eliminator only, so every other mode's line stays byte-identical: outside it
-//! [`PadSeeking::Off`] makes [`Race::pad_for`] return `None`, and a driver
+//! [`PadSeeking::Off`] makes [`RaceSim::pad_for`] return `None`, and a driver
 //! handed `None` computes exactly the bits it did before this existed.
 
 use super::*;
@@ -91,24 +91,24 @@ pub(crate) fn line_positions(
         .collect()
 }
 
-impl Race {
+impl RaceSim {
     /// The weapon pads this race armed, in the track file's node order. Empty
     /// in a mode that disarms them.
     #[must_use]
     pub fn weapon_pads(&self) -> &[oag_vex::pads::PadVolume] {
-        &self.sim.weapon_pads
+        &self.weapon_pads
     }
 
     /// Who steers for a weapon pad in this race.
     #[must_use]
     pub fn pad_seeking(&self) -> PadSeeking {
-        self.sim.pad_seeking
+        self.pad_seeking
     }
 
     /// Overrides [`PadSeeking::for_mode`]: the sweep that measures this term
     /// runs both arms on one binary. A mode with no armed pads ignores it.
     pub fn set_pad_seeking(&mut self, seeking: PadSeeking) {
-        self.sim.pad_seeking = seeking;
+        self.pad_seeking = seeking;
     }
 
     /// The weapon pad slot `slot` should swing over, if any.
@@ -123,21 +123,21 @@ impl Race {
     /// `field_for` when its autopilot is on, and a player who handed over the
     /// controls did not ask to go shopping - whichever person-flown slot it is.
     pub(crate) fn pad_for(&self, slot: usize) -> Option<oag_ai::Pad> {
-        if self.sim.world.person_flown(slot) {
+        if self.world.person_flown(slot) {
             return None;
         }
-        let ship = &self.sim.world.ships[slot];
-        let wants = match self.sim.pad_seeking {
+        let ship = &self.world.ships[slot];
+        let wants = match self.pad_seeking {
             PadSeeking::Off => false,
             PadSeeking::EmptySlot => ship.pickup.is_empty(),
             PadSeeking::Every => true,
         };
-        let line = &self.sim.racing_line;
+        let line = &self.racing_line;
         let len = line.len() as u32;
         // The pads are placed on the ring's indices, so a craft on a route
         // (`crate::routes`) does not seek one until it is back. Ours.
         let on_route = ship.driver.branching.route != 0;
-        if !wants || on_route || len == 0 || self.sim.weapon_pad_line.is_empty() {
+        if !wants || on_route || len == 0 || self.weapon_pad_line.is_empty() {
             return None;
         }
         let here = ship.driver.index % len;
@@ -146,23 +146,21 @@ impl Race {
         });
         // Samples ahead, for every armed pad in front.
         let ahead = |index: usize| -> Option<u32> {
-            let (at, _) = self.sim.weapon_pad_line[index]?;
-            if self.sim.weapon_pad_refresh_left[index] > 0.0 {
+            let (at, _) = self.weapon_pad_line[index]?;
+            if self.weapon_pad_refresh_left[index] > 0.0 {
                 return None;
             }
             let steps = (at + len - here) % len;
             (steps > 0).then_some(steps)
         };
-        let nearest = (0..self.sim.weapon_pad_line.len())
-            .filter_map(ahead)
-            .min()?;
+        let nearest = (0..self.weapon_pad_line.len()).filter_map(ahead).min()?;
         let mut best: Option<(u32, f32)> = None;
-        for index in 0..self.sim.weapon_pad_line.len() {
+        for index in 0..self.weapon_pad_line.len() {
             let Some(steps) = ahead(index) else { continue };
             if steps > nearest + PAIR_SAMPLES {
                 continue;
             }
-            let Some((_, offset)) = self.sim.weapon_pad_line[index] else {
+            let Some((_, offset)) = self.weapon_pad_line[index] else {
                 continue;
             };
             if best

@@ -102,7 +102,7 @@ fn watch(run: &mut Run, race: &Race) {
 fn assist_level(race: &Race) -> Option<Level> {
     [Level::Extreme, Level::Normal]
         .into_iter()
-        .find(|level| race.pilot_assist_available(*level))
+        .find(|level| race.sim.pilot_assist_available(*level))
 }
 
 /// What the run changes outside the tick, through the writers a session calls, so that it is
