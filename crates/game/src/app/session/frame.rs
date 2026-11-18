@@ -673,7 +673,11 @@ impl Session {
                     self.play_navs(boot_navs);
                 }
                 Stage::Menu(stage) => {
-                    stage.tick(dt, &self.audio.output().spectrum().levels());
+                    stage.tick(
+                        dt,
+                        &self.audio.output().spectrum().levels(),
+                        !self.dev.waiting,
+                    );
                     self.unseat_after_split_race();
                     self.sync_multiplayer();
                     self.sync_lan();

@@ -269,13 +269,20 @@ impl MenuStage {
     /// difference between this movie and the intro. `bands` is this tick's
     /// snapshot of the audio analysis, which the simulation never sees, and
     /// with music playing the only thing here two runs do not share.
-    pub(crate) fn tick(&mut self, dt: f64, bands: &[f32; oag_ui::backdrop::BANDS]) {
-        if let Some(backdrop) = &mut self.backdrop {
+    ///
+    /// `backdrop_runs` is `false` on a frame `--drive` spends waiting (`Dev::waiting`).
+    pub(crate) fn tick(
+        &mut self,
+        dt: f64,
+        bands: &[f32; oag_ui::backdrop::BANDS],
+        backdrop_runs: bool,
+    ) {
+        if let Some(backdrop) = self.backdrop.as_mut().filter(|_| backdrop_runs) {
             backdrop.player.update(dt);
         }
         // One clip frame per tick: the original counts its clip up once per
         // rendered frame at sixty, and the stage's step is the same sixty.
-        if let Some(styled) = &mut self.styled {
+        if let Some(styled) = self.styled.as_mut().filter(|_| backdrop_runs) {
             styled.tick(self.menu.depth() == 1, bands);
         }
         // The same fixed `dt` the backdrop is stepped with, and for the same
