@@ -526,13 +526,6 @@ pub fn load(options: &Options) -> Result<Loaded> {
         options.zone_stage,
         &mut report,
     );
-    // The player's scene precision: HD's scene in the original's 8-bit target or a float one
-    // (`oag_gpu::formats::scene_format`).
-    #[cfg(feature = "view")]
-    let hd_bloom = hd_bloom.map(|params| oag_post::hd_bloom::Params {
-        eight_bit: options.scene_precision.is_eight_bit(),
-        ..params
-    });
     // A comparison's held exposure over the circuit's adapting one.
     #[cfg(feature = "view")]
     let wo_composite = wo_composite.map(|params| oag_post::wo_composite::Params {
@@ -1372,7 +1365,7 @@ pub fn load(options: &Options) -> Result<Loaded> {
         #[cfg(feature = "view")]
         authored_fog,
         #[cfg(feature = "view")]
-        hd_bloom,
+        hd_bloom: hd_bloom.map(|p| p.with_eight_bit(options.scene_precision.is_eight_bit())),
         #[cfg(feature = "view")]
         omega_tonemap,
         #[cfg(feature = "view")]

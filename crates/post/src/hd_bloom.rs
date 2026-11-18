@@ -191,6 +191,14 @@ pub struct Params {
     pub eight_bit: bool,
 }
 
+impl Params {
+    /// These parameters with [`Self::eight_bit`] set: the player's scene precision.
+    #[must_use]
+    pub fn with_eight_bit(self, eight_bit: bool) -> Self {
+        Self { eight_bit, ..self }
+    }
+}
+
 /// Whether this chain's glow reaches the resolve.
 ///
 /// The player's `[graphics] bloom` switch, which until now reached only
