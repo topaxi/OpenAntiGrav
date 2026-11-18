@@ -182,17 +182,17 @@ impl Race {
     /// standing as before.
     pub fn tick_cosmetics(&mut self) {
         // Before the destroy camera eases - see `between_ticks`.
-        self.capture_poses();
+        self.view.capture_poses(&self.core);
         let dt = self.core.sim.dt;
         self.view.contact.shake.advance(dt);
-        self.advance_seat_shakes(dt);
-        self.advance_bomb_blast_models(dt);
-        self.advance_wreck_fx();
+        self.view.advance_seat_shakes(dt);
+        self.view.advance_bomb_blast_models(dt);
+        self.view.advance_wreck_fx(&self.core);
         self.view.stage.advance(dt, &mut self.view.stage_rng);
-        self.advance_scenery_fx(dt);
-        self.advance_craft_flashes();
-        self.advance_destroy_camera();
-        let eye = self.camera_position();
+        self.view.advance_scenery_fx(&self.core, dt);
+        self.view.advance_craft_flashes(&self.core);
+        self.view.advance_destroy_camera(&self.core);
+        let eye = self.view.camera_position(&self.core);
         if let Some(flash) = &mut self.view.screen_flash {
             flash.advance(dt, eye);
         }

@@ -23,7 +23,7 @@ fn with_a_station() -> Race {
 
 fn set_player(race: &mut Race, state: CraftState) {
     race.core.sim.world.ships[0].physics.craft_state = state;
-    race.advance_destroy_camera();
+    race.view.advance_destroy_camera(&race.core);
 }
 
 /// State 4 cuts the picture to the station's eye; the chase camera comes back
@@ -32,19 +32,19 @@ fn set_player(race: &mut Race, state: CraftState) {
 fn the_player_going_out_is_seen_from_the_circuits_own_camera() {
     let mut race = with_a_station();
     race.core.sim.world.ships[0].physics.body.position = Vec3::new(8.0, 0.0, 3.0);
-    let chase_eye = race.camera_position();
+    let chase_eye = race.view.camera_position(&race.core);
     assert_ne!(chase_eye, station().eye);
 
     set_player(&mut race, CraftState::Destroyed);
-    assert!((race.camera_position() - station().eye).length() < 1e-3);
+    assert!((race.view.camera_position(&race.core) - station().eye).length() < 1e-3);
     let wreck = race.core.sim.world.ships[0].physics.body.position;
-    let in_view = race.view().transform_point3(wreck);
+    let in_view = race.view.view(&race.core).transform_point3(wreck);
     assert!(in_view.z < 0.0, "the wreck is in front of the camera");
     set_player(&mut race, CraftState::Eliminated);
-    assert!((race.camera_position() - station().eye).length() < 1e-3);
+    assert!((race.view.camera_position(&race.core) - station().eye).length() < 1e-3);
 
     set_player(&mut race, CraftState::Racing);
-    assert!((race.camera_position() - chase_eye).length() < 1e-3);
+    assert!((race.view.camera_position(&race.core) - chase_eye).length() < 1e-3);
 }
 
 /// The field is the camera's own - tens of degrees at first, easing to the
@@ -53,12 +53,17 @@ fn the_player_going_out_is_seen_from_the_circuits_own_camera() {
 fn the_destroy_camera_zooms_to_frame_the_wreck() {
     let mut race = with_a_station();
     race.core.sim.world.ships[0].physics.body.position = Vec3::new(8.0, 0.0, 3.0);
-    let chase_fov = race.vertical_fov(16.0 / 9.0, Fov::AUTHORED);
+    let chase_fov = race
+        .view
+        .vertical_fov(&race.core, 16.0 / 9.0, Fov::AUTHORED);
     set_player(&mut race, CraftState::Destroyed);
     for _ in 0..300 {
-        race.advance_destroy_camera();
+        race.view.advance_destroy_camera(&race.core);
     }
-    let zoomed = race.vertical_fov(16.0 / 9.0, Fov::AUTHORED).to_degrees();
+    let zoomed = race
+        .view
+        .vertical_fov(&race.core, 16.0 / 9.0, Fov::AUTHORED)
+        .to_degrees();
     let reach = station()
         .eye
         .distance(race.core.sim.world.ships[0].physics.body.position);
@@ -71,29 +76,29 @@ fn the_destroy_camera_zooms_to_frame_the_wreck() {
 #[test]
 fn a_circuit_with_no_cameras_keeps_the_chase_camera() {
     let mut race = race_with_a_grid();
-    let chase_eye = race.camera_position();
+    let chase_eye = race.view.camera_position(&race.core);
     set_player(&mut race, CraftState::Destroyed);
-    assert!((race.camera_position() - chase_eye).length() < 1e-3);
+    assert!((race.view.camera_position(&race.core) - chase_eye).length() < 1e-3);
 }
 
 /// An opponent's wreck does not take the player's camera.
 #[test]
 fn an_opponents_wreck_leaves_the_players_camera_alone() {
     let mut race = with_a_station();
-    let chase_eye = race.camera_position();
+    let chase_eye = race.view.camera_position(&race.core);
     race.core.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
-    race.advance_destroy_camera();
-    assert!((race.camera_position() - chase_eye).length() < 1e-3);
+    race.view.advance_destroy_camera(&race.core);
+    assert!((race.view.camera_position(&race.core) - chase_eye).length() < 1e-3);
 }
 
 /// The race's own tick starts it, not only a direct call: the wiring a test
-/// of [`Race::advance_destroy_camera`] alone would miss.
+/// of [`RaceView::advance_destroy_camera`] alone would miss.
 #[test]
 fn a_tick_with_the_player_destroyed_cuts_to_the_circuits_camera() {
     let mut race = with_a_station();
     race.core.sim.force_destroy(0);
     race.tick(&oag_gameplay::PlayerInputs::none());
-    assert!((race.camera_position() - station().eye).length() < 1e-3);
+    assert!((race.view.camera_position(&race.core) - station().eye).length() < 1e-3);
 }
 
 /// The player's two explosion shakes in a race that goes on: `(0.3, 0.4)` on
@@ -103,17 +108,17 @@ fn a_tick_with_the_player_destroyed_cuts_to_the_circuits_camera() {
 fn the_players_explosions_shake_their_camera() {
     let mut race =
         race_with_weapon_table(Mode::Eliminator, enveloping_pad(), 1.0, one_mine_table());
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!(!race.view.contact.shake.active());
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!(race.view.contact.shake.active());
     assert!((race.view.contact.shake.magnitude() - 0.3).abs() < 1e-6);
     for _ in 0..92 {
         race.view.contact.shake.advance(1.0 / 60.0);
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
     }
     assert!(
         (race.view.contact.shake.magnitude() - 0.8).abs() < 1e-6,
@@ -122,9 +127,9 @@ fn the_players_explosions_shake_their_camera() {
 
     let mut other = with_a_station();
     other.core.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
-    other.advance_craft_flashes();
+    other.view.advance_craft_flashes(&other.core);
     other.core.sim.world.ships[3].physics.craft_state = CraftState::Eliminated;
-    other.advance_craft_flashes();
+    other.view.advance_craft_flashes(&other.core);
     assert!(
         !other.view.contact.shake.active(),
         "an opponent's blast shakes nobody"
@@ -139,9 +144,9 @@ fn a_race_that_ends_on_the_edge_is_shaken_like_any_other() {
     let mut race = with_a_station();
     assert_ne!(race.core.sim.world.mode(), Mode::Eliminator);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!((race.view.contact.shake.magnitude() - 0.3).abs() < 1e-6);
 }
 
@@ -151,9 +156,9 @@ fn destruction_cancels_a_running_shake() {
     let mut race = with_a_station();
     race.force_shake(1.0);
     assert!(race.view.contact.shake.active());
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert!(!race.view.contact.shake.active());
 }
 
@@ -162,11 +167,11 @@ fn destruction_cancels_a_running_shake() {
 #[test]
 fn the_camera_taking_over_and_letting_go_are_cuts() {
     let mut race = with_a_station();
-    let before = race.camera_cuts();
+    let before = race.view.camera_cuts(&race.core);
     set_player(&mut race, CraftState::Destroyed);
-    assert_eq!(race.camera_cuts(), before + 1);
+    assert_eq!(race.view.camera_cuts(&race.core), before + 1);
     set_player(&mut race, CraftState::Eliminated);
-    assert_eq!(race.camera_cuts(), before + 1);
+    assert_eq!(race.view.camera_cuts(&race.core), before + 1);
     set_player(&mut race, CraftState::Racing);
-    assert_eq!(race.camera_cuts(), before + 2);
+    assert_eq!(race.view.camera_cuts(&race.core), before + 2);
 }

@@ -407,10 +407,13 @@ pub fn draw(
     oag_gpu::perfprobe::mark("hud-begin");
     let (slots, cut) = if race.windowed() {
         (race.window_drawn(window), race.window_cut(window))
-    } else if race.viewport_count() <= 1 {
+    } else if race.view_state().viewport_count() <= 1 {
         (vec![race.core.player_slot()], race.cut())
     } else {
-        ((0..race.viewport_count()).collect(), race.cut())
+        (
+            (0..race.view_state().viewport_count()).collect(),
+            race.cut(),
+        )
     };
     if let [slot] = slots[..] {
         let readout = readout(race, scene, slot, campaign, record_target);

@@ -91,7 +91,7 @@ const SPENT: [Button; 10] = [
 
 /// Whether the mode can frame this race: one view, on one window.
 fn fits(stage: &crate::app::race_stage::RaceStage) -> bool {
-    !stage.race.windowed() && photo::offered(stage.race.viewport_count())
+    !stage.race.windowed() && photo::offered(stage.race.view_state().viewport_count())
 }
 
 impl super::Session {

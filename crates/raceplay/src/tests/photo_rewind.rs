@@ -288,7 +288,7 @@ fn a_lens_sample_keeps_the_focus_plane_sharp() {
 
 /// Where the camera is, in world space.
 fn eye(race: &Race) -> Vec3 {
-    race.view().inverse().w_axis.truncate()
+    race.view.view(&race.core).inverse().w_axis.truncate()
 }
 
 fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
@@ -316,8 +316,16 @@ fn the_eye_and_the_craft_through(kind: i32) -> Vec<(Vec3, Vec3, Vec3)> {
         );
         race.set_draw_alpha(alpha);
         let slot = race.core.player_slot();
-        let craft = race.ship_model_matrix_of(slot).w_axis.truncate();
-        seen.push((eye(&race), craft, race.view().transform_point3(craft)));
+        let craft = race
+            .view
+            .ship_model_matrix_of(&race.core, slot)
+            .w_axis
+            .truncate();
+        seen.push((
+            eye(&race),
+            craft,
+            race.view.view(&race.core).transform_point3(craft),
+        ));
         shot.advance();
     }
     shot.finish(
@@ -461,19 +469,20 @@ fn leaving_a_rewind_leaves_the_camera_where_the_live_race_had_it() {
     let (mut control, _, _) = driven();
     let (mut visited, mut keeper, _) = driven();
     // Nothing imposed over the chase camera: the picture the race itself draws.
-    let live = visited.camera_position();
-    assert_eq!(live, control.camera_position());
+    let live = visited.view.camera_position(&visited.core);
+    assert_eq!(live, control.view.camera_position(&control.core));
     let mut rewind = Rewind::begin(&mut keeper, &mut visited).expect("running");
     rewind.seek(&mut keeper, &mut visited, 5);
     assert!(
-        visited.camera_position().distance(live) > 5.0,
+        visited.view.camera_position(&visited.core).distance(live) > 5.0,
         "the camera is back at the start of the race"
     );
     rewind.end(&mut keeper, &mut visited);
     visited.tick(&inputs(LIVE));
     control.tick(&inputs(LIVE));
     let apart = visited
-        .camera_position()
-        .distance(control.camera_position());
+        .view
+        .camera_position(&visited.core)
+        .distance(control.view.camera_position(&control.core));
     assert!(apart < 0.5, "the camera is {apart} units from where it was");
 }

@@ -49,7 +49,7 @@ impl Scene {
                         .lens_flare_direction(self.anim_clock.get())
                         .unwrap_or(setup.direction),
                     setup.colour,
-                    race.view(),
+                    race.view.view(&race.core),
                     projection,
                     [viewport.0, viewport.1, viewport.2, viewport.3],
                     oag_fx::lens_flare::Random::FLAGGED,

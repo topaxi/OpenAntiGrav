@@ -45,7 +45,7 @@ impl Scene {
         let Some(stage) = stage.as_mut() else {
             return;
         };
-        let camera = race.view();
+        let camera = race.view.view(&race.core);
         let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
         let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
         let eye = camera.inverse().w_axis.truncate();
@@ -61,7 +61,7 @@ impl Scene {
                 lens,
                 // The offset and the flyby are the world meshes' epoch; a mod counts race time.
                 time: self.anim_clock.get() - race.world_clock_offset() - race.flyby_seconds(),
-                draw_alpha: race.draw_alpha(),
+                draw_alpha: race.view.draw_alpha(),
                 cut: race.viewed_camera_cut(),
                 fill: race.mod_fill(),
                 surfaces: &race.mod_surfaces(right, up, eye),

@@ -583,7 +583,7 @@ writes, already ported as `Projectile::velocity`. Nothing here needs a
 missile model, a locator, or any state this project does not already carry
 per projectile - `age`, `position` and `velocity` are all it takes. Ported as
 [`oag_raceplay::weapons::missile_flare_anchors`](../../../../crates/raceplay/src/weapons.rs),
-which `Race::advance_projectile_flares` rides both instances off.
+which `RaceView::advance_projectile_flares` rides both instances off.
 
 **Independently consistent with a maintainer's own description from play**,
 asked before any of this was decompiled: "the missile rotates with two

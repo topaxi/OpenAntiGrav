@@ -1675,7 +1675,7 @@ Pure's +0.04 is at the noise floor but all three rounds read that way (+0.02 to 
 ### The magstrip wake's drawing scans no spline
 
 `magstrip_wake_vertices` called `spline.nearest` for each craft each frame, a walk of the whole
-spline, for `with_track` and `lateral`, which only the spawn reads. `Race::wake_pose` is what
+spline, for `with_track` and `lateral`, which only the spawn reads. `RaceView::wake_pose` is what
 drawing needs, and a craft with no live arc is skipped. `0f95e9633` against `989d39bcf` with
 `OAG_FINISH_THREADS=1`, 800p, 3 rounds: HD 6.88 to 6.80 at one view, 10.66 to 10.44 at two (91.3 to 93.1 fps).
 Pulse does not move: it builds no arcs.

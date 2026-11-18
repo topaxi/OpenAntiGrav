@@ -190,7 +190,7 @@ pub fn run(
             moved,
             ticks: run.ticks(),
             leave,
-            cuts: race.camera_cuts(),
+            cuts: race.view_state().camera_cuts(&race.core),
             spectated: race.spectator_mode().is_some(),
             screen,
             screen_notes,

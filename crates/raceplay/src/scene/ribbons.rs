@@ -195,7 +195,7 @@ impl super::Scene {
     ) {
         self.upload_magstrip_wake(race, queue, vp);
         if let Some(smoke) = &self.ribbons.rocket_smoke {
-            let eye = race.view().inverse().w_axis.truncate();
+            let eye = race.view.view(&race.core).inverse().w_axis.truncate();
             let vertices = race.rocket_smoke_vertices(&smoke.ramp);
             smoke
                 .pipeline
@@ -203,7 +203,7 @@ impl super::Scene {
                 .upload_with_eye(queue, vp, eye.to_array(), &vertices);
         }
         if let Some(smoke) = &self.ribbons.missile_smoke {
-            let eye = race.view().inverse().w_axis.truncate();
+            let eye = race.view.view(&race.core).inverse().w_axis.truncate();
             let vertices = race.missile_smoke_vertices(eye, &smoke.ramp);
             smoke
                 .pipeline
@@ -211,7 +211,7 @@ impl super::Scene {
                 .upload_with_eye(queue, vp, eye.to_array(), &vertices);
         }
         if let Some(streaks) = &self.ribbons.missile_streaks {
-            let eye = race.view().inverse().w_axis.truncate();
+            let eye = race.view.view(&race.core).inverse().w_axis.truncate();
             let vertices = race.missile_streak_vertices(eye, &streaks.ramp);
             streaks
                 .pipeline
@@ -219,7 +219,7 @@ impl super::Scene {
                 .upload_with_eye(queue, vp, eye.to_array(), &vertices);
         }
         if let Some(contrails) = &self.ribbons.wingtip {
-            let eye = race.view().inverse().w_axis.truncate();
+            let eye = race.view.view(&race.core).inverse().w_axis.truncate();
             contrails.borrow_mut().upload_with_eye(
                 queue,
                 vp,
@@ -228,7 +228,7 @@ impl super::Scene {
             );
         }
         if let Some(strip) = &self.ribbons.leach_strip {
-            let eye = race.view().inverse().w_axis.truncate();
+            let eye = race.view.view(&race.core).inverse().w_axis.truncate();
             strip.borrow_mut().upload_with_clock(
                 queue,
                 vp,

@@ -185,7 +185,7 @@ run, because a caller reads them back.
 
 ## A client's recording is the confirmed run (2026-11-17)
 
-A replay recorder wants one pose and one input row per world tick, in order (`Race::record_tick` asserts
+A replay recorder wants one pose and one input row per world tick, in order (`Stage::record_tick` asserts
 it). A predicting client cannot give that from its present: every correction rewinds the ticks it
 predicted and replays them with other remote inputs, and when the server is ahead the present is
 replaced by the confirmed state, a jump over ticks nobody recorded. A debug client tripped the
@@ -481,7 +481,7 @@ swung the view **12.1 degrees** in one frame (`tests::correction`, the measure i
 angle between the camera's forward before and after the correction; the eye itself
 moves by about 1e-6). 12 degrees is a quarter of the screen's width at 960x540.
 
-What was built. `Race::camera_target` is the one place the chase camera reads its craft
+What was built. `RaceView::camera_target` is the one place the chase camera reads its craft
 from; it is the craft's **drawn** pose (the simulation's plus the correction glide), so
 the hull and the camera that frames it take the glide together and the old failure (the
 hull off its own camera's centre) cannot come back. `reconcile` now accumulates the
@@ -800,7 +800,7 @@ and the shield bulge of ADR-0071's follow-up. Both are view only; no hash moves.
   nine ticks old washed the screen at full strength nine ticks late.
   `ScreenFlash::start_aged` joins the kind's own ramp at the blast's age, is measured
   against the running flash by its colour at that age, and never draws once the age is past
-  the kind's duration (`Race::ignite_blast_aged`).
+  the kind's duration (`RaceView::ignite_blast_aged`).
   `flash::tests::a_flash_started_late_is_as_old_as_its_detonation` holds it frame for frame
   against a flash started on time, and
   `tests::catch_up::a_blast_first_seen_late_starts_its_screen_flash_aged` through the

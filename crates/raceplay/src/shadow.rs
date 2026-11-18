@@ -42,7 +42,7 @@ impl Race {
     pub fn shadow_placements(&self) -> Vec<Placement> {
         self.core
             .sim
-            .shadow_placements_of(|slot| self.body_between(slot))
+            .shadow_placements_of(|slot| self.view.body_between(&self.core, slot))
     }
 }
 

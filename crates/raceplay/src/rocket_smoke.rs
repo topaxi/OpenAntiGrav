@@ -8,6 +8,10 @@
 //! [`RocketSmokeAssets`] draws it, which today is HD alone - see
 //! `oag_title::weapons::WeaponModels::rocket_trail`.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::math::Vec3;
 use oag_core::rng::Rng;
 use oag_fx::exhaust::FlareTexture;
@@ -133,6 +137,25 @@ pub fn rocket_rows(forward: Vec3, surface: Vec3) -> (Vec3, Vec3) {
 }
 
 impl Race {
+    /// Every live ribbon's triangle list, alphas from `ramp`.
+    #[must_use]
+    pub fn rocket_smoke_vertices(&self, ramp: &OpacityRamp) -> Vec<GpuVertex> {
+        let mut out = Vec::new();
+        for trail in self.view.rocket_smoke.trails.iter().flatten() {
+            trail.extend_vertices(&mut out, ramp);
+        }
+        out
+    }
+
+    /// How many ribbons are alive, owned or ageing out.
+    #[must_use]
+    pub fn rocket_smoke_live(&self) -> usize {
+        self.view.rocket_smoke.live()
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
     /// One tick of every rocket's ribbon: `Rocket_Update` pushes a node at the
     /// rocket each update, then `RibbonEffects_UpdatePools` ages every chain
     /// and frees the empty ones - the order the dump's newest node (born
@@ -141,10 +164,10 @@ impl Race {
     /// The node sits at the rocket's own origin, **chosen, not measured**: the
     /// original adds a scaled vector to the position it pushes
     /// (`0x00124880..0x00124888`), unread. The basis is [`rocket_rows`].
-    pub(crate) fn advance_rocket_smoke(&mut self) {
-        let dt = self.core.sim.dt;
-        let smoke = &mut self.view.rocket_smoke;
-        for (slot, projectile) in self.core.sim.world.projectiles.slots.iter().enumerate() {
+    pub(crate) fn advance_rocket_smoke(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        let smoke = &mut self.rocket_smoke;
+        for (slot, projectile) in core.sim.world.projectiles.slots.iter().enumerate() {
             if projectile.kind != Some(oag_tables::weapons::Weapon::Rocket) {
                 smoke.owners[slot] = None;
                 continue;
@@ -181,22 +204,6 @@ impl Race {
                 }
             }
         }
-    }
-
-    /// Every live ribbon's triangle list, alphas from `ramp`.
-    #[must_use]
-    pub fn rocket_smoke_vertices(&self, ramp: &OpacityRamp) -> Vec<GpuVertex> {
-        let mut out = Vec::new();
-        for trail in self.view.rocket_smoke.trails.iter().flatten() {
-            trail.extend_vertices(&mut out, ramp);
-        }
-        out
-    }
-
-    /// How many ribbons are alive, owned or ageing out.
-    #[must_use]
-    pub fn rocket_smoke_live(&self) -> usize {
-        self.view.rocket_smoke.live()
     }
 }
 

@@ -74,6 +74,7 @@
 //! HD; they keep an empty anchor list here and draw and play nothing from this module.
 
 use super::*;
+use crate::stage::Stage;
 use oag_livery::SparkAnchor;
 
 /// The severity every hit spark plays at: `ShipCollisionFx_Trigger`'s
@@ -226,26 +227,6 @@ impl HitSparks {
 }
 
 impl Race {
-    /// `Ship_Damage`'s weapon branch, for every slot `hits` says a hit landed
-    /// on this tick. `leach` selects the LeachBeam's variant.
-    pub(super) fn throw_hit_sparks(
-        &mut self,
-        hits: &[oag_weapons::projectile::WeaponHit],
-        leach: bool,
-    ) {
-        for (slot, hit) in hits.iter().enumerate() {
-            if hit.landed {
-                self.arm_weapon_hit_shake(slot);
-                self.throw_hit_spark(slot, leach);
-                if !leach {
-                    self.throw_damage_smoke(slot);
-                } else if self.view.hit_sparks.anchors.is_empty() {
-                    self.throw_attached_leach_spark(slot);
-                }
-            }
-        }
-    }
-
     /// Lands a weapon hit on `slot` without a weapon, for `--force-hit`: the
     /// same call a real one makes, on the shield the craft has now. A
     /// verification aid and nothing else.
@@ -254,148 +235,9 @@ impl Race {
         if let Some(hit) = hits.get_mut(slot) {
             hit.landed = true;
         }
-        self.throw_hit_sparks(&hits, false);
-    }
-
-    /// `Ship_Damage`'s weapon branch, for the local player: `Camera_ArmShake(0.6,
-    /// 0.6, camera, 1)` (`Ship_Damage` `0x088439ac`, the end of its
-    /// `source == 2` block), beside the spark and gated on `+0x368 == 0` like
-    /// it. Magnitude `0.6` is passed as authored, where a wall contact's is
-    /// its clamped severity times `0.3` - hence the division; the duration is
-    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read,
-    /// confidence 85. **The game-mode gate** (not mode 2 or 12) is
-    /// not applied: neither mode is one this port races in.
-    pub(super) fn arm_weapon_hit_shake(&mut self, slot: usize) {
-        use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};
-        if let Some(fx) = self.seat_contact_mut(slot) {
-            fx.shake.arm(
-                WEAPON_HIT_SHAKE_MAGNITUDE / MAGNITUDE_SCALE,
-                Side::Elsewhere,
-                &mut fx.shake_rng,
-            );
-        }
-        self.arm_cockpit_hit(slot);
-    }
-
-    /// HD's Cannon on a craft: `Cannon_ApplyCraftHit` (`0x0010f730`) calls
-    /// `Ship_DispatchCollisionFx(craft, contact, 1)`, which picks the
-    /// `Ship Collision Fx` locator nearest the contact (squared distance, ten
-    /// at most) and has `ShipCollisionFx_Trigger` kind 1 spawn
-    /// [`Trigger::WeaponSpark`] there as a one-shot.
-    ///
-    /// **Chosen, not measured:** the burst's severity is `1.0` and it takes
-    /// the locator's own up axis. The original rolls the spawn matrix by two
-    /// random angles (`U(-pi/2, pi/2)` and `U(-pi, pi)`, constants at TOC
-    /// `0x008b3f58`) whose axes were not read, and applies no per-locator
-    /// cooldown (Pulse's `instance + 100` gate has no counterpart in that
-    /// branch). Nothing fires on a hull with no locators.
-    pub(super) fn throw_weapon_spark(&mut self, slot: usize, contact: Vec3) {
-        let Some(anchors) = self.view.hit_sparks.weapon_anchors.get(slot) else {
-            return;
-        };
-        let ship = &self.core.sim.world.ships[slot];
-        if anchors.is_empty() || !ship.in_world() {
-            return;
-        }
-        let Some(effect) = self.view.handles.get(Trigger::WeaponSpark).cloned() else {
-            return;
-        };
-        let Some(at) = nearest_locator(anchors, model_matrix_of(ship), contact) else {
-            return;
-        };
-        if self.view.stage.play(&effect, at, 1.0).is_some() {
-            self.view.hit_sparks.weapon_started += 1;
-        }
-    }
-
-    fn throw_hit_spark(&mut self, slot: usize, leach: bool) {
-        let nodes = self.view.hit_sparks.anchors.get(slot).map_or(0, Vec::len);
-        if nodes == 0 {
-            return;
-        }
-        let trigger = if leach {
-            Trigger::LeachHitSpark
-        } else {
-            Trigger::HitSpark
-        };
-        let rng = &mut self.view.hit_sparks.rng;
-        let first = rng.below(nodes as u32) as usize;
-        let second = rng.below(nodes as u32) as usize;
-        for node in [Some(first), (second != first).then_some(second)]
-            .into_iter()
-            .flatten()
-        {
-            self.fire_locator(slot, node, trigger, HIT_SPARK_SEVERITY);
-        }
-    }
-
-    /// A craft-to-craft or cage contact on `slot` at `point`, impulse magnitude `impulse`:
-    /// `FUN_088418e0`'s contact-ring loop reaching `Ship_DispatchCollisionFx`
-    /// (`0x0883de90`) with `min(|p| * 0.0125, 1.0)`. It fires the locator nearest `point`,
-    /// the damaged variant (a pair contact's friction is `0.02`, a cage contact's is
-    /// positive, so `damaged` holds), with `ShipCollisionFx_Trigger`'s `intensity * 2 + 0.4`.
-    /// The locator's own 0.8 s gate is the one a weapon hit shares, so the same call also
-    /// raises the `.COLLISIONS` cue.
-    ///
-    /// **Nothing for a shielded craft** (the loop's `craft + 0x1b8 & 0x10` branch skips the
-    /// dispatch, `0x0884255c`). **No distance gate:** the loop tests a value in `(0, 10000)` at
-    /// `0x08842614`-`0x0884262c` that `contact-response.md` read as a camera distance, but the
-    /// live read of `talons-boost` found the nearest-the-camera craft's locators quiet and a
-    /// craft 291 units off with a fresh stamp, so no range from the seat is applied here (the
-    /// value is two quads' dot product, not identified).
-    pub(super) fn throw_contact_spark(
-        &mut self,
-        slot: usize,
-        point: Vec3,
-        impulse: f32,
-        damaged: bool,
-    ) {
-        let ship = &self.core.sim.world.ships[slot];
-        if !ship.in_world() || ship.physics.shield_pickup_timer > 0.0 {
-            return;
-        }
-        let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
-            return;
-        };
-        let model = model_matrix_of(ship);
-        let Some(node) = anchors
-            .iter()
-            .map(|anchor| model.transform_point3(anchor.position))
-            .enumerate()
-            .min_by(|(_, a), (_, b)| {
-                a.distance_squared(point)
-                    .total_cmp(&b.distance_squared(point))
-            })
-            .map(|(node, _)| node)
-        else {
-            return;
-        };
-        let severity = oag_fx::sparks::severity(impulse);
-        let trigger = if damaged {
-            Trigger::HitSpark
-        } else {
-            Trigger::CollisionSparkNoDamage
-        };
-        self.fire_locator(slot, node, trigger, severity);
-    }
-
-    /// The collision cage's contacts on `slot` this tick, each through the same ring-loop dispatch
-    /// ([`Self::throw_contact_spark`]) with `damaged` clear: the cage's record carries friction `0`.
-    /// Nothing is lost to a shield (the loop's shield branch precedes the dispatch) and nothing is
-    /// charged: the damage call is the friction test's.
-    pub(super) fn throw_cage_sparks(
-        &mut self,
-        slot: usize,
-        response: &oag_physics::cage::CageResponse,
-    ) {
-        if !self.draws() {
-            return;
-        }
-        let before = self.view.hit_sparks.started;
-        for contact in &response.resolved[..response.contacts as usize] {
-            self.throw_contact_spark(slot, contact.point, contact.impulse, false);
-        }
-        self.view.hit_sparks.cage_started += self.view.hit_sparks.started - before;
+        self.core.lending_cues(|core, cues| {
+            crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, false)
+        });
     }
 
     /// A posed capture's recorded contact sparks: each seed's locator fired `age` seconds before
@@ -423,10 +265,19 @@ impl Race {
             }
             for seed in seeds.iter().filter(|seed| ticks_before(seed) == behind) {
                 if seed.slot < count {
-                    self.fire_locator(seed.slot, seed.node, Trigger::HitSpark, seed.severity);
+                    self.core.lending_cues(|core, cues| {
+                        crate::stage::stage!(self).fire_locator(
+                            core,
+                            cues,
+                            seed.slot,
+                            seed.node,
+                            Trigger::HitSpark,
+                            seed.severity,
+                        )
+                    });
                 }
             }
-            self.advance_hit_sparks();
+            self.view.advance_hit_sparks(&self.core);
             if behind > 0 {
                 self.view.stage.advance(dt, &mut self.view.stage_rng);
             }
@@ -434,75 +285,6 @@ impl Race {
         for (slot, at) in at.into_iter().enumerate() {
             self.core.sim.world.ships[slot].physics.body.position = at;
         }
-    }
-
-    /// `ShipCollisionFx_Trigger` on one locator: the locator's 0.8 s gate (`instance + 100`)
-    /// opens the cue and the spark together, so the sound plays whether or not the spark's
-    /// particle file loaded.
-    fn fire_locator(&mut self, slot: usize, node: usize, trigger: Trigger, severity: f32) {
-        let effect = self.view.handles.get(trigger).cloned();
-        let sparks = &mut self.view.hit_sparks;
-        if sparks.cooldown[slot][node] > 0.0 {
-            return;
-        }
-        sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
-        if self.draws()
-            && self.core.sim.contact_cues == oag_title::contact_cue::ContactCues::Rearmed
-        {
-            self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
-                oag_gameplay::cue::Cue::Collision,
-                slot,
-            ));
-        }
-        let Some(effect) = effect else {
-            return;
-        };
-        let anchor = self.view.hit_sparks.anchors[slot][node];
-        let model = model_matrix_of(&self.core.sim.world.ships[slot]);
-        let at = model.transform_point3(anchor.position);
-        let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
-        let Some(playing) = self.view.stage.play_riding(&effect, at, severity) else {
-            return;
-        };
-        self.view.stage.orient(playing, up);
-        let sparks = &mut self.view.hit_sparks;
-        sparks.riding.push(Riding {
-            slot,
-            node,
-            playing,
-        });
-        sparks.started += 1;
-    }
-
-    /// Counts the cooldowns down and keeps every emitting spark on its
-    /// locator, letting go once it stops emitting. Before `Stage::advance`,
-    /// like the absorb bursts.
-    pub(super) fn advance_hit_sparks(&mut self) {
-        let dt = self.core.sim.dt;
-        for slot in &mut self.view.hit_sparks.cooldown {
-            for left in slot {
-                *left = (*left - dt).max(0.0);
-            }
-        }
-        let mut riding = std::mem::take(&mut self.view.hit_sparks.riding);
-        riding.retain(|spark| {
-            let ship = &self.core.sim.world.ships[spark.slot];
-            if !ship.in_world() || !self.view.stage.is_emitting(spark.playing) {
-                self.view.stage.detach(spark.playing);
-                return false;
-            }
-            let anchor = self.view.hit_sparks.anchors[spark.slot][spark.node];
-            let model = model_matrix_of(ship);
-            self.view
-                .stage
-                .follow(spark.playing, model.transform_point3(anchor.position));
-            self.view.stage.orient(
-                spark.playing,
-                model.transform_vector3(anchor.up).normalize_or(Vec3::Y),
-            );
-            true
-        });
-        self.view.hit_sparks.riding = riding;
     }
 
     /// How many Cannon-hit bursts have ever started, for tests.
@@ -524,6 +306,259 @@ impl Race {
     #[must_use]
     pub fn hit_sparks_started_for_tests(&self) -> u32 {
         self.view.hit_sparks.started
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// `Ship_Damage`'s weapon branch, for the local player: `Camera_ArmShake(0.6,
+    /// 0.6, camera, 1)` (`Ship_Damage` `0x088439ac`, the end of its
+    /// `source == 2` block), beside the spark and gated on `+0x368 == 0` like
+    /// it. Magnitude `0.6` is passed as authored, where a wall contact's is
+    /// its clamped severity times `0.3` - hence the division; the duration is
+    /// the same `0.6` s and the mode `1`, [`Side::Elsewhere`]. Read,
+    /// confidence 85. **The game-mode gate** (not mode 2 or 12) is
+    /// not applied: neither mode is one this port races in.
+    pub(super) fn arm_weapon_hit_shake(&mut self, core: &SimRace, slot: usize) {
+        use oag_render::camera::shake::{MAGNITUDE_SCALE, Side};
+        if let Some(fx) = self.seat_contact_mut(core, slot) {
+            fx.shake.arm(
+                WEAPON_HIT_SHAKE_MAGNITUDE / MAGNITUDE_SCALE,
+                Side::Elsewhere,
+                &mut fx.shake_rng,
+            );
+        }
+        self.arm_cockpit_hit(core, slot);
+    }
+
+    /// HD's Cannon on a craft: `Cannon_ApplyCraftHit` (`0x0010f730`) calls
+    /// `Ship_DispatchCollisionFx(craft, contact, 1)`, which picks the
+    /// `Ship Collision Fx` locator nearest the contact (squared distance, ten
+    /// at most) and has `ShipCollisionFx_Trigger` kind 1 spawn
+    /// [`Trigger::WeaponSpark`] there as a one-shot.
+    ///
+    /// **Chosen, not measured:** the burst's severity is `1.0` and it takes
+    /// the locator's own up axis. The original rolls the spawn matrix by two
+    /// random angles (`U(-pi/2, pi/2)` and `U(-pi, pi)`, constants at TOC
+    /// `0x008b3f58`) whose axes were not read, and applies no per-locator
+    /// cooldown (Pulse's `instance + 100` gate has no counterpart in that
+    /// branch). Nothing fires on a hull with no locators.
+    pub(super) fn throw_weapon_spark(&mut self, core: &SimRace, slot: usize, contact: Vec3) {
+        let Some(anchors) = self.hit_sparks.weapon_anchors.get(slot) else {
+            return;
+        };
+        let ship = &core.sim.world.ships[slot];
+        if anchors.is_empty() || !ship.in_world() {
+            return;
+        }
+        let Some(effect) = self.handles.get(Trigger::WeaponSpark).cloned() else {
+            return;
+        };
+        let Some(at) = nearest_locator(anchors, model_matrix_of(ship), contact) else {
+            return;
+        };
+        if self.stage.play(&effect, at, 1.0).is_some() {
+            self.hit_sparks.weapon_started += 1;
+        }
+    }
+
+    /// Counts the cooldowns down and keeps every emitting spark on its
+    /// locator, letting go once it stops emitting. Before `Stage::advance`,
+    /// like the absorb bursts.
+    pub(super) fn advance_hit_sparks(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        for slot in &mut self.hit_sparks.cooldown {
+            for left in slot {
+                *left = (*left - dt).max(0.0);
+            }
+        }
+        let mut riding = std::mem::take(&mut self.hit_sparks.riding);
+        riding.retain(|spark| {
+            let ship = &core.sim.world.ships[spark.slot];
+            if !ship.in_world() || !self.stage.is_emitting(spark.playing) {
+                self.stage.detach(spark.playing);
+                return false;
+            }
+            let anchor = self.hit_sparks.anchors[spark.slot][spark.node];
+            let model = model_matrix_of(ship);
+            self.stage
+                .follow(spark.playing, model.transform_point3(anchor.position));
+            self.stage.orient(
+                spark.playing,
+                model.transform_vector3(anchor.up).normalize_or(Vec3::Y),
+            );
+            true
+        });
+        self.hit_sparks.riding = riding;
+    }
+}
+
+#[cfg(feature = "view")]
+impl Stage<'_> {
+    /// `Ship_Damage`'s weapon branch, for every slot `hits` says a hit landed
+    /// on this tick. `leach` selects the LeachBeam's variant.
+    pub(super) fn throw_hit_sparks(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        hits: &[oag_weapons::projectile::WeaponHit],
+        leach: bool,
+    ) {
+        for (slot, hit) in hits.iter().enumerate() {
+            if hit.landed {
+                self.view.arm_weapon_hit_shake(core, slot);
+                self.throw_hit_spark(core, cues, slot, leach);
+                if !leach {
+                    self.view.throw_damage_smoke(core, slot);
+                } else if self.view.hit_sparks.anchors.is_empty() {
+                    self.view.throw_attached_leach_spark(core, slot);
+                }
+            }
+        }
+    }
+
+    fn throw_hit_spark(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        leach: bool,
+    ) {
+        let nodes = self.view.hit_sparks.anchors.get(slot).map_or(0, Vec::len);
+        if nodes == 0 {
+            return;
+        }
+        let trigger = if leach {
+            Trigger::LeachHitSpark
+        } else {
+            Trigger::HitSpark
+        };
+        let rng = &mut self.view.hit_sparks.rng;
+        let first = rng.below(nodes as u32) as usize;
+        let second = rng.below(nodes as u32) as usize;
+        for node in [Some(first), (second != first).then_some(second)]
+            .into_iter()
+            .flatten()
+        {
+            self.fire_locator(core, cues, slot, node, trigger, HIT_SPARK_SEVERITY);
+        }
+    }
+
+    /// A craft-to-craft or cage contact on `slot` at `point`, impulse magnitude `impulse`:
+    /// `FUN_088418e0`'s contact-ring loop reaching `Ship_DispatchCollisionFx`
+    /// (`0x0883de90`) with `min(|p| * 0.0125, 1.0)`. It fires the locator nearest `point`,
+    /// the damaged variant (a pair contact's friction is `0.02`, a cage contact's is
+    /// positive, so `damaged` holds), with `ShipCollisionFx_Trigger`'s `intensity * 2 + 0.4`.
+    /// The locator's own 0.8 s gate is the one a weapon hit shares, so the same call also
+    /// raises the `.COLLISIONS` cue.
+    ///
+    /// **Nothing for a shielded craft** (the loop's `craft + 0x1b8 & 0x10` branch skips the
+    /// dispatch, `0x0884255c`). **No distance gate:** the loop tests a value in `(0, 10000)` at
+    /// `0x08842614`-`0x0884262c` that `contact-response.md` read as a camera distance, but the
+    /// live read of `talons-boost` found the nearest-the-camera craft's locators quiet and a
+    /// craft 291 units off with a fresh stamp, so no range from the seat is applied here (the
+    /// value is two quads' dot product, not identified).
+    pub(super) fn throw_contact_spark(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        point: Vec3,
+        impulse: f32,
+        damaged: bool,
+    ) {
+        let ship = &core.sim.world.ships[slot];
+        if !ship.in_world() || ship.physics.shield_pickup_timer > 0.0 {
+            return;
+        }
+        let Some(anchors) = self.view.hit_sparks.anchors.get(slot) else {
+            return;
+        };
+        let model = model_matrix_of(ship);
+        let Some(node) = anchors
+            .iter()
+            .map(|anchor| model.transform_point3(anchor.position))
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                a.distance_squared(point)
+                    .total_cmp(&b.distance_squared(point))
+            })
+            .map(|(node, _)| node)
+        else {
+            return;
+        };
+        let severity = oag_fx::sparks::severity(impulse);
+        let trigger = if damaged {
+            Trigger::HitSpark
+        } else {
+            Trigger::CollisionSparkNoDamage
+        };
+        self.fire_locator(core, cues, slot, node, trigger, severity);
+    }
+
+    /// The collision cage's contacts on `slot` this tick, each through the same ring-loop dispatch
+    /// ([`Self::throw_contact_spark`]) with `damaged` clear: the cage's record carries friction `0`.
+    /// Nothing is lost to a shield (the loop's shield branch precedes the dispatch) and nothing is
+    /// charged: the damage call is the friction test's.
+    pub(super) fn throw_cage_sparks(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        response: &oag_physics::cage::CageResponse,
+    ) {
+        if !self.draws() {
+            return;
+        }
+        let before = self.view.hit_sparks.started;
+        for contact in &response.resolved[..response.contacts as usize] {
+            self.throw_contact_spark(core, cues, slot, contact.point, contact.impulse, false);
+        }
+        self.view.hit_sparks.cage_started += self.view.hit_sparks.started - before;
+    }
+
+    /// `ShipCollisionFx_Trigger` on one locator: the locator's 0.8 s gate (`instance + 100`)
+    /// opens the cue and the spark together, so the sound plays whether or not the spark's
+    /// particle file loaded.
+    fn fire_locator(
+        &mut self,
+        core: &SimRace,
+        cues: &mut Vec<oag_gameplay::cue::CueEvent>,
+        slot: usize,
+        node: usize,
+        trigger: Trigger,
+        severity: f32,
+    ) {
+        let effect = self.view.handles.get(trigger).cloned();
+        let sparks = &mut self.view.hit_sparks;
+        if sparks.cooldown[slot][node] > 0.0 {
+            return;
+        }
+        sparks.cooldown[slot][node] = oag_gameplay::cue::COLLISION_COOLDOWN;
+        if self.draws() && core.sim.contact_cues == oag_title::contact_cue::ContactCues::Rearmed {
+            cues.push(oag_gameplay::cue::CueEvent::new(
+                oag_gameplay::cue::Cue::Collision,
+                slot,
+            ));
+        }
+        let Some(effect) = effect else {
+            return;
+        };
+        let anchor = self.view.hit_sparks.anchors[slot][node];
+        let model = model_matrix_of(&core.sim.world.ships[slot]);
+        let at = model.transform_point3(anchor.position);
+        let up = model.transform_vector3(anchor.up).normalize_or(Vec3::Y);
+        let Some(playing) = self.view.stage.play_riding(&effect, at, severity) else {
+            return;
+        };
+        self.view.stage.orient(playing, up);
+        let sparks = &mut self.view.hit_sparks;
+        sparks.riding.push(Riding {
+            slot,
+            node,
+            playing,
+        });
+        sparks.started += 1;
     }
 }
 

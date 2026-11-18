@@ -36,7 +36,7 @@ pub enum Aspect {
     Ps2,
     /// Whatever the window is.
     ///
-    /// **The field of view does not widen with it.** `Race::projection` caps at
+    /// **The field of view does not widen with it.** `RaceView::projection` caps at
     /// the authored aspect and fits the view inside anything wider, so a wide
     /// window shows the same amount of track rather than more of it. That is a
     /// deliberate reading of "free" as *fill the window* and not as *see more* -

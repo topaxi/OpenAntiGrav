@@ -645,7 +645,7 @@ recorded as such in `hd_ball::position`'s own doc comment.
 
 `oag_fx::beam::hd_ball` (`crates/fx/src/beam.rs`) carries the period
 law and the chosen straight-line placement law above, and
-`Race::advance_leach_beam_ribbon` (`crates/raceplay/src/weapons/visuals.rs`)
+`RaceView::advance_leach_beam_ribbon` (`crates/raceplay/src/weapons/visuals.rs`)
 drives a render-side accumulator (`RaceView::leach_ball_elapsed`) off it
 alongside Pulse's ribbon, firing `WO_LEACHBEAM_ABSORB` as a one-shot burst
 (`stage.play`, not attach-and-follow - the original allocates a fresh
@@ -731,7 +731,7 @@ bloomring's program is one texture tap and already drew as `slots::EMISSIVE`.
 
 `strings -a EBOOT.elf | grep -i LEACHBEAM_ENERGY` returns nothing, though
 the asset ships (`/data/psys/wo_leachbeam_energy.pob`, `DATA02`). This
-engine's own `Race::advance_leach_beam_ribbon` currently plays
+engine's own `RaceView::advance_leach_beam_ribbon` currently plays
 `LEACHBEAM_ENERGY_EFFECT` (Pulse's own recovered trigger) unconditionally
 on every title, HD included - so on HD this build likely fires an effect
 the retail executable's own code never names, alongside the ball/`ABSORB`
@@ -1120,7 +1120,7 @@ executable: not checkable here (no PS4 emulator).
 ## 2026-10-08 (`hd-missile-blast`): the Missile's explosion drawn
 
 `oag_raceplay::missile_blast` plays `HD_missile_explosion` when a Missile reaches a craft
-(`Race::ignite_blast`, `Missile` with `struck`), on HD only (`WeaponModels::missile_blast_hd`).
+(`RaceView::ignite_blast`, `Missile` with `struck`), on HD only (`WeaponModels::missile_blast_hd`).
 
 - **Programs** (fogged blocks, vertex programs read with `scripts/ps3-microcode.py vp-file`; each earns a
   pair of existing `slots` bits, the way the Bomb's did, `MISSILE_CORE`/`_RAYS`/`_SHOCK`). `U` = `UV_offset`

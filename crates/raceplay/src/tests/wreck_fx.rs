@@ -40,14 +40,14 @@ fn race_with_wreck_locators() -> Race {
 
 fn go_out(race: &mut Race, slot: usize) {
     race.core.sim.world.ships[slot].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert_eq!(
         race.wreck_fx_started_for_tests(),
         0,
         "the explosion (state 4) throws nothing"
     );
     race.core.sim.world.ships[slot].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
 }
 
 /// State 5 spawns the explosion and the sparks, in a pair, at each node.
@@ -138,7 +138,8 @@ fn the_big_explosion_follows_after_the_delay_below_the_craft() {
 fn a_source_with_no_wreck_throws_no_big_explosion() {
     let mut race = race_with_wreck_locators();
     race.view.wreck_fx = WreckFx::new(Vec::new());
-    race.throw_wreck_explosion(3, Mat4::IDENTITY);
+    race.view
+        .throw_wreck_explosion(&race.core, 3, Mat4::IDENTITY);
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
 }
 
@@ -157,7 +158,8 @@ fn pures_timeout_throws_a_big_blast_per_locator_and_the_debris_and_smoke() {
             .expect("the hand-laid effect parses");
         race.view.handles.insert(trigger, effect);
     }
-    race.throw_wreck_explosion(3, Mat4::IDENTITY);
+    race.view
+        .throw_wreck_explosion(&race.core, 3, Mat4::IDENTITY);
     assert_eq!(race.wreck_fx_started_for_tests(), 3 + 2);
     assert_eq!(race.wreck_explosion_at_for_tests(), None);
     assert!(

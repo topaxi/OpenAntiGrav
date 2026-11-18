@@ -16,22 +16,25 @@ fn photo_mode_opens_on_the_frame_the_pause_left() {
         race.tick(&PlayerInputs::none());
     }
     let (view, fov) = (
-        race.view(),
-        race.vertical_fov(1.5, oag_display::display::Fov::AUTHORED),
+        race.view.view(&race.core),
+        race.view
+            .vertical_fov(&race.core, 1.5, oag_display::display::Fov::AUTHORED),
     );
     assert!(race.photo_begin(false, false, None));
     assert_eq!(
         race.photo().map(crate::photo::Photo::lens),
         Some(Lens::Free)
     );
-    let opened = race.view();
+    let opened = race.view.view(&race.core);
     for (a, b) in view.to_cols_array().iter().zip(opened.to_cols_array()) {
         assert!(
             (a - b).abs() < 2e-3,
             "view moved: {view:?} against {opened:?}"
         );
     }
-    let opened_fov = race.vertical_fov(1.5, oag_display::display::Fov::AUTHORED);
+    let opened_fov = race
+        .view
+        .vertical_fov(&race.core, 1.5, oag_display::display::Fov::AUTHORED);
     assert!(
         (fov - opened_fov).abs() < 1e-4,
         "{fov} against {opened_fov}"
@@ -50,7 +53,7 @@ fn choosing_the_free_lens_from_another_starts_where_that_lens_was() {
         race.photo().map(crate::photo::Photo::lens),
         Some(Lens::Close)
     );
-    let close = race.view();
+    let close = race.view.view(&race.core);
     race.photo_cycle_lens();
     assert_eq!(
         race.photo().map(crate::photo::Photo::lens),
@@ -59,7 +62,7 @@ fn choosing_the_free_lens_from_another_starts_where_that_lens_was() {
     for (a, b) in close
         .to_cols_array()
         .iter()
-        .zip(race.view().to_cols_array())
+        .zip(race.view.view(&race.core).to_cols_array())
     {
         assert!((a - b).abs() < 2e-3, "the picture jumped");
     }
@@ -69,7 +72,7 @@ fn choosing_the_free_lens_from_another_starts_where_that_lens_was() {
 fn photo_mode_imposes_a_camera_and_leaving_puts_back_the_one_that_was_in_force() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
-    let before = race.camera_position();
+    let before = race.view.camera_position(&race.core);
     assert!(race.photo_begin(false, false, None));
     assert!(race.photo().is_some());
     for _ in 0..2 {
@@ -86,20 +89,24 @@ fn photo_mode_imposes_a_camera_and_leaving_puts_back_the_one_that_was_in_force()
         });
     }
     assert_ne!(
-        race.camera_position(),
+        race.view.camera_position(&race.core),
         before,
         "the eye moved off the chase camera"
     );
     race.photo_end();
     assert!(race.photo().is_none());
-    assert_eq!(race.camera_position(), before, "the chase camera is back");
+    assert_eq!(
+        race.view.camera_position(&race.core),
+        before,
+        "the chase camera is back"
+    );
 }
 
 #[test]
 fn flying_the_free_lens_moves_the_camera_and_leaving_puts_the_race_camera_back() {
     let mut race = race_with_a_grid();
     race.tick(&PlayerInputs::none());
-    let before = race.camera_position();
+    let before = race.view.camera_position(&race.core);
     assert!(race.photo_begin(false, false, None));
     for _ in 0..30 {
         race.photo_step(Pad {
@@ -108,9 +115,9 @@ fn flying_the_free_lens_moves_the_camera_and_leaving_puts_the_race_camera_back()
             ..pad()
         });
     }
-    assert!((race.camera_position() - before).length() > 5.0);
+    assert!((race.view.camera_position(&race.core) - before).length() > 5.0);
     race.photo_end();
-    assert_eq!(race.camera_position(), before);
+    assert_eq!(race.view.camera_position(&race.core), before);
 }
 
 #[test]
@@ -234,7 +241,7 @@ fn photo_modes_weather_section_is_the_subjects() {
     let ship = &mut race.core.sim.world.ships[3];
     ship.physics.body.position = Vec3::from_array(pos);
     ship.driver.index = u32::try_from(line).expect("a short fixture");
-    let seat = race.section_of_framed();
+    let seat = race.view.section_of_framed(&race.core);
     assert!(race.photo_begin(false, false, None));
     for _ in 0..3 {
         race.photo_step(Pad {
@@ -242,7 +249,7 @@ fn photo_modes_weather_section_is_the_subjects() {
             ..pad()
         });
     }
-    let subject = race.section_of_framed();
+    let subject = race.view.section_of_framed(&race.core);
     assert_ne!(subject, UNPLACED);
     assert_ne!(subject, seat);
     assert_eq!(

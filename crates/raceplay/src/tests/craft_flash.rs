@@ -29,9 +29,9 @@ fn drawn(race: &mut Race) -> Option<[f32; 4]> {
 fn the_view_through_a_portal_wears_no_wash() {
     let mut race = with_flash();
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     let at = race.core.sim.world.ships[0].physics.body.position;
     race.view.screen_flash.as_mut().unwrap().advance(DT, at);
     assert!(race.screen_wash().is_some(), "the player's own view");
@@ -52,24 +52,24 @@ fn a_craft_going_out_of_the_race_washes_the_screen_yellow() {
 
     let player_at = race.core.sim.world.ships[0].physics.body.position;
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert_eq!(drawn(&mut race), None, "state 4 starts no wash");
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     let flash = race.view.screen_flash.as_mut().unwrap();
     flash.advance(DT, player_at);
     let colour = flash.colour().expect("the player's own state 5 washes too");
     assert_eq!(colour[2], 0.0, "yellow to red: never any blue");
     race.core.sim.world.ships[0].physics.craft_state = CraftState::Racing;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     race.view.screen_flash = Some(oag_fx::flash::ScreenFlash::default());
 
     race.core.sim.world.ships[3].physics.craft_state = CraftState::Destroyed;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     assert_eq!(drawn(&mut race), None, "state 4 starts no wash");
 
     race.core.sim.world.ships[3].physics.craft_state = CraftState::Eliminated;
-    race.advance_craft_flashes();
+    race.view.advance_craft_flashes(&race.core);
     let flash = race.view.screen_flash.as_mut().unwrap();
     flash.advance(DT, at);
     let colour = flash.colour().expect("state 5 starts kind 0");
@@ -84,13 +84,13 @@ fn the_big_explosion_follows_after_the_dwell_and_is_white_for_the_player() {
     for (slot, white) in [(0_usize, true), (3, false)] {
         let mut race = with_flash();
         race.core.sim.world.ships[slot].physics.craft_state = CraftState::Destroyed;
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
         race.core.sim.world.ships[slot].physics.craft_state = CraftState::Eliminated;
-        race.advance_craft_flashes();
+        race.view.advance_craft_flashes(&race.core);
         // Let the small explosion's wash run out (0.5 s) before the big one.
         let mut seen = None;
         for tick in 0..100 {
-            race.advance_craft_flashes();
+            race.view.advance_craft_flashes(&race.core);
             if let Some(colour) = drawn(&mut race)
                 && tick >= 60
             {
@@ -108,10 +108,10 @@ fn the_big_explosion_follows_after_the_dwell_and_is_white_for_the_player() {
 #[test]
 fn only_the_local_players_reset_washes_the_screen() {
     let mut race = with_flash();
-    race.flash_player_reset(3);
+    race.view.flash_player_reset(&race.core, 3);
     assert_eq!(drawn(&mut race), None, "an opponent's reset is not seen");
 
-    race.flash_player_reset(0);
+    race.view.flash_player_reset(&race.core, 0);
     let colour = drawn(&mut race).expect("the player's reset washes");
     assert!(colour[..3].iter().all(|c| *c > 0.97), "white: {colour:?}");
 }

@@ -954,7 +954,7 @@ fn the_whole_grid_is_audible_and_not_all_from_one_place() {
     // engine alone and centred - which is the recovered behaviour and tests
     // nothing. Putting one rival ten units off the camera's own right axis is
     // the same kind of fixture `race::tests::cues` uses for its wall.
-    let camera = race.view().inverse();
+    let camera = race.view_state().view(&race.core).inverse();
     let right = camera.x_axis.truncate().normalize();
     race.core.sim.world.ships[1].physics.body.position = camera.w_axis.truncate() + right * 10.0;
     oag_game::sound::race_tick(&mut audio, &mut race);

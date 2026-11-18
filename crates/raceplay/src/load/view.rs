@@ -595,7 +595,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
              ribbon's owner is Fury-skinned, spawned every tick on the intruder's hull \
              anchor nearest the contact and carrying half its velocity. The consumer, \
              spawner, colour select, rate and velocity are read; the geometric test is \
-             this engine's - Race::advance_trail_hits names it"
+             this engine's - RaceView::advance_trail_hits names it"
                 .into(),
         );
     }

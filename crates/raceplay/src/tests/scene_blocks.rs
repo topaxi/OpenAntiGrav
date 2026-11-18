@@ -54,9 +54,9 @@ fn two_views_leave_a_block_each_holding_their_own_eye() {
         &mut [],
     );
     let eye_of = |slot| {
-        race.set_viewpoint(slot);
-        let eye = race.camera_position().to_array();
-        race.reset_viewpoint();
+        race.view.set_viewpoint(&race.core, slot);
+        let eye = race.view.camera_position(&race.core).to_array();
+        race.view.reset_viewpoint();
         eye
     };
     let (eye0, eye1) = (eye_of(0), eye_of(1));
@@ -76,7 +76,10 @@ fn two_views_leave_a_block_each_holding_their_own_eye() {
     };
     for view in 0..2 {
         let (view_projection, model) = hull_in_view(view, 0);
-        let expected = race.ship_model_matrix_of(0).to_cols_array_2d();
+        let expected = race
+            .view
+            .ship_model_matrix_of(&race.core, 0)
+            .to_cols_array_2d();
         assert_eq!(model, expected, "craft 0's model matrix in view {view}");
         assert_ne!(view_projection, [[0.0; 4]; 4], "view {view}'s camera");
     }

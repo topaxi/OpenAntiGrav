@@ -311,7 +311,7 @@ impl super::Scene {
         view_projection: Mat4,
         weapon_scene: &mesh_render::Scene,
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
-        let draws = race.plasma_blast_draws(race.view().inverse());
+        let draws = race.plasma_blast_draws(race.view.view(&race.core).inverse());
         let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
         for (slot, draw) in draws.iter().enumerate() {
             let Some(draw) = draw else { continue };
@@ -364,7 +364,7 @@ impl super::Scene {
     ) -> [bool; blast_models::PLASMA_BLAST_SLOTS] {
         let mut active = [false; blast_models::PLASMA_BLAST_SLOTS];
         for (slot, draw) in race
-            .disruptor_halo_draws(race.view().inverse())
+            .disruptor_halo_draws(race.view.view(&race.core).inverse())
             .into_iter()
             .enumerate()
         {

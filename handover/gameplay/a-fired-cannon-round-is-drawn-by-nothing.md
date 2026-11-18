@@ -85,7 +85,7 @@ throws a spark. See
   `Cannon_ApplyCraftDamage`) that applies `damage_per_bullet`/`slowdown_time`
   and a sound cue but never calls `Psys_Spawn_q` - confirming
   `oag_weapons::projectile::cannon::direct_hit`'s existing shape rather than
-  changing it. Wired through `Race::blast_for`'s existing per-impact
+  changing it. Wired through `RaceView::blast_for`'s existing per-impact
   dispatch: `CANNON_SPARKS_EFFECT` plays when `struck` is `None`, nothing when
   it is `Some`.
 - **Which display list is the bolt and which the flash is settled**,

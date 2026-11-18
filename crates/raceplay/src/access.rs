@@ -95,7 +95,7 @@ impl Race {
     /// A setter rather than a [`ViewSetup`] field because the kick is a display
     /// choice the loader cannot see; threading a graphics
     /// setting through the loader would put it in front of every caller that has
-    /// no screen. [`oag_display::display::BoostFovKick::OFF`] leaves [`Race::projection`]
+    /// no screen. [`oag_display::display::BoostFovKick::OFF`] leaves [`crate::RaceView::projection`]
     /// bit-identical to what it returned before the effect existed.
     /// The field of view the picture is being drawn at, for the lock-on reticle.
     ///
@@ -145,7 +145,7 @@ impl Race {
     /// setting, and exactly `0.0` at `original`, whatever the weather.
     #[must_use]
     pub fn wet_road(&self) -> f32 {
-        if self.enhanced_weather() {
+        if self.view.enhanced_weather() {
             self.view.scenery_fx.weather().wet_road()
         } else {
             0.0
@@ -292,7 +292,8 @@ impl Race {
         }
         self.view.camera_view = view;
         self.view.chase_params = chase_block_for(view, self.view.chase_far, self.view.chase_close);
-        self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
+        self.view.camera =
+            Chase::snapped(self.view.camera_target(&self.core), &self.view.chase_params);
     }
 
     #[cfg(feature = "view")]
@@ -300,26 +301,6 @@ impl Race {
     #[must_use]
     pub fn camera_view(&self) -> oag_display::display::CameraView {
         self.view.camera_view
-    }
-
-    #[cfg(feature = "view")]
-    /// Whether the player's own hull should be drawn this frame.
-    ///
-    /// False in the cockpit view alone. Read by [`Scene::render`], which skips
-    /// the draw call rather than moving the model: see
-    /// [`oag_display::display::CameraView::draws_own_ship`] for the evidence and its
-    /// confidence.
-    ///
-    /// **The exhaust plume, the boost plume and the collision sparks are still
-    /// drawn.** The recovered flag covers the hull and nothing else, so the
-    /// alternative would be inventing three more consequences for it; and from a
-    /// cockpit at the nose the nozzle is behind the eye, so the plume is normally
-    /// off screen anyway rather than visibly wrong.
-    #[must_use]
-    pub fn draws_own_ship(&self) -> bool {
-        // The flyby is nobody's cockpit: a player who saved the internal view still sees their
-        // own craft on the grid from the circuit's camera ([`super::intro_camera`]).
-        self.in_intro() || self.view.camera_view.draws_own_ship()
     }
 }
 
@@ -332,36 +313,6 @@ impl RaceSim {
 }
 
 impl Race {
-    #[cfg(feature = "view")]
-    /// How many times the player's picture has jumped to a different shot: each
-    /// of their respawns, and the destroy camera taking over and letting go
-    /// ([`super::destroy_camera`]), and the spectator camera's take-over and cuts
-    /// ([`super::finish_camera`]), and a viewer's seek ([`Self::restore_for_viewing`]).
-    /// What the temporal upscaler's history reset
-    /// watches, so a cut throws the history away the way a respawn does.
-    #[must_use]
-    pub fn camera_cuts(&self) -> u32 {
-        let spectator = self
-            .view
-            .finish_camera
-            .as_ref()
-            .map_or(0, finish_camera::FinishCamera::cuts);
-        let intro = self
-            .view
-            .intro
-            .as_ref()
-            .map_or(0, intro_camera::IntroCamera::cuts);
-        let photo = self.view.photo.as_ref().map_or(0, photo::Photo::cuts);
-        self.core
-            .sim
-            .placements_of(0)
-            .wrapping_add(self.view.destroy_camera.cuts)
-            .wrapping_add(spectator)
-            .wrapping_add(intro)
-            .wrapping_add(photo)
-            .wrapping_add(self.view.restores)
-    }
-
     #[cfg(feature = "view")]
     /// How many times a viewer has put this race at another tick ([`Self::restore_for_viewing`]).
     #[must_use]
@@ -603,7 +554,8 @@ impl Race {
         // seat that names the craft it already follows is no cut.
         #[cfg(feature = "view")]
         if self.core.player_slot() != followed {
-            self.view.camera = Chase::snapped(self.camera_target(), &self.view.chase_params);
+            self.view.camera =
+                Chase::snapped(self.view.camera_target(&self.core), &self.view.chase_params);
         }
     }
 }
@@ -801,6 +753,54 @@ pub(super) fn chase_block_for(
     match view {
         oag_display::display::CameraView::Close => close,
         oag_display::display::CameraView::Internal | oag_display::display::CameraView::Far => far,
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Whether the player's own hull should be drawn this frame.
+    ///
+    /// False in the cockpit view alone. Read by [`Scene::render`], which skips
+    /// the draw call rather than moving the model: see
+    /// [`oag_display::display::CameraView::draws_own_ship`] for the evidence and its
+    /// confidence.
+    ///
+    /// **The exhaust plume, the boost plume and the collision sparks are still
+    /// drawn.** The recovered flag covers the hull and nothing else, so the
+    /// alternative would be inventing three more consequences for it; and from a
+    /// cockpit at the nose the nozzle is behind the eye, so the plume is normally
+    /// off screen anyway rather than visibly wrong.
+    #[must_use]
+    pub fn draws_own_ship(&self) -> bool {
+        // The flyby is nobody's cockpit: a player who saved the internal view still sees their
+        // own craft on the grid from the circuit's camera ([`super::intro_camera`]).
+        self.in_intro() || self.camera_view.draws_own_ship()
+    }
+
+    /// How many times the player's picture has jumped to a different shot: each
+    /// of their respawns, and the destroy camera taking over and letting go
+    /// ([`super::destroy_camera`]), and the spectator camera's take-over and cuts
+    /// ([`super::finish_camera`]), and a viewer's seek ([`crate::Race::restore_for_viewing`]).
+    /// What the temporal upscaler's history reset
+    /// watches, so a cut throws the history away the way a respawn does.
+    #[must_use]
+    pub fn camera_cuts(&self, core: &SimRace) -> u32 {
+        let spectator = self
+            .finish_camera
+            .as_ref()
+            .map_or(0, finish_camera::FinishCamera::cuts);
+        let intro = self
+            .intro
+            .as_ref()
+            .map_or(0, intro_camera::IntroCamera::cuts);
+        let photo = self.photo.as_ref().map_or(0, photo::Photo::cuts);
+        core.sim
+            .placements_of(0)
+            .wrapping_add(self.destroy_camera.cuts)
+            .wrapping_add(spectator)
+            .wrapping_add(intro)
+            .wrapping_add(photo)
+            .wrapping_add(self.restores)
     }
 }
 

@@ -26,6 +26,10 @@
 //! - **An opponent's boost.** The original's pulse is the viewing craft's: a local person's
 //!   other seat fires its own pulse for its own view, and nobody else's draws in it.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+use crate::SimRace;
+use crate::stage::Stage;
 use oag_post::hd_zoom::{Frame, Tuning};
 
 use crate::Race;
@@ -75,7 +79,7 @@ impl Race {
 
     /// The pulse of the view being drawn: the player's, or the extra seat's own.
     fn viewed_zoom(&self) -> Option<&oag_post::hd_zoom::Pulse> {
-        match self.extra_viewpoint() {
+        match self.view.extra_viewpoint() {
             Some(slot) => self.view.viewpoints.zoom[slot].as_ref(),
             None => self.view.zoom.as_ref(),
         }
@@ -99,17 +103,20 @@ impl Race {
         // (`Scene::run_boost_zoom` leaves it to HD's chain when there is one).
         borrowed.or_else(|| Some(self.view.photo.as_ref()?.speed_blur()?.0))
     }
+}
 
+#[cfg(feature = "view")]
+impl Stage<'_> {
     /// The boost pulse, for a person's own speed pad or Turbo: the player's, or the local seat
     /// flying `slot` in a split or a window. A pulse is a view's own, so it only draws in the
     /// view that follows the craft that fired it.
-    pub(super) fn fire_zoom_boost(&mut self, slot: usize) {
+    pub(super) fn fire_zoom_boost(&mut self, core: &SimRace, slot: usize) {
         if !self.draws() {
             return;
         }
-        let pulse = if slot == self.core.player_slot() {
+        let pulse = if slot == core.player_slot() {
             self.view.zoom.as_mut()
-        } else if self.core.sim.world.person_flown(slot) {
+        } else if core.sim.world.person_flown(slot) {
             self.view.viewpoints.zoom[slot].as_mut()
         } else {
             None
@@ -118,12 +125,15 @@ impl Race {
             pulse.fire_boost();
         }
     }
+}
 
+#[cfg(feature = "view")]
+impl RaceView {
     /// One tick of the pulses.
-    pub(super) fn advance_zoom(&mut self) {
-        let dt = self.core.sim.dt;
-        for pulse in std::iter::once(&mut self.view.zoom)
-            .chain(self.view.viewpoints.zoom.iter_mut())
+    pub(super) fn advance_zoom(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        for pulse in std::iter::once(&mut self.zoom)
+            .chain(self.viewpoints.zoom.iter_mut())
             .flatten()
         {
             pulse.advance(dt);

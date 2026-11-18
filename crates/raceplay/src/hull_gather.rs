@@ -71,7 +71,7 @@ impl HullGather {
             let placements = race
                 .core
                 .sim
-                .shadow_placements_of(|slot| race.ship_tick_body(slot));
+                .shadow_placements_of(|slot| race.view.ship_tick_body(&race.core, slot));
             project(
                 race,
                 hulls,
@@ -110,7 +110,7 @@ impl HullGather {
             hulls,
             axis,
             &placements,
-            |slot| race.ship_model_matrix_of(slot),
+            |slot| race.view.ship_model_matrix_of(&race.core, slot),
             Gathered {
                 vertices: &mut vertices,
                 slots: &mut Vec::new(),

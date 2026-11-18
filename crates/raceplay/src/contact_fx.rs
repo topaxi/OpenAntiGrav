@@ -219,7 +219,7 @@ impl ContactFx {
         // A craft-to-craft contact restarts the attached spark exactly as a wall record does
         // (`docs/ghidra/functions/ps3-hdfury-eu/ship-collision-fx.md`, "who owns the looping
         // spark"). Only where the effect is attached: a burst title's pair contact is thrown by
-        // the hit-spark locators instead (`Race::throw_contact_spark`).
+        // the hit-spark locators instead (`Stage::throw_contact_spark`).
         //
         // Ignite once per contact, not once per cooldown: re-arming would leave a chattering
         // scrape with no sparks for up to `COLLISION_COOLDOWN` at a time, which a burst never

@@ -21,13 +21,15 @@
 //!   ADR-0087 decision 9 rests on two of them, the results capture and the wreck's end tick,
 //!   living outside `RaceSim`.
 //! - **The tick calls the view in the middle.** [`Race::tick`](super::Race::tick) and the
-//!   methods it reaches interleave simulation statements with `#[cfg(feature = "view")]`
-//!   blocks (effects, camera shake, HUD messages), and one runs the other way: a HUD
-//!   message board decides whether a `Cue::Message` is raised. Most methods that read and
+//!   methods it reaches interleave simulation statements with calls into the view: each a
+//!   [`RaceView`](crate::RaceView) or [`Stage`](crate::stage::Stage) method that takes the
+//!   simulation it reads as an argument, at the statement it always ran at, behind
+//!   `#[cfg(feature = "view")]` and mostly behind `Race::draws`. Two run the other way: the
+//!   HUD message boards and the seat's shield edge decide whether a cue is raised, and
+//!   return it for the tick to queue (`crate::stage::hooks`). Most methods that read and
 //!   write this half alone are `impl RaceSim` methods, reached as `race.core.sim.x()`; those
 //!   that also read the [`Outcome`](crate::outcome::Outcome) (the seat's slot, who hears a
-//!   cue, the results board) are `impl SimRace` methods, reached as `race.core.x()`; the ones
-//!   that read a view accessor (the viewed slot, the intro, the followed craft) stay on `Race`.
+//!   cue, the results board) are `impl SimRace` methods, reached as `race.core.x()`.
 //! - **The extension runtime.** With the `extensions` feature, `extensions` holds the
 //!   module instances over `oag_modhost`, which `just check-deps` forbids to a gameplay
 //!   crate.

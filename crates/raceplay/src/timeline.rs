@@ -528,6 +528,7 @@ fn probe_of(setup: &SimSetup, view: &ViewSetup, modules: &Prepared, race: &Race)
     {
         return probe;
     }
+
     #[cfg(not(feature = "view"))]
     let _ = race;
     Race::start(setup.clone(), view.clone(), modules.clone())

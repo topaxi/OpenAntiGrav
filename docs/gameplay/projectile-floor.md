@@ -262,7 +262,7 @@ the report.
 Missile's two orbiting flares use world up as `up`, **which is the original's**
 (`missile.md`: `world_up` is a hardcoded `(0, 1, 0)`, instruction level,
 confidence 80), and the Plasma and Missile flare frames were never read (see the
-note at `Race::advance_projectile_flares`), so they keep world up; **not
+note at `RaceView::advance_projectile_flares`), so they keep world up; **not
 checked on a bank against the original.** This engine draws no Missile body model (`projectile_sprites`' own note), so there is no pose to roll.
 
 **Mine and Bomb.** Laid where the craft is, to the bit, on every tilted drop

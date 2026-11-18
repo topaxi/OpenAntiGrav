@@ -428,8 +428,7 @@ impl Race {
         // player, who is the only craft one is flown from.
         #[cfg(feature = "view")]
         if self.draws() {
-            self.view.exhaust[slot].clear_trail();
-            self.view.hd_trail[slot].clear();
+            self.view.clear_trails(slot);
         }
     }
 
@@ -442,7 +441,7 @@ impl Race {
         self.reseat(slot, pose.position);
 
         #[cfg(feature = "view")]
-        self.flash_player_reset(slot);
+        self.view.flash_player_reset(&self.core, slot);
         self.core.sim.respawns[slot] += 1;
         self.core.sim.respawns_in_a_row[slot] += 1;
         self.core.sim.respawn_cooldown[slot] = self.core.sim.reset_triggers.cooldown_ticks;

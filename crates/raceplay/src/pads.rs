@@ -161,9 +161,10 @@ impl Race {
                 // as an opponent's plume rather than as the player's - the
                 // original arms `ExhaustFlare_OnSpeedupPad` from inside the
                 // per-craft update, with that craft's own flare.
-                self.boost_plume(slot);
                 #[cfg(feature = "view")]
-                self.fire_zoom_boost(slot);
+                crate::stage::stage!(self).boost_plume(slot);
+                #[cfg(feature = "view")]
+                crate::stage::stage!(self).fire_zoom_boost(&self.core, slot);
                 // The sound is on the same edge and from the same branch:
                 // `Ship_ApplySpeedupPad` calls `Sound_Play(..., "SPEEDUPPAD",
                 // ...)` here, immediately beside `ExhaustFlare_OnSpeedupPad`.

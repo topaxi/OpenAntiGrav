@@ -878,7 +878,7 @@ impl Session {
                     if crate::split_screen::deals_the_panes(open_windows, &self.pane_people) {
                         let layout = crate::split_screen::layout_for(
                             Some(&wanted_layout),
-                            race_stage.race.viewport_count(),
+                            race_stage.race.view_state().viewport_count(),
                             open_windows,
                             cut,
                         );

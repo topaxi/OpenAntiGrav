@@ -436,7 +436,8 @@ impl Race {
             // And its own plume, the same reuse the player's Turbo makes of it -
             // an opponent's boost has to be visible from behind, or the field
             // gains speed with nothing on screen saying why.
-            self.boost_plume(slot);
+            #[cfg(feature = "view")]
+            crate::stage::stage!(self).boost_plume(slot);
         } else if weapon == oag_tables::weapons::Weapon::Rocket {
             // **The `if` is inside the arm, not `&&`ed onto its condition**, and
             // that is the whole of finding an opponent that never fired. As an
@@ -531,7 +532,7 @@ impl Race {
         // The fire request the original announces (`Weapon_AnnounceIncoming`): one per
         // spent pickup. Turbo, Autopilot, the Disruptor and a mod's own earn no warning.
         #[cfg(feature = "view")]
-        self.note_incoming_fire(slot, weapon);
+        self.view.note_incoming_fire(&self.core, slot, weapon);
         // `Held::take` for the same reason `Race::spend_pickup` uses it: the
         // Mine/Bomb arm above always returns before here, so this is
         // defensive rather than reachable today, but a direct field write
@@ -623,7 +624,7 @@ impl Race {
         // (`docs/ghidra/functions/psp-pulse-usa/hud-incoming-warnings.md`, "Wired in the engine").
         #[cfg(feature = "view")]
         if started {
-            self.note_incoming_fire(slot, weapon);
+            self.view.note_incoming_fire(&self.core, slot, weapon);
         }
         true
     }

@@ -64,7 +64,7 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
     assert!(!race.hud_shown());
     let before = race.core.sim.state_hash();
     let mut ticks = 0u32;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         let key = race.motion_tick();
         race.tick_intro(&PlayerInputs::none());
         ticks += 1;
@@ -93,7 +93,7 @@ fn the_flyby_runs_its_course_and_leaves_the_world_alone() {
     }
     assert!(race.hud_shown());
     assert!(
-        race.camera_cuts() >= 3,
+        race.view_state().camera_cuts(&race.core) >= 3,
         "the cuts at 360, 720 and 1080 are counted"
     );
 }
@@ -104,7 +104,7 @@ fn a_held_cross_ends_it_when_the_lock_lifts_and_not_before() {
     let Some(mut race) = started() else { return };
     assert!(race.begin_intro());
     let mut ticks = 0u32;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&cross());
         ticks += 1;
         assert!(ticks < 3000, "a held cross did not end the flyby");
@@ -136,7 +136,7 @@ fn the_scenery_clock_runs_through_the_flyby_and_its_end_washes_white() {
         "the scenery's runs: 300 ticks = 5 s"
     );
     assert!(race.screen_wash().is_none(), "no wash while it plays");
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&PlayerInputs::none());
     }
     let held = race.world_clock_seconds();
@@ -157,7 +157,7 @@ fn the_scenery_clock_runs_through_the_flyby_and_its_end_washes_white() {
 fn intro_calls(race: &mut Race, held: bool) -> Vec<(u32, race::intro_camera::IntroCue)> {
     let mut calls = Vec::new();
     let mut tick = 0u32;
-    while race.in_intro() {
+    while race.view_state().in_intro() {
         race.tick_intro(&if held { cross() } else { PlayerInputs::none() });
         calls.extend(race.take_intro_cues().into_iter().map(|cue| (tick, cue)));
         tick += 1;

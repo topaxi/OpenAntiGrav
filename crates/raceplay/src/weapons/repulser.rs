@@ -105,13 +105,16 @@ impl Race {
             self.core.sim.world.repulsers[index] = alive.then_some(repulser);
         }
         self.core.sim.extensions.weapon_hits(&hits);
+        #[cfg(feature = "view")]
         for (slot, hit) in hits.iter().enumerate() {
             if hit.absorbed {
-                self.shield_hit(slot);
+                crate::stage::stage!(self).shield_hit(&self.core, slot);
             }
         }
         #[cfg(feature = "view")]
-        self.throw_hit_sparks(&hits, false);
+        self.core.lending_cues(|core, cues| {
+            crate::stage::stage!(self).throw_hit_sparks(core, cues, &hits, false)
+        });
         for (slot, owner) in credits {
             if hits[slot].landed {
                 self.core.sim.record_pending_hit(slot, owner);
@@ -124,7 +127,7 @@ impl Race {
 }
 
 #[cfg(feature = "view")]
-impl Race {
+impl RaceView {
     /// Keeps each live Repulser's three particle instances where the original
     /// keeps them, and releases them when it retires.
     ///
@@ -138,52 +141,52 @@ impl Race {
     ///   split. All four are released when the slot empties (`Repulser_Reset`).
     ///
     /// The field model `Data\Weapons\pulse_repulsorwave.vex` steps here too
-    /// ([`Race::advance_repulser_fields`]), and the blast takes the field's
+    /// ([`crate::RaceView::advance_repulser_fields`]), and the blast takes the field's
     /// unscaled basis turned by its spin, the matrix `+0x1a0` it is anchored
     /// to (`Repulser_UpdateFieldModel`, `0x08876168`).
-    pub(crate) fn advance_repulser_visual(&mut self) {
-        let dt = self.core.sim.dt;
-        self.advance_repulser_fields();
-        for index in 0..self.core.sim.world.repulsers.len() {
-            let handles = self.view.repulser_effects[index];
-            let Some(repulser) = self.core.sim.world.repulsers[index] else {
+    pub(crate) fn advance_repulser_visual(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        self.advance_repulser_fields(core);
+        for index in 0..core.sim.world.repulsers.len() {
+            let handles = self.repulser_effects[index];
+            let Some(repulser) = core.sim.world.repulsers[index] else {
                 for playing in handles.into_iter().flatten() {
-                    self.view.stage.release(playing);
+                    self.stage.release(playing);
                 }
-                self.view.repulser_effects[index] = [None; 4];
+                self.repulser_effects[index] = [None; 4];
                 continue;
             };
-            let firer = self.core.sim.world.ships[repulser.owner as usize]
+            let firer = core.sim.world.ships[repulser.owner as usize]
                 .physics
                 .body
                 .position;
             // The first tick, and only the first: a refused attach is not
             // retried later, so the blast cannot appear late.
             if handles[0].is_none() && repulser.age <= dt * 1.5 {
-                if let Some(effect) = self.view.handles.get(Trigger::RepulserBlast).cloned() {
-                    let playing = self.view.stage.attach(&effect, firer, 1.0);
+                if let Some(effect) = self.handles.get(Trigger::RepulserBlast).cloned() {
+                    let playing = self.stage.attach(&effect, firer, 1.0);
                     // `Repulser_SpawnBlastEffect` hands `Psys_Spawn_q` its `+0x1a0` by
                     // pointer (`param_5 = 1`), so the beads (flag `0x2`) ride it.
                     if let Some(playing) = playing {
-                        self.view.stage.set_rides_frame(playing, true);
+                        self.stage.set_rides_frame(playing, true);
                     }
-                    self.view.repulser_effects[index][0] = playing;
+                    self.repulser_effects[index][0] = playing;
                 }
             } else if let Some(playing) = handles[0] {
-                self.view.stage.follow(playing, firer);
+                self.stage.follow(playing, firer);
             }
             if let (Some(playing), Some(field), Some((_, sample, _))) = (
-                self.view.repulser_effects[index][0],
-                self.view.repulser_fields[index],
-                self.core.sim.spline.nearest(firer),
+                self.repulser_effects[index][0],
+                self.repulser_fields[index],
+                core.sim.spline.nearest(firer),
             ) {
                 let (side, up, _) = crate::repulser_field::field_basis(
                     Vec3::from_array(sample.lateral),
                     Vec3::from_array(sample.down),
                 );
-                self.view.stage.orient(playing, up);
+                self.stage.orient(playing, up);
                 let spun = oag_core::math::Quat::from_axis_angle(up, field.spin) * side;
-                self.view.stage.stretch(playing, 1.0, spun);
+                self.stage.stretch(playing, 1.0, spun);
             }
             let Some(fronts) = repulser.fronts else {
                 continue;
@@ -192,7 +195,7 @@ impl Race {
             // also when `Repulser_SpawnWaves` starts screen flash kind 2 at the
             // firer (`FUN_088f00c0(.., 2, ..)`, `0x088765ac`).
             let spawning = fronts[0].previous == fronts[0].point && handles[1].is_none();
-            if spawning && let Some(flash) = &mut self.view.screen_flash {
+            if spawning && let Some(flash) = &mut self.screen_flash {
                 flash.start(oag_fx::flash::REPULSER, firer);
             }
             // The fork's own `WO_REPULSER` (`REP2`, `0x32504552`), started on the
@@ -213,14 +216,13 @@ impl Race {
             {
                 let playing = match handles[1 + slot] {
                     Some(playing) => {
-                        self.view.stage.follow(playing, front.point);
+                        self.stage.follow(playing, front.point);
                         Some(playing)
                     }
                     None if starts => {
-                        let effect = self.view.handles.get(Trigger::Repulser).cloned();
-                        let attached =
-                            effect.and_then(|e| self.view.stage.attach(&e, front.point, 1.0));
-                        self.view.repulser_effects[index][1 + slot] = attached;
+                        let effect = self.handles.get(Trigger::Repulser).cloned();
+                        let attached = effect.and_then(|e| self.stage.attach(&e, front.point, 1.0));
+                        self.repulser_effects[index][1 + slot] = attached;
                         attached
                     }
                     None => None,
@@ -236,7 +238,7 @@ impl Race {
                 // the track's width. The same frame and width here, from the
                 // nearest spline sample to the wave's centre.
                 if let Some(playing) = playing
-                    && let Some((_, sample, _)) = self.core.sim.spline.nearest(front.point)
+                    && let Some((_, sample, _)) = core.sim.spline.nearest(front.point)
                 {
                     let lateral = Vec3::from_array(sample.lateral);
                     let backward = slot == 1;
@@ -244,8 +246,8 @@ impl Race {
                     let up = -Vec3::from_array(sample.down);
                     let width =
                         (lateral * (sample.half_width_left + sample.half_width_right)).length();
-                    self.view.stage.orient(playing, up);
-                    self.view.stage.stretch(playing, width / 100.0, across);
+                    self.stage.orient(playing, up);
+                    self.stage.stretch(playing, width / 100.0, across);
                 }
             }
         }

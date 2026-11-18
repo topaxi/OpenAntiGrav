@@ -8,6 +8,10 @@
 //! [`oag_title::Title::wingtip`] is set (HD, and 2048 and Omega by lineage), or on any title
 //! when the player's `graphics.wingtip_contrails` lends another source's.
 
+#[cfg(feature = "view")]
+use crate::RaceView;
+#[cfg(feature = "view")]
+use crate::SimRace;
 use oag_core::math::{Mat4, Vec3};
 use oag_fx::exhaust::FlareTexture;
 use oag_fx::fat_line::{Ribbon, Spec, Vortex};
@@ -315,44 +319,6 @@ fn craft_rows(up: Vec3, forward: Vec3) -> [Vec3; 2] {
 }
 
 impl Race {
-    /// One tick of every craft's two wingtip nodes, then the ribbons' ageing: the order the
-    /// original runs them in (a node's update pushes, `RibbonEffects_UpdatePools` ages).
-    ///
-    /// The trigger is `ShipState::pad_timer` (the pad force window the original's
-    /// `entry+0x2e8` is) or `turbo_timer` (the original's flag `0x20`; **code-only, the Turbo
-    /// half was never watched live** - `wingtip-vortices.md`). The destroyed sequence (states
-    /// 4 to 6) is [`CraftState::Destroyed`] and [`CraftState::Eliminated`].
-    pub(crate) fn advance_wingtip(&mut self) {
-        let dt = self.core.sim.dt;
-        let Some(mut contrails) = self.view.wingtip.take() else {
-            return;
-        };
-        for slot in 0..usize::from(self.core.sim.world.ship_count).min(MAX_SHIPS) {
-            let ship = &self.core.sim.world.ships[slot];
-            let body = &ship.physics.body;
-            let craft = Craft {
-                triggered: ship.physics.pad_timer > 0.0 || ship.physics.turbo_timer > 0.0,
-                flying: ship.active && ship.physics.craft_state == CraftState::Racing,
-                speed: body.linear_velocity.dot(body.forward()).abs(),
-            };
-            let rows = craft_rows(body.up(), body.forward());
-            let model = self.ship_model_matrix_of(slot);
-            for index in 0..2 {
-                let Some(local) = contrails.anchors[slot][index] else {
-                    continue;
-                };
-                let tip = (model * local).w_axis.truncate();
-                // The original's `left` node (side flag `1`) is the craft's physical left, which
-                // an HD hull's `wingtip_left` lands on in this engine; read off the world so the
-                // side holds for a locator that carries no name.
-                let left = (tip - body.position).dot(body.right()) < 0.0;
-                contrails.step_node(slot, usize::from(!left), craft, tip, rows, dt);
-            }
-        }
-        contrails.age(dt);
-        self.view.wingtip = Some(contrails);
-    }
-
     /// Every live element's triangle list, built for a camera at `eye`. Empty where the race
     /// draws no contrails.
     #[must_use]
@@ -370,6 +336,47 @@ impl Race {
     #[must_use]
     pub fn wingtip_live(&self) -> usize {
         self.view.wingtip.as_ref().map_or(0, Contrails::live)
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// One tick of every craft's two wingtip nodes, then the ribbons' ageing: the order the
+    /// original runs them in (a node's update pushes, `RibbonEffects_UpdatePools` ages).
+    ///
+    /// The trigger is `ShipState::pad_timer` (the pad force window the original's
+    /// `entry+0x2e8` is) or `turbo_timer` (the original's flag `0x20`; **code-only, the Turbo
+    /// half was never watched live** - `wingtip-vortices.md`). The destroyed sequence (states
+    /// 4 to 6) is [`CraftState::Destroyed`] and [`CraftState::Eliminated`].
+    pub(crate) fn advance_wingtip(&mut self, core: &SimRace) {
+        let dt = core.sim.dt;
+        let Some(mut contrails) = self.wingtip.take() else {
+            return;
+        };
+        for slot in 0..usize::from(core.sim.world.ship_count).min(MAX_SHIPS) {
+            let ship = &core.sim.world.ships[slot];
+            let body = &ship.physics.body;
+            let craft = Craft {
+                triggered: ship.physics.pad_timer > 0.0 || ship.physics.turbo_timer > 0.0,
+                flying: ship.active && ship.physics.craft_state == CraftState::Racing,
+                speed: body.linear_velocity.dot(body.forward()).abs(),
+            };
+            let rows = craft_rows(body.up(), body.forward());
+            let model = self.ship_model_matrix_of(core, slot);
+            for index in 0..2 {
+                let Some(local) = contrails.anchors[slot][index] else {
+                    continue;
+                };
+                let tip = (model * local).w_axis.truncate();
+                // The original's `left` node (side flag `1`) is the craft's physical left, which
+                // an HD hull's `wingtip_left` lands on in this engine; read off the world so the
+                // side holds for a locator that carries no name.
+                let left = (tip - body.position).dot(body.right()) < 0.0;
+                contrails.step_node(slot, usize::from(!left), craft, tip, rows, dt);
+            }
+        }
+        contrails.age(dt);
+        self.wingtip = Some(contrails);
     }
 }
 

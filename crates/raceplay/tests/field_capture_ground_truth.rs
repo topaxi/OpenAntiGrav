@@ -159,7 +159,10 @@ fn a_field_warm_up_gives_every_craft_a_trail_and_a_plume_and_leaves_the_poses_al
             exhaust.intensity() > 0.99,
             "slot {slot}'s plume is at the level a racing craft holds"
         );
-        assert!(warm.nozzle_of(slot).is_some(), "slot {slot} has a nozzle");
+        assert!(
+            warm.view_state().nozzle_of(&warm.core, slot).is_some(),
+            "slot {slot} has a nozzle"
+        );
         assert!(
             warm.trail_head_of(slot).is_none(),
             "slot {slot} is drawn at its tick, so its newest sample is already at the nozzle"

@@ -229,7 +229,7 @@ other, with friction `0`, so the dispatch throws `WO_SHIP_COLL_SPARK_NODAMAGE` f
 nearest the boundary point and plays `.COLLISIONS` inside the locator's gate, skips a shielded craft,
 and charges no shield ([contact-response.md](contact-response.md#live-2026-10-26-a-craft-to-craft-contact-sparks-both-hulls-and-the-dispatch-has-no-distance-gate)).
 `oag_physics::cage::CageResponse::resolved` lists each corner (boundary point, impulse), and both of
-`oag_raceplay`'s cage call sites hand it to `Race::throw_cage_sparks`.
+`oag_raceplay`'s cage call sites hand it to `Stage::throw_cage_sparks`.
 
 **Not wired: the flash.** `CageEffect_Spawn` is called from two places, `Cage_ResolveCraft` (`0x08831fdc`,
 `a1` the boundary point, `a2` the contact normal, `a3` a quad of the located section's slot at `+0x60`)

@@ -58,7 +58,7 @@ impl Scene {
                 ChunkSet::around(
                     pvs,
                     race.viewed_ship().physics.body.position,
-                    race.camera_position(),
+                    race.view.camera_position(&race.core),
                 )
             })
     }
@@ -125,7 +125,7 @@ impl Scene {
         };
         // A view of a split asks before its first view (`Scene::render_slots`).
         if matches!(self.layer.get(), Layer::Whole | Layer::Window) && self.does_frame_work() {
-            let drawn = [(race.viewed_slot(), viewport)];
+            let drawn = [(race.view.viewed_slot(&race.core), viewport)];
             self.draw_portal_view(device, queue, race, &drawn, &settings);
         }
         // Every drawable's matrices of this view are staged here and written once, in runs,
@@ -136,7 +136,7 @@ impl Scene {
         let uploads = Uploads::begin(
             queue,
             &self.uniform_blocks,
-            SceneBlocks::view(race.viewed_slot()),
+            SceneBlocks::view(race.view.viewed_slot(&race.core)),
             std::mem::take(&mut *self.upload_staging.borrow_mut()),
         );
         let pass = self.prepare_view(
@@ -322,12 +322,12 @@ impl Scene {
         // views of a frame never read or write the same one (`SceneBlocks`).
         let block = match portal {
             Some(_) => SceneBlocks::portal(),
-            None => SceneBlocks::view(race.viewed_slot()),
+            None => SceneBlocks::view(race.view.viewed_slot(&race.core)),
         };
         let queue = uploads;
         let aspect = portal.map_or(viewport.2.max(1.0) / viewport.3.max(1.0), |p| p.aspect);
-        let projection = race.projection(aspect, self.far, fov);
-        let view_projection = projection * race.view();
+        let projection = race.view.projection(&race.core, aspect, self.far, fov);
+        let view_projection = projection * race.view.view(&race.core);
         // The previous tick's camera and model matrices, promoted from the
         // last frame that rendered a different tick - what every drawable's
         // `prev_mvp` velocity is measured against. See [`MotionState`].
@@ -359,7 +359,7 @@ impl Scene {
         // Recorded before the offset is applied - see `Scene::record_frame`.
         self.record_frame(
             camera_jitter,
-            race.projection(aspect, self.far, fov),
+            race.view.projection(&race.core, aspect, self.far, fov),
             race.camera_view(),
             race.viewed_camera_cuts(),
         );
@@ -371,7 +371,9 @@ impl Scene {
         // keep the plain matrix: the swing tilts the far plane.
         let view_projection = portal
             .and_then(|p| oag_render::camera::portal::oblique_near(p.projection, p.exit_plane))
-            .map_or(view_projection, |oblique| oblique * race.view());
+            .map_or(view_projection, |oblique| {
+                oblique * race.view.view(&race.core)
+            });
         // Tier one, built once a frame. Both sections come from the authored
         // spline rather than from the section boxes: a control point's
         // `section_id` is what the artists wrote, while a point-in-box test is
@@ -422,7 +424,7 @@ impl Scene {
         // radius of 18 to 62 units while fog starts at 30 to 250, so fogging it
         // would drown it in fog colour; the original's sky geometry is authored
         // `_nolight` and stands in for infinity, which is behind the fog rather than inside it.
-        let eye = race.camera_position();
+        let eye = race.view.camera_position(&race.core);
         // Outside every volume, Wipeout HD's authored distance fog binds
         // instead - static for the race, since its curve reads view depth
         // rather than anything sampled at the camera. `Fog::off` remains for
@@ -665,7 +667,7 @@ impl Scene {
                 } else {
                     view_projection
                 },
-                Mat4::from_translation(race.camera_position()),
+                Mat4::from_translation(race.view.camera_position(&race.core)),
                 // The previous camera's *translation* cancels against the
                 // previous view-projection exactly as this frame's does
                 // against this one, leaving the sky with rotation-only
@@ -759,7 +761,7 @@ impl Scene {
             shell.write(
                 queue,
                 view_projection,
-                race.ship_model_matrix_of(slot) * scale,
+                race.view.ship_model_matrix_of(&race.core, slot) * scale,
                 prev_vp * prev.ship(slot, race) * scale,
             );
             shell.tint(queue, state.shell_colour(), recoloured);
@@ -779,7 +781,7 @@ impl Scene {
             sphere.write(
                 queue,
                 view_projection,
-                race.ship_model_matrix_of(0) * scale,
+                race.view.ship_model_matrix_of(&race.core, 0) * scale,
                 prev_vp * prev.ship(0, race) * scale,
             );
             sphere.tint(queue, state.colour(), recoloured);
@@ -868,7 +870,7 @@ impl Scene {
             // exhaust is not active - the flame then draws as authored, and
             // the load report already carries what is missing.
             let flame = hd_flame_transform(race, slot, false, self.flare_origins[slot].always);
-            let model = race.ship_model_matrix_of(slot) * flame;
+            let model = race.view.ship_model_matrix_of(&race.core, slot) * flame;
             // This frame's flame scale on the previous pose, like the shell's
             // swell: the flame's velocity is its craft's.
             flare.write(
@@ -900,7 +902,7 @@ impl Scene {
                 spike.drawable.write(
                     queue,
                     view_projection,
-                    race.ship_model_matrix_of(slot) * flame,
+                    race.view.ship_model_matrix_of(&race.core, slot) * flame,
                     prev_vp * prev.ship(slot, race) * flame,
                 );
             }
@@ -930,7 +932,7 @@ impl Scene {
                 continue;
             }
             let flame = hd_flame_transform(race, slot, true, self.flare_origins[slot].boost);
-            let model = race.ship_model_matrix_of(slot) * flame;
+            let model = race.view.ship_model_matrix_of(&race.core, slot) * flame;
             boost.write(
                 queue,
                 view_projection,
@@ -1006,7 +1008,7 @@ impl Scene {
         // Building the quad from these is what makes it face the viewer, and it is
         // the whole reason this is world-space rather than the original's
         // post-projection sprite.
-        let camera = race.view();
+        let camera = race.view.view(&race.core);
         let right = Vec3::new(camera.x_axis.x, camera.y_axis.x, camera.z_axis.x);
         let up = Vec3::new(camera.x_axis.y, camera.y_axis.y, camera.z_axis.y);
         // One flare and one ribbon per craft, the player's first, all in the two
@@ -1017,7 +1019,7 @@ impl Scene {
         //
         // **The player's own flare is not skipped in the cockpit view**, and that
         // is deliberate rather than overlooked: the nozzle sits behind the eye, so
-        // it falls outside the frustum on its own. See `Race::draws_own_ship`,
+        // it falls outside the frustum on its own. See `RaceView::draws_own_ship`,
         // which skips the *hull* because a hull drawn around the camera really
         // does put polygons across the middle of the screen.
         oag_gpu::perfprobe::mark("pre-exhaust");
@@ -1053,7 +1055,7 @@ impl Scene {
             // No locator, nothing drawn - rather than a flare at the origin.
             // `break` rather than `continue` because the whole field shares one
             // model, so a missing `Engine Flare` node is missing for every craft.
-            let Some(nozzle) = race.nozzle_of(slot) else {
+            let Some(nozzle) = race.view.nozzle_of(&race.core, slot) else {
                 break;
             };
             let exhaust = race.exhaust_of(slot);
@@ -1090,7 +1092,7 @@ impl Scene {
                     race.trail_head_of(slot),
                     right,
                     up,
-                    race.trail_law(),
+                    race.view.trail_law(),
                 );
             }
         }
@@ -1114,7 +1116,7 @@ impl Scene {
         self.exhaust.borrow_mut().upload(
             queue,
             &vp,
-            race.camera_position(),
+            race.view.camera_position(&race.core),
             vertices,
             flares,
             trail,
@@ -1123,7 +1125,7 @@ impl Scene {
             queue,
             &vp,
             race.core.sim.world.tick,
-            &race.camera_frame(),
+            &race.view.camera_frame(&race.core),
             visible_set.map_or(oag_vex::pvs::ALL_VISIBLE, |set| set.mask()),
         );
         oag_gpu::perfprobe::mark("exhaust-upload");
@@ -1184,7 +1186,7 @@ impl Scene {
         // Skipped outright in the cockpit view rather than moved or scaled away:
         // the original sets one flag on the craft and draws no hull, and a draw
         // call not issued is the only version of that with no chance of a stray
-        // polygon across the middle of the screen. See `Race::draws_own_ship`.
+        // polygon across the middle of the screen. See `RaceView::draws_own_ship`.
         // Only the *player's* hull is skipped in the cockpit view. The opponents
         // in front are exactly what a cockpit view is for.
         draws.mark("craft, weapons, shields");
@@ -1195,7 +1197,7 @@ impl Scene {
             let (centre, radius) = drawable.bound();
             if super::craft_cull::hull_in_view(
                 frustum.as_ref(),
-                race.ship_model_matrix_of(index),
+                race.view.ship_model_matrix_of(&race.core, index),
                 centre,
                 radius,
             ) {
@@ -1338,7 +1340,7 @@ impl Scene {
             layer: self.layer.get(),
             block,
             viewport,
-            eye: race.camera_position(),
+            eye: race.view.camera_position(&race.core),
             depth_plane: plane.map(|row| row * list_b_depth_scale),
             foliage_depth: race.writes_foliage_depth(),
             flare_keys,

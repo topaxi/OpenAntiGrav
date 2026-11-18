@@ -321,7 +321,7 @@ fn a_fresh_reticle_wears_the_missiles_art() {
 /// The original keeps all four widgets up while the extent is still moving -
 /// [`Sight::visible`] is that rule - so a set swapped out the moment the pickup
 /// slot emptied would finish a LeachBeam's closing arrowheads as the Missile's
-/// brackets. Nothing sets `held` back; `Race::update_sight` only ever writes it
+/// brackets. Nothing sets `held` back; `RaceView::update_sight` only ever writes it
 /// for a weapon that locks.
 #[test]
 fn the_art_holds_while_the_brackets_ease_back_open() {

@@ -159,7 +159,8 @@ fn a_blast_first_seen_in_the_replay_is_started_at_its_age_and_a_played_one_is_no
     // Called between ticks, so `quiet` (set for the length of a replayed tick) is set by hand.
     let blast = |race: &mut Race, quiet: bool| {
         race.quiet = quiet;
-        race.note_blast(
+        crate::stage::stage!(race).note_blast(
+            &race.core,
             oag_tables::weapons::Weapon::Rocket,
             Vec3::ZERO,
             None,
@@ -197,7 +198,8 @@ fn a_blast_first_seen_late_starts_its_screen_flash_aged() {
     let hit = |race: &mut Race, quiet: bool| {
         race.quiet = quiet;
         // A Rocket that reached a craft: screen flash kind 0.
-        race.note_blast(
+        crate::stage::stage!(race).note_blast(
+            &race.core,
             oag_tables::weapons::Weapon::Rocket,
             Vec3::ZERO,
             Some(1),
@@ -302,18 +304,18 @@ fn a_rocket_first_drawn_mid_flight_gets_its_effect_as_old_as_it_is() {
 
     // Drawn every tick of the flight.
     let mut ridden = flying(1);
-    ridden.advance_projectile_flares();
+    ridden.view.advance_projectile_flares(&ridden.core);
     for _ in 1..AGE {
         ridden.view.stage.advance(dt, &mut ridden.view.stage_rng);
         fly(&mut ridden, 1);
-        ridden.advance_projectile_flares();
+        ridden.view.advance_projectile_flares(&ridden.core);
     }
     // First drawn on the tick it is fired: the effect starts with nothing out.
     let mut fresh = flying(1);
-    fresh.advance_projectile_flares();
+    fresh.view.advance_projectile_flares(&fresh.core);
     // First drawn `AGE` ticks into the flight.
     let mut late = flying(AGE);
-    late.advance_projectile_flares();
+    late.view.advance_projectile_flares(&late.core);
 
     let (ridden, fresh, late) = (alive(&ridden), alive(&fresh), alive(&late));
     assert!(

@@ -171,7 +171,7 @@ pub struct FinishCamera {
     /// measured against the node's aim) until a cut gives the picture to the new subject.
     wreck: Option<Subject>,
     /// How many times the picture has jumped: the take-over, a new node while a node camera
-    /// is showing, a new mode and a new craft being watched. What [`Race::camera_cuts`] adds
+    /// is showing, a new mode and a new craft being watched. What [`crate::RaceView::camera_cuts`] adds
     /// so the temporal upscaler's history is dropped across them.
     cuts: u32,
     /// What the last frame showed: the mode, the node when it was a node camera, the craft.
@@ -290,7 +290,7 @@ impl FinishCamera {
         Some(pose)
     }
 
-    /// How many times the picture has jumped to a different shot. See [`Race::camera_cuts`].
+    /// How many times the picture has jumped to a different shot. See [`crate::RaceView::camera_cuts`].
     #[must_use]
     pub fn cuts(&self) -> u32 {
         self.cuts
@@ -571,74 +571,73 @@ impl Race {
             .as_ref()
             .and_then(FinishCamera::mode)
     }
-
-    /// Steps the post-race camera one tick and imposes its pose, once the player's craft
-    /// has crossed the line and the world is running on behind the panels.
-    ///
-    /// An attract demo's director runs from the first tick, on the player's craft, with no
-    /// finish to wait for ([`Race::fly_as_demo`]).
-    pub(super) fn advance_finish_camera(&mut self) {
-        if self.view.spectates_from_start {
-            self.step_director(START_TICKS, None);
-            return;
-        }
-        if self.view.finish_camera.is_none() || !self.core.runs_on_after_the_end() {
-            return;
-        }
-        let player = self.core.player_slot();
-        // The line's clock is the finishing tick; a Single Race wreck's is the tick the
-        // race ended, with the start pushed back to `WRECK_HANDOFF_TICKS`.
-        let (finish, delay) = match self.core.sim.world.ships[player].standing.finish_tick {
-            Some(finish) => (finish, 0),
-            None => match self.core.outcome.wreck_ended_tick {
-                Some(ended) => (ended, WRECK_HANDOFF_TICKS.saturating_sub(START_TICKS)),
-                None => return,
-            },
-        };
-        let wreck = (self.core.sim.world.ships[player]
-            .standing
-            .finish_tick
-            .is_none())
-        .then(|| self.destroy_camera_now().copied())
-        .flatten()
-        .map(|destroyed| {
-            let body = &self.core.sim.world.ships[player].physics.body;
-            Wreck {
-                craft: Subject {
-                    slot: player,
-                    position: body.position,
-                    orientation: body.orientation,
-                },
-                focus: destroyed.focus,
-                fov: destroyed.fov,
-            }
-        });
-        let since = self
-            .core
-            .sim
-            .world
-            .tick
-            .saturating_sub(finish)
-            .saturating_sub(delay);
-        self.step_director(since, wreck);
-    }
-
-    /// One tick of the director, `since` ticks into its life, imposing its pose.
-    fn step_director(&mut self, since: u64, wreck: Option<Wreck>) {
-        let player = self.core.player_slot();
-        let live = self.core.sim.spectator_subjects();
-        let Some(director) = self.view.finish_camera.as_mut() else {
-            return;
-        };
-        if self.view.camera_override.is_some() && !director.imposed {
-            return;
-        }
-        let pose = director.step(since, &live, player, wreck);
-        director.imposed = pose.is_some();
-        self.view.camera_override = pose;
-    }
 }
 
 mod photo_controls;
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Steps the post-race camera one tick and imposes its pose, once the player's craft
+    /// has crossed the line and the world is running on behind the panels.
+    ///
+    /// An attract demo's director runs from the first tick, on the player's craft, with no
+    /// finish to wait for ([`Race::fly_as_demo`]).
+    pub(super) fn advance_finish_camera(&mut self, core: &SimRace) {
+        if self.spectates_from_start {
+            self.step_director(core, START_TICKS, None);
+            return;
+        }
+        if self.finish_camera.is_none() || !core.runs_on_after_the_end() {
+            return;
+        }
+        let player = core.player_slot();
+        // The line's clock is the finishing tick; a Single Race wreck's is the tick the
+        // race ended, with the start pushed back to `WRECK_HANDOFF_TICKS`.
+        let (finish, delay) = match core.sim.world.ships[player].standing.finish_tick {
+            Some(finish) => (finish, 0),
+            None => match core.outcome.wreck_ended_tick {
+                Some(ended) => (ended, WRECK_HANDOFF_TICKS.saturating_sub(START_TICKS)),
+                None => return,
+            },
+        };
+        let wreck = (core.sim.world.ships[player].standing.finish_tick.is_none())
+            .then(|| self.destroy_camera_now().copied())
+            .flatten()
+            .map(|destroyed| {
+                let body = &core.sim.world.ships[player].physics.body;
+                Wreck {
+                    craft: Subject {
+                        slot: player,
+                        position: body.position,
+                        orientation: body.orientation,
+                    },
+                    focus: destroyed.focus,
+                    fov: destroyed.fov,
+                }
+            });
+        let since = core
+            .sim
+            .world
+            .tick
+            .saturating_sub(finish)
+            .saturating_sub(delay);
+        self.step_director(core, since, wreck);
+    }
+
+    /// One tick of the director, `since` ticks into its life, imposing its pose.
+    fn step_director(&mut self, core: &SimRace, since: u64, wreck: Option<Wreck>) {
+        let player = core.player_slot();
+        let live = core.sim.spectator_subjects();
+        let Some(director) = self.finish_camera.as_mut() else {
+            return;
+        };
+        if self.camera_override.is_some() && !director.imposed {
+            return;
+        }
+        let pose = director.step(since, &live, player, wreck);
+        director.imposed = pose.is_some();
+        self.camera_override = pose;
+    }
+}

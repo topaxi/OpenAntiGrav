@@ -34,7 +34,7 @@
 //! technically keeps computing to 1.7 s, but nothing after 1.3 s is visible
 //! once Collapse has run - the two facts do not contradict, they answer
 //! different questions). Nothing here derives one title's numbers from the
-//! other's: [`Race::advance_plasma_blast_models`] and
+//! other's: [`crate::RaceView::advance_plasma_blast_models`] and
 //! [`Race::plasma_blast_draws`] both branch on `RaceView::hd_plasma_blast`
 //! and run one body or the other, never a blend. **Placement differs too**:
 //! Pulse's hemispheres sit in a world-fixed track frame and its halo takes
@@ -300,92 +300,6 @@ pub(super) struct PlasmaBlastDraw {
 }
 
 impl Race {
-    /// Starts a render-side blast at `position`, in the first free slot -
-    /// dropped silently if all [`PLASMA_BLAST_SLOTS`] are already live, the
-    /// same "no evicting a running effect" rule
-    /// [`weapons::visuals::advance_one_flare`]'s own flare-stage fallback
-    /// takes. The hemispheres' frame is read off the track here, see
-    /// [`RaceSim::track_frame_at`].
-    ///
-    /// Called from [`Race::ignite_blast`] for every Plasma detonation - a
-    /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
-    /// teardown pass does not branch on which ended the bolt.
-    pub(crate) fn spawn_plasma_blast_model(&mut self, position: Vec3) {
-        // A title with neither mechanism has no blast to play.
-        if !self.view.hd_plasma_blast && self.view.plasma_blast_law.is_none() {
-            return;
-        }
-        let frame = self.core.sim.track_frame_at(position);
-        if let Some(slot) = self.view.plasma_blasts.iter().position(Option::is_none) {
-            self.view.plasma_blasts[slot] = Some(PlasmaBlast {
-                position,
-                age: 0.0,
-                frame,
-                ease: [0.0; 3],
-            });
-        }
-    }
-
-    /// Starts a Disruptor explosion halo at `position`, in the first free slot,
-    /// when the title authors one; dropped when the pool is full.
-    pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
-        if self.view.disruptor_halo_law.is_none() {
-            return;
-        }
-        if let Some(slot) = self.view.disruptor_halos.iter().position(Option::is_none) {
-            self.view.disruptor_halos[slot] = Some(DisruptorHaloBlast {
-                position,
-                age: 0.0,
-                ease: 0.0,
-            });
-        }
-    }
-
-    /// Ages every live Disruptor halo one tick, steps its scale ease and
-    /// retires it at its law's life.
-    fn advance_disruptor_halos(&mut self, dt: f32) {
-        let Some(law) = self.view.disruptor_halo_law else {
-            return;
-        };
-        for slot in &mut self.view.disruptor_halos {
-            let Some(halo) = slot else { continue };
-            halo.age += dt;
-            halo.ease += (law.target - halo.ease) * law.rate;
-            if halo.age >= law.life {
-                *slot = None;
-            }
-        }
-    }
-
-    /// Runs the on-craft Disruptor effect's lifecycle one tick: built (`cur` `0`, target `target`)
-    /// when a craft becomes disrupted, eased towards its target every tick, its target dropped
-    /// to `0` when the disruption ends and freed once `cur` is under the law's floor
-    /// (`Disruptor_ApplyEffect` builds it, `Ship_UpdateWeapons` ends it, `0x0885a010` eases
-    /// it; `docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
-    pub(crate) fn advance_disruptor_craft_fx(&mut self) {
-        let Some(law) = self.view.disruptor_craft_law else {
-            return;
-        };
-        for slot in 0..MAX_SHIPS {
-            let disrupted = self.core.sim.world.ships[slot].disruption.active();
-            let fx = &mut self.view.disruptor_craft[slot];
-            if disrupted && fx.is_none() {
-                *fx = Some(DisruptorCraftBlast {
-                    cur: 0.0,
-                    target: law.target,
-                });
-            }
-            let Some(live) = fx else { continue };
-            if !disrupted {
-                live.target = 0.0;
-            }
-            live.cur += (live.target - live.cur) * law.rate;
-            if !disrupted && live.cur < law.retire_below {
-                *fx = None;
-            }
-        }
-    }
-
     /// Each live on-craft Disruptor effect's matrix (the craft's own drawn matrix) and the grey
     /// tint the eased value gives, by ship slot.
     ///
@@ -395,10 +309,13 @@ impl Race {
     pub(crate) fn disruptor_craft_draws(&self) -> [Option<(Mat4, f32)>; MAX_SHIPS] {
         std::array::from_fn(|slot| {
             let live = self.view.disruptor_craft[slot]?;
-            if slot == 0 && !self.draws_own_ship() {
+            if slot == 0 && !self.view.draws_own_ship() {
                 return None;
             }
-            Some((self.ship_model_matrix_of(slot), live.cur.clamp(0.0, 1.0)))
+            Some((
+                self.view.ship_model_matrix_of(&self.core, slot),
+                live.cur.clamp(0.0, 1.0),
+            ))
         })
     }
 
@@ -449,67 +366,6 @@ impl RaceSim {
 }
 
 impl Race {
-    /// Ages every live blast one tick, steps its three scale eases and
-    /// retires whichever just crossed its title's own lifetime -
-    /// `PlasmaBlastLaw::life` on Pulse and Pure, [`HD_BLAST_LIFETIME_SECONDS`]
-    /// on HD, branched on `RaceView::hd_plasma_blast`. On HD this also, the
-    /// tick a blast first crosses [`HD_BLAST_HIDE_AT_SECONDS`], plays
-    /// `WO_PLASMA_LIGHTNING_COLLAPSE` at its position -
-    /// `WeaponExplosions_Collapse`'s own trigger.
-    ///
-    /// Called from [`Race::tick`], after the impacts loop that can spawn a
-    /// new one this same tick - a blast spawned this tick draws at `age ==
-    /// 0.0` for the rest of the frame before its first advance, the same
-    /// one-tick order [`Race::advance_projectile_flares`] already runs a
-    /// freshly-placed flare in.
-    pub(crate) fn advance_plasma_blast_models(&mut self, dt: f32) {
-        self.advance_disruptor_halos(dt);
-        self.advance_disruptor_craft_fx();
-        let hd = self.view.hd_plasma_blast;
-        // Looked up once, before the loop borrows `plasma_blasts` mutably -
-        // `self.view.stage.play` needs `&mut self.view` too, and nothing
-        // below can hold both borrows at once.
-        let collapse_effect = hd
-            .then(|| {
-                self.view
-                    .handles
-                    .get(Trigger::PlasmaLightningCollapse)
-                    .cloned()
-            })
-            .flatten();
-        let law = self.view.plasma_blast_law;
-        let (targets, rates) = match law {
-            Some(law) if !hd => (law.ease_targets, law.ease_rates),
-            _ => (HD_BLAST_TARGETS, HD_BLAST_RATES),
-        };
-        let mut collapsed_at = Vec::new();
-        for slot in &mut self.view.plasma_blasts {
-            let Some(blast) = slot else { continue };
-            let was_visible = blast.age < HD_BLAST_HIDE_AT_SECONDS;
-            blast.age += dt;
-            for (ease, (target, rate)) in blast.ease.iter_mut().zip(targets.into_iter().zip(rates))
-            {
-                *ease += (target - *ease) * rate;
-            }
-            let lifetime = if hd {
-                if was_visible && blast.age >= HD_BLAST_HIDE_AT_SECONDS {
-                    collapsed_at.push(blast.position);
-                }
-                HD_BLAST_LIFETIME_SECONDS
-            } else {
-                law.map_or(0.0, |law| law.life)
-            };
-            if blast.age >= lifetime {
-                *slot = None;
-            }
-        }
-        if let Some(effect) = collapse_effect {
-            for position in collapsed_at {
-                self.view.stage.play(&effect, position, 1.0);
-            }
-        }
-    }
-
     /// This frame's placement, tint and clock for every render-side blast
     /// slot, in slot order - `None` for a slot with nothing live, which the
     /// caller uses to decide what to write and what to draw. `camera` is the
@@ -678,3 +534,151 @@ fn facing_away(matrix: Mat4) -> Mat4 {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Starts a render-side blast at `position`, in the first free slot -
+    /// dropped silently if all [`PLASMA_BLAST_SLOTS`] are already live, the
+    /// same "no evicting a running effect" rule
+    /// [`weapons::visuals::advance_one_flare`]'s own flare-stage fallback
+    /// takes. The hemispheres' frame is read off the track here, see
+    /// [`RaceSim::track_frame_at`].
+    ///
+    /// Called from [`crate::RaceView::ignite_blast`] for every Plasma detonation - a
+    /// wall hit and a 10 s timeout alike, since `Plasmas_Update`'s own
+    /// teardown pass does not branch on which ended the bolt.
+    pub(crate) fn spawn_plasma_blast_model(&mut self, core: &SimRace, position: Vec3) {
+        // A title with neither mechanism has no blast to play.
+        if !self.hd_plasma_blast && self.plasma_blast_law.is_none() {
+            return;
+        }
+        let frame = core.sim.track_frame_at(position);
+        if let Some(slot) = self.plasma_blasts.iter().position(Option::is_none) {
+            self.plasma_blasts[slot] = Some(PlasmaBlast {
+                position,
+                age: 0.0,
+                frame,
+                ease: [0.0; 3],
+            });
+        }
+    }
+
+    /// Starts a Disruptor explosion halo at `position`, in the first free slot,
+    /// when the title authors one; dropped when the pool is full.
+    pub(crate) fn spawn_disruptor_halo(&mut self, position: Vec3) {
+        if self.disruptor_halo_law.is_none() {
+            return;
+        }
+        if let Some(slot) = self.disruptor_halos.iter().position(Option::is_none) {
+            self.disruptor_halos[slot] = Some(DisruptorHaloBlast {
+                position,
+                age: 0.0,
+                ease: 0.0,
+            });
+        }
+    }
+}
+
+#[cfg(feature = "view")]
+impl RaceView {
+    /// Ages every live Disruptor halo one tick, steps its scale ease and
+    /// retires it at its law's life.
+    fn advance_disruptor_halos(&mut self, dt: f32) {
+        let Some(law) = self.disruptor_halo_law else {
+            return;
+        };
+        for slot in &mut self.disruptor_halos {
+            let Some(halo) = slot else { continue };
+            halo.age += dt;
+            halo.ease += (law.target - halo.ease) * law.rate;
+            if halo.age >= law.life {
+                *slot = None;
+            }
+        }
+    }
+
+    /// Runs the on-craft Disruptor effect's lifecycle one tick: built (`cur` `0`, target `target`)
+    /// when a craft becomes disrupted, eased towards its target every tick, its target dropped
+    /// to `0` when the disruption ends and freed once `cur` is under the law's floor
+    /// (`Disruptor_ApplyEffect` builds it, `Ship_UpdateWeapons` ends it, `0x0885a010` eases
+    /// it; `docs/ghidra/functions/psp-pure-usa/weapon-effects.md`, "Disruptor").
+    pub(crate) fn advance_disruptor_craft_fx(&mut self, core: &SimRace) {
+        let Some(law) = self.disruptor_craft_law else {
+            return;
+        };
+        for slot in 0..MAX_SHIPS {
+            let disrupted = core.sim.world.ships[slot].disruption.active();
+            let fx = &mut self.disruptor_craft[slot];
+            if disrupted && fx.is_none() {
+                *fx = Some(DisruptorCraftBlast {
+                    cur: 0.0,
+                    target: law.target,
+                });
+            }
+            let Some(live) = fx else { continue };
+            if !disrupted {
+                live.target = 0.0;
+            }
+            live.cur += (live.target - live.cur) * law.rate;
+            if !disrupted && live.cur < law.retire_below {
+                *fx = None;
+            }
+        }
+    }
+
+    /// Ages every live blast one tick, steps its three scale eases and
+    /// retires whichever just crossed its title's own lifetime -
+    /// `PlasmaBlastLaw::life` on Pulse and Pure, [`HD_BLAST_LIFETIME_SECONDS`]
+    /// on HD, branched on `RaceView::hd_plasma_blast`. On HD this also, the
+    /// tick a blast first crosses [`HD_BLAST_HIDE_AT_SECONDS`], plays
+    /// `WO_PLASMA_LIGHTNING_COLLAPSE` at its position -
+    /// `WeaponExplosions_Collapse`'s own trigger.
+    ///
+    /// Called from [`Race::tick`], after the impacts loop that can spawn a
+    /// new one this same tick - a blast spawned this tick draws at `age ==
+    /// 0.0` for the rest of the frame before its first advance, the same
+    /// one-tick order [`crate::RaceView::advance_projectile_flares`] already runs a
+    /// freshly-placed flare in.
+    pub(crate) fn advance_plasma_blast_models(&mut self, core: &SimRace, dt: f32) {
+        self.advance_disruptor_halos(dt);
+        self.advance_disruptor_craft_fx(core);
+        let hd = self.hd_plasma_blast;
+        // Looked up once, before the loop borrows `plasma_blasts` mutably -
+        // `self.stage.play` needs `self` too, and nothing
+        // below can hold both borrows at once.
+        let collapse_effect = hd
+            .then(|| self.handles.get(Trigger::PlasmaLightningCollapse).cloned())
+            .flatten();
+        let law = self.plasma_blast_law;
+        let (targets, rates) = match law {
+            Some(law) if !hd => (law.ease_targets, law.ease_rates),
+            _ => (HD_BLAST_TARGETS, HD_BLAST_RATES),
+        };
+        let mut collapsed_at = Vec::new();
+        for slot in &mut self.plasma_blasts {
+            let Some(blast) = slot else { continue };
+            let was_visible = blast.age < HD_BLAST_HIDE_AT_SECONDS;
+            blast.age += dt;
+            for (ease, (target, rate)) in blast.ease.iter_mut().zip(targets.into_iter().zip(rates))
+            {
+                *ease += (target - *ease) * rate;
+            }
+            let lifetime = if hd {
+                if was_visible && blast.age >= HD_BLAST_HIDE_AT_SECONDS {
+                    collapsed_at.push(blast.position);
+                }
+                HD_BLAST_LIFETIME_SECONDS
+            } else {
+                law.map_or(0.0, |law| law.life)
+            };
+            if blast.age >= lifetime {
+                *slot = None;
+            }
+        }
+        if let Some(effect) = collapse_effect {
+            for position in collapsed_at {
+                self.stage.play(&effect, position, 1.0);
+            }
+        }
+    }
+}
