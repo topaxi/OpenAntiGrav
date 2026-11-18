@@ -100,6 +100,15 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 //
 // with 0.25 an inline constant of the executable and `adapted` the 1x1
 // state fs_adapt below maintains.
+
+// `luminance ^ frame_exponent`, with `x ^ 0` defined as 1 for every x. A bare `pow` is
+// unspecified at an exponent of 0 in WGSL's own terms (`exp2(0 * log2(x))`), and an NVIDIA
+// adapter returned 0 for it where an AMD one returns 1; the front end's model block authors an
+// exponent of 0 and means the flat term.
+fn luminance_term(luminance: f32) -> f32 {
+    return select(pow(luminance, constants.frame_exponent), 1.0, constants.frame_exponent == 0.0);
+}
+
 @fragment
 fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
     let frame = surface(textureSample(source_tex, source_sampler, drawn(in.uv)));
@@ -108,7 +117,7 @@ fn fs_gate(in: VertexOutput) -> @location(0) vec4<f32> {
     let luminance = max(dot(frame.rgb, vec3<f32>(0.9, 1.77, 0.33)), 0.0);
     let gated = frame.rgb * frame.a * constants.alpha_contribution
         + frame.rgb
-            * pow(luminance, constants.frame_exponent)
+            * luminance_term(luminance)
             * (constants.frame_contribution * fade);
     return vec4<f32>(gated, 1.0);
 }
