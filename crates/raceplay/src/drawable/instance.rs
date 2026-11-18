@@ -176,6 +176,7 @@ impl Drawable {
             additive_pipeline: self.additive_pipeline.clone(),
             unblended_pipeline: self.unblended_pipeline.clone(),
             authored_pipelines: self.authored_pipelines.clone(),
+            plain_blend: self.plain_blend.clone(),
             stamp_pipeline: self.stamp_pipeline.clone(),
             foliage: self.foliage.clone(),
             prepass: self.prepass.clone(),

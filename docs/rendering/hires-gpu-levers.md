@@ -905,3 +905,247 @@ purpose, not committed): NVIDIA 4K `track solid, shaded` 1,540 to 1,491 us and c
 medians of 3, about 1.5 % of a 6.2 ms frame before the second pass's cost; the Deck's own arm
 above ("no target encode") is 0.57 ms of a serialised 11.3 ms span, about 0.37 ms at the race's
 clock. Not worth a split race pass on this evidence; it stays recorded.
+
+## 2048 and Omega on the Deck, pass by pass; two exact cuts landed (2026-11-18, `deck-vita-ps4-perf`)
+
+The question: where the GPU time of Wipeout 2048 (Vita EU, Altima) and the Omega Collection (PS4
+EU, Tech de Ra) goes on the Steam Deck at 1280x800, 1920x1080 and 3840x2160, blur and MSAA off,
+and what can be cut without changing the picture. **Chosen workload, not measured against any
+original.**
+
+**Result.**
+
+- **At 800p (the Deck's own screen) both titles are bound by the CPU.** Whole-race frame p50
+  sits on `cpu_us`: 2048 2.50 ms against 2.02 ms of CPU, Omega 4.50 against 3.72. A GPU cut there
+  buys battery, not frames.
+- **At 1080p (docked)** 2048 is still CPU-bound (3.01 ms frame, 2.31 CPU). Omega is near balance
+  (6.21 frame, 4.09 CPU).
+- **2048 holds 60 Hz at native 4K** (frame p50 8.50 ms, p95 12.10 offscreen, about 13 with a
+  presented output). Its circuit's shading is 56 % of the spans there.
+- **Omega missed 60 Hz at native 4K on p95 only** (p50 13.44, p95 19.91 ms). Its circuit's
+  blended list (the road's decal layers) was 30 % of the spans and shading-bound. One cut,
+  exact by construction, takes that list from 6.70 to 2.55 ms at 4K. **Omega's whole-race frame
+  p95 at native 4K went from 19.85 to 15.92 ms offscreen.** That is at the 60 Hz line, not under
+  it: a presented 4K output adds about 1 ms of resolve, composite and HUD (HD's figure, "What a
+  4K output costs after this" above), which was not measured for Omega. Docked at 1080p the same
+  cut takes Omega's frame p50 from 6.18 to 5.60 ms (-9.4 %).
+- The second cut, 2048's exposure readback, is exact but below what a whole race resolves.
+
+### Method
+
+`RADV VANGOGH`, AC, offscreen over ssh under the Deck's lock, Deck load 0.6 to 3.5. Release
+`--features perf-probe` builds with `-C target-cpu=znver2` from the
+`oag-appimage-build:bookworm` container; before is `main` at `72c135ee7`. The Deck's
+`~/.local/share/oag/extracted` holds both titles: 2048 is `vita/PCSF00007` and Omega is
+`ps4/` (`omega-eu` and `omega-eu-patch`). Fragment counts per span agree with
+the host's (`omega-eu-merged`) to 0.3 %, so both adapters run the same workload.
+
+- **Spans**: this page's span command (`OAG_RENDER_GPU_BENCH=100 OAG_RENDER_PERF=1 ...
+  --ticks 2500 --render-scale 100`), the arms interleaved, 2 rounds. The rounds agree within
+  0.5 % at every size. The serialised span bench runs at a busy median of 1,040 MHz.
+- **Whole race**: `scripts/bench-render.py run <title> --binary <bin> --size WxH`, then
+  `compare`. The busy median clock is 1,600 MHz at 1080p and 4K. At 800p the pair read 1,435
+  and 1,512 MHz; those runs are CPU-bound, so read them loosely.
+- **The whole race's `gpu_us` covers only the race pass, the motion blur and HD's bloom**
+  ([render-bench.md](../tools/render-bench.md)). It holds neither 2048's `wo composite` chain nor
+  Omega's tone map and bloom. A change in those chains shows in `frame_us` and the spans only.
+- **Second adapter**: this notebook's NVIDIA RTX PRO 2000, a host release `perf-probe` build,
+  the same span command, 2 rounds, host load 3 to 33. Its whole-race runs swung -25 % to +34 %
+  on `gpu_us` between two binaries that differ only outside it (load 4 to 20 during them), so
+  they are not used.
+
+### Where the time goes, Deck spans, us, defaults (medians of 2 rounds, 1,040 MHz)
+
+2048, Altima, tick 2,500:
+
+| span | 1280x800 | 1920x1080 | 3840x2160 | share at 4K |
+|---|---:|---:|---:|---:|
+| track solid, shaded | 1,037 | 1,945 | 6,727 | 56 % |
+| craft, weapons, shields | 234 | 461 | 1,610 | 13 % |
+| wo composite (the vignette composite) | 132 | 291 | 1,128 | 9 % |
+| track solid (depth prepass) | 238 | 335 | 896 | 7 % |
+| wo composite gate | 88 | 199 | 770 | 6 % |
+| wo composite step (exposure readback) | 36 | 89 | 273 | 2 % |
+| wo composite blur (x2) | 30 | 55 | 194 | 2 % |
+| advert card | 163 | 163 | 162 | 1 % |
+| between passes (x8) | 99 | 99 | 107 | 1 % |
+| sum of spans | 2,106 | 3,760 | 12,100 | |
+| pipelined per frame | 2,651 | 3,055 | 8,807 | |
+
+Omega, Tech de Ra, tick 2,500:
+
+| span | 1280x800 | 1920x1080 | 3840x2160 | share at 4K |
+|---|---:|---:|---:|---:|
+| track solid, shaded | 2,365 | 3,344 | 8,380 | 38 % |
+| track blended (the road's decal layers) | 854 | 1,794 | 6,707 | 30 % |
+| track solid (depth prepass) | 1,205 | 1,368 | 2,033 | 9 % |
+| omega tonemap apply | 198 | 422 | 1,623 | 7 % |
+| omega bloom (bright, 5 blurs, 3 downs, 3 adds) | 572 | 667 | 1,141 | 5 % |
+| craft, weapons, shields | 199 | 297 | 864 | 4 % |
+| advert card (x5) | 505 | 501 | 500 | 2 % |
+| between passes (x30) | 390 | 394 | 397 | 2 % |
+| exhaust, sparks, clouds, ghost | 43 | 85 | 294 | 1 % |
+| omega tonemap luma and halve (x8) | 96 | 151 | 201 | 1 % |
+| sum of spans | 6,437 | 9,056 | 22,271 | |
+| pipelined per frame | 5,386 | 7,141 | 16,247 | |
+
+Whole race, Deck, before, ms (frame p50 / p95; CPU p50; `gpu_us` p50):
+
+| | 1280x800 | 1920x1080 | 3840x2160 |
+|---|---|---|---|
+| 2048 (13,040 frames, hash `570a234b8d1de611`) | 2.50 / 3.07; 2.02; 1.44 | 3.01 / 4.01; 2.31; 2.02 | 8.50 / 12.10; 3.35; 6.02 |
+| Omega (6,776 frames, hash `8967e698d2f4bb3b`) | 4.50 / 5.67; 3.72; 2.92 | 6.21 / 7.68; 4.09; 4.43 | 13.44 / 19.91; 4.67; 9.88 |
+
+NVIDIA, the same spans at 4K, us: 2048 shaded 955, composite 231, step 331, gate 159. Omega
+shaded 1,631, blended 1,124, prepass 341, tone map apply 276, bloom bright 207.
+
+What carries over from HD's work and what does not:
+
+- **Carries over**: the circuit folds (`slots_present`, the emissive fold, `Prepass::plain`, the
+  rig and Zone folds, `lit_by_rig`) are generic and already apply to both titles.
+- **Does not apply**: HD's 8-bit scene and its resolve are HD's alone. 2048 has the `wo_*`
+  chain and Omega its tone map and bloom.
+- **Whether an 8-bit scene would be the faithful default** (recorded, not assumed):
+  - **Omega: no.** Its programs export fp16 into a float target that its tone map reads
+    ([hd-track-tone.md](hd-track-tone.md), "Other titles"), so `Rgba16Float` is the original's
+    precision.
+  - **2048: no.** The original's target is `U2F10F10F10`, a 32-bit packed float
+    (`oag_post::wo_composite`), not 8-bit. wgpu's nearest format, `Rg11b10Ufloat`, has other
+    mantissa widths and no alpha, so it would move pixels. It is also not needed: 2048 already
+    holds 60 Hz at native 4K.
+
+### Landed: a circuit's plain blended draws shade through pipelines of their own
+
+`Prepass::plain` gave a circuit's opaque draws that name no emissive row and no weapon role a
+pipeline told so. The blended list kept the model-wide pipelines.
+
+**Bisect.** A throwaway timing arm on `fs_main_blend` (not committed), Deck, Omega, us:
+
+| arm | 1920x1080 | 3840x2160 |
+|---|---:|---:|
+| full shader | 1,795 | 6,703 |
+| constant colour, blending on | 165 | 597 |
+| colour write off | 41 | 146 |
+
+So the decals were shading-bound: 91 % of the span was the shader, not the blend or the
+bandwidth.
+
+**Census.** 162 of Tech de Ra's 166 blended draws (124,020 of 124,296 indices) name no row and no
+weapon role, and the OR of their `slots` is `0x1`. The four that name a row carry `0x3000100`
+over 276 indices.
+
+**First try, dropped.** Telling the blended pipelines the transparent list's own OR alone moved
+nothing: 6,706 against 6,706 us at 4K. The four row-naming draws keep the emissive table in that
+OR.
+
+**Landed.** `specialise::plain_transparent_draws` splits the blended list as `plain_draws` splits
+the opaque one. `mesh_render::PlainBlend` holds the four blended pipeline pairs again (alpha
+over, additive, none, each authored equation), built with that half's `slots_present`, its
+`emissive_rows` and, under a rig that lights every one of its vertices, `lit_by_rig`.
+`Drawable::draw_lists_into` picks per draw and keeps the draw order. The exactness argument is the
+opaque one: each draw's bits are a subset of what its pipeline is told. The split is for a
+prepassed model (a circuit) only, the same scope as `Prepass::plain`.
+
+| Deck, us, 2 rounds | 1280x800 | 1920x1080 | 3840x2160 |
+|---|---|---|---|
+| Omega `track blended` | 853 to 320 (-62 %) | 1,795 to 678 (-62 %) | 6,704 to 2,553 (-62 %) |
+| Omega race pass | 4,663 to 4,142 | 6,913 to 5,813 | 18,459 to 14,270 (-23 %) |
+| Omega pipelined per frame | 5,396 to 4,993 (-7.5 %) | 7,126 to 6,418 (-9.9 %) | 16,264 to 13,490 (-17.1 %) |
+| HD `track blended` | 118 to 108 | 190 to 144 | 592 to 357 (-40 %) |
+| HD pipelined per frame | 5,708 to 5,621 | 6,128 to 6,116 | 14,146 to 13,985 (-1.1 %) |
+
+Omega, whole race on the Deck, `bench-render.py compare`, ms. The 4K pair was run twice and the
+two agree to 0.1 ms. Every run finished at tick 6,777 with hash `8967e698d2f4bb3b`.
+
+| Omega | 1280x800 | 1920x1080 | 3840x2160, run 1 | 3840x2160, run 2 |
+|---|---|---|---|---|
+| frame p50 | 4.55 to 4.34 (-4.6 %) | 6.18 to 5.60 (-9.4 %) | 13.28 to 12.92 (-2.8 %) | 13.41 to 12.92 (-3.6 %) |
+| frame p95 | 5.74 to 5.60 | 7.69 to 7.01 (-8.8 %) | 19.72 to 15.86 (-19.6 %) | 19.85 to 15.92 (-19.8 %) |
+| `gpu_us` p50 | 2.93 to 2.56 | 4.42 to 3.69 (-16.6 %) | 9.87 to 9.36 (-5.1 %) | 9.88 to 9.36 (-5.2 %) |
+| `gpu_us` p95 | 4.10 to 4.04 | 5.75 to 4.97 (-13.5 %) | 16.29 to 12.42 (-23.8 %) | 16.32 to 12.41 (-24.0 %) |
+
+NVIDIA spans, us: Omega `track blended` 266 to 78 at 1080p and 1,051 to 330 at 4K (-69 %). HD's
+went 106 to 54 at 4K.
+
+**Picture.**
+
+- **Deck**: HD identical at all three sizes. Omega differs by one level in 1, 4 and 5 pixels at
+  800p, 1080p and 4K.
+- **NVIDIA**: HD (race at ticks 1,200 and 2,500, Zone at 1,500), Pulse, Pure and 2048 are
+  identical. Omega at 2,500 with `--msaa 4x` and at 1,200 is identical. Omega at 2,500 and 4,000
+  differs in 0 to 15 pixels by one level.
+- **Why**: the same float-order rounding as the opaque split above. Every pixel was compared
+  decoded, because the PNG bytes of two binaries differ in their metadata.
+- **2048: checked, not timed.** Its pictures are identical. Whether Altima's blended list splits
+  at all was not checked. Its opaque list names no row (the census table above), so its blended
+  list most likely has nothing to split. Either way that list is 594 fragments, so there is
+  nothing to gain.
+- **Load cost not measured.** The split adds up to two pipelines for each blended class and each
+  authored equation of a circuit. The cold shader cache race load (`MESA_SHADER_CACHE_DISABLE=true
+  --ticks 1`, as for the opaque split) was not run.
+- **The 2048 speckle fix** (`shade.wesl`'s sun-mask tests at -0.5 and 1.5) landed on `main` after
+  these numbers. It moves two comparison constants and no instruction. The 2048 rows were not
+  re-measured; to re-measure, rerun the span command on a build of `main`.
+
+### Landed: 2048's exposure readback over 256 invocations
+
+`cs_adapt`/`cs_prime` read the gate target's alpha at every fourth pixel of every fourth row
+(`Exposure_AdaptFromReadback`). They used one 64-invocation workgroup, each invocation walking
+whole rows: about 500 dependent loads an invocation at 4K, a latency-bound pass. Now the sampled
+grid is flattened and dealt to 256 invocations, four independent loads at a time, and summed in a
+tree in `u32`. Every partial sum is a whole number, so the order of the additions cannot change
+the mean. Below 2^24 the old `f32` sum was exact too, and 4K's largest total is 8.3 million. The
+test `the_readback_is_the_mean_of_every_fourth_gate_byte` pins it on known gate bytes over a
+63 x 38 grid that does not divide among the invocations.
+
+| `wo composite step`, us | 1280x800 | 1920x1080 | 3840x2160 |
+|---|---|---|---|
+| Deck (2 rounds) | 36 to under 20 | 88 to 28 | 269 to 94 |
+| NVIDIA (2 rounds) | 24 to under 20 | 53 to under 20 | 325 to 78 |
+
+Deck pipelined per frame 2,596 to 2,577, 3,060 to 3,019 and 8,833 to 8,737 us (-1.1 % at 4K).
+Whole race: 2048's frame p50 moves -0.8 to -1.2 % at 1080p and 4K, within one run's noise, and
+`gpu_us` cannot show it. Pictures are identical, decoded, on the Deck at all three sizes and on
+NVIDIA. The state hash is the same.
+
+**Omega: checked, differs.** Its exposure (`cs_coefficients`) reads the one texel at the end of a
+256-square luma ladder, 5 us, and has no readback loop to widen.
+
+### Ranked, not taken
+
+Estimates are **estimates, not measurements**.
+
+1. **Omega's depth prepass: 1.2 to 2.0 ms, nearly flat with size.**
+   - What: it writes no fragments, so it is bound by vertices (about 413 k triangles a frame,
+     drawn by both halves).
+   - Lever: a position-only vertex entry for the prepass. That needs `@invariant` positions and a
+     proof that the depth-equal test still passes on every vertex.
+   - Measure: the `track solid` span at 800p, where it is 19 % of the spans.
+2. **Omega's tone map apply, 1.6 ms at 4K.**
+   - What: three fetches (distortion, scene, bloom), the curve and the piecewise sRGB encode for
+     every pixel.
+   - Lever: skip the distortion fetch where the distortion target is clear. It holds only what
+     a refractive draw wrote.
+   - Estimate: 0.2 to 0.4 ms at 4K.
+   - Measure: the `omega tonemap apply` span.
+3. **2048's composite and gate, 1.9 ms at 4K together.**
+   - What: the composite runs once per output pixel as the vignette mesh, and the gate takes four
+     scene taps per quarter pixel.
+   - Lever: none found that keeps the picture. 2048 already holds 60 Hz at native 4K.
+4. **The circuits' opaque shading** (2048 6.7 ms and Omega 8.4 ms at 4K) is what is left.
+   `RADV_DEBUG=shaderstats` on their plain pipelines has not been read.
+5. **Tooling: the race bench's `gpu_us` misses 2048's and Omega's post chains.** Timestamps around
+   `wo_composite` and the Omega chain would let a whole race show a cut there.
+
+### RGP capture
+
+One capture was obtained, unlike the HD attempt above, with this command:
+
+```sh
+gamescope --backend headless -W 1920 -H 1080 -w 1920 -h 1080 -- env MESA_VK_TRACE=rgp MESA_VK_TRACE_FRAME=400 oag-game <omega> --race --autopilot --no-audio --frame-log --script 15:quit
+```
+
+The settings file said `pause_on_focus_loss = false`. The trace landed in `/tmp` as
+`<binary>_<date>_frame401.rgp` (30 MB): Omega at 1080p, on the build after the blended split. It
+is not committed (it is a capture of game content). The race at frame 401 is early in its first
+lap, and nothing above is read from it.

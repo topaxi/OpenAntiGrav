@@ -420,6 +420,84 @@ fn an_adapting_chain_settles_where_the_law_does() {
     );
 }
 
+/// The step's readback is the mean of every fourth pixel of every fourth row of the gate
+/// target's alpha byte over 64, on a gate of known bytes that differ pixel to pixel and a
+/// sampled grid (63 x 38) that does not divide among the shader's invocations.
+#[test]
+fn the_readback_is_the_mean_of_every_fourth_gate_byte() {
+    let Some(gpu) = gpu() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let size = (1000, 600);
+    let chain = Chain::new(&gpu.device, FORMAT, size, mall()).expect("the chain builds");
+    let (qw, qh) = quarter_of(size);
+    // Writes the uniform the step reads; the gate it draws is replaced below.
+    let out = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("out"),
+        size: wgpu::Extent3d {
+            width: size.0,
+            height: size.1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: FORMAT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let out_view = out.create_view(&Default::default());
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    chain.run(&gpu.queue, &mut encoder, &out_view, (0.0, 0.0), size);
+    gpu.queue.submit([encoder.finish()]);
+
+    let alpha = |x: u32, y: u32| ((x * 7 + y * 13 + (x * y) % 5) % 256) as u8;
+    let texels: Vec<u8> = (0..qh)
+        .flat_map(|y| (0..qw).flat_map(move |x| [0, 0, 0, alpha(x, y)]))
+        .collect();
+    gpu.queue.write_texture(
+        chain.sized.quarter[0].texture.as_image_copy(),
+        &texels,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(qw * 4),
+            rows_per_image: None,
+        },
+        chain.sized.quarter[0].texture.size(),
+    );
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    chain.step(&mut encoder, &chain.adapt, &chain.window);
+    let state = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("state"),
+        size: STATE_SIZE,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    encoder.copy_buffer_to_buffer(chain.window_state(), 0, &state, 0, STATE_SIZE);
+    gpu.queue.submit([encoder.finish()]);
+    state.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+    gpu.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the readback completes");
+    let words = state.slice(..).get_mapped_range().expect("state").to_vec();
+    let got = f32::from_le_bytes([words[8], words[9], words[10], words[11]]);
+
+    let (mut sum, mut count) = (0_u32, 0_u32);
+    for y in (0..qh).step_by(4) {
+        for x in (0..qw).step_by(4) {
+            sum += u32::from(alpha(x, y));
+            count += 1;
+        }
+    }
+    assert_eq!(count, 63 * 38);
+    let want = law::readback(sum as f32 / count as f32);
+    assert!(
+        (got - want).abs() <= want * 1e-6,
+        "readback {got}, every fourth byte's mean says {want}"
+    );
+}
+
 mod split {
     use super::*;
     use crate::split_fixture::{SIZE, device, frame, paint, read_red};
