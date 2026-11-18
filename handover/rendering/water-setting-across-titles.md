@@ -172,7 +172,7 @@ map.**
   is 75, no iterator table confirms it); Altima's edge `Watercolour` is unauthored and
   drawn as the pond's `ColourConstant` (chosen; Omega authors `(0.1332, 0.1726, 0.2176)` on the
   same material, which agrees to the third digit, and its named vertex inputs raise the lane
-  pairing to 88). No Vita3K frame of Altima's sea was taken.
+  pairing to 88). No Vita3K frame of Altima's or Park's sea exists: attempted 2026-11-18 (`water-2048cmp`), the original shows no `fc15`/`fc17` water from its racing line and Zone mode posterises; a pair needs a 2048 teleport (water.md, Open 4a).
 - Pure's caustic frames on Vineta K are unread; the caustic bit is unread on
   Pure's version-4 batches.
 - Pulse's caustic pass is read on the PSP code only (PS2 executable checked, ported; a PCSX2 frame open) and reached only by PS2
@@ -258,7 +258,7 @@ Ranked. Hours are for one member on an idle machine.
    kind `VITA_SEA_KIND`, `build_circuit(.., law)`, `oag_2048::TITLE.water.original_differs`,
    counts pinned in `omega_transparency_ground_truth`'s walk), **`fc17` landed** (`water-fc17`:
    kinds 7 and 8, the edge's alpha chain pinned by `vita_fc17_edge_lit_path`). Left: a Vita3K
-   frame pair on Altima at two times (it tests the edge's chosen `Watercolour` and the
+   frame pair on Altima at two times (attempted, not reached: needs a teleport to the pond, water.md Open 4a) (it tests the edge's chosen `Watercolour` and the
    `pa0.w`/`pa4.w` lane pairing). `is_drawn(Vita2048)` stays
    false on purpose: it is the borrowed `2048` choice on other titles, which nothing draws yet.
 6. **LANDED (`water-omega`): Omega's own water** on its 2048 circuits (`oag_rcs::gcn::sea`,

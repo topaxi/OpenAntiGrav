@@ -20,12 +20,8 @@ use serde::{Deserialize, Serialize};
 /// "not one dial", and worse here: a blob quad, a projected occluder hull and
 /// a shadow map act at different points in the frame and compose differently.
 ///
-/// **One of the design's four tiers is still missing on purpose.** `mapped`,
-/// this project's own cascaded shadow map, is designed and unbuilt, and is not
-/// offered until it exists - ADR-0013's own rule that a row for infrastructure
-/// that is not there is worse than no row. [`Self::Original`] joined the list
-/// on 2026-09-04 and is built **on Pulse only**; see its own doc for what the
-/// other titles get.
+/// [`Self::Original`] is built on Pulse and HD/Fury only (see its own doc for
+/// what the other titles get).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub enum Shadows {
@@ -107,9 +103,8 @@ impl Shadows {
     /// Whether anything is drawn at all - the one question the frame asks
     /// before building a shadow pass.
     ///
-    /// A method rather than a `!= Off` at each call site so that the tiers
-    /// still to come (`original`, `mapped`) join it by changing this file
-    /// instead of every caller.
+    /// A method rather than a `!= Off` at each call site so that a new tier
+    /// joins it by changing this file instead of every caller.
     #[must_use]
     pub fn draws(self) -> bool {
         !matches!(self, Self::Off)
