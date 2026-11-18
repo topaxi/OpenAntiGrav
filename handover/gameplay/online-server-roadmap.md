@@ -71,8 +71,7 @@ own leftovers (spectate, chat, invite-only, quick match, the recorded pad stream
    no params hash or host key), no
    report row on the room screen, a prune of old strike and expired ban lines (the lobby never
    deletes them, since the history sets the next ban's length; personal data with no retention
-   limit yet), the build-equality guard (the lobby refuses to judge when the host's build
-   differs from its own), and a server race's seed is still predictable from the room id.
+   limit yet), and a server race's seed is still predictable from the room id.
 6. **Lobby and race boundary.** Already split in code (`rooms.rs` has no I/O, the `Runner`
    seam, the job on standard input, the hand-off with port and hash); tied to one machine
    by a hand-off with no host, pipes, the lobby opening the images, one slot. The page's
