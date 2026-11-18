@@ -890,6 +890,19 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    original (`water-fc17` did not take the 45-minute capture; the edge's stand-in `Watercolour`
    and the lane pairing of `pa0.w`/`pa4.w`, 75, are what a frame would test: walk Empire Climb in
    `scripts/vita3k-drive.py race`, hold position at the pond, `shot` and compare the shore wedges).
+   **Attempted 2026-11-18 (`water-2048cmp`), not reached: confidence 80 that no pair is possible with the
+   current tooling.** (1) Ours at the grids of Altima and Park (`--race --track ...\altima\track.vex`, tick 240,
+   960x544) shows no water: Altima's grid is a stadium floor, Park's a brick road, so a grid pair tests nothing
+   here, and the pond (about 1,270 units from Altima's grid) is only reached in flight. (2) The original's only
+   flight the tooling can make without input is the HD Campaign's Zone event renamed to Altima
+   (`vita-2048-pair.py --walk --game-mode hd --node 600 395 --node-recentred 527 297 --rename-track Vineta_K altima
+   --zone-capture 70`, 37 samples, one boot, 190 s): **Zone mode posterises the whole frame into flat colour
+   bands** (every one of the 37 frames), so ripple scale, glint and edge colour are unreadable, and ours draws no
+   Zone grade on a native circuit. (3) A Race cell needs held throttle and steering for about 15 s to reach the pond,
+   which `vita-2048-pair.py` has no route for, and a teleport (`place`) was never built
+   ([vita3k-capture.md](../reverse-engineering/vita3k-capture.md), 2048 craft teleport). Park was not tried (its
+   Time Trial hung at 56 % on three boots). What would unblock it: a Race-cell flight with `vita3k-drive.py hold`
+   (R1 accelerate) and Pilot Assist Extreme sampled by the zone capture's SIGSTOP hull scan, or the teleport.
 5. `sea`, `seareflect`, `seaweed` class nodes: a class census over PSP `.vex`.
 6. Blue Ridge's `Water` texture is embedded and bound by no batch; whether a node of
    another class draws it is unread.
