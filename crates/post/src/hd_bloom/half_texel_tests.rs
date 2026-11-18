@@ -19,6 +19,7 @@ fn params(final_half_texel: bool, store: SceneStore) -> Params {
         // No glow and no darkening: the resolve's scale is exactly one.
         tone_darkening_clamp: 0.0,
         final_half_texel,
+        eight_bit: false,
         store,
         ..super::tests::params()
     }

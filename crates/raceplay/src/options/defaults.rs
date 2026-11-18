@@ -28,6 +28,7 @@ impl Default for Options {
             own_rockets: false,
             water: oag_display::display::Water::default(),
             shadow_resolution: oag_display::display::ShadowResolution::default(),
+            scene_precision: oag_display::display::ScenePrecision::default(),
             team: None,
             hull_variant: None,
             skin: None,

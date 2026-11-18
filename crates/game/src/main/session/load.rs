@@ -523,6 +523,7 @@ impl Session {
             );
         }
         options.shadow_resolution = self.render_profile().shadow_resolution;
+        options.scene_precision = self.render_profile().scene_precision;
         // And for the WATER row: the profile's choice, resolved against the discs this machine has.
         if let Some(shell) = self.shell.as_ref() {
             options.water = oag_game::water_setting::resolve(

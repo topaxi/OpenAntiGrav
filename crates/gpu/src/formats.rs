@@ -27,6 +27,40 @@ pub const DISTORTION_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Floa
 /// to output linear light - see `oag_mesh::mesh_render::is_linear_target`.
 pub const SCENE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
+/// The 8-bit scene target's format, as the race draws into it: Wipeout HD's own
+/// `A8R8G8B8` (`docs/rendering/hd-track-tone.md`, "HD's blends combine encoded
+/// values"). Only a scene that stores encoded values ([`SceneStore::Encoded`]) is
+/// drawn into it: every draw writes the encoded byte, a blend combines encoded
+/// bytes and the attachment clamps each to `[0, 1]`, as the console's does. The
+/// format alone says nothing about colour space here (every gamma target is
+/// `Rgba8Unorm` too), so the store goes with it: see `is_scene_target`.
+pub const SCENE_FORMAT_8BIT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+/// The view the post chain reads the 8-bit scene through: the texture unit decodes
+/// each texel with the sRGB curve before it filters, as the console's units do on a
+/// fetch with gamma nibble 7, so a bilinear tap averages light in one hardware tap.
+pub const SCENE_READ_8BIT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+
+/// The format a race's scene target is drawn in: [`SCENE_FORMAT_8BIT`] when the scene
+/// stores encoded values and the player keeps the original's precision, else
+/// [`SCENE_FORMAT`].
+#[must_use]
+pub fn scene_format(store: SceneStore, eight_bit: bool) -> wgpu::TextureFormat {
+    if eight_bit && store == SceneStore::Encoded {
+        SCENE_FORMAT_8BIT
+    } else {
+        SCENE_FORMAT
+    }
+}
+
+/// Whether a pipeline drawing into `format` with `store` draws into a race's scene
+/// target, and so computes in linear light: [`SCENE_FORMAT`] whatever it stores, or
+/// [`SCENE_FORMAT_8BIT`] holding encoded values.
+#[must_use]
+pub fn is_scene_target(format: wgpu::TextureFormat, store: SceneStore) -> bool {
+    format == SCENE_FORMAT || (format == SCENE_FORMAT_8BIT && store == SceneStore::Encoded)
+}
+
 /// What a target stores of a draw's linear-light output: a [`SCENE_FORMAT`] one keeps
 /// it or its encoding, and a card keeps it rounded to its few bits.
 ///

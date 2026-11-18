@@ -162,6 +162,11 @@ fn surface(texel: vec4<f32>) -> vec4<f32> {
 // downsample and the resolve) when the scene stores encoded values.
 override scene_encoded: f32 = 0.0;
 
+// 1.0 on the same two pipelines when they read the 8-bit scene through its sRGB
+// view: the texture unit has decoded every texel before it filtered, so a
+// bilinear tap is already light, and the resolve takes one hardware tap.
+override scene_srgb_view: f32 = 0.0;
+
 // A tap of the scene target, in linear light.
 fn scene_tap(texel: vec4<f32>) -> vec4<f32> {
     let c = surface(texel);
@@ -295,7 +300,11 @@ fn fs_blur(in: VertexOutput) -> @location(0) vec4<f32> {
 // first (`scene_tap`), then weighted, and the four stay inside the drawn
 // rectangle.
 fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
-    if constants.read_shift.x == 0.0 && constants.read_shift.y == 0.0 {
+    // Through the sRGB view the hardware filter averages light, which is what the
+    // taps below compute by hand. `drawn_scene` keeps the tap's footprint inside the
+    // drawn rectangle as the clamped texels below do.
+    if scene_srgb_view == 1.0
+        || (constants.read_shift.x == 0.0 && constants.read_shift.y == 0.0) {
         return scene_tap(textureSample(source_tex, source_sampler, drawn_scene(uv))).rgb;
     }
     let size = vec2<f32>(textureDimensions(source_tex));

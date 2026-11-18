@@ -630,6 +630,10 @@ pub(crate) fn run_race(
         oag_game::water_setting::profile_for_source(settings, &options.source)
             .map_or_else(Default::default, |profile| profile.shadow_resolution)
     });
+    options.scene_precision = cli.scene_precision.unwrap_or_else(|| {
+        oag_game::water_setting::profile_for_source(settings, &options.source)
+            .map_or_else(Default::default, |profile| profile.scene_precision)
+    });
     // `--event` resolves a Wipeout 2048 campaign event onto `options` before
     // loading - see `race::load_event`'s own doc comment for what it
     // overrides and why this is a second entry point rather than a new

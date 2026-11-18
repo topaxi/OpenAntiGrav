@@ -92,6 +92,7 @@ pub(super) fn load(
         // half a texel off"): the same law as a race's, on the Fury skin that draws it.
         oag_post::hd_bloom::Params {
             final_half_texel: true,
+            eight_bit: false,
             ..bloom
         }
     }) else {

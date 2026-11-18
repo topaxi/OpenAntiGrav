@@ -42,6 +42,7 @@ mod motion_blur;
 mod msaa;
 pub mod presets;
 mod reconstruction;
+mod scene_precision;
 mod scenery_sort;
 mod screen_filter;
 mod shadow_resolution;
@@ -53,9 +54,9 @@ mod weather;
 
 pub use {
     aspect::Aspect, dynamic_hud::DynamicHud, hud_scale::*, motion_blur::*, msaa::Msaa,
-    reconstruction::Reconstruction, scenery_sort::ScenerySort, screen_filter::FilterStrength,
-    shadow_resolution::ShadowResolution, shadows::Shadows, trail_length::TrailLength,
-    trail_order::TrailOrder, water::Water, weather::Weather,
+    reconstruction::Reconstruction, scene_precision::ScenePrecision, scenery_sort::ScenerySort,
+    screen_filter::FilterStrength, shadow_resolution::ShadowResolution, shadows::Shadows,
+    trail_length::TrailLength, trail_order::TrailOrder, water::Water, weather::Weather,
 };
 
 /// What kind of window the game asks the compositor for.
