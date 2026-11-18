@@ -1339,6 +1339,12 @@ loses every white glint on the tunnel ribs and panels. The rung is a poor trade 
 render scale is the better lever there. Where the rung could still matter is a fixed output on a
 GPU-bound machine with no upscaler, which this lane did not find.
 
+**NVIDIA whole race, HD** (`scripts/bench-render.py`, host load 4 to 46 because other lanes'
+gates ran, so read the GPU column, not the frame): GPU p50 / p95 at 3840x2160 4.18 / 6.14 ms
+(main), 3.69 / 5.59 (exact, -12 %), 3.46 / 5.31 (`simplified`); at 1280x800 0.96 / 1.69, 0.93 /
+1.54, 0.81 / 1.23. The NVIDIA part is CPU bound below 4K, so frame times there say nothing about
+shading. Every run finished at tick 7,020 with hash `94a2261ef5045e63`.
+
 
 ### B and D, recorded
 
