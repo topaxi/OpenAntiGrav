@@ -16,7 +16,8 @@
 //!
 //! A proven case is a strike, not a ban: a key is banned once [`STRIKES_TO_BAN`] of its strikes
 //! within [`STRIKE_WINDOW`] come from distinct races, each reported by a different player, and
-//! the strikes a ban was made on do not count again. The n-th ban the lobby makes on a key lasts
+//! neither the strikes a ban was made on nor any later report on one of their races counts
+//! again. The n-th ban the lobby makes on a key lasts
 //! [`FIRST_BAN`] doubled n - 1 times, at most [`LONGEST_BAN`], so the history is kept: an
 //! expired ban stops refusing but still counts. A line that does not parse, a missing date
 //! included, is reported by line number and skipped, never a ban and never a reason to stop.
@@ -170,8 +171,8 @@ pub fn span(length: Duration) -> String {
 /// Where a host's key stands after its strikes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Standing {
-    /// Strikes that count toward a ban: in the window, since the last ban, over distinct races
-    /// and distinct reporters.
+    /// Strikes that count toward a ban: in the window, since the last ban, on no race an earlier
+    /// ban was made on, over distinct races and distinct reporters.
     pub counted: usize,
     /// The ban due now and its length, if one is.
     pub ban: Option<Duration>,
@@ -282,9 +283,20 @@ impl Bans {
         let timed: Vec<&Ban> = self.key_bans(key).filter(|b| b.until.is_some()).collect();
         let last = timed.iter().map(|b| b.since).max();
         let from = now.checked_sub(STRIKE_WINDOW).unwrap_or(UNIX_EPOCH);
+        // A ban uses up its races too: another player's late report on one of them is no new case.
+        let used: Vec<u64> = self
+            .strikes(key)
+            .filter(|s| last.is_some_and(|last| s.at <= last))
+            .map(|s| s.race)
+            .collect();
         let counting: Vec<(u64, [u8; 32])> = self
             .strikes(key)
-            .filter(|s| s.at >= from && s.at <= now && last.is_none_or(|last| s.at > last))
+            .filter(|s| {
+                s.at >= from
+                    && s.at <= now
+                    && last.is_none_or(|last| s.at > last)
+                    && !used.contains(&s.race)
+            })
             .map(|s| (s.race, s.by))
             .collect();
         let counted = distinct_pairs(&counting);

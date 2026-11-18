@@ -234,3 +234,27 @@ fn a_ban_the_lobby_makes_is_written_with_its_dates_and_reads_back() {
     assert_eq!(again, *bans.bans(), "the file is what the lobby holds");
     let _ = std::fs::remove_dir_all(file.parent().expect("dir"));
 }
+
+#[test]
+fn a_late_report_on_a_race_a_ban_was_made_on_does_not_count_toward_the_next_ban() {
+    let mut bans = BanFile::new(None);
+    let t = day();
+    bans.strike(&strike(1, 7, t), t);
+    assert_eq!(bans.strike(&strike(2, 8, t), t).ban, Some(HOUR));
+    // Another guest of race 2 reports within the grace window, after the ban was made.
+    let late = t + MINUTE;
+    assert_eq!(
+        bans.strike(&strike(2, 9, late), late).ban,
+        None,
+        "banned already"
+    );
+    let after = t + HOUR + MINUTE;
+    let standing = bans.strike(&strike(3, 10, after), after);
+    assert_eq!(
+        (standing.counted, standing.ban),
+        (1, None),
+        "race 2 was used up by the ban: one new case is one strike"
+    );
+    let next = after + MINUTE;
+    assert_eq!(bans.strike(&strike(4, 11, next), next).ban, Some(2 * HOUR));
+}

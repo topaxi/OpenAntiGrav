@@ -1332,7 +1332,8 @@ comment, every date a UTC stamp as the log writes one (`2026-11-18T12:34:56.000Z
 
 A proven case (anti-cheat below) appends a `strike` line and bans nobody. When a key's strikes
 reach `STRIKES_TO_BAN` (2), counted within `STRIKE_WINDOW` (7 days), after its last timed ban,
-and only over distinct races each reported by a different player (a maximum matching, so the
+on no race a ban was already made on (another guest's late report on that race is recorded but
+counts for nothing), and only over distinct races each reported by a different player (a maximum matching, so the
 order they came in does not matter; reporters with no key count as one), the lobby appends a
 timed `key` line. Its n-th timed ban lasts `FIRST_BAN` (1 h) doubled n - 1 times, at most
 `LONGEST_BAN` (30 days): 1 h, 2 h, 4 h ... The lines are never removed by the lobby, so the
