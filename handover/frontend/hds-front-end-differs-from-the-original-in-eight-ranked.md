@@ -125,7 +125,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   offset (+150, -8); ours is 1:1. Not applied: may be the maintainer's
   `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
 - Track Select (2026-10-27: corner marks and header arrows landed; open: the
-  circuit thumbnail is the `FlyByMovie` Bink widget, page `Squares`): hex grid LANDED 2026-10-08 (`hd-track-select`, shared
+  circuit thumbnail landed 2026-11-19, page `Squares`): hex grid LANDED 2026-10-08 (`hd-track-select`, shared
   `hex::draw_cells`; direction glyphs open; ring thickness LANDED 2026-11-19). Circuit model
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
   record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega
@@ -138,11 +138,14 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   (its update is unread). The pair `hd/menu-track-select` is drawn at the RAM angle
   read at the grab. Open: nearZ/farZ (authored 1 and 1000, ours 10 and 2000), the
   multiplier `0x81db67ea`, the backdrop's brightness and cloud path (hidden on the pair since 2026-11-19, above), Zone circuits (`zone_1..4` carry a scene no record names),
-  Omega's own table; the moving fly-by picture (Bink)
+  Omega's own table. **The fly-by LANDED 2026-11-19 (`hd-track-flyby`)**: `preview.bik` plays in the panel at (500,190),
+  box difference 59.6 to 4.8, pair 5.84 to 4.65; open: the clip's frame is fitted on the pair, not read from the
+  emulator's counter (the Bink widget's struct is unread), a first visit waits for the transcode (the prefetch does not
+  warm the sixteen `preview.bik`), the Zone clips' sound, Omega ships no clip (its `TrackPreview` stills are unwired)
 - Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
   landed the Grid Selection counter, arrows, dotted unlock panel and its corner marks, and the Track Select record rows (fill
   alpha, `TextColor`). Open, each its own RE: ~~Ship Select hull pose convention~~ (closed 2026-11-11, above), page `Squares`,
-  the Track Select thumbnail (Bink `FlyByMovie`), the record fill (38 against 26), the Grid footer spacing, the ship
+  the record fill (38 against 26), the Grid footer spacing, the ship
   column's lock states; the card art and circuit model are loop phase
 - Not reached: a Tournament cell, loading and EndRace pairs, Omega (no capture path)
 
