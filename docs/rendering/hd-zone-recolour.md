@@ -271,3 +271,8 @@ moves 37.40 -> 36.83; the start-bay crop matches by eye.
 drawn. Which variant a chunk runs depends on the permutation word (lighting,
 shadow), unread for these chunks; the frame shows no rim-coloured bar on the
 bays.
+
+**2048 and Omega: not checked here.** The census read HD's four PS3
+archives only. Whether 2048's PSP2 programs or Omega's Zone variants add a
+light-bar term is open; this port's `_ne` path (`mesh::rcs::pad_ne`) binds on
+HD materials alone, so neither title's picture moved.
