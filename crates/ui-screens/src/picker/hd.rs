@@ -316,6 +316,7 @@ fn walk(
                     selected_column: colour("SelectedColumnCol").unwrap_or(0x64ff_0000),
                     selected_lock: colour("SelectedLockCol").unwrap_or(0xff80_8080),
                     selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff24_2424),
+                    ring: hex::TEAM_RING,
                 });
             }
             "image" if child.attr("name") == Some("Logo") => {

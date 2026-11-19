@@ -83,7 +83,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Ship Select: ~~bracket corners, loyalty value~~ (LANDED 2026-10-27,
   `hd-select-chrome`: corner marks, block arrows, `000`; loyalty value LANDED 2026-11-13, `hd-shipselect-loyalty`: raw total `%03d`, bar `total/100000`; open: the `middle`
   marks, `UnlockNobble` hearts (law read, threshold source unread, `team-selection-loyalty.md`), the page `Squares`); the hex column draws
-  (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
+  (2026-10-08, `picker::hd::hex`); **the selected variant's cursor ring LANDED 2026-11-19
+  (`hd-ship-variant-outline`)**: a 6-unit pale band, box metric 0.0800 to 0.0459
+  (`docs/ui/campaign-screens.md`, "The cursor ring"); open: HD's own HD style (white page)
+  ring colour (Omega's red is measured, HD's is not), the band's real draw (executable not
+  read); the `nitro` row is open where the original's
   fresh profile locks it (this build offers `_n1`); the
   original's default team is the maintainer's save (Feisar), not a gap
 - Cell Selection (closed 2026-10-08, hd-cell-select: back card face-on, 32-hex
@@ -93,7 +97,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   share of the pair's remaining 3.00: the footer legend's spacing (0.63: ours spreads the prompts wider), the
   wordmark 6 pixels right of the original's (0.58 in its box), the black hexagon field in the scene (about 0.25:
   the flyer thread), `EVENT 01/08`'s letter spacing (0.11), the selected cell's white outline (0.05: ours draws a
-  grey fill), the title rule's fade at its right end (the original's is solid). Also open: the base campaign's page
+  grey fill; a different widget from Ship Select's ring: `CellMode`'s `Bg_x_y`/`Outline_x_y` layers), the title rule's fade at its right end (the original's is solid). Also open: the base campaign's page
   (a first frame of `01_uplift` exists since 2026-11-18: values and the selected outline are cyan `0, 178, 231`,
   headings `82, 82, 82`, the card `233, 234, 233`; ours keeps `TitleColor`), the Y-joint and mark margins (one
   frame), a Tournament cell and the `NitroBattle` icon (no `_bw` file named for it)
@@ -110,7 +114,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
 - Track Select (2026-10-27: corner marks and header arrows landed; open: the
   circuit thumbnail is the `FlyByMovie` Bink widget, page `Squares`): hex grid LANDED 2026-10-08 (`hd-track-select`, shared
-  `hex::draw_cells`; direction glyphs and ring thickness open). Circuit model
+  `hex::draw_cells`; direction glyphs open; ring thickness LANDED 2026-11-19). Circuit model
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
   record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega
   ported 2026-10-09 (`omega-track-model`, its own fresnel material).

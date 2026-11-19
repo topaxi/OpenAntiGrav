@@ -37,9 +37,9 @@
 //! two-pass fill `Block_Render` uses: `0x64` twice over black is `160`, the
 //! frame reads `151`.
 //!
-//! **Chosen, not measured**: the cursor ring's thickness (the frame's ring
-//! is about twice as thick as the outline art draws; its tint is read
-//! off the frame, `185/35/55`), the ghost of an open
+//! **Chosen, not measured**: the cursor ring's width ([`RING_WIDTH`]; the
+//! frame's band is six times as thick as the outline art draws) and its tint
+//! (read off the frame), the ghost of an open
 //! row's thumbnail in the neighbouring columns (the frame shows faint ship
 //! silhouettes there; their tint is ours), and the pointer targets.
 //!
@@ -123,6 +123,8 @@ pub struct HexGrid {
     pub selected_column: u32,
     pub selected_lock: u32,
     pub selected_lock_fade: u32,
+    /// The cursor ring's tint, [`TEAM_RING`] unless the title's own differs.
+    pub ring: [f32; 4],
 }
 
 /// One cell: which team column and model row it is, where it sits, and what
@@ -172,6 +174,7 @@ impl HexGrid {
             selected_column: SELECTED_COL,
             selected_lock: LOCK_COL,
             selected_lock_fade: LOCK_COL_FADE,
+            ring: TEAM_RING,
         }
     }
 
@@ -313,8 +316,20 @@ pub(super) enum ArtSize {
     Fit(f32),
 }
 
-/// The cursor ring's tint on `Team Selection`, read off its frame.
-pub(super) const TEAM_RING: [f32; 4] = [0.73, 0.14, 0.22, 1.0];
+/// The cursor ring's tint on `Team Selection` in the Fury style: the frame's
+/// band reads 193/81/91 on the flats and 200/92/102 on the sides.
+pub(super) const TEAM_RING: [f32; 4] = [0.77, 0.33, 0.37, 1.0];
+
+/// How wide the cursor ring's band is, in units inward from the cell's edge,
+/// and how far apart the outline art's copies that build it sit.
+///
+/// **Chosen, not measured** as widget constants: the frame's band reads 6 px
+/// perpendicular to a flat edge on both `Team Selection` and `Track Creation`
+/// (a 73 px cell of 75.6 units), where `Hexagon_HD_OUTLINE.gtf` draws a ring
+/// 0.87 texel wide (alpha 221 on one texel), a unit. The band is the art
+/// repeated at one-unit insets, each copy a uniformly smaller hexagon.
+const RING_WIDTH: f32 = 6.0;
+const RING_STEP: f32 = 1.0;
 
 /// The grid's draws, behind-to-front per cell: the hexagon, then its face,
 /// then the cursor ring on the cell at `cursor` of the centre column.
@@ -384,13 +399,20 @@ pub(super) fn draw_cells(
             && Some(cell.row) == cursor
             && let Some(placed) = sprites(OUTLINE_SRC)
         {
-            let rect = [
-                cx - HEX_CENTRE[0] * hex_scale,
-                cy - HEX_CENTRE[1] * hex_scale,
-                placed.width as f32 * hex_scale,
-                placed.height as f32 * hex_scale,
-            ];
-            out.push(sprite(placed, rect, ring));
+            let inradius = HEX_SIZE[1] * 0.5 * grid.scale;
+            for copy in 0..(RING_WIDTH / RING_STEP).round() as usize {
+                let kept = 1.0 - copy as f32 * RING_STEP * grid.scale / inradius;
+                let rect = [
+                    cx - HEX_CENTRE[0] * hex_scale * kept,
+                    cy - HEX_CENTRE[1] * hex_scale * kept,
+                    placed.width as f32 * hex_scale * kept,
+                    placed.height as f32 * hex_scale * kept,
+                ];
+                // Twice, the band's two-pass fill (the selected column's red is drawn so):
+                // the art's plateau alpha is 0.87 and the frame's band is opaque.
+                out.push(sprite(placed, rect, ring));
+                out.push(sprite(placed, rect, ring));
+            }
         }
         if cell.weight < 1.0 {
             for draw in &mut out[first_draw..] {
@@ -423,7 +445,7 @@ pub(super) fn draw(
         grid,
         (picker.index(), picker.entries().len(), picker.pan()),
         cursor,
-        TEAM_RING,
+        grid.ring,
         &face,
         sprites,
         out,
