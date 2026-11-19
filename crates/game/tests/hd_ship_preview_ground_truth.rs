@@ -512,6 +512,38 @@ fn a_step_starts_the_hull_at_the_last_models_depth_and_settles() {
     }
 }
 
+/// The cut after a step is 3 screen frames from the selection (`hull_swap::GAP_FRAMES`; the
+/// original's craft is absent at RAM frames 3 to 5 and back at 6, `team-selection-model.md`,
+/// "The step against RAM"): the picture 2 frames after a step draws no craft, 3 frames after it
+/// draws the new one. The frame-6 step pair reads this frame.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images and a GPU adapter"]
+fn a_step_cuts_the_craft_for_three_frames_and_not_four() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let frames = |n: f32| format!("{:.5}", n / 60.0);
+    let empty = ship_select_still(&image, "Harimau", "0.001");
+    let drawn = |step: &str| {
+        let still = ship_select_still(&image, "Harimau", step);
+        let frame = [740, 200, 1660, 740];
+        let mut changed = 0;
+        for y in frame[1]..frame[3] {
+            for x in frame[0]..frame[2] {
+                let at = ((y * still.width + x) * 4) as usize;
+                changed += usize::from(
+                    (0..3).any(|c| still.rgba[at + c].abs_diff(empty.rgba[at + c]) > 40),
+                );
+            }
+        }
+        changed
+    };
+    let (two, three) = (drawn(&frames(2.0)), drawn(&frames(3.0)));
+    eprintln!("pixels beyond the empty frame: {two} at 2 frames, {three} at 3");
+    assert!(two < 1000, "the craft is still cut at 2 frames: {two}");
+    assert!(three > 20_000, "the craft is back at 3 frames: {three}");
+}
+
 /// The live screen through `--drive`, the real session ticking the picker, a press of the pad
 /// and frames read back: after a step right (Assegai to Mirage on a fresh profile) the settled
 /// hull is the width the capture draws for Mirage at rest. A screen that does not tick the fit
@@ -529,7 +561,7 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
     let script = format!(
         "boot; select racebox; press cross; until page=race; select launch_race; \
          press cross; until screen=picker; press cross; until screen.id=ship-select; \
-         until opening_reads=landed; ticks 120; press right; ticks 1; screenshot {gap}; \
+         until opening_reads=landed; ticks 120; press right; screenshot {gap}; \
          ticks 240; screenshot {settled}; quit",
         gap = shot("gap").display(),
         settled = shot("settled").display(),
