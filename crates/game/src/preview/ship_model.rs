@@ -500,6 +500,180 @@ mod tests {
         );
     }
 
+    /// One sample of the original's screen: the frames since the selection moved, the depth
+    /// target, the drawn depth and the drawn slide.
+    type Sample = (usize, f32, f32, f32, f32);
+
+    /// Seven steps of `TeamSelection_Screen` read out of RPCS3's RAM a game frame at a time
+    /// (`st+0x1014`, `+0x1020`, `+0x1018`, `+0x101c`, the frame being a change of the tuple;
+    /// `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The step against RAM"):
+    /// the old and new model's `<FE Length>`, the target and drawn depth on the frame the
+    /// selection moved (the fit still ran on the old model), and the frames after it.
+    #[allow(clippy::type_complexity, reason = "a table of reads")]
+    const STEPS_IN_RAM: [(f32, f32, (f32, f32), [Sample; 9]); 7] = [
+        (
+            3.2,
+            3.8,
+            (11.0, 11.0000),
+            [
+                (1, 11.100, 11.0125, 95.32, -82.46),
+                (2, 11.200, 11.0359, 97.49, -83.70),
+                (3, 11.300, 11.0689, 99.37, -84.74),
+                (5, 11.500, 11.1590, 102.34, -86.27),
+                (8, 11.800, 11.3405, 105.15, -87.41),
+                (12, 12.000, 11.6160, 106.47, -87.29),
+                (18, 12.000, 11.8534, 107.32, -86.68),
+                (24, 12.000, 11.9599, 107.90, -86.27),
+                (30, 12.000, 12.0077, 108.29, -85.99),
+            ],
+        ),
+        (
+            3.8,
+            4.5,
+            (12.0, 12.0467),
+            [
+                (1, 12.100, 12.0533, 112.08, -87.07),
+                (2, 12.200, 12.0717, 114.69, -88.52),
+                (3, 12.300, 12.1002, 116.96, -89.75),
+                (5, 12.500, 12.1830, 120.60, -91.62),
+                (8, 12.800, 12.3566, 124.15, -93.20),
+                (12, 13.200, 12.6504, 126.08, -93.52),
+                (18, 13.600, 13.1425, 124.82, -91.40),
+                (24, 13.600, 13.4204, 122.83, -89.13),
+                (30, 13.600, 13.5451, 121.48, -87.59),
+            ],
+        ),
+        (
+            4.5,
+            3.9,
+            (13.7, 13.6533),
+            [
+                (1, 13.600, 13.6467, 116.75, -83.31),
+                (2, 13.500, 13.6283, 115.03, -82.37),
+                (3, 13.400, 13.5998, 113.50, -81.56),
+                (5, 13.200, 13.5170, 110.99, -80.30),
+                (8, 12.900, 13.3434, 108.45, -79.22),
+                (12, 12.500, 13.0496, 107.06, -79.09),
+                (18, 12.300, 12.6235, 108.05, -80.94),
+                (24, 12.300, 12.4195, 109.07, -82.48),
+                (30, 12.300, 12.3279, 109.77, -83.52),
+            ],
+        ),
+        (
+            3.9,
+            3.8,
+            (12.3, 12.2533),
+            [
+                (1, 12.200, 12.2467, 110.82, -85.47),
+                (2, 12.100, 12.2283, 110.53, -85.32),
+                (3, 12.000, 12.1998, 110.39, -85.28),
+                (5, 12.000, 12.1639, 110.24, -85.29),
+                (8, 12.100, 12.1319, 110.10, -85.36),
+                (12, 12.100, 12.0994, 109.89, -85.38),
+                (18, 12.100, 12.0740, 109.67, -85.40),
+                (24, 12.100, 12.0626, 109.51, -85.41),
+                (30, 12.100, 12.0575, 109.41, -85.42),
+            ],
+        ),
+        (
+            3.8,
+            3.9,
+            (12.0, 12.0467),
+            [
+                (1, 12.100, 12.0533, 109.56, -85.66),
+                (2, 12.200, 12.0717, 109.85, -85.81),
+                (3, 12.300, 12.1002, 110.00, -85.85),
+                (5, 12.300, 12.1361, 110.15, -85.83),
+                (8, 12.200, 12.1681, 110.28, -85.76),
+                (12, 12.200, 12.2006, 110.48, -85.74),
+                (18, 12.200, 12.2260, 110.70, -85.72),
+                (24, 12.200, 12.2374, 110.85, -85.70),
+                (30, 12.200, 12.2425, 110.96, -85.69),
+            ],
+        ),
+        (
+            3.9,
+            4.5,
+            (12.2, 12.2467),
+            [
+                (1, 12.300, 12.2533, 113.66, -87.08),
+                (2, 12.400, 12.2717, 115.83, -88.27),
+                (3, 12.500, 12.3002, 117.70, -89.28),
+                (5, 12.700, 12.3830, 120.65, -90.76),
+                (8, 13.000, 12.5566, 123.36, -91.88),
+                (12, 13.400, 12.8504, 124.50, -91.79),
+                (18, 13.600, 13.2765, 122.97, -89.65),
+                (24, 13.600, 13.4805, 121.57, -87.94),
+                (30, 13.600, 13.5721, 120.62, -86.78),
+            ],
+        ),
+        (
+            4.5,
+            3.8,
+            (13.6, 13.6467),
+            [
+                (1, 13.500, 13.6283, 116.49, -83.17),
+                (2, 13.400, 13.5998, 114.58, -82.15),
+                (3, 13.300, 13.5623, 112.87, -81.26),
+                (5, 13.100, 13.4649, 110.02, -79.84),
+                (8, 12.800, 13.2755, 107.04, -78.56),
+                (12, 12.400, 12.9684, 105.13, -78.20),
+                (18, 12.000, 12.4878, 105.70, -79.94),
+                (24, 12.000, 12.2447, 106.80, -81.69),
+                (30, 12.000, 12.1355, 107.55, -82.88),
+            ],
+        ),
+    ];
+
+    /// The screen's own frames after a step, against ours. The depth target and drawn depth
+    /// agree to the last digit read and the slide to 0.1 grid units, once ours is on the same
+    /// side of the rest pair's alternation as the original was when the selection moved (which
+    /// frame the player's press fell on is nobody's law).
+    #[test]
+    fn a_step_follows_the_screens_own_frames_in_ram() {
+        for (from, to, (target0, depth0), samples) in STEPS_IN_RAM {
+            let mut motion = FitMotion::open(&FIT);
+            for _ in 0..600 {
+                motion.frame(&FIT, ASPECT, [-from, from]);
+            }
+            if (motion.target() - target0).abs() > 0.05 {
+                motion.frame(&FIT, ASPECT, [-from, from]);
+            }
+            let at = motion.framing();
+            assert!(
+                (motion.target() - target0).abs() < 0.01 && (at.depth - depth0).abs() < 1.0e-3,
+                "{from} to {to} before the step: {} {} against {target0} {depth0}",
+                motion.target(),
+                at.depth
+            );
+            let mut frame = 0;
+            for (k, target, depth, across, down) in samples {
+                while frame < k {
+                    motion.frame(&FIT, ASPECT, [-to, to]);
+                    frame += 1;
+                }
+                let at = motion.framing();
+                let label = format!("{from} to {to}, frame {k}");
+                assert!((motion.target() - target).abs() < 0.01, "{label}: target");
+                assert!(
+                    (at.depth - depth).abs() < 2.0e-3,
+                    "{label}: depth {}",
+                    at.depth
+                );
+                assert!(
+                    (at.slide[0] - across).abs() < 0.15,
+                    "{label}: slide {:?}",
+                    at.slide
+                );
+                assert!(
+                    (at.slide[1] - down).abs() < 0.15,
+                    "{label}: slide {:?}",
+                    at.slide
+                );
+            }
+        }
+    }
+
     /// The tick may be any length: sixty ticks of a sixtieth and thirty of a
     /// thirtieth play the same sixty frames, and the box
     /// asked for on each tick is the one the frame uses, so a step needs no
