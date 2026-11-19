@@ -108,7 +108,7 @@ fn the_turntable_runs_backwards_on_a_reversed_circuit_and_wraps() {
     assert!((Turntable::after(&law, 1.0, true).angle() + 0.6).abs() < 1e-4);
     // 314 frames reach 3.14, 315 pass pi (3.1415927) and land on -pi.
     let at = |frames: f32| Turntable::after(&law, frames / 60.0, false).angle();
-    assert!((at(314.0) - 3.14).abs() < 1e-3, "{}", at(314.0));
+    assert!((at(314.0) - 314.0 * law.step).abs() < 1e-3, "{}", at(314.0));
     assert_eq!(at(315.0), -law.limit);
     assert!((at(316.0) - (-law.limit + 0.01)).abs() < 1e-5);
     let back = Turntable::after(&law, 315.0 / 60.0, true).angle();
