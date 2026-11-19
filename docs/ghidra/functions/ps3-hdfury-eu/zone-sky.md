@@ -270,7 +270,58 @@ and how this double cone composites with the `ZoneSky.gtf` cubemap the same
 function already draws (same colour buffer? drawn before or after? additive,
 alpha, or opaque?) is unread. Guessing a compositing mode is exactly the kind
 of stand-in this project's rules exist to prevent, so the shape is documented
-and nothing is drawn on it yet.
+and nothing was drawn on it until the live frame answered the compositing question for the visible directions (next section).
+
+## The dome's colours, and the dome is what the frame shows (2026-11-19, `zone-pair-score`)
+
+**Read this pass** (static, confidence 82 each), from `Scene_PrepareFrame`'s
+Zone block `0x003adf58`-`0x003ae1c4` and `Sky_DrawGradientDome`'s first
+segment `0x005ebe70`-`0x005ebf68`:
+
+| what | where | value |
+| --- | --- | --- |
+| the common scale | `lwz r9,-0x60ec(r2)` -> TOC `0x008b72d8` -> `0x007b0e40` | `0x437f0000` = `255.0` |
+| horizon inner / outer | `-0x60f0` -> `0x00c81560`, `-0x60e4` -> `0x00c81570` | `Sky horizon colour` (zone-effectsettings-loader.md's slot table) |
+| zenith inner / outer | `-0x60e8` -> `0x00c81580`, `-0x60e0` -> `0x00c81590` | `Sky zenith colour` |
+| the lerp | `0x003ae0e0`-`0x003ae118` | `inner * w + outer * (1 - w)`, then `fctiwz` (truncation) |
+| the packing | `0x003ae13c`-`0x003ae160`, `0x003ae190`-`0x003ae1b4` | `R << 24 \| G << 16 \| B << 8 \| 0xff`: lane 0 is red, the natural order |
+| which colour is which | `r5` (`param_3`) = horizon, `r6` (`param_4`) = zenith | the horizon fills the ring and the lower half, the zenith the top |
+| the radius | `lfs f1,-0x6098(r2)` -> TOC `0x008b732c` | `0x457a0000` = `4000.0` |
+| the band | `stfs` at `0x005ebeb0`/`0x005ebf48` | the quad's lower vertices at `y = 0`, its upper ones at `y = 0.75 r` with the **same** `r sin`, `r cos`: a vertical band, then a flat zenith cap |
+
+So the dome seen from its centre: a direction at elevation `e` meets the band
+at height `r tan(e)` and takes `tan(e) / 0.75` of the zenith colour, the cap
+above `e = 36.9°` the zenith alone, eye level and below the horizon alone.
+The bytes reach the RSX as vertex colours, are interpolated as linear light
+and encoded by the target on write.
+
+**The live frame agrees, and shows no cubemap texel** (confidence 88: the
+static read above plus one RPCS3 frame of the original). The adopted pair
+`hd/zone-vineta-k-z5` (Vineta K, Zone start, stage 1 Sub Venom, cold boot,
+2026-11-19) shows a sky with no cloud or sea texel of `ZoneSky.gtf` anywhere:
+`(4..7, 124..129, 143..154)` over the whole visible sky, bluer upward.
+Sub Venom's horizon `(0, 0.2118, 0.2471)` is the bytes `(0, 54, 63)`, which
+the sRGB encode displays as `(0, 126, 135)`: green within 1 of the frame at
+eye level. So the gradient dome covers every visible direction the cubemap
+would show; whether the cubemap is drawn under it at all is still not read,
+and the port keeps `ZoneSky.gtf` only as the reflection map.
+
+**Port**: `oag_mesh::mesh::sky_cube::zone_dome` (the band law on the
+camera-centred cube, the 18-gon drawn as a circle, at most 1.5 % on a
+weight), recoloured per frame by `shade_zone_dome` from the grade's
+cross-faded palette (`oag_raceplay::Scene`, written only when the pair
+changes). Tests: `sky_cube`'s two unit tests and
+`crates/raceplay/tests/zone_sky_ground_truth.rs`. The pair's mean grey moves
+53.04 -> 37.40 (rmse 0.322 -> 0.224).
+
+**Open**: ours' sky reads about 17 % brighter than the original's at eye
+level (`(7, 149, 174)` against `(6, 127, 147)`), uniformly, which points at
+exposure rather than the dome; not chased here. Detonator's modes ride the
+same gate byte and are not wired to the dome. 2048: **checked, differs** -
+it draws its own `skycube.rcsmodel` dome and does not swap in
+`zoneSky.gxt` ([2048-sky.md](../../../formats/2048-sky.md)); whether its Zone
+draws a gradient is unread. Omega: **not checkable here** - its Zone sky is
+unread in its executable and no Omega Zone pair records a sky.
 
 ## What is **not** established
 
@@ -309,8 +360,8 @@ Read from there, with confidence **80** because each step is a direct decode:
 
 **What that draw does with them is read now** - see the section above. It is
 a dome, blended per-vertex from these two colours across the climbing half of
-the sweep, with a solid-horizon-colour skirt on the other half. Nothing is
-drawn on it yet in this port; the shape question a horizon-to-zenith lerp
+the sweep, with a solid-horizon-colour skirt on the other half. The port
+draws it since 2026-11-19 (section above); the shape question a horizon-to-zenith lerp
 would have guessed at is answered rather than guessed.
 
 Also not established, and unchanged from

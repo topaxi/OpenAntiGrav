@@ -57,7 +57,9 @@ pub(super) fn ps3_sky_model(
 /// ids, `Mode::Zone` being this port's stand-in for it - and the two branches
 /// converge on the same loader call, the same handle and the same sampler
 /// state, so the picture is the only thing that changes. The rotation is still
-/// the circuit's. See `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`.
+/// the circuit's. **What a Zone race draws is the gradient dome over it**
+/// (`mesh::sky_cube::zone_dome`), and the cubemap stays the reflection map. See
+/// `docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`.
 pub(super) fn hd_sky_model(
     archives: &mut oag_assets::Archives,
     track: &str,
@@ -106,6 +108,18 @@ pub(super) fn hd_sky_model(
         _ => 0.0,
     };
     match mesh::sky_cube::build(&name, &blob, rotation, tint, mask, store) {
+        Ok(cube) if zone_sky.is_some() => {
+            // The Zone branch draws `Sky_DrawGradientDome` over every direction
+            // the cubemap would show; the cubemap stays the reflection map.
+            let mut dome = mesh::sky_cube::zone_dome();
+            dome.sky_reflection = mesh::sky_paraboloid::from_sky(&cube).map(std::sync::Arc::new);
+            report.push(format!(
+                "{name}: loaded as the Zone sky's reflection map; the sky drawn is the Zone \
+                 gradient dome in the stage's Sky horizon and zenith colours \
+                 (Sky_DrawGradientDome, zone-sky.md)"
+            ));
+            Some(dome)
+        }
         Ok(sky) => {
             let (width, height) = sky
                 .textures
