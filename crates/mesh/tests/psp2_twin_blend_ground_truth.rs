@@ -234,6 +234,35 @@ fn check(name: &str, expected: usize, model: &Model, report: &psp2::Report) {
     }
 }
 
+/// Which texture channel is the alpha (`slots::alpha_channel`, `mesh::rcs::psp2`): Omega reads the
+/// diffuse map's alpha lane on every vertex its builder leaves to the generic path, Vita only on
+/// the alpha-lit ones (their programs are read to take `T.www`).
+fn check_alpha_lane(name: &str, model: &Model, omega: bool) {
+    let lane = slots::alpha_channel(3);
+    let on = |v: &oag_mesh::mesh::GpuVertex| v.slots & lane == lane;
+    let total = model.vertices.len();
+    let carried = model.vertices.iter().filter(|v| on(v)).count();
+    if omega {
+        assert!(
+            carried * 100 >= total * 95,
+            "{name}: {carried} of {total} vertices read the alpha lane"
+        );
+    } else {
+        let lit = model
+            .vertices
+            .iter()
+            .filter(|v| v.slots & slots::LIT_ALPHA != 0)
+            .count();
+        assert!(
+            model
+                .vertices
+                .iter()
+                .all(|v| on(v) == (v.slots & slots::LIT_ALPHA != 0)),
+            "{name}: {carried} vertices read the alpha lane, {lit} are alpha-lit"
+        );
+    }
+}
+
 /// Anulpha Pass's models flag their alpha-lit submeshes, every other circuit flags none.
 fn check_lit_alpha(name: &str, model: &Model, report: &psp2::Report) {
     let flagged = model
@@ -317,6 +346,7 @@ fn every_2048_and_omega_circuit_that_ships_nr_twinblend_draws_it_by_hds_law() {
         let (model, report) = build(&mut vita, index, &full);
         check(&format!("{package} {path}"), *expected, &model, &report);
         check_lit_alpha(path, &model, &report);
+        check_alpha_lane(path, &model, false);
     }
     for (path, expected) in OMEGA_CENSUS {
         let index = (0..omega.len())
@@ -325,5 +355,6 @@ fn every_2048_and_omega_circuit_that_ships_nr_twinblend_draws_it_by_hds_law() {
         let (model, report) = build(&mut omega, index, path);
         check(path, *expected, &model, &report);
         check_lit_alpha(path, &model, &report);
+        check_alpha_lane(path, &model, true);
     }
 }

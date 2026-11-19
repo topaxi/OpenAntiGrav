@@ -2339,8 +2339,9 @@ Ranked, by what each would remove:
 4. **The crowd sprites draw white**: Sol's stands +112 against the original, Queens Mall +57, Subway +68, Arena +64;
    drawing no sprite at all takes Sol from 45.55 to 42.48. **Half read** (2026-11-16, `omega-crowd-shadowed`): the
    `_shadow` materials are lit by their `Shadowed` and `Ambient` (below) and moved; the plain
-   `crowd_sprite_diffuse_normal_alpha`, which draws most of Sol's crowd pixels (46,650 under its own skip needle against the `_shadow` sprites' 3,376), declares neither and still draws white.
-   Crowds only reach the pairs that show stands.
+   `crowd_sprite_diffuse_normal_alpha`, which draws most of Sol's crowd pixels (46,650 under its own skip needle against the `_shadow` sprites' 3,376), declares neither and drew white because its alpha read the red lane: **closed** by the alpha lane
+   ([below](#the-alpha-lane-2026-11-19-omega-road-programs); Sol +115.7 to +38.2, Queens Mall +48.5 to +4.7); the
+   plain program's light inputs are still unread. Crowds only reach the pairs that show stands.
 5. **Pose, Capital Reach only**: the Auricom banner sits about 480 px further left in ours at 1920 and the road lines
    lean the other way: ours' grid slot or heading differs from the original's. Its scenery +21.6 is that, so this pair
    cannot judge a render change until the pose is matched.
@@ -2388,15 +2389,18 @@ The per-material Sol numbers are the same score over the pixels one material's o
 from it), the `_shadow` mask taken from a debug build that drew that sprite flat magenta, which also showed those draws
 reach the branch: the `_shadow` sprites' 3,376 pixels go +160.0 to +57.6, the plain sprite's 46,650 go +121.5 to +116.6.
 
-**The plain sprite is the rest, and it is not this law.** `crowd_sprite_diffuse_normal_alpha` (Sol: 12 submeshes,
-780 triangles) and `crowd_diffuse_normal` author no parameter, and their programs
-(`0x41a4`, 112 instructions) declare no `Shadowed` or `Ambient`: `T * (constantAmbientColour + sun * sat(N.L))`, which
-is what ours' generic path computes. Still ours draws them white (bias +121.5 to +116.6 with the wiring), so the
-cause is in their inputs, not in a missing factor. **A diagnostic, not shipped**: giving the plain sprite the `_shadow`
-sprite's constants (`0.12178`, `0.777`) moves the whole-crowd bias to Sol +39.7, Queens Mall +6.4, Subway -13.2 and
-draws the dense rows coloured, as in the original. That is a stand-in until the plain's own constants (the
-`constantAmbientColour` and `liveLighting0diffuse` the original binds for these draws, or the normal-map `N.L`) are
-read.
+**The plain sprite was the alpha lane, then a missing light term** (2026-11-19, `omega-road-programs`).
+`crowd_sprite_diffuse_normal_alpha` (Sol: 12 submeshes, 780 triangles) and `crowd_diffuse_normal` author no
+parameter, and their programs (`0x41a4`, 112 instructions) declare no `Shadowed` or `Ambient`:
+`T * (constantAmbientColour + sun * sat(N.L))`, which is what ours' generic path computes. Ours drew them white because
+its slot word read the texture's **red** as the alpha ([below](#the-alpha-lane-2026-11-19-omega-road-programs)), not
+because a factor was missing. With the lane fixed the plain crowd goes (crowd-region bias, ours minus theirs, same
+pixels before and after): Sol +115.7 to +38.2, Queens Mall +48.5 to +4.7, Metro Park +14.4 to -10.8 (Subway and Arena
+were not re-measured by region). What remains is Sol's +38.2 and Empire Climb's -37.2 (that crowd is under a low sun the original
+lights and ours does not): the plain program's own light inputs (`constantAmbientColour`, `liveLighting0diffuse`, the
+normal-map `N.L`) are still unread. The diagnostic of giving the plain sprite the `_shadow` sprite's constants
+(`0.12178`, `0.777`) reached Sol +39.7 and Queens Mall +6.4, which the lane alone now matches, so that stand-in is
+not needed.
 
 **2048 (Vita) crowd: checked, differs.** Vita's circuits (`data/art/published/environments/<circuit>/track.rcsmodel`,
 Sol, Queens Mall, Altima, Arena read with `psp2_material_dump`) draw their crowds through `fc06_lambert_alpha` and
@@ -2407,6 +2411,54 @@ and none of those materials authors `Shadowed` or `Ambient` (the only parameters
 **2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
 `tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
+## The alpha lane (2026-11-19, `omega-road-programs`)
+
+**Claim tested:** Omega's materials sample their diffuse map's **alpha** as the surface alpha; ours read the red lane.
+**True.** `mesh::rcs::psp2` built the slot word as 0 or `SECOND_IS_LIGHTMAP` for every Vita and PS4 material, and
+in `shade.wesl` bits 3 and 4 of that word choose which channel of the first texture is `texel.a`: 0 is red. The
+readers are the output alpha (`texel.a * in.colour.a`: every blended and cut-out draw), the generic specular mask,
+the glass pane's cover and clear, the snow term and the hull's probe reflection. The crowd sprites, the flags and
+banners, the trees and shrubs on Metro Park and the red slab that stood under the HUD on the HD-mode circuits were all
+drawn with the red channel as coverage. Omega's programs gate by the diffuse alpha (the panel road, `0xe144`, confidence
+94; the crowd's alpha test at 0.5, `0x4224`, `0x41a4`; "The crowd's law" above). The build now gives every PS4
+material `slots::DEFAULT` (lane 3); Vita keeps lane 0 except the alpha-lit families, whose programs are read to take
+`T.www` (`lit_alpha`).
+
+**Measured** (`scripts/compare-rerender-ours.py`'s `rerender` on copies of every Omega, `2048-vita` and `2048` pair, the
+binary before and after; the raw mean grey is dominated by decorrelation, so read the signs and the regions):
+
+- Omega, 29 pairs: 17 move by more than 0.05 grey down, 2 up (`menu-ship-select` +0.09, `zone-vineta-k-z5` +0.07),
+  mean over the 24 race pairs -0.72. Largest: `anulpha-pass` 24.31 to 21.19, `tech-de-ra` 30.36 to 27.76, `moa-therma`
+  38.40 to 36.39, `subway-2048` 32.28 to 30.38, `sol-2048` 34.57 to 32.71, `queens-mall-2048` 44.82 to 43.72,
+  `talons-junction` 28.68 to 27.89, `the-amphiseum` 49.86 to 49.11, `metro-park-2048` 44.11 to 43.67.
+  **`capital-reach-2048` (47.00 to 46.98) and `empire-climb-2048` (45.11 to 45.11) do not move**: their error is the
+  tarmac road and the scenery, not an alpha lane.
+- Regions (`scripts/compare-decompose.py`, region masks and crowd mask pinned across builds), ours minus theirs:
+  crowd bias Queens Mall +48.5 to +4.7, Sol +115.7 to +38.2, Metro Park +14.4 to -10.8; Empire Climb -24.8 to -37.2 and
+  Capital Reach -51.3 to -55.8 (0.0 to 0.6 % of the frame, a sun-lit crowd ours still draws dark). Queens Mall's road
+  bias +1.8 to +5.7 and LF 13.7 to 11.9, its sky -15.3 to -10.9, come from the adaptive exposure lifting the whole frame
+  once the crowd stopped being white: they are not a road fix.
+- Boxes at 1920x1080, mean |ours - theirs| grey and bias, before to after: Queens Mall left stands 52.1 to 49.2,
+  bias +13.3 to +1.4; right stands 50.2 to 50.3, +5.4 to +2.6; banner strip 69.3 to 67.5, +12.7 to +0.6. Metro Park left
+  trees and shrubs (absent before) 76.6 to 73.5, bias +36.2 to -1.8; flags and far shrubs 44.8 to 47.1, bias -9.6 to
+  -12.3 (now drawn, a few pixels out of phase with the original's: decorrelation, not a worse colour); right stands
+  47.6 to 47.3. Sol left stands 58.2 to 53.7, right stands 48.4 to 40.6, bias +22.8 to +11.3.
+- By eye (every mover above, theirs, before, after at 640 px wide): Metro Park gains the trees, shrubs and the flags
+  over the stands; Queens Mall's stands go from white cut-outs to dark rows with colour, as in the original; the red
+  slab under the HUD on `moa-therma`, `the-amphiseum` and `tech-de-ra` becomes the original's thin teal bar. Nothing the
+  original shows vanishes on those pairs, `anulpha-pass`, `subway-2048` or `sol-2048`. Sol's stands still carry white figures in the rows nearest the camera.
+
+**Test.** `psp2_twin_blend_ground_truth` (a pass over every 2048 and Omega circuit that ships the material) holds that
+at least 95 % of every Omega circuit's vertices carry lane 3 and, on Vita, that a vertex carries it exactly when it is
+alpha-lit; dropping the build's `slots::DEFAULT` turns Anulpha Pass's count into 31,714 of 947,447.
+
+**2048 (Vita): ported for the alpha-lit families, checked, applies, not wired for the rest.** The same re-render on the
+Vita pairs with lane 3 everywhere moved `anulpha-pass` 16.71 to 11.14 (the alpha-lit families, wired), and
+`moa-therma` 32.55 to 34.23, `tech-de-ra` +0.25, `mall` +0.15, `empire-climb` +0.09, `ubermall` -0.43, `talons-junction`
+-0.28: mixed. `moa-therma`'s change is the hull going darker (the hull's probe reflection reads `texel.a * row_tint.x`),
+and 2048's own programs are GXP: which of them gate by the diffuse alpha is unread, so Vita stays on lane 0
+outside the alpha-lit families until each family's gate lane is read.
 
 ## The port's anisotropy (2026-11-16, `port-aniso`)
 

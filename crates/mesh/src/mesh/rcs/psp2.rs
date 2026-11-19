@@ -419,6 +419,14 @@ fn build_planned(
         } else {
             crate::mesh::slots::SECOND_IS_LIGHTMAP
         };
+        // The diffuse map's own alpha is the surface's alpha, gloss and cut-out on Omega's programs
+        // (`docs/formats/omega-status.md`, "The alpha lane"). Vita keeps the red lane for every
+        // material but the alpha-lit ones below, whose programs are read to take `T.www`.
+        let role = if ps4 {
+            role | crate::mesh::slots::DEFAULT
+        } else {
+            role
+        };
         // A Zone material's colour is drawn as it is: its own colour, unlit.
         // **Chosen, not measured.** Its fragment program also declares a
         // lightmap, `liveLighting0` and a `Zone_ColourN_Emissive` scalar
@@ -466,7 +474,7 @@ fn build_planned(
                 .and_then(|m| decoded.materials.get(m))
                 .is_some_and(lit_alpha::admits);
         let role = if alpha_lit {
-            role | crate::mesh::slots::LIT_ALPHA
+            role | crate::mesh::slots::LIT_ALPHA | crate::mesh::slots::DEFAULT
         } else {
             role
         };
