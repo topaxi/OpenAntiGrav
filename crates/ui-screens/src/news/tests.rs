@@ -156,7 +156,7 @@ fn the_draw_follows_the_weights_and_never_repeats_the_item_before() {
         zone > songs + songs / 2,
         "weight 2 beats weight 1: {zone} vs {songs}"
     );
-    assert_eq!(count("Your favourite is Fenix Funk 5") > 0, true);
+    assert!(count("Your favourite is Fenix Funk 5") > 0);
 }
 
 #[test]
