@@ -992,9 +992,9 @@ impl Renderer {
         if self.hud.mode.snaps_geometry() {
             hud_scale::snap_sprites(&mut self.quads, self.hud.pixels_per_grid);
         }
-        if warp.is_some() {
+        if let Some(warp) = &warp {
             let end = warp_end.unwrap_or(self.quads.len());
-            warp::bend(&mut self.quads[..end], self.space.size);
+            warp::bend(&mut self.quads[..end], self.space.size, warp.amplitude);
         }
         // The glow mask's instances sit after the list's own, drawn only by the mask pass.
         let normal = self.quads.len() as u32;

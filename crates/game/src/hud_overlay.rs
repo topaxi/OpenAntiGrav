@@ -639,9 +639,14 @@ impl Overlay {
         if frame.is_empty() && bent.as_ref().is_none_or(Vec::is_empty) {
             return;
         }
+        let amplitude =
+            oag_hud::concave::amplitude_for(self.art.dynamic_hud.is_some(), self.space.size.1);
         let warp = |columns: Vec<[f32; 4]>, until: usize| {
-            bent.is_some()
-                .then_some(crate::render::Warp { columns, until })
+            bent.is_some().then_some(crate::render::Warp {
+                columns,
+                until,
+                amplitude,
+            })
         };
 
         // One scissor per view of a split screen, from where its draws start.

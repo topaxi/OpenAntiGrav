@@ -12,6 +12,8 @@ pub struct Warp {
     /// The draws from this index on are drawn flat: the lock-on reticle, which the original
     /// draws as a model and its warp never reaches.
     pub until: usize,
+    /// How far the middle column's edges move, in grid units (`oag_hud::concave::amplitude_for`).
+    pub amplitude: f32,
 }
 
 impl Warp {
@@ -31,10 +33,10 @@ pub(super) fn columns(quad: Quad) -> impl Iterator<Item = Quad> {
 /// Sets every quad's corner offsets on a grid of `size`. A triangle packs other data into its
 /// fields and a turned quad's corners are not its rect's, so both stay flat; the HUD draws
 /// neither but the reticle.
-pub(super) fn bend(quads: &mut [Quad], size: (f32, f32)) {
+pub(super) fn bend(quads: &mut [Quad], size: (f32, f32), amplitude: f32) {
     for quad in quads {
         if quad.mode < MODE_TRIANGLE - 0.5 && quad.rotation == 0.0 {
-            quad.warp = oag_hud::concave::corners(quad.rect, size);
+            quad.warp = oag_hud::concave::corners(quad.rect, size, amplitude);
         }
     }
 }
@@ -66,10 +68,10 @@ mod tests {
             turned.rotation = 0.5;
             turned
         }];
-        bend(&mut quads, size);
+        bend(&mut quads, size, 35.0);
         assert_eq!(
             quads[0].warp,
-            oag_hud::concave::corners([300.0, 240.0, 140.0, 8.0], size)
+            oag_hud::concave::corners([300.0, 240.0, 140.0, 8.0], size, 35.0)
         );
         assert!(quads[0].warp[0] < -10.0, "the bottom half rises");
         assert_eq!(quads[1].warp, [0.0; 4]);

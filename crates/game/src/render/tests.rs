@@ -746,6 +746,7 @@ fn a_warp_bends_its_draws_cuts_its_bars_and_is_spent() {
     renderer.set_warp(Some(Warp {
         columns: vec![bar],
         until: 2,
+        amplitude: oag_hud::concave::AMPLITUDE,
     }));
     let bent = frame(&mut renderer);
     assert_eq!(
@@ -755,14 +756,17 @@ fn a_warp_bends_its_draws_cuts_its_bars_and_is_spent() {
     );
     let size = Space::PSP.size;
     for column in &bent[..4] {
-        assert_eq!(column.warp, oag_hud::concave::corners(column.rect, size));
+        assert_eq!(
+            column.warp,
+            oag_hud::concave::corners(column.rect, size, 35.0)
+        );
     }
     assert!(
         bent[0].warp[0] < -20.0,
         "the bar's left end rises: {:?}",
         bent[0].warp
     );
-    assert_eq!(bent[4].warp, oag_hud::concave::corners(icon, size));
+    assert_eq!(bent[4].warp, oag_hud::concave::corners(icon, size, 35.0));
     assert!(bent[4].warp[0] > 1.0, "the top-left icon comes down");
     assert_eq!(bent[5].warp, [0.0; 4], "the reticle stays flat");
     let flat = frame(&mut renderer);

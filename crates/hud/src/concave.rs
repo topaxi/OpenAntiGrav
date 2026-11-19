@@ -10,40 +10,56 @@
 //! PPSSPP, the shield bar's top edge moved by the law to within a pixel at six columns
 //! (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`, "The warp").
 //!
-//! Here the law is written over any grid, `x / width` and `y / height`, so HD's 1280x720 HUD
-//! bends the same share of its screen. On Pulse's own grid it is the original's numbers exactly.
+//! The PS2 pressing runs the same law (`FUN_001e5e98`): the same 35.0 (`0x00282ab0`), its centre
+//! row half the screen's height and its period the screen's width, both read from the display's
+//! globals (`0x00284fe0`, `0x00284fe4`), so on its 640x448 grid the edges move 35 of 448.
+//!
+//! Written over any grid, `x / width` and `y / height`, with the amplitude in the grid's units:
+//! [`AMPLITUDE`] on Pulse's grids, [`amplitude_for`] scaling it to the share of the PSP's height on
+//! a title that never had the warp.
 
-/// How far the middle column's top and bottom edges move, in the PSP's pixels.
+/// How far the middle column's top and bottom edges move, in grid units, on both Pulse pressings.
 pub const AMPLITUDE: f32 = 35.0;
-/// The PSP's screen height, which the amplitude is a share of.
+/// The PSP's screen height, which the amplitude is a share of on a title without the warp.
 const PSP_HEIGHT: f32 = 272.0;
 /// How many columns a bar named in [`COLUMNED`] is cut into: `(10 / 2) - 1`.
 pub const COLUMNS: usize = 4;
 /// The images Pulse draws as a strip of [`COLUMNS`] columns while the warp is on.
 pub const COLUMNED: [&str; 4] = ["SpeedBarBg", "SpeedBar", "ShieldBarBg", "ShieldBar"];
 
-/// How far the warp moves a vertex at `(x, y)` down (negative: up), in grid units, on a grid of
-/// `size`.
+/// The amplitude on a grid `height` tall: [`AMPLITUDE`] where the title authors the warp (Pulse,
+/// both pressings), else the same share of the screen's height as on the PSP.
 #[must_use]
-pub fn dy(x: f32, y: f32, size: (f32, f32)) -> f32 {
+pub fn amplitude_for(authored: bool, height: f32) -> f32 {
+    if authored {
+        AMPLITUDE
+    } else {
+        AMPLITUDE * height / PSP_HEIGHT
+    }
+}
+
+/// How far the warp moves a vertex at `(x, y)` down (negative: up), in grid units, on a grid of
+/// `size` with the middle column's edges moving `amplitude`.
+#[must_use]
+pub fn dy(x: f32, y: f32, size: (f32, f32), amplitude: f32) -> f32 {
     let (width, height) = size;
     if width <= 0.0 || height <= 0.0 {
         return 0.0;
     }
     let half = height * 0.5;
-    AMPLITUDE * (height / PSP_HEIGHT) * (std::f32::consts::PI * x / width).sin() * (1.0 - y / half)
+    amplitude * (std::f32::consts::PI * x / width).sin() * (1.0 - y / half)
 }
 
 /// [`dy`] at the four corners of `rect` (`[x, y, width, height]`), in the order top-left,
 /// top-right, bottom-left, bottom-right.
 #[must_use]
-pub fn corners(rect: [f32; 4], size: (f32, f32)) -> [f32; 4] {
+pub fn corners(rect: [f32; 4], size: (f32, f32), amplitude: f32) -> [f32; 4] {
     let [x, y, w, h] = rect;
     [
-        dy(x, y, size),
-        dy(x + w, y, size),
-        dy(x, y + h, size),
-        dy(x + w, y + h, size),
+        dy(x, y, size, amplitude),
+        dy(x + w, y, size, amplitude),
+        dy(x, y + h, size, amplitude),
+        dy(x + w, y + h, size, amplitude),
     ]
 }
 
@@ -68,6 +84,7 @@ mod tests {
     use super::*;
 
     const PSP: (f32, f32) = (480.0, 272.0);
+    const A: f32 = AMPLITUDE;
 
     fn near(a: f32, b: f32) -> bool {
         (a - b).abs() < 1.0e-3
@@ -77,16 +94,16 @@ mod tests {
     /// (`pi / 480`): the middle column's top edge comes down 35, its bottom edge up 35.
     #[test]
     fn the_middle_column_moves_its_top_down_and_bottom_up_by_35() {
-        assert!(near(dy(240.0, 0.0, PSP), 35.0));
-        assert!(near(dy(240.0, 272.0, PSP), -35.0));
-        assert!(near(dy(240.0, 136.0, PSP), 0.0));
+        assert!(near(dy(240.0, 0.0, PSP, A), 35.0));
+        assert!(near(dy(240.0, 272.0, PSP, A), -35.0));
+        assert!(near(dy(240.0, 136.0, PSP, A), 0.0));
     }
 
     #[test]
     fn the_left_and_right_edges_do_not_move() {
         for y in [0.0, 60.0, 200.0, 272.0] {
-            assert!(near(dy(0.0, y, PSP), 0.0));
-            assert!(dy(480.0, y, PSP).abs() < 1.0e-4);
+            assert!(near(dy(0.0, y, PSP, A), 0.0));
+            assert!(dy(480.0, y, PSP, A).abs() < 1.0e-4);
         }
     }
 
@@ -95,7 +112,7 @@ mod tests {
     #[test]
     fn the_shield_bar_columns_move_as_the_original_measured() {
         for (x, measured) in [(310.0, -25.0), (360.0, -20.0), (420.0, -11.0)] {
-            let law: f32 = dy(x, 247.0, PSP);
+            let law: f32 = dy(x, 247.0, PSP, A);
             assert!(
                 (law - measured).abs() <= 1.0,
                 "x {x}: {law} against {measured}"
@@ -103,23 +120,28 @@ mod tests {
         }
     }
 
+    /// A title without the warp bends the same share of its screen as the PSP; the PS2 pressing
+    /// authors its own 35 on a 448-tall grid.
     #[test]
-    fn a_wider_grid_bends_the_same_share_of_its_screen() {
+    fn a_title_without_the_warp_bends_the_psp_share_and_the_ps2_its_own_35() {
         let hd = (1280.0, 720.0);
-        assert!(near(dy(640.0, 0.0, hd), 35.0 * 720.0 / 272.0));
+        let scaled = amplitude_for(false, hd.1);
+        assert!(near(dy(640.0, 0.0, hd, scaled), 35.0 * 720.0 / 272.0));
         assert!(near(
-            dy(320.0, 180.0, hd) / 720.0,
-            dy(120.0, 68.0, PSP) / 272.0
+            dy(320.0, 180.0, hd, scaled) / 720.0,
+            dy(120.0, 68.0, PSP, A) / 272.0
         ));
+        let ps2 = (640.0, 448.0);
+        assert!(near(dy(320.0, 0.0, ps2, amplitude_for(true, ps2.1)), 35.0));
     }
 
     #[test]
     fn corners_are_top_left_top_right_bottom_left_bottom_right() {
-        let c = corners([200.0, 10.0, 80.0, 250.0], PSP);
-        assert_eq!(c[0], dy(200.0, 10.0, PSP));
-        assert_eq!(c[1], dy(280.0, 10.0, PSP));
-        assert_eq!(c[2], dy(200.0, 260.0, PSP));
-        assert_eq!(c[3], dy(280.0, 260.0, PSP));
+        let c = corners([200.0, 10.0, 80.0, 250.0], PSP, A);
+        assert_eq!(c[0], dy(200.0, 10.0, PSP, A));
+        assert_eq!(c[1], dy(280.0, 10.0, PSP, A));
+        assert_eq!(c[2], dy(200.0, 260.0, PSP, A));
+        assert_eq!(c[3], dy(280.0, 260.0, PSP, A));
     }
 
     #[test]

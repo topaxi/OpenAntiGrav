@@ -711,7 +711,7 @@ persists each into the profile, as ours persist into `settings.toml`.
 | `OPT_SFX_VOL`, Sfx volume | 0, 25, 50, 75, 100 % (default 100) | yes | yes | present: AUDIO page, `audio.sfx_volume` (same steps) |
 | `OPT_MUSIC_PL`, Music playlist (list `Music Order`) | `OPT_SEQ` Sequential, `FE_RANDOM` Random (default sequential) | yes | yes | **added**: MUSIC ORDER on the AUDIO page, beside the volumes the disc's screen also holds (`audio.music_order`: sequential default, random). Random plays a shuffled deck, every song once before any repeats (`oag_sound::shuffle`, `docs/architecture/music-threads.md`, "Music order"). Shown on every title: the disc authors it on Pulse, the shuffle is wanted for every soundtrack. The label is ours (`OAG_AUDIO_MUSIC_ORDER`), not the disc's `OPT_MUSIC_PL` text: a menu row has no disc-string mechanism |
 | `OPT_CAM`, Camera | `OPT_INT` Internal, `OPT_CLOSE` Close, `OPT_FAR` Far (default close) | yes | yes | present: `graphics.camera_view` (internal, close, far) |
-| `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **two of four**: default and off. `FE_CONCAVE` and `FE_FLAT` set bit 1 of `+0xd0` on the HUD's two panel groups (1 and 0; `FE_DEFAULT` takes `race_manager+0x6f & 1`), a vertex warp read by `Text_Draw`, `Image_Draw` and the speed bar whose maths (`FUN_08919c2c`) is **unread** |
+| `OPT_HUD`, Dynamic HUD | `FE_DEFAULT`, `FE_CONCAVE`, `FE_FLAT`, `FE_OFF` (default `FE_DEFAULT`) | all four | three: no `FE_FLAT` | present, **all four**: `FE_CONCAVE` bends every HUD vertex towards the middle row (`Hud_WarpVertexY`, `y += 35 sin(pi x / 480) (1 - y / 136)`), `FE_FLAT` never, `FE_DEFAULT` in the cockpit view only; seen live and matched to the pixel ([hud-game-options.md](../ghidra/functions/psp-pulse-usa/hud-game-options.md#the-warp-2026-11-19)). Every other title offers `default` and `concave` (ours) |
 | `OPT_MP_TAGS`, Multiplayer tags | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: MULTIPLAYER TAGS, a player's name over each other person's craft in a multiplayer race (`oag_hud::player_tags`) |
 | `OPT_GHOST_VIS`, Ghost ships visible | `FE_ON`, `FE_OFF` (default on) | yes | yes | **added**: GHOST SHIPS VISIBLE, hides the ghost's draw (`Race::set_ghost_visible`) |
 | `OPT_AL_GHOST`, Auto load ghost | `FE_ON`, `FE_OFF` (default on) | yes | **no row** | **added**: AUTO LOAD GHOST, gates loading the stored lap when a Time Trial or Speed Lap starts |
@@ -719,7 +719,8 @@ persists each into the profile, as ours persist into `settings.toml`.
 | `OPT_LANG`, Language | the installed languages | yes | yes | present: `language` |
 
 Where the two pressings differ the PSP list wins (the project rule for anything invented for Pulse), so the PS2
-pressing offers both ghost rows and the same two Dynamic HUD entries.
+pressing offers both ghost rows and all four Dynamic HUD entries (its executable runs the same warp and still
+compares `FE_FLAT`).
 
 **Behaviour the rows have in the original** (`docs/ghidra/functions/psp-pulse-usa/ghost.md`, "Best lap, restarting at the
 line" and "Saving and loading"): `Ghost_Update` sets the ghost's visibility from the options byte `options+0x45c`
