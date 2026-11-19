@@ -1,11 +1,11 @@
 ---
 status: measure
 titles: [2048]
-updated: 2026-10-19
-summary: "2048 Zone circuit never judged against the original; needs a muted Vita3K altima Zone capture; start-grid clip unwired"
+updated: 2026-11-19
+summary: "2048 Zone stage colours draw (altima-z5 112.94 to 48.50), DLC/Omega Vineta K road on the Track group; open: fog binding, Omega stage, start grid"
 ---
 
-# 2048's scenery moves and the glow-layer scrolls play; the Zone circuit draws (road = fog colour, chosen) and the start-grid clip is unwired
+# 2048's scenery moves and the glow-layer scrolls play; the Zone circuit draws with the stage colours and the start-grid clip is unwired
 
 2026-09-16. Started from "nothing on 2048 is animated at all" and found the
 reason first: `track.vex` authors **no `Anim Transform`** (1,834 `Transform`s,
@@ -85,14 +85,25 @@ every submesh record reachable from exactly one mesh object.
 ## Open
 
 - **`fc01_dummy` is not flat fog (2026-10-27, [gxp.md](../../docs/formats/gxp.md#the-instruction-stream)).** The instruction listing reads its fragment program as `fogColour * (1 - f)`, `f` the vertex program's exponential-squared fog visibility (1 near, 0 far): black near, `fogColour` far, not `fogColour` everywhere. The `psp2::FOG_FLAT` draw (`oag_mesh`, `oag_raceplay::load`) was written from the 2026-10-19 reading and has not been re-read against it. Confidence 85 on the arithmetic, 60 on `f` meaning visibility; the constants (`sa32.w`, `sa36.x`, `sa36.z`) come from the material's uniform image, unread. Omega: not checkable until its GCN program is read.
-- **The Zone circuit's picture has not been judged against the original.** No
-  Vita3K capture of a Zone race exists in this tree and none was taken. What is
-  drawn: the eight `Zone_ColourN` colours unlit (**chosen, not measured**: lit
-  blows every surface out to white), `fc01_dummy` - the road and walls, 1,716 of
-  6,349 submeshes - drawn flat as the circuit's fog colour since 2026-10-19 (program read, value bound chosen), and
-  2,302 `zonefc07_cube_animation_1` nodes hidden. The road is the authored fog
-  colour, fixed at load (not following the Zone grade). A capture of 2048's Zone mode from the original settles
-  every one of those choices at once; the fogColour binding is a CPU-side Ghidra lead in `/vita-2048-eu-v104`.
+- **2026-11-19, `zone-road-2048-omega`: the Zone surface is read and the stage colours draw**
+  ([2048-material-params.md](../../docs/formats/2048-material-params.md), "The Zone surface").
+  `Zone_ColourN` surfaces are `Colour * (ambient + sun * sat(N.L) + Emissive)` with the stage's
+  `Colour k` and the title-wide Zone light; `2048-vita/zone-altima-z5` 112.94 -> 48.50, hills and
+  tower box 62.3 -> 46.4. The pair's camera is cold (original camera not read), so the road boxes
+  stay camera-bound: left box orig 87 / ours 14, right 40 / 22. Still open from it:
+  - **`fc01_dummy`'s `fogColour`**: which stage fog (`Fog.Environment Fog Colour` or
+    `Fog.Track Fog Colour`, density in the fourth lane) the engine binds is unread; ours keeps the
+    authored circuit fog, fixed at load. The original's far road strip `(214, 245, 18)` equals the
+    stage's `Track Paint.Primary Colour` (0.83 1.0 0.16), consumer unread (probably the road's paint
+    lines, in a material variant not yet listed).
+  - **The stage change is a step**, not 2048's own transition (unread).
+  - **`2048-vita/zone-dlc-vineta-k-z5`** (86.04 -> 62.92) and **`omega/zone-vineta-k-z5`** (74.25 ->
+    72.92): the road takes HD's Track group by shape name (chosen, not measured; the container's
+    per-chunk bit is unread, `+0x0a` flags do not carry it). Omega's hue is HD's Flash purple where
+    the original is olive: Omega's zone-to-stage ladder is unread (stage 9 is the closest of 1 to 12).
+  - **The 2048 `zoneGrowing*` fragment variants** (`Weapon_Pads` #59/#61, `zonefc06_..._07` #37/#64:
+    palette lookups of `zoneGrowingTexture`) belong to the stage table's `Growing Texture` accent;
+    their palette textures' source is unread.
 - **2048's Zone look has a runtime term nothing authors**: every material
   declares `zoneGrowingPaletteScene`/`Track`, `zoneGrowingTexture` samplers and
   `zoneGrowingTextureFactors`/`zoneShipPos` uniforms. Not read.
@@ -121,9 +132,9 @@ every submesh record reachable from exactly one mesh object.
 
 ## Next Steps
 
-- A muted Vita3K capture of an `altima` Zone race (see
-  `docs/reverse-engineering/vita3k-capture.md`) to judge the Zone circuit;
-  then decide the road and the lit-or-unlit colours from it.
+- A muted Vita3K capture of an `altima` Zone race **with the camera read** (the adopted pair's is cold)
+  to judge the road and the walls by region; then the `fogColour` binding and `Track Paint` consumer.
+- Read Omega's Zone stage writer (ladder) so its Vineta K Zone pair picks the right table stage.
 - `fc01_dummy` is read (flat `fogColour`). Still open: one
   `fc01_Effects_VScroll_Emissive` vertex program for the scroll sign, and a
   Vita3K capture of 2048's own Altima Zone (campaign progress needed) to confirm the fog colour is what the engine binds. `BloomFactor`/`BloomGate`/`Exposure*` authored in every `track.EnvSettings` stay unread: their consumer is the composite (`wo_composite_zone_fp`, USSE), whose arithmetic is unread.

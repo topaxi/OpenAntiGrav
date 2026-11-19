@@ -652,6 +652,21 @@ pub struct Zone {
     /// writes, carried here rather than in a texture and interpolated in the
     /// shader the way a linear, clamped lookup into a 17-texel strip reads.
     pub aniso: [ZoneRamp; 4],
+    /// The showing stage's eight `Zone_Colour<k>` in `.rgb` and
+    /// `Zone_Colour<k>_Emissive` in `.w`, index `k - 1`, for the 2048
+    /// `zonefc06_colour_emissive_scalar` surfaces. A vertex marks itself with
+    /// `colour.a = 1 + k` ([`crate::mesh::rcs::psp2::ZONE_COLOUR_ALPHA`]) and
+    /// reads its entry here when [`Self::stage_light`]'s first `.w` is `1.0`;
+    /// otherwise it keeps the material's own authored colour. All zero on
+    /// every title whose Zone table does not author the keys.
+    pub stage_colours: [[f32; 4]; 8],
+    /// What those surfaces are lit by: `constantAmbientColour` (`.w` is `1.0`
+    /// when the stage colours are in force), `liveLighting0diffuse` and
+    /// `liveLighting0direction`, the three title-wide `Lighting.*` keys of
+    /// 2048's Zone table. The surface is `Zone_Colour * (ambient + sun *
+    /// max(N.L, 0) + Emissive)`
+    /// (`docs/formats/2048-material-params.md`, "The Zone surface").
+    pub stage_light: [[f32; 4]; 3],
 }
 
 /// One 17-texel `zoneAnisoPalette` ramp, `.w` unused. See [`Zone::aniso`].
@@ -1010,8 +1025,8 @@ impl Scene {
 }
 
 const _: () = assert!(
-    std::mem::size_of::<Zone>() == 224 + 32 + 4 * 17 * 16,
-    "shaders/types.wesl's Zone is two vec4s, four three-vec4 sets, two vec4s and four 17-vec4 ramps"
+    std::mem::size_of::<Zone>() == 224 + 32 + 4 * 17 * 16 + 8 * 16 + 3 * 16,
+    "shaders/types.wesl's Zone is two vec4s, four three-vec4 sets, two vec4s, four 17-vec4 ramps, eight stage colours and three lights"
 );
 const _: () = assert!(
     std::mem::offset_of!(Scene, zone).is_multiple_of(16),

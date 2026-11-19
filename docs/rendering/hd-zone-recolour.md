@@ -276,3 +276,39 @@ bays.
 archives only. Whether 2048's PSP2 programs or Omega's Zone variants add a
 light-bar term is open; this port's `_ne` path (`mesh::rcs::pad_ne`) binds on
 HD materials alone, so neither title's picture moved.
+
+## On 2048's container (2026-11-19, `zone-road-2048-omega`)
+
+An HD circuit that 2048 (DLC1's `Vineta_K`) or Omega (`01_vineta_k`) ships in its own container draws
+HD's recolour: DLC1's fragment programs declare HD's Zone family (`zoneEffectInner`, `zoneTexInner`,
+`zoneOrigin`, `zoneColourTint`, `zoneAnisoLookupTex`) and none of 2048's `zoneGrowing*`
+([2048-material-params.md](../formats/2048-material-params.md), "The Zone surface"). What the
+container lacked was HD's per-chunk Scene/Track choice (the render-block bit above): without it every
+chunk took the `Scene` group, so the road drew `Scene.Texture Colour` flat, a pale sheet
+(`2048-vita/zone-dlc-vineta-k-z5` 86.04, the road boxes' mean grey 161 and 135 against the original's
+93 and 58).
+
+The mesh object's `+0x0a` flags are `0x0101` or `0x0201` on the road and on everything else alike
+(DLC1 Vineta K, 1,822 mesh objects: no material correlates), so they are not the bit. **The shape name
+stands in: a mesh object whose Maya shape name contains `track` (`wohdtrackShape`, `TRACK_0Shape`,
+`TRACK_Shape`) takes the Track group** (`oag_mesh::mesh::rcs::psp2::is_track_shape`). **Chosen, not
+measured**: no confidence score. The result is the original's picture in structure: dark road, the
+stage's yellow line, the lime wall (Scene group) beside it. The hash join to HD's own
+chunks does not exist (0 of 1,822 DLC1 mesh hashes meet HD's 1,811 chunk hashes), so the rule could not be
+checked against HD's `is_track` chunk by chunk.
+
+| pair | before | after | road box left / right, mean grey: original, before, after |
+| --- | ---: | ---: | --- |
+| `2048-vita/zone-dlc-vineta-k-z5` | 86.04 | 62.92 | 93 / 58, 162 / 135, 38 / 25 |
+| `omega/zone-vineta-k-z5` | 74.25 | 72.92 | 39 / 53, 118 / 94, 30 / 47 |
+
+**Omega's colour is still wrong, and the stage is the suspect.** The structure matches (dark road,
+lime lines) but the hue is HD's Flash purple where the original is olive green (frame mean
+`87 103 39`). Rendered at each of stages 1 to 12, none matches; the closest is stage 9 (`71 63 25`,
+mean absolute difference 52.5 against 71.4 at stage 4, the stage HD's ladder gives at zone 5). Omega's
+Zone HUD table and stage writer are unread (the ladder is inherited from HD, `oag_omega::race`), so
+this is a lead for the Omega Zone lane, not a wire: one frame cannot pick the ladder. rmse
+0.340 -> 0.372 on that pair is this hue gap.
+
+**HD is unchanged**: `hd/zone-vineta-k-z5` re-rendered with this change is pixel-identical to main's
+(0 of 2,073,600). The rule lives in the psp2 loader, which HD never takes.

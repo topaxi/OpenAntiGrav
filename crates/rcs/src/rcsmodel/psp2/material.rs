@@ -334,9 +334,16 @@ impl Material {
     /// without one.
     #[must_use]
     pub fn zone_colour(&self) -> Option<[f32; 3]> {
-        (1..=8).find_map(|n| {
+        self.zone_colour_slot().map(|(_, colour)| colour)
+    }
+
+    /// [`Self::zone_colour`] with its slot number `N` (`1..=8`), the `k` of the
+    /// stage table's `Colour <k>.Colour`.
+    #[must_use]
+    pub fn zone_colour_slot(&self) -> Option<(u8, [f32; 3])> {
+        (1..=8u8).find_map(|n| {
             let v = self.param(crate::rcsmaterial::name_hash(&format!("Zone_Colour{n}")))?;
-            Some([*v.first()?, *v.get(1)?, *v.get(2)?])
+            Some((n, [*v.first()?, *v.get(1)?, *v.get(2)?]))
         })
     }
 

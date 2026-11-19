@@ -401,6 +401,42 @@ fn a_2048_zone_race_escalates_on_the_recovered_ladder() {
     );
 }
 
+/// **The Flash stage's `Colour 7` and the Zone light reach the uniform, off the real table.**
+/// `Zone_Colour7` is the material default yellow `(1, 1, 0)`; the stage authors
+/// `"Zone 2 Flash.Colour 7.Colour"=1.000000 0.035294 0.125490` and `.Emissive=0.100000`, which
+/// is what the original's Zone frame draws (a red tower sphere, not yellow slabs).
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_2048_zone_race_publishes_the_flash_stages_zone_colours() {
+    let Some(mut archives) = open_2048() else {
+        return;
+    };
+    let palette = oag_2048::race::DEFAULTS
+        .zone_palette
+        .expect("2048 ships a table");
+    let name = palette
+        .entry_for(oag_2048::race::DEFAULT_TRACK)
+        .expect("the circuit's own directory");
+    let text = String::from_utf8(archives.read_name(&name).expect("the table")).expect("UTF-8");
+    let table = oag_tables::effectsettings::EffectSettings::parse(&text).expect("it parses");
+    let mut grade = race::zone_grade::ZoneGrade::new(
+        name,
+        table,
+        oag_2048::race::DEFAULTS.zone_stages,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("it names stages");
+    // Zone 5 is class 2, `Flash` (`2048`'s own HUD reads FLASH there).
+    grade.show_zone(5);
+    assert_eq!(grade.blend().current, 2);
+    let zone = grade.zone_uniform();
+    assert_eq!(zone.stage_colours[6], [1.0, 0.035_294, 0.125_49, 0.1]);
+    assert_eq!(zone.stage_colours[0][3], 0.2, "Colour 1's emissive");
+    assert_eq!(zone.stage_light[0], [0.603_922, 0.588_235, 0.588_235, 1.0]);
+    assert_eq!(zone.stage_light[1][..3], [0.984_314; 3]);
+}
+
 /// The base Vita package, or `None` with a printed reason.
 fn open_2048() -> Option<oag_assets::Archives> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))

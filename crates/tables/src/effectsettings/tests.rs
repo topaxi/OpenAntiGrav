@@ -275,3 +275,30 @@ fn a_key_the_previous_stage_omits_keeps_the_current_stages_value() {
         "only stage 1 authors it"
     );
 }
+
+#[test]
+fn a_2048_stage_reads_its_eight_zone_colours_and_the_title_wide_light() {
+    let text = concat!(
+        "\"Lighting.Constant Ambient Colour\"=0.603922 0.588235 0.588235\n",
+        "\"Lighting.Sun diffuse colour\"=0.984314 0.984314 0.984314\n",
+        "\"Lighting.Sun direction\"=-0.802630 0.469582 0.367802\n",
+        "\"Zone 2 Flash.Colour 1.Colour\"=0.129412 1.000000 0.847059\n",
+        "\"Zone 2 Flash.Colour 1.Emissive\"=0.200000\n",
+        "\"Zone 2 Flash.Colour 7.Colour\"=1.000000 0.035294 0.125490\n",
+        "\"Zone 2 Flash.Colour 7.Emissive\"=0.100000\n",
+    );
+    let e = EffectSettings::parse(text).expect("it parses");
+    let colours = e.zone_colours(2);
+    let seven = colours[6].expect("colour 7 is authored");
+    assert_eq!(seven.colour, [1.0, 0.035_294, 0.125_49]);
+    assert_eq!(seven.emissive, 0.1);
+    assert_eq!(colours[0].map(|c| c.emissive), Some(0.2));
+    assert!(colours[1].is_none(), "colour 2 is not authored");
+    let light = e.zone_lighting().expect("the three light keys");
+    assert_eq!(light.ambient, [0.603_922, 0.588_235, 0.588_235]);
+    assert_eq!(light.direction, [-0.802_63, 0.469_582, 0.367_802]);
+    // HD's vocabulary has none of these keys.
+    let hd = EffectSettings::parse(HD_EXCERPT).expect("it parses");
+    assert!(hd.zone_colours(0).iter().all(Option::is_none));
+    assert!(hd.zone_lighting().is_none());
+}

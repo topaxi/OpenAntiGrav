@@ -67,6 +67,27 @@ fn parse_stage_head(head: &str) -> Option<(u32, &str)> {
     Some((index, name))
 }
 
+/// One stage's `Zone_Colour<k>` and `Zone_Colour<k>_Emissive`, as
+/// [`EffectSettings::zone_colours`] reads them.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ZoneColour {
+    /// `Colour <k>.Colour`, red, green and blue; not clamped.
+    pub colour: [f32; 3],
+    /// `Colour <k>.Emissive`.
+    pub emissive: f32,
+}
+
+/// The light a 2048 Zone surface takes, [`EffectSettings::zone_lighting`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ZoneLighting {
+    /// `Lighting.Constant Ambient Colour`.
+    pub ambient: [f32; 3],
+    /// `Lighting.Sun diffuse colour`.
+    pub sun: [f32; 3],
+    /// `Lighting.Sun direction`, in the file's own convention.
+    pub direction: [f32; 3],
+}
+
 /// Everything one `.effectSettings`/`.effectsettings` file says.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct EffectSettings {
@@ -225,6 +246,32 @@ impl EffectSettings {
                 .or_else(|| self.stage_rgb(stage, key::SKY_ZENITH_COLOUR_2048)),
             eq_colour_tint: self.stage_rgba8(stage, key::EQ_COLOUR_TINT),
             eq_analogue_colour_tint: self.stage_rgba8(stage, key::EQ_ANALOGUE_COLOUR_TINT),
+        })
+    }
+
+    /// The eight `Zone_Colour<k>` values and `Zone_Colour<k>_Emissive` scalars
+    /// of one stage, index `k - 1`. `None` for a colour the stage does not
+    /// author, which every HD table is: only 2048's file spells these keys.
+    #[must_use]
+    pub fn zone_colours(&self, stage: u32) -> [Option<ZoneColour>; 8] {
+        std::array::from_fn(|i| {
+            let k = (i + 1).to_string();
+            let colour = self.stage_rgb(stage, &key::ZONE_COLOUR_2048.replace("{}", &k))?;
+            let emissive = self
+                .stage_scalar(stage, &key::ZONE_COLOUR_EMISSIVE_2048.replace("{}", &k))
+                .unwrap_or(0.0);
+            Some(ZoneColour { colour, emissive })
+        })
+    }
+
+    /// The title-wide light a 2048 Zone surface is lit by, or `None` unless the
+    /// file authors all three keys.
+    #[must_use]
+    pub fn zone_lighting(&self) -> Option<ZoneLighting> {
+        Some(ZoneLighting {
+            ambient: self.table.vec3(key::ZONE_AMBIENT_2048)?,
+            sun: self.table.vec3(key::ZONE_SUN_DIFFUSE_2048)?,
+            direction: self.table.vec3(key::ZONE_SUN_DIRECTION_2048)?,
         })
     }
 
@@ -422,6 +469,20 @@ pub mod key {
     /// drawn**: what selects environment or track is unrecovered, so the primary
     /// pair is used, as `.envsettings`' reader does.
     pub const TRACK_FOG_COLOUR_2048: &str = "Fog.Track Fog Colour";
+    /// `Colour <k>.Colour`, `k` in `1..=8`, on 2048: the showing stage's value of
+    /// the `Zone_Colour<k>` parameter of the `zonefc06_colour_emissive_scalar_0<k>`
+    /// materials (`docs/formats/2048-material-params.md`, "The Zone surface").
+    /// `{}` is `k`.
+    pub const ZONE_COLOUR_2048: &str = "Colour {}.Colour";
+    /// `Colour <k>.Emissive` on 2048: the stage's `Zone_Colour<k>_Emissive`.
+    pub const ZONE_COLOUR_EMISSIVE_2048: &str = "Colour {}.Emissive";
+    /// 2048's title-wide Zone ambient, `constantAmbientColour` of the Zone
+    /// fragment programs. No stage prefix.
+    pub const ZONE_AMBIENT_2048: &str = "Lighting.Constant Ambient Colour";
+    /// 2048's title-wide Zone sun, `liveLighting0diffuse`. No stage prefix.
+    pub const ZONE_SUN_DIFFUSE_2048: &str = "Lighting.Sun diffuse colour";
+    /// 2048's title-wide Zone sun direction, `liveLighting0direction`. No stage prefix.
+    pub const ZONE_SUN_DIRECTION_2048: &str = "Lighting.Sun direction";
     /// 2048's spelling of [`SKY_HORIZON_COLOUR`]. Read, not drawn.
     pub const SKY_HORIZON_COLOUR_2048: &str = "Sky.Horizon Colour";
     /// 2048's spelling of [`SKY_ZENITH_COLOUR`]. Read, not drawn.

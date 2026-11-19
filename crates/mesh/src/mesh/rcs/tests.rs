@@ -236,3 +236,22 @@ fn the_report_names_both_kinds_of_absence() {
         "a circuit is mostly this, so the line has to say it: {line}"
     );
 }
+
+#[test]
+fn a_shape_with_track_in_its_name_is_track_surface() {
+    use super::psp2::is_track_shape;
+    for name in [
+        "wohdtrackShape",
+        "TRACK_0Shape",
+        "weapon_pad_wohdtrack_016Shape",
+    ] {
+        assert!(is_track_shape(name), "{name}");
+    }
+    for name in [
+        "polySurfaceShape",
+        "tunnel_understruts2_3Shape_nova",
+        "MOUNTAIN_01Shape",
+    ] {
+        assert!(!is_track_shape(name), "{name}");
+    }
+}

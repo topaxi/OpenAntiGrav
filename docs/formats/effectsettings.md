@@ -266,6 +266,12 @@ reversible and none of them a substitution for authored values:
   left with the stand-in rather than given an invented direction to hang a
   stage colour on.
 
+**2026-11-19: 2048's `Colour <k>.Colour`/`.Emissive` and the three title-wide `Lighting.*`
+keys draw.** They are the per-stage `Zone_Colour<k>` and `Zone_Colour<k>_Emissive` of the
+`zonefc06_colour_emissive_scalar` materials and the Zone light those surfaces take
+([2048-material-params.md](2048-material-params.md), "The Zone surface"). Omega's copy of the table
+is byte-identical: checked, applies, not wired.
+
 **What still draws off nothing**: `Sky horizon/zenith colour` (this engine's
 HD sky is the `sky.gtf` cubemap, which has no horizon/zenith term), the
 `Track.*` colours, the EQ tints and the `Growing Texture` parameters. All are

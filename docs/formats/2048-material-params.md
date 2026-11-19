@@ -74,7 +74,7 @@ and probes. Its 6,349 submeshes:
 
 **What is drawn, and what is chosen, not measured:**
 
-- **Revised 2026-10-27: not flat.** The instruction listing ([gxp.md](gxp.md#the-instruction-stream)) reads
+- **Revised 2026-10-27: not flat** (the road is `fogColour * (1 - visibility)`, see "The Zone surface"). The instruction listing ([gxp.md](gxp.md#the-instruction-stream)) reads
   the setup op as `-fogColour + 0`, not a clamp, so the pixel is `fogColour * (1 - f)` with `f` the vertex
   program's exponential-squared fog visibility (1 near, 0 far): black near, `fogColour` in the distance.
   The paragraph below is the 2026-10-19 reading and is wrong on this point; the renderer's `FOG_FLAT`
@@ -130,12 +130,9 @@ and probes. Its 6,349 submeshes:
   Omega's Zone race is not wired (`is_ps4` passes the Zone model over), so
   nothing draws it; reading the 216-byte program through to its packed
   channels is the open step.
-- **`Zone_ColourN` is drawn as the surface's colour, unlit.** The fragment
-  program also declares a lightmap and `liveLighting0`, so lit is the other
-  candidate. Both were drawn on `altima`: lit, the colour is multiplied by a sun
-  of `2.0 1.8 1.7` and every surface blows out to white; unlit, the eight
-  colours read as eight colours. The `0.5` emissive scalar is read and not
-  applied.
+- **`Zone_ColourN` is `Colour * (ambient + sun * max(N.L, 0) + Emissive)`, with the stage's own
+  colour** - see "The Zone surface" below. (The 2026-10-05 reading drew the material's static colour
+  unlit, "chosen, not measured".)
 - **`zonefc07_cube_animation_1`'s 2,302 hidden nodes stay hidden.** Their
   visibility is the skeleton's own, and the clip shows none of them; what shows
   them in the original (the zone counter, the music) is not read.
@@ -152,6 +149,75 @@ DLC1, DLC2, ships and skies included) and Omega's 1,150, so `build`'s skip and
 colour reach no other model (`the_placeholder_and_the_zone_colours_exist_only_in_the_zone_models`).
 Likewise the 355 glow-layer materials' sampler-named diffuse is always the
 diffuse the older scan already picked, so the layer changes no texture.
+
+## The Zone surface (2026-11-19, `zone-road-2048-omega`)
+
+What a Zone race on `altima` draws for the 1,587 `zonefc06_colour_emissive_scalar_0N`
+submeshes, and what it does not know. Read with `scripts/vita-usse.py disasm` on
+`base/PSP2/data.psarc:zonefc06_colour_emissive_scalar_07.rcsmaterial`.
+
+**The law (confidence 85).** The unlightmapped fragment variants (the ones the Zone model needs:
+none of its 1,587 submeshes carries `lightmapUV` or a vertex colour, measured) compute, per fragment:
+
+```text
+#1  (ambient only; pri 3, sec 4)          #62 (live lighting; pri 13)
+secondary: sa4 = ambient * Zone_ColourN   r0 = max(N.L, 0) * liveLighting0diffuse + ambient
+           sa0 = Zone_ColourN * Emissive  pa0 = r0 * Zone_ColourN
+                 + sa4                    r0 = Zone_ColourN * Emissive + pa0
+           sa0 = sa0 - fogColour          pa0 = (r0 - fogColour) * visibility + fogColour
+primary:   pa0 = vis * sa0 + fogColour
+```
+
+So `Zone_ColourN * (ambient + sun * sat(N.L) + Emissive)` under the exponential-squared fog. The
+lightmapped variants (#14, #16, #20, #22) add `novaScaleBiasPower`; the Zone model never takes them.
+
+**Where the values come from (confidence 75: by name, plus the frame).** Each parameter has a
+same-named key per stage in `ZoneMode2048.effectSettings`: `"Zone 2 Flash.Colour 7.Colour"` and
+`".Emissive"` are the stage's `Zone_Colour7` and `Zone_Colour7_Emissive` (eight each; `Colour 8` is
+black, emissive 0), and the three title-wide keys `Lighting.Constant Ambient Colour` (0.60 0.59
+0.59), `Lighting.Sun diffuse colour` (0.98) and `Lighting.Sun direction` are `constantAmbientColour`,
+`liveLighting0diffuse` and `liveLighting0direction`. The material's own `Zone_ColourN` (Colour 7 is
+yellow `1 1 0`, 817 of the 1,587 submeshes) is the default the stage overrides: at Flash (zone 5) it
+is red `1 0.035 0.125` with emissive 0.1. Evidence: the `altima` Zone frame (`2048-vita/zone-altima-z5`)
+shows a pink-ringed tower and cyan bands where the static colours drew blue and yellow.
+Per-region mean absolute grey difference to the original, hills and tower box (0,60)-(460,250):
+62.3 before, 46.4 after; the whole frame's mean grey difference 112.94 before, 48.50 after.
+The old "lit blows out to white" was the circuit's own sun (2.0 1.8 1.7) on the lit law; the Zone
+light is the title-wide block above.
+
+**Wired:** `oag_tables::effectsettings::EffectSettings::zone_colours`/`zone_lighting`,
+`oag_raceplay::zone_grade::ZoneGrade::zone_uniform` (`stage_colours`, `stage_light`), a
+`Zone_ColourN` vertex's `colour.a = 1 + N` (`oag_mesh::mesh::rcs::psp2::ZONE_COLOUR_ALPHA`) and
+`shade.wesl`'s early return. It follows the showing stage; HD tables spell none of the keys, so
+no HD draw takes it (`hd/zone-vineta-k-z5` is pixel-identical, 0 of 2,073,600).
+
+**`fc01_dummy` (the road and walls) is `fogColour * (1 - visibility)`**, as `gxp.md` reads it: black
+near, the fog colour far. Our flat colour (the circuit's authored fog, fixed at load) stays; which of the
+stage's two fogs the engine binds as `fogColour` (`Fog.Environment Fog Colour` or `Fog.Track Fog Colour`,
+density in the fourth lane) is unread. The original's far road strip reads `(214, 245, 18)`, the stage's
+`Track Paint.Primary Colour` (0.83 1.0 0.16) to the digit, which no fog explains: open.
+
+**The `zoneGrowing*` programs are not the Zone look of these materials.** Every 2048 material also
+declares `zoneGrowingTexture`, `zoneGrowingPaletteScene`/`Track` and `zoneGrowingTextureFactors`, and
+the base package carries fragment variants that sample them (e.g. `Weapon_Pads` #59/#61, the
+no-diffuse road-family #37/#64 on `zonefc06_colour_emissive_scalar_07`: a palette lookup of the growing
+texture, lit). They are the "growing" accent the stage table's `Growing Texture.Colour/Scale
+Bias/Factors` drives; their palette textures' source is unread (HD's `Aniso` keys are not in 2048's
+table), and the `zonefc06` variants above are what the surfaces named here run.
+
+**An HD-lineage circuit on 2048 or Omega** (DLC1's Vineta K, Omega's `01_vineta_k`) is another case:
+DLC1's fragment programs declare HD's Zone family (`zoneEffectInner`, `zoneTexInner`, `zoneOrigin`,
+`zoneColourTint`, `zoneAnisoLookupTex`: counts 2,600 / 1,228 / 1,889 / 4,717 / 2,672 over the
+package) and none of `zoneGrowing*`, so HD's recolour (`docs/rendering/hd-zone-recolour.md`) is the
+right law there, and what was missing was HD's per-chunk Scene/Track choice. See that page, "On 2048's
+container".
+
+**Omega, checked.** `Data/environments2048/altima/ZoneMode2048.effectSettings` is byte-identical to
+the Vita file (md5 `fe2e1314576fd8b94ab764581e2499cd`, 43,812 bytes), and the ten `trackZone` models
+carry the same `zonefc06` material names with `Zone_ColourN` (above). The GCN fragment programs of
+those materials are unread (the `fc01_Dummy` ones are listed above as packed three-target exports), and
+Omega's Zone model is passed over by the loader, so this is **checked, applies, not wired**: same data,
+program arithmetic unread on GCN.
 
 ## The picture is the sampler named `DiffuseMap`, then the first in file order
 

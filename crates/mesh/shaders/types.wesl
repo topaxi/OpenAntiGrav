@@ -176,6 +176,11 @@ struct Zone {
     // Scene inner, Scene outer, Track inner, Track outer: 17 texels each.
     // See `mesh_render::Zone::aniso` and `zone_aniso` in `zone.wesl`.
     aniso: array<vec4<f32>, 68>,
+    // 2048's `Zone_Colour<k>` (rgb) and `Zone_Colour<k>_Emissive` (w) of the
+    // showing stage, and the light they take: ambient (`.w` 1.0 when the
+    // stage colours are in force), sun diffuse, sun direction.
+    stage_colours: array<vec4<f32>, 8>,
+    stage_light: array<vec4<f32>, 3>,
 };
 
 // Wipeout HD's SPU vertex lights, in the record layout `SpuLight_AddCandidate`
