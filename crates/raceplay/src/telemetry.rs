@@ -97,6 +97,23 @@ impl RaceSim {
 
 impl Race {
     #[cfg(feature = "view")]
+    /// The other craft as the 2048 dialect's radar places them, relative to `slot`'s craft:
+    /// dot `N` follows grid slot `N` (`oag_hud::radar`). A slot past the field, `slot` itself and
+    /// a craft sitting on `slot`'s hide their dots.
+    fn radar_blips(&self, slot: usize) -> [Option<oag_hud::radar::Blip>; oag_hud::radar::DOTS] {
+        let world = &self.core.sim.world;
+        let me = &world.ships[slot].physics.body;
+        let (forward, right) = (me.forward().to_array(), me.right().to_array());
+        std::array::from_fn(|other| {
+            if other == slot || other >= usize::from(world.ship_count) {
+                return None;
+            }
+            let offset = world.ships[other].physics.body.position - me.position;
+            oag_hud::radar::Blip::from_offset(offset.to_array(), forward, right)
+        })
+    }
+
+    #[cfg(feature = "view")]
     /// What the HUD shows, as of the last tick.
     ///
     /// Separate from [`Telemetry`], which is a log line and carries diagnostics
@@ -277,6 +294,7 @@ impl Race {
             boost_phase: (self.exhaust_of(slot).boost_timer() / oag_fx::exhaust::BOOST_SECONDS)
                 .clamp(0.0, 1.0),
             now_playing: if primary { self.now_playing() } else { None },
+            radar_blips: self.radar_blips(slot),
         };
         if let Some(hud) = self.view.capture_hud.filter(|_| primary) {
             readout.place = hud.place;

@@ -53,30 +53,58 @@ once listed `Radar` and `PlayerDot` as "never seen in any state reached" while r
 ring round the hull" as unmatched: they are the same thing, seen and not recognised. The time-trial
 and Zone roots include no radar file.
 
-## The dots: read, not wired
+## The dots: read, and wired
 
-**Confidence 75** (one executable's decompile, consistent with its bind; no capture with an
-opponent behind the player).
+**Confidence 90** (the 1.07 patch executable's dot loop disassembled, its constants read out of the
+file, and 2048's own update decompiled with the same law; no capture with an opponent behind the
+player, so the sign of `x` against a real frame is open, below).
 
-Omega's 2048-dialect update `FUN_012d3c50` (`0x012d5737`, `0x012d5820`) places the dots, gated on
-the HUD's flag word `hud+0x30 & 0x30000` (`0x10000` set: the full radar). For each other craft:
+Omega's 2048-dialect update (patch file offsets `0x2da8e5` to `0x2dac90`, which is `0x012d68e5` to
+`0x012d6c90` at the loader's base `0x01000000`; the earlier cited `0x012d5737`, `0x012d5820` and
+`DAT_0186e838` are `0x1430` below where the bytes are, so they were read off a shifted view) places
+the dots, gated on the HUD's flag word `hud+0x30 & 0x30000` (`0x10000` set: the full radar). Dot
+`N` follows grid slot `N` (the loop matches each craft's slot byte against `N`); the player's own
+slot, an absent slot and a craft whose state word is not `1` hide theirs. For each other craft:
 
 1. `d` = its position less the player's; `f` = `d` normalised, dotted with the player's forward
-   axis; `t = min(|d| / 200, 1)`.
+   axis (the frame row at `+0x30`); `r` the same against the row at `+0x10` (the right axis);
+   `t = min(|d| / 200, 1)`, `200.0` being `hud+0x8f8`.
 2. On the half radar a craft is placed only when `f < 0` (behind); the full radar places all.
-3. `x = -(t * (normalised d . right) * half_width)`; `y = f * t * half_height`, then times `-0.5`
-   when `f >= 0`, else times a per-radar constant (`DAT_0186e838`, indexed by the full flag).
-4. Alpha: half radar `255 - 127.5 * t` within range and 0 beyond; full radar
-   `max(1 - t, 0.2) * 255`. The colour is white with that alpha.
+3. `x = -(t * r * half_width)`; `y = f * t * half_height`, then times `-0.5` when `f >= 0`, else
+   times a per-radar float indexed by the full flag. **The table is `{-2.0, -1.0}`**, read at patch
+   file offset `0x873c68` (`0x86fc68`): the half radar's `-2.0` puts a craft at the rim dead behind
+   `54` layout pixels below the radar's top edge, the bowl's own height, and the full radar's `-1.0`
+   puts one at the ellipse's far edge.
+4. Alpha, truncated to a byte: half radar `255 - 127.5 * t` within range and `0` when `|d| > 200`;
+   full radar `max(1 - t, 0.2) * 255`. The colour is white with that alpha.
 
-On a grid where the player starts last, no craft is behind, so no dot draws: the grid frames need
-only `Radar` and `PlayerDot`.
+`half_width` and `half_height` are half the `Radar` rectangle (`98.625 x 27` on the half radar,
+`97.875 x 52.5` on the full one, `Elimination_HUD.xml`'s `Radar` `382.125, 404.5, 195.75 x 105`).
+Every `RadarDotN` is authored 21.75 x 8.25 centred on the radar's origin: the half radar's top-edge
+centre `(480, 439)`, the full radar's ellipse centre `(480, 457)`. Their sprite is the original's
+own dot art (a red disc in a white ring, `hud_2048.2x.gxt` `264, 1968, 116 x 44`).
+
+**2048 against Omega: ported.** 2048's update is `FUN_81194cfa` (`0x81194cfa`, on the v1.04
+executable): the same loop over the grid slots, the full flag from `hud+0x10 & 0x10000`, `200.0` at
+`hud+0x6dc` and half sizes at `hud+0x6d4`/`+0x6d8` as the bind stores them, the `255 * (1 - 0.5 t)`
+and `max(1 - t, 0.2) * 255` alphas, `-0.5` ahead, `-2.0` (`0x40000000` pushed beside the product)
+behind on the half radar and `1.0` on the full. The earlier note that the `0x6dc` range had no
+float-load hit was a search that missed the `movw r0, #0x6dc` / `add` addressing this function
+uses (`0x81194e60`, `0x81194f42`).
+
+**Not checked against a capture.** No frame of the original with an opponent behind the player
+exists in the checked-in captures, and the 1.07 loop reads the player's frame rows at `+0x10` and
+`+0x30` without naming which of our axes the original's handedness maps them to: ours takes them as
+right and forward, so a craft behind and to the right draws left of the origin. Forward is
+physical, so `f` (which dots draw at all, and their depth) does not depend on that; only the sign
+of `x` does.
 
 ## Wired
 
 `oag_2048::hud::ALWAYS_ON` and `oag_omega::hud::ART_2048.always_on` carry `Radar` and
-`PlayerDot`. Tests: `vita_2048_hud_ground_truth::the_played_single_race_draws_the_half_radar_round_the_craft`,
-`omega_hud_ground_truth::omega_2048_mode_draws_the_half_radar_round_the_craft`.
+`PlayerDot`; the dots are `oag_hud::radar` (the law, `radar_tests.rs`), fed by
+`oag_raceplay::Race::radar_blips` through `Readout::radar_blips`. Tests: `vita_2048_hud_ground_truth::the_played_single_race_draws_the_half_radar_round_the_craft`,
+`omega_hud_ground_truth::omega_2048_mode_draws_the_half_radar_round_the_craft`, and for the dots `omega_hud_ground_truth::omega_2048_mode_draws_a_radar_dot_for_a_craft_behind` and `vita_2048_hud_ground_truth::the_played_single_race_places_the_radar_dots_by_the_law`.
 
 Hull box (1080p `760x420+580+640`; the Vita pair at 960x544, `380x210+290+330`), mean absolute
 error per channel against the original, ours before and after, both rendered from the same tree:

@@ -385,8 +385,8 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
 ///   Assist was switched to Extreme in the options; absent at Normal.
 /// - `ZoneLight0`-`9` and `ZoneSpeedLogo`: lit per zone, and never seen (the
 ///   class was drawn as text, `VENOM`/`FLASH`, not as the badge).
-/// - `RadarDot0`-`7`: the opponents behind the craft on the radar, placed and faded per tick
-///   (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`); not drawn yet.
+/// - `RadarDot0`-`7`: the opponents behind the craft on the radar, placed and faded per tick by
+///   `oag_hud::radar` (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`).
 /// - `ManualShield`, `GiftCannon*`, `TargetShip*`, `TargetReticule*`,
 ///   `ReverseShipPos*`, `VoiceCom*`, `ObjectivePoint*`, `GloryMoment*`,
 ///   `ProtoTypeShipLogo`, `SpeedPad*`, `RaceMedal`, `MissileSight*`,

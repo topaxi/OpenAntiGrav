@@ -458,3 +458,40 @@ fn the_played_single_race_draws_the_half_radar_round_the_craft() {
         assert!(oag_2048::hud::ALWAYS_ON.contains(&name), "{name}");
     }
 }
+
+/// **2048 runs the radar dots by the same law as Omega** (`docs/ghidra/functions/ps4-omega-eu/
+/// hud-radar.md`, "The dots"; 2048's update is `FUN_81194cfa`, same constants): every `RadarDotN`
+/// is authored centred on the half radar's top edge, so a craft 200 units dead behind lands one
+/// radar-height (72 layout pixels) below it at half alpha, and nothing is drawn for a field with no
+/// blip. Dropping `Radar` from `oag_2048::hud::ALWAYS_ON` fails this.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_played_single_race_places_the_radar_dots_by_the_law() {
+    let Some(mut archives) = open() else {
+        return;
+    };
+    let layout = composed(&mut archives, oag_2048::hud::skins::played::ARCADE).layout;
+    let radar = layout.sprite("Radar").expect("Radar");
+    for i in 0..oag_hud::radar::DOTS {
+        let dot = layout.sprite(&format!("RadarDot{i}")).expect("RadarDot");
+        assert_eq!(dot.rect[0] + dot.rect[2] * 0.5, 480.0, "RadarDot{i} x");
+        assert_eq!(
+            dot.rect[1] + dot.rect[3] * 0.5,
+            radar.rect[1],
+            "RadarDot{i} y"
+        );
+    }
+    let mut readout = oag_hud::Readout::blank();
+    assert!(oag_hud::radar::dot_sprites(&layout, oag_2048::hud::ART, &readout).is_empty());
+    readout.radar_blips[5] = oag_hud::radar::Blip::from_offset(
+        [0.0, 0.0, oag_hud::radar::RANGE],
+        [0.0, 0.0, -1.0],
+        [1.0, 0.0, 0.0],
+    );
+    let dots = oag_hud::radar::dot_sprites(&layout, oag_2048::hud::ART, &readout);
+    let base = layout.sprite("RadarDot5").expect("RadarDot5");
+    assert_eq!(dots.len(), 1);
+    assert_eq!(dots[0].name, "RadarDot5");
+    assert!((dots[0].rect[1] - base.rect[1] - radar.rect[3]).abs() < 1e-3);
+    assert!((dots[0].color[3] - 127.0 / 255.0).abs() < 1e-3);
+}

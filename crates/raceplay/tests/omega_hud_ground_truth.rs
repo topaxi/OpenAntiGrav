@@ -727,3 +727,61 @@ fn omega_2048_mode_draws_the_half_radar_round_the_craft() {
         assert!(oag_omega::hud::ART_2048.always_on.contains(&name), "{name}");
     }
 }
+
+/// **The 2048-mode radar draws the dot of a craft behind the player where the law puts it**
+/// (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`, "The dots"): a craft 100 units dead behind
+/// is `RadarDot3`'s sprite moved down by `0.5 * 54` (`t = 0.5`, `y = f * t * half_height * -2`),
+/// 191/255 white, and a readout with no blip draws no dot. Dropping the dot draw from the HUD's
+/// list, or `Radar` from `ART_2048.always_on`, fails this.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omega_2048_mode_draws_a_radar_dot_for_a_craft_behind() {
+    if omega().is_none() {
+        return;
+    }
+    let loaded = load_on(ALTIMA_2048, "venom");
+    let context = loaded.hud.context().expect("the layout parses");
+    let mut readout = oag_hud::Readout::blank();
+    let without = oag_hud::draw_list(&context, &readout);
+    readout.radar_blips[3] =
+        oag_hud::radar::Blip::from_offset([0.0, 0.0, 100.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]);
+    let with = oag_hud::draw_list(&context, &readout);
+    assert_eq!(with.sprites.len(), without.sprites.len() + 1);
+    let layout = loaded.hud.layout.as_ref().expect("the layout composes");
+    let dot = layout.sprite("RadarDot3").expect("RadarDot3");
+    let drawn = with
+        .sprites
+        .iter()
+        .find(|draw| !without.sprites.contains(draw))
+        .expect("the extra draw");
+    let oag_ui::frontend::Draw::Sprite { rect, color, .. } = drawn else {
+        panic!("a sprite: {drawn:?}");
+    };
+    let scale = rect[2] / dot.rect[2];
+    // At the rim (200 units) the same dot sits 27 layout pixels lower still and is 127/255 white.
+    readout.radar_blips[3] =
+        oag_hud::radar::Blip::from_offset([0.0, 0.0, 200.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]);
+    let rim = oag_hud::draw_list(&context, &readout);
+    let oag_ui::frontend::Draw::Sprite {
+        rect: rim_rect,
+        color: rim_color,
+        ..
+    } = rim
+        .sprites
+        .iter()
+        .find(|draw| !without.sprites.contains(draw))
+        .expect("the rim draw")
+    else {
+        panic!("a sprite");
+    };
+    assert!(
+        (rim_rect[0] - rect[0]).abs() < 1e-3,
+        "straight behind stays on x"
+    );
+    assert!(
+        ((rim_rect[1] - rect[1]) / scale - 27.0).abs() < 1e-2,
+        "{rect:?} -> {rim_rect:?} at {scale}"
+    );
+    assert!((rim_color[3] - 127.0 / 255.0).abs() < 1e-3, "{rim_color:?}");
+    assert!((color[3] - 191.0 / 255.0).abs() < 1e-3, "{color:?}");
+}
