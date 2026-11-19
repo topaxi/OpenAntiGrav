@@ -1268,6 +1268,8 @@ pub fn from_grid(space: Space, viewport: (f32, f32, f32, f32), grid: (f32, f32))
 #[cfg(test)]
 mod atlas_limit_tests;
 #[cfg(test)]
+mod fly_by_tests;
+#[cfg(test)]
 mod glow_tests;
 #[cfg(test)]
 mod prompt_tests;

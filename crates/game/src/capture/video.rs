@@ -41,10 +41,11 @@ pub(super) fn still_frame(wanted: Option<usize>, len: usize) -> usize {
 pub(super) fn fly_by_still(
     archives: &mut oag_assets::Archives,
     location: &str,
+    clip: &str,
     wanted: Option<usize>,
     cache: &std::path::Path,
 ) -> Option<(crate::render::VideoFormat, crate::movie::VideoFrame)> {
-    let entry = oag_ui_screens::picker::hd::track::fly_by_src(location);
+    let entry = oag_ui_screens::picker::hd::track::fly_by_src(location, clip);
     let opened = archives
         .read_name(&entry)
         .map_err(|error| format!("{error:#}"))

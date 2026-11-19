@@ -138,14 +138,15 @@ pub fn grid_icon_src(location: &str) -> String {
     crate::campaign::hd::cell_emblems::track_emblem_src(location)
 }
 
-/// `<environment>\FE\preview.bik` - the clip the `FlyByMovie` widget plays for
-/// the circuit whose environment folder is `location`. The widget authors
-/// `Loading_Icon.bik` (a placeholder, as the loading screen's is); the frame
-/// shows the circuit's own footage, which is this file (the best-matching frame
-/// of Vineta K's is 509 of 602, `docs/ui/campaign-screens.md`).
+/// `<environment>\<clip>` - the clip the `FlyByMovie` widget plays for the circuit whose
+/// environment folder is `location`, `clip` being the title's
+/// [`oag_title::FrontEnd::circuit_fly_by`] (HD: `FE\preview.bik`). The widget authors
+/// `Loading_Icon.bik`, a placeholder as the loading screen's is; the frame shows the
+/// circuit's own footage (Vineta K's best-matching frame is 510 of 602,
+/// `docs/ui/campaign-screens.md`).
 #[must_use]
-pub fn fly_by_src(location: &str) -> String {
-    format!(r"{}\FE\preview.bik", location.trim_end_matches('\\'))
+pub fn fly_by_src(location: &str, clip: &str) -> String {
+    format!(r"{}\{clip}", location.trim_end_matches('\\'))
 }
 
 /// How a circuit's hexagon is arranged in `picker`: `(circuits per row,

@@ -641,6 +641,11 @@ pub struct FrontEnd {
     /// ([`CircuitPose`]) and the yaw is a per-frame turntable. `None` where the screen's code is
     /// unread (Omega), which draws the widget as authored and turns it on stand-in numbers.
     pub circuit_turntable: Option<CircuitTurntable>,
+    /// The clip the track selection screen's `FlyByMovie` plays for a circuit, as a path
+    /// under the circuit's environment folder (`FE\preview.bik` on HD). `None` where the
+    /// title ships none: Omega authors the same widget (`Loading_Icon.bik`) and no
+    /// environment of its carries a `preview` file.
+    pub circuit_fly_by: Option<&'static str>,
     /// The definition file that authors the three screens a race ends on
     /// (`EndRace Results`/`EndRace Rewards`/`EndRace Menu`), or `None` for a title
     /// whose copy has not been read.

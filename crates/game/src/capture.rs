@@ -803,12 +803,16 @@ pub fn run(
                         .hd_track
                         .as_ref()
                         .is_some_and(|screen| screen.fly_by.is_some())
+                    && let Some(clip) = title
+                        .front_end
+                        .and_then(|front_end| front_end.circuit_fly_by)
                     && let (Some(archives), Some(track)) =
                         (archives.as_mut(), selected.or(tracks.first()))
                 {
                     fly_by_still = video::fly_by_still(
                         archives,
                         &track.location,
+                        clip,
                         options.menu_movie_frame,
                         &oag_source::cache::default_cache_dir(),
                     );

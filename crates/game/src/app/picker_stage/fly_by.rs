@@ -39,6 +39,13 @@ impl PickerStage {
     /// the frame due now into `renderer`'s fly-by planes. A screen with no
     /// `FlyByMovie` does nothing.
     pub(crate) fn pump_fly_by(&mut self, renderer: &mut Renderer, gpu: &Gpu) {
+        let Some(clip) = self
+            .previews
+            .front_end
+            .and_then(|front_end| front_end.circuit_fly_by)
+        else {
+            return;
+        };
         if self
             .layout
             .hd_track
@@ -51,7 +58,7 @@ impl PickerStage {
         else {
             return;
         };
-        let entry = picker::hd::track::fly_by_src(location);
+        let entry = picker::hd::track::fly_by_src(location, clip);
         if self.fly_by.as_ref().map(|playing| playing.entry.as_str()) != Some(entry.as_str()) {
             renderer.clear_fly_by();
             let archives = Arc::clone(&self.archives);

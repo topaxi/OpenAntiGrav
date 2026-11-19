@@ -180,6 +180,29 @@ fn every_bik_on_the_disc_reads_its_own_header() {
     // everywhere or nowhere - fails here rather than passing the three
     // invariants above by luck.
     assert_eq!(with_audio, 6, "six of the 37 files carry audio");
+
+    check_every_circuit_has_its_fly_by(&files);
+}
+
+/// Track Select's `FlyByMovie` plays `<environment>\FE\preview.bik`
+/// ([`oag_title::FrontEnd::circuit_fly_by`]): every circuit the screen's model
+/// table names ships one, at the panel-sized 352x256 the survey measured, so a
+/// name that stopped resolving would draw an empty panel with nothing else failing.
+fn check_every_circuit_has_its_fly_by(files: &[(&'static str, String, Vec<u8>)]) {
+    let front_end = oag_hd::TITLE.front_end.expect("HD's front end");
+    let clip = front_end.circuit_fly_by.expect("HD plays a fly-by");
+    assert!(!front_end.circuit_models.is_empty());
+    for model in front_end.circuit_models {
+        let wanted = oag_ui_screens::picker::hd::track::fly_by_src(model.environment, clip)
+            .replace('\\', "/")
+            .to_ascii_lowercase();
+        let (_, path, blob) = files
+            .iter()
+            .find(|(_, path, _)| path.to_ascii_lowercase().ends_with(&format!("/{wanted}")))
+            .unwrap_or_else(|| panic!("{} ships no {wanted}", model.environment));
+        let header = bik::parse(blob).unwrap_or_else(|e| panic!("{path}: {e}"));
+        assert_eq!((header.width, header.height), (352, 256), "{path}");
+    }
 }
 
 /// The logo reel is 1080p at 59.94 Hz, with four stereo tracks inside it.
