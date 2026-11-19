@@ -785,3 +785,66 @@ fn omega_2048_mode_draws_a_radar_dot_for_a_craft_behind() {
     assert!((rim_color[3] - 127.0 / 255.0).abs() < 1e-3, "{rim_color:?}");
     assert!((color[3] - 191.0 / 255.0).abs() < 1e-3, "{color:?}");
 }
+
+/// **An HD-era Omega Zone race names the class over `ZONE`** off the zone counter, by Omega's own
+/// fourteen-record table (`docs/ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md`):
+/// `FLASH` at zone 5 as the original's frame reads, `SUB-RAPIER` at 7, each resolved by Omega's
+/// language plugin and none a raw `MSC_*` key.
+///
+/// Fails if `HudArt::zone_speed_classes` is dropped from Omega (nothing is drawn), if the ids stop
+/// resolving against Omega's own plugin (the raw key is drawn), or if a threshold moves.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn an_hd_era_zone_race_names_the_speed_class_in_the_players_language() {
+    if omega().is_none() {
+        return;
+    }
+    let source = omega().expect("checked above");
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: source.display().to_string(),
+        track: Some(TECH_DE_RA.to_string()),
+        mode: oag_race::Mode::Zone,
+        seed: Some(1),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("an Omega Zone race loads");
+    let context = loaded.hud.context().expect("the layout parses");
+    let drawn = |zone: u32| -> Vec<String> {
+        let frame = oag_hud::draw_list(
+            &context,
+            &oag_hud::Readout {
+                zone,
+                ..oag_hud::Readout::blank()
+            },
+        );
+        frame
+            .hud_text
+            .iter()
+            .chain(&frame.small_text)
+            .filter_map(|draw| match draw {
+                oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+                _ => None,
+            })
+            .collect()
+    };
+    for (zone, name) in [
+        (2, "VENOM"),
+        (3, "SUB-FLASH"),
+        (5, "FLASH"),
+        (7, "SUB-RAPIER"),
+        (35, "ZEN"),
+        (75, "SUPERSONIC"),
+    ] {
+        let text = drawn(zone);
+        assert!(
+            text.iter().any(|line| line == name),
+            "zone {zone}: {text:?}"
+        );
+        assert!(
+            !text
+                .iter()
+                .any(|line| line.starts_with("MSC_") || line.starts_with("IG_HUD_")),
+            "zone {zone} drew a raw string key: {text:?}"
+        );
+    }
+}

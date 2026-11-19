@@ -242,3 +242,84 @@ fn the_2048_zone_hud_names_the_class_off_the_zone_on_hds_thresholds() {
         assert_eq!(ours.id_for(rung), hd.id_for(hd_stage), "zone {zone}");
     }
 }
+
+/// Omega's Zone HUD names the class off the zone on a fourteen-record table that is HD's byte for
+/// byte (`docs/ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md`), so the zone-keyed reading
+/// must name at every zone the class HD's stage ladder does, and Omega's circuit grade
+/// (`oag_omega::race::ZONE_FALLBACK`) must step on the same thresholds.
+///
+/// Fails if a threshold or id of `oag_omega::hud::ZONE_SPEED_CLASSES` drifts from the table, if the
+/// table is dropped from `oag_omega::hud::ART`, or if the grade's ladder and the HUD's disagree.
+#[test]
+fn omegas_zone_hud_names_the_class_off_the_zone_on_the_grades_thresholds() {
+    let art = oag_omega::hud::ART;
+    let ours = art.zone_speed_classes.expect("Omega names the class");
+    let stages = oag_omega::race::ZONE_FALLBACK.stages;
+    assert_eq!(ours.ids.len(), stages.records.len());
+    assert_eq!(ours.id_for(ours.rung(0, 5)), Some("Flash"));
+    assert_eq!(ours.id_for(ours.rung(0, 7)), Some("MSC_SRAPIER"));
+    assert_eq!(ours.id_for(ours.rung(0, 6)), Some("Flash"));
+    assert_eq!(ours.id_for(ours.rung(0, 999)), Some("IG_HUD_SUPSON"));
+    for zone in 0..=100u16 {
+        assert_eq!(
+            ours.id_for(ours.rung(0, u32::from(zone))),
+            stages.class_for(zone),
+            "zone {zone}"
+        );
+    }
+    let hd = oag_hd::hud::ZONE_SPEED_CLASSES;
+    for zone in 0..=100u16 {
+        let stage = oag_hd::race::ZONE_STAGES
+            .stage_for(zone)
+            .expect("HD's table covers every zone");
+        assert_eq!(
+            ours.id_for(ours.rung(0, u32::from(zone))),
+            hd.id_for(stage),
+            "zone {zone}"
+        );
+    }
+}
+
+/// The next-class row names the rung **above the one the HUD names**: on a title whose class is
+/// keyed on the zone (Omega's walker, `rung_zones`) that is the zone's rung plus one, not the
+/// grade's stage plus one, or the original's `SUB-RAPIER` beside row 7 at zone 5 reads `RAPIER`.
+///
+/// Fails if `NextSpeedClass` goes back to indexing by the stage on a zone-keyed ladder; HD's
+/// stage-keyed ladder is the control.
+#[test]
+fn the_next_class_row_names_the_rung_above_the_one_the_hud_names() {
+    let layout = Layout::from_xml(
+        r#"<Screen>
+             <Text name="NextSpeedClass"><Values font="HUD" x="0" y="0"/></Text>
+           </Screen>"#,
+    );
+    let strings = oag_ui::language::StringTable::default();
+    let next = |art: &oag_title::HudArt, zone: u32, stage: u32| {
+        text_for(
+            &layout.labels[0],
+            &Readout {
+                zone,
+                zone_stage: stage,
+                zone_next_in: Some(2),
+                ..Readout::blank()
+            },
+            &strings,
+            false,
+            true,
+            art.zone_speed_classes,
+            true,
+            false,
+            crate::Precision::Tenths,
+        )
+    };
+    assert_eq!(
+        next(oag_omega::hud::ART, 5, 4).as_deref(),
+        Some("MSC_SRAPIER"),
+        "zone 5 is FLASH, the next class is SUB-RAPIER"
+    );
+    assert_eq!(
+        next(oag_hd::hud::ART, 5, 4).as_deref(),
+        Some("MSC_SRAPIER"),
+        "HD keys the rung on the stage"
+    );
+}

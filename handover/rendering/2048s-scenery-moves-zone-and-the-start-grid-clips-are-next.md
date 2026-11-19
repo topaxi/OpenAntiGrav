@@ -1,8 +1,8 @@
 ---
 status: measure
-titles: [2048]
+titles: [2048, omega]
 updated: 2026-11-19
-summary: "2048 Zone stage colours draw (altima-z5 112.94 to 48.50), DLC/Omega Vineta K road on the Track group; open: fog binding, Omega stage, start grid"
+summary: "2048 Zone stage colours draw (altima-z5 112.94 to 48.50); open: fog binding, Omega road surface (not its ladder), start grid"
 ---
 
 # 2048's scenery moves and the glow-layer scrolls play; the Zone circuit draws with the stage colours and the start-grid clip is unwired
@@ -100,7 +100,10 @@ every submesh record reachable from exactly one mesh object.
   - **`2048-vita/zone-dlc-vineta-k-z5`** (86.04 -> 62.92) and **`omega/zone-vineta-k-z5`** (74.25 ->
     72.92): the road takes HD's Track group by shape name (chosen, not measured; the container's
     per-chunk bit is unread, `+0x0a` flags do not carry it). Omega's hue is HD's Flash purple where
-    the original is olive: Omega's zone-to-stage ladder is unread (stage 9 is the closest of 1 to 12).
+    the original is olive. **2026-11-19, `omega-zone-ladder`: not the ladder** - Omega's own is read and is HD's
+    (`docs/ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md`), zone 5 is stage 4 there too. With every chunk on
+    the Scene group the walls turn olive and the road pale blue; neither HD group reproduces Omega's dark olive road
+    (Omega's GCN surface programs, unread).
   - **The 2048 `zoneGrowing*` fragment variants** (`Weapon_Pads` #59/#61, `zonefc06_..._07` #37/#64:
     palette lookups of `zoneGrowingTexture`) belong to the stage table's `Growing Texture` accent;
     their palette textures' source is unread.
@@ -134,7 +137,9 @@ every submesh record reachable from exactly one mesh object.
 
 - A muted Vita3K capture of an `altima` Zone race **with the camera read** (the adopted pair's is cold)
   to judge the road and the walls by region; then the `fogColour` binding and `Track Paint` consumer.
-- Read Omega's Zone stage writer (ladder) so its Vineta K Zone pair picks the right table stage.
+- ~~Read Omega's Zone stage writer (ladder)~~: closed 2026-11-19 (`omega-zone-ladder`), it is HD's table and `14 - i`; the Omega
+  Zone hue gap is the surface law. Next: Omega's GCN road/scenery programs for the HD-lineage Zone family
+  (the original's road is dark olive where either HD group draws purple or pale blue).
 - `fc01_dummy` is read (flat `fogColour`). Still open: one
   `fc01_Effects_VScroll_Emissive` vertex program for the scroll sign, and a
   Vita3K capture of 2048's own Altima Zone (campaign progress needed) to confirm the fog colour is what the engine binds. `BloomFactor`/`BloomGate`/`Exposure*` authored in every `track.EnvSettings` stay unread: their consumer is the composite (`wo_composite_zone_fp`, USSE), whose arithmetic is unread.
