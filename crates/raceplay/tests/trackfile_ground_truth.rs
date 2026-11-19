@@ -819,7 +819,7 @@ fn a_zone_race_on_a_track_file_flies_the_hosts_zone_ramp_round_the_files_loop() 
 }
 
 /// Zone on a track file where the host has a Zone default of its own: HD's
-/// `ZoneSky.gtf` and per-stage Zone grade over the file's flat-shaded loop. A
+/// Zone sky dome (`ZoneSky.gtf` as its reflection) and per-stage Zone grade over the file's flat-shaded loop. A
 /// file with a sky of its own keeps it, and the report says the Zone sky is not
 /// drawn over it. Pulse has no title-wide Zone sky, so it draws none.
 #[test]
@@ -833,7 +833,7 @@ fn a_zone_race_on_a_track_file_takes_the_hosts_zone_sky_unless_the_file_has_its_
     let loaded = race::load(&zone_options(&hd, &fixtures.join("oval.track.toml"))).expect("loads");
     let report = loaded.report.join("\n");
     for needle in [
-        "/data/tex/zonesky.gtf: the Zone sky, drawn in place of the circuit's own",
+        "/data/tex/zonesky.gtf: loaded as the Zone sky's reflection map; the sky drawn is the Zone gradient dome",
         "per-stage Zone track textures decoded",
         "the Zone colour grade",
         "zone: a track file has no Zone variant",
@@ -851,7 +851,7 @@ fn a_zone_race_on_a_track_file_takes_the_hosts_zone_sky_unless_the_file_has_its_
     let report = own.report.join("\n");
     assert!(
         report.contains("zone: the file's own sky stands; Wipeout HD's Zone sky (")
-            && !report.contains("the Zone sky, drawn in place of the circuit's own"),
+            && !report.contains("the Zone gradient dome"),
         "{report}"
     );
 }

@@ -1036,7 +1036,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     if glow_program > 11.5 && glow_program < 12.5 {
         emissive_add = first.a * glow_tint_offset.rgb * (1.0 - zone_program);
     }
-    let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne) + emissive_add;
+    // No Zone variant of an `_ne` program on the disc adds its light-bar colour (77 materials,
+    // `hd_zone_ne_census_ground_truth`), so a chunk on the Zone surface drops the term; a pad drawn
+    // on its plain program in a Zone race (`ZONE_PLAIN`) keeps it.
+    let pad_glow = pad_ne_texel.a * glow_tint_offset.rgb * select(0.0, 1.0, pad_ne) * (1.0 - zone_program)
+        + emissive_add;
 
     // **HD's magstrip wave** (`slots::MAG_WAVE`, `oag_mesh::mesh::rcs::mag_wave`):
     //

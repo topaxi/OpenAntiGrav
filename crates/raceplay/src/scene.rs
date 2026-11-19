@@ -127,6 +127,10 @@ pub struct Scene {
     /// and [`mesh_render::Depth`] for why it is not scaled to the far plane
     /// instead.
     sky: Option<Drawable>,
+    /// Where [`Self::sky`] is HD's Zone dome (`mesh::sky_cube::zone_dome`): the
+    /// store its colours are encoded for and the stage colours last written, so
+    /// a frame writes the dome's vertices only when they change.
+    sky_dome: Option<SkyDome>,
     /// The track's `Speedup Pad` geometry, drawn with the track. Same
     /// pipeline, same textures, same fog, same world matrix as
     /// [`Self::track`]; separate only because a pad belongs to no visibility
@@ -719,6 +723,13 @@ impl Scene {
             shadow_maps,
         )?;
         crate::stages::checkpoint()?;
+        let sky_dome = sky_model
+            .as_ref()
+            .is_some_and(|model| model.label == mesh::sky_cube::ZONE_DOME_LABEL)
+            .then(|| SkyDome {
+                store,
+                written: std::cell::Cell::new(None),
+            });
         let sky = sky_model
             .filter(|model| !model.indices.is_empty())
             .map(|model| {
@@ -1262,6 +1273,7 @@ impl Scene {
             shadow_gathered: Default::default(),
             hull_cache: Default::default(),
             zone_vis_written: Default::default(),
+            sky_dome,
             view_lists: Default::default(),
             shadow_rank: Default::default(),
             frame_work: Default::default(),
@@ -1280,4 +1292,12 @@ impl Scene {
         scene.share_uniform_blocks(device);
         Ok(scene)
     }
+}
+
+/// HD's Zone sky dome's per-frame state - see [`Scene::sky_dome`].
+#[derive(Debug)]
+struct SkyDome {
+    store: oag_gpu::formats::SceneStore,
+    /// The `(horizon, zenith)` pair the dome's vertices hold.
+    written: std::cell::Cell<Option<([f32; 3], [f32; 3])>>,
 }

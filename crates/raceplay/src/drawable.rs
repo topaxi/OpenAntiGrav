@@ -956,6 +956,19 @@ impl Drawable {
         }
     }
 
+    /// Rewrites this drawable's vertices from its model's own through
+    /// `recolour`, which fills `out` (scratch the caller owns). From the model
+    /// every time, never from the last write, for [`Self::tint`]'s reason.
+    pub(super) fn recolour_with(
+        &self,
+        queue: &dyn oag_gpu::writes::Writes,
+        out: &mut Vec<mesh::GpuVertex>,
+        recolour: impl FnOnce(&[mesh::GpuVertex], &mut Vec<mesh::GpuVertex>),
+    ) {
+        recolour(&self.model.vertices, out);
+        self.geometry.write(queue, 0, out);
+    }
+
     /// Multiplies every vertex colour by `rgba`, from the model's own authored
     /// values.
     ///
