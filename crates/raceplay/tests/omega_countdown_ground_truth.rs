@@ -230,7 +230,7 @@ const POSTED: [oag_gameplay::cue::Cue; 26] = {
 /// container on a group whose value is unread, media the ATRAC9 decoder rejects (`QUAKELAUNCH`
 /// and the hits behind `GAME_VR`), or no sound in the shipped banks (`NGP_LEACH`, whose player
 /// event does load).
-const WIRED: [oag_gameplay::cue::Cue; 15] = {
+const WIRED: [oag_gameplay::cue::Cue; 20] = {
     use oag_gameplay::cue::Cue;
     [
         Cue::Message,
@@ -240,11 +240,16 @@ const WIRED: [oag_gameplay::cue::Cue; 15] = {
         Cue::Absorb,
         Cue::MineLaunch,
         Cue::Plasma,
+        Cue::PlasmaHitWall,
         Cue::PlasmaHitShip,
         Cue::Rocket,
+        Cue::RocketHitWall,
+        Cue::RocketHitShip,
         Cue::Missile,
         Cue::MissileHitWall,
         Cue::CannonHitShip,
+        Cue::QuakeLaunch,
+        Cue::QuakeHit,
         Cue::LeachFail,
         Cue::LeachEnergy,
         Cue::Repulsor,
@@ -278,7 +283,7 @@ const BY_TEAM: [&str; 3] = [
 /// The held cues that load, and whether their event authors a loop: Omega spells them with a
 /// leading `_` and keeps the post's handle (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
 /// "Held loops").
-const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 9] = {
+const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 10] = {
     use oag_gameplay::cue::Cue;
     [
         (Cue::Shield, true),
@@ -290,14 +295,14 @@ const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 9] = {
         (Cue::RocketTravel, false),
         (Cue::MissileTravel, false),
         (Cue::QuakeTravel, true),
+        (Cue::Blowup, false),
     ]
 };
 
-/// The held cues that stay unplayed: the lock-on's switch group is the HUD's targeting state,
-/// the death's media the ATRAC9 decoder rejects.
-const HELD_REFUSED: [oag_gameplay::cue::Cue; 2] = {
+/// The held cue that stays unplayed: the lock-on's switch group is the HUD's targeting state.
+const HELD_REFUSED: [oag_gameplay::cue::Cue; 1] = {
     use oag_gameplay::cue::Cue;
-    [Cue::LockOn, Cue::Blowup]
+    [Cue::LockOn]
 };
 
 /// An Omega race load plays its posted cues from their events, `<cue>__<slot>` for every emitter
@@ -430,7 +435,7 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
     assert!(
         report
             .iter()
-            .any(|l| l.starts_with("sfx: 24 of 43 race cues play their Wwise event")),
+            .any(|l| l.starts_with("sfx: 30 of 43 race cues play their Wwise event")),
         "{report:#?}"
     );
     assert!(
