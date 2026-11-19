@@ -13,6 +13,7 @@ members = [
   "crates/display",
   "crates/ext",
   "crates/ext-abi",
+  "crates/ffmpeg",
   "crates/formats",
   "crates/fx",
   "crates/game",
@@ -78,6 +79,7 @@ oag-bytes = { path = "crates/bytes" }
 oag-core = { path = "crates/core" }
 oag-disc = { path = "crates/disc" }
 oag-display = { path = "crates/display" }
+oag-ffmpeg = { path = "crates/ffmpeg" }
 oag-formats = { path = "crates/formats" }
 oag-fx = { path = "crates/fx" }
 oag-gameplay = { path = "crates/gameplay" }
