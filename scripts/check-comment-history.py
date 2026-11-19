@@ -76,7 +76,6 @@ BASELINE: dict[str, int] = {
     "input": 7,
     "log": 1,
     "mesh": 33,
-    "music": 1,
     "net": 1,
     "omega": 11,
     "physics": 37,
