@@ -1887,6 +1887,52 @@ frame. `scripts/gs_fb_decode.py` decodes PSMCT32 from it, VRAM at byte 425 of th
 registers of a dump for the replay above.) The selected ring: before the selector fix `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px, 12 px
 and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)` (`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
 
+## Pulse PSP pairs over 5 mean grey: where the grey sits (2026-11-19, `pulse-psp-pairs`)
+
+Three pairs re-rendered at main `e51ae21d2` reproduce their recorded numbers exactly (`basilico-black` 5.08, `menu-team` 5.89, `pulse-psp-zone-talons-white-z8` 8.19).
+No fix landed; this is what was measured, so the next lane starts from a ranked list. Method: copy the pair, `compare-rerender-ours.rerender` on the copy, then paste
+the original's pixels over one region of ours and recompute `mean_grey` with the pair's own formula (`magick ... -colorspace Gray -compose difference`); the drop is the region's ceiling.
+
+| Pair | Region (480 x 272 px) | mean grey with the region taken from the original | Cause |
+| --- | --- | --- | --- |
+| `basilico-black` 5.075 | start-line laser band, rows 146 to 156 | 4.03 | see below |
+| | craft box (185, 150, 300, 250) | 3.23 | pose and livery, not isolated |
+| | bottom HUD (rows 200 to 272) | 4.32 | clock and best text |
+| `menu-team` 5.89 | footer (rows 205 to 272) | 3.18 | the original's ticker message and tag text, below |
+| `pulse-psp-zone-talons-white-z8` 8.19 | bottom HUD, left half | 7.75 | ours' HUD reads faded beside the original's solid one; speed bar and plume differ; not isolated |
+
+**`menu-team`: the footer is the original's random ticker draw, so the grey is original state not recorded.** The original shows "Your most listened to music track is ...";
+ours shows a tournament tip. The original picks the next message by a weighted `rand()` draw among items that have data (`Ticker_PickMessage`,
+`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "The footer ticker's message choice"), and a fresh profile that only sat in the menus has a
+songs-listened statistic. Ours keeps no lifetime-statistics store (`oag_game::records::ticker_tips` rotates the `TKR_NO*` tips). Missing values: the
+statistics table (`DAT_08b31774 + 0x11c + slot * 4`), the item weights and the `rand()` state at the grab. The left tag box reads "AAA" in the original
+and blank in ours (cause not read). Confidence 70 that the footer accounts for the 2.7 grey (the paste test); the cause of the draw, 85 (decompile, a prior lane).
+Closing it is a statistics store plus the draw, not a renderer fix.
+
+**`basilico-black`: the laser band is worth 1.05 grey, and the original's laser core is about 1.5 times brighter than ours before bloom.**
+Measured on a Talon's Junction grid in the original (PPSSPP 1.20.4, `psp-ge-dump.py`, bloom removed by `psp-ge-replay.py --nop-after` the first prim drawn into
+`0x110000`) because the Basilico states are not on this host:
+
+- the laser draws (texture `startline_laser_ADD_GLOW`, 64 x 8, `CLUT8` 8888, texel alpha `0xaf` everywhere; vertices carry 4444 colours fading `ffed` to `ffa7`
+  with alpha `f`; `lasersmoke` 128 x 16 with vertex alpha 0 to `f`) run `BLENDMODE 0xa2` (`SrcAlpha` / `Fix`, `BLENDFIXB 0xffffff`), `TFUNC 0x100` (the init block; the
+  stream never sets it), stencil ref `0xaf`, depth test `GREATER`, no mipmap levels (`TMODE 1`) for the laser, one for the smoke;
+- before the bloom the original's core pair of rows reads (205, 251, 255) over a (115, 150, 165) background: an excess of about 95 in green;
+- ours at Basilico with the bloom skipped (temporary switch, not committed) reads (99, 101, 100) over (36, 37, 33): an excess of about 64, grey where the original is white-blue;
+- ours' laser draw alone owns that core (skipping `startline_laser_ADD` returns the background; skipping `lasersmoke` only lowers the wide blue halo);
+- `--texture-detail high|maximum` does not move a pixel, so the mip chain is not it; the same asset is right on the Talon's pair (`talons-black` 3.22, laser matched by eye).
+  So the difference is specific to how this strip is seen at Basilico (the camera is 4.5 units above the ribbon, nearly edge on): ours spreads the core over four rows
+  (137, 136, 112) where the original has two sharp rows (241, 251) and 88 to 141 at the shoulders.
+
+Not established: the factor behind the ratio (a constant of about 0.686 squared against 0.686 fits the numbers, but the two sides are different circuits' files and the
+test that would separate a doubled alpha from a different geometry was not run). Needed: a Basilico grid in the original (`just sync-saves <host>` brings
+`time-trial-basilico-black-venom-grid.ppst`, absent from this host), one `psp-ge-dump.py dump` at the pair's stop, `census` rows for the draws with `texsize0` `0x306`,
+and ours' `OAG_DRAW_DUMP` rows for the same texture; compare the strip's vertex positions and colours. A Talon's Junction grid state made on this host is
+`data/saves/pulse-psp/time-trial-talons-venom-grid-lane-pairs.ppst` (not a repository file).
+
+**Reaching Basilico on a fresh PPSSPP profile did not work in bounded effort.** `psp-drive.py menu --unlock` sets the dev-unlock byte but the first attempt then lands in
+`MPMainMenu`; a second plain `menu` runs. `--track-down N` is relative to the profile's last selection, not to Talon's Junction (`--track-down 1` landed at
+(-404.2, 4.0, -11.6), `--track-down 8` after that at Metropia White), so the circuit is chosen by reading the start position back.
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on
