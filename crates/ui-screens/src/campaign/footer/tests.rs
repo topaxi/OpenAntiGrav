@@ -210,7 +210,7 @@ fn a_message_enters_at_the_viewports_right_edge() {
     };
     assert_eq!(
         *x,
-        85.0 + 370.0,
+        85.0 + TICKER_TEXT_ORIGIN + 370.0,
         "the head is on the right edge, outside the clip"
     );
     assert_eq!(*y, 235.0);
@@ -252,12 +252,15 @@ fn the_next_message_trails_the_tail_by_a_quarter_viewport() {
     // 93 = 370 - floor(370 * 0.75): the second's head is on the right edge once the first has
     // travelled its width and the gap, and the first is still the one drawn while its tail is in.
     let (text, x) = draw_at(100.0 + 93.0);
-    assert_eq!((text.as_str(), x), ("a", 85.0 + 370.0 - 193.0));
-    // The first's tail is out one pixel later than its width plus the viewport's.
-    let travelled = 100.0 + 370.0 + 1.0;
+    assert_eq!(
+        (text.as_str(), x),
+        ("a", 85.0 + TICKER_TEXT_ORIGIN + 370.0 - 193.0)
+    );
+    // The first's tail is out one pixel after its width plus the viewport and the text origin.
+    let travelled = 100.0 + 370.0 + TICKER_TEXT_ORIGIN + 1.0;
     let (text, x) = draw_at(travelled);
     assert_eq!(text, "b");
-    assert_eq!(x, 85.0 + 370.0 + 193.0 - travelled);
+    assert_eq!(x, 85.0 + TICKER_TEXT_ORIGIN + 370.0 + 193.0 - travelled);
 }
 
 #[test]
@@ -273,7 +276,11 @@ fn a_pinned_layout_draws_its_one_message_where_the_pin_says() {
     else {
         panic!("a pinned draw");
     };
-    assert_eq!(x, 85.0 + 131.0, "the clock does not move a pinned message");
+    assert_eq!(
+        x,
+        85.0 + TICKER_TEXT_ORIGIN + 131.0,
+        "the clock does not move a pinned message"
+    );
 }
 
 #[test]

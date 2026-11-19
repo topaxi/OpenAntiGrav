@@ -1011,6 +1011,12 @@ pub fn description_draws(
 /// choice"), which at 60 frames a second is [`oag_ui::anim::MARQUEE_SPEED`].
 pub const TICKER_SPEED: f32 = oag_ui::anim::MARQUEE_SPEED;
 
+/// Where a message's first glyph sits right of its record's `head_x`, in pixels: two PPSSPP grabs
+/// of the Team Selection footer put the text 2 pixels right of the head the text record held at
+/// the CPU stop (89 and 90 read; ours matched to the pixel at 91 and, with the one frame the
+/// presented picture lags the stop, 93), `docs/tools/compare-page.md`, "`menu-team`".
+pub const TICKER_TEXT_ORIGIN: f32 = 2.0;
+
 /// The gap between one message's tail and the next one's head: the next message enters at the
 /// viewport's right edge once the last one's tail has come in to three quarters of its width
 /// (`widget + 0xb4` is `(int)(width - width * 0.25)`), so the gap is what is left of it.
@@ -1061,8 +1067,11 @@ pub fn ticker_draw(
     let mut shown: Option<(f32, &String)> = None;
     for (tip, width) in tips.iter().zip(&widths) {
         for lap in [0.0, total] {
-            let x = vx + vw + cursor + lap - travelled;
-            if x + width >= vx && x <= vx + vw && shown.is_none_or(|(at, _)| x < at) {
+            let x = vx + TICKER_TEXT_ORIGIN + vw + cursor + lap - travelled;
+            if x + width >= vx
+                && x <= vx + vw + TICKER_TEXT_ORIGIN
+                && shown.is_none_or(|(at, _)| x < at)
+            {
                 shown = Some((x, tip));
             }
         }

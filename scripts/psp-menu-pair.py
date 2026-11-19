@@ -32,6 +32,7 @@ import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
 import compare_provenance as cp  # noqa: E402
 from ppsspp_debugger import Debugger  # noqa: E402
+import psp_ticker as pt  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("psp_drive", HERE / "psp-drive.py")
 psp_drive = importlib.util.module_from_spec(_spec)
@@ -117,6 +118,8 @@ class Rig:
         self.entered = None  # (state, time.monotonic() when `expect` saw it replace another): the screen-entry clock
         self.pressed_at = None  # time.monotonic() of the press straight before an `st:` step: the entry cannot be earlier
         self.press_ticks = None  # Pure: `cpu.status.ticks` at the start of the latest pad press
+        self.watch = pt.Watch()
+        self.ticker_frozen = None  # `wait_ticker`'s state, taken with the CPU stopped, for the `shot` straight after
         if self.dbg.is_stepping():
             self.dbg.call("cpu.resume")
             time.sleep(0.5)
@@ -205,13 +208,41 @@ class Rig:
                 return max(0.0, min(1.0, (ref - 80) / 150.0))
         return None
 
+    def wait_ticker(self, timeout=480.0):
+        """Pulse's footer ticker draws its next message by `rand()` and the grab cannot choose it, so this waits for a frame ours can show:
+        exactly one message on screen, its item one `records/lifetime.rs` counts, its head well inside the viewport. It returns with the CPU
+        **stopped**, the state kept in `ticker_frozen`, and the `shot` that follows grabs that very frame (docs/tools/compare-page.md,
+        "`menu-team`: the footer is the original's random ticker draw")."""
+        ticker = pt.Ticker(self.dbg, self.news)
+        if not ticker.find():
+            sys.exit("STALLED: no footer ticker widget in RAM (is the front end on a screen with a footer?)")
+        end = time.time() + timeout
+        polls = 0
+        while time.time() < end:
+            self.dbg.call("cpu.stepping")
+            sample = ticker.sample()
+            self.watch.observe(sample)
+            seen = self.watch.visible(sample)
+            polls += 1
+            if seen and 40 <= seen[1] <= 240:
+                item, head_x, text = seen
+                self.ticker_frozen = {"item": item, "head_x": head_x, "text": text, "sample": sample, "polls": polls}
+                print("ticker", item["id"], "head_x", head_x, repr(text), "after", polls, "polls", flush=True)
+                return
+            self.dbg.call("cpu.resume")
+            if polls % 40 == 0:
+                print("ticker: %d polls, last message %s" % (polls, sample["item"] and sample["item"]["id"]), flush=True)
+            time.sleep(0.25)
+        sys.exit("STALLED: no pinnable footer message in %.0f s (%d polls)" % (timeout, polls))
+
     def shot(self, name):
         wid, x, y, w, h = set_window(480, 272)
         dst = self.shots / (name + ".png")
         stopped = name.split("@")[0] in (STOPPED if self.title == "pulse" else PURE_CLOCKED)
         if stopped:
             # Frozen for the grab and the read, so the frame and the stamp are one pulse phase.
-            self.dbg.call("cpu.stepping")
+            if not self.dbg.is_stepping():
+                self.dbg.call("cpu.stepping")
             time.sleep(0.25)
         before = time.monotonic()
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
@@ -239,7 +270,10 @@ class Rig:
         if since_ticks is not None:
             since = since_ticks
         self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
-                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None}
+                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None,
+                           "ticker": self.ticker_frozen if stopped and name.split("@")[0] == "team" else None}
+        if self.seen[name]["ticker"] is not None:
+            self.ticker_frozen = None
         print("shot", name, "since_entry", self.seen[name]["since_entry"], "ship_node_time", ship_t, "clock", clock, flush=True)
         return dst
 
@@ -292,6 +326,8 @@ class Rig:
                 self.back_to(rest)
             elif kind == "st":
                 self.expect(rest)
+            elif kind == "tick":
+                self.wait_ticker(float(rest or 480))
             elif kind == "shot":
                 self.shot(rest)
             else:
@@ -307,7 +343,7 @@ PULSE_PLAN = ",".join([
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
     "key:cross", "st:Track Creation", "wait:3", "shot:track",
-    "key:cross", "st:Team Selection", "wait:3", "shot:team", "back:Main Menu", "wait:1",
+    "key:cross", "st:Team Selection", "wait:3", "tick:480", "shot:team", "back:Main Menu", "wait:1",
     "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "shot:options", "back:Main Menu", "wait:1",
 ])
 
@@ -383,6 +419,27 @@ def prepare_profile(plat, profile, title_name, difficulty, race=None):
         (ce.settings_path(profile).parent / "records.toml").write_text('[[campaign_difficulty]]\ntitle = "%s"\ndifficulty = "%s"\n' % (title_name.lower(), difficulty))
 
 
+def ticker_box_grey(theirs, ours):
+    """Mean grey difference of the ticker's own box (`oag_ui_screens::campaign::footer::TickerLayout::viewport`, 85, 235, 370 x 32) between two frames."""
+    from PIL import Image
+    import numpy as np
+    box = (85, 235, 455, 267)
+    a = np.asarray(Image.open(theirs).convert("L").crop(box), dtype=float)
+    b = np.asarray(Image.open(ours).convert("L").crop(box), dtype=float)
+    return float(abs(a - b).mean())
+
+
+def fit_ticker_lag(args, plat, profile, item, theirs, clocked, pin, pdir):
+    """0 or 1: the frames the presented picture lags the CPU stop the footer grab was taken at, read off which render of the pinned message matches."""
+    diffs = []
+    for lag in (0, 1):
+        png = pdir / ("ticker-lag%d.png" % lag)
+        cm.render_ours(args.oag_game, args.source, plat, item["page"], png, profile, ce.size_text(plat), clocked + ("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)))
+        diffs.append(round(ticker_box_grey(theirs, png), 3))
+        png.unlink()
+    return (0 if diffs[0] <= diffs[1] else 1), diffs
+
+
 def build_pairs(args, seen, out, plat, walk):
     """One pair or gap per `WALK` entry from the grabbed frames; returns the ids `Pair.finish` refused."""
     refused = []
@@ -416,13 +473,31 @@ def build_pairs(args, seen, out, plat, walk):
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
         prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"))
+        clocked = (("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in (CLOCKED if args.title == "pulse" else PURE_CLOCKED) and shot.get("since_entry") is not None else ()
+        pin = shot.get("ticker")
+        lag = 0
+        if pin:
+            # Ours' counters are put where the original's table is, so ours draws the message the grab caught from its own statistics.
+            records = ce.settings_path(profile).parent / "records.toml"
+            records.write_text((records.read_text() if records.exists() else "") + "\n" + pt.ours_lifetime(pin["sample"], args.campaign_title.lower()))
+            pair.rec["original"]["footer_ticker"] = {
+                "basis": "read from RAM with the CPU stopped, the frame grabbed in that stop (scripts/psp_ticker.py): the message is a rand() draw, so the "
+                         "grab waits for one ours can show and records it",
+                "item": pin["item"]["id"], "head_x": pin["head_x"], "text": pin["text"], "polls": pin["polls"],
+                "widget": pin["sample"]["widget"], "records": pin["sample"]["buffers"], "next_starts_at": pin["sample"]["next_starts_at"],
+                "stats_u32": pin["sample"]["stats_u32"], "favourites": pin["sample"]["favourites"]}
+            lag, diffs = fit_ticker_lag(args, plat, profile, item, shot["png"], clocked, pin, pdir)
+            pair.rec["original"]["footer_ticker"]["lag_frames"] = {
+                "value": lag, "ticker_box_mean_grey": diffs,
+                "basis": "the presented picture lags the CPU stop by 0 or 1 frame (a message moves one pixel a frame), so ours is drawn at the head read and at the head "
+                         "plus one and the one that matches the grabbed ticker box (85, 235, 370 x 32) better is kept"}
         cp.build(pair, args, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
         try:
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
                          selection=item["selection"], route=item.get("route"),
-                         extra_args=(("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in (CLOCKED if args.title == "pulse" else PURE_CLOCKED) and shot.get("since_entry") is not None else (), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
+                         extra_args=clocked + (("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)) if pin else ()), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:
             if exc.code == 3:
@@ -461,6 +536,8 @@ def main():
     plat = ce.platform(args.platform)
     args.source = args.source or str(ce.MAIN / plat["image"])
     args.campaign_title = args.campaign_title or plat["title"]
+    if args.title == "pulse":
+        rig.news = pt.load_rows(Path(args.oag_game).with_name("oag-wad"), args.source + ":" + "PSP_GAME/USRDIR/Data.wad") if "tick:" in (args.plan or PULSE_PLAN) else None
     rig.run(args.plan or (PULSE_PLAN if args.title == "pulse" else PURE_PLAN))
     refused = build_pairs(args, rig.seen, out, plat, PULSE_WALK if args.title == "pulse" else PURE_WALK)
     json.dump({"refused": refused}, open(out / "refused.json", "w"))
