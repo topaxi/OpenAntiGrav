@@ -422,7 +422,7 @@ fn build_planned(
         // The diffuse map's own alpha is the surface's alpha, gloss and cut-out on Omega's programs
         // (`docs/formats/omega-status.md`, "The alpha lane"). Vita keeps the red lane for every
         // material but the alpha-lit ones below, whose programs are read to take `T.www`.
-        let role = if ps4 {
+        let role = if ps4 || false {
             role | crate::mesh::slots::DEFAULT
         } else {
             role
@@ -475,6 +475,12 @@ fn build_planned(
                 .is_some_and(lit_alpha::admits);
         let role = if alpha_lit {
             role | crate::mesh::slots::LIT_ALPHA | crate::mesh::slots::DEFAULT
+        } else {
+            role
+        };
+        // A reflective window gates its reflection by the diffuse alpha (`emissive_add`).
+        let role = if emissive_add.alpha_gated(submesh.material) {
+            role | crate::mesh::slots::DEFAULT
         } else {
             role
         };

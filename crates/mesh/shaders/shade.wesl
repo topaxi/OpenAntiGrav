@@ -1029,6 +1029,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
+    // **2048's `fc10_Lambert_2UV_Emissive`** (mode 19, `mesh::rcs::psp2::emissive_add`): `D.a * R^2`
+    // after the light, `R` the third binding (`ReflectMap`) at `0.5 + 0.5 * reflect(-V, N).xy`.
+    if glow_program > 18.5 && glow_program < 19.5 {
+        let r = reflect(-normalize(scene.fog.camera - in.world), n);
+        let map = material_sample(MATERIAL_PAD_MASK, vec2<f32>(0.5) + 0.5 * r.xy);
+        emissive_add = decode(map.rgb) * texel.a * glow_tint_offset.rgb;
+    }
     // **HD's emissive-in-alpha families** (`Emissive::program` mode 12, `mesh::rcs::alpha_emissive`):
     // `MAD H.xyz, T.wwww, C, lit`, `T` the picture's own fetch and `C` the material's emissive
     // colour in the entry's tint. The mask is the unit-0 alpha; a `dn_diffuse_specular_emiss` entry (second lane set) binds its SpecularTexture third, read in the specular below. The Zone

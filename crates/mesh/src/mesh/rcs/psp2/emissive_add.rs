@@ -12,6 +12,11 @@
 //! not squared. It is the family of Vineta K's floor panels. [`PROGRAM_EMISSIVE_ALPHA_MASK`]
 //! selects it.
 //!
+//! **`fc10_Lambert_2UV_Emissive` is a window with a reflection map** (`docs/formats/2048-material-params.md`,
+//! "The reflective window"): every lit and ambient-only program of the file ends
+//! `fog(light * D^2 + D.a * R^2)`, `R` the `ReflectMap` read at `0.5 + 0.5 * reflect(-V, N).xy`
+//! with the view vector and the normal in world space ([`PROGRAM_REFLECT_MAP`]).
+//!
 //! The picture rides the third binding ([`crate::mesh::Model::pad_masks`]), the tint is one
 //! glow-table entry of [`PROGRAM_EMISSIVE_ADD`], and `shade.wesl` joins the term to the pad glow
 //! it already adds after the light.
@@ -37,7 +42,8 @@ use oag_rcs::rcsmodel::psp2::{self, material::Material};
 use super::{Report, decode_material_texture};
 use crate::mesh::rcs::Textures;
 use crate::mesh::{
-    Emissive, ModelTexture, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, slots,
+    Emissive, ModelTexture, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_REFLECT_MAP,
+    slots,
 };
 
 /// One admitted material: its glow-table slot (entry index plus one) and its mask map, which a
@@ -48,6 +54,9 @@ pub(super) struct Add {
     /// The `.gxt` the colour is drawn from when the material's first listed texture is the mask
     /// itself ([`Kind::colour`]).
     pub colour: Option<String>,
+    /// Whether the term reads the picture's alpha ([`PROGRAM_REFLECT_MAP`]), which takes the
+    /// alpha lane of a Vita slot word.
+    pub alpha_gated: bool,
 }
 
 /// Per material, the add it draws. [`super::shield_lightning`] fills in the same table: both ride
@@ -77,6 +86,11 @@ impl Plan {
     /// first texture listed.
     pub fn colour(&self, material: Option<usize>) -> Option<&str> {
         self.of(material)?.colour.as_deref()
+    }
+
+    /// Whether this material's term is gated by the diffuse alpha, so its slot word reads lane 3.
+    pub fn alpha_gated(&self, material: Option<usize>) -> bool {
+        self.of(material).is_some_and(|a| a.alpha_gated)
     }
 
     /// The mask map this material binds third, when it has one.
@@ -133,6 +147,15 @@ fn kind_of(material: &Material) -> Option<Kind> {
         Some(Kind {
             mask: "EmissiveMap",
             program: PROGRAM_EMISSIVE_ADD,
+            colour: None,
+            tint: None,
+            ps4: false,
+        })
+    } else if stem.eq_ignore_ascii_case("fc10_lambert_2uv_emissive") {
+        // The window facades of Moa Therma, Tech de Ra and the base circuits.
+        Some(Kind {
+            mask: "ReflectMap",
+            program: PROGRAM_REFLECT_MAP,
             colour: None,
             tint: None,
             ps4: false,
@@ -214,6 +237,7 @@ pub(super) fn plan(
                 .and_then(|name| material.sampler(name_hash(name)))
                 .filter(|p| !p.is_empty())
                 .map(str::to_string),
+            alpha_gated: program == PROGRAM_REFLECT_MAP,
         });
         report.emissive_add_materials += 1;
     }

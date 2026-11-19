@@ -87,6 +87,7 @@ pub(super) fn plan(
             slot,
             texture: Some(texture),
             colour: None,
+            alpha_gated: false,
         });
         report.shield_lightning_materials += 1;
     }

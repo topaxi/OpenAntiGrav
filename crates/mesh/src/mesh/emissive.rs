@@ -129,6 +129,12 @@ pub const PROGRAM_VERTEX_BLEND: f32 = 18.0;
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
 
+/// [`Emissive::program`]'s mode for 2048's `fc10_Lambert_2UV_Emissive`: the third binding (its
+/// `ReflectMap`) read at `0.5 + 0.5 * R.xy`, `R` the view vector reflected about the world normal,
+/// squared, times the **picture's alpha**, added after the light and before the fog. See
+/// `super::rcs::psp2`'s `emissive_add`.
+pub const PROGRAM_REFLECT_MAP: f32 = 19.0;
+
 /// [`Emissive::program`]'s mode for Omega's `rt_icetunnel`: the tunnel glass's refraction term
 /// (`2 * Constant1 * a * grab`, `a` the vertex colour's red, carried in `colour.a`), with the
 /// sample point pushed `Refraction * a` along the normal (`program[1]` is `Refraction`). See
