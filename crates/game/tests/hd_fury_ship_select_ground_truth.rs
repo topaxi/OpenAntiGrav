@@ -436,3 +436,40 @@ fn a_stated_adapted_luma_sets_the_exposure_the_craft_is_lit_at() {
         "the stated value of the title's read is the title's read"
     );
 }
+
+/// The sum of red, green and blue over a whole capture.
+fn frame_light(still: &oag_texture::replacer::Image) -> u64 {
+    still
+        .rgba
+        .chunks(4)
+        .map(|texel| texel[..3].iter().map(|&c| u64::from(c)).sum::<u64>())
+        .sum()
+}
+
+/// `--fury-adapted-luma` also pins the backdrop chain's adapted luma, which is what the exposure of
+/// a page's card follows (`Cell Selection`'s card is in the scene the chain reads). Pinned at the
+/// clamp (0.1, exposure 1) the card is darker than where ours' own scene lands, and pinned at 0
+/// (exposure 4) it is brighter. A pin dropped on the way to the chain leaves all three equal.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_stated_adapted_luma_pins_the_exposure_a_card_is_drawn_at() {
+    let Some(image) = image() else {
+        return;
+    };
+    let card = |luma: Option<&str>| {
+        let flags: Vec<&str> = ["--fury-tint", "0"]
+            .into_iter()
+            .chain(
+                luma.into_iter()
+                    .flat_map(|luma| ["--fury-adapted-luma", luma]),
+            )
+            .collect();
+        frame_light(&capture_of(&image, "cell-select", &flags))
+    };
+    let (own, dark, bright) = (card(None), card(Some("0.1")), card(Some("0.0")));
+    assert!(own > 0, "a card is drawn");
+    assert!(
+        dark < own && own < bright,
+        "exposure 1, the scene's own and 4 draw the card at {dark}, {own}, {bright}"
+    );
+}

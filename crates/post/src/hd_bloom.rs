@@ -358,6 +358,10 @@ struct Constants {
     /// the bits they read are the ones they always read.
     uv_offset: [f32; 2],
     scene_max: [f32; 2],
+    /// The adapted luma the adaptation pass writes instead of lerping towards the scene's
+    /// ([`Chain::pin_adapted`]); negative leaves the lerp.
+    pinned_luma: f32,
+    unused: f32,
 }
 
 /// How a pass's `0..1` maps onto what was drawn: the scale and clamp of the scratch levels
@@ -413,6 +417,8 @@ impl Constants {
             uv_max: rect.max,
             uv_offset: rect.offset,
             scene_max: rect.scene_max,
+            pinned_luma: -1.0,
+            unused: 0.0,
         }
     }
 }
@@ -484,6 +490,8 @@ pub struct Chain {
     sized: Sized,
     /// Each split seat's adaptation, built when a split first draws it. See `lanes.rs`.
     seats: crate::seat_lanes::SeatLanes<Lane>,
+    /// The luma every adaptation pass writes, in place of the lerp. See [`Self::pin_adapted`].
+    pinned: Option<f32>,
     /// What the four uniform buffers last held, so a frame that moved nothing writes nothing.
     written: std::cell::Cell<Option<Placement>>,
     /// The zoom-streak ring, when the title has one, and the pulses it draws
@@ -636,6 +644,7 @@ impl Chain {
             sampler,
             sized,
             seats: crate::seat_lanes::SeatLanes::default(),
+            pinned: None,
             written: std::cell::Cell::new(None),
             zoom,
             zoom_frame: std::cell::Cell::new(None),
@@ -654,6 +663,14 @@ impl Chain {
             eight_bit: self.params.eight_bit,
             ..params
         };
+        self.written.set(None);
+    }
+
+    /// States the adapted luma from the next run on, so the exposure and the gate's fade are
+    /// those of a frame whose average the caller knows rather than the scene's own: a capture
+    /// that lines up with a reading of the original. `None` returns to the lerp.
+    pub fn pin_adapted(&mut self, luma: Option<f32>) {
+        self.pinned = luma;
         self.written.set(None);
     }
 
@@ -946,7 +963,10 @@ impl Chain {
                 queue.write_buffer(
                     buffer,
                     0,
-                    bytemuck::bytes_of(&Constants::new(self.params, step, rect)),
+                    bytemuck::bytes_of(&Constants {
+                        pinned_luma: self.pinned.unwrap_or(-1.0),
+                        ..Constants::new(self.params, step, rect)
+                    }),
                 );
             };
             write(&self.sized.buffers[0], [0.0, 0.0], rect);
@@ -969,6 +989,7 @@ impl Chain {
                 } else {
                     [0.0; 2]
                 },
+                pinned_luma: self.pinned.unwrap_or(-1.0),
                 ..Constants::new(self.params, [0.0, 0.0], scene_rect)
             };
             queue.write_buffer(&self.sized.buffers[3], 0, bytemuck::bytes_of(&read));

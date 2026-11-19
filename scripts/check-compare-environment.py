@@ -142,7 +142,6 @@ def check_safe_area(root):
     # the screens it photographs with the Fury backdrop hidden are screens of its walk, and ours is told the same state
     walked = {item["id"] for item in hd.WALK if isinstance(item, dict)}
     assert hd.HIDDEN_BACKDROP and set(hd.HIDDEN_BACKDROP) <= walked, "HIDDEN_BACKDROP names a screen WALK does not photograph"
-    assert set(hd.CRAFT_LIT) <= set(hd.HIDDEN_BACKDROP), "CRAFT_LIT names a screen whose backdrop is not hidden"
     assert tuple(hd.fb.OURS_FLAGS) == ("--fury-tint", "0"), "ours must be drawn at the tint written over the original's row"
 
 

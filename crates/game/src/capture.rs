@@ -65,8 +65,8 @@ pub struct Options {
     /// The Fury menu backdrop's screen tint, stated for all three channels
     /// instead of read off the skin's row. See `Cli::fury_tint`.
     pub fury_tint: Option<f32>,
-    /// The adapted luma the Fury front end's craft is exposed at, stated
-    /// instead of the title's read. See `Cli::fury_adapted_luma`.
+    /// The adapted luma the Fury front end is exposed at, stated instead of the
+    /// craft's constant and the chain's own average. See `Cli::fury_adapted_luma`.
     pub fury_adapted_luma: Option<f32>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
     /// to. `--camera-jitter`; see `crate::race_capture::CaptureOptions::camera_jitter`.
@@ -1162,7 +1162,12 @@ pub fn run(
                 (&device, &queue),
                 page,
                 oag_display::display::viewport((width, height), options.settings.display.aspect),
-                (options.anim_seconds, options.fury_path, options.fury_tint),
+                (
+                    options.anim_seconds,
+                    options.fury_path,
+                    options.fury_tint,
+                    options.fury_adapted_luma,
+                ),
                 layer
                     .as_mut()
                     .map(|layer| layer as crate::render::DrawSceneLayer<'_>),

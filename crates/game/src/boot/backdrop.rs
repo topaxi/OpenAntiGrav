@@ -139,7 +139,12 @@ impl MenuBackdrop {
         (device, queue): (&wgpu::Device, &wgpu::Queue),
         page: &str,
         viewport: (f32, f32, f32, f32),
-        (anim_seconds, fury_path, fury_tint): (Option<f32>, Option<usize>, Option<f32>),
+        (anim_seconds, fury_path, fury_tint, adapted_luma): (
+            Option<f32>,
+            Option<usize>,
+            Option<f32>,
+            Option<f32>,
+        ),
         layer: Option<crate::render::DrawSceneLayer<'_>>,
     ) {
         let Self::Fury(assets) = self else {
@@ -159,6 +164,7 @@ impl MenuBackdrop {
             model.tick(&oag_ui::backdrop::SILENCE);
             frame
         });
+        renderer.pin_fury_adapted(adapted_luma);
         renderer.settle_fury_backdrop(device, queue, leading_up, (w as u32, h as u32), layer);
     }
 }

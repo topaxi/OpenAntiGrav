@@ -329,8 +329,8 @@ pub(crate) struct Cli {
     /// With the backdrop's cloud hidden (`--fury-tint 0`) the original's
     /// exposure adapts to a darker page than the cloud-showing read the
     /// craft's light carries, and a pair records its own read.
-    /// It reaches the craft's light only (`preview::model_light`); a page
-    /// whose scene the bloom chain reads adapts on its own.
+    /// It sets the craft's light (`preview::model_light`) and pins the
+    /// backdrop chain's adapted luma, which is what the cards' level follows.
     #[arg(long, value_name = "LUMA")]
     pub(crate) fury_adapted_luma: Option<f32>,
 

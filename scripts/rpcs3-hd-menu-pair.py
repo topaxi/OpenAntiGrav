@@ -63,12 +63,9 @@ ANGLE_STEP, FRAMES_PER_SECOND = 0.01, 60.0
 #: The `WALK` ids photographed with the Fury backdrop hidden on both sides: the screens whose page is mostly backdrop. The cloud, its
 #: path and how far along it are a new roll on every boot, two paths in three are modes ours does not draw and the music pulses it,
 #: so no grab can be reproduced; the row's tint is written to zero in the emulator's RAM before the settle and put back after the grab
-#: (`hd_fury_backdrop.py`), and ours is drawn with `--fury-tint 0` (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden
+#: (`hd_fury_backdrop.py`), and ours is drawn with `--fury-tint 0` and the adapted luma read at the grab (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden
 #: for a compare shot").
 HIDDEN_BACKDROP = ("track-select", "ship-select", "campaign-select", "grid-select", "cell-select")
-#: The hidden-backdrop screens that draw a craft in the front end's light: ours states them the adapted luma read at the grab, as the
-#: original's exposure adapts to the page without the cloud. The others adapt on their own, the scene being what the chain reads.
-CRAFT_LIT = ("ship-select",)
 
 #: The walk. A string is a button (`name` or `name:SETTLE_SECONDS`); a dict is a photograph. `pair` fields: `id`, `title`,
 #: `screen` (HD's own name, from TTY.log), `page` (ours' `--menu-page`), `drawn_from` (`xml` or `menu.toml`), `xml` (the
@@ -301,8 +298,8 @@ def main():
             pair.check("the Fury backdrop is hidden at the grab", hidden["still_hidden"] and hidden["frames_waited"] >= fb.FRAMES_TO_DECAY,
                        "row %s zero at the grab: %s, %d widget frames since the write (%d let the trail decay)"
                        % (hidden["row"], hidden["still_hidden"], hidden["frames_waited"], fb.FRAMES_TO_DECAY))
-            extra += fb.record(pair.rec, hidden, hidden["adapted_luma"], lights_craft=item["id"] in CRAFT_LIT)
-            pair.rec["meta"]["note"] += " The Fury backdrop is hidden on both sides (the original's row tint written to zero for the grab, ours `--fury-tint 0`%s)." % (" and `--fury-adapted-luma`" if item["id"] in CRAFT_LIT else "")
+            extra += fb.record(pair.rec, hidden, hidden["adapted_luma"])
+            pair.rec["meta"]["note"] += " The Fury backdrop is hidden on both sides (the original's row tint written to zero for the grab, ours `--fury-tint 0 --fury-adapted-luma` at the luma read at the grab)."
         taps = taps_before.get(item["id"])
         if taps:
             pair.rec["meta"]["state"] += "; then %s on this screen (--taps-before)" % taps
