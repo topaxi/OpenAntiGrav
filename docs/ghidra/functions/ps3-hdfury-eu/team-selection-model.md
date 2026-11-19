@@ -321,8 +321,9 @@ screen's header dots (the selected team's marker) are on the old team through fr
 grabs on two boots (one grab at frame 3 still showed the old one; every one from frame 4 on the new). The press
 reaches the selection 0.032 s (about 2 frames; 0.025 to 0.041 over 14 presses) after the pad is pressed, so a film counted from the press sees every
 number above 2 frames later, which is part of "the film holds its first size about six frames longer than the law".
-Ours (`hull_swap::GAP_SECONDS` 0.06): absent while the step is under 0.06 s, so frames 0 to 3 of its step, 4 frames. **The one term that
-differs is the gap: 3 frames in the original (once 4), ours 4.** Confidence 70.
+Ours was `hull_swap::GAP_SECONDS` 0.06: absent while the step is under 0.06 s, so frames 0 to 3 of its step, 4 frames. **The one term that
+differed was the gap: 3 frames in the original (once 4), ours 4. Wired (2026-11-19, `hd-step-gap`): `hull_swap::GAP_FRAMES` = 3 frames of the screen's
+own 60 Hz update, absent on a step's frames 0 to 2, present from 3; test `hull_swap::tests::a_step_cuts_the_craft_for_three_frames`.** Confidence 70.
 
 **5. The picture's lag behind RAM** is 3 to 4 frames and the cut is aligned with the selection's visible change. Of the 72 grabs on two boots, 14 show no craft (frames 3 to 6): 13 of them have the header dots already on
 the new team and one (frame 3, boot 2) the old dots; no grab at frame 3 or later shows the old craft, and none of the empty ones has the old dots past frame 3. So the craft
@@ -351,6 +352,12 @@ beyond the rest floor**. Where ours is absent and the original shows the new cra
 with the gap at 0.045 s (3 frames) draws the new craft at the original's frame 6 less 3 and brings the two boot-1 grabs at frame 6 from 20.5 and
 27.2 to 3.4 and 3.7 (at a lag of 3; at a lag of 4 the original's craft is back a frame earlier still and the gap would be 2 frames after the selection).
 
+**After the wire (picture lag 3, the pairs re-rendered from their recorded flags with the step seconds `(k-3)/60`; before is the table above):**
+craft box k=4 0.50, **k=6 30.52 to 2.57** (whole frame 13.58 to 4.72), k=8 3.69 to 3.52, k=10 4.59 to 4.92, k=15 4.04 to 4.33, k=19 3.95 to 3.91, k=29 4.49 to 4.47. The frame-6 pair
+drops to the rest floor (3.70); the others move by a frame of settle (under 0.35). At the old lag of 4 (ours at 2 frames) the cut still hides the craft on k=6 (30.52), so the
+pairs' lag is 3 (`scripts/rpcs3-hd-ship-step.py`, `PICTURE_LAG_FRAMES`): the cut and the header dots are the same frame in ours, and the dots' lag is the measured 3 (71 of 72 grabs).
+Omega shares `hull_swap` and so takes the 3-frame cut by lineage (HD's front end; the gap was never read off Omega, see "Omega and 2048").
+
 **Verdict for the claim**: the settle start per team, the turn and the zoom match (the law is exact in RAM, the turn and zoom terms are zero on a
 step); the craft box during the settle is at the rest pair's floor; the single term that differs is the cut: 3 frames (once 4) against ours' 4,
 a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step: in the two grabs read
@@ -378,6 +385,9 @@ eased fields are never read there (above), so a step has no settle to compare.
   HD's law", and `ship_preview_settle` carried HD's fit as **inherited from HD**. The eased fields
   are never read (the page above), so Omega's craft cuts in at its rest pose: the field and the
   scale-of-pose path are removed.
+- **Omega, the swap's gap: ported by lineage, unmeasured on Omega.** `ship_preview_hull` is `Some` there, so Omega's craft takes `hull_swap`'s opening delay and step gap
+  with HD's values (3 frames since 2026-11-19, 4 before). Omega's own update (`FUN_015a3b80`) is read for the pose, not for a model swap, and the original has no RAM readout here
+  (shadPS4), so the gap is inherited from HD, not measured; a title of its own would be a `Title` field.
 - **2048: checked, differs.** The window's `535.0` occurs nowhere in the v1.04 `eboot.elf` as a
   literal (a byte search for `00 c0 05 44`; an ARM `movw`/`movt` pair would not show, so this is
   absence of the HD constant run, not proof of no fit), its `<FE>` authors `length` beside

@@ -362,7 +362,7 @@ presents at least 60 fps there). Reference frames and the per-frame series:
 | --- | --- | --- |
 | Turntable | **none.** Silhouette identical to the pixel across 18 s of hold (width and height of the 1-99 percentile box constant to 1 px after the settle; frame-to-frame crop RMSE 0.3% where no particle crosses it) | 85 |
 | Opening the screen | craft **absent** while the screen's particle transition plays, then **cut in** whole at rest pose, no settle: first frame 119-120 of a press at frame 90, 30 fps, so 0.97 s less about 0.1 s of input latency | 60 |
-| Stepping, either direction | old craft cut in **one frame**; **empty frame 3 captured frames at 60 fps twice, 4 once (50-67 ms)**, and 3 at 30 fps (100 ms) in the heavier capture - counted in emulator frames, not a fixed time; new craft cut in solid (no alpha ramp, no slide) | 70 |
+| Stepping, either direction | old craft cut in **one frame**; **empty frame (wired as 3 frames, 2026-11-19) 3 captured frames at 60 fps twice, 4 once (50-67 ms)**, and 3 at 30 fps (100 ms) in the heavier capture - counted in emulator frames, not a fixed time; new craft cut in solid (no alpha ramp, no slide) | 70 |
 | Settle after a step | the new craft appears slightly off its rest size and **eases to it in 0.45 s** (5% left at 26-28 frames of 60). Excess per 50 ms: `1.00 1.03 0.97 0.83 0.56 0.39 0.24 0.17 0.10 0.06 0.03 0.01 0`. Pure scale about a pivot right of and above the hull's centre (Qirex: fit of both silhouette edges to 1 px) | 65 (curve), 40 (what is scaled) |
 | Start size of the settle | **per team**: 0.95 of rest (Feisar), 1.08 and 1.12 (two others), independent of the step direction (the same team entered from either side starts alike). **Wired 2026-11-12** (`hd-ship-swap-settle`): the depth fit's target is not reset on a step, so the new model starts at the last one's rest depth and the drawn depth eases to its own at 0.125 a frame (`team-selection-model.md`, "What the update writes over the widget"; the law against this film: "The swap against the 60 fps film" there) | 50 (measured), 85 (law) |
 | Particle burst | a red then orange/yellow streak cloud starts about 2 frames after each cut at the left of the craft and decays over about a second; red wisps also drift past with no press. Which is the screen's backdrop and which a step effect is **not separated**; no `.pob` named | open |
@@ -380,7 +380,7 @@ poses the craft on other rest angles (see the Omega section of
 
 What this build does: [`oag_game::preview::hull_swap`](../../crates/game/src/preview/hull_swap.rs)
 holds the measured timings, the craft absent for 0.9 s after the screen opens and
-a 60 ms gap on every step (RAM-read 2026-11-19: the original's is 3 game frames, once 4, so 50 ms; `team-selection-model.md`, "The step against RAM"). The craft's size across a step is the screen's own
+a gap of 3 frames of the screen's 60 Hz update on every step (`GAP_FRAMES`, wired 2026-11-19 from the RAM read: the original's is 3 game frames, once 4; `team-selection-model.md`, "The step against RAM"). The craft's size across a step is the screen's own
 depth fit, played frame by frame ([`oag_game::preview::ship_model::FitMotion`],
 held by `PickerStage` and ticked at 60 Hz beside the picker's clock, while the
 craft is hidden too): the new hull is drawn at the last model's rest depth and
@@ -391,7 +391,7 @@ Headless stills: `--menu-page ship-select --menu-picker-seconds T` (entry) and
 `--menu-picker-step-seconds T` (a step; the model stepped from is the entry
 above the selected one, **chosen**: the film's team order is not read).
 Omega: checked, differs (2026-11-19). `ship_preview_hull` is `Some("ship.vex")` there and
-the swap's timings reach it, but the craft has **no settle**: `FUN_015a3b80` eases the fit's
+the swap's timings (opening delay, the 3-frame gap, inherited from HD, unmeasured on Omega) reach it, but the craft has **no settle**: `FUN_015a3b80` eases the fit's
 targets into fields nothing reads, so the new craft cuts in at the rest pose (the earlier
 "ported by inheritance" reading is withdrawn; `ship_preview_settle` is gone). Its pose is the
 update's own rest values (`ps4-omega-eu/team-selection-pose.md`).
