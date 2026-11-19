@@ -32,10 +32,13 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
   finished field before its chain (`flyer::Layer::Scene`, `render::SceneLayer`); `FURY_GAIN` is the stand-in where
   no chain runs. Evidence and the frames: `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The
   flyer card is drawn before the resolve". Open from it:
-  - **The black hexagon field is in the original's scene and not in ours** (the ladder's mean reads `(34, 1, 1)`
-    where the card alone gives `(36.9, 1.6, 1.6)`; the 32 `bBg_x_y` hexagons account for it). Ours' exposure on
-    `Cell Selection` is 2.33 against 2.50 and the card reads 100 against 103 and 104. Needs the pass that draws
-    `bBg_x_y` read, then those quads drawn into the scene layer. Small (40).
+  - ~~**The black hexagon field is in the original's scene and not in ours**~~ WRONG PREMISE (`hd-menu-grid`,
+    2026-11-19): `bBg_x_y` is authored on `Cell Selection` only; `Grid Selection` (the `menu-grid-select` pair, mean
+    grey 7.25) has no hexagon, so the `(34, 1, 1)` against `(36.9, 1.6, 1.6)` gap there is something else (unread;
+    see `front-end-model-lighting.md`, "The scene mean"). What stays open: on `Cell Selection` the 32 `bBg` are
+    drawn by ours over the page, after the resolve; whether the original draws them into the scene (so they lower
+    the adapted exposure, ours 2.33 against 2.50) is unmeasured, the `menu-cell-select` pair reads 3.44 grey. Wiring
+    needs a Renderer path that rasterises a `Draw` sublist into the `STORED_FORMAT` scene layer. Small (30).
   - **Ship Select's backdrop runs the track block.** The read there is the model screens' block too; the hull is
     not in the scene (its level is a constant exposure). Putting the hull into the scene layer would give it the
     chain's bloom and retire `FrontEndTone::adapted_fury`. Medium (40). Measured 2026-11-18 (`hd-menu-ship`,
