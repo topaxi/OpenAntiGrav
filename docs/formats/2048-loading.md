@@ -110,8 +110,10 @@ oag-game data/extracted/vita/PCSF00007 --loading-screen 0/1 --loading-step race 
 
 `--loading-card EVENT[:PAGE]` presses Launch on that event's card (a capture has no save, so the first event counts as
 passed); `--loading-stage N` is the load stage reported to the bar (0 to 4: 4 turns the card to its mode page); `--ticks`
-the screen's age at 60 Hz (232 is 8 %, 1760 is 61 %, a few thousand holds 98 %). The original's is one command away
-(`scripts/vita-2048-race-load.py`).
+the screen's age at 60 Hz (232 is 8 %, 1780 is 61 %, 1760 reads 60 %, a few thousand holds 98 %). The original's is one command away
+(`scripts/vita-2048-race-load.py`). The comparison page's three race-load pairs (`2048/race-load-tip|mode|late`, stages 0, 4, 4
+at 232, 1780 and 6000 ticks) are made by `scripts/vita-2048-race-load-pair.py`: it writes each `pair.json` (`kind = "loading"`,
+the exact flags) beside the kept `theirs.png` and renders ours, so `compare-rerender-ours.py` re-renders them afterwards.
 
 Against Omega: **checked, differs** (unchanged: it never starts this screen). Against HD: **ported** for the law (HD's
 `Rules::HD` keeps its doubling, per-frame step and base-rate reset; HD's loading frames are byte-identical before and after).

@@ -445,6 +445,11 @@ and the clock's address); `pcsx2-pulse-walk.py` needs a Track Select savestate w
 
 ## Re-rendering ours only (2026-10-21)
 
+A pair with no `pair.json` is skipped here (`kept <page>.toml as written`) and its `ours.png` is never made. The Wipeout 2048
+race-load pairs are made by `scripts/vita-2048-race-load-pair.py [--pairs DIR]` (a `pair.json` for each of `race-load-tip`,
+`-mode` and `-late` beside its kept `theirs.png`, then ours drawn); run it once on the main checkout's pair directory, after
+which this script re-renders them like any other loading pair.
+
 `just compare-rerender-ours [--only <substring>]` re-draws `ours.png` of every pair with the current `oag-game` and
 leaves every original alone; no emulator runs, so the maintainer can run it at any time. It replays the flags each pair
 recorded in `ours.flags` against the pair's disc image (`--image` in `argv`, else the profile's), with a private
