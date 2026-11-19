@@ -15,7 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::rcs::psp2::{self, Animation};
-use oag_mesh::mesh::{Model, PROGRAM_VERTEX_BLEND, slots};
+use oag_mesh::mesh::{Model, PROGRAM_EMISSIVE_ADD, PROGRAM_VERTEX_BLEND, slots};
 use oag_mesh::mesh_render::TexAnims;
 
 fn package() -> Option<PathBuf> {
@@ -95,7 +95,7 @@ fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() 
     let mut rates: Vec<f32> = model
         .emissive
         .iter()
-        .filter(|e| e.program[0] != PROGRAM_VERTEX_BLEND)
+        .filter(|e| e.program[0] != PROGRAM_VERTEX_BLEND && e.program[0] != PROGRAM_EMISSIVE_ADD)
         .map(|e| e.rate)
         .collect();
     rates.sort_by(f32::total_cmp);
@@ -134,12 +134,14 @@ fn altima_scrolls_its_plain_materials_and_draws_the_rest_still() {
     };
     assert_eq!(report.glow_layers, 0, "{}", report.describe());
     assert_eq!(report.scrolling_materials, 12, "{}", report.describe());
-    // The vertex-red blend's entry is the one glow-table entry Altima carries: it adds no glow.
+    // The vertex-red blend's entry and the track surface's unit-tint emissive add
+    // (`psp2::emissive_add`) are the glow-table entries Altima carries: neither is a glow layer.
     assert!(
         model
             .emissive
             .iter()
-            .all(|e| e.program[0] == PROGRAM_VERTEX_BLEND),
+            .all(|e| e.program[0] == PROGRAM_VERTEX_BLEND
+                || e.program[0] == PROGRAM_EMISSIVE_ADD && e.tint == [1.0; 3]),
         "{:?}",
         model.emissive
     );
