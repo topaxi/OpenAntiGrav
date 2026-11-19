@@ -64,8 +64,8 @@ pub const RECORD_ROW_IDS: [&str; 3] = ["FE_PERSONAL", "FE_FRIENDS", "FE_GLOBAL"]
 /// unit, and the icon texture is drawn at the size that puts its own sails
 /// there (**chosen** from one frame, the texture's fill not measured).
 const ICON_SIZE: f32 = 62.0;
-/// The cursor ring's tint, off the frame's pale ring (221/155/162).
-const RING: [f32; 4] = [0.87, 0.61, 0.64, 1.0];
+/// The cursor ring's tint: the frame's pale band reads 223/169/174.
+const RING: [f32; 4] = [0.88, 0.70, 0.74, 1.0];
 
 /// What a widget the generic parser does not reach says.
 #[derive(Debug, Clone, Default, PartialEq)]

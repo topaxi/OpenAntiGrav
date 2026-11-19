@@ -4016,7 +4016,7 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 | Piece | Source | Confidence |
 | --- | --- | --- |
 | cell | `Data\FE\Images\Hexagon_HD.gtf` (72x62 art in 128x64) at 1.22 | 70 |
-| cursor ring | `Hexagon_HD_OUTLINE.gtf`, tint read off the frame (`185/35/55`); the original's ring is about twice as thick: **chosen, not measured** | 40 |
+| cursor ring | a band of `Hexagon_HD_OUTLINE.gtf` six units wide, tinted pale pink (`193/81/91` on the flats, `200/92/102` on the sides); see "The cursor ring" below. **Chosen, not measured** as widget constants | 60 |
 | padlock | `Padlock.gtf` (the image this screen authors at 512x512), visible art 91x129 texels drawn at 0.44; colour `SelectedLockCol` on the selected column, faded toward `SelectedLockColFade` by 0.2 and 0.65 one and two columns out (frame reads 128, 110, 68) | 70 |
 | model icon | `<modellocation>\FE\thumb<LiveryNumber>.gtf` - `Feisar_c1\FE\thumb4.gtf` for `concept1`, `Feisar\FE\thumb0.gtf` for `normal`; census: every model of every team carries one | 85 (the frame's two icons match thumb4 and thumb0) |
 | selected column | `SelectedColumnCol` drawn twice on the bare cell (the two-pass fill `Block_Render` uses): `0x64` twice over black is 160, the frame reads (151, 6, 20) | 70 |
@@ -4031,9 +4031,45 @@ below, which rests on one clean anchor (the stat blocks' 545-unit spacing).
 **The columns are teams, the rows models**: `Right` from `concept1` lands on
 the next team's `concept1` (2026-09-29 walk), so the centre column is the
 selected team and its neighbours the teams either side (wrapping: chosen).
-The cursor ring sits on the row of the chosen livery. Our picker offers three
+The cursor ring sits on the row of the chosen livery (a cell of the centre column
+only, and it follows `Up`/`Down` between variants and `Left`/`Right` between teams).
+Our picker offers three
 liveries (`""`, `_c1`, `_n1`), each on the row its model occupies
 (`Team::hex_cells`, `model_for_directory`).
+
+**The cursor ring (2026-11-19, `hd-ship-variant-outline`)**: the maintainer
+reported that Ship Select did not highlight the selected variant. The ring was
+drawn, but as the outline art alone: `Hexagon_HD_OUTLINE.gtf` is a ring 0.87
+texel wide (alpha 221 on one texel, 128x64 art), about one pixel at 1920x1080,
+in a red that vanished on the red cell. The Fury-style frame (`hd/menu-ship-select`)
+reads a pale band 6 px wide inside the cell's edge (193/81/91 on the flats,
+200/92/102 on the sides, perpendicular profile at the top and bottom edges: 602.5
+to 608.5 and 670.5 to 676.5 of a 73 px cell), the cell's red unchanged inside it
+(149/6/20). `Track Creation`'s frame has the same band (6 px, 223/169/174), so
+the band is the widget class's, shared by `hex::draw_cells`; and `Omega`'s
+Ship Select frame (`omega/menu-ship-select`) has a 4.6 px band, which is 6 px
+times its grid's `Scale="0.8"`, in an opaque red (215/0/0) on a grey cell.
+Drawn as the outline art repeated at one-unit insets (six copies, each twice,
+the two-pass fill the selected column's red uses), the tint per screen: **chosen,
+not measured**, because the XML authors no ring attribute (`HexSelection` reads
+shape and colours only, and `Omega`'s carries the same `SelectedColumnCol`
+`0x64ff0000` as HD's) and the executable's draw was not read (no Ghidra
+instance was up). Whether the band is the art repeated or a stencilled hexagon is
+unread; the frames fit either. The tint is HD's Fury-style pink by default and
+`FrontEnd::team_hex_ring` where a title's differs (Omega: red, the HD style;
+what HD's own HD style draws is unmeasured). Box metric (mean absolute difference
+of the selected cell's box, `390,598,490,682` of the 1920x1080 pair): 0.0800 to
+0.0459; `Track Creation`'s ring box (`450,440,570,545`): 0.1337 to 0.0985; mean
+grey of the two pairs 4.55 to 4.51 and 7.89 to 7.83. Confidence 60 (one frame
+each).
+
+**Omega cross-check: ported, tint differs.** Omega's Ship Select draws the same
+band through the same `draw_cells` (thickness scales with the grid's `Scale`, 4.6
+px against the frame's 4.6) in its own red; its selected column's fill (grey in
+the original, light red in ours) and the cell's thumbnail art are other open
+differences. **`Cell Selection`'s outline is not this widget**: `CellMode`
+authors its hexagons as `Bg_x_y`/`Outline_x_y` image layers, so its white
+outline needs that screen's own reading (still open).
 
 **The lock rule is inherited, labelled so**: a row is open when it is a model
 this build lets a player race, padlocked otherwise - Pulse's law, unmeasured

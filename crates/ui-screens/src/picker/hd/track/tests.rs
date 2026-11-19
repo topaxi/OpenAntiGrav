@@ -278,12 +278,12 @@ fn the_grid_puts_a_circuit_in_each_hexagon_and_red_on_the_chosen_column() {
     let picker = grid();
     let draws = grid_draws(&picker);
     // 9 columns x 2 rows: a hexagon and an icon each, the chosen column's
-    // two hexagons drawn twice, and the ring on the forward row.
+    // two hexagons drawn twice, and the ring's six copies, twice each, on the forward row.
     let sprites = draws
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { .. }))
         .count();
-    assert_eq!(sprites, 18 + 2 + 18 + 1);
+    assert_eq!(sprites, 18 + 2 + 18 + 12);
     let red = draws
         .iter()
         .filter(|d| matches!(d, Draw::Sprite { color, .. } if color[0] == 1.0 && color[1] == 0.0))
