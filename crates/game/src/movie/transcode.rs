@@ -233,6 +233,44 @@ pub(super) fn run_ffmpeg(
     frames: Frames,
     watch: Watch<'_>,
 ) -> Result<()> {
+    write_atomically(output, |part| {
+        encode(input, part, input_format, frames, watch)
+    })
+}
+
+/// Runs `write` against a temporary file beside `output` and renames it into
+/// place when `write` succeeds, so a reader (or a second writer of the same
+/// key, as a prefetch and a screen can be) sees a complete file or none. The
+/// temporary is removed on failure.
+pub(super) fn write_atomically(
+    output: &Path,
+    write: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let mut name = output.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(
+        ".{}-{}.part",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let part = output.with_file_name(name);
+    let result = write(&part).and_then(|()| {
+        std::fs::rename(&part, output)
+            .with_context(|| format!("moving {} into place", part.display()))
+    });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    result
+}
+
+fn encode(
+    input: &Path,
+    output: &Path,
+    input_format: Option<&str>,
+    frames: Frames,
+    watch: Watch<'_>,
+) -> Result<()> {
     if ffmpeg_missing() {
         bail!(
             "ffmpeg is not on PATH. Install it to see the intro video; \

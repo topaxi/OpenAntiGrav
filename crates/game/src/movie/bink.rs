@@ -166,7 +166,9 @@ fn ensure_source(cache_dir: &Path, key: &str, ext: &str, blob: &[u8]) -> Result<
     let path = cache_dir.join(format!("{key}.{ext}"));
     let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
     if !already_written {
-        std::fs::write(&path, blob).with_context(|| format!("writing {}", path.display()))?;
+        super::transcode::write_atomically(&path, |part| {
+            std::fs::write(part, blob).with_context(|| format!("writing {}", part.display()))
+        })?;
     }
     Ok(path)
 }

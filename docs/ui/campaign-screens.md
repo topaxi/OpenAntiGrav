@@ -4065,10 +4065,9 @@ Vineta K's own footage to a few grey levels).
   the key the screen looks up): the whole sixteen took 795 s in one process, and
   afterwards a circuit opens from the cache in 22 to 83 ms (four circuits timed).
   The prefetch's plan is pinned in `hd_movie_ground_truth` (the plan's keys equal
-  `cache_key` over every `fe/preview.bik` the disc walk finds: 16). Not atomic: the
-  transcode writes the cache file in place, so a first view of a circuit the
-  prefetch is converting at that moment runs a second `ffmpeg` into the same file.
-  The boot's two 1080p logo reels and the other front-end Bink files are not
+  `cache_key` over every `fe/preview.bik` the disc walk finds: 16). Each transcode writes a `.part` file beside the cache file and renames it into
+  place (`movie::transcode::write_atomically`), so a first view during the prefetch
+  never reads a half-written clip. The boot's two 1080p logo reels and the other front-end Bink files are not
   prefetched (a different key, and 98 s for the logo reel alone).
 - **The sound.** The four Zone circuits' clips carry a track; ours plays none.
 - **Omega: checked, differs.** Its `Track_Selection_Definition.xml` (`data09`)
