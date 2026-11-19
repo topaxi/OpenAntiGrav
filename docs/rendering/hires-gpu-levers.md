@@ -1455,9 +1455,17 @@ and the pipelined frame did not move beyond their noise.
 **Picture.** 2048, Omega, Pulse and Pure: byte-identical at every size on both adapters (Pulse and
 Pure 1280x800 NVIDIA). HD on NVIDIA: 0, 0 and 2 of 8,294,400 pixels, by one level. HD on Intel:
 182, 451 and 1,441 pixels (0.02 %), 149 of the 182 by one level and none past 7, scattered single
-pixels on the hull, the same in every round. A build with `programs_present` alone moves the same
-182, so it is the compiler's float order in the folded shader (the values the lanes return are the
-same zeros), not a change of what is computed. HD Zone race: byte-identical.
+pixels on the hull, the same in every round. A build without the hull `lit_by_rig` moves the same
+182, and in a single race `zone_race` was 0 for every pipeline already, so `programs_present` is
+what moves them: the compiler's float order in the folded shader (the lanes return the same
+zeros), not a change of what is computed. HD Zone race: byte-identical. On the start grid (tick
+300, several hulls up close, Intel 1280x800): HD 200 pixels by up to 4 levels, 2048 and Omega
+byte-identical. Every frame checked is a race frame; `programs_present` also reaches every other
+program-free table (pads, weapons, the front end's craft, the viewer), exact by the same argument.
+
+The scene block a hull reads is `SceneKind::Ship` on every path (`Scene::share_scene_blocks`,
+instances of a hull included), and the only writer of the emissive table after the upload is the
+pad cycle (`drawable/pad_glow.rs`), which writes tints.
 
 **The Deck.** It should carry: these are branches and one mix on the rich pipeline, whose
 register count limits waves on RDNA2 (5,943 instructions at 168 VGPRs before). Re-measure:
