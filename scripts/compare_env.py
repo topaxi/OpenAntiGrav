@@ -96,6 +96,17 @@ def profile_anisotropy_flags(flags, plat, kind=None):
     return flags
 
 
+def profile_pilot_assist_flags(flags, plat, kind=None):
+    """`flags` with `--pilot-assist` at the profile's setting. A recorded flag beats the profile, so a pair recorded while the
+    profile said `on` would keep drawing an indicator the original's recapture lacks. Menu and loading pairs hold no craft."""
+    flags = list(flags)
+    level = plat["ours"].get("pilot_assist")
+    if level is None or kind in ("menu", "loading") or "--pilot-assist" not in flags:
+        return flags
+    flags[flags.index("--pilot-assist") + 1] = level
+    return flags
+
+
 def ppsspp_ini(plat):
     """The `[Graphics]` lines the instance's ini carries for this profile (PPSSPP picture settings)."""
     e = plat["emulator"]
@@ -633,7 +644,8 @@ def environment_text(plat, rec):
             % (size_text(plat), o["render_scale"], "no upscaler" if o["reconstruction"] == "off" else o["reconstruction"],
                o["shadows"], o["motion_blur"], plat["aspect"], o["hud"], o["camera"])]
     if "pilot_assist" in o:
-        bits.append("Pilot Assist %s on both sides (the original's frame draws its indicator)" % o["pilot_assist"])
+        bits.append("Pilot Assist %s on both sides (%s)" % (o["pilot_assist"], "the original's frame draws its indicator"
+                    if o["pilot_assist"] != "off" else "the original's frame draws no indicator"))
     if "exposure_hold" in o:
         bits.append("exposure held at %s on ours (Vita3K never reads the original's gate back, so its exposure never "
                     "leaves %s; a Vita and ours in play adapt)" % (o["exposure_hold"], o["exposure_hold"]))

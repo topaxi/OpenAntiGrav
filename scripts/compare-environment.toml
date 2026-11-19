@@ -105,13 +105,13 @@ output = [1920, 1080]
 output_note = "full HD"
 aspect = "wide"
 profile_key = "Wipeout HD (PS3)"
-# Pilot Assist is ON in the original's HD states: every one of the thirteen frames draws the
-# assist indicator (`AssistIndicatorBG` and its chevrons, `hud_assist_indicator.xml`, bottom
-# centre at 960,885), the bracket under the craft that was once read as a ground ring, and ours
-# draws the same ring with `--pilot-assist on` (2026-10-21, `hd-go-board-hud`). The level is not
-# read (Normal and Extreme draw the same indicator); `on` is Extreme. Pairs pose-hold, so the
-# assist forces do not move the craft.
-pilot_assist = "on"
+# Pilot Assist is OFF in the original's HD pairs: they are cold boots of a fresh profile (every `hd-fury` pair
+# records `capture_path.kind = "cold_boot"`), and none of their frames draws the assist indicator
+# (`AssistIndicatorBG` and its chevrons, `HUD_assist_indicator.xml`, the bracket under the craft), which
+# the original draws while the option byte `+0x473` is on (docs/ghidra/functions/ps3-hdfury-eu/pilot-assist.md).
+# The pairs of 2026-10-21 were made from a save state that had it on and ours drew the same bracket; the
+# 2026-11-18 recaptures did not, and ours kept drawing it. Pairs pose-hold, so the assist forces do not move the craft.
+pilot_assist = "off"
 # The original's `Safe Area Setting` in the save the thirteen HD states were taken from: `96.0` read
 # live from the option's global (`+0x104` of the object behind the TOC slot `0x8a5bb4`), 2026-10-21,
 # `hd-hud-leftovers`. The disc's own default is 90 (`default="90%"`), which ours uses when nothing
