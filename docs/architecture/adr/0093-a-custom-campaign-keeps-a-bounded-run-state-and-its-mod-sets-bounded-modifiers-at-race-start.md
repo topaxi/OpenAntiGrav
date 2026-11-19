@@ -92,7 +92,7 @@ ratings, not computed from handling.
    state, which is hashed after the `slots.is_empty()` early return, so no vanilla
    hash moves and a replay on other bytes fails at tick 0. An out-of-range factor is
    **clamped with a named load-report warning**, not a fault (departing from the
-   other commands; open question 1 of `progression.md`). This is a bounded
+   other commands; settled by the maintainer, `progression.md` question 1). This is a bounded
    multiplier on the disc's own number, never a replacement value, and so narrows
    the README's "no replacing a disc table" row without contradicting its reason.
 5. **Pickup parameters.** Per slot, at race start: `count` (rockets per press, mines
@@ -128,7 +128,12 @@ ratings, not computed from handling.
     parameters and `give-autopilot`, then the frontend world and the screen. A campaign
     can ship with `race-end` choosing the reward by itself before the screen lands.
 
-**Not decided here:** whether a failed race ends a run, the AI's use of a mod pickup,
+**Settled by the maintainer (2026-11-19):** an out-of-range modifier is clamped, never
+a fault; whether a failed race ends a run is the mod's choice; whether the player may
+skip an offer is the mod's choice; a campaign may scale the AI's craft as well as the
+player's (`progression.md` section 12, questions 1, 3, 5 and 11).
+
+**Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 `TopSpeed` as a parameter, a data-first modifier table, a per-owner damage scale, the
 page that shows stats when the craft is preset, and every other item in
 `progression.md` section 12.

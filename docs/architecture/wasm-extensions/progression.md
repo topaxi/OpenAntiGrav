@@ -714,20 +714,20 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 
 ## 12. Open questions
 
-1. **Clamp or fault at `race-start`?** This draft clamps and warns by name
-   (section 4.1). The project's other commands fault. The cost of faulting: a module
-   turned off for the race with the player's rewards silently not applied.
+1. **Clamp or fault at `race-start`?** **Settled (maintainer, 2026-11-19): clamp.**
+   An out-of-range factor is clamped to the host's range and named in the load report
+   (section 4.1), never a fault.
 2. **Who owns NEW RUN?** A host row on the campaign page (this draft) or a mod
    screen action. A host row works with no screen and cannot be hidden by a mod.
-3. **Does a failed race commit?** This draft hands the decision to `race-end`
-   (`finished` and `tier` are in the result). A campaign that ends a run on a loss
-   needs a way to say "the run is over"; a flag in the reply, a status byte the host
-   reads, or the mod's own screen. Unspecified.
+3. **Does a failed race commit?** **Settled (maintainer, 2026-11-19): the mod
+   decides.** `race-end` gets `finished` and `tier` and chooses whether the run goes
+   on; the host imposes no rule. Open only in mechanism: how the mod says "the run is
+   over" (a flag in the reply, a status byte the host reads, or the mod's own screen).
 4. **A modded records table.** The interim "no `[[record]]` for a modified race" rule
    drops personal bests entirely. A separate modded table (README phase 2) is the
    fuller answer and is not built.
-5. **May the player skip the offer?** Skippable (take nothing), or the campaign blocks
-   until a pick.
+5. **May the player skip the offer?** **Settled (maintainer, 2026-11-19): the mod
+   decides**, per offer (skippable, or blocking until a pick); the host offers both.
 6. **Do `Thrust` and `scale-thrust` compose freely?** Each is bounded on its own, so
    the largest effective factor is 2.0 x 2.0 = 4.0. The alternative bounds the product
    by `MAX_THRUST_FACTOR`, so a reward would shrink the headroom of a per-tick boost.
@@ -740,10 +740,10 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    Options: the manifest names a gate (`never`, `turbo`, `under-fire`), or the AI never
    holds mod pickups in a run campaign.
 10. **Which page shows stats when Team Selection is skipped** (preset craft).
-11. **Slots beyond the person's.** `set-modifier` accepts any grid slot, so a campaign
-    could scale the AI. README section 3 says nothing in `oag-extras` favours the AI and
-    a third-party mod is the player's choice. Restrict to person-flown slots, or allow
-    both?
+11. **Slots beyond the person's.** **Settled (maintainer, 2026-11-19): allowed.**
+    `set-modifier` accepts any grid slot, so a campaign may scale the AI's craft too
+    (README section 3: a third-party mod is the player's choice). Open: the learned
+    speed plan a scaled AI craft invalidates (`progression-challenge.md`).
 12. **`TopSpeed`** (section 4.2): the measurement that settles it.
 13. **The run seed's source.** Drawn from the OS at run creation and stored. A
     campaign that wants the same rolls on every run needs a fixed seed in the `[run]`
