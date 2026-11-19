@@ -9,7 +9,7 @@
 
 use oag_display::space::Space;
 use oag_hud::{Placement, place};
-use oag_ui::frontend::Draw;
+use oag_ui::frontend::{Draw, Video};
 
 /// The placement that draws a `space`-sized grid at `scale` about its centre, or `None` at
 /// full size.
@@ -27,9 +27,28 @@ pub fn placement(space: Space, scale: f32) -> Option<Placement> {
 
 /// `draw` inset by `at`, or `None` when it stays as it was because it is a picture rather
 /// than a widget: a video or a backdrop, and a fill that covers the whole `space` (the page's
-/// clear colour).
+/// clear colour). The fly-by's clip is a widget, a picture in a panel, and moves with it.
 #[must_use]
 pub fn inset(draw: &Draw, at: &Placement, space: Space) -> Option<Draw> {
+    if let Draw::Video {
+        rect,
+        frame,
+        position,
+        source: source @ Video::FlyBy,
+    } = draw
+    {
+        return Some(Draw::Video {
+            rect: [
+                rect[0] * at.scale + at.offset[0],
+                rect[1] * at.scale + at.offset[1],
+                rect[2] * at.scale,
+                rect[3] * at.scale,
+            ],
+            frame: *frame,
+            position: *position,
+            source: *source,
+        });
+    }
     let whole = match draw {
         Draw::Video { .. } | Draw::FuryBackdrop(_) | Draw::SceneBackdrop(_) => true,
         Draw::Fill { rect, .. } => {

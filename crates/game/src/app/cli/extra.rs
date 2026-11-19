@@ -152,8 +152,24 @@ pub(crate) struct MenuArgs {
     /// opened: Pulse's `ship_FE.vex` sways on an `Anim Transform` that
     /// started when the model loaded, not when the screen did. `None` takes
     /// `--menu-picker-seconds`.
+    ///
+    /// With `--menu-page grid-select`/`cell-select` on HD/Fury it is the flyer
+    /// card's: its arrows and layers slide on the card's own clock, which
+    /// the widget keeps in `[3, 6)` seconds (a time reaching `6.0` goes back by
+    /// 3, `Flyer_Item`'s render at `0x001a2510`), so no two grabs of the original
+    /// show the same one. `scripts/rpcs3-hd-menu-pair.py` reads the clock out of
+    /// RAM at the grab and passes it; `None` draws the card at 3.0.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_model_seconds: Option<f32>,
+
+    /// With `--menu-page` on a title with a footer ticker, draw this one message instead of the
+    /// rotation: `ITEM@X`, the `PI_News` item's id (`TKR_FAVMUS`) and where the message's head
+    /// is, in pixels from the ticker's left edge (the original's own coordinate: a message
+    /// enters at the ticker's width and moves left a pixel a frame). A still has no moment in
+    /// a rotation drawn at random, so this states the one the original's frame caught; the
+    /// message is drawn from the profile's own lifetime statistics.
+    #[arg(long, value_name = "ITEM@X")]
+    pub(crate) menu_ticker: Option<String>,
 
     /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
     /// to draw behind the page, counting from zero; past the end it wraps.
@@ -162,7 +178,9 @@ pub(crate) struct MenuArgs {
     /// caught it depends on how long the walk took: the streaks and the craft
     /// that fly past are bright for about 0.3 s of the nine-second loop.
     /// `scripts/compare-menu-movie-phase.py` finds the frame a still shows.
-    /// `None` draws frame zero. No effect on a title with no backdrop movie.
+    /// `None` draws frame zero. No effect on a title with no backdrop movie, except on
+    /// HD's `track-select`, where it is the frame of the selected circuit's fly-by clip
+    /// (`scripts/compare-menu-movie-phase.py --fly-by-clip` finds it).
     #[arg(long, value_name = "FRAME")]
     pub(crate) menu_movie_frame: Option<usize>,
 
@@ -191,6 +209,9 @@ pub(crate) struct MenuArgs {
     /// `docs/formats/fexml.md`'s `TagInput` section. Needs a real `--race`
     /// source open, since it reads the row's geometry live off the disc;
     /// `-typed` is the same screen after a few glyph changes.
+    ///
+    /// `ffmpeg` draws the offer to download `ffmpeg` and `ffmpeg-progress` the status line over
+    /// the menus while it runs (`session::ffmpeg`).
     ///
     /// `player-name` and `player-tag` draw the first-run entries on Pulse's own `TagInput` row
     /// (needs a Pulse source); `player-name-grid` and `player-tag-grid` draw the grid every other

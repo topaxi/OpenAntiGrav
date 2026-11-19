@@ -447,6 +447,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
+    news: None,
     race_setup: None,
     track_label_overrides: &[],
     card_track_aliases: &[],
@@ -464,6 +465,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_settle: None,
     circuit_models: &CIRCUIT_MODELS,
     circuit_turntable: Some(CIRCUIT_TURNTABLE),
+    circuit_fly_by: Some(r"FE\preview.bik"),
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
     // [`names::FRONTEND_ROOT`] documents reaching `DATA00`'s `skin.xml`.

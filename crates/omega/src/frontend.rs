@@ -272,6 +272,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // (`race::TEAM_VARIANTS`); see `docs/formats/omega-status.md`, "Ship Select".
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
+    news: None,
     race_setup: None,
     track_label_overrides: &[],
     card_track_aliases: &[],
@@ -305,6 +306,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // -2.05, `Scale` 0.012 on Vineta K), in the widget's own scaled units; its screen's update is
     // not read, so HD's law is not borrowed and the widget draws as authored.
     circuit_turntable: None,
+    circuit_fly_by: None,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
     // draws `EndRace Results`, but `EndRace Menu` then draws no option blocks

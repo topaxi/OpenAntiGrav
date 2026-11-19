@@ -108,6 +108,10 @@ pub enum Action {
     /// (its `menu.toml`'s `settings`, [`super::Definition::mod_settings`]). On the page only
     /// while that mod has one.
     OpenModSettings,
+    /// The AUDIO page's DOWNLOAD FFMPEG row: asks again whether to fetch the pinned `ffmpeg`
+    /// (`oag_game::app::session::ffmpeg`). On the page only where a build exists for this OS and
+    /// the player has none of their own.
+    FetchFfmpeg,
 }
 
 impl Action {
@@ -140,6 +144,7 @@ impl Action {
             Self::KeepReplay => "keep_replay",
             Self::DeleteReplay => "delete_replay",
             Self::OpenModSettings => "open_mod_settings",
+            Self::FetchFfmpeg => "fetch_ffmpeg",
         }
     }
 
@@ -183,13 +188,14 @@ impl Action {
             "keep_replay" => Some(Self::KeepReplay),
             "delete_replay" => Some(Self::DeleteReplay),
             "open_mod_settings" => Some(Self::OpenModSettings),
+            "fetch_ffmpeg" => Some(Self::FetchFfmpeg),
             _ => None,
         }
     }
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 25] {
+    pub fn all() -> [Self; 26] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -216,6 +222,7 @@ impl Action {
             Self::KeepReplay,
             Self::DeleteReplay,
             Self::OpenModSettings,
+            Self::FetchFfmpeg,
         ]
     }
 }

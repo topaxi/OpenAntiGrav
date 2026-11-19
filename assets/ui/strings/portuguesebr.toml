@@ -506,6 +506,15 @@ OAG_EDITOR_DIFFICULTY_HARD = { text = "DIFÍCIL", human = false }
 OAG_EDITOR_PROGRESSION_FLAT = { text = "CONSTANTE", human = false }
 OAG_EDITOR_PROGRESSION_RAMP = { text = "CRESCENTE", human = false }
 
+# The pinned ffmpeg download (`oag_game::app::session::ffmpeg`).
+OAG_AUDIO_FFMPEG = { text = "BAIXAR FFMPEG", human = false }
+OAG_FFMPEG_TITLE = { text = "BAIXAR FFMPEG", human = false }
+OAG_FFMPEG_ASK = { text = "MÚSICA E VÍDEOS PRECISAM DO FFMPEG, QUE ESTE COMPUTADOR NÃO TEM. BAIXAR UMA VERSÃO LIVRE LGPL (%s) DO GITHUB SÓ PARA ESTE JOGO?", human = false }
+OAG_FFMPEG_YES = { text = "BAIXAR", human = false }
+OAG_FFMPEG_NO = { text = "NÃO, OBRIGADO", human = false }
+OAG_FFMPEG_DOWNLOADING = { text = "BAIXANDO FFMPEG %s - VOLTAR CANCELA", human = false }
+OAG_FFMPEG_UNPACKING = { text = "DESCOMPACTANDO FFMPEG...", human = false }
+
 [untranslated]
 ids = [
 ]

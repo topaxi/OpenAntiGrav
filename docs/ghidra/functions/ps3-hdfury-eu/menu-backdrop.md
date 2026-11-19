@@ -977,12 +977,16 @@ on every read with the cloud hidden (the luma of the 8-bit mean `(3, 4, 4)`), ag
 [front-end-model-lighting.md](front-end-model-lighting.md)'s read with it showing (`0.0157` to `0.0180`). The exposure
 is `4 - 35 * adapted`: `3.49` hidden against the `3.43` ours draws the craft at, 1.8 percent in linear light, under one
 grey level on the hull. On the Fury hull `0.022353` hidden against `0.0228` to `0.0244` showing. `Track Creation`
-reads `0.0041` hidden and `0.0051` showing. The pair records the read (`original.backdrop.adapted_luma`); ours does not
-take it yet (Open).
+reads `0.0041` hidden and `0.0051` showing. The pair records the read (`original.backdrop.adapted_luma`); ours takes it
+through `--fury-adapted-luma` ("Ours" below). The luma of the other hidden pages at the grab: Campaign Select `0.1204` (past the floor
+of 1, exposure 1 either way), grid `0.0452`, cell `0.0427`, Ship Select (classic Feisar) `0.0148`.
 
 **Ours.** `oag-game --fury-tint V` states the tint of a `--menu-page` capture for red, green and blue in place of the
 skin's row (`oag_game::boot::backdrop::captured_tint`), the same value through the same Blend term, so `0` is the
-same black field with the chain still running for the model. Play is unchanged: only a capture takes the flag.
+same black field with the chain still running for the model. Play is unchanged: only a capture takes the flag. `--fury-adapted-luma L` states the adapted luma in the same way:
+`oag_game::preview::model_light` takes it in place of `FrontEndTone::adapted_fury` (the craft's exposure, `4 - 35 L`), and
+`oag_post::hd_bloom::Chain::pin_adapted` makes the adaptation pass write it instead of lerping to the scene's average, so the
+cards' exposure and bloom fade follow it. The pair script states the luma it read at the grab for every hidden page.
 Tests: `boot::backdrop::tests` (the stated tint, the row's alpha kept),
 `hd_fury_ship_select_ground_truth::a_stated_tint_of_nothing_hides_the_cloud_on_a_captured_page` (the real binary: the
 margin lit without the flag, zero with it on both pages), `a_tint_of_nothing_leaves_the_trail_to_decay` (the law, from
@@ -997,15 +1001,26 @@ widget; `just check-pair-provenance` runs it).
 | `hd/menu-ship-select` | 4.51 to **3.05** | 1.55 to **0.035** | 5.56 to 3.54 |
 
 The page region is every pixel black on both sides of the new pair, less the model's frame, where the model itself
-moves between grabs; what is left in it is antialiased edges. The other three Fury pairs of the walk (Campaign
-Select, grid, cell) still show the cloud: their cards' level follows the adapted luma, which the cloud feeds, so hiding
-it there wants the read wired first. They opt in with one id each in `HIDDEN_BACKDROP`.
+moves between grabs; what is left in it is antialiased edges. The other three Fury pairs of the walk are hidden too, with the luma stated
+(2026-11-19, `hd-fury-backdrop-2`; before is the stored pair re-rendered by the same binary):
+
+| Pair | Whole-pair mean grey | Page region (dark on both sides) | Card region, ours minus original (red) |
+| --- | --- | --- | --- |
+| `hd/menu-campaign-select` | 4.77 to **3.32** | 1.68 to **0.046** | -4.1 to -2.8 |
+| `hd/menu-grid-select` | 7.28 to **7.75** | 1.50 to **0.068** | +5.5 to +3.1 |
+| `hd/menu-cell-select` | 3.00 to **2.81** | 0.67 to **0.060** | -3.4 to -1.0 |
+| `hd/menu-ship-select` (step 3) | 3.05 to 3.04 | 0.054 to 0.054 | -1.5 to -0.9 |
+
+Grid's whole-pair number rose because its card is an animation: two grabs of the original, a cloud-showing one and a hidden one, differ
+by 15.9 mean grey over the card (1.2 on cell, 4.2 on Campaign), so the card region is phase noise, and the page region still fell to
+zero. `hd/menu-track-select` is byte-identical with and without the stated luma (its model is not lit by the front end's exposure and
+its page is black): not re-shot.
 
 **Omega: checked, differs.** Neither `eboot.bin` (base and 1.07 patch) holds `BackgroundAnimFury`, a `RadioHead`
 program or a `.points2` name, and the packages ship no `.points2` file; its front end draws the scene widget
 (`BackgroundAnim_Item.cpp`, [menu-backdrop-scene.md](menu-backdrop-scene.md)), whose loop ours positions with
 `--anim-seconds`. So there is no row to write and `--fury-tint` reaches nothing there (`MenuBackdrop::Fury` alone
-reads it). **2048:** checked, differs, no `BackgroundAnim` string (above).
+reads it), and `--fury-adapted-luma` reaches only that Fury chain and the Fury style's craft light (`model_light`'s `fury` branch): nothing to port. **2048:** checked, differs, no `BackgroundAnim` string (above).
 
 ## Open
 
@@ -1013,8 +1028,6 @@ reads it). **2048:** checked, differs, no `BackgroundAnim` string (above).
 - The cloud itself on a compare pair: hidden on both sides since 2026-11-19, so no pair scores the cloud's path,
   colour or pulse. Reproducing one needs the path forced static, the build without the wrap, and the bands, the pulse
   and the trail's history read at a paused frame.
-- The adapted luma of a hidden-cloud grab into ours' craft exposure (`0.01451` against the `0.0163` ours carries;
-  `original.backdrop.adapted_luma` holds each pair's read).
 - Fresh particles `14` to `25` percent over the defect-free slice and the wrapped ladder.
 - The half texel ahead of the chain rather than in its resolve.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their

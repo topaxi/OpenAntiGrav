@@ -65,6 +65,9 @@ pub struct Options {
     /// The Fury menu backdrop's screen tint, stated for all three channels
     /// instead of read off the skin's row. See `Cli::fury_tint`.
     pub fury_tint: Option<f32>,
+    /// The adapted luma the Fury front end is exposed at, stated instead of the
+    /// craft's constant and the chain's own average. See `Cli::fury_adapted_luma`.
+    pub fury_adapted_luma: Option<f32>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
     /// to. `--camera-jitter`; see `crate::race_capture::CaptureOptions::camera_jitter`.
     ///
@@ -154,13 +157,17 @@ pub struct Options {
     /// the CLI flag's own docs. `None` draws no step.
     pub menu_picker_step_seconds: Option<f32>,
     /// With `--menu-page track-select`/`ship-select`, the previewed model's
-    /// own animation time - see the CLI flag's own docs. `None` takes
-    /// `menu_picker_seconds`.
+    /// own animation time; with `grid-select`/`cell-select`, the flyer card's -
+    /// see the CLI flag's own docs. `None` takes `menu_picker_seconds` on the
+    /// former and [`crate::flyer::SETTLED_SECONDS`] on the latter.
     pub menu_model_seconds: Option<f32>,
-    /// With `--menu-page`, the frame of the menu backdrop movie to draw, wrapped
-    /// to the movie's length - see the CLI flag's own docs. `None` draws frame
-    /// zero.
+    /// With `--menu-page`, the frame of the page's movie to draw, wrapped to the
+    /// movie's length: the menu backdrop's, or on HD's Track Select the selected
+    /// circuit's fly-by clip - see the CLI flag's own docs. `None` draws frame zero.
     pub menu_movie_frame: Option<usize>,
+    /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
+    /// own docs.
+    pub menu_ticker: Option<String>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -235,7 +242,7 @@ pub fn run(
         // one scope is how the wrong one gets passed.
         frame: menu_frame,
         nav_legend,
-        ticker,
+        mut ticker,
         fury_backdrop,
         track_select,
         ship_select,
@@ -247,6 +254,11 @@ pub fn run(
         face_scales,
         ..
     } = loaded;
+    if let Some(pin) = &options.menu_ticker
+        && let Some(ticker) = ticker.as_mut()
+    {
+        ticker.pin = Some(parse_ticker_pin(pin)?);
+    }
     let nav_legend = nav_legend
         .map(|legend| legend.with_tag(options.settings.player.footer_tag(&loaded.title.profile)));
 
@@ -599,6 +611,8 @@ pub fn run(
     // `draw_preview`. `None` on every other page.
     let mut preview_request: Option<PreviewRequest> = None;
     let mut flyer_shot: Option<campaign_page::FlyerShot> = None;
+    // HD's Track Select fly-by: the one frame the still shows, with its planes' shape.
+    let mut fly_by_still: Option<(VideoFormat, crate::movie::VideoFrame)> = None;
     // The footer ticker's own clip, `(index in `list`, left, right)` in
     // screen space - set only by the ordinary `--menu-page` arm below
     // (`menu_page`'s own return), since it is the only page kind that reads
@@ -793,6 +807,25 @@ pub fn run(
                     list = second_list;
                 }
                 list.extend(stills);
+                if kind == oag_ui_screens::picker::Kind::Track
+                    && layout
+                        .hd_track
+                        .as_ref()
+                        .is_some_and(|screen| screen.fly_by.is_some())
+                    && let Some(clip) = title
+                        .front_end
+                        .and_then(|front_end| front_end.circuit_fly_by)
+                    && let (Some(archives), Some(track)) =
+                        (archives.as_mut(), selected.or(tracks.first()))
+                {
+                    fly_by_still = video::fly_by_still(
+                        archives,
+                        &track.location,
+                        clip,
+                        options.menu_movie_frame,
+                        &oag_source::cache::default_cache_dir(),
+                    );
+                }
                 // HD's ship screen's footer legend, as the live one draws it
                 // (`main::menu_stage::footer::hd_nav`).
                 if let Some(legend) = nav_legend.as_ref().filter(|_| layout.is_hd()) {
@@ -811,6 +844,7 @@ pub fn run(
                     mode3d: mode3d_model
                         .map(|model| crate::preview::placed_mode3d(&model, kind, space)),
                     seconds: options.menu_model_seconds.unwrap_or(r.seconds),
+                    adapted_luma: options.fury_adapted_luma,
                     ..r
                 });
                 // A title that previews with stills alone has no mesh to
@@ -879,6 +913,7 @@ pub fn run(
                     &tracks,
                     &records,
                     options.menu_picker_seconds,
+                    options.menu_model_seconds,
                 )?;
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
@@ -1010,7 +1045,12 @@ pub fn run(
                 // see `crate::records::ticker_tips`'s own doc for why one
                 // function answers for both, and for the live session's own
                 // ordinary menu pages besides.
-                let ticker_tips = crate::records::ticker_tips(&strings, &records);
+                let ticker_tips = crate::records::ticker_tips(
+                    ticker.as_ref(),
+                    &strings,
+                    &records,
+                    crate::records::TICKER_CAPTURE_SEED,
+                );
                 let (list, clip) = menu_page(
                     &options.settings,
                     options.anisotropy,
@@ -1158,7 +1198,12 @@ pub fn run(
                 (&device, &queue),
                 page,
                 oag_display::display::viewport((width, height), options.settings.display.aspect),
-                (options.anim_seconds, options.fury_path, options.fury_tint),
+                (
+                    options.anim_seconds,
+                    options.fury_path,
+                    options.fury_tint,
+                    options.fury_adapted_luma,
+                ),
                 layer
                     .as_mut()
                     .map(|layer| layer as crate::render::DrawSceneLayer<'_>),
@@ -1179,6 +1224,10 @@ pub fn run(
     );
     crate::prompts::install(&mut renderer, title, &options.settings);
 
+    if let Some((format, picture)) = &fly_by_still {
+        renderer.set_fly_by(&device, *format)?;
+        renderer.upload_fly_by_frame(&queue, picture)?;
+    }
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),
         video::video_frame(&list),
@@ -1277,4 +1326,17 @@ pub fn run(
     touch_preview(options, &device, &queue, &mut encoder, &target)?;
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
+}
+
+/// `--menu-ticker`'s `ITEM@X`.
+fn parse_ticker_pin(text: &str) -> Result<oag_ui_screens::campaign::footer::TickerPin> {
+    let (item, head_x) = text
+        .split_once('@')
+        .and_then(|(item, x)| Some((item, x.trim().parse::<f32>().ok()?)))
+        .filter(|(item, _)| !item.trim().is_empty())
+        .with_context(|| format!("--menu-ticker takes ITEM@X (TKR_FAVMUS@131), not {text:?}"))?;
+    Ok(oag_ui_screens::campaign::footer::TickerPin {
+        item: item.trim().to_string(),
+        head_x,
+    })
 }

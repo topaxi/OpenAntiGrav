@@ -4,7 +4,7 @@
 //! Moved out of `render.rs` under the 1,000-line rule in
 //! `scripts/check-file-size.py`, with no behaviour change.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::VideoFormat;
 use super::resources::{blank_r8, sampler_entry, texture_entry, uniform_entry};
@@ -124,4 +124,60 @@ impl Video {
             format,
         })
     }
+}
+
+/// Writes `frame`'s three planes into `video`'s textures.
+///
+/// Slices by `video`'s own geometry, so a frame of another shape is a garbled
+/// picture and not an error: the caller sizes the planes to the clip.
+pub(super) fn upload_planes(
+    video: &Video,
+    queue: &wgpu::Queue,
+    frame: &crate::movie::VideoFrame,
+) -> Result<()> {
+    anyhow::ensure!(
+        frame.format == crate::movie::PixelFormat::I420,
+        "upload_frame only knows I420 today, got {:?}",
+        frame.format
+    );
+    let luma = (video.format.width * video.format.height) as usize;
+    let chroma = (video.format.chroma_width * video.format.chroma_height) as usize;
+
+    let planes = [
+        (0usize, 0..luma, video.format.width, video.format.height),
+        (
+            1,
+            luma..luma + chroma,
+            video.format.chroma_width,
+            video.format.chroma_height,
+        ),
+        (
+            2,
+            luma + chroma..luma + 2 * chroma,
+            video.format.chroma_width,
+            video.format.chroma_height,
+        ),
+    ];
+
+    for (index, range, width, height) in planes {
+        let bytes = frame
+            .bytes
+            .get(range)
+            .context("frame is shorter than its declared planes")?;
+        queue.write_texture(
+            video.planes[index].as_image_copy(),
+            bytes,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(width),
+                rows_per_image: Some(height),
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+    Ok(())
 }

@@ -72,6 +72,9 @@ impl Session {
         self.save_race_music();
         self.keep_campaign_position();
         self.keep_replays();
+        if self.records.take_lifetime_unsaved() {
+            crate::records::save_in_background(&self.records);
+        }
         crate::records::finish_background_saves();
     }
 

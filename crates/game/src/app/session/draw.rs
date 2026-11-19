@@ -859,9 +859,13 @@ impl Session {
         // not live inline here. See `docs/architecture/menus.md`'s Rebinding
         // section for why this prompt exists at all and `MenuStage::render`'s
         // own doc for how it is drawn.
-        let binding_prompt = self.awaiting_binding.map(|button| {
-            crate::app::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings))
-        });
+        let binding_prompt = self
+            .awaiting_binding
+            .map(|button| {
+                crate::app::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings))
+            })
+            // The ffmpeg download's status line takes the same slot: a modal line over frozen rows.
+            .or_else(|| self.ffmpeg_status());
         if let Stage::Menu(stage) = &mut self.stage {
             // What the `AXIS` row currently means, read live off the page's
             // own rows - `None` off any page but AI PILOTS. Computed here
@@ -899,9 +903,29 @@ impl Session {
             // `records_table` above already has. See
             // `crate::records::ticker_tips`'s own doc for why this is the
             // one function every reader of this save file rotates through.
-            let ticker_tips = self.shell.as_ref().map_or_else(Vec::new, |shell| {
-                crate::records::ticker_tips(&shell.strings, &self.records)
-            });
+            if let Some(shell) = self.shell.as_ref() {
+                let from = (
+                    shell.title.name,
+                    self.records.lifetime(shell.title.name).events(),
+                );
+                if self
+                    .ticker_tips
+                    .as_ref()
+                    .is_none_or(|(key, _)| *key != from)
+                {
+                    let tips = crate::records::ticker_tips(
+                        shell.ticker.as_ref(),
+                        &shell.strings,
+                        &self.records,
+                        crate::records::session_ticker_seed(),
+                    );
+                    self.ticker_tips = Some((from, tips));
+                }
+            }
+            let ticker_tips = self
+                .ticker_tips
+                .as_ref()
+                .map_or(&[][..], |(_, tips)| tips.as_slice());
             stage.render(
                 &self.gpu,
                 &mut encoder,
@@ -913,7 +937,7 @@ impl Session {
                 binding_prompt.as_deref(),
                 axis_preview.as_deref(),
                 &records_table,
-                &ticker_tips,
+                ticker_tips,
                 self.framebuffer.output_size(),
             )?;
         }

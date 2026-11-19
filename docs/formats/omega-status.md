@@ -250,6 +250,14 @@ files `skin.xml` includes by `SrcRel`); Track Select is read and drawn
 ([below](#the-circuit-model-on-track-select-2026-10-09-omega-track-model)), and so is Team Select
 ([Ship Select](#ship-select-2026-10-14-omega-ship-select)).
 
+## The Track Select fly-by (2026-11-19, `hd-track-flyby`)
+
+**Checked, differs.** Omega's `Track_Selection_Definition.xml` authors HD's `FlyByMovie` (X 500, Y 190,
+260x170, `Loading_Icon.bik`), but no environment of the merged `data00`..`data09` ships a `preview` file in
+any container, so `oag_title::FrontEnd::circuit_fly_by` is `None` and the panel draws nothing. The box's
+picture on Omega is the `TrackPreview` image (`fe/track0N.gnf`), unwired. Detail:
+`docs/ui/campaign-screens.md`, "The fly-by, drawn".
+
 ## The circuit model on Track Select (2026-10-09, `omega-track-model`)
 
 **Omega draws each circuit's own front-end model on `Track Select`, as HD does.** The screen is

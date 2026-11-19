@@ -673,6 +673,9 @@ impl Session {
                     self.play_navs(boot_navs);
                 }
                 Stage::Menu(stage) => {
+                    if let Some(shell) = &self.shell {
+                        self.records.count_menu_seconds(shell.title.name, dt);
+                    }
                     stage.tick(
                         dt,
                         &self.audio.output().spectrum().levels(),
@@ -682,6 +685,7 @@ impl Session {
                     self.sync_multiplayer();
                     self.sync_lan();
                     self.sync_online();
+                    self.sync_ffmpeg(&pointer);
                     let Stage::Menu(stage) = &mut self.stage else {
                         continue;
                     };
@@ -802,7 +806,10 @@ impl Session {
                     // nothing new here for the menus to navigate with anyway
                     // - and the pointer is held back with it, so a click
                     // cannot move the page under a prompt or a capture.
-                    let events = if self.awaiting_binding.is_some() || prompt_was_open {
+                    let events = if self.awaiting_binding.is_some()
+                        || prompt_was_open
+                        || self.ffmpeg.fetching()
+                    {
                         Vec::new()
                     } else {
                         let mut events = stage.menu.update(self.controls.buttons_mut());
@@ -1211,6 +1218,7 @@ impl Session {
         // once it has either built the flow or given up. The second guard
         // is not decoration: without it a source whose screens do not read
         // reopened its disc image once a frame and warned once a frame.
+        self.count_heard_song();
         self.phases.mark(super::phases::Phase::Ticks);
         self.start_endrace_prefetch();
         self.start_menu_source();

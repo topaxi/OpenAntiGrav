@@ -446,6 +446,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,
+    news: None,
     race_setup: None,
     track_label_overrides: &[],
     card_track_aliases: &[],
@@ -460,6 +461,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_settle: None,
     circuit_models: &[],
     circuit_turntable: None,
+    circuit_fly_by: None,
     // Not checked this pass - a gap, not a measurement that Pure ships no
     // such screen. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: None,

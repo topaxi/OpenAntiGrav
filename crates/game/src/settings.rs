@@ -62,6 +62,7 @@ use serde::{Deserialize, Serialize};
 use oag_mesh::mesh_render::Anisotropy;
 
 mod controls;
+pub mod ffmpeg;
 mod online;
 pub mod platform;
 pub mod player;
@@ -139,6 +140,9 @@ pub struct Settings {
     pub ai: Ai,
     #[serde(default)]
     pub log: Log,
+    /// Whether the game may fetch `ffmpeg` (`ffmpeg::Ffmpeg`).
+    #[serde(default)]
+    pub ffmpeg: ffmpeg::Ffmpeg,
     /// Which mods are turned off on the MODS page.
     #[serde(default)]
     pub mods: Mods,

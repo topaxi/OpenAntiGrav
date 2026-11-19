@@ -22,6 +22,8 @@ use oag_ui_screens::picker::{self, Picker};
 
 use crate::app::gpu::Gpu;
 
+mod fly_by;
+
 /// Where an entry's preview mesh is on the disc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PreviewSource {
@@ -472,6 +474,8 @@ pub(crate) struct PickerStage {
     /// The circuit model's turntable on a title whose update is read, stepped every frame
     /// whichever circuit is selected - see [`crate::preview::track_model::Turntable`].
     turntable: crate::preview::track_model::Turntable,
+    /// HD's fly-by clip for the selected circuit - see [`fly_by`].
+    fly_by: Option<fly_by::FlyBy>,
 }
 
 impl PickerStage {
@@ -516,6 +520,7 @@ impl PickerStage {
             seat: None,
             fit_motion: None,
             turntable: crate::preview::track_model::Turntable::default(),
+            fly_by: None,
         }
     }
 
@@ -1048,7 +1053,8 @@ pub(crate) fn read_preview(
     let light = match (previews.title, previews.ship_hull, &source) {
         (Some(title), Some(_), PreviewSource::Ship { .. }) => {
             let mut report = Vec::new();
-            let light = crate::preview::model_light(archives, title, previews.fury, &mut report);
+            let light =
+                crate::preview::model_light(archives, title, previews.fury, None, &mut report);
             for line in report {
                 debug!("preview {name}: {line}");
             }

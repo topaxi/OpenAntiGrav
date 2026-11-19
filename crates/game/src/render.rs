@@ -64,7 +64,7 @@ use quad::{
     MODE_SPRITE_GRADIENT, Quad, Uniforms,
 };
 use text::GlyphSlot;
-use video::Video;
+use video::{Video, upload_planes};
 
 pub use backdrop::{DrawSceneLayer, FuryBackdrop, SCENE_LAYER_FORMAT, SceneLayer};
 pub use scene::SceneBackdrop;
@@ -194,6 +194,16 @@ pub struct Renderer {
     /// The sprite sheet's pixel size, which the shader needs to normalise UVs.
     sprites: (u32, u32),
     video: Option<Video>,
+    /// The selection screen's fly-by clip: a plane set of its own, sized to
+    /// the clip, with the uniform buffer that carries its rect - see
+    /// [`Self::set_fly_by`]. The front end's `video` is sized once from its
+    /// boot movie, and a clip of another shape in it would be a garbled
+    /// picture rather than an error.
+    fly_by: Option<(Video, wgpu::Buffer)>,
+    /// Whether the fly-by planes hold a frame of the clip on screen. A quad over
+    /// planes nothing has filled is a green rectangle, so until this is set (and
+    /// after [`Self::clear_fly_by`]) a fly-by draw draws nothing.
+    fly_by_filled: bool,
     /// The Fury menu backdrop's clouds and passes, once a boot has loaded
     /// them - see [`Self::set_fury_backdrop`]. `None` draws a
     /// `Draw::FuryBackdrop` as nothing, which is the honest absence.
@@ -468,6 +478,8 @@ impl Renderer {
             atlas,
             sprites: (sprites.width, sprites.height),
             video,
+            fly_by: None,
+            fly_by_filled: false,
             fury: None,
             scene: None,
             target_format: format,
@@ -540,6 +552,55 @@ impl Renderer {
         self.video.as_ref().map(|v| v.format)
     }
 
+    /// Builds the fly-by's planes for clips of `format`, unless they already
+    /// are: a [`Draw::Video`] of [`oag_ui::frontend::Video::FlyBy`] draws from
+    /// them once [`Self::upload_fly_by_frame`] has filled them.
+    ///
+    /// # Errors
+    ///
+    /// The pipeline could not be built.
+    pub fn set_fly_by(&mut self, device: &wgpu::Device, format: VideoFormat) -> Result<()> {
+        let same = self.fly_by.as_ref().is_some_and(|(video, _)| {
+            (video.format.width, video.format.height) == (format.width, format.height)
+        });
+        if same {
+            return Ok(());
+        }
+        let uniforms = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("oag-game fly-by uniforms"),
+            size: std::mem::size_of::<Uniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let video = Video::new(device, &uniforms, self.target_format, format)?;
+        self.fly_by = Some((video, uniforms));
+        self.fly_by_filled = false;
+        Ok(())
+    }
+
+    /// Stops drawing the fly-by until the next [`Self::upload_fly_by_frame`]:
+    /// the selection changed and the new clip has no picture yet, so the old
+    /// circuit's last frame must not stay up.
+    pub fn clear_fly_by(&mut self) {
+        self.fly_by_filled = false;
+    }
+
+    /// Uploads one decoded frame of the fly-by clip into [`Self::set_fly_by`]'s planes.
+    ///
+    /// # Errors
+    ///
+    /// No fly-by planes, a frame that is not I420 or one shorter than its planes.
+    pub fn upload_fly_by_frame(
+        &mut self,
+        queue: &wgpu::Queue,
+        frame: &crate::movie::VideoFrame,
+    ) -> Result<()> {
+        let (video, _) = self.fly_by.as_ref().context("no fly-by planes")?;
+        upload_planes(video, queue, frame)?;
+        self.fly_by_filled = true;
+        Ok(())
+    }
+
     /// Uploads one decoded frame as three consecutive planes.
     ///
     /// Only [`crate::movie::PixelFormat::I420`] is implemented today; anything
@@ -550,51 +611,7 @@ impl Renderer {
         frame: &crate::movie::VideoFrame,
     ) -> Result<()> {
         let video = self.video.as_ref().context("no video pipeline")?;
-        anyhow::ensure!(
-            frame.format == crate::movie::PixelFormat::I420,
-            "upload_frame only knows I420 today, got {:?}",
-            frame.format
-        );
-        let luma = (video.format.width * video.format.height) as usize;
-        let chroma = (video.format.chroma_width * video.format.chroma_height) as usize;
-
-        let planes = [
-            (0usize, 0..luma, video.format.width, video.format.height),
-            (
-                1,
-                luma..luma + chroma,
-                video.format.chroma_width,
-                video.format.chroma_height,
-            ),
-            (
-                2,
-                luma + chroma..luma + 2 * chroma,
-                video.format.chroma_width,
-                video.format.chroma_height,
-            ),
-        ];
-
-        for (index, range, width, height) in planes {
-            let bytes = frame
-                .bytes
-                .get(range)
-                .context("frame is shorter than its declared planes")?;
-            queue.write_texture(
-                video.planes[index].as_image_copy(),
-                bytes,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(width),
-                    rows_per_image: Some(height),
-                },
-                wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-            );
-        }
-        Ok(())
+        upload_planes(video, queue, frame)
     }
 
     /// Draws `list` into `view`, clearing it first.
@@ -700,6 +717,10 @@ impl Renderer {
         // than filling it the way a `.PMF` always has. See
         // `oag_display::space::pillarbox`.
         let mut video_rect = [0.0, 0.0, self.space.size.0, self.space.size.1];
+        // The fly-by clip's place in the order and in screen space: the same two
+        // facts, for the planes of its own.
+        let mut fly_by_at = None;
+        let mut fly_by_rect = [0.0; 4];
         // Where the Fury backdrop sits, the same way: its passes run before
         // this one and its composite is drawn at its place in the order.
         let mut fury_at = None;
@@ -787,6 +808,16 @@ impl Renderer {
                     tile: [0.0, 0.0],
                     warp: [0.0; 4],
                 }),
+                Draw::Video {
+                    rect,
+                    source: oag_ui::frontend::Video::FlyBy,
+                    ..
+                } => {
+                    if self.fly_by_filled {
+                        fly_by_at = Some(self.quads.len() as u32);
+                        fly_by_rect = *rect;
+                    }
+                }
                 Draw::Video { rect, .. } => {
                     video_at = Some(self.quads.len() as u32);
                     video_rect = *rect;
@@ -1005,36 +1036,43 @@ impl Renderer {
         if glowing {
             self.quads.extend(glow::mask_quads(&stamps));
         }
-        queue.write_buffer(
-            &self.uniform_buffer,
-            0,
-            bytemuck::bytes_of(&Uniforms {
-                // Fitted to the *viewport rectangle*, not to the surface. The
-                // two are the same thing at `Aspect::Psp` on a PSP-shaped
-                // window and are not otherwise, and feeding the surface here
-                // would letterbox the widgets a second time inside the bars
-                // `set_viewport` already left.
-                viewport: letterbox_in(
-                    (viewport.2 as u32, viewport.3 as u32),
-                    self.space.display_aspect,
-                ),
-                // The **grid**, not the display aspect: this maps a draw's rect
-                // onto the viewport, and the rects are in grid coordinates.
-                // `letterbox_in` above is the one that wants the other number.
-                // See `oag_display::space::Space`.
-                screen: [self.space.size.0, self.space.size.1],
-                atlas: [self.atlas.width as f32, self.atlas.height as f32],
-                sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
-                video_rect,
-                face_atlas: face_atlas_size(self.face_atlas.as_ref()),
-                buttons_atlas: face_atlas_size(self.buttons_atlas.as_ref()),
-                hud: {
-                    let mut hud = self.hud.uniform();
-                    hud[2] = f32::from(u8::from(self.atlas.is_outlined()));
-                    hud
-                },
-            }),
-        );
+        let uniforms = Uniforms {
+            // Fitted to the *viewport rectangle*, not to the surface. The
+            // two are the same thing at `Aspect::Psp` on a PSP-shaped
+            // window and are not otherwise, and feeding the surface here
+            // would letterbox the widgets a second time inside the bars
+            // `set_viewport` already left.
+            viewport: letterbox_in(
+                (viewport.2 as u32, viewport.3 as u32),
+                self.space.display_aspect,
+            ),
+            // The **grid**, not the display aspect: this maps a draw's rect
+            // onto the viewport, and the rects are in grid coordinates.
+            // `letterbox_in` above is the one that wants the other number.
+            // See `oag_display::space::Space`.
+            screen: [self.space.size.0, self.space.size.1],
+            atlas: [self.atlas.width as f32, self.atlas.height as f32],
+            sprites: [self.sprites.0 as f32, self.sprites.1 as f32],
+            video_rect,
+            face_atlas: face_atlas_size(self.face_atlas.as_ref()),
+            buttons_atlas: face_atlas_size(self.buttons_atlas.as_ref()),
+            hud: {
+                let mut hud = self.hud.uniform();
+                hud[2] = f32::from(u8::from(self.atlas.is_outlined()));
+                hud
+            },
+        };
+        queue.write_buffer(&self.uniform_buffer, 0, bytemuck::bytes_of(&uniforms));
+        if let Some((_, fly_by_uniforms)) = &self.fly_by {
+            queue.write_buffer(
+                fly_by_uniforms,
+                0,
+                bytemuck::bytes_of(&Uniforms {
+                    video_rect: fly_by_rect,
+                    ..uniforms
+                }),
+            );
+        }
 
         if self.quads.len() > self.quad_capacity {
             self.quad_capacity = self.quads.len().next_power_of_two();
@@ -1063,6 +1101,7 @@ impl Renderer {
         // list puts them, so the list's own order is honoured.
         let mut cuts: Vec<(u32, backdrop::Cut)> = Vec::new();
         cuts.extend(video_at.map(|at| (at, backdrop::Cut::Video)));
+        cuts.extend(fly_by_at.map(|at| (at, backdrop::Cut::FlyBy)));
         cuts.extend(fury_at.map(|(at, _)| (at, backdrop::Cut::Fury)));
         cuts.extend(scene_at.map(|(at, _)| (at, backdrop::Cut::Scene)));
         cuts.sort_unstable();
@@ -1132,6 +1171,13 @@ impl Renderer {
                         pass.set_pipeline(&video.pipeline);
                         pass.set_bind_group(0, &video.bind_group, &[]);
                         pass.draw(0..6, 0..1);
+                    }
+                    (backdrop::Cut::FlyBy, ..) => {
+                        if let Some((video, _)) = &self.fly_by {
+                            pass.set_pipeline(&video.pipeline);
+                            pass.set_bind_group(0, &video.bind_group, &[]);
+                            pass.draw(0..6, 0..1);
+                        }
                     }
                     (backdrop::Cut::Fury, _, Some(fury), Some(_)) => {
                         fury.composite(&mut pass);
@@ -1253,6 +1299,8 @@ pub fn from_grid(space: Space, viewport: (f32, f32, f32, f32), grid: (f32, f32))
 
 #[cfg(test)]
 mod atlas_limit_tests;
+#[cfg(test)]
+mod fly_by_tests;
 #[cfg(test)]
 mod glow_tests;
 #[cfg(test)]

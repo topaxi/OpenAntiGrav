@@ -10,6 +10,7 @@ rust-version.workspace = true
 autotests = false
 
 [dependencies]
+oag-core.workspace = true
 oag-display.workspace = true
 oag-gameplay.workspace = true
 oag-hd.workspace = true

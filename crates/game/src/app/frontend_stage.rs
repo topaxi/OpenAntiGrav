@@ -222,13 +222,20 @@ impl FrontendStage {
         // here.
         debug_assert!(
             list.iter()
-                .filter(|draw| matches!(draw, frontend::Draw::Video { .. }))
+                .filter(|draw| matches!(
+                    draw,
+                    frontend::Draw::Video { source, .. } if *source != frontend::Video::FlyBy
+                ))
                 .count()
                 <= 1,
             "a draw list carries at most one Draw::Video; the renderer draws one \
              video quad from one plane set"
         );
         let drawn = list.iter().find_map(|draw| match draw {
+            frontend::Draw::Video {
+                source: frontend::Video::FlyBy,
+                ..
+            } => None,
             frontend::Draw::Video {
                 position, source, ..
             } => Some((*position, *source)),
@@ -301,7 +308,7 @@ impl FrontendStage {
             Some((_, frontend::Video::Backdrop)) => has_backdrop && self.backdrop_shown,
             // The race loading screen's, fed by `LoadingStage`; a front-end
             // list never carries it.
-            Some((_, frontend::Video::ModeIcon)) | None => return Ok(()),
+            Some((_, frontend::Video::ModeIcon | frontend::Video::FlyBy)) | None => return Ok(()),
         };
         if !ready {
             list.retain(|draw| !matches!(draw, frontend::Draw::Video { .. }));

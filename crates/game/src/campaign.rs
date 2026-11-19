@@ -153,6 +153,37 @@ fn read_footer(
     (nav_legend, ticker)
 }
 
+/// The ticker's messages: `name`'s `PI_News` rows ([`oag_title::FrontEnd::news`]), empty with a
+/// report line when the title names none or the file will not read.
+#[must_use]
+pub fn read_news(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+) -> oag_ui_screens::news::Feed {
+    let feed = |items| oag_ui_screens::news::Feed {
+        title: title.name.to_string(),
+        items,
+    };
+    let Some(name) = title.front_end.and_then(|front_end| front_end.news) else {
+        return feed(Vec::new());
+    };
+    let xml = archives
+        .read_name(name)
+        .map_err(|error| format!("{error:#}"))
+        .and_then(|blob| oag_tables::fexml::text(&blob).map_err(|error| format!("{error:#}")));
+    match xml {
+        Ok(xml) => {
+            let items = oag_ui_screens::news::parse(&xml);
+            log::debug!("footer ticker: {} messages from {name}", items.len());
+            feed(items)
+        }
+        Err(error) => {
+            log::warn!("{name}: {error} - the footer ticker has no messages");
+            feed(Vec::new())
+        }
+    }
+}
+
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]'s own draw list for a
 /// caller with no [`crate::records::Store`] to rotate the ticker's tips off
 /// of - `crate::capture::menu_page`'s `--menu-page grid-select`/
@@ -317,12 +348,15 @@ pub fn load(
         oag_pulse::campaign::DEFINITION_ENTRY,
         title.campaign.grid_archive,
     )?;
-    let (nav_legend, ticker) = read_footer(
+    let (nav_legend, mut ticker) = read_footer(
         archives,
         oag_pulse::names::FRONTEND_ROOT,
         strings,
         fallback_globals,
     );
+    if let Some(ticker) = ticker.as_mut() {
+        ticker.news = read_news(archives, title);
+    }
 
     let mut blobs = Vec::new();
     for src in HEX_TEXTURES {

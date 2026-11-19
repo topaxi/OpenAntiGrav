@@ -351,6 +351,9 @@ are not measured).
   the exposure is 2.33 where the original's is 2.50 and the card reads **100** against 103 and 104. Ship Select's
   backdrop still runs the track block (the hull is not in the scene: its level is the constant "Wired (2026-11-12)"
   above), though the read there is the model screens' block.
+  Since `hd-fury-backdrop-2` the compare pairs state the adapted luma read at the grab (`--fury-adapted-luma` pins the
+  chain), so `hd/menu-cell-select` no longer scores ours' own exposure: a player still sees the card at ours' live 2.33
+  against 2.50, a gap no pair measures now (the way the cloud's fidelity is not scored since the cloud was hidden).
 
 **Frames** (the pairs re-rendered with their own recorded flags, same day, base `751a96067` against this lane; mean
 grey difference, RMSE, edge correlation):

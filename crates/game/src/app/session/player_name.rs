@@ -129,7 +129,7 @@ impl Session {
         }
     }
 
-    fn say(&self, id: &str, english: &str) -> String {
+    pub(super) fn say(&self, id: &str, english: &str) -> String {
         self.shell
             .as_ref()
             .and_then(|shell| shell.strings.get(id))

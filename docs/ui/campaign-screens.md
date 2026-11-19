@@ -2342,6 +2342,25 @@ drawn: the medal fraction's own denominator (see the widget table above), the
 cards' reflection, glow and light, and the cards' own animation on a selection
 change.
 
+### The card's clock, 2026-11-19 (`hd-grid-card-phase`)
+
+The arrows and layers of a Fury card slide on the card's own clock, and no two grabs of the original share it, so the pair `hd/menu-grid-select`
+swung with the moment of the grab (two grabs of the original alone differ by 3.7 mean grey on average over seven, 0.1 to 6.6; ours at the chosen
+3.0 s scored 5.6 to 8.2 against them). **Law** (`flyer-item.md`, confidence 80): `Flyer_Item`'s render keeps the front model's time in `[3, 6)` s,
+a loop of 3 s; each node samples its keys at the clock modulo its own `LoopEnd` (4.0 on Fury), which `Model::sample_anim_nodes` already does.
+**Ours**: `Flyers::card_seconds` (default `SETTLED_SECONDS`, 3.0) is read when a card is first drawn (`Pending::build`), and `--menu-model-seconds` sets
+it on `grid-select`/`cell-select`. A card is a static picture in play: **the live loop is open** (the card's clip against its outline changes the
+triangles every frame, so it needs the card's GPU geometry rewritten per frame, not a re-bake of a cached `Preview`).
+**The pair**: `scripts/hd_flyer_clock.py` reads the clock out of RAM with the game stopped through the grab (`Debugger` on the `serve` proxy, a
+`PAUSE_FLUSH_S` wait for the RSX) and `rpcs3-hd-menu-pair.py` records `original.card_seconds` and passes the flag. The grab's picture is 0.07 s
+(4 frames) older than RAM: **fitted** on four paused grabs (the whole-frame minimum at -0.08, -0.06, -0.08, -0.06 from the clock), not derived.
+Unpaused, a grab takes 0.1 to 0.35 s and the clock moves through it: the minimum fell at -0.03 to -0.05 and once at +0.04.
+**Result** (whole-pair mean grey, ours at the original's clock less 0.07, against ours at 3.0): paused grabs 2.23, 2.53, 2.41, 4.83 and 2.86 (the
+script-made pair; 3.0 s gives 6.08 and 6.65 on the two measured), unpaused grabs 2.40, 2.21, 2.54, 3.10, 4.06, 2.53 and 2.56 (lag 0.04; 3.0 s gives
+5.6 to 8.2). **Not closed**: near a clock of 5.6 the card flashes its big hooked arrows for about 0.05 s and ours matches only at that exact
+second (a 0.05 s step either way scores 6.7), so one grab in three or four lands on it wrong (4.83 above); the five glitch textures stay hidden
+(`UNREAD_EFFECTS`).
+
 ### The two cards, 2026-09-30
 
 `FuryCampaignFlyerModel` and `HDCampaignFlyerModel` draw the two flyers the
@@ -2527,7 +2546,8 @@ reads both directly off the raw parsed tree instead - see its own module doc.
   PPSSPP capture in this pass isolated two frames a known tick count apart
   with the ticker moving, so the speed reuses this project's own existing
   scrolling-text rate as the nearest precedent rather than a number invented
-  from nothing. **Content is never invented**: `NewsItemBarText1`/`2` carry
+  from nothing. **Superseded 2026-11-19**: the speed is the original's (1 pixel an update, 60 px/s) and the content is the disc's own `PI_News` draw over
+lifetime statistics, `docs/tools/compare-page.md`, "`menu-team`"; what follows is the 2026-09-21 reading. **Content is never invented**: `NewsItemBarText1`/`2` carry
   no `idstring` and no literal `string` on disc - populated at runtime by a
   mechanism this build does not have - so `oag_game::records::ticker_tips`
   (moved there 2026-09-27 so `MenuStage`'s own ordinary-menu ticker and
@@ -3825,7 +3845,7 @@ against the original at its box.
 Not done, with where it was looked for: the page `Squares` (empty `<Item>` in
 both files, filled by screen code that was not read); the circuit thumbnail is
 the `FlyByMovie` (`Loading_Icon.bik` authored, the environment's
-`fe/preview.bik` by code), which needs a streaming Bink widget in the picker;
+`fe/preview.bik` by code; drawn since 2026-11-19, "The fly-by, drawn" below);
 the `UnlockNobble0..4` hearts (two dim hearts beside `000` on Feisar): the placing law is read (`team-selection-loyalty.md`) but the thresholds' source is not; the `middle="true"` marks.
 
 Omega: **ported**. Its Ship Select goes through the same `picker::hd` path and
@@ -3995,6 +4015,60 @@ old save of 2026-09-21.
   below.
 - **The heading scale** (`0.45` of the menu face, a 14-unit bullet, text 20
   units right of it) is read off the frame by eye.
+
+### The fly-by, drawn (2026-11-19, `hd-track-flyby`)
+
+**Claim: true.** The `CHOOSE CIRCUIT` panel plays the selected circuit's
+`<environment>\FE\preview.bik` (352x256, 600-625 frames at 59.94 Hz, ten seconds,
+no audio on the twelve base circuits; `bik.md`). On `hd/menu-track-select` the
+thumbnail box's mean absolute difference against the original fell from 59.6 to
+2.5 (RGB, 250x162 px at 1920x1080, ours drawn at the fitted frame 510), and the whole pair's mean grey from 5.84 to
+4.65 (confidence 90 for the clip and its place: one frame, the picture is
+Vineta K's own footage to a few grey levels).
+
+- **Which file.** The widget authors `Loading_Icon.bik`, as the loading screen's
+  mode panel authors a placeholder; the frame shows the circuit's own footage.
+  Every one of the 602 frames of Vineta K's `preview.bik` was scored against the
+  frame's box: the best is 510 (mean abs 3.82), the next 509 (4.05), the median
+  frame 79.4, frame 0 160.2. A sharp, unique minimum, so the file, the BT.601
+  limited-range conversion and the box are all right.
+- **Where.** The picture is at (518,204)-(768,367) px in the 1920x1080 frame at
+  Safe Area 96, which is (500,190) 260x170 in the layout's units
+  (`px = 0.96 u + 38.4`, `0.96 v + 21.6`). The XML's `Item` (160,170) would put it
+  at (660,360): the original draws a `Movie` at its own `X`/`Y`. The picture is
+  stretched to the box (352x256 into 260x170: 1.375 into 1.53). Measured on one frame.
+- **How ours plays it.** `oag_game::app::picker_stage::fly_by` opens the clip on a
+  thread through `oag_game::clip` (the loading screen's mode-icon opener, now shared:
+  the movie cache, AV1 lossless, `Feed` looped), pumps the frame due at the
+  clip's own rate, and uploads it into a plane set of its own in the renderer
+  (`Renderer::set_fly_by`; the front end's one video pipeline is sized from the boot
+  movie, 1920x1080 on HD). The panel is a `Draw::Video` of `Video::FlyBy` from
+  `picker::hd::track::body`, moved inside the Safe Area like the widgets (a
+  `Draw::Video` of another source is a picture behind them and is not), and drawn only once the planes
+  hold a frame. A selection change restarts the clip from frame 0 and draws
+  nothing until its first frame (**chosen**: the restart is not measured).
+  Which circuits have a clip is title data: `oag_title::FrontEnd::circuit_fly_by`.
+- **The frame of a still.** `--menu-movie-frame N` shows frame N of the clip on a
+  Track Select page (it is the page's movie frame, as on Pulse's backdrop). The pair
+  is pinned with `scripts/compare-menu-movie-phase.py --fly-by-clip <preview.bik>
+  <pair dir>`, which scores every frame over the box and records
+  `original.fly_by_frame` on the pair: **fitted to the picture, not read from the
+  emulator's frame counter**. The widget's counter (the Bink widget's current frame
+  in RPCS3 RAM) was not located: the Movie widget's struct is unread
+  (`loading-screen.md` reads only the quad it draws), so the route is a fit, good to
+  one frame (510 against 509).
+- **First view of a circuit.** The clip has to be transcoded once (lossless AV1;
+  `ffmpeg`, about 30 s for Anulpha Pass on a loaded machine, cached after), and the
+  prefetch does not warm the sixteen `preview.bik` files, so the panel stays empty
+  for that long on a first visit (live walk, Xvfb: Vineta K within 8 s, Anulpha Pass
+  empty until its transcode finished, then Vineta K back in 4 s).
+- **The sound.** The four Zone circuits' clips carry a track; ours plays none.
+- **Omega: checked, differs.** Its `Track_Selection_Definition.xml` (`data09`)
+  authors the same `FlyByMovie` at the same X/Y with `Loading_Icon.bik`, but no
+  environment of the merged `data00..data09` carries a `preview` file in any
+  container (census of every `FE` folder; `oag_title::FrontEnd::circuit_fly_by` is
+  `None`), so the panel draws nothing there. What its frame shows in that box is the
+  `TrackPreview` image (its `fe/track0N.gnf` stills), unwired: **open**.
 
 ### Not drawn, and why
 
@@ -4317,7 +4391,8 @@ digit, 19.10); Omega's `PI_Track` authors `RotX 0.45`, `PosX 0.55`, `PosY 0.175`
 so `hd/menu-track-select` and `hd/menu-ship-select` are photographed with its row tint written to zero in the original and drawn with
 `--fury-tint 0` in ours; the pairs read 7.83 to 5.84 and 4.51 to 3.05 mean grey, and the page outside the model's frame 0.83 and 1.55 to
 0.035 on both (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"; `docs/tools/compare-page.md`). The
-cloud a player sees is unchanged. **Omega: checked, differs** (no Fury widget; its scene backdrop is another widget).
+cloud a player sees is unchanged. Campaign Select, grid and cell are hidden the same way since `hd-fury-backdrop-2`, and ours states
+the adapted luma the pair read (`--fury-adapted-luma`); numbers on that page. **Omega: checked, differs** (no Fury widget; its scene backdrop is another widget).
 
 **Live, 2026-10-09** (Xvfb, software Vulkan, debug build): the model draws on
 the real screen, the grey matches the capture's, and stepping the circuit
@@ -4431,7 +4506,7 @@ Ubermall, Sol 2, Talon's Junction, The Amphiseum, Modesto Heights, Tech De Ra);
 | `ReverseIcon1..3` + `FE_REVERSE` text | (860,175) | yes, on a reverse circuit only (**chosen**: no frame has the cursor on the second row) |
 | `Infinity` | (1080,705) | yes, where the race has no lap count |
 | `Bracket` x3 | (160,170) 680x242 / (160,452) 680x230 / (856,170) 900x565 | yes (2026-10-27, `hd-select-chrome`): corner marks via `cell_brackets::draws`, plus the rects for layout and pointer. The `middle="true"` marks of Ship Select's frame stay open (art not found) |
-| `FlyByMovie` (`preview.bik`, Bink) | (660,360) 260x170 | no |
+| `FlyByMovie` (`preview.bik`, Bink) | **(500,190)** 260x170 (the widget's own `X`/`Y`; the `Item`'s (160,170) is not added) | yes (2026-11-19, `hd-track-flyby`): see "The fly-by, drawn" |
 | `Model name="TrackModel"` | `OriginX=1308 OriginY=440 z=-180` | yes (2026-10-09, `hd-track-model`): the circuit's own scene, see "The circuit model, drawn" |
 | `TrackHexSelection` | (210,500), 9x2 | yes (2026-10-08, `hd-track-select`): a circuit per column, forward and reverse rows - see "The hex grid" below |
 | `Squares` page dots, `Padlock`, `Unlockcondition`, `furyship1..3` | - | no (`Squares` is an empty `<Item>` the XML comments as a dummy for the screen code to read; count, art and colours are in code, unread) |
@@ -4471,8 +4546,7 @@ original fills them from code. That id choice is **chosen, not measured**.
 - **The circuit model** (`TrackModel`): drawn since 2026-10-09, see "The
   circuit model, drawn". Zone's circuits and any circuit outside the
   executable's twelve-row record draw nothing.
-- **The fly-by** (`FlyByMovie`): `preview.bik` per environment is Bink; the
-  screen has no video widget yet.
+- **The fly-by** (`FlyByMovie`): drawn since 2026-11-19, see "The fly-by, drawn".
 - **The hex grid** (`TrackHexSelection`): drawn since 2026-10-08, see below.
 - **The page squares** (`Squares`, top right of the circuit model frame): empty
   container filled by code.
@@ -4733,8 +4807,8 @@ hold 24 `Tournament` cells in the archive read, none walked).
    DIFFICULTY / START / BACK (`page-racebox-setup.png`).
 7. **Track Select.** *(hex grid landed 2026-10-08, `hd-track-select`; the
    shaded circuit model landed 2026-10-09, `hd-track-model`.)* Layout and
-   records table match; missing: the moving fly-by
-   picture (it moves: 17 % of the window's pixels differ across 1.5 s). Ours
+   records table match; the moving fly-by
+   picture landed 2026-11-19 (`hd-track-flyby`; it moves: 17 % of the window's pixels differ across 1.5 s). Ours
    also draws the hex window's stills as nothing (`no slideshow chain`).
 8. **Loading, EndRace.** Not re-paired: ours on software Vulkan sat on Ship
    Select for 32 s without reaching a load. See the `hd-loading-screen` and
@@ -4773,8 +4847,7 @@ Re-rendering unchanged code reproduces every number to the last digit, so the fl
   the card's remaining error is which moment of its loop the capture caught. The circuit model is a turntable
   (`TURN_SECONDS`, `YAW0`), same reading. Neither was tuned to one frame.
 - **Needs RE, not done**: Ship Select's hull (the lens 0.41, pitch 0.22, slide are fitted over the authored `RotX=0.4`; the
-  rotation convention is unread), the page `Squares` (an empty `<Item>`, count, art and colours in code), the Track Select
-  thumbnail (`FlyByMovie`, Bink), the NAVIGATION footer's glyph spacing on Grid Selection (ours 50 px wider between
+  rotation convention is unread), the page `Squares` (an empty `<Item>`, count, art and colours in code), the NAVIGATION footer's glyph spacing on Grid Selection (ours 50 px wider between
   entries), the ship hex column's lock states (the frame is a profile with Feisar and one more unlocked; ours unlocks
   more, and `unlock_everything = false` changed no pixel).
 - **Omega** (HD's front end): **ported**, same code path. `omega/menu-grid-select` 16.54 to 15.82, `omega/menu-track-select`

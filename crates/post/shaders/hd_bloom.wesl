@@ -46,6 +46,9 @@ struct Constants {
     // `uv_max` everywhere else, and for every whole picture.
     uv_offset: vec2<f32>,
     scene_max: vec2<f32>,
+    // A stated adapted luma, written by `fs_adapt` instead of the lerp; negative for none.
+    pinned_luma: f32,
+    unused: f32,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -267,7 +270,8 @@ fn fs_adapt(in: VertexOutput) -> @location(0) vec4<f32> {
     let previous = textureSample(state_tex, source_sampler, vec2<f32>(0.5, 0.5)).x;
     let luminance = dot(mean, vec3<f32>(0.3, 0.59, 0.11));
     let rate = max(constants.adaption_rate, rate_override);
-    let adapted = previous + rate * (luminance - previous);
+    let lerped = previous + rate * (luminance - previous);
+    let adapted = select(lerped, constants.pinned_luma, constants.pinned_luma >= 0.0);
     return vec4<f32>(adapted, 0.0, 0.0, 1.0);
 }
 

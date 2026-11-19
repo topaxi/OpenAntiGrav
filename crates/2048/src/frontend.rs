@@ -630,6 +630,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: None,
     track_select: None,
+    news: None,
     race_setup: None,
     track_label_overrides: &[],
     card_track_aliases: CARD_TRACK_ALIASES,
@@ -646,6 +647,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_settle: None,
     circuit_models: &[],
     circuit_turntable: None,
+    circuit_fly_by: None,
     // Plain XML (not dictionary-shortened) in the base package's `data.psarc`;
     // `patch-v104/data2.psarc` re-ships only the `Legacy` sibling, so the base
     // copy is the live one. See `docs/ui/endrace-2048.md`.

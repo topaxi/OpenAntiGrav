@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+import hd_flyer_clock as fc  # noqa: E402
 import hd_fury_backdrop as fb  # noqa: E402
 
 drive = importlib.import_module("rpcs3-drive")
@@ -63,9 +64,15 @@ ANGLE_STEP, FRAMES_PER_SECOND = 0.01, 60.0
 #: The `WALK` ids photographed with the Fury backdrop hidden on both sides: the screens whose page is mostly backdrop. The cloud, its
 #: path and how far along it are a new roll on every boot, two paths in three are modes ours does not draw and the music pulses it,
 #: so no grab can be reproduced; the row's tint is written to zero in the emulator's RAM before the settle and put back after the grab
-#: (`hd_fury_backdrop.py`), and ours is drawn with `--fury-tint 0` (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden
+#: (`hd_fury_backdrop.py`), and ours is drawn with `--fury-tint 0` and the adapted luma read at the grab (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden
 #: for a compare shot").
-HIDDEN_BACKDROP = ("track-select", "ship-select")
+HIDDEN_BACKDROP = ("track-select", "ship-select", "campaign-select", "grid-select", "cell-select")
+
+#: The `WALK` ids whose ours is drawn at the flyer card's own clock as the original's RAM held it at the grab (`--menu-model-seconds`,
+#: `hd_flyer_clock.py`): the card's arrows and layers play a 3 s loop of `Flyer_Item`'s own clock, so a grab's phase is the time of the tap
+#: and the boot, nothing a settle fixes.
+CARD_CLOCKED = ("grid-select",)
+GDB_PORT = int(os.environ.get("OAG_RPCS3_GDB", "127.0.0.1:2345").rsplit(":", 1)[1])
 
 #: The walk. A string is a button (`name` or `name:SETTLE_SECONDS`); a dict is a photograph. `pair` fields: `id`, `title`,
 #: `screen` (HD's own name, from TTY.log), `page` (ours' `--menu-page`), `drawn_from` (`xml` or `menu.toml`), `xml` (the
@@ -186,6 +193,7 @@ def main():
         mem.seek(GUEST_BASE + obj + ANGLE_FIELD)
         return struct.unpack(">f", mem.read(4))[0]
     taps_before = dict(item.split("=", 1) for item in args.taps_before)
+    card_clock = None
     widget = None
     steps = LOADING_WALK if args.walk == "loading" else WALK
     for item in steps:
@@ -215,11 +223,17 @@ def main():
         # Read just before the grab: the picture the grab returns is within one step of it (a burst of ten grabs against ours' yaw sweep:
         # the angle read before a grab runs 0.04 rad ahead of the frame, the one read after it 0.12).
         angle = turntable_angle() if item["id"] in CLOCKED else None
-        walk.grab(png, w, h)
+        card = None
+        if item["id"] in CARD_CLOCKED:
+            card_clock = card_clock or fc.Clock(mem)
+            before, after = fc.grab_paused(card_clock, lambda: walk.grab(png, w, h), GDB_PORT)
+            card = {"before": before, "after": after, "loop": card_clock.loop()}
+        else:
+            walk.grab(png, w, h)
         if hidden is not None:
             widget.restore()
         seen[item["id"]] = {"screen": screen, "feature": feature_read(), "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-                            "angle": angle, "hidden": hidden}
+                            "angle": angle, "hidden": hidden, "card": card}
         print("shot %-16s screen %r" % (item["id"], screen), flush=True)
     refused = []
     for item in (i for i in steps if isinstance(i, dict)):
@@ -293,13 +307,18 @@ def main():
                 "basis": "measured: the circuit model's global angle read out of the emulator's RAM just before the grab (`*(*(0x008ad4d8 + 0x49ec) + 0x1c4)`, "
                          "the `Track Creation` update's own RotY, stepped 0.01 rad a frame); ours is drawn at the seconds that turn its own table that far "
                          "at 60 frames a second"}
+        if shot.get("card") is not None:
+            extra += fc.record(pair.rec, shot["card"]["before"], shot["card"]["after"], shot["card"]["loop"])
+            pair.check("the card's clock stood still through the grab", shot["card"]["after"] == shot["card"]["before"],
+                       "read %.4f before the grab, %.4f after it" % (shot["card"]["before"], shot["card"]["after"]))
+            pair.rec["meta"]["note"] += " The flyer card is drawn at the clock the original's RAM held at the grab (`--menu-model-seconds`)."
         hidden = shot.get("hidden")
         if hidden is not None:
             pair.check("the Fury backdrop is hidden at the grab", hidden["still_hidden"] and hidden["frames_waited"] >= fb.FRAMES_TO_DECAY,
                        "row %s zero at the grab: %s, %d widget frames since the write (%d let the trail decay)"
                        % (hidden["row"], hidden["still_hidden"], hidden["frames_waited"], fb.FRAMES_TO_DECAY))
             extra += fb.record(pair.rec, hidden, hidden["adapted_luma"])
-            pair.rec["meta"]["note"] += " The Fury backdrop is hidden on both sides (the original's row tint written to zero for the grab, ours `--fury-tint 0`)."
+            pair.rec["meta"]["note"] += " The Fury backdrop is hidden on both sides (the original's row tint written to zero for the grab, ours `--fury-tint 0 --fury-adapted-luma` at the luma read at the grab)."
         taps = taps_before.get(item["id"])
         if taps:
             pair.rec["meta"]["state"] += "; then %s on this screen (--taps-before)" % taps

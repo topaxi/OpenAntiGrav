@@ -232,7 +232,7 @@ fn probe(blob: &[u8], key: &str, cache_dir: &Path) -> Result<Probed> {
 /// the order `ffprobe` prints them in - which is its own internal field
 /// order, not necessarily the order requested.
 fn run_ffprobe(input: &Path, section: &str, fields: &str) -> Result<String> {
-    let output = std::process::Command::new("ffprobe")
+    let output = oag_ffmpeg::command(oag_ffmpeg::Tool::Ffprobe)
         .args(["-v", "error"])
         .args(["-select_streams", "v:0"])
         .args(["-show_entries", &format!("{section}={fields}")])

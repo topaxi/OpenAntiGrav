@@ -324,6 +324,16 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "0..1")]
     pub(crate) fury_tint: Option<f32>,
 
+    /// States the adapted luma the Fury front end's exposure is taken at on a
+    /// `--menu-page` capture, in place of `FrontEndTone::adapted_fury`.
+    /// With the backdrop's cloud hidden (`--fury-tint 0`) the original's
+    /// exposure adapts to a darker page than the cloud-showing read the
+    /// craft's light carries, and a pair records its own read.
+    /// It sets the craft's light (`preview::model_light`) and pins the
+    /// backdrop chain's adapted luma, which is what the cards' level follows.
+    #[arg(long, value_name = "LUMA")]
+    pub(crate) fury_adapted_luma: Option<f32>,
+
     /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
     ///
     /// A window is not always given the size it asks for - a tiling compositor
@@ -480,6 +490,13 @@ pub(crate) struct Cli {
     /// See docs/tools/oag-game.md, "Music controls in a race".
     #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file"])]
     pub(crate) probe_pad: bool,
+
+    /// Download the pinned LGPL `ffmpeg` that plays Pulse's, Pure's and 2048's music and every
+    /// movie, into the per-user cache directory, then exit. Naming the flag is the consent. Does
+    /// nothing when an `ffmpeg` is already on `PATH` unless `[ffmpeg] use_pinned` is set. Opens
+    /// no window and no audio. See docs/architecture/ffmpeg.md.
+    #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file", "probe_pad"])]
+    pub(crate) fetch_ffmpeg: bool,
 
     /// Skip the front end and go straight to a ship on a track.
     ///
@@ -1301,6 +1318,7 @@ impl Cli {
             || self.dry_run
             || self.trace
             || self.probe_pad
+            || self.fetch_ffmpeg
             || self.prefetch
             || self.net.connect.is_some()
             || self.net.online.is_some())

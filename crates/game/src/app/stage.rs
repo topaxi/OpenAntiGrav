@@ -197,7 +197,7 @@ impl Stage {
     ) -> Result<Self> {
         // The mode icon's clip, where the title maps one for this mode: the
         // renderer's planes are sized from its header, and the clip itself is
-        // opened on a thread of its own (`loading_icon::Icon`).
+        // opened on a thread of its own (`crate::clip::Player`).
         let clip = loading::icon::clip(assets, mode);
         // The track's own picture goes under the title's sheet when it supplies one.
         let own_sheet = track.and_then(|track| track.sheet(assets));
@@ -261,10 +261,14 @@ impl Stage {
             icon: clip
                 .filter(|clip| loading::icon::format(clip).is_some())
                 .map(|clip| {
-                    crate::app::loading_icon::Icon::spawn(
-                        clip.clone(),
-                        oag_source::cache::default_cache_dir(),
-                    )
+                    let clip = clip.clone();
+                    let cache = oag_source::cache::default_cache_dir();
+                    // Looped: the original's panel plays the clip over and over for
+                    // as long as the load takes (two RPCS3 grabs 2 s apart are on
+                    // different beats of it).
+                    crate::clip::Player::spawn("loading screen mode icon", move || {
+                        loading::icon::open(&clip, &cache)
+                    })
                 }),
         })))
     }

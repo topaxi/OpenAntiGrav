@@ -24,7 +24,12 @@ pub(super) fn picker_footer(
     default_font: &oag_ui::font::Atlas,
 ) -> TickerClip {
     let layout = ticker?;
-    let tips = crate::records::ticker_tips(strings, &crate::records::load());
+    let tips = crate::records::ticker_tips(
+        Some(layout),
+        strings,
+        &crate::records::load(),
+        crate::records::TICKER_CAPTURE_SEED,
+    );
     let faces = oag_ui_screens::picker::FaceScales::default();
     let measure = |text: &str| oag_ui::font::measure(default_font, text);
     if let Some(legend) = nav_legend {
@@ -795,6 +800,21 @@ fn prompt_draws(
                 .draw(skin),
             )
         }
+        // The offer to download `ffmpeg` (`session::ffmpeg`), and the status line over the
+        // menus while it runs: the same text functions the session calls.
+        "ffmpeg" => Ok(
+            oag_ui_screens::prompt::Confirm::new(crate::ffmpeg_prompt::prompt_labels(
+                oag_ffmpeg::Pin::ALL[0].megabytes(),
+                |id, english| say(id, english),
+            ))
+            .draw(skin),
+        ),
+        "ffmpeg-progress" => Ok(oag_ui_screens::prompt::message_draw(
+            skin,
+            &crate::ffmpeg_prompt::status_text(37_000_000, 135_000_000, |id, english| {
+                say(id, english)
+            }),
+        )),
         // The CONTROLS page's key-capture prompt - `oag_ui_screens::prompt::
         // message_draw` is the same function `MenuStage::render` calls in
         // the binary, off `Session::awaiting_binding`, so this and a live
@@ -809,7 +829,7 @@ fn prompt_draws(
         )),
         other => anyhow::bail!(
             "no prompt named {other:?}; this build has rename, rename-note, delete, \
-             delete-built-in, binding, tag-entry, player-name, player-tag, \
+             delete-built-in, binding, ffmpeg, ffmpeg-progress, tag-entry, player-name, player-tag, \
              player-name-grid, player-tag-grid"
         ),
     }
@@ -1129,6 +1149,7 @@ pub(super) fn picker_page(
                 (open, step_seconds.unwrap_or(open))
             },
             fury: frame.blocks.as_ref().is_some_and(|blocks| blocks.fury),
+            adapted_luma: None,
         });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,

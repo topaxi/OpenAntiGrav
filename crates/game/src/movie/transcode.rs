@@ -196,28 +196,25 @@ pub(super) fn transcode(video: &[u8], to: Conversion<'_>, frames: usize) -> Resu
     Ok(store)
 }
 
-/// Whether `ffmpeg` is absent, probed once per process; the first miss logs
+/// Whether `ffmpeg` is absent (system or downloaded); the first miss logs
 /// the one line a player needs, and every later movie skips quietly.
 ///
 /// Without it every conversion would fail on its own, and the reason would sit
 /// in a debug-level loader report while the screen shows a black
 /// `INTRO FRAME n / N (NO PICTURE)`. One `warn` names the cause and the fix.
 pub(super) fn ffmpeg_missing() -> bool {
-    static MISSING: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *MISSING.get_or_init(|| {
-        let missing = matches!(
-            std::process::Command::new("ffmpeg").arg("-version").output(),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound
-        );
-        if missing {
+    static WARNED: std::sync::Once = std::sync::Once::new();
+    let missing = oag_ffmpeg::is_missing();
+    if missing {
+        WARNED.call_once(|| {
             warn!(
                 "ffmpeg is not installed, so the intro is skipped and movies show no \
                  picture (the game is otherwise fine). Install ffmpeg to see them; \
                  `--no-video` hides this message"
             );
-        }
-        missing
-    })
+        });
+    }
+    missing
 }
 
 /// Runs `ffmpeg` to transcode `input` into lossless AV1 `output`.
@@ -267,7 +264,7 @@ pub(super) fn run_ffmpeg(
             total: frames.total,
         },
     );
-    let mut command = std::process::Command::new("ffmpeg");
+    let mut command = oag_ffmpeg::command(oag_ffmpeg::Tool::Ffmpeg);
     command
         .arg("-hide_banner")
         .args(["-loglevel", "error"])

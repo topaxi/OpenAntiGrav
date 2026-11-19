@@ -23,6 +23,8 @@ fn populated() -> Settings {
     s.dev.unlock_everything = Some(false);
     s.mods.disabled.insert("oag.example".into());
     s.replay.record = false;
+    s.ffmpeg.download = settings::ffmpeg::Download::Never;
+    s.ffmpeg.use_pinned = true;
     s.mod_settings
         .entry("oag.example".into())
         .or_default()
@@ -53,6 +55,7 @@ fn a_settings_file_with_every_section_populated_validates() {
     for table in [
         "[mods]",
         "[replay]",
+        "[ffmpeg]",
         "[dev]",
         "[log]",
         "[source]",
