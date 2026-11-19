@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-10-29
+updated: 2026-11-19
 summary: "Nine unlock-predicate functions untraced; the two-axis unlock reading rests on XML plus one capture"
 ---
 
@@ -148,8 +148,13 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
   original prints `stats.xml`'s `<Physical Length>`, read by `oag_raceplay::authored_length`.
   Still open on the panel (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`): the per-mode
   row layout (distance moves to `Info2` outside modes 3/5/6/9/10; Zone's score row), Pure's
-  `0'00"00` empty record (its own binary), and the footer ticker's lifetime-statistics store
-  (weighted random draw among items with data; this build rotates only `TKR_NO*`).
+  `0'00"00` empty record (its own binary). ~~The footer ticker's lifetime-statistics store~~ - built
+  2026-11-19 (`oag_ui_screens::news`, `oag_game::records` `[[lifetime]]`, `docs/tools/compare-page.md`,
+  "`menu-team`"). Still open there: the original's increment sites for the 200 statistics are unread; ours
+  counts laps and time per mode, menu time and race songs only, so team, circuit, weapon, photo and
+  speed-pad statistics and the `TKR_FYI*` unlock announcements never show; the footer tag box
+  (`profile + 0x457`, `AAA`) waits for the player tag; the original shows two messages while a tail and
+  the next head overlap, ours one (the render clip has one slot).
 - **`Loyalty` is not drawn** - no counter to show. ~~The livery row cycles
   the variant axis~~ - it is the skin axis now (`Classic` + each
   `PI_ModelSkin`, `race.skin`), repainting the preview and reaching the

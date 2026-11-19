@@ -1447,9 +1447,9 @@
 # 2026-10-29 pulse-track-select-text: the track panel rows and the ticker's message choice (race-box-screens.md)
 0x088ede50	function	TrackSelection_SetIntRow	88	race-box-screens.md
 0x088edd60	function	TrackSelection_SetTimeRow	88	race-box-screens.md
-0x088d0e3c	function	Ticker_PickMessage	72	race-box-screens.md
-0x088d1384	function	Ticker_AdvanceWeighted	72	race-box-screens.md
-0x088d22ac	function	Ticker_BuildStatMessage	72	race-box-screens.md
+0x088d0e3c	function	Ticker_PickMessage	90	race-box-screens.md
+0x088d1384	function	Ticker_AdvanceWeighted	90	race-box-screens.md
+0x088d22ac	function	Ticker_BuildStatMessage	90	race-box-screens.md
 0x088a3e8c	function	GridController_UpdateSelectorStamp	85	race-campaign.md
 0x0881cdc4	function	Hud_UpdatePickupWidgets	88	pickup-colour.md
 0x08ab0844	data	g_hud_pickup_widget_table	92	pickup-colour.md
@@ -1487,3 +1487,22 @@
 0x0892342c	function	ShadowNode_Read	75	shadow-wipe.md
 0x08a88680	data	g_shadow_darkness	90	shadow-wipe.md
 0x08b62550	data	g_shadow_darkness_override	78	shadow-wipe.md
+0x088d0fe0	function	Ticker_FindUnseenUnlock	70	race-box-screens.md
+0x088d142c	function	Ticker_BuildFavouriteMessage	85	race-box-screens.md
+0x088d1510	function	Ticker_BuildTeamMessage	80	race-box-screens.md
+0x088d16f8	function	Ticker_BuildTrackMessage	75	race-box-screens.md
+0x088d18b8	function	Ticker_FormatDuration	90	race-box-screens.md
+0x088d0d88	function	Ticker_AssignWeights	90	race-box-screens.md
+0x088d1a64	function	Ticker_Init	75	race-box-screens.md
+0x088d1e04	function	Ticker_Update	85	race-box-screens.md
+0x088c1ad8	function	NewsItem_ParseValues	90	race-box-screens.md
+0x088c18e0	function	NewsItem_Construct	85	race-box-screens.md
+0x08808f04	function	Profile_RefreshFavourites	85	race-box-screens.md
+0x088092fc	function	Profile_PickFavouriteTeam	80	race-box-screens.md
+0x08809424	function	Profile_PickFavouriteTrack	80	race-box-screens.md
+0x0880954c	function	Profile_PickFavouriteSpeedClass	80	race-box-screens.md
+0x0880964c	function	Profile_PickFavouriteMusic	90	race-box-screens.md
+0x088097e0	function	Profile_PickFavouriteEvent	70	race-box-screens.md
+0x0880b794	function	Profile_PickFavouriteWeapon	80	race-box-screens.md
+0x08809e48	function	Profile_Deserialize	80	race-box-screens.md
+0x08b31774	data	g_profile	90	race-box-screens.md

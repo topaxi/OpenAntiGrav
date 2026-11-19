@@ -1966,16 +1966,48 @@ the original's pixels over one region of ours and recompute `mean_grey` with the
 | `basilico-black` 5.075 | start-line laser band, rows 146 to 156 | 4.03 | see below |
 | | craft box (185, 150, 300, 250) | 3.23 | pose and livery, not isolated |
 | | bottom HUD (rows 200 to 272) | 4.32 | clock and best text |
-| `menu-team` 5.89 | footer (rows 205 to 272) | 3.18 | the original's ticker message and tag text, below |
+| `menu-team` 5.89 | footer (rows 205 to 272) | 3.18 | the original's ticker message and tag text; **closed for the message, see below** |
 | `pulse-psp-zone-talons-white-z8` 8.19 | bottom HUD, left half | 7.75 | ours' HUD reads faded beside the original's solid one; speed bar and plume differ; not isolated |
 
-**`menu-team`: the footer is the original's random ticker draw, so the grey is original state not recorded.** The original shows "Your most listened to music track is ...";
-ours shows a tournament tip. The original picks the next message by a weighted `rand()` draw among items that have data (`Ticker_PickMessage`,
-`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "The footer ticker's message choice"), and a fresh profile that only sat in the menus has a
-songs-listened statistic. Ours keeps no lifetime-statistics store (`oag_game::records::ticker_tips` rotates the `TKR_NO*` tips). Missing values: the
-statistics table (`DAT_08b31774 + 0x11c + slot * 4`), the item weights and the `rand()` state at the grab. The left tag box reads "AAA" in the original
-and blank in ours (cause not read). Confidence 70 that the footer accounts for the 2.7 grey (the paste test); the cause of the draw, 85 (decompile, a prior lane).
-Closing it is a statistics store plus the draw, not a renderer fix.
+**`menu-team`: the footer is the original's random ticker draw, now read and wired (2026-11-19, `pulse-menu-team`).** The original picks the next message by a weighted
+`rand()` draw among the `PI_News` items that have data (`Ticker_PickMessage`, `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "The footer ticker's
+message choice"); the old frame caught "Your most listened to music track is Fenix Funk 5 (Wipeout Edit)" and ours rotated a tournament tip. Ours now draws the
+same way: `oag_ui_screens::news` parses the disc's `Data\Plugins\news\Definition.xml`, draws with the original's weights and no-repeat rule through the seeded
+`oag_core::Rng`, and quotes lifetime statistics `oag_game::records` keeps in the records file (`[[lifetime]]`, per title: laps and time per mode off each recorded race,
+menu time, the race songs heard per track; `Lifetime::favourite` is the most-played, as `Profile_PickFavouriteMusic` is). A mode never raced still says its `TKR_NO*`
+tip, because the six time items fall back to it at 0. **Not counted, so never shown:** team and circuit statistics, weapons, photos, speed pads, the unlock
+announcements (`TKR_FYI*`); the original's increment sites are not read either.
+
+The message at a grab cannot be chosen (`rand()` on the emulator's clock), so the grab picks the frame: `scripts/psp-menu-pair.py` with the plan step `tick:N` polls the
+ticker widget out of PPSSPP RAM (`scripts/psp_ticker.py`; the widget is the one object with 124 rows at `+0xc8` and weight 122 at `+0x104`) with the CPU stopped, remembers
+which item each text record holds (`+0xcc` is the item drawn *last*, the message waiting in the idle record), and stops on a frame with exactly one message on screen whose
+item ours counts. It grabs that frame in the same stop and records the item, head x, both records, the widget address and the statistics table in
+`original.footer_ticker`. Ours is drawn with `--menu-ticker ITEM@X` (the head x as the original's record has it: a message enters at the ticker's width 370 and moves left 1 px
+a frame) and a `[[lifetime]]` row written from the table. Two facts the first grabs gave: the text sits **2 px right of the record's head** (`TICKER_TEXT_ORIGIN`, confidence 70:
+two grabs, heads 89 and 90, matched at +2 and +3), and the presented picture **lags the CPU stop by 0 or 1 frame**, which the script settles per grab by rendering ours at the
+head and at the head plus 1 and keeping the better ticker box (`original.footer_ticker.lag_frames`).
+
+| Frame (theirs) | Ours | mean grey (whole 480 x 272) | footer rows 205 to 272 | ticker box (85, 235, 370 x 32) |
+| --- | --- | ---: | ---: | ---: |
+| 2026-10-29, "Your most listened ..." | before: tournament tip | 5.90 | 11.01 | 23.19 |
+| | after: `TKR_FAVMUS` at x 49, 6 plays of the song seeded (**fitted**: the old grab has no RAM read) | 5.32 | 8.66 | 16.81 |
+| 2026-11-19 grab A, `TKR_SLTIM` ("Why don't you try out the Speed Lap events?") | before: main's binary | 4.79 | 10.81 | 23.73 |
+| | after: pinned at the head read (89) | **3.12** | **4.06** | **5.39** |
+| | paste test: theirs' footer over before | 2.13 | 0.17 | 0.20 |
+| 2026-11-19 grab B, `TKR_TTTIM` | before | 5.84 | 10.76 | 23.64 |
+| | after: pinned at the head read plus 1 frame (91) | 4.21 | 4.17 | 5.74 |
+| 2026-11-19 grab C, `TKR_TTTIM`, the final tooling | before | 11.48 | 13.30 | 23.52 |
+| | after | 9.91 | 6.95 | 6.26 |
+
+Grab C's whole-frame grey is high on both sides because the menu backdrop movie's phase differs (a bright streak in the original that ours' frame zero does not draw): that
+is not the footer. The ticker box keeps 5.4 to 6.3 after the message and the position match: the silver bar's gradient and glyph antialiasing (a shift of one pixel in any
+direction costs 25 to 70). **The left tag box is the profile's footer tag** (`profile + 0x457`, `AAA` on a fresh profile, read by `Ticker_Update`'s tag branch) and is blank in
+ours: with theirs' tag box pasted on grab C the footer goes 6.95 to 4.90. The player tag is a planned feature (one shared name, a 3-character tag on Pulse and Pure); open, not built.
+**PS2** ships the same code (`NewsItemBarText1`, `PI_News` and `NewsFrequency` are in `SCES_547.48`) and the same list less three rows (121; `pulses_news_items_are_the_discs_list`),
+and ours draws it on the PS2 ship select at the PS2 viewport (113, 392, 493 x 53), inherited from PSP. **Pure** ships no ticker: its `BOOT.BIN` on both pressings has no
+`TKR_`, `NewsItemBarText` or `PI_News` string and its `Data.wad` no `news` plugin; its `TextInfoIsAlwaysLast` is the description box.
+Grab A is the one to keep as the pair (ours re-rendered by `compare-rerender-ours.rerender` on a copy: 4.06 to 3.12). A pair whose ticker quotes a seeded statistic
+(`TKR_FAVMUS`, `TKR_SONGS`) needs the `[[lifetime]]` row `pair.json` does not carry, so those re-render only through the pair script.
 
 **`basilico-black`: the laser band is worth 1.05 grey, and the original's laser core is about 1.5 times brighter than ours before bloom.**
 Measured on a Talon's Junction grid in the original (PPSSPP 1.20.4, `psp-ge-dump.py`, bloom removed by `psp-ge-replay.py --nop-after` the first prim drawn into

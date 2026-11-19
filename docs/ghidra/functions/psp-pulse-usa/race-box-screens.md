@@ -109,25 +109,67 @@ circuits print `5178`, `5350` and `4419`, which `oag_raceplay::authored_length` 
 retires the long-standing "ours is 1.7 to 2.3 per cent short of the screen" note: the screen never
 summed a curve. Confidence 95 (decompile, the disc's file, and the capture agree on three circuits).
 
-### The footer ticker's message choice, read 2026-10-29 (`0x088d0e3c`)
+### The footer ticker's message choice, read 2026-10-29 and live-checked 2026-11-19 (`0x088d0e3c`)
 
-`FUN_088d0e3c` (`Ticker_PickMessage`, 72) builds the next message. A first call to `FUN_088d0fe0`
-looks for unseen content (new tracks, skins, grid: the `TKR_FYI*` family, flags at `+0xd0..+0xf4`);
-otherwise it loops: `0x088d1384` (`Ticker_AdvanceWeighted`, 72) draws the next item with
+`FUN_088d0e3c` (`0x088d0e3c`, `Ticker_PickMessage`, 90) builds the next message. A first call to `0x088d0fe0`
+(`Ticker_FindUnseenUnlock`, 70) looks for unseen content (new tracks, skins, concept ships, grid: the
+`TKR_FYI*` family, flags at `+0xd0..+0xf4`); otherwise it loops: `0x088d1384` (`Ticker_AdvanceWeighted`, 90) draws the next item with
 **`rand() % total`** over per-item weight ranges (`+0xb0` width, `+0xb8` start; total at `+0x104`),
-never the item it just showed, then the item's kind (`+0xa8`) picks a builder, and the loop repeats
-until a builder returns a message. `0x088d22ac` (`Ticker_BuildStatMessage`, 72), the kind-0 builder,
-formats a lifetime statistic from the profile's stat table (`DAT_08b31774 + 0x11c + slot * 4`,
-slot at item `+0xac`) through the item's own `%d`/`%s`/`%.2f` string; **a statistic that is 0 yields
-no message and the loop draws again**, and for the six per-mode time items (`TKR_SRTIM` ...
-`TKR_ZTIM`) a 0 statistic is replaced by the matching `TKR_NO*` tip.
+again while it is the item it drew last (a draw that failed to build counts: `+0xcc` is set before the
+builder runs), then the item's class (`+0xa8`) picks a builder, and the loop repeats until a builder returns a message.
+`0x088d22ac` (`Ticker_BuildStatMessage`, 90), the `GenStats` builder, formats a lifetime statistic from the profile's stat table
+(`*(0x08b31774) + 0x11c + slot * 4`, slot at item `+0xac`) through the item's own `%d`/`%s`/`%.2f` string;
+**a statistic that is 0 yields no message and the loop draws again**, and for the six per-mode time items (`TKR_SRTIM`, `TKR_SLTIM`,
+`TKR_TTTIM`, `TKR_TOURTIM`, `TKR_ELIMTIM`, `TKR_ZTIM`) a 0 statistic is replaced by the matching `TKR_NO*` tip. Every other time item
+(`TKR_HTHTIM`, `TKR_MENTIM`, ...) at 0 says nothing.
 
-So the original's choice is **a weighted random draw among the items that have data**, not an order
-or a start index, and the data is a lifetime statistics table (laps, zones, songs listened to, the
-most-listened track, ...) the profile accumulates, menu music included: that is why a fresh
-profile that has only sat in the menus shows `6 songs` / `Your most listened to music track is ...`.
-This build keeps no such table, so it rotates only the `TKR_NO*` tips (`oag_game::records::ticker_tips`).
-Matching the original means a lifetime-statistics store and the weights; open (see the handover thread).
+**The items are authored.** `Data\Plugins\news\Definition.xml` (`PI_News`, 124 rows on both PSP pressings, 121 on PS2 with no `TKR_FYISL`,
+`TKR_FYIZONE` or concept-ship row) is the list; the loader `0x088c1ad8` (`NewsItem_ParseValues`, 90) fills the object a
+constructor `0x088c18e0` (`NewsItem_Construct`, 85) zeroes (so an attribute left out is 0):
+
+| Attribute | Field | Values |
+| --- | --- | --- |
+| `NewsID` | `+0xa0` | the string-table id of the message |
+| `NewsFormat` | `+0xa4` | table `0x08ab1a40`: `int` 0, `float` 1, `time` 2, `floattime` 3, `percent` 4, `string` 5 |
+| `NewsClass` | `+0xa8` | table `0x08ab1a78`: `GenStats` 0, `Profile` 1, `TeamStats` 2, `TrackStats` 3, `Unlockable` 4 |
+| `NewsMember` | `+0xac` | the statistic slot (`GenStats`), the favourite (`Profile`), the team or track index, the unlock flag |
+| `NewsFrequency` | `+0xb0` | the draw width: weight is this plus 1 |
+| `NewsMax` | `+0xb4` | the divisor of a `percent` row (no row uses it) |
+
+`0x088d0d88` (`Ticker_AssignWeights`, 90) lays the items end to end: an item's start is the running total, the total grows by
+`frequency + 1`, and an `Unlockable` row gets start `-1` (`+0xb8`) and so is never drawn (its `-1` frequency adds nothing). All 124
+rows author frequency 0 but `TKR_FYIZONE` and `TKR_FYISL` (1) and the four unlock rows (-1): the draw's total is **122**, which is what
+`+0x104` reads live. **A row naming no class is `GenStats` member 0**: those two messages show only once the speed-pad count (`TKR_SUP`) is
+above 0. Builders by class: `GenStats` `0x088d22ac`; `Profile` `0x088d142c` (`Ticker_BuildFavouriteMessage`, 85: shown unless the 32-byte
+string at `profile + 0x3c + member * 0x20` is the localised `MSC_NONE`); `TeamStats` `0x088d1510` (`Ticker_BuildTeamMessage`, 80: laps,
+time and loyalty of one team); `TrackStats` `0x088d16f8` (`Ticker_BuildTrackMessage`, 75: laps and time of one circuit);
+`0x088d18b8` (`Ticker_FormatDuration`, 90) prints a time as `H hours M mins` over an hour, `M mins S seconds` under one, each word
+singular at exactly 1 (`MSC_SEC`, `MSC_MIN`, `MSC_HOUR`).
+
+**The favourites are derived, not counted.** `0x08808f04` (`Profile_RefreshFavourites`, 85) resets the seven favourite strings to `MSC_NONE` and
+fills them from the profile's own records: `0x088092fc` the team with the greatest `+8` (`Profile_PickFavouriteTeam`, 80), `0x08809424` the
+circuit with the greatest first word (`Profile_PickFavouriteTrack`, 80), `0x0880954c` the speed class (`Profile_PickFavouriteSpeedClass`, 80),
+`0x0880964c` **the music track with the greatest play count** (`Profile_PickFavouriteMusic`, 90: a 4-byte record per track, a `u16` count, the
+first on a tie, the name copied into a 30-character field; the same loop sums the counts into stat slot 69, `TKR_SONGS`, at `+0x230`),
+`0x088097e0` the event (`Profile_PickFavouriteEvent`, 70) and `0x0880b794` the weapon (`Profile_PickFavouriteWeapon`, 80). The profile
+(`0x08809e48`, `Profile_Deserialize`, 80) is: name `+0x44c` (11 bytes), **the footer tag `+0x457` (4 bytes: `AAA` on a fresh profile)**, the statistics `+0x11c`
+(800 bytes, 200 words), then keyed records. `0x08b31774` holds the pointer (`g_profile`, 90).
+
+**Where the statistics are incremented is not read.** The `u16` count of a music record and the 200 slots have writers this lane did not
+trace (the menu music is a playlist, so a song counts when it starts; the profile record of a fresh profile that only sat in the menus read
+`6 songs`). Open.
+
+**The motion** (`0x088d1e04`, `Ticker_Update`, 85; set up by `0x088d1a64`, `Ticker_Init`, 75): two 0x114-byte text records from `+0x108`
+(`+0x00` active, `+0x04` head x, `+0x0c` minus the text width, `+0x10` the text), a message enters at the viewport's width (370) and moves left `+0x330` =
+1.0 pixel per update, the other record activates when the tail reaches `+0xb4` = `(int)(width - width * 0.25)` = 277, and a record that has
+left is refilled at once with the next draw. So `+0xcc` is the item drawn **last**, which is the message waiting in the idle record, not the
+one on screen. Read live from PPSSPP on Team Selection: `+0xc8` = 124, `+0x104` = 122, `+0xb4` = 277, `+0x330` = 1.0, the item array's
+rows in file order (index 71 read `TKR_TOURTIM` with its tournament tip in the record), the item fields as above.
+
+So the original's choice is **a weighted random draw among the items that have data**, not an order or a start index, and the data is a
+lifetime statistics table the profile accumulates, menu music included: that is why a fresh profile that has only sat in the menus shows
+`6 songs` / `Your most listened to music track is ...`. Ours: `oag_ui_screens::news` (the draw and each message),
+`oag_game::records` (the counters this build can count, filed in the records file per title), `docs/tools/compare-page.md`, "`menu-team`".
 
 ### `TrackSelection_PopulateList` closes "what populates the track list is unread"
 
