@@ -1368,3 +1368,14 @@ then serve slots 1-7 from a texture of that content in place of the strip
 
 **2048 / Omega:** both set `zone_shares_one_texture: true` too and strip the same way; each carries its
 own `TrackStartup` reader, so the binding was not read there: not checked.
+
+**Read attempt, 2026-11-19 (one launch, no result).** `serve --load-state zone-moa-therma-hd-early.SAVESTAT.zst
+--pause-after-load` on a private tree (`scripts/emu-env.sh`, display 96, GDB 2492, Null audio) froze in the
+state loader: `Verification failed` at `PPUModule.cpp:1895 ppu_load_prx()` with `errno=2` (a PRX the state
+names is not found under the private config tree), before the GDB stub answered. Not retried unchanged.
+Recipe for the read, to run once that load works or on a cold-boot Zone race (`docs/tools/compare-page.md`,
+"HD Zone race-start pair"): pause, read the u32 at `0x008b7940` (`0x00c7dfb0`, the stage block), the
+object pointer at `block + 0x32b4`, then that object's `+0x20` (the texture header: format, size, data
+pointer) and a few hundred bytes of the data; also read `block + 0x3374` and `block + 0x3354` (the two
+floats `Environment_UpdateStageBlend` stores before binding the target). A cleared target reads as one
+repeated texel; a stage-colour fill as one colour; a drawn scene as structure.
