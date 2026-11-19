@@ -30,6 +30,7 @@ pub mod app;
 pub mod boot;
 pub mod campaign;
 pub mod capture;
+pub mod clip;
 pub mod cursor;
 pub mod custom_tracks;
 pub mod demo;

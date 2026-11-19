@@ -16,6 +16,7 @@ const XML: &str = r#"<Variable global="Grey" name="Grey"><Values String="0xff969
       <Bracket><Values corner="true" X="0" Y="0" Width="680" Height="242"></Values></Bracket>
       <Image name="Emblem"><Values x="110" y="8" width="192" height="192"></Values></Image>
       <Text name="TrackName"><Values idstring="RB_TRACK_SEL" x="340" y="200"></Values></Text>
+      <Movie name="FlyByMovie"><Values X="500" Y="190" Width="260" height="170" src="Data\FE\Images\Loading_Icon.bik" repeat="true"></Values></Movie>
     </Item>
     <Bracket><Values corner="true" X="0" Y="282" Width="680" Height="230"></Values></Bracket>
     <TrackHexSelection name="TrackHexSelector" OffsetX="50" OffsetY="330"><Values columns="9" rows="2"></Values></TrackHexSelection>
@@ -125,6 +126,34 @@ fn the_emblem_is_the_environments_own_fe_texture() {
     assert_eq!(
         emblem_src(r"Data\Environments\01_Vineta_K"),
         r"Data\Environments\01_Vineta_K\FE\TrackSelectEmblem_Fury.gtf"
+    );
+}
+
+#[test]
+fn the_fly_by_clip_is_the_environments_own_preview() {
+    assert_eq!(
+        fly_by_src(r"Data\Environments\01_Vineta_K", r"FE\preview.bik"),
+        r"Data\Environments\01_Vineta_K\FE\preview.bik"
+    );
+}
+
+#[test]
+fn the_fly_by_panel_is_where_the_widget_says_and_not_offset_by_its_item() {
+    let layout = layout();
+    let extra = layout.hd_track.as_deref().expect("hd");
+    // The frame's picture sits at the widget's own X/Y: (500,190), where its `Item`'s
+    // (160,170) would put it at (660,360).
+    assert_eq!(extra.fly_by, Some([500.0, 190.0, 260.0, 170.0]));
+    let picker = Picker::new(Kind::Track, vec![circuit("a", false)], Some("a"), None);
+    let draws = body(&picker, &layout, extra, &Frame::default(), &sheet);
+    let video = draws.iter().find_map(|draw| match draw {
+        Draw::Video { rect, source, .. } => Some((*rect, *source)),
+        _ => None,
+    });
+    assert_eq!(
+        video,
+        Some(([500.0, 190.0, 260.0, 170.0], Video::FlyBy)),
+        "dropping the wiring leaves the panel with no video draw"
     );
 }
 

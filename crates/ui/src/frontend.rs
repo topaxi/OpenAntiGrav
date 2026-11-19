@@ -340,6 +340,10 @@ pub enum Video {
     /// The Bink clip in the race loading screen's mode icon panel. Not the
     /// front end's: `oag_game::loading` draws it and its stage feeds it.
     ModeIcon,
+    /// The Bink clip in HD's Track Select `FlyByMovie` panel: the selected
+    /// circuit's `preview.bik`. A selection screen's own, fed by
+    /// `oag_game::app::picker_stage`, drawn from a plane set of its own.
+    FlyBy,
 }
 
 mod draw;

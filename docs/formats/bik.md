@@ -134,6 +134,9 @@ The 16 circuit previews are one per track, under
 `/data/environments/<circuit>/fe/preview.bik` - ten seconds of footage each, at
 a size that says they are meant for a panel in a menu rather than for the
 screen. The four Zone circuits' previews are the only ones with sound.
+**Played** (2026-11-19): Track Select's `FlyByMovie` panel draws the selected circuit's, looped and
+stretched to 260x170 units; see `docs/ui/campaign-screens.md`, "The fly-by, drawn". Omega ships
+none.
 
 ## What is in the logo reel
 

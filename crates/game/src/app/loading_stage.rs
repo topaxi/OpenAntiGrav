@@ -83,7 +83,7 @@ pub(crate) struct LoadingStage {
     pub(crate) music: Option<oag_sound::MusicFetchWorker>,
     pub(crate) trace: bool,
     /// The mode icon's clip, on a race load of a mode the title maps one for.
-    pub(crate) icon: Option<crate::app::loading_icon::Icon>,
+    pub(crate) icon: Option<crate::clip::Player>,
 }
 
 /// Why [`LoadingStage::built_race`] is an `Err`.
@@ -148,7 +148,9 @@ impl LoadingStage {
         progress: &prefetch::Progress,
     ) {
         if let Some(icon) = self.icon.as_mut() {
-            let shown = icon.pump(&self.renderer, &gpu.queue, self.screen.playhead());
+            let shown = icon.pump(self.screen.playhead(), |frame| {
+                self.renderer.upload_frame(&gpu.queue, frame)
+            });
             self.screen.set_mode_icon(shown);
         }
         let quads = self.screen.quads();

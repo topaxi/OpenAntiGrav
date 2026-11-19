@@ -324,6 +324,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_settle: None,
     circuit_models: &[],
     circuit_turntable: None,
+    circuit_fly_by: None,
     // `Data\Plugins\PI001\GUI\EndRace_Definition.xml` - `oag_game::endrace`'s
     // own long-standing constant, restated here now that a second title
     // needs this axis. See `oag_title::FrontEnd::endrace_entry`.
