@@ -195,6 +195,7 @@ fn draw_grid(
     hex::draw_cells(
         &grid,
         (picker.index() % width.max(1), width, picker.pan()),
+        f32::INFINITY,
         Some(picker.index() / width.max(1)),
         RING,
         &face,

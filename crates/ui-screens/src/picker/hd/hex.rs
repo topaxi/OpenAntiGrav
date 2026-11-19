@@ -26,7 +26,8 @@
 //! fresh profile), fitted to the authored brackets (title rule `160..1757`
 //! authored against `306..1811` px gives 0.9424 px per unit): the first
 //! column's centre lands on the authored origin `x = 272`; the column pitch
-//! is 72.2 units, the row pitch 82.8, odd columns sit half a row lower; the
+//! is 72.2 units, the row pitch 82.8, the columns of odd teams sit half a row lower (the
+//! rest grabs of all twelve teams on two boots, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The banner and the hex column on a step"); the
 //! hexagon draws at 1.22 times its 72x62 art. The padlock's visible art
 //! (91x129 texels) measures 40x56 units, 0.44 per texel; the thumbnail's
 //! 1.0 per texel. A padlock reads `128` on the selected column (exactly
@@ -58,6 +59,14 @@ use super::super::Picker;
 
 /// Distance between column centres, and between row centres, in units.
 pub(in crate::picker) const PITCH: [f32; 2] = [72.2, 82.8];
+
+/// How long a team step leaves the columns' half-row shift on the previous team's phase: the
+/// original's hex column is the old picture through game frame 3 after the selection moved and
+/// half way to the new one by frame 8 (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`,
+/// "The banner and the hex column on a step"); ours is measured from the screen's frame 0, which
+/// is the original's frame 3 at the pairs' picture lag, so four frames. The slide between the two
+/// is a step here.
+pub const PHASE_HOLD_SECONDS: f32 = 4.0 / 60.0;
 /// A cell's art against the authored 72x62 hexagon.
 const HEX_SCALE: f32 = 1.22;
 /// The hexagon's visible centre inside its 128x64 texture, in texels.
@@ -125,6 +134,10 @@ pub struct HexGrid {
     pub selected_lock_fade: u32,
     /// The cursor ring's tint, [`TEAM_RING`] unless the title's own differs.
     pub ring: [f32; 4],
+    /// Whether the half-row shift of a column follows its team's index (`Team Selection`: a
+    /// column of an odd team sits half a row lower whichever window slot it is in) rather than
+    /// its slot in the window (`TrackHexSelection`, unmeasured).
+    pub phase_by_entry: bool,
 }
 
 /// One cell: which team column and model row it is, where it sits, and what
@@ -175,6 +188,7 @@ impl HexGrid {
             selected_lock: LOCK_COL,
             selected_lock_fade: LOCK_COL_FADE,
             ring: TEAM_RING,
+            phase_by_entry: false,
         }
     }
 
@@ -187,6 +201,14 @@ impl HexGrid {
     /// right-most one out, each fading by how far it has travelled.
     #[must_use]
     pub fn cells(&self, selected: usize, count: usize, pan: f32) -> Vec<Cell> {
+        self.cells_at(selected, count, pan, f32::INFINITY)
+    }
+
+    /// [`Self::cells`] `since` seconds after the selection moved: on a grid whose phase follows the
+    /// team, the columns keep the previous team's half-row shift for [`PHASE_HOLD_SECONDS`]
+    /// (the previous team is the neighbour a single step came from, whose parity is the opposite).
+    #[must_use]
+    pub fn cells_at(&self, selected: usize, count: usize, pan: f32, since: f32) -> Vec<Cell> {
         let mut out = Vec::new();
         if count == 0 || self.columns == 0 {
             return out;
@@ -195,7 +217,18 @@ impl HexGrid {
         let slide = pan.abs().min(1.0);
         let first = if pan > 0.0 { -1 } else { 0 };
         let last = self.columns as i64 - if pan < 0.0 { 0 } else { 1 };
-        let heave = |column: i64| if column.rem_euclid(2) == 1 { 1.0 } else { 0.0 };
+        let phase = match (self.phase_by_entry, since < PHASE_HOLD_SECONDS) {
+            (false, _) => 0,
+            (true, false) => selected as i64,
+            (true, true) => selected as i64 + 1,
+        };
+        let heave = |column: i64| {
+            if (column + phase).rem_euclid(2) == 1 {
+                1.0
+            } else {
+                0.0
+            }
+        };
         for column in first..=last {
             let offset = column - centre as i64;
             let entry = (selected as i64 + offset).rem_euclid(count as i64) as usize;
@@ -336,13 +369,14 @@ const RING_STEP: f32 = 1.0;
 pub(super) fn draw_cells(
     grid: &HexGrid,
     (selected, count, pan): (usize, usize, f32),
+    since: f32,
     cursor: Option<usize>,
     ring: [f32; 4],
     face: &dyn Fn(&Cell) -> Face,
     sprites: &dyn Fn(&str) -> Option<Placed>,
     out: &mut Vec<Draw>,
 ) {
-    for cell in grid.cells(selected, count, pan) {
+    for cell in grid.cells_at(selected, count, pan, since) {
         let first_draw = out.len();
         let chosen = cell.distance == 0;
         let (cx, cy) = centre(cell.rect);
@@ -441,9 +475,16 @@ pub(super) fn draw(
         }),
         _ => Face::Lock,
     };
+    // Only a selection that moved after the screen opened is a step.
+    let since = if picker.since_selection() < picker.seconds() {
+        picker.since_selection()
+    } else {
+        f32::INFINITY
+    };
     draw_cells(
         grid,
         (picker.index(), picker.entries().len(), picker.pan()),
+        since,
         cursor,
         grid.ring,
         &face,
