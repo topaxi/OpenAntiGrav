@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 #[cfg(not(target_arch = "wasm32"))]
-use log::info;
+use log::debug;
 use oag_core::hash::StateHasher;
 
 /// Decoded interleaved samples and what they are.
@@ -567,11 +567,14 @@ fn content_key(bytes: &[u8]) -> String {
 /// choose produce byte-identical output.
 #[cfg(not(target_arch = "wasm32"))]
 fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
-    info!(
-        "decoding {} into {} (once; cached after this)",
-        input.display(),
-        output.display()
-    );
+    // Said only once a decoder exists, and at debug: a player with no ffmpeg reads the one warn.
+    if !oag_ffmpeg::is_missing() {
+        debug!(
+            "decoding {} into {} (once; cached after this)",
+            input.display(),
+            output.display()
+        );
+    }
 
     // Captured rather than inherited, unlike `oag_game::movie::run_ffmpeg`, and
     // for a reason particular to this codec: the ATRAC3+ decoder hands the
