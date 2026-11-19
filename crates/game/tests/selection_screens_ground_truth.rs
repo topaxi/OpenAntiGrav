@@ -266,6 +266,7 @@ fn the_track_picker_draws_the_discs_own_rows() {
                 emblem: None,
                 icon: None,
                 reversed: false,
+                model_pose: None,
             },
         })
         .collect();

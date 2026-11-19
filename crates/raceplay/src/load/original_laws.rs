@@ -97,6 +97,7 @@ mod tests {
             unlock_grid: None,
             sound_register: None,
             string_id: None,
+            model_pose: None,
             foreign: None,
         }
     }

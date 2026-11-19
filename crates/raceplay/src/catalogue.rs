@@ -237,6 +237,9 @@ pub struct Track {
     /// circuits of 2048 (`altima`, `arena`, ...) author it (`Track_Altima_0`);
     /// the twenty-eight numbered ones do not, and are named by their id.
     pub string_id: Option<String>,
+    /// The pose the entry authors for its circuit model on `Track Creation`: `RotX`, `PosY`
+    /// and `PosZ`. `None` where the entry authors none, which is every title but HD.
+    pub model_pose: Option<oag_title::CircuitPose>,
     /// The foreign (Unity) track file this entry stands for, or `None` for a
     /// circuit of the source's own. See [`crate::foreign`].
     pub foreign: Option<std::path::PathBuf>,
@@ -1210,7 +1213,23 @@ fn read_track(node: &Node, wanted: Option<&str>) -> Option<Track> {
             .attr("soundregister")
             .and_then(|v| v.trim().parse().ok()),
         string_id: values.attr("StringTableId").map(str::to_string),
+        model_pose: read_model_pose(values),
         foreign: None,
+    })
+}
+
+/// `RotX`, `PosY` and `PosZ`, all three finite, off a `PI_Track`'s `Values`.
+fn read_model_pose(values: &Node) -> Option<oag_title::CircuitPose> {
+    let number = |name: &str| {
+        values
+            .attr(name)
+            .and_then(|v| v.trim().parse::<f32>().ok())
+            .filter(|v| v.is_finite())
+    };
+    Some(oag_title::CircuitPose {
+        rot_x: number("RotX")?,
+        pos_y: number("PosY")?,
+        pos_z: number("PosZ")?,
     })
 }
 

@@ -384,6 +384,7 @@ fn endrace_page(
                     kind: oag_ui_screens::picker::Kind::Ship,
                     mode3d: Some(trophy.placement.model.clone()),
                     track_model: None,
+                    track_posing: crate::preview::track_model::Posing::Standin { seconds: 0.0 },
                     seconds: 0.0,
                     hull_clock: (0.0, 0.0),
                     fury: false,

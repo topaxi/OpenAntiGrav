@@ -67,6 +67,7 @@ pub(super) fn track_entries(
                         emblem: oag_raceplay::catalogue::track_emblem(title, track),
                         icon: oag_raceplay::catalogue::track_icon(title, track),
                         reversed: track.reversed,
+                        model_pose: track.model_pose,
                     },
                 },
                 title.front_end.and_then(|front_end| {

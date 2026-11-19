@@ -997,3 +997,5 @@
 0x000d8910	function	Ship_RecordContactImpulse	78	collision-cues.md
 0x000e6fd8	function	Ship_SpawnContactFx	80	ship-collision-fx.md
 0x00400a00	function	Scene_DrawOpaqueChunkBucket	78	zone-plain-chunks.md
+0x0025d558	function	TrackSelectionScreen_Update	85	track-selection-screen.md
+0x0025c340	function	TrackSelectionScreen_SelectCircuit	80	track-selection-screen.md

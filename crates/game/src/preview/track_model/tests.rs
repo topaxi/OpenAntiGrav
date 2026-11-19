@@ -2,40 +2,131 @@ use super::*;
 use bytemuck::Zeroable;
 use oag_core::math::Vec4;
 
-/// The model's origin lands on the pixel `OriginX`/`OriginY` name: the
-/// widget's authored `(1308, 440)` in the 1920 by 1080 grid.
-#[test]
-fn the_model_origin_lands_on_the_authored_pixel() {
-    let widget = TrackModel {
+fn widget() -> TrackModel {
+    TrackModel {
         origin: [1308.0, 440.0],
         offset: [0.0, 0.0],
         z: -180.0,
         ortho_scale: [1.0; 3],
-    };
-    let (view_projection, model) = matrices(&widget, Space::HD, 3.0);
+    }
+}
+
+fn law() -> oag_title::CircuitTurntable {
+    oag_hd::frontend::CIRCUIT_TURNTABLE
+}
+
+/// Vineta K's entry on the disc: `RotX="0.35" PosZ="-135" PosY="-20"`.
+fn vineta_k() -> oag_title::CircuitPose {
+    oag_title::CircuitPose {
+        rot_x: 0.35,
+        pos_y: -20.0,
+        pos_z: -135.0,
+    }
+}
+
+fn entry(yaw: f32) -> Posing {
+    Posing::Entry {
+        pose: vineta_k(),
+        law: law(),
+        yaw,
+    }
+}
+
+fn pixel_of_origin(posing: Posing) -> (f32, f32) {
+    let (view_projection, model) = matrices(&widget(), Space::HD, posing);
     let clip = view_projection * model * Vec4::new(0.0, 0.0, 0.0, 1.0);
     let ndc = (clip.x / clip.w, clip.y / clip.w);
-    let pixel = (
+    (
         (ndc.0 + 1.0) * 0.5 * Space::HD.size.0,
         (1.0 - ndc.1) * 0.5 * Space::HD.size.1,
-    );
+    )
+}
+
+/// The widget's authored `(1308, 440)` is where an unread title's model sits.
+#[test]
+fn the_standin_origin_lands_on_the_authored_pixel() {
+    let pixel = pixel_of_origin(Posing::Standin { seconds: 3.0 });
     assert!((pixel.0 - 1308.0).abs() < 0.5, "x {}", pixel.0);
     assert!((pixel.1 - 440.0).abs() < 0.5, "y {}", pixel.1);
 }
 
-/// The circuit turns: a later second is a different pose, one revolution
-/// later the same one.
+/// The update puts the origin at `440 + PosY` down: the circuit's own entry moves the
+/// model, the widget's `OriginY` does not.
 #[test]
-fn the_circuit_turns_once_per_revolution() {
-    let widget = TrackModel {
-        origin: [1308.0, 440.0],
-        offset: [0.0, 0.0],
-        z: -180.0,
-        ortho_scale: [1.0; 3],
-    };
-    let at = |seconds| matrices(&widget, Space::HD, seconds).1;
+fn the_entry_moves_the_origin_by_its_pos_y() {
+    let pixel = pixel_of_origin(entry(0.0));
+    assert!((pixel.0 - 1308.0).abs() < 0.5, "x {}", pixel.0);
+    assert!((pixel.1 - 420.0).abs() < 0.5, "y {}", pixel.1);
+}
+
+/// The entry's depth and pitch replace the widget's `z` and the chosen pitch: the model
+/// stands `PosZ` in front of the camera, and a pitch of `RotX` tips the axis.
+#[test]
+fn the_entry_sets_the_depth_and_the_pitch() {
+    let (_, model) = matrices(&widget(), Space::HD, entry(0.0));
+    let at = model * Vec4::new(0.0, 0.0, 0.0, 1.0);
+    assert!((at.z + 135.0).abs() < 1e-3, "{}", at.z);
+    let up = model * Vec4::new(0.0, 100.0, 0.0, 0.0);
+    assert!((up.y - 100.0 * 0.35_f32.cos()).abs() < 1e-3, "{}", up.y);
+    assert!((up.z - 100.0 * 0.35_f32.sin()).abs() < 1e-3, "{}", up.z);
+}
+
+/// An unread title's circuit turns: a later second is a different pose, one
+/// revolution later the same one.
+#[test]
+fn the_standin_turns_once_per_revolution() {
+    let at = |seconds| matrices(&widget(), Space::HD, Posing::Standin { seconds }).1;
     assert_ne!(at(0.0), at(1.0));
     assert!(at(0.0).abs_diff_eq(at(TURN_SECONDS), 1e-4));
+}
+
+/// The angle is `0.01` rad a frame and a second is sixty frames: HD's one revolution is 629
+/// frames, a little over ten seconds.
+#[test]
+fn the_turntable_steps_a_hundredth_of_a_radian_a_frame() {
+    let law = law();
+    let mut table = Turntable::default();
+    for _ in 0..60 {
+        table.advance(&law, 1.0 / 60.0, false);
+    }
+    assert!((table.angle() - 0.6).abs() < 1e-4, "{}", table.angle());
+    // A second in one call is the same sixty frames.
+    assert!((Turntable::after(&law, 1.0, false).angle() - 0.6).abs() < 1e-4);
+    // A tick shorter than a frame is carried, not dropped.
+    let mut table = Turntable::default();
+    for _ in 0..240 {
+        table.advance(&law, 1.0 / 240.0, false);
+    }
+    assert!((table.angle() - 0.6).abs() < 1e-4, "{}", table.angle());
+}
+
+/// A reversed circuit turns the other way, and the angle wraps at `+-pi` to the other end
+/// (not by the excess).
+#[test]
+fn the_turntable_runs_backwards_on_a_reversed_circuit_and_wraps() {
+    let law = law();
+    assert!((Turntable::after(&law, 1.0, true).angle() + 0.6).abs() < 1e-4);
+    // 314 frames reach 3.14, 315 pass pi (3.1415927) and land on -pi.
+    let at = |frames: f32| Turntable::after(&law, frames / 60.0, false).angle();
+    assert!((at(314.0) - 314.0 * law.step).abs() < 1e-3, "{}", at(314.0));
+    assert_eq!(at(315.0), -law.limit);
+    assert!((at(316.0) - (-law.limit + 0.01)).abs() < 1e-5);
+    let back = Turntable::after(&law, 315.0 / 60.0, true).angle();
+    assert_eq!(back, law.limit);
+}
+
+/// A title with the law and an entry that authors a pose draws the entry's pose; one without
+/// either keeps the stand-in.
+#[test]
+fn the_posing_follows_the_law_and_the_entry() {
+    let table = Turntable::after(&law(), 1.0, false);
+    assert_eq!(
+        Posing::of(Some(law()), Some(vineta_k()), &table, 1.0),
+        entry(table.angle())
+    );
+    let standin = Posing::Standin { seconds: 1.0 };
+    assert_eq!(Posing::of(None, Some(vineta_k()), &table, 1.0), standin);
+    assert_eq!(Posing::of(Some(law()), None, &table, 1.0), standin);
 }
 
 fn ramp() -> Ramp {
@@ -82,7 +173,7 @@ fn an_ortho_scale_scales_the_placement() {
         z: -2.05,
         ortho_scale: [0.012; 3],
     };
-    let (_, model) = matrices(&widget, Space::HD, 0.0);
+    let (_, model) = matrices(&widget, Space::HD, Posing::Standin { seconds: 0.0 });
     let at = model.transform_point3(Vec3::ZERO);
     assert!((at.x - 43.75).abs() < 1e-3, "{at:?}");
     assert!((at.y - 10.417).abs() < 1e-3, "{at:?}");
@@ -124,4 +215,49 @@ fn the_fresnel_ramp_is_the_materials_own_uniforms() {
     let mut bare = material.clone();
     bare.params.clear();
     assert!(Ramp::fresnel(&bare, &mut Model::none("test")).is_err());
+}
+
+fn track_picker(
+    reversed: bool,
+    pose: Option<oag_title::CircuitPose>,
+) -> oag_ui_screens::picker::Picker {
+    use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
+    let entries = vec![Entry {
+        id: "01_Track".to_string(),
+        label: "VINETA K".to_string(),
+        details: Details::Track {
+            info: ["-".into(), "-".into(), "-".into()],
+            emblem: None,
+            icon: None,
+            reversed,
+            model_pose: pose,
+        },
+    }];
+    Picker::new(Kind::Track, entries, Some("01_Track"), None)
+}
+
+/// What a capture draws: on HD the selected entry's own pose and the turntable counted from zero
+/// in its direction; on a title whose update is unread, the stand-in. Dropping the wiring (the
+/// capture passing the stand-in, or the entry's pose not reaching the picker) fails this.
+#[test]
+fn a_capture_poses_the_selected_circuit_by_its_entry() {
+    let hd = Some(oag_hd::frontend::FRONT_END);
+    let forward = track_picker(false, Some(vineta_k()));
+    let Posing::Entry { pose, law, yaw } = Posing::after(hd, &forward, 1.0) else {
+        panic!("HD with an authored pose draws the entry's pose");
+    };
+    assert_eq!(pose, vineta_k());
+    assert_eq!(law, oag_hd::frontend::CIRCUIT_TURNTABLE);
+    assert!((yaw - 0.6).abs() < 1e-4, "{yaw}");
+    let reversed = track_picker(true, Some(vineta_k()));
+    let Posing::Entry { yaw, .. } = Posing::after(hd, &reversed, 1.0) else {
+        panic!("a reversed circuit is posed the same way");
+    };
+    assert!((yaw + 0.6).abs() < 1e-4, "{yaw}");
+    let standin = Posing::Standin { seconds: 1.0 };
+    assert_eq!(
+        Posing::after(Some(oag_omega::frontend::FRONT_END), &forward, 1.0),
+        standin
+    );
+    assert_eq!(Posing::after(hd, &track_picker(false, None), 1.0), standin);
 }

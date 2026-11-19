@@ -51,6 +51,9 @@ pub(super) struct PreviewRequest {
     /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
     /// the orbit.
     pub track_model: Option<oag_ui_screens::picker::hd::track::TrackModel>,
+    /// How the screen's update poses the circuit model: the selected circuit's own pose and
+    /// the turntable's angle `seconds` in, see [`crate::preview::track_model::Posing`].
+    pub track_posing: crate::preview::track_model::Posing,
     /// How far into the screen the capture is, for the circuit model's
     /// turntable: `--menu-picker-seconds`, or `0.0` settled.
     pub seconds: f32,
@@ -169,6 +172,7 @@ pub(super) fn draw_preview(
                 target_size,
                 space,
                 widget,
+                request.track_posing,
                 request.seconds,
             );
         }

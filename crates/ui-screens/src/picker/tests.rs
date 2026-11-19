@@ -57,6 +57,7 @@ fn entries() -> Vec<Entry> {
                 emblem: None,
                 icon: None,
                 reversed: false,
+                model_pose: None,
             },
         })
         .collect()

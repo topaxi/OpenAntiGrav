@@ -358,6 +358,7 @@ impl MenuStage {
         {
             picker.model.tick(dt);
             picker.tick_fit(aspect, dt);
+            picker.tick_turntable(dt);
         }
     }
 

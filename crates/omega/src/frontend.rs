@@ -301,6 +301,10 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega").
     ship_preview_settle: Some(oag_hd::frontend::SHIP_FIT),
     circuit_models: &CIRCUIT_MODELS,
+    // Omega's `PI_Track` authors `RotX`, `PosX`, `PosY`, `PosZ` and `Scale` (`RotX` 0.45, `PosZ`
+    // -2.05, `Scale` 0.012 on Vineta K), in the widget's own scaled units; its screen's update is
+    // not read, so HD's law is not borrowed and the widget draws as authored.
+    circuit_turntable: None,
     // `EndRace_Definition.xml` is in `data09.psarc` at HD's own path, and
     // dispatching Omega through HD's reader (`oag_game::endrace::load_hd`)
     // draws `EndRace Results`, but `EndRace Menu` then draws no option blocks
