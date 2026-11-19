@@ -44,7 +44,7 @@ PSP's grid, twice the size, right-hand column off screen.
   open: what sets that flag. Zone Battle (no `Mode`). The Race event's `XP` and `OBJECTIVE` lines are done (`Setup::campaign_event`).
   **Zone `SCORE` value** is centred under `SCORE` since 2026-11-17 (`dialect_2048::text_align`; `FUN_811538c2` centres it on `ScoreTxt`'s x by the width of a same-length string of `3`s; ours centres on the value itself).
 - **Seen in both 2048 pair originals and drawn by no widget of ours:** ~~the white ring round the hull at the grid~~ (the radar,
-  `Radar`/`PlayerDot` always on since 2026-11-16, `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`; `RadarDot*` read, not wired) and the
+  `Radar`/`PlayerDot` always on since 2026-11-16, `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`; `RadarDot*` drawn since 2026-11-19 by `oag_hud::radar`) and the
   key-shaped icon left of the speed bar (matched as `PilotAssist`, see below); `TOTAL` ~~reads
   `0.00.00` in the original and `0.00.0` in ours~~ is hundredths since 2026-10-29 (`HudArt::total_time_hundredths`, formatter
   `FUN_8106f784`, `2048-hud.md`). The `XP` value is drawn since 2026-11-13 (`Readout::race_xp`, a plain integer, `race-hud-selection.md`); the `+N` `AwardXP` popup is not.

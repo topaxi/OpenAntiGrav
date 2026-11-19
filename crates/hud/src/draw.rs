@@ -1063,6 +1063,11 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
         frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
     }
 
+    // The radar's dots, over its bowl.
+    for sprite in super::radar::dot_sprites(cx.layout, cx.art, readout) {
+        frame.sprites.extend(sprite_draw(&sprite, cx.sheet));
+    }
+
     // The pickup, after the always-on sprites and before the text. Conditional
     // rather than allow-listed, because *which* icon is live changes with what
     // the craft is holding - see `pickup_sprites`.

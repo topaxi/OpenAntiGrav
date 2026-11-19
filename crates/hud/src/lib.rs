@@ -66,6 +66,7 @@ pub mod pickup_fade;
 mod placement;
 pub mod player_tags;
 pub mod race_line;
+pub mod radar;
 mod runtime;
 pub mod score_rows;
 pub mod screen_layout;
@@ -864,6 +865,10 @@ pub struct Readout {
     /// after any placement ([`now_playing::append`]), because the text runs off the left of its
     /// clip, where a placement drops a draw whose origin is off the screen.
     pub now_playing: Option<now_playing::Marquee>,
+    /// Each other craft as the 2048 dialect's radar places it, by grid slot (`RadarDotN` follows
+    /// slot `N`); `None` hides the dot. Drawn by [`radar::dot_sprites`] on a title whose art draws
+    /// the `Radar`.
+    pub radar_blips: [Option<radar::Blip>; radar::DOTS],
 }
 
 impl Readout {
@@ -1114,6 +1119,8 @@ mod pickup_fade_tests;
 mod pickup_look_tests;
 #[cfg(test)]
 mod pickup_model_tests;
+#[cfg(test)]
+mod radar_tests;
 #[cfg(test)]
 mod readout_tests;
 #[cfg(test)]
