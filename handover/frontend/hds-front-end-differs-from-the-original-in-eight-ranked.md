@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-19
-summary: "HD front end: Ship Select camera, settle and hull lighting wired; settle start, craft turn and zoom, Omega pose open"
+summary: "HD front end: Ship Select camera, settle and hull lighting wired; craft turn and zoom, a step pair open; Omega pose wired (zoom fitted)"
 difficulty: medium (30)
 ---
 
@@ -56,6 +56,13 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   Five teams' silhouettes are within 4 px of their RPCS3 rest frames; the
   pair's hull box (sigma 7) went 20.62 to 14.33, the frame 9.35 to 7.35. Open,
   in the order a player would notice:
+  0. **The rest pair `hd/menu-ship-select` cannot score the settle start, the turn or the zoom** (checked 2026-11-19,
+     `hd-ship-craft`): its original is grabbed 3 s after the last tap (settled), the turn, pan and zoom are zero at rest, and
+     the hull silhouette is within 4 px on five teams, so what is left in its craft box (2.74 on an unblurred, 5 px blurred
+     scale; the lighting item below) is colour. A claim about those three needs a **step pair**: grab N frames after a press through
+     `grab_with_clock` with `st+0x1014` (depth target), `st+0x1020` (drawn depth) and `st+0x194` (the fit's model pointer) read from RAM
+     per frame, which would also settle the drawn depth at open and whether the fit keeps the old box through the 4-frame gap.
+     Not made.
   1. ~~**The hull is darker than the original** in that box~~ (LANDED 2026-11-12, `hd-ship-select-light-wire`):
      the craft is lit by the front end's own `.envsettings` (`oag_game::preview::model_light`, from
      `FrontEnd::model_lighting`; Fury style `fe.fury.EnvSettings`, HD style `fe.envsettings`, Omega its own
@@ -86,11 +93,16 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      Medium (40).
   4. **The Detonator box** (`-2.0..0`) is Title data nobody uses: the preview
      does not draw the Detonator hull. Small (50).
-  5. **Omega** keeps its borrowed pose and the fitted lens: its own update
-     carries the same fit with other rest angles (`+0.4307`, `-0.4438`), a
-     blended position and a scale, not followed (the page's "Omega" section;
-     `FUN_015a3b80`). Its pair reads 27.11, a far larger craft than the
-     original's. Medium (35); needs Omega's item layout read first.
+  5. ~~**Omega** keeps its borrowed pose~~ (LANDED 2026-11-19, `hd-ship-craft`): the update's rest
+     rotation, position, scale and lens are wired (`oag_title::ShipPose`), and the update's fit
+     result is never read, so Omega has **no fit and no settle** (the "settle inherited from HD" reading is
+     withdrawn, `ship_preview_settle` removed). `omega/menu-ship-select` re-made on the original's selection (Feisar `concept1`, locked profile): 26.13 to 20.03 whole
+     frame, `SHIP MODEL` frame 32.7 to 13.2, craft 43.4 to 19.6; edges 1029, 1357, 351, 691 against 1030, 1357, 358, 685
+     (`docs/ghidra/functions/ps4-omega-eu/team-selection-pose.md`). Open: **the 2.5 picture zoom** (`ShipPose::zoom`)
+     is fitted to that one frame, the lens and scale as read draw the craft 2.5 times too small and no literal explains it
+     (`FeModel_DrawAtOrigin`, `0x01618bb0`, searched, not read through); the original's Safe Area on that frame is unrecorded
+     (a fresh shadPS4 grab at a known one would pin the zoom); the 7-pixel vertical excess; the old pair's team mismatch is fixed in the
+     pair's record (`ours.race`, `unlock_everything = false`), the lead adopts the re-made pair
   `hull_orbit` remains only for Pulse-shaped fallbacks
 - Ship Select: ~~bracket corners, loyalty value~~ (LANDED 2026-10-27,
   `hd-select-chrome`: corner marks, block arrows, `000`; loyalty value LANDED 2026-11-13, `hd-shipselect-loyalty`: raw total `%03d`, bar `total/100000`; open: the `middle`
@@ -150,6 +162,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Not reached: a Tournament cell, loading and EndRace pairs, Omega (no capture path)
 
 ## Next Steps
+
+- The step pair above (RAM trace of `st+0x1014/0x1020/0x194` across a press), then the settle start and the swap's gap.
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
    scale survive? If yes, one HD-only presentation transform on `Space::HD`.

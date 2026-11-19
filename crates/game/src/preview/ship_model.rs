@@ -17,33 +17,37 @@ use oag_display::space::Space;
 use oag_title::ShipFit;
 use oag_ui_screens::picker::hd::ShipModel;
 
-/// The vertical field of view of [`matrices`], radians: **fitted, not
-/// authored**, against HD's frames before HD's own camera was read. It frames
-/// only a title that borrows a pose in place of a fit. See
-/// `docs/ui/selection-screens.md`.
-pub const FOV_Y: f32 = 0.41;
-/// The pitch of [`matrices`], radians: **fitted**, as [`FOV_Y`] is.
-pub const PITCH: f32 = 0.22;
-/// A sideways slide of the model before the lens in [`matrices`], model units:
-/// **fitted**, as [`FOV_Y`] is.
-pub const SLIDE_X: f32 = 0.36;
-/// The far plane of [`matrices`] (**chosen**).
-pub const FAR: f32 = 1000.0;
-/// The near plane the widget authors.
+/// The far plane of a widget's own pose: Omega's update writes `100` into the item.
+pub const FAR: f32 = 100.0;
+/// The near plane the HD widget authors.
 pub const NEAR: f32 = 1.0;
 
-/// The view-projection and model matrices of the craft on the widget's own
-/// origin and depth, for a title with no [`ShipFit`], `scale` times its rest size
-/// ([`settle_scale`]).
+/// The view-projection and model matrices of the craft as the widget poses it: its rotation,
+/// position, scale and lens through its `nearZ`, zoomed and slid to its origin. `safe_area` is the
+/// title's `Safe Area Setting` as a scale, which the picture and the origin take when the widget
+/// authors `ObeySafeZone`.
 #[must_use]
-pub fn matrices(widget: &ShipModel, space: Space, scale: f32) -> (Mat4, Mat4) {
-    let projection = camera::perspective(FOV_Y, space.display_aspect, NEAR, FAR);
-    let model = Mat4::from_translation(Vec3::new(SLIDE_X, 0.0, widget.z))
-        * Mat4::from_rotation_x(PITCH)
+pub fn matrices(widget: &ShipModel, space: Space, safe_area: f32) -> (Mat4, Mat4) {
+    let safe_area = if widget.obey_safe_zone {
+        safe_area
+    } else {
+        1.0
+    };
+    let projection = camera::perspective(
+        widget.fov_degrees.to_radians(),
+        space.display_aspect,
+        widget.near,
+        FAR,
+    );
+    let model = Mat4::from_translation(Vec3::new(widget.position[0], widget.position[1], widget.z))
+        * Mat4::from_rotation_x(widget.rot_x)
         * Mat4::from_rotation_y(widget.rot_y)
-        * Mat4::from_scale(Vec3::splat(scale));
+        * Mat4::from_scale(Vec3::splat(widget.scale));
+    let picture = safe_area * widget.zoom;
     (
-        Mat4::from_translation(grid_shift(widget.origin, space)) * projection,
+        Mat4::from_translation(grid_shift(widget.origin, space) * safe_area)
+            * Mat4::from_scale(Vec3::new(picture, picture, 1.0))
+            * projection,
         model,
     )
 }
@@ -316,43 +320,14 @@ pub fn fitted(fit: &ShipFit, framing: Framing, space: Space, safe_area: f32) -> 
     )
 }
 
-/// How large the craft is against its rest size while the fit moves it: the rest depth over
-/// the depth it is drawn at. For a title that poses the craft itself, where the fit's depth
-/// only says how far off rest the last model left it.
-#[must_use]
-pub fn settle_scale(fit: &ShipFit, aspect: f32, box_z: [f32; 2], drawn: Framing) -> f32 {
-    rest(fit, aspect, box_z).depth / drawn.depth
-}
-
-/// Where the fit's depth state puts the craft: `(Some(framing), 1.0)` for a title whose fit frames
-/// it (`frames_craft`, [`oag_title::FrontEnd::ship_preview_fit`]), `(None, scale)` for one that
-/// poses the craft itself and only plays the fit's settle on it
-/// ([`oag_title::FrontEnd::ship_preview_settle`]).
-#[must_use]
-pub fn placement(
-    frames_craft: bool,
-    fit: &ShipFit,
-    aspect: f32,
-    box_z: [f32; 2],
-    drawn: Framing,
-) -> (Option<Framing>, f32) {
-    if frames_craft {
-        (Some(drawn), 1.0)
-    } else {
-        (None, settle_scale(fit, aspect, box_z, drawn))
-    }
-}
-
-/// The matrices the screen draws its craft with: the title's fit when it has
-/// one and the framing is known, else the widget's own pose at `scale`. `safe_area` is the
-/// title's `Safe Area Setting` as a scale, which the fit's picture takes when
-/// the widget authors `ObeySafeZone`.
+/// The matrices the screen draws its craft with: the title's fit when it has one and the
+/// framing is known, else the widget's own pose. `safe_area` is the title's `Safe Area Setting`
+/// as a scale, which the picture takes when the widget authors `ObeySafeZone`.
 #[must_use]
 pub fn framed(
     widget: &ShipModel,
     fit: Option<(&ShipFit, Framing)>,
     space: Space,
-    scale: f32,
     safe_area: f32,
 ) -> (Mat4, Mat4) {
     match fit {
@@ -364,7 +339,7 @@ pub fn framed(
             };
             fitted(fit, framing, space, safe_area)
         }
-        None => matrices(widget, space, scale),
+        None => matrices(widget, space, safe_area),
     }
 }
 
@@ -375,15 +350,25 @@ mod tests {
     const FIT: ShipFit = oag_hd::frontend::SHIP_FIT;
     const ASPECT: f32 = 16.0 / 9.0;
 
-    #[test]
-    fn the_authored_origin_and_depth_place_the_craft() {
-        let widget = ShipModel {
-            origin: [960.0, 540.0],
+    /// HD's authored `ShipModel` at `origin`.
+    fn widget(origin: [f32; 2]) -> ShipModel {
+        ShipModel {
+            origin,
+            position: [0.0; 2],
             z: -24.0,
+            scale: 1.0,
+            near: NEAR,
+            fov_degrees: 57.3,
+            zoom: 1.0,
             rot_x: 0.4,
             rot_y: -0.5,
             obey_safe_zone: true,
-        };
+        }
+    }
+
+    #[test]
+    fn the_authored_origin_and_depth_place_the_craft() {
+        let widget = widget([960.0, 540.0]);
         let (_, model) = matrices(&widget, Space::HD, 1.0);
         let at = model.transform_point3(Vec3::ZERO);
         assert!((at.z + 24.0).abs() < 1e-4);
@@ -444,16 +429,10 @@ mod tests {
         assert_eq!(box_z(&FIT, true, Some(3.8)), Some([-4.2, 4.2]));
         assert_eq!(box_z(&FIT, false, Some(3.8)), Some([-3.8, 3.8]));
         assert_eq!(box_z(&FIT, false, None), None);
-        let widget = ShipModel {
-            origin: [1220.0, 412.0],
-            z: -24.0,
-            rot_x: 0.4,
-            rot_y: -0.5,
-            obey_safe_zone: true,
-        };
+        let widget = widget([1220.0, 412.0]);
         let framing = rest(&FIT, ASPECT, [-3.8, 3.8]);
-        let authored = framed(&widget, None, Space::HD, 1.0, 1.0);
-        let fit = framed(&widget, Some((&FIT, framing)), Space::HD, 1.0, 1.0);
+        let authored = framed(&widget, None, Space::HD, 1.0);
+        let fit = framed(&widget, Some((&FIT, framing)), Space::HD, 1.0);
         assert_ne!(authored, fit);
         assert_eq!(fit, fitted(&FIT, framing, Space::HD, 1.0));
     }
@@ -462,25 +441,19 @@ mod tests {
     /// middle of the screen by the Safe Area; a widget without it is untouched.
     #[test]
     fn an_obeying_widget_is_drawn_inside_the_safe_area() {
-        let mut widget = ShipModel {
-            origin: [1220.0, 412.0],
-            z: -24.0,
-            rot_x: 0.4,
-            rot_y: -0.5,
-            obey_safe_zone: true,
-        };
+        let mut widget = widget([1220.0, 412.0]);
         let fit = Some((&FIT, rest(&FIT, ASPECT, [-3.8, 3.8])));
         let at =
             |matrices: (Mat4, Mat4), point: Vec3| (matrices.0 * matrices.1).project_point3(point);
-        let full = framed(&widget, fit, Space::HD, 1.0, 1.0);
-        let inset = framed(&widget, fit, Space::HD, 1.0, 0.96);
+        let full = framed(&widget, fit, Space::HD, 1.0);
+        let inset = framed(&widget, fit, Space::HD, 0.96);
         for point in [Vec3::ZERO, Vec3::new(1.0, 0.5, -3.0)] {
             let (full, inset) = (at(full, point), at(inset, point));
             assert!((inset.x - 0.96 * full.x).abs() < 1e-5);
             assert!((inset.y - 0.96 * full.y).abs() < 1e-5);
         }
         widget.obey_safe_zone = false;
-        assert_eq!(framed(&widget, fit, Space::HD, 1.0, 0.96), full);
+        assert_eq!(framed(&widget, fit, Space::HD, 0.96), full);
     }
 
     /// A step to a model that rests deeper keeps the fit's state: the target
@@ -547,26 +520,29 @@ mod tests {
         assert!(a.depth > FIT.floor + 0.05, "{a:?}");
     }
 
-    /// A title that poses the craft itself plays the same state as a scale of that pose: a step
-    /// to a model resting farther starts the craft larger (nearer than its rest) and the scale
-    /// settles on one, where a title the fit frames takes the framing and no scale.
+    /// A widget's pose is its position, rotation and scale through its lens, slid to its
+    /// origin and zoomed about it: the model's origin lands at the widget's position, a point
+    /// `zoom` times as far from the origin on screen, and the Safe Area pulls both in.
     #[test]
-    fn a_title_that_poses_the_craft_plays_the_settle_as_a_scale() {
-        let (from, to) = ([-3.8, 3.8], [-4.5, 4.5]);
-        let mut motion = FitMotion::open(&FIT);
-        for _ in 0..600 {
-            motion.frame(&FIT, ASPECT, from);
-        }
-        let scale = |motion: &FitMotion| placement(false, &FIT, ASPECT, to, motion.framing()).1;
-        for _ in 0..4 {
-            motion.frame(&FIT, ASPECT, to);
-        }
-        assert!(scale(&motion) > 1.05, "{}", scale(&motion));
-        for _ in 0..80 {
-            motion.frame(&FIT, ASPECT, to);
-        }
-        assert!((scale(&motion) - 1.0).abs() < 0.005, "{}", scale(&motion));
-        let (framing, one) = placement(true, &FIT, ASPECT, to, motion.framing());
-        assert_eq!((framing, one), (Some(motion.framing()), 1.0));
+    fn a_widgets_own_pose_places_scales_and_zooms_the_craft() {
+        let mut posed = widget([960.0, 540.0]);
+        posed.position = [0.4, 0.1];
+        posed.z = -2.05;
+        posed.scale = 0.1;
+        posed.fov_degrees = 100.0;
+        let on_screen = |widget: &ShipModel, safe_area: f32, point: Vec3| {
+            let (view_projection, model) = matrices(widget, Space::HD, safe_area);
+            (view_projection * model).project_point3(point)
+        };
+        let origin = on_screen(&posed, 1.0, Vec3::ZERO);
+        let expected_x = 0.4 / (2.05 * 50.0_f32.to_radians().tan() * ASPECT);
+        assert!((origin.x - expected_x).abs() < 1e-4, "{origin:?}");
+        let mut zoomed = posed;
+        zoomed.zoom = 2.5;
+        let origin_zoomed = on_screen(&zoomed, 1.0, Vec3::ZERO);
+        assert!((origin_zoomed.x - 2.5 * origin.x).abs() < 1e-4);
+        assert!((origin_zoomed.y - 2.5 * origin.y).abs() < 1e-4);
+        let inset = on_screen(&zoomed, 0.96, Vec3::ZERO);
+        assert!((inset.x - 0.96 * origin_zoomed.x).abs() < 1e-4);
     }
 }

@@ -462,7 +462,6 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_hull: Some("ship.vex"),
     ship_preview_pose: None,
     ship_preview_fit: Some(SHIP_FIT),
-    ship_preview_settle: None,
     circuit_models: &CIRCUIT_MODELS,
     circuit_turntable: Some(CIRCUIT_TURNTABLE),
     circuit_fly_by: Some(r"FE\preview.bik"),

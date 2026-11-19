@@ -181,18 +181,17 @@ fn only_the_2048_era_circuits_are_in_the_2048_lineage() {
     }
 }
 
-/// Omega's craft is posed from a borrowed pose, not framed by a fit, and a step plays HD's
-/// depth law on it: the settle's data is HD's own, one definition. Dropping the field leaves the
-/// craft cutting in at rest size with no settle.
+/// Omega's craft is posed by its screen update's rest values and framed by no fit: its fit's
+/// result is written to fields nothing reads, so a step has no settle either. Dropping the pose
+/// draws the widget's authored rotation and position.
 #[test]
-fn omega_plays_hds_ship_select_settle_on_its_borrowed_pose() {
+fn omega_poses_its_craft_by_rest_values_with_no_fit_and_no_settle() {
     let front_end = TITLE.front_end.expect("Omega's front end");
-    assert!(front_end.ship_preview_pose.is_some());
+    let pose = front_end.ship_preview_pose.expect("the update's rest pose");
+    assert_eq!(pose.position, [0.4, 0.1, -2.05]);
+    assert_eq!(pose.scale, 0.1);
+    assert_eq!(pose.fov_degrees, 100.0);
     assert!(front_end.ship_preview_fit.is_none());
-    assert_eq!(
-        front_end.ship_preview_settle,
-        Some(oag_hd::frontend::SHIP_FIT)
-    );
 }
 
 /// Omega ships `SP.xml`'s event campaign under its own circuit directory; with the row gone

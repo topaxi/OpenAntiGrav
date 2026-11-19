@@ -99,13 +99,12 @@ fn each_variant_directory_has_a_hull_of_its_own() {
 /// Omega's `Team Selection` draws its craft too: every team's race hull is a PS4
 /// `.rcsmodel` that `preview::model` (the PS3 and PSP path) does not read, so the
 /// preview goes through `psp2_scene::model`; each hull frames to a hull-sized sphere
-/// with its own textures (HD's own sizes, which is what lets HD's pose frame it),
-/// and the screen is drawn at the pose the title names, not the widget's own
-/// `z=-2.05`. Dropping `ship_preview_hull` or the pose fails the first two
+/// with its own textures, and the widget is drawn at the rest pose the screen's update
+/// writes over it. Dropping `ship_preview_hull` or the pose fails the first two
 /// assertions; routing the hull back through `preview::model` fails the load.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
+fn omega_draws_every_teams_ps4_hull_at_the_updates_rest_pose() {
     let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
@@ -126,18 +125,27 @@ fn omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows() {
     let (shell, mut archives, title) = oag_game::boot::load_shell(&options).expect("Omega boots");
     let front_end = title.front_end.expect("a front end");
     assert_eq!(front_end.ship_preview_hull, Some("ship.vex"));
-    let pose = front_end.ship_preview_pose.expect("a borrowed pose");
+    let pose = front_end.ship_preview_pose.expect("the update's rest pose");
     let widget = shell
         .ship_select
         .as_ref()
         .and_then(|layout| layout.hd.as_deref())
         .and_then(|screen| screen.ship_model)
         .expect("the ShipModel widget");
-    assert_eq!((widget.origin, widget.z), (pose.origin, pose.z));
     assert_eq!(
-        (widget.rot_x, widget.rot_y),
-        (0.4, -0.5),
-        "rotations as authored"
+        widget.origin,
+        [960.0, 540.0],
+        "the origin stays as authored"
+    );
+    assert_eq!(widget.near, 0.1, "so does nearZ");
+    assert_eq!([widget.rot_x, widget.rot_y], pose.rotation);
+    assert_eq!(
+        [widget.position[0], widget.position[1], widget.z],
+        pose.position
+    );
+    assert_eq!(
+        (widget.scale, widget.fov_degrees, widget.zoom),
+        (pose.scale, pose.fov_degrees, pose.zoom)
     );
 
     assert_eq!(
@@ -359,7 +367,7 @@ fn silhouette(
     let space = oag_display::space::Space::HD;
     let framing = oag_game::preview::ship_model::rest(fit, space.display_aspect, box_z);
     let (view_projection, placed) =
-        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, 1.0, safe_area);
+        oag_game::preview::ship_model::framed(widget, Some((fit, framing)), space, safe_area);
     let matrix = view_projection * placed;
     let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
         .vertices
@@ -564,36 +572,67 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
     );
 }
 
-/// Omega's craft is posed on a borrowed pose with no fit, and a step plays HD's depth law on it
-/// as a scale: the first frames after a step are off rest size and settled by 1.5 s, which a
-/// title with no settle (the craft cutting in at rest) does not do. Piranha arrives from Qirex
-/// (4.5) in HD's order, farther than its 3.9, so it starts smaller; Omega's own order puts the
-/// first frame 7 % off.
+/// Omega's craft sits where its own frame has it: Feisar's concept hull on a fresh profile,
+/// 1030 to 1357 across and 358 to 685 down a 1920 by 1080 frame (the original's frame, read as
+/// the craft's pixels against the page: saturated or dark). The rest pose is the screen
+/// update's own values and the picture zoom was fitted to this same frame, so this holds the
+/// wiring (rotation, position, scale, lens, origin) and not the zoom's cause. Dropping the
+/// pose draws the widget as authored (about 1.6 times the size, 70 pixels to the left), and
+/// putting back HD's fit-and-settle starts it at another size.
 #[test]
-#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/ and a GPU adapter"]
-fn omega_plays_the_settle_on_its_borrowed_pose() {
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/ and the original's frame under data/reference/compare-page/omega"]
+fn omega_poses_feisars_concept_hull_where_the_original_draws_it() {
     let Some(source) = oag_testdata::exact("data/extracted/ps4") else {
         return;
     };
-    let team = "Piranha";
-    let empty = ship_select_still(&source, team, "0.03");
-    let width = |step: &str| {
-        f64::from(hull_width(
-            &ship_select_still(&source, team, step),
-            &empty,
-            [740, 200, 1660, 740],
-        ))
+    let (mut archives, title) = boot_archives(&source, "omega-rest-pose");
+    let front_end = title.front_end.expect("a front end");
+    let pose = front_end.ship_preview_pose.expect("the update's rest pose");
+    let widget = oag_ui_screens::picker::hd::ShipModel {
+        origin: [960.0, 540.0],
+        position: [pose.position[0], pose.position[1]],
+        z: pose.position[2],
+        scale: pose.scale,
+        near: 0.1,
+        fov_degrees: pose.fov_degrees,
+        zoom: pose.zoom,
+        rot_x: pose.rotation[0],
+        rot_y: pose.rotation[1],
+        obey_safe_zone: true,
     };
-    let (first, settled, late) = (width("0.07"), width("3"), width("1.5"));
-    eprintln!("omega {team}: {first} px first frame, {settled} settled, 1.5 s {late}");
-    assert!(
-        (first / settled - 1.0).abs() > 0.02,
-        "{team}: {first} against {settled}"
+    let join = title.race.team_variants_for("Feisar").map(|v| v.join);
+    let location = oag_game::preview::variant::variant_location(
+        join,
+        r"Data\art\published\hdships\Feisar",
+        "_c1",
     );
-    assert!(
-        (late / settled - 1.0).abs() < 0.01,
-        "{team}: {late} against {settled}"
-    );
+    let entry = oag_game::preview::ship_entry(title, &location, oag_race::Mode::default());
+    let model = oag_game::preview::psp2_scene::model(&mut archives, &entry)
+        .unwrap_or_else(|e| panic!("{entry}: {e:#}"));
+    let (view_projection, placed) =
+        oag_game::preview::ship_model::matrices(&widget, oag_display::space::Space::HD, 1.0);
+    let matrix = view_projection * placed;
+    let (mut across, mut down): (Vec<f32>, Vec<f32>) = model
+        .vertices
+        .iter()
+        .map(|vertex| {
+            let at = matrix.project_point3(oag_core::math::Vec3::from(vertex.position));
+            ((at.x * 0.5 + 0.5) * 1920.0, (0.5 - at.y * 0.5) * 1080.0)
+        })
+        .unzip();
+    across.sort_by(f32::total_cmp);
+    down.sort_by(f32::total_cmp);
+    let skip = across.len() / 2000;
+    let drawn = [
+        across[skip],
+        across[across.len() - 1 - skip],
+        down[skip],
+        down[down.len() - 1 - skip],
+    ];
+    eprintln!("omega Feisar _c1 edges {drawn:?}");
+    for (ours, theirs) in drawn.into_iter().zip([1030.0, 1357.0, 358.0, 685.0]) {
+        assert!((ours - theirs).abs() < 10.0, "{drawn:?}");
+    }
 }
 
 /// A title's archives and record, booted from `source` the way the previews' tests need them.

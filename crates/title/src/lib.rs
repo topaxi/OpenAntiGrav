@@ -618,10 +618,9 @@ pub struct FrontEnd {
     /// `Data\Ships\<team>` (`docs/ui/selection-screens.md`). `None` where a title
     /// has no such screen or draws stills.
     pub ship_preview_hull: Option<&'static str>,
-    /// A pose the craft preview is drawn at in place of the `ShipModel` widget's
-    /// own `OriginX`/`OriginY`/`z`, for a title whose widget authors a camera this
-    /// build cannot reproduce. `None` draws the widget as authored (HD). See
-    /// [`ShipPose`].
+    /// The rest pose the screen's update writes over the `ShipModel` widget's rotation,
+    /// position and scale, for a title whose craft is not framed by a fit (Omega). `None`
+    /// draws the widget as authored. See [`ShipPose`].
     pub ship_preview_pose: Option<ShipPose>,
     /// The camera the `Team Selection` screen's own code poses its craft on,
     /// over whatever the `ShipModel` widget authors: HD's screen update writes
@@ -629,11 +628,6 @@ pub struct FrontEnd {
     /// depth to the selected model's authored length. `None` where the title's
     /// screen has no such code or it is unread. See [`ShipFit`].
     pub ship_preview_fit: Option<ShipFit>,
-    /// The fit whose per-frame depth state plays the craft's swap on a title that poses it
-    /// from [`Self::ship_preview_pose`] and has no [`Self::ship_preview_fit`]: the new craft
-    /// starts at the last model's rest depth and eases to its own, drawn as a scale of the
-    /// borrowed pose. `None` where the craft is not swapped by it.
-    pub ship_preview_settle: Option<ShipFit>,
     /// The model each circuit's selection screen draws in its circuit-model frame,
     /// found by the circuit's environment folder: HD's track-select record names
     /// `<environment>\FE\track0N.vex` per circuit, and the number is not the
@@ -742,16 +736,22 @@ pub struct FrontEndTone {
     pub adapted_fury: f32,
 }
 
-/// The origin and depth a `Team Selection` draws its craft at, see
-/// [`FrontEnd::ship_preview_pose`]. The widget's rotations stay as authored.
+/// What a `Team Selection` screen's own update writes over its `ShipModel` widget, for a title
+/// whose update poses the craft by rest values rather than by a fit, see
+/// [`FrontEnd::ship_preview_pose`]. The widget keeps its origin, `nearZ` and `ObeySafeZone`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShipPose {
-    /// Where the model's origin lands in the screen's own grid.
-    pub origin: [f32; 2],
-    /// How far in front of the lens the craft sits, in model units.
-    pub z: f32,
-    /// Where the pose comes from, for the docs and the load report.
-    pub from: &'static str,
+    /// The rest rotation about X then Y, radians.
+    pub rotation: [f32; 2],
+    /// Where the model sits across, up and in front of the lens, model units.
+    pub position: [f32; 3],
+    /// How much the model is scaled before it is placed.
+    pub scale: f32,
+    /// The lens the update writes into the item, a vertical field of view in degrees.
+    pub fov_degrees: f32,
+    /// A zoom of the finished picture about the widget's origin that the frame needs and no
+    /// field read explains: the lens and scale above draw the craft this many times too small.
+    pub zoom: f32,
 }
 
 /// How a `Team Selection` screen frames its craft, see

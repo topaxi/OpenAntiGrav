@@ -1048,17 +1048,11 @@ pub(super) fn picker_page(
         _ => None,
     };
     // The live screen's rule, `PickerStage::draw_preview`.
-    let (ship_fit, ship_scale) = title
+    let ship_fit = title
         .front_end
-        .and_then(|front_end| {
-            let frames_craft = front_end.ship_preview_fit.is_some();
-            front_end
-                .ship_preview_fit
-                .or(front_end.ship_preview_settle)
-                .map(|fit| (fit, frames_craft))
-        })
+        .and_then(|front_end| front_end.ship_preview_fit)
         .filter(|_| kind == Kind::Ship)
-        .and_then(|(fit, frames_craft)| {
+        .and_then(|fit| {
             let box_of = |index: usize, length: Option<f32>| {
                 let zone_hull = teams.get(index).is_some_and(|team| {
                     crate::preview::zone_race_hull_entry(title, &team.id, mode).is_some()
@@ -1096,11 +1090,8 @@ pub(super) fn picker_page(
                 }
                 None => crate::preview::ship_model::rest(&fit, aspect, now),
             };
-            let (framing, scale) =
-                crate::preview::ship_model::placement(frames_craft, &fit, aspect, now, framing);
-            Some((framing.map(|framing| (fit, framing)), scale))
-        })
-        .unwrap_or((None, 1.0));
+            Some((fit, framing))
+        });
     let request = previews
         .get(picker.index())
         .and_then(Option::as_ref)
@@ -1136,7 +1127,6 @@ pub(super) fn picker_page(
             ship_model: layout.hd.as_ref().and_then(|screen| screen.ship_model),
             // The live screen's rule, `PickerStage::draw_preview`.
             ship_fit,
-            ship_scale,
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
             track_posing: crate::preview::track_model::Posing::after(
                 title.front_end,
