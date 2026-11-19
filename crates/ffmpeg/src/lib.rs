@@ -18,6 +18,11 @@ mod install;
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 pub use install::{Cancelled, Progress, install, install_from};
 
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
+mod install_stub;
+#[cfg(any(target_arch = "wasm32", target_os = "android"))]
+pub use install_stub::{Cancelled, Progress, install, install_from};
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::RwLock;

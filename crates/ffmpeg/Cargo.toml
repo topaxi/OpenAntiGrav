@@ -8,14 +8,13 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-log.workspace = true
+anyhow.workspace = true
 
 # Fetching a pinned build. Not on wasm (no process to run) or Android (no
 # executable may be started from app storage), where `Pin::current` is `None`
 # and nothing below is compiled.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
 # rustls with ring and bundled roots: no OpenSSL, no platform store (which a wine prefix lacks).
-anyhow.workspace = true
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 sha2 = "0.10"
 tar = { version = "0.4", default-features = false }

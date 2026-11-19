@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 /// The license text kept beside the executables.
+#[allow(unused)]
 const LICENSE: &str = "LICENSE.txt";
 
 /// Shared between the thread installing and the screen showing it.

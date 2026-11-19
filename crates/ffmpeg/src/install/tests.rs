@@ -1,5 +1,4 @@
 use super::*;
-use std::io::Write as _;
 use std::net::TcpListener;
 
 fn temp(name: &str) -> PathBuf {
