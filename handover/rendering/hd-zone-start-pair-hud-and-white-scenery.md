@@ -48,5 +48,9 @@ the release) to 28.77 (rmse 0.165).
 
 ## Next Steps
 
-1. Read the countdown timer beside the pair's grab and re-time ours'
+1. Adopt the HUD-gate fix on the pair: drop `--hud-state 1,1,0,0,0,100,0,1,0,0`
+   from `hd/zone-vineta-k-z5`'s `ours.flags`, then
+   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (28.77
+   expected; with the flag the imposed HUD state keeps the HUD drawn, 30.02).
+2. Read the countdown timer beside the pair's grab and re-time ours'
    `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
