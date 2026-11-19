@@ -92,10 +92,16 @@ struct Grid {
 /// looping layers (a sound's loop count `0`, or the pick of a continuous
 /// container looping forever), measured, so dropping either law moves it. `0`
 /// for an event that authors no loop: it played once and was not started again.
+///
+/// `unheld` is how many voices a separate one-shot cue raised on the same edge
+/// adds: the autopilot's `autopilot_eng` line is its own post, which the
+/// release does not stop, so it may outlast the second release; the case then
+/// waits for it to end before the next one begins.
 fn holds(
     grid: &mut Grid,
     name: &str,
     loops: usize,
+    unheld: usize,
     open: impl Fn(&mut race::Race),
     close: impl Fn(&mut race::Race),
 ) {
@@ -144,10 +150,21 @@ fn holds(
     );
     close(race);
     oag_game::sound::race_tick(audio, race);
+    assert!(
+        sounding(audio) <= idle + unheld,
+        "{name}: released while sounding, and still sounding ({} > {idle} idle + {unheld})",
+        sounding(audio)
+    );
+    for _ in 0..600 {
+        if sounding(audio) == idle {
+            break;
+        }
+        step(audio, race);
+    }
     assert_eq!(
         sounding(audio),
         idle,
-        "{name}: released while sounding, and still sounding"
+        "{name}: a one-shot raised with the hold never ended"
     );
 }
 
@@ -156,6 +173,7 @@ fn the_shield_holds_its_loops_until_it_drops(grid: &mut Grid) {
         grid,
         "_SHIELD_PC",
         5,
+        0,
         |race| race.core.sim.world.ships[0].physics.shield_pickup_timer = 1_000.0,
         |race| race.core.sim.world.ships[0].physics.shield_pickup_timer = 0.0,
     );
@@ -166,6 +184,7 @@ fn the_autopilot_holds_its_loops_until_it_expires(grid: &mut Grid) {
         grid,
         "_AUTOPILOT_PC",
         5,
+        1,
         |race| race.core.sim.world.ships[0].autopilot_timer = 1_000.0,
         |race| race.core.sim.world.ships[0].autopilot_timer = 0.0,
     );
@@ -176,6 +195,7 @@ fn the_magstrip_holds_its_hum_until_the_craft_leaves_it(grid: &mut Grid) {
         grid,
         "_magstrip01",
         5,
+        0,
         |race| race.core.raise_cue(Cue::Magstrip),
         |race| race.core.raise_cue(Cue::MagstripStop),
     );
@@ -186,6 +206,7 @@ fn a_shuriken_holds_its_travel_loop_while_it_flies(grid: &mut Grid) {
         grid,
         "_SHURIKENTRAVEL",
         3,
+        0,
         |race| {
             let position = race.core.sim.world.ships[0].physics.body.position;
             race.core.sim.world.projectiles.slots[0] = oag_weapons::projectile::Projectile {
@@ -207,6 +228,7 @@ fn the_leach_attach_plays_once_while_the_beam_holds(grid: &mut Grid) {
     holds(
         grid,
         "_NGP_LEACHATTACH",
+        0,
         0,
         |race| {
             assert!(
