@@ -934,6 +934,7 @@ pub(super) enum Cut {
     Fury,
     Scene,
     Video,
+    FlyBy,
 }
 
 impl super::Renderer {

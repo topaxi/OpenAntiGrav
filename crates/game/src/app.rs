@@ -23,7 +23,6 @@ mod headless;
 mod hints;
 mod join_stage;
 mod launcher_stage;
-mod loading_icon;
 mod loading_stage;
 mod menu_stage;
 mod overlay;

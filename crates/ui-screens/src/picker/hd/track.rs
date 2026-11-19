@@ -34,11 +34,14 @@
 //! places and shades it, and the scene each circuit draws is
 //! `oag_title::FrontEnd::circuit_models`.
 //!
-//! Not drawn, and said so: the `FlyByMovie` (`preview.bik`, Bink), the page
-//! squares, the `Padlock` (HD's circuit gate is open) and the small direction
+//! The `FlyByMovie` is a [`Draw::Video`] of [`Video::FlyBy`] in its authored
+//! rect; the stage that plays the circuit's `preview.bik` fills it (or drops
+//! it while no picture has arrived).
+//!
+//! Not drawn, and said so: the page squares, the `Padlock` (HD's circuit gate is open) and the small direction
 //! glyphs on the forward hexagon.
 
-use oag_ui::frontend::{Align, Draw, Placed};
+use oag_ui::frontend::{Align, Draw, Placed, Video};
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
 use oag_ui::screen::{Screens, argb_to_rgba};
@@ -78,6 +81,14 @@ pub struct TrackScreen {
     /// `TrackModel`'s own pose, which `oag_game::preview::track_model` draws
     /// the circuit's scene at.
     pub model: Option<TrackModel>,
+    /// The `FlyByMovie` widget's rect: where the selected circuit's
+    /// `preview.bik` plays.
+    ///
+    /// **The widget's own `X`/`Y`, not offset by the enclosing `Item`**
+    /// (`docs/ui/campaign-screens.md`, "The fly-by"): the frame's picture is at
+    /// (500,190) in the grid where the `Item`'s (160,170) would put it at
+    /// (660,360).
+    pub fly_by: Option<[f32; 4]>,
     /// The `TrackHexSelection` widget: circuits on hexagons, see [`super::hex`].
     pub hex_grid: Option<hex::HexGrid>,
     /// The RECORDS table's three row labels, resolved from
@@ -125,6 +136,16 @@ pub fn emblem_src(location: &str) -> String {
 #[must_use]
 pub fn grid_icon_src(location: &str) -> String {
     crate::campaign::hd::cell_emblems::track_emblem_src(location)
+}
+
+/// `<environment>\FE\preview.bik` - the clip the `FlyByMovie` widget plays for
+/// the circuit whose environment folder is `location`. The widget authors
+/// `Loading_Icon.bik` (a placeholder, as the loading screen's is); the frame
+/// shows the circuit's own footage, which is this file (the best-matching frame
+/// of Vineta K's is 509 of 602, `docs/ui/campaign-screens.md`).
+#[must_use]
+pub fn fly_by_src(location: &str) -> String {
+    format!(r"{}\FE\preview.bik", location.trim_end_matches('\\'))
 }
 
 /// How a circuit's hexagon is arranged in `picker`: `(circuits per row,
@@ -319,6 +340,14 @@ fn walk_track(
                     }),
                 });
             }
+            "movie" if child.attr("name") == Some("FlyByMovie") => {
+                out.fly_by = Some([
+                    number(child, "x").unwrap_or(0.0),
+                    number(child, "y").unwrap_or(0.0),
+                    number(child, "width").unwrap_or(0.0),
+                    number(child, "height").unwrap_or(0.0),
+                ]);
+            }
             "trackhexselection" => {
                 out.hex_grid = Some(hex::HexGrid::unauthored(
                     [inner.0, inner.1],
@@ -429,6 +458,17 @@ pub(in crate::picker) fn body(
             rect,
             uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
             color: [1.0, 1.0, 1.0, 1.0],
+        });
+    }
+    // The frame is the clip's picture where it has one: the stage that plays
+    // it sets `frame` and `position`, and takes this draw out of the list
+    // while no picture has arrived.
+    if let Some(rect) = extra.fly_by {
+        out.push(Draw::Video {
+            rect,
+            frame: 0,
+            position: 0,
+            source: Video::FlyBy,
         });
     }
     if let Some(name) = find_text(screen, "TrackName") {

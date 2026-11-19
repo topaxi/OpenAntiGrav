@@ -602,6 +602,8 @@ pub fn run(
     // `draw_preview`. `None` on every other page.
     let mut preview_request: Option<PreviewRequest> = None;
     let mut flyer_shot: Option<campaign_page::FlyerShot> = None;
+    // HD's Track Select fly-by: the one frame the still shows, with its planes' shape.
+    let mut fly_by_still: Option<(VideoFormat, crate::movie::VideoFrame)> = None;
     // The footer ticker's own clip, `(index in `list`, left, right)` in
     // screen space - set only by the ordinary `--menu-page` arm below
     // (`menu_page`'s own return), since it is the only page kind that reads
@@ -796,6 +798,21 @@ pub fn run(
                     list = second_list;
                 }
                 list.extend(stills);
+                if kind == oag_ui_screens::picker::Kind::Track
+                    && layout
+                        .hd_track
+                        .as_ref()
+                        .is_some_and(|screen| screen.fly_by.is_some())
+                    && let (Some(archives), Some(track)) =
+                        (archives.as_mut(), selected.or(tracks.first()))
+                {
+                    fly_by_still = video::fly_by_still(
+                        archives,
+                        &track.location,
+                        options.menu_movie_frame,
+                        &oag_source::cache::default_cache_dir(),
+                    );
+                }
                 // HD's ship screen's footer legend, as the live one draws it
                 // (`main::menu_stage::footer::hd_nav`).
                 if let Some(legend) = nav_legend.as_ref().filter(|_| layout.is_hd()) {
@@ -1188,6 +1205,10 @@ pub fn run(
     );
     crate::prompts::install(&mut renderer, title, &options.settings);
 
+    if let Some((format, picture)) = &fly_by_still {
+        renderer.set_fly_by(&device, *format)?;
+        renderer.upload_fly_by_frame(&queue, picture)?;
+    }
     if let (Some(frames), Some(wanted)) = (
         movie.as_mut().and_then(|movie| movie.frames.as_mut()),
         video::video_frame(&list),

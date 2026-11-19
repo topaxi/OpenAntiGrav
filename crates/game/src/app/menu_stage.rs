@@ -359,6 +359,7 @@ impl MenuStage {
             picker.model.tick(dt);
             picker.tick_fit(aspect, dt);
             picker.tick_turntable(dt);
+            picker.tick_fly_by(dt);
         }
     }
 
@@ -537,6 +538,7 @@ impl MenuStage {
                 &|text| font::measure(&self.text_atlas, text),
             );
             layers.body.extend(picker.slideshow_draws());
+            picker.pump_fly_by(&mut self.renderer, gpu);
             // The other seat's half of a shared Ship Select.
             if let Some(partner) = self.partner.as_mut() {
                 let other = oag_ui_screens::picker::draw_list(
