@@ -295,8 +295,12 @@ above `e = 36.9°` the zenith alone, eye level and below the horizon alone.
 The bytes reach the RSX as vertex colours, are interpolated as linear light
 and encoded by the target on write.
 
-**The live frame agrees, and shows no cubemap texel** (confidence 88: the
-static read above plus one RPCS3 frame of the original). The adopted pair
+**The live frame agrees, and shows no cubemap texel.** Confidence 88 that
+the dome is drawn, covers every visible direction and carries the horizon
+colour at eye level (the static read above plus one RPCS3 frame of the
+original). The band's shape stays at the static 82: the frame is flatter
+upward than `tan(e) / 0.75` predicts (top-left, about 24 degrees up:
+predicted about `(_, 135, 157)`, read `(6, 127, 147)`). The adopted pair
 `hd/zone-vineta-k-z5` (Vineta K, Zone start, stage 1 Sub Venom, cold boot,
 2026-11-19) shows a sky with no cloud or sea texel of `ZoneSky.gtf` anywhere:
 `(4..7, 124..129, 143..154)` over the whole visible sky, bluer upward.

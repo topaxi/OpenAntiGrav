@@ -38,6 +38,15 @@ the dome is what the frame shows") and no `_ne` light bar on the Zone surface
   darker (bias -15 to -22 grey outside the sky). Unread which chunks.
 - **Sky exposure.** Ours' dome reads about 17 % brighter than the original's
   at eye level, uniformly.
+- **The dome's band is flatter than read.** The frame rises less toward
+  the zenith than `tan(e) / 0.75` (zone-sky.md); the band geometry stays at
+  the static 82.
+- **2048 on HD-lineage circuits draws the same grey Flash sky** (zone-sky.md,
+  "2048 and Omega"): checked, applies, not wired; the port draws the circuit
+  dome there. Omega's Flash frame shows peach instead: differs, unread.
+- **The adopted pair's provenance says zone 1, score 0 were read off the
+  original's HUD**, but the frame draws no HUD; the values are the race's
+  start state, not a reading.
 - **`_ne.a * zoneBaseInner`.** Two of Vineta K's
   `diffuse_normal_specular_emmissive` Zone variants add it; which variant a
   chunk runs is unread, and the frame shows none.
