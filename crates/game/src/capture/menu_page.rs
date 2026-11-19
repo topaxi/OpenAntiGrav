@@ -1129,6 +1129,7 @@ pub(super) fn picker_page(
                 (open, step_seconds.unwrap_or(open))
             },
             fury: frame.blocks.as_ref().is_some_and(|blocks| blocks.fury),
+            adapted_luma: None,
         });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,

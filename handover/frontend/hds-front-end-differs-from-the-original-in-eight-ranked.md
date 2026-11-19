@@ -39,12 +39,14 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   ours does not draw, music-driven, RPCS3's index wrap), so `rpcs3-hd-menu-pair.py` zeroes the row's tint for the grab
   and ours takes `--fury-tint 0`; `hd/menu-track-select` 7.83 to 5.84, `hd/menu-ship-select` 4.51 to 3.05
   (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"). So the "fainter and browner"
-  item above is no longer scored by any pair and stays open as a live-play item. Open from that lane: the craft's
-  exposure on a hidden-cloud grab (the original adapts to `0.01451`, exposure 3.49; ours keeps the `0.0163` read with the
-  cloud showing, 3.43; each pair records its read in `original.backdrop.adapted_luma`, a capture flag to state it is the
-  wiring left: small); the Campaign Select, grid and cell pairs still show the cloud (one id each in `HIDDEN_BACKDROP`
-  once that read is wired, because their cards' level follows the adapted luma); `WALK`'s Ship Select state depends on
-  the save (the maintainer's opens on the Fury hull: `--taps-before ship-select=down`)
+  item above is no longer scored by any pair and stays open as a live-play item. **Landed since (`hd-fury-backdrop-2`)**: ours takes the
+  adapted luma the pair records (`original.backdrop.adapted_luma`) through `--fury-adapted-luma`, which sets the craft's
+  exposure and pins the backdrop chain's adaptation, and Campaign Select, grid and cell are hidden too (`hd/menu-campaign-select`
+  4.77 to 3.32, `hd/menu-cell-select` 3.00 to 2.81, `hd/menu-grid-select` 7.28 to 7.75: its whole-pair number rose, the card
+  animates and two grabs of the original differ by 15.9 over the card, the page region fell 1.50 to 0.07). Open: `WALK`'s
+  Ship Select state depends on the save and on the cursor the walk left on an earlier run (`--taps-before ship-select=down`
+  from the save's Fury hull; a second walk on the same boot needs `up` or none); the grid card's animation phase is not
+  lined up between the two sides
 - Ship Select framing (LANDED 2026-11-11, `hd-worst-pairs-2`): the screen's
   own camera, read off the executable, replaces the authored pose and the
   fitted lens, pitch and slide. The update writes rest `RotX 0.25`, `RotY -0.6`,

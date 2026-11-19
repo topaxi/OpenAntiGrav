@@ -1643,7 +1643,17 @@ the flag is in `ours.flags`, so a re-render keeps it. Two grabs of the original 
 1.4 to 1.7; the pairs read 7.83 to 5.84 and 4.51 to 3.05
 ([menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md), "Hidden for a compare shot"). `--show-backdrop` photographs the
 boot's own roll instead. `--taps-before ID=BUTTON[,BUTTON]` adds taps on a screen before its photograph: `ship-select=down` steps a save
-that opens Team Selection on the Fury hull to the classic one `WALK` declares (the maintainer's save of 2026-11-18 does).
+that opens Team Selection on the Fury hull to the classic one `WALK` declares (the maintainer's save of 2026-11-18 does). **The hex cursor is
+kept across visits**, so a second walk on the same boot starts from where the first left it: `up` (or no tap) where the first took `down`;
+read the pair's frame (a locked hull is a padlock) before trusting it.
+
+**All five Fury pairs of the walk hide the backdrop** (2026-11-19, `hd-fury-backdrop-2`: `HIDDEN_BACKDROP` also names `campaign-select`,
+`grid-select` and `cell-select`). The adapted luma each pair read at the grab (`original.backdrop.adapted_luma`) is stated to ours as
+`--fury-adapted-luma`, which sets the craft's exposure on Ship Select and pins the backdrop chain's adaptation on every page whose card the
+chain reads (`oag_post::hd_bloom::Chain::pin_adapted`; a capture only, play adapts on its own). Whole-pair mean grey, before to after: Campaign
+Select 4.77 to 3.32, cell 3.00 to 2.81, Ship Select 3.05 to 3.04 (the luma moved the hull by under a grey level), **grid 7.28 to 7.75**: its
+card animates, two grabs of the original differ by 15.9 mean grey over the card against 1.2 on cell, and the page region fell 1.50 to 0.07
+regardless. `original.backdrop.ours_exposure` records the stated value.
 
 **The HD Track Select pair is drawn at the original's turntable angle** (2026-11-19, `hd-track-select`): the circuit model's angle is a global
 the original's update steps every frame and keeps across visits, so `rpcs3-hd-menu-pair.py` reads it out of RAM just before the grab

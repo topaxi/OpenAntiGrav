@@ -1048,7 +1048,8 @@ pub(crate) fn read_preview(
     let light = match (previews.title, previews.ship_hull, &source) {
         (Some(title), Some(_), PreviewSource::Ship { .. }) => {
             let mut report = Vec::new();
-            let light = crate::preview::model_light(archives, title, previews.fury, &mut report);
+            let light =
+                crate::preview::model_light(archives, title, previews.fury, None, &mut report);
             for line in report {
                 debug!("preview {name}: {line}");
             }
