@@ -41,8 +41,12 @@ The file names below carry the nightly's date and commit instead of a version.
 If the page has no download for your system, build from source ("Build it
 yourself" below).
 
-Optional, any desktop: install **`ffmpeg`**. Without it the game skips each
-title's intro movie and goes straight to the menu. Everything else works.
+Recommended, any desktop: install **`ffmpeg`** (Linux: `sudo apt install ffmpeg`,
+`sudo dnf install ffmpeg`, `sudo pacman -S ffmpeg`; macOS: `brew install ffmpeg`;
+Windows: `winget install ffmpeg`, then open a new terminal so it is on `PATH`).
+Without it the game skips each title's intro movie and **plays no music in
+Pulse or Pure** (nor 2048's soundtrack, until the game decodes it itself). The
+game logs a `warn` line naming `ffmpeg` and otherwise works.
 
 ## 2. Make the "images" folder and put your files in it
 
@@ -310,7 +314,7 @@ their own data, but only Pulse is close to finished: see [status](status.md).
 | The game list has your file dim, `NEEDS DISC KEY` | An encrypted PS3 disc. Give it the key (section 3). |
 | Your Omega `.pkg` is not listed | You need **both** the base and the update in the same folder. |
 | `NO DISC IMAGE FOUND`, but a `.pkg` is in the folder | Either a Vita `.pkg` (not supported yet: use a `.vpk` or unpacked folder) or an Omega base `.pkg` without its update `.pkg`. Neither is ever listed. |
-| No sound / no intro | No `ffmpeg`: the intro is skipped, the game still plays. |
+| No music / no intro | No `ffmpeg` on `PATH` (Pulse and Pure music, 2048 music, and every intro movie need it): install it, see section 1. The game still plays. |
 | Anything else | The log file has the detail: see "Where things are kept" below. Include it when you report a problem. |
 
 ## For the curious
@@ -349,7 +353,8 @@ Optional:
 - **`ffmpeg`** converts each game's intro movie the first time you boot a
   title. Without it the program logs one line, `ffmpeg is not installed, so
   the intro is skipped and movies show no picture`, skips the conversion, and
-  the intro is skipped straight to the menu; everything else works. With it the
+  the intro is skipped straight to the menu, and Pulse's and Pure's music (and
+  2048's, for now) is silent with a `warn` saying so; everything else works. With it the
   first Pulse boot spends about 80 seconds converting, once, and caches the
   result.
 - `just` runs the repository's recipes (`just play ...`). Not needed to play.
