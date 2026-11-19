@@ -314,3 +314,72 @@ fn every_fourth_row_from_the_top_is_a_scanline() {
     let dip = by_phase[0] / by_phase[1];
     assert!((0.6..0.8).contains(&dip), "{dip}: {by_phase:?}");
 }
+
+/// How many pixels of `page`'s right-hand margin are lit, and the brightest
+/// channel there, on a 1280x720 capture through the real binary. The layout
+/// ends at nine tenths of the width, so only the backdrop draws in the strip.
+fn margin_of_a_capture(image: &Path, page: &str, tint: Option<&str>) -> (usize, u8) {
+    let dir = std::env::temp_dir().join(format!(
+        "oag-hd-fury-tint-ground-truth-{page}-{}",
+        tint.unwrap_or("authored")
+    ));
+    std::fs::create_dir_all(&dir).expect("a temp directory");
+    let out = dir.join("page.png");
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args(["--no-audio", "--size", "1280x720", "--menu-page", page]);
+    if let Some(tint) = tint {
+        command.args(["--fury-tint", tint]);
+    }
+    let status = command
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page {page}");
+    let still = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG");
+    let strip = (0..still.height).flat_map(|y| (1180..still.width).map(move |x| (x, y)));
+    let brightest = |(x, y): (u32, u32)| {
+        let at = ((y * still.width + x) * 4) as usize;
+        still.rgba[at..at + 3].iter().copied().max().unwrap_or(0)
+    };
+    let levels: Vec<u8> = strip.map(brightest).collect();
+    (
+        levels.iter().filter(|&&level| level > 16).count(),
+        levels.iter().copied().max().unwrap_or(0),
+    )
+}
+
+/// `--fury-tint 0` is the hidden cloud of a compare shot: the state a pair
+/// script writes over the original's `default` row before its grab. On RPCS3,
+/// `Track Creation` and `Team Selection` with that row at zero are a black
+/// page, the same on two boots, where two boots with the cloud showing differ
+/// by a mean of 1.7 grey levels outside the model
+/// (docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md, "Hidden for a
+/// compare shot"). The capture's page has to lose its cloud the same way, and
+/// keep it without the flag.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_stated_tint_of_nothing_hides_the_cloud_on_a_captured_page() {
+    let Some(image) = image() else {
+        return;
+    };
+    let (lit, _) = margin_of_a_capture(&image, "track-select", None);
+    assert!(
+        lit > 500,
+        "the cloud reaches the margin under the row's own tint: {lit} pixels"
+    );
+    for page in ["track-select", "ship-select"] {
+        let (lit, brightest) = margin_of_a_capture(&image, page, Some("0"));
+        assert_eq!(
+            (lit, brightest),
+            (0, 0),
+            "{page}: the margin is black with the tint stated as nothing"
+        );
+    }
+}

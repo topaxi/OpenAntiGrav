@@ -927,9 +927,94 @@ live memory readout on Omega's emulator). **Below about 414 lines** no Fury clou
 clamp(0.0015 * height - 0.62, 0, 4)` is 0 there, and it scales the particle and ramp
 colours (above), so this is the original's own law, not a gap.
 
+## Hidden for a compare shot
+
+2026-11-19, lane `hd-fury-backdrop`, RPCS3 0.0.43 on the compare profile (`OAG_COMPARE_PLATFORM=hd-fury`, 1920x1080,
+scale 100), three cold boots. The question was whether a front-end pair can show the backdrop the same on both sides.
+**It cannot be reproduced for a grab, so the pair scripts hide it on both sides.**
+
+Why not reproduced, each already read on this page or measured here:
+
+- **Every boot rolls a new picture.** `Load` picks twelve of nineteen clouds and `PickPath` a path kind and index by
+  `rand()` (above). Three grabs of `Track Creation`: the stored pair's shows a dim red diagonal sweep, this lane's first
+  boot a yellow radial burst behind the circuit model, and outside the model frame the two differ by a mean of 1.67 grey
+  levels, 85,768 pixels by more than 8.
+- **Two paths in three are modes ours does not draw.** `PickPath` rolls static, morph or dynamic evenly; the clip read
+  on `Team Selection` in the second boot was mode `10`, a morph path (`clip[0] = 10`, `clip[2]` counting 60 a second to
+  600). Morph and dynamic programs are unread (Open, below).
+- **The music drives it with a history.** `particleColour` follows three raw bands, the glow an attack detector on
+  the held ones, the wave's pivot two more, and the trail carries about a hundred frames of all of them; `OnEnable`
+  adds a random pulse on every screen change.
+- **Stock RPCS3 draws the cloud wrong** (the index wrap, above), so a faithful draw of ours would not match its frame
+  even at the same state, and the build without the wrap is not the one the compare page's originals are taken with.
+
+**The write.** The Blend pass multiplies the fresh particles by the tint of the `<ScreenSetting>` row in use ("The
+frame, measured"), so zero there stops light entering the chain and what is on screen decays: the accumulation keeps
+`0.647` of itself a frame and the wave pair `0.94` (`0.955` in blue) less `0.0003`, under half an 8-bit step after 135
+frames. `scripts/hd_fury_backdrop.py` finds the item by its row table, writes three zero floats at `row + 0x40` of the
+current row (`item + 0xc4`; `default` on both screens), waits 180 of the widget's own frames (the clip's counter,
+`*(item + 0x1640) + 8`), checks the row still reads zero, and after the grab writes the authored `0.12549` back.
+`rpcs3-hd-menu-pair.py` does this for `Track Creation` and `Team Selection` (`HIDDEN_BACKDROP`) and records it in
+`pair.json` (`original.backdrop`, `provenance.pair_script_ram_writes`). The item sat at `0x3291a100` on all three boots,
+as on the boots of 2026-10-10 and 2026-11-05; no word in the image's data (`0x00010000`..`0x00d00000`) holds that
+address, so there is no static pointer to follow and the scan (0.8 s) stays.
+
+**Measured on the original** (mean absolute grey difference between two grabs):
+
+| Screen | Cloud showing | Cloud hidden |
+| --- | ---: | ---: |
+| `Team Selection`, two grabs 2 s apart, one boot | 1.42 | 0.07 (Fury hull), 0.09 (classic) |
+| `Team Selection`, classic Feisar, boot 2 against boot 3 | | 0.08, every pixel over 8 inside the hull's box |
+| `Track Creation` outside the model frame and thumbnail, two boots | 1.67 | 0.05 |
+
+With the row at zero the page is black: the frame's left and right margins read 0 in every pixel, and the UI, the
+circuit model and the craft are untouched. **Confidence 92** that the write hides the widget and nothing else the
+page draws (two screens, two boots, the pass it acts on read off the command stream); the hexagon cells that the
+cloud showed through read a uniform grey once it is gone.
+
+**The hull's exposure moves a little with it.** The chain's adapted luma on `Team Selection`, classic Feisar: `0.014510`
+on every read with the cloud hidden (the luma of the 8-bit mean `(3, 4, 4)`), against the `0.0163` mean of
+[front-end-model-lighting.md](front-end-model-lighting.md)'s read with it showing (`0.0157` to `0.0180`). The exposure
+is `4 - 35 * adapted`: `3.49` hidden against the `3.43` ours draws the craft at, 1.8 percent in linear light, under one
+grey level on the hull. On the Fury hull `0.022353` hidden against `0.0228` to `0.0244` showing. `Track Creation`
+reads `0.0041` hidden and `0.0051` showing. The pair records the read (`original.backdrop.adapted_luma`); ours does not
+take it yet (Open).
+
+**Ours.** `oag-game --fury-tint V` states the tint of a `--menu-page` capture for red, green and blue in place of the
+skin's row (`oag_game::boot::backdrop::captured_tint`), the same value through the same Blend term, so `0` is the
+same black field with the chain still running for the model. Play is unchanged: only a capture takes the flag.
+Tests: `boot::backdrop::tests` (the stated tint, the row's alpha kept),
+`hd_fury_ship_select_ground_truth::a_stated_tint_of_nothing_hides_the_cloud_on_a_captured_page` (the real binary: the
+margin lit without the flag, zero with it on both pages), `a_tint_of_nothing_leaves_the_trail_to_decay` (the law, from
+before), and `scripts/hd_fury_backdrop.py selftest` (the write, the wait, the restore and the record, on a constructed
+widget; `just check-pair-provenance` runs it).
+
+**The pairs** (re-shot, ours re-rendered by this branch; before is the stored pair re-rendered by the same binary):
+
+| Pair | Mean grey, whole frame | Page outside the model frame (53 % of the frame) | Model frame |
+| --- | --- | --- | --- |
+| `hd/menu-track-select` | 7.83 to **5.84** | 0.83 to **0.035** | 12.71 to 6.92 |
+| `hd/menu-ship-select` | 4.51 to **3.05** | 1.55 to **0.035** | 5.56 to 3.54 |
+
+The page region is every pixel black on both sides of the new pair, less the model's frame, where the model itself
+moves between grabs; what is left in it is antialiased edges. The other three Fury pairs of the walk (Campaign
+Select, grid, cell) still show the cloud: their cards' level follows the adapted luma, which the cloud feeds, so hiding
+it there wants the read wired first. They opt in with one id each in `HIDDEN_BACKDROP`.
+
+**Omega: checked, differs.** Neither `eboot.bin` (base and 1.07 patch) holds `BackgroundAnimFury`, a `RadioHead`
+program or a `.points2` name, and the packages ship no `.points2` file; its front end draws the scene widget
+(`BackgroundAnim_Item.cpp`, [menu-backdrop-scene.md](menu-backdrop-scene.md)), whose loop ours positions with
+`--anim-seconds`. So there is no row to write and `--fury-tint` reaches nothing there (`MenuBackdrop::Fury` alone
+reads it). **2048:** checked, differs, no `BackgroundAnim` string (above).
+
 ## Open
 
 - A reference without the index wrap, and everything above marked as measured through it.
+- The cloud itself on a compare pair: hidden on both sides since 2026-11-19, so no pair scores the cloud's path,
+  colour or pulse. Reproducing one needs the path forced static, the build without the wrap, and the bands, the pulse
+  and the trail's history read at a paused frame.
+- The adapted luma of a hidden-cloud grab into ours' craft exposure (`0.01451` against the `0.0163` ours carries;
+  `original.backdrop.adapted_luma` holds each pair's read).
 - Fresh particles `14` to `25` percent over the defect-free slice and the wrapped ladder.
 - The half texel ahead of the chain rather than in its resolve.
 - Modes `5`, `9`, `10`, `11`: the vertex programs are paired and disassemble; their

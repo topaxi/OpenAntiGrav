@@ -62,6 +62,9 @@ pub struct Options {
     /// pair that lines a `--menu-page` capture up with an RPCS3 frame whose
     /// path and clock were read. See `Cli::fury_path`.
     pub fury_path: Option<usize>,
+    /// The Fury menu backdrop's screen tint, stated for all three channels
+    /// instead of read off the skin's row. See `Cli::fury_tint`.
+    pub fury_tint: Option<f32>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
     /// to. `--camera-jitter`; see `crate::race_capture::CaptureOptions::camera_jitter`.
     ///
@@ -634,6 +637,7 @@ pub fn run(
                     ),
                     options.anim_seconds,
                     options.fury_path,
+                    options.fury_tint,
                 )
             });
             // The race box's two selection screens are not pages of our
@@ -1154,7 +1158,7 @@ pub fn run(
                 (&device, &queue),
                 page,
                 oag_display::display::viewport((width, height), options.settings.display.aspect),
-                (options.anim_seconds, options.fury_path),
+                (options.anim_seconds, options.fury_path, options.fury_tint),
                 layer
                     .as_mut()
                     .map(|layer| layer as crate::render::DrawSceneLayer<'_>),

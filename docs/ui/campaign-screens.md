@@ -4313,6 +4313,12 @@ circuit-model frame (862,180)-(1747,675) mean absolute grey difference 22.5 to 1
 frame `mean_grey` 9.98 to 7.89, rmse 0.120 to 0.099. **Omega ported: checked, applies, not wired** (`omega/menu-track-select` unchanged to the
 digit, 19.10); Omega's `PI_Track` authors `RotX 0.45`, `PosX 0.55`, `PosY 0.175`, `PosZ -2.05` and `Scale 0.012`, in widget units whose update is unread.
 
+**The backdrop behind both pickers is hidden on the pairs, 2026-11-19 (`hd-fury-backdrop`)**: the Fury cloud is a new roll on every boot,
+so `hd/menu-track-select` and `hd/menu-ship-select` are photographed with its row tint written to zero in the original and drawn with
+`--fury-tint 0` in ours; the pairs read 7.83 to 5.84 and 4.51 to 3.05 mean grey, and the page outside the model's frame 0.83 and 1.55 to
+0.035 on both (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"; `docs/tools/compare-page.md`). The
+cloud a player sees is unchanged. **Omega: checked, differs** (no Fury widget; its scene backdrop is another widget).
+
 **Live, 2026-10-09** (Xvfb, software Vulkan, debug build): the model draws on
 the real screen, the grey matches the capture's, and stepping the circuit
 reloads it. The per-frame cost is the recolour (1 to 5 ms in a debug build for

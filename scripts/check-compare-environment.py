@@ -139,6 +139,10 @@ def check_safe_area(root):
     hd.prepare_profile(ce.platform("hd-fury"), hd_profile, 96, "FURY", None)
     assert cm.profile_is_locked(hd_profile), "the HD menu pair script must lock ours' profile"
     assert tomllib_load(ce.settings_path(hd_profile))["display"]["front_end_style"] == "FURY"
+    # the screens it photographs with the Fury backdrop hidden are screens of its walk, and ours is told the same state
+    walked = {item["id"] for item in hd.WALK if isinstance(item, dict)}
+    assert hd.HIDDEN_BACKDROP and set(hd.HIDDEN_BACKDROP) <= walked, "HIDDEN_BACKDROP names a screen WALK does not photograph"
+    assert tuple(hd.fb.OURS_FLAGS) == ("--fury-tint", "0"), "ours must be drawn at the tint written over the original's row"
 
 
 def check_ps2_world_clock(root):

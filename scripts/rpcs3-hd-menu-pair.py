@@ -37,6 +37,7 @@ sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+import hd_fury_backdrop as fb  # noqa: E402
 
 drive = importlib.import_module("rpcs3-drive")
 walk = importlib.import_module("rpcs3-hd-menu-walk")
@@ -58,6 +59,13 @@ ANGLE_SLOT = 0x008AD4D8 + 0x49EC
 ANGLE_FIELD = 0x1C4
 #: Radians the angle moves a frame (`TOC + 0x4b4c`) and frames a second: ours reads `--menu-picker-seconds` at 60 fps.
 ANGLE_STEP, FRAMES_PER_SECOND = 0.01, 60.0
+
+#: The `WALK` ids photographed with the Fury backdrop hidden on both sides: the screens whose page is mostly backdrop. The cloud, its
+#: path and how far along it are a new roll on every boot, two paths in three are modes ours does not draw and the music pulses it,
+#: so no grab can be reproduced; the row's tint is written to zero in the emulator's RAM before the settle and put back after the grab
+#: (`hd_fury_backdrop.py`), and ours is drawn with `--fury-tint 0` (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden
+#: for a compare shot").
+HIDDEN_BACKDROP = ("track-select", "ship-select")
 
 #: The walk. A string is a button (`name` or `name:SETTLE_SECONDS`); a dict is a photograph. `pair` fields: `id`, `title`,
 #: `screen` (HD's own name, from TTY.log), `page` (ours' `--menu-page`), `drawn_from` (`xml` or `menu.toml`), `xml` (the
@@ -145,6 +153,11 @@ def main():
                     help="`menus` walks WALK (one pair per screen); `loading` walks LOADING_WALK to the race load (ends in a race)")
     ap.add_argument("--only", help="comma list of walk ids to pair (the walk still runs through all)")
     ap.add_argument("--settle", type=float, default=3.0, help="seconds after the last tap before a photograph")
+    ap.add_argument("--taps-before", action="append", default=[], metavar="ID=BUTTON[,BUTTON...]",
+                    help="extra taps on a screen before its photograph, repeatable: for a save whose cursor rests elsewhere than "
+                         "WALK declares (`ship-select=down` steps a save that opens on the Fury hull to the classic one)")
+    ap.add_argument("--show-backdrop", action="store_true",
+                    help="photograph every screen with the Fury backdrop as the boot rolled it (no RAM write, no `--fury-tint`)")
     ap.add_argument("--front-end-style", default="FURY",
                     help="the styling both sides run: HD's red-and-black Fury front end is this profile's (see the docs)")
     cp.add_arguments(ap)
@@ -172,6 +185,8 @@ def main():
         (obj,) = struct.unpack(">I", mem.read(4))
         mem.seek(GUEST_BASE + obj + ANGLE_FIELD)
         return struct.unpack(">f", mem.read(4))[0]
+    taps_before = dict(item.split("=", 1) for item in args.taps_before)
+    widget = None
     steps = LOADING_WALK if args.walk == "loading" else WALK
     for item in steps:
         if isinstance(item, str):
@@ -181,15 +196,30 @@ def main():
             time.sleep(float(settle) if settle else 3.0)
             print("%-10s %-22s -> %s" % (item, before, drive.current_screen()), flush=True)
             continue
-        time.sleep(item.get("settle", args.settle))
+        for button in filter(None, taps_before.get(item["id"], "").split(",")):
+            pad.press(button, 0.15)
+            time.sleep(1.0)
+        hidden = None
+        if item["id"] in HIDDEN_BACKDROP and not args.show_backdrop:
+            widget = widget or fb.Widget(mem)
+            hidden = widget.hide()
+        settled = time.monotonic() + item.get("settle", args.settle)
+        if hidden is not None:
+            # The settle counted in the widget's own frames too: a slow emulator draws fewer in the same seconds.
+            widget.wait_frames(fb.FRAMES_TO_DECAY)
+        time.sleep(max(0.0, settled - time.monotonic()))
+        if hidden is not None:
+            hidden = dict(hidden, still_hidden=widget.still_hidden(), adapted_luma=widget.adapted_luma())
         screen = drive.current_screen()
         png = shots / (item["id"] + ".png")
         # Read just before the grab: the picture the grab returns is within one step of it (a burst of ten grabs against ours' yaw sweep:
         # the angle read before a grab runs 0.04 rad ahead of the frame, the one read after it 0.12).
         angle = turntable_angle() if item["id"] in CLOCKED else None
         walk.grab(png, w, h)
+        if hidden is not None:
+            widget.restore()
         seen[item["id"]] = {"screen": screen, "feature": feature_read(), "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
-                            "angle": angle}
+                            "angle": angle, "hidden": hidden}
         print("shot %-16s screen %r" % (item["id"], screen), flush=True)
     refused = []
     for item in (i for i in steps if isinstance(i, dict)):
@@ -263,6 +293,16 @@ def main():
                 "basis": "measured: the circuit model's global angle read out of the emulator's RAM just before the grab (`*(*(0x008ad4d8 + 0x49ec) + 0x1c4)`, "
                          "the `Track Creation` update's own RotY, stepped 0.01 rad a frame); ours is drawn at the seconds that turn its own table that far "
                          "at 60 frames a second"}
+        hidden = shot.get("hidden")
+        if hidden is not None:
+            pair.check("the Fury backdrop is hidden at the grab", hidden["still_hidden"] and hidden["frames_waited"] >= fb.FRAMES_TO_DECAY,
+                       "row %s zero at the grab: %s, %d widget frames since the write (%d let the trail decay)"
+                       % (hidden["row"], hidden["still_hidden"], hidden["frames_waited"], fb.FRAMES_TO_DECAY))
+            extra += fb.record(pair.rec, hidden, hidden["adapted_luma"])
+            pair.rec["meta"]["note"] += " The Fury backdrop is hidden on both sides (the original's row tint written to zero for the grab, ours `--fury-tint 0`)."
+        taps = taps_before.get(item["id"])
+        if taps:
+            pair.rec["meta"]["state"] += "; then %s on this screen (--taps-before)" % taps
         try:
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.image, page=item["page"],
                          drawn_from=item["drawn_from"], xml_file=item["xml"], screen_seen=shot["screen"],
