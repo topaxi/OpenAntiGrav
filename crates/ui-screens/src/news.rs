@@ -281,6 +281,18 @@ pub fn message(item: &NewsItem, strings: &StringTable, stats: &dyn Statistics) -
     }
 }
 
+/// The message of the item named `id`, for a capture that pins one.
+#[must_use]
+pub fn message_for(
+    items: &[NewsItem],
+    id: &str,
+    strings: &StringTable,
+    stats: &dyn Statistics,
+) -> Option<String> {
+    let item = items.iter().find(|item| item.id.eq_ignore_ascii_case(id))?;
+    message(item, strings, stats)
+}
+
 /// `rand() % total` over the items' weight ranges, again while it lands on
 /// `last`: the index of the next item, and the draw's own total.
 fn draw(items: &[NewsItem], last: usize, rng: &mut Rng) -> usize {

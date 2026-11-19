@@ -807,7 +807,7 @@ impl NavigationLegend {
 /// literal `string` either, so drawing it would mean inventing whatever
 /// short label the original fills in at runtime. Left undrawn, honestly,
 /// rather than guessed.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TickerLayout {
     /// `[x, y, width, height]`, PSP-native pixels - not enforced as a hard
     /// clip by [`ticker_draw`] (see its own doc), just where the text lands.
@@ -826,6 +826,17 @@ pub struct TickerLayout {
     /// ([`oag_title::FrontEnd::news`]); empty where the title authors none or the file did not
     /// read. Set by the loader, since the layout's own XML does not carry them.
     pub news: crate::news::Feed,
+    /// Capture only: draw this one message at this position instead of the rotation.
+    pub pin: Option<TickerPin>,
+}
+
+/// A still's ticker state: the message of one item, its head `head_x` pixels from the viewport's
+/// left edge (the original's own coordinate, `+0x10c` of the ticker's text record: a message
+/// enters at the viewport's width and moves left one pixel a frame).
+#[derive(Debug, Clone, PartialEq)]
+pub struct TickerPin {
+    pub item: String,
+    pub head_x: f32,
 }
 
 impl TickerLayout {
@@ -874,6 +885,7 @@ impl TickerLayout {
                 .unwrap_or("default")
                 .to_string(),
             news: crate::news::Feed::default(),
+            pin: None,
         })
     }
 
@@ -886,6 +898,11 @@ impl TickerLayout {
         stats: &dyn crate::news::Statistics,
         seed: u64,
     ) -> Vec<String> {
+        if let Some(pin) = &self.pin {
+            return crate::news::message_for(&self.news.items, &pin.item, strings, stats)
+                .into_iter()
+                .collect();
+        }
         crate::news::sequence(
             &self.news.items,
             strings,
@@ -988,41 +1005,33 @@ pub fn description_draws(
     draws
 }
 
-/// How fast the ticker travels, in pixels a second. **Chosen, not
-/// measured**: no PPSSPP capture in this pass isolated two frames a known
-/// tick count apart with the ticker actually moving - see
-/// `docs/ui/campaign-screens.md`'s own `[Open]` entry. Reuses
-/// [`oag_ui::anim::MARQUEE_SPEED`], this project's own existing scrolling-
-/// text rate, as the nearest available precedent rather than a number
-/// invented from nothing.
+/// How fast the ticker travels, in pixels a second: the original moves a message one pixel a
+/// frame (`widget + 0x330` is `1.0`, subtracted from each message's position once per update,
+/// `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "The footer ticker's message
+/// choice"), which at 60 frames a second is [`oag_ui::anim::MARQUEE_SPEED`].
 pub const TICKER_SPEED: f32 = oag_ui::anim::MARQUEE_SPEED;
 
-/// Gap between one tip and the next, in pixels - **chosen**, purely
-/// cosmetic breathing room, not a measured value.
-const GAP: f32 = 40.0;
+/// The gap between one message's tail and the next one's head: the next message enters at the
+/// viewport's right edge once the last one's tail has come in to three quarters of its width
+/// (`widget + 0xb4` is `(int)(width - width * 0.25)`), so the gap is what is left of it.
+fn gap(viewport_width: f32) -> f32 {
+    viewport_width - (viewport_width * 0.75).floor()
+}
 
-/// The ticker's own draw at `elapsed` seconds since the campaign screen
-/// opened, cycling through `tips` (already-resolved disc strings - see the
-/// module doc) at [`TICKER_SPEED`]. `None` when there is nothing to show -
-/// no tips, no viewport, or (briefly, once a cycle) the gap between one tip
-/// leaving and the next entering.
+/// The ticker's own draw at `elapsed` seconds since it started, cycling through `tips`
+/// (already-resolved disc strings - see the module doc) at [`TICKER_SPEED`]: a message enters at
+/// the viewport's right edge, leaves at its left, and the next enters [`gap`] pixels behind its
+/// tail. `None` when there is nothing to show - no tips, no viewport, or the moment no message
+/// is inside it. A pinned layout ([`TickerPin`]) draws its one message where the pin says.
 ///
-/// **Exactly one `Draw::Text` at a time, on purpose.** An earlier version of
-/// this function drew a tip up to twice (once at its own place in the loop,
-/// once a full loop-width further along) so the strip had no visible seam
-/// at the wrap - but that only works unclipped, and the caller now clips
-/// this single draw to [`TickerLayout::viewport`] the same way
-/// `crate::marquee`'s row-value scroll clips itself (`Renderer::render_with`'s
-/// `clip: Option<(usize, f32, f32)>`, keyed on the draw's own index in the
-/// flattened list). That mechanism clips one index, not several, so a
-/// caller wanting the render-level clip needs one draw to point it at - see
-/// `crate::app::campaign_stage::CampaignStage::ticker_draw` in `oag-game`
-/// for where the index is found. The trade is an honest half-second of
-/// nothing shown at each wrap rather than a seam this build cannot clip
-/// away, and a real player never sees it: the eye follows leaving/entering
-/// text, not the gap between two texts *neither* on screen. Reproduces
-/// `cellselect-grid0_3_2.png`'s own clean cut at both edges of the ticker's
-/// own band.
+/// **Exactly one `Draw::Text` at a time, on purpose.** The original keeps two messages in
+/// flight and shows both while one's tail and the next one's head overlap the viewport; this
+/// draws the earlier of them, because the caller clips this single draw to
+/// [`TickerLayout::viewport`] the same way `crate::marquee`'s row-value scroll clips itself
+/// (`Renderer::render_with`'s `clip: Option<(usize, f32, f32)>`, keyed on the draw's own index
+/// in the flattened list). That mechanism clips one index, not several. See
+/// `crate::app::campaign_stage::CampaignStage::ticker_draw` in `oag-game` for where the index is
+/// found.
 #[must_use]
 pub fn ticker_draw(
     layout: &TickerLayout,
@@ -1035,30 +1044,40 @@ pub fn ticker_draw(
         return None;
     }
     let scale = face_scale(faces, &layout.font);
+    let [vx, vy, vw, _] = layout.viewport;
+    let gap = gap(vw);
     let widths: Vec<f32> = tips.iter().map(|tip| measure(tip) * scale).collect();
-    let total: f32 = widths.iter().sum::<f32>() + GAP * tips.len() as f32;
+    let total: f32 = widths.iter().sum::<f32>() + gap * tips.len() as f32;
     if total <= 0.0 {
         return None;
     }
-    let travelled = (elapsed.max(0.0) * TICKER_SPEED) % total;
-    let [vx, vy, vw, _] = layout.viewport;
+    let travelled = match &layout.pin {
+        Some(pin) => vw - pin.head_x,
+        None => (elapsed.max(0.0) * TICKER_SPEED) % total,
+    };
+    // The message furthest along that is inside the viewport: when a tail and the next head both
+    // are, the tail.
     let mut cursor = 0.0;
+    let mut shown: Option<(f32, &String)> = None;
     for (tip, width) in tips.iter().zip(&widths) {
-        let x = vx + cursor - travelled;
-        if x + width >= vx && x <= vx + vw {
-            return Some(Draw::in_role(
-                face_role(&layout.font),
-                x,
-                vy,
-                scale,
-                layout.color,
-                Align::Left,
-                tip.clone(),
-            ));
+        for lap in [0.0, total] {
+            let x = vx + vw + cursor + lap - travelled;
+            if x + width >= vx && x <= vx + vw && shown.is_none_or(|(at, _)| x < at) {
+                shown = Some((x, tip));
+            }
         }
-        cursor += width + GAP;
+        cursor += width + gap;
     }
-    None
+    let (x, tip) = shown?;
+    Some(Draw::in_role(
+        face_role(&layout.font),
+        x,
+        vy,
+        scale,
+        layout.color,
+        Align::Left,
+        tip.clone(),
+    ))
 }
 
 pub mod typein;

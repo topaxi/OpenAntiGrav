@@ -185,13 +185,14 @@ fn no_tips_draws_nothing() {
         text_scale: 1.0,
         text_lines: 1,
         text_font: String::new(),
+        ..TickerLayout::default()
     };
     let draw = ticker_draw(&layout, 0.0, &[], &FaceScales::default(), &|_| 100.0);
     assert!(draw.is_none());
 }
 
 #[test]
-fn one_tip_starts_flush_against_the_viewport_s_own_left_edge_at_zero_elapsed() {
+fn a_message_enters_at_the_viewports_right_edge() {
     let layout = TickerLayout {
         viewport: [85.0, 235.0, 370.0, 32.0],
         font: "small".to_string(),
@@ -199,6 +200,7 @@ fn one_tip_starts_flush_against_the_viewport_s_own_left_edge_at_zero_elapsed() {
         text_scale: 1.0,
         text_lines: 1,
         text_font: String::new(),
+        ..TickerLayout::default()
     };
     let tips = vec!["Why don't you try out the Speed Lap events?".to_string()];
     let draw =
@@ -206,9 +208,72 @@ fn one_tip_starts_flush_against_the_viewport_s_own_left_edge_at_zero_elapsed() {
     let Draw::Text { x, y, text, .. } = &draw else {
         unreachable!("ticker_draw only ever emits Draw::Text");
     };
-    assert_eq!(*x, 85.0);
+    assert_eq!(
+        *x,
+        85.0 + 370.0,
+        "the head is on the right edge, outside the clip"
+    );
     assert_eq!(*y, 235.0);
     assert_eq!(text, &tips[0]);
+}
+
+fn plain_layout() -> TickerLayout {
+    TickerLayout {
+        viewport: [85.0, 235.0, 370.0, 32.0],
+        font: "small".to_string(),
+        color: [1.0, 1.0, 1.0, 1.0],
+        text_scale: 1.0,
+        text_lines: 1,
+        text_font: String::new(),
+        ..TickerLayout::default()
+    }
+}
+
+#[test]
+fn the_next_message_trails_the_tail_by_a_quarter_viewport() {
+    let layout = plain_layout();
+    let tips: Vec<String> = ["a", "b", "c"].map(str::to_string).to_vec();
+    let measure = |_: &str| 100.0;
+    let draw_at = |travelled: f32| {
+        let Some(Draw::Text { text, x, .. }) = ticker_draw(
+            &layout,
+            travelled / TICKER_SPEED,
+            &tips,
+            &FaceScales {
+                small: 1.0,
+                ..FaceScales::default()
+            },
+            &measure,
+        ) else {
+            panic!("a draw at {travelled} pixels");
+        };
+        (text, x)
+    };
+    // 93 = 370 - floor(370 * 0.75): the second's head is on the right edge once the first has
+    // travelled its width and the gap, and the first is still the one drawn while its tail is in.
+    let (text, x) = draw_at(100.0 + 93.0);
+    assert_eq!((text.as_str(), x), ("a", 85.0 + 370.0 - 193.0));
+    // The first's tail is out one pixel later than its width plus the viewport's.
+    let travelled = 100.0 + 370.0 + 1.0;
+    let (text, x) = draw_at(travelled);
+    assert_eq!(text, "b");
+    assert_eq!(x, 85.0 + 370.0 + 193.0 - travelled);
+}
+
+#[test]
+fn a_pinned_layout_draws_its_one_message_where_the_pin_says() {
+    let mut pinned = plain_layout();
+    pinned.pin = Some(TickerPin {
+        item: "TKR_X".to_string(),
+        head_x: 131.0,
+    });
+    let tips = vec!["pinned".to_string()];
+    let Some(Draw::Text { x, .. }) =
+        ticker_draw(&pinned, 99.0, &tips, &FaceScales::default(), &|_| 485.0)
+    else {
+        panic!("a pinned draw");
+    };
+    assert_eq!(x, 85.0 + 131.0, "the clock does not move a pinned message");
 }
 
 #[test]
@@ -220,6 +285,7 @@ fn scrolling_moves_the_tip_left_at_ticker_speed() {
         text_scale: 1.0,
         text_lines: 1,
         text_font: String::new(),
+        ..TickerLayout::default()
     };
     let tips = vec!["a fixed-width tip".to_string()];
     let measure = |_: &str| 100.0;
@@ -421,6 +487,7 @@ fn the_same_inputs_produce_an_equal_draw_for_the_index_lookup_to_find() {
         text_scale: 1.0,
         text_lines: 1,
         text_font: String::new(),
+        ..TickerLayout::default()
     };
     let tips = vec!["a fixed-width tip".to_string()];
     let measure = |_: &str| 100.0;

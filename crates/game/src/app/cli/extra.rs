@@ -155,6 +155,15 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_model_seconds: Option<f32>,
 
+    /// With `--menu-page` on a title with a footer ticker, draw this one message instead of the
+    /// rotation: `ITEM@X`, the `PI_News` item's id (`TKR_FAVMUS`) and where the message's head
+    /// is, in pixels from the ticker's left edge (the original's own coordinate: a message
+    /// enters at the ticker's width and moves left a pixel a frame). A still has no moment in
+    /// a rotation drawn at random, so this states the one the original's frame caught; the
+    /// message is drawn from the profile's own lifetime statistics.
+    #[arg(long, value_name = "ITEM@X")]
+    pub(crate) menu_ticker: Option<String>,
+
     /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
     /// to draw behind the page, counting from zero; past the end it wraps.
     ///

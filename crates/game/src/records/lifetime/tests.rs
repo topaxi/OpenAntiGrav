@@ -169,3 +169,29 @@ fn the_ticker_plays_the_profiles_favourite_song() {
         "no layout, no ticker"
     );
 }
+
+/// A capture that pins one message gets that one and no other, whatever the rotation would draw.
+#[test]
+fn a_pinned_ticker_plays_only_its_item() {
+    let items = r#"<Screen>
+        <PI_News><Values NewsID="TKR_FAVMUS" NewsClass="Profile" NewsMember="3" NewsFrequency="0"></Values></PI_News>
+        <PI_News><Values NewsID="TKR_SONGS" NewsFormat="int" NewsClass="GenStats" NewsMember="69" NewsFrequency="0"></Values></PI_News>
+        </Screen>"#;
+    let strings = StringTable::from_xml(
+        r#"<Entry ID="TKR_FAVMUS" String="Your most listened to music track is %s"></Entry>
+           <Entry ID="TKR_SONGS" String="%d songs"></Entry>"#,
+    );
+    let mut layout = layout(items);
+    let mut store = Store::default();
+    store.count_song("pulse", "Fenix Funk 5 (Wipeout Edit)");
+    layout.pin = Some(oag_ui_screens::campaign::footer::TickerPin {
+        item: "tkr_songs".to_string(),
+        head_x: 131.0,
+    });
+    assert_eq!(ticker_tips(Some(&layout), &strings, &store, 9), ["1 songs"]);
+    layout.pin = Some(oag_ui_screens::campaign::footer::TickerPin {
+        item: "TKR_NOPE".to_string(),
+        head_x: 0.0,
+    });
+    assert!(ticker_tips(Some(&layout), &strings, &store, 9).is_empty());
+}
