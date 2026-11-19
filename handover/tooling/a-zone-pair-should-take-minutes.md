@@ -56,7 +56,7 @@ invent.
 - A Zone save-state library and its index; regenerating states after an
   emulator update.
 - One shared driver instead of five per-emulator Zone modes.
-- HD pair `hd-zone-vineta-k-z5` is refused by the pair check (heading 1.86 deg against 1.0): `--pose` carries yaw only, the craft is tilted 2.75 deg off the spline; a pose with pitch and roll fixes it. `rpcs3-hd-pair.py` `set_window` picks the root window when the emulator window is larger than the screen. HD Zone capture needs `OAG_COMPARE_PLATFORM=hd-fury` on `serve` and a `--state` sidecar `{"mode":"zone"}` (else ours renders Time Trial); not yet written up in `docs/tools/compare-page.md`.
+- HD Zone: the refused mid-race pair is replaced by a race-start pair (`docs/tools/compare-page.md`, "HD Zone race-start pair"); open: the zone-1 colour grade (original cyan, ours pale) and a `rpcs3-drive.py restart` that knows Zone's pause menu.
 
 ## Next Steps
 
