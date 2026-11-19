@@ -1,6 +1,6 @@
 # ffmpeg: the resolver and the pinned download
 
-Pulse's, Pure's and 2048's music (ATRAC3+/ATRAC9) and every movie go through
+Pulse's and Pure's music (ATRAC3+), Bink movie audio and every movie transcode go through
 `ffmpeg` and `ffprobe` as child processes. `oag-ffmpeg` is the one place that
 finds them.
 
@@ -10,7 +10,7 @@ finds them.
 downloaded copy, then none** (a bare name, so a missing tool fails with the
 `NotFound` each call site already reports). Nothing is latched, so a copy that
 arrives mid-session is used by the next decode. Call sites: `oag-music`'s
-`at3` (and `at9` through it), `oag-game`'s `movie::transcode`,
+`at3` (ATRAC9 and the MP4 AAC audio are decoded in process and never reach it), `oag-game`'s `movie::transcode`,
 `movie::container_audio`, `movie::mpeg2_ps` and `prefetch`. A system tool is
 never replaced; only `[ffmpeg] use_pinned = true` (config file, no menu row)
 makes the resolver prefer the pinned copy.
