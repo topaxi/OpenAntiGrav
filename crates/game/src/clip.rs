@@ -31,6 +31,14 @@ pub fn format(blob: &[u8]) -> Option<VideoFormat> {
     })
 }
 
+/// The movie-cache key of the clip `entry` (its archive path) whose bytes are
+/// `len` long: the one spelling [`open`] and [`crate::prefetch`] both use, so a
+/// clip the prefetch converted is the file the screen finds.
+#[must_use]
+pub fn cache_key(entry: &str, len: usize) -> String {
+    format!("{}-{len}", entry.replace(['\\', '/'], "_").to_lowercase())
+}
+
 /// Opens the clip `entry` (its archive path, whose `blob` it is) through the
 /// movie cache, transcoding on a miss.
 ///
@@ -40,11 +48,17 @@ pub fn format(blob: &[u8]) -> Option<VideoFormat> {
 ///
 /// A clip the cache cannot make frames of, `ffmpeg` missing included.
 pub fn open(entry: &str, blob: &[u8], cache: &Path) -> Result<Movie> {
-    let key = format!(
-        "{}-{}",
-        entry.replace(['\\', '/'], "_").to_lowercase(),
-        blob.len()
-    );
+    open_refreshing(entry, blob, cache, false)
+}
+
+/// [`open`], converting again even when the cache holds the clip when `refresh`
+/// is set (`--refresh-video`).
+///
+/// # Errors
+///
+/// As [`open`].
+pub fn open_refreshing(entry: &str, blob: &[u8], cache: &Path, refresh: bool) -> Result<Movie> {
+    let key = cache_key(entry, blob.len());
     let movie = movie::open(
         blob,
         &key,
@@ -54,6 +68,7 @@ pub fn open(entry: &str, blob: &[u8], cache: &Path) -> Result<Movie> {
             // The AV1 cache, as the prefetch builds it: a platform decoder
             // would leave no file for the next run to find.
             prefer_cache: true,
+            refresh,
             ..Decode::default()
         },
         None,

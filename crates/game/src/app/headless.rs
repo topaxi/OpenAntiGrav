@@ -138,6 +138,7 @@ pub(crate) fn run_windowless(
             source: options.source.clone(),
             movies: options.cache.clone(),
             audio: oag_source::cache::default_audio_cache_dir(),
+            dlc: options.dlc.clone(),
             refresh_video: cli.refresh_video,
         })
     });
