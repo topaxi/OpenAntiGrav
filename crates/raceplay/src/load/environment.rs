@@ -793,7 +793,8 @@ pub(super) fn staging(
     let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
-        .map(|params| bloom::for_title(params, title));
+        .map(|params| bloom::for_title(params, title))
+        .map(|params| bloom::for_mode(params, title.race, mode));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
         .flatten()

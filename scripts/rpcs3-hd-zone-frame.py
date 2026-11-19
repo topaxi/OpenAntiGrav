@@ -115,6 +115,15 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     hook.LIGHT = True
+    log = open(out / "log.txt", "a")
+    write = sys.stdout.write
+
+    def tee(text):
+        log.write(text)
+        log.flush()
+        return write(text)
+
+    sys.stdout.write = tee
     plan = {"Main Menu": ["right"], "Single Player": ["right"] * args.rights + ["cross"]}
     port = int(drive.GDB_SERVER.rsplit(":", 1)[1])
     with drive.Session(args.image, str(out / "logs")) as session:
@@ -135,13 +144,24 @@ def main():
             drive.screenshot(probe, trim=True)
             return Image.open(probe).convert("L").resize((1280, 720)).crop((470, 125, 680, 147)).tobytes()
 
+        def settled_crop():
+            # The box as it stands once two grabs 0.6 s apart agree: a grab mid-slide differs from both ends.
+            last = race_type_crop()
+            for _ in range(8):
+                time.sleep(0.6)
+                now = race_type_crop()
+                if now == last:
+                    break
+                last = now
+            return last
+
         def navigate(plan, session=session):
-            # `rpcs3-hd-zone-palette.py`'s walk: a RIGHT on the race type is repeated until the box changes,
-            # since a press on a loaded machine is dropped about one time in four.
+            # A RIGHT on the race type is repeated until the settled box differs from the settled box before
+            # it: a press on a loaded machine is dropped about one time in four.
             screen = drive.current_screen()
             for button in plan.get(screen, []):
-                for _attempt in range(3):
-                    before = race_type_crop() if screen == "Single Player" else None
+                for _attempt in range(4):
+                    before = settled_crop() if screen == "Single Player" and button == "right" else None
                     if button in ("cross", "circle"):
                         session.press_once(button)
                     else:
@@ -150,7 +170,7 @@ def main():
                     navs[0] += 1
                     drive.screenshot(out / "nav" / ("nav-%02d.png" % navs[0]), trim=True)
                     print("    nav %-8s at %s" % (button, screen), flush=True)
-                    if before is None or button != "right" or race_type_crop() != before:
+                    if before is None or settled_crop() != before:
                         break
                     print("    (race type unchanged, tapping again)", flush=True)
             plan.pop(screen, None)

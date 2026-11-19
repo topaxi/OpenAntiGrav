@@ -172,6 +172,12 @@ pub struct Params {
     pub tone_darkening_clamp: f32,
     /// `Tone maximum brightness`: the exposure on a black frame.
     pub tone_maximum_brightness: f32,
+    /// `Bloom feedback`, the resolve's `scaleFeedback`: the weight of twice the feedback
+    /// buffer (the quarter-res scene) against the scene, `lerp(scene, 2 * buffer, this)`.
+    /// `0.0` on every circuit (none authors the key); a Zone race runs `-0.4`, which
+    /// darkens a flat surface to `0.6` of itself and sharpens its edges
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The feedback term").
+    pub feedback: f32,
     /// The final composite reads the scene half a source texel off, `(0.5 / width,
     /// 0.5 / height)` of the drawn rectangle, so each pixel is the mean of four texels in
     /// linear light (a title's `final_composite_half_texel` rule, injected by the
@@ -361,7 +367,8 @@ struct Constants {
     /// The adapted luma the adaptation pass writes instead of lerping towards the scene's
     /// ([`Chain::pin_adapted`]); negative leaves the lerp.
     pinned_luma: f32,
-    unused: f32,
+    /// The resolve's `scaleFeedback` ([`Params::feedback`]).
+    feedback: f32,
 }
 
 /// How a pass's `0..1` maps onto what was drawn: the scale and clamp of the scratch levels
@@ -418,7 +425,7 @@ impl Constants {
             uv_offset: rect.offset,
             scene_max: rect.scene_max,
             pinned_luma: -1.0,
-            unused: 0.0,
+            feedback: params.feedback,
         }
     }
 }
@@ -533,6 +540,7 @@ impl Chain {
                 uniform_entry(2),
                 texture_entry(3),
                 texture_entry(4),
+                texture_entry(5),
             ],
         });
         // Bilinear and clamped. The downsample microcode is a single tap
@@ -758,6 +766,9 @@ impl Chain {
         let half_target = Target::new(device, "hd bloom half", half);
         let quarter_a = Target::new(device, "hd bloom quarter a", quarter);
         let quarter_b = Target::new(device, "hd bloom quarter b", quarter);
+        // The vertical blur's own target, so `quarter_a` still holds the quarter-res
+        // scene when the resolve reads it as its feedback buffer.
+        let quarter_c = Target::new(device, "hd bloom quarter c", quarter);
         // The luminance reduction: keep halving from the quarter buffer to a
         // single pixel, the same iterated halving FUN_003b4690 runs before
         // its readback.
@@ -795,7 +806,7 @@ impl Chain {
                 layout,
                 sampler,
                 label,
-                [source, source, source],
+                [source, source, source, source],
                 buffer,
             ),
             target: target.clone(),
@@ -845,17 +856,17 @@ impl Chain {
             "hd bloom blur-v",
             &quarter_b.view,
             &vertical,
-            &quarter_a.view,
+            &quarter_c.view,
             quarter,
         );
         let blur_horizontal = pass(
             "hd bloom blur-h",
-            &quarter_a.view,
+            &quarter_c.view,
             &horizontal,
             &quarter_b.view,
             quarter,
         );
-        let mut scratch = vec![half_target, quarter_a, quarter_b];
+        let mut scratch = vec![half_target, quarter_a, quarter_b, quarter_c];
         scratch.extend(reductions.into_iter().map(|(target, _)| target));
         Sized {
             scene,
@@ -1180,14 +1191,14 @@ struct Placement {
     zoom: bool,
 }
 
-/// One pass's bindings: its source, the adapted-luminance state, the blurred bloom, and
-/// its constants.
+/// One pass's bindings: its source, the adapted-luminance state, the blurred bloom, the
+/// resolve's feedback buffer and its constants.
 fn bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     sampler: &wgpu::Sampler,
     label: &str,
-    [source, state, bloom]: [&wgpu::TextureView; 3],
+    [source, state, bloom, feedback]: [&wgpu::TextureView; 4],
     buffer: &wgpu::Buffer,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -1213,6 +1224,10 @@ fn bind_group(
             wgpu::BindGroupEntry {
                 binding: 4,
                 resource: wgpu::BindingResource::TextureView(bloom),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::TextureView(feedback),
             },
         ],
     })

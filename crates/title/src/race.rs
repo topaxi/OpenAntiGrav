@@ -156,6 +156,7 @@ mod lineage;
 pub mod sound;
 mod transition;
 mod variants;
+mod zone_bloom;
 mod zone_circuit;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{
@@ -173,6 +174,7 @@ pub use variants::{
     GuestRoster, HullVariant, LIVERY_SEPARATOR, TeamVariant, TeamVariants, VariantJoin,
     livery_variant, split_livery,
 };
+pub use zone_bloom::ZoneBloom;
 pub use zone_circuit::ZoneCircuit;
 
 /// The circuit and team a race falls back to on one title.
@@ -322,6 +324,10 @@ pub struct RaceDefaults {
     /// HD/Fury: 2048 fades by a factor nothing traced writes, and Pulse and Pure
     /// ship no stage table.
     pub zone_transition: Option<&'static ZoneTransition>,
+    /// The `HDR and Bloom` values this title's engine runs a Zone race with, over the
+    /// circuit's own. See [`ZoneBloom`]. `None` where the title has no such override read,
+    /// every title but HD/Fury.
+    pub zone_bloom: Option<&'static ZoneBloom>,
     /// HD/Fury's zoom-streak ring (see [`crate::ZoomRing`]); `None` on every other title.
     pub zoom_ring: Option<&'static crate::ZoomRing>,
     /// Whether the player may switch on a borrowed copy of HD's zoom-streak ring
