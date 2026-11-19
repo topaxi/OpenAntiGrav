@@ -1106,9 +1106,8 @@ reconstruction = "smaa"
     assert_eq!(ps2.target_fps.hz(), Some(90));
 }
 
-/// DYNAMIC HUD is seeded on every title (all offer `concave`); a value the title's row does not
-/// hold (`off` on HD) seeds as `default`, which is what it draws there. Reads `default` from a file
-/// without the key, and the choice survives the settings file.
+/// DYNAMIC HUD is seeded on every title (all offer `concave`); a value the row does not hold (`off`
+/// off Pulse) seeds as `default`, what it draws there. The choice survives the settings file.
 #[test]
 fn dynamic_hud_is_seeded_everywhere_as_a_value_the_row_holds_and_round_trips() {
     use oag_display::display::DynamicHud;
