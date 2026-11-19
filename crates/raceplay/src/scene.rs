@@ -608,7 +608,11 @@ impl Scene {
         // `--screenshot` path did, and compiled 9,859 pipelines for 53
         // distinct ones - about 7 MiB of resident memory per weapon drawable,
         // 8.4 GiB for a Pulse race. See `pipeline_cache`.
-        let crate::adverts::Billboards { gantry, adverts } = billboards;
+        let crate::adverts::Billboards {
+            gantry,
+            adverts,
+            zone_equaliser,
+        } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
         cache_scope.simplified_lighting(circuit_lighting.is_simplified());
@@ -816,6 +820,7 @@ impl Scene {
             true,
         )?;
         crate::stages::checkpoint()?;
+        crate::zone_equaliser::bind_into(device, queue, &mut track, &placeholders, &zone_equaliser);
         let adverts = if adverts.is_empty() {
             None
         } else {

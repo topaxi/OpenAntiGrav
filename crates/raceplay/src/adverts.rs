@@ -38,6 +38,8 @@ pub struct Billboards {
     pub gantry: Option<crate::gantry::Placed>,
     /// The other slots, see [`Card`].
     pub adverts: Vec<Card>,
+    /// The slots a Zone race shows the stage's shared target on, see [`crate::zone_equaliser`].
+    pub zone_equaliser: Vec<u32>,
 }
 
 /// The slot a card fills, drawn through the camera its own file authors.

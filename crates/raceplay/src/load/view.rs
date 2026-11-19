@@ -464,7 +464,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         }
     }
 
-    let (gantry, visibility, adverts) = gantry_visibility::build(
+    let (gantry, visibility, adverts, zone_equaliser) = gantry_visibility::build(
         &mut archives,
         &track,
         &mut track_model,
@@ -475,6 +475,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         vex_geometry,
         gantry_visibility::adverts_for(title, options.mode),
         gantry_visibility::gantry_card(title),
+        gantry_visibility::zone_shares_texture(title, options.mode),
         options.mode,
         start_position.as_ref(),
         &mut report,
@@ -796,7 +797,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         track_stats,
         track_model,
         behind_glass,
-        billboards: crate::adverts::Billboards { gantry, adverts },
+        billboards: crate::adverts::Billboards {
+            gantry,
+            adverts,
+            zone_equaliser,
+        },
         collision_model,
         sky_model,
         pad_model,

@@ -19,20 +19,27 @@ fn gantry_mode(mode: Mode) -> Option<oag_title::adverts::GantryMode> {
     }
 }
 
+/// Whether `mode` on `title` swaps the per-slot adverts for the one shared
+/// texture of the stage's offscreen target ([`crate::zone_equaliser`]).
+pub(super) fn zone_shares_texture(title: &oag_title::Title, mode: Mode) -> bool {
+    mode == Mode::Zone
+        && title
+            .adverts
+            .is_some_and(|spec| spec.zone_shares_one_texture)
+}
+
 /// Which advert pass `title` runs in `mode`, and why none does when it does not.
 ///
 /// A Zone race on a title whose zone effects bind one shared texture in place of
-/// the per-slot targets draws no advert: that texture is unread.
+/// the per-slot targets draws no advert: slots 1 to 7 show that texture
+/// instead.
 pub(super) fn adverts_for(
     title: &oag_title::Title,
     mode: Mode,
 ) -> (Option<&oag_title::adverts::Adverts>, &'static str) {
-    let zone_shared = title
-        .adverts
-        .is_some_and(|spec| spec.zone_shares_one_texture && mode == Mode::Zone);
+    let zone_shared = zone_shares_texture(title, mode);
     let reason = if zone_shared {
-        "a Zone race binds one shared billboard texture to every slot but 8 on this title and \
-         that texture is unread"
+        "a Zone race binds one shared billboard texture to every slot but 8 on this title"
     } else {
         "this title's advert pass is not measured"
     };
@@ -68,6 +75,7 @@ pub(super) fn build(
     vex_geometry: bool,
     (adverts_spec, adverts_off): (Option<&oag_title::adverts::Adverts>, &str),
     gantry_card: Option<&oag_title::adverts::Adverts>,
+    zone_shared: bool,
     mode: Mode,
     start_position: Option<&StartPosition>,
     report: &mut Vec<String>,
@@ -75,6 +83,7 @@ pub(super) fn build(
     Option<gantry::Placed>,
     Option<TrackVisibility>,
     Vec<crate::adverts::Card>,
+    Vec<u32>,
 ) {
     // The authored PVS. Skipped for a ribbon build, whose geometry is generated
     // from the spline rather than authored, so the section boxes have nothing
@@ -208,6 +217,16 @@ pub(super) fn build(
         }
     }
     let placeholders = oag_render::gantry::placeholder_texture_slots(track_model);
+    // Slots 1 to 7 of a Zone race on a title that binds the shared texture keep their draws.
+    let equaliser: Vec<u32> = if zone_shared {
+        placeholders
+            .iter()
+            .map(|&(_, num)| num)
+            .filter(|&num| num != 8)
+            .collect()
+    } else {
+        Vec::new()
+    };
     let served: Vec<u32> = adverts.iter().map(|card| card.slot).collect();
     if mode == Mode::Zone && gantry_card.is_some() && served.contains(&8) {
         let (exempted, skipped) =
@@ -234,13 +253,23 @@ pub(super) fn build(
             ));
         }
     }
-    let stripped = oag_render::gantry::strip_unserved_slot_placeholders(track_model, &served);
+    if !equaliser.is_empty() {
+        report.push(format!(
+            "Zone race: billboard slot(s) {equaliser:?} show the stage's shared 512x512 target, \
+             drawn as the equaliser's grid with no bar lit ({})",
+            crate::zone_equaliser::PROVENANCE,
+        ));
+    }
+    let kept: Vec<u32> = served.iter().chain(&equaliser).copied().collect();
+    let stripped = oag_render::gantry::strip_unserved_slot_placeholders(track_model, &kept);
     if stripped > 0 {
         // Named by slot with the reason, so the line says what is missing rather than
         // only that something is.
         let mut named: Vec<String> = unserved_why
             .iter()
-            .filter(|(num, _)| placeholders.iter().any(|&(_, n)| n == *num))
+            .filter(|(num, _)| {
+                !equaliser.contains(num) && placeholders.iter().any(|&(_, n)| n == *num)
+            })
             .map(|(num, why)| format!("slot {num}: {why}"))
             .collect();
         if named.is_empty() {
@@ -283,5 +312,5 @@ pub(super) fn build(
         ),
         _ => {}
     }
-    (gantry, visibility, adverts)
+    (gantry, visibility, adverts, equaliser)
 }
