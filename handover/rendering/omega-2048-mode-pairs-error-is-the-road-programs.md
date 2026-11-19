@@ -51,8 +51,9 @@ a correct detail fix can raise it).
      alpha lane above): every PS4 material reads lane 3, so the generic specular mask, the snow term, the hull's probe
      reflection, the glass pane's cover and clear and the output alpha read the diffuse alpha. `LIT_ALPHA` materials
      read it on both titles. **Left:** Vita's other families (2048's GXP programs: which gate by the diffuse alpha is
-     unread; lane 3 everywhere moved `moa-therma` 32.55 to 34.23 through the hull's reflection and the rest by
-     under 0.5), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
+     unread; lane 3 everywhere moved `moa-therma` 32.55 to 34.23: **that was the awning, not the hull's reflection**
+     (`vita-race-pairs`, 2026-11-19: wired with the reflective window, `moa-therma` 32.55 to 27.56; lane 3 everywhere
+     then moves `modesto-heights` +0.07 and `empire-climb` +0.09), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
      Climb did not move (47.00, 45.11), so their error is not this.
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
