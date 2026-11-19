@@ -571,6 +571,8 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
             menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
             // The MODS page's SETTINGS row (`session::mods_page`).
+            // The AUDIO page's DOWNLOAD FFMPEG row (`session::ffmpeg`).
+            menu::MenuEvent::Fired(menu::Action::FetchFfmpeg) => self.offer_ffmpeg(),
             menu::MenuEvent::Fired(menu::Action::OpenModSettings) => {
                 self.open_selected_mod_settings();
             }

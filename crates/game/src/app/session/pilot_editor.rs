@@ -571,6 +571,10 @@ impl Session {
             self.rejoin_answered(finished.text != DECLINED);
             return;
         }
+        if finished.purpose == Purpose::FetchFfmpeg {
+            self.ffmpeg_answered(finished.text != DECLINED);
+            return;
+        }
         let Some(dir) = pilots::directory() else {
             error!("no config directory on this platform, so nothing can be written");
             return;
@@ -618,6 +622,7 @@ impl Session {
             Purpose::LanAddress
             | Purpose::Online(_)
             | Purpose::RejoinRace
+            | Purpose::FetchFfmpeg
             | Purpose::CampaignName
             | Purpose::CampaignSeed
             | Purpose::PlayerName
@@ -793,9 +798,12 @@ impl Session {
             Outcome::Cancelled => {
                 let prompt = stage.prompt.take()?;
                 // Declining the offer to rejoin is an answer, not a dismissal: the record goes.
-                (prompt.purpose == Purpose::RejoinRace).then(|| Finished {
-                    purpose: prompt.purpose,
-                    text: DECLINED.to_string(),
+                // So is declining the ffmpeg download: it is not asked again.
+                matches!(prompt.purpose, Purpose::RejoinRace | Purpose::FetchFfmpeg).then(|| {
+                    Finished {
+                        purpose: prompt.purpose,
+                        text: DECLINED.to_string(),
+                    }
                 })
             }
             Outcome::Accepted => {

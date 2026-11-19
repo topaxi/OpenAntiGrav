@@ -691,3 +691,12 @@ OAG_SHOT_NO_STREAM = { text = "THIS SCREENSHOT CANNOT BE WATCHED: %s", human = f
 OAG_SHOT_NO_REASON = { text = "IT CARRIES NO INPUT STREAM", human = false }
 OAG_SHOT_OTHER_HASH = { text = "THIS VERSION DOES NOT REPRODUCE THIS SHOT EXACTLY: WHAT YOU SEE MAY DIFFER FROM IT", human = false }
 OAG_REPLAY_POSE_END = { text = "END OF THE POSE TRACK: IT HOLDS AT MOST AN HOUR", human = false }
+
+# The pinned ffmpeg download (`oag_game::app::session::ffmpeg`).
+OAG_AUDIO_FFMPEG = { text = "DOWNLOAD FFMPEG", human = false }
+OAG_FFMPEG_TITLE = { text = "DOWNLOAD FFMPEG", human = false }
+OAG_FFMPEG_ASK = { text = "MUSIC AND MOVIES NEED FFMPEG, WHICH THIS COMPUTER LACKS. DOWNLOAD A FREE LGPL BUILD (%s) FROM GITHUB FOR THIS GAME ONLY?", human = false }
+OAG_FFMPEG_YES = { text = "DOWNLOAD", human = false }
+OAG_FFMPEG_NO = { text = "NO THANKS", human = false }
+OAG_FFMPEG_DOWNLOADING = { text = "DOWNLOADING FFMPEG %s - BACK CANCELS", human = false }
+OAG_FFMPEG_UNPACKING = { text = "UNPACKING FFMPEG...", human = false }

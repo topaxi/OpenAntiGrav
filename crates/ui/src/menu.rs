@@ -558,6 +558,7 @@ impl Entry {
     }
 }
 
+mod ffmpeg_row;
 mod hide;
 mod page;
 pub use page::{Page, RowMeta};
