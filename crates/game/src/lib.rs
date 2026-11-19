@@ -82,6 +82,7 @@ pub mod official;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod online;
 pub mod online_screen;
+mod ffmpeg_prompt;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

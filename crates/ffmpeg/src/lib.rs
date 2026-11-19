@@ -16,7 +16,7 @@ pub use pins::{Archive, Pin};
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
 mod install;
 #[cfg(not(any(target_arch = "wasm32", target_os = "android")))]
-pub use install::{Progress, install, install_from};
+pub use install::{Cancelled, Progress, install, install_from};
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -133,10 +133,16 @@ pub fn is_missing() -> bool {
     resolve(Tool::Ffmpeg).is_none()
 }
 
-/// A [`Command`] for `tool`, or `None` when it is missing. Never latched.
+/// A [`Command`] for `tool`. Never latched: it is looked up on every call.
+///
+/// When the tool is missing this is the bare name, so starting it fails with
+/// `ErrorKind::NotFound` and each call site keeps the message it always had.
 #[must_use]
-pub fn command(tool: Tool) -> Option<Command> {
-    resolve(tool).map(Command::new)
+pub fn command(tool: Tool) -> Command {
+    resolve(tool).map_or_else(
+        || Command::new(tool.file_name().trim_end_matches(".exe")),
+        Command::new,
+    )
 }
 
 /// Whether to offer the download: no `ffmpeg` anywhere, this OS has a pin, or

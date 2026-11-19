@@ -580,7 +580,7 @@ fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
     // them - 638 lines for a 30-second track, none of which mean anything.
     // `-loglevel error` cannot filter them out because that is the level they
     // are at, so they are held and printed only if the run actually fails.
-    let result = std::process::Command::new("ffmpeg")
+    let result = oag_ffmpeg::command(oag_ffmpeg::Tool::Ffmpeg)
         .arg("-hide_banner")
         .args(["-loglevel", "error"])
         .arg("-y")

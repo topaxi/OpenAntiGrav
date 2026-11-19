@@ -83,7 +83,7 @@ fn a_process_with_the_pinned_copy_installed_resolves_it_ahead_of_nothing() {
         use_pinned: true,
         root: Some(root),
     });
-    assert_eq!(resolve(Tool::Ffmpeg), Some(ffmpeg));
+    assert_eq!(resolve(Tool::Ffmpeg), Some(ffmpeg.clone()));
     assert!(!wants_download());
-    assert!(command(Tool::Ffmpeg).is_some());
+    assert_eq!(command(Tool::Ffmpeg).get_program(), ffmpeg.as_os_str());
 }

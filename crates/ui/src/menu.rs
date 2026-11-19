@@ -705,6 +705,7 @@ impl Menu {
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
         menu.offer(Action::OpenModSettings, false);
+        menu.offer(Action::FetchFfmpeg, false);
         menu
     }
 

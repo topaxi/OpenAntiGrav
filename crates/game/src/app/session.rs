@@ -80,6 +80,7 @@ pub(crate) mod photo_meta;
 mod photo_rewind;
 mod pilot_editor;
 mod placeholder;
+mod ffmpeg;
 mod player_name;
 mod pointer;
 mod pure_chain;
@@ -489,6 +490,8 @@ pub(crate) struct Session {
     pub(crate) interactive_launch: bool,
     /// The first-run prompt has been shown this run, answered or not.
     pub(crate) player_asked: bool,
+    /// The pinned `ffmpeg` offer and download (`session::ffmpeg`).
+    pub(crate) ffmpeg: ffmpeg::State,
     /// Whether the phone's soft keyboard is up (`soft_keyboard`).
     pub(crate) soft_keyboard: bool,
     /// The Wipeout 2048 campaign event the next [`Session::launch_race`]

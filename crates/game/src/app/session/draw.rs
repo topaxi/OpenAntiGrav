@@ -856,9 +856,13 @@ impl Session {
         // not live inline here. See `docs/architecture/menus.md`'s Rebinding
         // section for why this prompt exists at all and `MenuStage::render`'s
         // own doc for how it is drawn.
-        let binding_prompt = self.awaiting_binding.map(|button| {
-            crate::app::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings))
-        });
+        let binding_prompt = self
+            .awaiting_binding
+            .map(|button| {
+                crate::app::rebind::prompt(button, self.shell.as_ref().map(|s| &s.strings))
+            })
+            // The ffmpeg download's status line takes the same slot: a modal line over frozen rows.
+            .or_else(|| self.ffmpeg_status());
         if let Stage::Menu(stage) = &mut self.stage {
             // What the `AXIS` row currently means, read live off the page's
             // own rows - `None` off any page but AI PILOTS. Computed here

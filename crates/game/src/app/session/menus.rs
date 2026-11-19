@@ -401,6 +401,8 @@ impl Session {
         platform: oag_disc::Platform,
     ) {
         let rect = self.scene_rect(self.gpu.output.size());
+        // The DOWNLOAD FFMPEG row is on the page only while there is something to offer.
+        model.offer(menu::Action::FetchFfmpeg, oag_ffmpeg::wants_download());
         for (key, value) in settings::mod_settings::seeds(&self.settings.mod_settings) {
             model.seed(&key, &value);
         }
@@ -571,6 +573,8 @@ impl Session {
             menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
             menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
             // The MODS page's SETTINGS row (`session::mods_page`).
+            // The OPTIONS page's DOWNLOAD FFMPEG row (`session::ffmpeg`).
+            menu::MenuEvent::Fired(menu::Action::FetchFfmpeg) => self.offer_ffmpeg(),
             menu::MenuEvent::Fired(menu::Action::OpenModSettings) => {
                 self.open_selected_mod_settings();
             }

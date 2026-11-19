@@ -589,6 +589,14 @@ label = "PLAYER TAG"
 string_id = "OAG_OPTIONS_PLAYER_TAG"
 action = "edit_player_tag"
 
+# Asks again whether to fetch the `ffmpeg` that plays music and movies. Dropped where no build
+# exists for the OS and where the player has an `ffmpeg` of their own (`menu_tree`).
+[[page.entry]]
+kind = "action"
+label = "DOWNLOAD FFMPEG"
+string_id = "OAG_OPTIONS_FFMPEG"
+action = "fetch_ffmpeg"
+
 # Ours - no disc has ever shipped a pilot editor, because pilots are this
 # project's own invention. See `crates/game/src/pilots.rs`.
 [[page.entry]]

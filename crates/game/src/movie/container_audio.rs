@@ -165,7 +165,7 @@ fn run_ffmpeg(
     );
 
     let map = format!("0:a:{}", track.stream_index);
-    let result = std::process::Command::new("ffmpeg")
+    let result = oag_ffmpeg::command(oag_ffmpeg::Tool::Ffmpeg)
         .arg("-hide_banner")
         .args(["-loglevel", "error"])
         .arg("-y")

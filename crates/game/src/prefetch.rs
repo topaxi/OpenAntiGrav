@@ -751,13 +751,13 @@ impl KnownNames {
 /// separate failure - a PS2 source needs it to read a `.PSS`'s own width,
 /// height and frame rate, which that container carries no header for.
 fn missing_tool() -> Option<&'static str> {
-    for tool in ["ffmpeg", "ffprobe"] {
-        match std::process::Command::new(tool).arg("-version").output() {
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Some(tool),
-            _ => {}
-        }
-    }
-    None
+    [
+        (oag_ffmpeg::Tool::Ffmpeg, "ffmpeg"),
+        (oag_ffmpeg::Tool::Ffprobe, "ffprobe"),
+    ]
+    .into_iter()
+    .find(|(tool, _)| oag_ffmpeg::resolve(*tool).is_none())
+    .map(|(_, name)| name)
 }
 
 fn lock(progress: &Mutex<Progress>) -> std::sync::MutexGuard<'_, Progress> {

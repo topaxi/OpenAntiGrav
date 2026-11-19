@@ -196,4 +196,5 @@ fn the_real_pinned_archive_unpacks() {
     for name in [Tool::Ffmpeg.file_name(), Tool::Ffprobe.file_name(), LICENSE] {
         assert!(std::fs::metadata(dir.join(name)).unwrap().len() > 1000, "{name}");
     }
+    std::fs::remove_dir_all(root).unwrap();
 }
