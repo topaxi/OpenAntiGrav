@@ -518,6 +518,12 @@ fn build_planned(
         } else {
             role
         };
+        // A reflective window gates its reflection by the diffuse alpha (`emissive_add`).
+        let role = if emissive_add.alpha_gated(submesh.material) {
+            role | crate::mesh::slots::DEFAULT
+        } else {
+            role
+        };
         report.lit_alpha_submeshes += usize::from(alpha_lit && !place.hidden);
         // **A vertex-lit surface**: a submesh whose declaration names `NOVAColor` and no
         // lightmap. Its vertex program lays `scale * rgb + bias` on the baked colour and passes

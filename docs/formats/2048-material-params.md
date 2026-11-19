@@ -609,3 +609,80 @@ outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou,
 `Texture2` and the colour named `Texture1`: read and wired 2026-11-11 (`gxp.md`,
 "`diffuse_normal_specular_emmissivenew` colours by `Texture1`"). Omega's plain member is wired the
 same way (its ambient GCN program read; **ported**).
+
+## The reflective window and the awning (2026-11-19, `vita-race-pairs`)
+
+Moa Therma's overhead awnings and its glass tower were the largest error region of the worst non-Zone 2048 race pair
+(`2048-vita/moa-therma`, top band bias -32.8 grey, whole frame 32.55). Two families draw them, neither was read.
+
+**Method.** `OAG_SKIP_MATERIAL=<stem>` on the pair's `ours.png` named the owner (`fc10_lambert_2uv_emissive` 179
+submeshes, 18,396 pixels above 25 grey, the tower and the window strips; the awning is `dc_diffusetexturealphaemissive`,
+one submesh, `dc_awning02.gxt`, the Feisar logo banner), and `scripts/vita-usse.py disasm` read each file's fragment
+programs (Vita .gxp, `dlc1.psarc`).
+
+**`fc10_Lambert_2UV_Emissive`: `fog(light * D^2 + D.a * R^2)`** (confidence 85; 9 of 9 fragment programs of the dlc1 copy
+that declare `ReflectMap` read, #1, #3, #5, #12, #14, #16, #18, #20, #22: each normalises `N` and `V`, samples `ReflectMap` once
+at `0.5 + 0.5 (2 (N.V) N - V).xy`, squares it, and ends `mad D.a, R^2, light` then the fog mix, `D.a` being `pa2.w`, or
+`pa6.w` where the lightmap takes `pa2`; the other nine fragment programs of the file are the lightmap's own (#10) and the Zone
+permutations, which declare no `ReflectMap`. The base copies, 54 programs, were not walked). #1 and #3 are listed below.
+The program samples `DiffuseMap` (the window atlas `dc_window_a_diffuse_light`, dark colour, alpha the reflectivity) and
+`ReflectMap` (`sky_moatherma_1.gxt`, 128x128, a teal sky picture) and ends
+
+```text
+ 8  dot.f16   pa0.x, N, V                     ; N.V
+ 9  mul.f16   pa0.xy, sa10.xx, pa0.xx          ; 2 (N.V), literal record (2.0, 0.0)
+10  mad.f16   pa0.xy, pa0.xy, N.xy, -V.xy      ; 2 (N.V) N - V
+11  mad.f16   pa0.xy, pa0.xy, sa12.xx, sa12.xx ; * 0.5 + 0.5, literal record (0.5, 0.5)
+12  smp2d     pa4.x, pa0.xy, ReflectMap
+14  mul.f16   r0.xyz, pa4.xyz, pa4.xyz         ; R^2
+20  mad.f16   pa2.xyzw, pa2.wwww, r0.xyzw, light * D^2   ; D.a * R^2 + light * D^2
+21-22                                          ; fog mix
+```
+
+`V` is interpolant 0, which the vertex program writes as `eyePositionWorldSpace - world position` (its `o4`, `o6` from the
+`world` uniform), `N` interpolant 2, the `world`-rotated normal (`o10`, `o12`): both **world space**. So `R` is the
+reflection vector's `xy` mapped to `[0, 1]`, a lookup in the one picture (no second UV set, whatever the name says), and
+`light` is the family's ordinary sum. The literal records read as `(word index, value)` with the value two f16, and a
+register holds four f16 here (`sa10.xx` = the 2.0 record, `sa12.xx` = the 0.5 record).
+
+Wired as `PROGRAM_REFLECT_MAP` (`mesh::rcs::psp2::emissive_add`, `shade.wesl` "2048's `fc10_Lambert_2UV_Emissive`"): the
+`ReflectMap` rides the third binding, the term joins the emissive add (after the light, before the fog), and the slot
+word reads alpha lane 3 because the gate is the diffuse alpha, not its red. The mapping `0.5 + 0.5 R.xy` in ours' world axes beats its four variants on every box (re-rendered with `R.xy` negated in x,
+in y, in both, and swapped; whole-frame luma 27.60 against 28.08, 28.87, 28.86, 29.36; tower box 20.81 against 30.17, 41.21,
+41.16, 51.00; right awning 23.24 against 23.71, 24.94, 24.90, 24.96; left awning 30.33 against 31.14, 32.97, 33.00, 34.13).
+
+**`dc_diffusetexturealphaemissive`: `fog(D^2 * (light + 1))`, alpha the picture's** (confidence 80; the three lit
+programs listed, #3, #5 lightmapped, #12): `mad light, D^2, D^2` then the fog mix, and `pck pa0.---w, pa2.---w` writes the
+texel's alpha out. Wired as `PROGRAM_PICTURE_ADD`, lane 3 (an awning blended by its own alpha instead of by its red, which
+drew it almost transparent).
+
+**Measured** (`scripts/compare-rerender-ours.py`'s `rerender` on a copy of `2048-vita/moa-therma`, 960x544, mean
+|ours - theirs| in luma with the HUD boxes masked, bias ours minus theirs; before is main `278e94ad6`):
+
+| Box | Before | After | Bias before | Bias after |
+| --- | ---: | ---: | ---: | ---: |
+| tower `(430,0,560,125)` | 56.12 | 20.81 | -49.1 | -6.0 |
+| right awning `(560,0,960,175)` | 42.30 | 23.24 | -37.5 | -16.0 |
+| left awning `(0,0,420,175)` | 36.37 | 30.33 | -24.6 | -18.6 |
+| top band `(0,0,960,175)` | 42.21 | 26.60 | -32.8 | -14.9 |
+| hull `(300,255,660,525)` | 38.12 | 38.12 | -27.0 | -27.0 |
+| road and walls `(0,175,960,544)` | 28.02 | 28.02 | -17.8 | -17.8 |
+| whole frame | 32.28 | 27.60 | -22.3 | -17.0 |
+
+The pair's mean grey 32.55 to 27.56. The other fifteen `2048-vita` pairs re-render pixel-identical (only Moa Therma's
+view holds either family; Zone pairs unchanged), and an HD race pair (`hd-race/talons-pack`) re-renders byte-identical.
+The base circuit Arena also ships the window file (`psp2_glow_ground_truth` saw its entries); no pair of it is kept, and a
+frame at tick 190 draws without artefacts (checked by eye only).
+
+**The hull's reflection was not the loss.** `omega-status.md`'s "The alpha lane" recorded lane 3 on every Vita family moving
+`moa-therma` from 32.55 to 34.23 "through the hull's reflection". With these two families wired, lane 3 everywhere gives
+27.53 against 27.56: the hull box does not move (38.12 against 38.12) and the loss was the awning, drawn by its red. Lane 3
+everywhere still moves `modesto-heights` 28.59 to 28.66 and `empire-climb` 26.14 to 26.23, so the other Vita families stay
+on lane 0 (one family at a time was scanned on Moa Therma: none but `dc_diffusetexturealphaemissive` moves it).
+
+**Omega.** **Checked, applies, not wired.** Omega's 2048-mode `Arena` (`#73`, 5 submeshes) and `Cathedral` (`#464`, `#824`,
+`#1106`) ship the same `fc10_lambert_2uv_emissive.rcsmaterial` with the same sampler layout (window atlas, a `sky5.gnf`
+second sampler whose hash `0xdba51b4c` is `name_hash("ReflectMap")`, pinned by a unit test, the lightmap third); the PS4 programs (GCN) are unread, so `Kind::ps4` is false and neither family is
+admitted on PS4. Read them with `gcn_dump` on `data0N.psarc` before wiring (does the term read the diffuse alpha, is the lookup
+`0.5 + 0.5 R.xy` too). `dc_diffusetexturealphaemissive` ships on no Omega circuit read here (`Square`'s awning is
+`fc06_lambert_simple` with `cloth_awning.gnf`).

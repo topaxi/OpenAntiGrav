@@ -127,6 +127,7 @@ pub(super) fn plan(
             slot,
             texture: specular,
             colour: None,
+            alpha_gated: false,
         });
         if tint.is_some() {
             report.alpha_emissive_materials += 1;

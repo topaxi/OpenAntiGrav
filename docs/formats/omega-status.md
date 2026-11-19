@@ -2426,7 +2426,8 @@ banners, the trees and shrubs on Metro Park and the red slab that stood under th
 drawn with the red channel as coverage. Omega's programs gate by the diffuse alpha (the panel road, `0xe144`, confidence
 94; the crowd's alpha test at 0.5, `0x4224`, `0x41a4`; "The crowd's law" above). The build now gives every PS4
 material `slots::DEFAULT` (lane 3); Vita keeps lane 0 except the alpha-lit families, whose programs are read to take
-`T.www` (`lit_alpha`).
+`T.www` (`lit_alpha`) and, since `vita-race-pairs` (2026-11-19), Moa Therma's reflective window and awning
+(`2048-material-params.md`, "The reflective window and the awning").
 
 **Measured** (`scripts/compare-rerender-ours.py`'s `rerender` on copies of every Omega, `2048-vita` and `2048` pair, the
 binary before and after; the raw mean grey is dominated by decorrelation, so read the signs and the regions):
@@ -2459,9 +2460,12 @@ alpha-lit; dropping the build's `slots::DEFAULT` turns Anulpha Pass's count into
 **2048 (Vita): ported for the alpha-lit families, checked, applies, not wired for the rest.** The same re-render on the
 Vita pairs with lane 3 everywhere moved `anulpha-pass` 16.71 to 11.14 (the alpha-lit families, wired), and
 `moa-therma` 32.55 to 34.23, `tech-de-ra` +0.25, `mall` +0.15, `empire-climb` +0.09, `ubermall` -0.43, `talons-junction`
--0.28: mixed. `moa-therma`'s change is the hull going darker (the hull's probe reflection reads `texel.a * row_tint.x`),
-and 2048's own programs are GXP: which of them gate by the diffuse alpha is unread, so Vita stays on lane 0
-outside the alpha-lit families until each family's gate lane is read.
+-0.28: mixed. **Corrected 2026-11-19 (`vita-race-pairs`): `moa-therma`'s change was not the hull** (the hull box
+does not move, 38.12 either way) **but the Feisar awning, `dc_diffusetexturealphaemissive`, drawn by its red lane**: its
+program writes the texel's alpha out and adds `D^2` (`2048-material-params.md`, "The reflective window and the awning"),
+now wired with the window family, and lane 3 everywhere then gives `moa-therma` 27.53 against 27.56 with the two wired, while
+`modesto-heights` +0.07 and `empire-climb` +0.09 stay worse. 2048's own programs are GXP: which others gate by the diffuse
+alpha is unread, so Vita stays on lane 0 outside the alpha-lit families and these two until each family's gate lane is read.
 
 ## The port's anisotropy (2026-11-16, `port-aniso`)
 

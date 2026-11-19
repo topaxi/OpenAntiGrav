@@ -15,7 +15,10 @@
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::rcs::psp2::{self, Animation};
-use oag_mesh::mesh::{Model, PROGRAM_EMISSIVE_ADD, PROGRAM_VERTEX_BLEND, slots};
+use oag_mesh::mesh::{
+    Model, PROGRAM_EMISSIVE_ADD, PROGRAM_PICTURE_ADD, PROGRAM_REFLECT_MAP, PROGRAM_VERTEX_BLEND,
+    slots,
+};
 use oag_mesh::mesh_render::TexAnims;
 
 fn package() -> Option<PathBuf> {
@@ -91,11 +94,21 @@ fn arenas_glow_layers_carry_their_authored_rates_and_a_bound_emissive_texture() 
         let slot = slots::material_index(vertex.slots) as usize;
         assert!((1..=model.emissive.len()).contains(&slot));
     }
-    // `TimeScaler` as authored on the three: 0.05, 1.0 and 3.0.
+    // `TimeScaler` as authored on the three: 0.05, 1.0 and 3.0. The entries that are not glow
+    // layers (the vertex blend, the emissive add, and the window and awning programs of
+    // `psp2::emissive_add`, which Arena's `fc10_Lambert_2UV_Emissive` windows take) carry no rate.
     let mut rates: Vec<f32> = model
         .emissive
         .iter()
-        .filter(|e| e.program[0] != PROGRAM_VERTEX_BLEND && e.program[0] != PROGRAM_EMISSIVE_ADD)
+        .filter(|e| {
+            ![
+                PROGRAM_VERTEX_BLEND,
+                PROGRAM_EMISSIVE_ADD,
+                PROGRAM_REFLECT_MAP,
+                PROGRAM_PICTURE_ADD,
+            ]
+            .contains(&e.program[0])
+        })
         .map(|e| e.rate)
         .collect();
     rates.sort_by(f32::total_cmp);
