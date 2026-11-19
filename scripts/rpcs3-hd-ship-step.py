@@ -45,8 +45,10 @@ FLUSH_S = 0.6
 #: (Icaras to Feisar, Feisar to Qirex, Qirex to Piranha, ...) ours at the original's frame less 3, 4, 5, 3, 3, any, 4 gives the
 #: lowest craft-box error, a minimum a half unit deep, so a frame either way is not told apart; 4 is also the card clock's fitted
 #: lag (`hd_flyer_clock.PRESENTED_LAG_S`, 0.07 s). The header dots (a 2D widget) are on the selected team from RAM frame 3 on
-#: in 71 of 72 grabs on two boots, which reads as a lag of 3 for them if they follow the selection the frame it moves.
-PICTURE_LAG_FRAMES = 4
+#: in 71 of 72 grabs on two boots, which reads as a lag of 3 for them if they follow the selection the frame it moves. 3 is the pairs' lag:
+#: the craft's cut (`hull_swap::GAP_FRAMES`) starts with the selection in ours and with the dots in the original, so at 3 the first frame the
+#: original shows the new craft (RAM frame 6) is the first frame ours does (frame 3).
+PICTURE_LAG_FRAMES = 3
 #: Frames before the aim at which the stop is asked for: the stub answers a few frames late.
 LEAD = 1
 TEAMS = ("AG_Systems", "Assegai", "Auricom", "EGX", "Feisar", "Goteki", "Harimau", "Icaras", "Mirage", "Piranha", "Qirex", "Triakis")
