@@ -322,7 +322,13 @@ pair's frame is 1,157,939 pixels, 55.84 %, with 8,494 at the stripes' 197 and 12
 `(36.9, 1.6, 1.6)`; the read is `(34, 1, 1)`. Taking out the 101,853 dark pixels of the 32 `bBg_x_y` hexagons gives
 `(33.8, 1.6, 1.6)`; were the grey and white widgets in the scene at their own values, its green would be about 5,
 which the read excludes. So the black hexagons are in the scene when the ladder reads it and the text is not. Which
-pass draws them is unread: the screen's XML gives `bBg_x_y` no attribute the other images lack. Confidence 60 (one
+pass draws them is unread: the screen's XML gives `bBg_x_y` no attribute the other images lack. **Corrected: the
+hexagons are not in this frame at all.** `DATA06.PSARC`'s `cellmode_definition.xml` authors `bBg_x_y` (32 black
+`Hexagon_HD.mip`, `Width="152" Height="76"`, in the first `<Item>` of `Cell Selection`'s `GridController`) only on
+`Cell Selection`; `Grid Selection` (the `menu-grid-select` pair) has no `Hexagon` image, and its frame shows none. So
+the 101,853 dark pixels are not the cause of the `(34, 1, 1)` against `(36.9, 1.6, 1.6)` gap on that frame; the cause
+is unread (candidates: the card's own mirrored floor and silhouette share). Confidence 90 for the XML fact (read
+by `scripts/psarc.py cat`). Prior text, confidence 60 (one
 page; `Cell Selection` of `01_uplift` was read, `(121, 121, 121)`, but its frame was grabbed trimmed, so its shares
 are not measured).
 
