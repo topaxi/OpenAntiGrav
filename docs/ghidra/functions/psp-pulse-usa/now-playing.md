@@ -128,10 +128,9 @@ byte the setting writes, not the setting's own path through the menu. The start-
 model, the track panel and the end screens were not seen under it. Confidence 80 for "OFF draws no
 HUD", 60 for "through that virtual".
 
-**What `FE_CONCAVE` and `FE_FLAT` change is not decoded.** Setting and clearing bit 1 of `+0xd0` on
-both panel groups in a running race (same state) moved no widget visibly in two frames, but the
-camera moved between them, so this is not a negative result. This build offers `FE_DEFAULT` and
-`FE_OFF` only.
+**What `FE_CONCAVE` and `FE_FLAT` change** is the HUD's vertex warp, read and seen live on
+[hud-game-options.md](hud-game-options.md), "The warp": an earlier poke here "moved no widget" only
+because the camera moved between its two frames. All four entries are offered.
 
 **The display is gated twice.** `RaceManager_ShowNowPlaying` (`0x08826ff4`) reads `hud+0x121` when
 a song starts: with it clear the text is blanked and the display state cleared, so a song that

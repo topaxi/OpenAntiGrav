@@ -96,6 +96,10 @@ struct Instance {
     // across and down the quad. Zero for everything but a tiled sprite: the
     // selection screens' hex grid, a 32x16 tile drawn 340x120.
     @location(7) tile: vec2<f32>,
+    // How far the `Dynamic HUD` warp moves each corner down, in screen units: top-left,
+    // top-right, bottom-left, bottom-right. Computed on the CPU (`oag_hud::concave`); zero for
+    // every quad of a flat HUD.
+    @location(8) warp: vec4<f32>,
 };
 
 struct VertexOut {
@@ -201,7 +205,12 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     );
     let placed = turn * centred + instance.rect.zw * 0.5;
     var out: VertexOut;
-    out.position = to_clip(instance.rect.xy + placed);
+    let warp_dy = mix(
+        mix(instance.warp.x, instance.warp.y, corner.x),
+        mix(instance.warp.z, instance.warp.w, corner.x),
+        corner.y,
+    );
+    out.position = to_clip(instance.rect.xy + placed + vec2<f32>(0.0, warp_dy));
     // Normalised here rather than in the fragment shader, against whichever
     // texture this quad indexes.
     // A gradient fill is resolved here: its colour at this corner is the mix

@@ -1340,7 +1340,10 @@ pub fn capture(
             None => match crate::hud_overlay::Overlay::new(&device, &queue, format, &hud, scale)
                 .map(|built| {
                     built.map(|mut o| {
-                        o.set_dynamic_hud(options.dynamic_hud);
+                        o.set_dynamic_hud(
+                            options.dynamic_hud,
+                            race.camera_view() == oag_display::display::CameraView::Internal,
+                        );
                         o.with_safe_area(options.hud_safe_area)
                     })
                 }) {

@@ -38,6 +38,23 @@ pub fn safe_area_frame(frame: Frame, scale: f32, size: (f32, f32)) -> Frame {
     frame.into_placed(&placement)
 }
 
+/// What `choice` does to a title's HUD in a camera view (`cockpit`: the internal one): whether
+/// the HUD is drawn, and whether bent (`oag_hud::concave`). `off` hides only where the title's
+/// options list it; `concave` bends on every title; `default` bends where the title's own default
+/// does in that view (Pulse's, in the cockpit:
+/// `docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`).
+#[must_use]
+pub fn dynamic_hud(
+    art: &oag_title::HudArt,
+    choice: oag_display::display::DynamicHud,
+    cockpit: bool,
+) -> (bool, bool) {
+    let list = art.dynamic_hud.as_ref().map(|list| list.value);
+    let shown = list.is_none() || choice.shows_hud();
+    let default_bends = list.is_some_and(|list| list.default_bends_in_cockpit) && cockpit;
+    (shown, shown && choice.bends(default_bends))
+}
+
 /// One view of a split screen: the layout it draws from, the slot's readout and
 /// where the HUD goes.
 #[derive(Debug)]
@@ -177,6 +194,9 @@ pub struct Overlay {
     /// Whether the HUD is drawn: `false` under Pulse's `Dynamic HUD` set to off
     /// ([`Self::set_dynamic_hud`]). The resume countdown is the host's own and still draws.
     hud_shown: bool,
+    /// Whether the HUD is drawn bent by the `Dynamic HUD` warp ([`Self::set_dynamic_hud`],
+    /// `oag_hud::concave`).
+    bent: bool,
     /// The mods' vector icons, kept so they are rasterised again when the HUD's pixel size
     /// changes (a resize, another HUD scale, a window of another shape).
     vector: Option<Retarget>,
@@ -301,6 +321,7 @@ impl Overlay {
             tag_label: assets.tag_label.clone(),
             safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
+            bent: false,
             vector: assets
                 .layout
                 .as_ref()
@@ -324,11 +345,19 @@ impl Overlay {
         }))
     }
 
-    /// The player's `[display] dynamic_hud`, which only a title with a `Dynamic HUD` option
-    /// obeys ([`oag_title::HudArt::dynamic_hud`]): `off` draws no HUD and no song marquee.
-    /// Idempotent, so the frame loop sets it every frame and the menu row applies live.
-    pub fn set_dynamic_hud(&mut self, choice: oag_display::display::DynamicHud) {
-        self.hud_shown = self.art.dynamic_hud.is_none() || choice.shows_hud();
+    /// The player's `[display] dynamic_hud` in the camera view in use (`cockpit`: the internal
+    /// view). `off` draws no HUD and no song marquee, and only on a title whose options list it
+    /// ([`oag_title::HudArt::dynamic_hud`]); `concave` bends the HUD on every title; `default`
+    /// bends it where the title's own default does (Pulse: in the cockpit view). Idempotent, so
+    /// the frame loop sets it every frame and both the menu row and a camera change apply live.
+    pub fn set_dynamic_hud(&mut self, choice: oag_display::display::DynamicHud, cockpit: bool) {
+        (self.hud_shown, self.bent) = dynamic_hud(self.art, choice, cockpit);
+    }
+
+    /// Whether the HUD is drawn bent, [`Self::set_dynamic_hud`].
+    #[must_use]
+    pub fn bent(&self) -> bool {
+        self.bent
     }
 
     /// The player's `[graphics] hud_safe_area` (`None`: the title's own default). A title with
@@ -485,9 +514,26 @@ impl Overlay {
     ) -> Vec<oag_hud::boost_smear::GlowStamp> {
         self.retarget(device, queue, viewport);
         oag_gpu::perfprobe::mark("hud-readout");
+        let mut flat = Vec::new();
         let mut frame = if self.hud_shown {
             let cx = self.context();
-            let mut list = draw_list(&cx, readout);
+            // The reticle is a model in the original and the warp never reaches it, so a bent
+            // HUD draws it after the rest, flat.
+            let mut list = if self.bent {
+                if let Some(sight) = readout.sight.as_ref() {
+                    let at = self.safe_area_placement();
+                    flat = oag_hud::sight_draws(&cx, sight)
+                        .iter()
+                        .filter_map(|draw| match &at {
+                            Some(at) => oag_hud::place(draw, at),
+                            None => Some(draw.clone()),
+                        })
+                        .collect();
+                }
+                oag_hud::draw_list_without_sight(&cx, readout)
+            } else {
+                draw_list(&cx, readout)
+            };
             oag_hud::ext_draws::append(&mut list, &cx, &readout.ext, self.space.size);
             self.safe_area(list)
         } else {
@@ -513,9 +559,27 @@ impl Overlay {
                 &self.sheet,
             );
         }
-        let glow = frame.glow.clone();
+        let mut glow = frame.glow.clone();
+        if self.bent {
+            // The stamp chain reads the HUD's pixels inside a rectangle, so a bent bar's stamp
+            // follows it column by column.
+            let size = self.space.size;
+            let amplitude = oag_hud::concave::amplitude_for(self.art.dynamic_hud.is_some(), size.1);
+            glow = glow
+                .iter()
+                .flat_map(|stamp| {
+                    oag_hud::concave::bent_columns(stamp.rect, size, amplitude).map(|rect| {
+                        oag_hud::boost_smear::GlowStamp {
+                            rect,
+                            value: stamp.value,
+                        }
+                    })
+                })
+                .collect();
+        }
         oag_gpu::perfprobe::mark("hud-frame");
-        self.paint(device, queue, encoder, view, frame, viewport);
+        let bent = self.bent.then_some(flat);
+        self.paint(device, queue, encoder, view, frame, viewport, bent);
         oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
@@ -570,11 +634,15 @@ impl Overlay {
         }
         let glow = frame.glow.clone();
         oag_gpu::perfprobe::mark("hud-frame");
-        self.paint(device, queue, encoder, view, frame, viewport);
+        // A split screen draws flat: Pulse's warp is on a whole-screen HUD.
+        self.paint(device, queue, encoder, view, frame, viewport, None);
         oag_gpu::perfprobe::mark("hud-paint");
         glow
     }
 
+    /// `bent` is `Some` for a HUD the `Dynamic HUD` warp bends, holding the draws that stay
+    /// flat over it (the reticle).
+    #[allow(clippy::too_many_arguments)]
     fn paint(
         &mut self,
         device: &wgpu::Device,
@@ -583,10 +651,20 @@ impl Overlay {
         view: &wgpu::TextureView,
         frame: Frame,
         viewport: (f32, f32, f32, f32),
+        bent: Option<Vec<oag_ui::frontend::Draw>>,
     ) {
-        if frame.is_empty() {
+        if frame.is_empty() && bent.as_ref().is_none_or(Vec::is_empty) {
             return;
         }
+        let amplitude =
+            oag_hud::concave::amplitude_for(self.art.dynamic_hud.is_some(), self.space.size.1);
+        let warp = |columns: Vec<[f32; 4]>, until: usize| {
+            bent.is_some().then_some(crate::render::Warp {
+                columns,
+                until,
+                amplitude,
+            })
+        };
 
         // One scissor per view of a split screen, from where its draws start.
         let clip = |at: usize, grid: [f32; 4]| {
@@ -614,6 +692,13 @@ impl Overlay {
         // one renderer holds both the sheet and the value font.
         let mut first = frame.sprites;
         first.extend(frame.hud_text);
+        let until = first.len();
+        let all = usize::MAX;
+        self.values.set_warp(warp(frame.columns, until));
+        first.extend(bent.clone().unwrap_or_default());
+        self.captions.set_warp(warp(Vec::new(), all));
+        self.rows.set_warp(warp(Vec::new(), all));
+        self.skin.set_warp(warp(Vec::new(), all));
         if !first.is_empty() {
             self.values.set_scissors(starts);
             self.values
@@ -639,3 +724,32 @@ impl Overlay {
 
 #[cfg(test)]
 mod retarget_tests;
+
+#[cfg(test)]
+mod dynamic_hud_tests {
+    use super::dynamic_hud;
+    use oag_display::display::DynamicHud;
+
+    /// Pulse: `FE_DEFAULT` bends in the cockpit view and nowhere else (seen live on PPSSPP),
+    /// `FE_CONCAVE` everywhere, `FE_FLAT` nowhere, `FE_OFF` hides.
+    #[test]
+    fn pulse_bends_by_its_list_and_the_camera_view() {
+        let art = &oag_pulse::TITLE.hud_art;
+        assert_eq!(dynamic_hud(art, DynamicHud::Default, false), (true, false));
+        assert_eq!(dynamic_hud(art, DynamicHud::Default, true), (true, true));
+        assert_eq!(dynamic_hud(art, DynamicHud::Concave, false), (true, true));
+        assert_eq!(dynamic_hud(art, DynamicHud::Flat, true), (true, false));
+        assert_eq!(dynamic_hud(art, DynamicHud::Off, true), (false, false));
+    }
+
+    /// Every other title: `concave` bends in every view, `default` never, and an `off` saved on
+    /// Pulse still draws the HUD here.
+    #[test]
+    fn another_title_bends_on_concave_alone() {
+        for art in [&oag_hd::TITLE.hud_art, &oag_2048::TITLE.hud_art] {
+            assert_eq!(dynamic_hud(art, DynamicHud::Concave, false), (true, true));
+            assert_eq!(dynamic_hud(art, DynamicHud::Default, true), (true, false));
+            assert_eq!(dynamic_hud(art, DynamicHud::Off, true), (true, false));
+        }
+    }
+}

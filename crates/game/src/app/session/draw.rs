@@ -488,7 +488,10 @@ impl Session {
                         .set_player_tags(self.settings.display.multiplayer_tags_shown(shell.title));
                 }
                 if let Some(hud) = &mut stage.hud {
-                    hud.set_dynamic_hud(self.settings.display.dynamic_hud);
+                    hud.set_dynamic_hud(
+                        self.settings.display.dynamic_hud,
+                        stage.race.camera_view() == oag_display::display::CameraView::Internal,
+                    );
                     // And the SCREEN SIZE row.
                     hud.set_safe_area(self.settings.graphics.hud_safe_area);
                 }

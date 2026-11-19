@@ -51,6 +51,7 @@ mod bar_models;
 mod bar_tip;
 pub mod boost_smear;
 mod compose;
+pub mod concave;
 mod dialect_2048;
 mod draw;
 pub mod ext_draws;

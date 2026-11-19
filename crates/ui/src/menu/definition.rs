@@ -656,15 +656,24 @@ impl Definition {
         }
     }
 
-    /// Drops the DYNAMIC HUD row on a title whose options list no such setting
-    /// (`oag_title::HudArt::dynamic_hud`): every title but Pulse. Same once-before-read
-    /// timing as [`Self::drop_unavailable_boost_zoom`].
+    /// Narrows the DYNAMIC HUD row to `default` and `concave` on a title whose options list no
+    /// such setting (`oag_title::HudArt::dynamic_hud`: every title but Pulse): Pulse's warp is
+    /// offered on every HUD, its `flat` and `off` only where the disc authors them. Same
+    /// once-before-read timing as [`Self::drop_unavailable_boost_zoom`].
     pub fn drop_unavailable_dynamic_hud(&mut self, title: &oag_title::Title) {
         if title.hud_art.dynamic_hud.is_some() {
             return;
         }
         for page in &mut self.pages {
-            page.retain_rows(|entry| entry.setting() != Some("display.dynamic_hud"));
+            for entry in &mut page.entries {
+                if let Entry::Choice {
+                    setting, values, ..
+                } = entry
+                    && setting == "display.dynamic_hud"
+                {
+                    values.retain(|choice| choice.value == "default" || choice.value == "concave");
+                }
+            }
         }
     }
 

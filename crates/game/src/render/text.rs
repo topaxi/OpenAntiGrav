@@ -198,6 +198,7 @@ impl Renderer {
                 rotation: 0.0,
                 chamfer: [0.0, 0.0],
                 tile: [0.0, 0.0],
+                warp: [0.0; 4],
             });
             pen += self.hud.advance(cell.advance * scale * texel);
         }

@@ -362,11 +362,12 @@ pub struct Display {
     /// here and says so in the loader report. Read when a race loads.
     #[serde(default)]
     pub hud_style: String,
-    /// Whether a race draws its HUD: `default` or `off`.
+    /// Whether a race draws its HUD, and bent or flat: `default`, `concave`, `flat` or `off`.
     ///
-    /// **Read only by a title whose own options list it** (`oag_title::HudArt::dynamic_hud`,
-    /// Pulse alone); the row is dropped on every other title and a value saved there is
-    /// ignored. `off` draws no HUD, and no song marquee with it. Applies live.
+    /// `flat` and `off` are **read only by a title whose own options list them**
+    /// (`oag_title::HudArt::dynamic_hud`, Pulse alone) and draw as `default` elsewhere. `off`
+    /// draws no HUD, and no song marquee with it; `concave` bends the HUD on every title
+    /// (`oag_hud::concave`). Applies live.
     #[serde(default)]
     pub dynamic_hud: oag_display::display::DynamicHud,
     /// How a finished frame reaches the display: `off`, `on` or `smooth`.
@@ -1348,14 +1349,21 @@ pub fn menu_seeds(
                 .to_string(),
         ),
     ));
-    // Offered only where the title's options list it; elsewhere the row is dropped
-    // (`Definition::drop_unavailable_dynamic_hud`) and nothing seeds it.
-    if title.hud_art.dynamic_hud.is_some() {
-        out.push((
-            "display.dynamic_hud",
-            text(&settings.display.dynamic_hud.to_string()),
-        ));
-    }
+    // Every title offers `default` and `concave`, only Pulse `flat` and `off`
+    // (`Definition::drop_unavailable_dynamic_hud`); a saved value the row does not hold shows as
+    // `default`, which is what it draws there.
+    let dynamic_hud = settings.display.dynamic_hud;
+    let offered = title.hud_art.dynamic_hud.is_some()
+        || matches!(
+            dynamic_hud,
+            oag_display::display::DynamicHud::Default | oag_display::display::DynamicHud::Concave
+        );
+    let shown = if offered {
+        dynamic_hud
+    } else {
+        oag_display::display::DynamicHud::Default
+    };
+    out.push(("display.dynamic_hud", text(&shown.to_string())));
     // Offered only where the title's options list them; elsewhere the rows are dropped
     // (`Definition::drop_unavailable_game_options`) and nothing seeds them.
     let on_off = |on: bool| text(if on { "on" } else { "off" });

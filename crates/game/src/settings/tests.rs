@@ -1106,27 +1106,42 @@ reconstruction = "smaa"
     assert_eq!(ps2.target_fps.hz(), Some(90));
 }
 
-/// DYNAMIC HUD is seeded only where the title's own options list it (Pulse), reads `default` from a
-/// file without the key, and the choice survives the settings file.
+/// DYNAMIC HUD is seeded on every title (all offer `concave`); a value the row does not hold (`off`
+/// off Pulse) seeds as `default`, what it draws there. The choice survives the settings file.
 #[test]
-fn dynamic_hud_is_seeded_only_where_the_options_list_it_and_round_trips() {
-    let seeded = |title, platform| {
-        menu_seeds(&Settings::default(), Anisotropy::default(), title, platform)
+fn dynamic_hud_is_seeded_everywhere_as_a_value_the_row_holds_and_round_trips() {
+    use oag_display::display::DynamicHud;
+    let seed = |choice: DynamicHud, title, platform| {
+        let mut settings = Settings::default();
+        settings.display.dynamic_hud = choice;
+        menu_seeds(&settings, Anisotropy::default(), title, platform)
             .into_iter()
-            .any(|(key, _)| key == "display.dynamic_hud")
+            .find(|(key, _)| *key == "display.dynamic_hud")
+            .map(|(_, value)| value)
     };
-    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
-    assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Ps2));
-    assert!(!seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
-    assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
+    let text = |name: &str| Some(oag_ui::menu::Value::Text(name.to_string()));
+    for choice in DynamicHud::ALL {
+        assert_eq!(
+            seed(choice, oag_pulse::TITLE, oag_disc::Platform::Psp),
+            text(choice.name())
+        );
+    }
+    assert_eq!(
+        seed(DynamicHud::Concave, oag_hd::TITLE, oag_disc::Platform::Ps3),
+        text("concave")
+    );
+    assert_eq!(
+        seed(DynamicHud::Off, oag_pure::TITLE, oag_disc::Platform::Psp),
+        text("default")
+    );
 
     let mut settings = Settings::default();
     assert!(settings.display.dynamic_hud.shows_hud());
-    settings.display.dynamic_hud = oag_display::display::DynamicHud::Off;
+    settings.display.dynamic_hud = DynamicHud::Concave;
     let written = toml::to_string_pretty(&settings).expect("serialise");
-    assert!(written.contains("dynamic_hud = \"off\""), "{written}");
+    assert!(written.contains("dynamic_hud = \"concave\""), "{written}");
     let back: Settings = toml::from_str(&written).expect("parse");
-    assert!(!back.display.dynamic_hud.shows_hud());
+    assert_eq!(back.display.dynamic_hud, DynamicHud::Concave);
 }
 
 /// TRAIL ORDER is seeded only where the ribbon is the PSP preset; elsewhere its row

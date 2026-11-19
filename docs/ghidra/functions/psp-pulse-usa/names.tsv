@@ -1487,6 +1487,14 @@
 0x0892342c	function	ShadowNode_Read	75	shadow-wipe.md
 0x08a88680	data	g_shadow_darkness	90	shadow-wipe.md
 0x08b62550	data	g_shadow_darkness_override	78	shadow-wipe.md
+0x08919c2c	function	Hud_WarpVertexY	92	hud-game-options.md
+0x088a686c	function	Image_SetVertexCount	85	hud-game-options.md
+0x08919cf8	function	Text_BuildGlyphQuads	72	hud-game-options.md
+0x088cc9f4	function	Text_LayoutKey	70	hud-game-options.md
+0x08abf585	data	g_text_warp	85	hud-game-options.md
+0x08abf580	data	g_hud_warp_amplitude	92	hud-game-options.md
+0x08abf588	data	g_hud_warp_centre_y	92	hud-game-options.md
+0x08abf58c	data	g_hud_warp_frequency	92	hud-game-options.md
 0x088d0fe0	function	Ticker_FindUnseenUnlock	70	race-box-screens.md
 0x088d142c	function	Ticker_BuildFavouriteMessage	85	race-box-screens.md
 0x088d1510	function	Ticker_BuildTeamMessage	80	race-box-screens.md

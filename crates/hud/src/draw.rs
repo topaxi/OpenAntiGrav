@@ -756,6 +756,9 @@ pub struct Frame {
     /// The rectangles whose pixels the bloom's bright pass reads at a mask of their own, in
     /// the HUD's grid: the speed bar's fill while a boost runs. See [`super::boost_smear`].
     pub glow: Vec<super::boost_smear::GlowStamp>,
+    /// The rectangles, in the HUD's grid, of the sprites the `Dynamic HUD` warp cuts into
+    /// columns ([`super::concave::COLUMNED`]): what a bent HUD draws as a strip.
+    pub columns: Vec<[f32; 4]>,
 }
 
 /// One view's share of a [`Frame`]: its draws run from these indices of the five
@@ -1001,6 +1004,11 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             && let Some(Draw::Sprite { rect, .. }) = &drawn
         {
             stamped.push(*rect);
+        }
+        if super::concave::COLUMNED.contains(&sprite.name.as_str())
+            && let Some(Draw::Sprite { rect, .. }) = &drawn
+        {
+            frame.columns.push(*rect);
         }
         if let Some(law) = cx.art.absorb_glow.filter(|law| law.fill == sprite.name)
             && readout.shield_absorbing
