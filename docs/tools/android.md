@@ -158,8 +158,10 @@ question.
   `libaaudio`, which is why the minimum API level is 26, Android 8). No Oboe, no
   `libc++_shared.so`: the library's only dependencies are `libandroid`, `libaaudio`,
   `liblog`, `libdl`, `libm` and `libc`.
-- **Missing tools degrade.** The movie and ATRAC paths shell out to `ffmpeg`, which a
-  phone does not have. A desktop run with `PATH` emptied (`--no-audio --screenshot
+- **Missing tools degrade.** The movie and ATRAC3+ paths shell out to `ffmpeg`, which a
+  phone does not have. Every other codec decodes in process with no tool: ATRAC9 (2048
+  and Omega, all music and effects), MP3 (HD), Wwise media (Omega), and AAC (2048's
+  intro sound track); see `docs/formats/atrac9.md`. A desktop run with `PATH` emptied (`--no-audio --screenshot
   --until "Language Selection"`) still reaches the Language Selection screen, which is
   the nearest check available without a device.
 
@@ -196,8 +198,8 @@ What a first launch does, as opposed to a desktop run (2026-10-07):
   the same handler a real press uses; a tap skips it too, as a real intro's does
   (the composition root turns an unhandled click into Start and Cross). The
   `INTRO FRAME n / m` counter is now `--overlay` only, everywhere.
-- **No ffmpeg also means no ATRAC3+ sound**, so the front end is silent as well
-  as pictureless. The fix is not to need ffmpeg on the device: convert on the
+- **No ffmpeg also means no ATRAC3+ sound** (Pulse and Pure), so their front end is
+  silent as well as pictureless; 2048, HD and Omega music needs no `ffmpeg`. The fix is not to need ffmpeg on the device: convert on the
   computer and push the result. See "Pre-converted caches".
 - **No disc image: the chooser's own screen says so.** With nothing under the
   search path a phone cannot print `resolve`'s message anywhere, so

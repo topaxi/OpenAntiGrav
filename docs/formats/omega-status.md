@@ -1688,7 +1688,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   music switch walks to one segment, and the song is that segment's 7 to 11
   stereo stems summed (unity, scaled down when it would clip - chosen, not
   measured). **Not played, by name:** location 0 (no event in the bank) and
-  eleven songs that are one eight-channel file (`atrac9dec` refuses them). A
+  eleven songs that are one eight-channel file (decoded since 2026-11-19; the
+  fold to stereo is unread, so they are not played). A
   headless `--race` WAV is the first song, `Shake It (WipEout Omega
   Instrumental Edit)`, at the music bus's 0.44 gain (correlation 0.9999999 with
   the offline mix). The front end's loop is `Game_FLOW` `Menus`, **not
@@ -1699,8 +1700,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   race prints: nothing wires Wwise events to this project's cues.
   [`wwise.md`](wwise.md) has the container, the event-to-media chain (0
   unresolved media over `data00` and `data08`) and the `.wem`: **every one is
-  Sony's ATRAC9**, mono and stereo decode in process and agree with FFmpeg to
-  one LSB up to polarity, four-, six- and eight-channel files do not decode yet.
+  Sony's ATRAC9**, and every one decodes in process (four-, six- and
+  eight-channel included since 2026-11-19, [`atrac9.md`](atrac9.md)) and agrees
+  with FFmpeg to one LSB up to polarity, the LFE of some 7.1 media aside.
   The ten `.bnk` in `data02`, which an extension-based census had counted
   as Wwise, are the old `SBlk` container. One Tech De Ra cue plays through the mixer to a WAV.
   **How the executable names a cue is read** (`omega-wwise-sfx-re`, 2026-11-02): it posts

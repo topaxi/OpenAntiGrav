@@ -241,6 +241,19 @@ that consumer.
 
 [`ContainerTrack::seconds`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/movie/container_audio.rs
 
+### Why Bink audio is still decoded by `ffmpeg`
+
+Checked 2026-11-19 for the in-process audio lane: no permissively licensed
+Bink audio decoder exists to take or learn from. FFmpeg's `binkaudio.c` is
+LGPL; crates.io has none; the
+[MultimediaWiki page](https://wiki.multimedia.cx/index.php/Bink_Audio) gives
+the frame sizes, the 25 critical frequencies, the 29-bit float and the
+quantiser law, but not how the coefficients are packed or how its 16-entry RLE
+length table is used, and a decoder cannot be written past those gaps without
+guessing. RAD's own decoder is linked into HD's executable, so reading it there
+is the route if this is wanted; it is open. Without `ffmpeg` the six of HD's
+37 `.bik` files that carry sound play silent, as their pictures are absent.
+
 ## Playing one
 
 ```sh

@@ -13,7 +13,7 @@ use anyhow::Result;
 use log::warn;
 use oag_video::{bik, pmf, pss};
 
-use super::container_audio::{self, ContainerTrack};
+use super::container_audio::{self, ContainerCodec, ContainerTrack};
 use oag_music::at3;
 
 /// Bytes of sub-header on every audio PES payload in a `.PMF`.
@@ -445,6 +445,7 @@ pub(super) fn bink_audio(
             // `ContainerTrack::seconds`'s own doc for why the video's own
             // duration stands in for the audio's until it is decoded.
             seconds: video_seconds,
+            codec: ContainerCodec::Bink,
         }),
     })
 }
@@ -479,6 +480,7 @@ pub(super) fn mp4_audio(
             stream_index: 0,
             descriptor: format!("{codec}, track 0 of 1"),
             seconds,
+            codec: ContainerCodec::Aac,
         }),
     }
 }

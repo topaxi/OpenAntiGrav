@@ -2,9 +2,10 @@
 //! `intro.mp4` AAC track and one Wipeout HD/Fury `.bik` reel's Bink Audio
 //! track, both through `MovieAudio::decode`, not just parsed off the header.
 //!
-//! **`#[ignore]`d and never run in CI.** It needs `ffmpeg` and this project's
-//! own game content - the decrypted Vita package for the first, a disc image
-//! for the second. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
+//! **`#[ignore]`d and never run in CI.** It needs this project's own game
+//! content - the decrypted Vita package for the first, a disc image for the
+//! second - and `ffmpeg` for the second: AAC decodes in process
+//! (`oag_music::aac`), Bink audio does not. See `docs/architecture/adr/0006-no-copyrighted-content.md`.
 //!
 //! ```sh
 //! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
@@ -57,11 +58,11 @@ fn read_intro(source: &Path) -> Vec<u8> {
 
 /// `intro.mp4`'s own audio track has an exact duration this project can
 /// compute with no decode at all - `frame_count * frame_delta / sample_rate`,
-/// per `oag_video::mp4::AudioTrack::frame_delta`'s own doc. What `ffmpeg`
-/// actually decodes must land within a tenth of a second of it.
+/// per `oag_video::mp4::AudioTrack::frame_delta`'s own doc. The in-process
+/// decode lands on it exactly.
 #[test]
-#[ignore = "needs data/extracted/vita/ and ffmpeg"]
-fn intro_mp4_audio_decodes_within_a_tenth_of_a_second_of_its_header() {
+#[ignore = "needs data/extracted/vita/"]
+fn intro_mp4_audio_decodes_to_exactly_its_header_length() {
     let Some(source) = vita_source() else {
         println!("skipping: data/extracted/vita/PCSF00007/base not present");
         assert!(
@@ -113,8 +114,8 @@ fn intro_mp4_audio_decodes_within_a_tenth_of_a_second_of_its_header() {
     let decoded_seconds =
         pcm.samples.len() as f64 / f64::from(pcm.channels) / f64::from(pcm.sample_rate);
     assert!(
-        (decoded_seconds - expected_seconds).abs() < 0.1,
-        "decoded {decoded_seconds:.3}s, header says {expected_seconds:.3}s"
+        (decoded_seconds - expected_seconds).abs() < 1e-9,
+        "decoded {decoded_seconds:.6}s, header says {expected_seconds:.6}s"
     );
 }
 

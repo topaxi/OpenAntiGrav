@@ -37,7 +37,7 @@ slice at a time, the race load on a Web Worker over shared memory, the
 workflow that deploys it to Cloudflare Pages, and what is not there yet (sound,
 movies).
 
-[Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`.
+[Running under Wine / Proton](wine.md) covers `just wine-run` and `just wine-check`; [Testing on a Windows VM](windows-vm.md) drives a real Windows guest over SSH.
 
 [Releases and CI](releases.md) covers the two GitHub workflows: what `ci.yml` gates, and
 what `release.yml` builds (artifact names, the zero-game-content check, how a
