@@ -876,9 +876,14 @@ pub fn load_shell(
         &mut report,
     );
     // See [`screens::read_ticker`]'s own doc.
-    let ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
-    if let Some(ticker) = &ticker {
-        report.push(format!("footer ticker: viewport {:?}", ticker.viewport));
+    let mut ticker = read_ticker(skin_xml.as_deref(), &screens.globals);
+    if let Some(ticker) = ticker.as_mut() {
+        ticker.news = crate::campaign::read_news(&mut archives, title);
+        report.push(format!(
+            "footer ticker: viewport {:?}, {} messages",
+            ticker.viewport,
+            ticker.news.items.len()
+        ));
     }
     let (track_select, ship_select, ship_select_split) = selection_layouts(
         race_box.as_ref(),

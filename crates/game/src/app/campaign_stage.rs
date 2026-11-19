@@ -176,9 +176,12 @@ pub(crate) struct CampaignStage {
     /// source whose `Skin.xml` this pass could not read at all (logged when
     /// that happens, see `crate::campaign::read_footer`).
     nav_legend: Option<oag_ui_screens::campaign::footer::NavigationLegend>,
-    /// The front-end root's own scrolling tip ticker layout - content is
-    /// supplied per frame by [`Self::ticker_tips`], not carried here.
+    /// The front-end root's own scrolling tip ticker layout - its messages are
+    /// [`Self::ticker_tips`].
     ticker: Option<oag_ui_screens::campaign::footer::TickerLayout>,
+    /// The messages the ticker plays, drawn once when the stage opens
+    /// ([`crate::records::ticker_tips`]).
+    ticker_tips: Vec<String>,
     /// Seconds since this campaign screen opened, advanced by
     /// [`Self::tick_ticker`] - the ticker's own clock. Never reset between
     /// `Grid Selection` and `Cell Selection`, unlike `oag_ui_screens::marquee::Timer`:
@@ -283,6 +286,12 @@ impl CampaignStage {
         custom: Option<crate::campaign::custom::Custom>,
     ) -> Self {
         let title = title_ref.name.to_string();
+        let ticker_tips = crate::records::ticker_tips(
+            ticker.as_ref(),
+            &strings,
+            &records,
+            crate::records::session_ticker_seed(),
+        );
         let campaign_title = custom.as_ref().map_or_else(
             || crate::records::campaign_title(title_ref, platform),
             |custom| custom.records_title.clone(),
@@ -343,6 +352,7 @@ impl CampaignStage {
             cell_help,
             nav_legend,
             ticker,
+            ticker_tips,
             ticker_elapsed: 0.0,
             selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases::default(),
             card_swing: None,
@@ -553,7 +563,7 @@ impl CampaignStage {
         oag_ui_screens::campaign::footer::ticker_draw(
             self.ticker.as_ref()?,
             self.ticker_elapsed,
-            &self.ticker_tips(),
+            &self.ticker_tips,
             faces,
             measure,
         )
@@ -567,17 +577,6 @@ impl CampaignStage {
     pub(crate) fn ticker_clip_bounds(&self) -> Option<(f32, f32)> {
         let [x, _, width, _] = self.ticker.as_ref()?.viewport;
         Some((x, x + width))
-    }
-
-    /// Which tip strings the ticker honestly has to show - see
-    /// `crate::records::ticker_tips`'s own doc for the `TKR_NO*` rotation
-    /// and why it is one shared function rather than three copies:
-    /// `MenuStage`'s own ticker (`crate::app::menu_stage`) and
-    /// `capture::menu_page`'s `--menu-page` still both read the identical
-    /// list off the identical save file.
-    #[must_use]
-    fn ticker_tips(&self) -> Vec<String> {
-        crate::records::ticker_tips(&self.strings, &self.records)
     }
 
     /// Keeps `difficulty` as this title's browsed rung in the stage's copy of

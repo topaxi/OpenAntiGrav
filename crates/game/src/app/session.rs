@@ -65,11 +65,11 @@ pub(crate) mod devrun;
 mod join;
 #[cfg(not(target_arch = "wasm32"))]
 mod lan;
-// The browser build takes the module named below instead (`lan_web.rs`, `online_web.rs`): a different file under the same module name, which only `#[path]` expresses.
-mod ffmpeg;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/lan_web.rs"]
 mod lan;
+// The browser build takes the module named below instead (`lan_web.rs`, `online_web.rs`): a different file under the same module name, which only `#[path]` expresses.
+mod ffmpeg;
 mod multiplayer;
 #[cfg(not(target_arch = "wasm32"))]
 mod online;
@@ -510,6 +510,11 @@ pub(crate) struct Session {
     /// this exists at all, and `Session::frame`/`Session::escape` for the two
     /// places that ever call [`records::Store::record`].
     pub(crate) records: records::Store,
+    /// The serial of the race song last counted ([`Self::count_heard_song`]).
+    pub(crate) heard_song: u32,
+    /// The footer ticker's messages and what they were drawn from (the title and the lifetime
+    /// counters' events), so the draw runs again only when a counted event changes it.
+    pub(crate) ticker_tips: Option<((&'static str, u64), Vec<String>)>,
     /// Where the campaign's `Selector` pulses stood when the screens were last left; a new
     /// `RACE CAMPAIGN` resumes them. Memory only: a relaunch is a cold start.
     pub(crate) selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases,

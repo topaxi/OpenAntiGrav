@@ -306,6 +306,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,
+    news: Some(names::NEWS_DEFINITION),
     race_setup: Some(names::RACE_SETUP_DEFINITION),
     // `TrackSelection_ApplySelection` hands `MSC_DISTANCE` to `Info1 Title` through
     // `0x088ede50` (`0x088cd0f4` sets the label); the XML's `IG_HUD_DISTANCE` is never shown.
@@ -473,6 +474,10 @@ pub mod names {
     /// The front-end root: every boot screen, the `FEGlobals` variables, and
     /// the `LoadXML` list that pulls in the rest of the menus.
     pub const FRONTEND_ROOT: &str = r"Data\Plugins\PI001\GUI\Skin.xml";
+    /// The footer ticker's message list: 124 `PI_News` rows on PSP, 121 on PS2 (no `TKR_FYISL`
+    /// or `TKR_FYIZONE`). See `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "The
+    /// footer ticker's message choice".
+    pub const NEWS_DEFINITION: &str = r"Data\Plugins\news\Definition.xml";
     /// The definition holding the race box's `Track Creation` and `Team
     /// Selection` screens, one of [`FRONTEND_ROOT`]'s 23 `LoadXML` includes.
     /// See `docs/formats/race-setup.md`.

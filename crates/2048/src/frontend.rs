@@ -630,6 +630,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: None,
     track_select: None,
+    news: None,
     race_setup: None,
     track_label_overrides: &[],
     card_track_aliases: CARD_TRACK_ALIASES,

@@ -164,6 +164,9 @@ pub struct Options {
     /// movie's length: the menu backdrop's, or on HD's Track Select the selected
     /// circuit's fly-by clip - see the CLI flag's own docs. `None` draws frame zero.
     pub menu_movie_frame: Option<usize>,
+    /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
+    /// own docs.
+    pub menu_ticker: Option<String>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -238,7 +241,7 @@ pub fn run(
         // one scope is how the wrong one gets passed.
         frame: menu_frame,
         nav_legend,
-        ticker,
+        mut ticker,
         fury_backdrop,
         track_select,
         ship_select,
@@ -250,6 +253,11 @@ pub fn run(
         face_scales,
         ..
     } = loaded;
+    if let Some(pin) = &options.menu_ticker
+        && let Some(ticker) = ticker.as_mut()
+    {
+        ticker.pin = Some(parse_ticker_pin(pin)?);
+    }
     let nav_legend = nav_legend
         .map(|legend| legend.with_tag(options.settings.player.footer_tag(&loaded.title.profile)));
 
@@ -1035,7 +1043,12 @@ pub fn run(
                 // see `crate::records::ticker_tips`'s own doc for why one
                 // function answers for both, and for the live session's own
                 // ordinary menu pages besides.
-                let ticker_tips = crate::records::ticker_tips(&strings, &records);
+                let ticker_tips = crate::records::ticker_tips(
+                    ticker.as_ref(),
+                    &strings,
+                    &records,
+                    crate::records::TICKER_CAPTURE_SEED,
+                );
                 let (list, clip) = menu_page(
                     &options.settings,
                     options.anisotropy,
@@ -1311,4 +1324,17 @@ pub fn run(
     touch_preview(options, &device, &queue, &mut encoder, &target)?;
     let pixels = read_back(&device, &queue, encoder, &target, width, height)?;
     write_png(&options.path, width, height, &pixels)
+}
+
+/// `--menu-ticker`'s `ITEM@X`.
+fn parse_ticker_pin(text: &str) -> Result<oag_ui_screens::campaign::footer::TickerPin> {
+    let (item, head_x) = text
+        .split_once('@')
+        .and_then(|(item, x)| Some((item, x.trim().parse::<f32>().ok()?)))
+        .filter(|(item, _)| !item.trim().is_empty())
+        .with_context(|| format!("--menu-ticker takes ITEM@X (TKR_FAVMUS@131), not {text:?}"))?;
+    Ok(oag_ui_screens::campaign::footer::TickerPin {
+        item: item.trim().to_string(),
+        head_x,
+    })
 }

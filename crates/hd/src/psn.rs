@@ -67,6 +67,7 @@ const FRONT_END: &FrontEnd = &FrontEnd {
     menu: Some(MENU_SKIN),
     team_select: None,
     track_select: None,
+    news: None,
     ..*frontend::FRONT_END
 };
 

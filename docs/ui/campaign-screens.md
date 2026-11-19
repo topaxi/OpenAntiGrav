@@ -2527,7 +2527,8 @@ reads both directly off the raw parsed tree instead - see its own module doc.
   PPSSPP capture in this pass isolated two frames a known tick count apart
   with the ticker moving, so the speed reuses this project's own existing
   scrolling-text rate as the nearest precedent rather than a number invented
-  from nothing. **Content is never invented**: `NewsItemBarText1`/`2` carry
+  from nothing. **Superseded 2026-11-19**: the speed is the original's (1 pixel an update, 60 px/s) and the content is the disc's own `PI_News` draw over
+lifetime statistics, `docs/tools/compare-page.md`, "`menu-team`"; what follows is the 2026-09-21 reading. **Content is never invented**: `NewsItemBarText1`/`2` carry
   no `idstring` and no literal `string` on disc - populated at runtime by a
   mechanism this build does not have - so `oag_game::records::ticker_tips`
   (moved there 2026-09-27 so `MenuStage`'s own ordinary-menu ticker and
