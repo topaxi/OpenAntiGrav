@@ -401,8 +401,6 @@ impl Session {
         platform: oag_disc::Platform,
     ) {
         let rect = self.scene_rect(self.gpu.output.size());
-        // The DOWNLOAD FFMPEG row is on the page only while there is something to offer.
-        model.offer(menu::Action::FetchFfmpeg, oag_ffmpeg::wants_download());
         for (key, value) in settings::mod_settings::seeds(&self.settings.mod_settings) {
             model.seed(&key, &value);
         }

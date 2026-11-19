@@ -1748,12 +1748,6 @@ string_id = "OAG_AUDIO_SPATIAL_AUDIO"
 setting = "audio.spatial_audio"
 values = ["auto", "original", "rear_cue", "headphones"]
 
-[[page.entry]]
-kind = "submenu"
-label = "MUSIC"
-string_id = "OAG_AUDIO_MUSIC"
-target = "music"
-
 # Asks again whether to fetch the `ffmpeg` that plays music and movies. Dropped where no build
 # exists for the OS and where the player has an `ffmpeg` of their own (`menu_tree`).
 [[page.entry]]
@@ -1761,6 +1755,15 @@ kind = "action"
 label = "DOWNLOAD FFMPEG"
 string_id = "OAG_AUDIO_FFMPEG"
 action = "fetch_ffmpeg"
+
+# (Above MUSIC on purpose: the MUSIC row is dropped when the pool has one source, and a parked
+# row returns to its old index, which then lands past BACK.)
+
+[[page.entry]]
+kind = "submenu"
+label = "MUSIC"
+string_id = "OAG_AUDIO_MUSIC"
+target = "music"
 
 [[page.entry]]
 kind = "back"
