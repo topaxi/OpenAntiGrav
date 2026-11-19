@@ -15,6 +15,7 @@ log.workspace = true
 # and nothing below is compiled.
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "android")))'.dependencies]
 # rustls with ring and bundled roots: no OpenSSL, no platform store (which a wine prefix lacks).
+anyhow.workspace = true
 ureq = { version = "3", default-features = false, features = ["rustls"] }
 sha2 = "0.10"
 tar = { version = "0.4", default-features = false }

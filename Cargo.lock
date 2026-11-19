@@ -3169,6 +3169,7 @@ version = "0.1.0"
 name = "oag-ffmpeg"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "log",
  "lzma-rust2 0.25.0",
  "sha2 0.10.9",
