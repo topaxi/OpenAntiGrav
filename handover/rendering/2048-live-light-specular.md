@@ -2,7 +2,7 @@
 status: re-first
 titles: [2048, omega]
 updated: 2026-11-19
-summary: "Which light 2048 binds as liveLighting0: Altima's violet run-off band is fc18's specular lobe from a light that is not the sun; trace the param-table writer"
+summary: "Altima's violet run-off band is fc18's specular lobe from a liveLighting0 that is not the sun; trace the param-table writer"
 size: M (20)
 difficulty: medium (60)
 ---
