@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-19
-summary: "HD front end: Ship Select camera, settle and hull lighting wired; craft turn and zoom, a step pair open; Omega pose wired (zoom fitted)"
+summary: "HD front end: Ship Select settle matches RAM; the swap gap (3 frames, ours 4) is ready to wire; craft turn/zoom input unwired; Omega zoom fitted"
 difficulty: medium (30)
 ---
 
@@ -56,13 +56,17 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   Five teams' silhouettes are within 4 px of their RPCS3 rest frames; the
   pair's hull box (sigma 7) went 20.62 to 14.33, the frame 9.35 to 7.35. Open,
   in the order a player would notice:
-  0. **The rest pair `hd/menu-ship-select` cannot score the settle start, the turn or the zoom** (checked 2026-11-19,
-     `hd-ship-craft`): its original is grabbed 3 s after the last tap (settled), the turn, pan and zoom are zero at rest, and
-     the hull silhouette is within 4 px on five teams, so what is left in its craft box (2.74 on an unblurred crop of 716,150 1012x650 after a 5 px blur) is **colour, open and not chased
-     in this lane**: ours reads darker than the original by mean RGB -2.5, -1.5, -1.9 there (the lighting item below). A claim about those three needs a **step pair**: grab N frames after a press through
-     `grab_with_clock` with `st+0x1014` (depth target), `st+0x1020` (drawn depth) and `st+0x194` (the fit's model pointer) read from RAM
-     per frame, which would also settle the drawn depth at open and whether the fit keeps the old box through the 4-frame gap.
-     Not made.
+  0. ~~**The rest pair cannot score the settle start, the turn or the zoom**~~ (MEASURED 2026-11-19, `hd-settle-step`): a step
+     pair, the original's frame N game frames after the selection moved with N read from RAM (`scripts/rpcs3-hd-ship-step.py`,
+     `scripts/hd_ship_step.py`; `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The step against RAM"). Settle start,
+     ease and fit order: **exact** (14 steps on two boots, depth to 1e-4, slide to 0.06; `ship_model::tests::a_step_follows_the_screens_own_frames_in_ram`);
+     turn, pan and zoom: **zero** through every step; the fit's model pointer moves with the selection (the "fit keeps the old box
+     through the gap" candidate is false); the craft box after the gap sits at the rest floor (3.85 against 3.82). **The one term that differs is the cut**: the original's craft is
+     absent at game frames 3, 4 and 5 after the selection moved (once also 6), ours for 4 frames (`hull_swap::GAP_SECONDS` 0.06); ours absent
+     where the original shows the new craft is craft box 20 to 30. **Ready to wire** (small, 20): `GAP_SECONDS` to 3 frames
+     (0.05, stated in frames): the original's craft goes with the header dots (13 of 14 empty grabs show the new dots, none shows the old craft with
+     new dots), as ours does from its frame 0; a scratch build at 0.045 brought the two boot-1 grabs at frame 6 from 20.5 and 27.2 to 3.4 and 3.7. Open: the step of the rest of the page (the team banner is blank at frame 6 and part drawn at 10, the hex column shifted, ours finished, not measured), the cold first visit of a team (craft absent past frame 10 in two of two grabs), `FitMotion`'s
+     alternation phase at the step (ours fixed, the original's the press's frame, 0.1 of depth at most). The craft box colour bias (-2.5, -1.5, -1.9) is item 1's.
   1. ~~**The hull is darker than the original** in that box~~ (LANDED 2026-11-12, `hd-ship-select-light-wire`):
      the craft is lit by the front end's own `.envsettings` (`oag_game::preview::model_light`, from
      `FrontEnd::model_lighting`; Fury style `fe.fury.EnvSettings`, HD style `fe.envsettings`, Omega its own
@@ -163,7 +167,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 
 ## Next Steps
 
-- The step pair above (RAM trace of `st+0x1014/0x1020/0x194` across a press), then the settle start and the swap's gap.
+- Wire the swap's gap at 3 frames (item 0 above, after pinning the picture lag); then the step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count) can go on the compare page (k=6 scores the gap, k=8 and later the settle).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
    scale survive? If yes, one HD-only presentation transform on `Space::HD`.

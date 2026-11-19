@@ -260,12 +260,104 @@ frame to a few per cent. **The film holds its first size for about six frames lo
 law**, and then decays by 0.875 a frame, the ease's own rate. One candidate, not adopted because
 it fits one direction and worsens the other: the fit's model pointer (`st + 0x194`) changes when
 the new craft cuts in, so the fit keeps the old box through the 4-frame gap (Feisar to Auricom
-1.087, 1.068, 1.018, 1.005; back 0.908, 0.925, 0.978, 0.994). Open: **the live screen keeps the previous team's hull until the new mesh's worker read lands**
+1.087, 1.068, 1.018, 1.005; back 0.908, 0.925, 0.978, 0.994) - **falsified by the RAM read below**
+(the pointer moves on the frame the selection does and the fit has the new box one frame later; the
+film's excess is not in the screen's law). Open: **the live screen keeps the previous team's hull until the new mesh's worker read lands**
 (a `--drive` frame 4 ticks after a press shows Assegai's hull under the MIRAGE label), where the
 film cuts the craft for 3-4 frames and shows the new one; the same read would be the moment the
-fit's box should change if the candidate above is right. Open: which team the film stepped
+fit's box should change if the candidate above is right (it is not: see below). Open: which team the film stepped
 to, and a second film of a pair whose lengths are known. Confidence 60 (tails and shape), 40 (the
 first six frames).
+
+## The step against RAM (2026-11-19, `hd-settle-step`)
+
+The question: does ours play the step the way the original does, frame by frame, and if not which term
+(settle start, craft turn, zoom, the gap) differs. **Written before the capture, what would falsify
+"ours matches"**: ours' drawn depth or slide differing from the original's by more than 0.02 depth or
+1 grid unit at any of frames 1 to 30 after the selection moved; a non-zero turn, pan or zoom term during a step; the
+craft absent for a different count of frames.
+
+**Method** (`scripts/hd_ship_step.py`, `scripts/rpcs3-hd-ship-step.py`; RPCS3 0.0.43, 1920x1080, scale 100, Fury style, a cold boot
+walked to Ship Select with the pad):
+
+- **The screen object `st` is found by a heap scan** for the pattern the fit leaves (depth target on the 0.1 grid at or above 11.0,
+  drawn depth within 3 of it, slides under 600, `st+0x194` pointing at a `PI_TeamModel` whose `+0x1cc` is one of the eight authored
+  lengths): exactly one hit on each of two boots (`0x3292cf30`, and another address on the second). `st+0x100` is the selection
+  index (Feisar 0, Qirex 1, Piranha 2, AG Systems 3, ... wrapping at 12), the model's hull entry name (`Feisar_c1`, ...) sits in
+  its first `0x400` bytes.
+- **A frame is a change of `(st+0x1014, st+0x1020, st+0x1018, st+0x101c)`**: the update rewrites them every frame, and a reader polling
+  `0x1040` bytes of the object takes about 0.3 ms a read, so it sees every one (131 frames in 2.2 s, 59.5 a second). The frames
+  since `st+0x100` moved are the age of a step in game frames, whatever the emulator's speed.
+- **The picture at a known frame**: the game is stopped (the stub, as `hd_flyer_clock.grab_paused`) once the count reaches an
+  aimed frame (the stop lands on the aim or one after it), the state is read in the stop, the window is given 0.6 s to show the frame the RSX last
+  got, grabbed through `grab_with_clock`, and the state is read again (equal in every grab). The Fury backdrop is hidden on both sides
+  (the rest pair's recipe). After one lap of every team (a team's first visit loads its hull: on a cold first visit the craft stayed
+  absent past frame 10 in two of two grabs, not measured further), 32 grabs on boot 1 (frames 0 to 19), 32 on boot 2 (1 to 29) and a
+  rest grab of each of the twelve teams on each.
+
+**1. The settle law is exact. Settle start, ease, fit order: true.** Fourteen steps (seven on each boot, `right` and `left`,
+the lengths 3.2, 3.8, 3.9, 4.4 and 4.5, one from the floor at 11.0), thirty frames each: ours'
+`FitMotion` (the model's box measured at the target, the target stepped, depth ease 0.125, slide ease 0.0625) gives the same depth target
+and drawn depth to under 1e-4 and the slide to under 0.06 of a grid unit, once ours is on the same side of the rest pair's alternation as
+the original was when the selection moved (which frame the player's press fell on is nobody's law; a wrong side is a 0.1 shift of the
+target and 0.08 of depth at most). Held by `ship_model::tests::a_step_follows_the_screens_own_frames_in_ram` (boot 1's seven steps,
+nine samples each; boot 2's seven pass the same test). Qirex to Piranha, frames since the selection moved (original / ours): target
+13.600 / 13.600 at 1, 12.500 / 12.500 at 12, 12.300 / 12.300 at 24; depth 13.6467 / 13.6467, 13.0496 / 13.0496, 12.4195 / 12.4195; slide
+across 116.75 / 116.79, 107.06 / 107.09, 109.07 / 109.10. Confidence 90.
+
+**2. The order inside the frame**: `st+0x100` and `st+0x194` change on the same frame (frame 0), the fit that frame still ran on the old
+model (its target and slide target are the old model's alternation), and the slide target takes the new box on frame 1. Ours'
+`stepped` applies the new box from its first frame, which is that frame 1. So the candidate "the fit keeps the old box through the gap" is false:
+the fit has the new box a frame after the selection, while the craft is still cut. Confidence 90.
+
+**3. The craft's own turn, pan and zoom are not in a step: true.** `st+0xfe8`, `+0xfec`, `+0xff0`, `+0xff4`, `+0xff8`, `+0x1024` read 0 and the idle
+counter `+0xffc` read 181 on every one of the fourteen steps and every grab (the right stick untouched). The turn and zoom terms of the claim
+cannot differ on a step. Confidence 90 for a step with no stick input; the input half stays at 65 (read, not exercised).
+
+**4. The picture, in game frames since the selection moved (RAM time)**. Old craft at its rest through frame 2, **absent at frames 3, 4 and
+5, new craft from frame 6**: twelve grabs at frames 3 to 5 (six per boot) showed no craft; at frame 6 three of four grabs showed the new craft and
+one (a `Feisar` to `Qirex` step) was still empty, and all four at frame 7 showed it, so the gap was 3 frames in three of four and 4 in one. The
+screen's header dots (the selected team's marker) are on the old team through frame 2 and **on the new one from frame 3** in 71 of 72
+grabs on two boots (one grab at frame 3 still showed the old one; every one from frame 4 on the new). The press
+reaches the selection 0.032 s (about 2 frames; 0.025 to 0.041 over 14 presses) after the pad is pressed, so a film counted from the press sees every
+number above 2 frames later, which is part of "the film holds its first size about six frames longer than the law".
+Ours (`hull_swap::GAP_SECONDS` 0.06): absent while the step is under 0.06 s, so frames 0 to 3 of its step, 4 frames. **The one term that
+differs is the gap: 3 frames in the original (once 4), ours 4.** Confidence 70.
+
+**5. The picture's lag behind RAM** is 3 to 4 frames and the cut is aligned with the selection's visible change. Of the 72 grabs on two boots, 14 show no craft (frames 3 to 6): 13 of them have the header dots already on
+the new team and one (frame 3, boot 2) the old dots; no grab at frame 3 or later shows the old craft, and none of the empty ones has the old dots past frame 3. So the craft
+goes with the dots, or at most a frame before them: the dots' own lag is 3 (71 of 72 grabs), and the craft-box minimum of seven fast steps, at
+the original's frame less 3, 5, 4, 5, 3, flat and 4, is half a unit deep, a frame either way is not told apart. Ours starts its cut with the
+selection (frame 0, dots changed) too, so **a 3-frame cut from the selection is the wire target whatever the absolute lag is**; the pairs use a lag of 4 (the box fit).
+Confidence 60.
+
+**What a player sees: the craft box (716,150, 1012 by 650, 5 px blur, mean absolute RGB) of ours against the original** (boot 2's grabs,
+one compare-page pair each from `scripts/rpcs3-hd-ship-step.py pairs`; the rest pair of the same teams on the same boot, the floor, is 3.70 over twelve teams: 2.7 to 5.1,
+colour not placement, the lighting item):
+
+| Frames since the step | Team stepped to | Ours at | Craft box | Whole frame |
+| --- | --- | --- | --- | --- |
+| 4 | Assegai | 0 (both absent) | 0.50 | 3.64 |
+| 6 | Harimau | 2 (ours absent, the original's new craft present) | **30.52** | 13.58 |
+| 8 | Icaras | 4 | 3.69 | 6.05 |
+| 10 | Qirex | 6 | 4.59 | 6.53 |
+| 15 | Triakis | 11 | 4.04 | 2.70 |
+| 19 | Goteki | 15 | 3.95 | 5.34 |
+| 29 | EGX | 25 | 4.49 | 2.79 |
+
+Across the 14 grabs of boot 1 after the gap (ours at the original's frame less 4, own-team rest as the floor): the craft box is 3.85 against a
+floor of 3.82, +0.04 (frames 7 to 9 -0.12, 10 to 12 +0.51, 13 to 16 -0.14, 19 -0.24): **the settle itself adds nothing to the craft box
+beyond the rest floor**. Where ours is absent and the original shows the new craft the box is 20 to 30, which is the gap term alone: a scratch build
+with the gap at 0.045 s (3 frames) draws the new craft at the original's frame 6 less 3 and brings the two boot-1 grabs at frame 6 from 20.5 and
+27.2 to 3.4 and 3.7 (at a lag of 3; at a lag of 4 the original's craft is back a frame earlier still and the gap would be 2 frames after the selection).
+
+**Verdict for the claim**: the settle start per team, the turn and the zoom match (the law is exact in RAM, the turn and zoom terms are zero on a
+step); the craft box during the settle is at the rest pair's floor; the single term that differs is the cut: 3 frames (once 4) against ours' 4,
+a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step: in the two grabs read
+by eye (frames 6 and 10) the team banner is blank, then part drawn, and the hex column is shifted, where ours draws both finished (not measured);
+the cold first visit of a team (craft absent past frame 10); `FitMotion`'s alternation phase after the cut (ours fixed, the original's the
+press's frame). **2048: checked, not checkable** (no Team Selection fit in v1.04; the constant run is absent). **Omega: checked, differs**: the
+eased fields are never read there (above), so a step has no settle to compare.
 
 ## Omega and 2048
 
