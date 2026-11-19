@@ -24,6 +24,10 @@ map", last paragraph; [water.md](../../docs/rendering/water.md), "The 'rim' is n
   (ours has no 2048 specular; `light.rs` leaves `specular_scale` 0 when the key is absent).
 - The orange marks on Altima's road at the same pose are not read (candidates: a decal family,
   `fc18_Blend_TrackSurface_Decal_Lerp`, or the pads).
+- Omega's fc16 emissive add is **checked, applies, not wired**: its lightmapped pixel program
+  (`data00.psarc`, `gcn_dump --at 0xad44`) ends `E + light * D + spec` (E unsquared), but a PS4
+  fc16 submesh binds its normal map third (`psp2::normal_map`), so `E` needs a binding of its own
+  before `psp2::emissive_add` can admit the file on PS4.
 - Omega: its fc16 programs read the same uniforms; whether Omega binds the same light is not
   checkable without a readout.
 

@@ -1162,7 +1162,12 @@ levels, and **the sun's specular lobe `D.a * lm.a * sat(R.L)^70` is zero over th
 The band's shape is the run-off picture's light parallelogram (`track_a_floor_runoff_ds`, alpha
 near 1 there and dark elsewhere), which is exactly where `D.a` gates the specular, so the band
 reads as fc18's specular lobe from a light whose direction is not the sun's and whose colour is
-violet (70/70/143 on the plate). Hypothesis, confidence 45: the engine binds `liveLighting0*`
+violet (70/70/143 on the plate). The lobe test used ours' bound sun direction and its sign
+convention (`Lighting.Sun direction`, toward the sun), not a value read off the original's
+`liveLighting0direction`; Altima's `.envsettings` authors no second or local light key (its
+`Lighting.*` keys are the sun, the shadow light, fog, exposure, sky, ship and lens-flare ones).
+A Zone frame (`2048-vita/zone-altima-z5`'s flags) draws no lane lines: the change moved only
+the hull there. Hypothesis, confidence 45: the engine binds `liveLighting0*`
 per draw from a light other than the `.envsettings` sun. Where to look next: the parameter table
 built by `FUN_8101d068` (EU v1.04) registers `liveLighting0specular` as slot `0xf` (string
 `0x81508d48`, `liveLighting0direction` slot `0xe`, `liveLighting0diffuse` slot `0x10`); the
