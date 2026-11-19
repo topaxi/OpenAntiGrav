@@ -189,6 +189,7 @@ fn params() -> Params {
         tone_adaption_boost: 0.0,
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
+        feedback: 0.0,
         final_half_texel: false,
         eight_bit: false,
         zoom: Some(tuning()),

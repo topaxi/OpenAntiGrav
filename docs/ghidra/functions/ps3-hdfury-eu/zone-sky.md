@@ -318,10 +318,13 @@ changes). Tests: `sky_cube`'s two unit tests and
 `crates/raceplay/tests/zone_sky_ground_truth.rs`. The pair's mean grey moves
 53.04 -> 37.40 (rmse 0.322 -> 0.224).
 
-**Open**: ours' sky reads about 17 % brighter than the original's at eye
-level (`(7, 149, 174)` against `(6, 127, 147)`), uniformly, which points at
-exposure rather than the dome; and the band's flatness above. Detonator's
-modes ride the same gate byte and are not wired to the dome.
+**Closed 2026-11-19 (`zone-grade-sky`)**: the 17 % and the flat band were one
+cause, the resolve. A Zone frame resolves `0.6` of the scene's light plus the
+bloom, and the **scene target** shows the band law as read (top centre
+`(7, 138, 164)`, predicted about green 138 and blue 166): confidence 90 for the
+band. [zone-frame.md](zone-frame.md), "The feedback term" and "The dome's
+band, re-read on the scene target". **Open**: Detonator's modes ride the same
+gate byte and are not wired to the dome.
 
 **2048 and Omega, against their own Zone frames at Flash** (zone 5, HD's
 ladder stage 4, whose sky is neutral grey: horizon `0.1255`, zenith `0.6118`):

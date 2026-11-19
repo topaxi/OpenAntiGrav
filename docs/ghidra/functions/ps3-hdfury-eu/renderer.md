@@ -1978,7 +1978,8 @@ out      = saturate(feedback * scale + bloom * scaleAdd + tint)
 with `scaleAdd` fed the constant 1.0 - **the bloom is added after the
 exposure scale, unscaled**; that fill was re-read end to end on 2026-08-20 and
 holds at confidence 92 (below, "`scaleAdd` re-read") - `scaleFeedback` fed `Bloom feedback + a runtime
-float` (inert at the authored default 0), and the resolve ending on its
+float` (inert at the authored default 0; **a Zone race writes `-0.4` every frame**,
+[zone-frame.md](zone-frame.md), read live 2026-11-19), and the resolve ending on its
 `ADD_SAT` with no gamma arithmetic. The correction variant
 (`downsamplescaleaddfeedbackcorrection_fp`) adds `saturation`/`finalScale`/
 `finalBias` parameters whose fill is a render-context field this reading

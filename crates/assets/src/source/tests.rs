@@ -109,6 +109,7 @@ const TITLE: &Title = &Title {
         zone_palette: None,
         zone_stages: None,
         zone_transition: None,
+        zone_frame: None,
         zoom_ring: None,
         borrows_zoom_ring: false,
         game_options: oag_title::race::GameOptions::NONE,

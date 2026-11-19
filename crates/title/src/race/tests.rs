@@ -389,6 +389,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     zone_palette: None,
     zone_stages: None,
     zone_transition: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
     game_options: crate::race::GameOptions::NONE,

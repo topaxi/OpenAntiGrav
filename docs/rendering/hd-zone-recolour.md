@@ -242,6 +242,31 @@ Evidence, the per-material census and the 2048/Omega check:
 gantry's card (`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably this
 same flag, unchecked.
 
+## The Zone surface's light, and the frame's post chain (2026-11-19, `zone-grade-sky`)
+
+**A chunk on its Zone program is lit by the stage alone, and the frame is
+resolved at `0.6` of its light.** `Scene_PrepareFrame`'s Zone arm switches
+every draw's lightmap and baked-vertex sources off, writes the `HDR and Bloom`
+block from a table of its own (adaption boost `5.0`, blur sizes `1.0`,
+whatever the circuit authors) and sets `Bloom feedback` to `-0.4`, which the
+resolve turns into `1.4 * scene - 0.8 * quarter-res scene`:
+
+```text
+light   = stage Constant Ambient Colour + saturate(N.L) * stage Sun colour
+colour  = light * surface + glow          ; surface as in the first section
+out     = 0.5 * fogged colour
+final   = saturate(lerp(scene, 2 * feedbackBuffer, -0.4) * exposure + bloom)
+```
+
+At Sub Venom (`Constant Ambient Colour` 1.5) a scenery chunk is `0.75 *
+zoneTex * Scene.Texture Colour`: Vineta K's buildings read near white, as the
+original draws them, where this port lit them by the circuit's lightmap and
+showed them grey-brown. Addresses, the live read (RPCS3, the settings block
+and the scene target of one paused frame) and the confidence per law:
+[zone-frame.md](../ghidra/functions/ps3-hdfury-eu/zone-frame.md). Wired as
+`oag_title::ZoneFrame` (`oag_hd::race::ZONE_FRAME`), HD/Fury alone; the pair
+`hd/zone-vineta-k-z5` moves 28.77 -> 7.42.
+
 ## The light-bar term in a Zone race (2026-11-19, `zone-pair-score`)
 
 **A chunk drawn through the Zone surface adds no `_ne.a * colour` light bar.**

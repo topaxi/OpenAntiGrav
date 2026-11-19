@@ -68,6 +68,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: None,
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
     // `Additional_Definition.xml`'s `Settings` screen on the PSP discs (USA and EU) lists
