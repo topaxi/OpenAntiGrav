@@ -221,9 +221,10 @@ resvg = { version = "0.49", default-features = false }
 # Pure Rust with no C toolchain, the bar those two are held to. **MPL-2.0**,
 # unlike everything else here: a file-level copyleft that covers changes to its
 # own sources and leaves this workspace's `MIT OR Apache-2.0` untouched by
-# depending on it. `default-features = false` takes only the MP3 codec and
-# demuxer, leaving the other twenty-odd formats and the SIMD paths out.
-symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg"] }
+# depending on it. `default-features = false` takes only the codecs and
+# demuxers named, leaving the rest and the SIMD paths out: AAC in MP4 is 2048's
+# `intro.mp4` sound track (`oag_music::aac`).
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg", "aac", "isomp4"] }
 opus-rs = "0.1"
 
 # The ATRAC9 decoder, for 2048's `.at9` and the Omega Collection's Wwise media.

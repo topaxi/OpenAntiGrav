@@ -601,9 +601,9 @@ fn run_ffmpeg(input: &Path, output: &Path, format: Format) -> Result<()> {
             String::from_utf8_lossy(&done.stderr).trim()
         ),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => bail!(
-            "ffmpeg is not on PATH. Pulse's and Pure's music (and 2048's, for now) is \
-             decoded by ffmpeg: install it to hear that soundtrack; without it the \
-             game still runs, in silence"
+            "ffmpeg is not on PATH. Pulse's and Pure's music is decoded by ffmpeg: \
+             install it to hear that soundtrack; without it the game still runs, in \
+             silence"
         ),
         Err(e) => Err(e).context("running ffmpeg"),
     }

@@ -42,6 +42,7 @@
 
 use std::path::Path;
 
+pub mod aac;
 pub mod at3;
 pub mod at9;
 pub mod file;

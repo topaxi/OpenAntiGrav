@@ -27,6 +27,8 @@ atrac9dec.workspace = true
 
 [dev-dependencies]
 oag-testdata.workspace = true
+# The MP4 census in `tests/aac_ground_truth.rs` reads each movie's header.
+oag-video.workspace = true
 
 [lints]
 workspace = true

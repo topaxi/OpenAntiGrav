@@ -249,6 +249,22 @@ originally shaped for a `.PMF`'s ATRAC3+-*beside*-the-video layout, and this
 container's AAC track sits *inside* the same file the picture does, the same
 as Bink's.
 
+### The audio decodes in process
+
+Since 2026-11-19 the AAC track does not go through `ffmpeg`:
+`container_audio::decode` reads the cached `{key}.mp4` and hands it to
+[`oag_music::aac`](../../crates/music/src/aac.rs), which is `symphonia`'s MP4
+reader and AAC decoder (MPL-2.0, the crate HD's MP3 already uses). Bink audio
+still goes to `ffmpeg` ([bik.md](bik.md)).
+
+Census, both regions' base packages: the EU package ships 26 `.mp4` and one
+carries audio (`intro.mp4`, 4,666 AAC frames); the USA package ships 27 and two
+do (`intro.mp4` and `introAS.mp4`, 4,665 frames each). Each decodes to exactly
+`frame_count * 1,024` samples per channel, and against FFmpeg's independent
+decoder every sample agrees to within **1 LSB** (RMS difference 0.69 LSB):
+two float AAC decoders agree to rounding, not bit for bit
+(`crates/music/tests/aac_ground_truth.rs` asserts at most 2).
+
 [`ContainerTrack::seconds`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/movie/container_audio.rs
 
 ## Playing one
