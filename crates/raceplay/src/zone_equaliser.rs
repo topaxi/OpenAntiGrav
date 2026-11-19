@@ -10,6 +10,7 @@
 //! Only the grid with no bar lit is drawn. The bars' source is unread, and a Zone race's
 //! first seconds (the start pair) show no bar.
 
+#[cfg(feature = "view")]
 use crate::drawable::Drawable;
 
 /// The target's side in pixels.
@@ -41,6 +42,7 @@ pub fn texels() -> Vec<u8> {
     out
 }
 
+#[cfg(feature = "view")]
 /// Points every placeholder material of `track` whose slot is in `slots` at the grid.
 pub(super) fn bind_into(
     device: &wgpu::Device,

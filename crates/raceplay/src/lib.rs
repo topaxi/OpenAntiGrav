@@ -357,8 +357,8 @@ pub(crate) use weapons::{CannonAssets, CannonDraw};
 #[cfg(feature = "view")]
 mod worker;
 pub mod xp_tally;
-#[cfg(feature = "view")]
 pub mod zone_equaliser;
+#[cfg(feature = "view")]
 pub mod zone_grade;
 
 #[cfg(feature = "view")]
