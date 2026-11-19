@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, 2048, omega]
-updated: 2026-10-19
+updated: 2026-11-19
 summary: "Read HD's Airbrake class 0x3c5 handler for axis and sign; deflect rival craft from their own sim level"
 ---
 
@@ -19,6 +19,10 @@ summary: "Read HD's Airbrake class 0x3c5 handler for axis and sign; deflect riva
 - AI craft keep stowed flaps on every title (Pulse included). Since 2026-10-19 (`local-seat-contact-fx`)
   every craft a *person* flies swings its own flaps (`RaceView::flaps` is per slot, `Race::airbrake_flaps_of`),
   not slot 0's drawable: a second local seat, and a network seat's own hull, deflect.
+- Pulse PSP has a pair with both air brakes out (`airbrake-pair`, 2026-11-19, `docs/tools/compare-page.md`, "A Pulse PSP pair with both air
+  brakes out"): the original's `craft+0x2c4`/`+0x2c8` read 100 and 100, ours drawn at them through `--pose-flaps`, the flap box's grey 23.27
+  against 23.06 for the rest of the scene. It checks the flap's amount and placement against the original; the sweep direction on the other
+  titles is still unread. A second Pulse state made the same way would settle repeatability across states.
 - HD's default craft hides its flaps under a blown-out hull glow in the close
   camera; the default chase camera shows them.
 

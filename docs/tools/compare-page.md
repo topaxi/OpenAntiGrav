@@ -1974,6 +1974,47 @@ and ours' `OAG_DRAW_DUMP` rows for the same texture; compare the strip's vertex 
 `MPMainMenu`; a second plain `menu` runs. `--track-down N` is relative to the profile's last selection, not to Talon's Junction (`--track-down 1` landed at
 (-404.2, 4.0, -11.6), `--track-down 8` after that at Metropia White), so the circuit is chosen by reading the start position back.
 
+## A Pulse PSP pair with both air brakes out (2026-11-19, `airbrake-pair`)
+
+`pulse-psp-race/talons-uturn-airbrakes`: Talon's Junction (`16_Track`), Time Trial, Venom, through the circuit's flat U-turn with
+both air brakes held, the original grabbed in PPSSPP and ours rendered at the recorded pose with the recorded air brake levels.
+The old plan (pose the flaps on `talons-alongside`) needed a save state that is not on every workstation, so this is a new pair on a
+circuit with a U-turn.
+
+- **The circuit.** `oag-trace track` on `16_Track`: path 1 (rows 1752 to 3448, the second half of the lap) turns 88 degrees over 40
+  rows (59 units) at rows 2650 to 2690, flat (`down_y` -0.97 at `y` -51). Path 0's sharper-looking rows near 1210 are the circuit's
+  vertical loop, where a heading in the XZ plane means nothing. Confidence 80 (spline read, not walked).
+- **The values.** `airbrake_l` and `airbrake_r` of `psp-trace.py` are `craft+0x2c4` and `craft+0x2c8`, the **ramped** level on `0..100` (a
+  six-tick trace with both brakes pressed read 0, 0, 0, 15.0, 30.0, 45.0 and 100 at the seventh; released it falls 8.4 a tick), the
+  scale `Race::view.flaps` holds in ours. Confidence 85 (one capture family, behaviour matches `craft-flags.md`). The pair reads
+  them at the pose's own stop (row 0) and refuses a pair where either is under 90: **left 100.00, right 100.00**.
+- **Ours.** `--pose-flaps` (needs `--pose-from`, `crates/game/src/race_capture/pose_flaps.rs`) reads the same two columns of the
+  pose row and `Race::force_flaps` puts them on ship 0's drawn flaps after the ticks (this tick and the previous one, so a draw at any
+  alpha shows them). Without it a posed capture draws stowed flaps, since no tick swings them. Tests: `forced_flaps_draw_at_their_levels_at_every_alpha`
+  (through `airbrake_flaps_of`) and `race_capture::pose_flaps::tests`.
+- **Making the state.** Not a grid state, so `scripts/psp-pulse-pair.py` takes `--mid-lap --layout forward` (no layout probe, no
+  start-line distance check; the pose check at the rendered tick is the proof) and `--air-brakes` (the check above, `--pose-flaps`,
+  `--pose-lean` and the lean row check). The craft was placed on the spline at row 2610, 130 units/s, by `psp-drive.py place` (a RAM
+  write, recorded with `--ram-write`), flown 45 ticks under `psp-trace.py --script` holding thrust, right and both shoulders, the pads
+  then held through the debugger (`input.buttons.send`, the shoulders are `ltrigger` and `rtrigger`) so the pause-menu save stored
+  100 and 100 (a save made with the pad released stored 0 and 0 and the pair refused it). A `drive` run killed mid-way wedged the
+  debugger: let it finish, or restart the instance.
+- **The camera.** The close chase sat 11.70 units from the craft (11.64 at rest), inside the pair's own view check; a
+  `--mid-lap` pair also accepts 6 to 12.5 units as the close view (the spring lags in a turn), since ours renders the recorded
+  camera and fov (`--camera-fov` 62.513 against RAM 62.560).
+- **Repeats.** The same state grabbed three times: the frame of run 1 and run 3 are byte-identical, run 2 differs by under one pixel
+  of one channel level (confidence 75, three grabs of one state; a second state made the same way would be the next check).
+- **The flap region's grey.** `scripts/compare-flap-region.py` (box x 185 to 275, y 148 to 210 of the 480x272 frame, both fins in both
+  images; HUD rectangles excluded from the rest): mean absolute grey difference **23.27 in the flap box against 23.06 in the rest
+  of the scene** (ratio 1.01; whole frame 21.83). Ours with the flaps stowed (the same flags without `--pose-flaps`) reads 23.55 in the box
+  against 23.06 (ratio 1.02): the flaps are as good a match as the hull and the circuit around them and the flag moves the box by
+  0.28 grey, because the hull's own pose differs more than the flap does. **Not matched:** the original's craft is rolled further
+  on the banked wall than ours (the pose check holds position and heading to 0.000 and the lean to 1e-5; the residual is in the
+  hull's roll about its nose, not measured here), and the HUD (ours at rest reads 0 km/h and a full cyan shield bar where the
+  original reads 165 km/h and a red one).
+- **Re-make.** `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track 16_Track --state <ppst> --layout forward --mid-lap
+  --air-brakes --autopilot off --ram-write "craft_pose=..." --meta <json>`, then `scripts/compare-flap-region.py D --box 185,148,275,210`.
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on
