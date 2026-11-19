@@ -4259,10 +4259,23 @@ widget shares the flyer's field of view (checked against the frames, not fitted:
 a 24 s sweep of this build, every 2 s, has its widest frame 739 grid units across
 on Vineta K and 797 on Moa Therma, against 790 and 802 in `track-carousel`
 frames 12 and 02, each of which is a lower bound on its circuit's widest yaw), the
-pitch (0.55), the turntable's 24 s per revolution and its starting yaw, the
+pitch (0.55), the turntable's 24 s per revolution and its starting yaw (all three **now measured on HD**, see below), the
 near and far planes, and the multiplier `0x81db67ea` (taken as 1: nothing in
 the model or the executable gives its value). **Measured**: that the circuit turns (frames 12 and 24 of
-`track-carousel` show Vineta K at different yaws), not its rate.
+`track-carousel` show Vineta K at different yaws); its rate and pose are below.
+
+**The pose and the turntable, measured 2026-11-19 (`hd-track-select`)**: the `TrackModel` widget's `OriginX=1308 OriginY=440 z=-180` are
+overwritten every frame by the screen's update, so the camera above holds only where a title's update is unread. On HD the update takes
+the selected circuit's own `RotX`, `PosZ` and `PosY` from its `PI_Track` entry (Vineta K `0.35`, `-135`, `-20`; the origin is
+`440 + PosY` down) and turns the circuit by one global angle stepped `0.01` rad a frame (`0.6` rad a second at 60 fps), backwards on a
+reversed circuit, wrapped at `+-pi`, kept across visits (`docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md`, "The circuit
+model's update"). `oag_title::FrontEnd::circuit_turntable` carries the law (HD `Some`, Omega `None`), `oag_raceplay::catalogue::Track::model_pose`
+the entry's numbers and `oag_game::preview::track_model::{Posing, Turntable}` the pose and the accumulator, ticked every frame by
+`PickerStage::tick_turntable`. The chosen pitch (0.55), 24 s revolution and starting yaw stay for Omega only. Per-visit the table restarts at
+zero in ours; the original keeps the angle across visits (open). The pair `hd/menu-track-select` (same original, ours before and after):
+circuit-model frame (862,180)-(1747,675) mean absolute grey difference 22.5 to 13.1 raw, 17.7 to 8.6 with the page's warm mask, whole
+frame `mean_grey` 9.98 to 7.89, rmse 0.120 to 0.099. **Omega ported: checked, applies, not wired** (`omega/menu-track-select` unchanged to the
+digit, 19.10); Omega's `PI_Track` authors `RotX 0.45`, `PosX 0.55`, `PosY 0.175`, `PosZ -2.05` and `Scale 0.012`, in widget units whose update is unread.
 
 **Live, 2026-10-09** (Xvfb, software Vulkan, debug build): the model draws on
 the real screen, the grey matches the capture's, and stepping the circuit

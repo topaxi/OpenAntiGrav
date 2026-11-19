@@ -183,6 +183,55 @@ to the Zone/Zone-Battle/Detonator bucket from a different angle (label formattin
 `WeaponManager` construction) - but it formats what is shown for the *currently selected*
 track, and does not change which tracks are selectable.
 
+## The circuit model's update (2026-11-19, `hd-track-select`)
+
+Read headless (`analyzeHeadless`, program `/hdfury/EBOOT-ps3-hdfury-eu.elf`, `scripts/ps3-toc.py toc` says
+`0x0025d558` and `0x0025c340` both read TOC `0x008ad4d8`, exact) and then **measured live**: the angle read out of RPCS3's RAM.
+
+| Address | Name | Confidence |
+| --- | --- | --- |
+| `0x0025d558` | `TrackSelectionScreen_Update` | 85 |
+| `0x0025c340` | `TrackSelectionScreen_SelectCircuit` | 80 |
+
+`TrackSelectionScreen_Update` (`0x0025d558`, the per-frame update, called with the frame's `dt` in `f1`; `menu-sounds.md` already names
+it for the accept and reject cues) writes the `TrackModel` widget (`st + 0x1ac`, fetched by `TrackSelectionScreen_OnEnter`) every frame
+at `0x0025d930..0x0025d964` and the matching reversed branch:
+
+| Widget field | Written | Source |
+| --- | --- | --- |
+| `RotX` `+0xb8` | `st[0x1b4]` | the selected circuit's `PI_Track` `RotX` |
+| `RotY` `+0xbc` | `*(*(TOC + 0x49ec) + 0x1c4)` | one global angle, below |
+| `z` `+0xb4` | `st[0x1bc]` | the circuit's `PosZ` |
+| `OriginY` `+0x110` | `st[0x1b8] + 440.0` (`TOC + 0x4b64`) | the circuit's `PosY` |
+
+`TrackSelectionScreen_SelectCircuit` (`0x0025c340`, called from the update every frame with the list's focused row and returning at once
+when the row has not changed) copies the selected `PI_Track` item's `+0x1a0`, `+0x1a4` and `+0x1a8` into `st + 0x1b4`, `+0x1b8`,
+`+0x1bc` (`0x0025c598..0x0025c5c0`), swaps the highlighted hexagon and the `ReverseIcon`s, and stores the row's `Reversed` byte
+(`item + 0x1b5`) in `st + 0x10e`. `PI_Track_Item::ReadXML` (strings at `0x0077fcd8`: `RotX`, `PosY`, `PosZ`, then `SoundRegister` and
+`FEModelLocation`) is where an entry's three numbers come from: HD's `Values` author them per circuit (Vineta K `RotX="0.35" PosZ="-135"
+PosY="-20"`; Anulpha Pass `0.4`, `-200`, `-20`; Moa Therma `0.4`, `-150`, `0`).
+
+**The angle.** One float at `+0x1c4` of the global object whose pointer is the TOC slot `+0x49ec` (guest `0x00abb82c`; the ELF carries no initial bytes there, and
+the first visit counted from zero). Each frame the update runs and `st + 0x10c` (the confirm pulse) is clear it adds `0.01` (`TOC + 0x4b4c`) when
+`st + 0x10e` is clear and subtracts it when set, and wraps: above `3.1415927` (`+ 0x4b50`) it is set to `-3.1415927` (`+ 0x4b54`), below
+that it is set to `3.1415927`. The step is per frame and not scaled by `dt`. The object is global, so **the angle persists across
+visits** and across circuits; only the direction follows the selection.
+
+**Measured**, RPCS3 attached on the Fury profile, 1920 by 1080: the angle read through `/proc/<pid>/mem` at `0x300000000 + 0x00abb9f0`
+every 0.1 s after a tap into the screen moved `0.36` rad in `0.6` s (`0.6` rad a second, 60 frames in real time), went from `2.8584` to
+`-3.0616` across the wrap, and began the second visit at the value the first left (`1.7184`). On a cold boot the first visit's angle
+at a grab 8.2 s after the tap was `-1.4116` rad, which is `487` frames from zero (`0.01 * 487 = 4.87 = 2 pi - 1.4116`), so the update
+starts with the tap. A burst of ten grabs (a grab takes 0.13 s), the angle read before and after each, against ours drawn at 106 yaws: the
+best-fitting yaw runs `0.08` rad (mean of ten; `0.05` to `0.12`) behind the mean of the two reads, so about `0.04` behind the read
+taken just before the grab and `0.12` behind the one after it; the fit's own grid is `0.06`.
+
+Not read: the lens (`+0xdc`) is the constructor's `57.3` degrees (`team-selection-model.md`, "The widget") and this update never writes it,
+which is the `1.0` radian ours already used. `nearZ` `1.0` and `farZ` `1000.0` are authored on the widget
+(`Track_Selection_Definition.xml`) and ours still draws `10` and `2000` (no visible effect). Omega authors the same `RotX`, `PosX`,
+`PosY`, `PosZ` and `Scale` on its `PI_Track` (`RotX 0.45`, `PosZ -2.05`, `Scale 0.012` on Vineta K, `data09.psarc`
+`data/plugins/tracks/Definition.xml`); its screen's update is not read, so the outcome of the 2048/Omega check is **checked, applies, not
+wired**.
+
 ## Not found
 
 - **What sets the Track list widget's `+0x120` item count / its `+0x94`-per-item name

@@ -22,8 +22,10 @@ import argparse
 import datetime
 import importlib
 import json
+import math
 import os
 import re
+import struct
 import sys
 import time
 from pathlib import Path
@@ -45,6 +47,17 @@ def prepare_profile(plat, profile, safe_area, front_end_style, race):
     (a debug build unlocks everything; the walk starts from a profile with its locks, and Ship Select's grid shows them)."""
     ce.write_ours_settings(plat, profile, safe_area)
     cm.extra_settings(profile, front_end_style, race, locked=True)
+
+#: The `WALK` ids whose ours is drawn at the turntable angle the original's RAM held at the grab (`--menu-picker-seconds`, the seconds that
+#: turn ours' table that far). `Track Creation`'s update turns the circuit model by a global angle, `*(*(TOC + 0x49ec) + 0x1c4)` with
+#: TOC `0x008ad4d8` (`docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md`, "The circuit model's update"); it persists across
+#: visits to the screen, so the wall time since the tap says nothing about it.
+CLOCKED = ("track-select",)
+GUEST_BASE = 0x300000000
+ANGLE_SLOT = 0x008AD4D8 + 0x49EC
+ANGLE_FIELD = 0x1C4
+#: Radians the angle moves a frame (`TOC + 0x4b4c`) and frames a second: ours reads `--menu-picker-seconds` at 60 fps.
+ANGLE_STEP, FRAMES_PER_SECOND = 0.01, 60.0
 
 #: The walk. A string is a button (`name` or `name:SETTLE_SECONDS`); a dict is a photograph. `pair` fields: `id`, `title`,
 #: `screen` (HD's own name, from TTY.log), `page` (ours' `--menu-page`), `drawn_from` (`xml` or `menu.toml`), `xml` (the
@@ -151,6 +164,14 @@ def main():
     shots = out / "shots"
     shots.mkdir(exist_ok=True)
     seen = {}
+    mem = drive.RemoteMem(info["socket"])
+
+    def turntable_angle():
+        """The circuit model's global angle, radians, read out of the emulator's RAM."""
+        mem.seek(GUEST_BASE + ANGLE_SLOT)
+        (obj,) = struct.unpack(">I", mem.read(4))
+        mem.seek(GUEST_BASE + obj + ANGLE_FIELD)
+        return struct.unpack(">f", mem.read(4))[0]
     steps = LOADING_WALK if args.walk == "loading" else WALK
     for item in steps:
         if isinstance(item, str):
@@ -163,8 +184,12 @@ def main():
         time.sleep(item.get("settle", args.settle))
         screen = drive.current_screen()
         png = shots / (item["id"] + ".png")
+        # Read just before the grab: the picture the grab returns is within one step of it (a burst of ten grabs against ours' yaw sweep:
+        # the angle read before a grab runs 0.04 rad ahead of the frame, the one read after it 0.12).
+        angle = turntable_angle() if item["id"] in CLOCKED else None
         walk.grab(png, w, h)
-        seen[item["id"]] = {"screen": screen, "feature": feature_read(), "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds")}
+        seen[item["id"]] = {"screen": screen, "feature": feature_read(), "png": png, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+                            "angle": angle}
         print("shot %-16s screen %r" % (item["id"], screen), flush=True)
     refused = []
     for item in (i for i in steps if isinstance(i, dict)):
@@ -227,12 +252,23 @@ def main():
         args.accept_provenance = list(args.accept_provenance)
         cp.build(pair, args, "menu", "cold_boot", None,
                  {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
+        extra = list(item.get("args", []))
+        if item["id"] in CLOCKED and shot["angle"] is not None:
+            # Ours' table starts at zero and its angle is the picture's yaw modulo a turn.
+            since_entry = (shot["angle"] % (2 * math.pi)) / (ANGLE_STEP * FRAMES_PER_SECOND)
+            extra += ["--menu-picker-seconds", "%.3f" % since_entry]
+            pair.rec["original"]["turntable_angle"] = {
+                "radians": round(shot["angle"], 4),
+                "ours_seconds": round(since_entry, 3),
+                "basis": "measured: the circuit model's global angle read out of the emulator's RAM just before the grab (`*(*(0x008ad4d8 + 0x49ec) + 0x1c4)`, "
+                         "the `Track Creation` update's own RotY, stepped 0.01 rad a frame); ours is drawn at the seconds that turn its own table that far "
+                         "at 60 frames a second"}
         try:
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.image, page=item["page"],
                          drawn_from=item["drawn_from"], xml_file=item["xml"], screen_seen=shot["screen"],
                          screen_wanted=item["screen"], profile_dir=profile, size=ce.size_text(plat),
                          front_end_style=args.front_end_style, language="English", original_language=language.split(" ")[0],
-                         selection=item["selection"], extra_args=item.get("args", []),
+                         selection=item["selection"], extra_args=extra,
                          race=item.get("race"), safe_area=safe_area)
             pair.finish()
         except SystemExit as exc:

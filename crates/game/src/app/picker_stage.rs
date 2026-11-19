@@ -871,7 +871,12 @@ impl PickerStage {
 
     /// The selected circuit's pose and direction, when it is a circuit entry.
     fn selected_circuit(&self) -> (Option<oag_title::CircuitPose>, bool) {
-        match self.model.entries().get(self.model.index()).map(|e| &e.details) {
+        match self
+            .model
+            .entries()
+            .get(self.model.index())
+            .map(|e| &e.details)
+        {
             Some(picker::Details::Track {
                 model_pose,
                 reversed,

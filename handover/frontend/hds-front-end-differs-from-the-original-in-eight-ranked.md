@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-18
+updated: 2026-11-19
 summary: "HD front end: Ship Select camera, settle and hull lighting wired; settle start, craft turn and zoom, Omega pose open"
 difficulty: medium (30)
 ---
@@ -114,9 +114,14 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
   record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega
   ported 2026-10-09 (`omega-track-model`, its own fresnel material).
-  Open: the turntable's rate, pitch and the field of view are chosen (an RPCS3
-  capture of the same circuit over time would fix the rate), the multiplier
-  `0x81db67ea`, Zone circuits (`zone_1..4` carry a scene no record names),
+  **Turntable and pose LANDED 2026-11-19 (`hd-track-select`)**: the screen's update
+  (`TrackSelectionScreen_Update`, `0x0025d558`) takes each circuit's own `RotX`,
+  `PosY` and `PosZ` from its `PI_Track` and turns one global angle 0.01 rad a frame
+  (kept across visits; ours restarts the table at zero per visit: open); the lens is
+  the constructor's 57.3 degrees, as ours was. Omega: checked, applies, not wired
+  (its update is unread). The pair `hd/menu-track-select` is drawn at the RAM angle
+  read at the grab. Open: nearZ/farZ (authored 1 and 1000, ours 10 and 2000), the
+  multiplier `0x81db67ea`, the backdrop's brightness and cloud path, Zone circuits (`zone_1..4` carry a scene no record names),
   Omega's own table; the moving fly-by picture (Bink)
 - Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
   landed the Grid Selection counter, arrows, dotted unlock panel and its corner marks, and the Track Select record rows (fill

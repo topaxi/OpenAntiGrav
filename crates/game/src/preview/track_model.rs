@@ -170,7 +170,9 @@ impl crate::preview::Preview {
 pub fn matrices(widget: &TrackModel, space: Space, posing: Posing) -> (Mat4, Mat4) {
     let projection = camera::perspective(FOV_Y, space.display_aspect, DEPTH[0], DEPTH[1]);
     let (origin_y, z, pitch, yaw) = match posing {
-        Posing::Entry { pose, law, yaw } => (law.origin_y + pose.pos_y, pose.pos_z, pose.rot_x, yaw),
+        Posing::Entry { pose, law, yaw } => {
+            (law.origin_y + pose.pos_y, pose.pos_z, pose.rot_x, yaw)
+        }
         Posing::Standin { seconds } => (
             widget.origin[1],
             widget.z,

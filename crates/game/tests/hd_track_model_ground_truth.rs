@@ -81,3 +81,57 @@ fn every_circuit_of_the_table_builds_a_model() {
         );
     }
 }
+
+/// The screen's update copies the selected circuit's own `RotX`, `PosY` and `PosZ` over the
+/// widget, so the entries the catalogue reads carry them: Vineta K's are `0.35`, `-20` and
+/// `-135`, and every circuit that has a model has a pose.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn every_circuit_with_a_model_carries_its_entrys_pose() {
+    let Some((mut archives, title)) = open() else {
+        return;
+    };
+    let front_end = title.front_end.expect("HD ships a front end");
+    let law = front_end
+        .circuit_turntable
+        .expect("HD's update is read: the turntable law");
+    assert_eq!((law.step, law.origin_y), (0.01, 440.0));
+    let blob = archives
+        .read_name(title.plugin_definition)
+        .expect("plugin definition");
+    let xml = oag_tables::fexml::text(&blob).expect("expand the definition");
+    let tracks = oag_raceplay::catalogue::tracks(&xml);
+    let vineta = tracks
+        .iter()
+        .find(|track| track.location.ends_with("01_Vineta_K") && !track.reversed)
+        .expect("Vineta K");
+    assert_eq!(
+        vineta.model_pose,
+        Some(oag_title::CircuitPose {
+            rot_x: 0.35,
+            pos_y: -20.0,
+            pos_z: -135.0
+        })
+    );
+    for row in front_end.circuit_models {
+        let track = tracks
+            .iter()
+            .find(|track| {
+                !track.reversed
+                    && track
+                        .location
+                        .rsplit('\\')
+                        .next()
+                        .is_some_and(|folder| folder.eq_ignore_ascii_case(row.environment))
+            })
+            .unwrap_or_else(|| panic!("{}: no forward entry", row.environment));
+        let pose = track
+            .model_pose
+            .unwrap_or_else(|| panic!("{}: the entry authors no pose", row.environment));
+        assert!(
+            (0.2..0.6).contains(&pose.rot_x) && (-300.0..-100.0).contains(&pose.pos_z),
+            "{}: {pose:?}",
+            row.environment
+        );
+    }
+}

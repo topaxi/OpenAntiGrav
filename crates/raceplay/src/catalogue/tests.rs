@@ -568,3 +568,28 @@ fn a_source_with_no_circuit_at_all_opens_none() {
     let tracks = tracks(SHIPPING_DEFINITION);
     assert_eq!(circuit_to_open(ALTIMA, &tracks, |_| false), None);
 }
+
+/// HD's entries author the pose their circuit model is drawn at: `RotX`, `PosY` and `PosZ`. An
+/// entry missing any of the three authors none.
+#[test]
+fn an_entry_authors_the_pose_of_its_circuit_model() {
+    let xml = r#"
+<Screen name="Top">
+  <PI_Track name="01_Track">
+    <Values type="Race" location="Data\Environments\01_Vineta_K" RotX="0.35" PosZ="-135" PosY="-20"/>
+  </PI_Track>
+  <PI_Track name="02_Track">
+    <Values type="Race" location="Data\Environments\02_Track" RotX="0.4" PosZ="-150"/>
+  </PI_Track>
+</Screen>"#;
+    let tracks = tracks(xml);
+    assert_eq!(
+        tracks[0].model_pose,
+        Some(oag_title::CircuitPose {
+            rot_x: 0.35,
+            pos_y: -20.0,
+            pos_z: -135.0
+        })
+    );
+    assert_eq!(tracks[1].model_pose, None);
+}
