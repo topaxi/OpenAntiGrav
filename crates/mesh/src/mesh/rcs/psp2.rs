@@ -86,6 +86,22 @@ pub const FOG_FLAT: [f32; 4] = [-1.0, -1.0, -1.0, 1.0];
 /// rgb, the material's authored colour, where the stage table gives none.
 pub const ZONE_COLOUR_ALPHA: f32 = 1.0;
 
+/// Whether a mesh object's Maya shape name says it is track surface: `wohdtrackShape`,
+/// `TRACK_0Shape`, `TRACK_Shape`, any shape with `track` in its name.
+///
+/// **Chosen, not measured.** HD authors "this chunk is track surface" as a bit of
+/// the chunk's render-block record (`oag_rcs::rcsmodel::Mesh::is_track`), which a
+/// Zone race reads to publish the `Track` colour group and `zoneModeTrack<n>`
+/// instead of the `Scene` ones. 2048's and Omega's container has no such record
+/// that has been read (the mesh object's `+0x0a` flags are `0x0101`/`0x0201` on
+/// the road and on everything else alike), so the shape name stands in for it
+/// where an HD-lineage circuit borrows HD's Zone recolour
+/// (`docs/rendering/hd-zone-recolour.md`, "On 2048's container").
+#[must_use]
+pub fn is_track_shape(name: &str) -> bool {
+    name.to_ascii_lowercase().contains("track")
+}
+
 /// Whether a blob is 2048's container rather than Wipeout HD's.
 ///
 /// Cheap and exact: the two containers disagree on their very first word, and
@@ -424,6 +440,16 @@ fn build_planned(
             0
         } else {
             crate::mesh::slots::SECOND_IS_LIGHTMAP
+        };
+        let on_track = submesh
+            .mesh
+            .and_then(|m| decoded.scene.meshes.get(m))
+            .is_some_and(|m| is_track_shape(&m.name));
+        report.track_shape_submeshes += usize::from(on_track && !place.hidden);
+        let role = if on_track {
+            role | crate::mesh::slots::ZONE_TRACK
+        } else {
+            role
         };
         // A Zone material's surface is `Zone_Colour * (ambient + sun * max(N.L, 0) +
         // Emissive)` under fog (its unlightmapped fragment programs,

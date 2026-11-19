@@ -120,6 +120,9 @@ pub struct Report {
     /// [`psp2::material::Material::zone_colour`]. Counted among
     /// [`Self::unresolved_draws`] too, since they have no texture.
     pub zone_colour_submeshes: usize,
+    /// Submeshes of a shape whose name says it is track ([`super::is_track_shape`]), which a
+    /// Zone race draws through the `Track` colour group.
+    pub track_shape_submeshes: usize,
     /// Submeshes of Omega's `emissive` family, drawn unlit in their `EmissiveColour` (`emissive_colour`).
     pub emissive_colour_submeshes: usize,
     /// Submeshes bound to a node of the model's own table and placed by
@@ -267,8 +270,16 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} submesh(es) take a Zone_ColourN uniform as their colour, drawn unlit (chosen, not measured)",
+                "; {} submesh(es) take a Zone_ColourN uniform as their colour (Colour * (ambient + sun * sat(N.L) + Emissive), the stage's own Colour k where the Zone table authors it)",
                 self.zone_colour_submeshes
+            )
+        };
+        let track_shapes = if self.track_shape_submeshes == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} submesh(es) on track-named shapes take the Track Zone group (chosen, not measured: the shape name stands in for HD's per-chunk track bit)",
+                self.track_shape_submeshes
             )
         };
         let poisoned = if self.non_finite_texcoords == 0 {
@@ -452,7 +463,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }

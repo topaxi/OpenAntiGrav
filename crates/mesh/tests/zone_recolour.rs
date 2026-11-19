@@ -1121,3 +1121,63 @@ fn draw_frame_scaled(
     let mapped = readback.slice(..).get_mapped_range().expect("mapping");
     mapped.to_vec()
 }
+
+/// **A 2048 `Zone_Colour<k>` vertex takes the showing stage's colour and light.**
+///
+/// The vertex names its slot in `colour.a` (`mesh::rcs::psp2::ZONE_COLOUR_ALPHA +
+/// k`) and keeps the material's authored colour in `.rgb`; with the stage light
+/// switched on the pixel is `Colour * (ambient + sun * sat(N.L) + Emissive)`,
+/// the arithmetic of the material's unlightmapped fragment programs
+/// (`docs/formats/2048-material-params.md`, "The Zone surface"). Dropping the
+/// uniform's fields, the marker or the shader branch leaves the vertex's own
+/// colour on screen, which is what the second half asserts.
+#[test]
+fn a_2048_zone_colour_vertex_takes_the_stage_colour_and_light() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+
+    let mut quad = model(texture("white", [255, 255, 255, 255]), 0.0);
+    for v in &mut quad.vertices {
+        // The authored colour (the fallback) is green; the slot is `k = 2`.
+        v.colour = [0.0, 1.0, 0.0, 1.0 + 2.0];
+        v.slots = slots::DEFAULT | slots::NO_AMBIENT | slots::NO_SUN;
+    }
+    let mut scene = Scene::off();
+    scene.fog.camera = [0.0, 0.0, 100.5];
+    let art = scene_art(&texture("stage", [128, 128, 128, 255]));
+
+    // Stage colour 2: (1, 0.5, 0.25), emissive 0.1; ambient 0.3, sun 0.5 along
+    // the quad's normal (+Z), so `sat(N.L)` is 1: factor 0.3 + 0.5 + 0.1.
+    let mut zone = Zone::default();
+    zone.stage_colours[1] = [1.0, 0.5, 0.25, 0.1];
+    zone.stage_light = [
+        [0.3, 0.3, 0.3, 1.0],
+        [0.5, 0.5, 0.5, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ];
+    scene.zone = zone;
+    let on = draw(&device, &queue, &quad, &art, scene, None);
+    let factor = 0.9_f32;
+    let want = [1.0 * factor, 0.5 * factor, 0.25 * factor].map(|c| (c * 255.0).round());
+    for (channel, want) in want.iter().enumerate() {
+        assert!(
+            (f32::from(on[channel]) - want).abs() <= 2.0,
+            "channel {channel}: {} against {want}",
+            on[channel]
+        );
+    }
+
+    // Without the stage light the vertex keeps the material's own green.
+    scene.zone.stage_light[0][3] = 0.0;
+    let off = draw(&device, &queue, &quad, &art, scene, None);
+    assert!(
+        off[1] > 200 && off[0] < 40,
+        "the authored colour should show: {off:?}"
+    );
+}

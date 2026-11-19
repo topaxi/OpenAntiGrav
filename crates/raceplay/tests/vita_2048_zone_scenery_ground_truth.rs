@@ -100,3 +100,29 @@ fn a_time_trial_on_altima_still_draws_the_race_model() {
     assert!(track.contains("over 2817 submesh(es)"), "{track}");
     assert!(!track.contains("placeholder"), "{track}");
 }
+
+/// **A Zone race on an HD-lineage 2048 circuit (DLC1's Vineta K) draws its road through the
+/// `Track` colour group.** The container carries no per-chunk track bit that has been read, so
+/// the shapes named `*track*` stand in for HD's (chosen, not measured); without them the road
+/// took the `Scene` group, the pale sheet the pair `2048-vita/zone-dlc-vineta-k-z5` showed.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn a_zone_race_on_dlc_vineta_k_draws_its_track_shapes_through_the_track_group() {
+    let Some(source) = source() else { return };
+    let lines = race::load(&race::Options {
+        source: source.display().to_string(),
+        mode: oag_race::Mode::Zone,
+        track: Some(r"Data\art\published\DLC1\environments\Vineta_K\track.vex".into()),
+        ..race::Options::default()
+    })
+    .unwrap_or_else(|e| panic!("loading {}: {e:#}", source.display()))
+    .report;
+    let track = lines
+        .iter()
+        .find(|l| l.contains("Vineta_K") && l.contains("triangle(s) over"))
+        .expect("a track model line");
+    assert!(
+        track.contains("submesh(es) on track-named shapes take the Track Zone group"),
+        "{track}"
+    );
+}

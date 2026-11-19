@@ -605,3 +605,38 @@ fn a_lap_staged_grade_steps_on_the_lap_and_sweeps_out_the_stage_below() {
     assert_eq!(grade.blend().current, grade.last_stage());
     assert!(grade.describe().contains("one stage per completed lap"));
 }
+
+/// 2048's Zone table: the showing stage's `Zone_Colour<k>` and the title-wide
+/// Zone light reach the uniform, and follow the stage; an HD table leaves them
+/// off, so no HD draw takes the 2048 surface.
+#[test]
+fn a_2048_stage_publishes_its_zone_colours_and_an_hd_one_does_not() {
+    let text = concat!(
+        "\"Lighting.Constant Ambient Colour\"=0.6 0.6 0.6\n",
+        "\"Lighting.Sun diffuse colour\"=0.9 0.9 0.9\n",
+        "\"Lighting.Sun direction\"=0.0 1.0 0.0\n",
+        "\"Zone 0 Start.Colour 7.Colour\"=1.0 1.0 0.0\n",
+        "\"Zone 0 Start.Colour 7.Emissive\"=0.5\n",
+        "\"Zone 1 Sub Flash.Colour 7.Colour\"=1.0 0.0 0.5\n",
+        "\"Zone 1 Sub Flash.Colour 7.Emissive\"=0.1\n",
+    );
+    let table = EffectSettings::parse(text).expect("it parses");
+    let mut grade = ZoneGrade::new(
+        "ZoneMode2048.effectSettings".to_string(),
+        table,
+        None,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("it names stages");
+    grade.pin_stage(0);
+    let start = grade.zone_uniform();
+    assert_eq!(start.stage_colours[6], [1.0, 1.0, 0.0, 0.5]);
+    assert_eq!(start.stage_light[0], [0.6, 0.6, 0.6, 1.0]);
+    assert_eq!(start.stage_light[2][..3], [0.0, 1.0, 0.0]);
+    grade.pin_stage(1);
+    assert_eq!(grade.zone_uniform().stage_colours[6], [1.0, 0.0, 0.5, 0.1]);
+
+    let hd = hd_grade();
+    assert_eq!(hd.zone_uniform().stage_light[0][3], 0.0);
+}
