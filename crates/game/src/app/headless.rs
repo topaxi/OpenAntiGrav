@@ -611,6 +611,16 @@ fn pose_lean(cli: &Cli) -> Result<Option<crate::race_capture::pose_lean::PoseLea
     }
 }
 
+/// `--pose-flaps`: the two air brake levels of the row `--pose-from` poses from.
+fn pose_flaps(cli: &Cli) -> Result<Option<crate::race_capture::pose_flaps::PoseFlaps>> {
+    match (cli.pose_flaps, &cli.pose_from) {
+        (true, Some(path)) => Ok(Some(
+            crate::race_capture::pose_flaps::PoseFlaps::from_trace(path, cli.pose_tick)?,
+        )),
+        _ => Ok(None),
+    }
+}
+
 /// How a `--race` run was reached beyond its options: a server's race, or a shot to remake.
 #[derive(Default)]
 pub(crate) struct RaceRoute {
@@ -874,6 +884,7 @@ pub(crate) fn run_race(
                     cli.pose_hold_ticks,
                 ),
                 pose_lean: pose_lean(cli)?,
+                pose_flaps: pose_flaps(cli)?,
                 field_lean: field_lean(cli)?,
                 field_warmup: field_warmup_velocities(cli)?,
                 pose_sparks: pose_sparks(cli)?,

@@ -450,3 +450,33 @@ fn the_flaps_and_the_shield_swell_move_between_ticks() {
     assert_eq!(race.airbrake_flaps_of(0), at_tick);
     assert_eq!(race.shield_scale_of(0).to_bits(), state.scale().to_bits());
 }
+
+/// `force_flaps` puts the drawn flaps at the given levels on this tick and the previous one, so
+/// a draw at any alpha shows them as given and the radians are the authored deflection scaled by
+/// the level.
+#[test]
+fn forced_flaps_draw_at_their_levels_at_every_alpha() {
+    let mut race = gliding_race();
+    race.tick(&PlayerInputs::none());
+    assert_eq!(
+        race.airbrake_flaps_of(0),
+        [0.0; 2],
+        "stowed before the force"
+    );
+    race.force_flaps(0, [100.0, 60.0]);
+    let amount = race.view.flap_graphics.amount;
+    assert!(amount > 0.0, "the hull authors a deflection");
+    for alpha in [0.0f32, 0.5, 1.0] {
+        race.set_draw_alpha(alpha);
+        let drawn = race.airbrake_flaps_of(0);
+        assert!((drawn[0] - amount).abs() < 1e-6, "{alpha}: {drawn:?}");
+        assert!((drawn[1] - amount * 0.6).abs() < 1e-6, "{alpha}: {drawn:?}");
+    }
+    race.force_flaps(0, [250.0, -5.0]);
+    race.set_draw_alpha(1.0);
+    assert_eq!(
+        race.airbrake_flaps_of(0),
+        [amount, 0.0],
+        "clamped to 0..=100"
+    );
+}
