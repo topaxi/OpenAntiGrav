@@ -505,6 +505,15 @@ record deleted; a token for a seat whose old link is still held now replaces tha
 sees the person leave; `loopback::a_token_taking_over_a_seat_whose_link_is_still_held_is_the_person_returning`).
 And a returning seat is loading the race for longer than a flying seat may be silent, so until it has
 said ready it is given `RELOAD_GRACE` (60 s, chosen) instead (`loopback::a_returning_seat_loading_the_race_is_not_silent_until_it_is_ready`).
+The grace does not end at Ready: the client then resimulates every confirmed tick it missed before it
+sends an input, which on a loaded notebook outlasted the 8 s rule (the rejoin test's relaunched game was
+dropped "no input for 8s"). So Ready restarts the seat's silence clock and the seat keeps the
+`RELOAD_GRACE` until its first input arrives (`Seat::catching_up`), capped at 60 s from Ready; after
+that input it is held to the 8 s rule like any seat, and a seat silent for the whole grace is dropped
+(`loopback::a_returning_seat_catching_up_after_ready_is_not_dropped_within_the_grace`,
+`a_returning_seat_silent_past_the_grace_after_ready_is_dropped`,
+`a_returning_seat_is_held_to_the_ordinary_silence_after_its_first_input`). A fixed 60 s cap is chosen,
+not scaled by the ticks to resimulate.
 `--drive` reports a prompt's purpose as `screen.id` (`rejoinrace`, `online`) so a script can tell the
 offer from the lobby questions. The offer's focus starts on DECLINE, as every confirm's does.
 

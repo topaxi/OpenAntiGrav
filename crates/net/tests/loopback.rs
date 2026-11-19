@@ -577,13 +577,13 @@ fn a_token_taking_over_a_seat_whose_link_is_still_held_is_the_person_returning()
     );
 }
 
-/// A seat that came back to a running race and has not said ready again is loading it, and is
-/// given [`oag_net::host::RELOAD_GRACE`] before it counts as silent; once ready it is held to
-/// the ordinary silence.
-#[test]
-fn a_returning_seat_loading_the_race_is_not_silent_until_it_is_ready() {
+/// Seats one person, runs the race a tick, and has them come back on a new link and say ready
+/// again; returns the host with the returning seat ready and silent. `grace` is the host's
+/// reload grace.
+fn returned_and_ready(grace: std::time::Duration) -> (Host, Vec<(Client, Box<Race>, Pilot)>) {
     let params = params(1);
     let mut host = Host::new(holding_turbo(&params), params.clone());
+    host.set_reload_grace(grace);
     let (mut clients, tokens) = tokened(&mut host, 1, &mut || holding_turbo(&params));
     ready_all(
         &mut host,
@@ -598,14 +598,81 @@ fn a_returning_seat_loading_the_race_is_not_silent_until_it_is_ready() {
     host.join(Box::new(server_end));
     client.reconnect(Box::new(client_end), "client 0", "", &tokens[0]);
     host.poll();
-    std::thread::sleep(std::time::Duration::from_millis(5));
-    let silence = web_time::Duration::from_millis(1);
-    assert_eq!(host.drop_silent(silence), 0, "loading, not silent");
     assert!(client.poll_welcome().expect("welcomed").is_some());
     client.ready(race).expect("the same start state");
     host.poll();
+    (host, clients)
+}
+
+/// A seat that came back to a running race and has not said ready again is loading it, and is
+/// given [`oag_net::host::RELOAD_GRACE`] before it counts as silent.
+#[test]
+fn a_returning_seat_loading_the_race_is_not_silent_until_it_is_ready() {
+    let params = params(1);
+    let mut host = Host::new(holding_turbo(&params), params.clone());
+    let (mut clients, tokens) = tokened(&mut host, 1, &mut || holding_turbo(&params));
+    ready_all(
+        &mut host,
+        &mut clients,
+        &Pace::Wall(std::time::Duration::ZERO),
+    );
+    host.start(0);
+    host.poll();
+    host.tick();
+    let (client, _, _) = &mut clients[0];
+    let (server_end, client_end) = Loopback::pair();
+    host.join(Box::new(server_end));
+    client.reconnect(Box::new(client_end), "client 0", "", &tokens[0]);
+    host.poll();
     std::thread::sleep(std::time::Duration::from_millis(5));
-    assert_eq!(host.drop_silent(silence), 1, "ready and then silent");
+    assert_eq!(
+        host.drop_silent(web_time::Duration::from_millis(1)),
+        0,
+        "loading, not silent"
+    );
+}
+
+/// A returning seat that said ready is resimulating the ticks it missed and sends no input
+/// until it has: silent for longer than the ordinary silence, it is not dropped within the
+/// grace (red before the grace ran on from Ready to the first input).
+#[test]
+fn a_returning_seat_catching_up_after_ready_is_not_dropped_within_the_grace() {
+    let (mut host, _clients) = returned_and_ready(std::time::Duration::from_secs(30));
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert_eq!(
+        host.drop_silent(web_time::Duration::from_millis(1)),
+        0,
+        "catching up, not silent"
+    );
+}
+
+/// A returning seat that said ready and then sends nothing for the whole grace is dead.
+#[test]
+fn a_returning_seat_silent_past_the_grace_after_ready_is_dropped() {
+    let (mut host, _clients) = returned_and_ready(std::time::Duration::from_millis(30));
+    std::thread::sleep(std::time::Duration::from_millis(60));
+    assert_eq!(host.drop_silent(web_time::Duration::from_millis(1)), 1);
+}
+
+/// Once the returning seat's first input arrives it is an ordinary seat again, held to the
+/// ordinary silence.
+#[test]
+fn a_returning_seat_is_held_to_the_ordinary_silence_after_its_first_input() {
+    let (mut host, mut clients) = returned_and_ready(std::time::Duration::from_secs(30));
+    let (client, race, _) = &mut clients[0];
+    for _ in 0..30 {
+        host.poll();
+        host.tick();
+        client.step(race, &oag_gameplay::InputSnapshot::EMPTY);
+        host.poll();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    assert_eq!(
+        host.drop_silent(web_time::Duration::from_millis(1)),
+        1,
+        "the returning client sent no input, or the grace outlived it"
+    );
 }
 
 /// A seat that has sent nothing for the allowed silence is dropped, told so, and retired.
