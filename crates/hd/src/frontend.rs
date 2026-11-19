@@ -415,6 +415,18 @@ pub const SHIP_FIT: oag_title::ShipFit = oag_title::ShipFit {
     zone_box: [-4.2, 4.2],
 };
 
+/// What `TrackSelection_Screen`'s update does to the circuit model each frame, read off the
+/// executable (`docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md`, "The circuit
+/// model's update"): the angle's step (`0x008ad4d8 + 0x4b4c`), its wrap (`+ 0x4b50`, `+ 0x4b54`)
+/// and the origin's base (`+ 0x4b64`). **`frames_per_second` is chosen**: the update counts
+/// frames, and 60 is the console's display rate.
+pub const CIRCUIT_TURNTABLE: oag_title::CircuitTurntable = oag_title::CircuitTurntable {
+    step: 0.01,
+    limit: std::f32::consts::PI,
+    origin_y: 440.0,
+    frames_per_second: 60.0,
+};
+
 pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     root: names::FRONTEND_ROOT,
     language_plugins: LANGUAGE_PLUGINS,
@@ -451,6 +463,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_fit: Some(SHIP_FIT),
     ship_preview_settle: None,
     circuit_models: &CIRCUIT_MODELS,
+    circuit_turntable: Some(CIRCUIT_TURNTABLE),
     // `DATA02`'s copy - `oag_assets::Archives::holder_of`'s own mount order
     // (`data` then `fe` then `extra`) reaches it first, the same precedence
     // [`names::FRONTEND_ROOT`] documents reaching `DATA00`'s `skin.xml`.
@@ -467,6 +480,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         columns: 2.22,
         span: Some(109.0),
     }),
+    team_hex_ring: None,
 };
 
 /// What lights Ship Select's craft: the two styles' files, and the tone stage the front end's

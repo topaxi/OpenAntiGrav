@@ -62,6 +62,12 @@ pub struct Options {
     /// pair that lines a `--menu-page` capture up with an RPCS3 frame whose
     /// path and clock were read. See `Cli::fury_path`.
     pub fury_path: Option<usize>,
+    /// The Fury menu backdrop's screen tint, stated for all three channels
+    /// instead of read off the skin's row. See `Cli::fury_tint`.
+    pub fury_tint: Option<f32>,
+    /// The adapted luma the Fury front end is exposed at, stated instead of the
+    /// craft's constant and the chain's own average. See `Cli::fury_adapted_luma`.
+    pub fury_adapted_luma: Option<f32>,
     /// Offset the camera by a sub-pixel each frame, on the race this hands off
     /// to. `--camera-jitter`; see `crate::race_capture::CaptureOptions::camera_jitter`.
     ///
@@ -634,6 +640,7 @@ pub fn run(
                     ),
                     options.anim_seconds,
                     options.fury_path,
+                    options.fury_tint,
                 )
             });
             // The race box's two selection screens are not pages of our
@@ -807,6 +814,7 @@ pub fn run(
                     mode3d: mode3d_model
                         .map(|model| crate::preview::placed_mode3d(&model, kind, space)),
                     seconds: options.menu_model_seconds.unwrap_or(r.seconds),
+                    adapted_luma: options.fury_adapted_luma,
                     ..r
                 });
                 // A title that previews with stills alone has no mesh to
@@ -1154,7 +1162,12 @@ pub fn run(
                 (&device, &queue),
                 page,
                 oag_display::display::viewport((width, height), options.settings.display.aspect),
-                (options.anim_seconds, options.fury_path),
+                (
+                    options.anim_seconds,
+                    options.fury_path,
+                    options.fury_tint,
+                    options.fury_adapted_luma,
+                ),
                 layer
                     .as_mut()
                     .map(|layer| layer as crate::render::DrawSceneLayer<'_>),

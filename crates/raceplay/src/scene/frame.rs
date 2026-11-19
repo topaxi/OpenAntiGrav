@@ -511,6 +511,24 @@ impl Scene {
             recoloured,
         } = &mut *scratch;
 
+        // HD's Zone sky dome takes the stage's cross-faded `Sky horizon colour`
+        // and `Sky zenith colour`, as the original packs them for its draw every
+        // frame (`docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`, "The dome's
+        // colours"). Written only when the pair changes.
+        if let (Some(dome), Some(sky), Some(grade)) = (&self.sky_dome, &self.sky, &self.zone_grade)
+        {
+            let palette = grade.palette();
+            if let (Some(horizon), Some(zenith)) =
+                (palette.sky_horizon_colour, palette.sky_zenith_colour)
+                && dome.written.get() != Some((horizon, zenith))
+            {
+                sky.recolour_with(queue, recoloured, |vertices, out| {
+                    mesh::sky_cube::shade_zone_dome(vertices, horizon, zenith, dome.store, out);
+                });
+                dome.written.set(Some((horizon, zenith)));
+            }
+        }
+
         let mut written = self.zone_vis_written.borrow_mut();
         for (drawable, last) in [
             Some(&self.track),

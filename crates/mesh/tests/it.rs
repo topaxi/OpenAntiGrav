@@ -66,6 +66,7 @@ mod hd_vineta_ceiling_ground_truth;
 mod hd_water_ground_truth;
 mod hd_weapon_pad_glow_ground_truth;
 mod hd_zone_light_cells_ground_truth;
+mod hd_zone_ne_census_ground_truth;
 mod hd_zone_wave_census_ground_truth;
 mod moving_normal_inverse_transpose;
 mod msaa_load_keeps_view;

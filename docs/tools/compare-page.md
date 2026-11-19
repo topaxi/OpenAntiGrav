@@ -1634,6 +1634,33 @@ lag (`compare_provenance.refusals`); an HD menu pair still needs a cold boot, wh
 | HD/Fury loading (RPCS3) | `scripts/rpcs3-hd-menu-pair.py --walk loading` | the same cold-booted `serve`, then `OAG_RPCS3_ATTACH=1 ... rpcs3-hd-menu-pair.py --walk loading --out D --oag-game <main checkout's binary> --settle 1`: Racebox single race, Vineta K, Feisar (`LOADING_WALK`), CROSS on Team Selection, one photograph 4 s later (`kind = "loading"`; the original's bar stood at 32 of its 166 columns, 19 %). **The walk ends in a race**, so a second attempt is a fresh cold boot. The screen name is declared (`TTY.log` names no loading screen, its last line reads `InGame`). **The feature is the original's random draw** (`Libc_Rand` in `LoadingScreen_Construct`): the pair reads the constructor's `Feature type == N` TTY line, and ours runs `--loading-draw` for the first seed in 0..16 whose logged feature slot equals it, so no cold-boot re-roll is needed; the pair is refused when none does. **The bar is stated, not live:** `compare_menu.lit_bar_columns` counts the lit columns off `theirs.png` (32), ours runs `--loading-step race --ticks 10 n + 5` (325) with no `--loading-live` (its real load made the fill, and so the pair, vary run to run), and the pair is refused when ours' recount differs, or when the original's bar is past the first target (33 columns) that only a load stage can pass. `--loading-screen`'s `DONE/TOTAL` is ignored on a race load, so the tick is the stated state ([hd-loading.md](../formats/hd-loading.md), "The bar's stated state"). Ours is drawn from `LoadingScreen_HD.toml` ([screen-layout.md](../formats/screen-layout.md)). Share of pixels differing by more than 40 grey: 10.52 % with the old code layout, 0.76 % with the file (2026-11-01) |
 | Omega (shadPS4) | `scripts/shadps4-omega-menu-pair.py pairs` | the `Rig` of `shadps4-omega-pair.py` (own headless `sway`, uinput pad, muted), cold boot to MAIN MENU in about 20 s, `WALK` in about 95 s. **The pad input reaches the game** (the 2026-10-26 worry that it did not was not reproduced: all four walks of this lane reached Ship Select). shadPS4 has no `TTY.log`: the screen is read by eye from the frame's SCREEN TITLE and declared in `WALK`, and `original.screen_basis` says so |
 
+**The HD Track Select and Ship Select pairs hide the Fury backdrop on both sides** (2026-11-19, `hd-fury-backdrop`): the cloud, its path and
+its music pulse are a new roll on every boot and two paths in three are modes ours does not draw, so `rpcs3-hd-menu-pair.py` writes zero over
+the tint of the `<ScreenSetting>` row in use before the settle (`scripts/hd_fury_backdrop.py`: `row + 0x40`, three floats), waits 180 of the
+widget's frames for the trail to decay, grabs, and writes the authored tint back; ours is drawn with `--fury-tint 0`. `pair.json` carries
+`original.backdrop` (row, both tints, frames waited, the adapted luma at the grab) and the write under `provenance.pair_script_ram_writes`;
+the flag is in `ours.flags`, so a re-render keeps it. Two grabs of the original then agree to 0.05 to 0.09 mean grey where they differed by
+1.4 to 1.7; the pairs read 7.83 to 5.84 and 4.51 to 3.05
+([menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md), "Hidden for a compare shot"). `--show-backdrop` photographs the
+boot's own roll instead. `--taps-before ID=BUTTON[,BUTTON]` adds taps on a screen before its photograph: `ship-select=down` steps a save
+that opens Team Selection on the Fury hull to the classic one `WALK` declares (the maintainer's save of 2026-11-18 does). **The hex cursor is
+kept across visits**, so a second walk on the same boot starts from where the first left it: `up` (or no tap) where the first took `down`;
+read the pair's frame (a locked hull is a padlock) before trusting it.
+
+**All five Fury pairs of the walk hide the backdrop** (2026-11-19, `hd-fury-backdrop-2`: `HIDDEN_BACKDROP` also names `campaign-select`,
+`grid-select` and `cell-select`). The adapted luma each pair read at the grab (`original.backdrop.adapted_luma`) is stated to ours as
+`--fury-adapted-luma`, which sets the craft's exposure on Ship Select and pins the backdrop chain's adaptation on every page whose card the
+chain reads (`oag_post::hd_bloom::Chain::pin_adapted`; a capture only, play adapts on its own). Whole-pair mean grey, before to after: Campaign
+Select 4.77 to 3.32, cell 3.00 to 2.81, Ship Select 3.05 to 3.04 (the luma moved the hull by under a grey level), **grid 7.28 to 7.75**: its
+card animates, two grabs of the original differ by 15.9 mean grey over the card against 1.2 on cell, and the page region fell 1.50 to 0.07
+regardless. `original.backdrop.ours_exposure` records the stated value.
+
+**The HD Track Select pair is drawn at the original's turntable angle** (2026-11-19, `hd-track-select`): the circuit model's angle is a global
+the original's update steps every frame and keeps across visits, so `rpcs3-hd-menu-pair.py` reads it out of RAM just before the grab
+(`*(*(0x008ad4d8 + 0x49ec) + 0x1c4)`, `original.turntable_angle`) and renders ours with `--menu-picker-seconds` set to the seconds that turn
+ours' table that far (angle modulo a turn, over 0.6 rad a second). The wall time since the tap does not give it. A pair made before has no
+angle recorded: its phase is unknown, and re-rendering it draws ours at the default 1 s.
+
 **What ours draws from XML and what from `menu.toml`** (read off `crates/game/src/capture/menu_page.rs`, `campaign_page.rs`,
 `oag_hd::main_menu` and the `--screen` list; `--menu-page` is the only still route and `--screen` reaches only the boot
 screens, `Main Menu`, `Team Selection` and the rest are not among its names):
@@ -2028,7 +2055,7 @@ armed Autopilot showed `1000000000.00` on the original's HUD, and emulators pres
 | `capture_path` | `cold_boot`, `savestate_restore` or `unknown`, and the state file |
 | `presented_lag` | `value`, `unit` (ticks or seconds), `basis` (`measured`, `platform_measurement`, `assumed`, `unknown`), `what` |
 | `autopilot` | `armed` (true, false or `"unknown"`), `timer_written`, `timer_authored`, where it was read from |
-| `ram_writes` | every memory write made before the grab (the state's making included), `ram_writes_complete`, and `pair_script_ram_writes` (the pair scripts write none; they only read) |
+| `ram_writes` | every memory write made before the grab (the state's making included), `ram_writes_complete`, and `pair_script_ram_writes` (what the pair script itself wrote for the grab: only `rpcs3-hd-menu-pair.py`'s hidden Fury backdrop, a row tint zeroed and put back; every other pair script only reads) |
 | `emulator` | name, version, a hash of the settings recorded |
 | `twin` | the RMSE against the previous capture of the same state; `agreed` stays `null` because no threshold is documented |
 | `pair_kind` | `scenery` (grid, Time Trial), `race` or `zone` |

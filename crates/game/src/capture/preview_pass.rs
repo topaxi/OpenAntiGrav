@@ -51,6 +51,9 @@ pub(super) struct PreviewRequest {
     /// see [`crate::preview::track_model`]. Takes the place of `mode3d` and
     /// the orbit.
     pub track_model: Option<oag_ui_screens::picker::hd::track::TrackModel>,
+    /// How the screen's update poses the circuit model: the selected circuit's own pose and
+    /// the turntable's angle `seconds` in, see [`crate::preview::track_model::Posing`].
+    pub track_posing: crate::preview::track_model::Posing,
     /// How far into the screen the capture is, for the circuit model's
     /// turntable: `--menu-picker-seconds`, or `0.0` settled.
     pub seconds: f32,
@@ -60,6 +63,9 @@ pub(super) struct PreviewRequest {
     /// Whether the served front end is the Fury style, which picks the light its models are
     /// drawn in - see [`crate::preview::model_light`].
     pub fury: bool,
+    /// The adapted luma the craft's exposure is taken at, instead of the
+    /// title's read - a capture's `--fury-adapted-luma`.
+    pub adapted_luma: Option<f32>,
 }
 
 /// The source a capture's race options name, opened with its packs, for the
@@ -98,8 +104,13 @@ pub(super) fn draw_preview(
     let built = open_for_previews(race).and_then(|mut archives| {
         let light = if request.hull_only {
             let mut report = Vec::new();
-            let light =
-                crate::preview::model_light(&mut archives, title, request.fury, &mut report);
+            let light = crate::preview::model_light(
+                &mut archives,
+                title,
+                request.fury,
+                request.adapted_luma,
+                &mut report,
+            );
             for line in report {
                 log::debug!("preview {}: {line}", request.entry);
             }
@@ -169,6 +180,7 @@ pub(super) fn draw_preview(
                 target_size,
                 space,
                 widget,
+                request.track_posing,
                 request.seconds,
             );
         }

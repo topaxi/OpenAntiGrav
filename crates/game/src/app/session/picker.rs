@@ -143,6 +143,7 @@ impl Session {
                             emblem: catalogue::track_emblem(title, track),
                             icon: catalogue::track_icon(title, track),
                             reversed: track.reversed,
+                            model_pose: track.model_pose,
                         },
                     },
                     PreviewSource::Track {

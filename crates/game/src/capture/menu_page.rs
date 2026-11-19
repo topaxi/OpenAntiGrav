@@ -1133,12 +1133,18 @@ pub(super) fn picker_page(
             ship_fit,
             ship_scale,
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
+            track_posing: crate::preview::track_model::Posing::after(
+                title.front_end,
+                &picker,
+                seconds.unwrap_or(SETTLED_SECONDS),
+            ),
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
             hull_clock: {
                 let open = seconds.unwrap_or(SETTLED_SECONDS);
                 (open, step_seconds.unwrap_or(open))
             },
             fury: frame.blocks.as_ref().is_some_and(|blocks| blocks.fury),
+            adapted_luma: None,
         });
     let layers = oag_ui_screens::picker::draw_list(
         &picker,

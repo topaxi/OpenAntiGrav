@@ -469,6 +469,9 @@ pub(crate) struct PickerStage {
     /// every frame with whatever model is selected, so a step carries the last
     /// model's depth into the next - see [`crate::preview::ship_model::FitPlayer`].
     fit_motion: Option<crate::preview::ship_model::FitPlayer>,
+    /// The circuit model's turntable on a title whose update is read, stepped every frame
+    /// whichever circuit is selected - see [`crate::preview::track_model::Turntable`].
+    turntable: crate::preview::track_model::Turntable,
 }
 
 impl PickerStage {
@@ -512,6 +515,7 @@ impl PickerStage {
             laps: Vec::new(),
             seat: None,
             fit_motion: None,
+            turntable: crate::preview::track_model::Turntable::default(),
         }
     }
 
@@ -766,10 +770,22 @@ impl PickerStage {
             }
             None => (None, 1.0),
         };
+        let circuit_law = self
+            .previews
+            .front_end
+            .and_then(|front_end| front_end.circuit_turntable);
+        let (circuit_pose, _) = crate::preview::track_model::selected_circuit(&self.model);
+        let turntable = self.turntable;
         let Some(preview) = self.preview.as_mut() else {
             return;
         };
         if let Some(widget) = track_model {
+            let posing = crate::preview::track_model::Posing::of(
+                circuit_law,
+                circuit_pose,
+                &turntable,
+                seconds,
+            );
             preview.draw_track_model(
                 &gpu.device,
                 &gpu.queue,
@@ -779,6 +795,7 @@ impl PickerStage {
                 target_size,
                 space,
                 &widget,
+                posing,
                 seconds,
             );
         } else if let Some(widget) = ship_model {
@@ -850,6 +867,20 @@ impl PickerStage {
         self.fit_motion
             .get_or_insert_with(|| crate::preview::ship_model::FitPlayer::open(&fit))
             .tick(&fit, aspect, box_z, dt);
+    }
+
+    /// Advances the circuit model's turntable by the fixed ticks `dt` seconds make, in the
+    /// direction of the selected circuit, as the original's update does every frame.
+    pub(crate) fn tick_turntable(&mut self, dt: f32) {
+        let Some(law) = self
+            .previews
+            .front_end
+            .and_then(|front_end| front_end.circuit_turntable)
+        else {
+            return;
+        };
+        let (_, reversed) = crate::preview::track_model::selected_circuit(&self.model);
+        self.turntable.advance(&law, dt, reversed);
     }
 
     /// The craft's swap state this tick on a title that draws the race hull -
@@ -1017,7 +1048,8 @@ pub(crate) fn read_preview(
     let light = match (previews.title, previews.ship_hull, &source) {
         (Some(title), Some(_), PreviewSource::Ship { .. }) => {
             let mut report = Vec::new();
-            let light = crate::preview::model_light(archives, title, previews.fury, &mut report);
+            let light =
+                crate::preview::model_light(archives, title, previews.fury, None, &mut report);
             for line in report {
                 debug!("preview {name}: {line}");
             }

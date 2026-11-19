@@ -11,11 +11,17 @@
 //! reading [`crate::flyer::flyer_view_projection`] already makes of the same
 //! widget class, and the model sits `-z` in front of the camera.
 //!
-//! **Chosen, not measured**: the pitch ([`PITCH`]), the turntable's rate
-//! ([`TURN_SECONDS`]) and its starting yaw ([`YAW0`]), and the near and far
-//! planes. The widget authors none of them. RPCS3 frames of the screen show
-//! the circuit seen from above and at a different angle on each visit, so it
-//! turns; they do not give a rate.
+//! **Measured**, on a title whose screen update is read
+//! ([`oag_title::FrontEnd::circuit_turntable`], HD): the update overwrites the widget's
+//! `RotX`, `z` and `OriginY` with the selected circuit's own `RotX`, `PosZ` and
+//! `PosY + 440` ([`oag_title::CircuitPose`]) and its `RotY` with one global angle, stepped
+//! 0.01 rad every frame and wrapped at +-pi, backwards on a reversed circuit
+//! ([`Turntable`]). `docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md`, "The
+//! circuit model's update".
+//!
+//! **Chosen, not measured**: on a title whose update is not read (Omega), the pitch
+//! ([`PITCH`]), the turntable's rate ([`TURN_SECONDS`]) and its starting yaw ([`YAW0`]);
+//! on both, the near and far planes.
 
 use std::sync::Arc;
 
@@ -29,14 +35,134 @@ use oag_ui_screens::picker::hd::track::TrackModel;
 /// function builds from `tanf(0.5)` (see [`crate::flyer::FOV_Y`]). That the
 /// circuit-model widget uses the same literal is **chosen, not measured**.
 pub const FOV_Y: f32 = crate::flyer::FOV_Y;
-/// How far the circuit is tipped towards the camera, radians (**chosen**).
+/// How far the circuit is tipped towards the camera where the title's update is unread,
+/// radians (**chosen**).
 pub const PITCH: f32 = 0.55;
-/// Seconds per revolution (**chosen**).
+/// Seconds per revolution where the title's update is unread (**chosen**).
 pub const TURN_SECONDS: f32 = 24.0;
-/// The yaw at the screen's first tick, radians (**chosen**).
+/// The yaw at the screen's first tick where the title's update is unread, radians
+/// (**chosen**).
 pub const YAW0: f32 = 0.6;
 /// Near and far planes (**chosen**; the model sits within 180 +- 80 units).
 const DEPTH: [f32; 2] = [10.0, 2000.0];
+
+/// How the circuit model is posed this frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Posing {
+    /// The screen's own update: the circuit's pose, the law it is applied by and the
+    /// turntable's angle.
+    Entry {
+        pose: oag_title::CircuitPose,
+        law: oag_title::CircuitTurntable,
+        yaw: f32,
+    },
+    /// The widget as authored, turned at the stand-in rate `seconds` into the screen.
+    Standin { seconds: f32 },
+}
+
+impl Posing {
+    /// How a screen `seconds` in poses the selected circuit: by its entry's `pose` where the
+    /// title has the update's `law` and the entry authors a pose, else the stand-in.
+    #[must_use]
+    pub fn of(
+        law: Option<oag_title::CircuitTurntable>,
+        pose: Option<oag_title::CircuitPose>,
+        turntable: &Turntable,
+        seconds: f32,
+    ) -> Self {
+        match law.zip(pose) {
+            Some((law, pose)) => Self::Entry {
+                pose,
+                law,
+                yaw: turntable.angle(),
+            },
+            None => Self::Standin { seconds },
+        }
+    }
+}
+
+/// The pose the selected entry of a track picker authors for its circuit model and whether it is
+/// the reversed one; `(None, false)` for anything that is not a circuit entry.
+#[must_use]
+pub fn selected_circuit(
+    picker: &oag_ui_screens::picker::Picker,
+) -> (Option<oag_title::CircuitPose>, bool) {
+    match picker.entries().get(picker.index()).map(|e| &e.details) {
+        Some(oag_ui_screens::picker::Details::Track {
+            model_pose,
+            reversed,
+            ..
+        }) => (*model_pose, *reversed),
+        _ => (None, false),
+    }
+}
+
+impl Posing {
+    /// How a track picker `seconds` into its screen poses its circuit model, counting the
+    /// turntable from zero in the selected circuit's direction: what a capture draws.
+    #[must_use]
+    pub fn after(
+        front_end: Option<&oag_title::FrontEnd>,
+        picker: &oag_ui_screens::picker::Picker,
+        seconds: f32,
+    ) -> Self {
+        let law = front_end.and_then(|front_end| front_end.circuit_turntable);
+        let (pose, reversed) = selected_circuit(picker);
+        let turntable = law
+            .map(|law| Turntable::after(&law, seconds, reversed))
+            .unwrap_or_default();
+        Self::of(law, pose, &turntable, seconds)
+    }
+}
+
+/// The global angle the screen's update turns the circuit by: a step per frame, forwards on a
+/// circuit and backwards on a reversed one, wrapped at the law's limit.
+///
+/// Counted in whole frames of the original's update (`dt` times
+/// [`oag_title::CircuitTurntable::frames_per_second`], the remainder carried), because the
+/// step is per frame and not per second.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Turntable {
+    angle: f32,
+    carry: f32,
+}
+
+impl Turntable {
+    /// The angle `seconds` of a screen's frames turn a table that started at zero, in the one
+    /// direction.
+    #[must_use]
+    pub fn after(law: &oag_title::CircuitTurntable, seconds: f32, reversed: bool) -> Self {
+        let mut table = Self::default();
+        table.advance(law, seconds, reversed);
+        table
+    }
+
+    /// The angle, radians in `-limit..=limit`: the widget's `RotY`.
+    #[must_use]
+    pub fn angle(&self) -> f32 {
+        self.angle
+    }
+
+    /// Runs `seconds` of the screen's frames.
+    pub fn advance(&mut self, law: &oag_title::CircuitTurntable, seconds: f32, reversed: bool) {
+        // A tick that is exactly one frame must not land a rounding error short of it.
+        const EPSILON: f32 = 1e-3;
+        self.carry += seconds * law.frames_per_second;
+        while self.carry >= 1.0 - EPSILON {
+            self.carry -= 1.0;
+            self.frame(law, reversed);
+        }
+    }
+
+    fn frame(&mut self, law: &oag_title::CircuitTurntable, reversed: bool) {
+        self.angle += if reversed { -law.step } else { law.step };
+        if self.angle > law.limit {
+            self.angle = -law.limit;
+        } else if self.angle < -law.limit {
+            self.angle = law.limit;
+        }
+    }
+}
 
 impl crate::preview::Preview {
     /// Draws the circuit model `seconds` into the screen: its own camera, the
@@ -53,9 +179,10 @@ impl crate::preview::Preview {
         target_size: (u32, u32),
         space: Space,
         widget: &TrackModel,
+        posing: Posing,
         seconds: f32,
     ) -> bool {
-        let (view_projection, model) = matrices(widget, space, seconds);
+        let (view_projection, model) = matrices(widget, space, posing);
         self.draw_matrices(
             device,
             queue,
@@ -71,25 +198,35 @@ impl crate::preview::Preview {
     }
 }
 
-/// The view-projection and model matrices of the circuit model `seconds` into
-/// the screen, for [`crate::preview::Preview::draw_matrices`].
+/// The view-projection and model matrices of the circuit model, for
+/// [`crate::preview::Preview::draw_matrices`].
 #[must_use]
-pub fn matrices(widget: &TrackModel, space: Space, seconds: f32) -> (Mat4, Mat4) {
+pub fn matrices(widget: &TrackModel, space: Space, posing: Posing) -> (Mat4, Mat4) {
     let projection = camera::perspective(FOV_Y, space.display_aspect, DEPTH[0], DEPTH[1]);
+    let (origin_y, z, pitch, yaw) = match posing {
+        Posing::Entry { pose, law, yaw } => {
+            (law.origin_y + pose.pos_y, pose.pos_z, pose.rot_x, yaw)
+        }
+        Posing::Standin { seconds } => (
+            widget.origin[1],
+            widget.z,
+            PITCH,
+            YAW0 + seconds * std::f32::consts::TAU / TURN_SECONDS,
+        ),
+    };
     let shift = Vec3::new(
         2.0 * widget.origin[0] / space.size.0 - 1.0,
-        1.0 - 2.0 * widget.origin[1] / space.size.1,
+        1.0 - 2.0 * origin_y / space.size.1,
         0.0,
     );
-    let yaw = YAW0 + seconds * std::f32::consts::TAU / TURN_SECONDS;
     // `orthoScale` scales the placement, not the model: the same reading the
     // campaign flyer's widget gets (`crate::flyer::campaign_pose`).
     let scale = widget.ortho_scale;
     let model = Mat4::from_translation(Vec3::new(
         widget.offset[0] / scale[0],
         widget.offset[1] / scale[1],
-        widget.z / scale[2],
-    )) * Mat4::from_rotation_x(PITCH)
+        z / scale[2],
+    )) * Mat4::from_rotation_x(pitch)
         * Mat4::from_rotation_y(yaw);
     (Mat4::from_translation(shift) * projection, model)
 }

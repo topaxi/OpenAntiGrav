@@ -43,7 +43,7 @@ behaviour only; what lands here is written by hand.
 - [wipeout-pure-dlc2dlc](https://gitlab.com/thp/wipeout-pure-dlc2dlc) (ISC, Thomas Perl): the published per-pack keys for Pure's DLC ([ADR-0033](docs/architecture/adr/0033-external-key-material-for-decryption.md), [DLC packs](docs/formats/dlc-pack.md)).
 - [GFD-Studio](https://github.com/tge-was-taken/GFD-Studio): read for the GNF texture header ([GNF](docs/formats/gnf.md)).
 - [chdman](https://www.mamedev.org/) (`mame-tools`): the reference implementation our CHD reader is checked against, and the tool `just` uses to unpack images.
-- [FFmpeg](https://ffmpeg.org/) (LGPL/GPL): an external program, last resort only ([ADR-0024](docs/architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md)): Bink and PS2 movie transcodes into the AV1 cache, PSP `.AT3` decoding, and an independent check of our IPU demuxer.
+- [FFmpeg](https://ffmpeg.org/) (LGPL/GPL): an external program, last resort only ([ADR-0024](docs/architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md)): Bink and PS2 movie transcodes into the AV1 cache, PSP `.AT3` and Bink audio decoding, and an independent check of our IPU demuxer and our ATRAC9 and AAC decodes.
 - [GStreamer](https://gstreamer.freedesktop.org/) (LGPL-2.1): the optional native video path on Linux ([ADR-0017](docs/architecture/adr/0017-gstreamer-native-video.md)).
 
 ## Algorithms and techniques we reimplemented or ported
@@ -53,7 +53,8 @@ behaviour only; what lands here is written by hand.
 - **FXAA**: Timothy Lottes' technique, written fresh from the published description, not from NVIDIA's FXAA 3.11 source, which carries its own terms (`oag_post::fxaa`).
 - **Motion blur**: McGuire, Hennessy, Bukowski and Osman, *A Reconstruction Filter for Plausible Motion Blur* (I3D 2012), written from the paper.
 - **AV1 movie cache**: [rav1d](https://github.com/memorysafety/rav1d) (via `re_rav1d`, BSD-2-Clause), a Rust port of [dav1d](https://code.videolan.org/videolan/dav1d), plays the cache ([ADR-0008](docs/architecture/adr/0008-av1-movie-cache.md)).
-- **ATRAC9**: [atrac9dec](https://github.com/claimore22/atrac9dec) (MIT) decodes Vita and PS4 music. ATRAC3+ has no Rust decoder we use; PSP `.AT3` goes through FFmpeg.
+- **ATRAC9**: [atrac9dec](https://github.com/claimore22/atrac9dec) (MIT), a Rust port of Alex Barney's [LibAtrac9](https://github.com/Thealexbarney/LibAtrac9) (MIT), decodes every Vita and PS4 sound. It is vendored in `vendor/atrac9dec` with five functions ported from LibAtrac9 ([ATRAC9](docs/formats/atrac9.md)); LibAtrac9's licence text is in [`licences/LibAtrac9-MIT.txt`](licences/LibAtrac9-MIT.txt). ATRAC3+ has no decoder we use; PSP `.AT3` goes through FFmpeg ([ATRAC3+](docs/formats/atrac3plus.md)).
+- **AAC**: [Symphonia](https://github.com/pdeljanov/Symphonia) (MPL-2.0) decodes 2048's `intro.mp4` sound track, as it does HD's MP3.
 - **MP3** (HD's music container): [Symphonia](https://github.com/pdeljanov/Symphonia) (MPL-2.0).
 - **CHD**: [chd-rs](https://github.com/SnowflakePowered/chd-rs) (BSD-3-Clause), with the perf fork of [lzma-rs](https://github.com/SnowflakePowered/lzma-rs/tree/feature-perf-experiments) (MIT).
 - **Networking**: the techniques in the reading list of [`docs/networking/README.md`](docs/networking/README.md), among them Jared Cone's GDC 2018 talk *It IS Rocket Science!*, Glenn Fiedler's networked physics series, Mauve et al.'s local-lag and timewarp, and Pantel and Wolf on racing-car collisions.

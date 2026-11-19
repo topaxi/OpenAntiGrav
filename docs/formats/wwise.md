@@ -11,7 +11,7 @@ project's cue vocabulary, and nothing plays sound in a race on this title.
 Reader: [`oag_formats::wwise`](../../crates/formats/src/wwise.rs) (banks) and
 [`oag_formats::wwise::wem`](../../crates/formats/src/wwise/wem.rs) (media
 header). Decoder: [`oag_music::wem`](../../crates/music/src/wem.rs), over the
-[`atrac9dec`](https://crates.io/crates/atrac9dec) crate.
+vendored `atrac9dec` ([atrac9.md](atrac9.md)).
 Ground truth: `crates/formats/tests/wwise_ground_truth.rs` (banks) and
 `crates/music/tests/omega_wem_ground_truth.rs` (media, the decoder, and a cue
 played through the mixer).
@@ -229,7 +229,7 @@ codec:
    all 400 loose `data00` files sampled (371 stereo, 24 four-channel, 5
    eight-channel) with `-xerror` and no message; random bytes in the same
    container stop at "Invalid scalefactor coding mode!". `atrac9dec` (a port of
-   LibAtrac9) decodes all mono and stereo files, both loose and embedded.
+   LibAtrac9, vendored with fixes) decodes every file, loose and embedded.
 4. **The bank says so.** Every source whose plugin is codec number 12 has
    media tagged `0xFFFC`, and every one whose plugin is codec number 1 has media
    tagged `0xFFFE` (PCM), **with no exception**: 7,785 ATRAC9 sources in `data00`
@@ -274,13 +274,15 @@ of LibAtrac9, no dependencies). It is young and single-author, so it was measure
   is not, and which is not known; it is inaudible on its own and is not
   corrected here. Confidence that mono and stereo decode is right: 90 (two
   independent decoders agree; neither is Sony's).
-* **Four-, six- and eight-channel files: refused, all of them** - 49 loose
-  (38 four-channel, 11 eight) and 9 embedded (2 six, 7 eight) per archive - with
-  "invalid scale factor mode" or "scale factor out of bounds" part-way in.
-  FFmpeg decodes the four- and eight-channel files it was given without error.
-  The crate's README rates multi-channel "partial", and this is that. These
-  are the soundtrack's stems and a few beds, not the effects; a decoder fix (or
-  a second crate) is what closes it.
+* **Four-, six- and eight-channel files: decoded since 2026-11-19.** The
+  published crate refused all of them - 49 loose (38 four-channel, 11 eight)
+  and 9 embedded (2 six, 7 eight) per archive - because its LFE block reader was
+  a placeholder and its band-extension and joint-stereo reads were wrong.
+  `vendor/atrac9dec` carries the fixes, and every ATRAC9 stream on both
+  archives now decodes sample-identical to LibAtrac9; [atrac9.md](atrac9.md)
+  has the patches and the numbers. Against FFmpeg every channel agrees to one
+  LSB, negated, except the LFE of some eight-channel files, where the two
+  decoders differ ([atrac9.md](atrac9.md#the-lfe-channel)).
 
 ### One circuit's cue, end to end
 
@@ -402,7 +404,8 @@ Counts come from the ground-truth tests, over every bank of each archive.
   the `None` branch.
 * **Front-end flow.** `Menus` is read to play the loop; which of `Menus` and
   `Loading` the original is in at which moment was not watched.
-* **Eight-channel streams.** 11 songs; `atrac9dec` refuses them.
+* **Eight-channel streams.** 11 songs; they decode since 2026-11-19 but are not
+  played: folding eight channels to the stereo mix is unread.
 * **The property id 13** on tracks, and the track's other base parameters.
 * **Looping.** Whether the ranseq's `loop 1` or the segment loops the song was
   not read; the engine plays each track once and advances the playlist.
@@ -534,7 +537,9 @@ the `SBlk` reader's. **HD:** `SBlk` too, untouched.
 * **Event names.** A bank carries ids only, but its `.txt` listing names every
   event, and the executable's name for a cue is `<cue>[_PC]__<bank>` (above).
   Mapping this project's cues to Omega's cue strings is wiring, not reading.
-* **Multi-channel ATRAC9**, above.
+* **Multi-channel mix-down**: four-, six- and eight-channel media decode, and
+  `oag_audio` plays the first two channels of each; how the original folds
+  the rest is unread.
 * **The unread parts of `HIRC`**: the base parameters of sounds and
   actor-mixers, switch values, `Init.bnk`'s bus and state definitions. Music
   objects are read (above); `EventPlan::unread` still lists the events that

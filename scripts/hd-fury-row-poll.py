@@ -4,7 +4,7 @@
 Attach to a long-lived `rpcs3-drive.py serve` on the Fury disc
 (`OAG_RPCS3_ATTACH=1`). Finds the widget's row table by scanning guest memory
 for the 0x60-byte row named `default` followed by `Main Menu`, then the item
-that points at it (`item+0xb8` is the table's start, `+0xc4` the current row,
+that points at it (`hd_fury_backdrop.Widget`; `item+0xb8` is the table's start, `+0xc4` the current row,
 `+0xc8` the `default` row, `+0x1648..+0x1654` the `OnEnable` pulse's frame,
 frames, seconds and rate), and prints the screen, the current row's name and tint
 and the pulse block every 0.1 s. Rows hold the tint's four floats at `+0x40`.
@@ -27,6 +27,7 @@ sys.path.insert(0, str(HERE))
 _spec = importlib.util.spec_from_file_location("rpcs3_drive", HERE / "rpcs3-drive.py")
 drive = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(drive)
+import hd_fury_backdrop as fb  # noqa: E402
 
 GUEST_BASE = 0x300000000
 ROW = 0x60
@@ -43,39 +44,11 @@ def main():
     def name(row):
         return row[:0x40].split(b"\0")[0].decode(errors="replace")
 
-    table = None
-    for base in range(0x30000000, 0x40000000, 0x100000):
-        try:
-            block = read(base, 0x100000)
-        except OSError:
-            continue
-        at = block.find(b"default\0")
-        while at >= 0 and table is None:
-            here = base + at
-            if at % 4 == 0 and name(read(here + ROW, ROW)) == "Main Menu":
-                table = here
-            at = block.find(b"default\0", at + 4)
-        if table is not None:
-            break
-    if table is None:
-        sys.exit("no row table: is the Fury style's front end up?")
-    word = struct.pack(">I", table)
-    item = None
-    for base in range(0x30000000, 0x40000000, 0x100000):
-        try:
-            block = read(base, 0x100000)
-        except OSError:
-            continue
-        at = block.find(word)
-        while at >= 0:
-            if at % 4 == 0 and struct.unpack(">I", read(base + at + 0x10, 4))[0] == table:
-                item = base + at - 0xB8
-                break
-            at = block.find(word, at + 4)
-        if item is not None:
-            break
-    if item is None:
-        sys.exit("found the rows at %#x but no item holds them" % table)
+    try:
+        widget = fb.Widget(mem)
+    except LookupError as error:
+        sys.exit(str(error))
+    table, item = widget.table, widget.item
     print("rows %#x item %#x" % (table, item), flush=True)
     start = time.time()
     while time.time() - start < seconds:

@@ -106,6 +106,9 @@ pub enum Details {
         /// where the title draws no such grid.
         icon: Option<String>,
         reversed: bool,
+        /// The pose the circuit's own entry authors for its model, on a title whose screen
+        /// takes it from there ([`oag_title::FrontEnd::circuit_turntable`]).
+        model_pose: Option<oag_title::CircuitPose>,
     },
     /// A team: its ratings, when the definition authors them, and its
     /// selectable liveries as `(id, label)` pairs - empty for a team that

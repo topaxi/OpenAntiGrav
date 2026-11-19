@@ -526,6 +526,12 @@ impl FuryBackdrop {
         })
     }
 
+    /// States the luma the chain's exposure is taken at, or `None` for the scene's own
+    /// (`oag_post::hd_bloom::Chain::pin_adapted`).
+    pub fn pin_adapted(&mut self, luma: Option<f32>) {
+        self.chain.pin_adapted(luma);
+    }
+
     /// Whether a page's models can be drawn into the scene: their block read.
     #[must_use]
     pub fn takes_models(&self) -> bool {
@@ -948,6 +954,14 @@ impl super::Renderer {
         match FuryBackdrop::new(device, queue, self.target_format, clouds, bloom) {
             Ok(fury) => self.fury = Some(fury),
             Err(error) => log::warn!("menu backdrop: {error:#} - it draws nothing"),
+        }
+    }
+
+    /// States the luma the Fury backdrop's chain adapts to, in place of the scene's own;
+    /// a capture's `--fury-adapted-luma`.
+    pub fn pin_fury_adapted(&mut self, luma: Option<f32>) {
+        if let Some(fury) = &mut self.fury {
+            fury.pin_adapted(luma);
         }
     }
 

@@ -459,6 +459,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_fit: None,
     ship_preview_settle: None,
     circuit_models: &[],
+    circuit_turntable: None,
     // Not checked this pass - a gap, not a measurement that Pure ships no
     // such screen. See `oag_title::FrontEnd::endrace_entry`.
     endrace_entry: None,
@@ -466,6 +467,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     borrows_ps2_split_screens: false,
     model_lighting: None,
     team_hex_fade: None,
+    team_hex_ring: None,
 };
 
 pub mod campaign;

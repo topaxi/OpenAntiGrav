@@ -377,29 +377,98 @@ fn a_faded_grid_shades_each_fill_toward_the_selected_column() {
     );
 }
 
+/// The cursor ring: a band of the outline art, one copy per unit of its width, in `TEAM_RING`,
+/// on the chosen livery's cell of the selected team's column only, and following the chosen
+/// livery as the selection moves between variants and teams.
 #[test]
-fn the_cursor_ring_follows_the_chosen_livery_row() {
+fn the_cursor_ring_is_a_band_on_the_chosen_liveries_cell() {
     let layout = layout();
     let extra = layout.hd.as_deref().unwrap();
-    let ring = |picker: &Picker| -> Option<f32> {
+    let grid = extra.hex.unwrap();
+    // The ring's copies, outermost first, in one frame's draws.
+    let ring = |picker: &Picker| -> Vec<[f32; 4]> {
         body(picker, &layout, extra, &Frame::default(), &|n| sheet(n))
-            .iter()
+            .into_iter()
             .filter_map(|draw| match draw {
-                Draw::Sprite { rect, color, .. } if *color == [0.73, 0.14, 0.22, 1.0] => {
-                    Some(rect[1])
-                }
+                Draw::Sprite { rect, color, .. } if color == super::hex::TEAM_RING => Some(rect),
                 _ => None,
             })
-            .next()
+            .collect()
+    };
+    // `row`'s cell in the selected column, which is the middle of five.
+    let cell = |picker: &Picker, row: usize| {
+        grid.cells(picker.index(), picker.entries().len(), 0.0)[2 * 7 + row].rect
+    };
+    let row_of = |picker: &Picker| {
+        let Details::Ship { models, .. } = &picker.entries()[picker.index()].details else {
+            unreachable!()
+        };
+        models
+            .iter()
+            .position(|model| model.variant == Some(picker.variant_index()))
+            .expect("the chosen livery has a row")
     };
     let mut picker = picker_of(&["A", "B", "C"], "B");
-    let first = ring(&picker).expect("a ring");
     let mut input = Input::default();
-    input.begin_frame(0);
-    input.begin_frame(1 << Button::Down as u32);
-    picker.update(&mut input);
-    let second = ring(&picker).expect("a ring");
-    assert!(second < first, "row 2 sits above row 3: {first} {second}");
+    let mut step = |picker: &mut Picker, button: Button| {
+        input.begin_frame(0);
+        input.begin_frame(1 << button as u32);
+        picker.update(&mut input);
+    };
+    let (mut down, mut across) = (None, None);
+    for (button, name) in [
+        (None, "the opening livery"),
+        (Some(Button::Down), "the second variant"),
+        (Some(Button::Right), "the next team, same variant"),
+        (Some(Button::Up), "back to the first variant"),
+    ] {
+        if let Some(button) = button {
+            step(&mut picker, button);
+        }
+        let drawn = ring(&picker);
+        assert_eq!(
+            drawn.len(),
+            12,
+            "{name}: six copies of the outline, two passes each"
+        );
+        assert!(
+            drawn.chunks(2).all(|pass| pass[0] == pass[1]),
+            "{name}: the passes agree"
+        );
+        let copies: Vec<[f32; 4]> = drawn.chunks(2).map(|pass| pass[0]).collect();
+        // The outermost copy is on the chosen row of the selected column: its offset from that
+        // row's cell is one constant for every row and team.
+        let row = row_of(&picker);
+        let (dy, dx) = (
+            copies[0][1] - cell(&picker, row)[1],
+            copies[0][0] - cell(&picker, row)[0],
+        );
+        assert_eq!(*down.get_or_insert(dy), dy, "{name}: on row {row}");
+        assert_eq!(*across.get_or_insert(dx), dx, "{name}: in the column");
+        // Each copy is the one before scaled down about the hexagon's centre by a unit, and the
+        // six of them span the band's six units.
+        let band = |copy: &[f32; 4]| (copies[0][3] - copy[3]) * 0.5 * 62.0 / 64.0;
+        for (n, copy) in copies.iter().enumerate() {
+            assert!((band(copy) - n as f32).abs() < 0.05, "{name}: copy {n}");
+        }
+    }
+    // A cell's ring never reaches another row or column: one band in the frame, not one per cell.
+    assert_eq!(ring(&picker).len(), 12);
+}
+
+/// The ring is drawn in the grid's own tint, which a title's data may change (Omega's is red).
+#[test]
+fn the_cursor_ring_takes_the_grids_tint() {
+    let mut layout = layout();
+    let red = [0.84, 0.0, 0.0, 1.0];
+    layout.hd.as_deref_mut().unwrap().hex.as_mut().unwrap().ring = red;
+    let extra = layout.hd.as_deref().unwrap();
+    let picker = picker_of(&["A", "B", "C"], "B");
+    let rings = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n))
+        .into_iter()
+        .filter(|draw| matches!(draw, Draw::Sprite { color, .. } if *color == red))
+        .count();
+    assert_eq!(rings, 12);
 }
 
 #[test]

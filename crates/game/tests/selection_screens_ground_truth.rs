@@ -266,6 +266,7 @@ fn the_track_picker_draws_the_discs_own_rows() {
                 emblem: None,
                 icon: None,
                 reversed: false,
+                model_pose: None,
             },
         })
         .collect();
@@ -1107,6 +1108,8 @@ fn omega_reads_its_own_team_selection() {
     assert_eq!(model.origin, pose.origin);
     let grid = extra.hex.expect("the honeycomb");
     assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
+    // Its cursor ring is the HD style's red, not the Fury style's pale pink the grid defaults to.
+    assert_eq!(grid.ring, [0.84, 0.0, 0.0, 1.0]);
     // The nineteen declared teams are all offered: the twelve HD-era, the two Tigrons and
     // the five 2048-era, whose `Logo.gtf` sits under their own `Ships\<Team>` directory.
     assert_eq!(shell.teams.len(), 19);

@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [omega]
-updated: 2026-10-05
-summary: "Decode the 11 eight-channel ATRAC9 songs and read the track base parameters that set the mix level"
+updated: 2026-11-19
+summary: "Fold the 11 eight-channel ATRAC9 songs (now decoded) to stereo and read the track base parameters that set the mix level"
 difficulty: medium (35)
 ---
 
@@ -13,8 +13,10 @@ the front end plays its loop. Evidence is in `docs/formats/wwise.md`, "Music".
 
 ## Open
 
-- 11 songs are one eight-channel ATRAC9 file; `atrac9dec` refuses them, so they
-  are listed (`omega::Skip::Channels`) and not played. FFmpeg decodes them.
+- 11 songs are one eight-channel ATRAC9 file. They decode in process since
+  2026-11-19 (`vendor/atrac9dec`, `docs/formats/atrac9.md`), but are still
+  listed (`omega::Skip::Channels`) and not played: how the original folds 7.1
+  to stereo is unread (`oag_audio` would play the front pair alone).
 - Location 00 has no `Set_Music_Track_0__frontend` event in the bank: unplayed.
 - The mix is a unity sum of stems and a scale-down when it would clip (chosen,
   not measured). The track property id 13 (-100 to 100) looks like a speaker
@@ -30,8 +32,8 @@ the front end plays its loop. Evidence is in `docs/formats/wwise.md`, "Music".
 
 ## Next Steps
 
-1. Decode the eight-channel files (FFmpeg out of process, or a fork of the
-   decoder), mix them down, and add the 11 songs to the playlist.
+1. Choose (or read) a 7.1-to-stereo fold, lift `Skip::Channels` for it, and
+   add the 11 songs to the playlist; decoding is done.
 2. Read a track's base parameters (property 13, positioning) and check the fold
    against a capture, if one ever exists.
 3. Read the third switch group and settle `PlaylistId`.

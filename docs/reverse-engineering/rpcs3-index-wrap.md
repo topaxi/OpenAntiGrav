@@ -39,6 +39,7 @@ Not walked: the HD-style front end, and a race with a full late-race weapon exch
 | Compare-page pairs | Verdict |
 | --- | --- |
 | `hd/menu-campaign-select`, `menu-cell-select`, `menu-grid-select`, `menu-ship-select`, `menu-track-select`, `gap-main`, `gap-options`, `gap-racebox` | wrapped. Re-taken on the wide build and held, not adopted into `data/reference` |
+| `hd/menu-ship-select`, `menu-track-select` since 2026-11-19 | not shown: the pair script hides the backdrop on both sides ([menu-backdrop.md](../ghidra/functions/ps3-hdfury-eu/menu-backdrop.md), "Hidden for a compare shot"), so the wrapped draw adds nothing to the frame |
 | `hd/loading-loading` | clean: one ring dump 3 s into a Vineta K load, `QUADS` arrays 4, `TRIANGLE_STRIP` 1,415. One frame, seen once |
 | the 13 `hd/<circuit>` pairs, `hd-race/talons-pack` | clean: same circuit in the race census. Inferred from another frame of that circuit, with a margin of about 40 times |
 

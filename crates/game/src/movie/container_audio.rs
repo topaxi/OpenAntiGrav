@@ -63,6 +63,18 @@ pub(super) struct ContainerTrack {
     /// track's own measured duration standing in until the audio is actually
     /// decoded - see `super::bink::bink_audio`.
     pub seconds: f64,
+    /// Which codec the track carries, which decides where it decodes.
+    pub codec: ContainerCodec,
+}
+
+/// A container track's codec, as its container header names it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ContainerCodec {
+    /// MP4's `mp4a`: decoded in process ([`oag_music::aac`]), no cache.
+    Aac,
+    /// Bink audio, DCT or RDFT: `ffmpeg`, through the cache. No permissively
+    /// licensed decoder exists to take or learn from (`docs/formats/bik.md`).
+    Bink,
 }
 
 /// Decodes one audio stream out of a container, through the cache.
@@ -87,6 +99,20 @@ pub(super) fn decode(
     sample_rate: u32,
     cache_dir: &Path,
 ) -> Result<Pcm> {
+    if track.codec == ContainerCodec::Aac {
+        let blob = std::fs::read(&track.source)
+            .with_context(|| format!("reading {}", track.source.display()))?;
+        let pcm = oag_music::aac::decode_mp4(&blob)?;
+        if (pcm.channels, pcm.sample_rate) != (channels, sample_rate) {
+            bail!(
+                "{} decodes to {} channel(s) at {} Hz; its header says {channels} at {sample_rate}",
+                track.source.display(),
+                pcm.channels,
+                pcm.sample_rate
+            );
+        }
+        return Ok(pcm);
+    }
     let out = cache_path(track, channels, sample_rate, cache_dir);
 
     if let Some(pcm) = read_cached(&out, channels, sample_rate) {
@@ -207,6 +233,7 @@ mod tests {
             stream_index: 0,
             descriptor: "binkaudio_dct, track 0 of 1".to_string(),
             seconds: 1.0,
+            codec: ContainerCodec::Bink,
         }
     }
 

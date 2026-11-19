@@ -4016,7 +4016,7 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 | Piece | Source | Confidence |
 | --- | --- | --- |
 | cell | `Data\FE\Images\Hexagon_HD.gtf` (72x62 art in 128x64) at 1.22 | 70 |
-| cursor ring | `Hexagon_HD_OUTLINE.gtf`, tint read off the frame (`185/35/55`); the original's ring is about twice as thick: **chosen, not measured** | 40 |
+| cursor ring | a band of `Hexagon_HD_OUTLINE.gtf` six units wide, tinted pale pink (`193/81/91` on the flats, `200/92/102` on the sides); see "The cursor ring" below. **Chosen, not measured** as widget constants | 60 |
 | padlock | `Padlock.gtf` (the image this screen authors at 512x512), visible art 91x129 texels drawn at 0.44; colour `SelectedLockCol` on the selected column, faded toward `SelectedLockColFade` by 0.2 and 0.65 one and two columns out (frame reads 128, 110, 68) | 70 |
 | model icon | `<modellocation>\FE\thumb<LiveryNumber>.gtf` - `Feisar_c1\FE\thumb4.gtf` for `concept1`, `Feisar\FE\thumb0.gtf` for `normal`; census: every model of every team carries one | 85 (the frame's two icons match thumb4 and thumb0) |
 | selected column | `SelectedColumnCol` drawn twice on the bare cell (the two-pass fill `Block_Render` uses): `0x64` twice over black is 160, the frame reads (151, 6, 20) | 70 |
@@ -4031,9 +4031,45 @@ below, which rests on one clean anchor (the stat blocks' 545-unit spacing).
 **The columns are teams, the rows models**: `Right` from `concept1` lands on
 the next team's `concept1` (2026-09-29 walk), so the centre column is the
 selected team and its neighbours the teams either side (wrapping: chosen).
-The cursor ring sits on the row of the chosen livery. Our picker offers three
+The cursor ring sits on the row of the chosen livery (a cell of the centre column
+only, and it follows `Up`/`Down` between variants and `Left`/`Right` between teams).
+Our picker offers three
 liveries (`""`, `_c1`, `_n1`), each on the row its model occupies
 (`Team::hex_cells`, `model_for_directory`).
+
+**The cursor ring (2026-11-19, `hd-ship-variant-outline`)**: the maintainer
+reported that Ship Select did not highlight the selected variant. The ring was
+drawn, but as the outline art alone: `Hexagon_HD_OUTLINE.gtf` is a ring 0.87
+texel wide (alpha 221 on one texel, 128x64 art), about one pixel at 1920x1080,
+in a red that vanished on the red cell. The Fury-style frame (`hd/menu-ship-select`)
+reads a pale band 6 px wide inside the cell's edge (193/81/91 on the flats,
+200/92/102 on the sides, perpendicular profile at the top and bottom edges: 602.5
+to 608.5 and 670.5 to 676.5 of a 73 px cell), the cell's red unchanged inside it
+(149/6/20). `Track Creation`'s frame has the same band (6 px, 223/169/174), so
+the band is the widget class's, shared by `hex::draw_cells`; and `Omega`'s
+Ship Select frame (`omega/menu-ship-select`) has a 4.6 px band, which is 6 px
+times its grid's `Scale="0.8"`, in an opaque red (215/0/0) on a grey cell.
+Drawn as the outline art repeated at one-unit insets (six copies, each twice,
+the two-pass fill the selected column's red uses), the tint per screen: **chosen,
+not measured**, because the XML authors no ring attribute (`HexSelection` reads
+shape and colours only, and `Omega`'s carries the same `SelectedColumnCol`
+`0x64ff0000` as HD's) and the executable's draw was not read (no Ghidra
+instance was up). Whether the band is the art repeated or a stencilled hexagon is
+unread; the frames fit either. The tint is HD's Fury-style pink by default and
+`FrontEnd::team_hex_ring` where a title's differs (Omega: red, the HD style;
+what HD's own HD style draws is unmeasured). Box metric (mean absolute difference
+of the selected cell's box, `390,598,490,682` of the 1920x1080 pair): 0.0800 to
+0.0459; `Track Creation`'s ring box (`450,440,570,545`): 0.1337 to 0.0985; mean
+grey of the two pairs 4.55 to 4.51 and 7.89 to 7.83. Confidence 60 (one frame
+each).
+
+**Omega cross-check: ported, tint differs.** Omega's Ship Select draws the same
+band through the same `draw_cells` (thickness scales with the grid's `Scale`, 4.6
+px against the frame's 4.6) in its own red; its selected column's fill (grey in
+the original, light red in ours) and the cell's thumbnail art are other open
+differences. **`Cell Selection`'s outline is not this widget**: `CellMode`
+authors its hexagons as `Bg_x_y`/`Outline_x_y` image layers, so its white
+outline needs that screen's own reading (still open).
 
 **The lock rule is inherited, labelled so**: a row is open when it is a model
 this build lets a player race, padlocked otherwise - Pulse's law, unmeasured
@@ -4259,10 +4295,30 @@ widget shares the flyer's field of view (checked against the frames, not fitted:
 a 24 s sweep of this build, every 2 s, has its widest frame 739 grid units across
 on Vineta K and 797 on Moa Therma, against 790 and 802 in `track-carousel`
 frames 12 and 02, each of which is a lower bound on its circuit's widest yaw), the
-pitch (0.55), the turntable's 24 s per revolution and its starting yaw, the
+pitch (0.55), the turntable's 24 s per revolution and its starting yaw (all three **now measured on HD**, see below), the
 near and far planes, and the multiplier `0x81db67ea` (taken as 1: nothing in
 the model or the executable gives its value). **Measured**: that the circuit turns (frames 12 and 24 of
-`track-carousel` show Vineta K at different yaws), not its rate.
+`track-carousel` show Vineta K at different yaws); its rate and pose are below.
+
+**The pose and the turntable, measured 2026-11-19 (`hd-track-select`)**: the `TrackModel` widget's `OriginX=1308 OriginY=440 z=-180` are
+overwritten every frame by the screen's update, so the camera above holds only where a title's update is unread. On HD the update takes
+the selected circuit's own `RotX`, `PosZ` and `PosY` from its `PI_Track` entry (Vineta K `0.35`, `-135`, `-20`; the origin is
+`440 + PosY` down) and turns the circuit by one global angle stepped `0.01` rad a frame (`0.6` rad a second at 60 fps), backwards on a
+reversed circuit, wrapped at `+-pi`, kept across visits (`docs/ghidra/functions/ps3-hdfury-eu/track-selection-screen.md`, "The circuit
+model's update"). `oag_title::FrontEnd::circuit_turntable` carries the law (HD `Some`, Omega `None`), `oag_raceplay::catalogue::Track::model_pose`
+the entry's numbers and `oag_game::preview::track_model::{Posing, Turntable}` the pose and the accumulator, ticked every frame by
+`PickerStage::tick_turntable`. The chosen pitch (0.55), 24 s revolution and starting yaw stay for Omega only. Per-visit the table restarts at
+zero in ours; the original keeps the angle across visits (open). The pair `hd/menu-track-select` (same original, ours before and after):
+circuit-model frame (862,180)-(1747,675) mean absolute grey difference 22.5 to 13.1 raw, 17.7 to 8.6 with the page's warm mask, whole
+frame `mean_grey` 9.98 to 7.89, rmse 0.120 to 0.099. **Omega ported: checked, applies, not wired** (`omega/menu-track-select` unchanged to the
+digit, 19.10); Omega's `PI_Track` authors `RotX 0.45`, `PosX 0.55`, `PosY 0.175`, `PosZ -2.05` and `Scale 0.012`, in widget units whose update is unread.
+
+**The backdrop behind both pickers is hidden on the pairs, 2026-11-19 (`hd-fury-backdrop`)**: the Fury cloud is a new roll on every boot,
+so `hd/menu-track-select` and `hd/menu-ship-select` are photographed with its row tint written to zero in the original and drawn with
+`--fury-tint 0` in ours; the pairs read 7.83 to 5.84 and 4.51 to 3.05 mean grey, and the page outside the model's frame 0.83 and 1.55 to
+0.035 on both (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"; `docs/tools/compare-page.md`). The
+cloud a player sees is unchanged. Campaign Select, grid and cell are hidden the same way since `hd-fury-backdrop-2`, and ours states
+the adapted luma the pair read (`--fury-adapted-luma`); numbers on that page. **Omega: checked, differs** (no Fury widget; its scene backdrop is another widget).
 
 **Live, 2026-10-09** (Xvfb, software Vulkan, debug build): the model draws on
 the real screen, the grey matches the capture's, and stepping the circuit

@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-18
+updated: 2026-11-19
 summary: "HD front end: Ship Select camera, settle and hull lighting wired; settle start, craft turn and zoom, Omega pose open"
 difficulty: medium (30)
 ---
@@ -34,7 +34,19 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   fainter and browner than the original at matched screens (the cloud path
   differs, and this build's music pulse sits at 0.23 where RPCS3's reaches 1.2);
   `--team Feisar` does not preselect the Ship Select picker, so captures show
-  the default team instead (a CLI bug, found 2026-10-10)
+  the default team instead (a CLI bug, found 2026-10-10). **The pairs hide the backdrop on both sides since 2026-11-19
+  (`hd-fury-backdrop`)**: no grab of it can be reproduced (a new cloud and path every boot, two paths in three in modes
+  ours does not draw, music-driven, RPCS3's index wrap), so `rpcs3-hd-menu-pair.py` zeroes the row's tint for the grab
+  and ours takes `--fury-tint 0`; `hd/menu-track-select` 7.83 to 5.84, `hd/menu-ship-select` 4.51 to 3.05
+  (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"). So the "fainter and browner"
+  item above is no longer scored by any pair and stays open as a live-play item. **Landed since (`hd-fury-backdrop-2`)**: ours takes the
+  adapted luma the pair records (`original.backdrop.adapted_luma`) through `--fury-adapted-luma`, which sets the craft's
+  exposure and pins the backdrop chain's adaptation, and Campaign Select, grid and cell are hidden too (`hd/menu-campaign-select`
+  4.77 to 3.32, `hd/menu-cell-select` 3.00 to 2.81, `hd/menu-grid-select` 7.28 to 7.75: its whole-pair number rose, the card
+  animates and two grabs of the original differ by 15.9 over the card, the page region fell 1.50 to 0.07). Open: `WALK`'s
+  Ship Select state depends on the save and on the cursor the walk left on an earlier run (`--taps-before ship-select=down`
+  from the save's Fury hull; a second walk on the same boot needs `up` or none); the grid card's animation phase is not
+  lined up between the two sides
 - Ship Select framing (LANDED 2026-11-11, `hd-worst-pairs-2`): the screen's
   own camera, read off the executable, replaces the authored pose and the
   fitted lens, pitch and slide. The update writes rest `RotX 0.25`, `RotY -0.6`,
@@ -83,7 +95,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Ship Select: ~~bracket corners, loyalty value~~ (LANDED 2026-10-27,
   `hd-select-chrome`: corner marks, block arrows, `000`; loyalty value LANDED 2026-11-13, `hd-shipselect-loyalty`: raw total `%03d`, bar `total/100000`; open: the `middle`
   marks, `UnlockNobble` hearts (law read, threshold source unread, `team-selection-loyalty.md`), the page `Squares`); the hex column draws
-  (2026-10-08, `picker::hd::hex`); the `nitro` row is open where the original's
+  (2026-10-08, `picker::hd::hex`); **the selected variant's cursor ring LANDED 2026-11-19
+  (`hd-ship-variant-outline`)**: a 6-unit pale band, box metric 0.0800 to 0.0459
+  (`docs/ui/campaign-screens.md`, "The cursor ring"); open: HD's own HD style (white page)
+  ring colour (Omega's red is measured, HD's is not), the band's real draw (executable not
+  read); the `nitro` row is open where the original's
   fresh profile locks it (this build offers `_n1`); the
   original's default team is the maintainer's save (Feisar), not a gap
 - Cell Selection (closed 2026-10-08, hd-cell-select: back card face-on, 32-hex
@@ -93,7 +109,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   share of the pair's remaining 3.00: the footer legend's spacing (0.63: ours spreads the prompts wider), the
   wordmark 6 pixels right of the original's (0.58 in its box), the black hexagon field in the scene (about 0.25:
   the flyer thread), `EVENT 01/08`'s letter spacing (0.11), the selected cell's white outline (0.05: ours draws a
-  grey fill), the title rule's fade at its right end (the original's is solid). Also open: the base campaign's page
+  grey fill; a different widget from Ship Select's ring: `CellMode`'s `Bg_x_y`/`Outline_x_y` layers), the title rule's fade at its right end (the original's is solid). Also open: the base campaign's page
   (a first frame of `01_uplift` exists since 2026-11-18: values and the selected outline are cyan `0, 178, 231`,
   headings `82, 82, 82`, the card `233, 234, 233`; ours keeps `TitleColor`), the Y-joint and mark margins (one
   frame), a Tournament cell and the `NitroBattle` icon (no `_bw` file named for it)
@@ -110,13 +126,18 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
 - Track Select (2026-10-27: corner marks and header arrows landed; open: the
   circuit thumbnail is the `FlyByMovie` Bink widget, page `Squares`): hex grid LANDED 2026-10-08 (`hd-track-select`, shared
-  `hex::draw_cells`; direction glyphs and ring thickness open). Circuit model
+  `hex::draw_cells`; direction glyphs open; ring thickness LANDED 2026-11-19). Circuit model
   LANDED 2026-10-09 (`hd-track-model`: all twelve scenes from the executable's
   record, `cf_fetracks` ramp by `N.V`, `oag_game::preview::track_model`). Omega
   ported 2026-10-09 (`omega-track-model`, its own fresnel material).
-  Open: the turntable's rate, pitch and the field of view are chosen (an RPCS3
-  capture of the same circuit over time would fix the rate), the multiplier
-  `0x81db67ea`, Zone circuits (`zone_1..4` carry a scene no record names),
+  **Turntable and pose LANDED 2026-11-19 (`hd-track-select`)**: the screen's update
+  (`TrackSelectionScreen_Update`, `0x0025d558`) takes each circuit's own `RotX`,
+  `PosY` and `PosZ` from its `PI_Track` and turns one global angle 0.01 rad a frame
+  (kept across visits; ours restarts the table at zero per visit: open); the lens is
+  the constructor's 57.3 degrees, as ours was. Omega: checked, applies, not wired
+  (its update is unread). The pair `hd/menu-track-select` is drawn at the RAM angle
+  read at the grab. Open: nearZ/farZ (authored 1 and 1000, ours 10 and 2000), the
+  multiplier `0x81db67ea`, the backdrop's brightness and cloud path (hidden on the pair since 2026-11-19, above), Zone circuits (`zone_1..4` carry a scene no record names),
   Omega's own table; the moving fly-by picture (Bink)
 - Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
   landed the Grid Selection counter, arrows, dotted unlock panel and its corner marks, and the Track Select record rows (fill

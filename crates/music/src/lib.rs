@@ -42,6 +42,7 @@
 
 use std::path::Path;
 
+pub mod aac;
 pub mod at3;
 pub mod at9;
 pub mod file;
@@ -279,9 +280,9 @@ fn riff_seconds(header: &[u8]) -> Option<f64> {
 
 /// Decodes a music blob, whichever of the three containers it is in.
 ///
-/// ATRAC9 and ATRAC3+ both go out to `ffmpeg` through the cache in
-/// [`crate::at3`]/[`crate::at9`]; MP3 is decoded in process by [`crate::mp3`]
-/// and cached nowhere, for the reason that module's header gives.
+/// ATRAC9 ([`crate::at9`]) and MP3 ([`crate::mp3`]) decode in process and are
+/// cached nowhere; ATRAC3+ goes out to `ffmpeg` through the cache in
+/// [`crate::at3`].
 ///
 /// **ATRAC9 is checked first.** [`crate::at9::describe`] verifies the real
 /// `WAVE_FORMAT_EXTENSIBLE` subformat GUID, where [`crate::at3::describe`]
@@ -293,10 +294,10 @@ fn riff_seconds(header: &[u8]) -> Option<f64> {
 /// # Errors
 ///
 /// A blob that is none of the three, or a decode that failed - including
-/// `ffmpeg` being absent, which the two ATRAC halves can hit.
+/// `ffmpeg` being absent, which ATRAC3+ can hit.
 fn decode(blob: &[u8], cache_dir: &Path) -> Result<Pcm> {
     if crate::at9::describe(blob).is_ok() {
-        return crate::at9::decode(blob, cache_dir);
+        return crate::at9::decode(blob);
     }
     if crate::at3::describe(blob).is_ok() {
         return crate::at3::decode(blob, cache_dir);

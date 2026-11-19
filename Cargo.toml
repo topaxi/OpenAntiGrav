@@ -223,24 +223,21 @@ resvg = { version = "0.49", default-features = false }
 # Pure Rust with no C toolchain, the bar those two are held to. **MPL-2.0**,
 # unlike everything else here: a file-level copyleft that covers changes to its
 # own sources and leaves this workspace's `MIT OR Apache-2.0` untouched by
-# depending on it. `default-features = false` takes only the MP3 codec and
-# demuxer, leaving the other twenty-odd formats and the SIMD paths out.
-symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg"] }
+# depending on it. `default-features = false` takes only the codecs and
+# demuxers named, leaving the rest and the SIMD paths out: AAC in MP4 is 2048's
+# `intro.mp4` sound track (`oag_music::aac`).
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg", "aac", "isomp4"] }
 opus-rs = "0.1"
 
-# The ATRAC9 decoder, for the Omega Collection's Wwise media: every `.wem` there
-# is ATRAC9 (`oag_formats::wwise::wem`). ADR-0024's order applies and puts a
-# library first: ATRAC9 is Sony's codec, not Wipeout's, so it may not be
-# written here, and a pure-Rust decoder exists, so `ffmpeg` (which ADR-0019
-# reserves for ATRAC3+, where none does) is not needed.
+# The ATRAC9 decoder, for 2048's `.at9` and the Omega Collection's Wwise media.
+# ADR-0024's order applies and puts a library first: ATRAC9 is Sony's codec,
+# not Wipeout's, and a pure-Rust decoder exists, so `ffmpeg` is not needed.
 #
-# **MIT, no dependencies of its own**, a port of LibAtrac9 (also MIT). Young
-# and single-author, so it was measured before it was taken: on a stereo voice
-# clip it and FFmpeg's independent decoder agree to within one least-significant
-# bit on 99.75% of samples, up to polarity (one is the negation of the other),
-# and `crates/music/tests/omega_wem_ground_truth.rs` decodes every `.wem` on the
-# Omega archives with it. Its own README rates multi-channel "partial"; the
-# four- and eight-channel files are measured there too.
+# **MIT, no dependencies of its own**, a port of LibAtrac9 (also MIT), vendored
+# with fixes by the `[patch.crates-io]` below: as published it refused every
+# 5.1 and 7.1 stream and departed from LibAtrac9 on stereo. Patched, it is
+# sample-identical to LibAtrac9 on every stream both titles ship
+# (`docs/formats/atrac9.md`).
 atrac9dec = "0.9"
 
 # Inflate for every deflate and zlib stream we read: PSARC and WAD blocks
@@ -294,6 +291,13 @@ unused_dependencies = "warn"
 float_arithmetic = "allow"
 suboptimal_flops = "allow"     # would suggest mul_add, which is contraction
 imprecise_flops = "allow"      # would suggest ln_1p, exp_m1 and hypot, which are libm
+
+# `atrac9dec` 0.9.1 as published refuses every multi-channel ATRAC9 stream
+# (its LFE block reader is a placeholder) and departs from LibAtrac9 elsewhere;
+# see `vendor/README.md` and `docs/formats/atrac9.md`. Drop this patch once a
+# release decodes every file `crates/music/tests/atrac9_ground_truth.rs` reads.
+[patch.crates-io]
+atrac9dec = { path = "vendor/atrac9dec" }
 
 [profile.release]
 debug = 1
