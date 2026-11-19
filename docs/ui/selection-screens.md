@@ -380,7 +380,7 @@ poses the craft on other rest angles (see the Omega section of
 
 What this build does: [`oag_game::preview::hull_swap`](../../crates/game/src/preview/hull_swap.rs)
 holds the measured timings, the craft absent for 0.9 s after the screen opens and
-a 60 ms gap on every step. The craft's size across a step is the screen's own
+a 60 ms gap on every step (RAM-read 2026-11-19: the original's is 3 game frames, once 4, so 50 ms; `team-selection-model.md`, "The step against RAM"). The craft's size across a step is the screen's own
 depth fit, played frame by frame ([`oag_game::preview::ship_model::FitMotion`],
 held by `PickerStage` and ticked at 60 Hz beside the picker's clock, while the
 craft is hidden too): the new hull is drawn at the last model's rest depth and

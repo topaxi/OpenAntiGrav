@@ -40,6 +40,12 @@ GDB_PORT = int(os.environ.get("OAG_RPCS3_GDB", "127.0.0.1:2345").rsplit(":", 1)[
 FRAME_SECONDS = 1.0 / 60.0
 #: Seconds the window is given to show the frame the stopped game last handed the RSX (`hd_flyer_clock.PAUSE_FLUSH_S`).
 FLUSH_S = 0.6
+#: Game frames the grab's picture is older than the RAM read in the stop, for the craft. **Fitted, loosely**: of seven fast steps
+#: (Icaras to Feisar, Feisar to Qirex, Qirex to Piranha, ...) ours at the original's frame less 3, 4, 5, 3, 3, any, 4 gives the
+#: lowest craft-box error, a minimum a half unit deep, so a frame either way is not told apart; 4 is also the card clock's fitted
+#: lag (`hd_flyer_clock.PRESENTED_LAG_S`, 0.07 s). The header dots (a 2D widget) are on the selected team from RAM frame 3 on
+#: in 71 of 72 grabs on two boots, which reads as a lag of 3 for them if they follow the selection the frame it moves.
+PICTURE_LAG_FRAMES = 4
 #: Frames before the aim at which the stop is asked for: the stub answers a few frames late.
 LEAD = 1
 TEAMS = ("AG_Systems", "Assegai", "Auricom", "EGX", "Feisar", "Goteki", "Harimau", "Icaras", "Mirage", "Piranha", "Qirex", "Triakis")
@@ -157,10 +163,11 @@ def cmd_capture(args):
             walk.grab(png, w, h)
             again = screen.state()
             luma = widget.adapted_luma()
+            still_hidden = widget.still_hidden() if hidden is not None else None
             dbg.resume()
             dbg.close()
             record.update({"frame": frame, "frame_exact": exact, "after": described(screen, post),
-                           "still": hs.key(again) == hs.key(post), "adapted_luma": luma,
+                           "still": hs.key(again) == hs.key(post), "adapted_luma": luma, "still_hidden": still_hidden,
                            "png": png.name, "rows": [(f, s["target"], s["depth"], s["slide"]) for f, s in counter.rows]})
             (out / ("%02d.json" % n)).write_text(json.dumps(record, indent=1) + "\n")
             trials.append(record)
@@ -171,6 +178,84 @@ def cmd_capture(args):
             widget.restore()
     (out / "trials.json").write_text(json.dumps({"hidden": hidden, "trials": [
         {k: v for k, v in t.items() if k != "rows"} for t in trials]}, indent=1) + "\n")
+
+
+def cmd_pairs(args):
+    """One compare-page pair per chosen grab: the original's frame at RAM frame `k`, ours at `k - PICTURE_LAG_FRAMES`."""
+    import datetime
+    import compare_env as ce
+    import compare_menu as cm
+    import compare_provenance as cp
+    import hd_fury_backdrop as fbk
+    cap = Path(args.capture)
+    doc = json.loads((cap / "trials.json").read_text())
+    hidden = doc["hidden"]
+    out = Path(args.out)
+    plat = ce.platform("hd-fury")
+    config = Path(os.environ["XDG_CONFIG_HOME"]) / "rpcs3"
+    wanted = [int(v) for v in args.frames.split(",")]
+    refused = []
+    for k in wanted:
+        trial = next((t for t in doc["trials"] if t.get("frame") == k and t.get("still")), None)
+        if trial is None:
+            print("no still grab at frame %d" % k)
+            continue
+        team = team_of(trial["after"]["name"])
+        frames = k - PICTURE_LAG_FRAMES
+        pdir = out / ("menu-ship-step-k%02d" % k)
+        pdir.mkdir(parents=True, exist_ok=True)
+        pair = ce.Pair("hd-fury", pdir)
+        pair.rec["meta"] = {"id": "hd-menu-ship-step-k%02d" % k, "title": "Ship Select, %d game frames after a step to %s" % (k, team),
+                            "track": "front end", "craft": "none (a menu)",
+                            "note": "Ours is `--menu-page ship-select --menu-picker-step-seconds %.4f`, the screen's step played to frame %d; the "
+                                    "original is stopped at RAM frame %d after the selection moved (`st+0x1014/0x1020/0x1018/0x101c`, a frame is a "
+                                    "change of that tuple) and the grab's picture is %d frames behind RAM (`PICTURE_LAG_FRAMES`). Both sides English, "
+                                    "front-end styling FURY, Fury backdrop hidden on both." % (frames / 60.0, frames, k, PICTURE_LAG_FRAMES),
+                            "state": "cold boot, walked to Ship Select, one lap of every team to load the hulls, then right presses"}
+        pair.rec["original"]["emulator"] = dict(plat["emulator"])
+        pair.rec["original"]["captured_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        pair.rec["original"]["capture_path"] = "cold boot, walked (no savestate)"
+        profile = pdir / "ours-profile" / "profile"
+        safe_area = ce.record_safe_area(pair)
+        ce.write_ours_settings(plat, profile, safe_area)
+        race = {"team": team}
+        cm.extra_settings(profile, "FURY", race, locked=True)
+        pair.rec["original"]["selection_basis"] = "read from RAM: `st+0x100` and the model's hull entry name (%s)" % trial["after"]["name"]
+        pair.rec["original"]["step"] = {
+            "frame": k, "frame_exact": trial["frame_exact"], "from": trial["before"]["name"], "to": trial["after"]["name"],
+            "to_length": trial["after"]["length"], "state_in_the_stop": {key: trial["after"][key] for key in ("target", "depth", "slide_target", "slide", "inputs", "idle")},
+            "picture_lag_frames": PICTURE_LAG_FRAMES, "ours_step_frames": frames,
+            "basis": "read: the screen object found by `hd_ship_step.find`, its fit state at the stop (game stopped through the grab, read again after it: %s)"
+                     % ("unchanged" if trial["still"] else "CHANGED")}
+        args.accept_provenance = list(args.accept_provenance)
+        cp.build(pair, args, "menu", "cold_boot", None, {"value": PICTURE_LAG_FRAMES, "unit": "game frames", "basis": "fitted on the craft box of seven fast steps, see `PICTURE_LAG_FRAMES`"})
+        extra = ["--menu-picker-seconds", "5", "--menu-picker-step-seconds", "%.5f" % (frames / 60.0)]
+        hid = dict(hidden, still_hidden=trial.get("still_hidden", False))
+        pair.check("the Fury backdrop is hidden at the grab", bool(hid["still_hidden"]) and hid["frames_waited"] >= fbk.FRAMES_TO_DECAY,
+                   "row %s zero at the grab: %s, %d widget frames since the write" % (hid["row"], hid["still_hidden"], hid["frames_waited"]))
+        extra += fbk.record(pair.rec, hid, trial["adapted_luma"])
+        pair.check("the screen stood still through the grab", bool(trial["still"]), "the fit's state read in the stop and again after the grab")
+        try:
+            cm.menu_pair(pair, theirs_png=cap / trial["png"], oag_game=args.oag_game, image=args.image, page="ship-select",
+                         drawn_from="xml", xml_file="Team_Selection_Definition.xml", screen_seen="Team Selection",
+                         screen_wanted="Team Selection", profile_dir=profile, size=ce.size_text(plat), front_end_style="FURY",
+                         language="English", original_language=original_language(config), selection={"original": team, "ours": team},
+                         extra_args=extra, race=race, safe_area=safe_area)
+            pair.finish()
+        except SystemExit as exc:
+            if exc.code == 3:
+                refused.append(k)
+                continue
+            raise
+        print("pair k=%d ok" % k)
+    return 3 if refused else 0
+
+
+def original_language(config_dir):
+    for line in (Path(config_dir) / "config.yml").read_text().splitlines():
+        if line.strip().startswith("Language:"):
+            return line.split(":", 1)[1].strip().split(" ")[0]
+    return "unknown"
 
 
 def main():
@@ -191,6 +276,15 @@ def main():
     c.add_argument("--size", default="1920x1080")
     c.add_argument("--show-backdrop", action="store_true")
     c.set_defaults(run=cmd_capture)
+    p = sub.add_parser("pairs", help="compare-page pairs from a capture, ours at the same frame less the picture's lag")
+    p.add_argument("--capture", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--frames", default="6,10,19")
+    p.add_argument("--oag-game", default=str(ROOT / "target/debug/oag-game"))
+    p.add_argument("--image", default=str(MAIN / "data/images/hdfury-ps3-eu.iso"))
+    import compare_provenance as cp
+    cp.add_arguments(p)
+    p.set_defaults(run=cmd_pairs)
     args = ap.parse_args()
     return args.run(args)
 
