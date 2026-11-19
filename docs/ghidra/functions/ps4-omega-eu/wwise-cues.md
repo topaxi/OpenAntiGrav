@@ -9,14 +9,15 @@ checked against the shipped banks' own Wwise listings (`data/audio/sound/English
 are [wwise-sound.md](wwise-sound.md); this page is the per-cue table that page left open.
 
 **The headline: 26 of this port's 43 race cues (`oag_gameplay::cue::Cue::ALL`) have a cue string the
-executable posts; 12 of them load and play for every emitter today, plus `NGP_LEACH` for the player
-alone.** The other 14 posted cues stop at a switch container on a group whose value is unread (8), an
+executable posts; 15 of them load and play for every emitter today, plus `NGP_LEACH` for the player
+alone.** The other 11 posted cues stop at a switch container on a group whose value is unread (5), an
 ATRAC9 frame the decoder rejects (5: `QUAKELAUNCH` and four hits reached through `GAME_VR`'s `No` case)
 or an event that starts no sound this loader reads (1, `NGP_LEACH` for non-player emitters; why is
 unread). Of the 12 held cues, **9 play and are held** (shield, autopilot, magstrip, shuriken travel,
 leach attach, and the Plasma, Rocket, Missile and Quake travel cues through `GAME_VR`; "Held loops"
 below), the lock-on stops at a switch container, the death at an ATRAC9 frame, and the engine is unread.
-The load report reads `21 of 43 race cues play their Wwise event` (15 before `GAME_VR` was read). The other 5 cues are 4 legacy events the executable never posts and the collision cue, whose
+The load report reads `24 of 43 race cues play their Wwise event` (15 before `GAME_VR` was read, 21
+before `TeamName` and loose media). The other 5 cues are 4 legacy events the executable never posts and the collision cue, whose
 choice is unread.
 
 ## How a cue string was read (confidence 80 for the method)
@@ -78,9 +79,9 @@ The event is `<cue>__<slot>` from a non-player emitter and `<cue>_PC__<slot>` fr
 | `MissileHitWall` | `MISSILEEXPWALL` | `Weapons_NGP` | `0x0137dcef`, `FUN_0137d1e0` (with `WO_MISSILE_BOUNCE`) | 80 | yes (1), through `GAME_VR` |
 | `SpeedupPad` | `Pad_General` | `Weapons_NGP` | `0x0173bae4`, `FUN_0173b210` | 70 | no: switch container, group `3202674372` (name not found among the executable's strings) |
 | `Turbo` | `NGP_Turbo` | `Weapons_NGP` | `0x0173c679` `FUN_0173be50`; `0x012b03b9` `FUN_012afea0` | 70 | no: switch container, group `3167274579` (name not found) |
-| `ShieldActive` | `shieldactive` | `Speech_NGP` | `0x0133e335`, `FUN_0133e2a0` (with `_SHIELD`) | 70 | no: switch container, group `VoiceReg__TeamName` |
-| `Engaging` | `autopilot_eng` | `Speech_NGP` | `0x017ba52a` `FUN_017ba150`; `0x013159fe` `FUN_01315000` | 70 | no: switch container, group `VoiceReg__TeamName` |
-| `Disengaging` | `disengaging` | `Speech_NGP` | `0x013a7888`, `FUN_013a2cd0` | 70 | no: switch container, group `VoiceReg__TeamName` |
+| `ShieldActive` | `shieldactive` | `Speech_NGP` | `0x0133e335`, `FUN_0133e2a0` (with `_SHIELD`) | 70 | yes (1), the player's team's line through `VoiceReg__TeamName`, loose media |
+| `Engaging` | `autopilot_eng` | `Speech_NGP` | `0x017ba52a` `FUN_017ba150`; `0x013159fe` `FUN_01315000` | 70 | yes (1), the same way |
+| `Disengaging` | `disengaging` | `Speech_NGP` | `0x013a7888`, `FUN_013a2cd0` | 70 | yes (1), the same way |
 | `PlasmaHitWall` | `NGP_PlasmaHitWall` | `Weapons_NGP` | `0x0138c53b`, `FUN_0138c410` | 80 | no: past `GAME_VR`, media `144136475` fails to decode (player's `573010160`) |
 | `RocketHitWall` | `ROCKEXPLWALL` | `Weapons_NGP` | `0x013825f3` `FUN_01380870`; `0x01399916` `FUN_013986d0` | 75 | no: past `GAME_VR`, media `845662642` fails to decode (player's `504708181`) |
 | `RocketHitShip` | `ROCKEXPLSHIP` | `Weapons_NGP` | `0x01382a6c` `FUN_01380870`; `0x0139994c` `FUN_013986d0` | 75 | no: past `GAME_VR`, media `483130367` fails to decode |
@@ -169,7 +170,7 @@ travel voices play the non-player event (a projectile's owner is not passed to t
 magstrip plays the non-player event from every craft, and a continuous random container repeats its first
 draw.
 
-## The `GAME_VR` state (lane `omega-silent-cues`, 2026-11-19; confidence 85)
+## The `GAME_VR` state (lane `omega-silent-cues`, 2026-11-19; confidence 90)
 
 Switch group `2068003018` is `name_hash("GAME_VR")`, its default `1668749452` is `"No"` and its other
 case `979470758` is `"Yes"`. It is a **state** group (`group_type` 1), and the game sets it.
@@ -188,7 +189,9 @@ pass them to `0x017c9b60`:
 `0x017c9b60` builds `"Set_State__" + group + "__" + state` on the stack (`movabs rdx, "Set_Stat"`,
 `0x017c9b77`; `"e__"`; the group; `"__"`; the state) and posts it as an event on game object 2 through
 `0x010937d0`, printing an error string on failure: so on a flat screen the sound manager posts
-`Set_State__GAME_VR__No` once, when it is built, before any race cue.
+`Set_State__GAME_VR__No` once, when it is built, before any race cue. That event is in `frontend.bnk`
+(loaded at boot), and its first action is a `SetState` (`0x1204`) of `GAME_VR` to `No`
+(`wwise_ground_truth::patch_data08_banks`, `state_and_switch_posts_resolve`).
 
 The banks agree from their side. All 36 switch containers on `GAME_VR` in the patch's `data08` banks are
 state containers defaulting to `No` with exactly the cases `None`, `No` and `Yes`, and **each `None`
@@ -197,9 +200,9 @@ state was ever set (`crates/formats/tests/wwise_ground_truth.rs`, `patch_data08_
 `switch_game_vr_flat: 36`). The base archives (`data00`, `data05`) have none, and the base eboot has no
 `GAME_VR` string: the VR states are the patch's.
 
-Why 85 and not more: two static sites agree with each other and with the banks' authored `None` = `No`,
-but the headset flag being clear on a flat screen is inferred from its owner, not traced live (shadPS4
-has no memory readout). `0x017c9b60` is not given a name: `names.tsv` replays into the base program,
+Why 90 and not more: two static sites agree with each other, with the posted event's own `SetState`
+and with the banks' authored `None` = `No`, but the headset flag being clear on a flat screen is
+inferred from its owner, not traced live (shadPS4 has no memory readout). `0x017c9b60` is not given a name: `names.tsv` replays into the base program,
 which has no counterpart (`Set_State__` is in its strings, unreferenced), and the patch program has no
 names applied (patch-v107-addresses.md).
 
@@ -209,13 +212,62 @@ group by every child of the value's case (the default's when the value has no ca
 any other group by name: the default is never played for a group whose value is unread. The countdown
 and the event start pass no states and are unchanged.
 
+## The `TeamName` switch (lane `omega-silent-cues`, 2026-11-19; confidence 85)
+
+The three speech cues (`shieldactive`, `autopilot_eng`, `disengaging`) each open on a switch container
+on `VoiceReg__TeamName` (`382442581`) with 14 cases, one per team, and no default (`0`).
+
+**The setter.** `0x0177fe40(group_object, group_index, value_index)` (patch) is a per-object
+`SetSwitch`: it skips when `[obj + 0xb4 + 4 * group]` already holds the value, stores it, takes the group
+name from the pointer table at `0x01995b20` and the value's from the per-group array at `0x01995ae0`
+(image-relative pointers; SELF segment for those addresses at file `0x96baf0`, address `0x968000`),
+builds `"Set_Switch__" + group + "__" + value` (`movabs "Set_Swit"`, `0x0177fe9e`) and posts it on the
+object's game object (`[obj + 0x64]`) through `0x010937d0`. Its eight groups, by index:
+
+| Index | Group | Values (index order) |
+| ---: | --- | --- |
+| 0 | `VoiceReg__CollisionSize` | `CollisionSizeSmall`, `Medium`, `Large` |
+| 1 | `VoiceReg__CollisionType` | `CollisionTypeShipToShip`, `CollisionTypeShipToWorld` |
+| 2 | `VoiceReg__ShipType` | `ShipTypePlayerInternal`, `ShipTypePlayerExternal`, `ShipTypeNonPlayer` |
+| 3 | `VoiceReg__TeamName` | `NULL`, `Team_Feisar`, `Team_Qirex`, `Team_Piranha`, `Team_Auricom`, `Team_AGSystems`, `Team_Goteki45`, `Team_EGX`, `Team_Assegai`, `Team_Harimau`, `Team_Mirage`, `Team_Icaras`, `Team_VanUber`, `Team_Tigron`, `Team_Triakis` |
+| 4 | `VoiceReg__TrackName` | `NULL`, `Track_Vineta_K`, ... `Track_tower` (26) |
+| 5 | `VoiceReg__HUDTargetingState` | `NoTarget`, `Tracking`, `Locked`, `LostLock` |
+| 6 | `VoiceReg__FlyerSelect` | `0` .. `20` |
+| 7 | `VoiceReg__TeamType` | `Default`, `Fighter`, `Agility`, `Speed`, `Prototype` |
+
+(An array's length is not stored; a list ends where the next group's begins.)
+
+**The value per ship.** At `0x01338ba5`..`0x01338e39` the ship's sound setup `strcmp`s the ship's team
+name (`[.. + 0xb8]`) against `Feisar2048`, `Qirex2048`, `AG_Systems2048`, `Auricom2048`,
+`Piranha2048`, `Feisar`, `Triakis`, `Qirex`, `Goteki_45`, `AG_Systems`, `EGX`, `Icaras`, `Auricom`,
+`Assegai`, `Piranha`, `Mirage`, `Harimau`, `Tigron`, `VanUber`, giving the value index above (each
+2048 id its base team's), and calls `SetSwitch(ship + 0x5f70 group, 3, index)`; the same index is then
+set on four more of the ship's groups (`+0x5f88`, `+0x5f90`, `+0x5fa0`, `+0x5f98`, `0x01338e59`..
+`0x01338eb9`). So a ship's sound groups carry its own team.
+
+**The bank's side.** Each `Set_Switch__VoiceReg__TeamName__<value>` is an event of `frontend.bnk`
+whose one action (`0x1901`) sets the group to the case of that name, **except AG Systems**: the
+executable posts `..__Team_AGSystems`, whose action sets the case `Team_AG_Systems` (the bank's
+spelling, `3187190718`; `Team_AGSystems` is no case). Pinned for all 14 by
+`wwise_ground_truth::patch_data08_banks` (`state_and_switch_posts_resolve`).
+
+Why 85: the setter, its tables, the team map and the bank's events are read and agree; which group a
+speech cue is posted on (the ship's `+0x5f70` group, as the launchers' are, is the reading) is not
+traced to the post itself.
+
+**How the port plays it.** `oag_title::WwiseCues::team_switch` maps each team id (case-insensitive, so
+the roster's `ag_systems` matches) to the case its event sets; `Banks::load_wwise_cues` takes the
+player's team (slot 0) and plays every cue with that value. Chosen: one team for every emitter, since
+the three cues behind it are the player's announcer and the loader builds one timeline per cue. Their
+media are not embedded: `WwiseCues::media_dirs` names where a loose `<id>.wem` is read, the language's
+directory first.
+
 ### The groups still refused
 
 | Group | Cues | What the value is |
 | --- | --- | --- |
-| `GAME_MODE` (`1071299879`) | `Cannon`, `CannonHitWall` | the game mode; where the executable sets it is unread |
-| `VoiceReg__TeamName` (`382442581`) | `ShieldActive`, `Engaging`, `Disengaging` | the player's team, for the announcer's voice; unread |
-| `VoiceReg__HUDTargetingState` (`3202746158`) | `LockOn` | `NoTarget`/`Tracking`/`Locked`/`LostLock`, per frame from the HUD; unread |
+| `GAME_MODE` (`1071299879`) | `Cannon`, `CannonHitWall` | no `Set_State__` or `Set_Switch__` post names it: the executable's one `GAME_MODE` string is a leaderboard field (`0x012b487c`); the 116 `Set_State__` posts (`0x017c9b60`'s callers) set `GAME`, `MODE`, `SPEEDCLASS`, `Music_Order`, `GAMEPLAY_HEALTH`, ... but not it. Who sets it, or whether anything does (then its `None` case would play), is open |
+| `VoiceReg__HUDTargetingState` (`3202746158`) | `LockOn` | group index 5 of `SetSwitch`, per frame from the HUD; callers not read |
 | `3202674372`, `3167274579`, `814711502` | `SpeedupPad`, `Turbo`, `ShurikenLaunch` | not found by hashing every printable string of the patch eboot |
 
 The names were found by hashing every printable run of the patch eboot with `name_hash`.
@@ -231,8 +283,8 @@ The names were found by hashing every printable run of the patch eboot with `nam
 
 ## Limits this table meets, not fixed here
 
-* **Switch containers** on a group other than `GAME_VR` (8 one-shot cues, the lock-on): refused at play
-  ("The groups still refused" above).
+* **Switch containers** on a group other than `GAME_VR` and `VoiceReg__TeamName` (5 one-shot cues, the
+  lock-on): refused at play ("The groups still refused" above).
 * **ATRAC9 frames** (`QUAKELAUNCH` and, past `GAME_VR`, `PlasmaHitWall`, `RocketHitWall`, `RocketHitShip`,
   `QuakeHit` and the death): `oag_music::wem::decode` rejects frame 0 ("invalid gradient boundary",
   "invalid scale factor mode", "scale factor out of bounds", "invalid reuse band params").
@@ -248,7 +300,7 @@ The names were found by hashing every printable run of the patch eboot with `nam
 
 ## Cross-title
 
-* **2048, `GAME_VR`: checked, differs.** Neither the base nor the 1.04 Vita executable holds a `GAME_VR`
+* **2048, `GAME_VR` and `TeamName`: checked, differs.** Neither the base nor the 1.04 Vita executable holds a `GAME_VR`
   or `Set_State` string; 2048 plays `SBlk` banks and has no Wwise state to hold.
 * **2048: checked, shares the cue column, differs in container.** The open Vita 1.04 executable
   (`/2048/eboot-vita-2048-eu-v104.elf`) holds `NGP_Absorb`, `MINELAUNCH`, `NGP_MissileFire`,
@@ -262,7 +314,7 @@ The names were found by hashing every printable run of the patch eboot with `nam
 ```sh
 cargo nextest run -p oag-raceplay --run-ignored all a_race_plays_its_posted_cues_from_their_wwise_events
 RUST_LOG=info,oag_sound=debug oag-game --race --no-audio --screenshot out.png --ticks 2 data/extracted/ps4
-# [DEBUG] sfx: 21 of 43 race cues play their Wwise event, 21 with a player version
+# [DEBUG] sfx: 24 of 43 race cues play their Wwise event, 21 with a player version
 cargo nextest run -p oag-game --run-ignored all omega_held_loops_ground_truth::
 # The magstrip held and released in a race (Talons Junction has strips; Tech De Ra, the default, has none):
 RUST_LOG=info,oag_sound=trace oag-game --race --mode single_race --autopilot \

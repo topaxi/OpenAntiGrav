@@ -17,7 +17,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use oag_formats::wwise::container::{ContainerError, RanSeq, Switch};
-use oag_formats::wwise::hirc::{self, Action, Codec, Event, MusicTrack, Sound, StreamType};
+use oag_formats::wwise::hirc::{
+    self, Action, Codec, Event, MusicTrack, SetState, Sound, StreamType,
+};
 use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library, name_hash};
 
 fn archive_path(dir: &str, name: &str) -> Option<PathBuf> {
@@ -397,6 +399,68 @@ fn census(
     Some(c)
 }
 
+/// The one action of a `Set_State__`/`Set_Switch__` event the 1.07 executable
+/// posts (`0x017c9b60`, `0x0177fe40`): its kind and the group and value it sets,
+/// the body's last eight bytes. All live in `frontend.bnk`, loaded at boot.
+fn set_action(paths: &[String], library: &Library<'_>, event: &str) -> (u16, u32, u32) {
+    let frontend = paths
+        .iter()
+        .position(|p| p.eq_ignore_ascii_case("data/audio/sound/english(us)/frontend.bnk"))
+        .expect("English(US)/frontend.bnk ships");
+    let bank = &library.banks()[frontend];
+    let object = bank
+        .object(name_hash(event))
+        .unwrap_or_else(|| panic!("{event} is an event of frontend.bnk"));
+    let actions = Event::parse(bank.body(object)).expect("an event").actions;
+    let body = bank.body(bank.object(actions[0]).expect("the action is in the bank"));
+    let u32_at = |at: usize| u32::from_le_bytes(body[at..at + 4].try_into().unwrap());
+    (
+        u16::from_le_bytes([body[0], body[1]]),
+        u32_at(body.len() - 8),
+        u32_at(body.len() - 4),
+    )
+}
+
+/// What the executable's state and switch posts set
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The `GAME_VR` state",
+/// "The `TeamName` switch"): `Set_State__GAME_VR__No` is a `SetState` of
+/// `GAME_VR` to `No`, and each team's `Set_Switch__VoiceReg__TeamName__<value>`
+/// (the value strings of the executable's table) sets the bank's own case,
+/// which for AG Systems is spelled `Team_AG_Systems`.
+fn state_and_switch_posts_resolve(paths: &[String], library: &Library<'_>) {
+    assert_eq!(
+        set_action(paths, library, "Set_State__GAME_VR__No"),
+        (SetState::KIND, name_hash("GAME_VR"), name_hash("No"))
+    );
+    assert_eq!(
+        set_action(paths, library, "Set_State__GAME_VR__Yes"),
+        (SetState::KIND, name_hash("GAME_VR"), name_hash("Yes"))
+    );
+    for (posted, case) in [
+        ("Team_Feisar", "Team_Feisar"),
+        ("Team_Qirex", "Team_Qirex"),
+        ("Team_Piranha", "Team_Piranha"),
+        ("Team_Auricom", "Team_Auricom"),
+        ("Team_AGSystems", "Team_AG_Systems"),
+        ("Team_Goteki45", "Team_Goteki45"),
+        ("Team_EGX", "Team_EGX"),
+        ("Team_Assegai", "Team_Assegai"),
+        ("Team_Harimau", "Team_Harimau"),
+        ("Team_Mirage", "Team_Mirage"),
+        ("Team_Icaras", "Team_Icaras"),
+        ("Team_VanUber", "Team_VanUber"),
+        ("Team_Tigron", "Team_Tigron"),
+        ("Team_Triakis", "Team_Triakis"),
+    ] {
+        let event = format!("Set_Switch__VoiceReg__TeamName__{posted}");
+        assert_eq!(
+            set_action(paths, library, &event),
+            (0x1901, name_hash("VoiceReg__TeamName"), name_hash(case)),
+            "{event}"
+        );
+    }
+}
+
 /// The executable posts `<event>[_PC]__<bank>`, hashed whole
 /// (`docs/ghidra/functions/ps4-omega-eu/wwise-sound.md`, "The event name"):
 /// the bare `_321_NGP` is no event, the suffixed one is, in the bank the
@@ -738,11 +802,10 @@ fn patch_data05_banks() {
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
 fn patch_data08_banks() {
-    let Some(c) = census(
-        ("omega-eu-patch", "data08.psarc"),
-        53,
-        posted_events_resolve,
-    ) else {
+    let Some(c) = census(("omega-eu-patch", "data08.psarc"), 53, |paths, library| {
+        posted_events_resolve(paths, library);
+        state_and_switch_posts_resolve(paths, library);
+    }) else {
         return;
     };
     assert_eq!(

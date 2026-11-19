@@ -95,6 +95,33 @@ pub struct WwiseCues {
     /// name as the executable spells them. A switch container on a group
     /// listed here plays the value's case; one on any other group is refused.
     pub states: &'static [WwiseState],
+    /// The switch group a ship's sound groups carry its team on, and the value
+    /// for each team id, or [`None`] where the title has none. The race's
+    /// player team picks the value.
+    pub team_switch: Option<WwiseTeamSwitch>,
+    /// The archive directories (with their trailing separator) a media id the
+    /// banks do not embed is read from as a loose `<id>.wem`, first match.
+    pub media_dirs: &'static [&'static str],
+}
+
+/// A Wwise switch group whose value is the posting ship's team.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WwiseTeamSwitch {
+    pub group: &'static str,
+    /// Team id to the group's value; ids compare without case, so a roster's
+    /// `ag_systems` finds `AG_Systems`.
+    pub values: &'static [(&'static str, &'static str)],
+}
+
+impl WwiseTeamSwitch {
+    /// The value for `team`, or [`None`] for a team the table does not list.
+    #[must_use]
+    pub fn value(&self, team: &str) -> Option<&'static str> {
+        self.values
+            .iter()
+            .find(|(t, _)| t.eq_ignore_ascii_case(team.trim()))
+            .map(|&(_, v)| v)
+    }
 }
 
 /// One Wwise state group and the value a title holds it at through a race.

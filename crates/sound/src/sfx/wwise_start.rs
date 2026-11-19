@@ -20,7 +20,9 @@
 //! A switch container plays every child of its case for the value the caller
 //! holds its group at (`states`, group and value ids); one on a group not
 //! listed is refused, never played by its default.
-//! Not read, so refused or reported: streamed media, a relay into another bank,
+//! Media not embedded in the bank is asked of `loose` (a loose `<id>.wem`,
+//! read whole before the race, not streamed).
+//! Not read, so refused or reported: a relay into another bank,
 //! state and other action kinds, the busses' own volumes and every positioning
 //! parameter (the start plays centred). A seek's randomised delay range plays at
 //! its minimum, chosen.
@@ -285,6 +287,7 @@ pub(super) fn load(
     event: &str,
     rng: &mut Rng,
     states: &[(u32, u32)],
+    loose: &mut dyn FnMut(u32) -> Option<Vec<u8>>,
 ) -> anyhow::Result<EventCue> {
     let bank = Bank::parse(blob).map_err(|e| anyhow::anyhow!("not a Wwise bank: {e}"))?;
     let tree = Tree::new(&bank);
@@ -353,12 +356,22 @@ pub(super) fn load(
     for start in &starts {
         let (_, body) = tree.kind_and_body(start.sound).expect("a start is a sound");
         let sound = WwiseSound::parse(body).context("a sound")?;
-        let Some(media) = bank.embedded(sound.source.media_id) else {
-            notes.push(format!(
-                "sound {}: media {} is not embedded in this bank, not played",
-                start.sound, sound.source.media_id
-            ));
-            continue;
+        let file: Vec<u8>;
+        let media = match bank.embedded(sound.source.media_id) {
+            Some(media) => media,
+            None => match loose(sound.source.media_id) {
+                Some(read) => {
+                    file = read;
+                    file.as_slice()
+                }
+                None => {
+                    notes.push(format!(
+                        "sound {}: media {} is neither embedded in this bank nor a loose file, not played",
+                        start.sound, sound.source.media_id
+                    ));
+                    continue;
+                }
+            },
         };
         let pcm = oag_music::wem::decode(media)
             .with_context(|| format!("media {} does not decode", sound.source.media_id))?;
@@ -466,7 +479,15 @@ pub(super) fn load(
             ));
         }
     }
-    ensure!(!layers.is_empty(), "{event} starts no sound that plays");
+    ensure!(
+        !layers.is_empty(),
+        "{event} starts no sound that plays{}",
+        if notes.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", notes.join("; "))
+        }
+    );
     let loaded = Loaded {
         waveforms: layers
             .iter()

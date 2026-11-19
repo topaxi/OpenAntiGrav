@@ -102,9 +102,9 @@ pub use race::sound::{
 pub use race::{
     CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, GuestRoster, RaceDefaults,
     SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant, TeamVariants, TrackBanks,
-    VariantJoin, WwiseBank, WwiseCue, WwiseCues, WwiseState, ZoneAnnouncer, ZoneCircuit,
-    ZoneClassAnnouncer, ZoneClassTone, ZoneCraft, ZoneFallback, ZonePalette, ZoneStageTextures,
-    ZoneStages, ZoneTeamStep, ZoneTransition,
+    VariantJoin, WwiseBank, WwiseCue, WwiseCues, WwiseState, WwiseTeamSwitch, ZoneAnnouncer,
+    ZoneCircuit, ZoneClassAnnouncer, ZoneClassTone, ZoneCraft, ZoneFallback, ZonePalette,
+    ZoneStageTextures, ZoneStages, ZoneTeamStep, ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};
 pub use track_alias::TrackAlias;

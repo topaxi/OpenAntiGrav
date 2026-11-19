@@ -546,8 +546,9 @@ the `SBlk` reader's. **HD:** `SBlk` too, untouched.
   through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
   start plays (`oag_sound::sfx`'s Wwise event timeline, the evidence page's
   "What the port plays"); every other cue waits on the evidence page's "Open"
-  list (switch containers on groups other than `GAME_VR`, positioning). Random
-  containers are read and played.
+  list (switch containers on groups other than `GAME_VR` and `VoiceReg__TeamName`,
+  positioning). Random containers are read and played; a posted cue's media that
+  no bank embeds is read as a loose `<id>.wem`.
 
 ## Confidence
 

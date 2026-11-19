@@ -224,15 +224,19 @@ const POSTED: [oag_gameplay::cue::Cue; 26] = {
     ]
 };
 
-/// The posted cues whose event loads for every emitter: 12 of the 26, each with the player's own
-/// event or the same one but `LeachEnergy`, whose player event is authored and loads nothing. The rest reach a switch
+/// The posted cues whose event loads for every emitter: 15 of the 26, each with the player's own
+/// event (or, for the three speech cues, which author none, the same one) but `LeachEnergy`, whose
+/// player event is authored and loads nothing. The rest reach a switch
 /// container on a group whose value is unread, media the ATRAC9 decoder rejects (`QUAKELAUNCH`
 /// and the hits behind `GAME_VR`), or no sound in the shipped banks (`NGP_LEACH`, whose player
 /// event does load).
-const WIRED: [oag_gameplay::cue::Cue; 12] = {
+const WIRED: [oag_gameplay::cue::Cue; 15] = {
     use oag_gameplay::cue::Cue;
     [
         Cue::Message,
+        Cue::ShieldActive,
+        Cue::Engaging,
+        Cue::Disengaging,
         Cue::Absorb,
         Cue::MineLaunch,
         Cue::Plasma,
@@ -261,6 +265,15 @@ const BY_GAME_VR: [oag_gameplay::cue::Cue; 6] = {
         Cue::QuakeTravel,
     ]
 };
+
+/// The speech cues behind `VoiceReg__TeamName`, played as the player's team (the race's default,
+/// AG Systems, whose case the bank spells `Team_AG_Systems`), their media loose `.wem` files
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The `TeamName` switch").
+const BY_TEAM: [&str; 3] = [
+    "shieldactive__Speech_NGP",
+    "autopilot_eng__Speech_NGP",
+    "disengaging__Speech_NGP",
+];
 
 /// The held cues that load, and whether their event authors a loop: Omega spells them with a
 /// leading `_` and keeps the post's handle (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
@@ -405,10 +418,19 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
             );
         }
     }
+    for event in BY_TEAM {
+        assert!(
+            report
+                .iter()
+                .any(|l| l.starts_with(&format!("sfx: {event} -> 1 voice(s) "))
+                    && l.ends_with(" 1 switch(es) by state")),
+            "{event} plays its team's case: {report:#?}"
+        );
+    }
     assert!(
         report
             .iter()
-            .any(|l| l.starts_with("sfx: 21 of 43 race cues play their Wwise event")),
+            .any(|l| l.starts_with("sfx: 24 of 43 race cues play their Wwise event")),
         "{report:#?}"
     );
     assert!(

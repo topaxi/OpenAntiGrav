@@ -296,7 +296,7 @@ impl Banks {
     ) -> bool {
         let line = match archives.read_name(entry) {
             Err(e) => format!("sfx: {entry} not read: {e}"),
-            Ok(blob) => match super::wwise_start::load(&blob, event, rng, &[]) {
+            Ok(blob) => match super::wwise_start::load(&blob, event, rng, &[], &mut |_| None) {
                 Ok(loaded) => {
                     self.report.push(format!(
                         "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s)",
@@ -370,6 +370,7 @@ impl Banks {
                     name,
                     &mut Rng::new(u64::from(name_hash(name))),
                     &[],
+                    &mut |_| None,
                 ) {
                     Ok(event) => {
                         report.push(format!(

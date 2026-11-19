@@ -4,7 +4,7 @@ titles: [omega]
 size: M (55)
 difficulty: medium (50)
 updated: 2026-11-19
-summary: "Omega: 21 of 43 race cues play Wwise events (9 held, GAME_VR read); 9 wait on other switch groups, 6 on ATRAC9 decode, the engine on its bands"
+summary: "Omega: 24 of 43 race cues play Wwise events (9 held; GAME_VR, TeamName read); 6 wait on switch groups, 6 on ATRAC9 decode, the engine"
 ---
 
 # Omega race sound effects through Wwise
@@ -76,12 +76,16 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
   `GAME_VR`, set to `No` by `SoundManager_Construct` on a flat screen (confidence 85; wwise-cues.md, "The
   `GAME_VR` state"). `WwiseCues::states` holds it; `wwise_start` plays a switch container on a listed group
   and refuses any other. Plays now: PlasmaHitShip, MissileHitWall and the four travel cues (15 -> 21).
-- **Switch containers still block 9 posted cues**, by group (wwise-cues.md, "The groups still refused"):
-  `GAME_MODE` (Cannon, CannonHitWall), `VoiceReg__TeamName` (ShieldActive, Engaging, Disengaging),
-  `VoiceReg__HUDTargetingState` (the held LockOn), and three groups whose names are not among the
-  executable's strings (SpeedupPad `3202674372`, Turbo `3167274579`, ShurikenLaunch `814711502`). Next:
-  `GAME_MODE` (find the `Set_State__GAME_MODE__*` post, read its values per mode), then `VoiceReg__TeamName`
-  (the `VoiceReg__` prefix suggests a per-object switch: find its setter).
+- ~~**`VoiceReg__TeamName`**~~ done (2026-11-19): `SetSwitch` (`0x0177fe40`) group 3 by the ship's team;
+  AG Systems' event sets `Team_AG_Systems`. ShieldActive, Engaging, Disengaging play the player's team's
+  line, their media loose `.wem` (`WwiseCues::media_dirs`); 21 -> 24.
+- **Switch containers still block 6 posted cues**, by group (wwise-cues.md, "The groups still refused"):
+  `GAME_MODE` (Cannon, CannonHitWall: no `Set_State__`/`Set_Switch__` post names it; find who sets it,
+  or show nothing does and play its `None` case), `VoiceReg__HUDTargetingState` (the held LockOn,
+  `SetSwitch` index 5: read its callers), and three groups whose names are not among the executable's
+  strings (SpeedupPad `3202674372`, Turbo `3167274579`, ShurikenLaunch `814711502`).
+- **Chosen in the team switch**: every emitter plays the player's team's case (one timeline per cue);
+  a split-screen second person hears the first's team voice.
 - **ATRAC9 decode now blocks 6 cues past `GAME_VR`** (PlasmaHitWall, RocketHitWall, RocketHitShip,
   QuakeHit, the death, and QuakeLaunch from before): `oag_music::wem::decode` rejects frame 0 of media
   `144136475`, `483130367`, `573010160`, `845662642`, `504708181`, `405228712`. One decoder fix may unlock
@@ -118,8 +122,8 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
 2. ~~Container rules~~ done; the missile launch loads (`omega_countdown_ground_truth::the_missile_launch_plays_one_child_of_each_random_layer`):
    a layer container of five layers, four random containers and a sound, so five media per post, not one.
    ~~Next: the per-cue table~~ done (above). ~~Held loops' loop flags~~ done (5 of 12). ~~Switch-container
-   play, `GAME_VR` first~~ done (9 of 12 held, 21 of 43). Next: the ATRAC9 frames (6 cues), `GAME_MODE`,
-   `VoiceReg__TeamName`, then the engine's band cues.
+   play, `GAME_VR` first~~ done (9 of 12 held), ~~`TeamName`~~ done (24 of 43). Next: the ATRAC9 frames
+   (6 cues), `GAME_MODE`, `HUDTargetingState`, then the engine's band cues.
    Per-post draws (above) before a cue is audible as random.
 3. Live check of the countdown post (an hour): run the wipeout_pc port past GO and look for no
    `Failed Posting Audio Event` line (patch `0x017caf30` prints one on an unknown event).
