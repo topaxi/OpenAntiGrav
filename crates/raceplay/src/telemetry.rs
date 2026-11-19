@@ -294,7 +294,7 @@ impl Race {
             boost_phase: (self.exhaust_of(slot).boost_timer() / oag_fx::exhaust::BOOST_SECONDS)
                 .clamp(0.0, 1.0),
             now_playing: if primary { self.now_playing() } else { None },
-            radar_blips: self.core.radar_blips(slot),
+            radar_blips: self.radar_blips(slot),
         };
         if let Some(hud) = self.view.capture_hud.filter(|_| primary) {
             readout.place = hud.place;
