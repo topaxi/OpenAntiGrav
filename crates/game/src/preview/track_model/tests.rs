@@ -216,3 +216,48 @@ fn the_fresnel_ramp_is_the_materials_own_uniforms() {
     bare.params.clear();
     assert!(Ramp::fresnel(&bare, &mut Model::none("test")).is_err());
 }
+
+fn track_picker(
+    reversed: bool,
+    pose: Option<oag_title::CircuitPose>,
+) -> oag_ui_screens::picker::Picker {
+    use oag_ui_screens::picker::{Details, Entry, Kind, Picker};
+    let entries = vec![Entry {
+        id: "01_Track".to_string(),
+        label: "VINETA K".to_string(),
+        details: Details::Track {
+            info: ["-".into(), "-".into(), "-".into()],
+            emblem: None,
+            icon: None,
+            reversed,
+            model_pose: pose,
+        },
+    }];
+    Picker::new(Kind::Track, entries, Some("01_Track"), None)
+}
+
+/// What a capture draws: on HD the selected entry's own pose and the turntable counted from zero
+/// in its direction; on a title whose update is unread, the stand-in. Dropping the wiring (the
+/// capture passing the stand-in, or the entry's pose not reaching the picker) fails this.
+#[test]
+fn a_capture_poses_the_selected_circuit_by_its_entry() {
+    let hd = Some(oag_hd::frontend::FRONT_END);
+    let forward = track_picker(false, Some(vineta_k()));
+    let Posing::Entry { pose, law, yaw } = Posing::after(hd, &forward, 1.0) else {
+        panic!("HD with an authored pose draws the entry's pose");
+    };
+    assert_eq!(pose, vineta_k());
+    assert_eq!(law, oag_hd::frontend::CIRCUIT_TURNTABLE);
+    assert!((yaw - 0.6).abs() < 1e-4, "{yaw}");
+    let reversed = track_picker(true, Some(vineta_k()));
+    let Posing::Entry { yaw, .. } = Posing::after(hd, &reversed, 1.0) else {
+        panic!("a reversed circuit is posed the same way");
+    };
+    assert!((yaw + 0.6).abs() < 1e-4, "{yaw}");
+    let standin = Posing::Standin { seconds: 1.0 };
+    assert_eq!(
+        Posing::after(Some(oag_omega::frontend::FRONT_END), &forward, 1.0),
+        standin
+    );
+    assert_eq!(Posing::after(hd, &track_picker(false, None), 1.0), standin);
+}

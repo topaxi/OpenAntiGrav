@@ -774,7 +774,7 @@ impl PickerStage {
             .previews
             .front_end
             .and_then(|front_end| front_end.circuit_turntable);
-        let (circuit_pose, _) = self.selected_circuit();
+        let (circuit_pose, _) = crate::preview::track_model::selected_circuit(&self.model);
         let turntable = self.turntable;
         let Some(preview) = self.preview.as_mut() else {
             return;
@@ -869,23 +869,6 @@ impl PickerStage {
             .tick(&fit, aspect, box_z, dt);
     }
 
-    /// The selected circuit's pose and direction, when it is a circuit entry.
-    fn selected_circuit(&self) -> (Option<oag_title::CircuitPose>, bool) {
-        match self
-            .model
-            .entries()
-            .get(self.model.index())
-            .map(|e| &e.details)
-        {
-            Some(picker::Details::Track {
-                model_pose,
-                reversed,
-                ..
-            }) => (*model_pose, *reversed),
-            _ => (None, false),
-        }
-    }
-
     /// Advances the circuit model's turntable by the fixed ticks `dt` seconds make, in the
     /// direction of the selected circuit, as the original's update does every frame.
     pub(crate) fn tick_turntable(&mut self, dt: f32) {
@@ -896,7 +879,7 @@ impl PickerStage {
         else {
             return;
         };
-        let (_, reversed) = self.selected_circuit();
+        let (_, reversed) = crate::preview::track_model::selected_circuit(&self.model);
         self.turntable.advance(&law, dt, reversed);
     }
 

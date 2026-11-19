@@ -81,6 +81,40 @@ impl Posing {
     }
 }
 
+/// The pose the selected entry of a track picker authors for its circuit model and whether it is
+/// the reversed one; `(None, false)` for anything that is not a circuit entry.
+#[must_use]
+pub fn selected_circuit(
+    picker: &oag_ui_screens::picker::Picker,
+) -> (Option<oag_title::CircuitPose>, bool) {
+    match picker.entries().get(picker.index()).map(|e| &e.details) {
+        Some(oag_ui_screens::picker::Details::Track {
+            model_pose,
+            reversed,
+            ..
+        }) => (*model_pose, *reversed),
+        _ => (None, false),
+    }
+}
+
+impl Posing {
+    /// How a track picker `seconds` into its screen poses its circuit model, counting the
+    /// turntable from zero in the selected circuit's direction: what a capture draws.
+    #[must_use]
+    pub fn after(
+        front_end: Option<&oag_title::FrontEnd>,
+        picker: &oag_ui_screens::picker::Picker,
+        seconds: f32,
+    ) -> Self {
+        let law = front_end.and_then(|front_end| front_end.circuit_turntable);
+        let (pose, reversed) = selected_circuit(picker);
+        let turntable = law
+            .map(|law| Turntable::after(&law, seconds, reversed))
+            .unwrap_or_default();
+        Self::of(law, pose, &turntable, seconds)
+    }
+}
+
 /// The global angle the screen's update turns the circuit by: a step per frame, forwards on a
 /// circuit and backwards on a reversed one, wrapped at the law's limit.
 ///
