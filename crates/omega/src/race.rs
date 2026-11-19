@@ -629,7 +629,8 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
 /// title-wide one (`Data/zoneenvironmenthdfury`, the `DLC3` revision on the four `zone_N`) and its
 /// two fifteen-entry texture sets as `.gnf`, the same shape as 2048's
 /// (`oag_2048::race::ZONE_FALLBACK` on the other title). The stage ladder is HD's fourteen
-/// records, **inherited from HD**: Omega's Zone HUD table and its stage writer are not read.
+/// records, **measured on Omega**: its Zone HUD walker carries the same thresholds and writes
+/// `14 - i` as the stage (`docs/ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md`).
 ///
 /// The ten `Data\Environments2048` circuits are held back: each ships its own `ZoneMode2048`
 /// table and a `trackZone.rcsmodel` whose flat `Zone_ColourN` look this build does not draw
