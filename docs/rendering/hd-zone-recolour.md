@@ -241,3 +241,33 @@ Evidence, the per-material census and the 2048/Omega check:
 (the pad draws as road, with a white bar), and its stand-in for the start
 gantry's card (`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably this
 same flag, unchecked.
+
+## The light-bar term in a Zone race (2026-11-19, `zone-pair-score`)
+
+**A chunk drawn through the Zone surface adds no `_ne.a * colour` light bar.**
+The lit `_ne` programs (the pads, and `diffuse_normal_specular_emmissive`'s
+rails, start line and start bays) add `_ne.a * colour` after the light, the
+colour a material parameter ([pads.md](pads.md)). Across all four PS3
+archives, 77 materials have a lit variant that adds it, and **none** of their
+Zone variants (those declaring `zoneColourTint`) gates that same parameter on
+`_ne.a`: confidence 85 (a census of the disc's own fragment programs,
+`crates/mesh/tests/hd_zone_ne_census_ground_truth.rs`, plus one live frame).
+On Vineta K's `diffuse_normal_specular_emmissive` (lit colour parameter
+`0x7611a2d8`) eighteen of the twenty Zone variants gate nothing on `_ne.a` and
+two gate `zoneBaseInner` (`0x1cc42e87`, renderer.md's hash table) instead.
+
+The live frame: the adopted pair `hd/zone-vineta-k-z5` shows the start bays
+under the craft as flat Zone teal with dark seams, where this port drew the
+bays' blue `LIFT` light bars (`ds_pit_cs`, `_ne` `ds_pit_ne.gtf`). Isolated by
+`OAG_ONLY_MATERIAL=ds_pit` and by zeroing each post-light additive in turn:
+only the `_ne` term carried the blue.
+
+`shade.wesl` multiplies the term by `1 - zone_program`, the mode-12 rule's
+shape. The speed and weapon pads keep their bars, because their chunks draw
+the plain program in a Zone race (the section above). The pair's mean grey
+moves 37.40 -> 36.83; the start-bay crop matches by eye.
+
+**Open**: the two Zone variants that add `_ne.a * zoneBaseInner` are not
+drawn. Which variant a chunk runs depends on the permutation word (lighting,
+shadow), unread for these chunks; the frame shows no rim-coloured bar on the
+bays.
