@@ -422,7 +422,7 @@ fn build_planned(
         // The diffuse map's own alpha is the surface's alpha, gloss and cut-out on Omega's programs
         // (`docs/formats/omega-status.md`, "The alpha lane"). Vita keeps the red lane for every
         // material but the alpha-lit ones below, whose programs are read to take `T.www`.
-        let role = if ps4 || false {
+        let role = if ps4 {
             role | crate::mesh::slots::DEFAULT
         } else {
             role
