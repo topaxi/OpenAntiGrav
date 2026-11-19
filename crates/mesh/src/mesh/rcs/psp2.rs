@@ -80,6 +80,12 @@ pub use report::Report;
 /// with the circuit's `fogColour`; one left in place is drawn black.
 pub const FOG_FLAT: [f32; 4] = [-1.0, -1.0, -1.0, 1.0];
 
+/// A `Zone_Colour<k>` vertex carries `colour.a = ZONE_COLOUR_ALPHA + k`
+/// (`k` in `1..=8`, so `2.0..=9.0`): the shader reads the showing stage's
+/// colour for slot `k` from `Zone::stage_colours` and keeps the vertex's own
+/// rgb, the material's authored colour, where the stage table gives none.
+pub const ZONE_COLOUR_ALPHA: f32 = 1.0;
+
 /// Whether a blob is 2048's container rather than Wipeout HD's.
 ///
 /// Cheap and exact: the two containers disagree on their very first word, and
@@ -419,18 +425,18 @@ fn build_planned(
         } else {
             crate::mesh::slots::SECOND_IS_LIGHTMAP
         };
-        // A Zone material's colour is drawn as it is: its own colour, unlit.
-        // **Chosen, not measured.** Its fragment program also declares a
-        // lightmap, `liveLighting0` and a `Zone_ColourN_Emissive` scalar
-        // (`0.5` on all eight), and how the three combine is GPU bytecode
-        // nobody here has decoded. Both readings were drawn on `altima`:
-        // lit, the colour is multiplied by a sun of `2.0 1.8 1.7` and every
-        // surface blows out to white; unlit, the eight colours read as eight
-        // colours. The scalar is read and not applied.
-        let zone = submesh
+        // A Zone material's surface is `Zone_Colour * (ambient + sun * max(N.L, 0) +
+        // Emissive)` under fog (its unlightmapped fragment programs,
+        // `docs/formats/2048-material-params.md`, "The Zone surface"), with the
+        // stage's own `Colour <k>` and `Emissive` where the Zone table authors
+        // them. The vertex keeps the material's authored colour as the fallback
+        // and names its slot in `colour.a` ([`ZONE_COLOUR_ALPHA`]); the shader
+        // does the rest.
+        let zone_slot = submesh
             .material
             .and_then(|m| decoded.materials.get(m))
-            .and_then(|m| m.zone_colour());
+            .and_then(|m| m.zone_colour_slot());
+        let zone = zone_slot.map(|(_, colour)| colour);
         report.zone_colour_submeshes += usize::from(zone.is_some());
         let emissive = (submesh.material.and_then(|m| decoded.materials.get(m)))
             .filter(|_| ps4)
@@ -453,7 +459,15 @@ fn build_planned(
                 role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
             ),
             Some([r, g, b]) => (
-                [r, g, b, 1.0],
+                [
+                    r,
+                    g,
+                    b,
+                    match zone_slot {
+                        Some((k, _)) if !ps4 => ZONE_COLOUR_ALPHA + f32::from(k),
+                        _ => 1.0,
+                    },
+                ],
                 0.0,
                 role | crate::mesh::slots::NO_AMBIENT | crate::mesh::slots::NO_SUN,
             ),

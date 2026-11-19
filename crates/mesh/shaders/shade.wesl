@@ -135,6 +135,20 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let rig_on = select(select(0.0, scene.light.enabled, light_rig != 0.0), 1.0, lit_by_rig != 0.0);
     in.lit_light.x = select(raw.lit_light.x, 1.0, lit_by_rig != 0.0);
     in.tangent = select(raw.tangent, vec4<f32>(0.0), tangents_present == 0.0);
+    // **2048's `zonefc06_colour_emissive_scalar` surface**, a vertex that names its
+    // slot in `colour.a` (`mesh::rcs::psp2::ZONE_COLOUR_ALPHA`) while the Zone table
+    // authors the stage's colours: `Colour * (ambient + sun * sat(N.L) + Emissive)`,
+    // the arithmetic of the material's unlightmapped fragment programs, in the
+    // gamma domain they run in (`docs/formats/2048-material-params.md`, "The Zone
+    // surface"). Fog and shadow are applied by the caller, as for every surface.
+    if scene.zone.stage_light[0].w > 0.5 && raw.colour.a > 1.5 {
+        let slot = clamp(i32(round(raw.colour.a)) - 2, 0, 7);
+        let stage = scene.zone.stage_colours[slot];
+        let up = normalize(raw.normal);
+        let sat_ndl = max(dot(up, normalize(scene.zone.stage_light[2].xyz)), 0.0);
+        let lit = stage.rgb * (scene.zone.stage_light[0].xyz + scene.zone.stage_light[1].xyz * sat_ndl + vec3<f32>(stage.w));
+        return vec4<f32>(mix(lit, decode(lit), linear_out), 1.0);
+    }
     let zone_on = select(0.0, scene.zone.enabled, zone_race != 0.0);
     // **A chunk a Zone race draws on its plain program** (`slots::ZONE_PLAIN`, the speed and weapon
     // pads, signs and screens; `docs/ghidra/functions/ps3-hdfury-eu/zone-plain-chunks.md`): none of

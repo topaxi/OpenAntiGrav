@@ -904,7 +904,7 @@ impl ZoneGrade {
                 ),
             )
         }
-        let off = mesh_render::Zone::default();
+        let off = self.stage_colours();
         let (Some(uv_scale), Some(palette)) = (
             self.table.zone_uv_scale(),
             self.table.stage_palette(self.blend.current),
@@ -937,7 +937,39 @@ impl ZoneGrade {
             aniso_power,
             shape: [if self.arena { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
             aniso,
+            ..off
         }
+    }
+
+    /// [`mesh_render::Zone::default`] with the showing stage's 2048 Zone
+    /// colours and the light they take filled in, or untouched where the
+    /// table authors none of it (every HD table: they spell different keys).
+    ///
+    /// The showing stage's own colours, not a cross-fade and not the
+    /// transition sphere's outer stage: how 2048 changes stage is unread
+    /// (`ZoneTransition` is `None` there), so a stage change is a step.
+    fn stage_colours(&self) -> mesh_render::Zone {
+        let mut zone = mesh_render::Zone::default();
+        let Some(light) = self.table.zone_lighting() else {
+            return zone;
+        };
+        let colours = self.table.zone_colours(self.blend.current);
+        if colours.iter().all(Option::is_none) {
+            return zone;
+        }
+        for (slot, colour) in zone.stage_colours.iter_mut().zip(colours) {
+            // A slot the stage does not author draws black, the identity for
+            // a surface that is a sum of terms times its colour.
+            if let Some(c) = colour {
+                let [r, g, b] = c.colour;
+                *slot = [r, g, b, c.emissive];
+            }
+        }
+        let [ar, ag, ab] = light.ambient;
+        let [sr, sg, sb] = light.sun;
+        let [dx, dy, dz] = light.direction;
+        zone.stage_light = [[ar, ag, ab, 1.0], [sr, sg, sb, 0.0], [dx, dy, dz, 0.0]];
+        zone
     }
 
     /// The showing stage's own `EQ colour tint`, for tinting the visualiser
