@@ -61,22 +61,6 @@ impl SimRace {
         }
     }
 
-    /// The other craft as the 2048 dialect's radar places them, relative to `slot`'s craft:
-    /// dot `N` follows grid slot `N` (`oag_hud::radar`). A slot past the field, `slot` itself and
-    /// a craft sitting on `slot`'s hide their dots.
-    fn radar_blips(&self, slot: usize) -> [Option<oag_hud::radar::Blip>; oag_hud::radar::DOTS] {
-        let world = &self.sim.world;
-        let me = &world.ships[slot].physics.body;
-        let (forward, right) = (me.forward().to_array(), me.right().to_array());
-        std::array::from_fn(|other| {
-            if other == slot || other >= usize::from(world.ship_count) {
-                return None;
-            }
-            let offset = world.ships[other].physics.body.position - me.position;
-            oag_hud::radar::Blip::from_offset(offset.to_array(), forward, right)
-        })
-    }
-
     /// Whether the ship is pointing back down the track.
     ///
     /// `dot(craft_forward, sample.tangent) < 0`. **The tangent, not the sample
@@ -112,6 +96,23 @@ impl RaceSim {
 }
 
 impl Race {
+    #[cfg(feature = "view")]
+    /// The other craft as the 2048 dialect's radar places them, relative to `slot`'s craft:
+    /// dot `N` follows grid slot `N` (`oag_hud::radar`). A slot past the field, `slot` itself and
+    /// a craft sitting on `slot`'s hide their dots.
+    fn radar_blips(&self, slot: usize) -> [Option<oag_hud::radar::Blip>; oag_hud::radar::DOTS] {
+        let world = &self.core.sim.world;
+        let me = &world.ships[slot].physics.body;
+        let (forward, right) = (me.forward().to_array(), me.right().to_array());
+        std::array::from_fn(|other| {
+            if other == slot || other >= usize::from(world.ship_count) {
+                return None;
+            }
+            let offset = world.ships[other].physics.body.position - me.position;
+            oag_hud::radar::Blip::from_offset(offset.to_array(), forward, right)
+        })
+    }
+
     #[cfg(feature = "view")]
     /// What the HUD shows, as of the last tick.
     ///

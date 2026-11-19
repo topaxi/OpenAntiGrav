@@ -103,7 +103,7 @@ of `x` does.
 
 `oag_2048::hud::ALWAYS_ON` and `oag_omega::hud::ART_2048.always_on` carry `Radar` and
 `PlayerDot`; the dots are `oag_hud::radar` (the law, `radar_tests.rs`), fed by
-`oag_raceplay::sim_race::SimRace::radar_blips` through `Readout::radar_blips`. Tests: `vita_2048_hud_ground_truth::the_played_single_race_draws_the_half_radar_round_the_craft`,
+`oag_raceplay::Race::radar_blips` through `Readout::radar_blips`. Tests: `vita_2048_hud_ground_truth::the_played_single_race_draws_the_half_radar_round_the_craft`,
 `omega_hud_ground_truth::omega_2048_mode_draws_the_half_radar_round_the_craft`, and for the dots `omega_hud_ground_truth::omega_2048_mode_draws_a_radar_dot_for_a_craft_behind` and `vita_2048_hud_ground_truth::the_played_single_race_places_the_radar_dots_by_the_law`.
 
 Hull box (1080p `760x420+580+640`; the Vita pair at 960x544, `380x210+290+330`), mean absolute

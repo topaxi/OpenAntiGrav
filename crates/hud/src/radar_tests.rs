@@ -39,7 +39,10 @@ fn right_of_the_player_lands_left_of_the_origin() {
     let (offset, _) = place(Kind::Half, blip([70.710_68, 0.0, 70.710_68]), HALF).unwrap();
     assert!(offset[0] < 0.0, "{offset:?}");
     let t = 100.0 / RANGE;
-    assert!(close(offset[0], -(t * 0.707_106_8 * HALF[0])), "{offset:?}");
+    assert!(
+        close(offset[0], -(t * std::f32::consts::FRAC_1_SQRT_2 * HALF[0])),
+        "{offset:?}"
+    );
     let left = place(Kind::Half, blip([-70.710_68, 0.0, 70.710_68]), HALF)
         .unwrap()
         .0;
