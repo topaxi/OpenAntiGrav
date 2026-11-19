@@ -1,7 +1,7 @@
 # oag-ffmpeg
 
-Where the game finds the `ffmpeg` and `ffprobe` it shells out to (Pulse, Pure and
-2048 music, every movie), and how it fetches a pinned LGPL build of them when the
+Where the game finds the `ffmpeg` and `ffprobe` it shells out to (Pulse and Pure
+music, every movie), and how it fetches a pinned LGPL build of them when the
 player has none and says yes.
 
 One resolver: `PATH` first, then the downloaded copy, then none. A system

@@ -226,6 +226,7 @@ carry those, and a README that repeats them drifts.
 | `oag-trace` | Per-tick trace capture and comparison against the original (`show\|run\|compare\|script\|drive\|track`). |
 | `oag-audio` | Voice pool, mixer, `cpal` stream or none, WAV writer. Cues are a per-tick *output*, never `World` state ([ADR-0018](docs/architecture/adr/0018-audio-mixer-architecture.md)). |
 | `oag-music` | A title's soundtrack: reading it and decoding ATRAC3+, ATRAC9, MP3, Wwise to PCM. |
+| `oag-ffmpeg` | The one way to find `ffmpeg`/`ffprobe`: `PATH`, then a consent-gated pinned LGPL download (never over a system one unless `[ffmpeg] use_pinned`). Not on Android or wasm. |
 | `oag-sound` | Soundtrack selection, effect banks and cues, HD's authored mix, over `oag-audio`. |
 | `oag-raceplay` | A race from load to finish. Its drawing half is the default `view` feature; without it, the simulation half that `oag-server` links. In `NOT_TITLE_PACKAGES`. |
 | `oag-source` | Finding and opening a title's disc image, DLC packs, a race's track/craft sources, caches. |
