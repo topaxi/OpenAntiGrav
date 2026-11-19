@@ -119,12 +119,14 @@ use serde::{Deserialize, Serialize};
 mod cursor;
 mod difficulty;
 mod found;
+mod lifetime;
 mod loyalty;
 
 mod medal;
 /// The profile's XP total - see `xp.rs`.
 mod xp;
 pub use cursor::CampaignCursor;
+pub use lifetime::{Lifetime, LifetimeRecord};
 pub use medal::{Difficulty, Medal};
 
 /// Which circuit/mode/class a [`Record`] is about.
@@ -614,6 +616,9 @@ pub struct Store {
     /// One row per hidden campaign event found. Absent in every file written
     /// before it existed.
     campaign_found: Vec<CampaignFoundRecord>,
+    /// One row per title with counted lifetime statistics, the footer ticker's source. Absent in
+    /// every file written before it existed.
+    lifetime: Vec<LifetimeRecord>,
 }
 
 impl Store {
@@ -642,6 +647,7 @@ impl Store {
     /// fields always take `obs`'s own values, whatever they say: that is
     /// what "the last race" means, better or worse than the one before it.
     pub fn record(&mut self, key: Key, obs: Observation) {
+        self.count_race(&key.title, &key.mode, obs.tick, obs.laps_completed);
         let row = match self.records.iter_mut().find(|record| record.key() == key) {
             Some(row) => row,
             None => {
@@ -1004,6 +1010,21 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
     }
     campaign_found.sort_by(|a, b| (&a.title, &a.event).cmp(&(&b.title, &b.event)));
 
+    let mut lifetime = Vec::new();
+    match table.get("lifetime") {
+        Some(toml::Value::Array(rows)) => {
+            for (index, row) in rows.iter().enumerate() {
+                match row.clone().try_into::<LifetimeRecord>() {
+                    Ok(record) => lifetime.push(record),
+                    Err(e) => notes.push(format!("lifetime[{index}] dropped: {e}")),
+                }
+            }
+        }
+        Some(_) => notes.push("`lifetime` is not an array of tables; ignoring it".to_string()),
+        None => {}
+    }
+    lifetime.sort_by(|a, b| a.title.cmp(&b.title));
+
     let xp = table
         .get("xp")
         .and_then(toml::Value::as_integer)
@@ -1018,6 +1039,7 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
             campaign_difficulty,
             campaign_cursor,
             campaign_found,
+            lifetime,
         },
         notes,
     ))

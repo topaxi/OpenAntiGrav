@@ -3867,6 +3867,7 @@ name = "oag-ui-screens"
 version = "0.1.0"
 dependencies = [
  "oag-assets",
+ "oag-core",
  "oag-display",
  "oag-gameplay",
  "oag-hd",

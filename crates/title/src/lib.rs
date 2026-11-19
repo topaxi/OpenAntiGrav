@@ -563,6 +563,10 @@ pub struct FrontEnd {
     /// its live skin includes and only `DATA06` carries. `None` elsewhere, whose
     /// track screen is in [`Self::race_box`] or unread.
     pub track_select: Option<&'static str>,
+    /// The footer ticker's message list: the `PI_News` rows (id, class, statistic slot,
+    /// weight) Pulse's `Data\Plugins\news\Definition.xml` authors. `None` on a title with no
+    /// ticker. Read by `oag_ui_screens::news`.
+    pub news: Option<&'static str>,
     /// The definition holding the race box's `Single Player` screen, whose lists
     /// are the settings a custom race is set up with. Read today for the
     /// `Eliminations` list, the kill targets the `KILLS` row offers

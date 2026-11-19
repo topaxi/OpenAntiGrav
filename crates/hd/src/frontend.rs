@@ -447,6 +447,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     race_box: None,
     team_select: Some(names::TEAM_SELECTION_DEFINITION),
     track_select: Some(names::TRACK_SELECTION_DEFINITION),
+    news: None,
     race_setup: None,
     track_label_overrides: &[],
     card_track_aliases: &[],
