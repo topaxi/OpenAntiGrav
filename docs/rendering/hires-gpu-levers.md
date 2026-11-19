@@ -1418,7 +1418,7 @@ RADV's `shaderstats` is not available on these adapters, and no instruction coun
 
 The craft draw under a scene block of their own (`ship_scene` in `scene/frame.rs`): the circuit's
 block with the Zone half off (`Zone::default()`), the light with its hull lights
-(`light` where the circuit gets `light.without_hull()`), and the craft's SPU lights. The shine
+(`light` where the circuit gets `light.for_track()`), and the craft's SPU lights. The shine
 block is the same with black fog. So for a hull pipeline:
 
 - the rig's `enabled` is the scope's (`BuildCacheScope::lit_by`), and the `lit_by_rig` fold holds

@@ -389,6 +389,55 @@ with the fallback removed). Other titles: HD's hull light is its own rig (`ship-
 Pure authors no hull rig (checked, differs); the 19 HD, HD race, Omega and 2048 compare pairs re-rendered from their recorded flags are
 unchanged to the printed digit, so nothing of theirs moved; Pulse PS2 takes none of this rig (not wired, see above).
 
+## The start laser is lit by the rig too (2026-11-19, `pulse-basilico`)
+
+Basilico's grid in PPSSPP v1.20.4 (`UCUS98712`, `data/saves/pulse-psp/time-trial-basilico-black-venom-grid.ppst`
+run on to the pair's race clock 15.4487 s, then `psp-ge-dump.py dump`; two boots, one dump each).
+The laser strip (`startline_laser_ADD_GLOW`, 64 x 8 `CLUT8`, 23 strip vertices, vertex type `0x121`: 8-bit UV,
+8-bit normal, 16-bit position, **no vertex colour**) is drawn with `LIGHTING` on, after a lighting list is replayed
+immediately before the draw (command chunk 4482, the strip at 4492; both boots):
+
+```text
+LIGHTING=1  AMBIENT=(0x90,0x7c,0x7a)  material ambient/diffuse white, alpha 0xff
+LIGHT0=1  L=(-0.300, 0.550, 0.779)  LDC0=(0x32,0x2e,0x23)
+LIGHT1=1  L=(-0.272, 0.337, 0.901)  LDC1=(0xe2,0xc2,0xb7)
+```
+
+That is `16_Track`'s recipe on `01_Track`: the circuit's own `AmbientLight` and two `DirectionalLight`s at scale
+`255 >> 8` (`HullLights::from_track` prints ambient bytes `145,125,123` before the scale, `144,124,122` after).
+The strip's normal is model +Z under a uniform-scale world matrix, so `N . L` is 0.779 and 0.901 and the sum
+`clamp(ambient + sum(diffuse * N.L))` saturates to `(255, 255, 255)` in every channel: the strip's colour is its texel,
+and with blend `0xa2` (`SrcAlpha` x `0xaf` / `Fix` 1) it adds 0.686 x texel. The pulse strip (`startline_laserpulse_ADD_GLOW`, chunk 4502, also `0x121`) draws under the same list.
+Confidence **85** (both boots agree on every light word, the sum is computed from them; the model whose list this is was
+not named in the executable, only seen replayed at the draw).
+
+**What ours did.** The track pass bound the hull rig off (`Light::without_hull`) and drew the colourless laser vertices
+through the stand-in (`0.15 + 0.75 key + 0.25 fill`, times the grey a colourless vertex carries): about 0.56 of the
+texel against the original's 1.0. The core read (132, 151, 171) at x 190, rows 149 to 152 against the original's
+(231..255), spread over the same four rows, which is what the 1.5 times figure and the "two sharp rows against four" in
+`docs/tools/compare-page.md` ("basilico-black") were: with the core saturated after the bloom, ours' four rows are 255 and the original's
+are 231, 255, 255, 246. The geometry was never the difference: ours' strip is the same 23 vertices at the same positions (bounds
+`(-731.57, 2.134, 299.00)` to `(-691.53, 2.732, 299.26)`), UV `u` 49/128 to 78/128, `v` 0 to 1, and the texture's rows are the
+same (rows 4 and 5 white, 3 and 6 about 0.45, 2 and 7 about 0.18, read from the dump). Why Talon's matched: its strip carries 4444
+vertex colours (`ffed` to `ffa7`), which the GE reads as already lit, so no rig reaches it.
+
+**Fix.** `mesh_render::mark_rig_vertices` marks the colourless vertices of the two textures `lit` 2.0
+(`HullLights::TRACK_LIT`); the track pass binds the rig with `w` 2.0 (`Light::for_track`), which `mesh.wesl` reads as "only
+a vertex marked 2.0 takes it"; the craft's scene keeps `w` 1.0 and every lit vertex. Loader line `start laser: N colourless
+vertices lit by the circuit's rig` (56 on the PSP Basilico, 0 on PS2 and Pure). Test:
+`crates/raceplay/tests/start_laser_rig_ground_truth.rs`. Pair `pulse-psp/basilico-black` 5.08 to 4.38 and `basilico-white`
+4.30 to 3.50; the laser band (rows 140 to 160) mean absolute error 18.6 to 9.0; no other of the 29 Pulse PSP race pairs
+moves by more than 0.01 (`docs/tools/compare-page.md`).
+
+**Open: which other models are rebuilt.** Giving every colourless lit track vertex the rig instead (the broad rule, tried
+and not kept) moved `amphiseum-black` 3.93 to 3.36, `outpost-7-white` 3.79 to 3.62 and `talons-boost` 9.13 to 9.00 the right way and
+`de-konstruct-black` 3.39 to 3.46 and `outpost-7-black` 3.30 to 3.34 the wrong way, so some lit scenery is rebuilt and some is the raw
+texel (the 97 above). A second lit scenery strip on Basilico (`vt 0x123`, 255 vertices, `x` -696 to -638, `z` 452 to 668, chunks 2730 and
+2778) sits under the same rig and is not marked either. Mapping them needs `Vex_UpdateLightLists`' selector (`model + 0xac`).
+
+PS2: **checked, differs.** The PS2 disc's laser vertices carry colours, so nothing is marked and `pulse-ps2/basilico-black` is
+byte-identical (14.76). Pure: marks nothing (its texture names are not these); not measured.
+
 ## Applied names
 
 Mirrored in [`names.tsv`](names.tsv).

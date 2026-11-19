@@ -23,7 +23,8 @@ pub use blend::{ADDITIVE_BLEND, PlainBlend, TRANSPARENT_BLEND, TransparentPipeli
 pub use foliage::Foliage;
 pub use glow_mask::GlowMask;
 pub use hull_lights::{
-    HULL_LIGHTS, HullLights, HullPassColour, ge_byte, ge_channel, pack_hull_scale,
+    HULL_LIGHTS, HullLights, HullPassColour, ge_byte, ge_channel, mark_rig_vertices,
+    pack_hull_scale,
 };
 pub use hull_points::{HULL_POINT_SLOTS, HullPoint, HullPointLights};
 pub use spu_light::{MAX_SPU_LIGHTS, RGBE_ROUND_TRIP, SpuLight, SpuLights};

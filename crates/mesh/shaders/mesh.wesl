@@ -65,7 +65,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
         out.tangent = vec4<f32>((uniforms.model * (node * vec4<f32>(t, 0.0))).xyz, in.tangent.w);
     }
     out.colour = in.colour;
-    out.lit_light.x = in.lit;
+    out.lit_light.x = min(in.lit, 1.0);
     out.glow = in.glow;
     // **A PSP hull (Pulse, Pure), lit the way the GE lights it**: per vertex, the circuit's
     // own ambient plus each directional light's `N . L`, clamped to `0..1` and
@@ -74,7 +74,9 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     // the stand-in rig and the grey an uncoloured vertex otherwise carries,
     // which is why `lit` is cleared. See `mesh_render::HullLights` and
     // docs/ghidra/functions/psp-pulse-usa/scene-light.md.
-    if scene.light.hull_ambient.w > 0.5 && in.lit > 0.5 {
+    // `w` is 1.0 in the craft's scene (every lit vertex takes the rig) and 2.0 in the track's
+    // (only a vertex marked `lit` 2.0 does).
+    if scene.light.hull_ambient.w > 0.5 && in.lit > scene.light.hull_ambient.w - 0.5 {
         let n = normalize(out.normal);
         // The craft's own scales, `(byte * scale) >> 8` per colour byte as
         // `SceneLight_BuildLightingList` packs them. The rig holds the bare

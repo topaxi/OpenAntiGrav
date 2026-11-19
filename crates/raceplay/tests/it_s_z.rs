@@ -40,6 +40,7 @@ mod start_gantry_hd_mount_ground_truth;
 mod start_gantry_omega_ground_truth;
 mod start_gantry_report_ground_truth;
 mod start_gantry_report_pure_ground_truth;
+mod start_laser_rig_ground_truth;
 mod start_line_ground_truth;
 mod start_pose_ground_truth;
 #[cfg(feature = "ballisticng")]

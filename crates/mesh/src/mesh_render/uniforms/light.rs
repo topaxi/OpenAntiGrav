@@ -89,14 +89,17 @@ pub struct Light {
 }
 
 impl Light {
-    /// This rig with [`Self::hull`] switched off, for every draw that is not a
-    /// craft's hull.
+    /// This rig as the track pass binds it: the hull rig, but read only by the
+    /// vertices a loader marked [`crate::mesh_render::HullLights::TRACK_LIT`]
+    /// (the original's models whose own GE light list was rebuilt; every other
+    /// lit-branch track model draws with the stand-in). A craft's hull keeps the
+    /// rig unmarked, from its own scene.
     #[must_use]
-    pub fn without_hull(self) -> Self {
-        Self {
-            hull: crate::mesh_render::HullLights::OFF,
-            ..self
+    pub fn for_track(mut self) -> Self {
+        if self.hull.enabled() {
+            self.hull.ambient[3] = crate::mesh_render::HullLights::TRACK_ONLY;
         }
+        self
     }
 
     /// The stand-in rig: what every title but HD binds.
