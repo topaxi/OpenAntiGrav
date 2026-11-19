@@ -1231,12 +1231,11 @@ a 0.223 peak in the tap, exactly 0.75.
 | Pure | not booted in a browser | absent, the same codec |
 | Pulse PS2 | front end (race not tried) | front end: soundtrack track 0, in process as natively (45 s tap, -18.5 dBFS, 0 under-runs) |
 | HD / Fury | menus, race | front end and race, MP3 through `symphonia` in process |
-| 2048, Omega | no package opens in a browser | `atrac9dec` builds into the web module; unreachable |
+| 2048, Omega | no package opens in a browser | ATRAC9 (both titles, `vendor/atrac9dec`) builds into the web module; unreachable |
 
 The absent music logs once, at warn, and every later track goes to debug:
-`audio: no music (decoding Data\Music\FEMusic\frontend1.at3: ATRAC3+ and
-RIFF-wrapped ATRAC9 are decoded by ffmpeg, which a browser cannot run); this
-music stays absent` (`oag_music::at3::NoDecoderHere`). Nothing stands in for
+`audio: no music (decoding Data\Music\FEMusic\frontend1.at3: ATRAC3+ is
+decoded by ffmpeg, which a browser cannot run); this music stays absent` (`oag_music::at3::NoDecoderHere`). Nothing stands in for
 it. HD's MP3 and Omega's ATRAC9 have no decode cache natively either, so
 nothing had to move into memory or OPFS. HD's pre-race fly-over is silent by
 the disc's own mix (`PreRace` has music at 0, and the fly-over fires no cues),

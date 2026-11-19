@@ -8,7 +8,7 @@ use super::*;
 
 /// Builds a minimal RIFF/WAVE with a 52-byte `WAVEFORMATEXTENSIBLE` `fmt `
 /// chunk carrying `guid`, and an empty `data` chunk - enough for [`describe`]
-/// to walk, nothing [`super::decode`] would try to hand `ffmpeg`.
+/// to walk.
 fn riff_with_guid(channels: u16, sample_rate: u32, block_align: u16, guid: [u8; 16]) -> Vec<u8> {
     let mut fmt_body = Vec::with_capacity(52);
     fmt_body.extend_from_slice(&0xfffe_u16.to_le_bytes()); // wFormatTag: extensible
@@ -55,10 +55,8 @@ fn a_different_subformat_guid_is_refused() {
     assert!(describe(&blob).is_err());
 }
 
-/// Wipeout Pulse's own ATRAC3+ GUID, refused the same way - this is the
-/// specific case [`super`]'s own module doc explains sharing `at3::decode_riff`
-/// does not risk: `describe` never lets an ATRAC3+ stream through as if it
-/// were ATRAC9's.
+/// Wipeout Pulse's own ATRAC3+ GUID, refused the same way: `describe` never
+/// lets an ATRAC3+ stream through to the ATRAC9 decoder.
 #[test]
 fn atrac3plus_s_own_guid_is_refused_too() {
     const ATRAC3PLUS_GUID: [u8; 16] = [

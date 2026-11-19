@@ -9,6 +9,7 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+mod atrac9_ground_truth;
 mod omega_wem_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

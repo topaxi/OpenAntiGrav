@@ -456,9 +456,7 @@ pub struct NoDecoderHere;
 
 impl std::fmt::Display for NoDecoderHere {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(
-            "ATRAC3+ and RIFF-wrapped ATRAC9 are decoded by ffmpeg, which a browser cannot run",
-        )
+        f.write_str("ATRAC3+ is decoded by ffmpeg, which a browser cannot run")
     }
 }
 

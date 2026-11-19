@@ -364,8 +364,6 @@ dependencies = [
 [[package]]
 name = "atrac9dec"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35b2862764c73193c0b0aae64e8510cc1177c79a4b5d24726470de479c59fc11"
 
 [[package]]
 name = "audio-codec-algorithms"

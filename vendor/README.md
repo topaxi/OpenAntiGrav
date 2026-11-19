@@ -15,7 +15,17 @@ itself is a normal code comment at the change site explaining what was
 touched and why, with a pointer to the upstream issue/repo so the entry can be
 dropped once a real release picks up the fix.
 
-Nothing is vendored right now. The Linux platform-native H.264 decode path
+**`atrac9dec/`** (0.9.1, MIT, a Rust port of the MIT LibAtrac9). Not a small
+fix, which this page otherwise asks for: the published crate refused every 5.1
+and 7.1 stream and departed from LibAtrac9 on stereo too, and five functions
+are ported from LibAtrac9 in full (`docs/formats/atrac9.md`, "What the
+published crate got wrong"). Each change carries an "OpenAntiGrav patch"
+comment. Upstream ships no licence file; the manifest says MIT, and
+LibAtrac9's own licence sits beside it as `LICENSE-LibAtrac9`. Drop the entry
+once a release decodes everything `crates/music/tests/atrac9_ground_truth.rs`
+and `omega_wem_ground_truth.rs` read, sample-identical to LibAtrac9.
+
+Earlier entries: the Linux platform-native H.264 decode path
 (see [ADR-0017](../docs/architecture/adr/0017-gstreamer-native-video.md))
 used to vendor patched copies of `cros-libva` and `h264-reader` for a
 hand-rolled VA-API decoder; that decoder was dropped in favor of GStreamer
