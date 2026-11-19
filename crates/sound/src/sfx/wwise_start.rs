@@ -16,8 +16,11 @@
 //! plays forever is a looping [`Layer`], held until the game releases the cue;
 //! one that plays `n` times is its media `n` times over. A random/sequence container sounds exactly one child per post:
 //! the first playlist item of a sequence, a uniform draw from `rng` for a
-//! random one (a container that weights its picks is refused, none does). Not
-//! read, so refused or reported: switch containers (which child plays), streamed media, a relay into another bank,
+//! random one (a container that weights its picks is refused, none does).
+//! A switch container plays every child of its case for the value the caller
+//! holds its group at (`states`, group and value ids); one on a group not
+//! listed is refused, never played by its default.
+//! Not read, so refused or reported: streamed media, a relay into another bank,
 //! state and other action kinds, the busses' own volumes and every positioning
 //! parameter (the start plays centred). A seek's randomised delay range plays at
 //! its minimum, chosen.
@@ -28,7 +31,7 @@ use std::sync::Arc;
 use anyhow::{Context, bail, ensure};
 use oag_audio::Sound;
 use oag_core::Rng;
-use oag_formats::wwise::container::RanSeq;
+use oag_formats::wwise::container::{RanSeq, Switch};
 use oag_formats::wwise::hirc::{self, Action, Event, Kind, Seek, Sound as WwiseSound, prop};
 use oag_formats::wwise::{Bank, name_hash};
 
@@ -43,6 +46,8 @@ pub(super) struct EventCue {
     pub(super) notes: Vec<String>,
     /// Each random/sequence container reached and the child it played.
     pub(super) picks: Vec<(u32, u32)>,
+    /// Each switch container reached and the state value it played.
+    pub(super) switched: Vec<(u32, u32)>,
 }
 
 /// A sound an action starts, before its media is cut by stops and seeks.
@@ -105,10 +110,14 @@ enum CutKind {
     Seek { fraction: f64 },
 }
 
-/// The draws a load makes.
+/// The draws a load makes, and the state group values it plays switch
+/// containers by.
 struct Picker<'a> {
     rng: &'a mut Rng,
     made: Vec<(u32, u32)>,
+    states: &'a [(u32, u32)],
+    /// Each switch container reached and the value it played.
+    switched: Vec<(u32, u32)>,
 }
 
 /// The objects of one bank, with every node's children.
@@ -234,10 +243,33 @@ impl<'a> Tree<'a> {
                 };
                 self.starts(child, at, repeat, pick, out)?;
             }
+            Kind::SwitchContainer => {
+                let container =
+                    Switch::parse(kind, body).with_context(|| format!("container {target}"))?;
+                let Some((value, children)) = switch_case(&container, pick.states) else {
+                    bail!(
+                        "target {target} is a SwitchContainer on group {}, whose value is not read",
+                        container.group
+                    );
+                };
+                pick.switched.push((target, value));
+                for &child in children {
+                    self.starts(child, at, repeat, pick, out)?;
+                }
+            }
             other => bail!("target {target} is a {other:?}, whose choice of child is not read"),
         }
         Ok(())
     }
+}
+
+/// The value `states` holds `container`'s group at and the children that
+/// sound for it: every child its case lists, or the default's when the value
+/// has no case. [`None`] for a group `states` does not list: its value is not
+/// read, and the default is never played in its place.
+fn switch_case<'c>(container: &'c Switch, states: &[(u32, u32)]) -> Option<(u32, &'c [u32])> {
+    let &(_, value) = states.iter().find(|(g, _)| *g == container.group)?;
+    Some((value, container.children_for(value)))
 }
 
 /// Loads `event` (its full name, as the title posts it) out of the Wwise bank
@@ -246,8 +278,14 @@ impl<'a> Tree<'a> {
 /// # Errors
 ///
 /// The bank does not parse, has no such event, an action starts something
-/// whose choice is unread (a switch, a weighted container), or no sound it starts decodes.
-pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<EventCue> {
+/// whose choice is unread (a switch on a group `states` does not list, a
+/// weighted container), or no sound it starts decodes.
+pub(super) fn load(
+    blob: &[u8],
+    event: &str,
+    rng: &mut Rng,
+    states: &[(u32, u32)],
+) -> anyhow::Result<EventCue> {
     let bank = Bank::parse(blob).map_err(|e| anyhow::anyhow!("not a Wwise bank: {e}"))?;
     let tree = Tree::new(&bank);
     let mut starts = Vec::new();
@@ -256,6 +294,8 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
     let mut pick = Picker {
         rng,
         made: Vec::new(),
+        states,
+        switched: Vec::new(),
     };
     let mut queue = vec![(name_hash(event), 0.0)];
     let mut seen = Vec::new();
@@ -441,5 +481,60 @@ pub(super) fn load(blob: &[u8], event: &str, rng: &mut Rng) -> anyhow::Result<Ev
         },
         notes,
         picks: pick.made,
+        switched: pick.switched,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use oag_formats::wwise::container::{Case, Switch};
+    use oag_formats::wwise::name_hash;
+
+    use super::switch_case;
+
+    /// A `GAME_VR` container shaped like Omega's travel loops: one child per
+    /// value, `No` the default.
+    fn game_vr() -> Switch {
+        Switch {
+            group_type: 1,
+            group: name_hash("GAME_VR"),
+            default: name_hash("No"),
+            continuous: 0,
+            children: vec![10, 20],
+            cases: vec![
+                Case {
+                    switch: name_hash("No"),
+                    children: vec![10],
+                },
+                Case {
+                    switch: name_hash("Yes"),
+                    children: vec![20],
+                },
+            ],
+            params: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_listed_state_plays_its_own_case() {
+        let container = game_vr();
+        let no = [(name_hash("GAME_VR"), name_hash("No"))];
+        let yes = [(name_hash("GAME_VR"), name_hash("Yes"))];
+        assert_eq!(
+            switch_case(&container, &no),
+            Some((name_hash("No"), &[10][..]))
+        );
+        assert_eq!(
+            switch_case(&container, &yes),
+            Some((name_hash("Yes"), &[20][..]))
+        );
+    }
+
+    #[test]
+    fn an_unlisted_group_is_refused_not_defaulted() {
+        let container = game_vr();
+        assert_eq!(switch_case(&container, &[]), None);
+        let other = [(name_hash("GAME_MODE"), name_hash("No"))];
+        assert_eq!(switch_case(&container, &other), None);
+    }
 }

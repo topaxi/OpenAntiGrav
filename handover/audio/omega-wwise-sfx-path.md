@@ -3,8 +3,8 @@ status: re-first
 titles: [omega]
 size: M (55)
 difficulty: medium (50)
-updated: 2026-11-12
-summary: "Omega: 15 of 43 race cues play Wwise events (5 held loops); 20 wait on switch-container play, the engine on its band cues"
+updated: 2026-11-19
+summary: "Omega: 21 of 43 race cues play Wwise events (9 held, GAME_VR read); 9 wait on other switch groups, 6 on ATRAC9 decode, the engine on its bands"
 ---
 
 # Omega race sound effects through Wwise
@@ -72,19 +72,30 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
 
 ## Open after the table
 
-- **Switch containers block 14 posted cues** (SpeedupPad, Turbo, ShieldActive, Engaging, Disengaging, both
-  Plasma hits, both Rocket hits, MissileHitWall, Cannon, CannonHitWall, QuakeHit, ShurikenLaunch). Reading
-  each switch group's game-side value (ship class, surface, player) is the next unlock; the loader report
-  names each target id.
+- ~~**Switch group `2068003018`**~~ done (2026-11-19, lane `omega-silent-cues`): it is the state
+  `GAME_VR`, set to `No` by `SoundManager_Construct` on a flat screen (confidence 85; wwise-cues.md, "The
+  `GAME_VR` state"). `WwiseCues::states` holds it; `wwise_start` plays a switch container on a listed group
+  and refuses any other. Plays now: PlasmaHitShip, MissileHitWall and the four travel cues (15 -> 21).
+- **Switch containers still block 9 posted cues**, by group (wwise-cues.md, "The groups still refused"):
+  `GAME_MODE` (Cannon, CannonHitWall), `VoiceReg__TeamName` (ShieldActive, Engaging, Disengaging),
+  `VoiceReg__HUDTargetingState` (the held LockOn), and three groups whose names are not among the
+  executable's strings (SpeedupPad `3202674372`, Turbo `3167274579`, ShurikenLaunch `814711502`). Next:
+  `GAME_MODE` (find the `Set_State__GAME_MODE__*` post, read its values per mode), then `VoiceReg__TeamName`
+  (the `VoiceReg__` prefix suggests a per-object switch: find its setter).
+- **ATRAC9 decode now blocks 6 cues past `GAME_VR`** (PlasmaHitWall, RocketHitWall, RocketHitShip,
+  QuakeHit, the death, and QuakeLaunch from before): `oag_music::wem::decode` rejects frame 0 of media
+  `144136475`, `483130367`, `573010160`, `845662642`, `504708181`, `405228712`. One decoder fix may unlock
+  five cues at once; a lane of its own (oag-music).
 - ~~**Held loops (12 cues)**~~ 5 done (2026-11-12, lane `omega-wwise-held-loops`): property 58 is a sound's
   loop count and a continuous container loops its pick ([wwise.md](../../docs/formats/wwise.md#loops)); a
   held post stops with no fade (`FUN_0109c140(id, 0, 4)`, `StopPlayingID`'s shape). Shield, Autopilot,
   Magstrip, ShurikenTravel and LeachAttach (no loop authored: plays once, held) play through the existing
   held paths (`Banks::held_voices`), pinned by `omega_held_loops_ground_truth` (red on main, green after)
   and `a_race_plays_its_posted_cues_from_their_wwise_events`. Evidence: wwise-cues.md, "Held loops".
-- **Six held cues stop at switch group `2068003018`** (Plasma, Rocket, Missile and Quake travel, the death
-  `_NGP_ShipDeath`) **or `3202746158`** (`_NGP_MissileLock`). Reading group `2068003018`'s game-side value
-  unlocks five of them at once; it is the same group several one-shot hits switch on.
+- ~~**Six held cues stop at switch group `2068003018`**~~ four travel cues play through `GAME_VR`; the death
+  stops at the ATRAC9 decoder, the lock-on at `VoiceReg__HUDTargetingState`. Rocket's flat branch authors no
+  loop, and Plasma's and Missile's loops are cut by a `Stop` in their own event (laid out as media): check
+  against the original by ear-free means (a WAV of a held travel cue) before calling them right.
 - **The engine** is `~Ship<n>_<band>` (`FUN_0130b8c0`: team to `Ship1`..`Ship5`, bands `LowAcc_%d`,
   `HighDec_G_%d`, ..., `CONTROLLERID_*` game parameters), not `xpress`/`xrelease`. Unread: how the band
   and `%d` are chosen, and the RTPC curves. A lane of its own.
@@ -98,16 +109,17 @@ Pinned by `omega_countdown_ground_truth::a_race_plays_its_posted_cues_from_their
   is silent rather than the non-player event.
 - **Unread choices**: `.COLLISIONS` (`_COLLISIONS_1`/`_COLLSHIELD`/`_GRIND*`, `FUN_0130b100`), the missile's
   ship hit (no `MISSILEEXPSHIP` post), the speed pad's per-team `Pad_<team>` layer on `Ship_NGP`.
-- **2048** shares the cue strings (7 of 8 probed in its executable) but plays `SBlk`; not wired.
+- **2048** shares the cue strings (7 of 8 probed in its executable) but plays `SBlk`; not wired. It has no
+  `GAME_VR` or `Set_State` string: checked, differs.
 
 ## Next Steps
 
 1. ~~Countdown~~ done (`the_start_plays_its_wwise_events_as_timelines`).
 2. ~~Container rules~~ done; the missile launch loads (`omega_countdown_ground_truth::the_missile_launch_plays_one_child_of_each_random_layer`):
    a layer container of five layers, four random containers and a sound, so five media per post, not one.
-   ~~Next: the per-cue table~~ done (above). ~~Held loops' loop flags~~ done (5 of 12). Next:
-   switch-container play (group `2068003018` first: four travel loops, the death and several hits), then
-   the engine's band cues.
+   ~~Next: the per-cue table~~ done (above). ~~Held loops' loop flags~~ done (5 of 12). ~~Switch-container
+   play, `GAME_VR` first~~ done (9 of 12 held, 21 of 43). Next: the ATRAC9 frames (6 cues), `GAME_MODE`,
+   `VoiceReg__TeamName`, then the engine's band cues.
    Per-post draws (above) before a cue is audible as random.
 3. Live check of the countdown post (an hour): run the wipeout_pc port past GO and look for no
    `Failed Posting Audio Event` line (patch `0x017caf30` prints one on an unknown event).

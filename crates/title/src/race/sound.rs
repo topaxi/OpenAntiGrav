@@ -91,6 +91,17 @@ pub struct WwiseCues {
     /// `ROCKET`, `~ROCKETTVL`), to what the title does with it. A cue absent
     /// from the list is unread.
     pub cues: &'static [(&'static str, WwiseCue)],
+    /// The state group values the title sets before a race posts any cue, by
+    /// name as the executable spells them. A switch container on a group
+    /// listed here plays the value's case; one on any other group is refused.
+    pub states: &'static [WwiseState],
+}
+
+/// One Wwise state group and the value a title holds it at through a race.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WwiseState {
+    pub group: &'static str,
+    pub value: &'static str,
 }
 
 /// One bank slot of a [`WwiseCues`].

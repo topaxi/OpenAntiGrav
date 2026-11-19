@@ -432,6 +432,14 @@ pub const WWISE_CUES: oag_title::WwiseCues = oag_title::WwiseCues {
         ("~SHURIKENTRAVEL", posts("_SHURIKENTRAVEL", WEAPONS)),
         ("~magstrip01", posts("_magstrip01", SHIP)),
     ],
+    // `SoundManager_Construct` posts `Set_State__GAME_VR__No` when the headset
+    // flag is clear (patch `0x017849bd`) and `SoundManager_Update` again on each
+    // change of it: `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The
+    // `GAME_VR` state".
+    states: &[oag_title::WwiseState {
+        group: "GAME_VR",
+        value: "No",
+    }],
 };
 
 /// Where Omega's original opponent differs from Pulse's, read off the base

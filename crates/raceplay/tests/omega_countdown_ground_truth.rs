@@ -224,19 +224,22 @@ const POSTED: [oag_gameplay::cue::Cue; 26] = {
     ]
 };
 
-/// The posted cues whose event loads for every emitter: 10 of the 26, each with the player's own
+/// The posted cues whose event loads for every emitter: 12 of the 26, each with the player's own
 /// event or the same one but `LeachEnergy`, whose player event is authored and loads nothing. The rest reach a switch
-/// container (its group value is the game's, refused at play), media the ATRAC9 decoder rejects
-/// (`QUAKELAUNCH`), or no sound in the shipped banks (`NGP_LEACH`, whose player event does load).
-const WIRED: [oag_gameplay::cue::Cue; 10] = {
+/// container on a group whose value is unread, media the ATRAC9 decoder rejects (`QUAKELAUNCH`
+/// and the hits behind `GAME_VR`), or no sound in the shipped banks (`NGP_LEACH`, whose player
+/// event does load).
+const WIRED: [oag_gameplay::cue::Cue; 12] = {
     use oag_gameplay::cue::Cue;
     [
         Cue::Message,
         Cue::Absorb,
         Cue::MineLaunch,
         Cue::Plasma,
+        Cue::PlasmaHitShip,
         Cue::Rocket,
         Cue::Missile,
+        Cue::MissileHitWall,
         Cue::CannonHitShip,
         Cue::LeachFail,
         Cue::LeachEnergy,
@@ -244,10 +247,25 @@ const WIRED: [oag_gameplay::cue::Cue; 10] = {
     ]
 };
 
+/// The cues that play only because a switch container on `GAME_VR` plays its `No` case, the
+/// state Omega sets on a flat screen (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The
+/// `GAME_VR` state"): each loads with one switch by state, for every emitter and the player.
+const BY_GAME_VR: [oag_gameplay::cue::Cue; 6] = {
+    use oag_gameplay::cue::Cue;
+    [
+        Cue::PlasmaHitShip,
+        Cue::MissileHitWall,
+        Cue::PlasmaTravel,
+        Cue::RocketTravel,
+        Cue::MissileTravel,
+        Cue::QuakeTravel,
+    ]
+};
+
 /// The held cues that load, and whether their event authors a loop: Omega spells them with a
 /// leading `_` and keeps the post's handle (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
 /// "Held loops").
-const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 5] = {
+const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 9] = {
     use oag_gameplay::cue::Cue;
     [
         (Cue::Shield, true),
@@ -255,20 +273,18 @@ const HELD_WIRED: [(oag_gameplay::cue::Cue, bool); 5] = {
         (Cue::ShurikenTravel, true),
         (Cue::Magstrip, true),
         (Cue::LeachAttach, false),
+        (Cue::PlasmaTravel, false),
+        (Cue::RocketTravel, false),
+        (Cue::MissileTravel, false),
+        (Cue::QuakeTravel, true),
     ]
 };
 
-/// The held cues whose event plays a switch container, whose child is the game's value.
-const HELD_REFUSED: [oag_gameplay::cue::Cue; 6] = {
+/// The held cues that stay unplayed: the lock-on's switch group is the HUD's targeting state,
+/// the death's media the ATRAC9 decoder rejects.
+const HELD_REFUSED: [oag_gameplay::cue::Cue; 2] = {
     use oag_gameplay::cue::Cue;
-    [
-        Cue::PlasmaTravel,
-        Cue::RocketTravel,
-        Cue::MissileTravel,
-        Cue::QuakeTravel,
-        Cue::LockOn,
-        Cue::Blowup,
-    ]
+    [Cue::LockOn, Cue::Blowup]
 };
 
 /// An Omega race load plays its posted cues from their events, `<cue>__<slot>` for every emitter
@@ -360,19 +376,39 @@ fn a_race_plays_its_posted_cues_from_their_wwise_events() {
                 && sounds
                     .held_voices(held, &mut oag_core::Rng::new(1))
                     .is_none(),
-            "{held:?} reaches a switch container and stays unplayed"
+            "{held:?} stays unplayed"
         );
         assert!(
             report.iter().any(|l| line_is_for(l, held)
                 && l.contains(" not loaded: ")
-                && l.contains("SwitchContainer")),
-            "{held:?} names the switch container: {report:#?}"
+                && (l.contains("SwitchContainer") || l.contains("does not decode"))),
+            "{held:?} names its limit: {report:#?}"
         );
+    }
+    // `GAME_VR` is a state the table holds at `No`: without it each of these is refused at its
+    // switch container.
+    for cue in BY_GAME_VR {
+        let row = oag_omega::race::WWISE_CUES
+            .cues
+            .iter()
+            .find(|(name, _)| oag_sound::sfx::CueTables::name(cue) == *name);
+        let Some((_, oag_title::WwiseCue::Posts { cue: posted, slot })) = row else {
+            panic!("{cue:?} is posted");
+        };
+        for event in [format!("{posted}__{slot}"), format!("{posted}_PC__{slot}")] {
+            assert!(
+                report
+                    .iter()
+                    .any(|l| l.starts_with(&format!("sfx: {event} -> "))
+                        && l.ends_with(" 1 switch(es) by state")),
+                "{event} plays one switch container by its state: {report:#?}"
+            );
+        }
     }
     assert!(
         report
             .iter()
-            .any(|l| l.starts_with("sfx: 15 of 43 race cues play their Wwise event")),
+            .any(|l| l.starts_with("sfx: 21 of 43 race cues play their Wwise event")),
         "{report:#?}"
     );
     assert!(

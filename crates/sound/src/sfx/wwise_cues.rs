@@ -73,6 +73,11 @@ impl Banks {
                 }
             })
             .collect();
+        let states: Vec<(u32, u32)> = cues
+            .states
+            .iter()
+            .map(|s| (name_hash(s.group), name_hash(s.value)))
+            .collect();
         let (mut played, mut player) = (0, 0);
         for cue in Cue::ALL {
             let Some(&(_, row)) = cues.cues.iter().find(|(name, _)| *name == cue.name()) else {
@@ -93,14 +98,14 @@ impl Banks {
                     .push(format!("sfx: {posted}: no bank for the slot {slot}"));
                 continue;
             };
-            if self.load_posted(cue, &format!("{posted}__{slot}"), blobs, false) {
+            if self.load_posted(cue, &format!("{posted}__{slot}"), blobs, &states, false) {
                 played += 1;
             }
             // The player's version where the bank authors one; where it does
             // not, the player hears what everyone does.
             let mine = format!("{posted}_PC__{slot}");
             if blobs.events.contains(&name_hash(&mine)) {
-                if self.load_posted(cue, &mine, blobs, true) {
+                if self.load_posted(cue, &mine, blobs, &states, true) {
                     player += 1;
                 } else {
                     self.player_silent.insert(cue);
@@ -117,16 +122,24 @@ impl Banks {
 
     /// Loads `event` out of the first of `blobs` that defines it: as `cue`'s
     /// sound, or as its player version.
-    fn load_posted(&mut self, cue: Cue, event: &str, blobs: &SlotBlobs, player: bool) -> bool {
+    fn load_posted(
+        &mut self,
+        cue: Cue,
+        event: &str,
+        blobs: &SlotBlobs,
+        states: &[(u32, u32)],
+        player: bool,
+    ) -> bool {
         let mut why = Vec::new();
         for (entry, blob) in &blobs.blobs {
             let mut rng = Rng::new(u64::from(name_hash(event)));
-            match super::wwise_start::load(blob, event, &mut rng) {
+            match super::wwise_start::load(blob, event, &mut rng, states) {
                 Ok(loaded) => {
                     let line = format!(
-                        "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s)",
+                        "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s), {} switch(es) by state",
                         loaded.timeline.layers.len(),
-                        loaded.picks.len()
+                        loaded.picks.len(),
+                        loaded.switched.len()
                     );
                     trace!("{line}");
                     self.report.push(line);

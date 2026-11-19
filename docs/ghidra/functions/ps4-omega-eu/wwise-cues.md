@@ -9,12 +9,14 @@ checked against the shipped banks' own Wwise listings (`data/audio/sound/English
 are [wwise-sound.md](wwise-sound.md); this page is the per-cue table that page left open.
 
 **The headline: 26 of this port's 43 race cues (`oag_gameplay::cue::Cue::ALL`) have a cue string the
-executable posts; 10 of them load and play for every emitter today, plus `NGP_LEACH` for the player
-alone.** The other 16 posted cues stop at a switch container (14), an ATRAC9 frame the decoder rejects
-(1, `QUAKELAUNCH`) or an event that starts no sound this loader reads (1, `NGP_LEACH` for non-player
-emitters; why is unread). Of the 12 held cues, **5 play and are held** (shield, autopilot, magstrip,
-shuriken travel, leach attach; "Held loops" below), 6 stop at a switch container and the engine is
-unread. The other 5 cues are 4 legacy events the executable never posts and the collision cue, whose
+executable posts; 12 of them load and play for every emitter today, plus `NGP_LEACH` for the player
+alone.** The other 14 posted cues stop at a switch container on a group whose value is unread (8), an
+ATRAC9 frame the decoder rejects (5: `QUAKELAUNCH` and four hits reached through `GAME_VR`'s `No` case)
+or an event that starts no sound this loader reads (1, `NGP_LEACH` for non-player emitters; why is
+unread). Of the 12 held cues, **9 play and are held** (shield, autopilot, magstrip, shuriken travel,
+leach attach, and the Plasma, Rocket, Missile and Quake travel cues through `GAME_VR`; "Held loops"
+below), the lock-on stops at a switch container, the death at an ATRAC9 frame, and the engine is unread.
+The load report reads `21 of 43 race cues play their Wwise event` (15 before `GAME_VR` was read). The other 5 cues are 4 legacy events the executable never posts and the collision cue, whose
 choice is unread.
 
 ## How a cue string was read (confidence 80 for the method)
@@ -72,21 +74,21 @@ The event is `<cue>__<slot>` from a non-player emitter and `<cue>_PC__<slot>` fr
 | `LeachEnergy` | `NGP_LEACHENERGY` | `Weapons_NGP` | `0x0136b2df`, `FUN_0136a490` | 65 | yes (1) for non-player emitters; the player's `_PC` event is authored and starts no sound this loader reads, so the player hears nothing |
 | `Repulsor` | `REPULSOR` | `Weapons_NGP` | `0x0139597b`, `FUN_013952c0` (with `_REPULSORTRAVEL`) | 75 | yes (8) |
 | `Leach` | `NGP_LEACH` | `Weapons_NGP` | `0x01369bfe`, `FUN_01369a70` (with `_NGP_LEACHATTACH`) | 75 | player only: `NGP_LEACH__Weapons_NGP` starts no sound this loader reads (why is unread) |
-| `SpeedupPad` | `Pad_General` | `Weapons_NGP` | `0x0173bae4`, `FUN_0173b210` | 70 | no: switch container |
-| `Turbo` | `NGP_Turbo` | `Weapons_NGP` | `0x0173c679` `FUN_0173be50`; `0x012b03b9` `FUN_012afea0` | 70 | no: switch container |
-| `ShieldActive` | `shieldactive` | `Speech_NGP` | `0x0133e335`, `FUN_0133e2a0` (with `_SHIELD`) | 70 | no: switch container |
-| `Engaging` | `autopilot_eng` | `Speech_NGP` | `0x017ba52a` `FUN_017ba150`; `0x013159fe` `FUN_01315000` | 70 | no: switch container |
-| `Disengaging` | `disengaging` | `Speech_NGP` | `0x013a7888`, `FUN_013a2cd0` | 70 | no: switch container |
-| `PlasmaHitWall` | `NGP_PlasmaHitWall` | `Weapons_NGP` | `0x0138c53b`, `FUN_0138c410` | 80 | no: switch container |
-| `PlasmaHitShip` | `NGP_PlasmaHitShip` | `Weapons_NGP` | `0x0138d850`, `FUN_0138c640` | 80 | no: switch container |
-| `RocketHitWall` | `ROCKEXPLWALL` | `Weapons_NGP` | `0x013825f3` `FUN_01380870`; `0x01399916` `FUN_013986d0` | 75 | no: switch container |
-| `RocketHitShip` | `ROCKEXPLSHIP` | `Weapons_NGP` | `0x01382a6c` `FUN_01380870`; `0x0139994c` `FUN_013986d0` | 75 | no: switch container |
-| `MissileHitWall` | `MISSILEEXPWALL` | `Weapons_NGP` | `0x0137dcef`, `FUN_0137d1e0` (with `WO_MISSILE_BOUNCE`) | 80 | no: switch container |
-| `Cannon` | `NGP_Cannonfire` | `Weapons_NGP` | `0x01354994`, `FUN_01353df0` (with `CannonBullet`) | 60 | no: switch container |
-| `CannonHitWall` | `CANNONEXPLWALL` | `Weapons_NGP` | `0x01358bb6`, `FUN_01356b20` | 75 | no: switch container |
+| `PlasmaHitShip` | `NGP_PlasmaHitShip` | `Weapons_NGP` | `0x0138d850`, `FUN_0138c640` | 80 | yes (6; player 5), through `GAME_VR` |
+| `MissileHitWall` | `MISSILEEXPWALL` | `Weapons_NGP` | `0x0137dcef`, `FUN_0137d1e0` (with `WO_MISSILE_BOUNCE`) | 80 | yes (1), through `GAME_VR` |
+| `SpeedupPad` | `Pad_General` | `Weapons_NGP` | `0x0173bae4`, `FUN_0173b210` | 70 | no: switch container, group `3202674372` (name not found among the executable's strings) |
+| `Turbo` | `NGP_Turbo` | `Weapons_NGP` | `0x0173c679` `FUN_0173be50`; `0x012b03b9` `FUN_012afea0` | 70 | no: switch container, group `3167274579` (name not found) |
+| `ShieldActive` | `shieldactive` | `Speech_NGP` | `0x0133e335`, `FUN_0133e2a0` (with `_SHIELD`) | 70 | no: switch container, group `VoiceReg__TeamName` |
+| `Engaging` | `autopilot_eng` | `Speech_NGP` | `0x017ba52a` `FUN_017ba150`; `0x013159fe` `FUN_01315000` | 70 | no: switch container, group `VoiceReg__TeamName` |
+| `Disengaging` | `disengaging` | `Speech_NGP` | `0x013a7888`, `FUN_013a2cd0` | 70 | no: switch container, group `VoiceReg__TeamName` |
+| `PlasmaHitWall` | `NGP_PlasmaHitWall` | `Weapons_NGP` | `0x0138c53b`, `FUN_0138c410` | 80 | no: past `GAME_VR`, media `144136475` fails to decode (player's `573010160`) |
+| `RocketHitWall` | `ROCKEXPLWALL` | `Weapons_NGP` | `0x013825f3` `FUN_01380870`; `0x01399916` `FUN_013986d0` | 75 | no: past `GAME_VR`, media `845662642` fails to decode (player's `504708181`) |
+| `RocketHitShip` | `ROCKEXPLSHIP` | `Weapons_NGP` | `0x01382a6c` `FUN_01380870`; `0x0139994c` `FUN_013986d0` | 75 | no: past `GAME_VR`, media `483130367` fails to decode |
+| `Cannon` | `NGP_Cannonfire` | `Weapons_NGP` | `0x01354994`, `FUN_01353df0` (with `CannonBullet`) | 60 | no: switch container, group `GAME_MODE`; the player's event starts no sound this loader reads |
+| `CannonHitWall` | `CANNONEXPLWALL` | `Weapons_NGP` | `0x01358bb6`, `FUN_01356b20` | 75 | no: switch container, group `GAME_MODE` |
 | `QuakeLaunch` | `QUAKELAUNCH` | `Weapons_NGP` | `0x01368666` `FUN_013684e0`; `0x017babc1` `FUN_017ba150` | 75 | no: media `405228712` fails to decode ("invalid reuse band params", frame 0) |
-| `QuakeHit` | `QUAKEHIT` | `Weapons_NGP` | `0x017b6aae`, `FUN_017b1850` | 75 | no: switch container |
-| `ShurikenLaunch` | `SHURIKEN` | `Weapons_NGP` | `0x0139eefd`, `FUN_0139ea70` (with `_SHURIKENTRAVEL`) | 75 | no: switch container |
+| `QuakeHit` | `QUAKEHIT` | `Weapons_NGP` | `0x017b6aae`, `FUN_017b1850` | 75 | no: past `GAME_VR`, media `144136475` fails to decode (player's `483130367`) |
+| `ShurikenLaunch` | `SHURIKEN` | `Weapons_NGP` | `0x0139eefd`, `FUN_0139ea70` (with `_SHURIKENTRAVEL`) | 75 | no: switch container, group `814711502` (name not found) |
 
 Notes on single rows:
 
@@ -151,13 +153,13 @@ Read over the 1.07 banks (`data08`), each with its `_PC` twin; **Plays** is the 
 | `Magstrip` | `_magstrip01` on `Ship_NGP` (slot 0) | three continuous random containers at loop `0`, two sounds at loop `0`, one one-shot | yes: 6 voices a craft, 5 loop |
 | `ShurikenTravel` | `_SHURIKENTRAVEL` | a continuous sequence at loop `0`, a sound at loop `0` | yes: 3 voices, all loop |
 | `LeachAttach` | `_NGP_LEACHATTACH` (relay) | a layer of sounds and a one-shot pick, **no loop authored** (13.7 s of media) | yes, once: held as the handle, stopped on release, not restarted |
-| `PlasmaTravel`, `RocketTravel`, `MissileTravel`, `QuakeTravel` | `_NGP_Plasmatvl`, `_ROCKETTVL`, `_NGP_MissileTravel`, `_QUAKETRAVEL` | a **switch container** (group `2068003018`, default `1668749452`) over looping layers | no: switch refused |
-| `LockOn` | `_NGP_MissileLock` | a switch container (group `3202746158`) | no: switch refused |
-| `Blowup` | `_NGP_ShipDeath` | a switch container (group `2068003018`) on its first `Play` | no: switch refused |
+| `PlasmaTravel`, `RocketTravel`, `MissileTravel`, `QuakeTravel` | `_NGP_Plasmatvl`, `_ROCKETTVL`, `_NGP_MissileTravel`, `_QUAKETRAVEL` | a **switch container** on `GAME_VR` ("The `GAME_VR` state" below), whose `No` case reaches one random pick or layer | yes, through `GAME_VR`: Plasma 1 voice, Rocket 2, Missile 3, Quake 2 (player 1). Rocket's `No` branch authors no loop; Plasma's, Missile's and the player's Quake loops are cut by a `Stop` in the same event and laid out as media (4.45 s, 13.2 to 22.3 s, 7.9 s), so only the non-player Quake loops while held |
+| `LockOn` | `_NGP_MissileLock` | a switch container on `VoiceReg__HUDTargetingState` (`3202746158`; the executable keeps the values `NoTarget`, `Tracking`, `Locked`, `LostLock` beside it) | no: the HUD's targeting value is unread |
+| `Blowup` | `_NGP_ShipDeath` | a switch container on `GAME_VR` on its first `Play` | no: past `GAME_VR`, media `483130367` fails to decode (player's `573010160`) |
 | `Engine` | `~Ship<n>_<band>` | `FUN_0130b8c0` builds `~Ship1_%s` .. `~Ship5_%s` by team (`Feisar`/`Triakis` 1, `Qirex`/`Goteki_45` 2, `Piranha`/`Mirage`/`Harimau` 3, `Auricom`/`Assegai` 4, `AG_Systems`/`EGX`/`Icaras` 5) over bands `LowAcc_%d`, `MidDec_G_%d`, `vHighAcc_%d`, ... and steers `CONTROLLERID_VELOCITY`, `_THRUST`, `_ACCELERATION`, `_ENGINEON` | no: unread. `xpress`/`xpress_low`/`xrelease` are not the loop: `xpress__Ship_NGP` has no action, `xpress_low_PC` one seek, `xrelease` a one-shot pick |
 
-**5 of 12 held cues play.** The switch group `2068003018` holds four travel loops and the death; reading
-its game-side value is the next unlock for six of the seven left.
+**9 of 12 held cues play.** `GAME_VR` (`2068003018`) unlocked the four travel cues; the death behind it
+stops at the ATRAC9 decoder.
 
 What the port does with them (`oag_sound::sfx`): the existing held paths (`TravelVoices`, the magstrip's
 per-slot voices, the shield's and autopilot's latches, the leach's held voice) start every voice the event
@@ -166,6 +168,57 @@ title grows the voice pool to HD's 128 (eight craft's magstrip is 48 voices). Ch
 travel voices play the non-player event (a projectile's owner is not passed to the sound path), the
 magstrip plays the non-player event from every craft, and a continuous random container repeats its first
 draw.
+
+## The `GAME_VR` state (lane `omega-silent-cues`, 2026-11-19; confidence 85)
+
+Switch group `2068003018` is `name_hash("GAME_VR")`, its default `1668749452` is `"No"` and its other
+case `979470758` is `"Yes"`. It is a **state** group (`group_type` 1), and the game sets it.
+
+Read statically off the 1.07 patch eboot's bytes (`data/extracted/ps4/omega-eu-patch/uroot/eboot.bin`;
+the patch program was not in the shared Ghidra project, so with capstone: address = file offset
+`- 0x5430 + 0x01000000`, calibrated on the `MISSILEEXPWALL` store at `0x0137dcef` above). The strings
+`GAME_VR` (`0x0189e266`), `Yes` (`0x0189e26e`) and `No` (`0x0189e2ba`) are loaded at two sites, and both
+pass them to `0x017c9b60`:
+
+| Site | What it does |
+| --- | --- |
+| `SoundManager_Construct` (patch `0x01784120`), `0x01784949` | `al = [0x02212d2b]` (the headset flag, owned by the `sceHmd*` code, audio-3d.md); `[mgr+0x2b828] = al`; flag set: `0x017c9b60("GAME_VR", "Yes")`, then a `Gameplay_CAMERA` state by a camera index; flag clear: `0x017849bd lea rsi, "No"` then `0x017849e4 call 0x017c9b60("GAME_VR", "No")` |
+| `SoundManager_Update` (patch `0x01780190`), `0x017801d8` | the same, only when the flag differs from `[mgr+0x2b828]` |
+
+`0x017c9b60` builds `"Set_State__" + group + "__" + state` on the stack (`movabs rdx, "Set_Stat"`,
+`0x017c9b77`; `"e__"`; the group; `"__"`; the state) and posts it as an event on game object 2 through
+`0x010937d0`, printing an error string on failure: so on a flat screen the sound manager posts
+`Set_State__GAME_VR__No` once, when it is built, before any race cue.
+
+The banks agree from their side. All 36 switch containers on `GAME_VR` in the patch's `data08` banks are
+state containers defaulting to `No` with exactly the cases `None`, `No` and `Yes`, and **each `None`
+case lists the same child as its `No` case**: a flat screen hears the same branch whether or not the
+state was ever set (`crates/formats/tests/wwise_ground_truth.rs`, `patch_data08_banks`,
+`switch_game_vr_flat: 36`). The base archives (`data00`, `data05`) have none, and the base eboot has no
+`GAME_VR` string: the VR states are the patch's.
+
+Why 85 and not more: two static sites agree with each other and with the banks' authored `None` = `No`,
+but the headset flag being clear on a flat screen is inferred from its owner, not traced live (shadPS4
+has no memory readout). `0x017c9b60` is not given a name: `names.tsv` replays into the base program,
+which has no counterpart (`Set_State__` is in its strings, unreferenced), and the patch program has no
+names applied (patch-v107-addresses.md).
+
+**How the port plays it.** `oag_title::WwiseCues::states` carries the values a title holds its state
+groups at; Omega's is `GAME_VR = No`. `oag_sound::sfx::wwise_start` plays a switch container on a listed
+group by every child of the value's case (the default's when the value has no case), and refuses one on
+any other group by name: the default is never played for a group whose value is unread. The countdown
+and the event start pass no states and are unchanged.
+
+### The groups still refused
+
+| Group | Cues | What the value is |
+| --- | --- | --- |
+| `GAME_MODE` (`1071299879`) | `Cannon`, `CannonHitWall` | the game mode; where the executable sets it is unread |
+| `VoiceReg__TeamName` (`382442581`) | `ShieldActive`, `Engaging`, `Disengaging` | the player's team, for the announcer's voice; unread |
+| `VoiceReg__HUDTargetingState` (`3202746158`) | `LockOn` | `NoTarget`/`Tracking`/`Locked`/`LostLock`, per frame from the HUD; unread |
+| `3202674372`, `3167274579`, `814711502` | `SpeedupPad`, `Turbo`, `ShurikenLaunch` | not found by hashing every printable string of the patch eboot |
+
+The names were found by hashing every printable run of the patch eboot with `name_hash`.
 
 ## The cues with no post
 
@@ -178,8 +231,11 @@ draw.
 
 ## Limits this table meets, not fixed here
 
-* **Switch containers** (14 one-shot cues and 6 held ones): the child is the game's switch value (ship class, surface, player or
-  not), refused at play ([wwise.md](../../../formats/wwise.md#sound-containers)).
+* **Switch containers** on a group other than `GAME_VR` (8 one-shot cues, the lock-on): refused at play
+  ("The groups still refused" above).
+* **ATRAC9 frames** (`QUAKELAUNCH` and, past `GAME_VR`, `PlasmaHitWall`, `RocketHitWall`, `RocketHitShip`,
+  `QuakeHit` and the death): `oag_music::wem::decode` rejects frame 0 ("invalid gradient boundary",
+  "invalid scale factor mode", "scale factor out of bounds", "invalid reuse band params").
 * **Per-post draws:** a random container's child is drawn once at load, seeded by the event name, so every
   post of a cue plays the same pick.
 * **Positioning:** every loaded cue plays through the existing craft placement (pan and distance from the
@@ -192,6 +248,8 @@ draw.
 
 ## Cross-title
 
+* **2048, `GAME_VR`: checked, differs.** Neither the base nor the 1.04 Vita executable holds a `GAME_VR`
+  or `Set_State` string; 2048 plays `SBlk` banks and has no Wwise state to hold.
 * **2048: checked, shares the cue column, differs in container.** The open Vita 1.04 executable
   (`/2048/eboot-vita-2048-eu-v104.elf`) holds `NGP_Absorb`, `MINELAUNCH`, `NGP_MissileFire`,
   `ROCKEXPLWALL`, `NGP_Plasma`, `Pad_General` and `NGP_Turbo` as strings (7 of the 8 probed; not
@@ -204,7 +262,7 @@ draw.
 ```sh
 cargo nextest run -p oag-raceplay --run-ignored all a_race_plays_its_posted_cues_from_their_wwise_events
 RUST_LOG=info,oag_sound=debug oag-game --race --no-audio --screenshot out.png --ticks 2 data/extracted/ps4
-# [DEBUG] sfx: 15 of 43 race cues play their Wwise event, 15 with a player version
+# [DEBUG] sfx: 21 of 43 race cues play their Wwise event, 21 with a player version
 cargo nextest run -p oag-game --run-ignored all omega_held_loops_ground_truth::
 # The magstrip held and released in a race (Talons Junction has strips; Tech De Ra, the default, has none):
 RUST_LOG=info,oag_sound=trace oag-game --race --mode single_race --autopilot \

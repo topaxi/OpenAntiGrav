@@ -456,7 +456,11 @@ the player rather than guessed.
 
 **What a post plays** (`oag_sound::sfx`, `wwise_start`): one child of a random
 container, drawn by the `Rng` passed in; the first playlist item of a sequence;
-a switch container is still refused (its group's current value is the game's).
+a switch container plays every child of its case for the value the title's table
+holds its group at (`oag_title::WwiseCues::states`; Omega holds the state `GAME_VR`
+at `No`, [wwise-cues.md](../ghidra/functions/ps4-omega-eu/wwise-cues.md), "The
+`GAME_VR` state"), and is refused on any group the table does not list: its
+value is the game's, and the default is not played in its place.
 The missile launch (`NGP_MissileFire__Weapons_NGP` -> relay -> `WPN_MISSILE_Fire`)
 plays *one layer container* of five layers: four random containers (275399150 has
 one item, three others six) and one plain sound, so a post sounds five media, one
@@ -542,7 +546,8 @@ the `SBlk` reader's. **HD:** `SBlk` too, untouched.
   through `oag_sound::sfx`, which reads `SBlk` banks by name. (Music is.) The
   start plays (`oag_sound::sfx`'s Wwise event timeline, the evidence page's
   "What the port plays"); every other cue waits on the evidence page's "Open"
-  list (switch containers, positioning). Random containers are read and played.
+  list (switch containers on groups other than `GAME_VR`, positioning). Random
+  containers are read and played.
 
 ## Confidence
 
