@@ -4058,10 +4058,17 @@ Vineta K's own footage to a few grey levels).
   (`loading-screen.md` reads only the quad it draws), so the route is a fit, good to
   one frame (510 against 509).
 - **First view of a circuit.** The clip has to be transcoded once (lossless AV1;
-  `ffmpeg`, about 30 s for Anulpha Pass on a loaded machine, cached after), and the
-  prefetch does not warm the sixteen `preview.bik` files, so the panel stays empty
-  for that long on a first visit (live walk, Xvfb: Vineta K within 8 s, Anulpha Pass
-  empty until its transcode finished, then Vineta K back in 4 s).
+  `ffmpeg`), cached after. Cold, measured 2026-11-19 on an idle desktop: 29.6 s and
+  41.0 s for Vineta K's clip in two runs, 44.4 s in a third, the panel empty for
+  that long. `--prefetch` now converts the sixteen `preview.bik` files (every
+  circuit Track Select lists, a DLC pack's included, keyed by `oag_game::clip::cache_key`,
+  the key the screen looks up): the whole sixteen took 795 s in one process, and
+  afterwards a circuit opens from the cache in 22 to 83 ms (four circuits timed).
+  The prefetch's plan is pinned in `hd_movie_ground_truth` (the plan's keys equal
+  `cache_key` over every `fe/preview.bik` the disc walk finds: 16). Each transcode writes a `.part` file beside the cache file and renames it into
+  place (`movie::transcode::write_atomically`), so a first view during the prefetch
+  never reads a half-written clip. The boot's two 1080p logo reels and the other front-end Bink files are not
+  prefetched (a different key, and 98 s for the logo reel alone).
 - **The sound.** The four Zone circuits' clips carry a track; ours plays none.
 - **Omega: checked, differs.** Its `Track_Selection_Definition.xml` (`data09`)
   authors the same `FlyByMovie` at the same X/Y with `Loading_Icon.bik`, but no
