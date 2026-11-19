@@ -2,7 +2,7 @@
 status: measure
 titles: [2048, omega]
 updated: 2026-11-19
-summary: "2048 Zone stage colours draw (altima-z5 112.94 to 48.50), DLC/Omega Vineta K road on the Track group; open: fog binding, Omega road surface (not its ladder), start grid"
+summary: "2048 Zone stage colours draw (altima-z5 112.94 to 48.50); open: fog binding, Omega road surface (not its ladder), start grid"
 ---
 
 # 2048's scenery moves and the glow-layer scrolls play; the Zone circuit draws with the stage colours and the start-grid clip is unwired
