@@ -528,6 +528,15 @@ lights it violet in the original is **not read**; the same violet shows as a dot
 the far track edge and a patch near `500,95`, with teal and orange marks on the road, none of
 which ours draws at this pose.
 
+*2026-11-19 (`2048-leftovers`):* the teal marks are partly the track surface's `EmissiveMap`
+squared, now drawn ([gxp.md](../formats/gxp.md), "`fc16_phong_alphaspec_normal_emissive` adds its
+emissive map"; the moved pixels went from 56/58/59 to 112/116/117 against the original's
+123/125/126). The band box is unmoved by it (16.3 / 16.3 / 18.0). The violet is fc18's
+specular lobe on the run-off picture's alpha patch, lit by a light that is not the circuit's sun
+(the sun's lobe is zero over the frame at this pose): same section, "What the violet is not, and
+where it is", confidence 45, with the parameter-table slot to trace next. The orange marks are
+not read.
+
 **The lightmapped edge's light, as listed (confidence 75, not wired).** Program #16,
 secondary 0 to 2 and `@17` to `@29`, `lm` the lightmap texel, `s` =
 `shadowLightSpecularDiffuse`, `scale` and `bias` = `novaScaleBiasPower.xy`:
@@ -1084,7 +1093,9 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
    the edge **does** author `Watercolour`, and both the edge and the basin were dark because this engine squared the colour
    uniform the programs multiply raw. Wired; the edge's sheet is within 2.5 levels of this frame on three of four boxes and the
    basin within 2.4 ("2048 (Vita)", "The constant is not squared", with the boxes). Still open from this pose: the violet band
-   and the violet, teal and orange marks on the road and walls that the original draws and ours does not; the edge sheet between
+   and the violet and orange marks on the road and walls that the original draws and ours does not (the
+   teal lane lines are the track surface's emissive map, drawn 2026-11-19; the violet is a specular lobe
+   of an engine-bound light that is not the sun, see "The 'rim' is not the edge"); the edge sheet between
    the wall and the gravel (10 over); ripple scale and scroll, (5).
    (6) **Park's sea pose `1000,200,-3500` was refused by the hold**: the guest pulled the body 725.6 units over the grabs at 200
    units up (120 reads pulled off the pose, the last at 16 s), so the original's camera was not at the pose; its frame does show a

@@ -318,7 +318,14 @@ and by drawing unlit.
 - **Nova prelit and `NO_SUN` on lightmapped draws** (Omega's combination) changed nothing either; the
   `no_sun` bit only feeds `emissive` in `mesh.wgsl`.
 
-**Next:** read the Vita `fc16_phong_alphaspec_normal_emissive` and `fc18` fragment programs (the GXP
+*2026-11-19:* the `fc16_phong_alphaspec_normal_emissive` and `fc18` lightmapped programs are read
+([gxp.md](gxp.md), "`fc16_phong_alphaspec_normal_emissive` adds its emissive map"): `scale * lm +
+bias + diffuse * (1 - s.w) * lm.a * sat(N.L) + s.w * sat(R.L) * lm^2`, times `D^2`, plus `E^2` (fc16
+only), plus `liveLighting0specular * D.a * lm.a * sat(R.L)^SpecPower` (times `SpecTint` on fc18).
+The emissive add is wired; the specular and the `s.w` term are not (which light the engine binds as
+`liveLighting0` is not traced).
+
+**Next (superseded in part, above):** read the Vita `fc16_phong_alphaspec_normal_emissive` and `fc18` fragment programs (the GXP
 instruction set is unread) for how sun, ambient and the exposure keys combine; the Vita3K reference frames
 in `data/reference/2048-hud/` are other circuits, so a same-circuit capture of Altima or Tower is needed to
 compare.

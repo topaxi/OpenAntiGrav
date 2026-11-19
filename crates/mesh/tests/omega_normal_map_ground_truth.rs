@@ -185,10 +185,15 @@ fn a_2048_circuit_stays_unbound() {
     assert_eq!(report.normal_maps, psp2::NormalMapCensus::default());
     assert!(model.vertices.iter().all(|v| v.tangent == 0));
     // The third binding carries no normal map: where it is bound at all it is the vertex-red
-    // blend's second picture, which only a blended draw's texture can have.
+    // blend's second picture or the track surface's emissive map (a unit-tint emissive add),
+    // which only such a draw's texture can have.
     let blended = |v: &oag_mesh::mesh::GpuVertex| {
         let index = oag_mesh::mesh::slots::material_index(v.slots) as usize;
-        index != 0 && model.emissive[index - 1].program[0] == oag_mesh::mesh::PROGRAM_VERTEX_BLEND
+        index != 0 && {
+            let e = &model.emissive[index - 1];
+            e.program[0] == oag_mesh::mesh::PROGRAM_VERTEX_BLEND
+                || e.program[0] == oag_mesh::mesh::PROGRAM_EMISSIVE_ADD && e.tint == [1.0; 3]
+        }
     };
     let blended_textures: Vec<usize> = model
         .draws
@@ -206,7 +211,7 @@ fn a_2048_circuit_stays_unbound() {
     for (at, mask) in model.pad_masks.iter().enumerate() {
         assert!(
             mask.is_none() || blended_textures.contains(&at),
-            "texture {at} binds a third picture that is not the vertex-red blend's"
+            "texture {at} binds a third picture that is not the vertex-red blend's or an emissive add's"
         );
     }
 }

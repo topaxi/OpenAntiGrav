@@ -16,6 +16,12 @@
 //! glow-table entry of [`PROGRAM_EMISSIVE_ADD`], and `shade.wesl` joins the term to the pad glow
 //! it already adds after the light.
 //!
+//! **The track's `fc16_phong_alphaspec_normal_emissive` adds its `EmissiveMap` squared, untinted**
+//! (`docs/formats/gxp.md`, "`fc16_phong_alphaspec_normal_emissive` adds its emissive map"): every
+//! lit program of the file ends `mad out, E, E, light * D^2` before the specular and the fog, and
+//! the material declares no tint uniform, so the entry's tint is one. It is the road and wall of
+//! the 2048 circuits' track surface (Altima's teal panel outlines).
+//!
 //! **Chenghou's `diffuse_normal_specular_emmissivenew` is the plain family with the samplers
 //! renamed**: `Norm` is the `_ne` map whose alpha is the mask, `Texture1` the `_cs` colour that is
 //! listed second, so the colour is named rather than the first texture listed (the first is the
@@ -85,6 +91,8 @@ struct Kind {
     mask: &'static str,
     program: f32,
     colour: Option<&'static str>,
+    /// The uniform the tint is read from; `None` where the program multiplies by nothing (one).
+    tint: Option<&'static str>,
     /// Whether Omega's programs of the same file were read and agree.
     ps4: bool,
 }
@@ -101,6 +109,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
             mask: "Texture2Alpha",
             program: PROGRAM_EMISSIVE_ADD,
             colour: None,
+            tint: Some("Constant1"),
             ps4: false,
         })
     } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive") {
@@ -108,6 +117,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
             mask: "Texture2",
             program: PROGRAM_EMISSIVE_ALPHA_MASK,
             colour: None,
+            tint: Some("Constant1"),
             ps4: true,
         })
     } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissivenew") {
@@ -116,6 +126,15 @@ fn kind_of(material: &Material) -> Option<Kind> {
             mask: "Norm",
             program: PROGRAM_EMISSIVE_ALPHA_MASK,
             colour: Some("Texture1"),
+            tint: Some("Constant1"),
+            ps4: false,
+        })
+    } else if stem.eq_ignore_ascii_case("fc16_phong_alphaspec_normal_emissive") {
+        Some(Kind {
+            mask: "EmissiveMap",
+            program: PROGRAM_EMISSIVE_ADD,
+            colour: None,
+            tint: None,
             ps4: false,
         })
     } else {
@@ -141,17 +160,19 @@ pub(super) fn plan(
             mask: sampler,
             program,
             colour,
+            tint,
             ..
         }) = kind_of(material).filter(|k| !ps4 || k.ps4)
         else {
             continue;
         };
         let index = out.adds.len() - 1;
+        const UNIT: [f32; 3] = [1.0; 3];
         let (Some(path), Some(tint)) = (
             material
                 .sampler(name_hash(sampler))
                 .filter(|p| !p.is_empty()),
-            material.param(name_hash("Constant1")),
+            tint.map_or(Some(UNIT.to_vec()), |name| material.param(name_hash(name))),
         ) else {
             report.emissive_add_unread += 1;
             continue;
@@ -224,6 +245,28 @@ mod tests {
         assert_eq!(new.mask, "Norm");
         assert_eq!(new.colour, Some("Texture1"));
         assert!(!new.ps4, "Omega ships no `new` file");
+    }
+
+    #[test]
+    fn the_track_surface_adds_its_emissive_map_untinted_on_2048_only() {
+        let road = kind_of(&named(
+            "data/art/published/environments/shared/objectlibrary/materials/fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial",
+        ))
+        .expect("admitted");
+        assert_eq!(road.mask, "EmissiveMap");
+        assert_eq!(road.program, PROGRAM_EMISSIVE_ADD);
+        assert_eq!(
+            road.tint, None,
+            "the programs multiply the square by nothing"
+        );
+        assert!(!road.ps4);
+        assert!(
+            kind_of(&named(
+                "x/materials/fc16_phong_alpha_normal_specpow.rcsmaterial"
+            ))
+            .is_none(),
+            "the sibling without an emissive map adds nothing"
+        );
     }
 
     #[test]

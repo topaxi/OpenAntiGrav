@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use oag_mesh::mesh::rcs::psp2;
-use oag_mesh::mesh::{Model, PROGRAM_VERTEX_BLEND, slots};
+use oag_mesh::mesh::{Model, PROGRAM_EMISSIVE_ADD, PROGRAM_VERTEX_BLEND, slots};
 use oag_rcs::rcsmodel::psp2::vertex_blend;
 
 const ARCHIVES: [&str; 5] = [
@@ -183,6 +183,7 @@ fn every_circuit_binds(
     let mut faulty = 0;
     let mut seas = Vec::new();
     let mut blends = Vec::new();
+    let mut track_emissive = Vec::new();
     for (i, path) in &tracks {
         let blob = archives[*i].read_path(path).expect("the model reads");
         let name = path.rsplit('/').nth(1).unwrap_or(path).to_string();
@@ -196,6 +197,7 @@ fn every_circuit_binds(
         .expect("builds");
         seas.push((path.clone(), report.sea.clone()));
         blends.push((path.clone(), Blend::of(&blob, &model, &report)));
+        track_emissive.push((path.clone(), TrackEmissive::of(&blob, &model)));
         println!(
             "{path}: {} submesh(es), {} unresolved{}",
             report.submeshes,
@@ -215,7 +217,93 @@ fn every_circuit_binds(
         unbound,
         seas,
         blends,
+        track_emissive,
     }
+}
+
+/// What one model's `fc16_phong_alphaspec_normal_emissive` materials built to: the
+/// `EmissiveMap` paths the file authors on them, and the third-binding pictures of the draws
+/// whose vertices take a unit-tint [`PROGRAM_EMISSIVE_ADD`] entry, lower case, sorted.
+struct TrackEmissive {
+    authored: Vec<String>,
+    bound: Vec<String>,
+    draws: usize,
+}
+
+impl TrackEmissive {
+    fn of(blob: &[u8], model: &Model) -> Self {
+        let file = oag_rcs::rcsmodel::psp2::parse(blob).expect("the model parses");
+        let mut authored: Vec<String> = file
+            .materials
+            .iter()
+            .filter(|m| {
+                let stem = m.name.rsplit(['/', '\\']).next().unwrap_or(&m.name);
+                stem.eq_ignore_ascii_case("fc16_phong_alphaspec_normal_emissive.rcsmaterial")
+            })
+            .filter_map(|m| m.sampler(oag_rcs::rcsmaterial::name_hash("EmissiveMap")))
+            .map(str::to_ascii_lowercase)
+            .collect();
+        let unit = |v: &oag_mesh::mesh::GpuVertex| {
+            let index = slots::material_index(v.slots) as usize;
+            index != 0
+                && model.emissive[index - 1].program[0] == PROGRAM_EMISSIVE_ADD
+                && model.emissive[index - 1].tint == [1.0; 3]
+        };
+        let mut bound = Vec::new();
+        let mut draws = 0;
+        for draw in model
+            .draws
+            .iter()
+            .chain(&model.transparent_draws)
+            .chain(&model.alpha_tested_draws)
+        {
+            let range = draw.range.start as usize..draw.range.end as usize;
+            if !model.indices[range]
+                .iter()
+                .any(|&i| unit(&model.vertices[i as usize]))
+            {
+                continue;
+            }
+            draws += 1;
+            if let Some(Some(t)) = draw.texture.and_then(|at| model.pad_masks.get(at)) {
+                bound.push(t.label.to_ascii_lowercase());
+            }
+        }
+        for list in [&mut authored, &mut bound] {
+            list.sort();
+            list.dedup();
+        }
+        Self {
+            authored,
+            bound,
+            draws,
+        }
+    }
+}
+
+/// The 2048 track surface adds its `EmissiveMap` squared after the light
+/// (`docs/formats/gxp.md`, "`fc16_phong_alphaspec_normal_emissive` adds its emissive map"):
+/// on every circuit model whose file authors the material, its draws take a unit-tint mode-8
+/// entry and bind that picture third. Drop the family from `psp2::emissive_add` and the bound
+/// list empties on every such model.
+fn the_track_surface_adds_its_emissive_map(walks: &[(String, TrackEmissive)]) {
+    let mut models = 0;
+    for (path, e) in walks {
+        println!(
+            "{path}: fc16 emissive {:?}, {} draw(s) bind {:?}",
+            e.authored, e.draws, e.bound
+        );
+        if e.authored.is_empty() {
+            continue;
+        }
+        models += 1;
+        assert!(e.draws > 0, "{path}: no draw takes the term");
+        assert_eq!(
+            e.bound, e.authored,
+            "{path}: the third binding against EmissiveMap"
+        );
+    }
+    assert!(models > 0, "no circuit model authors the track surface");
 }
 
 /// What one model's `fc07_blend_vertred_lambert_2diff` materials built to, against what the
@@ -364,6 +452,8 @@ struct Walk {
     seas: Vec<(String, psp2::water::Census)>,
     /// Each model's path and its vertex-blend family (`psp2::vertex_blend`).
     blends: Vec<(String, Blend)>,
+    /// Each model's path and its track-surface emissive add (`psp2::emissive_add`).
+    track_emissive: Vec<(String, TrackEmissive)>,
 }
 
 /// Altima's road binds its `DiffuseMap`, not the first sampler listed.
@@ -441,6 +531,7 @@ fn omega_circuit(dir: &str, known: usize) {
         unbound,
         seas,
         blends,
+        ..
     } = every_circuit_binds(&mut archives, 0, |p| {
         p.contains(&marker) && p.ends_with(".final.rcsmodel") && !p.contains(".final.pvs")
             // Altima's Zone model rides its circuit's walk: the one Zone model whose water
@@ -684,6 +775,7 @@ fn the_2048_circuits_bind_no_more_lookups_than_the_known_gap() {
     } = walk;
     println!("{n} circuit model(s), {faulty} drawn colour slot(s) that are not pictures");
     the_2048_seas_are_the_fc15_and_fc17_batches(&walk.seas);
+    the_track_surface_adds_its_emissive_map(&walk.track_emissive);
     // (circuit directory, family materials), the census of `docs/formats/gxp.md`.
     the_blend_family_mixes_its_second_picture_by_the_vertex_red(
         &walk.blends,
