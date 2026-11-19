@@ -23,8 +23,11 @@ pub(super) struct FlyBy {
     /// The archive entry the clip is read from.
     entry: String,
     player: Player,
-    /// Seconds since the clip started.
+    /// Seconds since the clip's first frame was due: zero until the clip has opened,
+    /// which on a cold cache is a transcode's wait.
     elapsed: f32,
+    /// Whether the clip has opened, and [`Self::elapsed`] been zeroed for it.
+    opened: bool,
 }
 
 impl PickerStage {
@@ -74,6 +77,7 @@ impl PickerStage {
                     clip::open(&name, &blob, &cache)
                 }),
                 elapsed: 0.0,
+                opened: false,
             });
         }
         let Some(fly_by) = self.fly_by.as_mut() else {
@@ -82,6 +86,10 @@ impl PickerStage {
         let Some((format, (rate, per))) = fly_by.player.shape() else {
             return;
         };
+        if !fly_by.opened {
+            fly_by.opened = true;
+            fly_by.elapsed = 0.0;
+        }
         if let Err(why) = renderer.set_fly_by(&gpu.device, format) {
             warn!("track select fly-by: {why:#}");
             return;

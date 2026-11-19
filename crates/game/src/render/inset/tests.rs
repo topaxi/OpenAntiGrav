@@ -64,6 +64,30 @@ fn the_picture_behind_the_widgets_is_not_moved() {
 }
 
 #[test]
+fn the_fly_by_panel_moves_with_the_widgets_where_a_backdrop_movie_does_not() {
+    let at = placement(HD, 0.96).expect("an inset");
+    let panel = |source| Draw::Video {
+        rect: [500.0, 190.0, 260.0, 170.0],
+        frame: 0,
+        position: 0,
+        source,
+    };
+    let Some(Draw::Video { rect, .. }) = inset(&panel(oag_ui::frontend::Video::FlyBy), &at, HD)
+    else {
+        panic!("the fly-by panel is a widget and stays a video draw");
+    };
+    // The measured frame of the original at the comparison save's 96: the picture's box
+    // starts at (518, 204) px and is 250 wide.
+    assert!((rect[0] - 518.4).abs() < 0.01, "{rect:?}");
+    assert!((rect[1] - 204.0).abs() < 0.01, "{rect:?}");
+    assert!((rect[2] - 249.6).abs() < 0.01, "{rect:?}");
+    assert_eq!(
+        inset(&panel(oag_ui::frontend::Video::Backdrop), &at, HD),
+        None
+    );
+}
+
+#[test]
 fn a_pointer_lands_on_the_widget_drawn_under_it() {
     let at = placement(HD, 0.96).expect("an inset");
     let Some(Draw::Text { x, y, .. }) = inset(&text(300.0, 200.0, 1.0), &at, HD) else {

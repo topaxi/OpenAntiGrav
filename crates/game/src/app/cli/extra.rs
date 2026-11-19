@@ -162,7 +162,9 @@ pub(crate) struct MenuArgs {
     /// caught it depends on how long the walk took: the streaks and the craft
     /// that fly past are bright for about 0.3 s of the nine-second loop.
     /// `scripts/compare-menu-movie-phase.py` finds the frame a still shows.
-    /// `None` draws frame zero. No effect on a title with no backdrop movie.
+    /// `None` draws frame zero. No effect on a title with no backdrop movie, except on
+    /// HD's `track-select`, where it is the frame of the selected circuit's fly-by clip
+    /// (`scripts/compare-menu-movie-phase.py --fly-by-clip` finds it).
     #[arg(long, value_name = "FRAME")]
     pub(crate) menu_movie_frame: Option<usize>,
 

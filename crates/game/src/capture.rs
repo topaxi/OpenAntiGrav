@@ -160,9 +160,9 @@ pub struct Options {
     /// own animation time - see the CLI flag's own docs. `None` takes
     /// `menu_picker_seconds`.
     pub menu_model_seconds: Option<f32>,
-    /// With `--menu-page`, the frame of the menu backdrop movie to draw, wrapped
-    /// to the movie's length - see the CLI flag's own docs. `None` draws frame
-    /// zero.
+    /// With `--menu-page`, the frame of the page's movie to draw, wrapped to the
+    /// movie's length: the menu backdrop's, or on HD's Track Select the selected
+    /// circuit's fly-by clip - see the CLI flag's own docs. `None` draws frame zero.
     pub menu_movie_frame: Option<usize>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
