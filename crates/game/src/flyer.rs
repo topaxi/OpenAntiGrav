@@ -83,6 +83,26 @@ pub const CARD_HEIGHT: f32 = 66.6;
 /// before the glitch a Fury card flashes at the end of its four-second loop.
 pub const SETTLED_SECONDS: f32 = 3.0;
 
+/// Where the card's clock wraps and where it wraps to, seconds: `Flyer_Item`'s `+0x234`
+/// and `+0x238` (`0x001a2060`). A clock at or past the first goes round by the difference,
+/// so a running card lives in `[LOOP_START_SECONDS, LOOP_END_SECONDS)`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/flyer-item.md`, `FlyerItem_Render`).
+pub const LOOP_END_SECONDS: f32 = 6.0;
+/// See [`LOOP_END_SECONDS`].
+pub const LOOP_START_SECONDS: f32 = 3.0;
+
+/// The clock a card is drawn at for `seconds` on the model's time: one at or past
+/// [`LOOP_END_SECONDS`] is taken round into `[LOOP_START_SECONDS, LOOP_END_SECONDS)`, as
+/// `FlyerItem_Render` does a frame at a time; one before it is the card's own and passes.
+#[must_use]
+pub fn card_clock(seconds: f32) -> f32 {
+    if seconds < LOOP_END_SECONDS {
+        return seconds;
+    }
+    let period = LOOP_END_SECONDS - LOOP_START_SECONDS;
+    LOOP_START_SECONDS + (seconds - LOOP_START_SECONDS).rem_euclid(period)
+}
+
 /// How the card stands in front of the widget's camera: turned about its
 /// vertical axis, and moved from straight ahead.
 ///
@@ -543,6 +563,8 @@ pub struct Flyers {
     pub card_seconds: f32,
     /// One line per card that would not read, for the loader's log.
     pub report: Vec<String>,
+    /// How many GPU cards [`Self::draw`] has built, counting each name once per target format.
+    builds: std::cell::Cell<usize>,
 }
 
 impl std::fmt::Debug for Flyers {
@@ -666,6 +688,7 @@ impl Flyers {
             anisotropy: Anisotropy::default(),
             card_seconds: SETTLED_SECONDS,
             report,
+            builds: std::cell::Cell::new(0),
         }
     }
 
@@ -844,6 +867,18 @@ impl Flyers {
         Some([lo[0], lo[1], hi[0] - lo[0], hi[1] - lo[1]])
     }
 
+    /// How many cards are decoded and not yet drawn: each leaves on its first draw.
+    #[must_use]
+    pub fn waiting_len(&self) -> usize {
+        self.waiting.borrow().len()
+    }
+
+    /// How many GPU cards have been built since the load, one per card and target format.
+    #[must_use]
+    pub fn builds(&self) -> usize {
+        self.builds.get()
+    }
+
     /// Whether `show` has a card to draw.
     #[must_use]
     pub fn has(&self, show: &Show) -> bool {
@@ -909,7 +944,7 @@ impl Flyers {
                 .waiting
                 .borrow_mut()
                 .remove(&name)
-                .map(|pending| pending.build(self.card_seconds))
+                .map(|pending| pending.build(card_clock(self.card_seconds)))
                 .or_else(|| {
                     let cards = self.cards.borrow();
                     cards
@@ -920,6 +955,7 @@ impl Flyers {
             if let Some(model) = model {
                 match Preview::new(device, queue, format, self.anisotropy, model) {
                     Ok(card) => {
+                        self.builds.set(self.builds.get() + 1);
                         self.cards.borrow_mut().insert(key.clone(), card);
                     }
                     Err(error) => log::warn!("flyer {}: {error:#} - it draws nothing", show.flyer),
@@ -957,7 +993,7 @@ impl Flyers {
             space,
             view_projection,
             model,
-            self.card_seconds,
+            card_clock(self.card_seconds),
         );
     }
 }
@@ -1082,6 +1118,17 @@ mod tests {
     /// `Grid Selection`'s own origin is the centre of its grid, so the
     /// projection carries no shift: a point on the optical axis lands at the
     /// middle of the screen.
+    #[test]
+    fn the_cards_clock_stays_in_its_loop_past_the_end() {
+        for seconds in [2.0, 3.0, 4.5, 5.99] {
+            assert_eq!(card_clock(seconds), seconds, "{seconds}");
+        }
+        for (seconds, wrapped) in [(6.0, 3.0), (6.5, 3.5), (9.0, 3.0), (10.25, 4.25)] {
+            assert_eq!(card_clock(seconds), wrapped, "{seconds}");
+        }
+        assert_eq!(SETTLED_SECONDS, LOOP_START_SECONDS);
+    }
+
     #[test]
     fn a_centred_origin_does_not_shift_the_axis() {
         let (view_projection, _) = flyer_view_projection(&widget(), Space::HD, GRID_POSE);
@@ -1208,6 +1255,7 @@ mod tests {
             anisotropy: Anisotropy::default(),
             card_seconds: SETTLED_SECONDS,
             report: Vec::new(),
+            builds: std::cell::Cell::new(0),
         };
         let (fury, hd) = (Campaign::new(0), Campaign::new(1));
         let mut swing = flyers.swing_settled(fury);

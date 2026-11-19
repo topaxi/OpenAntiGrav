@@ -55,7 +55,7 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
 - **The card's clock** (2026-11-19, `hd-grid-card-phase`): `--menu-model-seconds` poses the Fury card at the original's clock for a pair, read from RAM
   with the game stopped (`scripts/hd_flyer_clock.py`, `ps3-hdfury-eu/flyer-item.md`). Open: the **live loop** (the card plays `[3, 6)` s for ever in the
   original, ours is static at 3.0; needs per-frame geometry rewrite, `clip_to_shape` changes the triangles), the **flash near 5.6 s** (hooked arrows
-  for about 0.05 s, ours matches only at the exact second) and the five hidden glitch textures. Omega's pair is not re-shot with the flag.
+  for about 0.05 s, ours matches only at the exact second) and the five hidden glitch textures. Omega's pair is not re-shot with the flag. The lazy build, the flag and the `[3, 6)` wrap are pinned (`campaign-screens.md`, "The card's clock").
 - **The back card** draws on `Cell Selection` face-on (`CELL_POSE`, rectangle
   measured, `BACK_STRETCH` chosen); its wordmark glow draws (the chain's bloom). The wordmark stands 6 pixels right
   of the original's and the stripes reach the card's right edge where the original leaves a margin (the pair

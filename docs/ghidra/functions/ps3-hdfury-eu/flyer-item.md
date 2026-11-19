@@ -33,3 +33,10 @@ returns; `scripts/hd_flyer_clock.py` finds the instance by the vtable word and a
 **Omega: checked, applies, not wired, live clock not checkable.** Omega's cards are the same flyers through the PS4 reader (`campaign-screens.md`,
 "Omega: Fury's cards draw"); `--menu-model-seconds` reaches its `grid-select` the same way, the executable's render was not decompiled for the
 `[3, 6)` wrap, and there is no memory readout of a live clock. Omega's `menu-grid-select` pair is not re-shot with it.
+
+## Ours
+
+`oag_game::flyer::card_clock` (constants `LOOP_END_SECONDS` 6.0, `LOOP_START_SECONDS` 3.0) takes a clock at or past 6.0 round into `[3, 6)`;
+`Flyers` applies it to `card_seconds` at the one place the card is built and the one it is drawn, so `--menu-model-seconds 6.5` draws as 3.5.
+Pinned in `flyer::tests` and `hd_flyer_ground_truth`. **Omega**: the wrap applies through the shared `Flyers` and changes nothing at the default 3.0; Omega's
+own render function was not decompiled for it, so its wrap is unmeasured.

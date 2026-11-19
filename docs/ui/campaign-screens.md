@@ -2361,6 +2361,15 @@ script-made pair; 3.0 s gives 6.08 and 6.65 on the two measured), unpaused grabs
 second (a 0.05 s step either way scores 6.7), so one grab in three or four lands on it wrong (4.83 above); the five glitch textures stay hidden
 (`UNREAD_EFFECTS`).
 
+**Pinned** (`hd_flyer_ground_truth`, 2026-11-19): a load builds no card (`Flyers::waiting_len` 16, `builds` 0); thirty frames of one grid build its
+card once and draw it identically, a second grid builds one more, and going back builds none (the live menu's browse path is the same `draw` with
+`card_seconds` at its default; no scripted front-end walk reaches Grid Selection headless, so the live path is covered at that call, not by a menu
+walk). `09_blitzed` at 3.0 s differs from 4.5 s by 81009 bytes of a 1280x720 scene layer, no flag is the 3.0 s picture, and the same holds through
+`oag-game --menu-page grid-select --menu-model-seconds`. **A bug the pins found**: nothing wrapped the clock, so `--menu-model-seconds 6.5` drew a
+card the original never shows. `flyer::card_clock` now takes a clock at or past 6.0 round into `[3, 6)` (6.5 draws as 3.5, which is not the raw 6.5 and
+not 2.5); it is the identity on 3.0, so the default picture is unchanged. The wrap uses the period of the constructor's two floats (3 s), which is
+what the render function's single subtraction settles to; a clock below 3.0 passes through.
+
 ### The two cards, 2026-09-30
 
 `FuryCampaignFlyerModel` and `HDCampaignFlyerModel` draw the two flyers the

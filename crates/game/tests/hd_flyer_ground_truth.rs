@@ -512,3 +512,280 @@ fn the_fury_card_is_a_different_picture_at_two_clocks_of_its_loop() {
         "the card's loop starts at 3.0 s"
     );
 }
+
+/// The grid widget and a front [`oag_game::flyer::CardSpec`] for each of `names`, as the campaign screen wires them.
+fn grid_cards(
+    archives: &mut oag_assets::Archives,
+    names: &[&str],
+) -> (oag_game::flyer::Flyers, Vec<oag_game::flyer::Show>) {
+    let xml = screen_xml(archives);
+    let screens = oag_ui::screen::Screens::from_xml(&xml);
+    let widget = flyer::read(&xml, &screens)
+        .into_iter()
+        .find(|w| w.name == "FlyerModel")
+        .expect("the grid widget");
+    let cards: Vec<oag_game::flyer::CardSpec> = names
+        .iter()
+        .map(|name| oag_game::flyer::CardSpec {
+            flyer: (*name).to_string(),
+            side: oag_game::flyer::Side::Front,
+            window: if HD_CARDS.contains(name) {
+                oag_game::flyer::HD_WINDOW
+            } else {
+                oag_game::flyer::FURY_WINDOW
+            },
+            stretch: 1.0,
+            gain: oag_game::flyer::FURY_GAIN,
+            keyed: false,
+        })
+        .collect();
+    let flyers = oag_game::flyer::Flyers::load(archives, vec![widget], &cards);
+    assert!(flyers.report.is_empty(), "{:?}", flyers.report);
+    let shows = names.iter().map(|name| flyers.grid_show(name)).collect();
+    (flyers, shows)
+}
+
+/// A GPU target the size a scene layer is, and the device that made it; `None` on a machine with no adapter.
+struct Frame {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    target: wgpu::Texture,
+}
+
+impl Frame {
+    const SIZE: (u32, u32) = (1280, 720);
+
+    fn new() -> Option<Self> {
+        let instance = wgpu::Instance::default();
+        let adapter = oag_gpu::test_adapter::request(&instance)?;
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&Default::default())).ok()?;
+        let target = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("flyer clock test"),
+            size: wgpu::Extent3d {
+                width: Self::SIZE.0,
+                height: Self::SIZE.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: oag_game::render::SCENE_LAYER_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        Some(Self {
+            device,
+            queue,
+            target,
+        })
+    }
+
+    /// One frame of `shows` through the scene layer, cleared first, read back.
+    fn draw(&self, flyers: &oag_game::flyer::Flyers, shows: &[oag_game::flyer::Show]) -> Vec<u8> {
+        let (width, height) = Self::SIZE;
+        let view = self.target.create_view(&Default::default());
+        let mut encoder = self.device.create_command_encoder(&Default::default());
+        drop(encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("flyer clock test clear"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            ..Default::default()
+        }));
+        let mut layer = flyers.scene_layer(shows, oag_display::space::Space::HD, 1.0);
+        layer(oag_game::render::SceneLayer {
+            device: &self.device,
+            queue: &self.queue,
+            encoder: &mut encoder,
+            view: &view,
+            size: Self::SIZE,
+        });
+        let bytes = self
+            .target
+            .format()
+            .block_copy_size(None)
+            .expect("a colour format");
+        let padded = (width * bytes).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+            * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("flyer clock test readback"),
+            size: u64::from(padded * height),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            self.target.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &readback,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(Some(encoder.finish()));
+        let slice = readback.slice(..);
+        slice.map_async(wgpu::MapMode::Read, |_| {});
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .expect("the readback finishes");
+        let mapped = slice.get_mapped_range().expect("mapped");
+        let mut pixels = Vec::new();
+        for row in mapped.chunks(padded as usize).take(height as usize) {
+            pixels.extend_from_slice(&row[..(width * bytes) as usize]);
+        }
+        pixels
+    }
+}
+
+/// How many bytes of two frames differ.
+fn differing(a: &[u8], b: &[u8]) -> usize {
+    assert_eq!(a.len(), b.len());
+    a.iter().zip(b).filter(|(x, y)| x != y).count()
+}
+
+/// Every card is decoded at the load and built on the GPU the first time a frame draws it, once: thirty frames of one
+/// grid build one card, a second grid one more, and going back to the first builds nothing. The live menu draws through
+/// the same `scene_layer`/`draw` call every frame with `card_seconds` at its default, so this is the browse path.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images and a GPU adapter"]
+fn a_card_is_built_on_its_first_draw_and_once() {
+    let Some(image) = image() else { return };
+    let Some(frame) = Frame::new() else { return };
+    let mut archives = archives(&image);
+    let names: Vec<&str> = HD_CARDS.iter().chain(&FURY_CARDS).copied().collect();
+    let (flyers, shows) = grid_cards(&mut archives, &names);
+    assert_eq!(
+        (flyers.waiting_len(), flyers.builds()),
+        (16, 0),
+        "a load builds no card"
+    );
+    let (fury, other) = (&shows[8..9], &shows[9..10]);
+    let first = frame.draw(&flyers, fury);
+    for _ in 0..30 {
+        let again = frame.draw(&flyers, fury);
+        assert_eq!(again, first, "a settled frame redraws the same");
+    }
+    assert!(first.iter().any(|b| *b != 0), "the card draws something");
+    assert_eq!(
+        (flyers.waiting_len(), flyers.builds()),
+        (15, 1),
+        "thirty frames of one grid build its card once"
+    );
+    frame.draw(&flyers, other);
+    assert_eq!((flyers.waiting_len(), flyers.builds()), (14, 2));
+    frame.draw(&flyers, fury);
+    frame.draw(&flyers, other);
+    assert_eq!(
+        (flyers.waiting_len(), flyers.builds()),
+        (14, 2),
+        "browsing back builds nothing"
+    );
+}
+
+/// `--menu-model-seconds` reaches the build: `09_blitzed` at 4.5 s is another picture than at 3.0 s, the default is the
+/// 3.0 s picture, and a clock past the loop's end draws the card the wrap lands on (6.5 s is 3.5 s, which is not 6.5 s
+/// unwrapped: the nodes sample their keys at the clock modulo their own 4.0 s).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images and a GPU adapter"]
+fn the_menu_model_seconds_reach_the_card_and_wrap_at_the_loops_end() {
+    let Some(image) = image() else { return };
+    let Some(frame) = Frame::new() else { return };
+    let mut archives = archives(&image);
+    let mut at = |seconds: Option<f32>| {
+        let (mut flyers, shows) = grid_cards(&mut archives, &["09_blitzed"]);
+        if let Some(seconds) = seconds {
+            flyers.card_seconds = seconds;
+        }
+        frame.draw(&flyers, &shows)
+    };
+    let default = at(None);
+    let settled = at(Some(3.0));
+    let later = at(Some(4.5));
+    let wrapped = at(Some(6.5));
+    let same_as_wrapped = at(Some(3.5));
+    let unwrapped_would_be = at(Some(2.5));
+    println!(
+        "bytes differing: 3.0 vs 4.5 {}, 6.5 vs 3.5 {}, 6.5 vs 2.5 {}",
+        differing(&settled, &later),
+        differing(&wrapped, &same_as_wrapped),
+        differing(&wrapped, &unwrapped_would_be)
+    );
+    assert_eq!(default, settled, "no flag draws the card at 3.0 s");
+    assert!(
+        differing(&settled, &later) > 1000,
+        "3.0 s and 4.5 s draw the same card: the clock does not reach the build"
+    );
+    assert_eq!(wrapped, same_as_wrapped, "6.5 s wraps to 3.5 s");
+    assert!(
+        differing(&wrapped, &unwrapped_would_be) > 1000,
+        "the probe cannot tell a wrap from the raw clock"
+    );
+}
+
+/// `--menu-page grid-select`'s Fury card (`09_blitzed`) at `--menu-model-seconds seconds` (the flag's absence for
+/// `None`), as the PNG's RGBA bytes: the flag's whole path from the command line to the card's build.
+fn grid_select_still(image: &std::path::Path, seconds: Option<&str>) -> Vec<u8> {
+    let dir = std::env::temp_dir().join("oag-hd-flyer-clock-flag-ground-truth");
+    for empty in ["no-dlc", "no-mods", "config/oag"] {
+        std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
+    }
+    let out = dir.join(format!("grid-select-{}.png", seconds.unwrap_or("default")));
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command.arg(image).args([
+        "--no-audio",
+        "--size",
+        "960x540",
+        "--menu-page",
+        "grid-select",
+    ]);
+    if let Some(seconds) = seconds {
+        command.args(["--menu-model-seconds", seconds]);
+    }
+    let status = command
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env("OAG_DLC", dir.join("no-dlc"))
+        .env("OAG_MODS", dir.join("no-mods"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page grid-select");
+    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG")
+        .rgba
+}
+
+/// The same claim as the card's own test, through `oag-game`'s command line: no flag is the 3.0 s card, `4.5` is another
+/// card, `6.5` is the card `3.5` is.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images and a GPU adapter"]
+fn the_menu_model_seconds_flag_moves_grid_selects_card_and_wraps() {
+    let Some(image) = image() else { return };
+    let default = grid_select_still(&image, None);
+    let settled = grid_select_still(&image, Some("3.0"));
+    let later = grid_select_still(&image, Some("4.5"));
+    let wrapped = grid_select_still(&image, Some("6.5"));
+    let same_as_wrapped = grid_select_still(&image, Some("3.5"));
+    assert_eq!(default, settled, "no flag is the 3.0 s card");
+    assert!(
+        differing(&settled, &later) > 5000,
+        "the flag does not change the card"
+    );
+    assert_eq!(wrapped, same_as_wrapped, "6.5 s is the card 3.5 s is");
+}
