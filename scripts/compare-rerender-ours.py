@@ -127,6 +127,7 @@ def rerender(pj, binary):
         flags[flags.index("--gantry-seconds") + 1] = "%.6f" % ce.gantry_pin(orig["gantry_seconds"], lag)
     plat = ce.platform(rec["profile"])
     flags = ce.profile_anisotropy_flags(flags, plat, rec.get("kind"))
+    flags = ce.profile_pilot_assist_flags(flags, plat, rec.get("kind"))
     # Pairs recorded before the profile held the exposure (2048) drew an adapting one; hold it as the profile says.
     if "--hold-exposure" not in flags:
         flags += ce.exposure_hold_flags(plat["ours"])

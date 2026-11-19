@@ -196,6 +196,10 @@ def check_anisotropy(root):
     assert ["--anisotropy", "16x"] == ce.ours_flags(plat)[ce.ours_flags(plat).index("--anisotropy"):][:2]
     # a stored race pair that says `off` re-renders at the profile's level; a menu pair keeps its own; every other profile
     # is `off` on the measured claim that HD asks for none, the PSP and PS2 emulators are set to 0, and 2048 (Vita) is unmeasured
+    hd = ce.platform("hd-fury")
+    assert hd["ours"]["pilot_assist"] == "off"
+    assert ce.profile_pilot_assist_flags(["--race", "--pilot-assist", "on"], hd) == ["--race", "--pilot-assist", "off"]
+    assert ce.profile_pilot_assist_flags(["--race", "--pilot-assist", "on"], hd, "menu") == ["--race", "--pilot-assist", "on"]
     old = ["--race", "--anisotropy", "off", "--no-hull-shake"]
     assert ce.profile_anisotropy_flags(old, plat) == ["--race", "--anisotropy", "16x", "--no-hull-shake"]
     assert ce.profile_anisotropy_flags(["--race"], plat, "race") == ["--race", "--anisotropy", "16x"]
