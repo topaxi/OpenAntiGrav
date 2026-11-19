@@ -59,6 +59,8 @@ supply your own legally obtained copies. See
 the game files go on each system and what to do when it says "no disc image
 found".
 
+Install **`ffmpeg`** too (any package manager or `winget install ffmpeg`): intro movies and Pulse/Pure music need it, and without it the game runs silent and says so in the log.
+
 Downloads are on GitHub Releases. Only a daily "nightly" pre-release exists so
 far, and its files carry the date and commit instead of a version:
 `OpenAntiGrav-nightly-<date>-<commit>-linux-x86_64.AppImage`,

@@ -19,7 +19,7 @@ depends=('alsa-lib' 'glibc' 'libpipewire' 'systemd-libs' 'vulkan-icd-loader')
 # toolchain. clang provides libclang for the bindgen run in libspa-sys.
 makedepends=('cargo' 'clang' 'git' 'pkgconf')
 optdepends=('vulkan-driver: a GPU driver (vulkan-radeon, vulkan-intel, nvidia-utils); vulkan-swrast gives a CPU adapter'
-            'ffmpeg: converts each game intro movie on first boot (without it the intro is a black screen)')
+            'ffmpeg: converts each game intro movie on first boot and decodes Pulse and Pure music (without it: no intro, no music)')
 provides=('openantigrav')
 conflicts=('openantigrav')
 # makepkg's -flto in CFLAGS turns libspa-sys's C shim into LTO bitcode that
