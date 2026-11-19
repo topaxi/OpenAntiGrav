@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-19
-summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 7.42 after the Zone frame's light, bloom block and feedback; the board glyph, the hull's light and a pulse's feedback remain"
+summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 7.42 after the Zone frame light, bloom block and feedback; board glyph and hull light remain"
 ---
 
 # HD Zone start pair: what is left after the Zone frame's light and post chain
