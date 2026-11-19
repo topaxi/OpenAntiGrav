@@ -15,7 +15,8 @@ terms. `capture` presses `right`, stops the game once the frame count since the 
 state in the stop, grabs the window through `grab_with_clock` and resumes: `<out>/NN.png` and `NN.json` (the frame
 count, from and to model, state, adapted luma, the clock sidecar). The Fury backdrop is hidden for the run
 (`hd_fury_backdrop.py`), as the rest pair does. `pairs` turns a capture into compare-page pairs, ours drawn with
-`--menu-picker-step-seconds` at the same frame count.
+`--menu-picker-step-seconds` at the same frame count; it needs the lane's RPCS3 config tree (`XDG_CONFIG_HOME`) for the language and the
+Safe Area the save holds.
 """
 import argparse
 import importlib
@@ -213,7 +214,8 @@ def cmd_pairs(args):
                                     "front-end styling FURY, Fury backdrop hidden on both." % (frames / 60.0, frames, k, PICTURE_LAG_FRAMES),
                             "state": "cold boot, walked to Ship Select, one lap of every team to load the hulls, then right presses"}
         pair.rec["original"]["emulator"] = dict(plat["emulator"])
-        pair.rec["original"]["captured_at"] = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+        grabbed = json.loads((cap / (Path(trial["png"]).stem + ".clock.json")).read_text())["grabbed_at"]
+        pair.rec["original"]["captured_at"] = datetime.datetime.strptime(grabbed, "%Y-%m-%dT%H:%M:%S").astimezone().isoformat(timespec="seconds")
         pair.rec["original"]["capture_path"] = "cold boot, walked (no savestate)"
         profile = pdir / "ours-profile" / "profile"
         safe_area = ce.record_safe_area(pair)

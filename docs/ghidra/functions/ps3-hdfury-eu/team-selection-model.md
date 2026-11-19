@@ -324,14 +324,15 @@ number above 2 frames later, which is part of "the film holds its first size abo
 Ours (`hull_swap::GAP_SECONDS` 0.06): absent while the step is under 0.06 s, so frames 0 to 3 of its step, 4 frames. **The one term that
 differs is the gap: 3 frames in the original (once 4), ours 4.** Confidence 70.
 
-**5. The picture's lag behind RAM** is not pinned: the dots read 3 frames (if they follow the selection the frame it moves; 3 or 4 by the one late grab), and of seven
-fast steps the frame of ours with the lowest craft-box error is the original's less 3, 5, 4, 5, 3, 1 (flat) and 4, a minimum half a unit deep: 4 frames
-(0.07 s), the card clock's own fitted lag. The pairs below use 4. Confidence 45 (a frame either way is not told apart by the craft box;
-the gap's alignment to the selection depends on it: at 3 the gap runs from the selection to two frames after it, at 4 it starts a frame
-before it).
+**5. The picture's lag behind RAM** is 3 to 4 frames and the cut is aligned with the selection's visible change. Of the 72 grabs on two boots, 14 show no craft (frames 3 to 6): 13 of them have the header dots already on
+the new team and one (frame 3, boot 2) the old dots; no grab at frame 3 or later shows the old craft, and none of the empty ones has the old dots past frame 3. So the craft
+goes with the dots, or at most a frame before them: the dots' own lag is 3 (71 of 72 grabs), and the craft-box minimum of seven fast steps, at
+the original's frame less 3, 5, 4, 5, 3, flat and 4, is half a unit deep, a frame either way is not told apart. Ours starts its cut with the
+selection (frame 0, dots changed) too, so **a 3-frame cut from the selection is the wire target whatever the absolute lag is**; the pairs use a lag of 4 (the box fit).
+Confidence 60.
 
 **What a player sees: the craft box (716,150, 1012 by 650, 5 px blur, mean absolute RGB) of ours against the original** (boot 2's grabs,
-`pairs-new/hd/menu-ship-step-kNN`; the rest pair of the same teams on the same boot, the floor, is 3.70 over twelve teams: 2.7 to 5.1,
+one compare-page pair each from `scripts/rpcs3-hd-ship-step.py pairs`; the rest pair of the same teams on the same boot, the floor, is 3.70 over twelve teams: 2.7 to 5.1,
 colour not placement, the lighting item):
 
 | Frames since the step | Team stepped to | Ours at | Craft box | Whole frame |
@@ -352,8 +353,9 @@ with the gap at 0.045 s (3 frames) draws the new craft at the original's frame 6
 
 **Verdict for the claim**: the settle start per team, the turn and the zoom match (the law is exact in RAM, the turn and zoom terms are zero on a
 step); the craft box during the settle is at the rest pair's floor; the single term that differs is the cut: 3 frames (once 4) against ours' 4,
-a one-to-two-frame difference (17 to 33 ms) on the first visible frame. Open: the picture lag (3 or 4) that decides which; the cold
-first visit of a team (craft absent past frame 10); `FitMotion`'s alternation phase after the cut (ours fixed, the original's the
+a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step: in the two grabs read
+by eye (frames 6 and 10) the team banner is blank, then part drawn, and the hex column is shifted, where ours draws both finished (not measured);
+the cold first visit of a team (craft absent past frame 10); `FitMotion`'s alternation phase after the cut (ours fixed, the original's the
 press's frame). **2048: checked, not checkable** (no Team Selection fit in v1.04; the constant run is absent). **Omega: checked, differs**: the
 eased fields are never read there (above), so a step has no settle to compare.
 
