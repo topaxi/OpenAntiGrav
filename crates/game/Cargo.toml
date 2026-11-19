@@ -54,6 +54,7 @@ oag-music.workspace = true
 # What the game plays: soundtrack selection, effect banks, the mixer's buses.
 # `crate::sound` is the half of it that needs a `Race` or a title opener.
 oag-sound.workspace = true
+oag-ffmpeg.workspace = true
 oag-formats.workspace = true
 # `av1` decodes the movie cache; the composition root is the only crate that
 # plays video. See docs/architecture/adr/0008-av1-movie-cache.md. Turned on

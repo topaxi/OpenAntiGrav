@@ -491,6 +491,13 @@ pub(crate) struct Cli {
     #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file"])]
     pub(crate) probe_pad: bool,
 
+    /// Download the pinned LGPL `ffmpeg` that plays Pulse's, Pure's and 2048's music and every
+    /// movie, into the per-user cache directory, then exit. Naming the flag is the consent. Does
+    /// nothing when an `ffmpeg` is already on `PATH` unless `[ffmpeg] use_pinned` is set. Opens
+    /// no window and no audio. See docs/architecture/ffmpeg.md.
+    #[arg(long, conflicts_with_all = ["race", "screenshot", "dry_run", "trace_out", "launcher", "drive", "drive_file", "probe_pad"])]
+    pub(crate) fetch_ffmpeg: bool,
+
     /// Skip the front end and go straight to a ship on a track.
     ///
     /// Arrow keys steer, X or Return thrusts, Q and E are the airbrakes. The
@@ -1311,6 +1318,7 @@ impl Cli {
             || self.dry_run
             || self.trace
             || self.probe_pad
+            || self.fetch_ffmpeg
             || self.prefetch
             || self.net.connect.is_some()
             || self.net.online.is_some())

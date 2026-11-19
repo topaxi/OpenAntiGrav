@@ -402,6 +402,15 @@ OAG_OPTIONS_PLAYER_TAG = { text = "SPIELER-TAG", human = false }
 OAG_PLAYER_NAME_TITLE = { text = "GIB DEINEN NAMEN EIN", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "GIB DEIN TAG EIN", human = false }
 
+# The pinned ffmpeg download (`oag_game::app::session::ffmpeg`).
+OAG_AUDIO_FFMPEG = { text = "FFMPEG HERUNTERLADEN", human = false }
+OAG_FFMPEG_TITLE = { text = "FFMPEG HERUNTERLADEN", human = false }
+OAG_FFMPEG_ASK = { text = "MUSIK UND VIDEOS BRAUCHEN FFMPEG, DAS DIESER COMPUTER NICHT HAT. EINE FREIE LGPL-VERSION (%s) VON GITHUB NUR FÜR DIESES SPIEL HERUNTERLADEN?", human = false }
+OAG_FFMPEG_YES = { text = "HERUNTERLADEN", human = false }
+OAG_FFMPEG_NO = { text = "NEIN DANKE", human = false }
+OAG_FFMPEG_DOWNLOADING = { text = "FFMPEG WIRD HERUNTERGELADEN %s - ZURÜCK BRICHT AB", human = false }
+OAG_FFMPEG_UNPACKING = { text = "FFMPEG WIRD ENTPACKT...", human = false }
+
 [untranslated]
 ids = [
     # The RECONNECTING overlay; no translation pass yet.

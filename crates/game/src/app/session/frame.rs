@@ -682,6 +682,7 @@ impl Session {
                     self.sync_multiplayer();
                     self.sync_lan();
                     self.sync_online();
+                    self.sync_ffmpeg(&pointer);
                     let Stage::Menu(stage) = &mut self.stage else {
                         continue;
                     };
@@ -802,7 +803,10 @@ impl Session {
                     // nothing new here for the menus to navigate with anyway
                     // - and the pointer is held back with it, so a click
                     // cannot move the page under a prompt or a capture.
-                    let events = if self.awaiting_binding.is_some() || prompt_was_open {
+                    let events = if self.awaiting_binding.is_some()
+                        || prompt_was_open
+                        || self.ffmpeg.fetching()
+                    {
                         Vec::new()
                     } else {
                         let mut events = stage.menu.update(self.controls.buttons_mut());

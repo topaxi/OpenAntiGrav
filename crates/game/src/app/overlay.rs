@@ -47,6 +47,8 @@ pub(crate) enum Purpose {
     Online(OnlineField),
     /// Take the seat of an online race back (`session::online_rejoin`).
     RejoinRace,
+    /// Download the pinned `ffmpeg` (`session::ffmpeg`).
+    FetchFfmpeg,
 }
 
 /// Which text the online connect step is asking for.

@@ -232,6 +232,16 @@ fn run(mut cli: Cli) -> Result<()> {
     // seconds of intro later.
     let mut settings = settings::load()?;
     attach_log_file(&cli, &settings);
+    oag_ffmpeg::configure(oag_ffmpeg::Policy {
+        use_pinned: settings.ffmpeg.use_pinned,
+        root: Some(oag_source::cache::default_ffmpeg_dir()),
+    });
+    if cli.fetch_ffmpeg {
+        return crate::ffmpeg_cli::run(
+            &oag_source::cache::default_ffmpeg_dir(),
+            settings.ffmpeg.use_pinned,
+        );
+    }
     if cli.probe_pad {
         info!("--probe-pad: printing pad events until stopped; no window opens");
         return oag_input::probe::run(&mut std::io::stdout(), || false).map_err(anyhow::Error::msg);

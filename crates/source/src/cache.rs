@@ -52,6 +52,15 @@ pub fn default_dlc_cache_dir() -> std::path::PathBuf {
     cache_dir_named("dlc")
 }
 
+/// The default downloaded-ffmpeg directory: `data/cache/ffmpeg` in a repository
+/// checkout, and `<cache dir>/oag/ffmpeg` anywhere else. One directory per pinned
+/// version lives under it (`oag_ffmpeg::install_dir`); deleting it only costs the
+/// player the download again.
+#[must_use]
+pub fn default_ffmpeg_dir() -> std::path::PathBuf {
+    cache_dir_named("ffmpeg")
+}
+
 /// `data/cache/<what>` in a checkout, `<cache dir>/oag/<what>` anywhere else.
 ///
 /// A checkout is a folder with a `justfile` and a `data/` directory, or one

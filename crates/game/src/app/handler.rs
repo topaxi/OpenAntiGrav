@@ -574,6 +574,7 @@ impl App {
             launched: false,
             interactive_launch,
             player_asked: false,
+            ffmpeg: Default::default(),
             soft_keyboard: false,
             pending_event: None,
             pending_card: None,
