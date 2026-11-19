@@ -495,7 +495,7 @@ ids = [
     "OAG_PILOT_DELETE_ASK",
     "OAG_PILOT_DELETE_BUILT_IN",
     # The ffmpeg download offer, newest and unreviewed.
-    "OAG_OPTIONS_FFMPEG",
+    "OAG_AUDIO_FFMPEG",
     "OAG_FFMPEG_TITLE",
     "OAG_FFMPEG_ASK",
     "OAG_FFMPEG_YES",

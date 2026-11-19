@@ -12,7 +12,7 @@ pub enum Download {
     Ask,
     /// Yes: fetch it again without asking if it is gone (the cache was cleared).
     Yes,
-    /// No: never ask. The OPTIONS page's DOWNLOAD FFMPEG row asks again.
+    /// No: never ask. The AUDIO page's DOWNLOAD FFMPEG row asks again.
     Never,
 }
 

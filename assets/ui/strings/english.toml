@@ -693,7 +693,7 @@ OAG_SHOT_OTHER_HASH = { text = "THIS VERSION DOES NOT REPRODUCE THIS SHOT EXACTL
 OAG_REPLAY_POSE_END = { text = "END OF THE POSE TRACK: IT HOLDS AT MOST AN HOUR", human = false }
 
 # The pinned ffmpeg download (`oag_game::app::session::ffmpeg`).
-OAG_OPTIONS_FFMPEG = { text = "DOWNLOAD FFMPEG", human = false }
+OAG_AUDIO_FFMPEG = { text = "DOWNLOAD FFMPEG", human = false }
 OAG_FFMPEG_TITLE = { text = "DOWNLOAD FFMPEG", human = false }
 OAG_FFMPEG_ASK = { text = "MUSIC AND MOVIES NEED FFMPEG, WHICH THIS COMPUTER LACKS. DOWNLOAD A FREE LGPL BUILD (%s) FROM GITHUB FOR THIS GAME ONLY?", human = false }
 OAG_FFMPEG_YES = { text = "DOWNLOAD", human = false }

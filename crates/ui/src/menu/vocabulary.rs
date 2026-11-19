@@ -108,7 +108,7 @@ pub enum Action {
     /// (its `menu.toml`'s `settings`, [`super::Definition::mod_settings`]). On the page only
     /// while that mod has one.
     OpenModSettings,
-    /// The OPTIONS page's DOWNLOAD FFMPEG row: asks again whether to fetch the pinned `ffmpeg`
+    /// The AUDIO page's DOWNLOAD FFMPEG row: asks again whether to fetch the pinned `ffmpeg`
     /// (`oag_game::app::session::ffmpeg`). On the page only where a build exists for this OS and
     /// the player has none of their own.
     FetchFfmpeg,

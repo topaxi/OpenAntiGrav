@@ -310,6 +310,10 @@ pub(super) fn menu_page(
     // draw one frame with. Supplying the settings value would draw a note that
     // is silent by construction; supplying this capture's adapter would say a
     // player had changed something they have not touched.
+    model.offer(
+        oag_ui::menu::Action::FetchFfmpeg,
+        oag_ffmpeg::wants_download(),
+    );
     for (key, value) in crate::settings::mod_settings::seeds(&settings.mod_settings) {
         model.seed(&key, &value);
     }

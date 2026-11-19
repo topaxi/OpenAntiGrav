@@ -54,7 +54,7 @@ source, whether to download a pinned LGPL build into the per-user cache
 directory (`<cache dir>/oag/ffmpeg`). Yes downloads it, checks its SHA-256
 against the one in the game's source and uses it from then on; no (or offline,
 or a hash mismatch) leaves the game as described above and it does not ask
-again. OPTIONS, DOWNLOAD FFMPEG asks again; `oag-game --fetch-ffmpeg` downloads
+again. OPTIONS, AUDIO, DOWNLOAD FFMPEG asks again; `oag-game --fetch-ffmpeg` downloads
 without a window. An `ffmpeg` on `PATH` is never replaced and never prompts a
 download; `[ffmpeg] use_pinned = true` in `settings.toml` prefers the pinned
 copy anyway, and `[ffmpeg] download = "ask" | "yes" | "never"` is the stored

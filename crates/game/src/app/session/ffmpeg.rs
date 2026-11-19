@@ -4,7 +4,7 @@
 //! no `ffmpeg` at all (`oag_ffmpeg::wants_download`): a system tool on `PATH` is never offered
 //! a replacement. A yes is stored as the standing answer and the download runs on its own
 //! thread while a status line sits over the menus; a no is stored too and ends the asking until
-//! the OPTIONS page's DOWNLOAD FFMPEG row asks again.
+//! the AUDIO page's DOWNLOAD FFMPEG row asks again.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -94,7 +94,7 @@ impl Session {
         }
     }
 
-    /// The OPTIONS page's DOWNLOAD FFMPEG row: asks again whatever was answered before.
+    /// The AUDIO page's DOWNLOAD FFMPEG row: asks again whatever was answered before.
     pub(crate) fn offer_ffmpeg(&mut self) {
         if self.ffmpeg.fetching() || Pin::current().is_none() {
             return;
@@ -121,7 +121,7 @@ impl Session {
         if yes {
             self.start_ffmpeg_fetch();
         } else {
-            info!("ffmpeg will not be downloaded; the OPTIONS page can ask again");
+            info!("ffmpeg will not be downloaded; the AUDIO page can ask again");
         }
     }
 

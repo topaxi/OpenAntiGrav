@@ -43,7 +43,7 @@ monthly and opens a PR, the way Dependabot does for crates. Run
 (`app::session::ffmpeg`) asks once per run, only when `oag_ffmpeg::wants_download`
 (no `ffmpeg` anywhere and a pin for this OS), as a yes/no prompt naming the size
 and source. Yes is stored and starts the download on its own thread with a
-status line (BACK or a right click cancels); no is stored too. OPTIONS,
+status line (BACK or a right click cancels); no is stored too. OPTIONS, AUDIO,
 DOWNLOAD FFMPEG (shown only when there is something to offer) asks again.
 `oag-game --fetch-ffmpeg` does it without a window. Nothing downloads without a
 yes.

@@ -403,7 +403,7 @@ OAG_PLAYER_NAME_TITLE = { text = "GIB DEINEN NAMEN EIN", human = false }
 OAG_PLAYER_TAG_TITLE = { text = "GIB DEIN TAG EIN", human = false }
 
 # The pinned ffmpeg download (`oag_game::app::session::ffmpeg`).
-OAG_OPTIONS_FFMPEG = { text = "FFMPEG HERUNTERLADEN", human = false }
+OAG_AUDIO_FFMPEG = { text = "FFMPEG HERUNTERLADEN", human = false }
 OAG_FFMPEG_TITLE = { text = "FFMPEG HERUNTERLADEN", human = false }
 OAG_FFMPEG_ASK = { text = "MUSIK UND VIDEOS BRAUCHEN FFMPEG, DAS DIESER COMPUTER NICHT HAT. EINE FREIE LGPL-VERSION (%s) VON GITHUB NUR FÜR DIESES SPIEL HERUNTERLADEN?", human = false }
 OAG_FFMPEG_YES = { text = "HERUNTERLADEN", human = false }
