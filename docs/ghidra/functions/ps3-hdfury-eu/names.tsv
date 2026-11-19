@@ -999,3 +999,5 @@
 0x00400a00	function	Scene_DrawOpaqueChunkBucket	78	zone-plain-chunks.md
 0x0025d558	function	TrackSelectionScreen_Update	85	track-selection-screen.md
 0x0025c340	function	TrackSelectionScreen_SelectCircuit	80	track-selection-screen.md
+0x001a2060	function	FlyerItem_Construct	80	flyer-item.md
+0x001a2510	function	FlyerItem_Render	80	flyer-item.md

@@ -482,3 +482,33 @@ fn the_cell_page_card_is_exposed_and_bloomed_by_the_front_ends_chain() {
         "the bloom does not end: {far} fourteen pixels out"
     );
 }
+
+/// The Fury card plays on its own clock: `Flyer_Item`'s render keeps the front model's time in `[3, 6)` seconds
+/// (`0x001a2510`), and ours bakes the card at `Flyers::card_seconds` (`--menu-model-seconds`), so two clocks of that loop
+/// must give two cards. `09_blitzed` authors 34 `Anim Transform` nodes; the arrows' nodes sit at one place at 3.0 s and
+/// another at 5.5 s, the arrow quads' translations moving by more than a tenth of a unit.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_fury_card_is_a_different_picture_at_two_clocks_of_its_loop() {
+    let Some(image) = image() else { return };
+    let mut archives = archives(&image);
+    let (model, _) = oag_game::preview::psp2_scene::model_named(
+        &mut archives,
+        &flyer::front_entry("09_blitzed"),
+        false,
+    )
+    .expect("the card decodes");
+    assert_eq!(model.anim_nodes.len(), 34, "the nodes the card animates");
+    let (early, late) = (model.sample_anim_nodes(3.0), model.sample_anim_nodes(5.5));
+    let moved = early
+        .iter()
+        .zip(&late)
+        .filter(|(a, b)| (a[12] - b[12]).abs() > 0.1 || (a[13] - b[13]).abs() > 0.1)
+        .count();
+    assert!(moved >= 10, "{moved} nodes moved between 3.0 s and 5.5 s");
+    assert_eq!(
+        oag_game::flyer::SETTLED_SECONDS,
+        3.0,
+        "the card's loop starts at 3.0 s"
+    );
+}

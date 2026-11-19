@@ -2342,6 +2342,25 @@ drawn: the medal fraction's own denominator (see the widget table above), the
 cards' reflection, glow and light, and the cards' own animation on a selection
 change.
 
+### The card's clock, 2026-11-19 (`hd-grid-card-phase`)
+
+The arrows and layers of a Fury card slide on the card's own clock, and no two grabs of the original share it, so the pair `hd/menu-grid-select`
+swung with the moment of the grab (two grabs of the original alone differ by 3.7 mean grey on average over seven, 0.1 to 6.6; ours at the chosen
+3.0 s scored 5.6 to 8.2 against them). **Law** (`flyer-item.md`, confidence 80): `Flyer_Item`'s render keeps the front model's time in `[3, 6)` s,
+a loop of 3 s; each node samples its keys at the clock modulo its own `LoopEnd` (4.0 on Fury), which `Model::sample_anim_nodes` already does.
+**Ours**: `Flyers::card_seconds` (default `SETTLED_SECONDS`, 3.0) is read when a card is first drawn (`Pending::build`), and `--menu-model-seconds` sets
+it on `grid-select`/`cell-select`. A card is a static picture in play: **the live loop is open** (the card's clip against its outline changes the
+triangles every frame, so it needs the card's GPU geometry rewritten per frame, not a re-bake of a cached `Preview`).
+**The pair**: `scripts/hd_flyer_clock.py` reads the clock out of RAM with the game stopped through the grab (`Debugger` on the `serve` proxy, a
+`PAUSE_FLUSH_S` wait for the RSX) and `rpcs3-hd-menu-pair.py` records `original.card_seconds` and passes the flag. The grab's picture is 0.07 s
+(4 frames) older than RAM: **fitted** on four paused grabs (the whole-frame minimum at -0.08, -0.06, -0.08, -0.06 from the clock), not derived.
+Unpaused, a grab takes 0.1 to 0.35 s and the clock moves through it: the minimum fell at -0.03 to -0.05 and once at +0.04.
+**Result** (whole-pair mean grey, ours at the original's clock less 0.07, against ours at 3.0): paused grabs 2.23, 2.53, 2.41, 4.83 and 2.86 (the
+script-made pair; 3.0 s gives 6.08 and 6.65 on the two measured), unpaused grabs 2.40, 2.21, 2.54, 3.10, 4.06, 2.53 and 2.56 (lag 0.04; 3.0 s gives
+5.6 to 8.2). **Not closed**: near a clock of 5.6 the card flashes its big hooked arrows for about 0.05 s and ours matches only at that exact
+second (a 0.05 s step either way scores 6.7), so one grab in three or four lands on it wrong (4.83 above); the five glitch textures stay hidden
+(`UNREAD_EFFECTS`).
+
 ### The two cards, 2026-09-30
 
 `FuryCampaignFlyerModel` and `HDCampaignFlyerModel` draw the two flyers the

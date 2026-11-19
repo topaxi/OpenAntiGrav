@@ -49,6 +49,7 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use oag_core::math::{Mat4, Vec3, camera};
 use oag_display::space::Space;
@@ -437,6 +438,55 @@ fn hide_effects(model: &mut Model, textures: &[String]) {
     model.transparent_draws.retain(|draw| !hidden(draw));
 }
 
+/// A decoded card waiting for the moment of its own animation it is drawn at:
+/// [`Flyers::card_seconds`] is not known when the card is read.
+struct Pending {
+    model: Model,
+    camera_to_world: [f32; 16],
+    window: f32,
+    stretch: f32,
+    half: [f32; 2],
+    side: Side,
+    shell: Rc<Option<shell::Shell>>,
+}
+
+impl Pending {
+    /// The card as the screen draws it `seconds` into its animation: every node
+    /// at its pose then, the scene flattened through the card's camera and cut to
+    /// the card's outline, with its reflection under a front.
+    fn build(self, seconds: f32) -> Model {
+        let Self {
+            mut model,
+            camera_to_world,
+            window,
+            stretch,
+            half,
+            side,
+            shell,
+        } = self;
+        clip::bake(&mut model, seconds);
+        clip::flatten(&mut model, &camera_to_world, window, CARD_HEIGHT, stretch);
+        match &*shell {
+            Some(shell) => {
+                let outline = stretched(&shell.outline, half[0] / shell.half_size[0]);
+                match side {
+                    Side::Front => {
+                        clip::clip_to_shape(&mut model, &outline);
+                        clip::reflect(&mut model, shell.fade);
+                    }
+                    // The back's outline is the front's seen from the other
+                    // side, and RPCS3 draws no reflection under it.
+                    Side::Back => {
+                        clip::clip_to_shape(&mut model, &mirrored(&outline));
+                    }
+                }
+            }
+            None => clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]),
+        }
+        model
+    }
+}
+
 /// Where a card sits on its rectangle: half its width and height, card units, and
 /// its [`CardSpec::gain`].
 #[derive(Debug, Clone, Copy)]
@@ -471,7 +521,7 @@ pub struct Flyers {
     /// Every `<Flyer>` widget the screen file authors, by name.
     widgets: HashMap<String, FlyerWidget>,
     /// Decoded, not yet on the GPU, by `FlyerName`.
-    waiting: RefCell<HashMap<String, Model>>,
+    waiting: RefCell<HashMap<String, Pending>>,
     /// On the GPU, by `FlyerName` and the format of the target it was built for: the
     /// page's, or the scene layer's.
     cards: RefCell<HashMap<(String, wgpu::TextureFormat), Preview>>,
@@ -487,6 +537,10 @@ pub struct Flyers {
     pub grid_pose: Pose,
     /// Set by whoever opens the campaign, from the session's own setting.
     pub anisotropy: Anisotropy,
+    /// The moment of its own animation a card is built at, seconds: [`SETTLED_SECONDS`],
+    /// or what a capture pins it to (`--menu-model-seconds`). Read when a card is first
+    /// drawn, so it is set before the card is.
+    pub card_seconds: f32,
     /// One line per card that would not read, for the loader's log.
     pub report: Vec<String>,
 }
@@ -518,7 +572,7 @@ impl Flyers {
         let mut report = Vec::new();
         // The card's own shape and reflection. Without them a card is a plain
         // rectangle with no reflection, and the loader says so.
-        let shell = match shell::Shell::load(archives) {
+        let shell = Rc::new(match shell::Shell::load(archives) {
             Ok(shell) => Some(shell),
             Err(error) => {
                 report.push(format!(
@@ -527,7 +581,7 @@ impl Flyers {
                 ));
                 None
             }
-        };
+        });
         for CardSpec {
             flyer,
             side,
@@ -568,8 +622,6 @@ impl Flyers {
                         vertex.colour = [1.0; 4];
                     }
                     model.vertex_colour_is_light = false;
-                    clip::bake(&mut model, SETTLED_SECONDS);
-                    clip::flatten(&mut model, &camera.to_world, *window, CARD_HEIGHT, *stretch);
                     // The card is as wide as its camera's aspect makes it (times
                     // `stretch`): the shell's outline, a 1.54 rectangle, is
                     // widened or narrowed to that - by nothing on the base and
@@ -577,24 +629,6 @@ impl Flyers {
                     // squarer campaign cards.
                     let half_width = camera.value_1c * CARD_HEIGHT / 2.0 * stretch;
                     let half = [half_width, CARD_HEIGHT / 2.0];
-                    match &shell {
-                        Some(shell) => {
-                            let widen = half_width / shell.half_size[0];
-                            let outline = stretched(&shell.outline, widen);
-                            match side {
-                                Side::Front => {
-                                    clip::clip_to_shape(&mut model, &outline);
-                                    clip::reflect(&mut model, shell.fade);
-                                }
-                                // The back's outline is the front's seen from the other
-                                // side, and RPCS3 draws no reflection under it.
-                                Side::Back => {
-                                    clip::clip_to_shape(&mut model, &mirrored(&outline));
-                                }
-                            }
-                        }
-                        None => clip::clip(&mut model, [-half[0], -half[1], half[0], half[1]]),
-                    }
                     placed.insert(
                         name.clone(),
                         Placement {
@@ -602,7 +636,18 @@ impl Flyers {
                             gain: *gain,
                         },
                     );
-                    waiting.insert(name.clone(), model);
+                    waiting.insert(
+                        name.clone(),
+                        Pending {
+                            model,
+                            camera_to_world: camera.to_world,
+                            window: *window,
+                            stretch: *stretch,
+                            half,
+                            side: *side,
+                            shell: Rc::clone(&shell),
+                        },
+                    );
                 }
                 Err(error) => report.push(format!("{entry}: {error:#} - no flyer is drawn")),
             }
@@ -619,6 +664,7 @@ impl Flyers {
             campaign_scale: 1.0,
             grid_pose: GRID_POSE,
             anisotropy: Anisotropy::default(),
+            card_seconds: SETTLED_SECONDS,
             report,
         }
     }
@@ -859,13 +905,18 @@ impl Flyers {
         let key = (name.clone(), format);
         if !self.cards.borrow().contains_key(&key) {
             // The decoded card, or a copy of the one another format's target was built from.
-            let model = self.waiting.borrow_mut().remove(&name).or_else(|| {
-                let cards = self.cards.borrow();
-                cards
-                    .iter()
-                    .find(|((built, _), _)| *built == name)
-                    .map(|(_, card)| card.untinted_model())
-            });
+            let model = self
+                .waiting
+                .borrow_mut()
+                .remove(&name)
+                .map(|pending| pending.build(self.card_seconds))
+                .or_else(|| {
+                    let cards = self.cards.borrow();
+                    cards
+                        .iter()
+                        .find(|((built, _), _)| *built == name)
+                        .map(|(_, card)| card.untinted_model())
+                });
             if let Some(model) = model {
                 match Preview::new(device, queue, format, self.anisotropy, model) {
                     Ok(card) => {
@@ -906,7 +957,7 @@ impl Flyers {
             space,
             view_projection,
             model,
-            SETTLED_SECONDS,
+            self.card_seconds,
         );
     }
 }
@@ -1155,6 +1206,7 @@ mod tests {
             campaign_scale: 1.0,
             grid_pose: GRID_POSE,
             anisotropy: Anisotropy::default(),
+            card_seconds: SETTLED_SECONDS,
             report: Vec::new(),
         };
         let (fury, hd) = (Campaign::new(0), Campaign::new(1));
