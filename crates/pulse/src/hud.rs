@@ -197,14 +197,16 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     )),
     // `Additional_Definition.xml`'s `List name="Dynamic HUD" global="Dynamic HUD"
     // Default="FE_DEFAULT"` on the PSP discs (USA and EU), read off the disc; the PS2 executable
-    // carries the string and the same menu is assumed (one definition for both pressings). What
-    // `FE_OFF` does is the one entry whose effect is known: `Hud_Update` clears the HUD's shown
-    // byte, and a poke of that byte removed every HUD element from a running frame
-    // (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`).
+    // carries the string and the same menu is assumed (one definition for both pressings).
+    // `FE_OFF` clears the HUD's shown byte, which removed every HUD element from a running frame
+    // (`docs/ghidra/functions/psp-pulse-usa/now-playing.md`); `FE_CONCAVE` bends it, and
+    // `FE_DEFAULT` bends it in the cockpit view only, both seen live on PPSSPP
+    // (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`).
     dynamic_hud: Some(oag_title::pre_race::Sourced::measured(
         oag_title::hud::DynamicHudList {
             entries: &["FE_DEFAULT", "FE_CONCAVE", "FE_FLAT", "FE_OFF"],
             off: "FE_OFF",
+            default_bends_in_cockpit: true,
         },
     )),
     // **Chosen, not measured.** Neither disc authors an indicator (census in

@@ -28,6 +28,7 @@ mod resources;
 mod scene;
 mod text;
 mod video;
+mod warp;
 
 use face::{face_atlas_size, face_sampler, fit_to_device, upload_face};
 use resources::{
@@ -67,6 +68,7 @@ use video::Video;
 
 pub use backdrop::{DrawSceneLayer, FuryBackdrop, SCENE_LAYER_FORMAT, SceneLayer};
 pub use scene::SceneBackdrop;
+pub use warp::Warp;
 
 /// What a glyph's baked outline is drawn in when nothing supplies a colour.
 ///
@@ -186,6 +188,8 @@ pub struct Renderer {
     /// Where a draw list's views start, and the pixel rectangle each is clipped to:
     /// see [`Self::set_scissors`]. Empty draws the list unclipped, the common case.
     scissors: Vec<(usize, [u32; 4])>,
+    /// The `Dynamic HUD` warp for the next draw, spent by it like [`Self::scissors`].
+    warp: Option<Warp>,
     atlas: Atlas,
     /// The sprite sheet's pixel size, which the shader needs to normalise UVs.
     sprites: (u32, u32),
@@ -460,6 +464,7 @@ impl Renderer {
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
             scissors: Vec::new(),
+            warp: None,
             atlas,
             sprites: (sprites.width, sprites.height),
             video,
@@ -629,6 +634,12 @@ impl Renderer {
         self.scissors = scissors;
     }
 
+    /// Bends the next [`Self::overlay`] by the `Dynamic HUD` warp (`oag_hud::concave`), or
+    /// draws it flat with `None`. Spent by that draw, like [`Self::set_scissors`].
+    pub fn set_warp(&mut self, warp: Option<Warp>) {
+        self.warp = warp;
+    }
+
     /// Draws `list` **over** whatever is already in `view`.
     ///
     /// What the performance overlay does: it is not a stage and does not own
@@ -697,6 +708,8 @@ impl Renderer {
         let mut last_text = 0..0;
         let mut scene_at = None;
         let scissors = std::mem::take(&mut self.scissors);
+        let warp = self.warp.take();
+        let mut warp_end = None;
         let mut segments: Vec<(u32, [u32; 4])> = Vec::new();
         let inset = inset::placement(self.space, self.inset);
         // A marquee row's clip is two x positions in the grid, moved with the row.
@@ -728,6 +741,9 @@ impl Renderer {
                 segments.push((self.quads.len() as u32, rect));
             }
             let quads_before = self.quads.len();
+            if warp_end.is_none() && warp.as_ref().is_some_and(|w| index >= w.until) {
+                warp_end = Some(quads_before);
+            }
             match draw {
                 Draw::GlowStamp { rect, value } => stamps.push((*rect, *value)),
                 Draw::GlowText { value } => {
@@ -769,23 +785,32 @@ impl Renderer {
                     rotation: 0.0,
                     chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
+                    warp: [0.0; 4],
                 }),
                 Draw::Video { rect, .. } => {
                     video_at = Some(self.quads.len() as u32);
                     video_rect = *rect;
                 }
-                Draw::Sprite { rect, uv, color } => self.quads.push(Quad {
-                    rect: *rect,
-                    uv: *uv,
-                    color: *color,
-                    // A sprite is sampled as RGBA and never mixed, so this is
-                    // inert here. It still has to be a real value.
-                    border: *color,
-                    mode: MODE_SPRITE,
-                    rotation: 0.0,
-                    chamfer: [0.0, 0.0],
-                    tile: [0.0, 0.0],
-                }),
+                Draw::Sprite { rect, uv, color } => {
+                    let quad = Quad {
+                        rect: *rect,
+                        uv: *uv,
+                        color: *color,
+                        // A sprite is sampled as RGBA and never mixed, so this is
+                        // inert here. It still has to be a real value.
+                        border: *color,
+                        mode: MODE_SPRITE,
+                        rotation: 0.0,
+                        chamfer: [0.0, 0.0],
+                        tile: [0.0, 0.0],
+                        warp: [0.0; 4],
+                    };
+                    if warp.as_ref().is_some_and(|w| w.columned(*rect)) {
+                        self.quads.extend(warp::columns(quad));
+                    } else {
+                        self.quads.push(quad);
+                    }
+                }
                 Draw::Triangles(triangles) => {
                     self.quads.extend(triangles.iter().map(Quad::triangle));
                 }
@@ -814,6 +839,7 @@ impl Renderer {
                     rotation: 0.0,
                     chamfer: [0.0, 0.0],
                     tile: *repeat,
+                    warp: [0.0; 4],
                 }),
                 Draw::RotatedSprite {
                     rect,
@@ -829,6 +855,7 @@ impl Renderer {
                     rotation: *rotation,
                     chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
+                    warp: [0.0; 4],
                 }),
                 Draw::BlendedSprite {
                     rect,
@@ -855,6 +882,7 @@ impl Renderer {
                     rotation: *rotation,
                     chamfer: [0.0, 0.0],
                     tile: [0.0, 0.0],
+                    warp: [0.0; 4],
                 }),
                 Draw::Text {
                     x,
@@ -963,6 +991,10 @@ impl Renderer {
 
         if self.hud.mode.snaps_geometry() {
             hud_scale::snap_sprites(&mut self.quads, self.hud.pixels_per_grid);
+        }
+        if warp.is_some() {
+            let end = warp_end.unwrap_or(self.quads.len());
+            warp::bend(&mut self.quads[..end], self.space.size);
         }
         // The glow mask's instances sit after the list's own, drawn only by the mask pass.
         let normal = self.quads.len() as u32;

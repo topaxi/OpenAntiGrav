@@ -766,7 +766,10 @@ fn hud_overlay(
     )
     .context("building the HUD overlay")?
     .map(|mut overlay| {
-        overlay.set_dynamic_hud(settings.display.dynamic_hud);
+        overlay.set_dynamic_hud(
+            settings.display.dynamic_hud,
+            settings.graphics.camera_view == oag_display::display::CameraView::Internal,
+        );
         Box::new(overlay.with_safe_area(settings.graphics.hud_safe_area))
     }))
 }

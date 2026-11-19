@@ -53,10 +53,14 @@ pub(super) struct Quad {
     /// address mode: the tile is a patch *inside* the sheet, so the sampler's
     /// repeat would wrap the sheet, not the patch.
     pub(super) tile: [f32; 2],
+    /// How far the `Dynamic HUD` warp moves each corner down, in grid units: top-left,
+    /// top-right, bottom-left, bottom-right. Zero but on a bent HUD's quads; see
+    /// [`super::warp`].
+    pub(super) warp: [f32; 4],
 }
 
 /// The vertex attributes of a [`Quad`] instance, in field order.
-pub(super) const ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_array![
+pub(super) const ATTRIBUTES: [wgpu::VertexAttribute; 9] = wgpu::vertex_attr_array![
     0 => Float32x4,
     1 => Float32x4,
     2 => Float32x4,
@@ -64,7 +68,8 @@ pub(super) const ATTRIBUTES: [wgpu::VertexAttribute; 8] = wgpu::vertex_attr_arra
     4 => Float32,
     5 => Float32,
     6 => Float32x2,
-    7 => Float32x2
+    7 => Float32x2,
+    8 => Float32x4
 ];
 
 /// A quad whose `uv` is in glyph-atlas pixels, sampled for coverage.
@@ -133,6 +138,7 @@ impl Quad {
             rotation: c.color[2],
             chamfer: [b.color[1], b.color[2]],
             tile: [c.color[0], c.color[1]],
+            warp: [0.0; 4],
         }
     }
 }
@@ -157,6 +163,7 @@ impl Quad {
             rotation: 0.0,
             chamfer: [0.0, 0.0],
             tile: [0.0, 0.0],
+            warp: [0.0; 4],
         }
     }
 }
@@ -177,6 +184,7 @@ impl Renderer {
             rotation: 0.0,
             chamfer,
             tile: [0.0, 0.0],
+            warp: [0.0; 4],
         });
     }
 
@@ -193,6 +201,7 @@ impl Renderer {
             rotation: 0.0,
             chamfer: [0.0, 0.0],
             tile: [0.0, 0.0],
+            warp: [0.0; 4],
         });
     }
 }

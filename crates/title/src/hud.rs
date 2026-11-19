@@ -887,8 +887,9 @@ impl SafeArea {
 /// `FE_OFF` clears the HUD's shown byte (`+0x121`), which the song display and
 /// the HUD's own gate both read. Poking it to zero in a running race removed
 /// every HUD element, `docs/ghidra/functions/psp-pulse-usa/now-playing.md`.
-/// `FE_CONCAVE` and `FE_FLAT` set bit 1 of `+0xd0` on the two panel groups,
-/// which is not decoded, so this build offers `FE_DEFAULT` and `FE_OFF` only.
+/// `FE_CONCAVE` and `FE_FLAT` set and clear bit 1 of `+0xd0` on the two panel
+/// groups, the vertex warp `oag_hud::concave` draws
+/// (`docs/ghidra/functions/psp-pulse-usa/hud-game-options.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DynamicHudList {
     /// The list's entries as the disc spells them (string ids), in its order; the first is the
@@ -896,6 +897,9 @@ pub struct DynamicHudList {
     pub entries: &'static [&'static str],
     /// The entry that draws no HUD.
     pub off: &'static str,
+    /// Whether the default entry bends the HUD in the cockpit view: Pulse's `FE_DEFAULT`
+    /// copies the player craft's internal-view flag (`craft+0x6f`) into the warp bit.
+    pub default_bends_in_cockpit: bool,
 }
 
 /// The speed and shield bars' fill law: the fill's tip is where the marker and

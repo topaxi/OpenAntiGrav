@@ -675,3 +675,97 @@ fn the_quad_list_survives_into_the_next_frame() {
     frame(&mut renderer);
     assert_eq!(renderer.quads.capacity(), kept, "the list was rebuilt");
 }
+
+/// A bent draw list carries the `Dynamic HUD` warp on every quad up to [`Warp::until`], cuts a
+/// columned bar into four, leaves the draws after `until` flat, and is spent by that draw: the
+/// next one, with no warp set, is flat again.
+///
+/// **Skips with no adapter.**
+#[test]
+fn a_warp_bends_its_draws_cuts_its_bars_and_is_spent() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        Atlas::build(),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    renderer.set_space(Space::PSP);
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("warp test"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        view_formats: &[],
+    });
+    let view = target.create_view(&Default::default());
+    let bar = [304.0, 240.0, 140.0, 8.0];
+    let icon = [20.0, 10.0, 16.0, 16.0];
+    let reticle = [200.0, 100.0, 16.0, 16.0];
+    let list: Vec<Draw> = [bar, icon, reticle]
+        .into_iter()
+        .map(|rect| Draw::Sprite {
+            rect,
+            uv: [0.0, 0.0, 1.0, 1.0],
+            color: [1.0; 4],
+        })
+        .collect();
+    let frame = |renderer: &mut Renderer| {
+        let mut encoder = device.create_command_encoder(&Default::default());
+        renderer.overlay(
+            &device,
+            &queue,
+            &mut encoder,
+            &view,
+            &list,
+            (0.0, 0.0, 4.0, 4.0),
+        );
+        queue.submit(Some(encoder.finish()));
+        renderer.quads.clone()
+    };
+    renderer.set_warp(Some(Warp {
+        columns: vec![bar],
+        until: 2,
+    }));
+    let bent = frame(&mut renderer);
+    assert_eq!(
+        bent.len(),
+        6,
+        "the bar as four columns, the icon, the reticle"
+    );
+    let size = Space::PSP.size;
+    for column in &bent[..4] {
+        assert_eq!(column.warp, oag_hud::concave::corners(column.rect, size));
+    }
+    assert!(
+        bent[0].warp[0] < -20.0,
+        "the bar's left end rises: {:?}",
+        bent[0].warp
+    );
+    assert_eq!(bent[4].warp, oag_hud::concave::corners(icon, size));
+    assert!(bent[4].warp[0] > 1.0, "the top-left icon comes down");
+    assert_eq!(bent[5].warp, [0.0; 4], "the reticle stays flat");
+    let flat = frame(&mut renderer);
+    assert_eq!(flat.len(), 3);
+    assert!(flat.iter().all(|quad| quad.warp == [0.0; 4]), "spent");
+}

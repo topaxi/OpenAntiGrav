@@ -134,6 +134,7 @@ impl Frame {
     pub fn placed(&self, p: &Placement) -> Frame {
         let place_all = |list: &[Draw]| list.iter().filter_map(|draw| place(draw, p)).collect();
         Frame {
+            columns: self.columns.iter().map(|rect| moved(*rect, p)).collect(),
             sprites: place_all(&self.sprites),
             hud_text: place_all(&self.hud_text),
             small_text: place_all(&self.small_text),
@@ -173,6 +174,11 @@ impl Frame {
         for stamp in &mut glow {
             stamp.rect = moved(stamp.rect, p);
         }
+        let columns = self
+            .columns
+            .into_iter()
+            .map(|rect| moved(rect, p))
+            .collect();
         Frame {
             sprites: place_all(self.sprites),
             hud_text: place_all(self.hud_text),
@@ -181,6 +187,7 @@ impl Frame {
             skin_text: place_all(self.skin_text),
             spans,
             glow,
+            columns,
         }
     }
 
@@ -204,6 +211,7 @@ impl Frame {
         self.default_text.extend(other.default_text);
         self.skin_text.extend(other.skin_text);
         self.glow.extend(other.glow);
+        self.columns.extend(other.columns);
     }
 }
 

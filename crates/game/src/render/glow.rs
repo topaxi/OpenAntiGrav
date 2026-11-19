@@ -172,6 +172,7 @@ pub(super) fn mask_quads(stamps: &[([f32; 4], u8)]) -> Vec<Quad> {
         rotation: 0.0,
         chamfer: [0.0; 2],
         tile: [0.0; 2],
+        warp: [0.0; 4],
     };
     std::iter::once(quad(EVERYWHERE, BACKGROUND))
         .chain(stamps.iter().map(|&(rect, value)| quad(rect, value)))

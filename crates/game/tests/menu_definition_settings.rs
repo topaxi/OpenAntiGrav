@@ -550,48 +550,57 @@ fn the_hud_style_row_is_offered_only_where_the_disc_lists_one() {
     }
 }
 
-/// The DYNAMIC HUD row is offered where the title's own options list one (Pulse) and
-/// dropped on every title whose options do not, and it offers the two entries that change a frame.
+/// The DYNAMIC HUD row holds Pulse's four entries on Pulse, whose options list them, and
+/// `default` and `concave` on every other title (Pulse's warp offered on every HUD).
 #[test]
-fn the_dynamic_hud_row_is_offered_only_where_the_options_list_one() {
-    let rows = |definition: &Definition| {
+fn the_dynamic_hud_row_offers_the_disc_list_on_pulse_and_concave_everywhere() {
+    let values = |definition: &Definition| -> Vec<String> {
         definition
             .pages
             .iter()
             .flat_map(|page| page.entries.iter())
-            .filter(|entry| entry.setting() == Some("display.dynamic_hud"))
-            .count()
+            .filter_map(|entry| match entry {
+                oag_ui::menu::Entry::Choice {
+                    setting, values, ..
+                } if setting == "display.dynamic_hud" => Some(values),
+                _ => None,
+            })
+            .flat_map(|values| values.iter().map(|choice| choice.value.clone()))
+            .collect()
     };
-    for (title, offered) in [
-        (oag_pulse::TITLE, 1),
-        (oag_pure::TITLE, 0),
-        (oag_hd::TITLE, 0),
-        (oag_omega::TITLE, 0),
-        (oag_2048::TITLE, 0),
+    for title in [
+        oag_pulse::TITLE,
+        oag_pure::TITLE,
+        oag_hd::TITLE,
+        oag_omega::TITLE,
+        oag_2048::TITLE,
     ] {
         let mut definition = built_in();
-        assert_eq!(rows(&definition), 1, "the definition ships the row");
         definition.drop_unavailable_dynamic_hud(title);
-        assert_eq!(rows(&definition), offered, "{}", title.name);
-        assert_eq!(
-            title.hud_art.dynamic_hud.is_some(),
-            offered == 1,
-            "{}",
-            title.name
-        );
+        let expected: &[&str] = if title.hud_art.dynamic_hud.is_some() {
+            &["default", "concave", "flat", "off"]
+        } else {
+            &["default", "concave"]
+        };
+        assert_eq!(values(&definition), expected, "{}", title.name);
     }
     let list = oag_pulse::TITLE
         .hud_art
         .dynamic_hud
         .expect("Pulse's list")
         .value;
-    for choice in oag_display::display::DynamicHud::ALL {
-        let entry = match choice {
-            oag_display::display::DynamicHud::Default => list.entries[0],
-            oag_display::display::DynamicHud::Off => list.off,
-        };
-        assert!(list.entries.contains(&entry), "{choice} names {entry}");
+    assert!(list.default_bends_in_cockpit);
+    for (choice, entry) in oag_display::display::DynamicHud::ALL
+        .into_iter()
+        .zip(list.entries)
+    {
+        assert_eq!(
+            entry.trim_start_matches("FE_").to_ascii_lowercase(),
+            choice.name(),
+            "the disc's list order"
+        );
     }
+    assert_eq!(list.off, "FE_OFF");
 }
 
 /// Android drops QUIT (a phone app is left, not quit); every other row stays.
