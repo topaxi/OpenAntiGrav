@@ -381,6 +381,18 @@ impl Race {
         })
     }
 
+    /// Puts the craft in `slot`'s drawn airbrake flaps at `levels` (`0..=100`, left then right),
+    /// on this tick and on the previous one, so a draw between ticks shows them as given.
+    /// For a still posed at a captured craft's own flap values (`--pose-flaps`), which runs
+    /// no tick that would swing them there.
+    pub fn force_flaps(&mut self, slot: usize, levels: [f32; 2]) {
+        let levels = levels.map(|level| level.clamp(0.0, 100.0));
+        self.view.flaps[slot] = levels;
+        if let Some(previous) = self.view.poses.previous.as_mut() {
+            previous.ships[slot].flaps = levels;
+        }
+    }
+
     /// The craft in `slot`'s airbrake flap levels (`0..=100`) at the draw alpha:
     /// the flaps swing between ticks with the hull they hang on.
     pub(super) fn flaps_between(&self, slot: usize) -> [f32; 2] {

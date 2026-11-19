@@ -1176,6 +1176,14 @@ pub(crate) struct Cli {
     #[arg(long, requires = "pose_from")]
     pub(crate) pose_lean: bool,
 
+    /// With `--pose-from`: also draw the craft's airbrake flaps at the levels the pose's own trace row recorded
+    /// (`airbrake_l`, `airbrake_r`, `0..=100`), put on after the ticks.
+    ///
+    /// A posed capture runs no tick that swings the flaps, so they draw stowed whatever the original's air brakes
+    /// were doing at the instant. The row is the one `--pose-tick` poses from.
+    #[arg(long, requires = "pose_from")]
+    pub(crate) pose_flaps: bool,
+
     /// With `--race --screenshot` or `--race --trace-out`: drive the run from
     /// a committed `.inputs` script (see `scripts/input_script.py` for the
     /// format) instead of `--hold`/`--press` - the same file

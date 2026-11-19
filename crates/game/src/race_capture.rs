@@ -13,6 +13,7 @@ use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
+pub mod pose_flaps;
 pub mod pose_hold;
 pub mod pose_lean;
 mod race_bench;
@@ -259,6 +260,8 @@ pub struct CaptureOptions {
     /// `--pose-lean`: ship 0's drawn lean and roll phase as the pose's trace row recorded them, put on
     /// after the ticks. See [`pose_lean`].
     pub pose_lean: Option<pose_lean::PoseLean>,
+    /// `--pose-flaps`: ship 0's air brake levels from the pose's trace row, after the ticks. See [`pose_flaps`].
+    pub pose_flaps: Option<pose_flaps::PoseFlaps>,
     /// `--field-from`'s `steer_lean` / `roll_phase` columns: the opponents' drawn lean and roll phase
     /// as the original's RAM held them, slots 1.. in order; `None` for a craft whose row has no columns.
     pub field_lean: Vec<Option<pose_lean::PoseLean>>,
@@ -922,14 +925,8 @@ pub fn capture(
     if let Some(pose) = start_pose {
         pose.restore(&mut race);
     }
-    if let Some(lean) = options.pose_lean {
-        lean.apply(&mut race);
-    }
-    for (slot, lean) in options.field_lean.iter().enumerate() {
-        if let Some(lean) = lean {
-            lean.apply_to(&mut race, slot + 1);
-        }
-    }
+    pose_lean::apply_all(options.pose_lean, &options.field_lean, &mut race);
+    pose_flaps::apply(options.pose_flaps, &mut race);
     println!(
         "after {} tick(s): {}",
         race.core.sim.world.tick,

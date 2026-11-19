@@ -349,6 +349,8 @@ def zone_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, their
     pair.check("ours settings read back", not bad, "%d keys equal the profile" % (len(got) - len(bad)))
     ours_row = ce.csv_row(ours_csv, 0)
     pair.check_pose(theirs, ce.pose_of(ours_row), fov, fov)
+    if args.air_brakes:
+        display_checks(pair, theirs_row, ours_row)
     pair.rec["ours"]["shield"] = ours_row.get("shield")
     pair.check_size("ours", out / "ours.png")
     run(["magick", "montage", out / "theirs.png", out / "ours.png", "-tile", "2x1", "-geometry", "+2+2", out / "side.png"])
@@ -516,6 +518,14 @@ def main():
                     help="after the load stop and the Autopilot timer restore, run the player's ticks on to the first one whose "
                          "race clock reaches this many seconds (a stored pair's own moment, e.g. 38.4082), instead of "
                          "--run-ticks")
+    ap.add_argument("--air-brakes", action="store_true",
+                    help="the state has both air brakes out (held through the turn): read both levels from the pose row "
+                         "(airbrake_l/r, craft+0x2c4/0x2c8, ramped 0..100), refuse a pair where either is under 90, record them "
+                         "in pair.json and pass ours --pose-flaps so its flaps are drawn at the same levels")
+    ap.add_argument("--mid-lap", action="store_true",
+                    help="the state is somewhere on the circuit, not on the grid: --layout forward|reversed is required, the "
+                         "layout probe and the start-line distance check (grid states only) are skipped, and the pose "
+                         "check at the rendered tick is what proves ours stands where the original does")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -615,6 +625,10 @@ def main():
     theirs_row = ce.csv_row(csv, 0)
     theirs = ce.pose_of(theirs_row)
     view = camera_view_of(theirs_row)
+    if view is None and args.mid_lap and 6.0 <= camera_craft_distance(theirs_row) <= 12.5:
+        # the close chase's spring lags through a turn, so the camera is nearer than its 11.64 at rest; ours renders the
+        # recorded camera (`--pose-from`), so the distance is data, and the view's own fov base is the close view's
+        view = "close"
     pair.check("the original's camera is the internal (3.0 units) or the close chase (11.64) view",
                view is not None, "camera %.2f units from the craft" % camera_craft_distance(theirs_row))
     if view is None:
@@ -644,6 +658,12 @@ def main():
     pair.rec["original"]["camera"] = {"pos": [theirs_row["cam_pos_" + a] for a in "xyz"],
                                       "fwd": [theirs_row["cam_fwd_" + a] for a in "xyz"], "source": "psp-trace.py --camera"}
     pair.rec["original"]["shield"] = theirs_row.get("shield")
+    if args.air_brakes:
+        levels = [float(theirs_row["airbrake_l"]), float(theirs_row["airbrake_r"])]
+        pair.rec["original"]["air_brakes"] = {"left": levels[0], "right": levels[1], "scale": "0..100, ramped",
+                                              "source": "psp-trace.py row 0 (the pose's stop): craft+0x2c4, craft+0x2c8"}
+        pair.check("both air brakes are out in the original at the pose's stop", min(levels) >= 90.0,
+                   "left %.2f, right %.2f (a full brake is 100)" % tuple(levels))
     pair.rec["original"]["camera_view"] = {"view": view, "source": "camera-to-craft distance (%.2f units; the chase "
                                            "views sit 11.64 away, the cockpit view 3.0)" % camera_craft_distance(theirs_row)}
     pair.rec["ours"]["camera_view"] = view
@@ -664,23 +684,33 @@ def main():
                    "asserted %s, sidecar declares %s" % (layout, declared))
         return field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, theirs, fov, layout, profile_dir,
                           clock, view_flags)
-    layout, rep = detect_layout(args.oag_game, image, args.track, theirs_row, flags, {"scratch": str(out)})
-    pair.rec["ours"]["layout_probe"] = rep
+    if args.mid_lap:
+        if args.layout == "auto":
+            sys.exit("--mid-lap needs --layout forward|reversed: the grid probe is a start-line test")
+        layout, rep = args.layout, None
+        pair.rec["ours"]["layout_probe"] = "skipped: --mid-lap (the state is not on the grid), layout asserted"
+    else:
+        layout, rep = detect_layout(args.oag_game, image, args.track, theirs_row, flags, {"scratch": str(out)})
+        pair.rec["ours"]["layout_probe"] = rep
     asserted = {"forward": False, "reversed": True}.get(args.layout)
-    pair.check("layout file matches the start position", asserted is None or (layout == "reversed") == asserted,
-               "probe says %s (%s); %s" % (
-                   layout, ", ".join("%s %.1f units / %.1f deg" % (k, v["start_distance"], v["heading_deg"])
-                                     for k, v in rep.items()),
-                   "asserted %s" % args.layout if asserted is not None else "nothing asserted, the probe chooses"))
-    # the heading is only a layout discriminator here (the wrong layout points 178 degrees away); the ship may have
-    # yawed on the grid since the start, and the real pose parity is checked at the rendered tick below
-    pair.check("circuit start within 25 units of the original's grid pose, facing the same way (under 90 deg)",
-               rep[layout]["start_distance"] <= 25 and rep[layout]["heading_deg"] <= 90,
-               "%.1f units, %.1f deg" % (rep[layout]["start_distance"], rep[layout]["heading_deg"]))
+    if not args.mid_lap:
+        pair.check("layout file matches the start position", asserted is None or (layout == "reversed") == asserted,
+                   "probe says %s (%s); %s" % (
+                       layout, ", ".join("%s %.1f units / %.1f deg" % (k, v["start_distance"], v["heading_deg"])
+                                         for k, v in rep.items()),
+                       "asserted %s" % args.layout if asserted is not None else "nothing asserted, the probe chooses"))
+        # the heading is only a layout discriminator here (the wrong layout points 178 degrees away); the ship may have
+        # yawed on the grid since the start, and the real pose parity is checked at the rendered tick below
+        pair.check("circuit start within 25 units of the original's grid pose, facing the same way (under 90 deg)",
+                   rep[layout]["start_distance"] <= 25 and rep[layout]["heading_deg"] <= 90,
+                   "%.1f units, %.1f deg" % (rep[layout]["start_distance"], rep[layout]["heading_deg"]))
     pair.rec["ours"].update({"mode": mode, "class": klass, "team": args.team or "default", "layout": layout})
     pair.rec["original"]["layout"] = layout
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
     base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0] + flags
+    if args.air_brakes:
+        base += ["--pose-flaps"] + lean_and_boost_flags(pair, theirs_row)
+        pair.rec["ours"]["air_brakes"] = "ours --pose-flaps: the flaps drawn at the pose row's airbrake_l/airbrake_r"
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--camera-fov", "%.4f" % fov, "--ticks", args.ours_ticks]
     if pair.failed():
         pair.finish()
