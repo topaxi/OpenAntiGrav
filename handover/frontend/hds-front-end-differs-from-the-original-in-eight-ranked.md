@@ -34,7 +34,17 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   fainter and browner than the original at matched screens (the cloud path
   differs, and this build's music pulse sits at 0.23 where RPCS3's reaches 1.2);
   `--team Feisar` does not preselect the Ship Select picker, so captures show
-  the default team instead (a CLI bug, found 2026-10-10)
+  the default team instead (a CLI bug, found 2026-10-10). **The pairs hide the backdrop on both sides since 2026-11-19
+  (`hd-fury-backdrop`)**: no grab of it can be reproduced (a new cloud and path every boot, two paths in three in modes
+  ours does not draw, music-driven, RPCS3's index wrap), so `rpcs3-hd-menu-pair.py` zeroes the row's tint for the grab
+  and ours takes `--fury-tint 0`; `hd/menu-track-select` 7.83 to 5.84, `hd/menu-ship-select` 4.51 to 3.05
+  (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"). So the "fainter and browner"
+  item above is no longer scored by any pair and stays open as a live-play item. Open from that lane: the craft's
+  exposure on a hidden-cloud grab (the original adapts to `0.01451`, exposure 3.49; ours keeps the `0.0163` read with the
+  cloud showing, 3.43; each pair records its read in `original.backdrop.adapted_luma`, a capture flag to state it is the
+  wiring left: small); the Campaign Select, grid and cell pairs still show the cloud (one id each in `HIDDEN_BACKDROP`
+  once that read is wired, because their cards' level follows the adapted luma); `WALK`'s Ship Select state depends on
+  the save (the maintainer's opens on the Fury hull: `--taps-before ship-select=down`)
 - Ship Select framing (LANDED 2026-11-11, `hd-worst-pairs-2`): the screen's
   own camera, read off the executable, replaces the authored pose and the
   fitted lens, pitch and slide. The update writes rest `RotX 0.25`, `RotY -0.6`,
@@ -125,7 +135,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   the constructor's 57.3 degrees, as ours was. Omega: checked, applies, not wired
   (its update is unread). The pair `hd/menu-track-select` is drawn at the RAM angle
   read at the grab. Open: nearZ/farZ (authored 1 and 1000, ours 10 and 2000), the
-  multiplier `0x81db67ea`, the backdrop's brightness and cloud path, Zone circuits (`zone_1..4` carry a scene no record names),
+  multiplier `0x81db67ea`, the backdrop's brightness and cloud path (hidden on the pair since 2026-11-19, above), Zone circuits (`zone_1..4` carry a scene no record names),
   Omega's own table; the moving fly-by picture (Bink)
 - Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
   landed the Grid Selection counter, arrows, dotted unlock panel and its corner marks, and the Track Select record rows (fill
