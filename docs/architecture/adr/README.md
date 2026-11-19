@@ -101,6 +101,7 @@ out to be wrong.
 | [0090](0090-a-title-package-may-depend-on-the-title-it-inherits-from.md) | A title package may depend on the title it inherits from | **Accepted** (2026-11-11); amends ADR-0022's independent-tables reading (Omega -> HD, never the reverse or a cycle) |
 | [0091](0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) | A modded race records its inputs and its header names the modules | **Accepted** (2026-11-16); supersedes ADR-0087 decision 7's "modded races record nothing" and the phase-2 "no replay" rule of ADR-0079 |
 | [0092](0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md) | A player-hosted race is a lobby room whose owner runs the race host | **Proposed** (2026-11-17); version one built: an opened port probed by the lobby, a key pair per player, a ban file |
+| [0093](0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md) | A custom campaign keeps a bounded run state, and its mod sets bounded modifiers at race start | **Proposed** (2026-11-19); editable until merged to `main`; narrows the README's "no replacing a disc table" row and ADR-0080 decision 6; nothing built |
 
 ## Format
 

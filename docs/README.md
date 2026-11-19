@@ -66,6 +66,7 @@ Then, depending on what you are here to do:
 | Add or change a menu | [Menus](architecture/menus.md) |
 | Persist something to a player's own machine | [Persistence](architecture/persistence.md) |
 | Let a mod carry behaviour (a craft specialty, a track trigger, a HUD widget) | [WebAssembly extensions](architecture/wasm-extensions/README.md) (design, ADR-0079 Proposed) |
+| Let a custom campaign change the craft and the pickups from race to race | [Campaign progression for mods](architecture/wasm-extensions/progression.md) (draft, ADR-0093 Proposed) |
 | Choose a log level, or see more of what a launch did | [Logging](architecture/logging.md) |
 | Verify against the original | [Verification protocol](reverse-engineering/verification-protocol.md) |
 

@@ -13,7 +13,12 @@ and the maintainer's examples walked end to end. The engine half is beside it:
 [determinism-and-state.md](determinism-and-state.md) (floats, fuel, the state
 blob, the hash, replays, network play, web and iOS, the measurements).
 Where this page and those two disagree, they own the engine facts and this page
-is to be corrected.
+is to be corrected. A campaign whose races change the craft and the pickups from
+race to race (a run state, race-start modifiers, pickup parameters, a choice
+screen, mod-defined stats) is a draft in [progression.md](progression.md), decision
+record [ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
+(*Proposed*); it also lists which of this page's sketched calls (`race-start`,
+`race-end`, `setup.tune`, the frontend world) are not built.
 
 ## What is built: Wall Penalty (2026-10-29)
 
@@ -1814,7 +1819,8 @@ channel; the HUD layout files are planned separately.
    and in what order.
 9. **Persistence between races**: whether the blob is saved per mod and title (the
    proposal in section 3), and what a mod may do with it (an unlock, a best score)
-   without a save slot.
+   without a save slot. A run state that a race writes and
+   the next race reads is drafted in [progression.md](progression.md).
 10. **The pilot-controller thread's three questions** (may a pilot fly `"original"`
     outside the campaign; mod controllers in multiplayer; WebAssembly as the mod
     ABI): this page assumes yes to the third and leaves the first two to the
