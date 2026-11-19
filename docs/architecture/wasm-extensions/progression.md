@@ -49,7 +49,8 @@ A **run** is one playthrough of one custom campaign by one profile. It has:
 - `seed`: a `u64` the host draws once when the run is created, so the guest can
   derive reward rolls without an RNG stream (section 4.3).
 - `ordinal`: how many events the run has committed.
-- `pending`: bytes staged at a finish, not yet committed (section 5).
+- `pending`: the bytes and the medal a finish staged, not yet committed (section 5).
+- `offer_pending`: a flag, set when a committed finish asked for a choice and the player has not picked.
 
 The host stores it in the records `Store` as a sibling table of `campaign` and
 `loyalty`, **keyed like the campaign's progress rows**
@@ -106,17 +107,29 @@ pub const RUN_LEN_AT: usize = RUN_TEAMS_AT + 4 * MAX_CRAFTS; // u32: length of t
 pub const RUN_IN_AT: usize = RUN_LEN_AT + 4;         // [u8; MAX_RUN_BYTES]
 pub const RUN_RESULT_AT: usize = RUN_IN_AT + MAX_RUN_BYTES; // RunResult, race-end only
 pub const RUN_OUT_LEN_AT: usize = RUN_RESULT_AT + RunResult::LEN; // u32, race-end only
-pub const RUN_OUT_AT: usize = RUN_OUT_LEN_AT + 4;    // [u8; MAX_RUN_BYTES], race-end only
-pub const RUN_REPLY_AT: usize = RUN_OUT_AT + MAX_RUN_BYTES; // count u32, then 12-byte command records
-// const _: () = assert!(RUN_REPLY_AT + 4 + COMMAND_LEN * MAX_START_COMMANDS <= IO_LEN);
+pub const RUN_OUT_AT: usize = RUN_OUT_LEN_AT + 4;    // [u8; MAX_RUN_BYTES]: at race-start the guest's initial TICK state
+                                                      // (its length is the module's oag_state_len); at race-end the new RUN state
+pub const RUN_TICK_AT: usize = RUN_OUT_AT + MAX_RUN_BYTES; // [u8; MAX_STATE_BYTES], race-end only: the final tick state
+pub const RUN_REPLY_AT: usize = RUN_TICK_AT + MAX_STATE_BYTES; // count u32, then 12-byte command records
+// const _: () = assert!(RUN_REPLY_AT + 4 + COMMAND_LEN * MAX_START_COMMANDS <= IO_LEN); // about 4,000 of 4,096
 ```
 
 **Why a second buffer, and the 1,024 cap.** The tick buffer is 4,096 bytes with 1,024
 reserved for the state blob, so a run state of up to 4 KiB (ADR-0080's cap for a
 screen blob) cannot sit beside a race description, an output run state and a reply
-inside it. The second buffer fits: the fixed header is about 120 bytes, plus 2 x 1,024
-of state, the result, and 64 x 12 reply bytes, under `IO_LEN`. A guest that wants more
-than 1,024 bytes keeps a compact encoding.
+inside it. The second buffer fits, tightly: the fixed header is about 120 bytes,
+plus the run state in (1,024), the result, the output region (1,024), the final tick
+state at race-end (1,024) and 64 x 12 reply bytes come to about 4,000 of the 4,096.
+A guest that wants more than 1,024 bytes keeps a compact encoding.
+
+**How the run reaches `tick`.** The tick call never sees the run bytes. `race-start`
+reads them and **sets the module's initial tick state** in the output region (its
+length is `oag_state_len`, as the manifest checks it); the tick state is already in
+the race state and the hash, so a recipe the guest copied there at race start is
+what a `pickup-fire` handler reads at tick 100. This is the README's WIT shape
+(`race-start ... -> list<u8>`, "returns the initial blob"). At race-end the same
+region is the new run state, and the final tick state arrives beside it, so the race
+can hand what it counted to the run.
 
 *Rejected: put the run state in the tick buffer's state region.* At `race-start` the
 region is the module's own (zeroed) tick state, and the output needs a second region
@@ -151,15 +164,15 @@ So `race-end` is called from `oag-game` through a method on the race
 ### New commands
 
 Codes **39 and up**: the gaps at 4, 7 and 15 in `CommandKind` are not reused.
-The first four are valid only in an `oag_race_start` reply (anywhere else is a
-fault, like `pickup-roll` off slot 0).
+Codes 39 to 41 are valid only in an `oag_race_start` reply, and 42 only in a `tick`
+reply (anywhere else is a fault, like `pickup-roll` off slot 0).
 
 | Code | Command | Where valid | Meaning |
 | --- | --- | --- | --- |
-| 39 | `set-modifier{slot, param, factor}` | race-start | scale one handling parameter of that slot's craft (section 4) |
-| 40 | `set-pickup-count{slot, weapon, count}` | race-start | rockets per press, mines per drop, cannon rounds (section 6) |
-| 41 | `set-pickup-scale{slot, weapon, aspect, factor}` | race-start | duration or strength of a pickup, for that slot only (section 6) |
-| 42 | `give-autopilot{slot}` | tick | starts the title's Autopilot for its authored time, as `give-shield` starts the Shield (section 6) |
+| 39 | `set-modifier{slot, param, factor}` | race-start reply | scale one handling parameter of that slot's craft (section 4) |
+| 40 | `set-pickup-count{slot, weapon, count}` | race-start reply | rockets per press, mines per drop, cannon rounds (section 6) |
+| 41 | `set-pickup-duration{slot, weapon, factor}` | race-start reply | how long a Turbo, Shield or Autopilot lasts, for that slot only (section 6) |
+| 42 | `give-autopilot{slot}` | tick reply | starts the title's Autopilot for its authored time, as `give-shield` starts the Shield (section 6) |
 
 ```rust
 // crates/ext-abi: closed vocabularies, `coded!` like Weapon and Cue.
@@ -173,7 +186,6 @@ coded! { Param: u16, first 1 {
     ShieldMax,      // dimensions.shield: the maximum and the start
     TurboStrength,  // engine.turbo
 } }
-coded! { Aspect: u16, first 1 { Duration, Strength } }
 
 /// Valid factor range per parameter, owned by the host. Chosen.
 pub const fn modifier_range(param: Param) -> (f32, f32);
@@ -181,10 +193,22 @@ pub const fn modifier_range(param: Param) -> (f32, f32);
 pub enum Command { /* the existing variants, and: */
     SetModifier { slot: Slot, param: Param, factor: f32 },
     SetPickupCount { slot: Slot, weapon: Weapon, count: u8 },
-    SetPickupScale { slot: Slot, weapon: Weapon, aspect: Aspect, factor: f32 },
+    SetPickupDuration { slot: Slot, weapon: Weapon, factor: f32 },  // Turbo, Shield, Autopilot only
     GiveAutopilot { slot: Slot },
 }
 ```
+
+### Events and records
+
+**No new tick event.** `race-start` and `race-end` are calls, not events. A reward
+that fires on a press already has `pickup-fire` and `pickup-absorbed`; one that reacts
+to a hit has `hit`; the engine raises nothing new for a run. The new **records** are
+the run buffer (header, `RunResult`, the output regions) above.
+
+**One new craft flag.** `CRAFT_AUTOPILOT` (bit 5, value 32 in the craft record's flags,
+beside `CRAFT_SHIELDED`): the slot's Autopilot is running. Without it a guest that
+sent `give-autopilot` could not tell whether one is already running, which matters
+because a running Autopilot is not refreshed and a pad grants nothing during it.
 
 ### The guest SDK (`oag-ext`)
 
@@ -193,10 +217,14 @@ pub enum Command { /* the existing variants, and: */
 /// these default to "nothing", so existing extensions compile as before.
 pub trait Run: Extension {
     /// Once per race, after the grid is placed. Reads the run state, replies with
-    /// modifiers and pickup parameters. It cannot write the run state.
-    fn race_start(&mut self, start: &Start, reply: &mut StartReply) {}
-    /// Once, at the finish of a campaign event. Writes the new run state.
-    fn race_end(&mut self, end: &End, out: &mut RunOut) {}
+    /// modifiers and pickup parameters, and sets the module's **initial tick state**
+    /// (`state` starts zeroed; what the guest leaves in it is the state the first
+    /// `tick` sees, hashed like any tick state). It cannot write the run state.
+    fn race_start(start: &Start<'_>, state: &mut Self::State, reply: &mut StartReply<'_>) {}
+    /// Once, at the finish of a campaign event. `state` is the module's final tick
+    /// state (a copy; what the race counted, such as pads crossed or hits taken).
+    /// Writes the new run state.
+    fn race_end(end: &End<'_>, state: &Self::State, out: &mut RunOut<'_>) {}
 }
 
 pub struct Start<'a> { /* race(), campaign_key(), event_key(), ordinal(), seed(),
@@ -208,8 +236,7 @@ impl StartReply<'_> {
     /// Err(Refused::Range) outside `modifier_range`, never a silent clamp in the SDK.
     pub fn modifier(&mut self, slot: Slot, param: Param, factor: f32) -> Result<(), Refused>;
     pub fn pickup_count(&mut self, slot: Slot, weapon: Weapon, count: u8) -> Result<(), Refused>;
-    pub fn pickup_scale(&mut self, slot: Slot, weapon: Weapon, aspect: Aspect, factor: f32)
-        -> Result<(), Refused>;
+    pub fn pickup_duration(&mut self, slot: Slot, weapon: Weapon, factor: f32) -> Result<(), Refused>;
 }
 
 pub struct RunOut<'a> { /* private */ }
@@ -297,8 +324,7 @@ record** in `Extensions`:
 pub struct SlotMods {
     pub factor: [f32; Param::COUNT],         // 1.0 = untouched
     pub rockets: u8, pub mines: u8, pub cannon_rounds: u8,
-    pub duration: [f32; 3],                  // Turbo, Shield, Autopilot
-    pub turbo_strength: f32,
+    pub duration: [f32; 3],                  // Turbo, Shield, Autopilot (turbo strength is factor[TurboStrength])
 }
 // `[SlotMods; MAX_CRAFTS]`: cloned with `snapshot_sim`, hashed in `Extensions::hash_into`
 // after the `slots.is_empty()` early return, so `VANILLA_FOLD` cannot move.
@@ -348,10 +374,10 @@ Two bytes-in, one bytes-out, and one commit point.
 | NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `pending`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
 | An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write |
 | The person's craft finishes (or is wrecked or eliminated) | `Race::end_run(result)` calls `race-end` once; its output is **staged** as `pending` together with the medal this race earned, and saved |
-| The player leaves the results for the campaign screens, or presses CONTINUE | **Commit**: `pending` becomes `bytes`, the staged medal is recorded, ordinal += 1 |
+| The player leaves the results for the campaign screens, or presses CONTINUE | **Commit**: `pending` becomes `bytes`, the staged medal is recorded, ordinal += 1, and `offer_pending` is set if `race-end` asked for an offer. Then the choice screen opens, if there is one (section 8.1) |
 | RACE AGAIN on the results page, or RESTART RACE in the pause menu | `pending` and the staged medal are **discarded**; the race restarts from the committed bytes |
 | QUIT RACE or escape **before** the finish | No `race-end`, nothing staged, committed bytes untouched |
-| The game closes or crashes after the finish, before leaving | `pending` was saved with the finish; the next launch commits it (the medal was recorded at the finish, so the pair stays together) |
+| The game closes or crashes after the finish, before leaving | The staged bytes and the staged medal were saved together with the finish, and neither is live yet; the next launch commits both (and sets `offer_pending`), so the pair never splits |
 | A replay rebuild, `--from-png`, a demo, an unofficial run, a split screen | `race-end` is not called, nothing is staged |
 
 **Why stage the medal too.** Today the medal is recorded at the finish
@@ -404,16 +430,17 @@ and where `race_is_unofficial()` is true.
   write on top of itself. Read-only at start keeps `race-start` a pure function of
   (bytes, seed, ordinal, race).
 - *Pass the run state every tick.* The tick state blob already carries what a race
-  needs; the run state enters once, as a copy, and the guest keeps what it wants in
-  its own blob. This is the ADR-0080 `setup.tune` rule applied to a different owner.
+  needs; the run state enters once, as a copy, at `race-start`, and the guest sets its
+  initial tick state from it (section 3, "How the run reaches `tick`"). This is the
+  ADR-0080 `setup.tune` rule applied to a different owner.
 - *A host-typed run state (named integer fields the host understands).* Would let
   the host apply "thrust level 3" itself. Rejected: the host would own a schema the
   mods must fit, and the unit of the brief is "numbers the mod interprets itself".
 
 ## 6. Capability 3: pickup parameters
 
-Per slot, at race start. Three kinds of parameter, from what the engine already
-has.
+Per slot, at race start. Three kinds of parameter (count, duration, strength), from
+what the engine already has.
 
 | Parameter | Weapon | Where it lives today | Range (chosen) | Needs |
 | --- | --- | --- | --- | --- |
@@ -421,8 +448,8 @@ has.
 | `count` | Mine | `weapon_counts.mines`, `1..=MAX_MINES` = 5 | 1 to 5 | Nothing |
 | `count` | Cannon | `Held::cannon_rounds`, armed from the race-wide `<Stats rounds>` | 1 to 32 | A per-ship starting-rounds field |
 | `Duration` | Turbo, Shield, Autopilot | race-wide `WeaponStats::simple` (`<Stats time>`) | 0.25 to 4.0 | A per-ship scale, read where the pickup starts. Editing the shared table would change every craft, the AI's too |
-| `Strength` | Turbo | `Handling::engine.turbo` (per ship) | 0.5 to 2.0 | Same field as `Param::TurboStrength`; one name for it, `set-modifier` |
-| `Strength` | Shield | none: the Shield absorbs all damage for its time | n/a | Breakable armour is the mod's own logic (`hit`, `clear-shield`) |
+| strength | Turbo | `Handling::engine.turbo` (per ship) | 0.5 to 2.0 | Named `Param::TurboStrength` and sent with `set-modifier`; no other weapon has a strength to scale |
+| strength | Shield | none: the Shield absorbs all damage for its time | n/a | Breakable armour is the mod's own logic (`hit`, `clear-shield`) |
 
 **Hard bounds.** More than three rockets or five mines needs a larger volley array
 and mine pool, which are hashed projectile state: an engine change with its own
@@ -458,7 +485,7 @@ shield and the autopilot together or separately.
 race (craft record codes 15 to 46). A campaign that offers shield+autopilot,
 shield+turbo and a triple would need three kinds per mod. *Chosen:* one kind whose
 behaviour the run state selects: the guest reads its recipe from its tick state
-(copied from the run at the first tick) and sends `pickup-look` each tick. *Rejected:*
+(set by `race-start` from the run bytes, section 3) and sends `pickup-look` each tick. *Rejected:*
 more kinds per mod; it changes what `MAX` means and renumbers every craft record
 code a guest may have hard-coded.
 
@@ -479,7 +506,7 @@ id = "long-haul"
 
 [run]
 module = "ext/run.wasm"       # a module the mod lists in [extension.rules]; the only module that sees the run
-state_bytes = 256             # at most 1024; a guest whose oag_state_len disagrees is refused by name
+run_bytes = 256               # the run state's length, at most MAX_RUN_BYTES (1024); the module's tick blob has its own oag_state_len
 new_run = "clear-medals"      # "clear-medals" (default) | "keep-medals"
 choice_screen = "reward"      # optional: an [[extension.screen]] id, opened after a finish that offered
 
@@ -512,10 +539,19 @@ A mod screen (ADR-0080), named by `[run] choice_screen`. The flow:
 1. `race-end` rolls the offers from `seed` and `ordinal` (a pure function; the
    frontend world has no RNG and no determinism, and the roll belongs in sim code)
    and writes them into the run bytes, with `END_OFFER`.
-2. After the results page, the host opens the screen with `open-context.run` set.
-   The screen draws a `choice` or `list` widget from the offers it parses out of the
-   run bytes, and on accept returns `reply.run` with the pick applied, `close: true`.
-3. The host stores it as `pending`, then commits as in section 5.
+2. The player leaves the results page. The host **commits first** (section 5: the
+   staged bytes become the committed run bytes, the medal is recorded), then opens the
+   screen with `open-context.run` set to the committed bytes.
+3. The screen draws a `choice` or `list` widget from the offers it parses out of the
+   run bytes. On accept it returns `reply.run` with the pick applied and `close: true`;
+   the host writes that straight over the committed bytes and clears `offer_pending`.
+   There is no second staging: the pick happens after the commit, so a RACE AGAIN can
+   no longer discard the race that offered it, and a crash before the pick leaves
+   `offer_pending` set.
+
+**Back.** Back writes nothing. `offer_pending` stays set, and the screen re-opens at
+the campaign's next launch. If the maintainer allows skipping (open question 5), Back
+clears the flag and the offers stay in the run bytes for the guest to ignore or reuse.
 
 **Pointer and pad.** The screen is a host-widget screen, so the pad and the pointer
 come from the host widgets (the rule that every screen ships with mouse and touch).
@@ -586,26 +622,46 @@ A campaign "long-haul". The run state is three bytes: engine level, shield level
 and a recipe for the combined pickup. Two offers after each race.
 
 ```rust
-use oag_ext::{prelude::*, run_state};
+// Names are illustrative; the shapes are the signatures above.
+use oag_ext::{blob, prelude::*, run_state};
 
 run_state! { struct Haul { version: u8, engine: u8, shield: u8, recipe: u8, offer: [u8; 2] } }
+blob!      { struct Tick { recipe: u8 } }   // what the race needs from the run
 
 struct LongHaul;
 
+impl Extension for LongHaul {
+    type State = Tick;
+
+    fn tick(obs: &Observation<'_>, state: &mut Tick, reply: &mut Reply<'_>) {
+        for event in obs.events() {
+            if let Event::PickupFire { slot } = event {          // the mod's own pickup was pressed
+                let Some(craft) = obs.craft(slot) else { continue };
+                let _ = reply.give_shield(&craft);
+                if state.recipe > 0 {
+                    let _ = reply.give_autopilot(&craft);        // new, code 42
+                }
+                let _ = reply.clear_pickup(&craft);
+            }
+        }
+    }
+}
+
 impl Run for LongHaul {
-    fn race_start(&mut self, s: &Start, out: &mut StartReply) {
-        let h = Haul::read(s.run());                       // zeroed when the run is new
+    fn race_start(s: &Start<'_>, state: &mut Tick, out: &mut StartReply<'_>) {
+        let h = Haul::read(s.run());                              // zeroed when the run is new
+        state.recipe = h.recipe;                                  // the first tick sees this
         for slot in s.slots().filter(|&sl| s.is_person(sl)) {
             let _ = out.modifier(slot, Param::Thrust, 1.0 + 0.1 * f32::from(h.engine));
             let _ = out.modifier(slot, Param::ShieldMax, 1.0 + 0.25 * f32::from(h.shield));
-            let _ = out.pickup_scale(slot, Weapon::Shield, Aspect::Duration, 1.0 + 0.5 * f32::from(h.recipe));
+            let _ = out.pickup_duration(slot, Weapon::Shield, 1.0 + 0.5 * f32::from(h.recipe));
         }
     }
 
-    fn race_end(&mut self, e: &End, out: &mut RunOut) {
+    fn race_end(e: &End<'_>, _final_tick: &Tick, out: &mut RunOut<'_>) {
         let mut h = Haul::read(e.run());
         if e.result().finished && e.result().tier != 255 {
-            let roll = mix(e.seed(), e.ordinal());          // a pure function of the run's seed
+            let roll = mix(e.seed(), e.ordinal());               // a pure function of the run's seed
             h.offer = [(roll % 3) as u8, ((roll >> 8) % 3) as u8]; // 0 engine, 1 shield, 2 recipe
             let _ = out.write(&h.bytes());
             out.offer();
@@ -615,9 +671,8 @@ impl Run for LongHaul {
 ```
 
 The screen's `event` handler turns accept on offer `n` into `h.engine += 1` (or the
-shield or recipe) and returns `reply.run`. The next `race_start` reads it. A
-`tick` handler on the same module answers `pickup-fire` with `give-shield`, and with
-`give-autopilot` when `recipe > 0`.
+shield or recipe) and returns `reply.run`. The next `race_start` reads it and copies
+the recipe into the tick state, which is how `tick` knows it.
 
 ## 10. Titles
 

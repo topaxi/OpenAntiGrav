@@ -7,12 +7,24 @@ nothing is built. **This ADR stays editable until it is merged into `main`, and
 becomes immutable only then.** Until that merge, a review may change a decision
 here in place instead of superseding it.
 
-**Narrows** three statements without editing them, as
+**Narrows** these statements without editing them, as
 [ADR-0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) narrowed
 [ADR-0066](0066-the-menu-is-the-disc-plus-mods.md):
 
-- the "no replacing a recovered law or a disc table" row of
-  [`wasm-extensions/README.md`](../wasm-extensions/README.md) section 3 (decision 4);
+- **Persistence from the sim world** (decision 1, the central one): ADR-0079
+  decision 6 ("no persistence except a host-mediated blob"), the
+  [`wasm-extensions/README.md`](../wasm-extensions/README.md) section 3 row "No
+  persistence from the sim or HUD world" with its line that the sim guest "never
+  writes" the saved blob, the same page's `race-end` comment "Nothing persists past it
+  in v1", and ADR-0080 decision 7 (a blob reaches a race at `race-start` only, and
+  nothing flows back). A sim `race-end` now produces bytes that persist. Why this
+  stays within the reason for the rule: the record is host-owned, listed and clearable
+  on the MODS page, one per campaign, staged and committed by the host (never written
+  by the guest directly), capped at 1,024 bytes, never read by a second mod, and
+  single-player.
+- the "no replacing a recovered law or a disc table" row of the README's section 3
+  and the same words in ADR-0079 decision 6 (decision 4): a bounded multiplier on the
+  disc's number is not a replacement;
 - the "a disc screen never gains behaviour a mod invented" clause of ADR-0066
   decision 4, ADR-0079 decision 6 and ADR-0080 decision 2 (decision 8);
 - ADR-0080 decision 6, "the only output is one blob" of a screen (decision 7).
@@ -67,9 +79,11 @@ ratings, not computed from handling.
    `simulation = true`, so every race of the campaign is MODDED.
 3. **Two optional guest exports.** `oag_race_start` and `oag_race_end`, with a
    second host-written buffer a guest names by `oag_run`, the pattern of
-   `oag_wants_race` and `oag_track`. `race-start` reads the run state and replies
-   with commands; it cannot write the run. `race-end` reads the result (including
-   the medal tier the host evaluated) and writes the new run bytes. ABI revision 7.
+   `oag_wants_race` and `oag_track`. `race-start` reads the run state, replies with
+   commands and **sets the module's initial tick state** (the only way the run reaches
+   `tick`, which never sees the run bytes); it cannot write the run. `race-end` reads
+   the result (including the medal tier the host evaluated) and the final tick state,
+   and writes the new run bytes. ABI revision 7.
 4. **Modifiers.** At race start the mod may send `set-modifier{slot, param, factor}`
    for a closed list of `Handling` parameters. The host owns each range, scales the
    slot's `Ship::handling` once, and records the applied factors in `Extensions`
@@ -80,15 +94,16 @@ ratings, not computed from handling.
    multiplier on the disc's own number, never a replacement value, and so narrows
    the README's "no replacing a disc table" row without contradicting its reason.
 5. **Pickup parameters.** Per slot, at race start: `count` (rockets per press, mines
-   per drop, cannon rounds), `Duration` (Turbo, Shield, Autopilot) and `Strength`
-   (Turbo, which is `Param::TurboStrength`). Durations and the cannon's rounds are
+   per drop, cannon rounds), duration (Turbo, Shield, Autopilot) and strength (Turbo
+   only, which is `Param::TurboStrength` of decision 4). Durations and the cannon's rounds are
    per-ship fields, never edits to the race-wide weapon tables. A combined pickup is
    a `Weapon::Extension` whose `pickup-fire` reply sends `give-shield`, the new
    `give-autopilot` and `clear-pickup`. One kind per mod stays; the recipe is
    selected from state.
 6. **Stage and commit.** The finish site calls `race-end` once, and its output is
-   staged together with the medal the race earned. It is committed when the player
-   leaves the results for the campaign screens. RACE AGAIN and RESTART RACE discard it
+   staged together with the medal the race earned, both saved at the finish. They are
+   committed when the player leaves the results for the campaign screens, before any
+   choice screen opens. RACE AGAIN and RESTART RACE discard it
    and restart from the committed bytes. Quitting before the finish stages nothing.
    Replay rebuilds, demos, unofficial runs and split screens never call `race-end`.
 7. **A choice screen** is an ADR-0080 screen named by `[run] choice_screen`, opened by
