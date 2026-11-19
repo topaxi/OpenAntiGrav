@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [omega]
-updated: 2026-11-16
-summary: "2048-mode pairs: panelmap1 sheen gate wired; left: plain crowd sprites white, shadow-light factor, other families reading texel.a as red"
+updated: 2026-11-19
+summary: "2048-mode pairs: Omega alpha lane wired (crowd, foliage); left: plain crowd lights, Fsl, Metro Park terrain blend, Vita lanes"
 difficulty: medium (40)
 ---
 
@@ -15,16 +15,14 @@ a correct detail fix can raise it).
 
 ## Open
 
-1. **The plain crowd sprites still draw white** (the `_shadow` materials are wired, branch `omega-crowd-shadowed`:
-   `mesh::rcs::psp2::crowd`, glow-table program 16; Sol +117.6 to +103.3, Queens Mall +53.4 to +40.6, Arena +62 to +15,
-   method and the `_shadow` sprites' own +160 to +58 in `omega-status.md`, "The crowd's law"). `crowd_sprite_diffuse_normal_alpha`
-   and `crowd_diffuse_normal` author no `Shadowed` and their programs declare none, yet they are most of the crowd's
-   pixels (Sol 46,650) and the original draws them dark and coloured. Giving the plain sprite the `_shadow` constants
-   (a stand-in, not shipped) takes Sol to +39.7, Queens Mall to +6.4, Subway to -13.2, so the missing term is of that
-   size. Find it: the `constantAmbientColour` and `liveLighting0diffuse` the original binds for these draws (a per-draw
-   or per-material light set, the `Lighting.*` keys), or the normal-map `N.L` of a sprite whose tangent frame is built
-   in the vertex program (`0x3bc4`). `Ambient` (the term inside the bracket) is drawn for the `_shadow` materials.
-   2048: **checked, differs** (Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`, no `Shadowed`).
+1. ~~**The plain crowd sprites still draw white.**~~ **Mostly closed** (`omega-road-programs`, 2026-11-19): the cause was the
+   alpha lane, not a light term. `mesh::rcs::psp2` built every PS4 material's slot word with channel 0 (red) as the
+   alpha; it now carries `slots::DEFAULT` (lane 3), Vita only for the alpha-lit families
+   ([`omega-status.md`](../../docs/formats/omega-status.md), "The alpha lane"). Crowd bias: Queens Mall +48.5 to +4.7,
+   Sol +115.7 to +38.2, Metro Park +14.4 to -10.8; Metro Park also gains its trees, shrubs and flags, and the red slab
+   on the HD-mode circuits goes. **Left:** Sol's +38.2 and Empire Climb's -37.2: the plain sprite program's light
+   inputs (`constantAmbientColour` and `liveLighting0diffuse` as bound for these draws, the normal-map `N.L`), still
+   unread. 2048: **checked, differs** for the crowd (Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`).
 2. **`road_alphaspec_normal_emissive_panelmap1` (and `_mask`): wired except the lobe's colour** (2026-11-16,
    `panelmap-wire`; [panel-displacement.md](../../docs/ghidra/functions/ps4-omega-eu/panel-displacement.md),
    "Implemented where", has the numbers). March, sky-cube sheen and emissive draw; road at 16x: Sol `LF` 32.7 to
@@ -49,17 +47,13 @@ a correct detail fix can raise it).
      Mall's sheen-off road is 10 to 35 % brighter in the original (live `novaScaleBiasPower` `(2, 0, 2.5)`; Sol's is
      `(1, 0, 1)`): compare with what ours binds there first. `scripts/wipeout-pc-road-sheen-live.py --pre
      ReflectivityAmount=0` gives the original's base at the pair's pose (about 4 minutes a boot).
-   - **Wider, open (read statically, not measured):** `mesh::rcs::psp2` builds the slot word as 0 or
-     `SECOND_IS_LIGHTMAP` for **every** Vita and PS4 material, lightmapped or not (`slots::DEFAULT`, lane 3, is
-     added only on the HD path in `skin::roles`), so wherever `shade.wesl` reads `texel.a` on these titles it reads
-     the first texture's **red**. Readers, by line in `shade.wesl`: `specular_mask` for the generic specular
-     (`texel.a`, the `*alphaspec*` and `fc16_phong_AlphaSpec*` families), the snow term, the hull's probe
-     reflection (`texel.a * row_tint.x`), the glass pane's cover and clear (`pane_cover`, `reflect_clear`), and the
-     output alpha (`texel.a * in.colour.a`, which matters on a blended draw). `LIT_ALPHA` materials
-     (`lit_alpha::admits`) use `texel.a` as their grey on purpose and need their own check. 2048's own road
-     (`fc16_phong_AlphaSpec_Normal_Emissive`) goes through the same slot word: whether its program gates by the
-     diffuse alpha is unread (GXP). Next: per family, read the program's gate lane and then give those materials
-     an alpha lane in `psp2`, not before.
+   - ~~**Wider, open: other families reading `texel.a` as red.**~~ **Omega: wired** (`omega-road-programs`, 2026-11-19, the
+     alpha lane above): every PS4 material reads lane 3, so the generic specular mask, the snow term, the hull's probe
+     reflection, the glass pane's cover and clear and the output alpha read the diffuse alpha. `LIT_ALPHA` materials
+     read it on both titles. **Left:** Vita's other families (2048's GXP programs: which gate by the diffuse alpha is
+     unread; lane 3 everywhere moved `moa-therma` 32.55 to 34.23 through the hull's reflection and the rest by
+     under 0.5), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
+     Climb did not move (47.00, 45.11), so their error is not this.
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
      on a pose that looks down at the road.
@@ -84,6 +78,13 @@ a correct detail fix can raise it).
 
 ## Next Steps
 
-1. Item 1: read what lights the plain crowd sprite (half a day, RE: one `Shdr` is read, the inputs are not).
-2. Item 2's shadow-light factor on the prelit term (half a day: live constants are on the page), then the
-   per-family census of programs that gate by the diffuse alpha ("Wider, open").
+1. Metro Park's terrain (new, `omega-road-programs`): `grassmudrock_blend_diffuse_normal_conditional` (about 100,000
+   triangles over eight submesh groups, ten textures: grass, gravel, rock, mud, grass-transition diffuse and their
+   normals, program `Cg_ConditionalBlender1NormalMap`) draws grass in ours where the original draws brown mud and
+   dirt in the lower left, the largest scenery area of that pair. Nothing in the tree reads the material. Read the
+   program's blend weights (vertex colour or a mask), then wire (half a day RE, then a day to wire).
+2. Item 1's remainder: the plain crowd program's light inputs (half a day, RE).
+3. Item 2's shadow-light factor on the prelit term (`Fsl`): it reaches Queens Mall among the four worst pairs only,
+   and nothing in our code carries a shadow-light direction (`SL` was read live), so the first step is its source in
+   the lighting data; Queens Mall's road bias is already positive after the crowd fix (+5.7), so the factor would
+   brighten a road that is not dark (half a day, RE).
