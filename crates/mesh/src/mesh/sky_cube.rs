@@ -201,6 +201,7 @@ pub fn build(
         textures,
         tint_in_texel_domain(tint, store),
         None,
+        elevation_sine,
         rotation_degrees,
         mask,
     ))
@@ -227,7 +228,105 @@ pub fn own(
         gradient.is_some() || faces.iter().all(Option::is_some),
         "{label}: a face with no texture needs the gradient"
     );
-    cube(label, faces.into(), [1.0; 3], gradient, 0.0, 0.0)
+    cube(
+        label,
+        faces.into(),
+        [1.0; 3],
+        gradient,
+        elevation_sine,
+        0.0,
+        0.0,
+    )
+}
+
+/// A track file's gradient weight: the sine of the direction's angle above eye
+/// level, the horizon's colour from eye level down.
+fn elevation_sine(unit: [f32; 3]) -> f32 {
+    let length = (unit[0] * unit[0] + unit[1] * unit[1] + unit[2] * unit[2]).sqrt();
+    (unit[1] / length).max(0.0)
+}
+
+/// The label [`zone_dome`] gives its model, which is how a scene tells the
+/// dome from a cubemap sky.
+pub const ZONE_DOME_LABEL: &str = "HD Zone sky dome (Sky_DrawGradientDome)";
+
+/// The height of the dome's gradient band over its radius: the band runs from
+/// the base ring at eye level up to `0.75 * radius`, where a flat cap carries
+/// the zenith colour alone. The literal at `Sky_DrawGradientDome`'s TOC slot
+/// `0x008bf4b8` (`docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`, "The
+/// gradient dome").
+pub const ZONE_DOME_BAND: f32 = 0.75;
+
+/// Wipeout HD's Zone sky: `Sky_DrawGradientDome` (`0x005ebd58`) as seen from
+/// its centre, on the same camera-centred cube.
+///
+/// The original sweeps one 18-segment ring of radius `r` and builds, per
+/// segment, a vertical quad from the ring (the stage's `Sky horizon colour`)
+/// up to height `0.75 r` (its `Sky zenith colour`), a cap triangle in the
+/// zenith colour above it, and the same shapes downward in the horizon colour
+/// alone. Seen from the centre, a direction at elevation `e` meets the band at
+/// height `r * tan(e)`, so its zenith weight is `tan(e) / 0.75`, saturated at
+/// the cap, and zero at and below eye level ([`zone_dome_weight`]). The
+/// eighteen-gon is drawn as a circle: its walls sit between `cos(10°)` and `1`
+/// of the radius, which moves a weight by at most 1.5 %.
+///
+/// The colours are not baked: each vertex keeps its weight and
+/// [`shade_zone_dome`] writes the stage's colours into it per frame, as the
+/// original hands the draw two packed colours every frame. The model is built
+/// white.
+#[must_use]
+pub fn zone_dome() -> Model {
+    cube(
+        ZONE_DOME_LABEL,
+        Vec::new(),
+        [1.0; 3],
+        Some(([1.0; 3], [1.0; 3])),
+        zone_dome_weight,
+        0.0,
+        0.0,
+    )
+}
+
+/// The zenith colour's share in direction `unit` on [`zone_dome`]: `tan(e) /`
+/// [`ZONE_DOME_BAND`] above eye level, saturated at one, and zero below.
+#[must_use]
+pub fn zone_dome_weight(unit: [f32; 3]) -> f32 {
+    let across = (unit[0] * unit[0] + unit[2] * unit[2]).sqrt();
+    if unit[1] <= 0.0 {
+        return 0.0;
+    }
+    if across == 0.0 {
+        return 1.0;
+    }
+    (unit[1] / (ZONE_DOME_BAND * across)).min(1.0)
+}
+
+/// [`zone_dome`]'s vertices with this frame's `horizon` and `zenith` written in.
+///
+/// What the original's draw receives, in its order: each colour as the byte
+/// `fctiwz(255 * c)` packs (truncated toward zero, `0x003ae11c`), interpolated
+/// by the GPU between the vertices as linear light, and encoded by the target
+/// on write. Here the per-vertex blend is done on the bytes and the result
+/// encoded with the scene's own curve, because the sky's shading path
+/// multiplies the encoded value (see `tint_in_texel_domain`).
+pub fn shade_zone_dome(
+    vertices: &[GpuVertex],
+    horizon: [f32; 3],
+    zenith: [f32; 3],
+    store: SceneStore,
+    out: &mut Vec<GpuVertex>,
+) {
+    let byte = |c: f32| (c.clamp(0.0, 1.0) * 255.0).trunc() / 255.0;
+    let (horizon, zenith) = (horizon.map(byte), zenith.map(byte));
+    out.clear();
+    out.extend(vertices.iter().map(|v| {
+        let k = v.texcoord2[0];
+        let linear: [f32; 3] = std::array::from_fn(|c| horizon[c] + (zenith[c] - horizon[c]) * k);
+        let mut v = *v;
+        let [r, g, b] = tint_in_texel_domain(linear, store);
+        v.colour = [r, g, b, 1.0];
+        v
+    }));
 }
 
 /// The cube itself: one quad per face where `textures` has the face's picture,
@@ -238,19 +337,18 @@ fn cube(
     textures: super::TextureSlots,
     colour: [f32; 3],
     gradient: Option<([f32; 3], [f32; 3])>,
+    weight: fn([f32; 3]) -> f32,
     rotation_degrees: f32,
     mask: f32,
 ) -> Model {
     let (sin, cos) = rotation_degrees.to_radians().sin_cos();
     let turn = |p: [f32; 3]| [p[0] * cos + p[2] * sin, p[1], p[2] * cos - p[0] * sin];
-    // The gradient by elevation (the sine of the view direction's angle above
-    // eye level): the zenith colour overhead, the horizon's from eye level down.
-    // By direction, not by height on the cube, or the cube's corners show as
-    // creases in the picture.
+    // The gradient by direction, `weight` of the zenith colour against the
+    // horizon's. By direction, not by height on the cube, or the cube's corners
+    // show as creases in the picture.
     let shade = |unit: [f32; 3]| -> [f32; 3] {
         let (zenith, horizon) = gradient.unwrap_or(([1.0; 3], [1.0; 3]));
-        let length = (unit[0] * unit[0] + unit[1] * unit[1] + unit[2] * unit[2]).sqrt();
-        let k = (unit[1] / length).max(0.0);
+        let k = weight(unit);
         std::array::from_fn(|c| horizon[c] * (1.0 - k) + zenith[c] * k)
     };
 
@@ -293,7 +391,9 @@ fn cube(
                     slots: crate::mesh::slots::DEFAULT,
                     specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
                     glow: mask,
-                    texcoord2: [0.0, 0.0],
+                    // A gradient vertex keeps its zenith weight, which is what
+                    // [`shade_zone_dome`] recolours from.
+                    texcoord2: [if textured { 0.0 } else { weight(unit) }, 0.0],
                     tangent: 0,
                     depth_bias: 0.0,
                 });
@@ -409,6 +509,45 @@ mod tests {
             let (_, _, t_axis) = FACES[face];
             assert_eq!(t_axis, [0.0, -1.0, 0.0], "face {face}");
         }
+    }
+
+    /// HD's Zone dome, seen from its centre: nothing of the zenith at or below
+    /// eye level, `tan(e) / 0.75` on the band, the zenith alone on the cap.
+    /// Dropping the band height or the horizon floor fails here.
+    #[test]
+    fn the_zone_dome_weight_is_the_band_law() {
+        assert_eq!(zone_dome_weight([1.0, 0.0, 0.0]), 0.0);
+        assert_eq!(zone_dome_weight([0.0, -0.3, 1.0]), 0.0);
+        assert!((zone_dome_weight([0.0, 0.375, 1.0]) - 0.5).abs() < 1e-6);
+        assert_eq!(zone_dome_weight([1.0, 1.0, 0.0]), 1.0);
+        assert_eq!(zone_dome_weight([0.0, 1.0, 0.0]), 1.0);
+    }
+
+    /// The dome's colours are the bytes `fctiwz` packs (truncated, not
+    /// rounded), blended by each vertex's weight and encoded by the scene's
+    /// curve; the model carries its weight, not a baked colour.
+    #[test]
+    fn the_zone_dome_recolours_from_truncated_bytes() {
+        let dome = zone_dome();
+        assert_eq!(dome.label, ZONE_DOME_LABEL);
+        assert!(dome.textures.iter().all(Option::is_none));
+        let store = SceneStore::Encoded;
+        let mut out = Vec::new();
+        // 127.5 / 255 truncates to 127, where rounding would give 128.
+        let horizon = [127.5 / 255.0, 0.0, 1.0];
+        let zenith = [0.0, 1.0, 0.0];
+        shade_zone_dome(&dome.vertices, horizon, zenith, store, &mut out);
+        assert_eq!(out.len(), dome.vertices.len());
+        let mut checked = 0;
+        for (v, shaded) in dome.vertices.iter().zip(&out) {
+            let k = v.texcoord2[0];
+            let want = [127.0 / 255.0 * (1.0 - k), k, 1.0 - k];
+            for c in 0..3 {
+                assert!((shaded.colour[c] - store.texel_encode(want[c])).abs() < 1e-6);
+            }
+            checked += usize::from(k > 0.0 && k < 1.0);
+        }
+        assert!(checked > 0, "some vertices sit on the band");
     }
 
     /// A track's own sky: a gradient face is drawn untextured in two bands,

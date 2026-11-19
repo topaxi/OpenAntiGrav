@@ -27,13 +27,13 @@
 //! maintainer's own observation that a Zone sky reads as solid colours or
 //! gradients.
 //!
-//! # What is deliberately not asserted
+//! # The dome over it
 //!
-//! **Nothing about `Sky horizon colour` / `Sky zenith colour`.** Those two keys
-//! are cross-faded per Zone stage and reach a single-caller draw the same gate
-//! byte selects, but that draw's geometry has not been read, so this port draws
-//! no gradient at all and asserts nothing about one. See the same page's
-//! `## What is not established`.
+//! The same gate draws `Sky_DrawGradientDome` in the stage's `Sky horizon
+//! colour` and `Sky zenith colour`, and the original's Zone frame shows that
+//! dome and no cubemap texel, so the port draws the dome as the sky and keeps
+//! the cubemap as the reflection map only (`zone-sky.md`, "The dome is what
+//! the frame shows").
 
 use std::path::PathBuf;
 
@@ -123,8 +123,9 @@ fn a_zone_race_swaps_the_circuits_sky_for_the_zone_one() {
     assert!(
         zone.report
             .iter()
-            .any(|line| line.contains("the Zone sky, drawn in place of the circuit's own")),
-        "the load report should say which sky it drew"
+            .any(|line| line
+                .contains("/data/tex/zonesky.gtf: loaded as the Zone sky's reflection map")),
+        "the load report should say the Zone cubemap was read, and what for"
     );
     assert!(
         single_race
@@ -134,65 +135,83 @@ fn a_zone_race_swaps_the_circuits_sky_for_the_zone_one() {
         "a non-Zone race still reports the circuit's own sky"
     );
 
-    let (zone_width, zone_height, zone_faces) = faces(zone_sky);
-    let (circuit_width, circuit_height, circuit_faces) = faces(circuit_sky);
-
-    // **64x64 against 2048x2048.** Both numbers are the files' own headers,
-    // and the ratio is the measured form of "a Zone sky reads as solid colours
-    // or gradients": 1,024 times fewer texels a face, 12,288 bytes of DXT1
-    // against 12,582,912. **This pair of assertions is the real
-    // discriminator** - no `sky.gtf` on the disc is 64x64, so a load that
-    // failed to swap could not satisfy the first one.
-    assert_eq!(
-        (zone_width, zone_height),
-        (64, 64),
-        "ZoneSky.gtf is a 64x64 cubemap"
+    // The drawn sky is the dome, untextured, and the cubemap is its reflection.
+    assert_eq!(zone_sky.label, oag_mesh::mesh::sky_cube::ZONE_DOME_LABEL);
+    assert!(zone_sky.textures.iter().all(Option::is_none));
+    let zone_map = zone_sky
+        .sky_reflection
+        .as_ref()
+        .expect("the Zone cubemap is the dome's reflection map");
+    let circuit_map = oag_mesh::mesh::sky_paraboloid::from_sky(circuit_sky)
+        .expect("the circuit's cubemap makes a reflection map");
+    assert_ne!(
+        zone_map.as_slice(),
+        circuit_map.as_slice(),
+        "the Zone reflection must be ZoneSky.gtf's, not the circuit's"
     );
+
+    // **64x64 against 2048x2048**: the circuit's own sky still draws its file.
+    let (circuit_width, circuit_height, _) = faces(circuit_sky);
     assert_eq!(
         (circuit_width, circuit_height),
         (2048, 2048),
         "01_vineta_k's sky.gtf is a 2048x2048 cubemap"
     );
-    assert_ne!(
-        zone_faces, circuit_faces,
-        "the Zone sky must not be the circuit's"
-    );
 }
 
-/// **The Zone sky is a picture, not a flat fill** - which is worth asserting
-/// separately, because "reads as solid colours" is exactly the description a
-/// silently-blank texture would also earn.
-///
-/// Five of the six faces carry hundreds of distinct colours off the disc. The
-/// sixth - the nadir - genuinely is near-flat, so this asserts a majority
-/// rather than all six, and it asserts the faces are not all the *same* face.
+/// **The dome draws the disc's own stage colours by the read band law.**
+/// On Vineta K's Zone start (stage 1, Sub Venom) a direction at eye level
+/// takes `Sky horizon colour` alone and one overhead `Sky zenith colour`
+/// alone, as the bytes the original packs, encoded by the scene's curve.
+/// Dropping the dome, the stage's colours or the byte truncation fails here.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn the_zone_sky_carries_real_texels_on_five_of_its_six_faces() {
+fn the_zone_dome_takes_the_stages_horizon_and_zenith_colours() {
     let Some(zone) = load(oag_race::Mode::Zone) else {
         return;
     };
     let sky = zone.sky_model.as_ref().expect("the Zone sky loads");
-    let (_, _, pixels) = faces(sky);
-
-    let varied = pixels
-        .iter()
-        .filter(|face| {
-            let mut colours: Vec<[u8; 4]> = face.as_chunks::<4>().0.to_vec();
-            colours.sort_unstable();
-            colours.dedup();
-            colours.len() > 100
-        })
-        .count();
-    assert!(
-        varied >= 5,
-        "five of six faces should carry real art, saw {varied}"
-    );
-
-    let mut distinct = pixels.clone();
-    distinct.sort_unstable();
-    distinct.dedup();
-    assert_eq!(distinct.len(), 6, "no two faces of the Zone sky are equal");
+    let palette = zone
+        .zone_grade
+        .as_ref()
+        .expect("a Zone race on HD carries its grade")
+        .palette();
+    let horizon = palette
+        .sky_horizon_colour
+        .expect("Sub Venom authors a horizon");
+    let zenith = palette
+        .sky_zenith_colour
+        .expect("Sub Venom authors a zenith");
+    assert_ne!(horizon, zenith);
+    let store = oag_gpu::formats::SceneStore::Encoded;
+    let mut out = Vec::new();
+    oag_mesh::mesh::sky_cube::shade_zone_dome(&sky.vertices, horizon, zenith, store, &mut out);
+    let byte = |c: f32| store.texel_encode((c * 255.0).trunc() / 255.0);
+    let mut eye_level = 0;
+    let mut overhead = 0;
+    for (v, shaded) in sky.vertices.iter().zip(&out) {
+        let [x, y, z] = v.position;
+        let across = (x * x + z * z).sqrt();
+        let want = if y <= 0.0 {
+            eye_level += 1;
+            horizon
+        } else if y >= 0.75 * across {
+            overhead += 1;
+            zenith
+        } else {
+            continue;
+        };
+        for c in 0..3 {
+            assert!(
+                (shaded.colour[c] - byte(want[c])).abs() < 1e-6,
+                "vertex at {:?}: channel {c} {} against {}",
+                v.position,
+                shaded.colour[c],
+                byte(want[c])
+            );
+        }
+    }
+    assert!(eye_level > 0 && overhead > 0);
 }
 
 /// **Outside HD, nothing swaps.** Pulse ships no located Zone sky, so a Zone
