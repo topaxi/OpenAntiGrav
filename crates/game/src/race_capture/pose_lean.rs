@@ -57,6 +57,18 @@ impl PoseLean {
     }
 }
 
+/// Puts the player's lean (`--pose-lean`) on ship 0 and each opponent's (`--field-from`, slots 1..) on its own.
+pub fn apply_all(player: Option<PoseLean>, field: &[Option<PoseLean>], race: &mut Race) {
+    if let Some(lean) = player {
+        lean.apply(race);
+    }
+    for (slot, lean) in field.iter().enumerate() {
+        if let Some(lean) = lean {
+            lean.apply_to(race, slot + 1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

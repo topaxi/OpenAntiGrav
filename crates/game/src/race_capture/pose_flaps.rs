@@ -42,6 +42,13 @@ impl PoseFlaps {
     }
 }
 
+/// Puts `flaps`, when `--pose-flaps` read some, on ship 0.
+pub fn apply(flaps: Option<PoseFlaps>, race: &mut Race) {
+    if let Some(flaps) = flaps {
+        flaps.apply(race);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
