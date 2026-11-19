@@ -2035,6 +2035,19 @@ test that would separate a doubled alpha from a different geometry was not run).
 and ours' `OAG_DRAW_DUMP` rows for the same texture; compare the strip's vertex positions and colours. A Talon's Junction grid state made on this host is
 `data/saves/pulse-psp/time-trial-talons-venom-grid-lane-pairs.ppst` (not a repository file).
 
+**`basilico-black`: the laser's difference is its lighting, named and fixed (2026-11-19, `pulse-basilico`; the pair is `pulse-psp/basilico-black`, not `pulse-psp-race/`).**
+The grid state is on this host, so the "Needed" above was done: the state run on to the pair's clock (15.4487 s, bit for bit), one `psp-ge-dump.py dump` per boot (two
+boots, the same lighting words in both), the strip's census row (`texsize0` `0x306`, chunk 4492) and ours' `OAG_DRAW_DUMP` rows for the same texture. **The strip's
+geometry, UVs and texture agree; its colour does not.** The original's strip has no vertex colour and is drawn under a lighting list replayed just before it (the
+circuit's rig, which sums to white on this strip); ours lit it with the stand-in at about 0.56 of the texel. Cause, confidence 85, with the register values and the fix in
+`docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "The start laser is lit by the rig too". Replaying the dump with the bloom dropped
+(`psp-ge-replay.py --nop-after 4903`) and with the strip's PRIM also dropped, the strip's own pre-bloom contribution at `x` 190 reads (35, 24, 44), (133, 123, 140),
+(150, 144, 154), (58, 45, 68), (6, 4, 7) in rows 149 to 153, peak 0.86 of 0.686 x 255: two near-full rows and shoulders, which is the texture's white rows 4 and 5 and its 0.45 rows
+3 and 6. After the fix ours' core rows 149 to 152 are 255 in all three channels where the original's are (231, 228, 255), 255, 255, (246, 239, 255). Re-rendered on copies
+(`rerender` on copies in scratch, binary of this branch; the 29 Pulse PSP scenery, Zone and race pairs): `basilico-black` 5.08 to 4.38, `basilico-white` 4.30 to 3.50, the laser
+band's mean absolute error 18.6 to 9.0, every other pair within 0.01. Not reached: the region-paste ceiling 4.03 (ours is 4.38); the rest of the band is the purple tint to the strip's left, which the original's
+palette carries, and the bloom's halo.
+
 **Reaching Basilico on a fresh PPSSPP profile did not work in bounded effort.** `psp-drive.py menu --unlock` sets the dev-unlock byte but the first attempt then lands in
 `MPMainMenu`; a second plain `menu` runs. `--track-down N` is relative to the profile's last selection, not to Talon's Junction (`--track-down 1` landed at
 (-404.2, 4.0, -11.6), `--track-down 8` after that at Metropia White), so the circuit is chosen by reading the start position back.

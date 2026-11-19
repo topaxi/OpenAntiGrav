@@ -34,10 +34,11 @@
 //!   the craft's own spline parameter. A draw with no scale reads `255`, about
 //!   2 % under the bare colours, which is what a craft over Talon's open road
 //!   reads live (`250` or `251`).
-//! - **Only a craft's hull takes it.** 16 of 113 lit-branch models carried a
+//! - **A craft's hull and the start laser take it.** 16 of 113 lit-branch models carried a
 //!   light list live; the other 97 were never rebuilt, so the GE drew them
-//!   unlit. Which models those are is not mapped, so everything but the hull
-//!   keeps the stand-in rig.
+//!   unlit. Which models those are is not mapped beyond the hull and the start laser's
+//!   two textures ([`mark_rig_vertices`], `docs/ghidra/functions/psp-pulse-usa/scene-light.md`,
+//!   "The start laser"), so everything else keeps the stand-in rig.
 //! - The slots the directionals leave are the circuit's `wopoint`/`wospot` lights,
 //!   chosen per craft: see [`super::HullPointLights`]. They reach the grid hull on Tech
 //!   de Ra, The Amphiseum and Fort Gale, and none does on Talon's Junction.
@@ -62,6 +63,17 @@ pub struct HullLights {
 }
 
 impl HullLights {
+    /// The `.w` of [`Self::ambient`] in the track pass: the rig is read by
+    /// the vertices marked [`Self::TRACK_LIT`] alone (`1.0` is the craft's scene,
+    /// where every lit vertex takes it).
+    pub const TRACK_ONLY: f32 = 2.0;
+
+    /// A track vertex's `lit` for a model the original rebuilt a GE light list
+    /// for (`docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "The start
+    /// laser"). `mesh.wesl` lights it with this rig and hands the fragment
+    /// stage the `lit` of `1.0`.
+    pub const TRACK_LIT: f32 = 2.0;
+
     /// No rig: every title but Pulse and Pure on the PSP, and a circuit that authors
     /// no light at all.
     pub const OFF: Self = Self {
@@ -121,6 +133,41 @@ impl HullLights {
         }
         Some(out)
     }
+}
+
+/// Marks the colourless vertices of every draw in `model` whose diffuse texture is named
+/// in `labels` as lit by the circuit's GE rig ([`HullLights::TRACK_LIT`]), and returns how
+/// many it marked. A vertex with a colour is already lit and keeps it.
+///
+/// The original rebuilds a GE light list for some models only; `labels` names the textures
+/// of the ones measured to be among them, so every other lit-branch track model keeps the
+/// stand-in.
+pub fn mark_rig_vertices(model: &mut crate::mesh::Model, labels: &[&str]) -> usize {
+    let mut marked = 0;
+    let named = |draw: &crate::mesh::DrawCall| {
+        draw.texture
+            .and_then(|t| model.textures.get(t))
+            .and_then(Option::as_ref)
+            .is_some_and(|t| labels.iter().any(|l| t.label.eq_ignore_ascii_case(l)))
+    };
+    let ranges: Vec<std::ops::Range<u32>> = model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .filter(|draw| named(draw))
+        .map(|draw| draw.range.clone())
+        .collect();
+    for range in ranges {
+        for at in range {
+            let vertex = &mut model.vertices[model.indices[at as usize] as usize];
+            if vertex.lit == 1.0 {
+                vertex.lit = HullLights::TRACK_LIT;
+                marked += 1;
+            }
+        }
+    }
+    marked
 }
 
 /// One colour channel the way `SceneLight_BuildLightingList` packs it:

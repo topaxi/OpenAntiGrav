@@ -465,8 +465,9 @@ impl Scene {
             fog: fog
                 .with_texture_detail(race.texture_detail())
                 .with_wet(race.wet_road()),
-            // Pulse's hull lights reach the craft alone - see `ship_scene`.
-            light: light.without_hull(),
+            // Pulse's hull lights reach the craft (see `ship_scene`) and, in this scene,
+            // the track vertices a loader marked as lit by the circuit's rig alone.
+            light: light.for_track(),
             // The flame surface's scroll clock - `time`, engine parameter slot
             // 0 on the original. The same `seconds` the texture and node
             // animation ride, so `--anim-seconds` pins all three at once and a
