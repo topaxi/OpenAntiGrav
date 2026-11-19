@@ -52,7 +52,9 @@ mod tests {
             ("yes", Download::Yes),
             ("never", Download::Never),
         ] {
-            let ffmpeg = read(&format!("[ffmpeg]\ndownload = \"{word}\"\nuse_pinned = true\n"));
+            let ffmpeg = read(&format!(
+                "[ffmpeg]\ndownload = \"{word}\"\nuse_pinned = true\n"
+            ));
             assert_eq!(ffmpeg.download, answer);
             assert!(ffmpeg.use_pinned);
             let settings = crate::settings::Settings {

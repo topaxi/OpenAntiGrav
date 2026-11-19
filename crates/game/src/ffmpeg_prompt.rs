@@ -6,11 +6,7 @@
 use oag_ui_screens::prompt::ConfirmLabels;
 
 /// The status line for a download at `done` of `total` bytes, in the words `say` returns.
-pub(crate) fn status_text(
-    done: u64,
-    total: u64,
-    say: impl Fn(&str, &str) -> String,
-) -> String {
+pub(crate) fn status_text(done: u64, total: u64, say: impl Fn(&str, &str) -> String) -> String {
     if total > 0 && done >= total {
         return say("OAG_FFMPEG_UNPACKING", "UNPACKING FFMPEG...");
     }

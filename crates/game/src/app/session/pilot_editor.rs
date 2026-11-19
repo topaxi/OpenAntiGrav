@@ -799,9 +799,11 @@ impl Session {
                 let prompt = stage.prompt.take()?;
                 // Declining the offer to rejoin is an answer, not a dismissal: the record goes.
                 // So is declining the ffmpeg download: it is not asked again.
-                matches!(prompt.purpose, Purpose::RejoinRace | Purpose::FetchFfmpeg).then(|| Finished {
-                    purpose: prompt.purpose,
-                    text: DECLINED.to_string(),
+                matches!(prompt.purpose, Purpose::RejoinRace | Purpose::FetchFfmpeg).then(|| {
+                    Finished {
+                        purpose: prompt.purpose,
+                        text: DECLINED.to_string(),
+                    }
                 })
             }
             Outcome::Accepted => {

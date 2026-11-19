@@ -9,7 +9,6 @@ rust-version.workspace = true
 
 [dependencies]
 log.workspace = true
-anyhow.workspace = true
 
 # Fetching a pinned build. Not on wasm (no process to run) or Android (no
 # executable may be started from app storage), where `Pin::current` is `None`

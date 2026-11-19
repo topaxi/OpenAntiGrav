@@ -60,9 +60,7 @@ impl Session {
                 self.ffmpeg.fetch = None;
                 match result {
                     Some(Ok(Ok(dir))) => info!("ffmpeg installed in {}", dir.display()),
-                    Some(Ok(Err(why)))
-                        if why.downcast_ref::<oag_ffmpeg::Cancelled>().is_some() =>
-                    {
+                    Some(Ok(Err(why))) if why.downcast_ref::<oag_ffmpeg::Cancelled>().is_some() => {
                         info!("the ffmpeg download was cancelled");
                     }
                     Some(Ok(Err(why))) => warn!(
@@ -110,10 +108,7 @@ impl Session {
         };
         let labels = prompt_labels(pin.megabytes(), |id, english| self.say(id, english));
         if let Stage::Menu(stage) = &mut self.stage {
-            stage.prompt = Some(Prompt::asking(
-                Purpose::FetchFfmpeg,
-                Confirm::new(labels),
-            ));
+            stage.prompt = Some(Prompt::asking(Purpose::FetchFfmpeg, Confirm::new(labels)));
         }
     }
 

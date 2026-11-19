@@ -63,6 +63,8 @@ pub use oag_gameplay::input;
 /// is a device concern, and the front end is one of its consumers rather than
 /// its owner.
 pub use oag_input::keys;
+mod ffmpeg_cli;
+mod ffmpeg_prompt;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod identity;
 pub mod lan_list;
@@ -82,8 +84,6 @@ pub mod official;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod online;
 pub mod online_screen;
-mod ffmpeg_cli;
-mod ffmpeg_prompt;
 pub mod prefetch;
 pub mod preview;
 pub mod profile;

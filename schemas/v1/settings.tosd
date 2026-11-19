@@ -549,6 +549,18 @@ type = "table"
 type = "boolean"
 optional = true
 
+# [ffmpeg]: whether the game may fetch the ffmpeg it shells out to.
+[types.ffmpeg]
+type = "table"
+
+[types.ffmpeg.download]
+type = "string"
+optional = true
+
+[types.ffmpeg.use_pinned]
+type = "boolean"
+optional = true
+
 # [dev]: developer switches, read in debug builds only.
 [types.dev]
 type = "table"
@@ -618,6 +630,10 @@ optional = true
 
 [elements.replay]
 type = "types.replay"
+optional = true
+
+[elements.ffmpeg]
+type = "types.ffmpeg"
 optional = true
 
 [elements.mod_settings]

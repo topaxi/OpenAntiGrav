@@ -66,6 +66,7 @@ mod join;
 #[cfg(not(target_arch = "wasm32"))]
 mod lan;
 // The browser build takes the module named below instead (`lan_web.rs`, `online_web.rs`): a different file under the same module name, which only `#[path]` expresses.
+mod ffmpeg;
 #[cfg(target_arch = "wasm32")]
 #[path = "session/lan_web.rs"]
 mod lan;
@@ -80,7 +81,6 @@ pub(crate) mod photo_meta;
 mod photo_rewind;
 mod pilot_editor;
 mod placeholder;
-mod ffmpeg;
 mod player_name;
 mod pointer;
 mod pure_chain;

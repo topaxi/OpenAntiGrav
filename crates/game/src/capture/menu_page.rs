@@ -797,13 +797,13 @@ fn prompt_draws(
         }
         // The offer to download `ffmpeg` (`session::ffmpeg`), and the status line over the
         // menus while it runs: the same text functions the session calls.
-        "ffmpeg" => Ok(oag_ui_screens::prompt::Confirm::new(
-            crate::ffmpeg_prompt::prompt_labels(
+        "ffmpeg" => Ok(
+            oag_ui_screens::prompt::Confirm::new(crate::ffmpeg_prompt::prompt_labels(
                 oag_ffmpeg::Pin::ALL[0].megabytes(),
                 |id, english| say(id, english),
-            ),
-        )
-        .draw(skin)),
+            ))
+            .draw(skin),
+        ),
         "ffmpeg-progress" => Ok(oag_ui_screens::prompt::message_draw(
             skin,
             &crate::ffmpeg_prompt::status_text(37_000_000, 135_000_000, |id, english| {
