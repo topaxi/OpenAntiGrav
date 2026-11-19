@@ -320,12 +320,25 @@ changes). Tests: `sky_cube`'s two unit tests and
 
 **Open**: ours' sky reads about 17 % brighter than the original's at eye
 level (`(7, 149, 174)` against `(6, 127, 147)`), uniformly, which points at
-exposure rather than the dome; not chased here. Detonator's modes ride the
-same gate byte and are not wired to the dome. 2048: **checked, differs** -
-it draws its own `skycube.rcsmodel` dome and does not swap in
-`zoneSky.gxt` ([2048-sky.md](../../../formats/2048-sky.md)); whether its Zone
-draws a gradient is unread. Omega: **not checkable here** - its Zone sky is
-unread in its executable and no Omega Zone pair records a sky.
+exposure rather than the dome; and the band's flatness above. Detonator's
+modes ride the same gate byte and are not wired to the dome.
+
+**2048 and Omega, against their own Zone frames at Flash** (zone 5, HD's
+ladder stage 4, whose sky is neutral grey: horizon `0.1255`, zenith `0.6118`):
+
+- **2048 on an HD-lineage circuit: checked, applies, not wired** (confidence
+  60). `2048-vita/zone-dlc-vineta-k-z5`'s original draws a flat neutral grey
+  sky, `(88, 88, 88)` to `(116, 116, 116)`, no cloud texel, inside the bytes
+  HD's Flash pair packs (32 to 156). 2048's port draws its circuit dome.
+- **2048 on its own circuit: unresolved.** `2048-vita/zone-altima-z5` shows a
+  teal-grey sky, `(87, 138, 132)` to `(124, 134, 138)`; 2048's own table
+  authors Flash `Sky.Horizon Colour` `(0.682, 0.753, 0.761)` and
+  `Sky.Zenith Colour` `(0.812, 0.725, 0.725)`, not a clean match in either
+  domain. 2048's Zone sky draw is unread.
+- **Omega: checked, differs.** `omega/zone-vineta-k-z5`'s original (HD mode,
+  Flash) shows a bright peach sky, `(255, 255, 171)` at the top centre, not
+  HD's Flash grey. Omega's Zone sky source is unread in its executable, and
+  Omega's `zone_sky` is `None`, so the dome never draws there.
 
 ## What is **not** established
 
