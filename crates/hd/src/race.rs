@@ -64,6 +64,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // The cues and triggers are measured (`ready`, `HBEAT`, `go`); the 180 tick spacing is Pulse's,
     // inherited: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
+    // Zone's race manager clears the HUD's draw gate (`hud+0x115`) on the grid and sets it in
+    // the released phase; read in the executable and on RPCS3 (`hud-start-gate.md`).
+    hud_waits_for_go: oag_title::pre_race::Sourced::measured(&["zone"]),
     // Read in the craft update and measured on three RPCS3 boots (2026-10-08): the hover target is
     // clamped low through the flyby and countdown and released after the green light. See
     // `docs/ghidra/functions/ps3-hdfury-eu/hover-target.md`.

@@ -253,6 +253,9 @@ pub struct ViewSetup {
     pub zoom_borrowed: bool,
     /// [`Options::hud`], carried through to the readout.
     pub capture_hud: Option<CaptureHud>,
+    /// Whether this race's HUD stays hidden until the race is released:
+    /// `oag_title::RaceDefaults::hud_waits_for_go` naming the race's mode.
+    pub hud_waits_for_go: bool,
     /// The song-name marquee, read at load for a title that authors one.
     pub now_playing: Option<crate::now_playing::View>,
     /// [`Options::world_clock_offset`], carried to the scene's animation clock.
@@ -360,6 +363,7 @@ impl ViewSetup {
             zoom_ring: None,
             zoom_borrowed: false,
             capture_hud: None,
+            hud_waits_for_go: false,
             now_playing: None,
             world_clock_offset: 0.0,
             gantry_seconds: None,

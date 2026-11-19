@@ -432,10 +432,20 @@ impl Race {
         progress.visible().then_some(progress)
     }
 
-    /// Whether the HUD is drawn: not through the flyby, and not for [`IntroCamera::hud_delay`] ticks of
-    /// the race after it.
+    /// Whether the HUD is drawn: not through the flyby, not for [`IntroCamera::hud_delay`] ticks of
+    /// the race after it, and not before the race is released where the title's mode holds it
+    /// until then (`oag_title::RaceDefaults::hud_waits_for_go`; HD's Zone,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`). A capture that imposes a HUD state
+    /// ([`crate::CaptureHud`]) depicts a frame with that HUD on screen, so the release gate leaves it
+    /// alone.
     #[must_use]
     pub fn hud_shown(&self) -> bool {
+        if self.view.hud_waits_for_go
+            && self.view.capture_hud.is_none()
+            && oag_race::RaceState::thrust_gated(self.core.sim.world.tick)
+        {
+            return false;
+        }
         // **One answer for the whole screen under a split**: the primary's
         // flyby and `hud_delay` gate every view's HUD, since the other views
         // have no flyby of their own. Chosen, not measured.

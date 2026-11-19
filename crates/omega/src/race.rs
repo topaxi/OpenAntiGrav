@@ -101,6 +101,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Omega's own start events, Pulse's spacing lent; the `Go` cue event also times the song's
     // start (`now_playing_ground_truth`).
     countdown_voice: Some(COUNTDOWN_VOICE),
+    // Read in Omega's own Zone update (`0x012b3400`): `hud+0x189` cleared in phases 0 and 1,
+    // set in phase 2 (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`, "Omega and 2048").
+    hud_waits_for_go: oag_title::pre_race::Sourced::measured(&["zone"]),
     // The same grid clamp as HD's, read in Omega's own craft update; see `LAUNCH_HOVER`.
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: None,

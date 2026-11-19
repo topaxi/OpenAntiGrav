@@ -1001,3 +1001,15 @@
 0x0025c340	function	TrackSelectionScreen_SelectCircuit	80	track-selection-screen.md
 0x001a2060	function	FlyerItem_Construct	80	flyer-item.md
 0x001a2510	function	FlyerItem_Render	80	flyer-item.md
+# 2026-11-19 zone-hud-gate: the whole-HUD gate at the start (hud-start-gate.md)
+0x0098767c	data	g_Hud	90	hud-start-gate.md
+0x00084e08	function	Hud_PrepareDraw	72	hud-start-gate.md
+0x00076708	function	SPZone_Update	82	hud-start-gate.md
+0x00076548	function	SPZone_UpdateRacing	85	hud-start-gate.md
+0x00091c90	function	Hud_HideRaceGroups	80	hud-start-gate.md
+0x0008fd70	function	Hud_ShowPositionGroups	85	hud-start-gate.md
+0x00090160	function	Hud_ShowLapTimeGroups	85	hud-start-gate.md
+0x0008fbf0	function	Hud_ShowStatusGroups	80	hud-start-gate.md
+0x00090278	function	Hud_UpdateCountdownWidgets	60	hud-start-gate.md
+0x0007d8e0	function	DemoRaceManager_Construct	85	hud-start-gate.md
+0x0007d398	function	DemoRaceManager_Update	80	hud-start-gate.md
