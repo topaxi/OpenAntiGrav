@@ -41,6 +41,13 @@ fn event_ids(blob: &[u8]) -> BTreeSet<u32> {
     )
 }
 
+/// What every event of a title loads with: the state and switch values its
+/// switch containers play by, and where non-embedded media is read.
+struct Resolve<'a> {
+    states: &'a [(u32, u32)],
+    media_dirs: &'a [&'a str],
+}
+
 /// Media `id` read whole from a loose `<id>.wem` in the first of `dirs` that
 /// holds one.
 fn loose_media(archives: &mut Archives, dirs: &[&str], id: u32) -> Option<Vec<u8>> {
@@ -104,6 +111,10 @@ impl Banks {
                 )),
             }
         }
+        let resolve = Resolve {
+            states: &states,
+            media_dirs: cues.media_dirs,
+        };
         let (mut played, mut player) = (0, 0);
         for cue in Cue::ALL {
             let Some(&(_, row)) = cues.cues.iter().find(|(name, _)| *name == cue.name()) else {
@@ -129,8 +140,7 @@ impl Banks {
                 cue,
                 &format!("{posted}__{slot}"),
                 blobs,
-                &states,
-                cues.media_dirs,
+                &resolve,
                 false,
             ) {
                 played += 1;
@@ -139,7 +149,7 @@ impl Banks {
             // not, the player hears what everyone does.
             let mine = format!("{posted}_PC__{slot}");
             if blobs.events.contains(&name_hash(&mine)) {
-                if self.load_posted(archives, cue, &mine, blobs, &states, cues.media_dirs, true) {
+                if self.load_posted(archives, cue, &mine, blobs, &resolve, true) {
                     player += 1;
                 } else {
                     self.player_silent.insert(cue);
@@ -162,15 +172,14 @@ impl Banks {
         cue: Cue,
         event: &str,
         blobs: &SlotBlobs,
-        states: &[(u32, u32)],
-        media_dirs: &[&str],
+        resolve: &Resolve<'_>,
         player: bool,
     ) -> bool {
         let mut why = Vec::new();
         for (entry, blob) in &blobs.blobs {
             let mut rng = Rng::new(u64::from(name_hash(event)));
-            let mut loose = |id: u32| loose_media(archives, media_dirs, id);
-            match super::wwise_start::load(blob, event, &mut rng, states, &mut loose) {
+            let mut loose = |id: u32| loose_media(archives, resolve.media_dirs, id);
+            match super::wwise_start::load(blob, event, &mut rng, resolve.states, &mut loose) {
                 Ok(loaded) => {
                     let line = format!(
                         "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s), {} switch(es) by state",
