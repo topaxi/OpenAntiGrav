@@ -172,6 +172,7 @@ struct Zone {
     // `zoneAnisoPower` for `aniso`'s four ramps, in their order.
     aniso_power: vec4<f32>,
     // `.x` 1.0 on a Zone arena (the aniso shape), 0.0 on a circuit.
+    // `.w` 1.0 where the Zone frame lights a Zone-program chunk by the stage's rig alone.
     shape: vec4<f32>,
     // Scene inner, Scene outer, Track inner, Track outer: 17 texels each.
     // See `mesh_render::Zone::aniso` and `zone_aniso` in `zone.wesl`.

@@ -1007,6 +1007,12 @@ pub(super) fn zone_grade(
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
             .map(|grade| grade.with_transition(race.zone_transition))
+            .map(|grade| {
+                grade.with_stage_light(
+                    race.zone_frame
+                        .is_some_and(|frame| frame.lit_by_stage_alone),
+                )
+            })
             .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
             .map(|grade| {
                 if mode == oag_race::Mode::Detonator {

@@ -124,7 +124,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_palette: None,
     zone_stages: None,
     zone_transition: None,
-    zone_bloom: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
     // `FE_GHOST`, the list on the Time Trial and Speed Lap pause screens (`crate::pause_menu`), is

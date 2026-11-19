@@ -158,7 +158,7 @@ pub(in crate::load) fn for_title(
     }
 }
 
-/// `params` as a Zone race of a title with a [`oag_title::ZoneBloom`] runs them: the
+/// `params` as a Zone race of a title with a [`oag_title::ZoneFrame`] runs them: the
 /// engine's own values over the circuit's, the adaption rate and the `Tone` family kept.
 /// Any other mode, and a title without the table, keeps the circuit's.
 pub(in crate::load) fn for_mode(
@@ -166,7 +166,7 @@ pub(in crate::load) fn for_mode(
     race: &oag_title::RaceDefaults,
     mode: oag_race::Mode,
 ) -> oag_post::hd_bloom::Params {
-    match race.zone_bloom {
+    match race.zone_frame {
         Some(zone) if mode == oag_race::Mode::Zone => oag_post::hd_bloom::Params {
             frame_contribution: zone.frame_contribution,
             frame_exponent: zone.frame_exponent,

@@ -35,9 +35,6 @@ const SIZE: u32 = 64;
 /// The zone texture's one texel, and the multiplier bound beside it.
 const ZONE_TEXEL: u8 = 128;
 const ZONE_EFFECT: [f32; 4] = [2.0, 1.0, 0.0, 0.0];
-/// A stage ambient that leaves the Zone surface as it is: the surface is `light * surface`,
-/// and the tests that measure the surface alone run the light at one.
-const ONE_AMBIENT: [f32; 3] = [1.0; 3];
 
 fn vertex(position: [f32; 3], lit: f32) -> GpuVertex {
     GpuVertex {
@@ -243,10 +240,9 @@ fn the_zone_surface_replaces_the_albedo_in_the_right_colour_space() {
     let stage = texture("zone stage", [ZONE_TEXEL, ZONE_TEXEL, ZONE_TEXEL, 255]);
 
     let mut scene = Scene::off();
-    // The authored rig, switched on so the `lit` vertices take it. A Zone surface is lit
-    // by the stage's ambient, which is one here so the light is the identity.
+    // The authored rig, switched on so the `lit` vertices take it. `Emissive`
+    // above makes its own terms the identity.
     scene.light.enabled = 1.0;
-    scene.light.ambient = ONE_AMBIENT;
     // **The eye, dead in front and far away, so `rim` is zero here.** The
     // shader reads it out of the fog block, and `Fog::off` leaves it at the
     // origin - which for this quad (at `z = 0.5`, normal `+Z`) is *behind* the
@@ -355,7 +351,6 @@ fn the_arena_shape_adds_the_zone_colour_and_ramp_only_where_the_albedo_is_black(
     ramp.texels[16] = [0.0, 0.0, 4.0, 0.0];
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.light.ambient = ONE_AMBIENT;
     scene.fog.camera = [0.0, 0.0, 100.5];
     scene.zone = Zone {
         aniso_power: [1.0; 4],
@@ -434,7 +429,6 @@ fn the_two_rim_summands_carry_their_own_literal_exponents() {
 
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.light.ambient = ONE_AMBIENT;
     // `toEye = (sin 60, 0, cos 60)` from the quad's own plane, a hundred units
     // out so the centre fragment's own offset within the triangle does not
     // move the angle. The quad's normal is `+Z`, so `dot(N, toEye) = 0.5` and
@@ -634,7 +628,6 @@ fn the_track_bit_selects_the_track_texture_and_colours_and_its_absence_the_scene
     };
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.light.ambient = ONE_AMBIENT;
     scene.fog.camera = [0.0, 0.0, 100.5];
     let track_set = ZoneSet {
         effect: ZONE_EFFECT,
@@ -803,6 +796,8 @@ fn a_zone_surface_is_lit_by_the_stage_ambient_and_no_lightmap() {
         base: [0.0; 4],
         base_alt: [0.0; 4],
     });
+    // The title's marker: its Zone frame is the `Ambient` permutation.
+    scene.zone.shape[3] = 1.0;
     let art = scene_art(&stage);
 
     let sample = (f32::from(ZONE_TEXEL) / 255.0).powf(2.2);
@@ -821,6 +816,13 @@ fn a_zone_surface_is_lit_by_the_stage_ambient_and_no_lightmap() {
             );
         }
     }
+    // A title without the marker keeps the chunk's own light: the lightmap is in it.
+    scene.zone.shape[3] = 0.0;
+    let own = draw(&device, &queue, &lightmapped, &art, scene, None);
+    assert!(
+        own[1] > want(ZONE_EFFECT[1]) + 20,
+        "without the marker the lightmapped chunk keeps its lightmap, got {own:?}"
+    );
 }
 
 /// **The stage-transition sphere reaches the frame: a fragment inside it
@@ -862,7 +864,6 @@ fn the_transition_sphere_selects_the_inner_pair_inside_and_the_outer_outside() {
     };
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.light.ambient = ONE_AMBIENT;
     scene.fog.camera = [0.0, 0.0, 100.5 * WORLD];
     scene.zone = Zone {
         uv_scale: [1.0, 1.0],
@@ -989,7 +990,6 @@ fn the_transition_sphere_samples_the_inner_texture_inside_and_the_outer_outside(
     };
     let mut scene = Scene::off();
     scene.light.enabled = 1.0;
-    scene.light.ambient = ONE_AMBIENT;
     scene.fog.camera = [0.0, 0.0, 100.5 * WORLD];
     scene.zone = Zone {
         uv_scale: [1.0, 1.0],

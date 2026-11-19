@@ -105,7 +105,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: Some(ZONE_STAGES),
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
-    zone_bloom: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
     game_options: oag_title::race::GameOptions::NONE,
