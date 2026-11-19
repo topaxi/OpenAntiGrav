@@ -124,14 +124,27 @@ ratings, not computed from handling.
    reads the local store. There is no ghost (ADR-0091 decision 5). A race whose start
    applied any non-identity modifier, count or scale files no per-track `[[record]]`.
    Run state is single-player: a lobby race carries none and the module declines it.
-10. **Build order.** The run record and the ABI first, then modifiers, then pickup
+10. **Own unlocks** (maintainer, 2026-11-19). A campaign may opt out of the global
+    ship and variant unlocks (the title's loyalty and `<Unlock>` rows,
+    `oag_game::unlock`, that decide which teams, hulls and skins Team Selection
+    offers) and define its own: `[unlocks] source = "global"` (default) or `"own"`.
+    Under `"own"` Team Selection, for that campaign's events only, offers exactly
+    what the campaign's rules open: data rows in the campaign file (a team or a
+    variant, opened from the start, by an event's medal, or by a run flag), and the
+    run's own unlock set, which the mod adds to at `race-end` (`unlock{team,
+    variant}` into the run record, staged and committed like the run bytes). The
+    global unlocks are never written by a campaign, and a campaign's own unlocks
+    never leak into the Race Box or another campaign. Mechanism detail:
+    `progression.md` section 7.1.
+11. **Build order.** The run record and the ABI first, then modifiers, then pickup
     parameters and `give-autopilot`, then the frontend world and the screen. A campaign
     can ship with `race-end` choosing the reward by itself before the screen lands.
 
 **Settled by the maintainer (2026-11-19):** an out-of-range modifier is clamped, never
 a fault; whether a failed race ends a run is the mod's choice; whether the player may
 skip an offer is the mod's choice; a campaign may scale the AI's craft as well as the
-player's (`progression.md` section 12, questions 1, 3, 5 and 11).
+player's (`progression.md` section 12, questions 1, 3, 5 and 11); a campaign may opt
+out of the global ship and variant unlocks and define its own (decision 10).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 `TopSpeed` as a parameter, a data-first modifier table, a per-owner damage scale, the

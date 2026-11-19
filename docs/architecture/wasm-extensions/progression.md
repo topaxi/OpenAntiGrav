@@ -532,6 +532,52 @@ the same module in a Single Race, sees an empty run and campaign key 0, and
 The mod declares `simulation = true`, so every race of the campaign is MODDED. The
 campaign page names this, as the MODS page does.
 
+### 7.1 Own unlocks (maintainer, 2026-11-19)
+
+A campaign decides whether Team Selection follows the title's global unlocks or the
+campaign's own. The global ones are the title's loyalty and `<Unlock>` rows that
+`oag_game::unlock` evaluates against the records `Store` (and `[dev]
+unlock_everything` in debug builds).
+
+```toml
+[unlocks]
+source = "own"            # "global" (default): the title's unlocks, as today
+
+[[unlocks.team]]
+team = "Feisar"
+open = true               # offered from the start
+
+[[unlocks.team]]
+team = "Qirex"
+requires = [{ event = "gate-run", medal = "silver" }]   # the ADR-0077 rule shape
+
+[[unlocks.variant]]
+team = "Feisar"
+variant = "concept1"      # a title's variant/skin name, checked against the disc at load
+run_flag = "feisar-concept"   # opened when the run's unlock set holds this name
+```
+
+- **Data first.** A row opens a team or a variant from the start, by an event's
+  medal (`requires`, evaluated like a cell's `unlock`), or by a name in the run's
+  unlock set. A campaign with no module can still define its own unlocks.
+- **From the run.** A sim module adds names to the run's unlock set at `race-end`
+  with `unlock{name}` (new reply command; the set lives in the run record beside the
+  run bytes, at most 64 names of 32 bytes, staged and committed with them). NEW RUN
+  clears it; medal-based rows survive a new run, because medals are the campaign's
+  progress, not the run's.
+- **Scope.** Under `source = "own"` the campaign's events offer only what its rules
+  open, whatever the global profile has unlocked. Nothing a campaign opens reaches
+  the Race Box, the title's own campaign or another mod's campaign, and a campaign
+  never writes the global unlocks.
+- **Preset craft** (`craft = { team = ... }` on an event) is unaffected: a preset
+  is flown whether or not the campaign's rules have opened it.
+- **Validation.** A team or variant the disc does not ship is refused at load by
+  name, as a missing team is today (`custom-campaign.md`).
+
+Open: whether `unlock` should also be available to a campaign without `[run]` (a
+medal-only campaign does not need it), and whether a variant row may name a mod's
+own livery once mods ship liveries.
+
 ## 8. Capabilities 4 and 5: the choice screen and mod-defined stats
 
 ### 8.1 The choice screen
