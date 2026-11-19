@@ -360,11 +360,55 @@ Omega shares `hull_swap` and so takes the 3-frame cut by lineage (HD's front end
 
 **Verdict for the claim**: the settle start per team, the turn and the zoom match (the law is exact in RAM, the turn and zoom terms are zero on a
 step); the craft box during the settle is at the rest pair's floor; the single term that differs is the cut: 3 frames (once 4) against ours' 4,
-a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step: in the two grabs read
-by eye (frames 6 and 10) the team banner is blank, then part drawn, and the hex column is shifted, where ours draws both finished (not measured);
+a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step, measured in "The banner and the hex column on a step" below (not wired);
 the cold first visit of a team (craft absent past frame 10); `FitMotion`'s alternation phase after the cut (ours fixed, the original's the
 press's frame). **2048: checked, not checkable** (no Team Selection fit in v1.04; the constant run is absent). **Omega: checked, differs**: the
 eased fields are never read there (above), so a step has no settle to compare.
+
+## The banner and the hex column on a step (2026-11-20, `hd-step-banner`)
+
+The question: do the `CHOOSE TEAM` logo block and the `NAVIGATE TEAM` hex column step the way ours do. **Written before the
+measuring, what would falsify "ours matches"**: the original's banner showing the new team's logo whole from the frame after the cut, or its
+hex box scoring at the rest floor on the step pairs. **Both fire: ours does not match.** Boxes on the 1920x1080 pairs: banner
+`190,185,680,335`, hex column `190,355,680,960`, mean absolute grey difference (ours at lag 3, the seven pairs of
+`hd-step-gap`); the floor is the same box on the rest pairs of the same teams (two boots, 12 teams, `hd-settle-step`).
+
+| Pair | Team | Banner box | Banner floor (rest) | Hex box | Hex floor (rest) |
+| --- | --- | --- | --- | --- | --- |
+| k04 | Assegai | 29.66 | 27.85 | 16.80 | 4.47 |
+| k06 | Harimau | 19.27 | 19.44 | 21.53 | 4.66 |
+| k08 | Icaras | 18.76 | 24.05 | 27.62 | 4.25 |
+| k10 | Qirex | 20.54 | 20.22 | 27.69 | 4.31 |
+| k15 | Triakis | 17.15 | 24.23 | 3.98 | 22.0 |
+| k19 | Goteki | 25.97 | 27.27 | 22.09 | 4.51 |
+| k29 | EGX | 15.41 | 27.60 | 4.03 | 21.84 |
+
+Nothing in this lane changed a pixel of ours, so there is no "after". What the numbers are made of:
+
+- **The banner's fill is a standing difference, not the step.** The panel (`LogoOutline`'s 432x144 `HD_LightGrey` quad) reads 31 in every original frame
+  (rest pair and step pairs) and 50 in ours: the open item in `docs/ui/campaign-screens.md` ("the original's alpha reads about `0x50`; cause
+  unread", `0x50` of `0x64` is 31). Over the banner box that is about 19 grey on every pair, rest or step. The rest floor is 22.7 (16.6 to 27.9, by the team's logo).
+- **The logo is a timed reveal, deterministic by frame.** 84 grabs over frames 0 to 129 (two boots of `hd-settle-step`, one of this lane: `rpcs3-hd-ship-step.py capture
+  --aims 12,...,130` on 20 steps), crop rows counted from y=200:
+  frames 0 to 2 the old logo; **3 to 7 the bare panel (mean grey 30.10 in all 28 grabs)**; 8 to 15 a slab about 12 px tall sweeping **down** at 6.5 px a frame (top row
+  26, 33, 39, 45, 52 to 59, 65 to 72 at frames 8, 9, 10, 11, 13, 15; the four grabs at frame 10 and at frame 11 agree to the row); 17 to 23 bare; 25 to 29 the slab
+  sweeping **up** (top row 82, 69, 49 at 25, 27, 29); 33 and 37 bare; 41 a band 30 rows tall; **45 the whole logo** (rows 35 to 85, the extent of every later grab), whole at 51 and in every later grab.
+  Ours draws the finished logo at frame 0 (k04 to k29 show it whole). Reading the original's slab as an animation of `Logo`'s
+  authored `transitiontype="vwipe"`, `delay="0.5"`, `enebletransition="0.5"`: **the shape is not a plain wipe** (a plain wipe is monotone; this is two
+  sweeps and a gap), which is why it is not wired. Confidence 85 for the timeline, 40 for the vwipe reading.
+- **Where it lives.** `/hdfury/EBOOT-ps3-hdfury-eu.elf`: the attribute-name table of the `Image` widget class at `0x008ad680` is registered by `FUN_0052ea7c` (`0x0052ea7c`; it
+  loads `transitiontype` at `0x0078b828`, `vwipe` at `0x0078b860`, `hscale` after it, `ImageModel_Item` next). The enum's consumer (the `Image` draw) is **unread**. The only
+  spellings of the key in the binary are `EnableTransition` (`0x00786f90`) and `Delay` (`0x00786fd8`): the XML's `enebletransition` is a typo with no string of its own, so the authored
+  0.5 s may be dead and a default applied (unread, 30). The same `Image` carries the transition on every HD page that authors `transitiontype` (Campaign Select's emblems,
+  `docs/ui/campaign-screens.md`, "Still open (item 4)"), so the reading is the shared widget transition, not a Ship Select special; nothing in `oag_ui` plays it.
+- **The hex column.** Frames 0 to 3 of a step show the old picture (0.7 to 1.7 against the same team's rest grab); from frame 4 the box changes (15 to 27 against that rest grab, 21 steady from frame 11).
+  Two things move: **the selection ring** is not on the cell: it is a separate outline, displaced to the right of the cell at frames 4 to 10 (about a third of a column by eye), pulsing white, pink,
+  dark red and absent from frame to frame (white at frames 19, 41 and 69, absent at 11, 13, 15, 17 and 23); and **the lattice's vertical phase**: ours alternates the half-row shift with the *team index*
+  (the rest hex box is 4.4 on odd teams and 21.9 on even ones), the original's does not: this lane's 20 grabs (frames 11 to 129, teams of both parities) all differ by 20.7 to 21.7 over the box from
+  `hd-settle-step`'s rest grab of the same team, which is itself a frame-98 grab after a step; the two sets were taken on different boots, so the phase is a per-boot or per-walk state. The phase rule is not recovered (not the team index; a step counter, or a rest state, fit different subsets): confidence 30.
+  `HexSelection` has no code read at all: its authored values are only shape and colours (`columns`, `rows`, `HexCol`, `SelectedColumnCol`; `0x0078b348` is the class name).
+- **Omega: checked, applies, not wired.** `data09`'s `team_selection_definition.xml` authors the same `Logo` (`delay="0.5" enebletransition="0.5"`, `transitiontype="vwipe"`, 512x128 at y 15)
+  and the same `HexSelection` with `rows="9"` and `Scale="0.8"`; the widgets are HD's, so the same executable code applies (Omega's `eboot` was not read; no frame of the step exists).
 
 ## Omega and 2048
 
