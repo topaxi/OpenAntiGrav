@@ -127,10 +127,20 @@ the countdown, so the port holds only Zone.
 
 `Race::hud_shown` returns false while `oag_race::RaceState::thrust_gated(tick)` holds for such a mode.
 The check is independent of the flyby, so a `--race --camera-pose` capture with no intro is gated too.
+
+**One exemption.** A capture that imposes a HUD state (`--hud-state`, `CaptureHud`) depicts a frame with
+that HUD on screen, so the gate leaves it alone.
+
+- Every Omega and 2048 Zone pair is a mid-race frame posed at tick 0 with an imposed HUD state. Their
+  renders do not move: `omega/zone-capital-reach-2048-z5` differs from main's render by 1 pixel,
+  `2048-vita/zone-altima-z5` by 0.
+- `omega/zone-vineta-k-z5` and `2048-vita/zone-dlc-vineta-k-z5` differ only by main's drift since their
+  last render, not by this gate.
+- The HD countdown pair must drop its `--hud-state` (`docs/tools/compare-page.md`, "HD Zone race-start pair").
 Tests:
 
 - `tests::viewpoint::a_mode_held_until_go_draws_no_hud_before_the_release` pins hidden at tick 0 and
-  `COUNTDOWN_TICKS - 1`, and shown at `COUNTDOWN_TICKS`;
+  `COUNTDOWN_TICKS - 1`, shown at `COUNTDOWN_TICKS`, and shown at tick 0 with an imposed HUD state;
 - `tests::viewpoint::hd_and_omega_hold_zone_and_only_zone` pins the title data.
 
 The pair `hd/zone-vineta-k-z5` moved 30.02 -> 28.77 mean grey (RMSE 0.172 -> 0.165). The zone-list and

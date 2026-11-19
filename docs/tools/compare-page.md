@@ -1560,7 +1560,18 @@ time under load 38), at lap clock 0.0. Lead 2.6 s (one attempt, lap clock 0.57 a
 
 **Differences left (not matched, judged by eye on `side.png`).** The original's zone-1 colour grade is a strong cyan wash; ours renders its natural zone 1 grade
 (pale, warm sky). `--zone 1,0,0` (grade pinned to stage 0) is a grey scene and scores worse (mean grey 88.9), so the stage is left unpinned. The original's start gantry
-shows its countdown glyphs and no HUD yet (the HUD fades in after GO); ours draws a blank board and the imposed Zone HUD, since ours runs no ticks.
+shows its countdown glyphs and no HUD yet; ours draws a blank board.
+
+**No Zone HUD before GO (2026-11-19, `zone-hud-gate`).** HD and Omega draw no Zone HUD until the race is released
+([hud-start-gate.md](../ghidra/functions/ps3-hdfury-eu/hud-start-gate.md)), and ours follows. With that fix the
+pair scores 28.77 (RMSE 0.165), against 30.02 before.
+
+**A capture that imposes `--hud-state` is drawn with its HUD on screen,** gate or not: such a pair depicts a
+mid-race frame. Every Omega and 2048 Zone pair is one (`omega/zone-vineta-k-z5`, `omega/zone-capital-reach-2048-z5`,
+`2048-vita/zone-altima-z5`, `2048-vita/zone-dlc-vineta-k-z5`), and they render as before. A pre-release pair must
+**not** pass `--hud-state`. `rpcs3-hd-pair.py --zone` always emits it, so this pair's `ours.flags` drops
+`--hud-state 1,1,0,0,0,100,0,1,0,0` by hand. The countdown draws no HUD, so the counters are never seen, and the
+render is otherwise pixel-identical.
 
 ## Omega Zone pairs (2026-11-17, `zone-pair-omega`)
 

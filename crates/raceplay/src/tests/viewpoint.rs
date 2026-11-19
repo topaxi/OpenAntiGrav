@@ -187,8 +187,26 @@ fn a_mode_held_until_go_draws_no_hud_before_the_release() {
         race.core.sim.world.tick = tick;
         assert_eq!(race.hud_shown(), shown, "tick {tick}");
     }
-    race.view.hud_waits_for_go = false;
     race.core.sim.world.tick = 0;
+    race.view.capture_hud = Some(crate::CaptureHud {
+        place: 1,
+        lap: 1,
+        lap_ticks: 0,
+        race_ticks: 0,
+        speed_kmh: None,
+        shield_percent: None,
+        best_lap_ticks: None,
+        best_lap_centiseconds: None,
+        boost_phase: None,
+        autopilot_seconds: None,
+        zone: None,
+    });
+    assert!(
+        race.hud_shown(),
+        "an imposed HUD state is a frame with the HUD on screen"
+    );
+    race.view.capture_hud = None;
+    race.view.hud_waits_for_go = false;
     assert!(race.hud_shown(), "a mode not held draws it on the grid");
 }
 
