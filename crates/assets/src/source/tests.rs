@@ -92,6 +92,7 @@ const TITLE: &Title = &Title {
         zone_announcer: None,
         eliminator_skin: None,
         countdown_voice: None,
+        hud_waits_for_go: oag_title::pre_race::Sourced::chosen(&[]),
         launch_hover: None,
         hover_rig: None,
         zone_hover_rig: None,

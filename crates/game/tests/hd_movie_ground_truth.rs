@@ -182,6 +182,32 @@ fn every_bik_on_the_disc_reads_its_own_header() {
     assert_eq!(with_audio, 6, "six of the 37 files carry audio");
 
     check_every_circuit_has_its_fly_by(&files);
+    check_the_prefetch_plans_every_fly_by(&image, &files);
+}
+
+/// The prefetch's plan for the HD disc is every circuit's `preview.bik`, and
+/// each key is the one [`oag_game::clip::open`] looks up: the plan's keys equal
+/// the key function applied to every `fe/preview.bik` the walk found. Without
+/// the prefetch's HD branch the plan is empty; with a different spelling of the
+/// entry the keys differ.
+fn check_the_prefetch_plans_every_fly_by(image: &Path, files: &[(&'static str, String, Vec<u8>)]) {
+    let mut on_disc: Vec<String> = files
+        .iter()
+        .filter(|(_, path, _)| path.to_ascii_lowercase().ends_with("/fe/preview.bik"))
+        .map(|(_, path, blob)| oag_game::clip::cache_key(path.trim_start_matches('/'), blob.len()))
+        .collect();
+    let mut planned: Vec<String> =
+        oag_game::prefetch::fly_by::clip_keys(image.to_str().expect("a UTF-8 path"), &[])
+            .expect("the prefetch opens the HD disc")
+            .into_iter()
+            .map(|(_, key)| key)
+            .collect();
+    on_disc.sort();
+    planned.sort();
+    assert!(!planned.is_empty(), "the prefetch plans no fly-by clip");
+    println!("fly-by clips on the disc: {}", on_disc.len());
+    println!("fly-by clips planned: {}", planned.len());
+    assert_eq!(planned, on_disc);
 }
 
 /// Track Select's `FlyByMovie` plays `<environment>\FE\preview.bik`
@@ -328,4 +354,72 @@ fn reference_frames(blob: &[u8], frame_len: usize) -> Vec<u8> {
         "the reference is not {FRAMES} whole frames"
     );
     bytes
+}
+
+/// Times the first open of one circuit's fly-by on an empty cache, then the
+/// whole HD prefetch, then the same open again. A scratch measurement, not a
+/// claim: no wall-clock bound is asserted. `OAG_SWEEP=quick` stops after the
+/// first clip (40 s) instead of converting all sixteen (13 minutes).
+///
+/// ```sh
+/// OAG_SWEEP=1 cargo nextest run -p oag-game --run-ignored all --no-capture \
+///     -E 'test(a_prefetch_warms_the_fly_by_cache)'
+/// ```
+#[test]
+#[ignore = "a timing sweep: needs a disc image, ffmpeg with libaom, and OAG_SWEEP"]
+fn a_prefetch_warms_the_fly_by_cache() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
+    let Some(image) = image() else { return };
+    let source = image.to_str().expect("a UTF-8 path").to_string();
+    let clips = oag_game::prefetch::fly_by::clip_keys(&source, &[]).expect("the plan");
+    let entry = &clips[0].0;
+    let blob = oag_game::prefetch::fly_by::read_entry(&source, entry).expect("reading the clip");
+    let cold = cache_dir().join("fly-by-timing");
+    let _ = std::fs::remove_dir_all(&cold);
+
+    assert!(!oag_game::prefetch::fly_by::is_converted(
+        entry, &blob, &cold
+    ));
+    let started = std::time::Instant::now();
+    oag_game::clip::open(entry, &blob, &cold).expect("cold open");
+    println!("cold open of {entry}: {:.2?}", started.elapsed());
+    // The prefetch's "already cached" question agrees with what the open wrote.
+    assert!(oag_game::prefetch::fly_by::is_converted(
+        entry, &blob, &cold
+    ));
+    if std::env::var("OAG_SWEEP").is_ok_and(|mode| mode == "quick") {
+        let _ = std::fs::remove_dir_all(&cold);
+        return;
+    }
+
+    let mut prefetch = oag_game::prefetch::Prefetch::spawn(oag_game::prefetch::Options {
+        source,
+        movies: cold.clone(),
+        audio: cold.join("audio"),
+        dlc: Vec::new(),
+        refresh_video: false,
+    });
+    let started = std::time::Instant::now();
+    prefetch.join();
+    let progress = prefetch.progress();
+    println!(
+        "prefetch: {:.2?}, total {}, cached {}, failed {}",
+        started.elapsed(),
+        progress.total,
+        progress.cached,
+        progress.failed
+    );
+
+    let started = std::time::Instant::now();
+    oag_game::clip::open(entry, &blob, &cold).expect("warm open");
+    println!("warm open of {entry}: {:.2?}", started.elapsed());
+    for (entry, _) in clips.iter().skip(1).take(3) {
+        let blob = oag_game::prefetch::fly_by::read_entry(&image.to_string_lossy(), entry).unwrap();
+        let started = std::time::Instant::now();
+        oag_game::clip::open(entry, &blob, &cold).expect("warm open");
+        println!("warm open of {entry}: {:.2?}", started.elapsed());
+    }
+    let _ = std::fs::remove_dir_all(&cold);
 }

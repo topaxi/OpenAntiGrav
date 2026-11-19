@@ -494,6 +494,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         zoom_ring: None,
         zoom_borrowed: false,
         capture_hud: None,
+        hud_waits_for_go: false,
         now_playing: None,
         world_clock_offset: 0.0,
         gantry_seconds: None,

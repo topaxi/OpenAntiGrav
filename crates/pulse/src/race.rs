@@ -44,6 +44,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_announcer: Some(ZONE_ANNOUNCER),
     eliminator_skin: Some(ships::ELIMINATOR_SKIN),
     countdown_voice: Some(COUNTDOWN_VOICE),
+    hud_waits_for_go: oag_title::pre_race::Sourced::chosen(&[]),
     launch_hover: None,
     hover_rig: None,
     zone_hover_rig: Some(&ZONE_HOVER_RIG),

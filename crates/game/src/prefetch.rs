@@ -61,6 +61,7 @@
 //! | --- | --- |
 //! | PSP | The 93 RIFF-wrapped ATRAC3+ streams and the 22 `.PMF` movies, across `Data.wad`, `FE.wad`, `FEData.wad` and `BEData.wad` |
 //! | PS2 | The four loose movies under `DATA/MOVIES/`: `INTRO512.PSS`, `INTRO640.PSS`, `BG512.IPF`, `BG640.IPF` |
+//! | HD/Fury | Every circuit's Track Select fly-by, `<circuit>\FE\preview.bik` (352x256), for each circuit Track Select lists, a DLC pack's included ([`fly_by`]). The two boot logo reels and the other front-end Bink movies are not converted: they are 1080p and do not go through `crate::clip`'s key |
 //!
 //! **The PS2's audio is deliberately absent**, and that is not an omission:
 //! `PS2MUSIC.WAD` is raw interleaved `s16le` at 48 kHz (see
@@ -80,6 +81,7 @@ use oag_pulse as pulse;
 
 use crate::movie::{self, Extent};
 
+pub mod fly_by;
 mod manifest;
 use manifest::Owned;
 
@@ -94,6 +96,9 @@ pub struct Options {
     pub movies: PathBuf,
     /// Where decoded PCM lands - [`oag_source::cache::default_audio_cache_dir`].
     pub audio: PathBuf,
+    /// Downloadable-content folders, mounted as the game mounts them: a pack's
+    /// circuits have fly-by clips too.
+    pub dlc: Vec<PathBuf>,
     /// Convert every movie again even when the cache already holds it, and
     /// overwrite what is there. See [`movie::Decode::refresh`].
     ///
@@ -275,14 +280,17 @@ enum Task {
     },
     /// A PS2 movie sitting loose on the disc's own filesystem.
     Loose { label: String, path: &'static str },
+    /// An HD circuit's Track Select fly-by, read.
+    FlyBy { label: String, clip: fly_by::Clip },
 }
 
 impl Task {
     fn label(&self) -> &str {
         match self {
-            Self::Sound { label, .. } | Self::Movie { label, .. } | Self::Loose { label, .. } => {
-                label
-            }
+            Self::Sound { label, .. }
+            | Self::Movie { label, .. }
+            | Self::Loose { label, .. }
+            | Self::FlyBy { label, .. } => label,
         }
     }
 }
@@ -417,6 +425,7 @@ fn convert(task: &Task, archives: &mut [oag_assets::Archive], options: &Options)
                 None,
             )?)
         }
+        Task::FlyBy { clip, .. } => fly_by::convert(clip, &options.movies, options.refresh_video),
         Task::Loose { path, .. } => {
             // Read whole, unlike the WAD movies: a loose file's cache key is
             // its path and its length, and reaching a PS2 movie at all goes
@@ -483,11 +492,19 @@ struct Plan {
 
 /// Walks the source and works out what is left to do.
 fn plan(options: &Options) -> Result<Plan> {
+    // A title that plays a Track Select fly-by (HD) has its clips and nothing
+    // else here; every other source is walked as before.
+    let mut early_notes = Vec::new();
+    match fly_by::find(&options.source, &options.dlc) {
+        Ok(Some(found)) => return Ok(plan_fly_bys(options, found)),
+        Ok(None) => {}
+        Err(e) => early_notes.push(format!("fly-by clips not listed ({e:#})")),
+    }
     let layout = oag_assets::Layout::resolve(&options.source, oag_pulse::TITLE)
         .with_context(|| format!("resolving the archives in {}", options.source))?;
 
     let mut archives = Vec::new();
-    let mut notes = Vec::new();
+    let mut notes = early_notes;
     for spec in archive_specs(&layout) {
         match oag_assets::Archive::open(&spec) {
             Ok(archive) => archives.push(archive),
@@ -590,6 +607,33 @@ fn plan(options: &Options) -> Result<Plan> {
         notes,
         owned,
     })
+}
+
+/// The plan for a source whose title plays fly-by clips: one task per circuit
+/// clip not already cached, every clip owned by the manifest.
+fn plan_fly_bys(options: &Options, found: fly_by::Found) -> Plan {
+    let cached_movies = existing(&options.movies);
+    let mut tasks = Vec::new();
+    let mut cached = 0usize;
+    let mut owned = Owned::default();
+    for clip in found.clips {
+        owned.movie_keys.push(clip.key.clone());
+        if !options.refresh_video && fly_by::is_cached(&clip, &cached_movies) {
+            cached += 1;
+            continue;
+        }
+        tasks.push(Task::FlyBy {
+            label: format!("fly-by {}", clip.entry),
+            clip,
+        });
+    }
+    Plan {
+        archives: Vec::new(),
+        tasks,
+        cached,
+        notes: found.notes,
+        owned,
+    }
 }
 
 /// The PS2 release's movies, which are loose on the disc rather than in a WAD.

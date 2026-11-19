@@ -89,6 +89,43 @@ pub(super) fn load_tracks(
     tracks
 }
 
+/// The location of every circuit Track Select can offer on this source, in
+/// the order it lists them and each once: the race list, then the Zone list,
+/// read and filtered exactly as [`load_tracks`] and [`load_zone_tracks`] do for
+/// the screen. A forward circuit and its reverse share a location.
+pub(crate) fn circuit_locations(
+    archives: &mut oag_assets::Archives,
+    title: &oag_title::Title,
+) -> Vec<String> {
+    let mut report = Vec::new();
+    let definition = title.plugin_definition;
+    let documents = definitions(
+        archives,
+        &[
+            definition,
+            title.track_plugin_definition.unwrap_or(definition),
+        ],
+        &mut report,
+    );
+    let mut tracks = load_tracks(archives, definition, &documents, &mut report);
+    tracks.extend(load_zone_tracks(
+        archives,
+        title.race.zone,
+        &documents,
+        &mut report,
+    ));
+    let mut locations: Vec<String> = Vec::new();
+    for track in tracks {
+        if !locations
+            .iter()
+            .any(|seen| seen.eq_ignore_ascii_case(&track.location))
+        {
+            locations.push(track.location);
+        }
+    }
+    locations
+}
+
 /// Reads the circuits a Zone race can be picked from, the same way
 /// [`load_tracks`] reads the ones a normal race can - and filtered against
 /// the archives the same way, for the same reason: a pack can declare a Zone
