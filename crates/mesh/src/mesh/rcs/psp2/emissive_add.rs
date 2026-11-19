@@ -294,7 +294,7 @@ mod tests {
             "data/art/published/dlc1/environments/chenghou_project/materials/diffuse_normal_specular_emmissivenew.rcsmaterial",
         ))
         .expect("admitted");
-        assert_eq!(new.mask, "Norm");
+        assert_eq!(new.mask, Some("Norm"));
         assert_eq!(new.colour, Some("Texture1"));
         assert!(!new.ps4, "Omega ships no `new` file");
     }
@@ -305,7 +305,7 @@ mod tests {
             "data/art/published/environments/shared/objectlibrary/materials/fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial",
         ))
         .expect("admitted");
-        assert_eq!(road.mask, "EmissiveMap");
+        assert_eq!(road.mask, Some("EmissiveMap"));
         assert_eq!(road.program, PROGRAM_EMISSIVE_ADD);
         assert_eq!(
             road.tint, None,
@@ -326,11 +326,11 @@ mod tests {
         let plain = |n: &str| kind_of(&named(n)).map(|k| (k.mask, k.ps4));
         assert_eq!(
             plain("x/materials/diffuse_normal_specular_emmissive.rcsmaterial"),
-            Some(("Texture2", true))
+            Some((Some("Texture2"), true))
         );
         assert_eq!(
             plain("x/materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial"),
-            Some(("Texture2Alpha", false))
+            Some((Some("Texture2Alpha"), false))
         );
         assert_eq!(
             plain("x/materials/diffuse_normal_specular.rcsmaterial"),
