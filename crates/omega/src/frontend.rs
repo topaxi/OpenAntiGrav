@@ -280,27 +280,22 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_distance_authored: false,
     preview_meshes: false,
     ship_preview_hull: Some("ship.vex"),
-    // **Chosen, not measured.** Omega's `ShipModel` authors `z=-2.05` with
-    // `x=0.5 y=0.1` and `nearZ=0.1` where HD's authors `z=-24`, a camera and a
-    // model scale no PS4 capture exists to recover; the PS4 hulls carry HD's own
-    // raw size (framed radius 6.0 to 7.3 across the fourteen, against HD's 6.1 to
-    // 7.3), so HD's authored pose frames them in the same `SHIP MODEL` frame, which
-    // sits where HD's does (the grid's 705 to 1757 across).
+    // Omega's screen update (`FUN_015a3b80`, `docs/ghidra/functions/ps4-omega-eu/team-selection-pose.md`)
+    // writes the item's rotation (`+0.4307`, `-0.4438` over the player's turn), position (the
+    // constants at `0x01854b20`: `0.4`, `0.1`, `-2.05`), scale (`0.1`) and lens (`100`) every
+    // frame; the origin, `nearZ` and `ObeySafeZone` stay the widget's. Those draw the craft 2.5
+    // times smaller than the frame shows, and `zoom` is the factor that fits it (fitted to one
+    // frame, its cause unread).
     ship_preview_pose: Some(oag_title::ShipPose {
-        origin: [1220.0, 412.0],
-        z: -24.0,
-        from: "Wipeout HD",
+        rotation: [0.430_769_83, -0.443_762_5],
+        position: [0.4, 0.1, -2.05],
+        scale: 0.1,
+        fov_degrees: 100.0,
+        zoom: 2.5,
     }),
-    // Omega's own screen update keeps HD's depth fit and poses the craft on other
-    // rest angles and a blended position this build has not followed
-    // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega"), so
-    // HD's camera is not borrowed and the pose above stays.
+    // The same update runs HD's fit and eases its result into three fields nothing reads, so no
+    // depth fit frames the craft and a step has no settle.
     ship_preview_fit: None,
-    // **Inherited from HD.** Omega's update eases the same depth targets without resetting
-    // them on a step (`FUN_015a3b80`), so a step plays HD's law on the borrowed pose; its own
-    // rates and the fit's constants are not read there, and are HD's
-    // (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "Omega").
-    ship_preview_settle: Some(oag_hd::frontend::SHIP_FIT),
     circuit_models: &CIRCUIT_MODELS,
     // Omega's `PI_Track` authors `RotX`, `PosX`, `PosY`, `PosZ` and `Scale` (`RotX` 0.45, `PosZ`
     // -2.05, `Scale` 0.012 on Vineta K), in the widget's own scaled units; its screen's update is

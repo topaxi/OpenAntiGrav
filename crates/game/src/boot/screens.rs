@@ -483,8 +483,8 @@ pub(super) fn selection_layouts(
                 grid,
             )
             .map(|mut layout| {
-                // A title whose own `ShipModel` camera is not reproducible draws the
-                // pose it names instead; the widget's rotations stay as authored.
+                // A title whose screen update writes the craft's rest values over the widget
+                // draws those; the origin, `nearZ` and `ObeySafeZone` stay authored.
                 if let Some(pose) = ship_pose
                     && let Some(model) = layout
                         .hd
@@ -492,11 +492,15 @@ pub(super) fn selection_layouts(
                         .and_then(|screen| screen.ship_model.as_mut())
                 {
                     report.push(format!(
-                        "ship preview: pose borrowed from {} (origin {:?}, z {})",
-                        pose.from, pose.origin, pose.z
+                        "ship preview: rest pose from the screen's update (rotation {:?}, position {:?}, scale {}, lens {} degrees, picture zoom {})",
+                        pose.rotation, pose.position, pose.scale, pose.fov_degrees, pose.zoom
                     ));
-                    model.origin = pose.origin;
-                    model.z = pose.z;
+                    [model.rot_x, model.rot_y] = pose.rotation;
+                    model.position = [pose.position[0], pose.position[1]];
+                    model.z = pose.position[2];
+                    model.scale = pose.scale;
+                    model.fov_degrees = pose.fov_degrees;
+                    model.zoom = pose.zoom;
                 }
                 if let Some(grid) = layout.hd.as_mut().and_then(|screen| screen.hex.as_mut()) {
                     grid.fade = hex_fade;

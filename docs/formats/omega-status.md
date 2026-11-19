@@ -401,16 +401,14 @@ the rating, the nobble and the three digits now sit on a two-tone bar). The same
 textures) that `preview::model` does not read: the preview goes through `psp2_scene::model` (the loader the circuit model already used, renamed
 from `circuit_model` and now used by `variant::model_or_default` too, so the flyer and end-of-race callers still do not draw a PS4 scene).
 Each of the fourteen builds with its own textures (Assegai: 19,934 triangles, 16 submeshes) and `_c1`/`_n1` are hulls of their own (Feisar: three shapes).
-**Pose, chosen, not measured**: Omega's `ShipModel` authors `z=-2.05`, `x=0.5 y=0.1`, `nearZ=0.1` where HD's authors `z=-24`; no PS4
-capture exists to recover that camera and model scale. The fourteen PS4 hulls frame to the same size as HD's (1st to 99th percentile
-radius 5.2 to 7.3 against HD's 6.1 to 7.3), and the `SHIP MODEL` frame sits where HD's does, so HD's authored origin `(1220, 412)` and
-`z=-24` frame them (`oag_title::FrontEnd::ship_preview_pose`, `Some` on Omega only; the rotations stay as authored and
-are HD's, `RotX 0.4 RotY -0.5`). The load report says so ("ship preview: pose borrowed from Wipeout HD"). HD's lens, pitch and slide
-are fits to RPCS3 frames and apply here unchanged. The hull overruns the frame by a few tens of pixels to the left at this pose, as HD's did.
-**HD no longer draws this pose (2026-11-11)**: its screen update writes over the widget and fits the craft's depth to the model's `<FE length>`,
-and HD is drawn that way (`docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`). **Omega: checked, differs**: its update
-(`FUN_015a3b80`) carries the same fit and constants, then poses the item on other rest angles (`+0.4307`, `-0.4438`), a blended position and a
-scale that are not followed, so the borrowed pose stays; Omega's `<FE length>` (Feisar `3.8`) is read and unused.
+**Pose, read off the update (2026-11-19, `hd-ship-craft`)**: the screen's update (`FUN_015a3b80`) writes the `ShipModel` item's rest rotation
+(`+0.4307`, `-0.4438`), position `(0.4, 0.1, -2.05)`, scale `0.1` and lens `100` degrees every frame, over the widget's own origin `(960, 540)`
+and `nearZ 0.1` (`oag_title::FrontEnd::ship_preview_pose`, `Some` on Omega only). Its depth fit runs and its result is never read, so
+there is no fit and no settle on a step. Those values draw the craft 2.5 times smaller than a shadPS4 frame shows, and the one factor that
+closes it (`ShipPose::zoom`) is **fitted to that frame, its cause open**. Feisar's concept hull then lands within 1 pixel across and 7 down of
+the frame's, and the pair `omega/menu-ship-select` (re-made on the original's own selection) reads 26.13 to 20.03 mean grey
+(`docs/ghidra/functions/ps4-omega-eu/team-selection-pose.md`). The load report says "ship preview: rest pose from the screen's update".
+Omega's `<FE length>` (Feisar `3.8`) is read and unused.
 **Not drawn**: `ShipDesc` (the model's description string, authored per model with `teletype`), the `L1/R1` livery hint,
 `PadlockText1/2` (they hold unlock conditions this build keeps no state for).
 
@@ -451,7 +449,7 @@ measured**), the `speed` craft, confirm, and the race loads and starts on the ye
 - **Ratings** off each model's `<FE>` as for HD (Feisar2048: combat 5/8.5/6/8, agility 5/8/9/6, speed 8/8/7/4, prototype 8/8/7/4, in tenths 50/85/60/80 ...).
   Thumbnails are `<model>\FE\thumb0.gnf` per craft (drawn), the logo `Ships\<Team>\FE\Logo.gnf` per team: `picker::hd::logo_src` now takes the team's
   `location` and the entry carries it (`Details::Ship::logo`), where it joined `ship_dir` and the id and so only reached `hdships`.
-- **The preview** is `Ships\<Team>\<n>\ship.vex`, through the same `PreviewSource` join the HD-era variants use; the pose is the borrowed one.
+- **The preview** is `Ships\<Team>\<n>\ship.vex`, through the same `PreviewSource` join the HD-era variants use; the pose is the update's rest pose (above).
 - **Team-level unlock rules are not read, as on the HD-era teams.** `Piranha2048` and `AG_Systems2048` author `<Unlock purchase="1">` on the team (as HD-era
   `Qirex`, `Piranha`, `AG_Systems`, `Triakis`, `Goteki`, `EGX`, `Assegai` do, and `Mirage`..`Icaras` a `grid`); this build keeps no unlock state, offers all
   nineteen and says nothing is locked. **Not measured**: what the original draws for an unpurchased team.

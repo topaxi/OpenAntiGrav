@@ -110,7 +110,7 @@ included).
 ## Cross-title
 
 - **Omega: ported.** Same rows, same parser, same folders; the same gate and swap run on it,
-  pinned by `hd_ship_preview_ground_truth::omega_draws_every_teams_ps4_hull_at_the_pose_it_borrows`.
+  pinned by `hd_ship_preview_ground_truth::omega_draws_every_teams_ps4_hull_at_the_updates_rest_pose`.
 - **2048: checked, differs.** Its five teams carry no `<Unlock>` on a model (Omega's copies of them
   carry `<Unlock purchase="1">` on the team), and its craft are numbered directories, not liveries.
 - **Pulse: differs.** Its variants carry `Team`/`loyalty`/`Exclusive` rows, read by

@@ -458,7 +458,6 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     ship_preview_hull: None,
     ship_preview_pose: None,
     ship_preview_fit: None,
-    ship_preview_settle: None,
     circuit_models: &[],
     circuit_turntable: None,
     circuit_fly_by: None,

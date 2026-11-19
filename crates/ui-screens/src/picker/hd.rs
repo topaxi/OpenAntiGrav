@@ -119,13 +119,32 @@ pub struct Bracket {
     pub middle: bool,
 }
 
+/// A model widget's `nearZ` when none is authored (`ModelItem_Construct`, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`).
+const NEAR_DEFAULT: f32 = 20.0;
+
+/// A model widget's field of view, degrees, when nothing writes one (the literal at `0x008ae2e8`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The widget").
+const FOV_DEFAULT_DEGREES: f32 = 57.3;
+
 /// The `<Model name="ShipModel">` widget's own values - where and how the
 /// original poses the selected craft. Drawn by
 /// `oag_game::preview::ship_model`.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ShipModel {
     pub origin: [f32; 2],
+    /// The widget's `x` and `y`: where the model sits across and up from its own origin, model units.
+    pub position: [f32; 2],
     pub z: f32,
+    /// The widget's own scale of the model: authored by no `<Values>`, so 1 unless a screen's update
+    /// writes one.
+    pub scale: f32,
+    /// `nearZ`.
+    pub near: f32,
+    /// The lens, a vertical field of view in degrees: no `<Values>` attribute sets it, so the
+    /// widget's constructor value unless a screen's update writes one.
+    pub fov_degrees: f32,
+    /// A zoom of the finished picture about the widget's origin, 1 unless a title's pose states one.
+    pub zoom: f32,
     pub rot_x: f32,
     pub rot_y: f32,
     /// `ObeySafeZone`: the craft and its origin are drawn inside the title's
@@ -291,7 +310,15 @@ fn walk(
                         number(child, "OriginX").unwrap_or(0.0),
                         number(child, "OriginY").unwrap_or(0.0),
                     ],
+                    position: [
+                        number(child, "x").unwrap_or(0.0),
+                        number(child, "y").unwrap_or(0.0),
+                    ],
                     z: number(child, "z").unwrap_or(0.0),
+                    scale: 1.0,
+                    near: number(child, "nearZ").unwrap_or(NEAR_DEFAULT),
+                    fov_degrees: FOV_DEFAULT_DEGREES,
+                    zoom: 1.0,
                     rot_x: number(child, "RotX").unwrap_or(0.0),
                     rot_y: number(child, "RotY").unwrap_or(0.0),
                     obey_safe_zone: child.flag("ObeySafeZone").unwrap_or(false),

@@ -1099,13 +1099,14 @@ fn omega_reads_its_own_team_selection() {
     assert_eq!(ship.title, "SHIP SELECT");
     let extra = ship.hd.as_deref().expect("HD's dialect");
     let model = extra.ship_model.expect("ShipModel");
-    // Omega authors origin [960, 540] and z -2.05, which this build does not reproduce: the
-    // title names the pose HD's authored values give (`FrontEnd::ship_preview_pose`).
+    // Omega authors origin [960, 540] and keeps it; the screen's update writes the rest pose
+    // over the rest (`FrontEnd::ship_preview_pose`).
     let pose = oag_omega::TITLE
         .front_end
         .and_then(|front_end| front_end.ship_preview_pose)
-        .expect("a borrowed pose");
-    assert_eq!(model.origin, pose.origin);
+        .expect("the update's rest pose");
+    assert_eq!(model.origin, [960.0, 540.0]);
+    assert_eq!([model.rot_x, model.rot_y], pose.rotation);
     let grid = extra.hex.expect("the honeycomb");
     assert_eq!((grid.columns, grid.rows, grid.scale), (5, 9, 0.8));
     // Its cursor ring is the HD style's red, not the Fury style's pale pink the grid defaults to.

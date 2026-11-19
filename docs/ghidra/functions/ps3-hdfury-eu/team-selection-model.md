@@ -269,26 +269,23 @@ first six frames).
 
 ## Omega and 2048
 
-- **Omega: checked, differs.** `eboot-ps4-omega-eu-v107.bin` carries the fit inside its own
-  screen update, `FUN_015a3b80` (`0x015a3b80`): the same constant run at `0x01862f20`
-  (`0.25`, `-0.6`, a lens constant `0.472`, `1920.0`, `-1080.0`, `-0.5`, the window `-389`,
-  `535`, `-535`, `389`, the floor `11.0`), the same `pos%d` debug name, targets at
-  `st[0x7b4..0x7b6]` eased into `st[0x7bb..0x7bd]`. What it does with them differs: the item is
-  written with rest angles `+0.4307` and `-0.4438` (`0x01862f00`, `0x01862f04`, at item `+0x134`
-  and `+0x138`), a position blended between two sets (`+0x128..+0x130`) and a scale
-  (`+0x144..+0x14c`), and its `ShipModel` authors `x=0.5 y=0.1 z=-2.05 nearZ=0.1`. A shadPS4
-  frame of the screen shows a smaller, steeper craft than HD's. Omega's teams definition authors
-  the same `<FE length>` (Feisar `3.8`), which the reader now carries. Not followed further:
-  Omega keeps the pose it borrows (`oag_omega`'s `ship_preview_pose`).
-- **Omega, the swap's settle: checked, applies, ported by inheritance.** `FUN_015a3b80` eases
-  targets `st[0x7b4..0x7b6]` into `st[0x7bb..0x7bd]` and does not reset them on a step, which is
-  the same state, so a step plays HD's law on Omega's craft: `oag_omega`'s
-  `ship_preview_settle` is `oag_hd::frontend::SHIP_FIT` (**inherited from HD**; no Omega
-  capture of a step exists), and the craft, posed from the borrowed pose, is drawn at the rest
-  depth over the drawn depth as a scale (`ship_model::settle_scale`). Test:
-  `hd_ship_preview_ground_truth::omega_plays_the_settle_on_its_borrowed_pose` (Piranha's first
-  frame 0.93 of settled, settled by 1.5 s). Still open: Omega's own ease rates and fit
-  constants (HD's are assumed), and its pose, which `ship_preview_fit` is `None` for.
+- **Omega: checked, differs; ported on its own constants (2026-11-19, `hd-ship-craft`).**
+  `eboot-ps4-omega-eu-v107.bin` carries the fit inside its own screen update, `FUN_015a3b80`
+  (`0x015a3b80`): the same constant run (`0.25`, `-0.6`, `1920.0`, `-1080.0`, `-0.5`, the window
+  `-389`, `535`, `-535`, `389`, the floor `11.0`), the same `pos%d` debug name, targets at
+  `st[0x7b4..0x7b6]` eased into `st[0x7bb..0x7bd]`, with a projector of another lens (a 100 degree
+  field against HD's 57.3). **Nothing reads the eased values**, so Omega has no depth fit on the
+  craft and no settle on a step; the item is written with rest rotation `+0.4307`, `-0.4438`,
+  position `(0.4, 0.1, -2.05)`, scale `0.1` and lens `100`, wired as `oag_omega`'s
+  `ship_preview_pose`. The page with the evidence, the readers searched and the one fitted factor:
+  [../ps4-omega-eu/team-selection-pose.md](../ps4-omega-eu/team-selection-pose.md). Omega's teams
+  definition authors the same `<FE length>` (Feisar `3.8`), which the reader carries and the screen
+  does not use.
+- **Omega, the swap's settle: checked, differs (an earlier reading is withdrawn).** An earlier
+  version of this page said Omega "eases the same targets without resetting them, so a step plays
+  HD's law", and `ship_preview_settle` carried HD's fit as **inherited from HD**. The eased fields
+  are never read (the page above), so Omega's craft cuts in at its rest pose: the field and the
+  scale-of-pose path are removed.
 - **2048: checked, differs.** The window's `535.0` occurs nowhere in the v1.04 `eboot.elf` as a
   literal (a byte search for `00 c0 05 44`; an ARM `movw`/`movt` pair would not show, so this is
   absence of the HD constant run, not proof of no fit), its `<FE>` authors `length` beside
