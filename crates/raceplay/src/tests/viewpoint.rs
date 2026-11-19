@@ -169,3 +169,44 @@ fn the_cut_is_one_answer_for_every_view_rectangle_and_is_not_simulation() {
         "one view is the area itself"
     );
 }
+
+/// A mode the title holds until the release draws no HUD on the grid or through the
+/// countdown, and draws it from the first released tick
+/// (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`).
+#[test]
+fn a_mode_held_until_go_draws_no_hud_before_the_release() {
+    use oag_race::COUNTDOWN_TICKS;
+    let mut race = race_with_a_grid();
+    race.view.hud_waits_for_go = true;
+    for (tick, shown) in [
+        (0, false),
+        (COUNTDOWN_TICKS - 1, false),
+        (COUNTDOWN_TICKS, true),
+        (COUNTDOWN_TICKS + 600, true),
+    ] {
+        race.core.sim.world.tick = tick;
+        assert_eq!(race.hud_shown(), shown, "tick {tick}");
+    }
+    race.view.hud_waits_for_go = false;
+    race.core.sim.world.tick = 0;
+    assert!(race.hud_shown(), "a mode not held draws it on the grid");
+}
+
+/// HD and Omega hold Zone's HUD until the release and nothing else (a single race draws
+/// it through the countdown, read live); the names are the modes' own.
+#[test]
+fn hd_and_omega_hold_zone_and_only_zone() {
+    use oag_race::Mode;
+    for title in [oag_hd::TITLE, oag_omega::TITLE, oag_2048::TITLE] {
+        let held = title.race.hud_waits_for_go.value;
+        assert!(held.contains(&Mode::Zone.name()), "{}", title.name);
+        assert!(!held.contains(&Mode::SingleRace.name()), "{}", title.name);
+    }
+    for title in [oag_pulse::TITLE, oag_pure::TITLE] {
+        assert!(
+            title.race.hud_waits_for_go.value.is_empty(),
+            "{}",
+            title.name
+        );
+    }
+}

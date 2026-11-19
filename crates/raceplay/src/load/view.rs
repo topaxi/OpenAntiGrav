@@ -777,6 +777,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
         zoom_borrowed: borrowed_zoom.is_some(),
         capture_hud: options.hud,
+        hud_waits_for_go: title
+            .race
+            .hud_waits_for_go
+            .value
+            .contains(&options.mode.name()),
         hull_shake: title.race.hull_shake.map(|shake| shake.value),
         now_playing,
         world_clock_offset: options.world_clock_offset,
