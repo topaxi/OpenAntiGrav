@@ -303,9 +303,8 @@ about a second, decompression-shaped problem on top of it.
   (`oag_formats::wwise`, over 107 banks, 0 unresolved media) and the `.wem`
   codec (**Sony's ATRAC9**, `docs/formats/wwise.md`). The thread's "10 more
   banks in `data02`" were the old `SBlk` container, not Wwise. **Open in sound:**
-  (1) **multi-channel ATRAC9** - `atrac9dec` refuses all four-, six- and
-  eight-channel files (58 per archive: the soundtrack's stems and a few beds)
-  which FFmpeg decodes; fix the crate or write it up upstream; (2) **map Wwise
+  (1) ~~multi-channel ATRAC9~~ **closed 2026-11-19**: decoded by the fixed
+  `vendor/atrac9dec` (`docs/formats/atrac9.md`); (2) **map Wwise
   events to this project's cue vocabulary** - a bank carries event *ids* (hashes)
   only, so the simulation's cue names and a hash to test them against are
   needed; (3) **1,450 of 4,957 `Play` actions name an object no shipped bank

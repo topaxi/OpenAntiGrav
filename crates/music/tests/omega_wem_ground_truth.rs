@@ -306,11 +306,11 @@ fn omega_data00_loose_wems_are_atrac9_and_decode_shard_0() {
             rate_24k: 0,
             plain_chunk_order: 179,
             consistent: 179,
-            decoded: 169,
+            decoded: 179,
             silent: 0,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 10,
+            refused_multichannel: 0,
         },
     );
 }
@@ -334,11 +334,11 @@ fn omega_data00_loose_wems_are_atrac9_and_decode_shard_1() {
             rate_24k: 0,
             plain_chunk_order: 179,
             consistent: 179,
-            decoded: 169,
+            decoded: 179,
             silent: 0,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 10,
+            refused_multichannel: 0,
         },
     );
 }
@@ -362,11 +362,11 @@ fn omega_data00_loose_wems_are_atrac9_and_decode_shard_2() {
             rate_24k: 0,
             plain_chunk_order: 178,
             consistent: 178,
-            decoded: 162,
+            decoded: 178,
             silent: 1,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 16,
+            refused_multichannel: 0,
         },
     );
 }
@@ -390,11 +390,11 @@ fn omega_data00_loose_wems_are_atrac9_and_decode_shard_3() {
             rate_24k: 0,
             plain_chunk_order: 178,
             consistent: 178,
-            decoded: 165,
+            decoded: 178,
             silent: 0,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 13,
+            refused_multichannel: 0,
         },
     );
 }
@@ -418,11 +418,11 @@ fn omega_data08_loose_wems_are_atrac9_and_decode_shard_0() {
             rate_24k: 0,
             plain_chunk_order: 184,
             consistent: 184,
-            decoded: 170,
+            decoded: 184,
             silent: 1,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 14,
+            refused_multichannel: 0,
         },
     );
 }
@@ -446,11 +446,11 @@ fn omega_data08_loose_wems_are_atrac9_and_decode_shard_1() {
             rate_24k: 0,
             plain_chunk_order: 184,
             consistent: 184,
-            decoded: 174,
+            decoded: 184,
             silent: 0,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 10,
+            refused_multichannel: 0,
         },
     );
 }
@@ -474,11 +474,11 @@ fn omega_data08_loose_wems_are_atrac9_and_decode_shard_2() {
             rate_24k: 0,
             plain_chunk_order: 183,
             consistent: 183,
-            decoded: 169,
+            decoded: 183,
             silent: 0,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 14,
+            refused_multichannel: 0,
         },
     );
 }
@@ -502,11 +502,11 @@ fn omega_data08_loose_wems_are_atrac9_and_decode_shard_3() {
             rate_24k: 0,
             plain_chunk_order: 183,
             consistent: 183,
-            decoded: 172,
+            decoded: 183,
             silent: 0,
             prefetch_heads: 0,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 11,
+            refused_multichannel: 0,
         },
     );
 }
@@ -531,11 +531,11 @@ fn omega_data00_embedded_media_are_wems_too() {
             rate_24k: 295,
             plain_chunk_order: 1052,
             consistent: 1956,
-            decoded: 1947,
+            decoded: 1956,
             silent: 0,
             prefetch_heads: 164,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 9
+            refused_multichannel: 0
         }
     );
 }
@@ -560,11 +560,11 @@ fn omega_data08_embedded_media_are_wems_too() {
             rate_24k: 295,
             plain_chunk_order: 1076,
             consistent: 2080,
-            decoded: 2071,
+            decoded: 2080,
             silent: 1,
             prefetch_heads: 175,
             refused_stereo_or_mono: 0,
-            refused_multichannel: 9
+            refused_multichannel: 0
         }
     );
 }
@@ -672,8 +672,8 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
     let Some(mut archive) = archive("omega-eu-patch", "data08.psarc") else {
         return;
     };
-    // The smallest stereo `.wem`, and the smallest four-channel one, so the
-    // check stays cheap and covers a second layout. Entries are visited
+    // The smallest stereo, four-channel and eight-channel `.wem`, so the
+    // check stays cheap and covers every loose layout. Entries are visited
     // smallest first by their directory size and only read until both are
     // found, so the archive's other files are never read.
     let mut paths: Vec<(u64, String)> = archive
@@ -688,7 +688,7 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
     paths.sort_by_key(|(size, _)| *size);
     let mut found: Vec<(u16, String, Vec<u8>)> = Vec::new();
     for (_, path) in &paths {
-        if found.len() == 2 {
+        if found.len() == 3 {
             break;
         }
         let blob = archive.read_path(path).expect("the .wem reads");
@@ -696,7 +696,7 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
             continue;
         };
         let f = wem.format();
-        if f.tag != TAG_ATRAC9 || ![2u16, 4].contains(&f.channels) {
+        if f.tag != TAG_ATRAC9 || ![2u16, 4, 8].contains(&f.channels) {
             continue;
         }
         if found.iter().all(|(c, _, _)| *c != f.channels) {
@@ -718,6 +718,11 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
         println!("skipping: ffmpeg is not on PATH");
         return;
     }
+    assert_eq!(
+        found_layouts(&picked),
+        [2, 4, 8],
+        "the check covers stereo, quad and 7.1"
+    );
     for (channels, label, blob) in picked {
         let wem = Wem::parse(blob).unwrap();
         let a = wem.format().atrac9().unwrap();
@@ -727,34 +732,36 @@ fn the_decoder_agrees_with_ffmpeg_up_to_polarity() {
             wem.frames() * usize::from(a.frame_samples) * usize::from(channels),
             "{label}: ffmpeg decodes every frame without error"
         );
-        let ours = wem::decode(blob);
-        if channels > 2 {
-            // The measured limitation: FFmpeg decodes it and the crate stops
-            // part-way. When the crate is fixed this fails, and the census
-            // pins above want their multichannel numbers updated.
-            let e = ours.expect_err("the crate refuses four-channel ATRAC9 today");
-            println!("{label} ({channels} ch): ffmpeg decodes it; the crate: {e}");
-            continue;
-        }
-        let ours = ours.expect("stereo decodes");
-        let skip = a.delay as usize * usize::from(channels);
-        let mut worst = 0i32;
-        let mut identical = 0usize;
+        let ours = wem::decode(blob).expect("every layout decodes");
+        let n = usize::from(channels);
+        let skip = a.delay as usize * n;
+        // ATRAC9's 7.1 layout is blocks Stereo, Mono, LFE, Stereo, Stereo, so
+        // channel 3 is the LFE. LibAtrac9 and FFmpeg decode it differently
+        // (`docs/formats/atrac9.md`, "The LFE channel"); it is measured, not
+        // asserted.
+        let lfe = (channels == 8).then_some(3);
+        let mut worst = vec![0i32; n];
         for (i, &s) in ours.samples.iter().enumerate() {
             let theirs = reference[skip + i];
-            worst = worst.max((i32::from(s) + i32::from(theirs)).abs());
-            identical += usize::from(i32::from(s) + i32::from(theirs) == 0);
+            let w = &mut worst[i % n];
+            *w = (*w).max((i32::from(s) + i32::from(theirs)).abs());
         }
-        println!(
-            "{label} ({channels} ch): {} samples, worst |ours + ffmpeg| {worst}, identical {:.2}%",
-            ours.samples.len(),
-            100.0 * identical as f64 / ours.samples.len() as f64
-        );
-        assert!(
-            worst <= 1,
-            "{label}: stereo agrees with ffmpeg to one LSB, negated"
-        );
+        println!("{label} ({channels} ch): worst |ours + ffmpeg| per channel {worst:?}");
+        for (ch, w) in worst.iter().enumerate() {
+            if Some(ch) != lfe {
+                assert!(
+                    *w <= 1,
+                    "{label} channel {ch}: agrees with ffmpeg to one LSB, negated"
+                );
+            }
+        }
     }
+}
+
+fn found_layouts(picked: &[(u16, &str, &[u8])]) -> Vec<u16> {
+    let mut layouts: Vec<u16> = picked.iter().map(|(c, _, _)| *c).collect();
+    layouts.sort_unstable();
+    layouts
 }
 
 /// FFmpeg's decode of an ATRAC9 `.wem`, rewrapped as the `.at9` its demuxer

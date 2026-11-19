@@ -15,25 +15,23 @@
 //!
 //! # What was checked, and what was not
 //!
-//! The crate is young and single-author, so it was measured before it was
-//! taken (`docs/formats/wwise.md`): against FFmpeg's independent decoder on a
-//! stereo voice clip it agrees to within one least-significant bit on 99.75%
-//! of samples and **is the negation of it** - a polarity difference between two
-//! implementations, inaudible on its own and not corrected here, since which
-//! polarity Sony's decoder has is not known. `crates/music/tests/
-//! omega_wem_ground_truth.rs` decodes every `.wem` on the archives.
-//!
-//! The crate's README rates multi-channel decoding "partial" and skips the
-//! bandwidth-extension payload; the stereo files are the ones a cue plays.
+//! The published crate refused every multi-channel stream and departed from
+//! LibAtrac9 on stereo too, so it is vendored with fixes (`vendor/atrac9dec`).
+//! Every ATRAC9 stream Omega and 2048 ship decodes sample-identical to
+//! LibAtrac9 and within one least-significant bit of FFmpeg's independent
+//! decoder, negated: a polarity difference between the two implementations,
+//! inaudible on its own and not corrected here, since which polarity Sony's
+//! decoder has is not known. `docs/formats/atrac9.md` has the numbers;
+//! `crates/music/tests/omega_wem_ground_truth.rs` decodes every `.wem` on the
+//! archives.
 //!
 //! [ADR-0019]: ../../../docs/architecture/adr/0019-atrac3plus-out-of-process.md
 //! [ADR-0024]: ../../../docs/architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md
 
-use anyhow::{Context, Result, anyhow, ensure};
-use atrac9dec::Atrac9Decoder;
+use anyhow::{Context, Result, anyhow};
 use oag_formats::wwise::wem::Wem;
 
-use crate::at3::Pcm;
+use crate::at3::{Format, Pcm};
 
 /// What a `.wem` declares about itself, without decoding it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,44 +69,22 @@ pub fn describe(blob: &[u8]) -> Result<Stream> {
 ///
 /// # Errors
 ///
-/// When [`describe`] would refuse it, when the configuration word does not
-/// agree with `fmt ` (channels, rate, one frame per block), or when a frame
-/// will not decode.
+/// When [`describe`] would refuse it, or as [`crate::at9::decode_superframes`].
 pub fn decode(blob: &[u8]) -> Result<Pcm> {
     let wem = Wem::parse(blob).map_err(|e| anyhow!("{e}"))?;
     let format = wem.format();
     let atrac9 = format
         .atrac9()
         .context("not ATRAC9 with the 18-byte extra data Wwise writes")?;
-    let mut decoder =
-        Atrac9Decoder::new(&atrac9.config).map_err(|e| anyhow!("the ATRAC9 config word: {e}"))?;
-    let info = decoder.codec_info();
-    ensure!(
-        info.channels == usize::from(format.channels)
-            && info.sampling_rate == format.sample_rate
-            && info.superframe_size == usize::from(format.block_align),
-        "the ATRAC9 config word ({} channel(s), {} Hz, {}-byte superframe) disagrees with fmt \
-         ({} channel(s), {} Hz, block align {})",
-        info.channels,
-        info.sampling_rate,
-        info.superframe_size,
-        format.channels,
-        format.sample_rate,
-        format.block_align
-    );
-    let per_superframe = info.channels * info.frame_samples * info.frames_in_superframe;
-    let mut samples = Vec::with_capacity(wem.frames() * per_superframe);
-    let mut block = vec![0i16; per_superframe];
-    for (index, frame) in wem
-        .payload()
-        .chunks_exact(usize::from(format.block_align))
-        .enumerate()
-    {
-        decoder
-            .decode(frame, &mut block)
-            .map_err(|e| anyhow!("frame {index}: {e}"))?;
-        samples.extend_from_slice(&block);
-    }
+    let mut samples = crate::at9::decode_superframes(
+        &atrac9.config,
+        Format {
+            channels: format.channels,
+            sample_rate: format.sample_rate,
+            block_align: format.block_align,
+        },
+        wem.payload(),
+    )?;
     let channels = usize::from(format.channels);
     let skip = (atrac9.delay as usize * channels).min(samples.len());
     samples.drain(..skip);
