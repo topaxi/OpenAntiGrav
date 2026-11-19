@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-19
-summary: "HD front end: Ship Select settle matches RAM; the swap gap (3 frames, ours 4) is ready to wire; craft turn/zoom input unwired; Omega zoom fitted"
+summary: "HD front end: Ship Select settle matches RAM; the swap gap is wired at 3 frames (2026-11-19); craft turn/zoom input unwired; Omega zoom fitted"
 difficulty: medium (30)
 ---
 
@@ -22,7 +22,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `hull_orbit` pose is fitted to the classic Feisar hull only; no `_n1` frame;
   a variant rated below the base draws no marker (no frame shows one)
 - Ship Select swap (LANDED 2026-10-10, `hd-ship-select-anim`): no turntable
-  (measured), craft absent 0.9 s on opening, 60 ms gap and 0.45 s settle on a
+  (measured), craft absent 0.9 s on opening, 50 ms (3 frame) gap and 0.45 s settle on a
   step (`oag_game::preview::hull_swap`; the settle's start per team LANDED
   2026-11-12, item 2 below). Open: the step's burst (not a `.pob`: it is the Fury backdrop
   point cloud, `BackgroundAnimFury_Item`). Backdrop (LANDED 2026-10-10,
@@ -62,10 +62,11 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      ease and fit order: **exact** (14 steps on two boots, depth to 1e-4, slide to 0.06; `ship_model::tests::a_step_follows_the_screens_own_frames_in_ram`);
      turn, pan and zoom: **zero** through every step; the fit's model pointer moves with the selection (the "fit keeps the old box
      through the gap" candidate is false); the craft box after the gap sits at the rest floor (3.85 against 3.82). **The one term that differs is the cut**: the original's craft is
-     absent at game frames 3, 4 and 5 after the selection moved (once also 6), ours for 4 frames (`hull_swap::GAP_SECONDS` 0.06); ours absent
-     where the original shows the new craft is craft box 20 to 30. **Ready to wire** (small, 20): `GAP_SECONDS` to 3 frames
-     (0.05, stated in frames): the original's craft goes with the header dots (13 of 14 empty grabs show the new dots, none shows the old craft with
-     new dots), as ours does from its frame 0; a scratch build at 0.045 brought the two boot-1 grabs at frame 6 from 20.5 and 27.2 to 3.4 and 3.7. Open: the step of the rest of the page (the team banner is blank at frame 6 and part drawn at 10, the hex column shifted, ours finished, not measured), the cold first visit of a team (craft absent past frame 10 in two of two grabs), `FitMotion`'s
+     absent at game frames 3, 4 and 5 after the selection moved (once also 6), ours was 4 frames (0.06 s); ours absent
+     where the original shows the new craft is craft box 20 to 30. **WIRED 2026-11-19** (`hd-step-gap`): `hull_swap::GAP_FRAMES` = 3 screen frames from the selection
+     (the original's craft goes with the header dots: 13 of 14 empty grabs show the new dots, none shows the old craft with new dots), test
+     `hull_swap::tests::a_step_cuts_the_craft_for_three_frames`; the frame-6 step pair's craft box 30.52 to 2.57 (picture lag 3; at the old lag of 4 ours is
+     absent at the pair's 2 frames either way, so `PICTURE_LAG_FRAMES` is 3 now and the pairs are to be re-made with it, or re-rendered by flags with `--menu-picker-step-seconds (k-3)/60`). Open: the step of the rest of the page (the team banner is blank at frame 6 and part drawn at 10, the hex column shifted, ours finished, not measured), the cold first visit of a team (craft absent past frame 10 in two of two grabs), `FitMotion`'s
      alternation phase at the step (ours fixed, the original's the press's frame, 0.1 of depth at most). The craft box colour bias (-2.5, -1.5, -1.9) is item 1's.
   1. ~~**The hull is darker than the original** in that box~~ (LANDED 2026-11-12, `hd-ship-select-light-wire`):
      the craft is lit by the front end's own `.envsettings` (`oag_game::preview::model_light`, from
@@ -167,7 +168,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 
 ## Next Steps
 
-- Wire the swap's gap at 3 frames (item 0 above, after pinning the picture lag); then the step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count) can go on the compare page (k=6 scores the gap, k=8 and later the settle).
+- The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
    scale survive? If yes, one HD-only presentation transform on `Space::HD`.
