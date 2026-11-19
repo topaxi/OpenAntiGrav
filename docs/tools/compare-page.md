@@ -2006,6 +2006,12 @@ ours: with theirs' tag box pasted on grab C the footer goes 6.95 to 4.90. The pl
 **PS2** ships the same code (`NewsItemBarText1`, `PI_News` and `NewsFrequency` are in `SCES_547.48`) and the same list less three rows (121; `pulses_news_items_are_the_discs_list`),
 and ours draws it on the PS2 ship select at the PS2 viewport (113, 392, 493 x 53), inherited from PSP. **Pure** ships no ticker: its `BOOT.BIN` on both pressings has no
 `TKR_`, `NewsItemBarText` or `PI_News` string and its `Data.wad` no `news` plugin; its `TextInfoIsAlwaysLast` is the description box.
+**The other Pulse and Pure menu pairs, re-rendered on copies with this branch's binary** (recorded to re-rendered mean grey): `menu-track` 4.45 to 3.95, `menu-team` (the old frame)
+5.89 to 5.61, PS2 `menu-team` 5.65 to 5.55; PSP `menu-cell` 4.62 to 4.64, `menu-grid` 3.59 to 3.60, `menu-title` 4.53, PS2 `menu-cell` 4.04 and `menu-grid` 2.84, and all eight Pure pairs
+move by at most 0.01. The three that move are the pickers' footers: a still with no `--menu-ticker` now draws the ticker empty (a message enters at the right edge, so none is in view at
+clock 0) where it drew the tournament tip at the left edge. The original's frame always holds a message, drawn at random, so the blank is closer than a wrong tip, not a match; a pair
+that wants the message uses the `tick:` plan step. The live ticker is unaffected (its clock runs).
+
 Grab A is the one to keep as the pair (ours re-rendered by `compare-rerender-ours.rerender` on a copy: 4.06 to 3.12). A pair whose ticker quotes a seeded statistic
 (`TKR_FAVMUS`, `TKR_SONGS`) needs the `[[lifetime]]` row `pair.json` does not carry, so those re-render only through the pair script.
 

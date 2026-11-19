@@ -131,7 +131,8 @@ class Watch:
 
     def visible(self, sample):
         """`(item, head x, text)` of the one message on screen when exactly one record is active, its item is known and ours counts what it
-        quotes (`records/lifetime.rs`); else `None`."""
+        quotes and can seed from the profile table (`records/lifetime.rs`); else `None`. Total play time (slot 5) is not one: ours derives it from
+        the menu and race time rather than storing it, so a seeded row would print a different number."""
         alive = [k for k, record in enumerate(sample["buffers"]) if record["active"]]
         if len(alive) != 1:
             return None
@@ -140,7 +141,7 @@ class Watch:
         if item is None or not record["text"]:
             return None
         modelled = item["class"] == 0 and item["format"] != 5 and (
-            item["member"] in (LAPS, TOTAL_TIME, MENU_TIME, SONGS) or item["member"] in MODE_TIME_SLOTS.values())
+            item["member"] in (LAPS, MENU_TIME, SONGS) or item["member"] in MODE_TIME_SLOTS.values())
         favourite = item["class"] == 1 and item["member"] == FAVOURITE_MUSIC
         if not (modelled or favourite):
             return None
