@@ -93,6 +93,7 @@ mod psp2_glow_ground_truth;
 mod psp2_nitro_hull_ground_truth;
 mod psp2_nova_sun_mask_smooth;
 mod psp2_reflective_window_ground_truth;
+mod psp2_reflective_window_lit_path;
 mod psp2_scenery_animation_ground_truth;
 mod psp2_static_hologram_ground_truth;
 mod psp2_texture_dedupe_ground_truth;

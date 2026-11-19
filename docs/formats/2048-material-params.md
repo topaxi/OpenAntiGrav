@@ -614,7 +614,7 @@ on lane 0 (one family at a time was scanned on Moa Therma: none but `dc_diffuset
 
 **Omega.** **Checked, applies, not wired.** Omega's 2048-mode `Arena` (`#73`, 5 submeshes) and `Cathedral` (`#464`, `#824`,
 `#1106`) ship the same `fc10_lambert_2uv_emissive.rcsmaterial` with the same sampler layout (window atlas, a `sky5.gnf`
-second sampler, the lightmap third); the PS4 programs (GCN) are unread, so `Kind::ps4` is false and neither family is
+second sampler whose hash `0xdba51b4c` is `name_hash("ReflectMap")`, pinned by a unit test, the lightmap third); the PS4 programs (GCN) are unread, so `Kind::ps4` is false and neither family is
 admitted on PS4. Read them with `gcn_dump` on `data0N.psarc` before wiring (does the term read the diffuse alpha, is the lookup
 `0.5 + 0.5 R.xy` too). `dc_diffusetexturealphaemissive` ships on no Omega circuit read here (`Square`'s awning is
 `fc06_lambert_simple` with `cloth_awning.gnf`).

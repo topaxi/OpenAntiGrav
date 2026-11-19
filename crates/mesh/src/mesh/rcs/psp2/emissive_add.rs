@@ -289,6 +289,18 @@ mod tests {
     }
 
     #[test]
+    fn omegas_second_sampler_of_the_window_file_is_the_reflect_map() {
+        // The sampler hash Omega's `fc10_lambert_2uv_emissive` records beside its window atlas.
+        assert_eq!(name_hash("ReflectMap"), 0xdba5_1b4c);
+        let family = kind_of(&named(
+            "data/art/published/dlc1/environments/moa_therma/materials/fc10_lambert_2uv_emissive.rcsmaterial",
+        ))
+        .expect("admitted");
+        assert_eq!(family.mask, Some("ReflectMap"));
+        assert!(!family.ps4, "Omega's programs are unread");
+    }
+
+    #[test]
     fn chenghous_new_family_masks_by_norm_and_colours_by_texture1() {
         let new = kind_of(&named(
             "data/art/published/dlc1/environments/chenghou_project/materials/diffuse_normal_specular_emmissivenew.rcsmaterial",
