@@ -650,7 +650,7 @@ fn the_craft_is_lit_by_the_front_ends_envsettings_and_its_tone_stage() {
     assert_eq!(file.scalar(TONE_MAXIMUM_BRIGHTNESS), Some(tone.maximum));
 
     let mut report = Vec::new();
-    let light = oag_game::preview::model_light(&mut archives, title, true, &mut report)
+    let light = oag_game::preview::model_light(&mut archives, title, true, None, &mut report)
         .unwrap_or_else(|| panic!("no light: {report:?}"));
     assert_eq!(light.enabled, 1.0, "an authored rig, not the stand-in");
     assert_eq!(Some(light.sun), file.vec3(SUN_COLOUR));
@@ -669,7 +669,20 @@ fn the_craft_is_lit_by_the_front_ends_envsettings_and_its_tone_stage() {
         light.output_scale
     );
 
-    let hd_style = oag_game::preview::model_light(&mut archives, title, false, &mut report)
+    // A capture that states the adapted luma (a hidden backdrop adapts darker) replaces the read.
+    let stated =
+        oag_game::preview::model_light(&mut archives, title, true, Some(0.01451), &mut report)
+            .expect("the stated luma still lights the rig");
+    let stated_exposure = tone.maximum - (0.01451 * tone.boost).min(tone.clamp);
+    assert!(
+        (stated.output_scale - 0.5 * stated_exposure).abs() < 1e-5
+            && stated.output_scale > light.output_scale,
+        "output scale {} at a stated luma, {} at the title's read",
+        stated.output_scale,
+        light.output_scale
+    );
+
+    let hd_style = oag_game::preview::model_light(&mut archives, title, false, None, &mut report)
         .expect("the HD style's file reads");
     assert_ne!(hd_style.sun, light.sun, "the two styles are two files");
     assert!(
@@ -810,7 +823,7 @@ fn omega_lights_its_craft_from_its_own_front_end_file() {
     let file = EnvSettings::parse(&String::from_utf8(blob).expect("text")).expect("parses");
 
     let mut report = Vec::new();
-    let light = oag_game::preview::model_light(&mut archives, title, false, &mut report)
+    let light = oag_game::preview::model_light(&mut archives, title, false, None, &mut report)
         .unwrap_or_else(|| panic!("no light: {report:?}"));
     assert_eq!(light.enabled, 1.0);
     assert_eq!(Some(light.ambient), file.vec3(PSP2_AMBIENT_COLOUR));

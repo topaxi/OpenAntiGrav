@@ -324,6 +324,16 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "0..1")]
     pub(crate) fury_tint: Option<f32>,
 
+    /// States the adapted luma the Fury front end's exposure is taken at on a
+    /// `--menu-page` capture, in place of `FrontEndTone::adapted_fury`.
+    /// With the backdrop's cloud hidden (`--fury-tint 0`) the original's
+    /// exposure adapts to a darker page than the cloud-showing read the
+    /// craft's light carries, and a pair records its own read.
+    /// It reaches the craft's light only (`preview::model_light`); a page
+    /// whose scene the bloom chain reads adapts on its own.
+    #[arg(long, value_name = "LUMA")]
+    pub(crate) fury_adapted_luma: Option<f32>,
+
     /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
     ///
     /// A window is not always given the size it asks for - a tiling compositor

@@ -655,10 +655,15 @@ fn ps3_model(
 /// luma (the Fury style's is read; the HD style's page is white and is taken at the clamp). The file's fog is not applied: with it the hull's box against the original's frame
 /// goes from 4.62 to 6.48 (`docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`,
 /// "The frame check").
+///
+/// `adapted` states the Fury style's adapted luma in place of the title's read: a capture of a
+/// page whose backdrop is hidden, which the original adapts to differently
+/// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot").
 pub fn model_light(
     archives: &mut oag_assets::Archives,
     title: &oag_title::Title,
     fury: bool,
+    adapted: Option<f32>,
     report: &mut Vec<String>,
 ) -> Option<Light> {
     let lighting = title.front_end?.model_lighting?;
@@ -682,7 +687,7 @@ pub fn model_light(
     };
     let exposure = lighting.tone.map_or(1.0, |tone| {
         let adapted = if fury {
-            tone.adapted_fury
+            adapted.unwrap_or(tone.adapted_fury)
         } else {
             tone.clamp / tone.boost
         };

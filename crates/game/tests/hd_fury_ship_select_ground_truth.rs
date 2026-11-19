@@ -315,24 +315,18 @@ fn every_fourth_row_from_the_top_is_a_scanline() {
     assert!((0.6..0.8).contains(&dip), "{dip}: {by_phase:?}");
 }
 
-/// How many pixels of `page`'s right-hand margin are lit, and the brightest
-/// channel there, on a 1280x720 capture through the real binary. The layout
-/// ends at nine tenths of the width, so only the backdrop draws in the strip.
-fn margin_of_a_capture(image: &Path, page: &str, tint: Option<&str>) -> (usize, u8) {
+/// A 1280x720 capture of `page` through the real binary, with `flags` after the page.
+fn capture_of(image: &Path, page: &str, flags: &[&str]) -> oag_texture::replacer::Image {
     let dir = std::env::temp_dir().join(format!(
         "oag-hd-fury-tint-ground-truth-{page}-{}",
-        tint.unwrap_or("authored")
+        flags.join("-").replace('.', "_")
     ));
     std::fs::create_dir_all(&dir).expect("a temp directory");
     let out = dir.join("page.png");
-    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
-    command
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args(["--no-audio", "--size", "1280x720", "--menu-page", page]);
-    if let Some(tint) = tint {
-        command.args(["--fury-tint", tint]);
-    }
-    let status = command
+        .args(["--no-audio", "--size", "1280x720", "--menu-page", page])
+        .args(flags)
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", dir.join("config"))
@@ -341,8 +335,18 @@ fn margin_of_a_capture(image: &Path, page: &str, tint: Option<&str>) -> (usize, 
         .status()
         .expect("running oag-game");
     assert!(status.success(), "oag-game --menu-page {page}");
-    let still = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
-        .expect("a PNG");
+    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot")).expect("a PNG")
+}
+
+/// How many pixels of `page`'s right-hand margin are lit, and the brightest
+/// channel there, on a 1280x720 capture through the real binary. The layout
+/// ends at nine tenths of the width, so only the backdrop draws in the strip.
+fn margin_of_a_capture(image: &Path, page: &str, tint: Option<&str>) -> (usize, u8) {
+    let flags: Vec<&str> = tint
+        .into_iter()
+        .flat_map(|tint| ["--fury-tint", tint])
+        .collect();
+    let still = capture_of(image, page, &flags);
     let strip = (0..still.height).flat_map(|y| (1180..still.width).map(move |x| (x, y)));
     let brightest = |(x, y): (u32, u32)| {
         let at = ((y * still.width + x) * 4) as usize;
@@ -382,4 +386,53 @@ fn a_stated_tint_of_nothing_hides_the_cloud_on_a_captured_page() {
             "{page}: the margin is black with the tint stated as nothing"
         );
     }
+}
+
+/// The sum of the red, green and blue of the pixels over 60 in the middle of a 1280x720 Ship Select
+/// capture, where the craft stands.
+fn hull_light(still: &oag_texture::replacer::Image) -> u64 {
+    let mut sum = 0;
+    for y in 100..560 {
+        for x in 480..1180 {
+            let at = ((y * still.width + x) * 4) as usize;
+            let [r, g, b] = [0, 1, 2].map(|c| u64::from(still.rgba[at + c]));
+            if r.max(g).max(b) > 60 {
+                sum += r + g + b;
+            }
+        }
+    }
+    sum
+}
+
+/// `--fury-adapted-luma` states the luma the craft's exposure is taken at. The exposure is
+/// `4 - min(35 * luma, 3)`: at the title's `0.0163` it is 3.43, at `0.0` it is 4, and at `0.1`
+/// it is the clamp's 1. The hull follows it in both directions, so a flag dropped on the way to
+/// the craft's light leaves all three frames equal.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_stated_adapted_luma_sets_the_exposure_the_craft_is_lit_at() {
+    let Some(image) = image() else {
+        return;
+    };
+    let hull = |luma: Option<&str>| {
+        let flags: Vec<&str> = ["--fury-tint", "0"]
+            .into_iter()
+            .chain(
+                luma.into_iter()
+                    .flat_map(|luma| ["--fury-adapted-luma", luma]),
+            )
+            .collect();
+        hull_light(&capture_of(&image, "ship-select", &flags))
+    };
+    let (dark, own, bright) = (hull(Some("0.1")), hull(None), hull(Some("0.0")));
+    assert!(dark > 0, "a hull is drawn");
+    assert!(
+        own as f64 > dark as f64 * 1.15 && bright as f64 > own as f64 * 1.02,
+        "exposure 1, 3.43 and 4 draw the hull at {dark}, {own}, {bright}"
+    );
+    assert_eq!(
+        own,
+        hull(Some("0.0163")),
+        "the stated value of the title's read is the title's read"
+    );
 }

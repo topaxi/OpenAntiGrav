@@ -34,6 +34,9 @@ BLOCK = 0x100000
 FRAMES_TO_DECAY = 180
 #: What ours is drawn with when the original's row was written to zero.
 OURS_FLAGS = ("--fury-tint", "0")
+#: The flag that states the adapted luma ours' craft is exposed at: the original's chain adapts to a different page with
+#: the cloud gone, and the craft's light carries a constant read with it showing.
+ADAPTED_FLAG = "--fury-adapted-luma"
 
 
 class Widget:
@@ -138,13 +141,17 @@ def row_name(row):
     return row[:ROW_TINT].split(b"\0")[0].decode(errors="replace")
 
 
-def record(pair_rec, hidden, adapted_luma=None):
+def record(pair_rec, hidden, adapted_luma=None, lights_craft=False):
     """Write a hidden backdrop into a pair's record; returns the flags ours is drawn with. `hidden` is `Widget.hide`'s
-    record after the wait."""
+    record after the wait. `lights_craft` is true for a page that draws a craft lit at the front end's exposure, which
+    then states the adapted luma read at the grab (`--fury-adapted-luma`); a page whose scene the bloom chain reads
+    adapts on its own and takes none."""
     target = "BackgroundAnimFury row `%s` tint (row + 0x40, three floats)" % hidden["row"]
     pair_rec["original"]["backdrop"] = {
         "state": "hidden", "row": hidden["row"], "tint_authored": hidden["tint_authored"], "tint_written": hidden["tint_written"],
         "frames_waited": hidden["frames_waited"], "adapted_luma": None if adapted_luma is None else round(adapted_luma, 6),
+        "ours_exposure": ("stated: " + ADAPTED_FLAG + " " + format(adapted_luma, ".6f")) if lights_craft and adapted_luma is not None
+                         else "adapts on its own: the page's scene is what the bloom chain reads",
         "basis": "the pair script wrote zero over the row's tint in the emulator's RAM, waited that many of the widget's own frames for the "
                  "trail to decay, grabbed and wrote the authored tint back; ours is drawn with `--fury-tint 0`. The cloud, its path and its "
                  "music pulse are a new roll on every boot, so the pair compares the page without them"}
@@ -152,7 +159,10 @@ def record(pair_rec, hidden, adapted_luma=None):
         "target": target, "value": "0 0 0", "authored": " ".join("%g" % v for v in hidden["tint_authored"]),
         "why": "hide the Fury backdrop for the grab", "when": "before the grab, %d widget frames" % hidden["frames_waited"],
         "restored": "after the grab"})
-    return list(OURS_FLAGS)
+    flags = list(OURS_FLAGS)
+    if lights_craft and adapted_luma is not None:
+        flags += [ADAPTED_FLAG, format(adapted_luma, ".6f")]
+    return flags
 
 
 class FakeMem:
@@ -223,7 +233,11 @@ def selftest():
     assert not widget.still_hidden()
     mem.put(mem.item + ITEM_CURRENT, struct.pack(">I", mem.table))
     rec = {"original": {"provenance": {"pair_script_ram_writes": []}}}
-    assert record(rec, hidden, widget.adapted_luma()) == ["--fury-tint", "0"]
+    assert record(rec, hidden, widget.adapted_luma()) == ["--fury-tint", "0"], "a page with no craft states no luma"
+    assert "adapts on its own" in rec["original"]["backdrop"]["ours_exposure"]
+    assert record(rec, hidden, widget.adapted_luma(), lights_craft=True) == ["--fury-tint", "0", "--fury-adapted-luma", "0.014510"]
+    assert rec["original"]["backdrop"]["ours_exposure"].startswith("stated")
+    rec["original"]["provenance"]["pair_script_ram_writes"].pop()
     backdrop = rec["original"]["backdrop"]
     assert backdrop["state"] == "hidden" and backdrop["tint_written"] == [0.0, 0.0, 0.0] and backdrop["frames_waited"] == 210
     assert backdrop["adapted_luma"] == 0.01451

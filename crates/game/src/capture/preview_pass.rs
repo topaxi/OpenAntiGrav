@@ -63,6 +63,9 @@ pub(super) struct PreviewRequest {
     /// Whether the served front end is the Fury style, which picks the light its models are
     /// drawn in - see [`crate::preview::model_light`].
     pub fury: bool,
+    /// The adapted luma the craft's exposure is taken at, instead of the
+    /// title's read - a capture's `--fury-adapted-luma`.
+    pub adapted_luma: Option<f32>,
 }
 
 /// The source a capture's race options name, opened with its packs, for the
@@ -101,8 +104,13 @@ pub(super) fn draw_preview(
     let built = open_for_previews(race).and_then(|mut archives| {
         let light = if request.hull_only {
             let mut report = Vec::new();
-            let light =
-                crate::preview::model_light(&mut archives, title, request.fury, &mut report);
+            let light = crate::preview::model_light(
+                &mut archives,
+                title,
+                request.fury,
+                request.adapted_luma,
+                &mut report,
+            );
             for line in report {
                 log::debug!("preview {}: {line}", request.entry);
             }
