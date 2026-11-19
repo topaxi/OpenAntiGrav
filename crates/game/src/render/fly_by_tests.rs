@@ -129,8 +129,10 @@ fn the_fly_by_draws_its_own_planes_only_once_they_hold_a_frame() {
     );
 
     // Limit-range white: Y 235, Cb and Cr 128.
-    let mut frame = crate::movie::VideoFrame::default();
-    frame.bytes = [vec![235u8; 4], vec![128], vec![128]].concat();
+    let frame = crate::movie::VideoFrame {
+        bytes: [vec![235u8; 4], vec![128], vec![128]].concat(),
+        ..Default::default()
+    };
     renderer
         .upload_fly_by_frame(&queue, &frame)
         .expect("a frame of the planes' shape");
