@@ -289,6 +289,7 @@ pub(crate) fn run_windowless(
                 ticks: cli.ticks,
                 anim_seconds: cli.anim_seconds,
                 fury_path: cli.fury_path,
+                fury_tint: cli.fury_tint,
                 camera_jitter: cli.camera_jitter,
                 held: button_mask(cli.hold.as_deref()),
                 pressed: button_mask(cli.press.as_deref()),

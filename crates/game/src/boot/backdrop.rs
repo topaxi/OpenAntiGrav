@@ -96,6 +96,7 @@ impl MenuBackdrop {
         viewport: (f32, f32, f32, f32),
         anim_seconds: Option<f32>,
         fury_path: Option<usize>,
+        fury_tint: Option<f32>,
     ) -> Option<Picture> {
         let (_, _, w, h) = viewport;
         match self {
@@ -107,7 +108,7 @@ impl MenuBackdrop {
                 Some(Picture::from(model.frame(
                     h,
                     w / h,
-                    assets.tints.for_root(page == "main"),
+                    captured_tint(&assets.tints, page, fury_tint),
                 )))
             }
             Self::Scene(assets) => {
@@ -138,7 +139,7 @@ impl MenuBackdrop {
         (device, queue): (&wgpu::Device, &wgpu::Queue),
         page: &str,
         viewport: (f32, f32, f32, f32),
-        (anim_seconds, fury_path): (Option<f32>, Option<usize>),
+        (anim_seconds, fury_path, fury_tint): (Option<f32>, Option<usize>, Option<f32>),
         layer: Option<crate::render::DrawSceneLayer<'_>>,
     ) {
         let Self::Fury(assets) = self else {
@@ -148,7 +149,7 @@ impl MenuBackdrop {
             return;
         };
         let (_, _, w, h) = viewport;
-        let tint = assets.tints.for_root(page == "main");
+        let tint = captured_tint(&assets.tints, page, fury_tint);
         let history = frames.min(oag_ui::backdrop::FRAMES_TO_SETTLE);
         for _ in 0..frames - history {
             model.tick(&oag_ui::backdrop::SILENCE);
@@ -160,6 +161,15 @@ impl MenuBackdrop {
         });
         renderer.settle_fury_backdrop(device, queue, leading_up, (w as u32, h as u32), layer);
     }
+}
+
+/// The tint a captured page's cloud is drawn under: the skin's row for the
+/// page, or the one value a capture states for red, green and blue
+/// (`--fury-tint`). The row's alpha stays, as a write of three floats over the
+/// original's row leaves its fourth.
+fn captured_tint(tints: &oag_ui::backdrop::Tints, page: &str, stated: Option<f32>) -> [f32; 4] {
+    let authored = tints.for_root(page == "main");
+    stated.map_or(authored, |value| [value, value, value, authored[3]])
 }
 
 /// A stage's running backdrop.
@@ -206,5 +216,40 @@ impl Live {
                 Picture::from(model.frame(camera))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::captured_tint;
+
+    fn tints() -> oag_ui::backdrop::Tints {
+        let skin = r#"<Skin><BackgroundAnimFury name="bgAnimFury">
+            <ScreenSetting name="default" tint="0xFF202020" equaliser="0"/>
+            <ScreenSetting name="Main Menu" tint="0xFFFFFFFF" equaliser="0"/>
+        </BackgroundAnimFury></Skin>"#;
+        oag_ui::backdrop::Tints::read(&oag_tables::fexml::parse(skin)).expect("the widget")
+    }
+
+    /// A capture draws a page under the skin's row unless it states a tint, and
+    /// a stated `0` is the hidden cloud of a compare shot on every page.
+    #[test]
+    fn a_stated_tint_replaces_the_rows_colour_and_keeps_its_alpha() {
+        let grey = 0x20 as f32 / 255.0;
+        assert_eq!(
+            captured_tint(&tints(), "track-select", None),
+            [grey, grey, grey, 1.0]
+        );
+        assert_eq!(captured_tint(&tints(), "main", None), [1.0; 4]);
+        for page in ["track-select", "ship-select", "main"] {
+            assert_eq!(
+                captured_tint(&tints(), page, Some(0.0)),
+                [0.0, 0.0, 0.0, 1.0]
+            );
+        }
+        assert_eq!(
+            captured_tint(&tints(), "ship-select", Some(0.5)),
+            [0.5, 0.5, 0.5, 1.0]
+        );
     }
 }

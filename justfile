@@ -1446,6 +1446,7 @@ check-hd-clock-grab:
 check-pair-provenance:
     python3 scripts/compare_provenance.py selftest
     python3 scripts/compare_env.py selftest
+    python3 scripts/hd_fury_backdrop.py selftest
     python3 scripts/compare_provenance.py scan
 
 # Re-snapshot every program in the open Ghidra project. Two steps because only

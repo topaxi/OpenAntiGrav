@@ -314,6 +314,16 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "INDEX")]
     pub(crate) fury_path: Option<usize>,
 
+    /// States the Fury menu backdrop's screen tint on a `--menu-page` capture,
+    /// one value for red, green and blue, instead of the skin's row for the
+    /// page. `0` draws no cloud. This is what a pair script writes over the
+    /// original's `default` row before a grab, because the cloud, its path
+    /// and its music pulse are a new roll on every boot
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a
+    /// compare shot").
+    #[arg(long, value_name = "0..1")]
+    pub(crate) fury_tint: Option<f32>,
+
     /// With `--screenshot`, the image's size as `WIDTHxHEIGHT`.
     ///
     /// A window is not always given the size it asks for - a tiling compositor
