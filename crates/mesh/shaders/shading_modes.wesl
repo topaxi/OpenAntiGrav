@@ -23,8 +23,9 @@ override zone_race: f32 = 1.0;
 // on for the whole race and every vertex it draws has `lit` 1.0, so `lit_texel`'s last mix
 // has a weight of exactly one and the stand-in result it weighs at zero, with the decode of
 // it, is never seen. **0.0, the mix deciding, by default.** Set for a circuit's plain draws
-// (`mesh_render::Prepass::plain`) by `mesh_render::specialise::plain_is_lit` under a scope
-// whose light is an authored rig (`BuildCacheScope::lit_by`).
+// (`mesh_render::Prepass::plain`) by `mesh_render::specialise::plain_is_lit`, and for a craft hull
+// whose every vertex is lit (`BuildCacheScope::craft`), under a scope whose light is an authored
+// rig (`BuildCacheScope::lit_by`).
 override lit_by_rig: f32 = 0.0;
 
 // **Whether any vertex this pipeline draws can be a 2048 vertex-lit one** (`sun_mask` 2 or above,

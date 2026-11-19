@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [hd, pulse, 2048, omega]
-updated: 2026-11-18
+updated: 2026-11-19
 summary: "Deck native 4K: HD misses 60 Hz (16.6 ms p50 after circuit cuts), 2048 holds it, Omega near the line. Left: shadow redraw, rich pipelines"
 categories: [rendering, tooling]
 ---
@@ -30,9 +30,8 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
      8-bit by default (`graphics.scene_precision`), the resolve one sRGB-view tap; Deck 4K resolve
      3.88 to 1.10 ms, whole-race GPU p50 18.3 to 16.0 ms, pairs unchanged
      (`docs/rendering/hires-gpu-levers.md`, "HD's scene in 8 bits").
-  3. **The craft pass, 3.08 ms at 4K**, 4.5 ns a fragment against the circuit's 1.4. Not opened:
-     its overdraw is unmeasured, and the `lit_by_rig` fold is not applied to it because a craft
-     draws under a scene block of its own (`ship_scene`), which needs an audit first.
+  3. ~~**The craft pass, 3.08 ms at 4K**~~: opened 2026-11-19 (`craft-pass-perf`), see the item
+     below.
   4. ~~**The sun-removal arithmetic, 0.46 ms at 4K**~~: moved under the coverage test
      2026-11-18 (`circuit-lighting-rungs`), byte-identical and 0.8 % slower on the Deck; dropped.
   5. Eleven `pow` a pixel remain in HD's plain pipeline (lightmap curve, albedo decode, specular,
@@ -91,9 +90,9 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
   19 % on HD at 4K, but it buys only about 5 % of render scale at a 4K output, and exact
   lighting at 90 % looks better. Approximated light curves: no gain on RDNA2, not added.
   Left:
-  1. **The rich pipelines' `programs_present` override** (HD 0.58 ms, Omega 0.80 ms at 4K is the
-     whole rich half), and the craft pass, all rich (3 ms at 4K). Measure: the `track solid,
-     shaded` and `craft, weapons, shields` spans, same command as the page.
+  1. **The circuit's rich half** (HD 0.58 ms, Omega 0.80 ms at 4K): its tables carry programs, so
+     the landed `programs_present` (no program in the table) does not fold it; a per-mode mask
+     gating each `PROGRAM_*` test would. Measure: the `track solid, shaded` span.
   2. **Work the rung finds on few pixels**: `simplified` saves 7.8 % of Omega's shading at 4K for
      0.01 % to 12 % of its pixels (`tangents_present` per plain list, as `slots_present` is, is
      one try). A census of which plain draws carry them,
@@ -103,6 +102,18 @@ pipeline for a circuit's plain draws, and the rig and Zone folds. Levers 2 (blur
      **D (trilinear lightmap sampler)**: read the original's lightmap unit filter first.
   4. **A's pair check is mixed** (7 of 13 HD pairs toward the original, 5 away): the pairs where
      ours is already too bright get brighter; read why those pairs are bright before blaming A.
+
+- **2026-11-19, `craft-pass-perf`** (`docs/rendering/hires-gpu-levers.md`, "The craft pass").
+  On HD the span is the hulls alone, the player's own nearly all of it, and 80 to 90 % shading.
+  Landed: `programs_present` (a table with no program reads its program lanes as zero) and, under
+  `BuildCacheScope::craft`, `lit_by_rig` and `zone_race` off for the hulls. HD 4K span NVIDIA
+  409 to 200 us, Intel about 2.5 to 1.6 ms; 2048 -17 to -22 % at 4K, Omega -8 %; byte-identical
+  but HD (driver float order, 0.02 % of Intel's pixels). Left:
+  1. **The Deck re-measure** (command on the page) with `RADV_DEBUG=shaderstats` for the hull
+     pipelines.
+  2. **What a hull's `lit_texel` still runs** (1.6 ms Intel, 200 us NVIDIA at 4K against a
+     constant colour's 0.5 ms and 50 us): `INTEL_DEBUG=fs` statistics of the hull pipelines.
+  3. A per-draw plain split of a hull, as the circuit has; untried.
 
 ## Next Steps
 

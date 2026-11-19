@@ -819,6 +819,8 @@ impl Scene {
         // returns one per slot, so that is a defensive floor and not a path
         // any caller takes.
         let mut ships = Vec::with_capacity(GRID_SLOTS as usize);
+        // Drawn under `ship_scene` (`scene/frame.rs`): the scope's light, no Zone.
+        cache_scope.craft(true);
         for slot in 0..GRID_SLOTS as usize {
             crate::stages::checkpoint()?;
             let livery = &liveries[slot.min(liveries.len().saturating_sub(1))];
@@ -839,6 +841,7 @@ impl Scene {
                 mesh_render::Velocity::Gated,
             )?);
         }
+        cache_scope.craft(false);
         crate::stages::checkpoint()?;
         let collision = collision_model
             .map(|model| {

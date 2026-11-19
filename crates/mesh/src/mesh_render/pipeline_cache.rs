@@ -91,6 +91,8 @@ struct Cache {
     rig_on: bool,
     /// [`Scope::simplified_lighting`]'s choice.
     simplified_lighting: bool,
+    /// [`Scope::craft`]'s state.
+    craft: bool,
     texture_calls: u32,
     texture_hits: u32,
     shader_calls: u32,
@@ -176,6 +178,18 @@ impl Scope {
         CACHE.with(|cell| {
             if let Some(cache) = cell.borrow_mut().as_mut() {
                 cache.simplified_lighting = on;
+            }
+        });
+    }
+
+    /// Every model built while `on` is a craft hull, drawn under the craft's own scene block
+    /// (`ship_scene`): the scope's light with its hull lights, and no Zone. So where the scope's
+    /// rig is on and every vertex is lit, its pipelines take `lit_by_rig`, and they always take
+    /// `zone_race` off (`docs/rendering/hires-gpu-levers.md`, "The craft pass").
+    pub fn craft(&self, on: bool) {
+        CACHE.with(|cell| {
+            if let Some(cache) = cell.borrow_mut().as_mut() {
+                cache.craft = on;
             }
         });
     }
@@ -314,6 +328,11 @@ pub(crate) fn scope_simplified_lighting() -> bool {
             .as_ref()
             .is_some_and(|cache| cache.simplified_lighting)
     })
+}
+
+/// Whether the open scope is building craft hulls ([`Scope::craft`]); `false` with no scope open.
+pub(crate) fn scope_craft() -> bool {
+    CACHE.with(|cell| cell.borrow().as_ref().is_some_and(|cache| cache.craft))
 }
 
 pub(crate) fn scope_constants() -> Vec<(&'static str, f64)> {
