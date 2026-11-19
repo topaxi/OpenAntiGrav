@@ -27,7 +27,8 @@
 //!    `scale = <Tone maximum brightness> - min(adapted * <Tone adaption
 //!    boost>, <Tone darkening clamp>)`, plus the blurred bloom times
 //!    `scaleAdd` = 1.0 - the bloom is deliberately *not* exposure-scaled -
-//!    saturated. The exposure arithmetic is `FUN_003e3268`'s own (the
+//!    saturated. The scene is first mixed toward twice the quarter-res scene by
+//!    `Bloom feedback`, which is `0.0` outside a Zone race. The exposure arithmetic is `FUN_003e3268`'s own (the
 //!    settings registrar at `0x003a83d8` pins each key to its field).
 //!
 //! What is *not* the disc's, stated rather than hidden:
@@ -42,9 +43,9 @@
 //!   `additiveColour` is `{0,0,0,0}` outside a whiteout flash driven by
 //!   state this renderer does not carry, and `contribution.w` is hard-coded
 //!   zero by the engine itself, so both drop out of the shader.
-//! - **The resolve's `scaleFeedback` mix and `fullscreenTintColour`** are
-//!   inert at authored defaults (no circuit authors `Bloom feedback`; the
-//!   tint is an event effect) and left out.
+//! - **The resolve's `fullscreenTintColour`** is inert (an event tint nothing sets) and
+//!   left out. Its `scaleFeedback` mix is read and drawn ([`Params::feedback`]): `0.0`
+//!   on every circuit, `-0.4` in a Zone race.
 //! - **The final gamma encode is the ROP's, not a stand-in for an exposure
 //!   stage.** The exposure is the `scale` of the resolve above (1.0 on every
 //!   frame measured); the original writes the result through the surface's

@@ -1013,3 +1013,4 @@
 0x00090278	function	Hud_UpdateCountdownWidgets	60	hud-start-gate.md
 0x0007d8e0	function	DemoRaceManager_Construct	85	hud-start-gate.md
 0x0007d398	function	DemoRaceManager_Update	80	hud-start-gate.md
+0x008c2ae0	data	g_ZoneBloomTable	90	zone-frame.md

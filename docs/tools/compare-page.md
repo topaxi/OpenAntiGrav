@@ -1566,6 +1566,11 @@ shows its countdown glyphs and no HUD yet; ours draws a blank board.
 ([hud-start-gate.md](../ghidra/functions/ps3-hdfury-eu/hud-start-gate.md)), and ours follows. With that fix the
 pair scores 28.77 (RMSE 0.165), against 30.02 before.
 
+**The Zone frame's light and post chain (2026-11-19, `zone-grade-sky`).** With the Zone surface lit by the
+stage's ambient, the Zone bloom block and the resolve's feedback term
+([zone-frame.md](../ghidra/functions/ps3-hdfury-eu/zone-frame.md)) the pair scores 7.42 (RMSE 0.085). What is
+left is the gantry board's glyph, the hull's light and the exhaust.
+
 **A capture that imposes `--hud-state` is drawn with its HUD on screen,** gate or not: such a pair depicts a
 mid-race frame. Every Omega and 2048 Zone pair is one (`omega/zone-vineta-k-z5`, `omega/zone-capital-reach-2048-z5`,
 `2048-vita/zone-altima-z5`, `2048-vita/zone-dlc-vineta-k-z5`), and they render as before. A pre-release pair must

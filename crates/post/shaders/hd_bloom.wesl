@@ -358,9 +358,10 @@ fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
 // a Zone race, where the engine writes -0.4 every frame: `1.4 * scene - 0.8 *
 // feedbackBuffer`, which on a flat surface is `0.6 * scene` and across an edge
 // an unsharp mask. The feedback buffer is the quarter-res scene (its alpha
-// reads 255 everywhere live, so the weight is `scaleFeedback` alone); the
-// original also blends the previous frame's buffer into it, at a weight not
-// read, and this takes the frame's own alone
+// reads 255 everywhere live, so the weight is `scaleFeedback` alone). It is
+// the buffer the zoom ring's history draw blends into, at weight zero outside
+// a boost or damage pulse; this reads the frame's own quarter-res scene, so a
+// pulse in a Zone race is not in it
 // (docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md, "The feedback term").
 // The persistent `fullscreenTintColour` (an event tint this renderer does not
 // model) is left out.
