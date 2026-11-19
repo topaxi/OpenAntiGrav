@@ -1094,6 +1094,80 @@ read neither. With the container decoded:
 - **`track_proximity_shadow_fp` binds no parameter whose name contains
   "shadow".** Whatever it draws, it does not sample a named shadow texture.
 
+## `fc16_phong_alphaspec_normal_emissive` adds its emissive map (2026-11-19, `2048-leftovers`)
+
+**The law: `rgb = light * D^2 + E^2 + spec`, then the fog, with `E` the `EmissiveMap` texel at the
+diffuse coordinate and no tint.** The track surface of the 2048 circuits (road `Track_A_Floor`,
+wall `Track_A_Wall`, `road_a_*`) is this one file, `shared/objectlibrary/materials/
+fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial` in the base `data.psarc` (no DLC copy). Its
+lightmapped program (#16; `pa14` the `EmissiveMap` texel per its input records, `sa0` =
+`novaScaleBiasPower`, `sa2` = `liveLighting0diffuse`, `sa4` = `liveLighting0specular`, `sa6` =
+`shadowLightSpecularDiffuse`, `sa8` = `liveLighting0direction`, `sa10` = `SpecPower`):
+
+```text
+sec 0-1    sa6.xyz = 1 - s.w;   sa2 = diffuse * (1 - s.w)
+ 1-14      N from the normal map through the tangent frame; R = 2(N.E)N - E
+15-17      x = sat(N.L), y = sat(R.L)
+18-23      light = scale * lm.rgb + bias + diffuse * (1 - s.w) * lm.a * x + s.w * y * lm.rgb^2
+24-25      light * D^2
+26         mad.f16 pa4, pa14, pa14, light * D^2          ; + E^2
+27-32      + liveLighting0specular * D.a * lm.a * y^SpecPower
+33-34      fog mix by the visibility
+```
+
+**Census, confidence 90:** of the file's 14 fragment programs, the 9 that fetch `EmissiveMap`
+(#1, #3, #5, #12, #14, #16, #18, #20, #22) all carry `mad x, E, E, y` on the register its input
+records name (the other 5 are `fc01`-style dummies and the Zone programs, which fetch none); the
+material authors no tint uniform (`SpecPower` alone, 70 on Altima). One listing repeated per
+permutation and Omega's own compile agreeing (below); no live register readout. `fc18_phong_
+alpha_tintspec_normal_specpow` (the run-off) is the same program without the `E` line and with
+`SpecTint` (1, 1, 1 on every Altima instance) multiplying the specular colour.
+
+**Wired:** `oag_mesh::mesh::rcs::psp2::emissive_add` admits the file as a unit-tint member of
+`PROGRAM_EMISSIVE_ADD` (mode 8: the third binding's `decode(rgb)` added after the light and
+before the fog). Test: `the_track_surface_adds_its_emissive_map` in
+`omega_transparency_ground_truth.rs` (10 base circuit models author it: Altima, Arena, Bridge,
+Cathedral, Mall, Park, Sol, Square, Subway, Tower; every one's draws bind its own `EmissiveMap`
+pictures third under a unit-tint entry; red on the code before, which bound none).
+
+**Against the original** (Vita3K frames already on file; ours with `--hold-exposure 1.15`, the
+pixels the change moves by more than 40 levels, mean RGB):
+
+| Pose | Pixels | Original | Ours before | Ours after |
+| --- | ---: | --- | --- | --- |
+| Queens Mall grid (`2048-vita/mall`'s pair, tick 178) | 1,849 | 81.1 / 85.8 / 81.4 | 50.4 / 39.8 / 33.2 | 93.2 / 94.5 / 89.1 |
+| Altima pond `-250,25,1385` yaw -15 (`altima2c`) | 129 | 123.0 / 125.2 / 126.2 | 56.3 / 57.7 / 59.0 | 111.7 / 116.1 / 116.9 |
+
+The picture: Queens Mall's cool grey lane line beside the light strip, and Altima's faint teal
+lane lines and wall marks, now drawn where the original draws them; the frames' poses differ by
+the grid offset the pair records, so a pixel set is a rough match, read with side-by-side crops.
+5,273 pixels of the Mall frame and 611 of Altima's moved by more than 8 levels.
+
+**Omega: checked, applies, not wired.** Omega's Altima binds the same file on 10 materials
+(walls, `track_a_wall_e.gnf`). Its lightmapped pixel program (`cargo run -p oag-rcs --example
+gcn_dump -- data/extracted/ps4/omega-eu/uroot/data00.psarc
+Data/environments2048/shared/objectlibrary/materials/fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial
+--at 0xad44`) fetches `EmissiveMapSampler` with `dmask:0x7` into `v[13:15]` and ends `v_mac v13, light, D`
+plus the specular, then the fog: `E + light * D + spec`, the square gone because the PS4 texture
+unit decodes. Not wired: a PS4 submesh of this file binds its normal map third
+(`psp2::normal_map`), which the emissive picture would displace.
+
+**What the violet is not, and where it is (Altima's band, `water.md` Open 4a).** The violet band
+at `533,172,541,196` and the dotted violet line along the far edge are **not** a term of these
+programs read with the circuit's authored values. Measured in ours at the pose with temporary
+probes (none kept): the lightmap texel there is a mild lavender (103/102/110 through the
+composite), fog visibility `min(1, exp2(-(fogColour.w * w)^2 * k))` with Altima's density
+0.0002 is 1 at that distance, the `s.w * sat(R.L) * lm^2` term at 0.3 moves the box by 0.4
+levels, and **the sun's specular lobe `D.a * lm.a * sat(R.L)^70` is zero over the whole frame**.
+The band's shape is the run-off picture's light parallelogram (`track_a_floor_runoff_ds`, alpha
+near 1 there and dark elsewhere), which is exactly where `D.a` gates the specular, so the band
+reads as fc18's specular lobe from a light whose direction is not the sun's and whose colour is
+violet (70/70/143 on the plate). Hypothesis, confidence 45: the engine binds `liveLighting0*`
+per draw from a light other than the `.envsettings` sun. Where to look next: the parameter table
+built by `FUN_8101d068` (EU v1.04) registers `liveLighting0specular` as slot `0xf` (string
+`0x81508d48`, `liveLighting0direction` slot `0xe`, `liveLighting0diffuse` slot `0x10`); the
+writer of those three slots per draw is not traced.
+
 ## Sources for the instruction stream
 
 Read, never copied (landed code and text are handwritten): Vita3K's USSE
