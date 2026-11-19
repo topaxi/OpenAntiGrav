@@ -1,5 +1,7 @@
 # WebAssembly extensions: a campaign whose races change the craft and the pickups
 
+**Challenged, unresolved:** [progression-challenge.md](progression-challenge.md) lists 25 numbered objections to this draft (5 block a decision) and a smaller first slice; read it beside this page.
+
 **Status: a design draft, nothing built (2026-11-19).** The decision record is
 [ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md),
 status *Proposed*. This page holds the proposed surface of `oag-ext-abi` and

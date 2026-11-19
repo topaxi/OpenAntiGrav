@@ -1,5 +1,7 @@
 # ADR-0093: A custom campaign keeps a bounded run state, and its mod sets bounded modifiers at race start
 
+**Challenged, unresolved:** [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md) lists 25 numbered objections to this proposal (5 block a decision) and a smaller first slice; read it before accepting.
+
 ## Status
 
 **Proposed** (2026-11-19). A design for the maintainer to accept, change or reject;
