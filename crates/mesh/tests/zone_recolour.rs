@@ -746,11 +746,12 @@ fn a_zone_plain_chunk_draws_its_own_albedo_under_the_stage_ambient() {
     );
 }
 
-/// **A chunk on its Zone program is lit by the stage's ambient and sun alone**: `output_scale
-/// * surface * (ambient + sat(N.L) * sun)`, the `Ambient` permutation every draw of a Zone
-/// frame runs. The circuit's lightmap, which an ordinary frame adds to the light, is not in
-/// it, and a material whose plain program is fed no scene light (`slots::EMISSIVE`) is lit
-/// the same way (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone surface's
+/// **A chunk on its Zone program is lit by the stage's ambient and sun alone**: the pixel
+/// is `output_scale * surface * (ambient + sat(N.L) * sun)`, the `Ambient` permutation
+/// every draw of a Zone frame runs. The circuit's lightmap, which an ordinary frame adds to
+/// the light, is not in it, and a material whose plain program is fed no scene light
+/// (`slots::EMISSIVE`) is lit the same way. A title without the marker keeps the chunk's
+/// own light (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone surface's
 /// light").
 #[test]
 fn a_zone_surface_is_lit_by_the_stage_ambient_and_no_lightmap() {
