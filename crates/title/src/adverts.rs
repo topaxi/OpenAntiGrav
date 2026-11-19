@@ -47,8 +47,8 @@ pub struct Adverts {
     /// Whether a Zone race swaps the per-slot adverts for one shared texture. HD's
     /// `Billboard_LoadModelAndBind` takes a second branch while the zone effects are
     /// on, binding a single `"billboard"` texture to every slot but 8 instead of a
-    /// target per slot. What that texture is has not been read, so such a title draws
-    /// no advert in Zone and says so.
+    /// target per slot: the Environment stage's 512 x 512 target, an equaliser grid
+    /// (`oag_raceplay::zone_equaliser`). Read on HD; 2048 and Omega are not read.
     pub zone_shares_one_texture: bool,
     /// Whether slot 8, the start gantry, is drawn as a card like the other slots
     /// instead of as a model stood on the track's mount.

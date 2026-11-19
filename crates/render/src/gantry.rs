@@ -100,6 +100,9 @@ pub fn is_slot_placeholder(label: &str) -> bool {
 ///
 /// # Why this is "draw nothing", not an invented replacement
 ///
+/// (A Zone race on HD is the exception: slots 1 to 7 keep their draws and show the stage's
+/// own target, `oag_raceplay::zone_equaliser`.)
+///
 /// The maintainer's own report on the gantry landing: `3 2 1 GO` now plays,
 /// but the low-resolution `billboard8.tga` stub still shows through or beside
 /// it, and the fix should either paint it black or give whatever is drawn

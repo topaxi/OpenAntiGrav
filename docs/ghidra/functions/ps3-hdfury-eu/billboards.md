@@ -1324,3 +1324,70 @@ shows a board.
   magic constants (above); no PS4 capture path exists here to measure the pass.
 - **2048**: checked, not wired. No `trackstartup.xml` or `billboard` quad was found on a
   default race, so there is nothing to wire; not searched beyond that.
+
+## 2026-11-19 (`zone-billboard`): what a Zone race's shared `"billboard"` texture is, and why a panel is missing
+
+**Symptom.** `hd/zone-vineta-k-z5` (compare page): the original draws a solid near-black panel with a
+grey frame at the far left (x 0-360, y 120-760 at 1920x1080; one pixel at (150, 400) reads
+`(0, 12, 15)`); ours draws the frame and lets the sky dome and palms show through. Mean grey of the pair
+36.83.
+
+**Cause in ours (confirmed, 95).** A Zone race on HD sets `Adverts::zone_shares_one_texture`, so
+`gantry_visibility::adverts_for` serves no advert and `strip_unserved_slot_placeholders` removes the
+draws of every slot-1-to-7 placeholder quad. The Vineta K load logs `9 billboard-slot placeholder
+draw(s) suppressed ... a Zone race binds one shared billboard texture to every slot but 8`. The panel is
+one of those quads. Not a regression of the Zone sky dome or the light-bar change: the strip has been
+there since `902d8d79f` (2026-10-06), and the same log line is on `main` before them. (No render at
+`9fb394ce7` was made; the log line and `git log -S` carry the claim.)
+
+**What the original binds (confidence 85, static).** `Billboard_LoadModelAndBind` (`0x003a4da0`), `else`
+arm of `g_ZoneEffectsActive == 0 || slot == 8`: for each material of the track flagged `0x8000` whose
+name matches `"billboard" + num`, `material[+0x1c] = *FUN_003cdd30() + 0x20`. `FUN_003cdd30`
+(`0x003cdd30`) is `lwz r3,-0x5a84(r2); addi r3,r3,0x32b4`: the address of field `+0x32b4` of the
+**Environment stage block** (the same global `Environment_GetStage*Colour`,
+`Environment_UpdateStageBlend`, `Environment_LoadStageTextures` index; 29 load sites of `-0x5a84(r2)`).
+`FUN_003a4650` (`0x003a4650`) is the matching getter and refcounts it the same way as a slot's own
+target. So the Zone branch is not an authored picture.
+
+**What that object is (confidence 75).** `Environment_LoadStageTextures` (`0x003d6dd4`, tail): `+0x3378`
+is `FUN_005a6ce0(512, 512, fmt 8, 0, 0, 0, 0)`, a 512 x 512 texture created with no data; `+0x32b4` is
+its view (`FUN_005aa1d8`), flag word `+0x28` set to `0x700000`. `Environment_UpdateStageBlend`
+(`0x003dbef4`) and `FUN_003ce2c0` (`0x003ced3c`) both load `+0x3378`, store two floats at `+0x3374` and
+`+0x3354`, and hand it to `FUN_005e5d40` against the target block at `+0x3338`/`+0x3370`: the
+stage-blend pass **renders into** it each frame in the default branch (stage types other than 6, 7, 8).
+So in a Zone race, slots 1-7 show the Zone stage's own 512 x 512 offscreen buffer, whose content is
+engine-computed, not on the disc.
+
+**Not done: the content.** What the pass draws into that buffer at the start of a Zone race is unread
+(it needs a read of the texture off a running RPCS3 Zone race; the pixel above says near-black under the
+Zone grade). Painting black onto the quads would be a stand-in for a computed buffer, which
+`oag_render::gantry::strip_slot_placeholders` documents as the rule against; nothing was wired.
+Next step: one RPCS3 Zone launch, read `*(*(0x00c7dfb0 + 0x32b4)) + 0x20`'s format and a few texels,
+then serve slots 1-7 from a texture of that content in place of the strip
+(`Adverts::zone_shares_one_texture` becomes a description of the buffer).
+
+**2048 / Omega:** both set `zone_shares_one_texture: true` too and strip the same way; each carries its
+own `TrackStartup` reader, so the binding was not read there: not checked.
+
+**Read attempt, 2026-11-19 (one launch, no result).** `serve --load-state zone-moa-therma-hd-early.SAVESTAT.zst
+--pause-after-load` on a private tree (`scripts/emu-env.sh`, display 96, GDB 2492, Null audio) froze in the
+state loader: `Verification failed` at `PPUModule.cpp:1895 ppu_load_prx()` with `errno=2` (a PRX the state
+names is not found under the private config tree), before the GDB stub answered. Not retried unchanged.
+Recipe for the read, to run once that load works or on a cold-boot Zone race (`docs/tools/compare-page.md`,
+"HD Zone race-start pair"): pause, read the u32 at `0x008b7940` (`0x00c7dfb0`, the stage block), the
+object pointer at `block + 0x32b4`, then that object's `+0x20` (the texture header: format, size, data
+pointer) and a few hundred bytes of the data; also read `block + 0x3374` and `block + 0x3354` (the two
+floats `Environment_UpdateStageBlend` stores before binding the target). A cleared target reads as one
+repeated texel; a stage-colour fill as one colour; a drawn scene as structure.
+
+**Read, cold-boot RPCS3 Zone race on Vineta K, 2026-11-19 (second launch).** Chain verified live:
+`*(0x008b7940) = 0x00c7dfb0`; `+0x32b4` is a texture view (`0x304f72a0`) whose parent `+0x3378` is a
+512 x 512 `A8R8G8B8` texture (format word 8, pitch `0x800`, data at RSX offset `0xc53d0000`); floats `+0x3374`
+0.6 and `+0x3354` 0.183. Its 1 MiB read through the GDB stub is an **equaliser**: a 32 x 32 grid of 16-pixel
+cells, each cell ground `0x60010101` with a 2-pixel `0xff000000` line on its right and bottom edge, 16
+columns of 2 cells wide lit to different heights with `0x7f32b3bb` (peak cells `0xff49f4ff`) and fading trails
+`0x60xxxxxx` (21 distinct values). So the shared "billboard" texture is a music-spectrum display drawn by the
+stage pass. **Wired (confidence 80 for the grid, bars not drawn):** `oag_raceplay::zone_equaliser` draws the
+grid with no bar lit on slots 1 to 7 of an HD Zone race. The original's start-pair panel reads (0, 12, 15) at
+(150, 400) and ours now (0, 14, 18). Open: what feeds the bars (the audio spectrum is the strong guess, unread)
+and the two floats; the bars would need that law. 2048 and Omega: flag set, binding unread, not checked.
