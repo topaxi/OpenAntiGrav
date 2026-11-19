@@ -432,6 +432,50 @@ pub const WWISE_CUES: oag_title::WwiseCues = oag_title::WwiseCues {
         ("~SHURIKENTRAVEL", posts("_SHURIKENTRAVEL", WEAPONS)),
         ("~magstrip01", posts("_magstrip01", SHIP)),
     ],
+    // `SoundManager_Construct` posts `Set_State__GAME_VR__No` when the headset
+    // flag is clear (patch `0x017849bd`) and `SoundManager_Update` again on each
+    // change of it: `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The
+    // `GAME_VR` state".
+    states: &[oag_title::WwiseState {
+        group: "GAME_VR",
+        value: "No",
+    }],
+    // A ship's sound groups switch `VoiceReg__TeamName` to its team (patch
+    // `0x01338ba5`..`0x01338eb9`, `strcmp` on the team name, then `SetSwitch`
+    // with group 3) by posting `Set_Switch__VoiceReg__TeamName__<value>`; the
+    // value is the case that event sets, which for AG Systems the bank spells
+    // `Team_AG_Systems`: `docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`,
+    // "The `TeamName` switch".
+    team_switch: Some(oag_title::WwiseTeamSwitch {
+        group: "VoiceReg__TeamName",
+        values: &[
+            ("Feisar", "Team_Feisar"),
+            ("Feisar2048", "Team_Feisar"),
+            ("Qirex", "Team_Qirex"),
+            ("Qirex2048", "Team_Qirex"),
+            ("Piranha", "Team_Piranha"),
+            ("Piranha2048", "Team_Piranha"),
+            ("Auricom", "Team_Auricom"),
+            ("Auricom2048", "Team_Auricom"),
+            ("AG_Systems", "Team_AG_Systems"),
+            ("AG_Systems2048", "Team_AG_Systems"),
+            ("Goteki_45", "Team_Goteki45"),
+            // This port's id for the team the executable names `Goteki_45`.
+            ("Goteki", "Team_Goteki45"),
+            ("EGX", "Team_EGX"),
+            ("Assegai", "Team_Assegai"),
+            ("Harimau", "Team_Harimau"),
+            ("Mirage", "Team_Mirage"),
+            ("Icaras", "Team_Icaras"),
+            ("VanUber", "Team_VanUber"),
+            ("Tigron", "Team_Tigron"),
+            ("Tigron_x", "Team_Tigron"),
+            ("Triakis", "Team_Triakis"),
+        ],
+    }),
+    // The language's directory, then the shared one, as the IO layer opens a
+    // bank (`docs/formats/wwise.md`, "Event names and the stub banks").
+    media_dirs: &[r"Data\audio\sound\English(US)\", r"Data\audio\sound\"],
 };
 
 /// Where Omega's original opponent differs from Pulse's, read off the base
@@ -655,6 +699,27 @@ mod team_identity_tests {
         assert_eq!(of("Feisar2048"), of("Feisar"));
         assert_eq!(of("AG_Systems2048"), "ag_systems");
         assert_eq!(of("Tigron_x"), of("Tigron"));
+    }
+
+    /// Every team a race can field switches `VoiceReg__TeamName`, under the
+    /// roster's id or its lower-case directory name, and the 2048 ids take
+    /// their base team's case.
+    #[test]
+    fn every_team_has_a_team_name_switch_value() {
+        let switch = super::WWISE_CUES
+            .team_switch
+            .expect("Omega switches on the team");
+        for team in super::TEAM_IDENTITIES {
+            assert!(switch.value(team.id).is_some(), "{}", team.id);
+            assert!(
+                switch.value(&team.id.to_ascii_lowercase()).is_some(),
+                "{}",
+                team.id
+            );
+        }
+        assert_eq!(switch.value("ag_systems"), Some("Team_AG_Systems"));
+        assert_eq!(switch.value("Qirex2048"), switch.value("Qirex"));
+        assert_eq!(switch.value("Fantom"), None);
     }
 }
 

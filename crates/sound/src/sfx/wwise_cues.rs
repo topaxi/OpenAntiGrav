@@ -41,6 +41,20 @@ fn event_ids(blob: &[u8]) -> BTreeSet<u32> {
     )
 }
 
+/// What every event of a title loads with: the state and switch values its
+/// switch containers play by, and where non-embedded media is read.
+struct Resolve<'a> {
+    states: &'a [(u32, u32)],
+    media_dirs: &'a [&'a str],
+}
+
+/// Media `id` read whole from a loose `<id>.wem` in the first of `dirs` that
+/// holds one.
+fn loose_media(archives: &mut Archives, dirs: &[&str], id: u32) -> Option<Vec<u8>> {
+    dirs.iter()
+        .find_map(|dir| archives.read_name(&format!("{dir}{id}.wem")).ok())
+}
+
 impl Banks {
     /// Loads every cue `cues` posts, beside what [`Self::load`] decoded: a
     /// loaded event replaces the cue's named-bank sound. Never fails; one
@@ -49,7 +63,17 @@ impl Banks {
     /// A random container's child is drawn once here, seeded by the event's
     /// name, so a race is repeatable and every post of a cue plays the same
     /// pick (`docs/formats/wwise.md`, "Sound containers").
-    pub fn load_wwise_cues(&mut self, archives: &mut Archives, cues: &oag_title::WwiseCues) {
+    ///
+    /// `player_team` is the player's team id: where the title switches on a
+    /// ship's team ([`oag_title::WwiseCues::team_switch`]), every cue plays
+    /// that team's case, for every emitter (chosen: the cues behind it are the
+    /// player's announcer).
+    pub fn load_wwise_cues(
+        &mut self,
+        archives: &mut Archives,
+        cues: &oag_title::WwiseCues,
+        player_team: Option<&str>,
+    ) {
         let slots: Vec<SlotBlobs> = cues
             .banks
             .iter()
@@ -73,6 +97,24 @@ impl Banks {
                 }
             })
             .collect();
+        let mut states: Vec<(u32, u32)> = cues
+            .states
+            .iter()
+            .map(|s| (name_hash(s.group), name_hash(s.value)))
+            .collect();
+        if let Some(switch) = cues.team_switch {
+            match player_team.and_then(|team| switch.value(team)) {
+                Some(value) => states.push((name_hash(switch.group), name_hash(value))),
+                None => self.report.push(format!(
+                    "sfx: {}: no value for the player's team {player_team:?}",
+                    switch.group
+                )),
+            }
+        }
+        let resolve = Resolve {
+            states: &states,
+            media_dirs: cues.media_dirs,
+        };
         let (mut played, mut player) = (0, 0);
         for cue in Cue::ALL {
             let Some(&(_, row)) = cues.cues.iter().find(|(name, _)| *name == cue.name()) else {
@@ -93,14 +135,21 @@ impl Banks {
                     .push(format!("sfx: {posted}: no bank for the slot {slot}"));
                 continue;
             };
-            if self.load_posted(cue, &format!("{posted}__{slot}"), blobs, false) {
+            if self.load_posted(
+                archives,
+                cue,
+                &format!("{posted}__{slot}"),
+                blobs,
+                &resolve,
+                false,
+            ) {
                 played += 1;
             }
             // The player's version where the bank authors one; where it does
             // not, the player hears what everyone does.
             let mine = format!("{posted}_PC__{slot}");
             if blobs.events.contains(&name_hash(&mine)) {
-                if self.load_posted(cue, &mine, blobs, true) {
+                if self.load_posted(archives, cue, &mine, blobs, &resolve, true) {
                     player += 1;
                 } else {
                     self.player_silent.insert(cue);
@@ -117,16 +166,26 @@ impl Banks {
 
     /// Loads `event` out of the first of `blobs` that defines it: as `cue`'s
     /// sound, or as its player version.
-    fn load_posted(&mut self, cue: Cue, event: &str, blobs: &SlotBlobs, player: bool) -> bool {
+    fn load_posted(
+        &mut self,
+        archives: &mut Archives,
+        cue: Cue,
+        event: &str,
+        blobs: &SlotBlobs,
+        resolve: &Resolve<'_>,
+        player: bool,
+    ) -> bool {
         let mut why = Vec::new();
         for (entry, blob) in &blobs.blobs {
             let mut rng = Rng::new(u64::from(name_hash(event)));
-            match super::wwise_start::load(blob, event, &mut rng) {
+            let mut loose = |id: u32| loose_media(archives, resolve.media_dirs, id);
+            match super::wwise_start::load(blob, event, &mut rng, resolve.states, &mut loose) {
                 Ok(loaded) => {
                     let line = format!(
-                        "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s)",
+                        "sfx: {event} -> {} voice(s) from {entry}, one child of {} container(s), {} switch(es) by state",
                         loaded.timeline.layers.len(),
-                        loaded.picks.len()
+                        loaded.picks.len(),
+                        loaded.switched.len()
                     );
                     trace!("{line}");
                     self.report.push(line);

@@ -17,7 +17,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use oag_formats::wwise::container::{ContainerError, RanSeq, Switch};
-use oag_formats::wwise::hirc::{self, Action, Codec, Event, MusicTrack, Sound, StreamType};
+use oag_formats::wwise::hirc::{
+    self, Action, Codec, Event, MusicTrack, SetState, Sound, StreamType,
+};
 use oag_formats::wwise::{BANK_VERSION, Bank, Kind, Library, name_hash};
 
 fn archive_path(dir: &str, name: &str) -> Option<PathBuf> {
@@ -106,6 +108,11 @@ struct Containers {
     switch_case_children: usize,
     switch_case_direct: usize,
     switch_case_resolving: usize,
+    /// Switch containers on `GAME_VR`, the state Omega sets to `No` on a flat
+    /// screen (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The
+    /// `GAME_VR` state"), and of them those [`game_vr_is_flat_no`] holds for.
+    switch_game_vr: usize,
+    switch_game_vr_flat: usize,
     /// Refused by name (`ContainerError::BaseParams`): a 3D block that opens a path.
     ranseq_refused: usize,
     switch_refused: usize,
@@ -116,6 +123,19 @@ struct Containers {
     children: usize,
     children_resolving: usize,
     children_parented: usize,
+}
+
+/// A state group defaulting to `No`, with exactly the cases `None`, `No` and
+/// `Yes`, where `None` (the state never set) plays what `No` does: a flat
+/// screen hears the same child whether or not the game has set the state.
+fn game_vr_is_flat_no(s: &Switch) -> bool {
+    let case = |name: &str| s.cases.iter().find(|c| c.switch == name_hash(name));
+    s.group_type == 1
+        && s.default == name_hash("No")
+        && s.cases.len() == 3
+        && case("Yes").is_some()
+        && case("No")
+            .is_some_and(|no| case("None").is_some_and(|none| none.children == no.children))
 }
 
 fn tally_container(
@@ -150,6 +170,10 @@ fn tally_container(
                     t.switch_case_children += 1;
                     t.switch_case_direct += usize::from(s.children.contains(id));
                     t.switch_case_resolving += usize::from(library_has(library, *id));
+                }
+                if s.group == name_hash("GAME_VR") {
+                    t.switch_game_vr += 1;
+                    t.switch_game_vr_flat += usize::from(game_vr_is_flat_no(&s));
                 }
                 (s.children, None)
             }
@@ -373,6 +397,68 @@ fn census(
     check(&bank_paths, &library);
     println!("{}: {:?}", name_of_archive.1, c.containers);
     Some(c)
+}
+
+/// The one action of a `Set_State__`/`Set_Switch__` event the 1.07 executable
+/// posts (`0x017c9b60`, `0x0177fe40`): its kind and the group and value it sets,
+/// the body's last eight bytes. All live in `frontend.bnk`, loaded at boot.
+fn set_action(paths: &[String], library: &Library<'_>, event: &str) -> (u16, u32, u32) {
+    let frontend = paths
+        .iter()
+        .position(|p| p.eq_ignore_ascii_case("data/audio/sound/english(us)/frontend.bnk"))
+        .expect("English(US)/frontend.bnk ships");
+    let bank = &library.banks()[frontend];
+    let object = bank
+        .object(name_hash(event))
+        .unwrap_or_else(|| panic!("{event} is an event of frontend.bnk"));
+    let actions = Event::parse(bank.body(object)).expect("an event").actions;
+    let body = bank.body(bank.object(actions[0]).expect("the action is in the bank"));
+    let u32_at = |at: usize| u32::from_le_bytes(body[at..at + 4].try_into().unwrap());
+    (
+        u16::from_le_bytes([body[0], body[1]]),
+        u32_at(body.len() - 8),
+        u32_at(body.len() - 4),
+    )
+}
+
+/// What the executable's state and switch posts set
+/// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`, "The `GAME_VR` state",
+/// "The `TeamName` switch"): `Set_State__GAME_VR__No` is a `SetState` of
+/// `GAME_VR` to `No`, and each team's `Set_Switch__VoiceReg__TeamName__<value>`
+/// (the value strings of the executable's table) sets the bank's own case,
+/// which for AG Systems is spelled `Team_AG_Systems`.
+fn state_and_switch_posts_resolve(paths: &[String], library: &Library<'_>) {
+    assert_eq!(
+        set_action(paths, library, "Set_State__GAME_VR__No"),
+        (SetState::KIND, name_hash("GAME_VR"), name_hash("No"))
+    );
+    assert_eq!(
+        set_action(paths, library, "Set_State__GAME_VR__Yes"),
+        (SetState::KIND, name_hash("GAME_VR"), name_hash("Yes"))
+    );
+    for (posted, case) in [
+        ("Team_Feisar", "Team_Feisar"),
+        ("Team_Qirex", "Team_Qirex"),
+        ("Team_Piranha", "Team_Piranha"),
+        ("Team_Auricom", "Team_Auricom"),
+        ("Team_AGSystems", "Team_AG_Systems"),
+        ("Team_Goteki45", "Team_Goteki45"),
+        ("Team_EGX", "Team_EGX"),
+        ("Team_Assegai", "Team_Assegai"),
+        ("Team_Harimau", "Team_Harimau"),
+        ("Team_Mirage", "Team_Mirage"),
+        ("Team_Icaras", "Team_Icaras"),
+        ("Team_VanUber", "Team_VanUber"),
+        ("Team_Tigron", "Team_Tigron"),
+        ("Team_Triakis", "Team_Triakis"),
+    ] {
+        let event = format!("Set_Switch__VoiceReg__TeamName__{posted}");
+        assert_eq!(
+            set_action(paths, library, &event),
+            (0x1901, name_hash("VoiceReg__TeamName"), name_hash(case)),
+            "{event}"
+        );
+    }
 }
 
 /// The executable posts `<event>[_PC]__<bank>`, hashed whole
@@ -600,6 +686,8 @@ fn base_data00_banks() {
                 switch_case_children: 4393,
                 switch_case_direct: 3771,
                 switch_case_resolving: 4391,
+                switch_game_vr: 0,
+                switch_game_vr_flat: 0,
                 ranseq_refused: 1,
                 switch_refused: 0,
                 refused_other: 0,
@@ -698,6 +786,8 @@ fn patch_data05_banks() {
                 switch_case_children: 309,
                 switch_case_direct: 239,
                 switch_case_resolving: 239,
+                switch_game_vr: 0,
+                switch_game_vr_flat: 0,
                 ranseq_refused: 0,
                 switch_refused: 0,
                 refused_other: 0,
@@ -712,11 +802,10 @@ fn patch_data05_banks() {
 #[test]
 #[ignore = "needs data/extracted/ps4/omega-eu-patch"]
 fn patch_data08_banks() {
-    let Some(c) = census(
-        ("omega-eu-patch", "data08.psarc"),
-        53,
-        posted_events_resolve,
-    ) else {
+    let Some(c) = census(("omega-eu-patch", "data08.psarc"), 53, |paths, library| {
+        posted_events_resolve(paths, library);
+        state_and_switch_posts_resolve(paths, library);
+    }) else {
         return;
     };
     assert_eq!(
@@ -763,6 +852,8 @@ fn patch_data08_banks() {
                 switch_case_children: 4746,
                 switch_case_direct: 4122,
                 switch_case_resolving: 4742,
+                switch_game_vr: 36,
+                switch_game_vr_flat: 36,
                 ranseq_refused: 1,
                 switch_refused: 0,
                 refused_other: 0,
