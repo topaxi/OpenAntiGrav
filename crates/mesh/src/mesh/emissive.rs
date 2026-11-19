@@ -135,6 +135,11 @@ pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
 /// `super::rcs::psp2`'s `emissive_add`.
 pub const PROGRAM_REFLECT_MAP: f32 = 19.0;
 
+/// [`Emissive::program`]'s mode for 2048's `dc_diffusetexturealphaemissive`: the lit picture's
+/// own square, `D^2`, added after the light and before the fog (`rgb = D^2 * (light + 1)`), the
+/// output alpha the picture's. See `super::rcs::psp2`'s `emissive_add`.
+pub const PROGRAM_PICTURE_ADD: f32 = 20.0;
+
 /// [`Emissive::program`]'s mode for Omega's `rt_icetunnel`: the tunnel glass's refraction term
 /// (`2 * Constant1 * a * grab`, `a` the vertex colour's red, carried in `colour.a`), with the
 /// sample point pushed `Refraction * a` along the normal (`program[1]` is `Refraction`). See
