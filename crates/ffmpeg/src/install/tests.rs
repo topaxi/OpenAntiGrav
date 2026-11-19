@@ -12,8 +12,14 @@ fn temp(name: &str) -> PathBuf {
 fn members() -> Vec<(String, Vec<u8>)> {
     let top = "ffmpeg-test-build";
     vec![
-        (format!("{top}/bin/{}", Tool::Ffmpeg.file_name()), b"fake ffmpeg".to_vec()),
-        (format!("{top}/bin/{}", Tool::Ffprobe.file_name()), b"fake ffprobe".to_vec()),
+        (
+            format!("{top}/bin/{}", Tool::Ffmpeg.file_name()),
+            b"fake ffmpeg".to_vec(),
+        ),
+        (
+            format!("{top}/bin/{}", Tool::Ffprobe.file_name()),
+            b"fake ffprobe".to_vec(),
+        ),
         (format!("{top}/bin/ffplay"), b"not kept".to_vec()),
         (format!("{top}/{LICENSE}"), b"LGPL text".to_vec()),
         (format!("{top}/doc/other.txt"), b"not kept".to_vec()),
@@ -38,7 +44,8 @@ fn tar_xz() -> Vec<u8> {
 fn zipped() -> Vec<u8> {
     let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
     for (name, data) in members() {
-        zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        zip.start_file(name, zip::write::SimpleFileOptions::default())
+            .unwrap();
         zip.write_all(&data).unwrap();
     }
     zip.finish().unwrap().into_inner()
@@ -79,15 +86,24 @@ fn serve(bytes: Vec<u8>, requests: usize) -> String {
 }
 
 fn assert_installed(dir: &Path) {
-    assert_eq!(std::fs::read(dir.join(Tool::Ffmpeg.file_name())).unwrap(), b"fake ffmpeg");
-    assert_eq!(std::fs::read(dir.join(Tool::Ffprobe.file_name())).unwrap(), b"fake ffprobe");
+    assert_eq!(
+        std::fs::read(dir.join(Tool::Ffmpeg.file_name())).unwrap(),
+        b"fake ffmpeg"
+    );
+    assert_eq!(
+        std::fs::read(dir.join(Tool::Ffprobe.file_name())).unwrap(),
+        b"fake ffprobe"
+    );
     assert_eq!(std::fs::read(dir.join(LICENSE)).unwrap(), b"LGPL text");
     assert!(!dir.join("ffplay").exists());
     assert_eq!(std::fs::read_dir(dir).unwrap().count(), 3);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(dir.join("ffmpeg")).unwrap().permissions().mode();
+        let mode = std::fs::metadata(dir.join("ffmpeg"))
+            .unwrap()
+            .permissions()
+            .mode();
         assert_eq!(mode & 0o111, 0o111, "the executable bit");
     }
 }
@@ -150,7 +166,8 @@ fn an_archive_without_the_tools_installs_nothing() {
     let mut header = tar::Header::new_gnu();
     header.set_size(1);
     header.set_cksum();
-    tar.append_data(&mut header, "top/README", &b"x"[..]).unwrap();
+    tar.append_data(&mut header, "top/README", &b"x"[..])
+        .unwrap();
     let raw = tar.into_inner().unwrap();
     let mut xz = lzma_rust2::XzWriter::new(Vec::new(), lzma_rust2::XzOptions::default()).unwrap();
     xz.write_all(&raw).unwrap();
@@ -194,7 +211,10 @@ fn the_real_pinned_archive_unpacks() {
     let root = temp("real");
     let dir = install_from(&serve(bytes, 1), &pin, &root, &Progress::default()).unwrap();
     for name in [Tool::Ffmpeg.file_name(), Tool::Ffprobe.file_name(), LICENSE] {
-        assert!(std::fs::metadata(dir.join(name)).unwrap().len() > 1000, "{name}");
+        assert!(
+            std::fs::metadata(dir.join(name)).unwrap().len() > 1000,
+            "{name}"
+        );
     }
     std::fs::remove_dir_all(root).unwrap();
 }

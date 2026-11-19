@@ -34,10 +34,12 @@ pub struct Pin {
     pub license: &'static str,
 }
 
+// Rewritten, with the table below, by scripts/bump-ffmpeg-pin.py.
 const VERSION: &str = "n8.1.3-27-g8dca1586f4";
 
 impl Pin {
     /// Every pin in the table, for the docs check and the tests.
+    // BEGIN TABLE
     pub const ALL: [Self; 4] = [
         Self {
             version: VERSION,
@@ -84,6 +86,7 @@ impl Pin {
             license: "LGPL-3.0-or-later",
         },
     ];
+    // END TABLE
 
     /// The pin for the OS and architecture this binary was built for. `None` on
     /// macOS (no trustworthy static LGPL build is published), on Android and on

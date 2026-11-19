@@ -192,6 +192,9 @@ pub(crate) struct MenuArgs {
     /// source open, since it reads the row's geometry live off the disc;
     /// `-typed` is the same screen after a few glyph changes.
     ///
+    /// `ffmpeg` draws the offer to download `ffmpeg` and `ffmpeg-progress` the status line over
+    /// the menus while it runs (`session::ffmpeg`).
+    ///
     /// `player-name` and `player-tag` draw the first-run entries on Pulse's own `TagInput` row
     /// (needs a Pulse source); `player-name-grid` and `player-tag-grid` draw the grid every other
     /// title gets.

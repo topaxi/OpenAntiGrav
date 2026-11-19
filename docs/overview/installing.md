@@ -48,6 +48,32 @@ Without it the game skips each title's intro movie and **plays no music in
 Pulse or Pure** (nor 2048's soundtrack, until the game decodes it itself). The
 game logs a `warn` line naming `ffmpeg` and otherwise works.
 
+**Or let the game fetch it.** On Linux and Windows (x86-64 and AArch64), when
+there is no `ffmpeg` on `PATH` the front end asks once, naming the size and the
+source, whether to download a pinned LGPL build into the per-user cache
+directory (`<cache dir>/oag/ffmpeg`). Yes downloads it, checks its SHA-256
+against the one in the game's source and uses it from then on; no (or offline,
+or a hash mismatch) leaves the game as described above and it does not ask
+again. OPTIONS, DOWNLOAD FFMPEG asks again; `oag-game --fetch-ffmpeg` downloads
+without a window. An `ffmpeg` on `PATH` is never replaced and never prompts a
+download; `[ffmpeg] use_pinned = true` in `settings.toml` prefers the pinned
+copy anyway, and `[ffmpeg] download = "ask" | "yes" | "never"` is the stored
+answer. macOS keeps the `brew` route (no trustworthy static LGPL build is
+published), and Android and the web download nothing.
+
+Pinned build (BtbN FFmpeg-Builds, release `autobuild-2026-10-31-12-59`, FFmpeg
+`n8.1.3-27-g8dca1586f4`, LGPL v3, static; `crates/ffmpeg/src/pins.rs` is the
+source of truth and `scripts/bump-ffmpeg-pin.py` moves it monthly):
+
+| OS, arch | Archive | Size | SHA-256 |
+| --- | --- | --- | --- |
+| Linux x86-64 | `ffmpeg-n8.1.3-27-g8dca1586f4-linux64-lgpl-8.1.tar.xz` | 135 MB | `a64f3171e6ad1f7d358d28890a907ee478c331d1177ec696a93418f79ac3f1f3` |
+| Linux AArch64 | `...-linuxarm64-lgpl-8.1.tar.xz` | 116 MB | `2ea30086a637e3f0ad0f49a1b38db34121422b85e93cc82df2e01d9ee5200809` |
+| Windows x86-64 | `...-win64-lgpl-8.1.zip` | 168 MB | `d4c2a42673917b4a97104a3e9f082729a9730796b98664e37c0b7eba6c6c613d` |
+| Windows AArch64 | `...-winarm64-lgpl-8.1.zip` | 116 MB | `c918142d3920f6b15282739dd523885be0586cbd8684f400acea9d4a8c97002f` |
+
+Only `ffmpeg`, `ffprobe` and `LICENSE.txt` are kept (about 280 MB unpacked).
+
 ## 2. Make the "images" folder and put your files in it
 
 The game looks in a few folders for your files, and uses the first one that has

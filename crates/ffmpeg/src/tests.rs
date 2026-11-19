@@ -6,14 +6,23 @@ fn p(s: &str) -> Option<PathBuf> {
 
 #[test]
 fn a_system_tool_wins_unless_the_pinned_one_is_asked_for() {
-    assert_eq!(pick(p("/usr/bin/ffmpeg"), p("/c/ffmpeg"), false), p("/usr/bin/ffmpeg"));
-    assert_eq!(pick(p("/usr/bin/ffmpeg"), p("/c/ffmpeg"), true), p("/c/ffmpeg"));
+    assert_eq!(
+        pick(p("/usr/bin/ffmpeg"), p("/c/ffmpeg"), false),
+        p("/usr/bin/ffmpeg")
+    );
+    assert_eq!(
+        pick(p("/usr/bin/ffmpeg"), p("/c/ffmpeg"), true),
+        p("/c/ffmpeg")
+    );
 }
 
 #[test]
 fn either_one_alone_is_used_and_neither_is_missing() {
     assert_eq!(pick(None, p("/c/ffmpeg"), false), p("/c/ffmpeg"));
-    assert_eq!(pick(p("/usr/bin/ffmpeg"), None, false), p("/usr/bin/ffmpeg"));
+    assert_eq!(
+        pick(p("/usr/bin/ffmpeg"), None, false),
+        p("/usr/bin/ffmpeg")
+    );
     assert_eq!(pick(p("/usr/bin/ffmpeg"), None, true), p("/usr/bin/ffmpeg"));
     assert_eq!(pick(None, None, false), None);
     assert_eq!(pick(None, None, true), None);
@@ -60,10 +69,18 @@ fn an_installed_copy_is_found_under_the_pins_own_directory() {
 fn every_pin_names_its_hash_size_and_an_lgpl_license() {
     for pin in Pin::ALL {
         assert_eq!(pin.sha256.len(), 64, "{}", pin.url);
-        assert!(pin.sha256.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
+        assert!(
+            pin.sha256
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+        );
         assert!(pin.url.starts_with("https://"));
         assert!(pin.url.contains(pin.version), "{}", pin.url);
-        assert!(pin.url.contains("lgpl") && !pin.url.contains("-gpl"), "{}", pin.url);
+        assert!(
+            pin.url.contains("lgpl") && !pin.url.contains("-gpl"),
+            "{}",
+            pin.url
+        );
         assert!(pin.license.starts_with("LGPL"));
         assert!(pin.size > 50_000_000);
     }

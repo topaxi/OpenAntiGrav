@@ -15,7 +15,7 @@ pub(crate) fn status_text(
         return say("OAG_FFMPEG_UNPACKING", "UNPACKING FFMPEG...");
     }
     let size = if total > 0 {
-        format!("{} / {} MB", done / 1_000_000, total / 1_000_000)
+        format!("{} OF {} MB", done / 1_000_000, total / 1_000_000)
     } else {
         format!("{} MB", done / 1_000_000)
     };

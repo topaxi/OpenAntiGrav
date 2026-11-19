@@ -1,0 +1,26 @@
+# Dependabot cannot see the ffmpeg build pinned in crates/ffmpeg/src/pins.rs, so this does the
+# same job monthly: scripts/bump-ffmpeg-pin.py moves the pin to BtbN's newest month-end build
+# (hashes read from GitHub's asset digests) and a PR is opened. CI cannot run the movie and
+# music checks (no disc images), so run `just test-data` locally before merging.
+name: ffmpeg-pin
+on:
+  schedule:
+    - cron: "0 6 2 * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -I scripts/bump-ffmpeg-pin.py
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          branch: ffmpeg-pin-bump
+          title: "ffmpeg: bump the pinned build to the newest month-end release"
+          commit-message: "ffmpeg: bump the pinned build to the newest month-end release"
+          body: |
+            Written by scripts/bump-ffmpeg-pin.py. Also update the table in docs/overview/installing.md,
+            and run `just test-data` (movie and music checks) before merging.

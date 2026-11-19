@@ -6,8 +6,8 @@
 //! unpacked there, and only then is the directory renamed into place. A hash
 //! mismatch, a cancel, a full disk or a dead connection leaves nothing behind.
 
-use crate::pins::{Archive, Pin};
 use crate::Tool;
+use crate::pins::{Archive, Pin};
 use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 use std::fs::File;
@@ -119,7 +119,10 @@ fn download(url: &str, pin: &Pin, to: &Path, progress: &Progress) -> Result<()> 
         .timeout_resolve(Some(Duration::from_secs(20)))
         .build()
         .into();
-    let response = agent.get(url).call().with_context(|| format!("fetching {url}"))?;
+    let response = agent
+        .get(url)
+        .call()
+        .with_context(|| format!("fetching {url}"))?;
     let total = response
         .headers()
         .get("content-length")
