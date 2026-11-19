@@ -4317,7 +4317,8 @@ digit, 19.10); Omega's `PI_Track` authors `RotX 0.45`, `PosX 0.55`, `PosY 0.175`
 so `hd/menu-track-select` and `hd/menu-ship-select` are photographed with its row tint written to zero in the original and drawn with
 `--fury-tint 0` in ours; the pairs read 7.83 to 5.84 and 4.51 to 3.05 mean grey, and the page outside the model's frame 0.83 and 1.55 to
 0.035 on both (`docs/ghidra/functions/ps3-hdfury-eu/menu-backdrop.md`, "Hidden for a compare shot"; `docs/tools/compare-page.md`). The
-cloud a player sees is unchanged. **Omega: checked, differs** (no Fury widget; its scene backdrop is another widget).
+cloud a player sees is unchanged. Campaign Select, grid and cell are hidden the same way since `hd-fury-backdrop-2`, and ours states
+the adapted luma the pair read (`--fury-adapted-luma`); numbers on that page. **Omega: checked, differs** (no Fury widget; its scene backdrop is another widget).
 
 **Live, 2026-10-09** (Xvfb, software Vulkan, debug build): the model draws on
 the real screen, the grey matches the capture's, and stepping the circuit
