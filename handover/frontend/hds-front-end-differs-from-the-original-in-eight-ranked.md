@@ -58,8 +58,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   in the order a player would notice:
   0. **The rest pair `hd/menu-ship-select` cannot score the settle start, the turn or the zoom** (checked 2026-11-19,
      `hd-ship-craft`): its original is grabbed 3 s after the last tap (settled), the turn, pan and zoom are zero at rest, and
-     the hull silhouette is within 4 px on five teams, so what is left in its craft box (2.74 on an unblurred, 5 px blurred
-     scale; the lighting item below) is colour. A claim about those three needs a **step pair**: grab N frames after a press through
+     the hull silhouette is within 4 px on five teams, so what is left in its craft box (2.74 on an unblurred crop of 716,150 1012x650 after a 5 px blur) is **colour, open and not chased
+     in this lane**: ours reads darker than the original by mean RGB -2.5, -1.5, -1.9 there (the lighting item below). A claim about those three needs a **step pair**: grab N frames after a press through
      `grab_with_clock` with `st+0x1014` (depth target), `st+0x1020` (drawn depth) and `st+0x194` (the fit's model pointer) read from RAM
      per frame, which would also settle the drawn depth at open and whether the fit keeps the old box through the 4-frame gap.
      Not made.
