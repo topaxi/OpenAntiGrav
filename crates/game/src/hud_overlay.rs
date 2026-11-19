@@ -559,7 +559,24 @@ impl Overlay {
                 &self.sheet,
             );
         }
-        let glow = frame.glow.clone();
+        let mut glow = frame.glow.clone();
+        if self.bent {
+            // The stamp chain reads the HUD's pixels inside a rectangle, so a bent bar's stamp
+            // follows it column by column.
+            let size = self.space.size;
+            let amplitude = oag_hud::concave::amplitude_for(self.art.dynamic_hud.is_some(), size.1);
+            glow = glow
+                .iter()
+                .flat_map(|stamp| {
+                    oag_hud::concave::bent_columns(stamp.rect, size, amplitude).map(|rect| {
+                        oag_hud::boost_smear::GlowStamp {
+                            rect,
+                            value: stamp.value,
+                        }
+                    })
+                })
+                .collect();
+        }
         oag_gpu::perfprobe::mark("hud-frame");
         let bent = self.bent.then_some(flat);
         self.paint(device, queue, encoder, view, frame, viewport, bent);

@@ -37,7 +37,8 @@ The second group's bit copies the first's. Confidence 85 for the table (decompil
 of `+0x6d`, which `Camera_UpdatePlayerView` sets to 1 for `OPT_INT` and 0 for the two external views
 (`0x0883c23c`, `0x0883c2c4`, then `0x0883c2d0` copies it; [camera.md](camera.md)). The same SELECT press
 writes the settings-changed byte (`sb fp,0x45b` at `0x0883c174`), so `Hud_Update` re-reads the list on every
-camera change. Seen live (below): under `FE_DEFAULT` the bit was 0 in the far and close views and 2 in the
+camera change, and `RaceManager_Construct` sets it to 1 (`0x088295b4`), so a race starts with the list
+already applied. Seen live (below): under `FE_DEFAULT` the bit was 0 in the far and close views and 2 in the
 internal one, and only the internal frame was bent. Confidence 90.
 
 ## The warp (2026-11-19)
@@ -87,14 +88,17 @@ The lap digit's top moved 19 to 21 (law 1.6) and the `Lap` caption's 30 to 36 (l
 nothing" note on [now-playing.md](now-playing.md) was two frames with the camera moving between them.
 
 **Ours.** `oag_hud::concave` holds the law and the four column names; `oag_game`'s UI quad carries per-corner
-offsets the shader adds; the reticle is drawn after the rest, flat. On the same layout the shield bar's top edge
+offsets the shader adds; the reticle is drawn after the rest, flat; the boost and absorb glow stamps
+(a rectangle-only bloom chain reading the HUD's pixels) are cut into the same columns and grown to the bent
+corners, so the glow stays on a bent bar. On the same layout the shield bar's top edge
 in ours matches the original's to the pixel at all six columns (frame pair, `oag-game pulse-psp-usa.chd --race
 --mode time_trial --camera-view close --ticks 200 --size 480x272 --screenshot` with `[display] dynamic_hud =
 "concave"`). Ours offers `concave` on every other title too, at the same share of the screen's height; that is
 ours, not the original's.
 
 **PS2** (`SCES_547.48`, the same code). `FUN_001355d8` reads the list the same way, the bit at the group's
-`+0xd4` (`*(hud+0x2a4)`, `*(hud+0x2a8)`), `FE_DEFAULT` from the craft's `+0xfc & 1`; `FUN_00136748` gives the four
+`+0xd4` (`*(hud+0x2a4)`, `*(hud+0x2a8)`), `FE_DEFAULT` from the craft's `+0xfc & 1` (presumed the internal-view
+flag, its writer not read); `FUN_00136748` gives the four
 bars 10 vertices against 4 (`0x001368e4`..); the image draw (`0x001934dc`) runs `FUN_001e5e98`, the same law with
 35.0 at `0x00282ab0`, the centre row `FUN_001e4fe0` (screen height `/ 2`) and the frequency `FUN_001e5000`
 (`pi / ` screen width), both from the display globals `0x00284fe0`/`0x00284fe4` (512 and 512 in the image, written

@@ -79,6 +79,19 @@ pub fn columns(rect: [f32; 4], uv: [f32; 4]) -> [([f32; 4], [f32; 4]); COLUMNS] 
     })
 }
 
+/// The rectangles covering `rect` once bent: its [`COLUMNS`] columns, each grown to the span its
+/// bent corners reach. What a rectangle-only consumer (the boost glow's stamp) reads in place of a
+/// bent bar.
+#[must_use]
+pub fn bent_columns(rect: [f32; 4], size: (f32, f32), amplitude: f32) -> [[f32; 4]; COLUMNS] {
+    columns(rect, [0.0; 4]).map(|(column, _)| {
+        let [top_left, top_right, bottom_left, bottom_right] = corners(column, size, amplitude);
+        let top = column[1] + top_left.min(top_right);
+        let bottom = column[1] + column[3] + bottom_left.max(bottom_right);
+        [column[0], top, column[2], bottom - top]
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,6 +155,22 @@ mod tests {
         assert_eq!(c[1], dy(280.0, 10.0, PSP, A));
         assert_eq!(c[2], dy(200.0, 260.0, PSP, A));
         assert_eq!(c[3], dy(280.0, 260.0, PSP, A));
+    }
+
+    #[test]
+    fn a_bent_bar_is_covered_column_by_column() {
+        let bar = [304.0, 240.0, 140.0, 8.0];
+        let cover = bent_columns(bar, PSP, A);
+        for (column, (flat, _)) in cover.iter().zip(columns(bar, [0.0; 4])) {
+            let c = corners(flat, PSP, A);
+            assert!(column[1] <= flat[1] + c[0].min(c[1]) + 1.0e-4);
+            assert!(column[1] + column[3] >= flat[1] + flat[3] + c[2].max(c[3]) - 1.0e-4);
+        }
+        assert!(
+            cover[0][1] < 220.0,
+            "the left end has risen: {:?}",
+            cover[0]
+        );
     }
 
     #[test]
