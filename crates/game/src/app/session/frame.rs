@@ -673,6 +673,9 @@ impl Session {
                     self.play_navs(boot_navs);
                 }
                 Stage::Menu(stage) => {
+                    if let Some(shell) = &self.shell {
+                        self.records.count_menu_seconds(shell.title.name, dt);
+                    }
                     stage.tick(
                         dt,
                         &self.audio.output().spectrum().levels(),
@@ -1211,6 +1214,7 @@ impl Session {
         // once it has either built the flow or given up. The second guard
         // is not decoration: without it a source whose screens do not read
         // reopened its disc image once a frame and warned once a frame.
+        self.count_heard_song();
         self.phases.mark(super::phases::Phase::Ticks);
         self.start_endrace_prefetch();
         self.start_menu_source();

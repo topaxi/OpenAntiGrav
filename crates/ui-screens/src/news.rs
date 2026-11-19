@@ -88,6 +88,14 @@ impl NewsItem {
     }
 }
 
+/// A title's items and the name its statistics are filed under.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Feed {
+    /// `oag_title::Title::name`: whose lifetime table the items quote.
+    pub title: String,
+    pub items: Vec<NewsItem>,
+}
+
 /// Reads every `PI_News` row of a `Definition.xml`, in file order.
 #[must_use]
 pub fn parse(xml: &str) -> Vec<NewsItem> {
@@ -105,7 +113,11 @@ fn collect(node: &fexml::Node, items: &mut Vec<NewsItem>) {
         let number = |name: &str| node.value(name).and_then(|v| v.trim().parse::<i32>().ok());
         items.push(NewsItem {
             id: id.to_string(),
-            format: match node.value("NewsFormat").map(str::to_ascii_lowercase).as_deref() {
+            format: match node
+                .value("NewsFormat")
+                .map(str::to_ascii_lowercase)
+                .as_deref()
+            {
                 Some("float") => Format::Float,
                 Some("time") => Format::Time,
                 Some("floattime") => Format::FloatTime,
@@ -113,14 +125,20 @@ fn collect(node: &fexml::Node, items: &mut Vec<NewsItem>) {
                 Some("string") => Format::String,
                 _ => Format::Int,
             },
-            class: match node.value("NewsClass").map(str::to_ascii_lowercase).as_deref() {
+            class: match node
+                .value("NewsClass")
+                .map(str::to_ascii_lowercase)
+                .as_deref()
+            {
                 Some("profile") => Class::Profile,
                 Some("teamstats") => Class::TeamStats,
                 Some("trackstats") => Class::TrackStats,
                 Some("unlockable") => Class::Unlockable,
                 _ => Class::GenStats,
             },
-            member: number("NewsMember").and_then(|m| u32::try_from(m).ok()).unwrap_or(0),
+            member: number("NewsMember")
+                .and_then(|m| u32::try_from(m).ok())
+                .unwrap_or(0),
             frequency: number("NewsFrequency").unwrap_or(0),
             max: number("NewsMax").unwrap_or(0),
         });
@@ -199,7 +217,10 @@ fn duration(seconds: i64, strings: &StringTable) -> String {
     let minutes = (seconds / 60) % 60;
     let hours = seconds / 60 / 60;
     let word = |one: bool, singular: &str, plural: &str| {
-        strings.get(if one { singular } else { plural }).unwrap_or_default().to_string()
+        strings
+            .get(if one { singular } else { plural })
+            .unwrap_or_default()
+            .to_string()
     };
     let sec_word = word(seconds % 60 == 1, "MSC_SEC", "MSC_SECONDS");
     let min_word = word(minutes == 1, "MSC_MIN", "MSC_MINS");
@@ -239,7 +260,9 @@ pub fn message(item: &NewsItem, strings: &StringTable, stats: &dyn Statistics) -
             let count = slot as i64;
             match item.format {
                 Format::String => None,
-                Format::Float => (slot > 0.0).then(|| one(Arg::Float(f64::from(slot)))).flatten(),
+                Format::Float => (slot > 0.0)
+                    .then(|| one(Arg::Float(f64::from(slot))))
+                    .flatten(),
                 Format::Time | Format::FloatTime if count < 1 => {
                     untried_tip(&item.id).and_then(template)
                 }
@@ -264,7 +287,10 @@ fn draw(items: &[NewsItem], last: usize, rng: &mut Rng) -> usize {
     let total: u32 = items.iter().map(NewsItem::weight).sum();
     let weighted = items.iter().filter(|item| item.weight() > 0).count();
     if weighted < 2 {
-        return items.iter().position(|item| item.weight() > 0).unwrap_or(last);
+        return items
+            .iter()
+            .position(|item| item.weight() > 0)
+            .unwrap_or(last);
     }
     loop {
         let mut value = rng.below(total);

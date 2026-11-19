@@ -33,6 +33,21 @@ impl Session {
         }
     }
 
+    /// Counts the race song that started since the last call, as the disc names it, in the
+    /// title's lifetime statistics (`TKR_SONGS`, `TKR_FAVMUS`). A song the disc does not name
+    /// is not counted: the ticker would have no name to quote.
+    pub(super) fn count_heard_song(&mut self) {
+        let Some(song) = self.audio.now_playing() else {
+            return;
+        };
+        if std::mem::replace(&mut self.heard_song, song.serial) == song.serial {
+            return;
+        }
+        if let (Some(title), Some(name)) = (self.music_title(), song.name) {
+            self.records.count_song(title, &name.title);
+        }
+    }
+
     /// The title this session races.
     pub(super) fn title_raced(&self) -> Option<&'static oag_title::Title> {
         self.shell

@@ -822,6 +822,10 @@ pub struct TickerLayout {
     text_lines: usize,
     /// The `TextInfo`'s own `font` name, as authored (Pure: `scroll`).
     text_font: String,
+    /// The messages the ticker draws among, the title's `PI_News` rows
+    /// ([`oag_title::FrontEnd::news`]); empty where the title authors none or the file did not
+    /// read. Set by the loader, since the layout's own XML does not carry them.
+    pub news: crate::news::Feed,
 }
 
 impl TickerLayout {
@@ -869,9 +873,31 @@ impl TickerLayout {
                 .and_then(|bar| bar.value("font"))
                 .unwrap_or("default")
                 .to_string(),
+            news: crate::news::Feed::default(),
         })
     }
+
+    /// The messages the ticker plays, in order: [`crate::news::sequence`] of this layout's items
+    /// over `stats`, drawn with `seed`. Empty when no item has anything to say.
+    #[must_use]
+    pub fn tips(
+        &self,
+        strings: &oag_ui::language::StringTable,
+        stats: &dyn crate::news::Statistics,
+        seed: u64,
+    ) -> Vec<String> {
+        crate::news::sequence(
+            &self.news.items,
+            strings,
+            stats,
+            &mut oag_core::Rng::new(seed),
+            TIPS_PLAYED,
+        )
+    }
 }
+
+/// How many messages [`TickerLayout::tips`] lays out before the rotation repeats.
+const TIPS_PLAYED: usize = 24;
 
 /// The scale of a `TextInfo` whose `scale` does not resolve. **Chosen, not
 /// measured off a number on the disc**: Pure's `TextInfo` names

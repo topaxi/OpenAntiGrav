@@ -619,6 +619,10 @@ pub struct Store {
     /// One row per title with counted lifetime statistics, the footer ticker's source. Absent in
     /// every file written before it existed.
     lifetime: Vec<LifetimeRecord>,
+    /// Whether menu time or a song was counted since the last [`Store::take_lifetime_unsaved`]:
+    /// the counters nothing else saves (a race's end saves the whole file).
+    #[serde(skip)]
+    lifetime_unsaved: bool,
 }
 
 impl Store {
@@ -838,56 +842,46 @@ impl Store {
     }
 }
 
-/// The footer ticker's own honest tip rotation - the `TKR_NO*` family, the
-/// only strings on disc that carry no `%d`/`%s`/`%.2f` template this build has
-/// a real counter for. See `oag_ui_screens::campaign::footer`'s own module doc for why
-/// nothing here invents a play-time or song-count statistic instead.
+/// The footer ticker's messages: the layout's `PI_News` items drawn by the original's
+/// law over the profile's lifetime statistics ([`Lifetime`]), `seed` choosing the draw.
 ///
-/// **One function, three callers that must agree.** The Race Campaign's own
-/// screens (`CampaignStage::ticker_tips` in the `oag-game` binary), the
-/// ordinary menu pages (`Session::draw`'s call into `MenuStage::render`, same
-/// binary) and `--menu-page`'s still (`capture::menu_page`, this crate) all
-/// rotate through the same list off the same save file - a live session and a
-/// screenshot of it must not show two different tips for one
-/// `<config dir>/oag/records.toml`. Living here rather than beside either
-/// `CampaignStage` or `capture::menu_page` is what lets both reach it: neither
-/// binary module is visible to this crate's own `capture`, and this crate
-/// cannot depend on the binary the other way (`workspace-layout.md`'s rule 2).
+/// **One function, every caller.** The Race Campaign's own screens
+/// (`CampaignStage::ticker_tips` in the `oag-game` binary), the ordinary menu pages
+/// (`Session::draw`'s call into `MenuStage::render`, same binary) and `--menu-page`'s still
+/// (`capture::menu_page`, this crate) all play the same list off the same save file and seed - a
+/// live session and a screenshot of it must not show two different messages for one
+/// `<config dir>/oag/records.toml`. Living here rather than beside either `CampaignStage` or
+/// `capture::menu_page` is what lets both reach it: neither binary module is visible to this
+/// crate's own `capture`, and this crate cannot depend on the binary the other way
+/// (`workspace-layout.md`'s rule 2).
 ///
-/// `Tournament` never launches from the RACE page (`crate::campaign::race_mode_for_cell`
-/// reaches it only through a campaign cell), so `TKR_NOTOURN` is unconditionally included;
-/// the other six, `Head2Head` among them since it joined the RACE page, are gated on whether `store`
-/// carries any row for that mode - `oag_race::Mode::name`'s own spelling, the
-/// same string [`Key::new`] normalises every record's `mode` to - which reads
-/// real save data rather than a guess, at the cost of never re-showing a tip
-/// once its mode has been raced even once.
+/// Empty for a layout with no items or a profile and a table with nothing to say.
 #[must_use]
-pub fn ticker_tips(strings: &oag_ui::language::StringTable, store: &Store) -> Vec<String> {
-    let never_raced = |mode: &str| !store.rows().iter().any(|row| row.mode == mode);
-    let mut ids = vec!["TKR_NOTOURN"];
-    if never_raced(oag_race::Mode::Head2Head.name()) {
-        ids.push("TKR_NOHH");
-    }
-    if never_raced(oag_race::Mode::SingleRace.name()) {
-        ids.push("TKR_NOSR");
-    }
-    if never_raced(oag_race::Mode::TimeTrial.name()) {
-        ids.push("TKR_NOTT");
-    }
-    if never_raced(oag_race::Mode::SpeedLap.name()) {
-        ids.push("TKR_NOSL");
-    }
-    if never_raced(oag_race::Mode::Zone.name()) {
-        ids.push("TKR_NOZONE");
-    }
-    if never_raced(oag_race::Mode::Eliminator.name()) {
-        ids.push("TKR_NOELIM");
-    }
-    ids.into_iter()
-        .filter_map(|id| strings.get(id))
-        .map(str::to_string)
-        .collect()
+pub fn ticker_tips(
+    ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
+    strings: &oag_ui::language::StringTable,
+    store: &Store,
+    seed: u64,
+) -> Vec<String> {
+    ticker.map_or_else(Vec::new, |ticker| {
+        ticker.tips(strings, &store.lifetime(&ticker.news.title), seed)
+    })
 }
+
+/// The seed of a live session's ticker draw, taken once per process so the menu pages and the
+/// campaign screens play one rotation.
+#[must_use]
+pub fn session_ticker_seed() -> u64 {
+    static SEED: std::sync::OnceLock<u64> = std::sync::OnceLock::new();
+    *SEED.get_or_init(|| {
+        web_time::SystemTime::now()
+            .duration_since(web_time::UNIX_EPOCH)
+            .map_or(1, |since| since.as_nanos() as u64)
+    })
+}
+
+/// The seed of a capture's ticker draw: a still must not change between runs.
+pub const TICKER_CAPTURE_SEED: u64 = 1;
 
 /// Parses `text` as a records file, keeping every row that decodes and
 /// noting - never discarding the whole file over - one that does not.
@@ -1040,6 +1034,7 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
             campaign_cursor,
             campaign_found,
             lifetime,
+            lifetime_unsaved: false,
         },
         notes,
     ))

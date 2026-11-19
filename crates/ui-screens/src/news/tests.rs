@@ -62,7 +62,11 @@ fn the_definition_reads_every_row_with_its_class_format_and_weight() {
     assert_eq!(items[5].member, 0);
     assert_eq!(items[5].weight(), 2, "NewsFrequency 1 is weight 2");
     assert_eq!(items[0].weight(), 1);
-    assert_eq!(items[6].weight(), 0, "an unlock announcement is never drawn");
+    assert_eq!(
+        items[6].weight(),
+        0,
+        "an unlock announcement is never drawn"
+    );
 }
 
 #[test]
@@ -84,9 +88,18 @@ fn a_counted_statistic_fills_its_template() {
         favourite: Some("Fenix Funk 5".to_string()),
     };
     let strings = strings();
-    assert_eq!(message(&items[0], &strings, &stats).unwrap(), "You've listened to 6 songs");
-    assert_eq!(message(&items[3], &strings, &stats).unwrap(), "Energy 12.50 units, 100%");
-    assert_eq!(message(&items[4], &strings, &stats).unwrap(), "Your favourite is Fenix Funk 5");
+    assert_eq!(
+        message(&items[0], &strings, &stats).unwrap(),
+        "You've listened to 6 songs"
+    );
+    assert_eq!(
+        message(&items[3], &strings, &stats).unwrap(),
+        "Energy 12.50 units, 100%"
+    );
+    assert_eq!(
+        message(&items[4], &strings, &stats).unwrap(),
+        "Your favourite is Fenix Funk 5"
+    );
     assert_eq!(message(&items[5], &strings, &stats).unwrap(), "Try Zone");
 }
 
@@ -110,7 +123,10 @@ fn times_read_in_hours_minutes_and_seconds_singular_at_one() {
 fn an_untried_modes_time_item_says_to_try_it_and_other_time_items_say_nothing() {
     let items = parse(DEFINITION);
     let none = Stats::default();
-    assert_eq!(message(&items[2], &strings(), &none).unwrap(), "Try a Speed Lap");
+    assert_eq!(
+        message(&items[2], &strings(), &none).unwrap(),
+        "Try a Speed Lap"
+    );
     assert_eq!(message(&items[1], &strings(), &none), None);
 }
 
@@ -127,13 +143,19 @@ fn the_draw_follows_the_weights_and_never_repeats_the_item_before() {
     let mut rng = Rng::new(7);
     let plays = sequence(&items, &strings(), &stats, &mut rng, 4000);
     assert_eq!(plays.len(), 4000);
-    assert!(plays.windows(2).all(|pair| pair[0] != pair[1]), "an item is never drawn twice running");
+    assert!(
+        plays.windows(2).all(|pair| pair[0] != pair[1]),
+        "an item is never drawn twice running"
+    );
     let count = |text: &str| plays.iter().filter(|p| p.as_str() == text).count();
     // Every drawable item has a message here, so the weight-2 item is drawn about twice as
     // often as a weight-1 one, less the draws no-repeat steals from it.
     let zone = count("Try Zone");
     let songs = count("You've listened to 6 songs");
-    assert!(zone > songs + songs / 2, "weight 2 beats weight 1: {zone} vs {songs}");
+    assert!(
+        zone > songs + songs / 2,
+        "weight 2 beats weight 1: {zone} vs {songs}"
+    );
     assert_eq!(count("Your favourite is Fenix Funk 5") > 0, true);
 }
 
@@ -146,7 +168,11 @@ fn an_empty_statistic_is_skipped_and_the_draw_goes_again() {
     };
     let plays = sequence(&items, &strings(), &stats, &mut Rng::new(5), 200);
     // The untried Speed Lap tip and the song count are all that has a message.
-    assert!(plays.iter().all(|p| p == "You've listened to 6 songs" || p == "Try a Speed Lap"));
+    assert!(
+        plays
+            .iter()
+            .all(|p| p == "You've listened to 6 songs" || p == "Try a Speed Lap")
+    );
     assert!(plays.iter().any(|p| p == "Try a Speed Lap"));
 }
 

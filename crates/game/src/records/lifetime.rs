@@ -91,6 +91,7 @@ impl Store {
     /// `seconds` spent in the front end.
     pub fn count_menu_seconds(&mut self, title: &str, seconds: f64) {
         self.lifetime_row(title).menu_seconds += seconds;
+        self.lifetime_unsaved = true;
     }
 
     /// One race song started, as the disc names it.
@@ -100,6 +101,12 @@ impl Store {
             .songs
             .entry(song.to_string())
             .or_default() += 1;
+        self.lifetime_unsaved = true;
+    }
+
+    /// Whether counters changed that no save has taken yet; clears the flag.
+    pub fn take_lifetime_unsaved(&mut self) -> bool {
+        std::mem::take(&mut self.lifetime_unsaved)
     }
 
     /// What `title`'s ticker quotes. A title never played reads as all zero.
@@ -120,7 +127,12 @@ impl Lifetime<'_> {
     #[must_use]
     pub fn events(&self) -> u64 {
         self.0.map_or(0, |row| {
-            row.laps + row.songs.values().map(|plays| u64::from(*plays)).sum::<u64>()
+            row.laps
+                + row
+                    .songs
+                    .values()
+                    .map(|plays| u64::from(*plays))
+                    .sum::<u64>()
         })
     }
 }
@@ -151,13 +163,16 @@ impl Statistics for Lifetime<'_> {
         }
         let row = self.0?;
         // The first song with the most plays, which is how the original's strict `<` keeps one.
-        let (song, _) = row
-            .songs
-            .iter()
-            .fold(None, |best: Option<(&String, u32)>, (song, plays)| match best {
+        let (song, _) = row.songs.iter().fold(
+            None,
+            |best: Option<(&String, u32)>, (song, plays)| match best {
                 Some((_, most)) if most >= *plays => best,
                 _ => Some((song, *plays)),
-            })?;
+            },
+        )?;
         Some(song.chars().take(NAME_FIELD).collect())
     }
 }
+
+#[cfg(test)]
+mod tests;

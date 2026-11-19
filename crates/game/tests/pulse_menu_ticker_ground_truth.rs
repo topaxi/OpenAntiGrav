@@ -77,15 +77,13 @@ fn pulses_footer_authors_the_ticker_viewport_docs_measured() {
     }
 }
 
-/// A sanity check on the wiring, not a new measurement: given the two tips
-/// `oag_game::records::ticker_tips` finds on a fresh save (`TKR_NOTOURN`/
-/// `TKR_NOHH` on a fresh save, which has raced neither - see that function's own doc), the ticker
-/// actually draws something inside its own viewport at `elapsed = 0.0`. This
-/// is what a player sees on the very first frame a menu with no save data
-/// yet opens on - not a still with nothing in the footer at all.
+/// A sanity check on the wiring, not a new measurement: with the disc's own `PI_News` items and a
+/// fresh save (no statistic counted), the ticker's rotation is exactly the `TKR_NO*` tips - the
+/// six per-mode time items each fall back to their "try it" tip - and it draws something inside
+/// its own viewport at `elapsed = 0.0`. Drop the items from the layout and nothing plays.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn a_fresh_saves_ticker_tips_actually_draw() {
+fn a_fresh_saves_ticker_plays_the_untried_mode_tips() {
     let Some((label, path)) = images().into_iter().next() else {
         return;
     };
@@ -94,12 +92,13 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
     let xml = front_end_root_xml(&mut archives);
     let screens = Screens::from_xml(&xml);
     let root = parse(&xml);
-    let layout = TickerLayout::read(&root, &screens.globals)
+    let mut layout = TickerLayout::read(&root, &screens.globals)
         .unwrap_or_else(|| panic!("{label}: no ticker viewport to test against"));
 
     let mut opened =
         oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
             .unwrap_or_else(|e| panic!("{label}: opening the source: {e}"));
+    layout.news = oag_game::campaign::read_news(&mut opened.archives, opened.title);
     let plugins = opened
         .title
         .front_end
@@ -108,17 +107,36 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
     let languages =
         oag_ui::language::load::load_languages(&mut opened.archives, plugins, None, &mut report);
     // `oag_ui::language::load::load_strings` is the real path every other caller
-    // (the live session, `capture::menu_page`) resolves `TKR_NO*` through -
-    // not a hand-rolled read, which would leave this test checking its own
-    // parse of `language.entries` (an archive *path*, not decoded text)
-    // rather than the wiring this thread actually built.
+    // (the live session, `capture::menu_page`) resolves `TKR_*` through - not a hand-rolled
+    // read, which would leave this test checking its own parse of `language.entries`.
     let strings =
         oag_ui::language::load::load_strings(&mut opened.archives, &languages, None, &mut report);
 
-    let tips = oag_game::records::ticker_tips(&strings, &oag_game::records::Store::default());
+    let store = oag_game::records::Store::default();
+    let tips = oag_game::records::ticker_tips(Some(&layout), &strings, &store, 1);
+    let untried: Vec<&str> = [
+        "TKR_NOSR",
+        "TKR_NOSL",
+        "TKR_NOTT",
+        "TKR_NOTOURN",
+        "TKR_NOELIM",
+        "TKR_NOZONE",
+    ]
+    .into_iter()
+    .filter_map(|id| strings.get(id))
+    .collect();
+    assert_eq!(
+        untried.len(),
+        6,
+        "{label}: the six tips are in the string table"
+    );
     assert!(
         !tips.is_empty(),
-        "{label}: a fresh save should still show TKR_NOTOURN/TKR_NOHH"
+        "{label}: a fresh save still shows the untried-mode tips"
+    );
+    assert!(
+        tips.iter().all(|tip| untried.contains(&tip.as_str())),
+        "{label}: nothing but those six is countable on a fresh save: {tips:?}"
     );
 
     let measure = |text: &str| f32::from(u16::try_from(text.chars().count()).unwrap_or(0)) * 8.0;
@@ -133,6 +151,91 @@ fn a_fresh_saves_ticker_tips_actually_draw() {
         draw.is_some(),
         "{label}: the ticker should draw something at elapsed = 0.0 with real tips in hand"
     );
+}
+
+/// **The `PI_News` list is the disc's, read, on every Pulse pressing present.** PSP (both
+/// pressings carry the same file): 124 rows, draw weight 122, `TKR_FYISL` and `TKR_FYIZONE` at
+/// weight 2, four `Unlockable` rows that are never drawn. PS2: 121 rows (no `TKR_FYISL`, `TKR_FYIZONE` or
+/// concept-ship announcement, so three `Unlockable` rows). Every item's string is in the table.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_news_items_are_the_discs_list() {
+    let pressings: Vec<(&str, PathBuf, usize, u32)> = [
+        ("pulse-psp-eu", "data/images/pulse-psp-eu.chd", 124, 122),
+        ("pulse-psp-usa", "data/images/pulse-psp-usa.chd", 124, 122),
+        ("pulse-ps2-eu", "data/images/pulse-ps2-eu.chd", 121, 118),
+    ]
+    .into_iter()
+    .filter_map(|(label, name, rows, weight)| {
+        oag_testdata::image(name).map(|path| (label, path, rows, weight))
+    })
+    .collect();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !pressings.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but no Pulse image is present"
+    );
+    for (label, path, rows, weight) in pressings {
+        let mut opened =
+            oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+                .unwrap_or_else(|e| panic!("{label}: opening the source: {e}"));
+        let feed = oag_game::campaign::read_news(&mut opened.archives, opened.title);
+        assert_eq!(feed.items.len(), rows, "{label}: PI_News rows");
+        let total: u32 = feed
+            .items
+            .iter()
+            .map(oag_ui_screens::news::NewsItem::weight)
+            .sum();
+        assert_eq!(total, weight, "{label}: the draw's total weight");
+        let unlockables = feed
+            .items
+            .iter()
+            .filter(|item| item.class == oag_ui_screens::news::Class::Unlockable)
+            .count();
+        assert_eq!(
+            unlockables,
+            if rows == 124 { 4 } else { 3 },
+            "{label}: unlock announcements"
+        );
+        let heavy: Vec<&str> = feed
+            .items
+            .iter()
+            .filter(|item| item.weight() == 2)
+            .map(|item| item.id.as_str())
+            .collect();
+        let expected: &[&str] = if rows == 124 {
+            &["TKR_FYIZONE", "TKR_FYISL"]
+        } else {
+            &[]
+        };
+        assert_eq!(heavy, expected, "{label}: the weight-2 items");
+        let plugins = opened
+            .title
+            .front_end
+            .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
+        let mut report = Vec::new();
+        let languages = oag_ui::language::load::load_languages(
+            &mut opened.archives,
+            plugins,
+            None,
+            &mut report,
+        );
+        let strings = oag_ui::language::load::load_strings(
+            &mut opened.archives,
+            &languages,
+            None,
+            &mut report,
+        );
+        let missing: Vec<&str> = feed
+            .items
+            .iter()
+            .filter(|item| strings.get(&item.id).is_none())
+            .map(|item| item.id.as_str())
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "{label}: items with no string: {missing:?}"
+        );
+    }
 }
 
 /// **The footer tag's glow is the disc's authored `RealGlow`, and the card titles author `pulse`.**

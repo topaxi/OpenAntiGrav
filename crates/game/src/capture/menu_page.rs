@@ -24,7 +24,12 @@ pub(super) fn picker_footer(
     default_font: &oag_ui::font::Atlas,
 ) -> TickerClip {
     let layout = ticker?;
-    let tips = crate::records::ticker_tips(strings, &crate::records::load());
+    let tips = crate::records::ticker_tips(
+        Some(layout),
+        strings,
+        &crate::records::load(),
+        crate::records::TICKER_CAPTURE_SEED,
+    );
     let faces = oag_ui_screens::picker::FaceScales::default();
     let measure = |text: &str| oag_ui::font::measure(default_font, text);
     if let Some(legend) = nav_legend {

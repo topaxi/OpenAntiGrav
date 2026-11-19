@@ -1014,7 +1014,12 @@ pub fn run(
                 // see `crate::records::ticker_tips`'s own doc for why one
                 // function answers for both, and for the live session's own
                 // ordinary menu pages besides.
-                let ticker_tips = crate::records::ticker_tips(&strings, &records);
+                let ticker_tips = crate::records::ticker_tips(
+                    ticker.as_ref(),
+                    &strings,
+                    &records,
+                    crate::records::TICKER_CAPTURE_SEED,
+                );
                 let (list, clip) = menu_page(
                     &options.settings,
                     options.anisotropy,

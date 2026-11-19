@@ -588,6 +588,8 @@ impl App {
             // which cannot fail - a records file this build cannot make sense
             // of degrades to an empty store rather than failing the boot.
             records: crate::records::load(),
+            ticker_tips: None,
+            heard_song: 0,
             selector_phases: oag_ui_screens::campaign::pulse::SelectorPhases::default(),
             shell: self.shell.clone(),
             race_title: self.race_title,
