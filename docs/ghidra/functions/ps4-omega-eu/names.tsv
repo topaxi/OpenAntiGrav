@@ -248,3 +248,5 @@
 0x017f3ae0	function	VertexDecl_InitAttributeFormats	75	hull-tone.md
 0x022129c0	data	g_vertex_attribute_formats	80	hull-tone.md
 
+# 2026-11-19 zone-hud-gate: Zone's HUD gate at the start (hud-start-gate.md)
+0x012b3400	function	SPZoneRaceManager_Update	80	hud-start-gate.md

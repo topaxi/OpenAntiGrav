@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-19
-summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 36.83 after the sky dome and light-bar fixes; the pre-GO HUD gate, white scenery and sky exposure remain"
+summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 28.77 after the sky dome, light-bar and pre-GO HUD gate fixes; white scenery and sky exposure remain"
 ---
 
 # HD Zone start pair: what is left after the sky dome and light-bar fixes
@@ -13,22 +13,17 @@ the Zone gradient dome as the sky
 (`docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`, "The dome's colours, and
 the dome is what the frame shows") and no `_ne` light bar on the Zone surface
 (`docs/rendering/hd-zone-recolour.md`, "The light-bar term in a Zone race").
+A later zone-equaliser fix took it to 30.02, and the Zone HUD's start gate
+(`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`: no Zone HUD until
+the release) to 28.77 (rmse 0.165).
 
 ## Open
 
-- **The Zone HUD before GO** (about 7 grey on the zone list and gauge). The
-  original's frame (lap clock 0.0) draws no Zone HUD; ours at `--ticks 0`
-  (race clock -4.53 s) draws the zone list, header and gauge. Not found in
-  `RaceManager_UpdateCountdown` (`0x00057690`): it writes bytes `+0x68`
-  (countdown running) and `+0x69` (released) of `*(*0x008a6890 = 0x0098767c)
-  + 0x40` and calls `RaceManager_SetPhase(2)`; the readers of those two bytes
-  are the next thing to read, then the per-player HUD reset `0x000cf970` that
-  phase 1 calls (`countdown-voice.md`). `Hud_Update` (`0x0009e3d0`) is 1,400
-  decompiled lines and gates per widget; no whole-HUD gate seen in its first
-  part. Whether the gate is Zone-only is unknown: no HD pair sits in a
-  countdown outside Zone.
 - **Which countdown moment the original's frame is.** The gantry board shows
-  a glyph ours does not (ours' board assembly starts at tick 63). The pair's
+  a glyph ours does not (ours' board assembly starts at tick 63). The live
+  read for the HUD gate (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`)
+  saw the same `3` glyph in phase 1, the countdown, so the frame is inside the
+  countdown; the HUD gate is phase-based, so it needs no re-timing. The pair's
   `--ticks 0` may be earlier than the original's moment; pinning it needs the
   countdown timer read in the same pause (`RaceManager +0x1958 - +0x1968`).
   A pair-timing question for the lead, not a board law.
@@ -53,7 +48,5 @@ the dome is what the frame shows") and no `_ne` light bar on the Zone surface
 
 ## Next Steps
 
-1. `get_xrefs_to` the byte fields `+0x68`/`+0x69` of the object at
-   `0x0098767c + 0x40` in the PS3 executable; find the HUD draw's gate.
-2. Read the countdown timer beside the pair's grab and re-time ours'
+1. Read the countdown timer beside the pair's grab and re-time ours'
    `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
