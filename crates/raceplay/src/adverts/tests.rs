@@ -841,6 +841,31 @@ fn hd_zone_race_shows_the_zone_board_on_slot_8_and_starts_it_210_ticks_early() {
     );
 }
 
+/// A Zone race keeps the circuit's slot 1-7 quads and shows the stage's shared target on
+/// them (`zone_equaliser`), where it stripped them before.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_zone_race_keeps_slots_1_to_7_for_the_stage_target() {
+    let Some(loaded) = hd_zone_race() else {
+        return;
+    };
+    let slots = &loaded.billboards.zone_equaliser;
+    assert!(!slots.is_empty() && !slots.contains(&8), "{slots:?}");
+    let kept = oag_render::gantry::placeholder_texture_slots(&loaded.track_model);
+    assert!(
+        slots
+            .iter()
+            .all(|slot| kept.iter().any(|&(_, num)| num == *slot)),
+        "the quads of {slots:?} are still in the model: {kept:?}"
+    );
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("show the stage's shared 512x512 target"))
+    );
+}
+
 /// Every other mode keeps the countdown board.
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]

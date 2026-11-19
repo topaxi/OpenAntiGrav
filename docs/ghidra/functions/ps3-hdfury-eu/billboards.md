@@ -1379,3 +1379,15 @@ object pointer at `block + 0x32b4`, then that object's `+0x20` (the texture head
 pointer) and a few hundred bytes of the data; also read `block + 0x3374` and `block + 0x3354` (the two
 floats `Environment_UpdateStageBlend` stores before binding the target). A cleared target reads as one
 repeated texel; a stage-colour fill as one colour; a drawn scene as structure.
+
+**Read, cold-boot RPCS3 Zone race on Vineta K, 2026-11-19 (second launch).** Chain verified live:
+`*(0x008b7940) = 0x00c7dfb0`; `+0x32b4` is a texture view (`0x304f72a0`) whose parent `+0x3378` is a
+512 x 512 `A8R8G8B8` texture (format word 8, pitch `0x800`, data at RSX offset `0xc53d0000`); floats `+0x3374`
+0.6 and `+0x3354` 0.183. Its 1 MiB read through the GDB stub is an **equaliser**: a 32 x 32 grid of 16-pixel
+cells, each cell ground `0x60010101` with a 2-pixel `0xff000000` line on its right and bottom edge, 16
+columns of 2 cells wide lit to different heights with `0x7f32b3bb` (peak cells `0xff49f4ff`) and fading trails
+`0x60xxxxxx` (21 distinct values). So the shared "billboard" texture is a music-spectrum display drawn by the
+stage pass. **Wired (confidence 80 for the grid, bars not drawn):** `oag_raceplay::zone_equaliser` draws the
+grid with no bar lit on slots 1 to 7 of an HD Zone race. The original's start-pair panel reads (0, 12, 15) at
+(150, 400) and ours now (0, 14, 18). Open: what feeds the bars (the audio spectrum is the strong guess, unread)
+and the two floats; the bars would need that law. 2048 and Omega: flag set, binding unread, not checked.
