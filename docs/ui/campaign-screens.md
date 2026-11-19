@@ -4002,7 +4002,7 @@ old save of 2026-09-21.
 `<environment>\FE\preview.bik` (352x256, 600-625 frames at 59.94 Hz, ten seconds,
 no audio on the twelve base circuits; `bik.md`). On `hd/menu-track-select` the
 thumbnail box's mean absolute difference against the original fell from 59.6 to
-4.8 (RGB, 250x162 px at 1920x1080), and the whole pair's mean grey from 5.84 to
+2.5 (RGB, 250x162 px at 1920x1080, ours drawn at the fitted frame 510), and the whole pair's mean grey from 5.84 to
 4.65 (confidence 90 for the clip and its place: one frame, the picture is
 Vineta K's own footage to a few grey levels).
 

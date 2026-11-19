@@ -139,7 +139,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   read at the grab. Open: nearZ/farZ (authored 1 and 1000, ours 10 and 2000), the
   multiplier `0x81db67ea`, the backdrop's brightness and cloud path (hidden on the pair since 2026-11-19, above), Zone circuits (`zone_1..4` carry a scene no record names),
   Omega's own table. **The fly-by LANDED 2026-11-19 (`hd-track-flyby`)**: `preview.bik` plays in the panel at (500,190),
-  box difference 59.6 to 4.8, pair 5.84 to 4.65; open: the clip's frame is fitted on the pair, not read from the
+  box difference 59.6 to 2.5, pair 5.84 to 4.65; open: the clip's frame is fitted on the pair, not read from the
   emulator's counter (the Bink widget's struct is unread), a first visit waits for the transcode (the prefetch does not
   warm the sixteen `preview.bik`), the Zone clips' sound, Omega ships no clip (its `TrackPreview` stills are unwired)
 - Fury page content (2026-11-05, `fury-menu-content`, `docs/ui/campaign-screens.md`, "Fury page content against the original"):
