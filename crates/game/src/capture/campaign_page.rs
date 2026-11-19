@@ -204,6 +204,10 @@ pub(super) fn campaign_page(
     // `--menu-picker-seconds`: how long after the screen opened `Selector`'s
     // pulse is drawn at (`SelectorPulse`); `None` draws it at clock 0.
     pulse_seconds: Option<f32>,
+    // `--menu-model-seconds`: the moment of its own animation the flyer card is drawn
+    // at ([`crate::flyer::Flyers::card_seconds`]); `None` draws it at
+    // [`crate::flyer::SETTLED_SECONDS`].
+    card_seconds: Option<f32>,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let campaign = crate::campaign::load(
         archives,
@@ -589,7 +593,10 @@ pub(super) fn campaign_page(
     };
     let layers = crate::campaign::gate_glow(campaign.frontend_glow, layers);
     let split = layers.backdrop.len();
-    let shot = campaign.flyers.and_then(|flyers| {
+    let shot = campaign.flyers.and_then(|mut flyers| {
+        if let Some(seconds) = card_seconds {
+            flyers.card_seconds = seconds;
+        }
         let shows = match (flyer_name, selected_campaign) {
             (Some(name), _) if cell_page => vec![crate::flyer::Flyers::cell_show(&name)],
             (Some(name), _) => vec![flyers.grid_show(&name)],

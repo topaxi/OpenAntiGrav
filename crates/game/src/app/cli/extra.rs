@@ -152,6 +152,13 @@ pub(crate) struct MenuArgs {
     /// opened: Pulse's `ship_FE.vex` sways on an `Anim Transform` that
     /// started when the model loaded, not when the screen did. `None` takes
     /// `--menu-picker-seconds`.
+    ///
+    /// With `--menu-page grid-select`/`cell-select` on HD/Fury it is the flyer
+    /// card's: its arrows and layers slide on the card's own clock, which
+    /// the widget keeps in `[3, 6)` seconds (a time reaching `6.0` goes back by
+    /// 3, `Flyer_Item`'s render at `0x001a2510`), so no two grabs of the original
+    /// show the same one. `scripts/rpcs3-hd-menu-pair.py` reads the clock out of
+    /// RAM at the grab and passes it; `None` draws the card at 3.0.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_model_seconds: Option<f32>,
 

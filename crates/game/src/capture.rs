@@ -157,8 +157,9 @@ pub struct Options {
     /// the CLI flag's own docs. `None` draws no step.
     pub menu_picker_step_seconds: Option<f32>,
     /// With `--menu-page track-select`/`ship-select`, the previewed model's
-    /// own animation time - see the CLI flag's own docs. `None` takes
-    /// `menu_picker_seconds`.
+    /// own animation time; with `grid-select`/`cell-select`, the flyer card's -
+    /// see the CLI flag's own docs. `None` takes `menu_picker_seconds` on the
+    /// former and [`crate::flyer::SETTLED_SECONDS`] on the latter.
     pub menu_model_seconds: Option<f32>,
     /// With `--menu-page`, the frame of the page's movie to draw, wrapped to the
     /// movie's length: the menu backdrop's, or on HD's Track Select the selected
@@ -912,6 +913,7 @@ pub fn run(
                     &tracks,
                     &records,
                     options.menu_picker_seconds,
+                    options.menu_model_seconds,
                 )?;
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
