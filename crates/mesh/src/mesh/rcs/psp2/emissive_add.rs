@@ -13,12 +13,12 @@
 //! selects it.
 //!
 //! **`fc10_Lambert_2UV_Emissive` is a window with a reflection map** (`docs/formats/2048-material-params.md`,
-//! "The reflective window"): every lit and ambient-only program of the file ends
+//! "The reflective window and the awning"): every lit and ambient-only program of the file ends
 //! `fog(light * D^2 + D.a * R^2)`, `R` the `ReflectMap` read at `0.5 + 0.5 * reflect(-V, N).xy`
 //! with the view vector and the normal in world space ([`PROGRAM_REFLECT_MAP`]).
 //!
 //! **`dc_diffusetexturealphaemissive` adds its own picture's square** (Moa Therma's Feisar
-//! awnings, `docs/formats/2048-material-params.md`, "The reflective window"): its lit programs end
+//! awnings, `docs/formats/2048-material-params.md`, "The reflective window and the awning"): its lit programs end
 //! `mad light, D^2, D^2` before the fog and write the texel's alpha out, so `rgb = D^2 * (light + 1)`
 //! and the awning's alpha is the picture's ([`PROGRAM_PICTURE_ADD`]).
 //!
@@ -160,7 +160,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
             ps4: false,
         })
     } else if stem.eq_ignore_ascii_case("fc10_lambert_2uv_emissive") {
-        // The window facades of Moa Therma, Tech de Ra and the base circuits.
+        // Moa Therma's glass facades; the file ships in the base circuits' packages too.
         Some(Kind {
             mask: Some("ReflectMap"),
             program: PROGRAM_REFLECT_MAP,

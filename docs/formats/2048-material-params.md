@@ -554,8 +554,11 @@ submeshes, 18,396 pixels above 25 grey, the tower and the window strips; the awn
 one submesh, `dc_awning02.gxt`, the Feisar logo banner), and `scripts/vita-usse.py disasm` read each file's fragment
 programs (Vita .gxp, `dlc1.psarc`).
 
-**`fc10_Lambert_2UV_Emissive`: `fog(light * D^2 + D.a * R^2)`** (confidence 85; 4 of 4 lit and ambient-only programs read:
-dlc1 #1 and #3 listed, the lightmapped and vertex-lit permutations run the same words on shifted registers).
+**`fc10_Lambert_2UV_Emissive`: `fog(light * D^2 + D.a * R^2)`** (confidence 85; 9 of 9 fragment programs of the dlc1 copy
+that declare `ReflectMap` read, #1, #3, #5, #12, #14, #16, #18, #20, #22: each normalises `N` and `V`, samples `ReflectMap` once
+at `0.5 + 0.5 (2 (N.V) N - V).xy`, squares it, and ends `mad D.a, R^2, light` then the fog mix, `D.a` being `pa2.w`, or
+`pa6.w` where the lightmap takes `pa2`; the other nine fragment programs of the file are the lightmap's own (#10) and the Zone
+permutations, which declare no `ReflectMap`. The base copies, 54 programs, were not walked). #1 and #3 are listed below.
 The program samples `DiffuseMap` (the window atlas `dc_window_a_diffuse_light`, dark colour, alpha the reflectivity) and
 `ReflectMap` (`sky_moatherma_1.gxt`, 128x128, a teal sky picture) and ends
 
@@ -578,9 +581,9 @@ register holds four f16 here (`sa10.xx` = the 2.0 record, `sa12.xx` = the 0.5 re
 
 Wired as `PROGRAM_REFLECT_MAP` (`mesh::rcs::psp2::emissive_add`, `shade.wesl` "2048's `fc10_Lambert_2UV_Emissive`"): the
 `ReflectMap` rides the third binding, the term joins the emissive add (after the light, before the fog), and the slot
-word reads alpha lane 3 because the gate is the diffuse alpha, not its red. The mapping `0.5 + 0.5 R.xy` with ours' world
-axes is checked by eye only (the tower's glass reads teal as in the original; the four sign flips were not tried), not
-by a measured number per axis.
+word reads alpha lane 3 because the gate is the diffuse alpha, not its red. The mapping `0.5 + 0.5 R.xy` in ours' world axes beats its four variants on every box (re-rendered with `R.xy` negated in x,
+in y, in both, and swapped; whole-frame luma 27.60 against 28.08, 28.87, 28.86, 29.36; tower box 20.81 against 30.17, 41.21,
+41.16, 51.00; right awning 23.24 against 23.71, 24.94, 24.90, 24.96; left awning 30.33 against 31.14, 32.97, 33.00, 34.13).
 
 **`dc_diffusetexturealphaemissive`: `fog(D^2 * (light + 1))`, alpha the picture's** (confidence 80; the three lit
 programs listed, #3, #5 lightmapped, #12): `mad light, D^2, D^2` then the fog mix, and `pck pa0.---w, pa2.---w` writes the
