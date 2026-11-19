@@ -265,6 +265,11 @@ decoder every sample agrees to within **1 LSB** (RMS difference 0.69 LSB):
 two float AAC decoders agree to rounding, not bit for bit
 (`crates/music/tests/aac_ground_truth.rs` asserts at most 2).
 
+**Omega: checked, differs.** Omega ships no movie at all: none of the 46,005
+entries of its base and patch PSARCs (`oag-psarc-diff --no-hash`) is an `.mp4`,
+`.bik` or `.PMF`, and the package root holds only the executable, its modules
+and the archives. There is no AAC track there to decode.
+
 [`ContainerTrack::seconds`]: https://github.com/topaxi/OpenAntiGrav/blob/main/crates/game/src/movie/container_audio.rs
 
 ## Playing one

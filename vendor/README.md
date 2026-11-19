@@ -21,7 +21,8 @@ and 7.1 stream and departed from LibAtrac9 on stereo too, and five functions
 are ported from LibAtrac9 in full (`docs/formats/atrac9.md`, "What the
 published crate got wrong"). Each change carries an "OpenAntiGrav patch"
 comment. Upstream ships no licence file; the manifest says MIT, and
-LibAtrac9's own licence sits beside it as `LICENSE-LibAtrac9`. Drop the entry
+LibAtrac9's own licence sits beside it as `LICENSE-LibAtrac9` and ships in
+`licences/LibAtrac9-MIT.txt`. Drop the entry
 once a release decodes everything `crates/music/tests/atrac9_ground_truth.rs`
 and `omega_wem_ground_truth.rs` read, sample-identical to LibAtrac9.
 

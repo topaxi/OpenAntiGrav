@@ -20,16 +20,21 @@ GitHub #26 (no music in Pulse without `ffmpeg`) and Android are what is left.
   provenance unstated). Its decoder was not run: executing the downloaded code
   was refused by the sandbox, so it is unmeasured against FFmpeg.
 - **Decision for the maintainer**: port carta5's decoder half to Rust under ISC
-  (keep its notice, roughly 5,000 lines), or keep ATRAC3+ on `ffmpeg`.
+  (keep its notice, roughly 5,000 lines), or keep ATRAC3+ on `ffmpeg`. A port
+  is our own decoder for a codec we did not invent, the category
+  [ADR-0024](../../docs/architecture/adr/0024-in-process-codecs-and-ffmpeg-as-a-last-resort.md)
+  forbids, so a yes needs a superseding ADR as part of the decision.
 - **Bink audio**: no permissive decoder; the MultimediaWiki page leaves the
   coefficient packing and the RLE table's use out (`docs/formats/bik.md`, "Why
   Bink audio is still decoded by `ffmpeg`"). RAD's decoder is in HD's EBOOT.
 
 ## Next Steps
 
-1. Get the maintainer's answer on carta5. If yes: run its decoder once on
-   Pulse's `frontend1.at3` against `ffmpeg -f s16le` (node, no dependencies:
-   `decodeWavePcm` from `codec/index.js`) to see the tolerance before porting.
+1. Get the maintainer's answer on carta5, and **explicit approval before
+   executing its code**: the sandbox refused running the downloaded JavaScript
+   once already. With that approval, decode Pulse's `frontend1.at3` with it
+   (node, no dependencies: `decodeWavePcm` from `codec/index.js`) against
+   `ffmpeg -f s16le` to see the tolerance before porting.
 2. Port the decoder half into `oag-music` (`at3.rs` decode side, ahead of the
    `ffmpeg` resolver); prove it per file over every `Data.wad` RIFF ATRAC3+
    entry of both Pulse pressings and both Pure pressings, and every `.PMF`

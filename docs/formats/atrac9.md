@@ -27,9 +27,11 @@ under any other name. 4,561 in each region's base `PSP2/data.psarc` (EU
 `data2.psarc`; the patch's `data1.psarc` and the three DLC packs carry none.
 Every one is stereo, 48,000 Hz, four 256-sample frames to a 384-byte superframe
 (configuration word `FE 74 0B F0`, channel-config index 2, superframe index 2).
-That is the front end's `frontend_stereo.at9`, the eleven race tracks'
-`music_stereo.at9`, and the localised speech streams under
-`data/audio/sound/streams/atrac/<language>/`. The `.fft` beside each music file
+Per region: the eleven race tracks (`data/audio/music/<NN>/music_stereo.at9`),
+the front end's and the demo front end's `frontend_stereo.at9` (`FEMusic`,
+`FEDemoMusic`), and 4,730 speech streams under
+`data/audio/sound/streams/atrac/<language>/` (grouped by directory over the
+archives' own path lists). The `.fft` beside each music file
 is not audio: it opens `AFEX`, the spectrum data `oag_music::spectrum` reads.
 
 **Omega**: 1,448 loose `.wem` and 4,096 media inside the `BKHD` banks of the
@@ -109,9 +111,8 @@ patch" comment at its site.
 5. **The fine residual used the coarse step table** (`QuantizerFineStepSize`).
 
 Before the fixes, against LibAtrac9: 4,076 of 2048's 9,486 files failed
-part-way with a bitstream error, 3,218 more decoded but differed (by up to a
-few LSB on the speech checked), and 2,192 were identical; every Omega stream of
-four channels or more was refused.
+part-way with a bitstream error, 3,218 more decoded but differed, and 2,192
+were identical; every Omega stream of four channels or more was refused.
 
 The vendored crate stays a separate package with its own `MIT` manifest and
 LibAtrac9's licence beside it (`vendor/atrac9dec/LICENSE-LibAtrac9`). The fixes
