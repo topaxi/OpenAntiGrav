@@ -1537,6 +1537,31 @@ and `--hud-autopilot` (the timer read from the pickup record); both flags are ho
 - **Not matched, in each pair's caveats**: the zone clock, ours' exhaust and trail history (no ticks), the shield bar (drawn full), the ZONE label (fading in the original).
 - **Pure against the other titles**: not checked here (the Pulse Zone camera and HD's Zone frame were not compared in this lane); the camera spring is a Pure measurement only.
 
+## HD Zone race-start pair (RPCS3, 2026-11-19, `hd-zone-replace`)
+
+`hd-zone-vineta-k-z5` is replaced by a Zone race-start shot on Vineta K (Feisar Zone hull, zone 1, score 0): cold boot, no savestate, original grabbed
+through `grab_with_clock` (world clock offset 53.383 s recorded, `capture_path.kind = cold_boot`), ours rendered at the recorded pose. The old mid-race shot was
+refused on heading (1.86 deg, tilt uncarried); the start shot passes all eight parity checks (position 0.000 units, heading 0.175 deg, fov equal, uncarried
+tilt 0.21 deg). Mean grey difference 53.04, RMSE 0.322, edge NCC 0.222 (`compare_env.overlap_score`); seen on one boot (a first grab, moving at lap clock
+7.9 s, was refused at 3.03 deg and discarded). Confidence 70 that the recipe reproduces; the number is one measurement.
+
+**Menu path** (RACEBOX cursor sits on RACE TYPE; the screen names are `Single Player`, `Track Creation`, `Team Selection`): Main Menu, Racebox, RACE TYPE
+to **Zone** (the setting is remembered between visits; the list ends Zone, Zone Battle, Detonator, Tournament, so read the row before pressing), `cross` to Track
+Select (Vineta K is the first circuit, no steps), `cross` to Ship Select (Feisar is the first team), `cross` loads (`TTY.log`: `GetMode()==6`, `Loading World
+"Data\Environments\01_Vineta_K\track.vex"`), then START RACE. On a loaded machine a `press` is dropped about one time in four and the screenshot lags the
+cursor by several seconds: read the highlighted row off a grab before every `cross`.
+
+**The grab.** Zone flies the craft itself (about 110 km/h by lap clock 8 s with no input), so a start shot has a window of a fraction of a game second.
+`rpcs3-drive.py restart` fails in Zone (its Down count is one short because the greyed VIEW INVITES row is skipped); open the pause menu with `start`, move to
+RESTART RACE by hand and `cross`: the race reloads straight into the countdown with no START RACE prompt (about 5.2 game seconds to GO). A script then polls
+`world_clock_now()` (no pause) after the reload and runs `rpcs3-hd-pair.py ... --zone 1,0 --autopilot off --state <sidecar with {"mode":"zone","circuit":"vineta-k"}>` once the
+world clock has advanced 2.4 s from its first post-reload reading: the pair's own attach and pause land 2 to 3 game seconds later (emulator at about a fifth of real
+time under load 38), at lap clock 0.0. Lead 2.6 s (one attempt, lap clock 0.57 at the trigger) landed at lap clock 3.3 with the craft already moving; lead 2.4 s landed at 0.0.
+
+**Differences left (not matched, judged by eye on `side.png`).** The original's zone-1 colour grade is a strong cyan wash; ours renders its natural zone 1 grade
+(pale, warm sky). `--zone 1,0,0` (grade pinned to stage 0) is a grey scene and scores worse (mean grey 88.9), so the stage is left unpinned. The original's start gantry
+shows its countdown glyphs and no HUD yet (the HUD fades in after GO); ours draws a blank board and the imposed Zone HUD, since ours runs no ticks.
+
 ## Omega Zone pairs (2026-11-17, `zone-pair-omega`)
 
 `scripts/wipeout-pc-omega-pair.py pair --zone` (the `wipeout_pc` native port; shadPS4 race shots stay untrusted). Two pairs in `omega/`:
