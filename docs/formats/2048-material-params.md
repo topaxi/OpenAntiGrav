@@ -605,6 +605,8 @@ drew it almost transparent).
 
 The pair's mean grey 32.55 to 27.56. The other fifteen `2048-vita` pairs re-render pixel-identical (only Moa Therma's
 view holds either family; Zone pairs unchanged), and an HD race pair (`hd-race/talons-pack`) re-renders byte-identical.
+The base circuit Arena also ships the window file (`psp2_glow_ground_truth` saw its entries); no pair of it is kept, and a
+frame at tick 190 draws without artefacts (checked by eye only).
 
 **The hull's reflection was not the loss.** `omega-status.md`'s "The alpha lane" recorded lane 3 on every Vita family moving
 `moa-therma` from 32.55 to 34.23 "through the hull's reflection". With these two families wired, lane 3 everywhere gives

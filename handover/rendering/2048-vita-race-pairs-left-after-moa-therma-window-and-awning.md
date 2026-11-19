@@ -28,6 +28,8 @@ fifteen `2048-vita` pairs re-render pixel-identical.
   `(600..960, 136..272)` 51 to 60, bias +24 to +51 (ours brighter: not read); `amphiseum` left road `(0..160, 272..408)` 52,
   bias -19 and the white lines across ours' road where the original's is dark with blue panels (not read); `empire-climb`
   top middle `(320..640, 0..136)` 47 to 50, bias -41 to -21 (the sun's flare and haze, `lens-flare.md`, 2048 not wired).
+- **Arena (a base circuit) now takes the window term too**, with no kept pair to score it: a Vita3K Arena grid pair would
+  measure it.
 - **The base copies of `fc10_Lambert_2UV_Emissive`** (54 `ReflectMap` programs in `data.psarc`) were not walked for the
   dlc1 copy's shape; walk them before relying on the term in a base circuit.
 - **Lane 3 on every other Vita family** moves `modesto-heights` +0.07 and `empire-climb` +0.09 against `moa-therma` -0.03,
