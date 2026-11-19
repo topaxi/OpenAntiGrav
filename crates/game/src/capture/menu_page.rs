@@ -1118,6 +1118,22 @@ pub(super) fn picker_page(
             ship_fit,
             ship_scale,
             track_model: layout.hd_track.as_ref().and_then(|screen| screen.model),
+            track_posing: {
+                let (pose, reversed) = match picker.entries().get(picker.index()).map(|e| &e.details) {
+                    Some(Details::Track {
+                        model_pose,
+                        reversed,
+                        ..
+                    }) => (*model_pose, *reversed),
+                    _ => (None, false),
+                };
+                let law = title.front_end.and_then(|front_end| front_end.circuit_turntable);
+                let open = seconds.unwrap_or(SETTLED_SECONDS);
+                let turntable = law
+                    .map(|law| crate::preview::track_model::Turntable::after(&law, open, reversed))
+                    .unwrap_or_default();
+                crate::preview::track_model::Posing::of(law, pose, &turntable, open)
+            },
             seconds: seconds.unwrap_or(SETTLED_SECONDS),
             hull_clock: {
                 let open = seconds.unwrap_or(SETTLED_SECONDS);

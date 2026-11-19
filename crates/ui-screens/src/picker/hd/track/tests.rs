@@ -67,6 +67,7 @@ fn circuit(id: &str, reversed: bool) -> Entry {
             emblem: Some(emblem_src(&format!(r"Data\Environments\{id}"))),
             icon: Some(grid_icon_src(&format!(r"Data\Environments\{id}"))),
             reversed,
+            model_pose: None,
         },
     }
 }

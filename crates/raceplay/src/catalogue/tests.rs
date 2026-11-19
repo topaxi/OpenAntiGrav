@@ -463,6 +463,7 @@ fn track(id: &str, folder: &str, reversed: bool) -> (Track, String) {
             unlock_grid: None,
             sound_register: None,
             string_id: None,
+            model_pose: None,
             foreign: None,
         },
         if reversed {

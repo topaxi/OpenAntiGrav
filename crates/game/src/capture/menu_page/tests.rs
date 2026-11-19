@@ -119,6 +119,7 @@ fn records_draws_builds_one_row_per_class_below_the_pages_own_rows() {
         unlock_grid: None,
         sound_register: None,
         string_id: None,
+        model_pose: None,
         foreign: None,
     };
     let tracks = [track.clone()];

@@ -636,6 +636,11 @@ pub struct FrontEnd {
     /// folder's (`10_Sebenco_Climb` is `track06`). A circuit with no row has no
     /// model on the disc. Empty where the screen draws no such model.
     pub circuit_models: &'static [CircuitModel],
+    /// How `Track Creation`'s own update turns the circuit model and which pose it gives each
+    /// circuit: the pitch, depth and vertical origin come from the circuit's own entry
+    /// ([`CircuitPose`]) and the yaw is a per-frame turntable. `None` where the screen's code is
+    /// unread (Omega), which draws the widget as authored and turns it on stand-in numbers.
+    pub circuit_turntable: Option<CircuitTurntable>,
     /// The definition file that authors the three screens a race ends on
     /// (`EndRace Results`/`EndRace Rewards`/`EndRace Menu`), or `None` for a title
     /// whose copy has not been read.
@@ -792,6 +797,42 @@ pub struct CircuitModel {
     /// The scene file under that folder's `FE` directory.
     pub file: &'static str,
 }
+
+/// The turntable `TrackSelection_Screen`'s update drives the circuit model with, every frame.
+///
+/// The update writes the widget's `RotY` from one global angle that it steps by `step` radians
+/// each frame it runs (forwards on a circuit, backwards on a reversed one) and wraps at
+/// `+-limit`, and writes `RotX`, `z` and `OriginY` from the selected circuit's own entry
+/// ([`CircuitPose`], with `origin_y` added to its `PosY`). Per frame, not per second, so a
+/// caller turns `dt` into frames at `frames_per_second`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CircuitTurntable {
+    /// Radians the angle moves each frame the screen's update runs.
+    pub step: f32,
+    /// The angle wraps from `limit` to `-limit` (and back, reversed).
+    pub limit: f32,
+    /// The vertical origin a circuit's `PosY` is added to, pixels of the 1920 by 1080 grid.
+    pub origin_y: f32,
+    /// The frame rate `dt` is read at: the console's display rate, so what a tick of the
+    /// fixed 60 Hz clock is in the original's frames.
+    pub frames_per_second: f32,
+}
+
+/// A circuit's own pose for its model on `Track Creation`: the `RotX`, `PosY` and `PosZ` its
+/// `PI_Track` entry authors (`Values`), which the screen's update copies over the widget.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CircuitPose {
+    /// The pitch, radians.
+    pub rot_x: f32,
+    /// Added to [`CircuitTurntable::origin_y`].
+    pub pos_y: f32,
+    /// The depth, the widget's `z`.
+    pub pos_z: f32,
+}
+
+// A pose is read from three finite numbers, so it equals itself; the entries that carry one are
+// compared as a whole.
+impl Eq for CircuitPose {}
 
 impl FrontEnd {
     /// The touch layout when the touch front end *is* the title's front end
