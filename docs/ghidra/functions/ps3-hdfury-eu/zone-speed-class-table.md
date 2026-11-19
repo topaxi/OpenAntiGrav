@@ -193,6 +193,13 @@ neither table is a copy of the other.
 - **`0x00202f58`**, the text setter, is named by its argument shape (`node`,
   `stringId`, `0`, `1`) and is not disassembled here.
 
+## Omega and 2048
+
+**Ported, with its own ground truth.** Omega's executable carries the same fourteen records (`0x0197b890`, 16-byte
+records) and its walker stores `14 - i` as the stage
+([zone-speed-class-ladder.md](../ps4-omega-eu/zone-speed-class-ladder.md)); 2048's text table is identical
+([zone-speed-class-text.md](../vita-2048-eu-v104/zone-speed-class-text.md)).
+
 ## See also
 
 - [zone-effectsettings-loader](zone-effectsettings-loader.md) - the consumer of

@@ -97,6 +97,8 @@ would be inventing a colour the layout nulls. Headless Vineta K Zone at zone 5, 
 `_HD` one: `NextSpeedClassBG` (385x35 art) and `NextSpeedClass` (`"next speed class"`) are authored visible, `ZonePlus1`-`3`
 sit on an arc at their own x and y (`25,76`, `0,135`, `-15,198`), `SpeedClass` is authored at `(130, 35)`, `Score` is a left
 `Score` with no `ScoreTxt` caption widget. So Omega does draw the next-class widget, but placed by its own walker
-(`FUN_0126b030`, unread for the row) on that arc, not by 2048's `+32/-2` rule, and `zone_speed_classes` is still `None`. Left open
-for an Omega lane: wire the shared fourteen-record table first, then read where `FUN_0126b030` puts the row.
+(`FUN_0126b030`, unread for the row) on that arc, not by 2048's `+32/-2` rule, and `zone_speed_classes` is still `None`. **Wired 2026-11-19 (`omega-zone-ladder`)**: Omega's executable carries the same
+fourteen records (`0x0197b890`, [zone-speed-class-ladder.md](../ps4-omega-eu/zone-speed-class-ladder.md)) and
+`oag_omega::hud::ZONE_SPEED_CLASSES` draws them; where `FUN_0126b030` places the next-class row is still unread
+(the row sits on `ZonePlus<k>` where the next threshold falls, as HD's does, and matches the original's frame).
 

@@ -169,8 +169,9 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   (shield bar colours, arcs), `shield_percent`, `message_slots` are HD's
   readings; every name they carry is authored by Omega's layouts
   (`the_widget_names_title_data_inherits_are_authored_by_omegas_layouts`), which
-  proves the names match, not the values. `zone_speed_classes` is `None`: the
-  Zone ladder draws no class text.
+  proves the names match, not the values. `zone_speed_classes` is Omega's own table off its
+  executable ([zone-speed-class-ladder.md](../ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md)): an
+  HD-lineage Zone race draws `FLASH` beside zone 5 and `SUB-RAPIER` on the next-class row, as the original's frame does.
 
 Frames, 1920x1080, `--race --ticks 700/900/1500` on `data/extracted/ps4`:
 time trial, two moments: the timers move; Arcade; zone;
@@ -1421,7 +1422,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   which renders brighter (0.375 -> 0.461 mean luminance, 0.43 % -> 1.65 %
   clipped) and plausible. The Zone rig rebuild (`ZoneGrade::light`) now carries
   the Omega flag through, though Omega ships no Zone palette today
-  (`zone_palette: None`), so no Omega Zone race reaches it.
+  (`zone_palette: None`), so no Omega Zone race reaches it. (2026-11-19: an HD-lineage circuit does take
+  HD's title-wide table through `ZONE_FALLBACK`; Omega's own ladder was read and is HD's, so zone 5 is stage 4,
+  see [zone-speed-class-ladder.md](../ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md).)
 
   Read by eye (`*-before-after.png`): Tech De Ra's blown-white upper walls now
   carry panel shading, and Anulpha Pass's walls and floor take a deeper baked
