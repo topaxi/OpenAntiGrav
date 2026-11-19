@@ -24,7 +24,10 @@ the `fmt ` chunk), not by extension, then reproduced by
 **2048**: 9,486 RIFF ATRAC9 files, every one named `.at9`, and no RIFF ATRAC9
 under any other name. 4,561 in each region's base `PSP2/data.psarc` (EU
 `PCSF00007`, USA `PCSA00015`) and 182 in each region's v1.04 patch
-`data2.psarc`; the patch's `data1.psarc` and the three DLC packs carry none.
+`data2.psarc`; the patch's `data1.psarc` and the three DLC packs carry none. The USA files are the EU
+files byte for byte, base and patch (all 4,561 identical by MD5,
+`oag-psarc-diff`), so the ground truth decodes the EU set and holds the USA
+set's identity.
 Every one is stereo, 48,000 Hz, four 256-sample frames to a 384-byte superframe
 (configuration word `FE 74 0B F0`, channel-config index 2, superframe index 2).
 Per region: the eleven race tracks (`data/audio/music/<NN>/music_stereo.at9`),
@@ -134,8 +137,9 @@ OAG_SWEEP=1 OAG_ATRAC9_ORACLE=target/atrac9-oracle \
 ```
 
 **Against FFmpeg: within one LSB, negated, on every 2048 file**: ours is the
-negation of FFmpeg's to within 1 on every sample of all 9,486 files
-(`atrac9_ground_truth`, which runs FFmpeg 64 files to a process). On Omega,
+negation of FFmpeg's to within 1 on every sample of all 4,743 distinct files
+(`atrac9_ground_truth`, which runs FFmpeg 64 files to a process; the other
+4,743 are byte-identical copies). On Omega,
 the stereo, quad and 7.1 files `the_decoder_agrees_with_ffmpeg_up_to_polarity`
 picks agree the same way on every channel. The polarity is a difference between
 two implementations; which one matches Sony's decoder is not known, and it is

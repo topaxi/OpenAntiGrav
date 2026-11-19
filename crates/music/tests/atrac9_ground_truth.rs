@@ -10,7 +10,9 @@
 //!
 //! The census is every `.at9` entry of every 2048 archive held: both regions'
 //! base packages, the v1.04 patch's two archives and the DLC packs
-//! (`docs/formats/atrac9.md`, "Census"). Each file decodes through
+//! (`docs/formats/atrac9.md`, "Census"); the USA package's files are the EU
+//! package's byte for byte, which is asserted rather than decoded twice. Each
+//! file decodes through
 //! [`oag_music::at9::decode`], the path the game takes; its `fact` chunk agrees
 //! with the frames; and its PCM is within one least-significant bit of FFmpeg's,
 //! negated (`docs/formats/atrac9.md`, "Conformance"). A missing `ffmpeg` skips
@@ -199,6 +201,8 @@ fn assert_census(path: &str, shard: usize, shards: usize, expected: Census) {
 
 const EU_BASE: &str = "data/extracted/vita/PCSF00007/base/PSP2/data.psarc";
 const US_BASE: &str = "data/extracted/vita/PCSA00015/base/PSP2/data.psarc";
+const EU_PATCH: &str = "data/extracted/vita/PCSF00007/patch-v104/PSP2/data2.psarc";
+const US_PATCH: &str = "data/extracted/vita/PCSA00015/patch-v104/PSP2/data2.psarc";
 
 /// Every file in a slice is RIFF ATRAC9, decodes, and was compared.
 const fn all(n: usize) -> Census {
@@ -235,31 +239,31 @@ fn eu_base_at9_shard_3() {
     assert_census(EU_BASE, 3, 4, all(1140));
 }
 
+/// The USA package's `.at9` files are the EU package's, byte for byte, in the
+/// base and in the v1.04 patch (measured by MD5 too, `docs/formats/atrac9.md`,
+/// "Census"), so decoding them again would prove nothing new: this holds the
+/// identity instead.
 #[test]
-#[ignore = "needs data/extracted/vita/PCSA00015"]
-fn us_base_at9_shard_0() {
-    assert_census(US_BASE, 0, 4, all(1141));
+#[ignore = "needs data/extracted/vita"]
+fn us_at9_files_are_the_eu_ones() {
+    for (us, eu, count) in [(US_BASE, EU_BASE, 4_561), (US_PATCH, EU_PATCH, 182)] {
+        let (Some(mut us), Some(mut eu)) = (archive(us), archive(eu)) else {
+            continue;
+        };
+        let us_paths = at9_paths(&us, 0, 1);
+        assert_eq!(us_paths, at9_paths(&eu, 0, 1), "the same .at9 paths");
+        assert_eq!(us_paths.len(), count);
+        for p in &us_paths {
+            assert!(
+                us.read_path(p).unwrap() == eu.read_path(p).unwrap(),
+                "{p} differs between the regions"
+            );
+        }
+    }
 }
 
-#[test]
-#[ignore = "needs data/extracted/vita/PCSA00015"]
-fn us_base_at9_shard_1() {
-    assert_census(US_BASE, 1, 4, all(1140));
-}
-
-#[test]
-#[ignore = "needs data/extracted/vita/PCSA00015"]
-fn us_base_at9_shard_2() {
-    assert_census(US_BASE, 2, 4, all(1140));
-}
-
-#[test]
-#[ignore = "needs data/extracted/vita/PCSA00015"]
-fn us_base_at9_shard_3() {
-    assert_census(US_BASE, 3, 4, all(1140));
-}
-
-/// The patch and DLC archives, one test: they are small.
+/// The patch and DLC archives, one test: they are small. The USA patch's
+/// `data2.psarc` is held by `us_at9_files_are_the_eu_ones`.
 #[test]
 #[ignore = "needs data/extracted/vita"]
 fn patch_and_dlc_at9() {
@@ -268,19 +272,12 @@ fn patch_and_dlc_at9() {
             "data/extracted/vita/PCSF00007/patch-v104/PSP2/data1.psarc",
             0,
         ),
-        (
-            "data/extracted/vita/PCSF00007/patch-v104/PSP2/data2.psarc",
-            182,
-        ),
+        (EU_PATCH, 182),
         ("data/extracted/vita/PCSF00007/dlc1/PSP2/dlc1.psarc", 0),
         ("data/extracted/vita/PCSF00007/dlc2/PSP2/dlc2.psarc", 0),
         (
             "data/extracted/vita/PCSA00015/patch-v104/PSP2/data1.psarc",
             0,
-        ),
-        (
-            "data/extracted/vita/PCSA00015/patch-v104/PSP2/data2.psarc",
-            182,
         ),
         ("data/extracted/vita/PCSA00015/dlc1/PSP2/dlc1.psarc", 0),
     ] {
