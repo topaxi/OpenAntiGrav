@@ -23,6 +23,7 @@ just              # the gate every commit must pass (`just --show check` lists i
 just fmt | lint | build | docs
 just test         # nextest, quick profile (our crates opt-level 0, examples not built)
 just test-data    # also the #[ignore]d ground-truth tests; needs data/images/; skips binaries that passed unchanged, --full runs all
+just lead-test-data [-n M]   # the lead's full test-data as M (4) slices, each under its own gate lock (`test-data --partition N/M`); never inside `flock`
 just gate-affected / test-data-affected   # same checks in full, only the tests the branch can reach (scripts/affected.py); a drive member's gate
 just check-docs   # internal links in docs/ (not CLAUDE.md, .claude/ or HANDOVER.md)
 just check-deps   # the six dependency rules below
