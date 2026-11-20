@@ -1,6 +1,6 @@
 # WebAssembly extensions: a campaign whose races change the craft and the pickups
 
-**Challenged, unresolved:** [progression-challenge.md](progression-challenge.md) lists 25 numbered objections to this draft (5 block a decision) and a smaller first slice; read it beside this page.
+**Challenged and answered:** [progression-challenge.md](progression-challenge.md) lists 25 numbered objections to the first draft; the maintainer answered each on 2026-11-20, and this page carries the answers.
 
 **Status: a design draft, nothing built (2026-11-19).** The decision records are
 [ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
@@ -59,6 +59,12 @@ A **run** is one playthrough of one custom campaign by one profile. It has:
 - `end_owed`: only after a faulted `race-end`, the latched `RunResult` and tick state
   it still owes (about 1.1 KiB), until RETRY or DISCARD settles it (section 5).
 - `offer_pending`: a flag, set when a committed `race-end` asked for a choice and the player has not picked.
+- the run's **unlock set** (up to 64 names of 32 bytes, section 7.1) and the guest's
+  last **stat rows** (up to 8, ADR-0094), a display cache.
+
+Worst case, all of it full: about 7.5 KiB raw, about 9.5 KB in `records.toml` per
+campaign (base64 for the bytes and the latch). A typical run of tens of bytes, with
+no owed end, is well under 1 KB.
 
 The host stores it in the records `Store` as a sibling table of `campaign` and
 `loyalty`, **keyed like the campaign's progress rows**
@@ -511,7 +517,9 @@ tick state latched at the end of the previous one, so a mod can count across leg
 by a frame-dependent number of ticks, so a state read at the exit would differ between
 two machines with the same inputs. On the tick the person's race ends the sim
 **latches** the `RunResult` fields and a copy of the module's tick state (plain data
-in the race state, no guest call); `race-end` is built from the latch at the exit.
+in the extension state, which exists only when a run module is bound, so a vanilla
+race carries none of it (ADR-0093 decision 12); no guest call); `race-end` is built
+from the latch at the exit.
 Zone and Speed Lap latch at the leave, which is the player's own moment. A run is then
 a function of its races' inputs ([progression-challenge.md](progression-challenge.md),
 objection 8).
@@ -557,7 +565,7 @@ and where `race_is_unofficial()` is true.
   campaign down a second path through both `record_result` sites (above).
 - *Let `race-start` write the run state too.* A retry would re-apply a start-time
   write on top of itself. Read-only at start keeps `race-start` a pure function of
-  (bytes, seed, ordinal, race).
+  (bytes, seed, ordinal, race, and on a later tournament leg the carried latch).
 - *Pass the run state every tick.* The tick state blob already carries what a race
   needs; the run state enters once, as a copy, at `race-start`, and the guest sets its
   initial tick state from it (section 3, "How the run reaches `tick`"). This is the
@@ -575,8 +583,8 @@ what the engine already has.
 | --- | --- | --- | --- | --- |
 | `count` | Rocket | `Ship::weapon_counts.rockets`, `1..=MAX_ROCKETS` = 3 (`oag_weapons::counts`) | 1 to the craft's own count (settled 2026-11-20: down only) | Nothing. The machinery exists: 2048 and Omega author `number_of_rockets` per craft; Pulse, Pure and HD default to 3 |
 | `count` | Mine | `weapon_counts.mines`, `1..=MAX_MINES` = 5 | 1 to the craft's own count (down only) | Nothing |
-| `count` | Cannon | `Held::cannon_rounds`, armed from the race-wide `<Stats rounds>` | 1 to 32 | A per-ship starting-rounds field |
-| `Duration` | Turbo, Shield, Autopilot | race-wide `WeaponStats::simple` (`<Stats time>`) | 0.25 to 4.0 | A per-ship scale, read where the pickup starts. Editing the shared table would change every craft, the AI's too |
+| `count` | Cannon | `Held::cannon_rounds`, armed from the race-wide `<Stats rounds>` | 1 to 32 | A per-slot starting-rounds override in the extension state (below) |
+| `Duration` | Turbo, Shield, Autopilot | race-wide `WeaponStats::simple` (`<Stats time>`) | 0.25 to 4.0 | A per-slot override in the extension state, read where the pickup starts through one grant helper (below). Editing the shared table would change every craft, the AI's too |
 | strength | Turbo | `Handling::engine.turbo` (per ship) | 0.5 to 2.0 | Named `Param::TurboStrength`, a factor column of the slot table; no other weapon has a strength to scale |
 | strength | Shield | none: the Shield absorbs all damage for its time | n/a | Breakable armour is the mod's own logic (`hit`, `clear-shield`) |
 

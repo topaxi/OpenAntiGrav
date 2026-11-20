@@ -3,7 +3,8 @@
 **Status: a design review, 2026-11-19.** It challenges
 [ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
 (Proposed) and [progression.md](progression.md) as they stand at commit `fd75340aa`.
-It changes neither. Resolution is the maintainer's review. Nothing here is built or
+It changes neither. **Resolved:** the maintainer answered every objection on
+2026-11-20; each answer stands under its objection. Nothing here is built or
 measured by this review; where a number is derived from a documented law it says so.
 
 **The claim tested:** the draft is a sound, minimal, buildable design that fits this

@@ -74,7 +74,10 @@ ratings, not computed from handling.
    `u64` seed drawn from the OS when the run is created (or the campaign's fixed
    `[run] seed`, so every run rolls the same; maintainer, 2026-11-20), an event ordinal (every committed
    `race-end` advances it, changed bytes or not), an `over` flag, and, only after a
-   faulted `race-end`, the latch it still owes (decision 6). It is a table of the records `Store` keyed like the campaign's
+   faulted `race-end`, the latch it still owes (decision 6); beside it the run's unlock
+   set (decision 10) and the guest's last stat rows (ADR-0094). Worst case about 7.5
+   KiB raw, about 9.5 KB in `records.toml` per campaign; a typical run of tens of bytes
+   is well under 1 KB. It is a table of the records `Store` keyed like the campaign's
    progress rows (`<title slug>/mod:<mod id>/<campaign id>`), saved by
    `records::save_in_background`. It is not the ADR-0080 tune, which is one blob per
    mod and title.
@@ -307,7 +310,7 @@ fixed by `[run] seed` (decision 1; question 13, answered).
   Rejected for `prior_tier` and a commit on exit (decision 6).
 - **Let `race-start` write the run state.** A retry re-applies a start-time write on
   top of itself. Rejected: `race-start` stays a pure function of (bytes, seed,
-  ordinal, race).
+  ordinal, race, and on a later tournament leg the carried latch).
 - **Write modifiers straight into `Handling` and let the hash skip them.** Matches the
   current "load-time data" rule and lets a replay on other bytes drift unnoticed.
   Rejected (decision 4).
@@ -341,7 +344,8 @@ fixed by `[run] seed` (decision 1; question 13, answered).
 **Good.** A campaign can change the craft and the pickups from race to race with no
 engine knowledge of what a reward is. A race with no run module hashes exactly as
 before. A replay carries what it needs and fails at tick 0 on wrong bytes. A retry is
-the same race. Every disc number stays the source of truth.
+a new event of the run, judged by the mod through `prior_tier`, and the same race and
+inputs always give the same run bytes. Every disc number stays the source of truth.
 
 **Bad.**
 
@@ -372,7 +376,7 @@ the same race. Every disc number stays the source of truth.
   costs one plan adaptation at load.
 - **An adapted plan is close, not optimal.** A modified craft's AI, Autopilot and Pilot
   Assist fly an adaptation of the reference plan, not a plan learned from scratch.
-- **More weapon-lineage rows.** Each new per-ship pickup field and `give-autopilot`
+- **More weapon-lineage rows.** Each new per-slot pickup override and `give-autopilot`
   needs its row in `docs/gameplay/weapon-lineage.md` when built.
 - **Run state is single-player for now.** Online, a run campaign will share the
   host's run across seats (co-op); a per-seat run is not planned.
