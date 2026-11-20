@@ -71,7 +71,7 @@ pub const PROGRESSIONS: [(&str, &str, &str); 2] = [
 pub const SEED_DIGITS: usize = 9;
 
 /// Every other word the editor's screen and flow show: string id and English.
-pub const WORDS: [(&str, &str); 35] = [
+pub const WORDS: [(&str, &str); 34] = [
     ("OAG_EDITOR_FIELD_DIFFICULTY", "DIFFICULTY"),
     ("OAG_EDITOR_FIELD_PROGRESSION", "PROGRESSION"),
     ("OAG_EDITOR_FIELD_SEED", "SEED"),
@@ -84,7 +84,6 @@ pub const WORDS: [(&str, &str); 35] = [
     ("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED"),
     ("OAG_EDITOR_HINT_SAVE", "START SAVES"),
     ("OAG_EDITOR_KEY_SELECT", "SELECT"),
-    ("OAG_EDITOR_KEY_TRIANGLE", "TRIANGLE"),
     ("OAG_EDITOR_KEY_START", "START"),
     ("OAG_EDITOR_LEGEND_FILL", "Fill grid"),
     ("OAG_EDITOR_TITLE", "CAMPAIGN EDITOR"),

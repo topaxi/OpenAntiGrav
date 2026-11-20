@@ -273,8 +273,8 @@ OAG_CONTROLS_FIRE_PICKUP = { text = "DISPARAR COLETÁVEL", human = false }
 OAG_CONTROLS_ABSORB_PICKUP = { text = "ABSORVER COLETÁVEL", human = false }
 OAG_KEYBOARD_DELETE = { text = "DEL", human = false }
 OAG_KEYBOARD_ACCEPT = { text = "OK", human = false }
-OAG_KEYBOARD_HINT = { text = "CROSS DIGITAR   SQUARE APAGAR   START CONFIRMAR   CIRCLE CANCELAR", human = false }
-OAG_TAG_ENTRY_HINT = { text = "ESQ./DIR. CÉLULA   CIMA/BAIXO SÍMBOLO   CROSS/START CONFIRMAR   CIRCLE CANCELAR", human = false }
+OAG_KEYBOARD_HINT = { text = "CROSS DIGITAR   SQUARE APAGAR   START CONFIRMAR   %s CANCELAR", human = false }
+OAG_TAG_ENTRY_HINT = { text = "ESQ./DIR. CÉLULA   CIMA/BAIXO SÍMBOLO   CROSS/START CONFIRMAR   %s CANCELAR", human = false }
 OAG_PILOT_RENAME_TITLE = { text = "RENOMEAR PILOTO", human = false }
 OAG_PILOT_NAME_TAKEN = { text = "JÁ EXISTE UM PILOTO CHAMADO %s", human = false }
 OAG_PILOT_RENAME_SHADOWS = { text = "%s É INTEGRADO: UM ARQUIVO COM ESSE NOME O SUBSTITUI", human = false }
@@ -286,7 +286,9 @@ OAG_PILOT_DELETE_NO = { text = "MANTER", human = false }
 OAG_HINTS_TITLE = { text = "OpenAntiGrav", human = false }
 OAG_HINTS_MENU_KEYS = { text = "as setas ou o analógico esquerdo movem, Enter, X ou cross seleciona, espaço ou start pula, Esc sai", human = false }
 OAG_HINTS_SHELL_TITLE = { text = "OpenAntiGrav - menu", human = false }
-OAG_HINTS_SHELL_KEYS = { text = "cima e baixo movem, esquerda e direita mudam uma configuração, Enter, X ou cross seleciona, Backspace, circle ou Esc volta", human = false }
+OAG_HINTS_SHELL_KEYS = { text = "cima e baixo movem, esquerda e direita mudam uma configuração, Enter, X ou cross seleciona, %s ou Esc volta", human = false }
+OAG_HINTS_BUTTON_CIRCLE = { text = "círculo", human = false }
+OAG_HINTS_BUTTON_TRIANGLE = { text = "triângulo", human = false }
 OAG_HINTS_RACE_TITLE = { text = "OpenAntiGrav - corrida", human = false }
 OAG_HINTS_RACE_KEYS = { text = "as setas ou o analógico esquerdo guiam, X, Enter ou R2 aceleram, Q e E ou os gatilhos laterais são os freios aéreos, L2 aciona os dois, C dispara um coletável e Z o absorve, espaço ou start pausa", human = false }
 OAG_HINTS_ESC_TO_MENU = { text = ", Esc volta aos menus", human = false }
@@ -493,7 +495,6 @@ OAG_EDITOR_FIELD_CLASS_FROM = { text = "CLASSE DE", human = false }
 OAG_EDITOR_FIELD_CLASS_TO = { text = "CLASSE ATÉ", human = false }
 OAG_EDITOR_HINT_SAVE = { text = "START SALVA", human = false }
 OAG_EDITOR_KEY_SELECT = { text = "SELECT", human = false }
-OAG_EDITOR_KEY_TRIANGLE = { text = "TRIÂNGULO", human = false }
 OAG_EDITOR_KEY_START = { text = "START", human = false }
 OAG_EDITOR_ACTION_FILL = { text = "PREENCHER GRADE", human = false }
 OAG_EDITOR_ACTION_SETTINGS = { text = "AJUSTES", human = false }

@@ -396,11 +396,7 @@ impl Session {
                     title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     delete: say(self.table(), "OAG_KEYBOARD_DELETE", "DEL"),
                     accept: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
-                    hint: say(
-                        self.table(),
-                        "OAG_KEYBOARD_HINT",
-                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
-                    ),
+                    hint: self.keyboard_hint(),
                 };
                 RenameModel::Keyboard(prompt::Keyboard::new(labels, &name, pilots::MAX_NAME))
             }
@@ -430,11 +426,7 @@ impl Session {
         let labels = tag_entry::Labels {
             title: say(self.table(), "OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
             confirm: say(self.table(), "OAG_KEYBOARD_ACCEPT", "OK"),
-            hint: say(
-                self.table(),
-                "OAG_TAG_ENTRY_HINT",
-                "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
-            ),
+            hint: self.tag_entry_hint(),
         };
         self.pulse_tag_entry("Name", name, labels, prompt::accepts)
     }

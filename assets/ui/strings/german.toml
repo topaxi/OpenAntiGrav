@@ -267,8 +267,8 @@ OAG_CONTROLS_FIRE_PICKUP = { text = "OBJEKT BENUTZEN", human = false }
 OAG_CONTROLS_ABSORB_PICKUP = { text = "OBJEKT ABSORB.", human = false }
 OAG_KEYBOARD_DELETE = { text = "ENTF", human = false }
 OAG_KEYBOARD_ACCEPT = { text = "OK", human = false }
-OAG_KEYBOARD_HINT = { text = "KREUZ TIPPEN   QUADRAT LÖSCHEN   START ÜBERNEHMEN   KREIS ABBRECHEN", human = false }
-OAG_TAG_ENTRY_HINT = { text = "LINKS/RECHTS ZELLE   HOCH/RUNTER ZEICHEN   KREUZ/START ÜBERNEHMEN   KREIS ABBRECHEN", human = false }
+OAG_KEYBOARD_HINT = { text = "KREUZ TIPPEN   QUADRAT LÖSCHEN   START ÜBERNEHMEN   %s ABBRECHEN", human = false }
+OAG_TAG_ENTRY_HINT = { text = "LINKS/RECHTS ZELLE   HOCH/RUNTER ZEICHEN   KREUZ/START ÜBERNEHMEN   %s ABBRECHEN", human = false }
 OAG_PILOT_RENAME_TITLE = { text = "PILOT UMBENENNEN", human = false }
 OAG_PILOT_NAME_TAKEN = { text = "ES GIBT BEREITS EINEN PILOTEN NAMENS %s", human = false }
 OAG_PILOT_RENAME_SHADOWS = { text = "%s IST INTEGRIERT: EINE DATEI MIT DIESEM NAMEN ERSETZT IHN", human = false }
@@ -280,7 +280,9 @@ OAG_PILOT_DELETE_NO = { text = "BEHALTEN", human = false }
 OAG_HINTS_TITLE = { text = "OpenAntiGrav", human = false }
 OAG_HINTS_MENU_KEYS = { text = "Pfeiltasten oder linker Stick bewegen, Eingabe, X oder Kreuz wählt aus, Leertaste oder Start überspringt, Esc beendet", human = false }
 OAG_HINTS_SHELL_TITLE = { text = "OpenAntiGrav - Menü", human = false }
-OAG_HINTS_SHELL_KEYS = { text = "Hoch und Runter bewegen, Links und Rechts ändern eine Einstellung, Eingabe, X oder Kreuz wählt aus, Rücktaste, Kreis oder Esc geht zurück", human = false }
+OAG_HINTS_SHELL_KEYS = { text = "Hoch und Runter bewegen, Links und Rechts ändern eine Einstellung, Eingabe, X oder Kreuz wählt aus, %s oder Esc geht zurück", human = false }
+OAG_HINTS_BUTTON_CIRCLE = { text = "Kreis", human = false }
+OAG_HINTS_BUTTON_TRIANGLE = { text = "Dreieck", human = false }
 OAG_HINTS_RACE_TITLE = { text = "OpenAntiGrav - Rennen", human = false }
 OAG_HINTS_RACE_KEYS = { text = "Pfeiltasten oder linker Stick lenken, X, Eingabe oder R2 gibt Schub, Q und E oder die Schultertasten sind die Luftbremsen, L2 betätigt beide, C benutzt ein Objekt und Z absorbiert es, Leertaste oder Start pausiert", human = false }
 OAG_HINTS_ESC_TO_MENU = { text = ", Esc führt zurück ins Menü", human = false }
@@ -454,7 +456,6 @@ ids = [
     "OAG_EDITOR_FIELD_CLASS_TO",
     "OAG_EDITOR_HINT_SAVE",
     "OAG_EDITOR_KEY_SELECT",
-    "OAG_EDITOR_KEY_TRIANGLE",
     "OAG_EDITOR_KEY_START",
     "OAG_EDITOR_ACTION_FILL",
     "OAG_EDITOR_ACTION_SETTINGS",

@@ -12,7 +12,6 @@ use oag_gameplay::input::Button;
 use oag_physics::pilot_assist::Level;
 use oag_raceplay as race;
 use oag_ui::frontend::{self};
-use oag_ui::strings;
 
 /// Ticks a network race may stand ended with nobody finished before the menus return: one
 /// second. **Chosen.**
@@ -31,7 +30,6 @@ const END_SCREEN_BUTTONS: [Button; 6] = [
     Button::Start,
 ];
 
-use crate::app::hints;
 use crate::app::stage::Stage;
 
 use super::Session;
@@ -153,7 +151,6 @@ impl Session {
                         oag_sound::Volume::try_from(percent).unwrap_or_default();
                 }
             }
-            let hint_strings = strings::project_table(self.settings.language.as_deref());
             // What Wipeout 2048's own front end asked for, if it was that
             // title: its `Launch 2048` carries a request where every other
             // title's `Launch Game` opens the menus and stops. See
@@ -173,7 +170,7 @@ impl Session {
                     "opened the menus in {:.0} ms (a stall on the main thread, drawn as the held backdrop)",
                     opening.elapsed().as_secs_f32() * 1000.0
                 );
-                println!("\n{}", hints::shell_keys(&hint_strings));
+                println!("\n{}", self.shell_keys_hint());
                 self.follow_launch(launch, card);
             }
         }

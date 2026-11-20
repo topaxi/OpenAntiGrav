@@ -210,6 +210,34 @@ impl Session {
         self.roles_with_help(oag_gameplay::input::Button::Triangle)
     }
 
+    /// The key hint printed when the menus open, naming the keys and the pad button that go back
+    /// on this title and pressing under the player's MENU BACK choice (`hints::shell_keys`).
+    pub(super) fn shell_keys_hint(&self) -> String {
+        let back = self.roles().back;
+        let keys = self.controls.bound_keys(back);
+        crate::app::hints::shell_keys(
+            &oag_ui::strings::project_table(self.settings.language.as_deref()),
+            back,
+            &keys,
+        )
+    }
+
+    /// The line under the on-screen keyboard, naming the Back button of this title and pressing.
+    pub(super) fn keyboard_hint(&self) -> String {
+        crate::app::hints::keyboard_hint(
+            self.shell.as_ref().map(|shell| &shell.strings),
+            self.roles().back,
+        )
+    }
+
+    /// The line under Pulse's own `TagInput` row, naming the Back button likewise.
+    pub(super) fn tag_entry_hint(&self) -> String {
+        crate::app::hints::tag_entry_hint(
+            self.shell.as_ref().map(|shell| &shell.strings),
+            self.roles().back,
+        )
+    }
+
     /// [`Self::roles`] for a screen whose own `Redirect` opens Help on `authored_help`.
     pub(super) fn roles_with_help(
         &self,

@@ -20,7 +20,7 @@ mod frontend_stage;
 mod gpu;
 mod handler;
 mod headless;
-mod hints;
+pub(crate) mod hints;
 mod join_stage;
 mod launcher_stage;
 mod loading_stage;

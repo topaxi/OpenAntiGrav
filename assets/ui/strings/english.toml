@@ -406,13 +406,13 @@ OAG_KEYBOARD_ACCEPT = { text = "OK", human = false }
 # CONTROLS page and `docs/architecture/menus.md` use, rather than this
 # machine's current bindings: a pad and a keyboard both reach the same four,
 # and a line naming keys would be wrong on a pad.
-OAG_KEYBOARD_HINT = { text = "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL", human = false }
+OAG_KEYBOARD_HINT = { text = "CROSS TYPE   SQUARE DELETE   START ACCEPT   %s CANCEL", human = false }
 
 # The other RENAME PILOT shape: Pulse's own `TagInput` cell row, used instead
 # of the grid above when the disc's own alphabet can spell the name being
 # edited - see `docs/formats/fexml.md`'s `TagInput` section. One line under
 # the row, on the same terms as `OAG_KEYBOARD_HINT`.
-OAG_TAG_ENTRY_HINT = { text = "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL", human = false }
+OAG_TAG_ENTRY_HINT = { text = "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   %s CANCEL", human = false }
 
 # `%s` is the pilot's own name, substituted where the entry is read. A string
 # table is edited by translators and the disc's own tables already spell a
@@ -442,7 +442,12 @@ OAG_PILOT_DELETE_NO = { text = "KEEP", human = false }
 OAG_HINTS_TITLE = { text = "OpenAntiGrav", human = false }
 OAG_HINTS_MENU_KEYS = { text = "arrow keys or the left stick move, return, X or cross selects, space or start skips, escape quits", human = false }
 OAG_HINTS_SHELL_TITLE = { text = "OpenAntiGrav - menu", human = false }
-OAG_HINTS_SHELL_KEYS = { text = "up and down move, left and right change a setting, return, X or cross selects, backspace, circle or escape goes back", human = false }
+# `%s` is the keys bound to the Back button of this title and pressing, then the button's word
+# (`OAG_HINTS_BUTTON_*`), as `backspace, z, y, circle`: Back is the triangle on Pulse's PS2 and
+# wherever MENU BACK says so (`crates/game/src/app/hints.rs`).
+OAG_HINTS_SHELL_KEYS = { text = "up and down move, left and right change a setting, return, X or cross selects, %s or escape goes back", human = false }
+OAG_HINTS_BUTTON_CIRCLE = { text = "circle", human = false }
+OAG_HINTS_BUTTON_TRIANGLE = { text = "triangle", human = false }
 OAG_HINTS_RACE_TITLE = { text = "OpenAntiGrav - race", human = false }
 OAG_HINTS_RACE_KEYS = { text = "arrow keys or the left stick steer, X, return or R2 thrusts, Q and E or the shoulders are the airbrakes, L2 is both, C fires a pickup and Z absorbs it, space or start pauses", human = false }
 OAG_HINTS_ESC_TO_MENU = { text = ", escape returns to the menus", human = false }
@@ -523,7 +528,6 @@ OAG_EDITOR_FIELD_CLASS_FROM = { text = "CLASS FROM", human = false }
 OAG_EDITOR_FIELD_CLASS_TO = { text = "CLASS TO", human = false }
 OAG_EDITOR_HINT_SAVE = { text = "START SAVES", human = false }
 OAG_EDITOR_KEY_SELECT = { text = "SELECT", human = false }
-OAG_EDITOR_KEY_TRIANGLE = { text = "TRIANGLE", human = false }
 OAG_EDITOR_KEY_START = { text = "START", human = false }
 OAG_EDITOR_ACTION_FILL = { text = "FILL GRID", human = false }
 OAG_EDITOR_ACTION_SETTINGS = { text = "SETTINGS", human = false }
