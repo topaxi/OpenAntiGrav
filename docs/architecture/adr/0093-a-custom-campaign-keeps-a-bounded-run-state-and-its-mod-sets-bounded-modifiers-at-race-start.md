@@ -133,6 +133,9 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    campaign can start a craft on one rocket and level it back up to two and three,
    and its progression ends at today's limit. Below the craft's own number it is a
    reduction of the disc's value, not a replacement past it (decision 4's rule).
+   **Damage taken** is a per-slot factor too (`DamageTaken`, a slot-table column),
+   scaling the damage that reaches that craft's shield; damage dealt, which needs
+   projectile ownership, is later (maintainer, 2026-11-20).
    Durations (Turbo, Shield, Autopilot, all three kept; maintainer, 2026-11-20) and the
    cannon's rounds are per-slot overrides held **only in the extension state**, never
    fields of `World` or `Ship` and never edits to the race-wide weapon tables: every
@@ -267,9 +270,10 @@ page then shows the run's summary and only NEW RUN. Every committed `race-end`
 advances the ordinal (decisions 1 and 6; question 3's mechanism, answered). NEW RUN is a
 host row with a confirm, which a mod screen may also request (decision 6; question 2,
 answered). There is no data-only modifier table, now or later: changing the craft
-takes a wasm module (question 7, answered).
+takes a wasm module (question 7, answered). Damage taken is a per-slot factor now; damage
+dealt is later (decision 5; question 8, half answered).
 
-**Not decided here:** a per-owner damage scale, and every other item in
+**Not decided here:** a damage-dealt scale (it needs projectile ownership), and every other item in
 `progression.md` section 12.
 
 ## Alternatives considered

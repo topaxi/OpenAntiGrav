@@ -32,6 +32,8 @@ lead: the maintainer reviews it first.
 - Replay compression: a replay header now carries a run of up to 4 KiB (ADR-0093
   decision 1, 2026-11-20); the maintainer expects it to compress well and favour
   compressing replay files again.
+- A damage-dealt scale per craft (needs each projectile to carry its owner through the
+  `Craft` trait): later, its own design (maintainer, 2026-11-20).
 - A per-leg `race-end` for tournaments (rewards between legs): later, by the
   maintainer's answer to challenge objection 9 (2026-11-20).
 - The frontend world (ADR-0080) is unbuilt, so the choice screen and the stat rows have

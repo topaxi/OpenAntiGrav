@@ -232,6 +232,7 @@ coded! { Param: u16, first 1 {
     Grip,           // antigrav.grip_ground and antigrav.grip_air
     ShieldMax,      // dimensions.shield: the maximum and the start
     TurboStrength,  // engine.turbo
+    DamageTaken,    // damage reaching this craft's shield (section 6); not a Handling field
 } }                 // at most 16: SlotStart::factor has 16 columns
 
 /// Valid factor range per parameter, owned by the host. Chosen.
@@ -584,9 +585,15 @@ to two and then three, and the progression ends where today's limit is.
 
 **Hard bounds.** More than three rockets or five mines needs a larger volley array
 and mine pool, which are hashed projectile state: an engine change with its own
-proof, not a range edit. Damage per weapon is not offered: the weapon tables are
-race-wide, a per-owner damage scale touches the `Craft` trait and every projectile
-(open question 8).
+proof, not a range edit.
+
+**Damage (maintainer, 2026-11-20).** `DamageTaken` is a factor column of the slot table
+(a spare column, `Param` 9): it scales the damage that reaches that craft's shield,
+read where damage is applied through the same override helper as the durations, so a
+race with no module is untouched. Range 0.25 to 4.0, chosen. Damage *dealt* (a scale
+on the firer) needs each projectile to carry its owner through the `Craft` trait to
+where damage lands, and is left for its own design (open question 8). The weapon
+tables stay race-wide.
 
 **Where the overrides live (maintainer, 2026-11-20).** The cannon's starting rounds
 and the three duration scales (Turbo, Shield, Autopilot, all kept) are **not** fields
@@ -950,8 +957,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 7. **A data-first modifier table** (`[[run.modifier]]`) beside the guest path.
    **Settled (maintainer, 2026-11-20): never.** A campaign that changes the craft has
    a wasm module (section 4.3).
-8. **Per-owner damage scale.** Needs the `Craft` trait and projectile ownership; not
-   in this draft.
+8. **Per-owner damage scale.** **Half settled (maintainer, 2026-11-20):** damage
+   *taken* is the `DamageTaken` column now (section 6); damage *dealt* needs the
+   `Craft` trait and projectile ownership and is later, in its own design.
 9. **The AI and a mod pickup.** **Answered by the build:** the manifest key
    `drives_ai_pickup` lets the module decide when an AI craft uses its pickup; the
    Turbo's gate is only the default (section 6; challenge nit 19).
