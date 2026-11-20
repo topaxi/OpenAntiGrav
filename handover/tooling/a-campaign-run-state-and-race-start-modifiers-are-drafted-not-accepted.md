@@ -45,7 +45,8 @@ ADRs, `progression.md` and under its objection in `progression-challenge.md`.
 
 ## Next Steps
 
-1. The maintainer decides ADR-0093's status and merges the branch.
+1. ADR-0093 is Accepted on the branch (2026-11-20). When the `profile-atomic-writes`
+   lane reports its ADR number, link it in decision 11, then the maintainer merges.
 2. Build in the order of `progression.md` section 11: the ABI (revision 7, SDK, mod
    author skill), then the run and its lifecycle (the first playable slice), then
    modifiers (`Launch` and `TopEnd` after their ground truths), pickups, own unlocks;

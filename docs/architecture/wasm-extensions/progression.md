@@ -2,7 +2,8 @@
 
 **Challenged and answered:** [progression-challenge.md](progression-challenge.md) lists 25 numbered objections to the first draft; the maintainer answered each on 2026-11-20, and this page carries the answers.
 
-**Status: a design draft, nothing built (2026-11-19).** The decision records are
+**Status: the design of an Accepted ADR (ADR-0093, 2026-11-20) and a Proposed one
+(ADR-0094); nothing built.** The decision records are
 [ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
 (the run, modifiers, pickups, unlocks; sections 2 to 7) and
 [ADR-0094](../adr/0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md)
@@ -478,7 +479,7 @@ Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 | RESTART RACE in the pause menu, before the medal is captured | Nothing was written; the race restarts from the same committed bytes |
 | QUIT RACE or escape **before** the finish, in a mode with a lap target | No `race-end`, nothing written, committed bytes untouched |
 | `race-end` faults at the exit (a trap, spent fuel, bytes over the cap) | The medal stays. The run bytes and ordinal are untouched; the latch is saved as `end_owed` and a line names the mod. While it is set the campaign's events refuse to launch, and its page offers **RETRY** (call `race-end` on the saved latch again, for example after a mod update; on success it commits as usual) or **DISCARD** (drop the latch, the run stays as it was) |
-| The game closes or crashes after the medal is captured, before the exit | The medal is kept, as today; `race-end` never ran, so the run is as it was. A replay of the event then sees the medal as `prior_tier` |
+| The game closes or crashes after the medal is captured, before the exit | The medal is kept, as today, and its save also wrote the latch as `end_owed`, which a normal commit on exit clears. The next launch of the campaign offers RETRY (`race-end` on the saved latch) or DISCARD, as after a `race-end` fault, so no reward is lost (maintainer, 2026-11-20) |
 | A replay rebuild, `--from-png`, a demo, an unofficial run, a split screen | `race-end` is not called, nothing is written |
 
 **Why nothing is staged (maintainer, 2026-11-20).** The first draft staged the run

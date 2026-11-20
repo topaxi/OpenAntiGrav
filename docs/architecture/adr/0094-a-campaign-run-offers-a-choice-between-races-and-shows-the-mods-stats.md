@@ -2,7 +2,8 @@
 
 ## Status
 
-**Proposed** (2026-11-20). Split out of
+**Proposed** (2026-11-20); stays Proposed while ADR-0080 is, because decision 1
+narrows it. The ABI hooks it needs are reserved in ADR-0093. Split out of
 [ADR-0093](0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
 by the maintainer, so the run state can be accepted and built without waiting for the
 frontend world. Nothing is built. **This ADR stays editable until it is merged into

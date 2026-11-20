@@ -1,13 +1,13 @@
 # ADR-0093: A custom campaign keeps a bounded run state, and its mod sets bounded modifiers at race start
 
-**Challenged, being answered:** [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md) lists 25 numbered objections to this proposal (5 block a decision) and a smaller first slice; each answered one says so under it.
+**Challenged and answered:** [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md) lists 25 objections to the first draft; the maintainer answered each on 2026-11-20, under its objection.
 
 ## Status
 
-**Proposed** (2026-11-19). A design for the maintainer to accept, change or reject;
-nothing is built. **This ADR stays editable until it is merged into `main`, and
-becomes immutable only then.** Until that merge, a review may change a decision
-here in place instead of superseding it.
+**Accepted** (2026-11-20, by the maintainer, after the review of
+`progression-challenge.md`; proposed 2026-11-19). Nothing is built. Immutable once
+merged into `main`; to be merged after decision 11 links the general atomic-write
+ADR.
 
 **Narrows** these statements without editing them, as
 [ADR-0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) narrowed
@@ -168,8 +168,10 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    then the event relaunches from the new run. A campaign may hide RACE AGAIN with
    `[run] race_again = false` (default `true`). RESTART RACE before the medal is
    captured writes nothing, and nor does quitting a lap-target race before its finish.
-   A crash between the medal and the exit keeps the medal and leaves the run as it
-   was. **Ending a run** (maintainer, 2026-11-20): `race-end` may set `END_RUN_OVER`
+   A crash between the medal and the exit loses nothing: the medal's save also writes
+   the latch as an owed end, which the commit on exit clears, so after a crash the
+   campaign offers RETRY and DISCARD as after a `race-end` fault (maintainer,
+   2026-11-20). **Ending a run** (maintainer, 2026-11-20): `race-end` may set `END_RUN_OVER`
    beside `END_OFFER`. The host marks the run over and keeps its final bytes and stat
    rows; the campaign page then shows that summary and offers only NEW RUN, and the
    campaign's events refuse to launch until the player starts one. **NEW RUN** is a
@@ -226,6 +228,13 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
     commands; modifiers (`Launch` and `TopEnd` after their ground truths); pickup
     parameters and `give-autopilot`; own unlocks. The stats and the choice follow under
     ADR-0094. Detail: `progression.md` section 11.
+**Reserved for ADR-0094.** `END_OFFER`, `offer_pending`, the stat-row region of
+`race-end`'s reply, the stat cache in the run record and the `[run] choice_screen` key
+are reserved: the layout keeps their space and the host ignores them until
+[ADR-0094](0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md)
+is accepted and built, and ADR-0094 may still change what they mean (maintainer,
+2026-11-20).
+
 12. **Original content pays nothing** (maintainer, 2026-11-20). A race with no module
     keeps `World`'s size, its snapshot, its hash and its per-tick work exactly as
     today. State only a mod needs (the applied factors, the pickup overrides, the
