@@ -454,7 +454,7 @@ pub(in crate::picker) fn body(
     out.extend(crate::campaign::hd::cell_brackets::draws(
         &screen.brackets,
         sprites,
-        oag_ui::screen::EntryClock::finished().seconds(),
+        picker.entry().seconds(),
     ));
     if let Some(grid) = &extra.hex_grid {
         draw_grid(grid, picker, sprites, &mut out);

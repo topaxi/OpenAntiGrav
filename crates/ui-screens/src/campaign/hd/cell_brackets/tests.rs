@@ -23,6 +23,7 @@ fn bracket(corner: bool) -> Bracket {
         corner,
         delay: 0.0,
         seconds: 0.1,
+        group: None,
     }
 }
 

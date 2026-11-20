@@ -513,7 +513,7 @@ pub(super) fn body(
     out.extend(crate::campaign::hd::cell_brackets::draws(
         &screen.brackets,
         sprites,
-        EntryClock::finished().seconds(),
+        picker.entry().seconds(),
     ));
     if let Some(grid) = &extra.hex {
         hex::draw(grid, picker, sprites, &mut out);

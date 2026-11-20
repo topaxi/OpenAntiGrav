@@ -30,12 +30,22 @@ pub fn draws(
     sprites: &dyn Fn(&str) -> Option<Placed>,
     since_entry: f32,
 ) -> Vec<Draw> {
+    draws_by(brackets, sprites, &|_| since_entry)
+}
+
+/// [`draws`] for a page that arms its brackets on more than one clock: `since` gives the seconds a
+/// bracket has counted its `delay` for.
+pub fn draws_by(
+    brackets: &[Bracket],
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    since: &dyn Fn(&Bracket) -> f32,
+) -> Vec<Draw> {
     let Some(mask) = sprites(SRC) else {
         return Vec::new();
     };
     let mut out = Vec::new();
     for bracket in brackets.iter().filter(|bracket| bracket.corner) {
-        let Some([inset_x, inset_y]) = bracket.inset(since_entry) else {
+        let Some([inset_x, inset_y]) = bracket.inset(since(bracket)) else {
             continue;
         };
         let color = argb_to_rgba(bracket.color);
