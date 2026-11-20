@@ -404,6 +404,8 @@ Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 | The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. Nothing is written to the run yet |
 | The player **exits the race** (leaves the results for the campaign screens, presses CONTINUE, or, in Zone and Speed Lap, escapes) | `Race::end_run(result)` calls `race-end` once with `prior_tier` and `event_index`. **Commit** at once, in one records save: its output becomes `bytes`, ordinal += 1, and `offer_pending` is set if it asked for an offer. Then the choice screen opens, if there is one (section 8.1) |
 | RACE AGAIN on the results page | An exit: `race-end` runs and commits as above, then the event relaunches from the **new** run bytes (after the offer, if one was asked for). Hidden when the campaign sets `[run] race_again = false` |
+| A tournament leg ends, not the last | No `race-end`. The tick state latched at the leg's end becomes the next leg's initial tick state; the next leg's `race-start` sees it with the same committed run bytes |
+| The player exits after a tournament's last leg | `race-end` once, with the final rank as `place`, the event's medal and the last leg's latch; one ordinal step for the whole event. Quitting midway commits nothing |
 | RESTART RACE in the pause menu, before the medal is captured | Nothing was written; the race restarts from the same committed bytes |
 | QUIT RACE or escape **before** the finish, in a mode with a lap target | No `race-end`, nothing written, committed bytes untouched |
 | The game closes or crashes after the medal is captured, before the exit | The medal is kept, as today; `race-end` never ran, so the run is as it was. A replay of the event then sees the medal as `prior_tier` |
@@ -434,6 +436,13 @@ as it does today: the world keeps stepping under the results, and Zone runs unti
 player leaves. The mod's award and end-of-run logic (`race-end`) runs once, when the
 player exits the race, not at the finish moment.
 
+**A tournament (maintainer, 2026-11-20)** is one run event over several legs. Each
+leg's `race-start` gets the same committed run bytes plus, after the first leg, the
+tick state latched at the end of the previous one, so a mod can count across legs
+(total kills, a shield that does not refill). `race-end` runs once after the last leg
+([progression-challenge.md](progression-challenge.md), objection 9). A per-leg
+`race-end`, paying rewards between legs, is a later addition.
+
 **The latch (maintainer, 2026-11-20).** The world keeps stepping under the results,
 by a frame-dependent number of ticks, so a state read at the exit would differ between
 two machines with the same inputs. On the tick the person's race ends the sim
@@ -454,7 +463,8 @@ and where `race_is_unofficial()` is true.
 
 - **Replay.** `ModUse` gains an optional `run`: the **input** bytes the race started
   from (not the committed output), the `seed`, the `ordinal`, the campaign and event
-  keys. Base64 in the TOML, capped at `MAX_RUN_BYTES` on the raw bytes, like the
+  keys, and on a tournament leg after the first the tick state carried in from the
+  previous leg (section 5). Base64 in the TOML, capped at `MAX_RUN_BYTES` on the raw bytes, like the
   tune proposal. A rebuild (`Options::recorded_mods`, `apply_recorded`) feeds those to
   `race-start` and never reads the local store; the applied record in section 4.1 is
   hashed from tick 0, so a rebuild on other bytes fails at tick 0. A replay does not

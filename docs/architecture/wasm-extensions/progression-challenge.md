@@ -299,6 +299,11 @@ ordinal counts.
 `race-end` runs once, after the last leg, with the final rank as `place`. The tick
 state does not carry between legs.
 
+**Answered by the maintainer (2026-11-20): once per event, and the state carries.**
+`race-start` runs per leg with the same committed bytes and the previous leg's latched
+tick state; `race-end` runs once after the last leg. A per-leg `race-end` is for the
+future (ADR-0093 decision 6, progression.md section 5).
+
 ### 10. A fault at `race-start` must refuse the launch, and then the clamp question disappears
 
 **Evidence.** The draft clamps an out-of-range factor "because a fault would turn

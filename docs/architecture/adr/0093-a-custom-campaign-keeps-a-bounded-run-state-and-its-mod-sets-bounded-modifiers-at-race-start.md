@@ -139,12 +139,18 @@ ratings, not computed from handling.
    `[run] race_again = false` (default `true`). RESTART RACE before the medal is
    captured writes nothing, and nor does quitting a lap-target race before its finish.
    A crash between the medal and the exit keeps the medal and leaves the run as it
-   was. Replay rebuilds, demos, unofficial runs and split screens never call `race-end`.
+   was. A **tournament** event is one run event: `race-start` runs for every leg with
+   the same committed bytes, and the tick state latched at the end of a leg is the
+   next leg's initial tick state, which `race-start` sees and may keep or change, so
+   a mod can count across legs. `race-end` runs once, at the exit after the last leg,
+   with the final rank as `place`; quitting midway commits nothing. A per-leg
+   `race-end` is a later addition (maintainer, 2026-11-20). Replay rebuilds, demos, unofficial runs and split screens never call `race-end`.
 7. **A choice screen:** moved to [ADR-0094](0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md) decision 1. Until it is built,
    `race-end` picks the reward itself.
 8. **Stats:** moved to ADR-0094 decision 2.
 9. **Replays, ghosts, records, network.** The replay header's `ModUse` carries the run
-   input bytes, seed, ordinal and keys (base64, capped on raw bytes). Playback never
+   input bytes, seed, ordinal and keys (base64, capped on raw bytes), and on a
+   tournament leg after the first the tick state carried in from the previous leg. Playback never
    reads the local store. There is no ghost (ADR-0091 decision 5). A race whose start
    applied any non-identity modifier, count or scale files no per-track `[[record]]`.
    Run state is single-player: a lobby race carries none and the module declines it.
@@ -189,7 +195,9 @@ any craft (decisions 4 and 5; objection 5, answered). An atomic records write is
 general rule for every profile file, decided in its own ADR outside this one, and a
 prerequisite of the run record (decision 11; objection 7, answered). `race-end` gets a
 `score` (zones or kills) and reads a result and tick state latched in the sim on the
-tick the person's race ends (decisions 3 and 6; objection 8, answered).
+tick the person's race ends (decisions 3 and 6; objection 8, answered). A tournament is one
+run event whose tick state carries from leg to leg, with one `race-end` after the last
+leg; a per-leg `race-end` is for later (decision 6; objection 9, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in

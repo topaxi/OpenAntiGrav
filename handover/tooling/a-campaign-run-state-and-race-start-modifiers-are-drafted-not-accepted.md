@@ -23,6 +23,8 @@ lead: the maintainer reviews it first.
   design most: clamp or fault at race start (1), the commit rule that stages the medal
   with the run state (section 5), the Ship Select allowance for mod stats (section 8.2),
   and whether the AI may be scaled (11).
+- A per-leg `race-end` for tournaments (rewards between legs): later, by the
+  maintainer's answer to challenge objection 9 (2026-11-20).
 - The frontend world (ADR-0080) is unbuilt, so the choice screen and the stat rows have
   no home until it lands. The README's `race-start`, `race-end` and `setup.tune` are not
   in ABI revision 6 either.
