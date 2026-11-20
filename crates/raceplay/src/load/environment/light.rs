@@ -152,6 +152,17 @@ pub fn authored_light(
         }
         _ => light,
     };
+    // **Omega's shadow light**, the factor on the lightmapped programs' prelit term. A file that
+    // authors no direction leaves it off.
+    let light = match env.direction(oag_tables::envsettings::OMEGA_SHADOW_LIGHT_DIRECTION) {
+        Some(direction) if ps4 => {
+            let [power, scale] = env
+                .vec2(oag_tables::envsettings::OMEGA_SHADOW_LIGHT_SPECULAR)
+                .unwrap_or([1.0, 0.0]);
+            light.with_shadow_light(direction, power, scale)
+        }
+        _ => light,
+    };
     let prelit = match nova {
         Some([scale, bias, power]) => format!("{scale:.1}*lightmap^{power:.1} + {bias:.2}"),
         None => format!("{:.1}*lightmap^{:.1}", prelit_scale[0], prelit_power[0]),

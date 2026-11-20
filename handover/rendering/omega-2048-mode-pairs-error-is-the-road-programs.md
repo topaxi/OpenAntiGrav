@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-20
-summary: "2048-mode pairs: Omega alpha lane wired (crowd, foliage); left: plain crowd lights, Fsl, Metro Park terrain blend, Vita lanes"
+summary: "2048-mode pairs: alpha lane, tarmac Fsl wired; left: track shadow receiver and lobe, panel-road Fsl, crowd lights, Metro Park terrain"
 difficulty: medium (40)
 ---
 
@@ -41,6 +41,11 @@ a correct detail fix can raise it).
      HD `talons-pack` and 2048 `anulpha-pass` re-render pixel-identical. Test:
      `omega_panel_map_lit_path::the_sheen_is_gated_by_the_diffuse_alpha_not_its_red`. Sol's near road is now
      red-brown; it stays greyer and bluer than the original's, which is the base under the sheen (next bullet).
+   - **Shadow-light factor: source solved, wired for the tarmac roads, not for this road yet** (`omega-2048-road`,
+     2026-11-20): `Lighting.ShadowLight direction` and `specular power scale` are authored in the circuit's
+     `.envsettings` and equal the live reads (Sol exact, Queens Mall after normalising), and `Light::shadow_light`
+     carries them; the panel-map road's program uses the same `Fsl`, so wiring it is the `tarmac` block's
+     `shadow_light_factor` applied to this family's prelit term (a few lines; measure the four panel pairs).
    - **Left after that, both the base under the sheen:** (a) the program's shadow-light factor
      `Fsl = 0.75 + 0.25 sat(Nw.SL) + SLSD.y sat(R.SL)^SLSD.x` on the prelit term is not drawn; live `SLSD` is
      `(10, 1, 0, 0)` on both circuits and `SL` `(0.791, -0.375, -0.484)` on Sol, `(-0.307, 0.445, -0.841)` on Queens Mall,
@@ -55,7 +60,10 @@ a correct detail fix can raise it).
      unread; lane 3 everywhere moved `moa-therma` 32.55 to 34.23: **that was the awning, not the hull's reflection**
      (`vita-race-pairs`, 2026-11-19: wired with the reflective window, `moa-therma` 32.55 to 27.56; lane 3 everywhere
      then moves `modesto-heights` +0.07 and `empire-climb` +0.09), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
-     Climb did not move (47.00, 45.11), so their error is not this.
+     Climb did not move (47.00, 45.11), so their error is not this. Their tarmac lit program is now read and wired
+     (`omega-2048-road`, [`omega-status.md`](../../docs/formats/omega-status.md), "The tarmac roads' lit programs"):
+     the shadow-light factor moves them +0.28 and -0.14 grey, so the road program is not their gap
+     either (the lobe is read and not drawn until the track has the shadow term); the lead is the track as a shadow receiver (below, Next Steps 3).
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
      on a pose that looks down at the road.
@@ -86,7 +94,13 @@ a correct detail fix can raise it).
    dirt in the lower left, the largest scenery area of that pair. Nothing in the tree reads the material. Read the
    program's blend weights (vertex colour or a mask), then wire (half a day RE, then a day to wire).
 2. ~~Item 1's remainder: one live read of the crowd draw's constant block on Sol.~~ **Done** (`omega-crowd-live`, 2026-11-20, [`omega-status.md`](../../docs/formats/omega-status.md), "Crowd and scene light inputs, read live"): the bound `constantAmbientColour`, `liveLighting0diffuse`, direction, `Shadowed` and `Ambient` equal the file's authored values (ratio 1.000, two boots), with no per-draw light. The Sol plain sprite's all-or-nothing `N.L` is therefore the normal, not the light: next read the crowd draw's vertex block (`world`, `worldScaleInv`) and the 1,287 white pixels that skip every debug return (half a day, same rig as `scripts/wipeout-pc-crowd-light-live.py`).
-3. Item 2's shadow-light factor on the prelit term (`Fsl`): it reaches Queens Mall among the four worst pairs only,
-   and nothing in our code carries a shadow-light direction (`SL` was read live), so the first step is its source in
-   the lighting data; Queens Mall's road bias is already positive after the crowd fix (+5.7), so the factor would
-   brighten a road that is not dark (half a day, RE).
+3. **The track as a shadow receiver** (new, `omega-2048-road`): the race binds the shadow-map variants of the road programs
+   (`tarmac` `@0xa764`, panel road `0xe144`/`0x14284`); their sun term and sun lobe are `LM.a * S`, `S = min(1, pcf(shadowMap)
+   * exp2(clamp(c0 + c1 z, c2, c3)))` with the coefficients in `shadowCoeffs`. Ours has the baked `LM.a` only on the track
+   (`sun_occlusion` is the hull's). Evidence it matters: with the tarmac sun switched off Capital Reach's whole frame goes
+   46.98 to 45.41 and the original's near road is neutral grey where ours is warm.
+   Read the pass that fills the map (casters, matrix, `shadowCoeffs` meaning) first (half a day, RE), then wire (a day), then
+   the tarmac sun lobe (read and measured, taken out for want of `S`: `omega-status.md`).
+4. The panel-map road's shadow-light factor (above): apply `shadow_light_factor` to that family (an hour) and measure
+   Sol, Queens Mall, Altima and Unity Square.
+5. The tarmac dirt layer's colour (`OAG_TARMAC_DIRT`) is still off by default; revisit after the shadow receiver.
