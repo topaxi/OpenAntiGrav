@@ -24,6 +24,9 @@ pub struct Report {
     /// from what the file authored, the same reasoning
     /// [`Self::authored_normals`] already applies to its own fallback.
     pub non_finite_texcoords: usize,
+    /// Material slots whose vertex programs write `1 - v` into the diffuse coordinate
+    /// ([`super::uv_flip`]).
+    pub flipped_v_materials: usize,
     /// Vertices whose submesh's declaration named a `tangent` attribute for
     /// this stride, so [`psp2::SubMesh::tangents`] carries one - **not** a
     /// count of non-zero/well-formed tangents the way [`Self::authored_normals`]
@@ -290,6 +293,14 @@ impl Report {
                 self.non_finite_texcoords
             )
         };
+        let flipped = if self.flipped_v_materials == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} material(s) write 1 - v into the diffuse coordinate (read off their vertex programs)",
+                self.flipped_v_materials
+            )
+        };
         let tangents = (if self.decoded_tangents == 0 {
             String::new()
         } else if self.normal_maps.submeshes == 0 {
@@ -463,7 +474,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
