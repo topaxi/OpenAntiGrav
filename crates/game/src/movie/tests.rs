@@ -614,3 +614,49 @@ fn concurrent_writes_of_one_key_leave_one_complete_file() {
     assert_eq!(leftovers, ["key-1-2x2-av1-all.ivf"]);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// Concurrent prefetches of one `.mp4` source never expose a partial file at
+/// its final path: the length check `ensure_source` trusts only ever meets
+/// nothing or the whole blob, and no temporary is left behind.
+#[test]
+fn concurrent_source_writes_never_expose_a_partial_mp4() {
+    let dir = std::env::temp_dir().join(format!("oag-source-{}", std::process::id()));
+    let blob = vec![9u8; 32 << 20];
+    let path = dir.join("clip.mp4");
+    let done = std::sync::atomic::AtomicBool::new(false);
+    std::thread::scope(|scope| {
+        let watcher = scope.spawn(|| {
+            let mut seen = 0u32;
+            while !done.load(std::sync::atomic::Ordering::Acquire) {
+                if let Ok(meta) = std::fs::metadata(&path) {
+                    assert_eq!(meta.len(), blob.len() as u64, "partial source visible");
+                    seen += 1;
+                }
+            }
+            seen
+        });
+        let writers: Vec<_> = (0..4)
+            .map(|_| {
+                scope.spawn(|| {
+                    for _ in 0..3 {
+                        let got = transcode::ensure_source(&dir, "clip", "mp4", &blob).unwrap();
+                        assert_eq!(got, path);
+                    }
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().unwrap();
+        }
+        done.store(true, std::sync::atomic::Ordering::Release);
+        watcher.join().unwrap();
+    });
+    assert_eq!(std::fs::read(&path).unwrap(), blob);
+    let names: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["clip.mp4"]);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
