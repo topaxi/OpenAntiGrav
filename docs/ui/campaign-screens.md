@@ -5015,7 +5015,7 @@ emulator), so flagged for the lead rather than scoped away.
 `transition`/`delay` keys (`bBg_0_0` 0.4 s, the emblems 0.05 to 0.275 s, the
 right column 0.35 to 0.625 s, `EnableTransition` 0.3/0.5), not curves, and the
 page-in is a vertical wipe (`transitiontype="vwipe"`) on the emblems; nothing here
-plays them. A tween measured off `trans-campsel-original.png` remains the next step.
+plays them (`oag_ui::screen::Screens::vwipe_from_node` reads the emblems' `vwipe` and `Vwipe::window` is its geometry, `docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`; the page-in clock is not wired). A tween measured off `trans-campsel-original.png` remains the next step.
 
 ### The `Selector` pulse (2026-10-29, `pulse-menu-clock`)
 

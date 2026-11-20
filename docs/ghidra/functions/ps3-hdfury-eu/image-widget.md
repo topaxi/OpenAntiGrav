@@ -217,9 +217,37 @@ frames; one of the unread vtable slots (`0x001b7898`, `0x001b79c0`, `0x001b7ae8`
 - The lattice slide over frames 4 to 10 and the pulsing ring's displacement do **not** fall out of these
   functions (`HexSelection`'s code is a different class, not touched here).
 
+## Wired: the Team Selection logo (2026-11-20, `hd-banner-wipe`)
+
+`oag_ui::screen::Vwipe` (`crates/ui/src/screen/wipe.rs`) is the law above: `Screens::vwipe_from_node` reads
+`transitiontype="vwipe"` (case-insensitive) and the in-time (`EnableTransition`, else `Transition`, else the 0.7 s
+class default, so `enebletransition` is not read), `Vwipe::alpha` is the linear ramp, `Vwipe::window` the three phases as
+fractions of the quad's height. `picker::hd::logo_draw` scales the quad and the texture's rows by the window and draws
+at full opacity, from `Picker::seconds_since_step` (the clock `land_on` zeroes on a team step). Tests: the phase boundaries
+(0, 0.39, 0.4, 0.79, 0.8, 0.99, 1) in `screen/wipe/tests.rs`, a pad step through `Picker::update` to a 12.8-row slab in
+`picker::hd::tests::a_team_step_replays_the_logos_vwipe`, and the disc's `Logo` reading 0.7 s in
+`selection_screens_ground_truth::hd_reads_its_own_team_selection`.
+
+Banner box `190,185,680,335`, mean absolute grey against the original, ours at picture lag 3, the seven step pairs
+(frame k): k04 29.66 to 16.07, k06 19.27 to 16.07, k08 18.76 to 16.07, k10 20.54 to 16.83, k15 17.15 to 16.22, k19 25.97 to
+16.07, k29 15.41 to 16.02. 16.07 is the floor when both sides show the bare panel (ours fills it 50 against 31, the open
+`HD_LightGrey` item: the 13.6 to 14.6 of a whole logo had ink matching on both sides). Slab rows and phases read by eye match
+(bare at k04, k06, k08, k19; the slab at k10 near the top, k15 and k29 near the apex). **The unread start offset shows**: starting
+the ramp 0, 1 or 2 frames after the press gives k10 16.83, 15.61, 16.69; k15 16.22, 16.03, 15.48; k29 16.02, 15.80, 15.98; k19
+16.07, 16.07, 16.23; no single offset is best for all, so none is applied (the offset is 0 to 2 frames, unpinned, above).
+Not played: the screen's opening (the original waits the authored `Delay`, then ramps; the arming is unread), so a
+fresh screen draws the finished logo; the other `vwipe` images (below).
+
+**Other screens that author `vwipe`** (DATA06 and the patch archives, `Image` tags): Team Selection `Logo` (played), Track
+Selection's circuit emblem (192x192; `TrackSelectionScreen_SelectCircuit` restarts it), `cellmode_definition` (9), `racebox` (5),
+`recordgrid` (6), `showunlocks` (3), `controls_definition_ps3` (4), `credits` (2), `additional` (1), `network` (44). `hscale`:
+Track Selection's two lines, `endrace` (16), `network` (11). None of these plays yet: each needs the page's own entry clock.
+
 ## Omega and 2048
 
-- **Omega: checked, applies in part.** `eboot-ps4-omega-eu-v107.bin` has the same `Image` `<Values>` parser
+- **Omega: checked, applies in part; wired by lineage, unmeasured.** Omega's Ship Select runs the same `picker::hd` layout and
+  its `team_selection_definition.xml` authors the same `Logo`, so a step plays the wipe there (`--menu-page ship-select
+  --menu-picker-step-seconds 0.15` shows the slab, 0.45 the slab on its way up, 5 the finished logo). The draw law below is not read in Omega. `eboot-ps4-omega-eu-v107.bin` has the same `Image` `<Values>` parser
   (`FUN_01462af0`, `strcasecmp` key match; `transitiontype` at `0x01463323`, the `vwipe` string referenced at
   `0x0146376e`), and its post-loop sets `+0x1c4` to `vwipe` = 2 and `hscale` = 4, exactly HD's two modes, plus
   four HD's parser lacks: `hgrow_right` = 8, `hgrow_left` = 0x10, `vgrow_down` = 0x20, `vgrow_up` = 0x40, and

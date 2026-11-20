@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-20
-summary: "HD front end: Ship Select matches RAM, swap gap wired; Team Selection banner vwipe recovered, ready to wire; craft input unwired"
+summary: "HD front end: Ship Select matches RAM, swap gap wired; Team Selection banner vwipe wired; craft input unwired"
 difficulty: medium (30)
 ---
 
@@ -168,7 +168,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 
 ## Next Steps
 
-- Banner, ring and lattice slide on a step (`hd-step-banner`, ready for an RE lane, opus, size large 60): read the `Image` draw that consumes `transitiontype` (start from `FUN_0052ea7c`'s table at `0x008ad680`, `vwipe` `0x0078b860`) and `HexSelection`'s update (class name `0x0078b348`; ring pulse and displacement, the lattice slide over game frames 4 to 10), then play the law in `oag_ui` as the shared widget transition (Campaign Select's emblems author the same `vwipe`). Targets in `team-selection-model.md`: banner logo timeline (bare 3 to 7, slabs 8 to 15 and 25 to 29, whole at 45), hex box on k04 to k10 (16.8, 21.5, 22.6, 14.1) down to the 4 floor, the panel fill 31 against 50.
+- Ring and lattice slide on a step (`hd-step-banner`, opus RE lane, size large 60): `HexSelection`'s update (class name `0x0078b348`; ring pulse and displacement, the lattice slide over game frames 4 to 10); targets in `team-selection-model.md`: hex box on k04 to k10 (16.8, 21.5, 22.6, 14.1) down to the 4 floor, the panel fill 31 against 50. **The banner logo's `vwipe` is wired** (`hd-banner-wipe`: `oag_ui::screen::Vwipe`, replayed by `picker::hd::logo_draw` from `Picker::seconds_since_step`; banner box 29.66, 19.27, 18.76, 20.54, 17.15, 25.97, 15.41 on k04 to k29 now 16.07, 16.07, 16.07, 16.83, 16.22, 16.07, 16.02, the bare-panel floor, see `image-widget.md`, "Wired"). Open on it: the ramp starts at the press, the original's 0 to 2 frames later (sensitivity in `image-widget.md`); page entry plays no wipe (the delay arming is unread); the same widget's other uses, not played: Track Select's circuit emblem (`vwipe`, restarted by `TrackSelectionScreen_SelectCircuit` `0x0025cb8c`), Campaign Select's emblems, and `vwipe` Images on the credits, controls, show-unlocks, record-grid, race-box, additional and network pages (`Screens::vwipe_from_node` reads any of them; each needs its page-entry clock).
 - The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
