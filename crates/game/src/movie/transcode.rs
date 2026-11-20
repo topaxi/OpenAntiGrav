@@ -264,6 +264,35 @@ pub(super) fn write_atomically(
     result
 }
 
+/// Writes `blob` under `cache_dir` as `{key}.{ext}`, unless a file already
+/// there is already the right length - the same trust model
+/// [`cached`] applies to the video cache, extended to the source file
+/// a container-hosted audio track reads back.
+///
+/// Needed because a transcode's own write of this file only happens on a
+/// video-cache **miss**: a movie whose picture is already cached would
+/// otherwise leave a track with nothing on disk to decode. Writing it here
+/// unconditionally (well, unconditionally on there being a track worth
+/// reading at all) means the audio route never depends on whether the video
+/// route happened to run this time.
+pub(super) fn ensure_source(
+    cache_dir: &Path,
+    key: &str,
+    ext: &str,
+    blob: &[u8],
+) -> Result<PathBuf> {
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+    let path = cache_dir.join(format!("{key}.{ext}"));
+    let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
+    if !already_written {
+        write_atomically(&path, |part| {
+            std::fs::write(part, blob).with_context(|| format!("writing {}", part.display()))
+        })?;
+    }
+    Ok(path)
+}
+
 fn encode(
     input: &Path,
     output: &Path,
