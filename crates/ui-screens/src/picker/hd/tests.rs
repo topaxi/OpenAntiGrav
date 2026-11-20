@@ -17,7 +17,7 @@ const XML: &str = r#"<Variable global="Grey" name="Grey"><Values String="0xff969
     <MiniText><Values y="-30" idstring="RC_CHOOSE_TEAM" color="FEGlobals->Grey"></Values></MiniText>
     <Bracket><Values corner="true" Y="0" Width="506" Height="156"></Values></Bracket>
     <Bracket><Values corner="true" Y="196" Width="506" Height="600"></Values></Bracket>
-    <Image name="Logo"><Values x="0" y="15" width="512" height="128"></Values></Image>
+    <Image name="Logo"><Values transitiontype="vwipe" delay="0.5" enebletransition="0.5" x="0" y="15" width="512" height="128"></Values></Image>
     <Bracket><Values corner="true" middle="true" X="545" Width="1052" Height="650"></Values></Bracket>
     <HexSelection name="hexselection" OffsetX="112" OffsetY="225"><Values columns="5" rows="7" SelectedLockCol="0xFF808080" SelectedLockColFade="0xFF242424" HexCol="0x64808080" HexColFade="0x32808080" SelectedColumnCol="0x64ff0000"></Values></HexSelection>
   </Item>
@@ -104,6 +104,11 @@ fn the_child_screen_carries_the_parents_widgets_and_its_own_title() {
     assert_eq!(layout.panel, [160.0, 170.0, 506.0, 156.0]);
     assert_eq!(layout.preview, [705.0, 170.0, 1052.0, 650.0]);
     assert_eq!(extra.logo, Some([160.0, 185.0, 512.0, 128.0]));
+    assert_eq!(
+        extra.logo_wipe,
+        Some(oag_ui::screen::Vwipe { seconds: 0.7 }),
+        "`enebletransition` matches no key, so the class default stands"
+    );
     assert_eq!(
         extra.ship_model.map(|model| model.origin),
         Some([1220.0, 412.0])
@@ -1089,4 +1094,70 @@ fn the_authored_corner_marks_and_block_arrow_are_drawn() {
     assert_eq!(from(200.0), 1, "{draws:?}");
     let none = body(&picker, &layout, extra, &Frame::default(), &|_| None);
     assert!(none.iter().all(|draw| !matches!(draw, Draw::Sprite { .. })));
+}
+
+/// A team step replays the `Logo`'s `vwipe` from the press
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"): a slab a tenth of the
+/// quad tall at the top, then lower, back up, and the finished logo after 0.7 s. The screen's
+/// opening and a settled screen draw it whole.
+#[test]
+fn a_team_step_replays_the_logos_vwipe() {
+    const LOGO: &str = "Data/Ships/A/FE/Logo.gtf";
+    let layout = layout();
+    let extra = layout.hd.as_deref().unwrap();
+    let sprites = |name: &str| {
+        (name == LOGO).then_some(Placed {
+            x: 1000,
+            y: 0,
+            width: 512,
+            height: 128,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        })
+    };
+    let mut entries = vec![hex_team("A"), hex_team("B")];
+    for entry in &mut entries {
+        let Details::Ship { logo, .. } = &mut entry.details else {
+            unreachable!()
+        };
+        *logo = Some(LOGO.to_string());
+    }
+    let mut picker = Picker::new(Kind::Ship, entries, Some("A"), None).with_entries_across();
+    let logo_rect = |picker: &Picker| {
+        let draws = body(picker, &layout, extra, &Frame::default(), &sprites);
+        let rects: Vec<[f32; 4]> = draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, uv, .. } if uv[0] >= 1000.0 => Some(*rect),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(rects.len(), 1, "{draws:?}");
+        rects[0]
+    };
+    let whole = [160.0, 185.0, 512.0, 128.0];
+    picker.tick(1.0);
+    assert_eq!(logo_rect(&picker), whole, "no step yet");
+
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    assert_eq!(picker.update(&mut input), vec![Event::Moved]);
+    let close = |got: [f32; 4], want: [f32; 4]| {
+        assert!(
+            got.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-3),
+            "{got:?} vs {want:?}"
+        );
+    };
+    close(logo_rect(&picker), [160.0, 185.0, 512.0, 12.8]);
+    picker.tick(0.35);
+    close(logo_rect(&picker), [160.0, 185.0 + 128.0 * 0.675, 512.0, 12.8]);
+    picker.tick(0.175);
+    close(logo_rect(&picker), [160.0, 185.0 + 128.0 * 0.1125, 512.0, 12.8]);
+    picker.tick(0.105);
+    close(logo_rect(&picker), [160.0, 185.0, 512.0, 128.0 * 0.55]);
+    picker.tick(0.35);
+    assert_eq!(logo_rect(&picker), whole, "the ramp is over after 0.7 s");
 }
