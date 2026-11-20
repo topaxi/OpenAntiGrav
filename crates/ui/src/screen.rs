@@ -53,7 +53,10 @@ pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
 pub use touch::{CanvasLabel, Include, TouchButton};
-pub use wipe::{EntryClock, FRAME_SECONDS, IMAGE_RAMP_SECONDS, Vwipe, Window, entry_draw};
+pub use wipe::{
+    BRACKET_RAMP_SECONDS, EntryClock, FRAME_SECONDS, IMAGE_RAMP_SECONDS, Vwipe, Window, entry_draw,
+    ramp_seconds, restart_draw,
+};
 
 /// One `Text` widget.
 #[derive(Debug, Clone, Default, PartialEq)]

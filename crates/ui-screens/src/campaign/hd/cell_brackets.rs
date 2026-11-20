@@ -22,24 +22,33 @@ pub const SRC: &str = r"Data\FE\Images\corner2.gtf";
 /// The mask's side, in texels and in authored units.
 const SIDE: f32 = 16.0;
 
-/// Every bracket's four marks.
-pub fn draws(brackets: &[Bracket], sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
+/// Every bracket's four marks, `since_entry` seconds after the page became current: none while
+/// a bracket's own `delay` runs, then drawn in from the corners ([`Bracket::inset`]). A page
+/// that does not play its brackets passes [`oag_ui::screen::EntryClock::finished`]'s seconds.
+pub fn draws(
+    brackets: &[Bracket],
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    since_entry: f32,
+) -> Vec<Draw> {
     let Some(mask) = sprites(SRC) else {
         return Vec::new();
     };
     let mut out = Vec::new();
     for bracket in brackets.iter().filter(|bracket| bracket.corner) {
+        let Some([inset_x, inset_y]) = bracket.inset(since_entry) else {
+            continue;
+        };
         let color = argb_to_rgba(bracket.color);
         for (right, bottom) in [(false, false), (true, false), (false, true), (true, true)] {
             let x = if right {
-                bracket.x + bracket.width - SIDE
+                bracket.x + bracket.width - SIDE - inset_x
             } else {
-                bracket.x
+                bracket.x + inset_x
             };
             let y = if bottom {
-                bracket.y + bracket.height - SIDE
+                bracket.y + bracket.height - SIDE - inset_y
             } else {
-                bracket.y
+                bracket.y + inset_y
             };
             // A negative extent turns the mask about that axis. The file's
             // own corner is its bottom-left one (an RPCS3 frame of Cell

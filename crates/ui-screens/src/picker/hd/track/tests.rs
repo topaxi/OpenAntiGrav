@@ -470,3 +470,60 @@ fn the_emblem_waits_its_delay_and_then_wipes() {
         "whole when the ramp is out"
     );
 }
+
+fn wiped_layout() -> Layout {
+    let xml = XML.replace(
+        r#"<Image name="Emblem"><Values x="110""#,
+        r#"<Image name="Emblem"><Values transitiontype="vwipe" delay="0.6" EnableTransition="0.5" x="110""#,
+    );
+    let screens = Screens::from_xml_with_fallback_globals(&xml, &[]);
+    read(
+        &xml,
+        &screens,
+        &strings(),
+        FaceScales::default(),
+        [1920.0, 1080.0],
+    )
+    .expect("both screens are there")
+}
+
+fn drawn_emblem_height(picker: &Picker, layout: &Layout) -> Option<f32> {
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let emblem_sheet = |name: &str| {
+        name.to_ascii_lowercase()
+            .contains("trackselectemblem_fury")
+            .then(|| sheet("trackselectemblem_bw").expect("a placement"))
+    };
+    body(picker, layout, extra, &Frame::default(), &emblem_sheet)
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[0] == 270.0 && rect[2] == 192.0 => Some(rect[3]),
+            _ => None,
+        })
+}
+
+/// `TrackSelectionScreen_SelectCircuit` restarts the `Emblem` with `Widget_ResetTransition`, which
+/// leaves its countdown alone: a circuit step after the page has settled replays the wipe at once
+/// (a slab on the press, whole 0.5 s on), and one inside the opening delay keeps waiting for it.
+/// This fails if the step is not passed to the emblem.
+#[test]
+fn a_circuit_step_replays_the_emblems_wipe_without_the_delay() {
+    let layout = wiped_layout();
+    let mut picker = grid();
+    picker.tick(2.0);
+    assert_eq!(drawn_emblem_height(&picker, &layout), Some(192.0));
+    press(&mut picker, Button::Right);
+    let slab = drawn_emblem_height(&picker, &layout).expect("no delay after a step");
+    assert!((slab - 19.2).abs() < 1e-3, "{slab}: a slab a tenth tall");
+    picker.tick(0.5);
+    assert_eq!(drawn_emblem_height(&picker, &layout), Some(192.0));
+
+    let mut early = grid();
+    early.tick(0.2);
+    press(&mut early, Button::Right);
+    assert_eq!(
+        drawn_emblem_height(&early, &layout),
+        None,
+        "the opening delay is still running"
+    );
+}

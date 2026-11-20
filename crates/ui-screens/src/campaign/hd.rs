@@ -149,6 +149,8 @@ use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
 #[cfg(test)]
 mod cell_field_tests;
 #[cfg(test)]
+mod cell_rearm_tests;
+#[cfg(test)]
 mod target_rows_tests;
 #[cfg(test)]
 mod tests;
@@ -279,7 +281,11 @@ pub fn hd_grid_draw_list(
         out.extend(wiped(image, placed, model.entry()));
     }
     if unlock.is_some() {
-        out.extend(cell_brackets::draws(&screen.brackets, sprites));
+        out.extend(cell_brackets::draws(
+            &screen.brackets,
+            sprites,
+            model.entry().seconds(),
+        ));
     }
     let Some(selected) = model.selected() else {
         layers.body = out;
@@ -422,7 +428,11 @@ pub fn hd_cell_draw_list(
     // unlocked tier: how many points the tier still needs to open the next
     // grid, over the next grid's logo. Nothing once the tier's own figure
     // is met or when there is no next grid.
-    out.extend(cell_brackets::draws(&screen.brackets, sprites));
+    out.extend(cell_brackets::draws(
+        &screen.brackets,
+        sprites,
+        EntryClock::finished().seconds(),
+    ));
     out.extend(cell_emblems::rule(&screen.slots));
     let remaining = grid_summary
         .required_points
@@ -534,7 +544,7 @@ pub fn hd_cell_draw_list(
         cell,
         art.track_emblems,
         sprites,
-        model.entry(),
+        cell_emblems::since_armed(model.entry(), model.refreshed_at()),
     ));
     let targets_visible = true;
     let targets = cell.targets_for_difficulty(model.difficulty());

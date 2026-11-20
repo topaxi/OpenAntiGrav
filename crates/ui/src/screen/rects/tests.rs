@@ -55,3 +55,42 @@ fn a_bracket_keeps_its_rect_inside_the_image_that_holds_it() {
     assert_eq!(bracket.color, 0xff96_9696);
     assert!(bracket.corner);
 }
+
+/// A `Bracket` reads its own `delay` and in-time off its tag (the generic child parser), not the
+/// image's: the class default 0.1 s stands where it authors none.
+#[test]
+fn a_bracket_reads_its_own_delay_and_in_time() {
+    let xml = r#"
+<Screen name="Top">
+  <Screen name="Box">
+    <Image name="Outer" EnableTransition="0.5" delay="0.45">
+      <Values x="168" y="708" width="440" height="168" transitiontype="vwipe"></Values>
+      <Bracket delay="0.4">
+        <Values corner="true" X="160" Y="700" Width="448" Height="176" Colour="0xff969696"></Values>
+      </Bracket>
+      <Bracket Transition="0.25" delay="0.6">
+        <Values corner="true" X="0" Y="0" Width="10" Height="10" Colour="0xff969696"></Values>
+      </Bracket>
+      <Bracket>
+        <Values corner="true" X="0" Y="0" Width="10" Height="10" Colour="0xff969696"></Values>
+      </Bracket>
+    </Image>
+  </Screen>
+</Screen>
+"#;
+    let screens = Screens::from_xml(xml);
+    let screen = screens.by_name("Box").expect("the screen");
+    let read: Vec<(f32, f32)> = screen
+        .brackets
+        .iter()
+        .map(|bracket| (bracket.delay, bracket.seconds))
+        .collect();
+    assert_eq!(
+        read,
+        [
+            (0.4, super::super::BRACKET_RAMP_SECONDS),
+            (0.6, 0.25),
+            (0.0, super::super::BRACKET_RAMP_SECONDS)
+        ]
+    );
+}

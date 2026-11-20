@@ -61,7 +61,7 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
 use oag_ui::screen::{
     BlockWidget, EntryClock, Node, Screen, Screens, Text, Vwipe, argb_to_rgba, entry_draw, parse,
-    parse_argb,
+    parse_argb, restart_draw,
 };
 
 use super::{Details, FaceScales, Layout, Picker};
@@ -454,12 +454,16 @@ fn logo_draw(
 ) -> Option<Draw> {
     let (entry, step) = clocks;
     let uv = placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]);
-    let color = [1.0, 1.0, 1.0, 1.0];
-    let (Some(wipe), Some(age)) = (wipe, step) else {
-        return entry_draw(wipe, entry.seconds(), Draw::Sprite { rect, uv, color });
-    };
-    let (rect, uv) = Vwipe::window(wipe.alpha(age)).map_or((rect, uv), |w| w.cut(rect, uv));
-    Some(Draw::Sprite { rect, uv, color })
+    restart_draw(
+        wipe,
+        entry.seconds(),
+        step,
+        Draw::Sprite {
+            rect,
+            uv,
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+    )
 }
 
 /// The body of the screen - see the module doc for what is and is not here.
@@ -509,6 +513,7 @@ pub(super) fn body(
     out.extend(crate::campaign::hd::cell_brackets::draws(
         &screen.brackets,
         sprites,
+        EntryClock::finished().seconds(),
     ));
     if let Some(grid) = &extra.hex {
         hex::draw(grid, picker, sprites, &mut out);

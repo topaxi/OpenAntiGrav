@@ -118,14 +118,16 @@ fn sprites(src: &str) -> Option<Placed> {
 }
 
 fn shown_at(seconds: f32) -> Vec<f32> {
-    let mut clock = EntryClock::default();
-    clock.tick(seconds);
+    shown_since_armed(seconds - ENTRY_HOLD_SECONDS)
+}
+
+fn shown_since_armed(since_armed: f32) -> Vec<f32> {
     draws(
         &slots(),
         &cell(Mode::Race, "Venom", true),
         &emblem(),
         &sprites,
-        clock,
+        since_armed,
     )
     .iter()
     .map(|draw| match draw {
@@ -156,4 +158,43 @@ fn the_emblems_hold_then_start_in_order_and_finish() {
     assert_eq!(shown_at(0.60).len(), 3, "the speed class emblem too");
     assert_eq!(shown_at(0.70).len(), 4, "all four have started");
     assert_eq!(shown_at(1.5), [96.0; 4], "every emblem whole");
+}
+
+fn clock_at(seconds: f32) -> EntryClock {
+    let mut clock = EntryClock::default();
+    clock.tick(seconds);
+    clock
+}
+
+/// Nothing re-arms the emblems inside the entry hold or when no change has happened, and a change
+/// after the hold counts the `delay` from the change alone. This fails if the change is ignored
+/// or the hold is applied again on top of it.
+#[test]
+fn a_change_after_the_hold_rearms_the_delay_without_the_hold() {
+    let since = |entry: f32, refreshed_at: Option<f32>| since_armed(clock_at(entry), refreshed_at);
+    assert!((since(1.0, None) - (1.0 - ENTRY_HOLD_SECONDS)).abs() < 1e-5);
+    assert!(
+        (since(1.0, Some(0.2)) - (1.0 - ENTRY_HOLD_SECONDS)).abs() < 1e-5,
+        "a change inside the hold is covered by the hold's own re-arming"
+    );
+    assert!(
+        (since(1.5, Some(1.0)) - 0.5).abs() < 1e-5,
+        "a change at 1.0 s starts the delay there"
+    );
+    assert_eq!(
+        since_armed(EntryClock::finished(), None),
+        f32::INFINITY,
+        "a still with no clock stays finished"
+    );
+}
+
+/// After a change every emblem is gone again and then returns in order, each at its own delay.
+#[test]
+fn a_rearmed_page_hides_the_emblems_and_brings_them_back_in_order() {
+    let arm = |entry: f32, at: f32| shown_since_armed(since_armed(clock_at(entry), Some(at)));
+    assert_eq!(arm(1.0, 1.0), Vec::<f32>::new(), "all four wait again");
+    assert_eq!(arm(1.06, 1.0).len(), 1, "the event emblem first, 0.05 s on");
+    assert_eq!(arm(1.16, 1.0).len(), 2, "then the track emblem");
+    assert_eq!(arm(1.40, 1.0).len(), 4, "all four back");
+    assert_eq!(arm(2.0, 1.0), [96.0; 4], "and whole once the ramps are out");
 }

@@ -198,6 +198,11 @@ impl Screens {
                 .and_then(parse_argb)
                 .unwrap_or(0xffff_ffff),
             corner: node.flag("corner").unwrap_or(false),
+            delay: self.number(node.value("delay")).unwrap_or(0.0).max(0.0),
+            seconds: self
+                .number(node.value("EnableTransition"))
+                .or_else(|| self.number(node.value("Transition")))
+                .unwrap_or(super::BRACKET_RAMP_SECONDS),
         })
     }
 
