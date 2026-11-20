@@ -156,6 +156,40 @@ two button words in its `[untranslated]` table and falls back to English with th
 German's old sentence named the key `Rücktaste`; the key names now come from the binding table and
 are not translated.
 
+## Footer hints are clicks
+
+Every key or button hint on screen is a click and touch target: a glyph and its label (`(O) Help`,
+`(X) Confirm`, `(△) Back`, `(□) AI difficulty`, `Music playlist`) press what the button does, and a
+hint whose button does nothing on that screen does nothing. A click is `Controls::tap(button)`, the
+keyboard latch that feeds the same `buttons` the pad does, so it goes through `Roles`, the picker's own
+Back and Help and the MENU BACK choice with no second path; it is consumed ahead of the stage's own
+pointer handling and the stage never sees it as a click on a row. No hint adds an action, and none
+gets a pressed or hover look the screen does not already have.
+
+How the hints are found (`oag_ui::hints`):
+
+- **The disc's own footers** are read off the draw list. `Renderer::collect_hints` scans the
+  `Vec<Draw>` of a frame: a prompt stand-in glyph (`oag_title::Prompts`, per title) that opens a
+  string and the word after it, or a glyph-only string and the nearest word to its right on the same
+  row. A glyph in the middle of a sentence, a d-pad glyph (four controls), wrapped text and the
+  clipped ticker are not hints; `Scope::ButtonsFace` needs the glyph in the Buttons face. The control a
+  hint presses is the glyph **as drawn** (`Substitution::button_drawn`): under MENU BACK `circle` on
+  Pulse's PS2 the footer draws the circle where the disc authored the triangle, and the hint taps the
+  circle. This covers the menu pages, the pickers, the campaign screens, the pause menu and the end
+  of race screens on Pulse, Pure, HD and Omega, one mechanism.
+- **Our own legends** are laid out with `oag_ui::hints::Entry`/`Line`/`legend` beside the text they
+  draw: photo mode (`CROSS Take`, `SELECT Camera`, `SQUARE HUD`...), the replay viewer's key row, the disc chooser
+  (`ESC QUIT` is `Session::escape`, not a button) and the key entry. The on-screen keyboard's
+  and the tag entry's hint lines are wrapped text, so `legend_wrapped` places each entry's rectangle
+  on the line the renderer breaks it to; the cell and glyph entries of the tag row name no one
+  control and are not targets. While a prompt is up the page's footer under its scrim is not a target.
+- **2048** draws no key hints (a touch front end), so there is nothing to wire; its in-race pause is
+  the touch icons. **Omega** is HD's front end and goes through the first path unchanged.
+
+Drive: `draw` forces a drawn frame (hints are collected from drawn frames only), `click hint
+<button|escape>` clicks the hint that presses it, and `expect hints=<button>` reads the list in the
+state line (`docs/tools/oag-game.md`).
+
 ## The pickers' Help overlays
 
 `Track Creation` and `Team Selection` each author a `Redirect` whose `forward` is a face button and
@@ -206,5 +240,14 @@ paragraph).
   on every choice, and the camera reset sits on the other face button); Track Select and Ship Select open
   Track Help and Team Help on `Roles::help`, Back closes the overlay and then leaves, for each choice on both
   pressings (`..._opens_..._help_on_the_...`).
+- `footer_hint_ground_truth` (disc-backed, `#[ignore]`d, `crates/game/tests/`): on Pulse PS2 EU and PSP EU
+  the race page, Track Select, Ship Select, Cell Selection (Help opens on its hint, Back leaves), the
+  pause menu, end of race, photo mode and the replay viewer, for each choice of MENU BACK: the hint for
+  the resolved Back leaves and the other face button's hint is absent, so a swap puts the click where the
+  press is; HD's Track Select leaves on the circle and the d-pad glyph is not a hint; Pure's race page
+  leaves on the triangle (`pure_back_is_the_triangle_...`) and the name prompt's hint line cancels. With
+  the pointer routing dropped every one of them fails. Model tests beside the legends:
+  `oag_ui::hints::tests`, `oag_game::photo::tests`, `replay_view::tests`, `launcher::tests`,
+  `app::overlay::tests`.
 - All 33 menu comparison pairs (2048, HD, Omega, Pulse PSP, Pulse PS2, Pure) re-rendered with the build
   before this change and after it are byte-identical: no pair moved.
