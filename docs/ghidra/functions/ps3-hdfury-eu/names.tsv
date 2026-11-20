@@ -1021,3 +1021,4 @@
 0x00164bd0	function	Widget_UpdateTransition	85	image-widget.md
 0x00164df8	function	Widget_ResetTransition	85	image-widget.md
 0x0016e580	function	Widget_ParseChildXml	75	image-widget.md
+0x00165018	function	Widget_ArmTransition	85	image-widget.md
