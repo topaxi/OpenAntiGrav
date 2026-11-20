@@ -202,7 +202,8 @@ pub(super) fn campaign_page(
     // raced under, draws exactly the fresh-profile numbers either way.
     records: &crate::records::Store,
     // `--menu-picker-seconds`: how long after the screen opened `Selector`'s
-    // pulse is drawn at (`SelectorPulse`); `None` draws it at clock 0.
+    // pulse is drawn at (`SelectorPulse`) and the entry wipes have run; `None` draws the
+    // pulse at clock 0 and the wipes finished.
     pulse_seconds: Option<f32>,
     // `--menu-model-seconds`: the moment of its own animation the flyer card is drawn
     // at ([`crate::flyer::Flyers::card_seconds`]); `None` draws it at
@@ -271,6 +272,9 @@ pub(super) fn campaign_page(
         &mut campaign.sprites,
     );
     *sprites = campaign.sprites;
+    let page_clock = pulse_seconds.map_or(oag_ui::screen::EntryClock::finished(), |seconds| {
+        oag_ui::screen::EntryClock::at(seconds)
+    });
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
     // above for why this reads the real file rather than always `None`.
@@ -471,6 +475,7 @@ pub(super) fn campaign_page(
                     hd_grids.iter().map(&summarise).collect(),
                 );
                 model.set_index(tier);
+                *model.entry_mut() = page_clock;
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
                 oag_ui_screens::campaign::hd::hd_grid_draw_list(
                     &model,
@@ -500,12 +505,13 @@ pub(super) fn campaign_page(
                 // `oag_ui_screens::campaign::CellSelection::difficulty`'s own doc for
                 // the RPCS3 measurement. Already inside `is_hd` here, so
                 // unconditional.
-                let model = crate::campaign::with_opening_difficulty(
+                let mut model = crate::campaign::with_opening_difficulty(
                     cell_model(cells, tier).with_difficulty(&difficulty_of),
                     records,
                     &campaign_title,
                     true,
                 );
+                *model.entry_mut() = page_clock;
                 let grid_summary = grid
                     .map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
                         summarise(grid)

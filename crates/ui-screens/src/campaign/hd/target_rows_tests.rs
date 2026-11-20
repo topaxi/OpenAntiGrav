@@ -75,6 +75,7 @@ fn drawn(targets: Option<[i64; 4]>) -> (Vec<String>, Vec<f32>) {
             reveal: Vec::new(),
             transition: 0.0,
             start_enabled: true,
+            wipe: None,
         });
     }
     let layout = Layout {

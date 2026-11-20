@@ -60,7 +60,8 @@ use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
 use oag_ui::screen::{
-    BlockWidget, Node, Screen, Screens, Text, Vwipe, Window, argb_to_rgba, parse, parse_argb,
+    BlockWidget, EntryClock, Node, Screen, Screens, Text, Vwipe, argb_to_rgba, entry_draw, parse,
+    parse_argb,
 };
 
 use super::{Details, FaceScales, Layout, Picker};
@@ -438,31 +439,27 @@ pub(crate) fn block_arrow(
     });
 }
 
-/// The `Logo` quad, `step` the widget's `vwipe` and the seconds since the team moved: the
-/// original resets the widget's alpha on every step and plays the wipe
-/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"). Without a step
-/// since the screen opened, the finished logo; the page-entry delay and ramp are not
-/// measured. The ramp starts at the press: the original's start is 0 to 2 frames later.
-fn logo_draw(rect: [f32; 4], step: Option<(Vwipe, f32)>, placed: Placed) -> Draw {
-    let [x, y, width, height] = rect;
-    let (texels_wide, texels_high) = (placed.width as f32, placed.height as f32);
-    let whole = Window {
-        top: 0.0,
-        height: 1.0,
+/// The `Logo` quad as the page shows it, `None` while it waits out its authored `delay`.
+///
+/// The widget's countdown is armed at the page's entry with its `delay` and the ramp then runs
+/// its in-time; a team step resets the alpha without re-arming the delay, so the wipe replays
+/// from the press (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step" and "Page
+/// entry"). With no wipe authored the quad is whole. The ramp after a step starts at the press:
+/// the original's start is 0 to 2 frames later.
+fn logo_draw(
+    rect: [f32; 4],
+    wipe: Option<Vwipe>,
+    clocks: (EntryClock, Option<f32>),
+    placed: Placed,
+) -> Option<Draw> {
+    let (entry, step) = clocks;
+    let uv = placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]);
+    let color = [1.0, 1.0, 1.0, 1.0];
+    let (Some(wipe), Some(age)) = (wipe, step) else {
+        return entry_draw(wipe, entry.seconds(), Draw::Sprite { rect, uv, color });
     };
-    let window = step
-        .and_then(|(wipe, age)| Vwipe::window(wipe.alpha(age)))
-        .unwrap_or(whole);
-    Draw::Sprite {
-        rect: [x, y + height * window.top, width, height * window.height],
-        uv: placed.sheet_rect([
-            0.0,
-            texels_high * window.top,
-            texels_wide,
-            texels_high * window.height,
-        ]),
-        color: [1.0, 1.0, 1.0, 1.0],
-    }
+    let (rect, uv) = Vwipe::window(wipe.alpha(age)).map_or((rect, uv), |w| w.cut(rect, uv));
+    Some(Draw::Sprite { rect, uv, color })
 }
 
 /// The body of the screen - see the module doc for what is and is not here.
@@ -485,7 +482,11 @@ pub(super) fn body(
             continue;
         }
         if let Some(placed) = sprites(&image.src) {
-            out.push(sprite(image, placed, None));
+            out.extend(entry_draw(
+                image.wipe,
+                picker.entry().seconds(),
+                sprite(image, placed, None),
+            ));
         }
     }
     let Some(entry) = picker.selected() else {
@@ -497,9 +498,10 @@ pub(super) fn body(
         }) = Some(&entry.details)
         && let Some(placed) = sprites(logo)
     {
-        out.push(logo_draw(
+        out.extend(logo_draw(
             rect,
-            extra.logo_wipe.zip(picker.seconds_since_step()),
+            extra.logo_wipe,
+            (picker.entry(), picker.seconds_since_step()),
             placed,
         ));
     }

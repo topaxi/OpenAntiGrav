@@ -78,6 +78,8 @@ pub struct TrackScreen {
     pub common: TeamScreen,
     /// The `Emblem` image's rect. It authors no `src`.
     pub emblem: Option<[f32; 4]>,
+    /// The `Emblem`'s `transitiontype="vwipe"`: it waits its `delay` after the page opens.
+    pub emblem_wipe: Option<oag_ui::screen::Vwipe>,
     /// `TrackModel`'s own pose, which `oag_game::preview::track_model` draws
     /// the circuit's scene at.
     pub model: Option<TrackModel>,
@@ -326,6 +328,7 @@ fn walk_track(
                     number(child, "width").unwrap_or(0.0),
                     number(child, "height").unwrap_or(0.0),
                 ]);
+                out.emblem_wipe = screens.vwipe_from_node(child);
             }
             "model" if child.attr("name") == Some("TrackModel") => {
                 out.model = Some(TrackModel {
@@ -460,11 +463,15 @@ pub(in crate::picker) fn body(
         } = &entry.details
         && let Some(placed) = sprites(src)
     {
-        out.push(Draw::Sprite {
-            rect,
-            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
-            color: [1.0, 1.0, 1.0, 1.0],
-        });
+        out.extend(oag_ui::screen::entry_draw(
+            extra.emblem_wipe,
+            picker.entry().seconds(),
+            Draw::Sprite {
+                rect,
+                uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
+                color: [1.0, 1.0, 1.0, 1.0],
+            },
+        ));
     }
     // The frame is the clip's picture where it has one: the stage that plays
     // it sets `frame` and `position`, and takes this draw out of the list

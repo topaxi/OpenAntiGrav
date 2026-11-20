@@ -24,6 +24,7 @@ fn image(name: &str, src: &str) -> Image {
         reveal: Vec::new(),
         transition: 0.0,
         start_enabled: true,
+        wipe: None,
     }
 }
 

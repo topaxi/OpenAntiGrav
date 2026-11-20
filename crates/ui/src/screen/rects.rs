@@ -16,6 +16,8 @@ pub struct Slot {
     pub width: Option<f32>,
     /// Authored height.
     pub height: Option<f32>,
+    /// The widget's `transitiontype="vwipe"`, when it authors one.
+    pub wipe: Option<super::Vwipe>,
 }
 
 /// A `<Bracket corner="true">`: a rectangle framed by a mark at each of its

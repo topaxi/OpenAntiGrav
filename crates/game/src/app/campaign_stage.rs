@@ -474,10 +474,12 @@ impl CampaignStage {
         match &mut self.screen {
             Screen::Grid(model) => {
                 model.pulse_mut().tick(dt);
+                model.entry_mut().tick(dt);
                 self.selector_phases.grid = *model.pulse();
             }
             Screen::Cell { model, .. } => {
                 model.pulse_mut().tick(dt);
+                model.entry_mut().tick(dt);
                 self.selector_phases.cell = *model.pulse();
             }
             Screen::Selection(_) => {}

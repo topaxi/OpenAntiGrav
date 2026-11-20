@@ -84,7 +84,7 @@ use oag_gameplay::input::{Button, Input};
 use oag_tables::race_campaign::{Cell, Difficulty, Grid, Medal, MedalTiers};
 
 use oag_ui::language::StringTable;
-use oag_ui::screen::{Screen, Screens};
+use oag_ui::screen::{EntryClock, Screen, Screens};
 
 pub mod draw;
 pub mod editor;
@@ -298,6 +298,8 @@ pub struct GridSelection {
     per_page: usize,
     /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
     pulse: pulse::SelectorPulse,
+    /// Seconds since the page became current, which its `vwipe` images count their `delay` from.
+    entry: EntryClock,
     /// The finger gesture in progress on HD's `Grid Selection`, see [`hd::Swipe`].
     swipe: hd::Swipe,
     /// What a tier's medal hex is filled with, see [`Self::with_medal_art`].
@@ -314,6 +316,7 @@ impl GridSelection {
             index: 0,
             per_page: GRIDS_PER_PAGE,
             pulse: pulse::SelectorPulse::default(),
+            entry: EntryClock::default(),
             swipe: hd::Swipe::default(),
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
@@ -369,6 +372,16 @@ impl GridSelection {
 
     pub fn pulse_mut(&mut self) -> &mut pulse::SelectorPulse {
         &mut self.pulse
+    }
+
+    /// The clock the page's `vwipe` images wait their `delay` on.
+    #[must_use]
+    pub fn entry(&self) -> EntryClock {
+        self.entry
+    }
+
+    pub fn entry_mut(&mut self) -> &mut EntryClock {
+        &mut self.entry
     }
 
     #[must_use]
@@ -564,6 +577,8 @@ pub struct CellSelection {
     tier_targets: Vec<Option<Vec<i64>>>,
     /// `Selector`'s pulse clock, see [`pulse::SelectorPulse`].
     pulse: pulse::SelectorPulse,
+    /// Seconds since the page became current, which its `vwipe` images count their `delay` from.
+    entry: EntryClock,
     /// The rung the `DifficultyButton` widget's square-button prompt
     /// currently shows (built by [`draw::cell_draw_list`]), and what
     /// `crate::app::session::campaign` (`oag_game`) records alongside a
@@ -661,6 +676,7 @@ impl CellSelection {
             tiers: MedalTiers::default(),
             tier_targets: Vec::new(),
             pulse: pulse::SelectorPulse::default(),
+            entry: EntryClock::default(),
             difficulty: Difficulty::Medium,
         }
     }
@@ -737,6 +753,16 @@ impl CellSelection {
 
     pub fn pulse_mut(&mut self) -> &mut pulse::SelectorPulse {
         &mut self.pulse
+    }
+
+    /// The clock the page's `vwipe` images wait their `delay` on.
+    #[must_use]
+    pub fn entry(&self) -> EntryClock {
+        self.entry
+    }
+
+    pub fn entry_mut(&mut self) -> &mut EntryClock {
+        &mut self.entry
     }
 
     /// Attaches each cell's own earned medal difficulty alongside

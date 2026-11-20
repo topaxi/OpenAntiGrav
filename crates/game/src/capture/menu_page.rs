@@ -1015,6 +1015,10 @@ pub(super) fn picker_page(
         picker = picker.with_rows(grid_columns);
     }
     picker.tick(seconds.unwrap_or(SETTLED_SECONDS));
+    // The entry wipes (`vwipe` images) are finished unless the still states a time.
+    picker.set_entry(seconds.map_or(oag_ui::screen::EntryClock::finished(), |s| {
+        oag_ui::screen::EntryClock::at(s)
+    }));
     if let Some(since) = step_seconds {
         picker.set_since_selection(since);
     }

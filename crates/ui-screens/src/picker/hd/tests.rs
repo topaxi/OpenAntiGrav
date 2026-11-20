@@ -106,7 +106,10 @@ fn the_child_screen_carries_the_parents_widgets_and_its_own_title() {
     assert_eq!(extra.logo, Some([160.0, 185.0, 512.0, 128.0]));
     assert_eq!(
         extra.logo_wipe,
-        Some(oag_ui::screen::Vwipe { seconds: 0.7 }),
+        Some(oag_ui::screen::Vwipe {
+            seconds: 0.7,
+            delay: 0.5
+        }),
         "`enebletransition` matches no key, so the class default stands"
     );
     assert_eq!(
