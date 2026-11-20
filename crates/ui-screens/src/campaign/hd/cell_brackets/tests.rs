@@ -70,8 +70,8 @@ fn a_bracket_waits_its_delay_and_opens_out_from_a_third_in() {
         delay: 0.4,
         ..bracket(true)
     };
-    assert!(draws(&[waiting.clone()], &mask, 0.3).is_empty());
-    let top_left = |since: f32| match draws(&[waiting.clone()], &mask, since).first() {
+    assert!(draws(std::slice::from_ref(&waiting), &mask, 0.3).is_empty());
+    let top_left = |since: f32| match draws(std::slice::from_ref(&waiting), &mask, since).first() {
         Some(Draw::Sprite { rect, .. }) => Some([rect[0], rect[1]]),
         _ => None,
     };
