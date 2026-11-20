@@ -3369,6 +3369,111 @@ Omega object's `+0x1d8` ring is Omega's. The 2048-mode pairs' brightness (`omega
 **Repeats:** each circuit twice, one boot apart, ring means within 2.4 %; **confidence** per row above; one binary (the 1.07 patch eboot),
 one pose per circuit (the grid before GO), HD mode only.
 
+## HD-mode frame offset: which stage carries it (2026-11-20, `omega-frame-offset`)
+
+**Claim tested:** Omega's frame-wide darkness against the original (Sebenco Climb about 18 grey under, Moa Therma 14 under) is
+carried by one named stage of the post chain (bloom, the tone curve, the exposure `E`, or the gamma and encode), not by the scene.
+**Written down before the first boot:** bloom would be a *minority* of the offset (the ring puts scene luma at 1.30 times ours on
+Sebenco with `E` pinned and `b = 0`, so a post stage can only be the remainder); it would be *the* stage if the original's frame
+with its bloom knocked out sat at least 12 grey under the original's own on Sebenco while ours' bloom stayed under 4; it would be
+*not* the stage if that difference were under 6; a poke that leaves the frame byte-identical hit a dead copy and is not a result.
+**Result: no post stage is the offset.** The tone curve and `E` are the original's law with the original's numbers on three of the
+four pairs, the encode is the shared sRGB encode, and bloom is **3.5 grey of Sebenco's 18** (ours draws none there). The rest, about
+14 grey on Sebenco, is scene radiance before the curve, the ring's 1.30 times; the closure below reproduces the frame to 1.4 grey.
+
+### Method
+
+Ours: the four pairs re-rendered from their own flags with the current tree (`408f6fe6e`, anisotropy 16x as the pairs record it)
+and, for the bloom stage, a local uncommitted switch that zeroes `BloomScale` (the render is otherwise identical; not kept). Theirs:
+the native port (`scripts/wipeout-pc-bloom-knockout.py`; seat 5, own sway, own profile, a copy of the port checkout, no audio). The
+script walks to the grid as the pair script does, freezes the port (`SIGSTOP`), scans its memory for the circuit's own `Bloom.*`
+values read from its `.EnvSettings` (`Blend factors`, and `Threshold, Offset, Scale, Power, cBrightness x3, AlphaScale` as one
+block), then alternates: poke while frozen, run 0.06 s, freeze, `grim` grab, restore, run, freeze, base grab. **`nobloom`** writes
+`Blend factors[0]` (the composite's `BloomScale`) to 0 in the env object's copy and the level array's (`+0` of a `0x108` stride):
+2 sites, held (read back after the run) on every sample counted. **`nomask`** writes `AlphaScale` to 0 in the block's guest copies
+(4 to 22 hits; some are overwritten per frame, so it is a lower bound on the mask's share). The effect is the knockout's Rec.709
+grey (sRGB values) minus the mean of its two neighbouring base grabs, as `scripts/omega-bloom-knockout-effect.py` computes it,
+because the grid camera drifts: two bases 0.06 s apart differ by 8 to 14 grey per pixel and by under 1 in the frame mean. A sample is
+dropped when its bases are identical (the port had ended: after about 14 to 30 stop and continue cycles its GPU log reads "Wrong PM4
+type 1" and the last frame stays up) or when the poke did not hold. Boots counted for bloom: Sebenco 2 (D, E), Modesto 3, Moa 2, Amphiseum 2. Not counted: two Sebenco boots that wedged on the first
+poke of an earlier script (a poke into the host's copies of the constants), one that failed on a write, one Modesto boot that raced
+another circuit, and two Sebenco boots (F, G) that ran the exposure poke (below) before the bloom knockout: the exposure answers a
+poke several frames late, so their base grabs after it are contaminated and their `nobloom` reads +6.9 and +9.3 (brighter, impossible
+for an additive term).
+
+A boot proves its circuit by the scan: the circuit's own bloom constants are found (1 `Blend factors` hit, 1 level-array hit) or
+the script finds none. One Modesto boot raced another circuit (Track Select stepped wrong) and found 0 hits: discarded.
+
+### Per stage, ours against the original, same pairs
+
+| Stage | Sebenco Climb | Modesto Heights | Moa Therma | The Amphiseum |
+| --- | --- | --- | --- | --- |
+| Frame grey, theirs / ours / signed bias | 103.8 / 85.7 / **-18.1** | 90.8 / 91.5 / +0.7 | 110.2 / 96.3 / **-14.0** | 83.5 / 87.8 / +4.3 |
+| 1. Scene luma before the curve (`LAvg`), theirs against ours | 0.229 against 0.176: **1.30** | 0.42 against 0.262: 1.60 | 0.472 against 0.385: 1.23 | 0.132 against 0.133: 0.99 |
+| 2. Exposure `E` (min, max pins), theirs / ours | 0.555 / 0.555 | **0.60 / 0.868** | 1.0 / 1.0 | 2.0 / 2.0 |
+| 3. Curve end `t1`, theirs / ours | 0.612 / 0.612 | 1.0 / 1.0 | 1.571 / 1.465 | 1.0 / 1.0 |
+| 4. Bloom the original adds (whole frame, grey) | **+3.5** sd 0.4 (boots +3.15, +3.73; 10 samples) | 0.2 to 5.1 (boots +5.1, +0.4, +0.2) | -0.8 to +1.4, about 0 | 1.4 to 4.8 (2 boots, 7 samples) |
+| 4. Bloom ours adds | **0.00** | +3.42 | +0.63 | +6.49 |
+| 5. Flat HUD yellow (position hexagon, R G B median), theirs / ours | 233 233 39 / 219 219 16 | 233 233 35 / 217 217 15 | 233 233 35 / 217 217 14 | 233 233 33 / 219 218 15 |
+
+Stages 1 to 3 are the earlier lanes' live reads (`omega-luma-read`, the ring and the object's own coefficients); stage 4 is this
+lane's. Sebenco's bloom by box (grey the knockout removes, two boots): building left **-10.7 to -11.7** (the lit Senco sign),
+snow sky -1.4, yellow floor and right wall 0.0. Moa's sky/city reads -4.1 and +2.0 on its two boots (it flips sign: drift, so no
+claim); Modesto's boxes move together with the frame mean (drift again).
+
+**The mask term carries it.** Zeroing `AlphaScale` alone (`nomask`) removes -2.4 to -3.5 of Sebenco's -3.5 (4 and 6 samples; only
+1 of 4 `full`-block copies held in boot D, so the true share is at least this), with the same boxes (building left -6.4 to -8.1). The
+threshold term (`Threshold 0.944`, `Offset 1`, `Scale 2.55`) is what ours draws; the per-material mask `AlphaScale * mask.a`
+(`AlphaScale 0.928` on Sebenco) is what it does not ([`tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md), "The mask, not
+drawn"). The mask's contribution is therefore real and sign-correct on Sebenco, but it is a 3.5 grey term, not the offset.
+
+**Closure, Sebenco (a model, confidence 60).** Ours' no-bloom frame decoded, its curve inverted (`t1 0.612`, the angles of
+`.EnvSettings`), the scene scaled by the ring's 1.30, run through the original's curve and encoded: 98.9 grey (theirs 103.8, bias
+-4.8); adding the original's measured bloom 3.5: **102.4, bias -1.4**. So scene radiance before the curve is about **13.2 of the
+18.1 grey**, bloom 3.5, residual 1.4. Moa the same way: 1.23 gives 101.9 (bias -8.3; its bloom is about 0): the gain does not close
+Moa, whose dark surfaces are the stands and stripe road, not a global factor. Modesto: the ring's 1.60 together with the original's
+lower `E` is a net 1.12 on the output, and applying it overshoots (96.5 against 90.8), because Modesto's gap is the sky alone
+(-36 against +0.5 on the wall, `omega-hd-exposure`). The Amphiseum needs no gain (0.99: 80.8 against 83.5, bloom on top 87.3 against
+ours' own 87.8).
+
+### What this settles, and what it does not
+
+1. **The tone curve and the exposure are not the stage** (confidence 85): identical numbers on Sebenco, Moa (`t1` 1.571 against
+   1.465, from the higher `LAvg`), Amphiseum; Modesto's `E` is the symptom of its dim scene.
+2. **Bloom is a stage, and it is 3.5 grey on Sebenco, not the offset** (confidence 80: two boots, ten samples, a sd of 0.4, with
+   the poke read back). The prediction written before the boots held: a minority (19 %). On Modesto, Moa and Amphiseum the knockout
+   is below this method's noise (about 1 to 2.5 grey on the whole-frame mean) and the boots disagree: **unread** there. Ours already
+   draws bloom on those three (+3.4, +0.6, +6.5), none on Sebenco (nothing in its frame reaches `Threshold` 0.944 after the curve),
+   so wiring the mask would add to Sebenco, and Amphiseum (`AlphaScale 6`, ours already 5 grey bright, ring ratio 0.99) is the
+   circuit where it must not overshoot.
+3. **The remaining offset is scene radiance before the curve** (the ring, confidence 80, stands from `omega-luma-read`), about 13
+   grey on Sebenco; it is per surface, not one gain (Moa and Modesto above).
+4. **Encode and presenter: not shown to be the stage** (confidence 60). The shared sRGB encode and the cubic are the same law in
+   ours and in the inversion that recovers 96 % of ours' own `LAvg`; the one flat-colour comparison available (the HUD, drawn after the
+   composite in both, since its yellow is 233 on every circuit in theirs and 217 to 219 in ours) shows ours' flat HUD yellow
+   **14 to 16 levels lower in red and green and 19 to 24 lower in blue**, the same across all four circuits, so it is a HUD colour
+   difference (ours 6 % darker and more saturated), not a scene stage: Amphiseum and Modesto have no scene gap and show it equally.
+   **Open, not this lane's:** the HUD yellow.
+5. **Not done:** the exposure poke (`ehalf`: `cL` at the ToneMap object's `+0x8c` written to 0.5, held on every sample) did not give
+   the frame the curve predicts (predicted grey 0.675 times the base; observed 1.02 and 1.16 times, one of twelve samples within
+   3 grey), and its effect outlives the restore by several frames (the grabs after it carry it), so the original's `E` answers
+   a write late or through a second path (the coefficient texture is
+   read back by the CPU): the curve and encode were not validated against the original by a knockout. A poke of the bright-pass
+   `Threshold` to 2 (`highthr`, which leaves only the mask) wedged the port's GPU queue twice, on the host's copies; the script now
+   writes only the guest's own range and does not run it by default.
+
+**Comparison environment.** `scripts/compare-environment.toml` sets no bloom, tone map or exposure key for Omega (only 16x
+anisotropy, 1920x1080, `shadows = "original"`), and the pair flags carry none: ours runs the title's own chain with the circuit's
+authored `Bloom.*` and `Tonemap.*`. No mismatch. **Stale text found:** `crates/omega/src/lib.rs`'s comment on `EXTRA_CANDIDATES` and
+this page's "`.EnvSettings` is read through 2048's reader" bullet say the patch's copy carries no bloom block so the chain is off in a
+race; the patch's `data08` copies of all four circuits carry `Bloom.*`, `BloomHDR.*` and `Tonemap*.*` and ours draws the chain on three
+of them (the measured +3.4, +0.6, +6.5 above). **Not run:** the HD and 2048 paths. **2048: checked, differs** (no bloom block in its
+`.envsettings`, [`tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md)); HD: not checked (`hd_bloom` is another chain).
+
+**Repeats and limits.** Sebenco two boots,
+Modesto three valid and one wrong circuit, Moa two, Amphiseum two (one had a single valid sample); one binary (1.07 eboot), HD mode,
+the grid before GO. Raw captures: `data/scratch/` of the lane, not tracked.
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's

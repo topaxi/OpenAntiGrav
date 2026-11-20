@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega]
 updated: 2026-11-20
-summary: "Omega HD-mode per-surface gap: sky, RT_snow1 and DC_Rocks wired; open: Sebenco_snow, snowfade overlays, bloom, Modesto E, shadow map"
+summary: "Omega HD-mode gap is pre-curve scene radiance, no post stage; bloom mask is 3.5 of Sebenco 18 grey; open: Sebenco_snow, snowfade, mask"
 difficulty: medium (45)
 ---
 
@@ -27,7 +27,19 @@ original's luma ring, read".
 - **Read live by `omega-crowd-live` (native port, Sebenco Climb three boots, Sol two):** the bound `constantAmbientColour`, `liveLighting0diffuse` and direction, specular, `fogColour` (HDR `0.646 1.18 1.85`, unclamped in the constant) and the lighting object's `Sky brightness 1.51` equal the file's authored values, which ours feeds (ratio 1.000; [`omega-status.md`](../../docs/formats/omega-status.md), "Crowd and scene light inputs, read live"). So the per-surface excess is not a bound light constant: it is inside the sky, far-building and fog programs and their textures. That narrows the first step below to reading those programs, not their inputs.
 - Moa's stands belong to the queued crowd-lighting lane (its Sol counterpart is closed: inputs equal ours').
 
+- **Measured by `omega-frame-offset` (native port, bloom knocked out live, [`omega-status.md`](../../docs/formats/omega-status.md), "HD-mode frame offset: which stage carries it"):** no post stage
+  (bloom, curve, `E`, encode) is the frame-wide offset. The original's bloom adds **3.5 grey** to Sebenco (2 boots, 10 samples, sd 0.4), almost all of it the per-material
+  mask term `AlphaScale * mask.a` that ours does not draw (ours draws 0.00 there); the lit Senco sign alone is 11 grey. Closure on Sebenco: ours' scene scaled by the ring's
+  1.30 through the original's curve plus that bloom is 102.4 grey against theirs 103.8, so about 13 of the 18 grey is scene radiance before the curve and 3.5 is bloom.
+  Moa, Modesto and Amphiseum read below the method's noise (1 to 2.5 grey); do not wire the mask against Amphiseum (ours already +4.3).
+
 ## Next Steps
+
+0. **Bloom mask (small, 3.5 grey on Sebenco):** read `exp mrt1`'s second half off each material's program (`oag_rcs::gcn`, recipe in
+   [`tonemap.md`](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md), "The mask, not drawn") and add `AlphaScale * mask` to `fs_bright`; acceptance is the original's
+   knockout numbers above (Sebenco +3.5, building-left box +11, snow sky +1.4, floor and wall 0) with Amphiseum not rising. The knockout script
+   (`scripts/wipeout-pc-bloom-knockout.py`, `scripts/omega-bloom-knockout-effect.py`) gives the acceptance numbers for any circuit; the `E` write (`cL`) answers late and
+   contaminates later grabs, `highthr` wedges the port: do not use them.
 
 1. **DONE 2026-11-20 (`omega-sky-program`)**: the sky dome is `SkyBrightness * texture` and is wired for Omega
    (`Looks::sky_brightness`; [`omega-status.md`](../../docs/formats/omega-status.md), "The sky dome's pixel program"). Sky-only pixels,
