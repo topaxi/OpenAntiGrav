@@ -604,14 +604,7 @@ new_run = "clear-medals"      # "clear-medals" (default) | "keep-medals"
 choice_screen = "reward"      # optional: an [[extension.screen]] id, opened after a finish that offered
 race_again = true             # false: the results page offers no RACE AGAIN for this campaign's events
 
-[[run.stat]]                  # capability 5, section 8; at most 8
-id = "engine"
-string_id = "STAT_ENGINE"     # strings/<language>.toml of the mod
-offset = 0                    # byte offset into the run state
-kind = "u8"                   # u8 | i8 | u16
-max = 10                      # the value that fills a bar, in the title's rating units (0 to 10)
-show = "bonus"                # "row" | "bonus"
-bonus_of = "thrust"           # speed | thrust | handling | shield | firepower | length
+# Stats are reported by the guest at race-end (section 8.2); the campaign file declares none.
 ```
 
 **Binding.** The start description carries the campaign and event keys, and the
@@ -718,9 +711,22 @@ UI side is not a function of the seed the replay carries.
 
 ### 8.2 Mod-defined stats
 
-The host reads the declared `[[run.stat]]` values out of the run bytes, at the
-declared offsets, and draws them. It interprets nothing else: what a stat means is
-the guest's business.
+**Reported by the guest (maintainer, 2026-11-20;
+[progression-challenge.md](progression-challenge.md), objection 15).** `race-end`'s
+reply and the choice screen's reply may carry up to 8 rows:
+
+```rust
+// crates/ext-abi, a race-end reply record. Proposed.
+pub struct Stat { pub string_id: u32 /* channel_key of the mod's string id */, pub value: u16, pub max: u16 }
+pub const MAX_RUN_STATS: usize = 8;
+```
+
+The host keeps them beside the run as a display cache and draws them, with the mod's
+strings, on pages it owns for the campaign: a stats block on the campaign page, which
+also covers an event with a preset craft (question 10). It reads nothing out of the run
+bytes, so the byte layout lives in the module alone, and a stale cache shows the last
+true values. Rows on a title's Ship Select are a **follow-up**: what is below describes
+that panel and the two styles a follow-up would draw there.
 
 **Where the title shows its own bars.** The bars are authored ratings, not derived
 from handling. Pulse authors `<FE speed thrust handling shield>` on each team and
@@ -737,7 +743,7 @@ authored sets disagree for the same craft (2048's Feisar Fighter is speed 5 in t
 plugin and 3 in `HandlingStats`), so a title bar is **never recomputed from scaled
 handling**.
 
-**Two display styles:**
+**Two display styles (Ship Select follow-up):**
 
 - `show = "row"`: an extra labelled row under the title's bars, in the title's row
   style (name, ten segments, number).
@@ -746,9 +752,9 @@ handling**.
   `firepower` and `length` exist on 2048 and Omega only; on another title the stat
   is dropped with a load-report line. The authored base bar is untouched.
 
-**The narrowing.** README section 3 and ADR-0080 say a disc screen never gains
-behaviour a mod invented, and Ship Select is a disc screen. ADR-0094 narrows this by
-one allowance: **a campaign that declares `[[run.stat]]` adds display-only rows and
+**The narrowing (follow-up, not decided).** README section 3 and ADR-0080 say a disc screen never gains
+behaviour a mod invented, and Ship Select is a disc screen. The follow-up would narrow
+this by one allowance: **a campaign that declares `[[run.stat]]` adds display-only rows and
 bonus segments to the stat panel of the Ship Select it launches, for that campaign
 only.** No input, no new page, no change to what the screen does. Without the
 allowance the stats could live only on a mod screen's canvas, which means the player
@@ -890,6 +896,8 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    Options: the manifest names a gate (`never`, `turbo`, `under-fire`), or the AI never
    holds mod pickups in a run campaign.
 10. **Which page shows stats when Team Selection is skipped** (preset craft).
+    **Settled (maintainer, 2026-11-20):** the campaign page's stats block, which every
+    event has (section 8.2).
 11. **Slots beyond the person's.** **Settled (maintainer, 2026-11-19): allowed.**
     `set-modifier` accepts any grid slot, so a campaign may scale the AI's craft too
     (README section 3: a third-party mod is the player's choice). **Settled

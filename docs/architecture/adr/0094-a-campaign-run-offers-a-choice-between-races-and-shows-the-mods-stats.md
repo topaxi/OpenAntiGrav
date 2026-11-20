@@ -12,15 +12,13 @@ frontend world. Nothing is built. **This ADR stays editable until it is merged i
 [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md)
 proposed a host-drawn offer page with a third sim export and guest-reported stat rows.
 Objection 14 is answered: the choice stays a mod screen (decision 1). Objection 15 is
-open.
+answered: the guest reports its stat rows, Ship Select rows follow later (decision 2).
 
-**Would narrow**, if accepted as drafted:
-
-- the "a disc screen never gains behaviour a mod invented" clause of
-  [ADR-0066](0066-the-menu-is-the-disc-plus-mods.md) decision 4, ADR-0079 decision 6
-  and [ADR-0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) decision 2
-  (decision 2);
-- ADR-0080 decision 6, "the only output is one blob" of a screen (decision 1).
+**Narrows** ADR-0080 decision 6, "the only output is one blob" of a screen
+([ADR-0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md); decision 1).
+It does **not** yet narrow "a disc screen never gains behaviour a mod invented"
+([ADR-0066](0066-the-menu-is-the-disc-plus-mods.md) decision 4, ADR-0079 decision 6,
+ADR-0080 decision 2): rows on a title's Ship Select are a follow-up (decision 2).
 
 **Builds on** ADR-0093 (the run, its seed and ordinal, `race-end`, the commit on exit)
 and ADR-0080 (the frontend world, itself *Proposed*). The surface is
@@ -45,16 +43,19 @@ world that would host both is a Proposed design, and nothing of it is built.
    2026-11-19). **Settled (maintainer, 2026-11-20):** the choice is a mod screen as
    drafted, not a host-drawn page, so a campaign owns its reward screen's art and
    layout; it waits for the frontend world.
-2. **Stats.** `[[run.stat]]` rows name a byte offset, a kind and a style in the run
-   bytes. The host draws them and interprets nothing else. A campaign that declares
-   them may add **display-only** rows and bonus segments to the stat panel of the
-   Ship Select it launches, for that campaign only (the one allowance that narrows
-   "a disc screen gains no mod behaviour"). A title bar is never recomputed from scaled
-   handling.
+2. **Stats, reported by the guest** (maintainer, 2026-11-20). `race-end`'s reply and
+   the choice screen's reply may carry up to 8 rows `stat{string id, value, max}`.
+   The host stores them beside the run as a display cache and draws them on pages it
+   owns for the campaign: a stats block on the campaign page, which also serves an
+   event with a preset craft. The host reads no offsets in the run bytes, and a stale
+   cache shows the last true values. A title bar is never recomputed from scaled
+   handling. `race-end` is ADR-0093's sim export, so the rows on the campaign page
+   need no frontend world. **Follow-up:** display-only rows and bonus segments on the
+   title's own Ship Select for that campaign, which would narrow "a disc screen gains
+   no mod behaviour"; decided when it is built.
 
-**Not decided here:** guest-reported stat rows (objection 15), the page that shows stats when the craft
-is preset (`progression.md` section 12, question 10), and ADR-0080's own fate
-(question 15).
+**Not decided here:** the Ship Select rows (decision 2's follow-up) and ADR-0080's own
+fate (`progression.md` section 12, question 15).
 
 ## Alternatives considered
 
@@ -70,7 +71,11 @@ is preset (`progression.md` section 12, question 10), and ADR-0080's own fate
 - **Stats on a mod screen's canvas only.** The player would see the craft and the
   title's bars on one screen and the mod's stats on another, and the canvas would need
   disc data a mod may not yet read (README open question 15). Rejected as the only
-  path; kept as the fallback if the maintainer refuses the allowance in decision 2.
+  path.
+- **`[[run.stat]]` rows naming byte offsets in the run bytes** (the first draft). The
+  layout would live in the rules module, the screen and the campaign file, and a mod
+  update that moves a field draws wrong numbers until the next write (challenge
+  objection 15). Rejected for guest-reported rows.
 
 ## Consequences
 
@@ -79,7 +84,9 @@ choosing its reward before anything here is built.
 
 **Bad.**
 
-- **Blocked on ADR-0080 as drafted.** If the frontend world is rejected, both
-  decisions have no home unless objections 14 and 15 are taken.
-- **Three screen integrations for the stats** (Pulse's Team Selection, HD's and
-  Omega's Ship Select), and a fourth place for preset craft.
+- **The choice is blocked on ADR-0080.** If the frontend world is rejected, decision 1
+  has no home. The stats on the campaign page do not wait for it.
+- **Stats are not beside the craft yet.** Until the Ship Select follow-up, the player
+  sees the mod's numbers on the campaign page and the reward screen, and the title's
+  bars on Ship Select. The follow-up costs three screen integrations (Pulse's Team
+  Selection, HD's and Omega's Ship Select).

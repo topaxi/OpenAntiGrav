@@ -424,6 +424,11 @@ beside the run as a display cache and draws them on pages it owns for the campai
 values, never misread bytes. Defer rows on a title's Ship Select until a campaign
 exists that needs them.
 
+**Answered by the maintainer (2026-11-20): the guest reports rows now, Ship Select
+rows as a follow-up.** Up to 8 `stat` rows from `race-end` and the choice screen,
+cached beside the run, drawn on the campaign page (ADR-0094 decision 2, progression.md
+section 8.2). Nit 24 falls with it.
+
 ### 16. The SDK draft does not match `crates/ext`
 
 **Evidence, each against `crates/ext/src/lib.rs` or `reply.rs`.**
