@@ -353,6 +353,78 @@ pub fn legend(atlas: &Atlas, scale: f32, lines: &[Line]) -> Vec<Hint> {
     out
 }
 
+/// Where a wrapped legend is drawn: `Draw::Text { x, y, scale, wrap_width: Some(width), .. }`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wrapped {
+    pub x: f32,
+    pub y: f32,
+    pub scale: f32,
+    pub width: f32,
+}
+
+/// The hints of a legend drawn as one wrapped `Draw::Text` of [`line_text`]: the renderer breaks
+/// it at word boundaries ([`crate::font::wrap`]), so an entry's words are found on the lines they
+/// fall on, and an entry broken across two lines is a rectangle on each.
+#[must_use]
+pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry]) -> Vec<Hint> {
+    let text = line_text(entries);
+    // The entry each word belongs to, in the order `wrap` reads them.
+    let owner: Vec<usize> = entries
+        .iter()
+        .enumerate()
+        .flat_map(|(index, entry)| {
+            std::iter::repeat_n(index, entry.text.split_whitespace().count())
+        })
+        .collect();
+    let line_height = atlas.line_height * at.scale;
+    let mut out = Vec::new();
+    let mut word = 0;
+    for (row, line) in crate::font::wrap(atlas, &text, at.scale, at.width)
+        .iter()
+        .enumerate()
+    {
+        let mut pen = 0.0;
+        let mut from = None;
+        let mut last = (0.0, 0.0);
+        let flush = |entry: usize, left: f32, right: f32, out: &mut Vec<Hint>| {
+            if let Some(press) = entries[entry].press {
+                out.push(Hint {
+                    press,
+                    rect: [
+                        at.x + left,
+                        at.y + row as f32 * line_height,
+                        right - left,
+                        line_height,
+                    ],
+                });
+            }
+        };
+        for piece in line.split(' ') {
+            let width = advance(atlas, piece) * at.scale;
+            let space = advance(atlas, " ") * at.scale;
+            let entry = owner[word];
+            match from {
+                Some((current, _)) if current != entry => {
+                    flush(current, last.0, last.1, &mut out);
+                    from = Some((entry, pen));
+                    last = (pen, pen + width);
+                }
+                None => {
+                    from = Some((entry, pen));
+                    last = (pen, pen + width);
+                }
+                Some(_) => last.1 = pen + width,
+            }
+            pen += width + space;
+            word += 1;
+        }
+        if let Some((current, _)) = from {
+            flush(current, last.0, last.1, &mut out);
+        }
+    }
+    out
+}
+
 /// The press of the first hint under `at`.
 #[must_use]
 pub fn hit(hints: &[Hint], at: (f32, f32)) -> Option<Press> {

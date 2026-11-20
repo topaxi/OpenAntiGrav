@@ -206,3 +206,36 @@ fn a_centred_legend_line_is_centred_as_a_whole() {
     assert!((hints[0].rect[0] - (200.0 - half / 2.0)).abs() < 0.01);
     assert!((hints[0].rect[2] - half).abs() < 0.01);
 }
+
+#[test]
+fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
+    let atlas = Atlas::build();
+    let entries = [
+        Entry::button(Button::Cross, "X TYPE"),
+        Entry::button(Button::Circle, "Y CANCEL").after("   "),
+    ];
+    let place = |width| Wrapped {
+        x: 10.0,
+        y: 50.0,
+        scale: 1.0,
+        width,
+    };
+    let one = legend_wrapped(&atlas, place(10_000.0), &entries);
+    assert_eq!(one.len(), 2);
+    // `wrap` joins the words with one space, as the renderer draws them.
+    assert_eq!(one[0].rect[0], 10.0);
+    assert_eq!(one[0].rect[1], 50.0);
+    assert!((one[0].rect[2] - width("X TYPE")).abs() < 0.01);
+    assert_eq!(one[1].rect[1], 50.0);
+    assert!((one[1].rect[0] - (10.0 + width("X TYPE "))).abs() < 0.01);
+
+    // Narrow enough that the second entry wraps below the first.
+    let narrow = legend_wrapped(&atlas, place(width("X TYPE") + 2.0), &entries);
+    let cancel: Vec<_> = narrow
+        .iter()
+        .filter(|hint| hint.press == Press::Button(Button::Circle))
+        .collect();
+    assert!(!cancel.is_empty());
+    assert!(cancel.iter().all(|hint| hint.rect[1] > 50.0), "{narrow:?}");
+    assert_eq!(cancel[0].rect[0], 10.0);
+}

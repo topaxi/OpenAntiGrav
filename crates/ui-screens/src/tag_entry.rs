@@ -465,6 +465,26 @@ impl TagEntry {
         Outcome::Pending
     }
 
+    /// The hint line, as [`Self::draw`] draws it.
+    #[must_use]
+    pub fn hint(&self) -> &str {
+        &self.labels.hint
+    }
+
+    /// Where [`Self::draw`] puts the hint line on `skin`, which the hints of its entries are
+    /// laid over (`oag_ui::hints::legend_wrapped`). **Chosen, not measured** - near the bottom of
+    /// the panel, the shape `crate::prompt::Keyboard`'s own hint takes relative to its.
+    #[must_use]
+    pub fn hint_place(&self, skin: &oag_ui::menu::Skin) -> oag_ui::hints::Wrapped {
+        let (screen_w, screen_h) = skin.space().size;
+        oag_ui::hints::Wrapped {
+            x: self.geometry.tag_input.x,
+            y: screen_h * 0.70,
+            scale: skin.row_scale() * 0.6,
+            width: screen_w * 0.84 - self.geometry.tag_input.x,
+        }
+    }
+
     /// What this looks like, over whatever is already on screen - every
     /// position the disc's own [`Geometry`], every string this project's own
     /// [`Labels`].
@@ -573,18 +593,16 @@ impl TagEntry {
         }
 
         if !self.labels.hint.is_empty() {
+            let at = self.hint_place(skin);
             out.push(Draw::Text {
-                x: self.geometry.tag_input.x,
-                // Chosen, not measured - near the bottom of the panel, the
-                // same shape `crate::prompt::Keyboard`'s own hint takes
-                // relative to its.
-                y: screen_h * 0.70,
-                scale: skin.row_scale() * 0.6,
+                x: at.x,
+                y: at.y,
+                scale: at.scale,
                 color: [1.0, 1.0, 1.0, 0.7],
                 border: None,
                 align: Align::Left,
                 text: self.labels.hint.clone(),
-                wrap_width: Some(screen_w * 0.84 - self.geometry.tag_input.x),
+                wrap_width: Some(at.width),
             });
         }
 

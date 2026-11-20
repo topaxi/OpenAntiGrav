@@ -116,6 +116,31 @@ impl Prompt {
         }
     }
 
+    /// The hints of the line under the keys: the entries that name a button are click targets,
+    /// laid over the wrapped line as the renderer breaks it. None for a yes/no, which has none.
+    pub(crate) fn hints(
+        &self,
+        skin: &Skin,
+        atlas: &oag_ui::font::Atlas,
+        back: crate::input::Button,
+    ) -> Vec<oag_ui::hints::Hint> {
+        let (line, at, presses) = match &self.model {
+            Model::Keyboard(keyboard) => (
+                keyboard.hint(),
+                Keyboard::hint_place(skin),
+                crate::app::hints::keyboard_hint_presses(back),
+            ),
+            Model::TagEntry(entry) => (
+                entry.hint(),
+                entry.hint_place(skin),
+                crate::app::hints::tag_entry_hint_presses(back),
+            ),
+            Model::Confirm(_) => return Vec::new(),
+        };
+        let entries = crate::app::hints::legend_entries(line, &presses);
+        oag_ui::hints::legend_wrapped(atlas, at, &entries)
+    }
+
     /// Whether a desk key may type `c` into this prompt: the grid's own alphabet, so the two
     /// input paths cannot build different text.
     pub(crate) fn accepts(&self, c: char) -> bool {
@@ -236,4 +261,55 @@ pub(crate) struct Finished {
     pub(crate) purpose: Purpose,
     /// What the keyboard held, or empty for a confirm.
     pub(crate) text: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::Button;
+    use oag_ui::hints::Press;
+    use oag_ui_screens::prompt::Labels;
+
+    /// A keyboard's hint line is a click target for each key it names: type, delete, accept and
+    /// the Back button it was handed, and a yes/no has none.
+    #[test]
+    fn a_keyboard_prompt_offers_its_hint_line_as_clicks() {
+        let skin = Skin::new(
+            oag_pulse::FRONT_END.menu.unwrap(),
+            oag_display::space::Space::PSP,
+            22.0,
+        );
+        let atlas = oag_ui::font::builtin();
+        let labels = Labels {
+            title: "NAME".into(),
+            delete: "DEL".into(),
+            accept: "OK".into(),
+            hint: crate::app::hints::keyboard_hint(None, Button::Triangle),
+        };
+        let prompt = Prompt::typing(
+            Purpose::PlayerName,
+            Keyboard::with_keys(labels, "", 8, "ABC"),
+        );
+        let hints = prompt.hints(&skin, atlas, Button::Triangle);
+        let presses: Vec<_> = hints.iter().map(|hint| hint.press).collect();
+        for button in [
+            Button::Cross,
+            Button::Square,
+            Button::Start,
+            Button::Triangle,
+        ] {
+            assert!(presses.contains(&Press::Button(button)), "{button:?}");
+        }
+        assert!(!presses.contains(&Press::Button(Button::Circle)));
+        let yes_no = Prompt::asking(
+            Purpose::DeletePilot { name: "X".into() },
+            Confirm::new(oag_ui_screens::prompt::ConfirmLabels {
+                title: "DELETE".into(),
+                message: "SURE?".into(),
+                yes: "YES".into(),
+                no: "NO".into(),
+            }),
+        );
+        assert!(yes_no.hints(&skin, atlas, Button::Circle).is_empty());
+    }
 }

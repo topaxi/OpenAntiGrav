@@ -67,8 +67,15 @@ impl super::Session {
                 stage.frontend.space(),
                 stage.renderer.inset(),
             ),
+            // A prompt takes the whole input, so what is under its scrim is not a target: a click
+            // on the page's footer would press that button into the keyboard.
             Stage::Menu(stage) => (
-                Cow::Borrowed(stage.renderer.hints()),
+                match &stage.prompt {
+                    Some(prompt) => {
+                        Cow::Owned(prompt.hints(&stage.skin, &stage.text_atlas, self.roles().back))
+                    }
+                    None => Cow::Borrowed(stage.renderer.hints()),
+                },
                 stage.skin.space(),
                 stage.renderer.inset(),
             ),

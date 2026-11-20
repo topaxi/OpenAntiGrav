@@ -530,3 +530,28 @@ fn a_sixty_four_digit_certificate_is_drawn_on_two_lines_so_it_fits_the_panel() {
     let address = Keyboard::with_keys(Labels::default(), "race.example.org", 40, ADDRESS_KEYS);
     assert_eq!(buffer_texts(&address), ["race.example.org_"]);
 }
+
+/// The hint line is drawn where `hint_place` says, wrapped to its width: the hints laid over it
+/// (`oag_ui::hints::legend_wrapped`) sit on the words that are drawn.
+#[test]
+fn the_hint_line_is_drawn_where_hint_place_says() {
+    let mut keyboard = keyboard("");
+    keyboard.labels.hint = "CROSS TYPE   START ACCEPT".into();
+    let skin = skin();
+    let at = Keyboard::hint_place(&skin);
+    let drawn = keyboard
+        .draw(&skin)
+        .into_iter()
+        .find_map(|draw| match draw {
+            Draw::Text {
+                x,
+                y,
+                scale,
+                text,
+                wrap_width: Some(width),
+                ..
+            } if text == "CROSS TYPE   START ACCEPT" => Some((x, y, scale, width)),
+            _ => None,
+        });
+    assert_eq!(drawn, Some((at.x, at.y, at.scale, at.width)));
+}

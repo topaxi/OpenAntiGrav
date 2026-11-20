@@ -99,6 +99,42 @@ pub(crate) fn tag_entry_hint(strings: Option<&StringTable>, back: Button) -> Str
         .replace("%s", &button_word(strings, back).to_uppercase())
 }
 
+/// The entries of a hint line the strings word as `KEY WORD   KEY WORD   ...` (three spaces between
+/// entries, in every language), each paired with the press the entry names, by position. A line
+/// with more entries than presses leaves the rest words only.
+pub(crate) fn legend_entries(
+    line: &str,
+    presses: &[Option<oag_ui::hints::Press>],
+) -> Vec<oag_ui::hints::Entry> {
+    line.split("   ")
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .enumerate()
+        .map(|(index, entry)| {
+            let press = presses.get(index).copied().flatten();
+            oag_ui::hints::Entry::new(press, entry).after(if index == 0 { "" } else { "   " })
+        })
+        .collect()
+}
+
+/// The presses of [`keyboard_hint`]'s entries: type, delete, accept, cancel.
+pub(crate) fn keyboard_hint_presses(back: Button) -> [Option<oag_ui::hints::Press>; 4] {
+    use oag_ui::hints::Press::Button as B;
+    [
+        Some(B(Button::Cross)),
+        Some(B(Button::Square)),
+        Some(B(Button::Start)),
+        Some(B(back)),
+    ]
+}
+
+/// The presses of [`tag_entry_hint`]'s entries: cell and glyph name directions (no one control),
+/// then accept, then cancel.
+pub(crate) fn tag_entry_hint_presses(back: Button) -> [Option<oag_ui::hints::Press>; 4] {
+    use oag_ui::hints::Press::Button as B;
+    [None, None, Some(B(Button::Cross)), Some(B(back))]
+}
+
 /// And once a race has taken it over.
 pub(crate) fn race_title(strings: &StringTable) -> String {
     resolved(strings, "OAG_HINTS_RACE_TITLE", "OpenAntiGrav - race")
@@ -222,6 +258,34 @@ mod tests {
             let word = back.to_string().to_uppercase();
             assert!(keyboard_hint(none, back).ends_with(&format!("{word} CANCEL")));
             assert!(tag_entry_hint(none, back).ends_with(&format!("{word} CANCEL")));
+        }
+    }
+
+    /// Each language's keyboard line splits into four entries, and the ones that name a control are
+    /// the presses of that control (the cell and glyph entries of the tag row name no one).
+    #[test]
+    fn the_keyboard_and_tag_hint_entries_carry_the_presses_of_their_keys() {
+        use oag_ui::hints::Press::Button as B;
+        let presses = |entries: &[oag_ui::hints::Entry]| {
+            entries.iter().map(|entry| entry.press).collect::<Vec<_>>()
+        };
+        for back in [Button::Circle, Button::Triangle] {
+            let keyboard = legend_entries(&keyboard_hint(None, back), &keyboard_hint_presses(back));
+            assert_eq!(
+                presses(&keyboard),
+                [
+                    Some(B(Button::Cross)),
+                    Some(B(Button::Square)),
+                    Some(B(Button::Start)),
+                    Some(B(back))
+                ]
+            );
+            assert!(keyboard[3].text.ends_with("CANCEL"));
+            let tag = legend_entries(&tag_entry_hint(None, back), &tag_entry_hint_presses(back));
+            assert_eq!(
+                presses(&tag),
+                [None, None, Some(B(Button::Cross)), Some(B(back))]
+            );
         }
     }
 

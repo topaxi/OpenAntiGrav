@@ -419,3 +419,33 @@ fn pure_back_is_the_triangle_and_its_footer_hint_presses_the_resolved_button() {
         );
     }
 }
+
+/// The name prompt's hint line (Pulse's own `TagInput` row) is a click target: `CROSS/START
+/// ACCEPT` is the cross and the Back word cancels, on the Back button the pressing resolved to.
+/// (The keyboard grid's own line, which adds square and start, is
+/// `app::overlay::tests::a_keyboard_prompt_offers_its_hint_line_as_clicks`.)
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and pulse-ps2-eu.chd"]
+fn the_name_prompts_hint_line_accepts_and_cancels() {
+    for (image, original, tag) in [
+        (psp(), "circle", "name-psp"),
+        (ps2(), "triangle", "name-ps2"),
+    ] {
+        let Some(image) = image else {
+            return;
+        };
+        let (back, _) = buttons(original, "original");
+        let profile = Profile::fresh(tag);
+        profile.drive(
+            &image,
+            &[],
+            &format!(
+                "boot; until stage=menu within 3000; select options; press cross; ticks 30; \
+                 select edit_player_name; press cross; ticks 30; draw; expect screen=prompt; \
+                 expect hints={back}; expect hints=cross; click hint {back}; ticks 30; \
+                 expect screen=page"
+            ),
+            "name.jsonl",
+        );
+    }
+}
