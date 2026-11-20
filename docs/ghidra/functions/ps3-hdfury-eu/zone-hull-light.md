@@ -102,9 +102,10 @@ both live values against the disc's two files.
 | original | | | `(73.0, 92.6, 104.8)` |
 
 Every other HD race pair (the thirteen circuits, `talons-assegai-c1`,
-`hd-race/talons-pack`) keeps its score; the five checked pixel by pixel against the
-base build (`anulpha-pass`, `modesto-heights`, and the three Zone pairs below) differ in
-0 pixels.
+`hd-race/talons-pack`) keeps its score. Pixel for pixel against a build of `main` at
+`9cc77d9b6` (after the Omega Zone ladder merged): `hd/vineta-k`, `hd/anulpha-pass`,
+`omega/zone-vineta-k-z5`, `omega/zone-capital-reach-2048-z5`,
+`2048-vita/zone-dlc-vineta-k-z5` and `2048-vita/zone-altima-z5` differ in 0 pixels.
 
 ## Still open: the hull is about half as bright
 
@@ -134,8 +135,9 @@ fit, not a law, and not wired. Next reads, in order:
   hull's ambient never reaches `probe_tint`, and Omega carries no `ZoneFrame`. Where its
   Zone hull's light comes from is unread. `omega/zone-vineta-k-z5` and `omega/zone-capital-reach-2048-z5` render
   pixel-identical to the base build.
-- **2048: checked, differs.** No `.probes` ships and no `Track.Base Colour Highlight`
-  key is in its table (`ZoneMode2048.effectSettings` reauthors the vocabulary);
+- **2048: checked, differs.** No `Track.Base Colour Highlight` key is in its table
+  (`ZoneMode2048.effectSettings` reauthors the vocabulary,
+  [effectsettings.md](../../../formats/effectsettings.md)) and 2048 carries no `ZoneFrame`;
   `2048-vita/zone-dlc-vineta-k-z5` renders pixel-identical to the base build.
 
 ## Reproduce

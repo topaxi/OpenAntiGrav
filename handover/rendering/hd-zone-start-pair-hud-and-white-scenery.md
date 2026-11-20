@@ -58,7 +58,7 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
 ## Next Steps
 
 1. After this lands, re-render the pair from the main checkout:
-   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (7.42
+   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (7.27
    expected).
 2. Read the countdown timer beside the pair's grab and re-time ours'
    `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
