@@ -248,6 +248,7 @@ pub fn read(
         scale: [grid[0] / super::PSP_GRID[0], grid[1] / super::PSP_GRID[1]],
         hd: Some(Box::new(extra)),
         hd_track: None,
+        help: None,
         ready: String::new(),
         name_scale: 1.0,
         entry_pitch: None,

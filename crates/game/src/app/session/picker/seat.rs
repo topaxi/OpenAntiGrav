@@ -278,7 +278,7 @@ impl Session {
     /// An event of the second seat on the shared page.
     pub(crate) fn handle_partner(&mut self, event: oag_ui_screens::picker::Event) {
         use oag_ui_screens::picker::Event;
-        self.play_navs([event.nav()]);
+        self.play_navs(event.nav());
         match event {
             Event::Moved | Event::VariantChanged => {
                 if let Stage::Menu(stage) = &mut self.stage
@@ -287,6 +287,8 @@ impl Session {
                     partner.refresh_preview(&self.gpu);
                 }
             }
+            // A shared page's halves author no Help.
+            Event::Help => {}
             Event::Confirmed => self.confirm_shared(true),
             Event::Back => {
                 let locked = matches!(&self.stage, Stage::Menu(stage)

@@ -559,7 +559,13 @@ impl MenuStage {
                 .chrome
                 .extend(footer::hd_nav(&self.nav_legend, picker));
             let layers = crate::campaign::gate_glow(self.frontend_glow, layers);
-            let (flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
+            let (mut flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
+            // The screen's Help, over the page, its footer and the dimming it brings; the 3D
+            // preview is not drawn under it (below).
+            let help_open = picker.model.help_open();
+            if help_open && let Some(help) = &picker.layout.help {
+                flat.extend(help.draw(&|src| picker.placed(src), &self.text_atlas));
+            }
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
@@ -585,14 +591,16 @@ impl MenuStage {
                 viewport,
                 footer::resolve_clip(None, ticker_clip, frozen_race),
             );
-            picker.draw_preview(
-                gpu,
-                encoder,
-                view,
-                viewport,
-                target_size,
-                (self.skin.space(), self.renderer.inset()),
-            );
+            if !help_open {
+                picker.draw_preview(
+                    gpu,
+                    encoder,
+                    view,
+                    viewport,
+                    target_size,
+                    (self.skin.space(), self.renderer.inset()),
+                );
+            }
             if let Some(partner) = self.partner.as_mut() {
                 partner.draw_preview(
                     gpu,

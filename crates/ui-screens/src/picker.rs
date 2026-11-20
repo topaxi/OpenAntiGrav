@@ -35,6 +35,7 @@ use oag_ui::screen::{EntryClock, Fill, Image, Screen, Screens, Text};
 mod body;
 pub mod borrow;
 pub mod hd;
+pub mod help;
 pub mod pointer;
 pub mod slideshow;
 mod split;
@@ -156,6 +157,8 @@ pub enum Event {
     Confirmed,
     /// The player backed out.
     Back,
+    /// The screen's Help overlay opened or closed ([`help::Help`]).
+    Help,
 }
 
 impl Event {
@@ -163,13 +166,15 @@ impl Event {
     /// (`UPDOWN` on a move, `LEFTRIGHT` on a livery step, `ACCEPT`, `DECLINE`),
     /// per `docs/ghidra/functions/psp-pulse-usa/menu-sounds.md`.
     #[must_use]
-    pub fn nav(self) -> oag_ui::menu::nav::Nav {
+    pub fn nav(self) -> Option<oag_ui::menu::nav::Nav> {
         use oag_ui::menu::nav::Nav;
         match self {
-            Self::Moved => Nav::Moved(None),
-            Self::VariantChanged => Nav::Stepped(None),
-            Self::Confirmed => Nav::Accept,
-            Self::Back => Nav::Decline,
+            Self::Moved => Some(Nav::Moved(None)),
+            Self::VariantChanged => Some(Nav::Stepped(None)),
+            Self::Confirmed => Some(Nav::Accept),
+            Self::Back => Some(Nav::Decline),
+            // `Cell Help` opening has no cue recovered, and the pickers' Help is the same widget.
+            Self::Help => None,
         }
     }
 }
@@ -213,12 +218,31 @@ pub struct Picker {
     locked: bool,
     /// Whether the livery is fixed by the mode - see [`Self::with_fixed_livery`].
     fixed_livery: bool,
+    /// Whether the screen has a Help overlay to open - see [`Self::set_help_available`].
+    help_available: bool,
+    /// Whether the Help overlay is up. It takes the tick whole.
+    help_open: bool,
 }
 
 impl Picker {
     /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
     pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
         self.roles = roles;
+    }
+
+    /// Says whether the screen authors a Help overlay ([`Layout::help`]): only then does
+    /// `roles.help` open one. Closes an overlay that is up when it is taken away.
+    pub fn set_help_available(&mut self, available: bool) {
+        self.help_available = available;
+        if !available {
+            self.help_open = false;
+        }
+    }
+
+    /// Whether the Help overlay is up.
+    #[must_use]
+    pub fn help_open(&self) -> bool {
+        self.help_open
     }
 
     /// A picker over `entries`, opened on `selected` when that id is one of
@@ -249,6 +273,8 @@ impl Picker {
             grabbed: true,
             locked: false,
             fixed_livery: false,
+            help_available: false,
+            help_open: false,
         };
         out.variant = variant
             .and_then(|id| out.variants().iter().position(|(v, _)| v == id))
@@ -446,14 +472,40 @@ impl Picker {
     /// **Up/down wrap**, which is measured: the original's three-entry track
     /// list walked round with `down` alone lands back at `1/3` on the fourth
     /// press (`race-setup.md`). Left/right move the livery and are inert on
-    /// a circuit, where the original opens `Track Help` instead - a screen
-    /// this build does not have. Cross or Start confirms; Circle backs out.
+    /// a circuit, where the original opens `Track Help` instead
+    /// ([`help::Help`]). Cross or Start confirms; Back backs out; Help opens the overlay.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
         if self.locked {
             if self.roles.take_back(input) {
                 out.push(Event::Back);
             }
+            return out;
+        }
+        if self.help_open {
+            // The overlay closes on any of cross, triangle and circle: its own three `Redirect`s,
+            // the same on both pressings. Back is one of them, so it closes the overlay and does
+            // not leave the screen; the directions do nothing under it.
+            let closed = [
+                self.roles.help,
+                Button::Cross,
+                Button::Triangle,
+                Button::Circle,
+            ]
+            .into_iter()
+            .fold(false, |closed, button| input.take(button) | closed);
+            if closed {
+                self.help_open = false;
+                out.push(Event::Help);
+            }
+            for direction in [Button::Up, Button::Down, Button::Left, Button::Right] {
+                input.take(direction);
+            }
+            return out;
+        }
+        if self.help_available && self.roles.take_help(input) {
+            self.help_open = true;
+            out.push(Event::Help);
             return out;
         }
         let (next, previous, next_variant, previous_variant) = if self.across {
@@ -556,6 +608,9 @@ pub struct Layout {
     /// [`hd::track::read`] built - `None` on every other. The track
     /// screen's counterpart to [`Self::hd`]; at most one is set.
     pub hd_track: Option<Box<hd::track::TrackScreen>>,
+    /// The screen's Help overlay, read off the `Redirect` it authors to it on a face button -
+    /// `None` on a layout that authors none ([`help::Help`]).
+    pub help: Option<help::Help>,
     /// What a seat that has confirmed on a split screen's shared Ship Select
     /// shows under its craft - empty draws nothing. Set by the composition
     /// root, which owns the string table; see [`Picker::lock`].
@@ -645,7 +700,10 @@ impl Layout {
         let scale = [grid[0] / PSP_GRID[0], grid[1] / PSP_GRID[1]];
         let mut screen = screens.by_name(name)?.clone();
         strip_player_suffix(&mut screen);
-        Self::from_screen(screen, name, kind, strings, faces, scale)
+        let help = help::Help::read(&screen, screens, strings, faces, grid);
+        let mut layout = Self::from_screen(screen, name, kind, strings, faces, scale)?;
+        layout.help = help;
+        Some(layout)
     }
 
     /// The layout of one authored `screen`, already reduced to the widgets of
@@ -756,6 +814,7 @@ impl Layout {
             scale,
             hd: None,
             hd_track: None,
+            help: None,
             ready: String::new(),
             name_scale: 1.0,
             entry_pitch: None,

@@ -1212,3 +1212,158 @@ fn a_picker_backs_out_on_the_button_it_is_handed() {
     press(&mut input, Button::Triangle);
     assert_eq!(picker.update(&mut input), vec![Event::Back]);
 }
+
+/// `Track Creation` with the `Redirect` to its Help on `button`, and the Help screen it names:
+/// the shape the PSP (`forward="triangle"`, `Track Help`) and the PS2 (`forward="circle"`,
+/// `Track HelpSingle`) author.
+fn help_xml(button: &str, help: &str) -> String {
+    XML.replace(
+        "</Screen>\n</Screen>",
+        &format!(
+            r#"<Redirect>
+<Values forward="{button}" backward="none"></Values>
+<Default goto="{help}"></Default>
+</Redirect>
+</Screen>
+<Screen name="{help}">
+<Image y="0" width="480" height="272" color="0xE0000000"></Image>
+<Text idstring="MSC_HELP_RB_CS" font="small" x="20" y="100"></Text>
+<Redirect>
+<Values forward="none" backward="cross"></Values>
+</Redirect>
+</Screen>
+</Screen>"#
+        ),
+    )
+}
+
+fn help_strings() -> StringTable {
+    StringTable::from_xml(
+        r#"<Strings><Entry ID="RB_TRACK_SEL" String="TRACK SELECT"></Entry><Entry ID="MSC_HELP_RB_CS" String="Pick a circuit"></Entry></Strings>"#,
+    )
+}
+
+fn help_layout(button: &str, help: &str) -> Layout {
+    Layout::read(
+        &Screens::from_xml(&help_xml(button, help)),
+        Kind::Track,
+        &help_strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .expect("Track Creation reads")
+}
+
+fn track_picker(layout: &Layout, roles: oag_ui::roles::Roles) -> Picker {
+    let mut picker = Picker::new(Kind::Track, entries(), None, None);
+    picker.set_roles(roles);
+    picker.set_help_available(layout.help.is_some());
+    picker
+}
+
+#[test]
+fn a_screen_reads_the_help_its_own_redirect_names_on_the_face_button_it_authors() {
+    let psp = help_layout("triangle", "Track Help");
+    let help = psp.help.as_ref().expect("the PSP's Track Help reads");
+    assert_eq!(help.button, Button::Triangle);
+    let ps2 = help_layout("circle", "Track HelpSingle");
+    assert_eq!(ps2.help.as_ref().map(|h| h.button), Some(Button::Circle));
+    assert!(
+        track_layout().help.is_none(),
+        "a screen that authors none has none"
+    );
+    let words: Vec<String> = help
+        .draw(&|_| None, &oag_ui::font::Atlas::build())
+        .into_iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        words.iter().any(|w| w == "Pick a circuit"),
+        "the overlay draws the disc's own text: {words:?}"
+    );
+}
+
+#[test]
+fn help_opens_on_the_roles_help_and_closes_on_cross_triangle_or_circle_without_leaving() {
+    let layout = help_layout("triangle", "Track Help");
+    let mut picker = track_picker(&layout, oag_ui::roles::Roles::DEFAULT);
+    let mut input = Input::new();
+    press(&mut input, Button::Triangle);
+    assert_eq!(picker.update(&mut input), vec![Event::Help]);
+    assert!(picker.help_open());
+    press(&mut input, Button::Down);
+    assert_eq!(
+        picker.update(&mut input),
+        vec![],
+        "the page does not move under it"
+    );
+    assert_eq!(picker.index(), 0);
+    press(&mut input, Button::Circle);
+    assert_eq!(
+        picker.update(&mut input),
+        vec![Event::Help],
+        "Back closes the overlay and does not leave the screen"
+    );
+    assert!(!picker.help_open());
+    press(&mut input, Button::Circle);
+    assert_eq!(picker.update(&mut input), vec![Event::Back]);
+    for closer in [Button::Cross, Button::Triangle] {
+        press(&mut input, Button::Triangle);
+        picker.update(&mut input);
+        press(&mut input, closer);
+        assert_eq!(picker.update(&mut input), vec![Event::Help], "{closer:?}");
+    }
+}
+
+#[test]
+fn on_the_ps2_the_circle_helps_and_the_triangle_leaves() {
+    let layout = help_layout("circle", "Track HelpSingle");
+    let ps2 = oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    };
+    let mut picker = track_picker(&layout, ps2);
+    let mut input = Input::new();
+    press(&mut input, Button::Circle);
+    assert_eq!(picker.update(&mut input), vec![Event::Help]);
+    assert!(picker.help_open());
+    press(&mut input, Button::Triangle);
+    assert_eq!(picker.update(&mut input), vec![Event::Help]);
+    press(&mut input, Button::Triangle);
+    assert_eq!(picker.update(&mut input), vec![Event::Back]);
+}
+
+#[test]
+fn a_screen_with_no_help_to_open_leaves_the_help_button_alone() {
+    let mut picker = track_picker(&track_layout(), oag_ui::roles::Roles::DEFAULT);
+    let mut input = Input::new();
+    press(&mut input, Button::Triangle);
+    assert_eq!(picker.update(&mut input), vec![]);
+    assert!(!picker.help_open());
+}
+
+#[test]
+fn a_click_or_the_secondary_button_closes_help_and_picks_nothing() {
+    let layout = help_layout("triangle", "Track Help");
+    let mut picker = track_picker(&layout, oag_ui::roles::Roles::DEFAULT);
+    let mut input = Input::new();
+    press(&mut input, Button::Triangle);
+    picker.update(&mut input);
+    assert!(picker.help_open());
+    assert_eq!(
+        picker.pointer(&click_at((100.0, 100.0)), &[]),
+        vec![Event::Help]
+    );
+    assert!(!picker.help_open());
+    press(&mut input, Button::Triangle);
+    picker.update(&mut input);
+    let secondary = oag_ui::pointer::Pointer {
+        at: Some((10.0, 10.0)),
+        back: true,
+        ..Default::default()
+    };
+    assert_eq!(picker.pointer(&secondary, &[]), vec![Event::Help]);
+}
