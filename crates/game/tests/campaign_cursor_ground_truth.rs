@@ -18,8 +18,12 @@ use serde_json::Value;
 struct Profile(PathBuf);
 
 impl Profile {
+    /// A new, empty profile owned by this test process alone. The process id keeps two tests that
+    /// share a `tag` (the PS2 and PSP pickers) from wiping and rewriting each other's state log
+    /// when nextest runs them at once.
     fn fresh(tag: &str) -> Self {
-        let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("campaign-cursor-{tag}"));
+        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .join(format!("campaign-cursor-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("a scratch directory");
         Self(dir)
@@ -77,7 +81,16 @@ impl Profile {
         std::fs::read_to_string(&log)
             .unwrap_or_default()
             .lines()
-            .map(|line| serde_json::from_str(line).expect("a state line is JSON"))
+            .enumerate()
+            .map(|(n, line)| {
+                serde_json::from_str(line).unwrap_or_else(|e| {
+                    panic!(
+                        "{} line {}: a state line is JSON ({e}): {line:?}",
+                        log.display(),
+                        n + 1
+                    )
+                })
+            })
             .collect()
     }
 }
