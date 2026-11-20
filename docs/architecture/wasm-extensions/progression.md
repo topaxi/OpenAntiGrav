@@ -53,6 +53,8 @@ A **run** is one playthrough of one custom campaign by one profile. It has:
 - `seed`: a `u64` the host draws once when the run is created, so the guest can
   derive reward rolls without an RNG stream (section 4.3).
 - `ordinal`: how many events the run has committed.
+- `end_owed`: only after a faulted `race-end`, the latched `RunResult` and tick state
+  it still owes (about 1.1 KiB), until RETRY or DISCARD settles it (section 5).
 - `offer_pending`: a flag, set when a committed `race-end` asked for a choice and the player has not picked.
 
 The host stores it in the records `Store` as a sibling table of `campaign` and
@@ -415,6 +417,7 @@ Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 | The player exits after a tournament's last leg | `race-end` once, with the final rank as `place`, the event's medal and the last leg's latch; one ordinal step for the whole event. Quitting midway commits nothing |
 | RESTART RACE in the pause menu, before the medal is captured | Nothing was written; the race restarts from the same committed bytes |
 | QUIT RACE or escape **before** the finish, in a mode with a lap target | No `race-end`, nothing written, committed bytes untouched |
+| `race-end` faults at the exit (a trap, spent fuel, bytes over the cap) | The medal stays. The run bytes and ordinal are untouched; the latch is saved as `end_owed` and a line names the mod. While it is set the campaign's events refuse to launch, and its page offers **RETRY** (call `race-end` on the saved latch again, for example after a mod update; on success it commits as usual) or **DISCARD** (drop the latch, the run stays as it was) |
 | The game closes or crashes after the medal is captured, before the exit | The medal is kept, as today; `race-end` never ran, so the run is as it was. A replay of the event then sees the medal as `prior_tier` |
 | A replay rebuild, `--from-png`, a demo, an unofficial run, a split screen | `race-end` is not called, nothing is written |
 

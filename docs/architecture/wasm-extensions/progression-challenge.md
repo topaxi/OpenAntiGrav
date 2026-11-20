@@ -321,6 +321,10 @@ fault like every other command, the README's "a fault, never a clamp" holds, and
 `race-start` fault refuses the launch with a line naming the mod. An out-of-range factor
 still clamps with a load-report warning (settled 2026-11-19), so only the first half of
 the proposed change is taken (ADR-0093 decision 3, progression.md section 4.1).
+Asked beside it, the same day: a fault in `race-end` keeps the medal and saves the
+latch as an owed end; the campaign refuses to launch until RETRY succeeds or the
+player picks DISCARD, so a mod bug loses no reward (ADR-0093 decision 6,
+progression.md section 5).
 
 ### 11. The no-record rule leaves loyalty and XP paying for a boosted race
 

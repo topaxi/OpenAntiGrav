@@ -71,7 +71,8 @@ ratings, not computed from handling.
 
 1. **A run.** A custom campaign that declares a `[run]` table has, per profile, one
    **run**: opaque bytes of at most `MAX_RUN_BYTES` = 1,024 (raw, before base64), a
-   `u64` seed drawn when the run is created, and an event ordinal. It is a table of the records `Store` keyed like the campaign's
+   `u64` seed drawn when the run is created, an event ordinal, and, only after a
+   faulted `race-end`, the latch it still owes (decision 6). It is a table of the records `Store` keyed like the campaign's
    progress rows (`<title slug>/mod:<mod id>/<campaign id>`), saved by
    `records::save_in_background`. It is not the ADR-0080 tune, which is one blob per
    mod and title.
@@ -144,7 +145,12 @@ ratings, not computed from handling.
    `[run] race_again = false` (default `true`). RESTART RACE before the medal is
    captured writes nothing, and nor does quitting a lap-target race before its finish.
    A crash between the medal and the exit keeps the medal and leaves the run as it
-   was. A **tournament** event is one run event: `race-start` runs for every leg with
+   was. **A fault in `race-end`** keeps the medal and saves the latch in the run
+   record as an owed end; the run bytes and ordinal are untouched. Until it is settled
+   the campaign's events refuse to launch, and its page offers RETRY (run `race-end`
+   on the saved latch again, for example after a mod update) or DISCARD (drop the
+   latch; the run stays as it was). No reward is lost to a mod bug (maintainer,
+   2026-11-20). A **tournament** event is one run event: `race-start` runs for every leg with
    the same committed bytes, and the tick state latched at the end of a leg is the
    next leg's initial tick state, which `race-start` sees and may keep or change, so
    a mod can count across legs. `race-end` runs once, at the exit after the last leg,
@@ -203,7 +209,9 @@ prerequisite of the run record (decision 11; objection 7, answered). `race-end` 
 tick the person's race ends (decisions 3 and 6; objection 8, answered). A tournament is one
 run event whose tick state carries from leg to leg, with one `race-end` after the last
 leg; a per-leg `race-end` is for later (decision 6; objection 9, answered). A fault in
-`race-start` refuses the launch; the clamp stays (decision 3; objection 10, answered).
+`race-start` refuses the launch; the clamp stays (decision 3; objection 10, answered). A
+fault in `race-end` keeps the medal and saves the latch as an owed end, settled by
+RETRY or DISCARD before the campaign launches again (decision 6).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in
