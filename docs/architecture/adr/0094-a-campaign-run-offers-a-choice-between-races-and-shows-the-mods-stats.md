@@ -42,7 +42,8 @@ world that would host both is a Proposed design, and nothing of it is built.
    Whether the player may skip an offer is the mod's choice, per offer (maintainer,
    2026-11-19). **Settled (maintainer, 2026-11-20):** the choice is a mod screen as
    drafted, not a host-drawn page, so a campaign owns its reward screen's art and
-   layout; it waits for the frontend world.
+   layout; it waits for the frontend world. Its reply may also request a new run, which goes
+   through the host's NEW RUN confirm (ADR-0093 decision 6; maintainer, 2026-11-20).
 2. **Stats, reported by the guest** (maintainer, 2026-11-20). `race-end`'s reply and
    the choice screen's reply may carry up to 8 rows `stat{string id, value, max}`.
    The host stores them beside the run as a display cache and draws them on pages it

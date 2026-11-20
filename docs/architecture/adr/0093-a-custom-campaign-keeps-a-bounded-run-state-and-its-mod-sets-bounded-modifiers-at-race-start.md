@@ -163,7 +163,11 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    was. **Ending a run** (maintainer, 2026-11-20): `race-end` may set `END_RUN_OVER`
    beside `END_OFFER`. The host marks the run over and keeps its final bytes and stat
    rows; the campaign page then shows that summary and offers only NEW RUN, and the
-   campaign's events refuse to launch until the player starts one. **A fault in
+   campaign's events refuse to launch until the player starts one. **NEW RUN** is a
+   host-drawn row on every `[run]` campaign's page, with a confirm naming what it
+   clears (the run, and the campaign's medals under `[run] new_run = "clear-medals"`,
+   the default); a mod cannot hide it. The mod's own screen may also request a new
+   run, which goes through the same confirm (maintainer, 2026-11-20). **A fault in
    `race-end`** keeps the medal and saves the latch in the run
    record as an owed end; the run bytes and ordinal are untouched. Until it is settled
    the campaign's events refuse to launch, and its page offers RETRY (run `race-end`
@@ -260,7 +264,9 @@ key. `Grip` is clamped per craft to a safety ceiling,
 `0.9 * 60 / (grip * 1.5)`, so the slide correction never overshoots (decision 4; nit
 25). A mod ends a run with an `END_RUN_OVER` flag from `race-end`; the campaign
 page then shows the run's summary and only NEW RUN. Every committed `race-end`
-advances the ordinal (decisions 1 and 6; question 3's mechanism, answered).
+advances the ordinal (decisions 1 and 6; question 3's mechanism, answered). NEW RUN is a
+host row with a confirm, which a mod screen may also request (decision 6; question 2,
+answered).
 
 **Not decided here:** a data-first modifier table, a per-owner damage scale, and every other item in
 `progression.md` section 12.

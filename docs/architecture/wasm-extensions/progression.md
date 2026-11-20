@@ -457,7 +457,7 @@ Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 | Event | What happens to the run |
 | --- | --- |
 | Campaign entered, no run | Host creates a run: all zero bytes of the module's run length (`oag_run_len`), a drawn `seed`, ordinal 0 |
-| NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `offer_pending`, `over`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
+| NEW RUN (a host-drawn row on the campaign's page with a confirm naming what it clears, or a request from the mod's screen through the same confirm) | Clears `bytes`, `offer_pending`, `over`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
 | An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write. Refused while the run is `over` |
 | A committed `race-end` set `END_RUN_OVER` | The run is marked `over`, with its final bytes and stat rows kept. The campaign page shows that summary and offers only NEW RUN (maintainer, 2026-11-20) |
 | The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. Nothing is written to the run yet |
@@ -927,8 +927,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 1. **Clamp or fault at `race-start`?** **Settled (maintainer, 2026-11-19): clamp.**
    An out-of-range factor is clamped to the host's range and named in the load report
    (section 4.1), never a fault.
-2. **Who owns NEW RUN?** A host row on the campaign page (this draft) or a mod
-   screen action. A host row works with no screen and cannot be hidden by a mod.
+2. **Who owns NEW RUN?** **Settled (maintainer, 2026-11-20): both.** A host row on
+   every `[run]` campaign's page, with a confirm, which a mod cannot hide; and the
+   mod's own screen (ADR-0094) may request a new run through the same confirm.
 3. **Does a failed race commit?** **Settled (maintainer, 2026-11-19): the mod
    decides.** `race-end` gets `finished` and `tier` and chooses whether the run goes
    on; the host imposes no rule. **Mechanism settled (2026-11-20):** an `END_RUN_OVER`
