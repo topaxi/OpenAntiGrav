@@ -2981,6 +2981,12 @@ authored specular colour times its intensity (Sol `6.096 3.263 1.6` times 1 equa
 Which variant the race binds on a tarmac draw was not read; on the panel road all eight staged blocks had the shadow-map layout,
 so `@0xa764` is assumed here (confidence 70).
 
+**Settled 2026-11-20 (`omega-shadow-map`):** the race binds the shadow-map permutation on the tarmac. Forcing `S` to 0 through
+`shadowCoeffs` on the native port takes Capital Reach's sunlit streaks from 154 to 96 grey (confidence 90), and forcing it to 1
+moves nothing on that grid: no craft shadow is visible there, so **Capital Reach's whole-frame gap is not `S`**
+([track-shadow.md](../ghidra/functions/ps4-omega-eu/track-shadow.md), [shadows.md](../rendering/shadows.md),
+"Omega's own `S`").
+
 **Wired** (`omega-2048-road`): `Light::shadow_light` and `shadow_light_specular` (`Light::with_shadow_light`, filled by
 `envsettings_light` on PS4 only) and the factor on the prelit term in `shade.wesl`'s mode-14 path. Tests:
 `omega_tarmac_lit_path::the_shadow_light_factor_scales_the_prelit_term`, `omega_lightmap_ground_truth` (the loader

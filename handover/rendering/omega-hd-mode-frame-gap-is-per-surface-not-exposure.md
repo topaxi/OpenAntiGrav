@@ -45,6 +45,9 @@ original's luma ring, read".
    its lightmapped program `@0xca64` (two normal maps, wrapped sun, `Fsl`, lobe): the rock's grain matches (high-pass 4.78 to 6.99, theirs 6.75), the mean does not
    (-25.4 to -27.5 on its mask, box 133.2 to 133.0): the rock sits 22 grey under at every distance from the snow, and the whole frame 18. **Left open:** `Sebenco_snow*`
    (own program, 154 to 369 instructions), the `snowfade` overlays (3.5 % of the frame, `PROGRAM_UV_OVERLAY` first), the cube and `S`.
+   **`S` read 2026-11-20 (`omega-shadow-map`)**: three exponential cascades along `Sun direction`, the sun term removed whole inside a
+   shadow ([`shadows.md`](../../docs/rendering/shadows.md), "Omega's own `S`"); it moves only where the sun reaches a surface past its
+   baked `LM.a` and a caster stands in it, so it is not a frame-wide offset. Wiring is in the 2048-road thread.
 3. **An exact linear sky gain**: the dome's gain is a gamma-domain multiply by the sRGB encode of the gain (1.9 to 3.4 % low at a
    mid texel, 6 to 11 % low at 0.2); an exact multiply after `decode` needs a per-draw uniform slot (the block has none and 34 test files
    mirror it). Also: read the frame-constant table's own `SkyBrightness` (recipe in `omega-status.md`).
