@@ -929,6 +929,12 @@ Two variants measured on the way, both worse: the target read linear and saturat
 **The doubled lights** change only the reflected scenery: with them off, 26,893 pixels differ by at most 10
 levels, all in the tower's reflection, and the foreground crop reads 135.8 instead of 136.4.
 
+**Everything else is unchanged.** Re-rendered with main (`6a7f4dcbb`) and with this change, the
+compare-page race pairs are pixel-identical (0 pixels differ): Pulse PSP `talons-alongside`, 2048
+`moa-therma`, Omega `moa-therma`, and all 15 HD race pairs (`hd-race/talons-pack` and the 14 under `hd/`,
+Moa Therma, Ubermall, Chenghou and Modesto included: none of their poses frames the sea). The target
+is built only on an HD circuit whose sea draws under `original`, and the sea is the only reader.
+
 ## Enhanced: this project's own water on Pulse and Pure
 
 2026-11-17, lane `water-enhanced`. **Chosen, not measured, everywhere but the shape of the
