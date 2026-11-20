@@ -1158,15 +1158,18 @@ pub(super) fn cloud_layer(
 /// Pure's Chenghou Project, whose sky cube is six 81-vertex faces with neither colour
 /// nor normals: in a recorded GE list every one draws with `LIGHTINGENABLE` 0 and
 /// `MATERIALAMBIENT` `0xffffff` (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`,
-/// "The sky"). Left to `mesh::build`'s defaults they took the stand-in rig and its
-/// grey, and the sky read 72 grey where the original reads about 110. A sky vertex
-/// that authors a colour is prelit already and is left alone.
+/// "The sky"). A vertex with no normals already builds unlit and white (`mesh::build`, the
+/// same GE rule for every batch); one with normals and no colour took the stand-in rig and
+/// its grey, and the sky read 72 grey where the original reads about 110, so it is made
+/// unlit here too. A sky vertex that authors a colour is prelit already and is left alone.
 pub(super) fn unlit_sky(sky: &mut oag_mesh::mesh::Model, report: &mut Vec<String>) {
     let mut unlit = 0usize;
     for vertex in &mut sky.vertices {
         if vertex.lit > 0.5 {
             vertex.lit = 0.0;
             vertex.colour = [1.0; 4];
+            unlit += 1;
+        } else if vertex.lit == 0.0 && vertex.colour == [1.0; 4] {
             unlit += 1;
         }
     }

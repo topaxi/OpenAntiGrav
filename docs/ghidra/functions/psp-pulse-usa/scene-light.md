@@ -429,14 +429,92 @@ vertices lit by the circuit's rig` (56 on the PSP Basilico, 0 on PS2 and Pure). 
 4.30 to 3.50; the laser band (rows 140 to 160) mean absolute error 18.6 to 9.0; no other of the 29 Pulse PSP race pairs
 moves by more than 0.01 (`docs/tools/compare-page.md`).
 
-**Open: which other models are rebuilt.** Giving every colourless lit track vertex the rig instead (the broad rule, tried
-and not kept) moved `amphiseum-black` 3.93 to 3.36, `outpost-7-white` 3.79 to 3.62 and `talons-boost` 9.13 to 9.00 the right way and
-`de-konstruct-black` 3.39 to 3.46 and `outpost-7-black` 3.30 to 3.34 the wrong way, so some lit scenery is rebuilt and some is the raw
-texel (the 97 above). A second lit scenery strip on Basilico (`vt 0x123`, 255 vertices, `x` -696 to -638, `z` 452 to 668, chunks 2730 and
-2778) sits under the same rig and is not marked either. Mapping them needs `Vex_UpdateLightLists`' selector (`model + 0xac`).
-
 PS2: **checked, differs.** The PS2 disc's laser vertices carry colours, so nothing is marked and `pulse-ps2/basilico-black` is
 byte-identical (14.76). Pure: marks nothing (its texture names are not these); not measured.
+
+## Which models take the rig
+
+Read 2026-11-20 (`pulse-lit-scenery`); the static half in Ghidra, the live half in PPSSPP v1.20.4 (`UCUS98712`).
+
+**The per-model rule (confidence 85).** A model has a light list at `model + 0xb0` that `Vex_UpdateLightLists` (`0x08912358`)
+rebuilds, and the list is only ever rebuilt if two things hold:
+
+1. `model + 0xac` is non-null. `Vex_LoadModel` (`0x08912b80`) sets it to the nearest ancestor on the parent chain
+   (`model + 8`, then each node's `+ 8`) whose class token at `node + 4` is the `FUN_08a6bd6c` token, the scene-light context
+   (`0x08913048`-`0x08912ff4`; 0 when no ancestor has it).
+2. The model's node is visited. `Vex_UpdateLightLists` is slot `+0x34` of the model method table `0x08ad17a4` (its one byte
+   reference is `0x08ad17d8`), and the only dispatcher is `SceneNode_SubmitTree` (`0x08944160`, `jalr` at `0x089441b0`):
+   a node whose flag word `+0x2c` has bit `0x8` set is skipped, along with its children.
+
+A model that fails either keeps `RET` as its list, which is the "97 of 113" above: hidden or pooled models (weapon and pickup
+bodies not in play) and models parented under no context. `SceneLight_Rebuild` (`0x08879b14`) writes the list once, then
+again on alternate frames while the context has lights (`DAT_08ac2280 & 1` against the list's own parity byte).
+Live: a breakpoint on `0x08912358` in Basilico's grid state fires for exactly **8 models** per frame, in the same order each
+frame, all from `ra = 0x089441b0`: `01_Track\start_grid.vex`, `01_Track\track.vex`, two `Assegai\ship.vex` and four
+`Pulse_Adverts` billboards; the track and ship models share context `0x08f29ff0`'s heap address and each billboard has
+its own.
+
+**Which batches replay the list** is `Mesh_SetBatchLighting`'s branch above: normals present and no vertex colour. So the
+selector is per model and the use is per batch, never per texture: every colourless batch with normals in `track.vex` and
+`start_grid.vex` draws under the circuit's rig.
+
+**Census (confidence 80).** One GE dump per circuit's Time Trial grid state (`psp-ge-dump.py dump` then `census`, the
+`lighting` and `light0..3` columns), vertex type with normals and no colour (`vt & 0x60`, no `vt & 0x1c`). Basilico,
+Amphiseum (black), De Konstruct, Outpost 7 (black and white) and Talon's Junction, one boot each, and Amphiseum, De Konstruct
+and Outpost 7 (white) a second time with identical (vertex type, vertex count, lighting, light-enable) tuples:
+
+| Circuit | Lit-capable draws | `lighting` 1, the circuit's lights | `lighting` 0 |
+| --- | --- | --- | --- |
+| Basilico | 20 | 14 (12 `0x121`, 2 `0x123`), 2 lights | 6: the hull's extra pass (one 39-vertex and five draws of 313 vertices) |
+| De Konstruct | 25 | 19, 2 or 3 lights | the same 6 |
+| Outpost 7 black | 17 | 11, 2 lights | the same 6 |
+| Outpost 7 white | 23 | 14, 2 lights | the same 6 and 3 more: a 317-vertex model drawn in model space (box about 6 x 2 x 14, the world matrix near identity), three textures, no light enabled |
+| Amphiseum | 20 | 14, 4 lights | the same 6 |
+| Talon's Junction | 17 | 11, 3 lights | the same 6 |
+
+So in every dumped frame the lit-capable draws not under the rig are the craft's extra pass, which is drawn unlit by
+design ([mesh-draw.md](mesh-draw.md), "The extra pass's colour is the light the hull stands in"). Basilico's second lit
+strip (`vt 0x123`, 255 vertices, chunks 2730 and 2778) is in the 14. The 317-vertex model on Outpost 7 white is the one
+draw of a lit-capable batch with no light enabled that is not the extra pass; what it is (a craft drawn in another pass) is
+not identified, and it is one boot. Raw dumps and the lists stay under `data/`, not committed.
+
+**Wired.** The no-normals rule (unlit, white material) is the one [`psp-pure-usa/hull-shine.md`](../psp-pure-usa/hull-shine.md), "The sky", measured on Pure's sky cube in a recorded GE list; `oag_mesh::mesh::build` now applies it to every batch, so Pure's sky builds unlit at the source (`unlit_sky` still converts a sky vertex that has normals and no colour). `mesh_render::mark_rig_vertices` marks every vertex with normals and no colour (`GpuVertex::lit` 1.0) as `lit`
+2.0, the rig; `oag_mesh` builds a vertex of a batch with no normals as `lit` 0.0 and white, since the GE draws it unlit
+(raw texel). The start-laser texture list is gone. Test:
+`crates/raceplay/tests/start_laser_rig_ground_truth.rs` (no `lit` 1.0 left on Basilico, the laser strip marked, coloured
+batches untouched, the flash sprites held back on `05_Track`).
+
+**Held back, chosen not measured: the animated flash sprites** (`cameraflash_glow_add`, `07_camflash_Glow_Add`; colourless,
+with normals, under `Anim Transform` nodes, 6 to 9 vertices each). Marked with the rest they moved `de-konstruct-black`
+3.39 to 3.46 and `outpost-7-black` 3.30 to 3.34 and nothing else; bisecting by texture names these two alone (a single
+texture's marking reproduces the full +0.065 and +0.037, and every other lit texture is below 0.0005). No dump has a flash
+in frame (they blink), so the state the original draws them in is unread; they keep the stand-in.
+
+**Pairs (`pulse-psp` and `pulse-psp-race`, the 27 race pairs, mean grey against the original; control re-render of
+`de-konstruct-black` with the unchanged tree reproduced the stored 3.395 exactly):**
+
+| Pair | Before | After |
+| --- | --- | --- |
+| `amphiseum-black` | 3.925 | 3.359 |
+| `outpost-7-white` | 3.792 | 3.621 |
+| `talons-boost` | 9.126 | 9.000 |
+| `basilico-black` | 4.380 | 4.344 |
+| `de-konstruct-black` | 3.395 | 3.395 |
+| `outpost-7-black` | 3.297 | 3.299 |
+| `talons-white` | 3.946 | 3.957 |
+| `fort-gale-black` / `fort-gale-white` | 19.641 / 14.408 | 19.648 / 14.411 |
+| `talons-black`, `talons-alongside` | 3.217, 2.354 | 3.218, 2.356 |
+| the other 16 | | unchanged to 0.001 |
+
+Amphiseum's side image (rail, stands and the start gantry) matches the original's lit scenery closely; the loss on
+`talons-white` (0.011) and the two Fort Gale pairs (0.007, 0.003) is under the noise a one-tick difference makes and is not
+explained.
+
+**Not done: the raw texel for the 97 `RET` models.** Those models are not in the circuit's own `.vex`; no pair moment has one
+in view, so their raw-texel draw stays unmeasured. **PS2: checked, differs** (every colourless-with-normals vertex is
+a PSP GE case; the PS2 pairs re-rendered byte-for-byte, mean grey unchanged on all 20). **Pure: checked, not wired.**
+`mark_rig_vertices` is called only by the Pulse PSP loader; Pure's `Vex_UpdateLightLists` twin was not located, so its track
+keeps the stand-in until its own dump shows its colourless batches lit.
 
 ## Applied names
 
@@ -466,11 +544,11 @@ extra pass's colour is the light the hull stands in".
 
 ## Open
 
-- **What the other 89 lit-branch models get.** Their lists stayed `RET`, so
+- **What the other 97 lit-branch models get.** Their lists stayed `RET`, so
   the GE runs them with lighting in whatever state the batch set left it:
   `FUN_089307b4` opens with `Gu_Disable(10)`, so unlit, white material, the
-  raw texel. Which models those are (weapons, pickups, scenery) was not
-  mapped.
+  raw texel. The selector is now read ("Which models take the rig"): not submitted,
+  or no context ancestor. Which hidden models they are was not listed.
 - The point and spot slots are reproduced for a craft's own position (see above);
   the AI craft's lists and the PS2 executable's own were not read.
 - `WoSpot_Init` (the `wospot` twin of `WoPoint_Init`) was not read; no shipped circuit

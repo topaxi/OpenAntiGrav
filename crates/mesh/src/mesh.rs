@@ -873,19 +873,32 @@ fn build_class(
                                 n
                             }
                         }),
-                        colour: v.colour.map_or([0.75, 0.78, 0.82, 1.0], |c| {
-                            [
-                                f32::from(c[0]) / 255.0,
-                                f32::from(c[1]) / 255.0,
-                                f32::from(c[2]) / 255.0,
-                                f32::from(c[3]) / 255.0,
-                            ]
-                        }),
+                        colour: v.colour.map_or_else(
+                            || {
+                                if v.normal.is_some() {
+                                    [0.75, 0.78, 0.82, 1.0]
+                                } else {
+                                    [1.0; 4]
+                                }
+                            },
+                            |c| {
+                                [
+                                    f32::from(c[0]) / 255.0,
+                                    f32::from(c[1]) / 255.0,
+                                    f32::from(c[2]) / 255.0,
+                                    f32::from(c[3]) / 255.0,
+                                ]
+                            },
+                        ),
                         texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
                         // No PSP or PS2 model authors a lightmap; the white 1x1
                         // bound for them makes the shader's multiply identity.
                         lightmap_texcoord: [0.0, 0.0],
-                        lit: if v.colour.is_some() { 0.0 } else { 1.0 },
+                        lit: if v.colour.is_some() || v.normal.is_none() {
+                            0.0
+                        } else {
+                            1.0
+                        },
                         anim,
                         xform,
                         sun_mask: 1.0,
