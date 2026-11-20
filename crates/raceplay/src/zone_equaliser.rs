@@ -139,8 +139,9 @@ impl Equaliser {
     }
 }
 
-/// One channel under the fade: black at alpha `0x60` over it, rounded to nearest, which
-/// holds a ground of 1 at 1 as the read target does.
+/// One channel under the fade: black at alpha `0x60` over it. Rounded to nearest, which
+/// holds the race-start ground of 1 at 1: **chosen**, the original's rounding is not read and
+/// its ground reads 0 after a minute of silence (`zone-equaliser.md`, "Live reads").
 fn fade(channel: u8) -> u8 {
     let out = (u32::from(channel) * (255 - FADE_ALPHA) + 127) / 255;
     #[expect(clippy::cast_possible_truncation, reason = "at most 255")]

@@ -864,7 +864,10 @@ fn hd_zone_race_keeps_slots_1_to_7_for_the_stage_target() {
             .iter()
             .any(|line| line.contains("show the stage's shared 512x512 equaliser target"))
     );
-    assert!(loaded.billboards.zone_equaliser_bars, "HD's target draws the bars");
+    assert!(
+        loaded.billboards.zone_equaliser_bars,
+        "HD's target draws the bars"
+    );
 }
 
 /// Every other mode keeps the countdown board.
