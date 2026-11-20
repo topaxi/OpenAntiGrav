@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-20
-summary: "2048-mode pairs: alpha lane, tarmac Fsl wired; left: track shadow receiver and lobe, panel-road Fsl, crowd lights, Metro Park terrain"
+summary: "2048-mode pairs: tarmac Fsl wired; left: track shadow (read; blocked on hull sun occlusion), lobe, panel-road Fsl, crowd lights, Metro Park terrain"
 difficulty: medium (40)
 ---
 
@@ -94,13 +94,17 @@ a correct detail fix can raise it).
    dirt in the lower left, the largest scenery area of that pair. Nothing in the tree reads the material. Read the
    program's blend weights (vertex colour or a mask), then wire (half a day RE, then a day to wire).
 2. ~~Item 1's remainder: one live read of the crowd draw's constant block on Sol.~~ **Done** (`omega-crowd-live`, 2026-11-20, [`omega-status.md`](../../docs/formats/omega-status.md), "Crowd and scene light inputs, read live"): the bound `constantAmbientColour`, `liveLighting0diffuse`, direction, `Shadowed` and `Ambient` equal the file's authored values (ratio 1.000, two boots), with no per-draw light. The Sol plain sprite's all-or-nothing `N.L` is therefore the normal, not the light: next read the crowd draw's vertex block (`world`, `worldScaleInv`) and the 1,287 white pixels that skip every debug return (half a day, same rig as `scripts/wipeout-pc-crowd-light-live.py`).
-3. **The track as a shadow receiver** (new, `omega-2048-road`): the race binds the shadow-map variants of the road programs
-   (`tarmac` `@0xa764`, panel road `0xe144`/`0x14284`); their sun term and sun lobe are `LM.a * S`, `S = min(1, pcf(shadowMap)
-   * exp2(clamp(c0 + c1 z, c2, c3)))` with the coefficients in `shadowCoeffs`. Ours has the baked `LM.a` only on the track
-   (`sun_occlusion` is the hull's). Evidence it matters: with the tarmac sun switched off Capital Reach's whole frame goes
-   46.98 to 45.41 and the original's near road is neutral grey where ours is warm.
-   Read the pass that fills the map (casters, matrix, `shadowCoeffs` meaning) first (half a day, RE), then wire (a day), then
-   the tarmac sun lobe (read and measured, taken out for want of `S`: `omega-status.md`).
+3. **The track as a shadow receiver: RE done** (`omega-shadow-map`, 2026-11-20,
+   [`track-shadow.md`](../../docs/ghidra/functions/ps4-omega-eu/track-shadow.md), [`shadows.md`](../../docs/rendering/shadows.md),
+   "Omega's own `S`"): cast along `normalize(Sun direction)` into three exponential cascades, the sun diffuse and lobe removed whole
+   inside a shadow, live on the native port. **Capital Reach's gap is not `S`** (no map shadow on its grid; the earlier "sun
+   switched off" probe took out the baked `LM.a` sun, not `S`). Ours' coverage mode already applies the receiver law and the axis,
+   and its shadows land like the original's on Metro Park; **blocked** on HD's sun-occlusion and self-shadow passes, which the same
+   tier turns on and which darken Omega's hull 22 grey where the original's is lit. Next: (a) scope `render_sun_occlusion` off for
+   Omega by title data (an hour, plus the HD and 2048 identity renders), (b) read the second caster list (`*0x020e4268`) and
+   which models set `+0x110` bit 1, (c) flip `Title::original_shadows` to `Built` (the player default only: the compare page already renders Omega with
+   `shadows = "original"` from `scripts/compare-environment.toml`, so (a) is what moves the pairs; check `sun_known` on Metro Park's
+   brick, grass and the tarmac first), score Metro Park and Altima, then the tarmac sun lobe.
 4. The panel-map road's shadow-light factor (above): apply `shadow_light_factor` to that family (an hour) and measure
    Sol, Queens Mall, Altima and Unity Square.
 5. The tarmac dirt layer's colour (`OAG_TARMAC_DIRT`) is still off by default; revisit after the shadow receiver.
