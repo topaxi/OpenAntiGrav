@@ -484,6 +484,9 @@ and where `race_is_unofficial()` is true.
   files **no** per-track `[[record]]`. The modded table README phase 2 planned is not
   built, so without this rule a doubled engine files a personal best on a
   leaderboard row (open question 4). Medals are the campaign's own and stay.
+  **Loyalty and XP are paid** as for any official race (maintainer, 2026-11-20;
+  [progression-challenge.md](progression-challenge.md), objection 11): only the
+  per-track record is withheld.
 - **Network.** Single-player. The lobby carries no run state, the start description
   has campaign key 0 in a lobby race, and a run module declines it in
   `oag_wants_race`. A campaign shared by a host (all seats on the same bytes) is the
@@ -855,9 +858,10 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    decides.** `race-end` gets `finished` and `tier` and chooses whether the run goes
    on; the host imposes no rule. Open only in mechanism: how the mod says "the run is
    over" (a flag in the reply, a status byte the host reads, or the mod's own screen).
-4. **A modded records table.** The interim "no `[[record]]` for a modified race" rule
-   drops personal bests entirely. A separate modded table (README phase 2) is the
-   fuller answer and is not built.
+4. **A modded records table.** **Settled (maintainer, 2026-11-20): later, outside
+   ADR-0093.** The "no `[[record]]` for a modified race" rule drops personal bests
+   until a separate modded table (README phase 2) is built; it is already owed in the
+   custom race modes thread.
 5. **May the player skip the offer?** **Settled (maintainer, 2026-11-19): the mod
    decides**, per offer (skippable, or blocking until a pick); the host offers both.
 6. **Do `TopEnd` and `scale-thrust` compose freely?** They are different levers:

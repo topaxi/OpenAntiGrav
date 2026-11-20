@@ -23,6 +23,10 @@ lead: the maintainer reviews it first.
   design most: clamp or fault at race start (1), the commit rule that stages the medal
   with the run state (section 5), the Ship Select allowance for mod stats (section 8.2),
   and whether the AI may be scaled (11).
+- The modded records table (personal bests for a modified race): later, outside
+  ADR-0093 (maintainer, 2026-11-20); already owed in
+  [custom-race-modes-and-campaigns.md](../gameplay/custom-race-modes-and-campaigns.md),
+  "Still open from this slice".
 - A per-leg `race-end` for tournaments (rewards between legs): later, by the
   maintainer's answer to challenge objection 9 (2026-11-20).
 - The frontend world (ADR-0080) is unbuilt, so the choice screen and the stat rows have

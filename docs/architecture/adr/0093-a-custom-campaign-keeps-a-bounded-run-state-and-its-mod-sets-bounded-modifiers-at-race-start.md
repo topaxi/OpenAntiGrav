@@ -163,7 +163,10 @@ ratings, not computed from handling.
    input bytes, seed, ordinal and keys (base64, capped on raw bytes), and on a
    tournament leg after the first the tick state carried in from the previous leg. Playback never
    reads the local store. There is no ghost (ADR-0091 decision 5). A race whose start
-   applied any non-identity modifier, count or scale files no per-track `[[record]]`.
+   applied any non-identity modifier, count or scale files no per-track `[[record]]`;
+   loyalty and XP are paid as for any official race (maintainer, 2026-11-20). A
+   modded records table, which would give such a race a personal best of its own, is
+   later work outside this ADR.
    Run state is single-player: a lobby race carries none and the module declines it.
 10. **Own unlocks** (maintainer, 2026-11-19). A campaign may opt out of the global
     ship and variant unlocks (the title's loyalty and `<Unlock>` rows,
@@ -174,7 +177,8 @@ ratings, not computed from handling.
     variant, opened from the start, by an event's medal, or by a run flag), and the
     run's own unlock set, which the mod adds to at `race-end` (`unlock{team,
     variant}` into the run record, committed with the run bytes). The
-    global unlocks are never written by a campaign, and a campaign's own unlocks
+    global unlocks are never written by a campaign directly (loyalty and XP earned by
+    racing are paid as for any race, decision 9), and a campaign's own unlocks
     never leak into the Race Box or another campaign. Mechanism detail:
     `progression.md` section 7.1.
 11. **Build order.** Prerequisite, owned outside this ADR: the records file is written
@@ -211,7 +215,9 @@ run event whose tick state carries from leg to leg, with one `race-end` after th
 leg; a per-leg `race-end` is for later (decision 6; objection 9, answered). A fault in
 `race-start` refuses the launch; the clamp stays (decision 3; objection 10, answered). A
 fault in `race-end` keeps the medal and saves the latch as an owed end, settled by
-RETRY or DISCARD before the campaign launches again (decision 6).
+RETRY or DISCARD before the campaign launches again (decision 6). A modified race
+withholds only its per-track record; loyalty and XP are paid. The modded records table
+is later work (decision 9; objection 11 and question 4, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in
@@ -274,6 +280,9 @@ the same race. Every disc number stays the source of truth.
   rewards are silently weaker than intended; only the load report says so.
 - **Per-track records are lost for a modified race.** No leaderboard pollution, and
   no personal best either, until the modded records table exists.
+- **A boosted race still pays loyalty and XP.** Loyalty opens the title's teams and
+  skins, so a campaign with strong modifiers is a faster way to the global unlocks.
+  Accepted by the maintainer (2026-11-20).
 - **A closed parameter list is a ceiling,** like the command set in ADR-0079. A
   parameter outside the list waits for a host change, and `Launch` and `TopEnd` are
   on the list and refused until their ground truths land.

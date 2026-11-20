@@ -338,6 +338,10 @@ modifier: no per-track record, no loyalty, no XP. Or decide that loyalty is paid
 write that down. The engine-power path through `scale-thrust` has the same question
 today, so the rule belongs to MODDED races in general.
 
+**Answered by the maintainer (2026-11-20): loyalty and XP are paid.** A modified race
+withholds only its per-track record, as the draft had it. The modded records table is
+later work, outside ADR-0093 (decision 9; progression.md section 5.1, question 4).
+
 ### 12. A pickup `count` replaces an authored value, and on Pulse and HD it can only go down
 
 **Evidence.** `WeaponCounts::default()` is 3 rockets and 5 mines, which are
