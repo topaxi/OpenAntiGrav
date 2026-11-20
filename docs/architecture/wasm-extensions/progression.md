@@ -220,52 +220,64 @@ because a running Autopilot is not refreshed and a pad grants nothing during it.
 
 ### The guest SDK (`oag-ext`)
 
+**Shape (maintainer, 2026-11-20;
+[progression-challenge.md](progression-challenge.md), objection 16).** Default methods
+on `Extension`, as `wants_race` is, so `export!` (a `macro_rules!` that cannot see a
+trait impl) always emits the exports, and an extension that ignores runs compiles and
+behaves as before. Reply methods take a craft handle, never a raw slot.
+
 ```rust
-/// An extension that takes part in a campaign run. `Extension` is unchanged;
-/// these default to "nothing", so existing extensions compile as before.
-pub trait Run: Extension {
-    /// Once per race, after the grid is placed. Reads the run state, replies with
-    /// modifiers and pickup parameters, and sets the module's **initial tick state**
-    /// (`state` starts zeroed; what the guest leaves in it is the state the first
-    /// `tick` sees, hashed like any tick state). It cannot write the run state.
-    fn race_start(start: &Start<'_>, state: &mut Self::State, reply: &mut StartReply<'_>) {}
-    /// Once, at the finish of a campaign event. `state` is the module's final tick
-    /// state (a copy; what the race counted, such as pads crossed or hits taken).
-    /// Writes the new run state.
-    fn race_end(end: &End<'_>, state: &Self::State, out: &mut RunOut<'_>) {}
+pub trait Extension {
+    type State: Blob;
+    /// The run state, read and written whole. `Blob::from_bytes` reads missing bytes as
+    /// zero, so a new run is all zeroes; `()` for an extension with no run.
+    type Run: Blob = ();
+    // tick, wants_race: unchanged.
+
+    /// Once per race (per leg in a tournament), after the grid is placed. Reads the run,
+    /// replies with modifiers and pickup parameters, and sets the module's **initial
+    /// tick state** (on a later tournament leg it arrives holding the previous leg's
+    /// latch). It cannot write the run.
+    fn race_start(start: &Start<'_, Self::Run>, state: &mut Self::State, reply: &mut StartReply<'_>) {}
+    /// Once, on the exit from a campaign event. `state` is the tick state latched at the
+    /// race's end. `run` holds the committed run; what the guest leaves in it is
+    /// committed.
+    fn race_end(end: &End<'_>, state: &Self::State, run: &mut Self::Run, reply: &mut EndReply<'_>) {}
 }
 
-pub struct Start<'a> { /* race(), campaign_key(), event_key(), ordinal(), seed(),
-                          run() -> &[u8], slots(), is_person(Slot), team_key(Slot) */ }
-pub struct End<'a>   { /* everything in Start, plus result() -> &RunResult */ }
+pub struct Start<'a, R> { /* race(), campaign_key(), event_key(), ordinal(), seed(),
+                             run() -> &R, crafts() -> impl Iterator<Item = GridCraft> */ }
+pub struct End<'a>      { /* race(), keys, ordinal(), seed(), result() -> &RunResult */ }
+/// A grid slot the start description handed out: slot, `is_person()`, `team_key()`.
+pub struct GridCraft { /* private */ }
 
 pub struct StartReply<'a> { /* private */ }
 impl StartReply<'_> {
-    /// Err(Refused::Range) outside `modifier_range`, never a silent clamp in the SDK.
-    pub fn modifier(&mut self, slot: Slot, param: Param, factor: f32) -> Result<(), Refused>;
-    pub fn pickup_count(&mut self, slot: Slot, weapon: Weapon, count: u8) -> Result<(), Refused>;
-    pub fn pickup_duration(&mut self, slot: Slot, weapon: Weapon, factor: f32) -> Result<(), Refused>;
+    /// Clamps to `modifier_range` exactly as the host does; the test harness records a
+    /// warning a test can assert on. Err only for what the host faults on: a non-finite
+    /// factor, a second command for one craft and parameter, a full reply.
+    pub fn modifier(&mut self, craft: &GridCraft, param: Param, factor: f32) -> Result<(), Refused>;
+    pub fn pickup_count(&mut self, craft: &GridCraft, weapon: Weapon, count: u8) -> Result<(), Refused>;
+    pub fn pickup_duration(&mut self, craft: &GridCraft, weapon: Weapon, factor: f32) -> Result<(), Refused>;
 }
 
-pub struct RunOut<'a> { /* private */ }
-impl RunOut<'_> {
-    pub fn write(&mut self, bytes: &[u8]) -> Result<(), Refused>;  // <= MAX_RUN_BYTES
-    pub fn offer(&mut self);                                       // sets END_OFFER
+pub struct EndReply<'a> { /* private */ }
+impl EndReply<'_> {
+    pub fn offer(&mut self);                                                   // sets END_OFFER
+    pub fn stat(&mut self, string_id: &str, value: u16, max: u16) -> Result<(), Refused>; // ADR-0094, at most 8
+    pub fn unlock(&mut self, name: &str) -> Result<(), Refused>;               // section 7.1
 }
-
-/// A plain-data run state, like `blob!`: field order, little endian, no padding, a
-/// const assert against MAX_RUN_BYTES. A `version: u8` first field is the author's
-/// own migration tool; the host never looks at it.
-macro_rules! run_state { /* ... */ }
 ```
 
-`Refused::Range` is the SDK's version of the host's clamp warning (section 4.1): the
-SDK refuses, so an author hits it in `cargo test` long before a player does. The
-host still clamps what a hand-written or older guest sends.
+**Clamp in the SDK too.** An out-of-range factor clamps in the SDK as on the host, so
+what `cargo test` shows is what a player gets, and the harness's warning list lets a
+test assert none were clamped. The first draft's `Err(Refused::Range)` is gone: with a
+`let _ =` it dropped the whole reward in silence.
 
-`export!` gains `oag_run`, `oag_race_start` and `oag_race_end` when the extension
-implements `Run`. The test harness gains `oag_ext::test::Run::<E>::start(&info)` and
-`::end(&info, &result)`, which go through the host's own writer and decoder.
+`blob!` serves the run state (`MAX_RUN_BYTES` equals `MAX_STATE_BYTES`, so its size
+assert fits); the draft's `run_state!` is dropped. The test harness gains
+`oag_ext::test::start::<E>(&info, &run)` and `::end::<E>(&info, &result, &latch, &run)`,
+which go through the host's own writer and decoder.
 
 ### The frontend world (needs ADR-0080)
 
@@ -774,15 +786,16 @@ and a recipe for the combined pickup. Two offers after each race.
 
 ```rust
 // Names are illustrative; the shapes are the signatures above.
-use oag_ext::{blob, prelude::*, run_state};
+use oag_ext::{blob, prelude::*};
 
-run_state! { struct Haul { version: u8, engine: u8, shield: u8, recipe: u8, offer: [u8; 2] } }
-blob!      { struct Tick { recipe: u8 } }   // what the race needs from the run
+blob! { struct Haul { version: u8, engine: u8, shield: u8, recipe: u8, offer: [u8; 2], cleared: u64 } }
+blob! { struct Tick { recipe: u8 } }   // what the race needs from the run
 
 struct LongHaul;
 
 impl Extension for LongHaul {
     type State = Tick;
+    type Run = Haul;
 
     fn tick(obs: &Observation<'_>, state: &mut Tick, reply: &mut Reply<'_>) {
         for event in obs.events() {
@@ -796,27 +809,30 @@ impl Extension for LongHaul {
             }
         }
     }
-}
 
-impl Run for LongHaul {
-    fn race_start(s: &Start<'_>, state: &mut Tick, out: &mut StartReply<'_>) {
-        let h = Haul::read(s.run());                              // zeroed when the run is new
+    fn race_start(s: &Start<'_, Haul>, state: &mut Tick, out: &mut StartReply<'_>) {
+        let h = s.run();                                          // all zeroes when the run is new
         state.recipe = h.recipe;                                  // the first tick sees this
-        for slot in s.slots().filter(|&sl| s.is_person(sl)) {
-            let _ = out.modifier(slot, Param::TopEnd, 1.0 + 0.1 * f32::from(h.engine));
-            let _ = out.modifier(slot, Param::ShieldMax, 1.0 + 0.25 * f32::from(h.shield));
-            let _ = out.pickup_duration(slot, Weapon::Shield, 1.0 + 0.5 * f32::from(h.recipe));
+        for craft in s.crafts().filter(GridCraft::is_person) {
+            // Out of range clamps; an Err here is a bug the author's tests should catch.
+            out.modifier(&craft, Param::TopEnd, 1.0 + 0.1 * f32::from(h.engine)).expect("one TopEnd");
+            out.modifier(&craft, Param::ShieldMax, 1.0 + 0.25 * f32::from(h.shield)).expect("one ShieldMax");
+            out.pickup_duration(&craft, Weapon::Shield, 1.0 + 0.5 * f32::from(h.recipe)).expect("one Shield");
         }
     }
 
-    fn race_end(e: &End<'_>, _final_tick: &Tick, out: &mut RunOut<'_>) {
-        let mut h = Haul::read(e.run());
-        if e.result().finished && e.result().tier != 255 {
-            let roll = mix(e.seed(), e.ordinal());               // a pure function of the run's seed
-            h.offer = [(roll % 3) as u8, ((roll >> 8) % 3) as u8]; // 0 engine, 1 shield, 2 recipe
-            let _ = out.write(&h.bytes());
+    fn race_end(e: &End<'_>, _latch: &Tick, h: &mut Haul, out: &mut EndReply<'_>) {
+        let r = e.result();
+        let first_clear = r.prior_tier == 255 && r.tier != 255; // a replay of a cleared event pays nothing
+        if first_clear {
+            h.cleared |= 1 << r.event_index;
+            let roll = splitmix64(e.seed() ^ u64::from(e.ordinal())); // the mod's own pure hash of the run's seed
+            let a = (roll % 3) as u8;
+            h.offer = [a, (a + 1 + ((roll >> 8) % 2) as u8) % 3];   // two different rewards: 0 engine, 1 shield, 2 recipe
             out.offer();
         }
+        let _ = out.stat("STAT_ENGINE", h.engine.into(), 10);
+        let _ = out.stat("STAT_SHIELD", h.shield.into(), 10);
     }
 }
 ```

@@ -453,6 +453,13 @@ a grid craft (slot, person flag, team key) that the reply methods take. Under
 objection 10 a refused value is the author's bug, found by `cargo test`; the example
 should use `?` or handle the error, not discard it.
 
+**Answered by the maintainer (2026-11-20): default methods, and the SDK clamps.**
+`race_start` and `race_end` are default methods on `Extension` with `type Run: Blob`,
+and the reply methods take a grid craft handle. An out-of-range factor clamps in the
+SDK exactly as on the host, and the test harness records a warning a test can assert
+on (progression.md section 3, "The guest SDK"; the worked example in section 9 follows
+it, and also fixes the duplicate offer and the made-up `mix`).
+
 ### 17. The caps are argued from the wrong grid size, and the buffer is full on day one
 
 **Evidence.** `MAX_START_COMMANDS` = 64 is justified as "8 slots x 8 parameters,

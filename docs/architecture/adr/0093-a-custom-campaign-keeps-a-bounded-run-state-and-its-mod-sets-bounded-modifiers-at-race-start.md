@@ -229,7 +229,10 @@ withholds only its per-track record; loyalty and XP are paid. The modded records
 is later work (decision 9; objection 11 and question 4, answered). All three pickup
 durations stay, held as per-slot overrides in the extension state only; original
 content never pays for mod features, mod content may be slower (decisions 5 and 12;
-objection 13, answered).
+objection 13, answered). The guest SDK exposes `race_start` and `race_end` as default
+methods on `Extension` with a `Run` blob type and craft handles, and clamps an
+out-of-range factor as the host does, with a warning its test harness can assert on
+(decisions 3 and 4; objection 16, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in
