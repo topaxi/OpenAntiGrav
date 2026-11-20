@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-19
-summary: "HD front end: Ship Select camera, settle and hull lighting wired; craft turn and zoom, a step pair open; Omega pose wired (zoom fitted)"
+updated: 2026-11-20
+summary: "HD front end: Ship Select settle matches RAM; the swap gap is wired at 3 frames (2026-11-19); craft turn/zoom input unwired; Omega zoom fitted"
 difficulty: medium (30)
 ---
 
@@ -22,7 +22,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `hull_orbit` pose is fitted to the classic Feisar hull only; no `_n1` frame;
   a variant rated below the base draws no marker (no frame shows one)
 - Ship Select swap (LANDED 2026-10-10, `hd-ship-select-anim`): no turntable
-  (measured), craft absent 0.9 s on opening, 60 ms gap and 0.45 s settle on a
+  (measured), craft absent 0.9 s on opening, 50 ms (3 frame) gap and 0.45 s settle on a
   step (`oag_game::preview::hull_swap`; the settle's start per team LANDED
   2026-11-12, item 2 below). Open: the step's burst (not a `.pob`: it is the Fury backdrop
   point cloud, `BackgroundAnimFury_Item`). Backdrop (LANDED 2026-10-10,
@@ -56,13 +56,18 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   Five teams' silhouettes are within 4 px of their RPCS3 rest frames; the
   pair's hull box (sigma 7) went 20.62 to 14.33, the frame 9.35 to 7.35. Open,
   in the order a player would notice:
-  0. **The rest pair `hd/menu-ship-select` cannot score the settle start, the turn or the zoom** (checked 2026-11-19,
-     `hd-ship-craft`): its original is grabbed 3 s after the last tap (settled), the turn, pan and zoom are zero at rest, and
-     the hull silhouette is within 4 px on five teams, so what is left in its craft box (2.74 on an unblurred crop of 716,150 1012x650 after a 5 px blur) is **colour, open and not chased
-     in this lane**: ours reads darker than the original by mean RGB -2.5, -1.5, -1.9 there (the lighting item below). A claim about those three needs a **step pair**: grab N frames after a press through
-     `grab_with_clock` with `st+0x1014` (depth target), `st+0x1020` (drawn depth) and `st+0x194` (the fit's model pointer) read from RAM
-     per frame, which would also settle the drawn depth at open and whether the fit keeps the old box through the 4-frame gap.
-     Not made.
+  0. ~~**The rest pair cannot score the settle start, the turn or the zoom**~~ (MEASURED 2026-11-19, `hd-settle-step`): a step
+     pair, the original's frame N game frames after the selection moved with N read from RAM (`scripts/rpcs3-hd-ship-step.py`,
+     `scripts/hd_ship_step.py`; `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The step against RAM"). Settle start,
+     ease and fit order: **exact** (14 steps on two boots, depth to 1e-4, slide to 0.06; `ship_model::tests::a_step_follows_the_screens_own_frames_in_ram`);
+     turn, pan and zoom: **zero** through every step; the fit's model pointer moves with the selection (the "fit keeps the old box
+     through the gap" candidate is false); the craft box after the gap sits at the rest floor (3.85 against 3.82). **The one term that differs is the cut**: the original's craft is
+     absent at game frames 3, 4 and 5 after the selection moved (once also 6), ours was 4 frames (0.06 s); ours absent
+     where the original shows the new craft is craft box 20 to 30. **WIRED 2026-11-19** (`hd-step-gap`): `hull_swap::GAP_FRAMES` = 3 screen frames from the selection
+     (the original's craft goes with the header dots: 13 of 14 empty grabs show the new dots, none shows the old craft with new dots), test
+     `hull_swap::tests::a_step_cuts_the_craft_for_three_frames`; the frame-6 step pair's craft box 30.52 to 2.57 (picture lag 3; at the old lag of 4 ours is
+     absent at the pair's 2 frames either way, so `PICTURE_LAG_FRAMES` is 3 now and the pairs are to be re-made with it, or re-rendered by flags with `--menu-picker-step-seconds (k-3)/60`). **The rest of the page's step MEASURED 2026-11-20** (`hd-step-banner`, `team-selection-model.md`, "The banner and the hex column on a step"): the hex column's half-row phase follows the team index (odd teams lower; **WIRED**, `HexGrid::phase_by_entry`, `Team Selection` only: rest hex box 13.08 to 4.12 over the twelve rest pairs, k19 22.09 to 3.99, k10 27.69 to 14.05, k08 27.62 to 22.63); the step's lattice slide (old phase to frame 3, new at 11), the displaced pulsing ring and the banner logo (old to frame 2, bare 3 to 7, a 12 px slab sweeping down 8 to 15 and up 25 to 29, whole at 45, ours whole from frame 0) are **open, mechanism unread**: the `Image` widget's `transitiontype` (`vwipe`) table is at `0x008ad680` (`FUN_0052ea7c`), the draw is unread, `enebletransition` has no string in the binary; the banner panel is 31 in the original and 50 in ours (the `HD_LightGrey` alpha item). Open: the cold first visit of a team (craft absent past frame 10 in two of two grabs), `FitMotion`'s
+     alternation phase at the step (ours fixed, the original's the press's frame, 0.1 of depth at most). The craft box colour bias (-2.5, -1.5, -1.9) is item 1's.
   1. ~~**The hull is darker than the original** in that box~~ (LANDED 2026-11-12, `hd-ship-select-light-wire`):
      the craft is lit by the front end's own `.envsettings` (`oag_game::preview::model_light`, from
      `FrontEnd::model_lighting`; Fury style `fe.fury.EnvSettings`, HD style `fe.envsettings`, Omega its own
@@ -163,7 +168,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 
 ## Next Steps
 
-- The step pair above (RAM trace of `st+0x1014/0x1020/0x194` across a press), then the settle start and the swap's gap.
+- Banner, ring and lattice slide on a step (`hd-step-banner`, ready for an RE lane, opus, size large 60): read the `Image` draw that consumes `transitiontype` (start from `FUN_0052ea7c`'s table at `0x008ad680`, `vwipe` `0x0078b860`) and `HexSelection`'s update (class name `0x0078b348`; ring pulse and displacement, the lattice slide over game frames 4 to 10), then play the law in `oag_ui` as the shared widget transition (Campaign Select's emblems author the same `vwipe`). Targets in `team-selection-model.md`: banner logo timeline (bare 3 to 7, slabs 8 to 15 and 25 to 29, whole at 45), hex box on k04 to k10 (16.8, 21.5, 22.6, 14.1) down to the 4 floor, the panel fill 31 against 50.
+- The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
    scale survive? If yes, one HD-only presentation transform on `Space::HD`.

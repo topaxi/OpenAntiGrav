@@ -993,6 +993,67 @@ fn a_scaled_honeycomb_shrinks_its_pitch_and_its_cells() {
     assert!((b[0].rect[2] - 0.8 * a[0].rect[2]).abs() < 1e-3);
 }
 
+/// `Team Selection`'s columns alternate their half-row shift with the team's index, not with
+/// their slot in the window: the centre column of an odd team sits half a row lower than an
+/// even team's, and the grid `TrackHexSelection` builds keeps the window's slots.
+#[test]
+fn the_team_grids_half_row_follows_the_team_index() {
+    let layout = layout();
+    let grid = layout
+        .hd
+        .as_deref()
+        .unwrap()
+        .hex
+        .expect("the team screen authors a honeycomb");
+    assert!(grid.phase_by_entry);
+    let centre_y = |grid: &hex::HexGrid, selected: usize| {
+        let cells = grid.cells(selected, 12, 0.0);
+        cells
+            .iter()
+            .find(|c| c.offset == 0 && c.row == 0)
+            .unwrap()
+            .rect[1]
+    };
+    let half = hex::PITCH[1] * grid.scale * 0.5;
+    assert!((centre_y(&grid, 1) - centre_y(&grid, 0) - half).abs() < 1e-3);
+    assert!((centre_y(&grid, 2) - centre_y(&grid, 0)).abs() < 1e-3);
+    // A neighbour keeps its team's phase: team 1's column is lowered next to team 0 selected.
+    let right = |g: &hex::HexGrid| {
+        g.cells(0, 12, 0.0)
+            .iter()
+            .find(|c| c.offset == 1 && c.row == 0)
+            .unwrap()
+            .rect[1]
+    };
+    assert!((right(&grid) - centre_y(&grid, 0) - half).abs() < 1e-3);
+    // Through the first frames of a step the columns keep the previous team's phase.
+    let held = |since: f32| {
+        grid.cells_at(1, 12, 0.0, since)
+            .iter()
+            .find(|c| c.offset == 0 && c.row == 0)
+            .unwrap()
+            .rect[1]
+    };
+    assert!((held(0.0) - centre_y(&grid, 0)).abs() < 1e-3);
+    assert!((held(hex::PHASE_HOLD_SECONDS) - centre_y(&grid, 1)).abs() < 1e-3);
+    // The drawn grid takes the hold: a picker a frame after a step draws other rects than a settled one.
+    let extra = layout.hd.as_deref().unwrap();
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    picker.tick(1.0);
+    let settled = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
+    picker.set_since_selection(0.0);
+    let stepped = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
+    assert_ne!(settled, stepped);
+    picker.set_since_selection(1.0);
+    assert_eq!(
+        settled,
+        body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n))
+    );
+    let track = hex::HexGrid::unauthored([100.0, 200.0], 5, 7);
+    assert!(!track.phase_by_entry);
+    assert!((centre_y(&track, 1) - centre_y(&track, 0)).abs() < 1e-3);
+}
+
 fn art(src: &str) -> Option<Placed> {
     let (x, size) = match src {
         crate::campaign::hd::cell_brackets::SRC => (100, 16),

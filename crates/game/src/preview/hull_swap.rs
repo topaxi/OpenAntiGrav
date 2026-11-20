@@ -13,16 +13,27 @@
 //!
 //! This module holds the timings, which are measured.
 
+use super::ship_model::FRAME_SECONDS;
+
 /// Seconds from the screen opening to the craft's first frame. One press at
 /// frame 90 of a 30 fps film, craft first present at frame 119-120: 0.97 s,
 /// less an input latency of about 0.1 s (confidence 60: one boot, two films).
 pub const ENTRY_SECONDS: f32 = 0.9;
 
-/// Seconds the frame holds no craft after a step: 3 captured frames at 60 fps
-/// (two steps), 4 once, so 50-67 ms (confidence 70). The same gap read 3
-/// frames at 30 fps (100 ms) under a heavier capture, so it is counted in
-/// emulator frames and varies with the emulator's speed.
-pub const GAP_SECONDS: f32 = 0.06;
+/// Screen frames the picture holds no craft after a step, counted from the
+/// frame the selection moves: the craft is absent at the original's RAM frames
+/// 3 to 5 and present from 6 (the header dots change at frame 3), so the cut
+/// is 3 frames from the selection whatever the picture's absolute lag (three
+/// of four grabs at frame 6, all four at frame 7; confidence 70,
+/// `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The step
+/// against RAM"). Frames of the screen's own 60 Hz update
+/// ([`super::ship_model::FRAME_SECONDS`]), not a seconds value fitted to one
+/// capture.
+pub const GAP_FRAMES: u32 = 3;
+
+/// The share of a frame a tick may fall short of a frame boundary and still
+/// count it, as the fit's own frame loop does.
+const FRAME_TOLERANCE: f32 = 0.999;
 
 /// What to draw of the craft this tick.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -37,7 +48,7 @@ pub struct Phase {
 pub fn phase(open: f32, since: f32) -> Phase {
     let stepped = open - since > 1.0e-3;
     let visible = if stepped {
-        since >= GAP_SECONDS
+        since >= GAP_FRAMES as f32 * FRAME_SECONDS * FRAME_TOLERANCE
     } else {
         open >= ENTRY_SECONDS
     };
@@ -54,10 +65,19 @@ mod tests {
         assert!(phase(ENTRY_SECONDS + 0.01, ENTRY_SECONDS + 0.01).visible);
     }
 
+    /// The craft is absent on the step's frames 0 to 2 and present from frame 3,
+    /// the original's 3 absent frames from the selection (`team-selection-model.md`,
+    /// "The step against RAM", item 4). A longer or shorter gap moves the frame-6
+    /// step pair, where the original already shows the new craft.
     #[test]
-    fn a_step_cuts_the_craft_for_the_gap() {
-        assert!(!phase(5.0, 0.02).visible);
-        assert!(phase(5.0, GAP_SECONDS + 0.001).visible);
-        assert!(phase(5.0, 1.0).visible);
+    fn a_step_cuts_the_craft_for_three_frames() {
+        let after = |frames: u32| phase(5.0, frames as f32 * FRAME_SECONDS).visible;
+        assert_eq!(GAP_FRAMES, 3);
+        assert_eq!(
+            [after(0), after(1), after(2), after(3), after(4), after(30)],
+            [false, false, false, true, true, true]
+        );
+        assert!(phase(5.0, 0.05).visible, "the CLI's 0.05 s is frame 3");
+        assert!(!phase(5.0, 0.0333).visible, "0.0333 s is frame 2");
     }
 }

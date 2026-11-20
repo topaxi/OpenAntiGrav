@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [omega]
-updated: 2026-11-19
+updated: 2026-11-20
 summary: "2048-mode pairs: Omega alpha lane wired (crowd, foliage); left: plain crowd lights, Fsl, Metro Park terrain blend, Vita lanes"
 difficulty: medium (40)
 ---
@@ -20,9 +20,10 @@ a correct detail fix can raise it).
    alpha; it now carries `slots::DEFAULT` (lane 3), Vita only for the alpha-lit families
    ([`omega-status.md`](../../docs/formats/omega-status.md), "The alpha lane"). Crowd bias: Queens Mall +48.5 to +4.7,
    Sol +115.7 to +38.2, Metro Park +14.4 to -10.8; Metro Park also gains its trees, shrubs and flags, and the red slab
-   on the HD-mode circuits goes. **Left:** Sol's +38.2 and Empire Climb's -37.2: the plain sprite program's light
-   inputs (`constantAmbientColour` and `liveLighting0diffuse` as bound for these draws, the normal-map `N.L`), still
-   unread. 2048: **checked, differs** for the crowd (Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`).
+   on the HD-mode circuits goes. **Left (`omega-crowd-light`, 2026-11-20, [`omega-status.md`](../../docs/formats/omega-status.md), "The plain crowd's light inputs, read"):** the program is ours' formula
+   (a probe left every pixel unchanged), so the bound `constantAmbientColour`/`liveLighting0diffuse` need a live read
+   (recipe there). Sol's plain sprite is +64.5 (15,198 px; ours lights each figure fully or not at all, the original
+   none), Empire's dimness is scene-wide (non-crowd structure 0.69, crowd 0.61), not the crowd program. 2048: **checked, differs** for the crowd (Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`).
 2. **`road_alphaspec_normal_emissive_panelmap1` (and `_mask`): wired except the lobe's colour** (2026-11-16,
    `panelmap-wire`; [panel-displacement.md](../../docs/ghidra/functions/ps4-omega-eu/panel-displacement.md),
    "Implemented where", has the numbers). March, sky-cube sheen and emissive draw; road at 16x: Sol `LF` 32.7 to
@@ -51,8 +52,9 @@ a correct detail fix can raise it).
      alpha lane above): every PS4 material reads lane 3, so the generic specular mask, the snow term, the hull's probe
      reflection, the glass pane's cover and clear and the output alpha read the diffuse alpha. `LIT_ALPHA` materials
      read it on both titles. **Left:** Vita's other families (2048's GXP programs: which gate by the diffuse alpha is
-     unread; lane 3 everywhere moved `moa-therma` 32.55 to 34.23 through the hull's reflection and the rest by
-     under 0.5), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
+     unread; lane 3 everywhere moved `moa-therma` 32.55 to 34.23: **that was the awning, not the hull's reflection**
+     (`vita-race-pairs`, 2026-11-19: wired with the reflective window, `moa-therma` 32.55 to 27.56; lane 3 everywhere
+     then moves `modesto-heights` +0.07 and `empire-climb` +0.09), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
      Climb did not move (47.00, 45.11), so their error is not this.
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
@@ -83,7 +85,7 @@ a correct detail fix can raise it).
    normals, program `Cg_ConditionalBlender1NormalMap`) draws grass in ours where the original draws brown mud and
    dirt in the lower left, the largest scenery area of that pair. Nothing in the tree reads the material. Read the
    program's blend weights (vertex colour or a mask), then wire (half a day RE, then a day to wire).
-2. Item 1's remainder: the plain crowd program's light inputs (half a day, RE).
+2. Item 1's remainder: one live read of the crowd draw's constant block on Sol (port, a pad seat, about an hour), then the white plain-sprite figures that skip every debug return (half a day).
 3. Item 2's shadow-light factor on the prelit term (`Fsl`): it reaches Queens Mall among the four worst pairs only,
    and nothing in our code carries a shadow-light direction (`SL` was read live), so the first step is its source in
    the lighting data; Queens Mall's road bias is already positive after the crowd fix (+5.7), so the factor would

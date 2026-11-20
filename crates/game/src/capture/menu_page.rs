@@ -1015,6 +1015,9 @@ pub(super) fn picker_page(
         picker = picker.with_rows(grid_columns);
     }
     picker.tick(seconds.unwrap_or(SETTLED_SECONDS));
+    if let Some(since) = step_seconds {
+        picker.set_since_selection(since);
+    }
     let skin_entry = match kind {
         Kind::Ship => teams
             .get(picker.index())

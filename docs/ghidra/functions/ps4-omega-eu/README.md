@@ -63,6 +63,8 @@ unnamed rather than forced.
   its colour by era, Fury skin and mag strip, the 32-slot table, six lights a draw.
 - [hull-tone.md](hull-tone.md) - the unlit hull's 1.6x: live knockouts of the lighting object on the port;
   sun constant equal, the diffuse combination left.
+- [zone-speed-class-ladder.md](zone-speed-class-ladder.md) - the Zone ladder is HD's table and `14 - i`, beside
+  2048's 17-record one; the hue gap is not the ladder
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [particle-paths.md](particle-paths.md) - the `Data/Particles` versus

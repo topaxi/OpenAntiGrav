@@ -609,3 +609,151 @@ outside-the-light add is open. `diffuse_normal_specular_emmissivenew` (Chenghou,
 `Texture2` and the colour named `Texture1`: read and wired 2026-11-11 (`gxp.md`,
 "`diffuse_normal_specular_emmissivenew` colours by `Texture1`"). Omega's plain member is wired the
 same way (its ambient GCN program read; **ported**).
+
+## The reflective window and the awning (2026-11-19, `vita-race-pairs`)
+
+Moa Therma's overhead awnings and its glass tower were the largest error region of the worst non-Zone 2048 race pair
+(`2048-vita/moa-therma`, top band bias -32.8 grey, whole frame 32.55). Two families draw them, neither was read.
+
+**Method.** `OAG_SKIP_MATERIAL=<stem>` on the pair's `ours.png` named the owner (`fc10_lambert_2uv_emissive` 179
+submeshes, 18,396 pixels above 25 grey, the tower and the window strips; the awning is `dc_diffusetexturealphaemissive`,
+one submesh, `dc_awning02.gxt`, the Feisar logo banner), and `scripts/vita-usse.py disasm` read each file's fragment
+programs (Vita .gxp, `dlc1.psarc`).
+
+**`fc10_Lambert_2UV_Emissive`: `fog(light * D^2 + D.a * R^2)`** (confidence 85; 9 of 9 fragment programs of the dlc1 copy
+that declare `ReflectMap` read, #1, #3, #5, #12, #14, #16, #18, #20, #22: each normalises `N` and `V`, samples `ReflectMap` once
+at `0.5 + 0.5 (2 (N.V) N - V).xy`, squares it, and ends `mad D.a, R^2, light` then the fog mix, `D.a` being `pa2.w`, or
+`pa6.w` where the lightmap takes `pa2`; the other nine fragment programs of the file are the lightmap's own (#10) and the Zone
+permutations, which declare no `ReflectMap`. The base copies, 54 programs, were not walked). #1 and #3 are listed below.
+The program samples `DiffuseMap` (the window atlas `dc_window_a_diffuse_light`, dark colour, alpha the reflectivity) and
+`ReflectMap` (`sky_moatherma_1.gxt`, 128x128, a teal sky picture) and ends
+
+```text
+ 8  dot.f16   pa0.x, N, V                     ; N.V
+ 9  mul.f16   pa0.xy, sa10.xx, pa0.xx          ; 2 (N.V), literal record (2.0, 0.0)
+10  mad.f16   pa0.xy, pa0.xy, N.xy, -V.xy      ; 2 (N.V) N - V
+11  mad.f16   pa0.xy, pa0.xy, sa12.xx, sa12.xx ; * 0.5 + 0.5, literal record (0.5, 0.5)
+12  smp2d     pa4.x, pa0.xy, ReflectMap
+14  mul.f16   r0.xyz, pa4.xyz, pa4.xyz         ; R^2
+20  mad.f16   pa2.xyzw, pa2.wwww, r0.xyzw, light * D^2   ; D.a * R^2 + light * D^2
+21-22                                          ; fog mix
+```
+
+`V` is interpolant 0, which the vertex program writes as `eyePositionWorldSpace - world position` (its `o4`, `o6` from the
+`world` uniform), `N` interpolant 2, the `world`-rotated normal (`o10`, `o12`): both **world space**. So `R` is the
+reflection vector's `xy` mapped to `[0, 1]`, a lookup in the one picture (no second UV set, whatever the name says), and
+`light` is the family's ordinary sum. The literal records read as `(word index, value)` with the value two f16, and a
+register holds four f16 here (`sa10.xx` = the 2.0 record, `sa12.xx` = the 0.5 record).
+
+Wired as `PROGRAM_REFLECT_MAP` (`mesh::rcs::psp2::emissive_add`, `shade.wesl` "2048's `fc10_Lambert_2UV_Emissive`"): the
+`ReflectMap` rides the third binding, the term joins the emissive add (after the light, before the fog), and the slot
+word reads alpha lane 3 because the gate is the diffuse alpha, not its red. The mapping `0.5 + 0.5 R.xy` in ours' world axes beats its four variants on every box (re-rendered with `R.xy` negated in x,
+in y, in both, and swapped; whole-frame luma 27.60 against 28.08, 28.87, 28.86, 29.36; tower box 20.81 against 30.17, 41.21,
+41.16, 51.00; right awning 23.24 against 23.71, 24.94, 24.90, 24.96; left awning 30.33 against 31.14, 32.97, 33.00, 34.13).
+
+**`dc_diffusetexturealphaemissive`: `fog(D^2 * (light + 1))`, alpha the picture's** (confidence 80; the three lit
+programs listed, #3, #5 lightmapped, #12): `mad light, D^2, D^2` then the fog mix, and `pck pa0.---w, pa2.---w` writes the
+texel's alpha out. Wired as `PROGRAM_PICTURE_ADD`, lane 3 (an awning blended by its own alpha instead of by its red, which
+drew it almost transparent).
+
+**Measured** (`scripts/compare-rerender-ours.py`'s `rerender` on a copy of `2048-vita/moa-therma`, 960x544, mean
+|ours - theirs| in luma with the HUD boxes masked, bias ours minus theirs; before is main `278e94ad6`):
+
+| Box | Before | After | Bias before | Bias after |
+| --- | ---: | ---: | ---: | ---: |
+| tower `(430,0,560,125)` | 56.12 | 20.81 | -49.1 | -6.0 |
+| right awning `(560,0,960,175)` | 42.30 | 23.24 | -37.5 | -16.0 |
+| left awning `(0,0,420,175)` | 36.37 | 30.33 | -24.6 | -18.6 |
+| top band `(0,0,960,175)` | 42.21 | 26.60 | -32.8 | -14.9 |
+| hull `(300,255,660,525)` | 38.12 | 38.12 | -27.0 | -27.0 |
+| road and walls `(0,175,960,544)` | 28.02 | 28.02 | -17.8 | -17.8 |
+| whole frame | 32.28 | 27.60 | -22.3 | -17.0 |
+
+The pair's mean grey 32.55 to 27.56. The other fifteen `2048-vita` pairs re-render pixel-identical (only Moa Therma's
+view holds either family; Zone pairs unchanged), and an HD race pair (`hd-race/talons-pack`) re-renders byte-identical.
+The base circuit Arena also ships the window file (`psp2_glow_ground_truth` saw its entries); no pair of it is kept, and a
+frame at tick 190 draws without artefacts (checked by eye only).
+
+**The hull's reflection was not the loss.** `omega-status.md`'s "The alpha lane" recorded lane 3 on every Vita family moving
+`moa-therma` from 32.55 to 34.23 "through the hull's reflection". With these two families wired, lane 3 everywhere gives
+27.53 against 27.56: the hull box does not move (38.12 against 38.12) and the loss was the awning, drawn by its red. Lane 3
+everywhere still moves `modesto-heights` 28.59 to 28.66 and `empire-climb` 26.14 to 26.23, so the other Vita families stay
+on lane 0 (one family at a time was scanned on Moa Therma: none but `dc_diffusetexturealphaemissive` moves it).
+
+**Omega.** **Checked, applies, not wired.** Omega's 2048-mode `Arena` (`#73`, 5 submeshes) and `Cathedral` (`#464`, `#824`,
+`#1106`) ship the same `fc10_lambert_2uv_emissive.rcsmaterial` with the same sampler layout (window atlas, a `sky5.gnf`
+second sampler whose hash `0xdba51b4c` is `name_hash("ReflectMap")`, pinned by a unit test, the lightmap third); the PS4 programs (GCN) are unread, so `Kind::ps4` is false and neither family is
+admitted on PS4. Read them with `gcn_dump` on `data0N.psarc` before wiring (does the term read the diffuse alpha, is the lookup
+`0.5 + 0.5 R.xy` too). `dc_diffusetexturealphaemissive` ships on no Omega circuit read here (`Square`'s awning is
+`fc06_lambert_simple` with `cloth_awning.gnf`).
+
+## The track wall that writes `1 - v` (2026-11-20, `vita-race-pairs-2`)
+
+`2048-vita/modesto-heights`' right wall (box `(600,136,960,408)`, bias +31.8 grey, ours brighter) drew the wall
+picture's chevron band where the original shows its panel and hex rows: the same `track_wall_diffuse_modesto.gxt`
+(1024x512), a different window of it.
+
+**Method.** `OAG_SKIP_MATERIAL=track_wall` on the pair named the owner (43,857 pixels moved, box error 46.89 to 27.62);
+the vertex program of `track_wall` (`dlc2.psarc`, `scripts/vita-usse.py disasm`, #15 and #32) ends the diffuse coordinate in
+`add.f32 pa12.-y, -pa12.-y, sa40.-x` (a `bw` copies it out) or `add.f32 o8.-y, -pa8.-y, sa42.-x`: **`(u, 1 - v)`**, the
+literal record reading 1.0 (`mov o10.xy, pa16.xy` beside it is the lightmap coordinate, not the diffuse). Ours drew the
+authored `v`.
+
+**Census** (`flip_census` over `data.psarc`, `dlc1.psarc`, `dlc2.psarc`, the two patch packages: every vertex program that
+declares `Uv1`, the `add` that negates its `y` into an output or a register a `bw` copies out): **four of 569 material files
+flip, and every vertex program of each does** (confidence 90): `amphiseum/track_surface` (71 of 71 programs),
+`amphiseum/track_surface_no_emissive` (73 of 73), `modesto_heights/track_wall` (73 of 73), `tech_de_ra/track_surface`
+(72 of 72), all in `dlc2.psarc`. No program of the other 565 files does, and the same circuit's other files (Modesto's
+`track_surface`: `mov o8.xy, pa12.xy`) keep the authored `v`, so the flip is per file, which is why a blanket flip is wrong.
+Wired as `oag_rcs::gxp::texcoord_flip::flips_v` (the one `nmad32` `add` read by its bits, narrowed from
+`scripts/vita-usse.py`'s operand layout) and `mesh::rcs::psp2::uv_flip`, read per `.rcsmaterial` file, never by name.
+Pinned by `psp2_texcoord_flip_ground_truth` (exactly those four files; fails with the reader dropped).
+
+**Measured** (`scripts/compare-rerender-ours.py`'s `rerender` on copies of `2048-vita`, 960x544, mean |ours - theirs| in
+luma with the HUD boxes masked, bias ours minus theirs; before is main `f9287fd17`):
+
+| Pair, box | Err before | Err after | Grey before | Grey after | Original grey | Bias before | Bias after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Modesto right wall `(600,136,960,408)` | 46.89 | 17.80 | 84.9 | 66.4 | 53.1 | +31.8 | +13.3 |
+| Modesto left wall and stands `(0,136,320,272)` | 21.73 | 12.72 | 40.1 | 32.5 | 33.3 | +6.8 | -0.8 |
+| Modesto road `(0,272,960,544)` | 25.88 | 21.11 | 71.8 | 69.2 | 68.3 | +3.5 | +1.0 |
+| Modesto whole frame (mean grey of the pair) | 28.59 | 21.81 | | | | | |
+| Tech De Ra left third `(0,136,320,408)` | 14.65 | 10.15 | 28.5 | 28.8 | 31.2 | -2.7 | -2.3 |
+| Tech De Ra whole frame | 20.85 | 17.64 | | | | | |
+| Amphiseum left road `(0,272,160,408)` | 47.96 | 30.17 | 41.9 | 56.1 | 63.1 | -21.2 | -6.9 |
+| Amphiseum whole frame | 28.15 | 27.94 | | | | | |
+
+The other thirteen `2048-vita` pairs re-render pixel-identical (`moa-therma`, `empire-climb` and both Zone pairs among
+them) and `hd-race/talons-pack` is pixel-identical with the reader switched off and on. Amphiseum's whole frame moves
+under the 0.3 noise line and its road bias grows (+10.8 to +13.9): the white lines across the road and the pit's blue
+panels in the original are not this cause (open).
+
+**HD: ported.** HD's circuits ship the same materials and flip the same way, read off the RSX microcode
+(`skin::flips`, `hd_uv_flip_ground_truth`). **Omega: checked, applies, not wired.** Omega ships
+`Data/environments/modesto_heights/materials/Track_Wall.rcsmaterial` (`data02.psarc`) and its GCN vertex program
+(`gcn_dump`, `Shdr @0x2e44`) starts `v_sub_f32 v0, 1.0, v9` on `Uv1`: the same `1 - v`. There is no GCN reader for it, so
+`uv_flip::plan` flips nothing on a PS4 model; Omega's Modesto wall is drawn with the authored `v`.
+
+### Moa Therma's road is `diffuse_normal_specular` #16, and its inputs are the light's (not wired)
+
+The `OAG_SKIP_MATERIAL` scan of `2048-vita/moa-therma` (road and walls box `(0,175,960,544)`: error 28.02, bias -17.8, 354k
+px): `diffuse_normal_specular` owns it (180,316 pixels move, box error 28.02 to 72.87); no other family moves the box (the
+rest of the scan: `fc06_lambert_simple`, `diffuse_specular`, `dc_diffusenormalspecular`, `fc05_Colour_lambert`,
+`dc_metallic_NOREF`, `fc01_emissive_simple`, `fc06_lambert_AlphaTest`, `fc12_phong_simple`, `fc07_Blend`, `speedup_material`,
+`weapon_pads`, `blimphull`: each under 60k pixels and none on the road). Its lightmapped fragment program (`dlc1.psarc`,
+`diffuse_normal_specular`, #16; #22 the same without `shadowMap`) reads (confidence 80, `scripts/vita-usse.py disasm`):
+
+```text
+N      = normalize(T * n.x + B * n.y + Nrm * n.z),  n = 2 * Texture2 - 1     the normal map, in the tangent frame
+R      = 2 (N.V) N - V
+prelit = L.rgb * scale + bias + sunDiffuse * max(0, N.Ldir) * L.a + s.w * max(0, R.Ldir) * L.rgb^2
+rgb    = fog(prelit * D^2 + liveLighting0specular * D.a * L.a * max(0, R.Ldir)^Constant1)
+```
+
+`L` is the lightmap texel, `D` `Texture1`, `s` `shadowLightSpecularDiffuse`. Ours draws `prelit = L.rgb * scale + bias + sunDiffuse * max(0, N_vertex.Ldir) * L.a`
+only: no normal map on a Vita draw (tangents decode and are unused), no `s.w` term, no specular lobe. The two missing
+additive terms are why the sunlit road and walls read dark (-17.8), but **both read light uniforms this lane may not touch**:
+`s.w` is `shadowLightSpecularDiffuse.w` (unmeasured; a candidate is `Lighting.ShadowLight diffuse nova scale`) and the lobe's
+colour is `liveLighting0specular`, whose writer (`FUN_8101d068`'s per-draw upload) is the 2048 violet-band lane's
+(the 2048 live-light specular thread). Wiring the normal map alone cannot move a -17.8 mean bias. Left as a
+finding with the program, the two uniform names and the law above.

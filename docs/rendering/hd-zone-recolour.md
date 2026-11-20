@@ -327,12 +327,16 @@ checked against HD's `is_track` chunk by chunk.
 | `2048-vita/zone-dlc-vineta-k-z5` | 86.04 | 62.92 | 93 / 58, 162 / 135, 38 / 25 |
 | `omega/zone-vineta-k-z5` | 74.25 | 72.92 | 39 / 53, 118 / 94, 30 / 47 |
 
-**Omega's colour is still wrong, and the stage is the suspect.** The structure matches (dark road,
+**Omega's colour is still wrong, and the stage is not the cause.** The structure matches (dark road,
 lime lines) but the hue is HD's Flash purple where the original is olive green (frame mean
 `87 103 39`). Rendered at each of stages 1 to 12, none matches; the closest is stage 9 (`71 63 25`,
-mean absolute difference 52.5 against 71.4 at stage 4, the stage HD's ladder gives at zone 5). Omega's
-Zone HUD table and stage writer are unread (the ladder is inherited from HD, `oag_omega::race`), so
-this is a lead for the Omega Zone lane, not a wire: one frame cannot pick the ladder. rmse
+mean absolute difference 52.5 against 71.4 at stage 4). **Omega's own ladder was then read** (lane
+`omega-zone-ladder`, [zone-speed-class-ladder.md](../ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md)):
+its Zone HUD walker carries HD's fourteen thresholds and stores `14 - i`, so zone 5 is stage 4 on Omega
+too. The gap is the surface, not the ladder: with the shape-name Track rule off (every chunk on the
+Scene group) the walls turn olive (mean RGB `114 139 39` against the original's `38 58 6`, hue right,
+three times too bright) and the road pale blue-white against the original's dark olive, so neither
+group's HD law reproduces Omega's road. Omega's GCN surface programs are the unread part. rmse
 0.340 -> 0.372 on that pair is this hue gap.
 
 **HD is unchanged**: `hd/zone-vineta-k-z5` re-rendered with this change is pixel-identical to main's

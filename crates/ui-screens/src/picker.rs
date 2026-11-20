@@ -365,6 +365,11 @@ impl Picker {
         self.since_selection
     }
 
+    /// Sets [`Self::since_selection`], for a still drawn a known time after a step.
+    pub fn set_since_selection(&mut self, seconds: f32) {
+        self.since_selection = seconds;
+    }
+
     /// Advances the screen's own clock by one fixed tick.
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;

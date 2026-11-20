@@ -12,6 +12,16 @@
 //! not squared. It is the family of Vineta K's floor panels. [`PROGRAM_EMISSIVE_ALPHA_MASK`]
 //! selects it.
 //!
+//! **`fc10_Lambert_2UV_Emissive` is a window with a reflection map** (`docs/formats/2048-material-params.md`,
+//! "The reflective window and the awning"): every lit and ambient-only program of the file ends
+//! `fog(light * D^2 + D.a * R^2)`, `R` the `ReflectMap` read at `0.5 + 0.5 * reflect(-V, N).xy`
+//! with the view vector and the normal in world space ([`PROGRAM_REFLECT_MAP`]).
+//!
+//! **`dc_diffusetexturealphaemissive` adds its own picture's square** (Moa Therma's Feisar
+//! awnings, `docs/formats/2048-material-params.md`, "The reflective window and the awning"): its lit programs end
+//! `mad light, D^2, D^2` before the fog and write the texel's alpha out, so `rgb = D^2 * (light + 1)`
+//! and the awning's alpha is the picture's ([`PROGRAM_PICTURE_ADD`]).
+//!
 //! The picture rides the third binding ([`crate::mesh::Model::pad_masks`]), the tint is one
 //! glow-table entry of [`PROGRAM_EMISSIVE_ADD`], and `shade.wesl` joins the term to the pad glow
 //! it already adds after the light.
@@ -37,7 +47,8 @@ use oag_rcs::rcsmodel::psp2::{self, material::Material};
 use super::{Report, decode_material_texture};
 use crate::mesh::rcs::Textures;
 use crate::mesh::{
-    Emissive, ModelTexture, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, slots,
+    Emissive, ModelTexture, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_PICTURE_ADD,
+    PROGRAM_REFLECT_MAP, slots,
 };
 
 /// One admitted material: its glow-table slot (entry index plus one) and its mask map, which a
@@ -48,6 +59,10 @@ pub(super) struct Add {
     /// The `.gxt` the colour is drawn from when the material's first listed texture is the mask
     /// itself ([`Kind::colour`]).
     pub colour: Option<String>,
+    /// Whether the family's program reads the picture's alpha as the surface's own
+    /// ([`PROGRAM_REFLECT_MAP`] gates by it, [`PROGRAM_PICTURE_ADD`] writes it out), which takes
+    /// the alpha lane of a Vita slot word.
+    pub alpha_gated: bool,
 }
 
 /// Per material, the add it draws. [`super::shield_lightning`] fills in the same table: both ride
@@ -79,6 +94,11 @@ impl Plan {
         self.of(material)?.colour.as_deref()
     }
 
+    /// Whether this material's term is gated by the diffuse alpha, so its slot word reads lane 3.
+    pub fn alpha_gated(&self, material: Option<usize>) -> bool {
+        self.of(material).is_some_and(|a| a.alpha_gated)
+    }
+
     /// The mask map this material binds third, when it has one.
     pub fn mask(&self, material: Option<usize>) -> Option<&Arc<ModelTexture>> {
         self.of(material)?.texture.as_ref()
@@ -88,7 +108,9 @@ impl Plan {
 /// One member of the family: the sampler whose alpha is the mask, the glow-table mode that says
 /// how, and the sampler that carries the colour when it is not the first texture listed.
 struct Kind {
-    mask: &'static str,
+    /// The sampler whose picture rides the third binding; `None` for a term of the first
+    /// binding's own.
+    mask: Option<&'static str>,
     program: f32,
     colour: Option<&'static str>,
     /// The uniform the tint is read from; `None` where the program multiplies by nothing (one).
@@ -106,7 +128,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
     let stem = stem.trim_suffix(".rcsmaterial");
     if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive_alpha") {
         Some(Kind {
-            mask: "Texture2Alpha",
+            mask: Some("Texture2Alpha"),
             program: PROGRAM_EMISSIVE_ADD,
             colour: None,
             tint: Some("Constant1"),
@@ -114,7 +136,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
         })
     } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive") {
         Some(Kind {
-            mask: "Texture2",
+            mask: Some("Texture2"),
             program: PROGRAM_EMISSIVE_ALPHA_MASK,
             colour: None,
             tint: Some("Constant1"),
@@ -123,7 +145,7 @@ fn kind_of(material: &Material) -> Option<Kind> {
     } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissivenew") {
         // Chenghou's: the mask is `Norm`'s alpha and the colour is `Texture1`, listed second.
         Some(Kind {
-            mask: "Norm",
+            mask: Some("Norm"),
             program: PROGRAM_EMISSIVE_ALPHA_MASK,
             colour: Some("Texture1"),
             tint: Some("Constant1"),
@@ -131,8 +153,26 @@ fn kind_of(material: &Material) -> Option<Kind> {
         })
     } else if stem.eq_ignore_ascii_case("fc16_phong_alphaspec_normal_emissive") {
         Some(Kind {
-            mask: "EmissiveMap",
+            mask: Some("EmissiveMap"),
             program: PROGRAM_EMISSIVE_ADD,
+            colour: None,
+            tint: None,
+            ps4: false,
+        })
+    } else if stem.eq_ignore_ascii_case("fc10_lambert_2uv_emissive") {
+        // Moa Therma's glass facades; the file ships in the base circuits' packages too.
+        Some(Kind {
+            mask: Some("ReflectMap"),
+            program: PROGRAM_REFLECT_MAP,
+            colour: None,
+            tint: None,
+            ps4: false,
+        })
+    } else if stem.eq_ignore_ascii_case("dc_diffusetexturealphaemissive") {
+        // Moa Therma's Feisar awnings.
+        Some(Kind {
+            mask: None,
+            program: PROGRAM_PICTURE_ADD,
             colour: None,
             tint: None,
             ps4: false,
@@ -168,27 +208,38 @@ pub(super) fn plan(
         };
         let index = out.adds.len() - 1;
         const UNIT: [f32; 3] = [1.0; 3];
+        let path = match sampler {
+            None => Some(None),
+            Some(name) => material
+                .sampler(name_hash(name))
+                .filter(|p| !p.is_empty())
+                .map(Some),
+        };
         let (Some(path), Some(tint)) = (
-            material
-                .sampler(name_hash(sampler))
-                .filter(|p| !p.is_empty()),
+            path,
             tint.map_or(Some(UNIT.to_vec()), |name| material.param(name_hash(name))),
         ) else {
             report.emissive_add_unread += 1;
             continue;
         };
         let channel = |i: usize| tint.get(i).copied().unwrap_or(0.0);
-        let Some(texture) = cache
-            .entry(path.to_string())
-            .or_insert_with(|| {
-                textures(path)
-                    .and_then(|blob| decode_material_texture(path, &blob, report))
-                    .map(Arc::new)
-            })
-            .clone()
-        else {
-            report.emissive_add_unread += 1;
-            continue;
+        let texture = match path {
+            None => None,
+            Some(path) => {
+                let loaded = cache
+                    .entry(path.to_string())
+                    .or_insert_with(|| {
+                        textures(path)
+                            .and_then(|blob| decode_material_texture(path, &blob, report))
+                            .map(Arc::new)
+                    })
+                    .clone();
+                if loaded.is_none() {
+                    report.emissive_add_unread += 1;
+                    continue;
+                }
+                loaded
+            }
         };
         let entry = Emissive {
             tint: [channel(0), channel(1), channel(2)],
@@ -209,11 +260,12 @@ pub(super) fn plan(
         };
         out.adds[index] = Some(Add {
             slot,
-            texture: Some(texture),
+            texture,
             colour: colour
                 .and_then(|name| material.sampler(name_hash(name)))
                 .filter(|p| !p.is_empty())
                 .map(str::to_string),
+            alpha_gated: program == PROGRAM_REFLECT_MAP || program == PROGRAM_PICTURE_ADD,
         });
         report.emissive_add_materials += 1;
     }
@@ -237,12 +289,24 @@ mod tests {
     }
 
     #[test]
+    fn omegas_second_sampler_of_the_window_file_is_the_reflect_map() {
+        // The sampler hash Omega's `fc10_lambert_2uv_emissive` records beside its window atlas.
+        assert_eq!(name_hash("ReflectMap"), 0xdba5_1b4c);
+        let family = kind_of(&named(
+            "data/art/published/dlc1/environments/moa_therma/materials/fc10_lambert_2uv_emissive.rcsmaterial",
+        ))
+        .expect("admitted");
+        assert_eq!(family.mask, Some("ReflectMap"));
+        assert!(!family.ps4, "Omega's programs are unread");
+    }
+
+    #[test]
     fn chenghous_new_family_masks_by_norm_and_colours_by_texture1() {
         let new = kind_of(&named(
             "data/art/published/dlc1/environments/chenghou_project/materials/diffuse_normal_specular_emmissivenew.rcsmaterial",
         ))
         .expect("admitted");
-        assert_eq!(new.mask, "Norm");
+        assert_eq!(new.mask, Some("Norm"));
         assert_eq!(new.colour, Some("Texture1"));
         assert!(!new.ps4, "Omega ships no `new` file");
     }
@@ -253,7 +317,7 @@ mod tests {
             "data/art/published/environments/shared/objectlibrary/materials/fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial",
         ))
         .expect("admitted");
-        assert_eq!(road.mask, "EmissiveMap");
+        assert_eq!(road.mask, Some("EmissiveMap"));
         assert_eq!(road.program, PROGRAM_EMISSIVE_ADD);
         assert_eq!(
             road.tint, None,
@@ -274,11 +338,11 @@ mod tests {
         let plain = |n: &str| kind_of(&named(n)).map(|k| (k.mask, k.ps4));
         assert_eq!(
             plain("x/materials/diffuse_normal_specular_emmissive.rcsmaterial"),
-            Some(("Texture2", true))
+            Some((Some("Texture2"), true))
         );
         assert_eq!(
             plain("x/materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial"),
-            Some(("Texture2Alpha", false))
+            Some((Some("Texture2Alpha"), false))
         );
         assert_eq!(
             plain("x/materials/diffuse_normal_specular.rcsmaterial"),
