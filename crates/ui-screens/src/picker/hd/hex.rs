@@ -368,8 +368,7 @@ const RING_STEP: f32 = 1.0;
 /// then the cursor ring on the cell at `cursor` of the centre column.
 pub(super) fn draw_cells(
     grid: &HexGrid,
-    (selected, count, pan): (usize, usize, f32),
-    since: f32,
+    (selected, count, pan, since): (usize, usize, f32, f32),
     cursor: Option<usize>,
     ring: [f32; 4],
     face: &dyn Fn(&Cell) -> Face,
@@ -483,8 +482,7 @@ pub(super) fn draw(
     };
     draw_cells(
         grid,
-        (picker.index(), picker.entries().len(), picker.pan()),
-        since,
+        (picker.index(), picker.entries().len(), picker.pan(), since),
         cursor,
         grid.ring,
         &face,

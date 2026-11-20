@@ -194,8 +194,12 @@ fn draw_grid(
     grid.rows = grid.rows.min(rows);
     hex::draw_cells(
         &grid,
-        (picker.index() % width.max(1), width, picker.pan()),
-        f32::INFINITY,
+        (
+            picker.index() % width.max(1),
+            width,
+            picker.pan(),
+            f32::INFINITY,
+        ),
         Some(picker.index() / width.max(1)),
         RING,
         &face,
