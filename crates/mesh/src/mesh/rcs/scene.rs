@@ -41,6 +41,13 @@ pub enum View {
         /// Whether this group is fogged with the alternate pair.
         alternate_fog: bool,
     },
+    /// One fog group of the planar reflection target ([`build_reflection`]): the
+    /// chunks with `rcsmodel::RENDER_REFLECTED` whose `RENDER_ALTERNATE_FOG` is
+    /// `alternate_fog`. They stay in the main view too.
+    Reflection {
+        /// Whether this group is fogged with the alternate pair.
+        alternate_fog: bool,
+    },
 }
 
 impl View {
@@ -50,6 +57,11 @@ impl View {
             Self::Main => !chunk.is_behind_glass(),
             Self::BehindGlass { alternate_fog } => {
                 chunk.is_behind_glass() && chunk.uses_alternate_fog() == alternate_fog
+            }
+            Self::Reflection { alternate_fog } => {
+                chunk.is_reflected()
+                    && !chunk.is_behind_glass()
+                    && chunk.uses_alternate_fog() == alternate_fog
             }
         }
     }
@@ -196,6 +208,41 @@ pub fn build_scene_views(
         primary_fog: group(false)?,
     };
     Ok((main, behind_glass, report))
+}
+
+/// The planar reflection target's two fog groups for a circuit whose `main`
+/// model was built from the same files: the chunks with
+/// `rcsmodel::RENDER_REFLECTED`, split by fog as the original's reflect list
+/// picks a chunk's fog (`0x00403a30`: bit 5 the alternate pair, else the
+/// primary; `docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md`). Unlike the
+/// behind-the-glass groups each draw keeps the cull its material authors, the
+/// main view's own.
+///
+/// # Errors
+///
+/// As [`build_scene`].
+pub fn build_reflection(
+    label: &str,
+    data: &[u8],
+    model_blob: &[u8],
+    main: &Model,
+) -> Result<BehindGlass> {
+    let group = |alternate_fog| -> Result<Option<Model>> {
+        let view = View::Reflection { alternate_fog };
+        let (mut model, _) = build_view(label, data, model_blob, Setup::Copy(main), view)?;
+        if model.draws.is_empty()
+            && model.alpha_tested_draws.is_empty()
+            && model.transparent_draws.is_empty()
+        {
+            return Ok(None);
+        }
+        keep_drawn_textures(&mut model);
+        Ok(Some(model))
+    };
+    Ok(BehindGlass {
+        alternate_fog: group(true)?,
+        primary_fog: group(false)?,
+    })
 }
 
 /// Draws every chunk of a target model single-sided, as the original draws

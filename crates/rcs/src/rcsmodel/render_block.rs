@@ -66,9 +66,21 @@ const RENDER_FLAGS: usize = 0x06;
 ///
 /// The other bits the same pass read - the five-bucket draw routing in bits
 /// 2-5, the PVS scrub in bits 9-10 - are carried in the halfword and are not
-/// interpreted here, except bits 4 and 5 ([`RENDER_BEHIND_GLASS`],
+/// interpreted here, except bits 3, 4 and 5 ([`RENDER_REFLECTED`], [`RENDER_BEHIND_GLASS`],
 /// [`RENDER_ALTERNATE_FOG`]).
 pub const RENDER_TRACK: u16 = 1 << 0;
+
+/// Bit 3 of [`Mesh::render_flags`]: **this chunk is drawn into the planar
+/// reflection target as well as the main view.**
+///
+/// The original's reflect job (`TrackReflect_RenderJob`, `0x006cf358`) draws a
+/// chunk list of its own into a 960x540 target under the main camera mirrored
+/// about the water plane; on Moa Therma's RPCS3 frames the scenery in that
+/// target is these chunks, and the sea, the track and the craft are not. On
+/// disc it is set on 257 chunks of Moa Therma and 73 of Ubermall. Confidence
+/// 85, from `docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md` and
+/// `docs/rendering/water.md`, "The planar reflection, read off live frames".
+pub const RENDER_REFLECTED: u16 = 1 << 3;
 
 /// Bit 4 of [`Mesh::render_flags`]: **this chunk is drawn behind the glass,
 /// never in the main view.**
@@ -163,6 +175,13 @@ impl Mesh {
     #[must_use]
     pub fn is_behind_glass(&self) -> bool {
         self.render_flags & RENDER_BEHIND_GLASS != 0
+    }
+
+    /// Whether this chunk is drawn into the planar reflection target - bit 3
+    /// of [`Self::render_flags`], see [`RENDER_REFLECTED`].
+    #[must_use]
+    pub fn is_reflected(&self) -> bool {
+        self.render_flags & RENDER_REFLECTED != 0
     }
 
     /// Whether this chunk is fogged with the alternate pair - bit 5 of

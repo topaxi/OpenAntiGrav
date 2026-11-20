@@ -36,12 +36,16 @@ pub(crate) enum SceneKind {
     Shine,
     /// The flame surfaces' (flares and boost plumes): `Scene::off` plus the clock.
     Flame,
-    /// The behind-the-glass target's alternate fog.
+    /// The behind-the-glass target's alternate fog, or the planar reflection target's
+    /// alternate-fog group (its lights doubled, as [`SceneKind::Reflection`]'s).
     GlassAlternate,
+    /// The planar reflection target's primary-fog group: the circuit's scene with the sun
+    /// colour and the prelit scale doubled (`scene::behind_glass::reflected_scene`).
+    Reflection,
 }
 
 impl SceneKind {
-    const COUNT: usize = 5;
+    const COUNT: usize = 6;
 
     fn index(self) -> u64 {
         self as u64

@@ -212,6 +212,16 @@ pub const SKY_ROTATION: &str = "Lighting.Sky rotation";
 /// `"Lighting.Sky brightness"`. One number, 0.5 to 3.
 pub const SKY_BRIGHTNESS: &str = "Lighting.Sky brightness";
 
+/// `"Water.Water plane height"`. One number: Wipeout HD's planar reflection mirrors the
+/// camera by `y' = h - y` for this `h` (the plane at `h / 2`), and draws the reflection
+/// only while the eye is above `h`. -50 on every circuit with a planar sea, and the
+/// executable's own default (`docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md`).
+pub const WATER_PLANE_HEIGHT: &str = "Water.Water plane height";
+
+/// `"Water.Water distortion"`. One number, the world units the sea's mapped normal pushes
+/// the point it samples the reflection at; 40 on every circuit, and the executable's default.
+pub const WATER_DISTORTION: &str = "Water.Water distortion";
+
 /// `"Fog.Fog Color"`. Three numbers, reaching 1.85.
 pub const FOG_COLOUR: &str = "Fog.Fog Color";
 

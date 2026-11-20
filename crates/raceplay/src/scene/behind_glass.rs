@@ -23,6 +23,30 @@
 //!
 //! **Built only for a circuit with such chunks**, Vineta K in either
 //! direction, so every other circuit draws exactly what it drew without it.
+//!
+//! # The planar reflection (a [`Mirror`])
+//!
+//! The original has one such screen-space target and two jobs that fill it:
+//! `Scene_PrepareFrame` (`0x003aa888`) clears it and runs RenderTrackRefract
+//! when the eye is at or below the circuit's `Water plane height` `h`, and
+//! RenderTrackReflect (`TrackReflect_RenderJob`, `0x006cf358`) when above. The
+//! reflect job draws the sky, then the chunks with
+//! `oag_rcs::rcsmodel::RENDER_REFLECTED` (fogged as here), under the main
+//! view-projection composed with the mirror `y' = h - y`, the main eye
+//! unchanged, and with the sun colour and the prelit scale bound doubled
+//! (`directionalLight0Colour` and `prelitScaleSpecular` read from copies
+//! multiplied by 2.0). HD's sea (`reflectplane_dc_seawater`) samples it
+//! through the main view-projection (`reflectProject`) at its own point pushed
+//! `distortion * (N.x, 0, N.z)`. A 960x540 target, read live on Moa Therma
+//! (`docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md`,
+//! `docs/rendering/water.md`, "The planar reflection, drawn").
+//!
+//! The mirror reverses the winding; this draws the target with the clip `x`
+//! flipped as well, so the two flips cancel and every draw keeps the main
+//! view's own cull, and the sea's lookup flips `u` with the same matrix
+//! ([`Scene::target_projection`]). The original draws only the reflect half on
+//! these circuits: what the refract job puts in the target when the eye drops
+//! below `h` there is unread, so this clears it to black and draws nothing.
 
 use super::*;
 
@@ -34,6 +58,54 @@ pub(super) const SIZE: (u32, u32) = (640, 360);
 /// How much the target's projection scales the main view's clip `x` and `y`:
 /// `c[256]`'s `sy` is `1.29923 = 0.75 * 1.7323`, the main view's, measured.
 const NARROWING: f32 = 0.75;
+
+/// The planar reflection target's size: measured on Moa Therma (surface clip `0x3c0 x
+/// 0x21c` beside a 1920x1080 output), kept whatever the window's, as [`SIZE`] is.
+pub(crate) const REFLECTION_SIZE: (u32, u32) = (960, 540);
+
+/// What the reflect job multiplies the sun colour and the prelit scale by before it binds
+/// them: the vector at `0x007b0da0`, `{2.0, 0, 0, 0}` splatted (`Scene_PrepareFrame`,
+/// `0x003ab074`..`0x003ab118`).
+const REFLECTED_LIGHT: f32 = 2.0;
+
+/// A circuit's planar reflection: the mirror and the sea's sample offset.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Mirror {
+    /// `Water.Water plane height`, the `h` of the mirror `y' = h - y` and of the
+    /// eye test.
+    pub plane_height: f32,
+    /// `Water.Water distortion`, the sea program's `distortion.z`.
+    pub distortion: f32,
+}
+
+impl Mirror {
+    /// The executable's defaults (`Environment_RegisterLightingSchema`, `0x003a83d8`:
+    /// `+0x528` = -50.0, `+0x520` = 40.0), which every circuit with a planar sea authors.
+    pub const DEFAULT: Self = Self {
+        plane_height: -50.0,
+        distortion: 40.0,
+    };
+
+    /// World to world: `y' = h - y`.
+    fn matrix(self) -> Mat4 {
+        Mat4::from_translation(Vec3::new(0.0, self.plane_height, 0.0))
+            * Mat4::from_scale(Vec3::new(1.0, -1.0, 1.0))
+    }
+}
+
+/// The clip-space flip that keeps the mirrored target's winding the main view's.
+fn flip_x() -> Mat4 {
+    Mat4::from_scale(Vec3::new(-1.0, 1.0, 1.0))
+}
+
+/// `scene` as the reflect job binds it: the sun colour and the prelit scale doubled, nothing
+/// else changed.
+pub(super) fn reflected_scene(scene: &mesh_render::Scene) -> mesh_render::Scene {
+    let mut out = *scene;
+    out.light.sun = scene.light.sun.map(|c| c * REFLECTED_LIGHT);
+    out.light.prelit_scale = scene.light.prelit_scale.map(|c| c * REFLECTED_LIGHT);
+    out
+}
 
 /// What a load hands the scene for the target: the chunks, split by fog, and
 /// the circuit's alternate fog pair.
@@ -47,6 +119,9 @@ pub struct BehindGlassModels {
     /// `Fog.Alternate Fog Color` / `Alternate Fog Density`, read only when a
     /// group exists.
     pub alternate_fog: Option<mesh_render::Fog>,
+    /// `Some` where the groups are the planar reflection's chunks rather than the
+    /// behind-the-glass ones.
+    pub mirror: Option<Mirror>,
 }
 
 impl Default for BehindGlassModels {
@@ -55,6 +130,7 @@ impl Default for BehindGlassModels {
             size: SIZE,
             groups: oag_mesh::mesh::rcs::BehindGlass::default(),
             alternate_fog: None,
+            mirror: None,
         }
     }
 }
@@ -73,6 +149,7 @@ pub(super) struct Target {
     /// The `0x10` chunks without `0x20`, fogged with the primary pair.
     primary: Option<Drawable>,
     alternate_fog: Option<mesh_render::Fog>,
+    mirror: Option<Mirror>,
 }
 
 /// The target's colour texture: created ahead of the drawables, because the
@@ -83,7 +160,7 @@ fn colour_texture(
     models: &BehindGlassModels,
     format: wgpu::TextureFormat,
 ) -> Option<wgpu::Texture> {
-    if models.groups.is_empty() {
+    if models.groups.is_empty() && models.mirror.is_none() {
         return None;
     }
     let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -214,19 +291,22 @@ impl Target {
                 true,
             )
         };
+        // The reflection's chunks keep each draw's own cull, the main view's: the mirror and
+        // the clip flip cancel ([`Mirror`]).
+        let cull_all = models.mirror.is_none();
         let scenery = |model| {
             drawable(
                 model,
                 mesh_render::Depth::Scene,
                 mesh_render::ShadowReceiver::Both,
-                true,
+                cull_all,
             )
         };
         let BehindGlassModels {
             size,
             groups,
             alternate_fog,
-            ..
+            mirror,
         } = models;
         Ok(Self {
             size,
@@ -248,6 +328,7 @@ impl Target {
             alternate: groups.alternate_fog.map(scenery).transpose()?,
             primary: groups.primary_fog.map(scenery).transpose()?,
             alternate_fog,
+            mirror,
         })
     }
 
@@ -271,13 +352,21 @@ impl Target {
         if let Some(alternate) = &mut self.alternate {
             alternate.share_scene(device, blocks, SceneKind::GlassAlternate);
         }
+        // The reflection's primary group reads its own block: the circuit's with the
+        // reflect job's doubled lights ([`reflected_scene`]).
+        let primary_kind = if self.mirror.is_some() {
+            SceneKind::Reflection
+        } else {
+            SceneKind::Circuit
+        };
         if let Some(primary) = &mut self.primary {
-            primary.share_scene(device, blocks, SceneKind::Circuit);
+            primary.share_scene(device, blocks, primary_kind);
         }
     }
 
     /// Writes every drawable's uniforms for this frame: `matrix` is
-    /// [`view_projection`] of the main view's, `scene` the circuit's own scene
+    /// [`view_projection`] of the main view's (or the mirrored one), `eye` where the
+    /// sky cube is centred, `scene` the circuit's own scene
     /// uniform (whose fog the alternate group swaps for its pair, in the view's
     /// alternate block), `seconds` the scenery clock. The primary group reads the circuit's
     /// block, which the caller wrote.
@@ -306,7 +395,17 @@ impl Target {
                 }),
             ..*scene
         };
-        blocks.write(queue, block, SceneKind::GlassAlternate, &alternate);
+        if self.mirror.is_some() {
+            blocks.write(
+                queue,
+                block,
+                SceneKind::GlassAlternate,
+                &reflected_scene(&alternate),
+            );
+            blocks.write(queue, block, SceneKind::Reflection, &reflected_scene(scene));
+        } else {
+            blocks.write(queue, block, SceneKind::GlassAlternate, &alternate);
+        }
         for drawable in [&self.alternate, &self.primary].into_iter().flatten() {
             drawable.write(queue, matrix, Mat4::IDENTITY, matrix);
             drawable.write_anims(queue, seconds);
@@ -324,6 +423,7 @@ impl Target {
         set: Option<&VisibleSet>,
         chunks: Option<&ChunkSet>,
         frustum: Option<&Frustum>,
+        draw: bool,
     ) -> SceneStats {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("behind the glass"),
@@ -362,6 +462,10 @@ impl Target {
             multiview_mask: None,
         });
         oag_gpu::perfprobe::marks::mark(&mut pass, "behind the glass");
+        if !draw {
+            oag_gpu::perfprobe::marks::close(&mut pass);
+            return SceneStats::default();
+        }
         let groups = || self.alternate.iter().chain(&self.primary);
         let mut stats = SceneStats::default();
         let solid = Lists::Solid { order: None };
@@ -413,15 +517,53 @@ impl Scene {
         let Some(target) = &self.behind_glass else {
             return SceneStats::default();
         };
+        let Some(mirror) = target.mirror else {
+            target.write(
+                queue,
+                (&self.scene_blocks, block),
+                view_projection(matrix),
+                eye,
+                scene,
+                seconds,
+            );
+            return target.render(encoder, block, set, chunks, frustum, true);
+        };
+        // The reflect job runs only while the eye is above the plane height
+        // (`Scene_PrepareFrame`, `0x003ac014`..`0x003ac030`); below it the target is cleared.
+        let above = eye.y > mirror.plane_height;
+        // The sky cube is placed at the mirrored eye, so the mirror carries it back round the
+        // camera: the sky's rotation with its `y` row negated, as the target's sky draws read.
         target.write(
             queue,
             (&self.scene_blocks, block),
-            view_projection(matrix),
-            eye,
+            flip_x() * matrix * mirror.matrix(),
+            mirror.matrix().transform_point3(eye),
             scene,
             seconds,
         );
-        target.render(encoder, block, set, chunks, frustum)
+        // The main view's frustum would drop what is off screen but seen in the sea (a
+        // tower's top); the visible set stays. How the original culls its reflect list
+        // is unread, so this is chosen, not measured.
+        target.render(encoder, block, set, None, None, above)
+    }
+
+    /// The matrix the circuit's screen-space target is read through (`scene.refraction`):
+    /// the glass's `refractProject` ([`view_projection`]), or, for the planar reflection, the
+    /// main view-projection the sea's `reflectProject` is, flipped as the target is drawn.
+    pub(super) fn target_projection(&self, main: Mat4) -> Mat4 {
+        match self.behind_glass.as_ref().and_then(|target| target.mirror) {
+            Some(_) => flip_x() * main,
+            None => view_projection(main),
+        }
+    }
+
+    /// `scene.sea_reflection`: the sea's `distortion` and the flag that the planar target is
+    /// bound, or zero where the circuit has none.
+    pub(super) fn sea_reflection(&self) -> [f32; 4] {
+        self.behind_glass
+            .as_ref()
+            .and_then(|target| target.mirror)
+            .map_or([0.0; 4], |mirror| [mirror.distortion, 1.0, 0.0, 0.0])
     }
 }
 
@@ -523,4 +665,54 @@ fn srgb_byte(linear: f32) -> u8 {
         1.055 * c.powf(1.0 / 2.4) - 0.055
     };
     (encoded * 255.0).round() as u8
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `y' = h - y`: Moa Therma's `h` -50 mirrors about y = -25, the plane read live.
+    #[test]
+    fn the_mirror_reflects_about_half_the_plane_height() {
+        let mirror = Mirror::DEFAULT;
+        assert_eq!((mirror.plane_height, mirror.distortion), (-50.0, 40.0));
+        let m = mirror.matrix();
+        assert_eq!(
+            m.transform_point3(Vec3::new(3.0, 10.0, -7.0)),
+            Vec3::new(3.0, -60.0, -7.0)
+        );
+        assert_eq!(
+            m.transform_point3(Vec3::new(1.0, -25.0, 2.0)),
+            Vec3::new(1.0, -25.0, 2.0)
+        );
+        // An involution, so the sky cube placed at the mirrored eye lands back on the eye.
+        let eye = Vec3::new(211.9, 37.7, -368.0);
+        assert!((m.transform_point3(m.transform_point3(eye)) - eye).length() < 1e-4);
+    }
+
+    /// The mirror alone reverses the winding; with the clip flip the determinant is the main
+    /// view's again, which is what lets every draw keep its own cull.
+    #[test]
+    fn the_clip_flip_cancels_the_mirrors_winding() {
+        let mirror = Mirror::DEFAULT.matrix();
+        assert!(mirror.determinant() < 0.0);
+        assert!((flip_x() * mirror).determinant() > 0.0);
+    }
+
+    /// The reflect job doubles the sun colour and the prelit scale and nothing else.
+    #[test]
+    fn the_reflected_scene_doubles_the_sun_and_the_prelit_scale_only() {
+        let mut scene = mesh_render::Scene::off();
+        scene.light.sun = [4.0, 3.843_137, 3.309_804];
+        scene.light.prelit_scale = [1.0, 0.5, 0.25];
+        scene.light.ambient = [0.8, 0.827_451, 0.831_373];
+        scene.light.specular_scale = 2.0;
+        scene.light.output_scale = 0.5;
+        let out = reflected_scene(&scene);
+        assert_eq!(out.light.sun, [8.0, 7.686_274, 6.619_608]);
+        assert_eq!(out.light.prelit_scale, [2.0, 1.0, 0.5]);
+        assert_eq!(out.light.ambient, scene.light.ambient);
+        assert_eq!(out.light.specular_scale, 2.0);
+        assert_eq!(out.light.output_scale, 0.5);
+    }
 }

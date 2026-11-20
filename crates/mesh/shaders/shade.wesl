@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading, shield_shading};
-import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
+import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -13,7 +13,7 @@ import package::omega_snow::{OmegaSnow, omega_snow, omega_snow_normal};
 import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
-import oag_shaders::target::{decode, encode, encoded_out, linear_out};
+import oag_shaders::target::{decode, encode, encoded_out, linear_out, target_in};
 import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_prelit, nova_vertices, rig_specular, simplified_lighting, tangents_present, zone_race};
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
@@ -1483,20 +1483,31 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // `@0x5c`) or `* (0.2 a + 0.4)` (block `@0x24b0`, the entry's `offset` 1), `a` the alpha
         // of its second map (fourth binding) at `uv` plus the third tap.
         //
-        // **The sea's reflection is the planar target (`Reflectivity * R`), which is not drawn**
-        // (`docs/rendering/water.md`, "The planar reflection, read off live frames"). Until it
-        // is, the sea carries `Reflectivity * sky` at the mapped normal in its place, unmasked
-        // and unshadowed as the planar term is. Chosen, not measured: the sky stands in for the
-        // mirrored sky and scenery. The target holds what the sky and scenery programs wrote,
-        // display-encoded values, so the sky is encoded here as `enhanced` water does, where
-        // the pool and the glass read the probe map's own linear texels.
+        // **The sea's reflection is the planar target, `Reflectivity * R`** (`docs/rendering/water.md`,
+        // "The planar reflection, drawn"): the point pushed `distortion * (N.x, 0, N.z)`, projected
+        // through `reflectProject` (the main view-projection, in `scene.refraction` flipped as the
+        // target is drawn) and read at `(0.5 + q.x / 2w, 0.5 - q.y / 2w)`. The original's target is
+        // a 5-6-5 surface the sky and scenery programs wrote, which the sea fetches raw (unit 3's
+        // gamma nibble 0, read live), so `R` is the stored value: the encoded light, saturated,
+        // where the main view's taps are decoded. Where no target is bound
+        // (`scene.sea_reflection.y` 0: a front-end capture, the viewer), the sea carries
+        // `Reflectivity * encode(sky)` at the mapped normal in its place, chosen, not measured.
         if water > 0.5 && water < 4.5 {
             let r = reflect(-to_eye, n_lit);
             let sky = probe_tint(textureSampleLevel(sky_probe_tex, shadow_sampler, env_probe_uv(r), 0.0).rgb);
             let gate = material_sample(MATERIAL_WAVE_MAP, in.texcoord + water_tap_uv(water_entry, water, 2u, in.texcoord)).a;
             let glint_weight = select(gate, 0.2 * gate + 0.4, row_tint.w > 0.5);
             let weight = select(select(in.colour.rgb, vec3<f32>(glint_weight), water > 3.5), vec3<f32>(row_tint.w), water < 2.5);
-            sky_reflection = select(sky, encode(sky), water < 1.5) * weight;
+            var sea = encode(sky);
+            if scene.sea_reflection.y > 0.5 {
+                let pushed = in.world + scene.sea_reflection.x * vec3<f32>(n_lit.x, 0.0, n_lit.z);
+                let q = scene.refraction * vec4<f32>(pushed, 1.0);
+                let ndc = q.xy / max(q.w, 1e-6);
+                let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
+                let texel = textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb;
+                sea = encode(clamp(target_in(texel), vec3<f32>(0.0), vec3<f32>(1.0)));
+            }
+            sky_reflection = select(sky, sea, water < 1.5) * weight;
         }
 
         // **Omega's reflective sea** (kinds 9 and 10): the program adds

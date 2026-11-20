@@ -233,6 +233,9 @@ struct Scene {
     // The Quake's travelling displacement - `oag_mesh::mesh_render::QuakeWave`,
     // read by `quake.wesl` for the surfaces whose vertex carries `quake`.
     quake: QuakeWave,
+    // `mesh_render::Scene::sea_reflection`: `x` the sea's `distortion`, `y` 1.0 where the planar
+    // reflection target is bound in `behind_glass_tex` through `refraction`.
+    sea_reflection: vec4<f32>,
 };
 
 // One craft's map on the road: world to its orthographic sun view, and where

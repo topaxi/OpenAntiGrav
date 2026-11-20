@@ -128,6 +128,51 @@ fn the_sea_entry_carries_its_materials_reflectivity() {
     }
 }
 
+/// The planar reflection target's chunks are exactly the chunks with render flag bit 3
+/// (`rcsmodel::RENDER_REFLECTED`), split by bit 5 into its two fog groups
+/// (`docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md`): Moa Therma's and Ubermall's
+/// seas have them, Chenghou's has none (its target holds the sky alone, as read live).
+/// Dropping the view's filter, or drawing the behind-the-glass chunks instead, fails here.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_reflection_target_draws_the_bit_3_chunks() {
+    let Some(image) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let reads = Reads::new();
+    let specs: Vec<String> = (0..4).map(|n| archive(&image, n)).collect();
+    for circuit in ["03_track", "05_ubermall", "04_chenghou_project"] {
+        let path = format!("/data/environments/{circuit}/track.vex");
+        let (spec, data) = reads.read_any(&specs, &path).expect("the circuit ships");
+        let geometry = mesh::rcs::sibling_geometry(spec, &path, &data).expect("its geometry");
+        let (main, _) = build(&reads, &image, &path).expect("the circuit builds");
+        let groups =
+            mesh::rcs::build_reflection(&path, &data, &geometry, &main).expect("the groups build");
+        let drawn = |group: &Option<mesh::Model>| group.as_ref().map_or(0, |m| m.mesh_count);
+        let flagged = oag_rcs::rcsmodel::Model::parse(&geometry)
+            .expect("the geometry parses")
+            .meshes
+            .iter()
+            .filter(|chunk| chunk.is_reflected() && !chunk.is_behind_glass())
+            .map(|chunk| chunk.uses_alternate_fog())
+            .fold((0, 0), |(alt, pri), alternate| {
+                if alternate {
+                    (alt + 1, pri)
+                } else {
+                    (alt, pri + 1)
+                }
+            });
+        let got = (drawn(&groups.alternate_fog), drawn(&groups.primary_fog));
+        println!("{circuit}: reflected chunks (alternate, primary) {got:?}, flagged {flagged:?}");
+        assert_eq!(got, flagged, "{circuit}");
+        assert_eq!(
+            got.0 + got.1 > 0,
+            circuit != "04_chenghou_project",
+            "{circuit}"
+        );
+    }
+}
+
 /// How many drawn materials and chunks resolve no shader variant, per circuit
 /// and direction, measured 2026-10-19: **a ratchet over a known gap, not zero**.
 /// Only Modesto Heights, Talon's Junction and Tech De Ra have one (the others
