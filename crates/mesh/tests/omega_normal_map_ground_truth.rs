@@ -142,7 +142,9 @@ fn omega_circuits_bind_the_normal_map_their_programs_decode() {
     // `ambiguous` is a material that blends two normal maps (`DC_Rocks`, `Road_..._panelmap1`),
     // `absent` a material whose programs sample no normal map though its model carries a tangent
     // (`m_Diffuse_Normal_ConstantSpecular`: one alpha texture), `unread` a normal map the
-    // archives do not hold or will not decode.
+    // archives do not hold or will not decode. The 10,219 bind-pose crowd rigs
+    // (`psp2::crowd_rigs`, one per crowd-entity shape of these circuits) carry a tangent and
+    // bind their `_n` map: 24,793 of 25,977 before them.
     assert_eq!(
         (
             total.bound,
@@ -153,7 +155,7 @@ fn omega_circuits_bind_the_normal_map_their_programs_decode() {
             total.third_taken,
             total.unresolved_samples
         ),
-        (24793, 25977, 771, 413, 0, 0, 0),
+        (35012, 36196, 771, 413, 0, 0, 0),
         "{}",
         total.describe()
     );
