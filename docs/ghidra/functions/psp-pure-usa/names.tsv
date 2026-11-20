@@ -324,3 +324,5 @@
 0x08a8f50c	data	g_caustic_uv_scale	80	caustic-pass.md
 0x08a8c5f4	data	g_world_state	75	world-clock.md
 0x0888681c	function	WorldNode_AdvanceAnimation	65	world-clock.md
+0x08898af8	function	Input_ParseButtonName	90	input.md
+0x08898eb4	function	Input_GetButtonName	85	input.md

@@ -9,10 +9,15 @@ No screen names the circle or the triangle as its Back.
 The disc's front-end XML never says "circle" for Back. It says `backward` and `cancel`, and each
 executable binds those abstract controls to a pad bit:
 
-- the PSP's `Input_ParseButtonName` binds both to the **circle**;
+- the PSP's `Input_ParseButtonName` binds both to the **circle** on Pulse (and to the **triangle** on
+  Pure, below);
 - the PS2's binds both to the **triangle** (`docs/ghidra/functions/ps2-pulse-eu/input.md`, "The
   divergence", confidence 90). Pulse on the PS2 then authors Help on the circle where the PSP
-  authors it on the triangle, and the footers draw the pair that way round.
+  authors it on the triangle, and the footers draw the pair that way round;
+- **Pure's PSP executable binds both to the triangle** (`FUN_08898af8`, `Input_ParseButtonName`,
+  returns index `6` for `backward` and `cancel`, the index its own `triangle` returns;
+  `docs/ghidra/functions/psp-pure-usa/input.md`, confidence 90), and its footers draw the triangle
+  beside `BACK`. The Pure EU disc's footers agree; its executable is not in Ghidra.
 
 A screen that wants a different button for something names it in its own `Redirect`
 (`forward="circle"`), and that wins over any rule. Our parser reads the abstract names as the PSP's
@@ -54,8 +59,8 @@ screens (`LogoFMV`, `Play Intro`).
 the movie screens skip on any face button, the in-game and photo screens on `square`/`start`. Omega
 re-ships HD's and 2048's files (`forward="backward"` on `Records` and `Cell Selection`, `forward="cancel"` on
 `WOW Download`). 2048 adds `circle` on `Demo Build Vita Lobby` and `Demo_Definition`'s
-`dlcTestScreen`, and `start` on its tutorial movies. So the only title whose `backward` is not the
-circle is Pulse on the PS2. For Omega and 2048 the resolver is **ported** (the same table, tested for
+`dlcTestScreen`, and `start` on its tutorial movies. Where the XML names no button the executable decides: the titles whose `backward` is not the
+circle are Pulse on the PS2 and **Pure on the PSP** (read in its executable, not inherited). For Omega and 2048 the resolver is **ported** (the same table, tested for
 both: `the_roles_a_screen_is_handed_on_every_title_pressing_and_choice`); that their `backward` is the circle is
 **inherited from HD by lineage and open**: HD's `Stats` pages author it, and the static read of the button-name
 parser in Omega's `eboot.bin` and 2048's executable was not done.
@@ -64,7 +69,8 @@ parser in Omega's `eboot.bin` and 2048's executable was not done.
 
 `oag_title::Title::menu_buttons(platform, choice, authored_help)` returns
 `oag_title::prompts::MenuButtons { back, help, glyph_swap }`. `FrontEnd::back_button(platform)` is the
-title's and pressing's own Back (Pulse's PS2: the triangle, everyone else: the circle);
+title's and pressing's own Back (Pulse's PS2 and Pure's PSP: the triangle, everyone else: the circle;
+`back_button_ps2`, `back_button_psp`);
 `choice` is CONTROLS > MENU BACK (`original`, `circle`, `triangle`); `authored_help` is the
 screen's own Help redirect (the triangle where it authors none). Back is the choice, or the
 original's under `original`. Help is the screen's authored button unless Back takes it, and then
@@ -75,6 +81,9 @@ it is the button Back displaced.
 | Pulse PS2 | circle | original | triangle | circle |
 | Pulse PS2 | circle | circle | circle | triangle |
 | Pulse PS2 | circle | triangle | triangle | circle |
+| Pure PSP | triangle (none authored) | original | triangle | circle |
+| Pure PSP | triangle (none authored) | circle | circle | triangle |
+| Pure PSP | triangle (none authored) | triangle | triangle | circle |
 | every other title and pressing | triangle | original | circle | triangle |
 | every other title and pressing | triangle | circle | circle | triangle |
 | every other title and pressing | triangle | triangle | triangle | circle |
@@ -138,7 +147,7 @@ beside `Help` on Track Select; `circle` draws them exchanged.
 The line printed when the menus open (`OAG_HINTS_SHELL_KEYS`, `crates/game/src/app/hints.rs`) names
 the keys bound to the resolved Back (`Controls::bound_keys`, the live table, so a rebind shows) and
 the pad button's word (`OAG_HINTS_BUTTON_CIRCLE`/`_TRIANGLE`) through its `%s`: `backspace, z, y,
-circle or escape goes back` on every title and pressing but Pulse's PS2 under `original` or
+circle or escape goes back` on every title and pressing but Pulse's PS2 and Pure's PSP under `original` or
 `triangle`, where it reads `v, triangle or escape goes back`. The on-screen keyboard's and the tag
 entry's hint lines (`OAG_KEYBOARD_HINT`, `OAG_TAG_ENTRY_HINT`) take the button's word the same way,
 and the campaign editor's fill key names the face button Back displaced. English, German and
