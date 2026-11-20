@@ -102,7 +102,7 @@ pub(super) fn open(
     let audio = if header.audio.is_empty() {
         None
     } else {
-        match ensure_source(cache_dir, key, "bik", blob) {
+        match super::transcode::ensure_source(cache_dir, key, "bik", blob) {
             Ok(source) => track::bink_audio(&header.audio, source, key, header.seconds()),
             Err(e) => {
                 warn!("{key}'s audio track could not be cached for decoding: {e:#}");
@@ -149,30 +149,6 @@ pub(super) fn open(
     }
 }
 
-/// Writes `blob` under `cache_dir` as `{key}.{ext}`, unless a file already
-/// there is already the right length - the same trust model
-/// [`super::cached`] applies to the video cache, extended to the source file
-/// a container-hosted audio track reads back.
-///
-/// Needed because [`transcode`]'s own write of this file only happens on a
-/// video-cache **miss**: a movie whose picture is already cached would
-/// otherwise leave a track with nothing on disk to decode. Writing it here
-/// unconditionally (well, unconditionally on there being a track worth
-/// reading at all) means the audio route never depends on whether the video
-/// route happened to run this time.
-fn ensure_source(cache_dir: &Path, key: &str, ext: &str, blob: &[u8]) -> Result<PathBuf> {
-    std::fs::create_dir_all(cache_dir)
-        .with_context(|| format!("creating {}", cache_dir.display()))?;
-    let path = cache_dir.join(format!("{key}.{ext}"));
-    let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
-    if !already_written {
-        super::transcode::write_atomically(&path, |part| {
-            std::fs::write(part, blob).with_context(|| format!("writing {}", part.display()))
-        })?;
-    }
-    Ok(path)
-}
-
 /// Converts a Bink file into lossless AV1 under the cache.
 ///
 /// The input is the **whole file**, as [`super::mpeg2_ps::transcode`] hands over
@@ -199,7 +175,7 @@ fn transcode(blob: &[u8], to: Conversion<'_>, frames: Frames) -> Result<FrameSto
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
 
-    let source = ensure_source(cache_dir, key, "bik", blob)?;
+    let source = super::transcode::ensure_source(cache_dir, key, "bik", blob)?;
 
     run_ffmpeg(&source, &out, None, frames, watch)?;
 
