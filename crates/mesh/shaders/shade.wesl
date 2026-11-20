@@ -8,6 +8,7 @@ import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, fl
 import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_frame, hull_normal};
+import package::omega_rock::{OmegaRock, omega_rock};
 import package::omega_snow::{OmegaSnow, omega_snow, omega_snow_normal};
 import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
@@ -184,6 +185,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let omega_snow_entry = (in.slots >> 24u) & 63u;
     let omega_snow_on = omega_snow_entry != 0u && row_scale.z > 20.5 && row_scale.z < 21.5
         && simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    // **Omega's `DC_Rocks`** (mode 22, `mesh::rcs::psp2::snow`, `omega_rock.wesl`): its own normal
+    // blend, wrapped sun, shadow-light factor and sun lobe. Off under CIRCUIT LIGHTING `simplified`.
+    let omega_rock_on = omega_snow_entry != 0u && row_scale.z > 21.5 && row_scale.z < 22.5
+        && simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
     // **HD's scrolled-tap water** (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`):
     // 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`, 4 `water_noref`; 0 elsewhere.
     let water_entry = (in.slots >> 24u) & 63u;
@@ -236,6 +241,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The mapped normal feeds the sun's `N.L`, the specular's `N.H` and the probe
     // lookups; a pad takes its own frame above and has no tangent.
     var n_hull = n;
+    var omega_rock_lit: OmegaRock;
     // **Sebenco's snow-capped rock** (`Emissive::program` mode 4, `oag_mesh::mesh::rcs::snow_rock`):
     // the mask (third binding, second pair) mixes the snow's normal (fourth) with the rock's
     // (sixth) before the frame, and the rock (fifth) into the snow below. Both normals and the
@@ -263,6 +269,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         n_lit = n_hull;
     } else if omega_snow_on {
         n_hull = omega_snow_normal(omega_snow_entry, in, n);
+        n_lit = n_hull;
+    } else if omega_rock_on {
+        omega_rock_lit = omega_rock(omega_snow_entry, in, n);
+        n_hull = omega_rock_lit.normal;
         n_lit = n_hull;
     } else if simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
         let map = material_sample(MATERIAL_PAD_MASK, in.texcoord);
@@ -647,6 +657,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         if omega_snow_on {
             authored = omega_snow_lit.diffuse;
             sun_light = omega_snow_lit.sun;
+        }
+        // Omega's rock: the Nova term times the shadow light's factor plus the wrapped sun gated by
+        // the lightmap's alpha (`omega_rock.wesl`).
+        if omega_rock_on {
+            sun_light = scene.light.sun * (omega_rock_lit.wrapped * mask);
+            authored = prelit * omega_rock_lit.shadow_factor + sun_light;
         }
     }
 
@@ -1384,6 +1400,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
 
         if omega_snow_on {
             specular = omega_snow_lit.specular;
+        }
+        if omega_rock_on {
+            specular = omega_rock_lit.specular * albedo_linear * (mask * rig_on);
         }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it

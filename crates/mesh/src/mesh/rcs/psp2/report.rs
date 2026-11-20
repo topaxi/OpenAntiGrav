@@ -203,6 +203,11 @@ pub struct Report {
     /// `VertexColour2` or a tangent, a constant unauthored, a picture that would not decode or a
     /// full glow table.
     pub snow_unread: usize,
+    /// Omega's `DC_Rocks`-shaped materials drawn by their own pixel program (`psp2::snow`).
+    pub rock_materials: usize,
+    /// Of that shape, materials left to the generic reading: a submesh without a lightmap pair
+    /// or a tangent, a constant unauthored, a picture that would not decode or a full glow table.
+    pub rock_unread: usize,
     /// Materials of the `alpha_emissive` families that add the picture's alpha times `glowtinrt`
     /// after the light (`psp2::alpha_emissive`).
     pub alpha_emissive_materials: usize,
@@ -423,6 +428,14 @@ impl Report {
                 self.snow_materials, self.snow_unread
             )
         };
+        let rock = if self.rock_materials + self.rock_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} rock material(s) lit by their own pixel program ({} left to the generic reading)",
+                self.rock_materials, self.rock_unread
+            )
+        };
         let alpha_emissive = if self.alpha_emissive_materials + self.alpha_emissive_unread == 0 {
             String::new()
         } else {
@@ -490,7 +503,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{snow}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }
