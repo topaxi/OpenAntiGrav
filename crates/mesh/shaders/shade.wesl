@@ -189,6 +189,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // blend, wrapped sun, shadow-light factor and sun lobe. Off under CIRCUIT LIGHTING `simplified`.
     let omega_rock_on = omega_snow_entry != 0u && row_scale.z > 21.5 && row_scale.z < 22.5
         && simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    // A Zone frame lights the surface with its own program, never this permutation's.
+    let omega_rock_drawn = omega_rock_on && !zone_plain
+        && !(zone_program != 0.0 && scene.zone.shape.w > 0.5);
     // **HD's scrolled-tap water** (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`):
     // 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`, 4 `water_noref`; 0 elsewhere.
     let water_entry = (in.slots >> 24u) & 63u;
@@ -660,7 +663,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         }
         // Omega's rock: the Nova term times the shadow light's factor plus the wrapped sun gated by
         // the lightmap's alpha (`omega_rock.wesl`).
-        if omega_rock_on {
+        if omega_rock_drawn {
             sun_light = scene.light.sun * (omega_rock_lit.wrapped * mask);
             authored = prelit * omega_rock_lit.shadow_factor + sun_light;
         }
@@ -1401,7 +1404,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         if omega_snow_on {
             specular = omega_snow_lit.specular;
         }
-        if omega_rock_on {
+        if omega_rock_drawn {
             specular = omega_rock_lit.specular * albedo_linear * (mask * rig_on);
         }
 
