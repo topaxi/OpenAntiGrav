@@ -1151,8 +1151,7 @@ const ASSEGAI_HELP: &str = "The Assegai's exceptional handling model forms the c
      Nations' new ship, which has ably demonstrated solid all-round abilities in other areas.";
 
 /// `Team Help`'s second paragraph is the selected team's own description (the PSP's team definition
-/// authors a `helpText` per team; the PS2's authors none, so its overlay keeps the XML's default):
-/// Assegai's on the team the
+/// authors a `helpText` per team): Assegai's on the team the
 /// screen opens on, and another team's once the selection has moved (`TeamSelection_Update` writes
 /// `Team Ship Help` from the team's `HelpText` on every change).
 fn team_help_describes_the_selected_team(image: &Path, help: &str) {
@@ -1175,4 +1174,22 @@ fn team_help_describes_the_selected_team(image: &Path, help: &str) {
 fn pulse_psp_team_help_describes_the_selected_team() {
     let Some(image) = psp() else { return };
     team_help_describes_the_selected_team(&image, "triangle");
+}
+
+/// The PS2's team definition authors no `HelpText`, and its `TeamSelection_Update` (`0x001bd368`)
+/// writes `Team Ship Help` from the team's empty field all the same: the second paragraph is blank
+/// for every team.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_team_help_has_no_team_paragraph() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("team-help-text-ps2");
+    profile.drive_on(
+        &image,
+        &format!(
+            "{}; press circle; ticks 10; expect screen.help=open; expect screen.help_text=\"\"",
+            SHIP_PICKER.reach
+        ),
+        "text.jsonl",
+    );
 }

@@ -155,21 +155,28 @@ HelpSingle`, `Team HelpSingle` (`circle`) on the PS2. `oag_ui_screens::picker::h
 screen off the same XML (`Layout::help`), the picker opens it on `Roles::help` and closes it on
 cross, triangle or circle (the three `Redirect`s the overlay authors: Back closes it and does not
 leave), or on a click or the secondary button, and `oag_game` draws it with
-`campaign::cell_help_draw` over the page and its footer, without the 3D preview under it (the
-preview is a pass of its own over the finished picture). `--drive` reports it as `screen.help`
-(`open` or `closed`, only on a screen that has one).
+`campaign::cell_help_draw` in a pass after the page, its footer and the 3D preview, so the overlay's
+dimming covers the craft too (`Renderer::renew_quad_buffer` gives that second pass its own buffer). `--drive` reports it as `screen.help`
+(`open` or `closed`, only on a screen that has one) and `screen.help_text` (the selected team's own
+paragraph).
 
-- **Team Help's second paragraph** is the disc's own `MSC_TEAMDES_ASS` (Assegai's description) for
-  every team, as authored: the widget is named `Team Ship Help` and the team catalogue carries a
-  `helpText` per team (`MSC_TEAMDES_<team>`), so the original very likely swaps it per selected
-  team, but no trace of that setter was read (confidence 55), so none is invented.
-- **Open: the screens left undrawn.** `Tournament C` has no screen model in this build (so
-  `Tournament Help` has nothing to open from), and `Pre Race Music Select` is a `MusicList` widget,
-  not a Help overlay. Their footers are unchanged.
-- **Pulse's split screens.** `Track CreationSplit`'s `Track HelpSpilt` is `Track HelpSingle` with a 488-high
-  dim (a diff of the two screens), and a split race's Track Select is read from `Track Creation`, so
-  its Help is the one above. `Team SelectionSplit` authors no face-button `Redirect` to `Team HelpSplit`
-  (census table), so the shared Ship Select's halves open none.
+- **Team Help's second paragraph is the selected team's own description.** `TeamSelection_Update`
+  writes the `Team Ship Help` widget from the team's `HelpText` each time the selection changes
+  (read on the PSP, `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, confidence 90):
+  the PSP's team definition authors `helpText="MSC_TEAMDES_<team>"` per team and ours shows it
+  (`Picker::with_help_texts`, `Help::draw`); the PS2's authors none, and its executable writes the
+  empty field all the same, so the PS2's paragraph is blank.
+- **Not drawn, and why.** `Tournament C` has no screen model in this build (so `Tournament Help` has
+  nothing to open from) and `Pre Race Music Select` is a `MusicList` widget, not a Help overlay:
+  both are new screens (thread `ps2-picker-help-screens`). Their footers are unchanged.
+- **Pulse's split screens.** `Track CreationSplit`'s `Track HelpSpilt` is `Track HelpSingle` with a
+  488-high dim (a diff of the two screens), and a split race's Track Select is read from `Track
+  Creation`, so its Help is the one above (a split-race drive is not possible: `--drive` has no step
+  that seats a second pad). `Team SelectionSplit` authors no face-button `Redirect` to `Team HelpSplit`
+  (census table), and the PS2 executable's `TeamSelection_Update` only checks whether that screen is
+  present and names its Help state by the split flag, nothing opens it (`race-box-screens.md`, "What
+  presents `Team HelpSplit`", 85): the shared Ship Select has no Help on the disc, so its halves open
+  none.
 
 ## Tests
 

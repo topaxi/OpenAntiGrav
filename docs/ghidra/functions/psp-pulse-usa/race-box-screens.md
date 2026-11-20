@@ -559,9 +559,28 @@ same setter the screen uses for the string ids `ER_SUG_SHIP`/`ER_FOR_SHIP` and
 (80), not a literal sentence. The first paragraph (`Main Help`, `MSC_HELP_RC_SS`) has no setter.
 
 Confidence 90 that the paragraph is set per selected team from `+0x360`; 90 that `+0x360` is the team's
-`HelpText`; 80 that the widget resolves the id through the string table rather than drawing it. The PS2
-executable was not re-read: its `Team HelpSingle` authors the same two widgets and the same default
-(inherited from the PSP). No function was renamed.
+`HelpText`; 80 that the widget resolves the id through the string table rather than drawing it. No
+function was renamed.
+
+**PS2 (`SCES_547.48`, `/pulse/SCES_547.48-ps2-pulse-eu`): the same code, an empty field.** Its
+`TeamSelection_Update` (`0x001bd368`, read as `FUN_001bd368`) picks the Help screen's name with the
+split flag `DAT_002dab3c` (`Team HelpSingle` or `Team HelpSplit`, `strcpy` to `0x0027fbc8`, the
+constructor `0x001bd258` seeds the same global) and ends the same way (`FUN_00182f98` finds that
+state, `FUN_00181090` the `Team Ship Help` widget at `0x002b6158`, `FUN_001a8a70` sets its text
+from `selectedTeam + 0x378`). `+0x378` is filled from the `HelpText` attribute by the team parser
+`0x0019ea78` (`Xml_AttributeAsString(attr, team + 0x378, 0x10)`; the `HelpText` string at
+`0x002afeb0`), but the PS2's `Definition.xml` authors **no** `helpText` on any of its twelve
+`PI_Team`s, so every team writes an empty string: the second paragraph of the PS2's Team Help is
+blank (90 for the code, 90 for the data). The XML's `MSC_TEAMDES_ASS` there is only the widget's
+default before the first write. Our `Team Ship Help` follows both pressings
+(`pulse_psp_team_help_describes_the_selected_team`, `pulse_ps2_team_help_has_no_team_paragraph`).
+
+**What presents `Team HelpSplit`.** Nothing in either file: the split page has the name, the update
+code checks whether it is the present screen (`strcasecmp(present, 0x27fbc8)` at `0x001bd3f8`
+onward) and the XML has a `Watch` on the four directions for it, but `Team SelectionSplit` carries
+no `Redirect` whose `forward` is a face button (the single page's is `forward="circle"` to `Team
+HelpSingle`, six `forward="circle"` redirects in the PS2's whole selection file, none on that
+screen), and no code path in the update opens it. 85 that the PS2's shared Ship Select has no Help.
 
 ## `LeftLayer`'s own `transition` attribute is a fade duration
 

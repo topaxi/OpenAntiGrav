@@ -438,18 +438,24 @@ impl Session {
             (None, _, LiveryAxis::Skin) => String::new(),
             (None, _, LiveryAxis::Variant) => self.settings.race.opening_variant(title).to_string(),
         };
-        // Each team's own description for `Team Help`, worded: `TeamSelection_Update` sets the
-        // overlay's `Team Ship Help` from the selected team's `HelpText`.
+        // Each team's own description for `Team Help`, worded: `TeamSelection_Update` writes the
+        // overlay's `Team Ship Help` from the selected team's `HelpText` on every change, so a
+        // team that authors none (every PS2 team) writes an empty string and the paragraph is
+        // blank (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "`Team Ship Help` is
+        // set per team", and the PS2's `0x001bd368`).
         let help_texts = entries
             .iter()
             .map(|entry| {
-                shell
-                    .team_details
-                    .iter()
-                    .find(|team| team.id == entry.id)
-                    .and_then(|team| team.help_text.as_deref())
-                    .and_then(|id| shell.strings.get(id))
-                    .map(str::to_string)
+                Some(
+                    shell
+                        .team_details
+                        .iter()
+                        .find(|team| team.id == entry.id)
+                        .and_then(|team| team.help_text.as_deref())
+                        .and_then(|id| shell.strings.get(id))
+                        .map(str::to_string)
+                        .unwrap_or_default(),
+                )
             })
             .collect();
         let model = Picker::new(
