@@ -1505,7 +1505,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 let ndc = q.xy / max(q.w, 1e-6);
                 let uv = vec2<f32>(0.5 + 0.5 * ndc.x, 0.5 - 0.5 * ndc.y);
                 let texel = textureSampleLevel(behind_glass_tex, shadow_sampler, uv, 0.0).rgb;
-                sea = encode(clamp(target_in(texel), vec3<f32>(0.0), vec3<f32>(1.0)));
+                // A gamma target already stores the encoded value, which is `R` as it is.
+                let stored = clamp(texel, vec3<f32>(0.0), vec3<f32>(1.0));
+                sea = select(stored, encode(clamp(target_in(texel), vec3<f32>(0.0), vec3<f32>(1.0))), linear_out > 0.5);
             }
             sky_reflection = select(sky, sea, water < 1.5) * weight;
         }

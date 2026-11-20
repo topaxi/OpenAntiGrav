@@ -49,6 +49,7 @@ mod hd_program_glow_ground_truth;
 mod hd_program_glow_mask;
 mod hd_quake_lift;
 mod hd_scenery_animation_ground_truth;
+mod hd_sea_planar_lit_path;
 mod hd_shadowed_track_redraw;
 mod hd_snow_rock_ground_truth;
 mod hd_snow_rock_lit_path;
