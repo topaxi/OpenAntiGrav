@@ -95,6 +95,47 @@ Modesto's yellow wing panels turn the original's orange under its warm ambient a
 Pulse compare pairs (Arc Prime White, Fort Gale Black, Amphiseum White) render
 pixel-identical before and after.
 
+## The track takes the rig (2026-11-20, `pure-drift`)
+
+**What the original draws.** One `psp-ge-dump.py` frame of each Time Trial restart state (PPSSPP v1.20.4 software renderer,
+`UCUS98612`, the pairs' own `.ppst` files: Karbonis, Manor Top and Vineta K), `census` rows by vertex type (`vt & 0x60`
+normals, `vt & 0x1c` colour):
+
+| Circuit | normals, no colour, `lighting` 1 | normals, no colour, `lighting` 0 | no normals, no colour (`lighting` 0) |
+| --- | ---: | ---: | ---: |
+| Karbonis | 188 | 0 | 4 |
+| Manor Top | 198 | 1 (7 vertices, drawn into another target) | 4 |
+| Vineta K | 16 | 55 (blended 64 x 64 batches of 228 to 512 vertices in pairs, the craft's extra pass) | 4 |
+
+Every track batch with normals and no vertex colour is drawn with `LIGHTINGENABLE` 1; the draws that are not are the hull's
+extra pass, as on Pulse. A batch with neither normals nor colour draws `lighting` 0 with a white material (`0xffffff`), the
+rule `oag_mesh::mesh::build` applies to every batch. On Karbonis the list in force before the first lit draw is
+`AMBIENTCOLOR` `0xfefefe`, ambient alpha `0xff` and all four lights disabled (the four Classic circuits author an ambient
+light and no directional, table above), so the scenery reads about its texel; ours builds the same list from the circuit's
+nodes (`hull lights: ambient [1.0, 1.0, 1.0, 1.0]`, no directional, no point light; 0xfe against 1.0 is the craft's own scale
+byte, applied in the shader).
+
+**What ours did.** `pulse-lit-scenery` (merge `631b83151`) marks every colourless vertex with normals as lit by the rig
+inside `pulse_psp::finish`, behind the `hull_lights` rule. Pure has that rule on, so its track took the marking too, though
+the change recorded Pure as not wired. Before it the Classic circuits' scenery was on the stand-in grey (`0.75, 0.78, 0.82`
+under the stand-in light) and read about 8 to 24 grey darker than the original; after it the four pairs moved toward the
+original:
+
+| Pair | mean grey against the original, before | after | rmse before | after |
+| --- | ---: | ---: | ---: | ---: |
+| `karbonis` | 17.16 | 9.68 | 0.172 | 0.121 |
+| `mandrashee` | 23.11 | 12.44 | 0.214 | 0.147 |
+| `manor-top` | 38.60 | 14.12 | 0.247 | 0.141 |
+| `sagarmartha` | 26.52 | 9.28 | 0.187 | 0.100 |
+
+The other ten Pure pairs (`blue-ridge`, `chenghou`, `citta-nuova`, `modesto`, `sebenco-climb`, `sinucit`, `sol-2`, `vineta`,
+both Zone pairs) moved by at most 0.04. Bisected on the first-parent merges between the stored pairs' build (`8a82a6512`)
+and main: the parent of `631b83151` reproduces the stored frames to the pixel, `631b83151` moves all four; reverting only
+`mesh::build`'s no-normals rule leaves the move in place, skipping only the `mark_rig_vertices` call removes it. Test:
+`crates/raceplay/tests/start_laser_rig_ground_truth.rs`, `pures_classic_scenery_takes_the_circuits_ambient_rig` (fails with the
+call removed). Open: the flash-sprite hold-back (`RIG_HELD_BACK`) is inherited by title and not measured on Pure; no Pure
+pair draws one. Three circuits, one boot each.
+
 ## Functions
 
 | Address | Name | Confidence | What it is |

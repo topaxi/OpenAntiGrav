@@ -512,9 +512,12 @@ explained.
 
 **Not done: the raw texel for the 97 `RET` models.** Those models are not in the circuit's own `.vex`; no pair moment has one
 in view, so their raw-texel draw stays unmeasured. **PS2: checked, differs** (every colourless-with-normals vertex is
-a PSP GE case; the PS2 pairs re-rendered byte-for-byte, mean grey unchanged on all 20). **Pure: checked, not wired.**
-`mark_rig_vertices` is called only by the Pulse PSP loader; Pure's `Vex_UpdateLightLists` twin was not located, so its track
-keeps the stand-in until its own dump shows its colourless batches lit.
+a PSP GE case; the PS2 pairs re-rendered byte-for-byte, mean grey unchanged on all 20). **Pure: checked, ported.**
+`mark_rig_vertices` is called from `pulse_psp::finish` under the `hull_lights` rule, which Pure's PSP also has, so Pure took the
+marking with this change (the first reading here, "not wired", was wrong: four Pure Classic-league pairs moved, mean grey
+against the original 17.2 to 9.7, 23.1 to 12.4, 38.6 to 14.1 and 26.5 to 9.3). Pure's own GE census says the same
+(confidence 85, [psp-pure-usa/scene-light.md](../psp-pure-usa/scene-light.md), "The track takes the rig"); Pure's
+`Vex_UpdateLightLists` twin is still not located by address.
 
 ## Applied names
 

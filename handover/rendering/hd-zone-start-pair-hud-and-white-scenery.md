@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd]
 updated: 2026-11-20
-summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 7.27 after the hull probe tint; board glyph and a 2x hull brightness gap remain"
+summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 6.57 after the hull's rim term; board glyph and three over-bright hull panels remain"
 ---
 
 # HD Zone start pair: what is left after the Zone frame's light and post chain
@@ -28,13 +28,17 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
   `--ticks 0` may be earlier than the original's moment; pinning it needs the
   countdown timer read in the same pause (`RaceManager +0x1958 - +0x1968`).
   A pair-timing question for the lead, not a board law. 1.32 grey.
-- **The hull's light in a Zone frame: half read.** The hull's probe tint is twice
-  the stage's `Track.Base Colour Highlight` (wired; pair 7.42 -> 7.27, craft box
-  38.56 -> 33.58,
-  `docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). The hull is still about
-  half as bright as the original's (left pod red 44 against 88). Ruled out: probe data
-  (live = Vineta K probe 210), SPU light, sun (0), tint, and the probe decode (the
-  non-Zone `hd/vineta-k` hull matches). Next reads on that page, "Still open".
+- **The hull's light in a Zone frame: read, three panels overshoot.** The probe tint
+  (twice the stage's `Track.Base Colour Highlight`) and `zoneship01`'s rim term
+  (`fresnelBase` `0.1234`, `base + (1 - base) * (1 - N.V)^5` added untinted) are wired:
+  pair 7.42 -> 7.27 -> 6.57, craft box 38.56 -> 33.58 -> 15.07, the flat pod panels
+  within 1 byte (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). Left: the
+  nose, the flaps and the pods' outer sides are too bright in ours (left pod box
+  `(98.7, 110.3, 124.5)` against `(88.6, 98.7, 111.2)`); the nose's excess predates
+  the rim and is ours' reflection there. Next reads on that page, "Still open".
+- **The rim on Omega and 2048: applies, not wired.** Both ship `zoneship01` with
+  `fresnelBase` declared and authored (Omega `0.12269939`, 2048 `0.1234`); their
+  programs are unread and neither hull draws the term (same page, "2048 and Omega").
 - **A pulse's history in the feedback term.** The resolve's feedback buffer is
   the zoom ring's history target; ours resolves against the frame's own
   quarter-res scene, so a damage pulse in a Zone race is not in the term.
@@ -58,11 +62,14 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
 ## Next Steps
 
 1. After this lands, re-render the pair from the main checkout:
-   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (7.27
+   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (6.57
    expected).
 2. Read the countdown timer beside the pair's grab and re-time ours'
    `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
-3. The hull's remaining factor of two: match unit 0's 64-byte heads (`0x0a780100`)
-   against `zoneship_faisar`'s textures, then the live program's tail past `@0x5f`,
-   then ours' scene target against `target-01920000.bin` (zone-hull-light.md, "Still
-   open"). Recipe: `HOOK_TEX_RE='0\.69804' scripts/rpcs3-hd-zone-frame.py --small 2500`.
+3. The hull's three bright panels: decode the normal and tangent streams of the live
+   `zoneship01` draws (641..644, `va-06xx-*.bin`) and compare `N` on the nose with
+   ours' `hull_normal`; check whether the flaps carry their own node matrix
+   (zone-hull-light.md, "Still open"). Recipe:
+   `HOOK_TEX_RE='0\.69804' scripts/rpcs3-hd-zone-frame.py --small 2500`.
+4. Read `zoneship01`'s program on Omega (GCN) and 2048 (GXP) and wire `fresnelBase`
+   on their Zone hulls.

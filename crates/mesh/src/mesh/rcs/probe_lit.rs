@@ -15,6 +15,12 @@
 //! `tint.x` is the material's own `reflectivity` (parameter `0xab31c2b1`, `0.5` on
 //! Harimau). A slot that already holds a glow index keeps it and is counted, not
 //! overwritten.
+//!
+//! `tint.y` is the material's `fresnelBase` (`0x743ea80b`, `0.1234` on the Zone ship's
+//! `zoneship01` panels), where the `IBL` variant declares one: the program adds
+//! `base + (1 - base) * (1 - N.V)^5` to the lit albedo, untinted
+//! (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`, "The rim term"). Zero on a
+//! material whose program has no such term.
 
 use oag_rcs::rcsmaterial::{self, Features};
 use oag_rcs::rcsmodel;
@@ -26,6 +32,9 @@ use crate::mesh::Emissive;
 const REFLECTION_SAMPLER: u32 = 0x9edd_3243;
 /// The material's own reflectivity, the `0.5` the program multiplies the alpha by.
 const REFLECTIVITY: u32 = 0xab31_c2b1;
+/// `~crc32("fresnelBase")`: the base of the rim term `zoneship01`'s program adds to the
+/// lit albedo.
+const FRESNEL_BASE: u32 = 0x743e_a80b;
 /// The `IBL` permutation without the craft light, the shadow map or the SPU colours:
 /// `Sun`, field 3 (`IBL`), `Spot0`, `HalfBright`, `SVC0`.
 const IBL_PASS: u32 = 0b0000_0000_0111;
@@ -88,8 +97,14 @@ pub(super) fn probe_lit(
             report.probe_lit_blocked += 1;
             continue;
         }
+        let fresnel_base = declared
+            .parameters
+            .contains(&FRESNEL_BASE)
+            .then(|| material.parameters.iter().find(|p| p.hash == FRESNEL_BASE))
+            .flatten()
+            .map_or(0.0, |p| p.value[0]);
         let layer = Emissive {
-            tint: [reflectivity, 0.0, 0.0],
+            tint: [reflectivity, fresnel_base, 0.0],
             offset: 0.0,
             scale: 1.0,
             rate: REFLECTION_RATE,

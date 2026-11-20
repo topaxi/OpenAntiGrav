@@ -619,3 +619,58 @@ fn the_probe_maps_are_decoded_as_srgb() {
         assert!((236..=240).contains(channel), "{lit:?}");
     }
 }
+
+/// A hull material tagged with a `fresnelBase` adds `base + (1 - base) * (1 - N.V)^5` to every
+/// channel alike, whatever the probe holds: `zoneship01`'s `IBL` program
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`, "The rim term"). Craft 1's probe
+/// layers are black, so the picture is the rim alone and its bytes are `(k * rim)^(1 / 2.2)`:
+/// a ratio of two draws raised to 2.2 is the ratio of their rims. Dropping the base, the
+/// grazing term or its fifth power turns a case red.
+#[test]
+fn a_fresnel_base_adds_an_untinted_rim_to_the_hull() {
+    let Some((device, queue)) = gpu() else { return };
+    let view = array(&device, &queue, fill);
+    let maps = ShadowMaps {
+        env_probes: Some(&view),
+        ..ShadowMaps::NONE
+    };
+    let rimmed = |base: f32, normal| {
+        let table = vec![Emissive {
+            tint: [0.5, base, 0.0],
+            ..reflective()[0]
+        }];
+        let hull = model(slots::DEFAULT | (1 << slots::MATERIAL_SHIFT), table, normal);
+        draw(&device, &queue, &hull, rig(), maps, 2.0)
+    };
+    let linear = |px: [u8; 4]| (f32::from(px[0]) / 255.0).powf(2.2);
+    const FACING: [f32; 3] = [0.0, 0.0, 1.0];
+    // `N.V` 0.3 from the camera on `+z`: the grazing term is `0.7^5`.
+    const TILTED: [f32; 3] = [0.0, 0.953_939_2, 0.3];
+
+    // No base declared: the black probe and nothing else.
+    let none = rimmed(0.0, TILTED);
+    assert_eq!((none[0], none[1], none[2]), (0, 0, 0), "{none:?}");
+
+    // Facing the camera the term is the base: grey, and linear in the base.
+    let low = rimmed(0.1234, FACING);
+    let high = rimmed(0.4936, FACING);
+    assert!(
+        low[0] > 0 && low[0] == low[1] && low[1] == low[2],
+        "{low:?}"
+    );
+    let floors = linear(high) / linear(low);
+    assert!(
+        (floors - 4.0).abs() < 0.25,
+        "{floors}: {high:?} over {low:?}"
+    );
+
+    // Tilted, `0.1234 + 0.8766 * 0.7^5 = 0.2707`: 2.194 times the base. A third power would
+    // give 3.44, no grazing term 1.
+    let tilted = rimmed(0.1234, TILTED);
+    assert_eq!((tilted[0], tilted[1]), (tilted[1], tilted[2]), "{tilted:?}");
+    let grazing = linear(tilted) / linear(low);
+    assert!(
+        (grazing - 2.194).abs() < 0.15,
+        "{grazing}: {tilted:?} over {low:?}"
+    );
+}
