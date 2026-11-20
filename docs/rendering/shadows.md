@@ -825,11 +825,23 @@ circuit's `light.direction`, which is Omega's axis. Rendered with `--shadows ori
 grass lands where the original's does, and the other craft's shadows fall on the same side with the same elongation (offset by
 the grid poses, which differ between ours and the original). But the same tier turns on HD's per-craft **sun-occlusion and
 self-shadow passes** (`render_sun_occlusion`, gated on an authored sun and no occluder hulls), and on Omega they darken the
-player's hull by 22 grey over its box (bias +9.2 to -13.1 against the original), where the original's hull is unchanged by
-`S = 1`. Omega's hull reads `S` from the same cascades, not HD's road mask. Scored on the original's shadow mask (Metro Park,
-hull excluded, ours `off` then `original`): mean absolute grey 43.85 to 42.57, bias -1.04 to -7.99 (the mask is from a second
-boot of the port, whole-frame MAE 13.2 against the adopted frame). Building `original` on Omega needs the sun-occlusion pass
-scoped off by title data first, and the second caster list read; until then the default stays `off`.
+player's hull: its box (`730x560+600+520`) is 114.3 under `off` and 91.9 under `original`, a 22.4 grey drop, where the
+original's same box does not respond to `S = 1` (106.1 on, 104.4 knocked out; 80.0 with `S = 0`, so the hull does receive `S`,
+and `S` is 1 there on the grid). Against the adopted original frame the hull box's mean absolute grey improves 45.56 to 34.66
+(bias +9.2 to -13.1), but that is ours' known hull excess ([hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md))
+cancelled by a darkening the original does not apply, not a matched shadow. Omega's hull reads `S` from the same cascades, not
+HD's road mask. Scored on the original's shadow mask (Metro Park, hull excluded, ours `off` then `original`): mean absolute grey
+43.85 to 42.57, bias -1.04 to -7.99 (the mask is from a second boot of the port, whole-frame MAE 13.2 against the adopted frame).
+That the receiver law holds on each Omega material is read from the shader (`sun_known` is set on the generic combine), not
+checked per draw: Metro Park's brick, its conditional-blender grass and the tarmac may each fall back to the `MAP_STRENGTH`
+multiply.
+
+**The compare page already draws `original` on Omega.** `scripts/compare-environment.toml` writes `shadows = "original"` into
+ours' settings file for every platform, so the adopted Omega pairs carry the coverage tier and HD's hull sun occlusion today
+(Metro Park's adopted frame matches a `--shadows original` render on the hull box, 91.5 against 91.9, and the left-grass shadow,
+68.6 against 68.8; `off` reads 114.3 and 84.4). Flipping `Title::original_shadows` changes the player's default only and moves no
+pair. Building `original` on Omega properly means scoping the sun-occlusion pass off by title data (which **will** move the Omega
+pairs, the hull first) and reading the second caster list; until then the default stays `off`.
 
 **2048: checked, differs.** 2048 casts along `Ship shadow direction` into one map out to 60 units; Omega along the sun into
 three exponential cascades out to 254.9.
