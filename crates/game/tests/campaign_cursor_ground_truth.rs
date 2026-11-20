@@ -25,6 +25,17 @@ impl Profile {
         Self(dir)
     }
 
+    /// Writes `[controls] menu_back = <choice>` into this profile's settings.
+    fn menu_back(&self, choice: &str) {
+        let dir = self.0.join("config/oag");
+        std::fs::create_dir_all(&dir).expect("a config directory");
+        std::fs::write(
+            dir.join("settings.toml"),
+            format!("[controls]\nmenu_back = \"{choice}\"\n"),
+        )
+        .expect("settings.toml");
+    }
+
     /// One launch of Pulse on `script`; the states it reported.
     fn drive(&self, script: &str, log: &str) -> Vec<Value> {
         let image = oag_testdata::image("pulse-psp-eu.chd").expect("pulse-psp-eu.chd");
@@ -748,4 +759,59 @@ fn cell_help_opened_on_the_ps2_circle_freezes_the_cursor_until_it_closes() {
     );
     let (first, last) = first_and_last_cell(&freed);
     assert_ne!(first, last, "Cell Help closed: down moves the cursor again");
+}
+
+/// The CONTROLS row MENU BACK = `circle` puts Back on the circle on Pulse's PS2, where the disc
+/// binds it to the triangle: `Cell Selection` and `Grid Selection` leave on the circle, and Help,
+/// which the circle opened, moves to the triangle (`docs/ui/campaign-screens.md`, "Menu back").
+/// `original` is the previous test's behaviour.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_triangle() {
+    let Some(ps2) = oag_testdata::image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("menu-back-circle");
+    profile.menu_back("circle");
+    let level = |tail: &str, log: &str| {
+        let states = profile.drive_on(
+            &ps2,
+            &format!("{OPEN}; press cross; until screen.id=cell; ticks 20; {tail}; ticks 20"),
+            log,
+        );
+        last_campaign(&states).0
+    };
+    assert_eq!(level("press circle", "circle.jsonl"), "grid");
+    assert_eq!(
+        level("press triangle", "triangle.jsonl"),
+        "cell",
+        "triangle opens Cell Help once circle is Back"
+    );
+    let states = profile.drive_on(
+        &ps2,
+        &format!(
+            "{OPEN}; press cross; until screen.id=cell; ticks 20; press circle; \
+             until screen.id=grid; ticks 20; press circle; until screen!=campaign"
+        ),
+        "twice.jsonl",
+    );
+    assert_ne!(
+        states
+            .last()
+            .and_then(|state| state["screen"]["kind"].as_str()),
+        Some("campaign"),
+        "the second circle left the campaign"
+    );
+    let original = Profile::fresh("menu-back-original");
+    original.menu_back("original");
+    let states = original.drive_on(
+        &ps2,
+        &format!("{OPEN}; press cross; until screen.id=cell; ticks 20; press circle; ticks 20"),
+        "original.jsonl",
+    );
+    assert_eq!(
+        last_campaign(&states).0,
+        "cell",
+        "original keeps the PS2's circle on Help"
+    );
 }

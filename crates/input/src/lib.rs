@@ -306,6 +306,25 @@ pub struct Controls {
     /// A pad that is not there, for a run with no device (`--drive`, a test): read like a real
     /// one, its triggers raising their buttons in the snapshot as a trigger does.
     injected: view::ViewRaw,
+    /// Whether the circle and the triangle are read exchanged in the slots' button state
+    /// ([`Self::set_face_swap`]).
+    face_swap: bool,
+}
+
+/// `mask` with the circle's bit and the triangle's bit exchanged when `swap`.
+fn exchange_faces(swap: bool, mask: u32) -> u32 {
+    if !swap {
+        return mask;
+    }
+    let (circle, triangle) = (Button::Circle.bit(), Button::Triangle.bit());
+    let mut out = mask & !(circle | triangle);
+    if mask & circle != 0 {
+        out |= triangle;
+    }
+    if mask & triangle != 0 {
+        out |= circle;
+    }
+    out
 }
 
 /// What a keyboard seat after the first holds.
@@ -350,6 +369,7 @@ impl Controls {
             view_buttons: Input::new(),
             view: view::ViewReading::default(),
             injected: view::ViewRaw::default(),
+            face_swap: false,
         }
     }
 
@@ -669,8 +689,35 @@ impl Controls {
 
     /// Presses `button` for one tick on the keyboard's own latch. See
     /// [`Keyboard::tap`].
+    ///
+    /// `button` is what the reader of [`Self::buttons`] will see, so under
+    /// [`Self::set_face_swap`] the latch holds the other face button.
     pub fn tap(&mut self, button: Button) {
-        self.keyboard.tap(button);
+        self.keyboard.tap(self.faces(button));
+    }
+
+    /// Makes [`Self::buttons`] (and the snapshots of the same tick) read the circle as the
+    /// triangle and the triangle as the circle, from the next tick on. What a front end
+    /// that leaves on the circle in its own code does to leave on the triangle
+    /// (`oag_title::prompts::MenuButtons::input_swap`); the replay viewer and photo mode read
+    /// their own state ([`Self::view_take`]) and a race must not have it on.
+    pub fn set_face_swap(&mut self, swap: bool) {
+        self.face_swap = swap;
+    }
+
+    /// `button`, or the other face button under [`Self::set_face_swap`].
+    fn faces(&self, button: Button) -> Button {
+        match (self.face_swap, button) {
+            (true, Button::Circle) => Button::Triangle,
+            (true, Button::Triangle) => Button::Circle,
+            _ => button,
+        }
+    }
+
+    /// `mask` with the circle's bit and the triangle's bit exchanged, under
+    /// [`Self::set_face_swap`].
+    fn faces_mask(&self, mask: u32) -> u32 {
+        exchange_faces(self.face_swap, mask)
     }
 
     /// Releases every key. Call it on focus loss, as [`Keyboard::release_all`]
@@ -802,13 +849,14 @@ impl Controls {
     /// are `InputSnapshot::default`.
     pub fn player_snapshots(&mut self) -> oag_gameplay::PlayerInputs {
         let mut pads = self.pad.poll_players();
+        let swap = self.face_swap;
         self.presses = self
             .pad
             .take_presses()
             .into_iter()
             .map(|(id, buttons)| lobby::Press {
                 device: lobby::Device::Pad(id),
-                buttons,
+                buttons: exchange_faces(swap, buttons),
             })
             .collect();
         let android = pad::resolve(self.android.reading(), self.pad.triggers());
@@ -881,13 +929,13 @@ impl Controls {
         if pressed != 0 {
             self.presses.push(lobby::Press {
                 device: lobby::Device::Keyboard,
-                buttons: pressed,
+                buttons: exchange_faces(self.face_swap, pressed),
             });
         }
         for (id, buttons) in std::mem::take(&mut self.raw_edges) {
             self.presses.push(lobby::Press {
                 device: lobby::Device::Keys(id),
-                buttons,
+                buttons: exchange_faces(self.face_swap, buttons),
             });
         }
         let mut pads = pads;
@@ -933,8 +981,9 @@ impl Controls {
 
     /// One slot's devices, as one snapshot.
     fn merge(&mut self, slot: usize, keys: u32, pad: pad::PadState) -> InputSnapshot {
+        let faces = self.faces_mask(keys | pad.held);
         let buttons = &mut self.buttons[slot];
-        buttons.begin_frame(keys | pad.held);
+        buttons.begin_frame(faces);
 
         let digital_x = axis(
             buttons.is_held(Button::Right),

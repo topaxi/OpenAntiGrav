@@ -1106,6 +1106,10 @@ pub fn menu_seeds(
         ("controls.triggers", text(&settings.controls.triggers)),
         ("controls.rumble", text(&settings.controls.rumble)),
         (
+            "controls.menu_back",
+            text(settings.controls.menu_back_value().name()),
+        ),
+        (
             "controls.touch_go_zones",
             text(if settings.controls.touch_go_zones {
                 "on"

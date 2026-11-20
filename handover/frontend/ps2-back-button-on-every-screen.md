@@ -17,6 +17,8 @@ Found 2026-11-20 fixing GitHub issue 27 (lane `issue-27-quit-box`).
   now answers it, and `Cell Selection` and `Grid Selection` read it (`CellSelection::with_buttons`, `GridSelection::with_back_button`,
   `docs/ui/campaign-screens.md`, "Back and Help on the PS2"). Every other screen still takes the circle as Back: `oag_ui::menu` (`menu.rs`, the `Button::Circle` arm), the pickers
   (`crate::picker`, `selection.rs`), `Team Selection`, the pause menu, the end-of-race pages.
+- The player's own choice (CONTROLS > MENU BACK, `original`/`circle`/`triangle`) reaches every screen through one input exchange and one glyph
+  substitution (`docs/ui/campaign-screens.md`, "Menu back"); it does not change `original`, so the PS2's other screens still leave on the circle by default.
 - A screen that authors a `triangle` or `circle` redirect of its own can differ from the PSP's (Cell Selection's Help is `circle` on the PS2,
   `triangle` on the PSP), so a blanket circle/triangle swap at the input layer is not safe until each PS2 screen's redirects are read.
 

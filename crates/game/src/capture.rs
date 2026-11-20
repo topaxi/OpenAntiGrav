@@ -1230,7 +1230,7 @@ pub fn run(
         title_font.clone(),
         buttons_font,
     );
-    crate::prompts::install(&mut renderer, title, &options.settings);
+    crate::prompts::install(&mut renderer, title, platform, &options.settings);
 
     if let Some((format, picture)) = &fly_by_still {
         renderer.set_fly_by(&device, *format)?;

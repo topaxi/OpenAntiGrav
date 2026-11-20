@@ -263,30 +263,41 @@ pub(crate) struct CampaignStage {
     medal_art: oag_ui_screens::campaign::MedalArt,
 }
 
-/// The buttons `Cell Selection` opens `Cell Help` on and leaves on, as `(help, back)`.
+/// The buttons `Cell Selection` opens `Cell Help` on and leaves on, as `(help, back)`, in the
+/// frame the screens read their input in.
 ///
 /// Help is the one the screen's own `Redirect` to `Cell Help` authors: the PSP's
 /// `forward="triangle"`, the PS2's `forward="circle"`. Back is the pressing's own
-/// (`oag_title::FrontEnd::back_button`: the PS2 binds it to the triangle). A screen that authors no
-/// such redirect keeps the PSP's triangle.
+/// (`oag_title::FrontEnd::back_button`: the PS2 binds it to the triangle), or the player's
+/// choice (`oag_title::Title::menu_buttons`), which also moves the button it displaces. A
+/// screen that authors no such redirect keeps the PSP's triangle.
 fn cell_buttons(
     cell_layout: &oag_ui_screens::campaign::Layout,
     title: &oag_title::Title,
     platform: oag_disc::Platform,
+    choice: oag_title::prompts::MenuBack,
 ) -> (Button, Button) {
-    let help = cell_layout
+    let authored_help = cell_layout
         .screen
         .redirects
         .iter()
         .find(|redirect| redirect.goto.as_deref() == Some("Cell Help"))
         .and_then(|redirect| redirect.forward)
         .unwrap_or(Button::Triangle);
-    let back = title
-        .front_end
-        .map_or(oag_title::prompts::Prompt::Circle, |front_end| {
-            front_end.back_button(platform)
-        });
-    (help, crate::prompts::button_of(back))
+    let prompt = match authored_help {
+        Button::Circle => oag_title::prompts::Prompt::Circle,
+        _ => oag_title::prompts::Prompt::Triangle,
+    };
+    let buttons = title.menu_buttons(platform, choice, prompt);
+    let help = if matches!(authored_help, Button::Circle | Button::Triangle) {
+        crate::prompts::button_of(buttons.logical(buttons.help))
+    } else {
+        authored_help
+    };
+    (
+        help,
+        crate::prompts::button_of(buttons.logical(buttons.back)),
+    )
 }
 
 impl CampaignStage {
@@ -313,9 +324,10 @@ impl CampaignStage {
         flyers: Option<crate::flyer::Flyers>,
         circuit_emblems: std::collections::HashMap<String, String>,
         custom: Option<crate::campaign::custom::Custom>,
+        menu_back: oag_title::prompts::MenuBack,
     ) -> Self {
         let title = title_ref.name.to_string();
-        let cell_buttons = cell_buttons(&cell_layout, title_ref, platform);
+        let cell_buttons = cell_buttons(&cell_layout, title_ref, platform, menu_back);
         let ticker_tips = crate::records::ticker_tips(
             ticker.as_ref(),
             &strings,
@@ -1363,6 +1375,7 @@ mod tests {
             None,
             std::collections::HashMap::new(),
             None,
+            oag_title::prompts::MenuBack::Original,
         )
     }
 
