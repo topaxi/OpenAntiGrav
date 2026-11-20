@@ -2632,17 +2632,23 @@ box means move with pose decorrelation, read the sign and the spread between box
    the output one for one. Forcing ours' `E` to 0.9 reproduces the original's luminance quantiles
    (q10 to q95: 35/57/95/141/230 against 33/58/97/140/219), which is a x1.6 scene factor, **but it is not uniform**: at
    `E` 0.9 the snow sky is still -38 and the far building -25 while the yellow floor is +16 and the right wall +4.5. Moa
-   (`Exposure maximum` 1, ours at 1.0) needs about x1.4 and cannot be raised by any exposure; its sky and floor boxes
-   already match (-0.7, -2.3), its stands and stripe road are 15 grey dark. The Amphiseum (ours at the maximum 2.0) is
+   (`Exposure maximum` 1, ours at 1.0) would need about x1.4 from `E`, which its clamp forbids (`t1` grows with `LAvg`, so
+   a lower `LAvg` does brighten it through the curve: 96.1 rises to 108 as the unprimed sweep's `LAvg` falls), but its
+   sky/city, floor and wall boxes already match (-0.7, -2.3, -1.0), so any global gain, through `E` or `t1`, would
+   overshoot them; only its stands (-16.1) and stripe road (-14.6) are dark. The Amphiseum (ours at the maximum 2.0) is
    5 grey bright.
-4. **Ours' luma input is not inflated by an HDR tail.** The luma image's 99th percentile is 0.82 and its maximum 1.0 on
-   Sebenco (0.7 to 2.7 and 3.7 to 8 on the others), skipping the sky changes `LAvg` 0.175 to 0.170, and the centre 64x64 or
+4. **Ours' luma input is not inflated by an HDR tail.** The luma image's 99th percentile is 0.82 and no texel reaches 0.97 on
+   Sebenco (the other circuits reach 1.6 to 8; where Sebenco's luma sits relative to the sky or far geometry was not
+   located, so whether the HDR fog colour is clamped there is open), skipping the sky changes `LAvg` 0.175 to 0.170, and the centre 64x64 or
    128x128 means are 0.237 and 0.183 against the full mean 0.176 (so which ladder level the coefficient pass samples,
    `tonemap.md`'s confidence-60 reading, moves `LAvg` by at most 35 % on Sebenco and cannot explain a x1.6 gap).
 
-**What the data supports: per-surface light, concentrated in the sky and the far scenery.** The deficit is largest where
-the surface is far or the sky: Sebenco snow -65 and far building -41 against floor and wall -13 to -17, Modesto's sky gap
--36 against floor +7 and wall +0.5. `Lighting.Sky brightness` (Sebenco 1.51, Modesto 2.264, Moa 2.0, Metropia 2.2,
+**What the data supports: per-surface light, a different surface on each pair** (confidence 85 that it is not a global
+exposure or gain: the signed bias spans -22 to +5 over twelve pairs, and at a forced `E` the Sebenco boxes still split from
+-38 to +16, which does not depend on `LAvg`). Sebenco: sky and far scenery (snow -65 and far building -41 against floor and
+wall -13 to -17). Modesto: the sky only (-36 against floor +7 and wall +0.5). Moa: the stands (-16.1) and the stripe road
+(-14.6), sky level; the stands belong to the queued Omega crowd-lighting lane. The Amphiseum: its ceiling truss (+39.9) and
+stands (+25.1) are brighter in ours, and its frame carries no sky (the decomposition's sky region is 0.0 % of the frame). `Lighting.Sky brightness` (Sebenco 1.51, Modesto 2.264, Moa 2.0, Metropia 2.2,
 Amphiseum 0.5) does not predict the sign (Moa's sky is level at 2.0, the Amphiseum's ceiling is 40 grey bright at 0.5), the
 same mixed result the 2048-mode lane recorded ("Where the WipEout 2048 mode pairs' error is", sky). Not wired.
 
@@ -2651,17 +2657,20 @@ history.** Read recipe, not run (no pad seat in this lane's brief, and a native-
 in the native port launched through `scripts/wipeout-pc-omega-pair.py` the object is a heap pointer held at guest
 `0x021dbdb8` ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md), "The ToneMap object, read live
 through the pointer"; host address image base `0x800000000` plus the offset from Ghidra's `0x01000000`); after the pair
-script's `SIGSTOP`, read the 5-slot luma ring `ToneMap_SetHistoryWeights` sizes at the object's `+0x1d8` (`begin`/`end`
-float pointers, `+0x1f8` the weights). Its mean is the original's `LAvg` on the same frame as `theirs.png`, to compare with
-ours' `frameL` above (Sebenco 0.1756, Moa 0.3851, Amphiseum 0.1333, Modesto 0.2621): a ratio near 1 means the scene is the
-same and the gap is how pixels are shaded; a ratio near 1.6 on Sebenco means the original's scene is brighter before the
-curve. The coefficient texture (`LAvg`, `E`) lives in GPU memory and cannot be read this way.
+script's `SIGSTOP`, read the history ring `ToneMap_SetHistoryWeights` sizes at the object's `+0x1d8` (N-1 slots, 4 on these
+circuits; the begin/end pointer layout is inferred from the weights vector at `+0x1f8`, which was read live, the ring itself
+was not). `ToneMap_UpdateCoefficients` is unresolved on 1.07, so **confirm the ring's offset before trusting a mean**, and
+whether the slots hold raw frame luma or past `LAvg` is not pinned (they agree once settled). Its mean is the original's
+`LAvg` on the same frame as `theirs.png`, to compare with ours' `frameL` above (Sebenco 0.1756, Moa 0.3851, Amphiseum 0.1333,
+Modesto 0.2621): a ratio near 1 means the scene is the same and the gap is how pixels are shaded; a ratio near 1.6 on
+Sebenco means the original's scene is brighter before the curve. The coefficient texture (`LAvg`, `E`) is read back by the
+CPU on hardware (`ToneMap_UpdateCoefficients`), so a direct read of it is not tried here, not ruled out.
 
 **Closed negatives:** a global exposure or gain (the signed bias spans -22 to +5 over twelve pairs); an HDR tail inflating
 ours' `LAvg`; the original still adapting at the grab as a common cause; `Sky brightness` as a sky multiplier (sign
-mixed). **Unchanged by this lane:** no code, no table; the HD and 2048 frames are untouched. **2048: checked, differs** (its
-programs read a held exposure under Vita3K, `compare-page.md`, "Vita3K never writes the bloom gate's target back"; there
-is no adaptive chain on that side to compare).
+mixed). **Unchanged by this lane:** no code, no table; the HD and 2048 frames are untouched. **2048: checked, differs** (2048
+runs `wo_composite`'s exposure, not this cubic chain, and its references are drawn at the held 1.15 because Vita3K never
+writes the bloom gate's target back, `oag_raceplay::Options::exposure_hold`).
 
 ## See also
 
