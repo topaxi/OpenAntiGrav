@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-20
-summary: "HD front end: Ship Select settle matches RAM; the swap gap is wired at 3 frames (2026-11-19); craft turn/zoom input unwired; Omega zoom fitted"
+summary: "HD front end: Ship Select settle matches RAM; the swap gap is wired at 3 frames (2026-11-19); Team Selection banner vwipe recovered, ready to wire (2026-11-20); craft turn/zoom input unwired; Omega zoom fitted"
 difficulty: medium (30)
 ---
 
