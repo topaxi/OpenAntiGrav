@@ -390,3 +390,32 @@ fn hd_track_select_hints_confirm_and_leave() {
         "the d-pad glyph is four controls, not a hint: {hints}"
     );
 }
+
+/// Pure's PSP executable binds `backward` and `cancel` to the triangle
+/// (`docs/ghidra/functions/psp-pure-usa/input.md`), and its footers draw the triangle beside `BACK`
+/// in the `Stats` face. Back leaves on the triangle and not the circle, the footer's `BACK` hint
+/// leaves, and under MENU BACK `circle` the footer draws the circle and the hint presses it.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pure_back_is_the_triangle_and_its_footer_hint_presses_the_resolved_button() {
+    let Some(image) = oag_testdata::image("pure-psp-eu.chd") else {
+        return;
+    };
+    let reach = "boot; until stage=menu within 3000; select racebox; press cross; \
+                 until page=race; ticks 60";
+    for choice in ["original", "circle"] {
+        let (back, other) = buttons("triangle", choice);
+        println!("Pure race page, MENU BACK {choice}: {back} leaves, {other} does not");
+        let profile = Profile::fresh(&format!("pure-{choice}"));
+        profile.menu_back(choice);
+        profile.drive(
+            &image,
+            &[],
+            &format!(
+                "{reach}; press {other}; ticks 40; expect page=race; draw; expect hints={back}; \
+                 expect hints=cross; click hint {back}; ticks 40; expect page!=race"
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}

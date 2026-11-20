@@ -181,6 +181,11 @@ mod tests {
             ] {
                 for platform in [Platform::Psp, Platform::Ps3, Platform::Ps4, Platform::Vita] {
                     let got = hint(title, platform, choice);
+                    let other = if title.name == oag_pure::TITLE.name && platform == Platform::Psp {
+                        ps2
+                    } else {
+                        other
+                    };
                     assert!(
                         got.ends_with(other),
                         "{} {platform:?} {choice:?}: {got}",

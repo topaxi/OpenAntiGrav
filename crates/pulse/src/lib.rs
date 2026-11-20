@@ -295,6 +295,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // The PS2 executable binds `backward`/`cancel` to the triangle, the PSP's to the circle:
     // `docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence".
     back_button_ps2: Some(oag_title::prompts::Prompt::Triangle),
+    back_button_psp: None,
     // Pulse authors the `FEGlobals`/`<Menu>` vocabulary `MenuSkin` describes,
     // not the touch-icon idiom `TouchFrontEnd` does - see ADR-0054.
     touch: None,

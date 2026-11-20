@@ -267,23 +267,32 @@ impl Substitution {
     /// ([`Prompts::UNREAD`], a title that has not read its glyphs).
     #[must_use]
     pub fn exchanging(prompts: &Prompts, a: Prompt, b: Prompt) -> Self {
-        let stand_in = |wanted: Prompt| {
+        let all = |wanted: Prompt| {
             prompts
                 .glyphs
                 .iter()
-                .find(|(_, prompt)| *prompt == wanted)
+                .filter(move |(_, prompt)| *prompt == wanted)
                 .map(|&(stand_in, _)| stand_in)
+                .collect::<Vec<_>>()
         };
-        let (Some(a), Some(b)) = (stand_in(a), stand_in(b)) else {
+        let (of_a, of_b) = (all(a), all(b));
+        if of_a.is_empty() || of_b.is_empty() {
             return Self::none();
-        };
-        let prompt_of = |wanted: char| prompts.prompt_of(wanted);
+        }
+        // The k-th stand-in of one control is drawn as the k-th of the other, in whichever face
+        // it is: a title that has two styles of glyph (Pure's menus and its footers) lists them
+        // in the same order, so a style keeps its own.
+        let mut pairs = Vec::new();
+        let mut depicted = Vec::new();
+        for (from, to, shown) in [(&of_a, &of_b, b), (&of_b, &of_a, a)] {
+            for (k, &stand_in) in from.iter().enumerate() {
+                pairs.push((stand_in, to[k.min(to.len() - 1)]));
+                depicted.push((stand_in, shown));
+            }
+        }
         Self {
-            pairs: vec![(a, b), (b, a)],
-            depicted: [(a, b), (b, a)]
-                .into_iter()
-                .filter_map(|(from, to)| prompt_of(to).map(|prompt| (from, prompt)))
-                .collect(),
+            pairs,
+            depicted,
             scope: Some(prompts.scope),
             table: Some(*prompts),
         }
