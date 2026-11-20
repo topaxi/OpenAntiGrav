@@ -25,6 +25,7 @@ pub(super) fn params() -> Params {
         tone_adaption_boost: 1.0,
         tone_darkening_clamp: 1.0,
         tone_maximum_brightness: 1.0,
+        feedback: 0.0,
         final_half_texel: false,
         eight_bit: false,
         zoom: None,
@@ -419,6 +420,7 @@ fn the_adaptation_is_the_encoded_mean() {
         tone_adaption_boost: 1.0,
         tone_darkening_clamp: 10.0,
         tone_maximum_brightness: 2.0,
+        feedback: 0.0,
         ..params()
     };
     let chain = Chain::new(&device, format, size, chain_params, Glow::Suppressed)
@@ -812,6 +814,7 @@ fn a_dark_encoded_scene_value_resolves_to_itself() {
         tone_adaption_boost: 20.0,
         tone_darkening_clamp: 3.0,
         tone_maximum_brightness: 4.0,
+        feedback: 0.0,
         ..params()
     };
     let Some(resolved) = resolve_flat_with(authored, SceneStore::Encoded, 0.162) else {
@@ -821,6 +824,43 @@ fn a_dark_encoded_scene_value_resolves_to_itself() {
     assert!(
         resolved.abs_diff(41) <= 1,
         "stored 0.162 resolved {resolved}"
+    );
+}
+
+/// The resolve's feedback term, `lerp(scene, 2 * feedbackBuffer, scaleFeedback)`: on a flat
+/// scene the feedback buffer (the quarter-res scene) is the scene, so a Zone race's `-0.4`
+/// resolves a surface to `1.4 - 0.8 = 0.6` of its light, and `0.0` to itself
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The feedback term"). The tone
+/// block is the authored one, whose exposure is 1 here, and the boost fades the frame term
+/// out, so the scale is the feedback's alone.
+#[test]
+fn a_negative_feedback_darkens_a_flat_scene_to_its_share() {
+    let authored = Params {
+        adaption_rate: 1.0,
+        adaption_boost: 20.0,
+        tone_adaption_boost: 20.0,
+        tone_darkening_clamp: 3.0,
+        tone_maximum_brightness: 4.0,
+        ..params()
+    };
+    let zone = Params {
+        feedback: -0.4,
+        ..authored
+    };
+    let stored = 0.5f64;
+    let (Some(plain), Some(fed)) = (
+        resolve_flat_with(authored, SceneStore::Encoded, stored),
+        resolve_flat_with(zone, SceneStore::Encoded, stored),
+    ) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let light = ((stored + 0.055) / 1.055).powf(2.4);
+    let want = ((1.055 * (0.6 * light).powf(1.0 / 2.4) - 0.055) * 255.0).round() as u8;
+    assert!(plain.abs_diff(128) <= 1, "no feedback resolved {plain}");
+    assert!(
+        fed.abs_diff(want) <= 1,
+        "feedback -0.4 resolved {fed}, want {want}: 0.6 of the scene's light"
     );
 }
 
@@ -837,6 +877,7 @@ fn the_exposure_function_is_the_scale_the_resolve_applies() {
         tone_adaption_boost: 35.0,
         tone_darkening_clamp: 3.0,
         tone_maximum_brightness: 4.0,
+        feedback: 0.0,
         ..params()
     };
     let linear = 0.002f64;
@@ -877,6 +918,7 @@ fn a_chain_runs_under_the_settings_it_was_last_handed() {
         tone_adaption_boost: 0.0,
         tone_darkening_clamp: 0.0,
         tone_maximum_brightness: 1.0,
+        feedback: 0.0,
         ..params()
     };
     // A boost low enough that a flat grey of 63 leaves the exposure off its floor.
@@ -884,6 +926,7 @@ fn a_chain_runs_under_the_settings_it_was_last_handed() {
         tone_adaption_boost: 5.0,
         tone_darkening_clamp: 3.0,
         tone_maximum_brightness: 4.0,
+        feedback: 0.0,
         ..dark
     };
     let stored = 63.0 / 255.0;

@@ -591,6 +591,16 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             authored = scene.light.ambient + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
         }
+        // **A chunk on its Zone program** is the same `Ambient` permutation where the title's
+        // Zone frame is read to be one (`shape.w`): `light * surface` with the stage's ambient
+        // and sun as the light, never the circuit's lightmap or baked vertex light. A material
+        // whose plain program is fed no scene light is lit here too:
+        // every material's Zone variant has a compile that declares the ambient constant
+        // (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone surface's light").
+        if zone_program != 0.0 && scene.zone.shape.w > 0.5 {
+            authored = scene.light.ambient + scene.light.sun * ndl;
+            sun_light = scene.light.sun * ndl;
+        }
         // The `_shadow` crowd's sum: no prelit or vertex-light term, the material's `Ambient` added.
         if crowd_lit {
             authored = row_tint.rgb + scene.light.ambient + sun_diffuse;

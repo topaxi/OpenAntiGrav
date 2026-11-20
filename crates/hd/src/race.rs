@@ -100,6 +100,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // Read off `Environment_UpdateStageBlend` and reproduced live - see
     // `ZONE_TRANSITION`.
     zone_transition: Some(ZONE_TRANSITION),
+    zone_frame: Some(ZONE_FRAME),
     zoom_ring: Some(&ZOOM_RING),
     borrows_zoom_ring: false,
     // `FE_GHOST`, the `GhostOption` list on the Time Trial and Speed Lap pause screens
@@ -314,6 +315,26 @@ pub const ZONE_TRANSITION: &oag_title::ZoneTransition = &oag_title::ZoneTransiti
     acceleration: 0.1,
     radius_cap: 20_000.0,
     weight_step: 0.01,
+};
+
+/// What HD/Fury does to a Zone race's frame, whatever the circuit authors.
+///
+/// `Scene_PrepareFrame`'s Zone arm (`0x003ad8f0`..`0x003ad980`, and `0x003aec34` for the
+/// Zone mode id) clears the byte that gates every chunk's lightmap and baked-vertex light
+/// sources (`0x003ad8fc`) and copies the bloom values out of the table at `0x008c2ae0` into
+/// the settings block, every frame; the ordinary arm writes `Bloom feedback` back to `0.0`
+/// (`0x003abb0c`). Read at instruction level and then live on RPCS3 in a Zone race on
+/// Vineta K, where the block held every one of them in place of the circuit's own `6.709`
+/// boost and `0.5` sizes (confidence 92). `docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`.
+pub const ZONE_FRAME: &oag_title::ZoneFrame = &oag_title::ZoneFrame {
+    lit_by_stage_alone: true,
+    frame_contribution: 0.5,
+    frame_exponent: 0.1,
+    alpha_contribution: 1.0,
+    adaption_boost: 5.0,
+    vertical_size: 1.0,
+    horizontal_size: 1.0,
+    feedback: -0.4,
 };
 
 /// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.

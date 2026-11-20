@@ -211,7 +211,8 @@ on the built model) and `a_zone_plain_chunk_draws_its_own_albedo_under_the_stage
 original's frame at the settled pose: the pad plate's non-cyan pixels average 171/180/184 (original
 148/158/161; before the change 220/228/229 with a white bar), 21 % of the box (original 17 %, before
 7 %). Open on the same page's list: the Track fog, the start gantry's card, weapon pads with WEAPONS
-OFF, the unflagged Zone surface's own lightmap term.
+OFF. The unflagged Zone surface's own lightmap term is closed (2026-11-19: it takes the stage's
+ambient and sun too, [zone-frame.md](zone-frame.md), "The Zone surface's light").
 
 The earlier state of this section, for the record:
 

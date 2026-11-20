@@ -104,6 +104,7 @@ pub fn hd_bloom_params(
         tone_adaption_boost: env.scalar(TONE_ADAPTION_BOOST)?,
         tone_darkening_clamp: env.scalar(TONE_DARKENING_CLAMP)?,
         tone_maximum_brightness: env.scalar(TONE_MAXIMUM_BRIGHTNESS)?,
+        feedback: 0.0,
         final_half_texel: false,
         eight_bit: false,
         zoom: None,
@@ -157,6 +158,29 @@ pub(in crate::load) fn for_title(
     }
 }
 
+/// `params` as a Zone race of a title with a [`oag_title::ZoneFrame`] runs them: the
+/// engine's own values over the circuit's, the adaption rate and the `Tone` family kept.
+/// Any other mode, and a title without the table, keeps the circuit's.
+pub(in crate::load) fn for_mode(
+    params: oag_post::hd_bloom::Params,
+    race: &oag_title::RaceDefaults,
+    mode: oag_race::Mode,
+) -> oag_post::hd_bloom::Params {
+    match race.zone_frame {
+        Some(zone) if mode == oag_race::Mode::Zone => oag_post::hd_bloom::Params {
+            frame_contribution: zone.frame_contribution,
+            frame_exponent: zone.frame_exponent,
+            alpha_contribution: zone.alpha_contribution,
+            adaption_boost: zone.adaption_boost,
+            vertical_size: zone.vertical_size,
+            horizontal_size: zone.horizontal_size,
+            feedback: zone.feedback,
+            ..params
+        },
+        _ => params,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,6 +197,7 @@ mod tests {
             tone_adaption_boost: 1.0,
             tone_darkening_clamp: 1.0,
             tone_maximum_brightness: 1.0,
+            feedback: 0.0,
             final_half_texel: false,
             eight_bit: false,
             zoom: None,
@@ -197,5 +222,34 @@ mod tests {
         assert_eq!(store_of(oag_2048::TITLE, true), SceneStore::Squared);
         assert_eq!(store_of(oag_omega::TITLE, true), SceneStore::SrgbTexels);
         assert_eq!(store_of(oag_pulse::TITLE, false), SceneStore::Computed);
+    }
+
+    /// A Zone race on HD runs the engine's own bloom block (the feedback, the sizes, the
+    /// boost), any other mode and any title without the table the circuit's.
+    #[test]
+    fn a_zone_race_runs_the_titles_own_bloom_block() {
+        let zone = for_mode(authored(), oag_hd::TITLE.race, oag_race::Mode::Zone);
+        assert_eq!(zone.feedback, -0.4);
+        assert_eq!((zone.vertical_size, zone.horizontal_size), (1.0, 1.0));
+        assert_eq!(zone.adaption_boost, 5.0);
+        assert_eq!(
+            (
+                zone.frame_contribution,
+                zone.frame_exponent,
+                zone.alpha_contribution
+            ),
+            (0.5, 0.1, 1.0)
+        );
+        // The adaption rate and the Tone family stay the circuit's.
+        assert_eq!(zone.adaption_rate, authored().adaption_rate);
+        assert_eq!(zone.tone_adaption_boost, authored().tone_adaption_boost);
+        assert_eq!(
+            for_mode(authored(), oag_hd::TITLE.race, oag_race::Mode::SingleRace),
+            authored()
+        );
+        assert_eq!(
+            for_mode(authored(), oag_pulse::TITLE.race, oag_race::Mode::Zone),
+            authored()
+        );
     }
 }

@@ -793,7 +793,8 @@ pub(super) fn staging(
     let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
-        .map(|params| bloom::for_title(params, title));
+        .map(|params| bloom::for_title(params, title))
+        .map(|params| bloom::for_mode(params, title.race, mode));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
         .flatten()
@@ -1006,6 +1007,12 @@ pub(super) fn zone_grade(
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
             .map(|grade| grade.with_transition(race.zone_transition))
+            .map(|grade| {
+                grade.with_stage_light(
+                    race.zone_frame
+                        .is_some_and(|frame| frame.lit_by_stage_alone),
+                )
+            })
             .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
             .map(|grade| {
                 if mode == oag_race::Mode::Detonator {

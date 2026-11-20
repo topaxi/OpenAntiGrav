@@ -214,6 +214,9 @@ pub struct ZoneGrade {
     /// The race runs on one of the title's Zone arenas, whose materials
     /// compile the aniso shape. See [`Self::with_arena`].
     arena: bool,
+    /// Every chunk of the frame is lit by the stage's ambient and sun alone. See
+    /// [`Self::with_stage_light`].
+    stage_lit: bool,
     /// The stage is a lap counter's ([`Self::show_stage`]), not a zone ladder's: a
     /// Detonator race. See [`Self::with_lap_stages`].
     lap_stages: bool,
@@ -244,6 +247,7 @@ impl ZoneGrade {
             pinned: false,
             lap_stages: false,
             arena: false,
+            stage_lit: false,
         })
     }
 
@@ -274,6 +278,15 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_arena(mut self, arena: bool) -> Self {
         self.arena = arena;
+        self
+    }
+
+    /// Whether the title's Zone frame lights every chunk by the stage's ambient and sun
+    /// alone, with no lightmap or baked vertex light
+    /// ([`oag_title::ZoneFrame::lit_by_stage_alone`]).
+    #[must_use]
+    pub fn with_stage_light(mut self, stage_lit: bool) -> Self {
+        self.stage_lit = stage_lit;
         self
     }
 
@@ -935,7 +948,12 @@ impl ZoneGrade {
             track_outer,
             scene_outer,
             aniso_power,
-            shape: [if self.arena { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
+            shape: [
+                if self.arena { 1.0 } else { 0.0 },
+                0.0,
+                0.0,
+                if self.stage_lit { 1.0 } else { 0.0 },
+            ],
             aniso,
             ..off
         }

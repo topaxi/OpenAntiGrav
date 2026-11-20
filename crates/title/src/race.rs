@@ -157,6 +157,7 @@ pub mod sound;
 mod transition;
 mod variants;
 mod zone_circuit;
+mod zone_frame;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{
     CountdownEvent, CountdownVoice, SequenceTick, StartCue, ZoneAnnouncer, ZoneClassAnnouncer,
@@ -174,6 +175,7 @@ pub use variants::{
     livery_variant, split_livery,
 };
 pub use zone_circuit::ZoneCircuit;
+pub use zone_frame::ZoneFrame;
 
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -322,6 +324,10 @@ pub struct RaceDefaults {
     /// HD/Fury: 2048 fades by a factor nothing traced writes, and Pulse and Pure
     /// ship no stage table.
     pub zone_transition: Option<&'static ZoneTransition>,
+    /// What this title's engine does to a Zone race's frame beyond the stage table: the
+    /// light its chunks are drawn under and the `HDR and Bloom` values it runs with, over the
+    /// circuit's own. See [`ZoneFrame`]. `None` where unread, every title but HD/Fury.
+    pub zone_frame: Option<&'static ZoneFrame>,
     /// HD/Fury's zoom-streak ring (see [`crate::ZoomRing`]); `None` on every other title.
     pub zoom_ring: Option<&'static crate::ZoomRing>,
     /// Whether the player may switch on a borrowed copy of HD's zoom-streak ring

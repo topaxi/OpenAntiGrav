@@ -71,6 +71,7 @@ fn plain() -> hd_bloom::Params {
         tone_adaption_boost: 0.0,
         tone_darkening_clamp: 0.0,
         tone_maximum_brightness: 1.0,
+        feedback: 0.0,
         final_half_texel: false,
         eight_bit: false,
         zoom: None,
@@ -191,6 +192,7 @@ fn a_picture_is_exposed_by_the_bloom_chain() {
         tone_adaption_boost: 20.0,
         tone_darkening_clamp: 3.0,
         tone_maximum_brightness: 4.0,
+        feedback: 0.0,
         ..plain()
     };
     let Some((_, flat)) = run(1, plain()) else {
@@ -268,6 +270,7 @@ fn a_scene_layer_is_exposed_under_the_block_a_model_screen_loads() {
         tone_adaption_boost: 20.0,
         tone_darkening_clamp: 3.0,
         tone_maximum_brightness: 4.0,
+        feedback: 0.0,
         ..plain()
     };
     let models = hd_bloom::Params {
