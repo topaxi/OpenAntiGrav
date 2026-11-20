@@ -40,17 +40,19 @@ const FAMILIES: [&str; 3] = [
 ];
 
 /// The plain materials, whose programs are the twins' with `Shadowed = 1` and `Ambient = 0`.
-const PLAIN: [&str; 3] = [
+const PLAIN: [&str; 4] = [
     "crowd_sprite_diffuse_normal_alpha",
     "crowd_diffuse_normal",
+    "crowd_diffuse_normal_bonecount4",
     "crowd_diffuse_normal_bonecount4_normalizets",
 ];
 
 /// Whether `material` is one of the rigs' skinned twins, whose pixel programs are the unskinned
-/// ones' (`gcn_dump` of both: 52/119/125/115 instructions plain, 60/128/131/123 shadowed) and whose
-/// vertex programs read `eyePositionWorldSpace` as theirs do.
+/// ones' (`gcn_dump` of each pair: 52/119/125/115 instructions for `_NormalizeTS`, 52/104/110/100
+/// for the bare `Crowd_Diffuse_Normal`, 60/128/131/123 shadowed) and whose vertex programs read
+/// `eyePositionWorldSpace` as theirs do.
 fn skinned(material: &Material) -> bool {
-    material.name.to_ascii_lowercase().contains("_bonecount4_")
+    material.name.to_ascii_lowercase().contains("_bonecount4")
 }
 
 /// Per material, the glow-table slot (entry index plus one) it was admitted with.

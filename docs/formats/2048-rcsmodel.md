@@ -575,6 +575,40 @@ triangles and materials. The node table is read on PS4 with 8-byte pointers
 ([`2048-animation.md`](2048-animation.md#the-models-node-table)). Evidence and
 counts: [omega-status.md](omega-status.md#racing-a-race-starts-on-this-titles-own-data).
 
+## Omega's skinned record: a fourth gap, 200 bytes (2026-11-20, `omega-crowd-rigs`)
+
+`data00.psarc` left **82 relocation pointers unpaired**. They are 41 records, one in each of
+`Data/crowd/Rigs/{male,female}NN[_shadow].rcsmodel` (40 files) and `Data/startanim/model/start.rcsmodel`:
+the vertex-buffer site sits **200 bytes** past the index-buffer site
+(`PS4_DECLARED_BUFFER_POINTER_GAP`, confidence 85; tried on PS4 files only). Census over all nine
+`data00..09` archives (the patch archives hold none of these files): 41 of 41 pairs have the
+gap 200 and the record's word at `+0x20` (a CPU pointer) equals the vertex site, so the 200 is the
+size of the declaration the record keeps between its two buffer pointers, not a format constant.
+Every pair clears `one`'s arithmetic (index count divisible by three, buffers of the stated
+length, stride 36 on all 40 rigs). The other unpaired pointers of the corpus are unchanged:
+`data04` 2 (Sol) and `data08` 6 (the front-end scenes), asserted by the censuses.
+
+**The declaration is two pointers deep here.** `PS4_DECLARATION_POINTER` (`+0x28`) holds zero on
+this record; `+0x18` names a slot that holds the header's address (`male01`: `+0x18 = 0xca0`, the
+word there `0xcb0`, a stride-36 header with six attributes). Read that way all 41 resolve.
+
+**The vertex** (stride 36, confidence 90 for the roles, measured): position `f32` x3 at 0, normal
+at 12 and tangent at 16 (the PS4's signed-byte types), `Uv1` as two halves at 20, then two
+attributes whose names are not recovered (`~crc32` `0xf0768d21`, `0x45177157`): **four `u16`
+skin weights at 24** (type nibble 9; the four lanes sum to 65,533..65,535 on all 21,344 vertices of
+the 40 rigs) and **four `u8` bone indices at 32** (type `0xa`; every index with a non-zero weight
+is below the sibling `.rcsskeleton`'s node count, 17 to 19 against 18 to 21 nodes). The
+skeleton's node ids equal the model's node table on all 40. `SubMesh::skin_weights` and
+`skin_indices` carry them. Positions are authored at one hundredth of a metre (the root bone
+carries scale 100; the figures are 1.69 to 1.75 tall after it).
+
+Pinned by `omega_race_ground_truth::data00_rcsmodels_decode_and_close_completely` (625 files,
+38,403 submeshes, 0 unpaired, `check_crowd_rig` on each of the 40 rigs) and by
+`psp2_flat_census_ground_truth::omega_data00` / `omega_declaration_ground_truth::data00_...`
+(620 files, 38,403 submeshes, every record resolves its declaration). **2048 (Vita): checked, does
+not apply**: no Vita file has a pair this gap would take (`unpaired_pointers` is zero on
+every Vita file, and the gap is not tried on one); 2048 ships no `Data/Crowd/Rigs`.
+
 ## The flat-submesh census, and the record pointer
 
 Measured 2026-10-27 (`2048-flat-census`), `crates/rcs/tests/psp2_flat_census_ground_truth.rs`
