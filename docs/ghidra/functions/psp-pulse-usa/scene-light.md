@@ -478,7 +478,7 @@ strip (`vt 0x123`, 255 vertices, chunks 2730 and 2778) is in the 14. The 317-ver
 draw of a lit-capable batch with no light enabled that is not the extra pass; what it is (a craft drawn in another pass) is
 not identified, and it is one boot. Raw dumps and the lists stay under `data/`, not committed.
 
-**Wired.** `mesh_render::mark_rig_vertices` marks every vertex with normals and no colour (`GpuVertex::lit` 1.0) as `lit`
+**Wired.** The no-normals rule (unlit, white material) is the one [`psp-pure-usa/hull-shine.md`](../psp-pure-usa/hull-shine.md), "The sky", measured on Pure's sky cube in a recorded GE list; `oag_mesh::mesh::build` now applies it to every batch, so Pure's sky builds unlit at the source (`unlit_sky` still converts a sky vertex that has normals and no colour). `mesh_render::mark_rig_vertices` marks every vertex with normals and no colour (`GpuVertex::lit` 1.0) as `lit`
 2.0, the rig; `oag_mesh` builds a vertex of a batch with no normals as `lit` 0.0 and white, since the GE draws it unlit
 (raw texel). The start-laser texture list is gone. Test:
 `crates/raceplay/tests/start_laser_rig_ground_truth.rs` (no `lit` 1.0 left on Basilico, the laser strip marked, coloured
