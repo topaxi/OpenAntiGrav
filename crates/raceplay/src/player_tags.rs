@@ -8,9 +8,9 @@ use crate::RaceSim;
 #[cfg(feature = "view")]
 use crate::RaceView;
 use crate::SimRace;
+use oag_core::math::Vec3;
 use oag_gameplay::MAX_SHIPS;
 use oag_hud::PlayerTag;
-use oag_core::math::Vec3;
 use oag_hud::player_tags::{alpha, anchor, in_view_row, step_fade};
 
 use crate::Race;
