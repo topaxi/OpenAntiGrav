@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-20
-summary: "HD front end: Ship Select matches RAM, swap gap wired; Team Selection banner vwipe wired; craft input unwired"
+summary: "HD front end: Ship Select matches RAM; team banner wipe wired; other pages wipe entry measured, ready to wire"
 difficulty: medium (30)
 ---
 
