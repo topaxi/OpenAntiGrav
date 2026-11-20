@@ -299,11 +299,14 @@ impl Driver {
                     .button(left, winit::event::ElementState::Released);
                 self.frame(None)?;
             }
+            Step::Draw => {
+                self.session.gpu.output.draw_next = true;
+                self.frame(None)?;
+            }
             Step::ClickHint(press) => {
                 // A drive draws only the frames it is asked for, and the hints are read off a
                 // drawn frame, as a player's click lands on what they saw.
-                self.session.gpu.output.draw_next = true;
-                self.frame(None)?;
+                self.exec(&Step::Draw)?;
                 let (x, y) = self.session.hint_pixel(*press).ok_or_else(|| {
                     anyhow!(
                         "no hint on screen presses {press:?} (hints: {})",

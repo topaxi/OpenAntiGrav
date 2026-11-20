@@ -103,3 +103,26 @@ fn a_buttons_face_table_leaves_other_faces_alone() {
     assert_eq!(substitution.apply("A", false), "A");
     assert_ne!(substitution.apply("A", true), "A");
 }
+
+#[test]
+fn the_button_a_glyph_depicts_is_the_one_drawn_not_the_one_written() {
+    const TABLE: Prompts = Prompts {
+        scope: Scope::AnyFace,
+        glyphs: &[('A', Prompt::Circle), ('B', Prompt::Triangle)],
+    };
+    let reading = Substitution::reading(&TABLE);
+    assert!(reading.is_none() && reading.reads_prompts());
+    assert_eq!(reading.button_drawn('A', false), Some(Prompt::Circle));
+    assert_eq!(reading.button_drawn('Z', false), None);
+    let swapped = Substitution::exchanging(&TABLE, Prompt::Circle, Prompt::Triangle);
+    assert_eq!(swapped.button_drawn('A', false), Some(Prompt::Triangle));
+    assert_eq!(swapped.button_drawn('B', false), Some(Prompt::Circle));
+    let art = Substitution::reading(&TABLE).with(&TABLE, 0, art_index("xbox-a"), Prompt::Triangle);
+    assert_eq!(art.button_drawn('A', false), Some(Prompt::Triangle));
+    assert_eq!(
+        art.button_drawn('B', false),
+        Some(Prompt::Triangle),
+        "a stand-in this substitution does not redraw is the disc's own"
+    );
+    assert!(!Substitution::none().reads_prompts());
+}

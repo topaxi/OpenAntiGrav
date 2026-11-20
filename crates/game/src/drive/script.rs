@@ -18,6 +18,7 @@
 //! mouse 640 360                    the mouse moved to this window pixel
 //! click                            the primary mouse button went down and up
 //! click hint <button>              click the key or button hint on screen that presses this button, or `escape` (the footer's `(O) Help`)
+//! draw                             draw the next frame, so `hints` reports what it shows (a drive draws only the frames it is asked for)
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
 //! drop shot.png                    a file dropped on the window (a screenshot of ours opens in the replay viewer on the main menu or in a demo)
@@ -131,6 +132,8 @@ pub enum Step {
     Click,
     /// The same click, on the middle of the hint on screen that depicts this button.
     ClickHint(oag_ui::hints::Press),
+    /// Draw the next frame.
+    Draw,
     /// Let this many ticks pass.
     Ticks(u32),
     /// Write the next frame to this PNG.
@@ -168,6 +171,7 @@ impl std::fmt::Display for Step {
             Self::Mouse { x, y } => write!(f, "mouse {x} {y}"),
             Self::Click => f.write_str("click"),
             Self::ClickHint(press) => write!(f, "click hint {press:?}"),
+            Self::Draw => f.write_str("draw"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
             Self::Drop(path) => write!(f, "drop {}", path.display()),
@@ -398,6 +402,7 @@ impl Script {
             },
             "escape" if words.is_empty() => Step::Escape,
             "key" if words.is_empty() => Step::Key,
+            "draw" if words.is_empty() => Step::Draw,
             "click" if words.is_empty() => Step::Click,
             "click" => match words.as_slice() {
                 [hint, name] if hint == "hint" => Step::ClickHint(if name == "escape" {

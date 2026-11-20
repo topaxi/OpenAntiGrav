@@ -698,3 +698,32 @@ fn the_setting_off_hands_the_race_no_lender() {
         }
     );
 }
+
+/// `ENTER OR X START` is the cross and `ESCAPE QUIT` the Escape key, each under the words the
+/// footer draws: fails if the hint list and the line drawn stop sharing one layout.
+#[test]
+fn the_list_footer_names_the_cross_and_escape_where_it_draws_them() {
+    use oag_ui::hints::Press;
+    let launcher = Launcher::new(vec![playable("a.chd")]);
+    let hints = hints(&launcher);
+    let presses: Vec<_> = hints.iter().map(|hint| hint.press).collect();
+    assert_eq!(presses, [Press::Button(Button::Cross), Press::Escape]);
+    let line = oag_ui::hints::line_text(&hint_entries());
+    let at = |text: &str| oag_ui::font::measure(oag_ui::font::builtin(), text);
+    let start = line.find("ENTER").unwrap();
+    assert!((hints[0].rect[0] - (MARGIN + at(&line[..start]))).abs() < 0.01);
+    assert!((hints[0].rect[2] - at("ENTER OR X START")).abs() < 0.01);
+    let quit = line.find("ESCAPE").unwrap();
+    assert!((hints[1].rect[0] - (MARGIN + at(&line[..quit]))).abs() < 0.01);
+    let middle = |rect: [f32; 4]| (rect[0] + rect[2] / 2.0, rect[1] + rect[3] / 2.0);
+    assert_eq!(
+        oag_ui::hints::hit(&hints, middle(hints[1].rect)),
+        Some(Press::Escape)
+    );
+}
+
+/// The chooser with nothing to choose from has no footer, so it has no hints.
+#[test]
+fn a_chooser_with_no_images_has_no_hints() {
+    assert!(hints(&Launcher::not_found(vec!["none".to_string()])).is_empty());
+}

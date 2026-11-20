@@ -1,0 +1,392 @@
+//! A click on a key or button hint presses that button, through the real session
+//! (`oag-game --drive`, no window) on real discs.
+//!
+//! `click hint <button>` draws a frame, finds the hint on screen that presses the button, moves
+//! the mouse to the middle of it and clicks (`oag_game::drive::script`). The game reports the
+//! buttons its hints press as the state key `hints`, so a script can say what is on screen before
+//! it clicks. Each test clicks and then reads what the screen did: Back leaves, Help opens Help,
+//! Confirm confirms. A hint that is not under the pointer, or a click that is not routed to the
+//! button, leaves the screen where it was, which the `expect` after it catches.
+//!
+//! The glyph a footer draws is the button the click presses: on Pulse's PS2 the disc authors
+//! `Back` on the triangle and the player's MENU BACK choice may put it on the circle, in which
+//! case the footer draws the glyphs exchanged and so does the click
+//! (`docs/ui/back-and-help.md`, "Footers").
+//!
+//! ```sh
+//! OAG_REQUIRE_GAME_DATA=1 cargo nextest run -p oag-game --run-ignored all \
+//!     -E 'test(/^footer_hint_ground_truth::/)'
+//! ```
+
+use std::path::{Path, PathBuf};
+
+use serde_json::Value;
+
+/// A profile directory; the game's config, data and state live under it.
+struct Profile(PathBuf);
+
+impl Profile {
+    /// A new, empty profile owned by this test process alone, so two tests sharing a `tag` do
+    /// not wipe each other's logs.
+    fn fresh(tag: &str) -> Self {
+        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .join(format!("footer-hint-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("a scratch directory");
+        Self(dir)
+    }
+
+    /// Writes `[controls] menu_back = <choice>` into this profile's settings.
+    fn menu_back(&self, choice: &str) {
+        let dir = self.0.join("config/oag");
+        std::fs::create_dir_all(&dir).expect("a config directory");
+        std::fs::write(
+            dir.join("settings.toml"),
+            format!("[controls]\nmenu_back = \"{choice}\"\n"),
+        )
+        .expect("settings.toml");
+    }
+
+    /// One launch of the title at `image` on `script`, with `extra` arguments; the states it
+    /// reported.
+    fn drive(&self, image: &Path, extra: &[&str], script: &str, log: &str) -> Vec<Value> {
+        let log = self.0.join(log);
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+            .arg(image)
+            .args(extra)
+            .args(["--no-audio", "--no-intro", "--drive", script])
+            .arg("--state-log")
+            .arg(&log)
+            .env("XDG_CONFIG_HOME", self.0.join("config"))
+            .env("XDG_DATA_HOME", self.0.join("data"))
+            .env("XDG_STATE_HOME", self.0.join("state"))
+            .env("OAG_TRACKS", self.0.join("no-tracks"))
+            // The repository's example mods put a picker behind RACE CAMPAIGN and a REMIX row in
+            // the racebox; these tests are about the disc's own screens.
+            .env("OAG_MODS", self.0.join("no-mods"))
+            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .env_remove("WAYLAND_DISPLAY")
+            .env_remove("DISPLAY")
+            .output()
+            .expect("running oag-game");
+        assert!(
+            output.status.success(),
+            "{:?}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        std::fs::read_to_string(&log)
+            .unwrap_or_default()
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("a state line is JSON"))
+            .collect()
+    }
+}
+
+fn ps2() -> Option<PathBuf> {
+    oag_testdata::image("pulse-ps2-eu.chd")
+}
+
+fn psp() -> Option<PathBuf> {
+    oag_testdata::image("pulse-psp-eu.chd")
+}
+
+/// `(back, help)`: the face buttons Back and Help are on under `choice` on a pressing whose own
+/// Back is `original` and whose Help is on the other face button.
+fn buttons(original: &'static str, choice: &str) -> (&'static str, &'static str) {
+    let other = |button: &'static str| {
+        if button == "circle" {
+            "triangle"
+        } else {
+            "circle"
+        }
+    };
+    match choice {
+        "circle" => ("circle", "triangle"),
+        "triangle" => ("triangle", "circle"),
+        _ => (original, other(original)),
+    }
+}
+
+const TRACK_SELECT: &str = "boot; select racebox; press cross; until page=race; \
+     select launch_race; press cross; until screen=picker; ticks 30";
+const SHIP_SELECT: &str = "boot; select racebox; press cross; until page=race; \
+     select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; ticks 30";
+const RACE_PAGE: &str = "boot; select racebox; press cross; until page=race; ticks 30";
+
+/// Pulse's Track Select, under every MENU BACK choice: the hint that depicts Help opens it, the
+/// one that depicts Back leaves, and each is the button the choice put there.
+fn track_select_hints(image: &Path, original: &'static str, tag: &str) {
+    let profile = Profile::fresh(tag);
+    for choice in ["original", "circle", "triangle"] {
+        let (back, help) = buttons(original, choice);
+        println!("Track Select, MENU BACK {choice}: {help} opens Help, {back} leaves");
+        profile.menu_back(choice);
+        profile.drive(
+            image,
+            &[],
+            &format!(
+                "{TRACK_SELECT}; draw; expect hints={back}; expect hints={help}; expect hints=cross; \
+                 click hint {help}; ticks 10; expect screen.help=open; expect screen.id=track-select; \
+                 press {help}; ticks 10; expect screen.help=closed; \
+                 click hint {back}; ticks 30; expect screen.id!=track-select"
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_track_select_hints_follow_menu_back() {
+    let Some(image) = ps2() else { return };
+    track_select_hints(&image, "triangle", "ps2-track");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_track_select_hints_follow_menu_back() {
+    let Some(image) = psp() else { return };
+    track_select_hints(&image, "circle", "psp-track");
+}
+
+/// Ship Select authors a Help of its own, which the hint opens on the button the choice put it on.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_ship_select_hints_follow_menu_back() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("ps2-ship");
+    for choice in ["original", "circle"] {
+        let (back, help) = buttons("triangle", choice);
+        println!("Ship Select, MENU BACK {choice}: {help} opens Team Help, {back} leaves");
+        profile.menu_back(choice);
+        profile.drive(
+            &image,
+            &[],
+            &format!(
+                "{SHIP_SELECT}; draw; expect hints={back}; expect hints={help}; \
+                 click hint {help}; ticks 10; expect screen.help=open; expect screen.id=ship-select; \
+                 press {help}; ticks 10; expect screen.help=closed; \
+                 click hint {back}; ticks 30; expect screen.id!=ship-select"
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+/// Confirm on a picker's footer is the cross: it takes the track to Ship Select, and on Ship
+/// Select it picks the team and starts the race.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_confirm_hint_confirms_on_both_pickers() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("ps2-confirm");
+    profile.drive(
+        &image,
+        &[],
+        &format!(
+            "{TRACK_SELECT}; click hint cross; until screen.id=ship-select within 300; ticks 30; \
+             click hint cross; until stage=race within 4000"
+        ),
+        "confirm.jsonl",
+    );
+}
+
+/// The settings pages and menu pages draw `Confirm` and, past the root, `Back`: Back leaves the
+/// racebox page for the main page, Confirm on the main page opens the row under the cursor.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_menu_page_hints_confirm_and_leave() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("ps2-page");
+    for choice in ["original", "circle"] {
+        let (back, _) = buttons("triangle", choice);
+        profile.menu_back(choice);
+        profile.drive(
+            &image,
+            &[],
+            &format!(
+                "boot; until stage=menu within 3000; select racebox; ticks 30; \
+                 draw; expect hints=cross; click hint cross; until page=race; ticks 30; \
+                 draw; expect hints={back}; click hint {back}; until page=main; expect page=main"
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+/// The footer of the racebox page, on a title with Help authored nowhere: the Back hint leaves
+/// the page on the PSP's circle.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_race_page_back_hint_leaves() {
+    let Some(image) = psp() else { return };
+    let profile = Profile::fresh("psp-page");
+    profile.drive(
+        &image,
+        &[],
+        &format!("{RACE_PAGE}; click hint circle; ticks 30; expect page!=race"),
+        "back.jsonl",
+    );
+}
+
+/// Cell Selection's footer carries Help, AI difficulty, Confirm and Back: Help opens Cell Help
+/// on the button the pressing and the choice put it on (with it open a direction moves nothing),
+/// and Back then leaves for Grid Selection.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_cell_selection_hints_follow_menu_back() {
+    let Some(image) = ps2() else { return };
+    let open = "boot; until stage=menu within 3000; select campaign; press cross; \
+                until screen=campaign; press cross; until screen.id=cell; ticks 60";
+    for choice in ["original", "circle"] {
+        let (back, help) = buttons("triangle", choice);
+        println!("Cell Selection, MENU BACK {choice}: {help} opens Cell Help, {back} leaves");
+        // A profile of its own per choice: the campaign reopens where the cursor was left, and
+        // the script reads the cursor against where it starts.
+        let profile = Profile::fresh(&format!("ps2-cell-{choice}"));
+        profile.menu_back(choice);
+        profile.drive(
+            &image,
+            &[],
+            &format!(
+                "{open}; draw; expect hints={help}; expect hints=square; \
+                 click hint {help}; ticks 20; press down; ticks 20; expect focus=grid0_3_1; \
+                 press {help}; ticks 20; press down; ticks 20; expect focus!=grid0_3_1; \
+                 click hint {back}; until screen.id=grid within 100"
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+/// The pause menu's root draws `Confirm` alone (Back is silent there): clicking it takes the row
+/// under the cursor, CONTINUE, and the race resumes. A page under it draws `Back`, which leaves
+/// for the root.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_pause_menu_hints_confirm_and_leave() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("ps2-pause");
+    let to_the_pause = "boot; select racebox; press cross; until page=race; \
+         set race.mode=time_trial; select launch_race; press cross; until screen=picker; \
+         press cross; until screen.id=ship-select; press cross; until stage=race within 4000; \
+         ticks 400; press start; until stage=menu; expect page=pause; ticks 40";
+    profile.drive(
+        &image,
+        &[],
+        &format!(
+            "{to_the_pause}; select \"Game options\"; click hint cross; until page=options; ticks 40; \
+             click hint triangle; until page=pause; ticks 40; select continue; \
+             click hint cross; until stage=race within 300"
+        ),
+        "pause.jsonl",
+    );
+}
+
+/// `EndRace Menu` draws `Confirm`: a click on it takes the option under the cursor, RETURN TO
+/// MENUS, and the race is left. The player is flown for it, as `photo_mode_ground_truth` does.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_end_of_race_menu_confirm_hint_confirms() {
+    let Some(image) = psp() else { return };
+    let profile = Profile::fresh("psp-endrace");
+    profile.drive(
+        &image,
+        &["--autopilot"],
+        "boot; select racebox; press cross; until page=race; select launch_race; \
+         press cross; until screen=picker; press cross; until screen.id=ship-select; \
+         press cross; until stage=race within 4000; ticks 400; \
+         ticks 8000; until endrace=photo within 2000; ticks 100; press cross; ticks 100; \
+         press cross; ticks 100; draw; expect hints=cross; click hint cross; \
+         until stage=menu within 300",
+        "endrace.jsonl",
+    );
+}
+
+/// Photo mode's key legend, on Pulse's PS2: `Back` is the triangle under `original` and the
+/// circle under MENU BACK `circle`, and the camera reset is the button Back displaced. A click on
+/// the reset hint keeps the mode open, a click on the Back hint leaves it.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_photo_mode_hints_follow_menu_back() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("ps2-photo");
+    for choice in ["original", "circle"] {
+        let (back, help) = buttons("triangle", choice);
+        println!("Photo mode, MENU BACK {choice}: {back} leaves, {help} resets the camera");
+        profile.menu_back(choice);
+        profile.drive(
+            &image,
+            &[],
+            &format!(
+                "boot; select racebox; press cross; until page=race; select launch_race; \
+                 press cross; until screen=picker; press cross; until screen.id=ship-select; \
+                 press cross; until stage=race within 4000; ticks 400; \
+                 escape; until stage=menu; select photo_mode; press cross; \
+                 until photo=free within 200; ticks 5; draw; expect hints={back}; expect hints={help}; \
+                 expect hints=cross; click hint {help}; ticks 10; expect photo=free; \
+                 click hint cross; ticks 10; expect photo=free; \
+                 click hint {back}; until photo=none within 50"
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+/// The replay viewer's key legend: a click on `CROSS PLAY` pauses the recording that is playing,
+/// and a second resumes it.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn pulse_psp_replay_viewer_play_hint_toggles_playback() {
+    let Some(image) = psp() else { return };
+    let profile = Profile::fresh("psp-viewer");
+    profile.drive(
+        &image,
+        &[],
+        "boot; select racebox; press cross; until page=race; select launch_race; \
+         press cross; until screen=picker; press cross; until screen.id=ship-select; \
+         press cross; until stage=race within 4000; ticks 400; escape; until stage=menu; quit",
+        "record.jsonl",
+    );
+    profile.drive(
+        &image,
+        &[],
+        "boot; select replays; press cross; until page=replays; select watch_replay; \
+         press cross; until replay=playing within 4000; ticks 30; \
+         draw; expect hints=cross; expect hints=square; \
+         click hint cross; ticks 10; expect replay=paused; \
+         click hint cross; ticks 10; expect replay=playing",
+        "viewer.jsonl",
+    );
+}
+
+/// Wipeout HD's Track Select footer: the Back hint leaves, as the circle does there, and the
+/// d-pad's `NAVIGATION` glyph is not a hint.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_track_select_hints_confirm_and_leave() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let profile = Profile::fresh("hd-track");
+    let state = profile.drive(
+        &image,
+        &[],
+        &format!(
+            "{TRACK_SELECT}; ticks 60; draw; expect hints=circle; expect hints=cross; \
+             click hint circle; ticks 60; expect screen.id!=track-select"
+        ),
+        "back.jsonl",
+    );
+    let hints = state
+        .iter()
+        .filter_map(|state| state["hints"].as_str())
+        .find(|hints| hints.contains("circle"))
+        .expect("the footer's hints were reported");
+    assert!(
+        !hints.contains("up") && !hints.contains("down") && !hints.contains("left"),
+        "the d-pad glyph is four controls, not a hint: {hints}"
+    );
+}
