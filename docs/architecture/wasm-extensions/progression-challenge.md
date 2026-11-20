@@ -317,6 +317,11 @@ page with a line naming the mod and the fault. Then an out-of-range factor can b
 fault like every other command, the README's "a fault, never a clamp" holds, and the
 "clamp where the convention is a fault" consequence goes away.
 
+**Answered by the maintainer (2026-11-20): refuse the launch; the clamp stays.** Any
+`race-start` fault refuses the launch with a line naming the mod. An out-of-range factor
+still clamps with a load-report warning (settled 2026-11-19), so only the first half of
+the proposed change is taken (ADR-0093 decision 3, progression.md section 4.1).
+
 ### 11. The no-record rule leaves loyalty and XP paying for a boosted race
 
 **Evidence.** The finish site pays loyalty for any official race

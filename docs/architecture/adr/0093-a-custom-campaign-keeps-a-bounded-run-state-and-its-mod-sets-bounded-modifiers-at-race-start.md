@@ -83,7 +83,12 @@ ratings, not computed from handling.
    second host-written buffer a guest names by `oag_run`, the pattern of
    `oag_wants_race` and `oag_track`. `race-start` reads the run state, replies with
    commands and **sets the module's initial tick state** (the only way the run reaches
-   `tick`, which never sees the run bytes); it cannot write the run. `race-end` reads
+   `tick`, which never sees the run bytes); it cannot write the run. **A fault in
+   `race-start`** (a trap, spent fuel, a malformed reply, a non-finite factor) **refuses
+   the launch**: the player is back on the campaign page with a line naming the mod and
+   the fault, and no stock race runs in its place (ADR-0077's "refuse, never
+   substitute"; maintainer, 2026-11-20). An out-of-range factor still clamps (decision
+   4). `race-end` reads
    the result (including the medal tier the host evaluated, the event's best medal
    before this race as `prior_tier`, the event's position in the campaign as
    `event_index`, and a `score`: zones reached in Zone, kills in Eliminator) and the final tick state,
@@ -197,7 +202,8 @@ prerequisite of the run record (decision 11; objection 7, answered). `race-end` 
 `score` (zones or kills) and reads a result and tick state latched in the sim on the
 tick the person's race ends (decisions 3 and 6; objection 8, answered). A tournament is one
 run event whose tick state carries from leg to leg, with one `race-end` after the last
-leg; a per-leg `race-end` is for later (decision 6; objection 9, answered).
+leg; a per-leg `race-end` is for later (decision 6; objection 9, answered). A fault in
+`race-start` refuses the launch; the clamp stays (decision 3; objection 10, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in

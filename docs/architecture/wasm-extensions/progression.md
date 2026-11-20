@@ -328,6 +328,13 @@ module off for the race, so the player would fly the stock craft with no hint th
 their rewards did not apply. A non-finite value is still a fault. This departs from
 the established convention, so it is open question 1.
 
+**A fault refuses the launch (maintainer, 2026-11-20).** Any other fault in
+`race-start` (a trap, spent fuel, a malformed record, a non-finite factor) refuses the
+launch: back to the campaign page with a line naming the mod and the fault. A stock
+race never runs in its place, so it never earns a medal in a run campaign
+([progression-challenge.md](progression-challenge.md), objection 10; ADR-0077 decision
+6). The clamp of an out-of-range factor stays as settled.
+
 **The hash.** `Ship::handling` and `Ship::weapon_counts` are deliberately not
 hashed (`oag_gameplay::hash`: "named in the destructure so this is a decision rather
 than an omission"). Writing modifiers into them would let a replay run on other run
