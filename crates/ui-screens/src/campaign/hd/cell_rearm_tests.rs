@@ -55,11 +55,22 @@ fn emblems_drawn(model: &CellSelection) -> usize {
         }),
     })
     .collect();
-    let layout = Layout {
-        screen: Screen {
+    page_body(
+        model,
+        Screen {
             slots,
             ..Screen::default()
         },
+    )
+    .iter()
+    .filter(|draw| matches!(draw, Draw::Sprite { rect, .. } if rect[0] == 10.0 && rect[2] == 96.0))
+    .count()
+}
+
+/// The page's body draws for `screen`, every sprite the sheet is asked for placed 96 by 96.
+fn page_body(model: &CellSelection, screen: Screen) -> Vec<Draw> {
+    let layout = Layout {
+        screen,
         scale: [1.0, 1.0],
         faces: crate::picker::FaceScales::default(),
     };
@@ -69,7 +80,7 @@ fn emblems_drawn(model: &CellSelection) -> usize {
         33.0,
     );
     let sprites = |src: &str| {
-        src.ends_with("_bw.gtf").then_some(Placed {
+        (src.ends_with("_bw.gtf") || src.ends_with("corner2.gtf")).then_some(Placed {
             x: 0,
             y: 0,
             width: 96,
@@ -104,13 +115,7 @@ fn emblems_drawn(model: &CellSelection) -> usize {
         &sprites,
         &[],
     );
-    layers
-        .body
-        .iter()
-        .filter(
-            |draw| matches!(draw, Draw::Sprite { rect, .. } if rect[0] == 10.0 && rect[2] == 96.0),
-        )
-        .count()
+    layers.body
 }
 
 fn page_up_for(seconds: f32) -> CellSelection {
@@ -161,4 +166,89 @@ fn a_finished_still_does_not_replay() {
     *model.entry_mut() = oag_ui::screen::EntryClock::finished();
     press(&mut model, Button::Right);
     assert_eq!(emblems_drawn(&model), 4);
+}
+
+const BRACKET_FIXTURE: &str = r#"
+<Screen>
+  <Screen name="Cell Selection">
+    <Image name="Event Emblem" OffsetX="750" OffsetY="315" EnableTransition="0.3" delay="0.05">
+      <Values transitiontype="vwipe" x="4" y="0" width="96" height="96"></Values>
+      <Bracket delay="0.1"><Values corner="true" x="0" y="0" Width="100" Height="96" Colour="0xFF646464"></Values></Bracket>
+    </Image>
+    <Text name="Target Title" OffsetX="750" OffsetY="810" transition="0" delay="0.6">
+      <Values x="30" y="13" string="TARGET"></Values>
+      <Item OffsetX="0" OffsetY="50">
+        <Bracket delay="0.625"><Values corner="true" x="0" y="0" Width="100" Height="60" Colour="0xFF646464"></Values></Bracket>
+      </Item>
+    </Text>
+    <Item name="RightColumnText" OffsetX="1286" OffsetY="315">
+      <Bracket delay="0.3"><Values corner="true" x="-16" y="0" Width="415" Height="486" Colour="0xFF646464"></Values></Bracket>
+    </Item>
+  </Screen>
+</Screen>
+"#;
+
+/// The top-left corner of each 16 by 16 mark the page draws, by the bracket's own left edge.
+fn bracket_marks(model: &CellSelection) -> Vec<f32> {
+    let screens = oag_ui::screen::Screens::from_xml(BRACKET_FIXTURE);
+    let screen = screens
+        .by_name("Cell Selection")
+        .expect("the screen")
+        .clone();
+    page_body(model, screen)
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => Some(rect[0]),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A bracket inside a re-armed widget counts its `delay` from the arming, the entry hold and each
+/// change included; one inside no re-armed widget counts from the page's entry. Dropping the
+/// `group` split, or the delay, fails this: the page would draw every mark from frame 0, or the
+/// emblem's bracket would not replay at a step.
+#[test]
+fn a_bracket_in_a_rearmed_widget_replays_with_it() {
+    let at = |seconds: f32| {
+        let mut model = CellSelection::new(vec![cell("grid8_0_0"), cell("grid8_1_0")]);
+        model.tick(seconds);
+        model
+    };
+    assert!(bracket_marks(&at(0.0)).is_empty(), "nothing at frame 0");
+    // The hold ends at 0.37 s; the emblem's bracket (0.1 s) is out from 0.47 s, the column's
+    // (0.3 s) from 0.67 s. The target row's (0.625 s) counts from the entry, with no hold.
+    assert!(
+        bracket_marks(&at(0.4)).is_empty(),
+        "the hold is over, the delays not"
+    );
+    assert_eq!(
+        bracket_marks(&at(0.5)).len(),
+        4,
+        "the emblem's marks are out"
+    );
+    assert_eq!(bracket_marks(&at(0.6)).len(), 4);
+    assert_eq!(
+        bracket_marks(&at(0.65)).len(),
+        8,
+        "the target row's, 0.625 s in"
+    );
+    assert_eq!(bracket_marks(&at(0.7)).len(), 12, "and the column's");
+    // Past the opening, a cell step restarts the emblem's and the column's, and the row's stays.
+    let mut model = at(2.0);
+    assert_eq!(bracket_marks(&model).len(), 12);
+    press(&mut model, Button::Right);
+    assert_eq!(
+        bracket_marks(&model).len(),
+        4,
+        "only the target row's stays"
+    );
+    model.tick(0.15);
+    assert_eq!(bracket_marks(&model).len(), 8, "the emblem's is back");
+    model.tick(0.3);
+    assert_eq!(bracket_marks(&model).len(), 12);
+    // A still with no stated time is the finished page.
+    let mut still = CellSelection::new(vec![cell("grid8_0_0")]);
+    *still.entry_mut() = oag_ui::screen::EntryClock::finished();
+    assert_eq!(bracket_marks(&still).len(), 12);
 }

@@ -428,10 +428,19 @@ pub fn hd_cell_draw_list(
     // unlocked tier: how many points the tier still needs to open the next
     // grid, over the next grid's logo. Nothing once the tier's own figure
     // is met or when there is no next grid.
-    out.extend(cell_brackets::draws(
+    // A bracket inside a re-armed widget counts from that arming (the entry hold, then each cell
+    // or rung change); the target rows' own brackets from the page's entry.
+    let armed = cell_emblems::since_armed(model.entry(), model.refreshed_at());
+    out.extend(cell_brackets::draws_by(
         &screen.brackets,
         sprites,
-        EntryClock::finished().seconds(),
+        &|bracket| {
+            if cell_emblems::rearms_brackets(bracket.group.as_deref()) {
+                armed
+            } else {
+                model.entry().seconds()
+            }
+        },
     ));
     out.extend(cell_emblems::rule(&screen.slots));
     let remaining = grid_summary

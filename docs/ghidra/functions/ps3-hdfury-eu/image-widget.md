@@ -434,7 +434,7 @@ four emblems (the `Event Title`, `Track Title`, `Speed Class Title` and `Weapons
 Reverse`, and each emblem's two `Bracket` children, delays 0.1 to 0.325 s) and of `RightColumnText` (its `Bracket`, 0.3 s, and the
 `RC ...` texts). A `transition="0"` widget with a `delay` draws nothing until the delay is out (`Widget_UpdateTransition` keeps
 alpha at 0.001 and `Image_Render` returns), so on a change the original blanks and brings back that text column in stages; ours
-draws no delay on a `Text`, an arrow or those brackets, so only the four emblem icons replay. Omega: the same files and
+draws no delay on a `Text` or an arrow, so only the four emblem icons and (since `hd-brackets-pages`, "The corner brackets") their nine brackets replay. Omega: the same files and
 `picker::hd::track` / `campaign::hd` run its pages, so this is wired by lineage and unmeasured there (checked, applies).
 
 **Test**: a pad step on a settled `Cell Selection` hides all four emblems the same instant and brings them back in order
@@ -460,14 +460,29 @@ it is written inside. It has its own `delay` attribute (the generic child parser
 - The image's `vwipe` does not cut a bracket: `unlockboxbrackets` wipes its `dot.gtf` panel from 0.45 s, its `Bracket` appears at
   0.4 s and is out by 0.5 s.
 
-`Grid Selection Fury`'s `unlockboxbrackets` carries `<Bracket delay="0.4">`; every `<Bracket>` in `CellMode_Definition.xml`
-authors a `delay` too (0.1 to 0.675 s). **Wired for the Grid page's unlock box only** (`Bracket::inset`,
-`cell_brackets::draws(.., since_entry)` from `GridSelection::entry`; sheet at 0.35, 0.43, 0.46, 0.5, 0.9, 1.3 s). Cell Selection,
-Team Selection and Track Select draw their brackets from frame 0 as before: each such bracket counts its delay from its own arming
-(the cell page's sit under the re-armed emblems, the target rows under `Target Title`), page-entry and per-parent clocks that no RAM
-read covered. Confidence 75 for the bracket law (decompile of three functions, constants read from the file; no RAM watch of a
-bracket countdown); what would raise it: the countdown of a `Bracket` widget at the Grid page's entry. Omega: its Grid page draws
-through the same `campaign::hd` code, wired by lineage; the Omega `Bracket` class was not read (checked, applies, unread).
+`Grid Selection Fury`'s `unlockboxbrackets` carries `<Bracket delay="0.4">`. **Wired on every page that authors one
+(2026-11-20, `hd-brackets-pages`)**: the Grid unlock box (`hd-vwipe-rearm`) and the three pages below. `Bracket::inset`,
+`cell_brackets::draws`/`draws_by` read a clock per bracket; `Bracket::group` names the nearest named widget it is written
+inside. Census from the served files, asserted by `crates/ui/tests/bracket_ground_truth.rs`:
+
+| Page (screen) | Brackets (delay s) | Clock |
+| --- | --- | --- |
+| Team Selection (`Team Selection Top Level`) | two panel frames 0.2, ship frame 0.9 | page entry; a team step re-arms the `Logo` only (Reset), no bracket |
+| Track Select (`TrackSelectionTopLevel`) | circuit panel 0.2, hex selector 0.3, model frame 1.0 | page entry; a circuit step Resets the `Emblem` only |
+| Cell Selection (`DATA06`'s copy) | 15: `Event Emblem` 0.1 x2, `Track Emblem` 0.2 x2, `Speed Class Emblem` 0.25 x2, `Weapons Emblem` 0.325 x2, `RightColumnText` 0.3 x1, `Target Title` rows 0.625, 0.65, 0.675 x2 each | the nine written inside the four emblems and `RightColumnText` count from those widgets' arming (`CellSelection_Update`'s 0.4 s hold, then each cell or rung change: `Arm` is recursive over children, so it re-arms them with the widget); the six target-row brackets from page entry (`Target Title` is not among the six re-armed widgets) |
+
+Each opens out over 0.1 s from a third in (the law above), the in-time being the class default as none authors one. The
+Cell emblem hold applies to the nine brackets the same way it applies to the emblems (unmeasured on the brackets
+themselves: they share the arming call, not a RAM read). Sheet at page ages 0, 0.2, 0.45, 0.6 s (and 0.5, 0.8, finished for the
+cell page) with `--menu-entry-seconds`: the Track Select circuit panel's marks start at 0.2 s and the hex selector's at 0.3 s;
+Team Selection's two panel frames show at 0.45 s and its ship frame only after 0.9 s; on Cell Selection the first emblem brackets
+open at about 0.47 s and the column at 0.67 s. A still with no stated time is the finished page and draws every pair of the ten
+HD and Omega `menu-*` comparison pairs pixel for pixel as before (re-rendered with the binary of main and with this change,
+identical hashes). Confidence 75 for the law and 70 for the per-widget clocks (arming read in the decompile, delays from the
+XML, no RAM watch of a bracket countdown; what would raise it: the countdown of a `Bracket` under `RightColumnText` read in RPCS3
+after a cell step). Omega: **ported** for the XML (its Team Selection, Track Select and Cell Selection author the same brackets
+with the same delays inside the same widgets, `omega_authors_the_same_brackets_inside_the_same_widgets`) and wired by lineage
+through the same `picker::hd`/`campaign::hd` code; the Omega `Bracket` class itself was not read in Ghidra.
 
 ## Omega and 2048
 

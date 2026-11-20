@@ -198,3 +198,19 @@ fn a_rearmed_page_hides_the_emblems_and_brings_them_back_in_order() {
     assert_eq!(arm(1.40, 1.0).len(), 4, "all four back");
     assert_eq!(arm(2.0, 1.0), [96.0; 4], "and whole once the ramps are out");
 }
+
+/// The widgets the cell refresh re-arms hold their brackets' clock too; the target rows do not.
+#[test]
+fn the_refresh_rearms_the_emblems_and_the_right_column_but_not_the_target_rows() {
+    for name in [
+        "Event Emblem",
+        "Track Emblem",
+        "Speed Class Emblem",
+        "Weapons Emblem",
+        "RightColumnText",
+    ] {
+        assert!(rearms_brackets(Some(name)), "{name}");
+    }
+    assert!(!rearms_brackets(Some("Target Title")));
+    assert!(!rearms_brackets(None));
+}

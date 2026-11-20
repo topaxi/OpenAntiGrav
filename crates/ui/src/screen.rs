@@ -696,6 +696,33 @@ impl Screens {
         transition: f32,
         fallback_images: &[(&str, &str)],
     ) {
+        let first_bracket = screen.brackets.len();
+        self.collect_widget(
+            screen,
+            child,
+            viewport_width,
+            offset,
+            transition,
+            fallback_images,
+        );
+        if let Some(name) = child.attr("name") {
+            for bracket in &mut screen.brackets[first_bracket..] {
+                bracket.group.get_or_insert_with(|| name.to_string());
+            }
+        }
+    }
+
+    /// One node of [`Self::collect_widgets`], without the bookkeeping that names the brackets it
+    /// reached.
+    fn collect_widget(
+        &self,
+        screen: &mut Screen,
+        child: &Node,
+        viewport_width: Option<f32>,
+        offset: (f32, f32),
+        transition: f32,
+        fallback_images: &[(&str, &str)],
+    ) {
         let inner = (
             offset.0 + self.number(child.value("OffsetX")).unwrap_or(0.0),
             offset.1 + self.number(child.value("OffsetY")).unwrap_or(0.0),

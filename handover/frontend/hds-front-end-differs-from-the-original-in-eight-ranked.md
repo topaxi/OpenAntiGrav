@@ -134,6 +134,8 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   0.904 layout scale remain; the quad-buffer bug that dropped the rules on every
   flyer page is fixed (`Renderer::renew_quad_buffer`)
 - Page transitions: Campaign Select/Grid/Cell play the `vwipe` Images' entry wipes since 2026-11-20 (`hd-vwipe-wire`);
+  every `Bracket` on Grid (unlock box), Cell Selection (15), Team Selection (3) and Track Select (3) opens after its own delay
+  (`hd-vwipe-rearm`, `hd-brackets-pages`; `docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "The corner brackets");
   the other per-widget `transition`/`delay` keys (`bBg_0_0`, the right column) and the title scramble are not played
   (`--menu-anim-phase` draws identical pixels; `docs/ui/campaign-screens.md`, "Still open")
 - Main Menu and Racebox setup are our own tree, not HD's pages

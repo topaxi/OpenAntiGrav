@@ -203,6 +203,7 @@ impl Screens {
                 .number(node.value("EnableTransition"))
                 .or_else(|| self.number(node.value("Transition")))
                 .unwrap_or(super::BRACKET_RAMP_SECONDS),
+            group: None,
         })
     }
 

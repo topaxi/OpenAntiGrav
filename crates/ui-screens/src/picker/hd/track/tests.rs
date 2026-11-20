@@ -527,3 +527,75 @@ fn a_circuit_step_replays_the_emblems_wipe_without_the_delay() {
         "the opening delay is still running"
     );
 }
+
+/// The corner marks the page has out, as the top-left corners of the 16 by 16 sprites, with the
+/// three brackets' `delay`s authored as the disc does (0.2, 0.3, 1.0 s).
+fn corner_marks(picker: &Picker) -> Vec<[f32; 2]> {
+    let mut delays = ["0.2", "0.3", "1.0"].into_iter();
+    let xml = XML
+        .split("<Bracket>")
+        .enumerate()
+        .map(|(index, part)| match index {
+            0 => part.to_string(),
+            _ => format!(
+                "<Bracket delay=\"{}\">{part}",
+                delays.next().expect("three brackets")
+            ),
+        })
+        .collect::<String>();
+    let screens = Screens::from_xml_with_fallback_globals(&xml, &[]);
+    let layout = read(
+        &xml,
+        &screens,
+        &strings(),
+        FaceScales::default(),
+        [1920.0, 1080.0],
+    )
+    .expect("both screens are there");
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let corners = |name: &str| {
+        name.ends_with("corner2.gtf")
+            .then_some(oag_ui::frontend::Placed {
+                x: 0,
+                y: 0,
+                width: 16,
+                height: 16,
+                quad_extent: None,
+                quad_centre: None,
+                blend: None,
+                scale: [1.0, 1.0],
+            })
+    };
+    body(picker, &layout, extra, &Frame::default(), &corners)
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => {
+                Some([rect[0], rect[1]])
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The three `Bracket`s count their own `delay` from the page's entry (0.2, 0.3 and 1.0 s), each
+/// opening out over 0.1 s, and a circuit step re-arms none of them (it restarts the `Emblem`
+/// alone). This fails if the entry clock is not passed to the brackets.
+#[test]
+fn the_brackets_wait_their_delays_from_the_pages_entry() {
+    let mut picker = grid();
+    assert!(corner_marks(&picker).is_empty(), "frame 0");
+    picker.tick(0.19);
+    assert!(corner_marks(&picker).is_empty(), "inside the 0.2 s delay");
+    picker.tick(0.05);
+    assert_eq!(corner_marks(&picker).len(), 4, "the circuit panel opens");
+    picker.tick(0.1);
+    assert_eq!(corner_marks(&picker).len(), 8, "the hex selector (0.3 s)");
+    picker.tick(0.8);
+    assert_eq!(corner_marks(&picker).len(), 12, "the model frame (1.0 s)");
+    press(&mut picker, Button::Right);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        12,
+        "a circuit step re-arms no bracket"
+    );
+}

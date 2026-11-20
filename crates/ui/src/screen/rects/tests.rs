@@ -94,3 +94,34 @@ fn a_bracket_reads_its_own_delay_and_in_time() {
         ]
     );
 }
+
+/// A bracket names the nearest named widget it is written inside, however many unnamed containers
+/// lie between; one written inside no named widget names none. This fails if the grouping is
+/// dropped or takes the outermost name.
+#[test]
+fn a_bracket_names_the_nearest_named_widget_around_it() {
+    let xml = r#"
+<Screen name="Top">
+  <Screen name="Box">
+    <Bracket><Values corner="true" X="0" Y="0" Width="10" Height="10"></Values></Bracket>
+    <Text name="Outer">
+      <Item OffsetY="50">
+        <Bracket><Values corner="true" X="0" Y="0" Width="10" Height="10"></Values></Bracket>
+      </Item>
+      <Image name="Inner">
+        <Values x="0" y="0" width="10" height="10"></Values>
+        <Bracket><Values corner="true" X="0" Y="0" Width="10" Height="10"></Values></Bracket>
+      </Image>
+    </Text>
+  </Screen>
+</Screen>
+"#;
+    let screens = Screens::from_xml(xml);
+    let screen = screens.by_name("Box").expect("the screen");
+    let groups: Vec<Option<&str>> = screen
+        .brackets
+        .iter()
+        .map(|bracket| bracket.group.as_deref())
+        .collect();
+    assert_eq!(groups, [None, Some("Outer"), Some("Inner")]);
+}

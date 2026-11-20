@@ -50,6 +50,26 @@ pub fn since_armed(entry: EntryClock, refreshed_at: Option<f32>) -> f32 {
     entry.seconds() - refreshed_at.map_or(ENTRY_HOLD_SECONDS, |at| at.max(ENTRY_HOLD_SECONDS))
 }
 
+/// The widgets `CellSelection_Refresh` and the entry hold re-arm (`Widget_ArmTransition`, recursive
+/// over children), by name: the four emblems and `RightColumnText`. A [`Bracket`] written inside
+/// one counts its `delay` from the same arming; any other bracket on the page counts from the
+/// page's entry alone.
+///
+/// [`Bracket`]: oag_ui::screen::Bracket
+const REARMED: [&str; 5] = [
+    "Event Emblem",
+    "Track Emblem",
+    "Speed Class Emblem",
+    "Weapons Emblem",
+    "RightColumnText",
+];
+
+/// Whether the cell refresh re-arms a bracket written inside the widget named `group`.
+#[must_use]
+pub fn rearms_brackets(group: Option<&str>) -> bool {
+    group.is_some_and(|name| REARMED.contains(&name))
+}
+
 /// The barcode strip the screen authors under the hex field; on no sheet until
 /// this names it, since nothing else draws it.
 pub const BARCODE_SRC: &str = r"Data\FE\Images\flyerbarcode.gtf";

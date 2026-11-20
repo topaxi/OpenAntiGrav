@@ -44,6 +44,11 @@ pub struct Bracket {
     /// `EnableTransition`, else `Transition`, else [`super::BRACKET_RAMP_SECONDS`]: how long the
     /// marks take to move out to the corners. An authored `0` means they are there at once.
     pub seconds: f32,
+    /// The `name` of the nearest named widget this bracket is written inside (`Event Emblem`,
+    /// `RightColumnText`), `None` when no enclosing widget is named. A page that re-arms a widget
+    /// re-arms its children too (`Widget_ArmTransition` is recursive), so this is what tells a
+    /// caller which clock a bracket counts its `delay` on.
+    pub group: Option<String>,
 }
 
 impl Bracket {

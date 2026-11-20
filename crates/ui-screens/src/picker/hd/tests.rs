@@ -1227,3 +1227,78 @@ fn a_team_step_replays_the_logos_vwipe() {
     picker.tick(0.35);
     assert_eq!(logo_rect(&picker), whole, "the ramp is over after 0.7 s");
 }
+
+/// The corner marks the page has out, as the top-left corners of the 16 by 16 sprites, with the
+/// three brackets' `delay`s authored as the disc does (0.2, 0.2, 0.9 s).
+fn corner_marks(picker: &Picker) -> Vec<[f32; 2]> {
+    let mut delays = ["0.2", "0.2", "0.90"].into_iter();
+    let xml = XML
+        .split("<Bracket>")
+        .enumerate()
+        .map(|(index, part)| match index {
+            0 => part.to_string(),
+            _ => format!(
+                "<Bracket delay=\"{}\">{part}",
+                delays.next().expect("three brackets")
+            ),
+        })
+        .collect::<String>();
+    let layout = layout_of(&xml);
+    let extra = layout.hd.as_deref().unwrap();
+    let corners = |name: &str| {
+        name.ends_with("corner2.gtf").then_some(Placed {
+            x: 0,
+            y: 0,
+            width: 16,
+            height: 16,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        })
+    };
+    body(picker, &layout, extra, &Frame::default(), &corners)
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => {
+                Some([rect[0], rect[1]])
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The three `Bracket`s count their own `delay` from the page's entry: none at first, the two panel
+/// frames (0.2 s) and then the ship frame (0.9 s), each opening out over 0.1 s. A team step
+/// re-arms only the `Logo`, so the marks stay out. This fails if the entry clock is not passed to
+/// the brackets (they would all be out at frame 0).
+#[test]
+fn the_brackets_wait_their_delays_from_the_pages_entry() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    assert!(corner_marks(&picker).is_empty(), "frame 0");
+    picker.tick(0.19);
+    assert!(corner_marks(&picker).is_empty(), "inside the 0.2 s delay");
+    picker.tick(0.05);
+    assert_eq!(corner_marks(&picker).len(), 8, "the two panel frames open");
+    picker.tick(0.5);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        8,
+        "the ship frame is still waiting"
+    );
+    picker.tick(0.2);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        12,
+        "the ship frame (0.9 s) is out"
+    );
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    picker.update(&mut input);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        12,
+        "a team step re-arms no bracket"
+    );
+}
