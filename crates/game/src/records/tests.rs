@@ -798,6 +798,71 @@ fn loyalty_accumulates_caps_and_round_trips() {
     assert_eq!(parsed.loyalty_total(pulse, "qirex"), 30);
 }
 
+/// A `[[loyalty]]` table holds **one row per team**, so two rows for one team are a malformed
+/// file: the first was the only one any read could see, and the second was banked progress that
+/// nothing read and every save rewrote. Both fold, and each fold is named - the first because a
+/// player loses nothing by being brought together, the second because the key is not the lower-cased
+/// spelling the table is keyed on.
+#[test]
+fn duplicate_loyalty_rows_fold_into_the_teams_one_row_and_each_is_named() {
+    let pulse = oag_pulse::TITLE;
+    let text = "[[loyalty]]\nteam = \"assegai\"\ntotal = 9385\n\n\
+                [[loyalty]]\nteam = \"assegai\"\ntotal = 165\n\n\
+                [[loyalty]]\nteam = \" Feisar \"\ntotal = 40\n";
+    let (store, notes) = parse(text).expect("parses");
+    assert_eq!(store.loyalty_total(pulse, "Assegai"), 9550);
+    assert_eq!(
+        store.loyalty_total(pulse, "Feisar"),
+        40,
+        "a key folded to the lower-cased spelling the table is keyed on"
+    );
+    assert_eq!(
+        notes,
+        [
+            "loyalty row for team \"assegai\" folded into the one kept for \"assegai\": +165",
+            "loyalty row for team \" Feisar \" folded under its key \"feisar\"",
+        ],
+        "in file order"
+    );
+    // And the write is the clean shape: one row per team, so a reload needs no note.
+    let (again, notes) =
+        parse(&toml::to_string_pretty(&store).expect("serialises")).expect("parses back");
+    assert!(notes.is_empty(), "a canonical write needs none: {notes:?}");
+    assert_eq!(again.loyalty_total(pulse, "assegai"), 9550);
+}
+
+/// The class the fold does **not** fix, pinned so the claim on
+/// [`super::loyalty::fold_keys`] stays honest: `parse` knows no title, so the fold can only trim
+/// and lower-case, never apply a roster identity. Pulse keys the team its roster id `Mantis` stands
+/// for as `mirage`, so a row spelled `Mantis` is kept under `mantis` - the fold names it, but the
+/// total stays unreachable through the identity every read uses.
+#[test]
+fn a_fold_normalises_spelling_but_cannot_apply_a_roster_identity() {
+    let pulse = oag_pulse::TITLE;
+    let text = "[[loyalty]]\nteam = \" Mantis \"\ntotal = 500\n";
+    let (store, notes) = parse(text).expect("parses");
+    assert_eq!(
+        notes,
+        ["loyalty row for team \" Mantis \" folded under its key \"mantis\""],
+        "the fold's own note says what it did: a key, not an identity"
+    );
+    assert_eq!(store.loyalty.len(), 1, "one row for one team");
+    assert_eq!(
+        store.loyalty[0].team, "mantis",
+        "the row keeps its lower-cased spelling, not Pulse's identity for that team"
+    );
+    assert_eq!(
+        store.loyalty_total(pulse, "Mantis"),
+        0,
+        "the read goes through `identity_of`, which finds no row for `mirage`"
+    );
+    assert_eq!(
+        store.loyalty_best(pulse),
+        0,
+        "so an `<Unlock Team=\"any\">` row is not met by it either"
+    );
+}
+
 /// One team's total is shared by every title that has the team, and a team only
 /// one title has stays that title's.
 #[test]
@@ -825,6 +890,35 @@ fn loyalty_is_shared_across_titles_by_team() {
     tigron_only.record_loyalty(oag_omega::TITLE, "Tigron", 70);
     assert_eq!(tigron_only.loyalty_best(oag_pulse::TITLE), 0);
     assert_eq!(tigron_only.loyalty_best(oag_omega::TITLE), 70);
+}
+
+/// A race flown out of a variant directory credits its **team**, not the directory:
+/// `Assegai_c1` is Fury's concept reskin of Assegai, so the row it writes is the one
+/// Team Selection prints and the one that reskin's own `<Unlock>` asks for. Every
+/// reskin of the same team meets on that one row, on both join shapes.
+#[test]
+fn a_variant_race_credits_its_team_not_its_directory() {
+    let hd = oag_hd::TITLE;
+    let mut store = Store::default();
+    assert_eq!(store.record_loyalty(hd, "Assegai_c1", 90), 90);
+    assert_eq!(store.loyalty_total(hd, "Assegai"), 90);
+    assert_eq!(
+        store.record_loyalty(hd, "Assegai_n1", 40),
+        130,
+        "the same team's row, not a row per directory"
+    );
+    let text = toml::to_string_pretty(&store).expect("serialises");
+    assert!(
+        text.contains("team = \"assegai\""),
+        "the key is the team's identity, not the directory it was raced out of: {text}"
+    );
+    assert!(
+        !text.contains("assegai_c1") && !text.contains("assegai_n1"),
+        "one row for the team, not one per variant directory: {text}"
+    );
+    // 2048's numbered level is the other join shape and resolves the same way.
+    store.record_loyalty(oag_2048::TITLE, r"Feisar2048\3", 10);
+    assert_eq!(store.loyalty_total(oag_2048::TITLE, "Feisar"), 10);
 }
 
 /// Every title's roster lists the ids its own race code names, each under a lower-case

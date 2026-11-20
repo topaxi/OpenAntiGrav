@@ -952,6 +952,7 @@ pub fn parse(text: &str) -> Result<(Store, Vec<String>)> {
         Some(_) => notes.push("`loyalty` is not an array of tables; ignoring it".to_string()),
         None => {}
     }
+    let loyalty = loyalty::fold_keys(loyalty, &mut notes);
 
     let mut campaign_difficulty = Vec::new();
     match table.get("campaign_difficulty") {

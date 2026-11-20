@@ -464,6 +464,61 @@ fn join_for_and_names_no_craft_follow_the_variant_table() {
     assert!(!DEFAULTS.names_no_craft("Triakis"), "no table at all");
 }
 
+/// A combined id names the **team** its variant belongs to, on both join shapes:
+/// the suffix is a directory under a team, not a team, and loyalty is kept per
+/// team. An id these tables do not name resolves to no team, and the livery half of
+/// an id is dropped through `split_livery` first, so a grid row that carries one
+/// verbatim still names its team.
+#[test]
+fn base_team_names_the_team_a_variant_directory_belongs_to() {
+    assert_eq!(DEFAULTS.base_team(r"Feisar2048\3"), Some("Feisar2048"));
+    assert_eq!(DEFAULTS.base_team("Assegai_c1"), Some("Assegai"));
+    assert_eq!(
+        DEFAULTS.base_team("Assegai"),
+        Some("Assegai"),
+        "the empty suffix is the team's own directory"
+    );
+    assert_eq!(
+        DEFAULTS.base_team("assegai_C1"),
+        Some("Assegai"),
+        "case-folded like `identity_of`"
+    );
+    assert_eq!(
+        DEFAULTS.base_team("Assegai_n1"),
+        None,
+        "not one of this table's own suffixes"
+    );
+    assert_eq!(DEFAULTS.base_team("Triakis"), None, "not on either table");
+    assert_eq!(
+        DEFAULTS.base_team("Assegai_c1@livery4"),
+        Some("Assegai"),
+        "the livery half is `split_livery`'s and is dropped before the split"
+    );
+}
+
+/// The case-folded split is the same rule as `split`, asked of the same table, so it
+/// can only ever differ in the case the id was handed in as - never in the team it
+/// names. `base_team` calls it, which is what keeps the loyalty row and the name
+/// `Results` prints from spelling one race differently.
+#[test]
+fn split_ignore_case_can_only_differ_from_split_in_the_case_it_is_handed_in_as() {
+    for &team in MATCHING.teams {
+        for variant in MATCHING.variants {
+            let combined = MATCHING.join.combine(team, variant.suffix);
+            assert_eq!(
+                MATCHING.split(&combined),
+                MATCHING.split_ignore_case(&combined)
+            );
+            assert_eq!(MATCHING.split(&combined), Some((team, variant.suffix)));
+            assert_eq!(
+                MATCHING.split_ignore_case(&combined.to_uppercase()),
+                Some((team, variant.suffix)),
+                "the same id, spelled differently, still resolves to the same team"
+            );
+        }
+    }
+}
+
 /// An already-combined guest id resolves under the guest roster's own
 /// directory; a native or unrecognised one falls back to the title's own.
 #[test]

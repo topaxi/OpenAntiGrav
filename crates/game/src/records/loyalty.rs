@@ -75,3 +75,40 @@ impl Store {
         total
     }
 }
+
+/// Folds read `[[loyalty]]` rows onto the table's own rule: **one row per team, keyed by
+/// the trimmed, lower-cased spelling of its key**.
+///
+/// A row is found by key, so a file that holds two rows for the same team, or a key
+/// spelled differently, is malformed: the first row would win every read, and the rest would
+/// be read by nothing yet rewritten on every save forever. Summing what each row holds is the
+/// reading the table means - a row is what has been banked for that team, so two rows for one
+/// team are two bankings that were never brought together - capped at [`CAP`] after the fold,
+/// the same way a single row is capped. Every fold is named in `notes`; a file written by this
+/// build needs none, because [`Store::add_loyalty`] can only ever keep one row per key.
+///
+/// **Spelling only, never identity.** `parse` knows no title, so the fold can only trim and
+/// lower-case: a key whose roster identity is spelled differently from the key itself stays under
+/// its own spelling. A row keyed `Mantis` folds to `mantis`, not to Pulse's identity for that team
+/// (`mirage`), so [`Store::loyalty_total`] still reads `0` for it - as it did before the fold.
+/// Pinned by `crates/game/src/records/tests.rs::a_fold_normalises_spelling_but_cannot_apply_a_roster_identity`.
+#[must_use]
+pub(super) fn fold_keys(rows: Vec<LoyaltyRecord>, notes: &mut Vec<String>) -> Vec<LoyaltyRecord> {
+    let mut store = Store::default();
+    for row in rows {
+        let key = row.team.trim().to_ascii_lowercase();
+        if store.loyalty.iter().any(|kept| kept.matches(&key)) {
+            notes.push(format!(
+                "loyalty row for team {:?} folded into the one kept for {:?}: +{}",
+                row.team, key, row.total
+            ));
+        } else if key != row.team {
+            notes.push(format!(
+                "loyalty row for team {:?} folded under its key {:?}",
+                row.team, key
+            ));
+        }
+        store.add_loyalty(&key, row.total);
+    }
+    store.loyalty
+}

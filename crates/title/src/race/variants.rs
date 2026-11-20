@@ -107,10 +107,42 @@ impl TeamVariants {
     /// the longest suffix so an empty one only matches a bare team.
     #[must_use]
     pub fn split(&self, combined: &str) -> Option<(&'static str, &'static str)> {
+        self.split_on(combined, |built, want| built == want)
+    }
+
+    /// [`Self::split`] compared case-insensitively, on the same table with the same
+    /// longest-suffix rule - so the two cannot disagree about which team an id
+    /// belongs to, only about the case the id was handed in as.
+    ///
+    /// Case-insensitive like [`crate::team::identity_of`]: an id can reach a lookup
+    /// spelled differently from the table that authored it.
+    #[must_use]
+    pub fn split_ignore_case(&self, combined: &str) -> Option<(&'static str, &'static str)> {
+        self.split_on(combined, |built, want| built.eq_ignore_ascii_case(want))
+    }
+
+    /// The rule both spellings share, and the only place it is written: combine
+    /// every team with every suffix and keep the longest match.
+    ///
+    /// A team `combined` does not begin with is skipped before anything is built.
+    /// `combine` allocates, and a caller that asks over a whole roster - a menu or
+    /// picker draw, once per slot - would otherwise pay one `String` per
+    /// (team x variant) pair for matches that cannot exist.
+    fn split_on(
+        &self,
+        combined: &str,
+        same: impl Fn(&str, &str) -> bool,
+    ) -> Option<(&'static str, &'static str)> {
         let mut best: Option<(&'static str, &'static str)> = None;
         for team in self.teams {
+            if !combined
+                .get(..team.len())
+                .is_some_and(|head| same(head, team))
+            {
+                continue;
+            }
             for variant in self.variants {
-                if self.join.combine(team, variant.suffix) == combined
+                if same(&self.join.combine(team, variant.suffix), combined)
                     && best.is_none_or(|(_, s)| variant.suffix.len() > s.len())
                 {
                     best = Some((team, variant.suffix));
@@ -127,14 +159,10 @@ impl TeamVariants {
     /// Reuses [`VariantJoin::combine`] rather than parsing a suffix back out
     /// of `combined`, so this can never disagree with what actually built the
     /// id in the first place - by construction, not by keeping two rules in
-    /// step by hand.
+    /// step by hand - asked through [`Self::split`], the one place the rule is written.
     #[must_use]
     pub fn recognizes(&self, combined: &str) -> bool {
-        self.teams.iter().any(|team| {
-            self.variants
-                .iter()
-                .any(|v| self.join.combine(team, v.suffix) == combined)
-        })
+        self.split(combined).is_some()
     }
 }
 
@@ -308,6 +336,48 @@ impl RaceDefaults {
         self.guest_roster
             .filter(|guest| guest.variants.teams.contains(&team))
             .map(|guest| guest.variants)
+    }
+
+    /// The **team** an **already-combined** id stands for, `None` when it is not
+    /// one of this title's own ids.
+    ///
+    /// A variant is a directory, not a team: every HD-era team declares one
+    /// `PI_Team` with its reskins as `PI_TeamModel` rows, so `Assegai_c1` is an
+    /// Assegai race and `Feisar2048\3` a Feisar2048 race. Loyalty rows are keyed
+    /// by the team (`docs/architecture/persistence.md`, "Loyalty"), so this is what
+    /// keeps a race flown out of a reskin crediting the row that reskin's own
+    /// `<Unlock>` asks for - Feisar's `SKIN1` needs Feisar loyalty 4000
+    /// (`docs/formats/race-setup.md`, "HD-era model unlocks"): keyed by the
+    /// directory, a concept-skin race would never move the total its own skin
+    /// gate reads.
+    ///
+    /// Case-insensitive like [`crate::team::identity_of`], and preferring the longest
+    /// suffix so an empty one only matches a bare team. Both tables are asked
+    /// through [`TeamVariants::split_ignore_case`], the one place that rule is
+    /// written, so `base_team` and a `split` of the same table can never name a
+    /// different team for the same id.
+    ///
+    /// The livery half (`"Assegai_c1@livery4"`) names a folder, not a variant, so it
+    /// is dropped through [`split_livery`] before the split: a caller holding the id
+    /// verbatim - an authored `grid_teams` row copied straight into a slot - still
+    /// resolves the team rather than printing the directory.
+    #[must_use]
+    pub fn base_team(&self, combined: &str) -> Option<&'static str> {
+        let (combined, _) = split_livery(combined.trim());
+        let tables = [
+            self.team_variants,
+            self.guest_roster.map(|guest| guest.variants),
+        ];
+        let mut best: Option<(&'static str, usize)> = None;
+        for variants in tables.into_iter().flatten() {
+            match variants.split_ignore_case(combined) {
+                Some((team, suffix)) if best.is_none_or(|(_, len)| suffix.len() > len) => {
+                    best = Some((team, suffix.len()));
+                }
+                _ => {}
+            }
+        }
+        best.map(|(team, _)| team)
     }
 
     /// The speed classes a **bare** team id's `handlingstats.xml` authors:

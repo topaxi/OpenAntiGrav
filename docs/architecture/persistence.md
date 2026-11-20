@@ -89,7 +89,19 @@ identity each stands for in `Title::teams`; an id not listed is its own case-fol
 `AG_Systems` and `ag_systems` meet with no table. How a race earns points stays each title's law
 (Pulse's `award`, HD's `oag_hd::loyalty`); each title's unlock thresholds stay its own, and an
 `<Unlock Team="any">` row ranges over **that title's roster only** (`Store::loyalty_best`), so
-Omega's `Tigron` opens nothing in Pulse. **Earning (2026-10-16, `Title::loyalty`)**: every title pays its finished races
+Omega's `Tigron` opens nothing in Pulse. **Keyed by the team, never by the directory the race
+was flown out of**: a variant is a directory under a team, not a team - the twelve HD-era teams
+declare one `PI_Team` each with their reskins as `PI_TeamModel` rows
+(`docs/formats/race-setup.md`, "HD-era model unlocks") - and a race reaches the records with the
+combined id (`Assegai_c1`), which `Title::team_identity` resolves to `assegai` through the title's
+own variant table (`RaceDefaults::base_team`). Keyed by the directory instead, a concept-skin race
+would never move the total its own `SKIN1` gate asks for, and `Results`' name column
+(`oag_game::results_tables::team_key`) would print a team the award did not bank into - the two
+now resolve through the one rule, and both drop a livery half first (`split_livery`): `apply_grid_teams`
+(`crates/raceplay/src/load/roster.rs`) copies an event's authored `grid_teams` row verbatim into a
+slot, so a `Feisar_c1@livery4` can reach `Results` with the livery still on it. Pinned by
+`crates/game/src/records/tests.rs::a_variant_race_credits_its_team_not_its_directory`.
+**Earning (2026-10-16, `Title::loyalty`)**: every title pays its finished races
 into the shared total, under the law its data names:
 
 | Title | Law | Origin | Banked by |
@@ -118,6 +130,18 @@ Ids that differ but are one team (maintainer ruling, 2026-10-16), merged in each
 
 The store reads only this shared per-team format; nothing is released, so there is no
 migration path for rows an earlier build kept per title.
+
+**One row per team.** `Store::add_loyalty` finds a row by key, so the table has no room for a
+second row for one team: a file that holds one is malformed, and the first row would win every read
+while the rest would be read by nothing and rewritten on every save. `parse` folds such a row into
+the team's row - summed, capped at `100000` after the fold, since a row is what has been banked -
+and names each fold in `notes`.
+
+**What the fold can do is normalise spelling, nothing more.** `parse` knows no title, so it cannot
+apply the identity table above: a key is trimmed and lower-cased, and a key whose identity is
+spelled differently from the key itself stays under its own spelling - a row keyed `Mantis` is kept
+as `mantis`, not `mirage`, and still reads `0`. A file this build writes needs no note, because
+every row it writes is already keyed on the identity through `Title::team_identity`.
 
 ## `[dev]` in `settings.toml`
 

@@ -48,13 +48,17 @@ pub fn field_rows(board: Option<&Board>, roster: &[String]) -> Vec<FieldRow> {
 /// A grid's team id as the title's string table keys the team: a variant directory
 /// (`Assegai_c1`) is its base team, and a base is spelled as `Title::teams` lists it
 /// (`assegai` is `Assegai`). An id neither knows is returned as it is.
+///
+/// Resolves the variant half through `RaceDefaults::base_team`, the same rule the
+/// loyalty row is keyed by (`Title::team_identity`), so the name the screen prints and
+/// the row the award banks cannot spell the same race differently. `base_team` drops a
+/// livery half first, which matters here: `apply_grid_teams`
+/// (`crates/raceplay/src/load/roster.rs`) copies an event's authored `grid_teams` row
+/// verbatim into a slot, so a `Feisar_c1@livery4` reaches this with the livery still on
+/// it - and an id nothing resolves is returned as it is, livery and all.
 #[must_use]
 pub fn team_key(title: &oag_title::Title, id: &str) -> String {
-    let base = title
-        .race
-        .team_variants
-        .and_then(|variants| variants.split(id))
-        .map_or(id, |(base, _)| base);
+    let base = title.race.base_team(id).unwrap_or(id);
     oag_title::team::listed_id(title.teams, base).to_string()
 }
 
@@ -318,6 +322,11 @@ mod tests {
             "a variant directory is its base team"
         );
         assert_eq!(team_key(oag_hd::TITLE, "nobody"), "nobody");
+        assert_eq!(
+            team_key(oag_hd::TITLE, "Feisar_c1@livery4"),
+            "Feisar",
+            "a grid row that carries its livery still names its team"
+        );
         assert_eq!(rows[0].place, 1);
         assert_eq!(rows[0].time_ticks, Some(1234));
         assert!(!rows[0].player);

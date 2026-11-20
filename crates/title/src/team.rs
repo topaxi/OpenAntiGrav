@@ -8,6 +8,12 @@
 //! a title does not list is its own case-folded spelling, which is what makes two
 //! titles that spell a team the same way share it with no table at all.
 //!
+//! The identity is always a **team**, never a variant directory: a race reaches
+//! this crate with the combined id (`Feisar_c1`), and `Title::team_identity`
+//! resolves it to its team through the title's own variant table first
+//! ([`crate::race::RaceDefaults::base_team`]), so a reskin's race credits the row
+//! its own skin gate reads.
+//!
 //! The roster does a second job: an `<Unlock Team="any" loyalty="N">` row is met
 //! by the best single team **of that title**, so the set of identities a title
 //! ranges over has to be its own - Omega's `Tigron` must not open Pulse's `any`

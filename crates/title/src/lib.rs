@@ -1101,10 +1101,17 @@ impl Title {
         prompts::MenuButtons::resolve(original, choice, authored_help)
     }
 
-    /// The shared identity `team (an id as this title spells it) is kept under.
+    /// The shared identity `team` (an id as this title spells it) is kept under.
+    ///
+    /// **A variant directory credits its team.** The id a race reaches the records
+    /// with is the combined one (`Assegai_c1`, `Feisar2048\3`) and a variant is a
+    /// directory under a team, not a team of its own, so the row is the team's - the
+    /// row that directory's own `<Unlock>` asks for
+    /// (`docs/formats/race-setup.md`, "HD-era model unlocks") and the row Team
+    /// Selection prints. See [`race::RaceDefaults::base_team`].
     #[must_use]
     pub fn team_identity(&self, team: &str) -> String {
-        team::identity_of(self.teams, team)
+        team::identity_of(self.teams, self.race.base_team(team).unwrap_or(team))
     }
     /// The name as a mod's `titles` list spells it: lowercase ASCII, every run of
     /// anything else one `-` (`Wipeout: Omega Collection` is
