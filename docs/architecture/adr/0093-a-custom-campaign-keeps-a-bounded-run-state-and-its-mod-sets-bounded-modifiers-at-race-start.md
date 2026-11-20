@@ -82,7 +82,10 @@ ratings, not computed from handling.
    `simulation = true`, so every race of the campaign is MODDED. **Only that module
    gets `race-start` and `race-end`**: another module that is on still ticks as usual
    but is never called at a race's start or end, and outside a run campaign no module
-   is, so one writer fills the slot table (maintainer, 2026-11-20).
+   is, so one writer fills the slot table (maintainer, 2026-11-20). Widening this later
+is additive: no ABI change (any module may already export the calls) and no campaign
+breaks; it needs a combining rule for several slot tables and, once this ADR is on
+`main`, an ADR that narrows this decision (README open question 8).
 3. **Two optional guest exports.** `oag_race_start` and `oag_race_end`, with a
    second host-written buffer a guest names by `oag_run`, the pattern of
    `oag_wants_race` and `oag_track`. `race-start` reads the run state, fills the
