@@ -275,8 +275,7 @@ takes a wasm module (question 7, answered). Damage taken and damage dealt are pe
 factors; projectiles already carry their owner (decision 5; question 8, answered). The seed is drawn per run, or
 fixed by `[run] seed` (decision 1; question 13, answered).
 
-**Not decided here:** and every other item in
-`progression.md` section 12.
+**Not decided here:** the open items of `progression.md` section 12 and section 7.1.
 
 ## Alternatives considered
 
