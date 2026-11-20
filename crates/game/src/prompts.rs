@@ -16,23 +16,6 @@ use oag_input::prompt::{PromptFamily, PromptStyle};
 use oag_title::prompts::{Prompt, Prompts};
 use oag_ui::prompt::{Substitution, art_index};
 
-/// The abstract button a prompt glyph depicts.
-#[must_use]
-pub fn button_of(prompt: Prompt) -> Button {
-    match prompt {
-        Prompt::Cross => Button::Cross,
-        Prompt::Circle => Button::Circle,
-        Prompt::Square => Button::Square,
-        Prompt::Triangle => Button::Triangle,
-        Prompt::L => Button::L,
-        Prompt::R => Button::R,
-        Prompt::Up => Button::Up,
-        Prompt::Down => Button::Down,
-        Prompt::Left => Button::Left,
-        Prompt::Right => Button::Right,
-    }
-}
-
 /// The Back and Help buttons the front end reads on `title`'s `platform` pressing under `choice`,
 /// for a screen whose own `Redirect` opens Help on `authored_help` (`Button::Triangle` where it
 /// authors none). Every screen model that takes Back is handed this
@@ -53,9 +36,9 @@ pub fn roles(
     };
     let buttons = title.menu_buttons(platform, choice, prompt);
     oag_ui::roles::Roles {
-        back: button_of(buttons.back),
+        back: oag_ui::hints::button_of(buttons.back),
         help: if matches!(authored_help, Button::Circle | Button::Triangle) {
-            button_of(buttons.help)
+            oag_ui::hints::button_of(buttons.help)
         } else {
             authored_help
         },
@@ -144,19 +127,21 @@ pub fn substitution(
         return if exchange {
             Substitution::exchanging(prompts, Prompt::Circle, Prompt::Triangle)
         } else {
-            Substitution::none()
+            Substitution::reading(prompts)
         };
     };
-    let mut out = Substitution::none();
+    let mut out = Substitution::reading(prompts);
     for (index, (_, authored)) in prompts.glyphs.iter().enumerate() {
         let prompt = if exchange {
             oag_title::prompts::exchanged(*authored)
         } else {
             *authored
         };
-        let key = bound_keys(button_of(prompt)).into_iter().next();
+        let key = bound_keys(oag_ui::hints::button_of(prompt))
+            .into_iter()
+            .next();
         let name = glyph_name(prompt, family, key);
-        out = out.with(prompts, index, art_index(&name));
+        out = out.with(prompts, index, art_index(&name), prompt);
     }
     out
 }

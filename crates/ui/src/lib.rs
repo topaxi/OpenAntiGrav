@@ -14,6 +14,7 @@ pub mod anim;
 pub mod backdrop;
 pub mod font;
 pub mod frontend;
+pub mod hints;
 pub mod kinetic;
 pub mod language;
 pub mod loading_meter;

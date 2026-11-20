@@ -160,10 +160,17 @@ need `with_prompts` there and a fan-out on `hud_overlay::Overlay` first.
 - **Pure**: `ε γ δ β Λ Ν` in `FX300ANG.fnt` and `LTe50325.fnt` are the same
   six pictures as Pulse's (14x17 face buttons, 25x17 and 26x17 shoulder
   boxes), **measured**, table in `oag_pure::prompts`, pinned by hash in
-  `prompt_glyphs_ground_truth`. The Pure front end's own footer glyph is a
-  sprite, not a stand-in, so the menus do not change under a forced family
-  today; the table serves the strings that carry the codepoints
-  (`Press ε to Continue`, `Press β to Cancel`).
+  `prompt_glyphs_ground_truth`. The Pure footers' `Confirm` and `Back` are not
+  those six: they are four filled discs in the `Stats` face, `Ϊ` U+03AA
+  (triangle), `Ϋ` U+03AB (circle), `ά` U+03AC (square), `έ` U+03AD (cross),
+  14x16 each, in the same table after the six (**measured**, pinned by hash).
+  The cross and the triangle are what the EU disc's footers draw; the circle
+  is read off the footer drawn under MENU BACK `circle`; the square is read
+  off the shape of its cell and no footer draws it (75). A forced family or
+  a MENU BACK exchange swaps each style's glyph for the same style's other
+  control, so the footers follow the device and the player's choice. The
+  strings that carry the menu face's codepoints (`Press ε to Continue`,
+  `Press β to Cancel`) swap as before.
 - **Omega**: `PS_BUTTONS.fnt` is HD's face at twice the size: `ε γ δ β` are
   96x107 circled cross, circle, square and triangle, `Λ Ν` 168x109 boxes
   lettered `L2` and `R2`. **Measured**, table in `oag_omega::prompts`

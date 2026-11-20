@@ -173,6 +173,11 @@ impl EndRacePrep {
 }
 
 impl EndRaceRuntime {
+    /// The hints this flow's last pass drew. See `Renderer::hints`.
+    pub(crate) fn hints(&self) -> &[oag_ui::hints::Hint] {
+        self.renderer.hints()
+    }
+
     /// Sets the button-prompt substitution on this flow's own renderer. See
     /// `session::prompts`.
     pub(crate) fn set_prompt_substitution(&mut self, substitution: oag_ui::prompt::Substitution) {

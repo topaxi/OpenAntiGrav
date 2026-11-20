@@ -31,9 +31,12 @@ use std::path::{Path, PathBuf};
 
 use oag_disc::ps3_crypt::{self, DiscKey};
 use oag_gameplay::input::{Button, Input};
-use oag_ui::frontend::Draw;
+use oag_ui::frontend::{Align, Draw};
+use oag_ui::hints::{Entry, Hint, Line, Press};
 
-use super::{DIM, HEADING, HIGHLIGHT, MARGIN, SELECTED, TEXT, UNAVAILABLE_COLOUR, text};
+use super::{
+    DIM, HEADING, HIGHLIGHT, HINT_HEIGHT, MARGIN, SELECTED, TEXT, UNAVAILABLE_COLOUR, text,
+};
 use oag_display::space::SCREEN;
 
 /// Hex digits in a sector key.
@@ -445,13 +448,46 @@ impl KeyEntry {
             ));
         }
 
-        let hint = if self.can_paste {
-            "PAD OR TOUCH THE KEYS   TYPE OR CTRL+V   ENTER OK   ESC CANCEL"
-        } else {
-            "PAD OR TOUCH THE KEYS   OR A .DKEY BESIDE THE IMAGE"
-        };
-        out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, hint));
+        out.push(text(
+            MARGIN,
+            SCREEN.1 - 20.0,
+            1.0,
+            DIM,
+            &oag_ui::hints::line_text(&self.hint_entries()),
+        ));
         out
+    }
+
+    /// The footer's key hints: `ENTER OK` is Start, which submits on the pad, and `ESC CANCEL` is
+    /// the Escape key.
+    fn hint_entries(&self) -> Vec<Entry> {
+        if self.can_paste {
+            vec![
+                Entry::new(None, "PAD OR TOUCH THE KEYS"),
+                Entry::new(None, "TYPE OR CTRL+V").after("   "),
+                Entry::button(Button::Start, "ENTER OK").after("   "),
+                Entry::new(Some(Press::Escape), "ESC CANCEL").after("   "),
+            ]
+        } else {
+            vec![
+                Entry::new(None, "PAD OR TOUCH THE KEYS"),
+                Entry::new(None, "OR A .DKEY BESIDE THE IMAGE").after("   "),
+            ]
+        }
+    }
+
+    /// The hints [`Self::draw`] puts in the footer.
+    #[must_use]
+    pub fn hints(&self) -> Vec<Hint> {
+        let entries = self.hint_entries();
+        let line = Line {
+            entries: &entries,
+            x: MARGIN,
+            y: SCREEN.1 - 20.0,
+            align: Align::Left,
+            height: HINT_HEIGHT,
+        };
+        oag_ui::hints::legend(oag_ui::font::builtin(), 1.0, &[line])
     }
 }
 

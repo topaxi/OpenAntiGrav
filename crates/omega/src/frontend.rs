@@ -245,6 +245,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu: Some(MENU_SKIN),
     menu_ps2: None,
     back_button_ps2: None,
+    back_button_psp: None,
     // HD's `FEGlobals`/`<HorizMenu>` vocabulary is the front end; `touch` is
     // only the 2048 campaign map the chooser hands off to.
     touch: Some(TOUCH),

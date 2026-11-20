@@ -7,6 +7,7 @@
 //! (`crate::photo`). **Chosen, not measured:** the layout and the words.
 
 use oag_ui::frontend::{Align, Draw};
+use oag_ui::hints::Entry;
 
 /// The ids of the screen's words, in `assets/ui/strings/english.toml`.
 pub mod strings {
@@ -201,6 +202,53 @@ pub fn speed_label(speed: u32) -> String {
     }
 }
 
+/// Where the lines of keys are centred.
+fn key_centre(grid: (f32, f32)) -> f32 {
+    let first = chip_rect(Control::Play, grid);
+    let last = chip_rect(Control::Exit, grid);
+    (first[0] + last[0] + last[2]) / 2.0
+}
+
+/// The lines under the chips: the time, with the first line of keys beside it, then the rest.
+fn key_lines(view: &View, keys: &[Vec<Entry>]) -> Vec<Vec<Entry>> {
+    let time = format!("{} / {}", clock(view.at), clock(view.ticks));
+    let mut first = vec![Entry::new(None, time)];
+    for (i, entry) in keys.first().into_iter().flatten().enumerate() {
+        first.push(if i == 0 {
+            entry.clone().after("    ")
+        } else {
+            entry.clone()
+        });
+    }
+    std::iter::once(first)
+        .chain(keys.iter().skip(1).cloned())
+        .take(KEY_LINES)
+        .collect()
+}
+
+/// The hints among the lines of keys: an entry that names one control is a click target.
+#[must_use]
+pub fn legend_hints(
+    view: &View,
+    grid: (f32, f32),
+    keys: &[Vec<Entry>],
+) -> Vec<oag_ui::hints::Hint> {
+    let first = chip_rect(Control::Play, grid);
+    let lines = key_lines(view, keys);
+    let placed: Vec<oag_ui::hints::Line> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, entries)| oag_ui::hints::Line {
+            entries,
+            x: key_centre(grid),
+            y: first[1] + CHIP_HEIGHT + 2.0 + LINE * i as f32 + 2.0,
+            align: Align::Centre,
+            height: LINE,
+        })
+        .collect();
+    oag_ui::hints::legend(oag_ui::font::builtin(), SCALE, &placed)
+}
+
 /// The screen over the picture, as draws in `grid`; `say` is the text of a project id and
 /// `keys` the lines of what the keys do: the first beside the time, the rest under it.
 #[must_use]
@@ -208,7 +256,7 @@ pub fn draw_list(
     view: &View,
     grid: (f32, f32),
     say: &dyn Fn(&str) -> String,
-    keys: &[String],
+    keys: &[Vec<Entry>],
 ) -> Vec<Draw> {
     let text = |x: f32, y: f32, text: String, align: Align| Draw::Text {
         x,
@@ -252,24 +300,17 @@ pub fn draw_list(
         color: TEXT,
     });
     let first = chip_rect(Control::Play, grid);
-    let last = chip_rect(Control::Exit, grid);
-    let time = format!("{} / {}", clock(view.at), clock(view.ticks));
-    let centre = (first[0] + last[0] + last[2]) / 2.0;
-    let lines: Vec<String> = std::iter::once(format!(
-        "{time}    {}",
-        keys.first().map_or("", String::as_str)
-    ))
-    .chain(keys.iter().skip(1).cloned())
-    .take(KEY_LINES)
-    .collect();
+    let centre = key_centre(grid);
+    let lines = key_lines(view, keys);
     for (i, line) in lines.iter().enumerate() {
+        let line = oag_ui::hints::line_text(line);
         let width = line.chars().count() as f32 * CHAR_WIDTH + 12.0;
         let y = first[1] + CHIP_HEIGHT + 2.0 + LINE * i as f32;
         list.push(Draw::Fill {
             rect: [centre - width / 2.0, y, width, LINE + 2.0],
             color: BAND,
         });
-        list.push(text(centre, y + 2.0, line.clone(), Align::Centre));
+        list.push(text(centre, y + 2.0, line, Align::Centre));
     }
     for chip in CHIPS {
         let rect = chip_rect(chip, grid);

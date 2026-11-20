@@ -11,6 +11,7 @@ use oag_gameplay::input::Button;
 use oag_raceplay::timeline::OpenError;
 use oag_raceplay::viewer::{Moved, SKIP, State, Viewer};
 use oag_replay::Replay;
+use oag_ui::hints::Entry;
 use oag_ui::language::StringTable;
 use oag_ui::menu;
 use oag_ui::pointer::Pointer;
@@ -429,42 +430,82 @@ impl Session {
         self.viewer.as_ref().is_none_or(|active| active.stepping)
     }
 
-    /// The viewer's screen as an overlay draw list in `grid`; empty when none is open.
-    pub(crate) fn viewer_screen(&mut self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
-        // Photo mode's screen takes its place while it is open over the viewer.
-        let Some(active) = self.viewer.as_mut().filter(|_| self.photo.is_none()) else {
-            return Vec::new();
-        };
-        let view = active.view();
+    /// The lines of what the keys do under the viewer's chips: each entry that names one control
+    /// is a click target (`replay_view::legend_hints`).
+    fn viewer_keys(&self, active: &Active) -> Vec<Vec<Entry>> {
         let name = |button: Button, fallback: &str| {
             self.controls
                 .bound_keys(button)
                 .first()
                 .map_or_else(|| fallback.to_string(), ToString::to_string)
         };
-        let keys = vec![
-            format!(
-                "{} {}  {} {}  {} {}",
-                name(Button::Cross, "CROSS"),
-                active.word(replay_view::strings::PLAY),
-                "LEFT RIGHT",
-                active.word(replay_view::strings::SKIP),
-                "UP",
-                active.word(replay_view::strings::SPEED),
-            ),
-            format!(
-                "{} {} {}  {} {}  L2 R2 {}  R-STICK {}",
-                name(Button::L, "L1"),
-                name(Button::R, "R1"),
-                active.word(replay_view::strings::CRAFT),
-                name(Button::Square, "SQUARE"),
-                active.word(replay_view::strings::HUD),
-                active.word(replay_view::strings::SCRUB),
-                active.word(replay_view::strings::JOG),
-            ),
-        ];
+        let word = |id: &str| active.word(id);
+        let (cross, square) = (name(Button::Cross, "CROSS"), name(Button::Square, "SQUARE"));
+        vec![
+            vec![
+                Entry::button(
+                    Button::Cross,
+                    format!("{cross} {}", word(replay_view::strings::PLAY)),
+                ),
+                Entry::new(
+                    None,
+                    format!("LEFT RIGHT {}", word(replay_view::strings::SKIP)),
+                )
+                .after("  "),
+                Entry::button(
+                    Button::Up,
+                    format!("UP {}", word(replay_view::strings::SPEED)),
+                )
+                .after("  "),
+            ],
+            vec![
+                Entry::new(
+                    None,
+                    format!(
+                        "{} {} {}",
+                        name(Button::L, "L1"),
+                        name(Button::R, "R1"),
+                        word(replay_view::strings::CRAFT)
+                    ),
+                ),
+                Entry::button(
+                    Button::Square,
+                    format!("{square} {}", word(replay_view::strings::HUD)),
+                )
+                .after("  "),
+                Entry::new(None, format!("L2 R2 {}", word(replay_view::strings::SCRUB)))
+                    .after("  "),
+                Entry::new(None, format!("R-STICK {}", word(replay_view::strings::JOG)))
+                    .after("  "),
+            ],
+        ]
+    }
+
+    /// The viewer's screen as an overlay draw list in `grid`; empty when none is open.
+    pub(crate) fn viewer_screen(&mut self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
+        // Photo mode's screen takes its place while it is open over the viewer.
+        let Some(active) = self.viewer.as_ref().filter(|_| self.photo.is_none()) else {
+            return Vec::new();
+        };
+        let keys = self.viewer_keys(active);
+        let Some(active) = self.viewer.as_mut() else {
+            return Vec::new();
+        };
+        let view = active.view();
         let say = |id: &str| active.word(id);
         replay_view::draw_list(&view, grid, &say, &keys)
+    }
+
+    /// The hints of the viewer's key lines on the overlay grid `grid`; none when it is not up.
+    pub(crate) fn viewer_hints(&mut self, grid: (f32, f32)) -> Vec<oag_ui::hints::Hint> {
+        let Some(active) = self.viewer.as_ref().filter(|_| self.photo.is_none()) else {
+            return Vec::new();
+        };
+        let keys = self.viewer_keys(active);
+        let Some(active) = self.viewer.as_mut() else {
+            return Vec::new();
+        };
+        replay_view::legend_hints(&active.view(), grid, &keys)
     }
 
     /// One tick of the viewer: the devices into the playhead, and the race stepped or sought.

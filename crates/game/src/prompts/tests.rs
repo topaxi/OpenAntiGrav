@@ -95,7 +95,13 @@ fn every_title_that_read_its_glyphs_swaps_all_six() {
         let prompts = title.prompts;
         let out = substitution(prompts, Some(PromptFamily::Xbox), false, &no_keys);
         let in_buttons_face = prompts.scope == oag_title::prompts::Scope::ButtonsFace;
-        assert_eq!(prompts.glyphs.len(), 6, "{}", title.name);
+        // Pure's footers draw their own four discs in the `Stats` face beside the six of its menus.
+        let glyphs = if title.name == oag_pure::TITLE.name {
+            10
+        } else {
+            6
+        };
+        assert_eq!(prompts.glyphs.len(), glyphs, "{}", title.name);
         for &(stand_in, _) in prompts.glyphs {
             let text = stand_in.to_string();
             assert_ne!(
@@ -199,8 +205,8 @@ fn the_choice_resolves_on_every_title_and_pressing() {
 }
 
 /// The buttons a screen is handed (`crate::prompts::roles`), for every title and pressing under
-/// every choice: Pulse's PS2 backs on the triangle and helps on the circle, every other title and
-/// pressing the other way round; a choice moves Back and puts the button it displaced where Back
+/// every choice: Pulse's PS2 and Pure's PSP back on the triangle and help on the circle, every
+/// other title and pressing the other way round; a choice moves Back and puts the button it displaced where Back
 /// was (`docs/ui/back-and-help.md`).
 #[test]
 fn the_roles_a_screen_is_handed_on_every_title_pressing_and_choice() {
@@ -229,9 +235,15 @@ fn the_roles_a_screen_is_handed_on_every_title_pressing_and_choice() {
             oag_2048::TITLE,
         ] {
             for platform in [Platform::Psp, Platform::Ps3, Platform::Ps4, Platform::Vita] {
+                // Pure's PSP executable binds `backward` to the triangle, as Pulse's PS2 does.
+                let expected = if title.name == oag_pure::TITLE.name && platform == Platform::Psp {
+                    ps2
+                } else {
+                    other
+                };
                 assert_eq!(
                     roles(title, platform, choice, triangle),
-                    other,
+                    expected,
                     "{} {platform:?} {choice:?}",
                     title.name
                 );

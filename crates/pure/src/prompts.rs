@@ -7,6 +7,13 @@
 //! `Λ` the `L` box and `Ν` the `R` box, the same six pictures Pulse draws
 //! (`docs/ui/button-prompts.md`). The strings carry them inline: `Press ε to
 //! Continue`, `Press β to Cancel`.
+//!
+//! The footers' own `Confirm` and `Back` are in the `Stats` face instead, as filled discs: `έ` is the
+//! cross and `Ϊ` the triangle (the footers the Pure EU disc draws show the circled cross beside
+//! `CONFIRM` and the triangle beside `BACK`). The face's other two discs are `Ϋ`, the circle (the
+//! footer drawn under MENU BACK `circle`), and `ά`, the square (read off the shape of its cell, 75;
+//! no footer draws it). The outlined variants (`ή ί ΰ`) are not read.
+//! `docs/ui/button-prompts.md`, "Other titles".
 
 use oag_title::prompts::{Prompt, Prompts, Scope};
 
@@ -20,5 +27,9 @@ pub const PROMPTS: &Prompts = &Prompts {
         ('β', Prompt::Triangle),
         ('Λ', Prompt::L),
         ('Ν', Prompt::R),
+        ('έ', Prompt::Cross),
+        ('Ϋ', Prompt::Circle),
+        ('ά', Prompt::Square),
+        ('Ϊ', Prompt::Triangle),
     ],
 };

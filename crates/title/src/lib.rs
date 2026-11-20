@@ -503,6 +503,9 @@ pub struct FrontEnd {
     /// front end's own footers draw the triangle beside `Back`. The screens that read this are
     /// listed in `docs/ui/campaign-screens.md`, "Back and Help on the PS2".
     pub back_button_ps2: Option<prompts::Prompt>,
+    /// The same for this title's PSP pressing. `None`: circle, which Pulse's executable binds
+    /// both names to. Pure's binds them to the triangle (`docs/ghidra/functions/psp-pure-usa/input.md`).
+    pub back_button_psp: Option<prompts::Prompt>,
     /// How this title lays a touch-icon front end out, for a title that authors
     /// *that* vocabulary instead of [`menu::MenuSkin`]'s. See
     /// [`touch::TouchFrontEnd`].
@@ -857,12 +860,13 @@ impl Eq for CircuitPose {}
 
 impl FrontEnd {
     /// The control `backward` and `cancel` are on `platform`'s pressing: [`Self::back_button_ps2`]
-    /// on a PS2, the circle everywhere else. What the player's CONTROLS choice is relative to
+    /// on a PS2, [`Self::back_button_psp`] on a PSP, the circle everywhere else. What the player's CONTROLS choice is relative to
     /// ([`Self::menu_buttons`]).
     #[must_use]
     pub fn back_button(&self, platform: Platform) -> prompts::Prompt {
         match platform {
             Platform::Ps2 => self.back_button_ps2.unwrap_or(prompts::Prompt::Circle),
+            Platform::Psp => self.back_button_psp.unwrap_or(prompts::Prompt::Circle),
             _ => prompts::Prompt::Circle,
         }
     }

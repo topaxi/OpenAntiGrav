@@ -14,6 +14,7 @@ use oag_gameplay::input::Button;
 use oag_raceplay::photo::effects::Row as Effect;
 use oag_raceplay::photo::{Lens, Photo};
 use oag_ui::frontend::{Align, Draw};
+use oag_ui::hints::Entry;
 
 /// The directory under the user's data directory shots are written to.
 pub const DIRECTORY: &str = "photos";
@@ -495,55 +496,95 @@ pub fn draw_list(
     if photo.panel() {
         list.extend(panel_list(photo, grid, say));
     }
-    let button = words.button;
-    let mut lines = vec![
-        format!(
-            "{} {}    {} {}",
-            button(Button::Cross),
-            say(strings::TAKE),
-            button(words.roles.back),
-            say(strings::BACK),
-        ),
-        format!(
-            "{} {}    {} {}    {} {}",
-            button(Button::Select),
-            say(strings::CAMERA),
-            button(Button::Square),
-            say(strings::HUD),
-            button(words.roles.help),
-            say(strings::RESET),
-        ),
-        format!(
-            "{} {}    {} / {} {}",
-            button(Button::Start),
-            say(strings::HELP),
-            button(Button::L),
-            button(Button::R),
-            say(strings::SHIP),
-        ),
-    ];
-    if photo.panel() {
-        lines.push(say(strings::PANEL_KEYS));
-    } else {
-        lines.extend(lens_lines(photo, say, button));
-        match photo.lens() {
-            Lens::Internal => {}
-            Lens::Free => lines.push(say(strings::FREE_KEYS)),
-            Lens::Close | Lens::Track => lines.push(say(strings::PAD_KEYS)),
-        }
-    }
-    if photo.effects().rewinds() {
-        lines.push(say(strings::SCRUB_KEYS));
-    }
+    let lines = legend_lines(photo, words);
     let top = grid.1 - MARGIN - LINE * lines.len() as f32;
     list.push(Draw::Fill {
         rect: [0.0, top - 4.0, grid.0, grid.1 - top + 4.0],
         color: BAND,
     });
-    for (i, line) in lines.into_iter().enumerate() {
-        list.push(text(MARGIN, top + LINE * i as f32, line, Align::Left));
+    for (i, line) in lines.iter().enumerate() {
+        list.push(text(
+            MARGIN,
+            top + LINE * i as f32,
+            oag_ui::hints::line_text(line),
+            Align::Left,
+        ));
     }
     list
+}
+
+/// The key legend along the bottom: each line is entries, and an entry that names one control is
+/// a click target ([`legend_hints`]).
+fn legend_lines(photo: &Photo, words: &Words) -> Vec<Vec<Entry>> {
+    let say = words.say;
+    let button = words.button;
+    let words_of = |key: Button, id: &str| format!("{} {}", button(key), say(id));
+    let mut lines = vec![
+        vec![
+            Entry::button(Button::Cross, words_of(Button::Cross, strings::TAKE)),
+            Entry::button(words.roles.back, words_of(words.roles.back, strings::BACK))
+                .after("    "),
+        ],
+        vec![
+            Entry::button(Button::Select, words_of(Button::Select, strings::CAMERA)),
+            Entry::button(Button::Square, words_of(Button::Square, strings::HUD)).after("    "),
+            Entry::button(words.roles.help, words_of(words.roles.help, strings::RESET))
+                .after("    "),
+        ],
+        vec![
+            Entry::button(Button::Start, words_of(Button::Start, strings::HELP)),
+            Entry::button(Button::L, button(Button::L)).after("    "),
+            Entry::new(None, "/").after(" "),
+            Entry::button(
+                Button::R,
+                format!("{} {}", button(Button::R), say(strings::SHIP)),
+            )
+            .after(" "),
+        ],
+    ];
+    let plain = |line: String| vec![Entry::new(None, line)];
+    if photo.panel() {
+        lines.push(plain(say(strings::PANEL_KEYS)));
+    } else {
+        lines.extend(lens_lines(photo, say, button).into_iter().map(plain));
+        match photo.lens() {
+            Lens::Internal => {}
+            Lens::Free => lines.push(plain(say(strings::FREE_KEYS))),
+            Lens::Close | Lens::Track => lines.push(plain(say(strings::PAD_KEYS))),
+        }
+    }
+    if photo.effects().rewinds() {
+        lines.push(plain(say(strings::SCRUB_KEYS)));
+    }
+    lines
+}
+
+/// The hints of the key legend on the overlay grid `grid`; none while the help is hidden or a
+/// shot is under way, when the legend is not drawn.
+#[must_use]
+pub fn legend_hints(
+    photo: &Photo,
+    grid: (f32, f32),
+    words: &Words,
+    shot_under_way: bool,
+) -> Vec<oag_ui::hints::Hint> {
+    if shot_under_way || !photo.help() {
+        return Vec::new();
+    }
+    let lines = legend_lines(photo, words);
+    let top = grid.1 - MARGIN - LINE * lines.len() as f32;
+    let placed: Vec<oag_ui::hints::Line> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, entries)| oag_ui::hints::Line {
+            entries,
+            x: MARGIN,
+            y: top + LINE * i as f32,
+            align: Align::Left,
+            height: LINE,
+        })
+        .collect();
+    oag_ui::hints::legend(oag_ui::font::builtin(), SCALE, &placed)
 }
 
 /// The lines of what the stick does on the lens that is up.

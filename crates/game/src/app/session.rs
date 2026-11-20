@@ -32,6 +32,7 @@ mod demo;
 mod escape;
 mod frame;
 pub(crate) mod frame_timing;
+mod hints;
 mod hosted_map;
 mod language;
 mod launch2048;

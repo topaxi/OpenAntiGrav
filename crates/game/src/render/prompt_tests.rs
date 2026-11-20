@@ -111,8 +111,9 @@ fn a_stand_in_draws_as_the_substitute_glyph_once_one_is_set() {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    let swapped = render_text(Substitution::none().with(TABLE, 0, art_index("xbox-a")))
-        .expect("the same adapter");
+    let swapped =
+        render_text(Substitution::none().with(TABLE, 0, art_index("xbox-a"), Prompt::Cross))
+            .expect("the same adapter");
     let ink = |pixels: &[u8]| {
         pixels
             .as_chunks::<4>()

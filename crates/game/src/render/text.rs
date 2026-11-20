@@ -42,6 +42,74 @@ impl Renderer {
         self.prompt_substitution = substitution;
     }
 
+    /// The slot a [`Draw::FacedText`] in `role` is drawn from, `None` when it draws nothing: a
+    /// `Buttons` draw with the third slot holding another role's face (Pulse's `Title`), where
+    /// sampling that face would print the button codepoints as letters. A `Buttons` role always
+    /// reads [`Self::buttons_atlas`] and never falls back; every other role falls back to the
+    /// primary atlas whether or not it matches [`Self::face_role`].
+    ///
+    /// [`Draw::FacedText`]: oag_ui::frontend::Draw::FacedText
+    pub(super) fn slot_for(&self, role: &str) -> Option<GlyphSlot> {
+        let buttons = oag_ui::language::roles::BUTTONS;
+        let is_buttons = role.eq_ignore_ascii_case(buttons);
+        if is_buttons && !self.buttons_role.eq_ignore_ascii_case(buttons) {
+            return None;
+        }
+        Some(
+            if is_buttons
+                || (self.buttons_atlas.is_some() && role.eq_ignore_ascii_case(self.buttons_role))
+            {
+                GlyphSlot::Buttons
+            } else if self.face_atlas.is_some()
+                && self
+                    .face_role
+                    .is_some_and(|loaded| loaded.eq_ignore_ascii_case(role))
+            {
+                GlyphSlot::Face
+            } else {
+                GlyphSlot::Primary
+            },
+        )
+    }
+
+    /// The hints the last cleared pass and the passes drawn over it put on screen, in the grid
+    /// the draw lists are in (before [`Self::inset`] moves them). The pointer reads these a tick
+    /// later, so a click lands on what the player saw. See [`oag_ui::hints`].
+    #[must_use]
+    pub fn hints(&self) -> &[oag_ui::hints::Hint] {
+        &self.hints
+    }
+
+    /// Reads `list`'s hints into [`Self::hints`]: cleared by a pass that clears the target,
+    /// added to by one that draws over it. `clip` is the index of the clipped (scrolling) line.
+    pub(super) fn collect_hints(
+        &mut self,
+        load: &wgpu::LoadOp<wgpu::Color>,
+        list: &[Draw],
+        clip: Option<usize>,
+    ) {
+        if matches!(load, wgpu::LoadOp::Clear(_)) {
+            self.hints.clear();
+        }
+        if !self.prompt_substitution.reads_prompts() {
+            return;
+        }
+        let found = oag_ui::hints::scan(list, clip, &self.prompt_substitution, &|role| {
+            let slot = match role {
+                Some(role) => self.slot_for(role)?,
+                None => GlyphSlot::Primary,
+            };
+            Some(oag_ui::hints::Face {
+                atlas: self.atlas_for(slot)?,
+                buttons: slot == GlyphSlot::Buttons
+                    && self
+                        .buttons_role
+                        .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS),
+            })
+        });
+        self.hints.extend(found);
+    }
+
     /// The atlas [`Self::push_text`] and [`Self::push_wrapped_text`] read
     /// glyphs from for `slot`. `None` only for [`GlyphSlot::Buttons`] with
     /// [`Self::buttons_atlas`] still unloaded - every other slot always

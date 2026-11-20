@@ -27,6 +27,15 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
 
 ## Open
 
+- **Footer hint clicks are drawn-list based, so a hint the draw list does not
+  carry is not a target.** Every glyph-and-word footer and our own legends
+  are (`docs/ui/back-and-help.md`, "Footer hints are clicks"). Open: Pure's
+  square disc (`ά`, `Stats` face) is mapped off the shape of its cell and no
+  footer draws it (75), so a Pure footer that does would be the first live
+  check; the tag entry's `CROSS/START ACCEPT` taps the cross only (the pad's
+  start has no hint of its own there); and the live pointer path (a real mouse
+  on a footer, as against the drive's synthetic one) was not run on a desktop
+  window.
 - **Pure's selection screens under the ink-centred band, live.** The
   language picker's hover is confirmed; its second tap confirming was
   only exercised in `frontend/tests/pointer.rs`, because confirming there

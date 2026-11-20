@@ -412,6 +412,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu: Some(frontend::MENU_SKIN),
     menu_ps2: None,
     back_button_ps2: None,
+    // Pure's `Input_ParseButtonName` returns the triangle's index for `backward` and `cancel`
+    // (`docs/ghidra/functions/psp-pure-usa/input.md`); its footers draw the triangle beside `Back`.
+    back_button_psp: Some(oag_title::prompts::Prompt::Triangle),
     // Pure authors the same `FEGlobals`/`<Menu>` vocabulary Pulse does, not
     // the touch-icon idiom - see ADR-0054.
     touch: None,

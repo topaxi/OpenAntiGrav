@@ -182,6 +182,8 @@ pub struct Renderer {
     /// Which substitute glyph each of the title's button stand-ins draws as
     /// right now; empty draws the disc's own. See [`oag_ui::prompt`].
     prompt_substitution: oag_ui::prompt::Substitution,
+    /// The hints the last cleared pass and the passes over it drew; see [`Self::hints`].
+    hints: Vec<oag_ui::hints::Hint>,
     uniform_buffer: wgpu::Buffer,
     quad_buffer: wgpu::Buffer,
     quad_capacity: usize,
@@ -470,6 +472,7 @@ impl Renderer {
             buttons_atlas: None,
             buttons_role: oag_ui::language::roles::BUTTONS,
             prompt_substitution: oag_ui::prompt::Substitution::none(),
+            hints: Vec::new(),
             uniform_buffer,
             quad_buffer,
             quad_capacity: INITIAL_QUADS,
@@ -982,27 +985,8 @@ impl Renderer {
                     // A `Buttons` draw with the third slot holding another
                     // role's face (Pulse's `Title`) draws nothing: sampling
                     // that face would print the button codepoints as letters.
-                    let is_buttons = role.eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS);
-                    if is_buttons
-                        && !self
-                            .buttons_role
-                            .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS)
-                    {
+                    let Some(slot) = self.slot_for(role) else {
                         continue;
-                    }
-                    let slot = if is_buttons
-                        || (self.buttons_atlas.is_some()
-                            && role.eq_ignore_ascii_case(self.buttons_role))
-                    {
-                        GlyphSlot::Buttons
-                    } else if self.face_atlas.is_some()
-                        && self
-                            .face_role
-                            .is_some_and(|loaded| loaded.eq_ignore_ascii_case(role))
-                    {
-                        GlyphSlot::Face
-                    } else {
-                        GlyphSlot::Primary
                     };
                     match wrap_width {
                         Some(width) => {
@@ -1020,6 +1004,7 @@ impl Renderer {
             }
         }
 
+        self.collect_hints(&load, list, clip.map(|(at, ..)| at));
         if self.hud.mode.snaps_geometry() {
             hud_scale::snap_sprites(&mut self.quads, self.hud.pixels_per_grid);
         }

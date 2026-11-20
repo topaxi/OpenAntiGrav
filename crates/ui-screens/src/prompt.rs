@@ -446,6 +446,25 @@ impl Keyboard {
         Outcome::Cancelled
     }
 
+    /// The hint line under the grid, as [`Self::draw`] draws it.
+    #[must_use]
+    pub fn hint(&self) -> &str {
+        &self.labels.hint
+    }
+
+    /// Where [`Self::draw`] puts the hint line on `skin`, which the hints of its entries are
+    /// laid over (`oag_ui::hints::legend_wrapped`).
+    #[must_use]
+    pub fn hint_place(skin: &Skin) -> oag_ui::hints::Wrapped {
+        let panel = Panel::new(skin);
+        oag_ui::hints::Wrapped {
+            x: panel.text_x,
+            y: panel.bottom() - panel.line * 1.4,
+            scale: panel.scale * 0.6,
+            width: panel.text_width,
+        }
+    }
+
     /// The grid as [`Self::draw`] lays it out on `skin`.
     fn grid(skin: &Skin) -> Grid {
         let panel = Panel::new(skin);
@@ -570,15 +589,16 @@ impl Keyboard {
             // shipped English hint wrapped to two - the second of which drew
             // *below the panel*, over the front end's own footer chrome.
             // Caught by looking at a capture; the arithmetic had looked fine.
+            let at = Self::hint_place(skin);
             out.push(Draw::Text {
-                x: panel.text_x,
-                y: panel.bottom() - line * 1.4,
-                scale: panel.scale * 0.6,
+                x: at.x,
+                y: at.y,
+                scale: at.scale,
                 color: skin.normal(),
                 border: None,
                 align: Align::Left,
                 text: self.labels.hint.clone(),
-                wrap_width: Some(panel.text_width),
+                wrap_width: Some(at.width),
             });
         }
         out

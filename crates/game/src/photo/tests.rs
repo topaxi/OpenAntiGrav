@@ -251,3 +251,68 @@ fn the_legend_names_the_buttons_the_roles_hand_it() {
     assert!(psp.iter().any(|t| t.contains("CIRCLE BACK")), "{psp:?}");
     assert!(psp.iter().any(|t| t.contains("TRIANGLE RESET")), "{psp:?}");
 }
+
+fn legend(photo: &Photo, roles: oag_ui::roles::Roles) -> Vec<oag_ui::hints::Hint> {
+    let say = |id: &str| id.to_string();
+    let button = |button: Button| format!("{button:?}").to_uppercase();
+    let words = Words {
+        say: &say,
+        button: &button,
+        roles,
+    };
+    legend_hints(photo, (483.0, 272.0), &words, false)
+}
+
+/// The legend's hints are the resolved Back and Help, so a title whose Back is the triangle (the
+/// PS2's) has the triangle leave and the circle reset: fails if the legend names the circle.
+#[test]
+fn the_legend_hints_follow_the_resolved_back_and_help() {
+    use oag_ui::hints::Press;
+    let photo = Photo::new(0, false, None);
+    let ps2 = oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    };
+    let presses = |roles| -> Vec<Press> { legend(&photo, roles).iter().map(|h| h.press).collect() };
+    let psp = presses(oag_ui::roles::Roles::DEFAULT);
+    assert!(psp.contains(&Press::Button(Button::Circle)));
+    let ps2 = presses(ps2);
+    assert!(ps2.contains(&Press::Button(Button::Triangle)));
+    assert!(ps2.contains(&Press::Button(Button::Circle)));
+    for button in [Button::Cross, Button::Select, Button::Square, Button::Start] {
+        assert!(psp.contains(&Press::Button(button)), "{button:?}");
+    }
+    assert!(
+        psp.contains(&Press::Button(Button::L)) && psp.contains(&Press::Button(Button::R)),
+        "the ship change takes L and R"
+    );
+}
+
+/// A hint sits over its words on the line the legend draws, at the legend's own scale.
+#[test]
+fn a_legend_hint_sits_over_its_words_on_the_line_drawn() {
+    let photo = Photo::new(0, false, None);
+    let say = |id: &str| id.to_string();
+    let button = |button: Button| format!("{button:?}").to_uppercase();
+    let words = words(&say, &button);
+    let grid = (483.0, 272.0);
+    let hints = legend_hints(&photo, grid, &words, false);
+    let list = draw_list(&photo, grid, &words, None, None);
+    let atlas = oag_ui::font::builtin();
+    let cross = hints
+        .iter()
+        .find(|hint| hint.press == oag_ui::hints::Press::Button(Button::Cross))
+        .expect("the cross hint");
+    let line = list
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Text { text, x, y, .. } if text.starts_with("CROSS ") => Some((*x, *y)),
+            _ => None,
+        })
+        .expect("the first line of the legend");
+    assert_eq!(cross.rect[0], line.0);
+    assert_eq!(cross.rect[1], line.1);
+    let width = oag_ui::font::measure(atlas, &format!("CROSS {}", strings::TAKE)) * SCALE;
+    assert!((cross.rect[2] - width).abs() < 0.01);
+    assert!(legend_hints(&photo, grid, &words, true).is_empty());
+}
