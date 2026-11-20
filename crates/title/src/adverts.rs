@@ -50,6 +50,12 @@ pub struct Adverts {
     /// target per slot: the Environment stage's 512 x 512 target, an equaliser grid
     /// (`oag_raceplay::zone_equaliser`). Read on HD; 2048 and Omega are not read.
     pub zone_shares_one_texture: bool,
+    /// Whether that shared target draws the stage pass's equaliser bars from the music's
+    /// held bands (`oag_raceplay::zone_equaliser`), rather than the bare grid. Read on HD
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`). Omega's frame reads the
+    /// same `-508.0`/`526.0` pair but its loop is unread; 2048 carries neither: both draw
+    /// the grid.
+    pub zone_equaliser_bars: bool,
     /// Whether slot 8, the start gantry, is drawn as a card like the other slots
     /// instead of as a model stood on the track's mount.
     ///

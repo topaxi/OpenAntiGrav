@@ -357,6 +357,9 @@ pub struct Scene {
     /// (`Drawable::write_zone_vis`). Here rather than on each drawable, which every view
     /// walks, to keep a kilobyte each out of them; reset by [`Self::rebind_zone_art`].
     zone_vis_written: std::cell::RefCell<[Option<oag_mesh::mesh_render::zone::VisTexels>; 4]>,
+    /// The Zone stage's equaliser target on billboard slots 1 to 7, stepped once a frame
+    /// (`crate::zone_equaliser`). `None` outside an HD Zone race.
+    zone_equaliser: Option<std::cell::RefCell<crate::zone_equaliser::Live>>,
     /// The lists a view's pass carries, kept from frame to frame: see
     /// `Scene::keep_view_lists`.
     view_lists: std::cell::RefCell<record::ViewLists>,
@@ -612,6 +615,7 @@ impl Scene {
             gantry,
             adverts,
             zone_equaliser,
+            zone_equaliser_bars,
         } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
@@ -820,7 +824,15 @@ impl Scene {
             true,
         )?;
         crate::stages::checkpoint()?;
-        crate::zone_equaliser::bind_into(device, queue, &mut track, &placeholders, &zone_equaliser);
+        let zone_equaliser = crate::zone_equaliser::bind_into(
+            device,
+            queue,
+            &mut track,
+            &placeholders,
+            &zone_equaliser,
+            zone_equaliser_bars,
+        )
+        .map(std::cell::RefCell::new);
         let adverts = if adverts.is_empty() {
             None
         } else {
@@ -1278,6 +1290,7 @@ impl Scene {
             shadow_gathered: Default::default(),
             hull_cache: Default::default(),
             zone_vis_written: Default::default(),
+            zone_equaliser,
             sky_dome,
             view_lists: Default::default(),
             shadow_rank: Default::default(),

@@ -230,8 +230,8 @@ if (FUN_0883e37c(entity) && source == 2 && entity->fx_count /* +0xca8 */ != 0) {
 - **At most once per locator per 0.8 s.** The trigger's `instance + 100`
   cooldown applies to kinds 0 and 1, so a Cannon's stream of small hits
   sparks each of Assegai's six locators at most every 0.8 s.
-- `FUN_0883e37c` is a display-mask test (see "Which ten nodes" below) and is
-  not read further.
+- `FUN_0883e37c` is `Craft_IsInVisibleSection`: the craft's section bit in the view's
+  section row ([hud-game-options.md](hud-game-options.md), "The gate").
 
 Confidence **88**: a clean decompile, both call sites read, and measured.
 
@@ -1277,8 +1277,8 @@ void Ship_PlayAbsorbFeedback(Entity *e) {                          // 0x08840640
   hull at `+0x8b0` is swapped between the two models at `+0x8b4`/`+0x8b8`.
   Confidence **85**.
 - **The gate:** `+0xca8 != 0`, so a hull with no nodes gets **no sound
-  either**. `FUN_0883e37c` is a display-mask test (`FUN_0891e908(g_display)
-  & FUN_0897bc08(...)`) that was not read further. The port raises the cue
+  either**. `FUN_0883e37c` is `Craft_IsInVisibleSection`, the craft's section bit in the
+  view's section row ([hud-game-options.md](hud-game-options.md), "The gate"). The port raises the cue
   regardless, as it did before, and only the picture waits on the node
   count. This is recorded as a difference, not fixed.
 - **`DAT_08abf564` is a start delay.** Its only reader is

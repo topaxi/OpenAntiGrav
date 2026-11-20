@@ -1028,3 +1028,5 @@
 0x002197d0	function	CellSelection_OnEnter	80	image-widget.md
 0x0021a570	function	CellSelection_Update	80	image-widget.md
 0x002181a8	function	CellSelection_Refresh	80	image-widget.md
+0x005e5770	function	Prim_SetBlendMode	80	zone-equaliser.md
+0x008c2d2c	data	g_ZoneEqualiserStyle	85	zone-equaliser.md

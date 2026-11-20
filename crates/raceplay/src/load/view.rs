@@ -787,6 +787,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         world_clock_offset: options.world_clock_offset,
         gantry_seconds: options.gantry_seconds,
         camera_override: options.camera,
+        track_sections: visibility.as_ref().and_then(|v| v.pvs().cloned()),
     };
     let mut loaded = Loaded {
         started: None,
@@ -806,6 +807,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             gantry,
             adverts,
             zone_equaliser,
+            zone_equaliser_bars: title.adverts.is_some_and(|spec| spec.zone_equaliser_bars),
         },
         collision_model,
         sky_model,

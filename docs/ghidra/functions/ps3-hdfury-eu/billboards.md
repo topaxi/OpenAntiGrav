@@ -1391,3 +1391,12 @@ stage pass. **Wired (confidence 80 for the grid, bars not drawn):** `oag_racepla
 grid with no bar lit on slots 1 to 7 of an HD Zone race. The original's start-pair panel reads (0, 12, 15) at
 (150, 400) and ours now (0, 14, 18). Open: what feeds the bars (the audio spectrum is the strong guess, unread)
 and the two floats; the bars would need that law. 2048 and Omega: flag set, binding unread, not checked.
+
+## 2026-11-20 (`zone-equaliser-bars`): the bars are read
+
+What draws the bars of the shared target, and from what: [zone-equaliser.md](zone-equaliser.md).
+`Environment_UpdateStageBlend` fades the target by black at alpha `0x60` each frame, draws style 0's
+sixteen bars (30 pixels wide at `32 b + 1`, from row 510 up to `510 - 508 * held[b]`, a 16-row cap in
+the stage's `EQ colour tint` over a body at half of it) from the same held bands as `zoneTexVis`, and
+lays the grid last. `+0x3374`/`+0x3354` are band 2's held and raw levels. Wired on HD; Omega and 2048
+keep the bare grid.
