@@ -191,6 +191,24 @@ pub const SKY_BUFFER_POINTER_GAP: usize = 184;
 /// is never reached there.
 pub const PS4_BUFFER_POINTER_GAP: usize = 32;
 
+/// The fourth known gap, PS4 only: a record that carries a second CPU pointer,
+/// to a vertex declaration, between its two buffer pointers.
+///
+/// **Confidence 85.** Every `Data/crowd/Rigs/*.rcsmodel` (40 files: `male01..10`,
+/// `female01..10` and their `_shadow` twins) and `Data/startanim/model/start.rcsmodel`
+/// holds exactly one such record, 41 records and 82 relocation sites on
+/// `data00.psarc`. In each the vertex-buffer site sits 200 bytes past the
+/// index-buffer site, and the record's word at `+0x20` (a CPU pointer) equals the
+/// vertex site, so the 200 is where the record keeps the declaration the
+/// `+0x18` pointer names, not a constant of the format. Only [`submeshes`] on a
+/// PS4 file tries it, and the pair still has to clear [`one`]'s arithmetic.
+pub const PS4_DECLARED_BUFFER_POINTER_GAP: usize = 200;
+
+/// Where a [`PS4_DECLARED_BUFFER_POINTER_GAP`] record holds the pointer to the slot that holds its
+/// vertex declaration's address (`male01`: `+0x18` is `0xca0`, the word there is `0xcb0`, the
+/// header with stride 36 and six attributes).
+const DECLARED_SLOT_POINTER: usize = 0x18;
+
 /// Every gap [`submeshes`] tries, in the order it tries them.
 const KNOWN_BUFFER_POINTER_GAPS: [usize; 3] = [
     BUFFER_POINTER_GAP,
@@ -496,6 +514,12 @@ pub struct SubMesh {
     /// declaration names none. The vertex program decodes `.rgb` by the Nova triple and passes
     /// `.a` on as the sun's mask.
     pub ps4_nova_colour: Vec<[u8; 4]>,
+    /// Four skin weights per vertex, each `u16 / 65535`, on a skinned PS4 record
+    /// ([`vertex_decl::SKIN_WEIGHTS_HASH`]); empty elsewhere.
+    pub skin_weights: Vec<[f32; 4]>,
+    /// Four bone indices per vertex ([`vertex_decl::SKIN_INDICES_HASH`]), into the node list of
+    /// the `.rcsskeleton` beside the model; empty exactly where [`Self::skin_weights`] is.
+    pub skin_indices: Vec<[u8; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
@@ -734,7 +758,9 @@ fn submeshes(file: &[u8], cpu: Section, gpu: Section, ps4: bool) -> Result<(Vec<
     while i + 1 < sites.len() {
         let (first, second) = (sites[i], sites[i + 1]);
         let gap = second - first;
-        if first < INDEX_POINTER || !KNOWN_BUFFER_POINTER_GAPS.contains(&gap) {
+        let known = KNOWN_BUFFER_POINTER_GAPS.contains(&gap)
+            || (ps4 && gap == PS4_DECLARED_BUFFER_POINTER_GAP);
+        if first < INDEX_POINTER || !known {
             i += 1;
             continue;
         }
@@ -836,7 +862,7 @@ fn one(
             normals.push(unpack_normal([file[at], file[at + 1], file[at + 2]]));
         }
     }
-    let own = declarations.of_record(file, cpu, record, stride, ps4);
+    let own = declarations.of_record(file, cpu, (record, gap), stride, ps4);
     let half_type = if ps4 {
         vertex_decl::PS4_HALF2
     } else {
@@ -1028,6 +1054,30 @@ fn one(
     };
     let ps4_vertex_colour2 = ps4_colour(vertex_decl::VertexDecl::vertex_colour2);
     let ps4_nova_colour = ps4_colour(vertex_decl::VertexDecl::ps4_nova_colour);
+    let mut skin_weights = Vec::new();
+    let mut skin_indices = Vec::new();
+    if let (Some(w), Some(i)) = (
+        own.filter(|_| ps4)
+            .and_then(|d| d.attribute(vertex_decl::SKIN_WEIGHTS_HASH))
+            .filter(|a| a.components == 4 && a.gxm_type == vertex_decl::PS4_USHORT4_NORM),
+        own.filter(|_| ps4)
+            .and_then(|d| d.attribute(vertex_decl::SKIN_INDICES_HASH))
+            .filter(|a| a.components == 4 && a.gxm_type == vertex_decl::PS4_UBYTE4),
+    ) {
+        let (w, i) = (usize::from(w.offset), usize::from(i.offset));
+        if stride >= w + 8 && stride >= i + 4 {
+            for v in 0..vertex_count {
+                let at = vertex_at + v * stride;
+                skin_weights.push(std::array::from_fn(|k| {
+                    f32::from(u16::from_le_bytes([
+                        file[at + w + k * 2],
+                        file[at + w + k * 2 + 1],
+                    ])) / 65535.0
+                }));
+                skin_indices.push(std::array::from_fn(|k| file[at + i + k]));
+            }
+        }
+    }
     Some(SubMesh {
         record,
         mesh: None,
@@ -1048,6 +1098,8 @@ fn one(
         vita_vertex_colour1,
         ps4_vertex_colour2,
         ps4_nova_colour,
+        skin_weights,
+        skin_indices,
         stride,
     })
 }
@@ -1065,17 +1117,34 @@ impl Declarations {
         &self,
         file: &[u8],
         cpu: Section,
-        record: usize,
+        (record, gap): (usize, usize),
         stride: usize,
         ps4: bool,
     ) -> Option<&vertex_decl::VertexDecl> {
+        let word = |at: usize| -> Option<usize> {
+            let word = file.get(at..at.checked_add(8)?)?;
+            usize::try_from(u64::from_le_bytes(word.try_into().ok()?)).ok()
+        };
+        if ps4 && gap == PS4_DECLARED_BUFFER_POINTER_GAP {
+            // This record keeps the declaration two pointers deep: `+0x18` names a slot
+            // that holds the header's address.
+            let slot = word(
+                cpu.at
+                    .checked_add(record)?
+                    .checked_add(DECLARED_SLOT_POINTER)?,
+            )?;
+            let target = word(cpu.at.checked_add(slot)?)?;
+            return self
+                .by_header
+                .get(&target)
+                .filter(|decl| decl.stride == stride);
+        }
         let at = cpu
             .at
             .checked_add(record)?
             .checked_add(vertex_decl::PS4_DECLARATION_POINTER)?;
         let target = if ps4 {
-            let word = file.get(at..at.checked_add(8)?)?;
-            usize::try_from(u64::from_le_bytes(word.try_into().ok()?)).ok()?
+            word(at)?
         } else {
             let word = file.get(at..at.checked_add(4)?)?;
             u32::from_le_bytes(word.try_into().ok()?) as usize

@@ -335,6 +335,21 @@ fn a_ps4_gap_submesh_is_found_on_its_own() {
     assert_eq!(decoded.unpaired_pointers, 0);
 }
 
+/// The skinned record's 200-byte gap is a PS4 shape only: the same pointer pair in a file that
+/// does not carry the PS4 header word stays unpaired, so no Vita file can take it.
+#[test]
+fn the_declared_gap_is_taken_on_a_ps4_file_and_never_on_a_vita_one() {
+    let mut file = build_with_gaps(&[(9, 4, 36, PS4_DECLARED_BUFFER_POINTER_GAP)]);
+    let vita = parse(&file).expect("parses");
+    assert!(vita.submeshes.is_empty());
+    assert_eq!(vita.unpaired_pointers, 2);
+    file[4..8].copy_from_slice(&PS4_HEADER_WORD.to_le_bytes());
+    let ps4 = parse(&file).expect("parses");
+    assert_eq!(ps4.submeshes.len(), 1);
+    assert_eq!(ps4.submeshes[0].stride, 36);
+    assert_eq!(ps4.unpaired_pointers, 0);
+}
+
 /// All three shapes in one file, which is what a PS4 ship is: a mirrored twin
 /// in the Vita's 184-byte shape beside the 32-byte ones. None of them may
 /// shift where the scan resumes for the next.

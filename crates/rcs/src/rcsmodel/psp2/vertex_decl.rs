@@ -111,6 +111,19 @@ pub const VITA_UBYTE4_NORM: u8 = 4;
 /// wipe's in `.zw`. The same hash HD's `nr_twinblend` names its `v[8]` by.
 pub const BARS_BLEND_HASH: u32 = 0x0e7e_a5a8;
 
+/// The attribute at offset 24 of a skinned PS4 vertex (`Data/crowd/Rigs`): four `u16` skin weights,
+/// normalised. The name's `~crc32` is this value; the name itself is not recovered, so the role is
+/// measured: on all 40 rigs' 21,344 vertices the four lanes sum to 65,533 to 65,535 (confidence 90).
+pub const SKIN_WEIGHTS_HASH: u32 = 0xf076_8d21;
+/// The attribute at offset 32 of a skinned PS4 vertex: four `u8` bone indices into the sibling
+/// `.rcsskeleton`'s node list (every index is below the skeleton's node count on all 40 rigs).
+/// Name not recovered; see [`SKIN_WEIGHTS_HASH`].
+pub const SKIN_INDICES_HASH: u32 = 0x4517_7157;
+/// The type nibble of [`SKIN_WEIGHTS_HASH`]: four unsigned normalised `u16`.
+pub const PS4_USHORT4_NORM: u8 = 9;
+/// The type nibble of [`SKIN_INDICES_HASH`]: four unsigned bytes.
+pub const PS4_UBYTE4: u8 = 0xa;
+
 /// The type nibble of a PS4 two-component half-float attribute: `Uv1`,
 /// `lightmapUV` and every other coordinate set on all 43 layouts of
 /// `tech_de_ra`, which also carries two `f32` pairs (`0`) that are not

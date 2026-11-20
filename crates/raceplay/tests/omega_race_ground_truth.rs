@@ -337,7 +337,7 @@ fn census(number: &str, files: usize, submeshes: usize, unpaired: usize) {
         .filter(|p| p.to_ascii_lowercase().ends_with(".rcsmodel"))
         .cloned()
         .collect();
-    let (mut seen, mut found, mut leftover) = (0, 0, 0);
+    let (mut seen, mut found, mut leftover, mut rigs) = (0, 0, 0, 0);
     for name in &names {
         let blob = archive.read_path(name).expect("read");
         assert!(oag_rcs::rcsmodel::psp2::is_ps4(&blob), "{name}: not PS4's");
@@ -349,18 +349,74 @@ fn census(number: &str, files: usize, submeshes: usize, unpaired: usize) {
         for s in &model.submeshes {
             assert!(s.material.is_some(), "{name}: a submesh names no material");
         }
+        if is_crowd_rig(name) {
+            check_crowd_rig(&mut archive, name, &model);
+            rigs += 1;
+        }
     }
     assert_eq!(
         (seen, found, leftover),
         (files, submeshes, unpaired),
         "data{number}"
     );
+    assert_eq!(
+        rigs,
+        if number == "00" { 40 } else { 0 },
+        "data{number}'s crowd rigs"
+    );
+}
+
+/// Whether `name` is one of the 40 `Data/crowd/Rigs/{male,female}NN[_shadow].rcsmodel` (not `LODs`).
+fn is_crowd_rig(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.starts_with("data/crowd/rigs/") && (lower.contains("/male") || lower.contains("/female"))
+}
+
+/// A crowd rig is one skinned submesh whose vertex records close (`PS4_DECLARED_BUFFER_POINTER_GAP`):
+/// weights that sum to one, bone indices inside the sibling `.rcsskeleton`'s node list, and the
+/// skeleton's node ids equal to the model's own node table (`docs/formats/omega-status.md`,
+/// "The crowd rigs").
+fn check_crowd_rig(
+    archive: &mut oag_assets::psarc::Archive,
+    name: &str,
+    model: &oag_rcs::rcsmodel::psp2::Model,
+) {
+    assert_eq!(model.submeshes.len(), 1, "{name}");
+    let sub = &model.submeshes[0];
+    let verts = sub.positions.len();
+    assert_eq!(sub.stride, 36, "{name}");
+    assert!(
+        sub.indices.iter().all(|&i| usize::from(i) < verts),
+        "{name}"
+    );
+    assert_eq!(sub.skin_weights.len(), verts, "{name}: skin weights");
+    assert_eq!(sub.skin_indices.len(), verts, "{name}: skin indices");
+    assert_eq!(sub.texcoords.len(), verts, "{name}: texcoords");
+    assert_eq!(sub.normals.len(), verts, "{name}: normals");
+    let skeleton_name = name.replace(".rcsmodel", ".rcsskeleton");
+    let skeleton =
+        oag_rcs::rcsskeleton::parse(&archive.read_path(&skeleton_name).expect("skeleton"))
+            .unwrap_or_else(|e| panic!("{skeleton_name}: {e}"));
+    let ids: Vec<u32> = model.scene.nodes.iter().map(|n| n.id).collect();
+    let skeleton_ids: Vec<u32> = skeleton.nodes.iter().map(|n| n.id).collect();
+    assert_eq!(ids, skeleton_ids, "{name}: node ids");
+    for (w, i) in sub.skin_weights.iter().zip(&sub.skin_indices) {
+        let sum: f32 = w.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-3, "{name}: weights sum to {sum}");
+        for (&weight, &bone) in w.iter().zip(i) {
+            assert!(
+                weight == 0.0 || usize::from(bone) < skeleton.nodes.len(),
+                "{name}: bone {bone} of {}",
+                skeleton.nodes.len()
+            );
+        }
+    }
 }
 
 #[test]
 #[ignore = "needs the corrected Omega extraction"]
-fn data00_rcsmodels_decode_with_only_the_crowd_rigs_unpaired() {
-    census("00", 625, 38_362, 82);
+fn data00_rcsmodels_decode_and_close_completely() {
+    census("00", 625, 38_362 + 41, 0);
 }
 
 #[test]
