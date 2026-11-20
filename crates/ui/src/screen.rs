@@ -40,6 +40,7 @@ mod settings;
 mod tag_input;
 mod touch;
 mod widgets;
+mod wipe;
 pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use display_type::DisplayType;
@@ -52,6 +53,7 @@ pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
 pub use touch::{CanvasLabel, Include, TouchButton};
+pub use wipe::{IMAGE_RAMP_SECONDS, Vwipe, Window};
 
 /// One `Text` widget.
 #[derive(Debug, Clone, Default, PartialEq)]

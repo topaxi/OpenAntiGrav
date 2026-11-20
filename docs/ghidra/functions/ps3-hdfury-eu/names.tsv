@@ -1014,3 +1014,10 @@
 0x0007d8e0	function	DemoRaceManager_Construct	85	hud-start-gate.md
 0x0007d398	function	DemoRaceManager_Update	80	hud-start-gate.md
 0x008c2ae0	data	g_ZoneBloomTable	90	zone-frame.md
+0x001b5c90	function	Image_Construct	85	image-widget.md
+0x001b7c18	function	Image_ParseXml	85	image-widget.md
+0x001b6398	function	Image_Render	82	image-widget.md
+0x001b7720	function	Image_Update	72	image-widget.md
+0x00164bd0	function	Widget_UpdateTransition	85	image-widget.md
+0x00164df8	function	Widget_ResetTransition	85	image-widget.md
+0x0016e580	function	Widget_ParseChildXml	75	image-widget.md

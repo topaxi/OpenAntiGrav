@@ -86,6 +86,13 @@ pub struct Light {
     /// (`docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, "The law"). `.w` unused. Zero
     /// on every other title, where nothing reads it. See [`Light::with_sun_specular`].
     pub sun_specular: [f32; 4],
+    /// Omega's `shadowLightDirection`: `Lighting.ShadowLight direction`, normalised, in `xyz`, and
+    /// `w` is `1.0` where the circuit authors one (the factor below is read) and `0.0` elsewhere.
+    /// See [`Light::with_shadow_light`].
+    pub shadow_light: [f32; 4],
+    /// Omega's `shadowLightSpecularDiffuse`: `Lighting.ShadowLight specular power scale`, power in
+    /// `x` and scale in `y`; `zw` unused.
+    pub shadow_light_specular: [f32; 4],
     /// The probe tint (`iblScalePower`) every craft hull of the frame takes in place of its
     /// own, where `.w` is `1.0`: HD/Fury's Zone frame, whose stage blend writes the tint
     /// from the stage table (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). The
@@ -127,6 +134,8 @@ impl Light {
             prelit_bias: 0.0,
             sun_specular: [0.0; 4],
             hull_probe_tint: [0.0; 4],
+            shadow_light: [0.0; 4],
+            shadow_light_specular: [0.0; 4],
             hull: crate::mesh_render::HullLights::OFF,
         }
     }
@@ -169,6 +178,8 @@ impl Light {
             prelit_bias: 0.0,
             sun_specular: [0.0; 4],
             hull_probe_tint: [0.0; 4],
+            shadow_light: [0.0; 4],
+            shadow_light_specular: [0.0; 4],
             hull: crate::mesh_render::HullLights::OFF,
         }
     }
@@ -227,6 +238,37 @@ impl Light {
     pub fn with_hull_probe_tint(self, gain: [f32; 3]) -> Self {
         Self {
             hull_probe_tint: [gain[0], gain[1], gain[2], 1.0],
+            ..self
+        }
+    }
+    /// This rig with Omega's shadow light, the factor the lightmapped programs multiply the
+    /// prelit term by (`docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`, "What is recovered
+    /// and not wired"):
+    ///
+    /// ```text
+    /// Fsl = 0.75 + 0.25 sat(N.SL) + scale * sat(R.SL)^power
+    /// ```
+    ///
+    /// `direction` is the authored `Lighting.ShadowLight direction` (normalised here, as the
+    /// executable does), `power` and `scale` the authored `Lighting.ShadowLight specular power
+    /// scale` pair.
+    #[must_use]
+    pub fn with_shadow_light(self, direction: [f32; 3], power: f32, scale: f32) -> Self {
+        let length = (direction[0] * direction[0]
+            + direction[1] * direction[1]
+            + direction[2] * direction[2])
+            .sqrt();
+        if length <= 0.0 {
+            return self;
+        }
+        Self {
+            shadow_light: [
+                direction[0] / length,
+                direction[1] / length,
+                direction[2] / length,
+                1.0,
+            ],
+            shadow_light_specular: [power, scale, 0.0, 0.0],
             ..self
         }
     }

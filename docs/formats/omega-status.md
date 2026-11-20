@@ -1635,7 +1635,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `PROGRAM_TARMAC` (14) selects the combine in `shade.wesl`; the markings pair rides `texcoord2`
   and the dirt pair `colour.xy` (`colour.zw` = 1, tint forced white on the mode) because the
   vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the specular
-  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`.
+  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`. (The shadow-light factor is wired since
+  `omega-2048-road`; the lobe is read and waits for the track's shadow term: "The tarmac roads' lit programs" below.)
   **Result on `arena-2048`** (private copy of the pair, recorded flags, 1920 x 1080; mean RGB of
   the three boxes): original (86,122,114) (131,138,128) (124,132,123); before this change
   (74,115,108) (139,147,137) (95,129,120); after (72,111,105) (117,125,118) (83,114,107). The
@@ -2450,7 +2451,7 @@ readable statically.** Three different things sit under the old "crowd region" n
   walk to a 2048 grid, `--game-mode 2048 --track-steps 6 --class-steps 2` for Sol) find the staged copies by Sol's
   exact `liveLighting0direction` followed after four bytes by `fogColour` and read the three floats at `dw0` and `dw4`:
   they say whether the crowd's sun and ambient are per draw or the global frame constants. Global means the cause is
-  ours' `N` or a route, per draw means a per-object light the engine computes. Not run: a pad seat was not assigned.
+  ours' `N` or a route, per draw means a per-object light the engine computes. **Run 2026-11-20 (`omega-crowd-live`): global, and equal to ours' ([below](#crowd-and-scene-light-inputs-read-live-2026-11-20-omega-crowd-live)).**
 - **2048: checked, differs** (as below: Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`). Omega
   ships a PS4 `fc08_effects_crowd` on Sol (336 triangles, 120 px, bias +9.6) whose program is unread.
 
@@ -2463,6 +2464,94 @@ and none of those materials authors `Shadowed` or `Ambient` (the only parameters
 **2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
 `tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
+## Crowd and scene light inputs, read live (2026-11-20, `omega-crowd-live`)
+
+**Claim tested:** the light inputs bound to Sol's crowd draws (`constantAmbientColour`, `liveLighting0diffuse` and its
+direction, `Shadowed`, `Ambient`) can be read from the original, and the sky and fog inputs on Sebenco Climb where
+reachable; each equals what ours binds or differs by a stated factor. **Read: yes. Result: equal, ratio 1.000 on every
+input, on both circuits.** The plain crowd's dimness (Sol +64.5, the figures lit all or nothing) is therefore not the
+bound ambient, sun or `Shadowed`.
+
+**Method** (`scripts/wipeout-pc-crowd-light-live.py`, reads only; walk and rig as `wipeout-pc-omega-pair.py`, seat 2, about
+150 s a boot). The port is frozen with `SIGSTOP` when the walk's grab loop ends (about five or six grabs after the HUD shows, still before GO: TOTAL reads `0.00.00` in `frozen.png`) and its guest memory is read through
+`/proc/<pid>/mem`: (1) the frame-constant table (an entry is `~crc32(name)` with the value pointer at `+0x10`, as in
+`wipeout-pc-road-sheen-live.py`; 125 to 420 entries per name across boots, the most common pointer into the image or heap is the
+live one, a stale entry reads junk in its fourth lane); (2) every copy of the live `fogColour` xyz in memory, dumped with the
+64 bytes before it and the 48 after it. The `_shadow` crowd sprite's pixel constant block is 96 bytes
+(`gcn_dump Crowd_Sprite_Diffuse_Normal_Alpha_Shadow` `0x21e4`, 122 instructions): `dw0 Shadowed`, `dw1-3 Ambient`,
+`dw4 constantAmbientColour`, `dw8 liveLighting0diffuse`, `dw12 liveLighting0direction`, `dw16 fogColour`, `dw20
+fadeResCoeffs`; the plain programs (`0x41a4`, `0x3c04`) are its last 80 bytes. A block that starts with Sol's authored
+`Shadowed 0.12178` and `Ambient 0.776742` is therefore the crowd sprite's by construction.
+Written before the capture: "global" is falsified by a staged block whose `dw4`, `dw8` or `dw12` differs from the table,
+"equal" by a value outside 0.92 to 1.08 of ours' per channel.
+
+**Sol (`environments2048/sol`, 2048 mode, speed class A), original against ours' bound value** (ours: `authored_light`
+passes the file's `Lighting.*` keys through unchanged; the sun is colour times `Sun diffuse intensity`; **measured**, not only read: `oag_raceplay::load` of `environments2048\sol` gives `ambient [0.8, 1.0, 1.2]`, `sun [7.608, 5.352, 3.72]`, `dir [-0.105345, 0.574048, -0.812017]`, `sun_specular [6.096, 3.2627, 1.6]`, and of `environments\10_sebenco_climb` `ambient [0.1804, 0.2275, 0.3529]`, `sun [0.3, 0.3, 0.3]`, `dir [-0.31888, 0.93355, -0.16370]`, `sun_specular [12, 12, 12]`, both with `output_scale 1`, because Omega leaves `lit_output_halved` unread; a one-off test, not kept):
+
+| Input | Original, live | Ours (file) | Ratio |
+| --- | --- | --- | --- |
+| `constantAmbientColour` | `0.8, 1.0, 1.2` | `Constant ambient colour` `0.8 1 1.2` | 1.000 |
+| `liveLighting0diffuse` | `7.608, 5.352, 3.72` | `0.951 0.669 0.465` times `8` | 1.000 |
+| `liveLighting0direction` | `-0.10534, 0.57405, -0.81202` | `Sun direction`, normalised | 1.000 |
+| `liveLighting0specular` | `6.096, 3.2627, 1.6` | `Sun specular colour` times `1` | 1.000 |
+| `shadowLightDirection` | `0.79075, -0.37501, -0.48381` | `ShadowLight direction` `0.79073 -0.375 -0.4838` | 1.000 |
+| `fogColour` | `0.34, 0.49, 0.566`, `w 0.00012` | `Fog colour` `0.34 0.49 0.566 0.000117` | 1.000 |
+| crowd sprite `Shadowed`, `Ambient` | `0.12178`, `0.77674` x3 | the material records `0.12178`, `0.776742` | 1.000 |
+
+The crowd sprite's block was found 54 times (boot A) and 52 times (boot B), 8 and 9 of them with the main view's
+`fadeResCoeffs`: every one carries `constantAmbientColour 0.8 1 1.2`, `liveLighting0diffuse 7.608 5.352 3.72` and the
+frame direction. **There is no per-draw light**: among the plain-layout blocks (the frame direction before `fogColour`)
+of the main view, the ones that differ are the hull's probe blocks (`probeOffsetAndDiffuse` `x/8, K, K` in the slot where
+the plain layout has the ambient), offset copies of them, and junk. One further `constantAmbientColour`, `0.5, 0.8, 1.0`
+(114 and 123 blocks, the same sun), appears only with `fadeResCoeffs (100, 0.0333, 0.00391, 0.00391)`, the 256 x 256
+pass (its `zw` is `1/256`; the main view's `(40000, 0, 0.00052, 0.00093)` is `1/1920, 1/1080`): a probe or reflection
+capture with its own ambient, not the picture. The same `fadeResCoeffs` pair splits the crowd sprite's own blocks 46/8 and
+43/9 between the 256 pass and the main view. A second `Shadowed 0.2`, `Ambient 0.0688 0.1199 0.183` block (78 + 14
+copies, same frame constants) is another crowd material on the circuit; 46 `Shadowed 0.2` records exist.
+
+**Sebenco Climb (HD mode, `10_sebenco_climb`), three boots** (the third after the pointer filter below):
+
+| Input | Original, live | Ours (file) | Ratio |
+| --- | --- | --- | --- |
+| `constantAmbientColour` | `0.18039, 0.22745, 0.35294` | `Constant ambient colour` | 1.000 |
+| `liveLighting0diffuse` | `0.3, 0.3, 0.3` | `Sun diffuse colour 1 1 1` times `0.3` | 1.000 |
+| `liveLighting0direction` | `-0.31888, 0.93355, -0.1637` | `Sun direction` | 1.000 |
+| `liveLighting0specular` | `12, 12, 12` | `4 4 4` times `3` | 1.000 |
+| `fogColour` | `0.64639, 1.18384, 1.85203`, `w 0.0005` | `Fog colour` (HDR, above 1) | 1.000 |
+| lighting object at `0x800eb2898` | `Sky height offset -85.102`, `Sky scale 3.13`, `Sky brightness 1.51`, `Ship diffuse brightness 0.5` | the same four keys | 1.000 |
+
+Staged plain-layout blocks carry the same values (5,975, 5,480 and 4,402 blocks with the frame ambient, sun and
+direction in the three boots). So the 2.3 to 2.5 times sky, the 1.4 stands and the 1.6 stripe road of the luma read are **not** carried by
+any bound ambient, sun, direction, specular, fog colour or `Sky brightness` value: ours feeds the same numbers. The HDR fog
+colour (`1.18, 1.85`) reaches the pixel constant unclamped, so a clamp, if there is one, is in a program or in the target,
+not in the constant. What differs is therefore inside the programs and their textures: the sky material's program and the
+sky cube, the consumers of `Sky brightness` and `Fog colour` (still unread in the 1.07 eboot), and for the crowd the
+normal `N` the lit sum is given.
+
+**What this leaves for the Sol plain sprite.** The program is ours' formula and its inputs are ours' inputs, so the
+original's "no figure sun-lit" and ours' "each figure fully lit or fully dark" come from `N.L`: the normal-map decode, the
+vertex program's TBN (`0x3bc4`, `worldScaleInv`), the world matrix of the crowd instances, or the permutation the draw
+selects (`0x41a4` against `0x4f44`/`0x7904`). The next read is the crowd draw's **vertex** constant block (`world`,
+`worldScaleInv`, `eyePositionWorldSpace`), found the same way (a copy of Sol's `worldScaleInv` followed by `fogColour`).
+
+**Also answers the Omega 2048 road's globals.** The panel-map road programs read the same frame constants; on Sol they
+equal the file's (sun, specular, ambient, `ShadowLight` direction, fog). The road's material parameters are separate.
+
+**Confidence.** The frame constants equal the file's authored values: 92 (two Sol boots, three Sebenco boots, the table and
+thousands of staged copies agree). The `_shadow` crowd sprite's draw reads exactly these: 80 (identified by the staged
+block's `Shadowed`/`Ambient` prefix, 8 and 9 copies with the main view's fade; a copy in memory is a staging copy, not a
+captured bind). The **plain** sprite (`0x41a4`, the `+64.5` figures) has no prefix to identify its block: its inputs are
+inferred from every main-view plain-layout block carrying the frame constants, 70. That ours' loaded rig holds the same
+numbers: 92 (measured from `Loaded.light` above; the shader's own use of it is the earlier debug render's
+`(7.6, 5.4, 3.7)` and the code read of `shade.wesl`'s crowd path). One caution on the table
+read: a hit of the hash that is not an entry can sit in the most common pointer (boot B of Sebenco picked a pointer that
+reads zeros); the script keeps only pointers into the image or heap, and the staged blocks, which do not depend on it,
+agree.
+
+**2048: checked, differs.** Vita's crowds are `fc06_lambert_alpha`/`fc08_effects_crowd` (no `Shadowed`/`Ambient`); the
+read is of Omega's native port, and Vita3K's constants for them were not read. HD: the front end and the sky/fog consumers
+are the open part, not checked here.
 
 ## The alpha lane (2026-11-19, `omega-road-programs`)
 
@@ -2515,6 +2604,86 @@ program writes the texel's alpha out and adds `D^2` (`2048-material-params.md`, 
 now wired with the window family, and lane 3 everywhere then gives `moa-therma` 27.53 against 27.56 with the two wired, while
 `modesto-heights` +0.07 and `empire-climb` +0.09 stay worse. 2048's own programs are GXP: which others gate by the diffuse
 alpha is unread, so Vita stays on lane 0 outside the alpha-lit families and these two until each family's gate lane is read.
+
+## The tarmac roads' lit programs (2026-11-20, `omega-2048-road`)
+
+**Claim tested:** Omega's 2048-mode road is drawn by the law its own GCN road program computes, so the road box on
+`capital-reach-2048` (46.98) and `empire-climb-2048` (45.11) improves measurably. **False.** The one term the program
+computes that ours did not draw and that could be wired from authored data, the shadow-light factor, moves the two
+frames +0.28 and -0.14 grey (under the 0.3 bar both ways): the gap on these two roads is not in this program. The sun
+lobe was read, wired, measured and **taken out again** (below).
+
+**Census.** Capital Reach (`bridge`) and Empire Climb (`tower`) draw their road through
+`tarmac_markings_dirt_markingsnormal` (36.0 % and 60.0 % of the frame, `compare-decompose.py --road tarmac`); the
+`road_alphaspec_normal_emissive_panelmap1[_mask]` materials the circuits also carry, and the speed and weapon pads,
+change no pixel by more than 25 grey on either pose (0.0 %). Every road submesh (`DECL_SUB` on `bridge` sub 3658, `tower`
+sub 2881) carries `lightmapUV`, `tangent`, `uvMarkings` and `uv1_uvDirt` and no `NOVAColor`: the lightmapped variants.
+
+**The program** (`gcn_dump data05.psarc data/environments2048/shared/objectlibrary/materials/tarmac_markings_dirt_markingsnormal.rcsmaterial --at <offset>`;
+the patch's copy ships): the lightmapped lit variants are `@0xbd44` (241 instructions, no shadow map) and `@0xa764`
+(342, `shadowMapSampler` and `shadowCoeffs`; `data00`'s are `@0xbc44` and `@0xa684`). The two are read to the same
+law apart from the shadow term (confidence 88, decoded GCN, no run):
+
+```text
+nova  = pow(LM.rgb, power) * scale + bias                         (the authored Nova triple; unchanged)
+Fsl   = 0.75 + 0.25 sat(N.SL) + SLSD.y sat(R.SL)^SLSD.x          (0x4e4 `0.75`, `0.25 sat(N.SL)`)
+lit   = nova * Fsl + liveLighting0diffuse * LM.a * S * sat(N.L)    S = the shadow map's term, 1 in @0xbd44
+G     = mix(Dm.a (1 - Dirt.a), MarkingsSpec Dm.a, Markings.a)
+spec  = liveLighting0specular * G * LM.a * S * sat(R.L)^SpecPower   (reflectiveBlurCoeffs.z reads 0 live: plain power)
+out   = fog(Dm.rgb mixed by Dirt, Markings * lit + spec)
+```
+
+`N` is the normal-mapped world normal, `R` the view reflected about it. `SL` and `SLSD` are the circuit's authored
+`Lighting.ShadowLight direction` (normalised, as the executable does) and `Lighting.ShadowLight specular power scale`:
+the live reads on Sol `(0.7908, -0.375, -0.4838)` and Queens Mall `(-0.3068, 0.4453, -0.8412)`
+([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), "Frame constants read live")
+equal the authored triples (Sol exactly, Queens Mall `(-0.31, 0.45, -0.85)` after normalising), so **no live read is
+needed for the factor** (the thread's "its source in the lighting data" is the envsettings). Capital Reach authors
+`(-0.414, 0.943, -0.850)` and `(10, 1)`, Empire Climb `(0, -0.320, -0.947)` and `(10, 1)`. `liveLighting0specular` is the
+authored specular colour times its intensity (Sol `6.096 3.263 1.6` times 1 equals the live read), which ours already carried.
+Which variant the race binds on a tarmac draw was not read; on the panel road all eight staged blocks had the shadow-map layout,
+so `@0xa764` is assumed here (confidence 70).
+
+**Wired** (`omega-2048-road`): `Light::shadow_light` and `shadow_light_specular` (`Light::with_shadow_light`, filled by
+`envsettings_light` on PS4 only) and the factor on the prelit term in `shade.wesl`'s mode-14 path. Tests:
+`omega_tarmac_lit_path::the_shadow_light_factor_scales_the_prelit_term`, `omega_lightmap_ground_truth` (the loader
+reaches the rig from Tech De Ra's file), `envsettings::tests::a_pair_is_exactly_two_numbers`.
+
+**Read, not drawn: the sun lobe.** It was wired (an entry carrying `SpecPower` and `MarkingsSpec`, the lobe weighted by the
+gloss `G` with the dirt alpha unconditional) and measured against the factor alone: Capital Reach 47.26 either way, Empire
+Climb 44.97 with the factor alone and 45.25 with the lobe, Subway, Downtown, Arena and the Zone pair unchanged by it. The
+lobe is `LM.a * S` in the original and ours has no `S`: it draws crack glints on Empire's near road, including inside the
+craft's shadow, that the original's smoother road lacks, and scored no better on any of the five tarmac pairs, so it was removed
+(the shader block, its test and the entry fields). Draw it with the factor once the track receives `S` (below).
+
+**Measured** (the pairs' recorded flags, 1920x1080, ours re-rendered; `compare-decompose.py` and fixed boxes, mean abs
+grey and bias, ours minus theirs). Factor alone, before to after:
+
+| | Capital Reach | Empire Climb |
+| --- | --- | --- |
+| whole frame (raw mean grey) | 46.98 to 47.26 | 45.11 to 44.97 |
+| road region `LF`, `bias`, `G` | 27.6 to 28.3, -3.5 to -5.5, 0.91 to 0.95 | 29.8 to 29.5, -8.2 to -9.4, 1.08 to 1.09 |
+| box 1 mean abs grey, bias | near left `440x240+200+560`: 28.54 to 29.03, -12.4 to -15.3 | tarmac `700x120+620+380`: 42.60 to 42.87, -20.9 to -22.7 |
+| box 2 | mid `600x160+380+400`: 64.49 to 65.99, -45.6 to -48.1 (the 480 px pose offset pollutes it) | near left `400x200+160+640`: 25.67 to 25.31, -0.9 to -3.7 |
+| box 3 | right `360x200+1500+560`: 17.26 to 17.42, +0.8 to -0.7 | right `400x200+1380+560`: 39.04 to 38.95, +6.2 to +1.7 |
+
+The other tarmac-road pairs' whole frame, before to after: `subway-2048` 30.38 to 30.38, `downtown-2048` 26.97 to 26.72,
+`arena-2048` 33.15 to 32.84, `zone-capital-reach-2048-z5` 68.96 to 69.17. Three of the six improve, two worsen by 0.2 to 0.3,
+none leaves the noise band except Arena's -0.31. The factor is the program's: the originals' road is brighter than ours on both
+pairs (Empire's far road, box 1, is the sun glare and exposure the earlier lanes found; Capital's near road is neutral grey
+in the original and warm in ours, R/G 1.07 against 1.14).
+
+**Where the gap is instead.** The race's program takes the shadow map: its sun term and its lobe are `LM.a * S`, with
+`S = min(1, pcf(shadowMap) * exp2(clamp(c0 + c1 z, c2, c3)))` (`@0xa764` `@0x14c`, `@0x1a8`, `@0x488`-`@0x4b0`; the
+coefficients are `shadowCoeffs`). Ours has the baked `LM.a` only on the track, so Capital's sun on the road is over-present:
+with the road's sun term switched off (a probe, not kept) Capital's whole frame goes 46.98 to 45.41 (Empire 45.11 to 56.86,
+which needs its sun). Next: the track as a shadow receiver (a shadow-map pass over the track casters; ours' hull map is
+`sun_occlusion`), then the lobe, then the dirt layer's colour.
+
+**2048 (Vita): checked, applies, not wired.** Vita authors `Lighting.ShadowLight direction` and its nova prelit programs
+read `shadowLightDirection` as the same shading uniform (`ship-shadows.md`, "Which light"), but 2048 carries no tarmac family
+and its light table (`FUN_8101d068`) is not this lane's. **HD and `2048-vita/moa-therma`:** re-rendered before and after
+(`hd-race/talons-pack` 23.06, `2048-vita/moa-therma` 27.56): pixel-identical.
 
 ## The port's anisotropy (2026-11-16, `port-aniso`)
 
