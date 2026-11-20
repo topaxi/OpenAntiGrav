@@ -1,8 +1,8 @@
 ---
 status: measure
 titles: [2048, omega]
-updated: 2026-11-19
-summary: "Moa Therma window and awning wired (32.55 to 27.56); left: Omega fc10 (GCN unread), Moa hull and walls dark, one top box per other Vita pair"
+updated: 2026-11-20
+summary: "Vita v flip wired (modesto 28.6 to 21.8); open: Moa road needs the light lane, Omega GCN reads, amphiseum road, empire flare"
 size: M (30)
 difficulty: medium (50)
 ---
@@ -20,14 +20,20 @@ fifteen `2048-vita` pairs re-render pixel-identical.
   GCN programs (`cargo run -p oag-rcs --example gcn_dump -- <data0N.psarc> <entry>`) for the `D.a * R^2` term and the
   `0.5 + 0.5 R.xy` lookup, then set `Kind::ps4` in `mesh::rcs::psp2::emissive_add` and re-render `omega/arena-2048` and
   `omega/downtown-2048` (the Cathedral pair).
-- **Moa Therma, what is left** (boxes at 960x544, HUD masked, luma, ours minus theirs): hull `(300,255,660,525)` 38.12
-  (bias -27.0), road and walls `(0,175,960,544)` 28.02 (-17.8), left awning `(0,0,420,175)` 30.33 (-18.6). The whole frame is
-  dark: this is the `2048-grid-dark-bias-is-the-craft-not-a-frame-term.md` family of causes (the craft's paint, the lightmap
-  scale), now with a cleaner top band to read it against.
-- **One top box on each other pair** (4 x 6 grid of mean |err| and bias, before this change): `modesto-heights` right wall
-  `(600..960, 136..272)` 51 to 60, bias +24 to +51 (ours brighter: not read); `amphiseum` left road `(0..160, 272..408)` 52,
-  bias -19 and the white lines across ours' road where the original's is dark with blue panels (not read); `empire-climb`
-  top middle `(320..640, 0..136)` 47 to 50, bias -41 to -21 (the sun's flare and haze, `lens-flare.md`, 2048 not wired).
+- **Moa Therma's road and walls are `diffuse_normal_specular` #16, and the missing terms read the light's uniforms**
+  (box `(0,175,960,544)` 28.02, bias -17.8, 354k px; skip scan in `docs/formats/2048-material-params.md`, "Moa Therma's
+  road"). Law read: normal-mapped N, `s.w * max(0, R.L) * lm^2` added to the prelit sum, and a `liveLighting0specular * D.a * lm.a
+  * max(0, R.L)^Constant1` lobe; ours has none of the three on Vita. `s.w` is `shadowLightSpecularDiffuse.w` and the lobe's colour is
+  `liveLighting0specular`: the 2048 violet-band lane's writer (`2048-live-light-specular.md`), so not wired here. Once that
+  lane lands the light values, wire the three terms (the normal map needs the Vita sampler choice and tangent binding
+  `normal_map.rs` does only for PS4; the lobe is the Omega panel-map road's `mode 15` shape without the SDF) and re-render
+  `moa-therma` and the four Vita pairs. The hull box `(300,255,660,525)` (38.12, bias -27.0) was not split from the road under it;
+  the craft's hdships materials are not in the `OAG_SKIP_MATERIAL` filter, so a craft mask needs a second render.
+- **Amphiseum** (27.94 after the flip, whole frame bias +11.4): the left road box fell 47.96 to 30.17 but the original's blue
+  panels and dark road under the white lines are still not ours (ours brighter, bias +10.8 to +13.9 over the road): not read.
+- **Omega: the `1 - v` flip is checked, applies, not wired.** Omega's Modesto `Track_Wall` (`data02.psarc`) starts its GCN vertex
+  program `v_sub_f32 v0, 1.0, v9` on `Uv1`; its Amphiseum and Tech De Ra track materials were not read. A GCN reader that
+  mirrors `oag_rcs::gxp::texcoord_flip` (the `v_sub_f32 1.0` on the `Uv1` input) would let `psp2::uv_flip::plan` act on a PS4 model.
 - **Arena (a base circuit) now takes the window term too**, with no kept pair to score it: a Vita3K Arena grid pair would
   measure it.
 - **The base copies of `fc10_Lambert_2UV_Emissive`** (54 `ReflectMap` programs in `data.psarc`) were not walked for the
@@ -39,7 +45,5 @@ fifteen `2048-vita` pairs re-render pixel-identical.
 
 1. Omega: read the GCN programs of `fc10_lambert_2uv_emissive` and wire it (about 30 minutes of reading, an hour to wire and
    re-render two pairs).
-2. `modesto-heights` right wall: skip-scan with `OAG_SKIP_MATERIAL` (the method in "The reflective window and the awning")
-   to name the owner, then read its program with `scripts/vita-usse.py disasm`.
-3. `amphiseum` road: the same scan; the white lines are a draw the original does not show at this pose or a material whose
-   emissive add is not read.
+2. `amphiseum` road: skip-scan again (the flip is in, so what is left is the white lines and the original's blue pit panels).
+3. `empire-climb` top middle: scan for the sky and the flare; then Moa's road once the light lane lands `s.w` and the specular colour.

@@ -63,6 +63,7 @@ mod static_hologram;
 mod tarmac;
 mod transparency;
 mod twin_blend;
+mod uv_flip;
 mod uv_keys;
 mod vertex_blend;
 pub mod water;
@@ -331,6 +332,8 @@ fn build_planned(
     );
     // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
+    // Materials whose vertex programs write `1 - v` into the diffuse coordinate.
+    let uv_flip = uv_flip::plan(&decoded, ps4, &mut *textures, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let mut normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
     // 2048's own seas scroll a normal map, bound third as the PS4's are.
@@ -618,7 +621,10 @@ fn build_planned(
             // through `(0, 0)` is indistinguishable from one with no texture
             // bound at all, which is what `report.diffuse_texture` being
             // `None` already says.
-            let texcoord = submesh.texcoords.get(i).copied().unwrap_or([0.0, 0.0]);
+            let texcoord = uv_flip.apply(
+                submesh.material,
+                submesh.texcoords.get(i).copied().unwrap_or([0.0, 0.0]),
+            );
             // The atlas coordinate a lightmapped submesh's own declaration
             // names, and nothing where it names none - so a Vita model, which
             // never has one, is unchanged to the bit.
