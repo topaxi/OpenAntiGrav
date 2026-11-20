@@ -153,8 +153,8 @@ pub struct Options {
     /// `--menu-anim-phase`'s equivalent for the race box's own two screens,
     /// which are not `assets/ui/menu.toml` pages and so do not reach it.
     pub menu_picker_seconds: Option<f32>,
-    /// With `--menu-page ship-select`, seconds since a selection step - see
-    /// the CLI flag's own docs. `None` draws no step.
+    /// With `--menu-page ship-select`, `track-select` or `cell-select`, seconds since a selection
+    /// step - see the CLI flag's own docs. `None` draws no step.
     pub menu_picker_step_seconds: Option<f32>,
     /// With `--menu-page` on HD/Fury or Omega's selection and campaign screens, seconds since the
     /// page became current, which its `vwipe` images count their `delay` from - see the CLI flag's
@@ -921,7 +921,7 @@ pub fn run(
                     &records,
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
-                    options.menu_entry_seconds,
+                    (options.menu_entry_seconds, options.menu_picker_step_seconds),
                 )?;
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)

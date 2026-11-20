@@ -786,6 +786,11 @@ impl CellSelection {
         self.refreshed_at
     }
 
+    /// Sets [`Self::refreshed_at`], for a still drawn a stated time after a change.
+    pub fn set_refreshed_at(&mut self, at: Option<f32>) {
+        self.refreshed_at = at;
+    }
+
     fn note_refresh(&mut self) {
         let now = self.entry.seconds();
         if now.is_finite() {

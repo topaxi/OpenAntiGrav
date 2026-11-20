@@ -186,7 +186,9 @@ fn an_entry_draw_waits_cuts_and_finishes() {
         color: [1.0; 4],
     };
     assert_eq!(entry_draw(wipe, 0.2, tiled.clone()), None);
-    let Some(Draw::TiledSprite { rect, uv, repeat, .. }) = entry_draw(wipe, 0.45, tiled.clone())
+    let Some(Draw::TiledSprite {
+        rect, uv, repeat, ..
+    }) = entry_draw(wipe, 0.45, tiled.clone())
     else {
         panic!("a tiled slab");
     };
@@ -214,7 +216,10 @@ fn a_restart_replays_from_the_press_and_keeps_the_countdown() {
         other => panic!("{other:?}"),
     };
     let slab = height(restart_draw(wipe, 3.0, Some(0.0), sprite())).expect("drawn");
-    assert!((slab - 5.0).abs() < 1e-4, "{slab}: a tenth of the 50 tall quad");
+    assert!(
+        (slab - 5.0).abs() < 1e-4,
+        "{slab}: a tenth of the 50 tall quad"
+    );
     assert_eq!(
         restart_draw(wipe, 3.0, Some(0.6), sprite()),
         Some(sprite()),
