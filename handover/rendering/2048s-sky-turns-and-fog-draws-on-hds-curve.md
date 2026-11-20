@@ -25,8 +25,10 @@ own six-face sky cube and rotation.
   INHERITED. Reading the GXP fog term would replace it with a measured law.
 - **The sky rotation's sign is HD's choice, chosen not measured.** The unit
   (degrees) is measured off Anulpha Pass, authored 230 in HD and -130 in 2048.
-- **`Sky brightness` and `Sky height offset` are authored and read by
-  nothing**: their consumer is unlocated.
+- **`Sky height offset` is authored and read by nothing**: its consumer is unlocated. `Sky brightness`: **Omega reads it** (its
+  dome's pixel program is `SkyBrightness * texture`, wired 2026-11-20, `omega-status.md`, "The sky dome's pixel program"); **2048
+  (Vita) carries the same `SkyBrightness` parameter in `SkyCube.rcsmaterial` and its USSE program is unread**, so the Vita dome still
+  draws the plain texture (checked, applies, not wired; the GXP decode that would state it is the Next Steps item below).
 - **The fog region ladder and `Depth Fog Offset RecipRange` are unwired.**
 - **No 2048 reference capture exists** to judge the picture against. As played,
   the fog is a faint haze on sol and bridge and nothing on altima, and the dome

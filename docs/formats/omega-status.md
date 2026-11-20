@@ -2339,7 +2339,10 @@ Ranked, by what each would remove:
    `Sky height offset`, `Sky scale` and `Sky brightness` at `+0x158`, `+0x15c` and `+0x160` of the object
    `FUN_015eda20` fills (the `LEA RSI` before each key's `LEA RDX` at `0x015edcee` to `0x015edd43`; confidence 75 for
    the offsets); the consumer was not found (the function has over 50 callers). Scaling the dome by it, linear or
-   gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired.
+   gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired. **Read since**: its consumer is the dome's pixel program, `SkyBrightness * texture` in linear light,
+   and the gain is wired for Omega ("The sky dome's pixel program"); re-measured with it, three of the ten 2048-mode pairs improve by a
+   grey or more (Sol 32.71 to 29.57, Queens Mall 43.72 to 42.58, Empire Climb 44.97 to 43.94), four do not move, two move by 0.01 and
+   Metro Park gets worse by 0.22.
 4. **The crowd sprites draw white**: Sol's stands +112 against the original, Queens Mall +57, Subway +68, Arena +64;
    drawing no sprite at all takes Sol from 45.55 to 42.48. **Half read** (2026-11-16, `omega-crowd-shadowed`): the
    `_shadow` materials are lit by their `Shadowed` and `Ambient` (below) and moved; the plain
@@ -2585,6 +2588,106 @@ are the open part, not checked here.
 **Open:** the permutation the original takes for the plain sprite is unread (70); a live read would stage the pixel block of a plain sprite draw (the five-field layout) against the shadow-receiving one (`shadowLightDirection` between the direction and the fog).
 
 **2048 (Vita): checked, differs.** Vita draws crowds through `fc06_lambert_alpha` and `fc08_effects_crowd` (no `crowd_*` material), and its GXP programs' operands are unread, so the frame is not checkable there. HD (PS3): the hull programs build `N = nx T + ny B + nz N0` (`hd-ship-materials.md`, "Hull normal maps"); a Cg frame read for HD's crowd is not done.
+
+## The sky dome's pixel program (2026-11-20, `omega-sky-program`)
+
+**Claim tested:** Omega's HD-mode sky is drawn by the law its own sky and fog programs compute, so the two sky boxes improve
+(`omega/sebenco-climb` snow sky `1100,40,300,160`: theirs 162.3, ours 97.3, bias -65.0; `omega/modesto-heights` sky gap
+`800,160,240,100`: theirs 192.4, ours 156.4, bias -36.0). **Modesto's box: true. Sebenco's box: false for the sky program.** The dome is drawn by one tiny program,
+`SkyBrightness * texture`, which ours did not apply; wiring it cuts the sky-pixel mean absolute error on Moa, Sebenco and Modesto
+(38.4 to 13.5, 37.5 to 14.3, 43.4 to 33.8) and moves Modesto's box 156.4 to 207.7 (an overshoot, below). **Sebenco's box is not the dome**: the dome owns 15 % of its pixels, the snow
+mountain materials 48 % (below), so that box moves 97.3 to 100.1 only.
+
+**Census** (`OAG_SKIP_MATERIAL`, 1920x1080, a pixel counts when it changes by more than 25 grey): the dome (`skycube.rcsmodel`,
+six faces, `SkyCube.rcsmaterial` and its `_1`/`_2` twins) draws 79 % of Modesto's box, 15 % of Sebenco's and 1.6 % of
+Sebenco's frame (6.0 % of Modesto's, 1.5 % of Moa's). The rest of Sebenco's box is `RT_snow1` (a material needle `rt_snow`
+brightens the box 97 to 109 when skipped), the "snow" family as a whole 48 % of the box pixels. The dome material's pixel
+programs carry no fog and no vertex colour.
+
+**The program** (`gcn_dump data08.psarc data/environments/10_Sebenco_Climb/SkyCube/SkyCube.rcsmaterial --at 0x9e4`; the three
+pixel variants `@0x9e4`, `@0x1864`, `@0x2304` are the same 52 instructions, on `environments2048` and `modesto_heights` too;
+data02, data05 and data08 ship three revisions of it; confidence 90, decoded GCN, no run):
+
+```text
+t   = image_sample(Texture1Sampler, attr1.xy)              @0x2c, dmask 0x7
+out = SkyBrightness * t.rgb                                 @0xd0-@0xd8, mrt0 as f16
+```
+
+The rest is the two motion-vector targets (`mrt1`, `mrt2`: the position over `max(0.5, w)` against `fadeResCoeffs`). The face
+`.gnf` is BC7 `ChannelType::Srgb` (descriptor word `0x26900008`; 4096x4096 with mips by its 22,374,656 bytes), so the multiply is in linear light.
+`SkyBrightness` is **engine-bound, not material-authored**: the material table holds no record for it (its `~crc32` appears
+only in the three pixel programs' reflection, `@0xd50`, `@0x1bd0`, `@0x2670`). The lighting object's `Sky brightness` (`+0x160`,
+read live as 1.51 on Sebenco, equal to the key: "Crowd and scene light inputs, read live") is the candidate; the frame-constant
+table's own `SkyBrightness` entry was not read (**read recipe**: `scripts/wipeout-pc-crowd-light-live.py`'s table walk for
+`~crc32("SkyBrightness")`, or the staged 32-byte block with `SkyBrightness` at dw0 and the main view's `fadeResCoeffs`
+`(40000, 0, 1/1920, 1/1080)` at dw4 to dw7). The fit below is the evidence the two are equal (confidence 75).
+
+**Wired** (`omega-sky-program`): `Looks::sky_brightness` (Omega, `Measured`) and `psp2_sky_model` multiplying the dome's vertex
+colour by `SceneStore::texel_gain(Lighting.Sky brightness)`. The dome's shade is `decode(texel * colour)` in the gamma domain
+(`shade.wesl`, the stand-in path), so a linear gain `B` is carried as the sRGB encode of `B` (1.198 for 1.51, 1.428 for 2.264); that
+is exact at no texel and reads 1.9 % (1.51) and 3.4 % (2.264) low at a texel of 0.5, 6 % and 11 % low at 0.2, never high
+(`a_texel_gain_decodes_to_about_the_gain`). **An exact multiply after `decode` needs a per-draw field the uniform block has no
+free slot for** (34 test files mirror its layout); recorded as the follow-up. Tests: `omega_sky_brightness_ground_truth`
+(Sebenco of the HD lineage and Sol of the 2048 lineage: the loaded dome's vertex colour is the authored gain and the loader line names it),
+`texel_gain` unit test. The 2048 (Vita) dome keeps colour 1.0.
+
+**Measured, sky-only pixels** (the pixels `OAG_SKIP_MATERIAL=sky` changes by more than 25 grey, HUD boxes left out; mean grey,
+ours minus theirs; base to wired; theirs in brackets):
+
+| Pair | sky px | authored `Sky brightness` | bias | mean abs grey | mean RGB ours (theirs) |
+| --- | --- | --- | --- | --- | --- |
+| Moa Therma (control) | 1.48 % | 2.0 | -36.4 to -2.3 | 38.4 to 13.5 | 62.6/108.1/108.5 to 81.4/146.4/146.7 (95.1/145.9/143.1) |
+| Sebenco Climb | 1.57 % | 1.51 | -36.8 to -12.8 | 37.5 to 14.3 | 75.9/117.2/159.2 to 90.7/143.0/192.7 (111.0/154.2/199.8) |
+| Modesto Heights | 5.96 % | 2.264 | -14.5 to +23.1 | 43.4 to 33.8 | 121.4/142.1/169.3 to 158.7/180.9/196.2 (134.5/157.3/180.8) |
+
+**The two named boxes** (`compare` boxes, ours re-rendered at the pair's recorded flags; mean grey, bias ours minus theirs, mean absolute grey):
+
+| Box | theirs | ours before | ours after | bias before to after | mean abs before to after |
+| --- | --- | --- | --- | --- | --- |
+| Sebenco snow sky `1100,40,300,160` | 162.3 | 97.3 | 100.1 | -65.0 to -62.1 | 65.2 to 62.5 |
+| Modesto sky gap `800,160,240,100` | 192.4 | 156.4 | 207.7 | -36.0 to +15.2 | 46.0 to 30.9 |
+
+**Why Modesto overshoots, and why that is not the law.** Sebenco's tone map is pinned (`E` 0.555 and `t1` 0.612 equal ours'), so its
+sky is a direct read: the G and B channels land (143.0/192.7 against 154.2/199.8) and the red is short by 20 (the original's bloom
+adds the same light to every channel and a dark channel gains most after the curve; ours draws none there). On Modesto ours'
+exposure is `E` 0.868 against the original's 0.60 (the dim-scene symptom of the luma read), and an exposure forced to 0.6 on a
+prototype build (a temporary `Tonemap` override, not kept, with the gain `B^(1/2.4)` = 1.406, 1.5 % below the committed sRGB-encode
+factor 1.428, so the committed build reads about 2 to 3 grey higher) gives sky pixels 133.6/157.5/184.4 against 134.5/157.3/180.8:
+**bias +0.2, every channel within 4**. The same override without the gain reads bias -41.0 (113.1 against 154.1). So the law is right and
+Modesto's remaining sky error is the rest of its scene being too dark for `LAvg`.
+
+**Whole frames, all 22 Omega race pairs re-rendered** (raw mean grey ours / theirs, mean absolute grey to the original; before to
+after). HD mode: Anulpha 21.19 to 20.94, Chenghou 27.44 to 27.36, Metropia 32.14 to 32.13, Modesto 40.77 to 39.08, Sebenco 40.23 to
+39.86, Sol 2 32.54 to 31.40, Talons 27.89 to 26.89, Tech De Ra 27.76 (0 pixels differ), Amphiseum 49.11 (unchanged), Ubermall 20.28
+to 20.19, Vineta K 28.45 to 25.80, Moa Therma 36.39 to 35.95. 2048 mode: Altima, Arena, Subway unchanged, Capital Reach 47.26
+(unchanged), Downtown 26.72 to 26.71, Empire Climb 44.97 to 43.94, Metro Park 43.67 to 43.89 (+0.22, the one worse), Queens Mall 43.72
+to 42.58, Sol 32.71 to 29.57, Square 25.96 to 25.95. Seven pairs move the whole frame more than 0.3 grey (Modesto -0.25 is the
+nearest miss); the raw mean moves toward the original on all seven, and Metro Park's mean absolute grey is the one that gets worse.
+
+**Fog: Omega's curve is read now.** The vertex program of `RT_snow1`'s lit variant (`@0x12424`, 120 instructions) computes
+`t = fogColour.w * v7`, `F = exp2(1.4427 * (-t * t))` and passes it as `attr1.w`; the pixel program ends
+`out = lit * F + fogColour.rgb * (1 - F)` (`@0x7b0-@0x7d8`) with `fogColour` unclamped. That is `exp(-(density * depth)^2)`,
+ours' curve (confidence 85; one material, `v7` taken to be the view depth, whose definition was not traced). The loader still
+labels Omega's fog **INHERITED** from HD; the label is stale for the HD-lineage circuits' materials and left for the loader's next
+change. Fog is not what the Sebenco mountain misses: drawing no fog moves the box 100.1 to 96.5, four times the density
+128.4, a brightening by the HDR fog colour.
+
+**What owns Sebenco's box: the snow programs (open, not wired).** `RT_snow1`'s lit variant is 419 instructions with constants
+`snownormDetailStrength/Scale/LargeScale`, `Fresnel{Min,Scale,Power,Strength,Colour}`, `SpecStrength`, `SpecColour`, `SpecTwinkleScale`,
+`DiffuseWrap`, `SpecPower`, `liveLighting0specular` (12, 12, 12 on this circuit), `shadowLightSpecularDiffuse` and a shadow map, over
+five samplers (`Texture1`, `DriftNormalTexture`, two snow-normal detail scales, `Texture2`). The siblings (`RT_snow`, `RT_snow_ref`,
+`Sebenco_snow`, `Sebenco_snow_just_snow` and their `_new`/`_1`/`_2` twins) run 255 to 485 instructions. Ours draws these through the
+generic path: HD's `sebenco_snow` has its own wiring (`mesh::rcs::snow_rock`, read off PS3 microcode) and the GCN programs have none.
+In the frame the original's mountain is white with a bright sheen where ours is lilac, which a sun specular of 12 times
+`SpecStrength` and a Fresnel colour would produce and the generic ambient-plus-sun sum cannot. Read order for the next lane: the
+Fresnel and specular tail (`@0x5b0`-`@0x7b0`), then the detail-normal blend (`@0x2d8`-`@0x3b0`).
+
+**Cross-checks.** 2048 (Vita): **checked, applies, not wired.** `altima`'s `SkyCube.rcsmaterial` carries the parameter name
+`SkyBrightness` and the same circuits author `Lighting.Sky brightness`, but its pixel program is USSE and unread, so the multiply is
+not stated for it and its dome keeps the plain texture (`2048-vita/moa-therma` re-rendered before and after: 0 pixels differ).
+HD: **checked, differs** (its sky is a `sky.gtf` cubemap with `Sky colour` bytes and no `Sky brightness`,
+`renderer.md`, "The sky law, read off live draws"); the HD race pair (`hd-race/talons-pack`) re-rendered before and after: 0 pixels
+differ.
 
 ## The alpha lane (2026-11-19, `omega-road-programs`)
 
