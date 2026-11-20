@@ -119,6 +119,11 @@ pub const PROGRAM_CROWD: f32 = 16.0;
 /// the entry and the two after it carry its constants. See `super::rcs::psp2`'s `snow`.
 pub const PROGRAM_OMEGA_SNOW: f32 = 21.0;
 
+/// [`Emissive::program`]'s mode for Omega's `DC_Rocks`: the colour normal third and the detail
+/// normal fourth blended into the frame, the wrapped sun, the shadow-light factor and a specular
+/// lobe, from one entry. See `super::rcs::psp2`'s `snow`.
+pub const PROGRAM_OMEGA_ROCK: f32 = 22.0;
+
 /// [`Emissive::program`]'s mode for HD's scrolled-tap water (`super::rcs::water`): the
 /// normal is the weighted sum of the third binding read at the entry's taps, `program[1]` the
 /// family. The entry carries the colour, reflection weight and specular power, the next one

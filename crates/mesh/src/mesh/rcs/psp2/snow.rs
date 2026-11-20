@@ -1,5 +1,6 @@
 //! Omega's `RT_snow1`: the snow mountain of Sebenco Climb, drawn by the law its own pixel program
-//! computes (`docs/formats/omega-status.md`, "The snow program").
+//! computes (`docs/formats/omega-status.md`, "The snow program"), and the `DC_Rocks` family beside
+//! it (below, "The rock").
 //!
 //! The material's vertex-lit permutation (`NOVAColor`, no lightmap, no shadow map, no vertex light)
 //! blends a drift normal with two detail normals, weights the picture by a Fresnel factor and a
@@ -25,6 +26,16 @@
 //! the fifth; the vertex carries `NOVAColor.rgb` in `colour`, its alpha in `sun_mask`,
 //! `VertexColour2.rgb` in the lightmap pair and the pair after it, and `VertexColour1.x` (the drift
 //! mask) in the last lane.
+//!
+//! **The rock.** `DC_Rocks` (the boulders and cliffs of Sebenco Climb, which names the drift normal
+//! as its detail map) is a lightmapped, tangent-framed material: pixel programs with the
+//! `RockColour`, `RockColourNormal` and `RockDetailNormal` samplers, the lightmap, a cube
+//! reflection and the wrap, detail and specular constants (`docs/formats/omega-status.md`, "The
+//! rock program"). One entry carries `DetailNormalStrength`, `DetailScale` and `SpecStrength` (tint),
+//! `SpecPower` (offset), the blur `ReflectivityBlur` (scale) and `Wrap` (`program[1]`); the colour
+//! normal rides the third binding and the detail normal the fourth. A material is admitted only
+//! when every submesh carries a lightmap pair and a tangent. The cube reflection is not drawn (the
+//! cube is bound by the engine and was not read).
 
 use std::sync::Arc;
 
@@ -34,13 +45,16 @@ use oag_rcs::rcsmodel::psp2::{self, material::Material};
 use super::normal_map;
 use super::{Report, decode_material_texture};
 use crate::mesh::rcs::Textures;
-use crate::mesh::{Emissive, ModelTexture, PROGRAM_OMEGA_SNOW, slots};
+use crate::mesh::{Emissive, ModelTexture, PROGRAM_OMEGA_ROCK, PROGRAM_OMEGA_SNOW, slots};
 
 /// The five samplers' pictures, by `~crc32` of the program's sampler names less `Sampler`.
 const TEXTURE1: u32 = 0x3bdc_0403;
 const DRIFT: u32 = 0x6d65_2665;
 const DETAIL: u32 = 0xff9d_cfe7;
 const DETAIL_LARGE: u32 = 0x6555_b0e3;
+const ROCK_COLOUR: u32 = 0xb90d_f195;
+const ROCK_NORMAL: u32 = 0x97f1_2f2e;
+const ROCK_DETAIL_NORMAL: u32 = 0xe188_475c;
 
 /// The material's constants, by `~crc32` of their names.
 const DIFFUSE_WRAP: u32 = 0xa99e_82f7;
@@ -56,12 +70,18 @@ const SPEC_TWINKLE: u32 = 0x6cf2_efc3;
 const DETAIL_STRENGTH: u32 = 0xd9e5_2a6c;
 const DETAIL_SCALE: u32 = 0xe4cc_8a2e;
 const DETAIL_LARGE_SCALE: u32 = 0xbd77_f3ba;
+const ROCK_DETAIL_STRENGTH: u32 = 0x3544_a0b1;
+const ROCK_DETAIL_SCALE: u32 = 0xfe94_e23c;
+const ROCK_BLUR: u32 = 0x3704_9fda;
+const ROCK_WRAP: u32 = 0xf3f7_801c;
 
 /// What one admitted material binds.
 struct Bound {
     slot: u32,
     small: Arc<ModelTexture>,
-    large: Arc<ModelTexture>,
+    /// The snow's large detail normal; the rock has none.
+    large: Option<Arc<ModelTexture>>,
+    rock: bool,
 }
 
 /// Per material, what [`plan`] admitted.
@@ -92,13 +112,13 @@ impl Plan {
 
     /// The fifth binding: the large detail normal.
     pub fn large(&self, material: Option<usize>) -> Option<Arc<ModelTexture>> {
-        self.of(material).map(|b| b.large.clone())
+        self.of(material).and_then(|b| b.large.clone())
     }
 
     /// The vertex a snow submesh writes, from its `NOVAColor`, `VertexColour2` and
     /// `VertexColour1` bytes: `None` for any other material.
     pub fn vertex(&self, material: Option<usize>, bytes: Attributes<'_>) -> Option<Vertex> {
-        self.of(material)?;
+        self.of(material).filter(|b| !b.rock)?;
         let unit = |b: u8| f32::from(b) / 255.0;
         let (nova, tint, mask) = bytes;
         let (nova, tint) = (nova?, tint?);
@@ -127,26 +147,63 @@ pub(super) struct Vertex {
     pub texcoord2: [f32; 2],
 }
 
-/// Whether a material file declares the snow program's shape: a pixel program with exactly the five
-/// snow samplers (and, where a permutation reads them, the lightmap and the shadow map) and the
-/// Fresnel and specular constants.
-fn declares_snow(file: &[u8]) -> bool {
-    const SAMPLERS: [&str; 5] = [
+/// The shape one family's pixel program declares: the samplers it must have, the ones a
+/// permutation may add, and the constants it must name.
+struct Shape {
+    samplers: &'static [&'static str],
+    other: &'static [&'static str],
+    constants: &'static [&'static str],
+}
+
+/// A pixel program with exactly the five snow samplers (and, where a permutation reads them, the
+/// lightmap and the shadow map) and the Fresnel and specular constants.
+const SNOW: Shape = Shape {
+    samplers: &[
         "Texture1Sampler",
         "DriftNormalTextureSampler",
         "snowNormDetailTextureSampler",
         "snowNormDetailLargeTextureSampler",
         "Texture2Sampler",
-    ];
-    const OTHER: [&str; 2] = ["lightmapSampler", "shadowMapSampler"];
-    const CONSTANTS: [&str; 6] = [
+    ],
+    other: &["lightmapSampler", "shadowMapSampler"],
+    constants: &[
         "FresnelMin",
         "FresnelScale",
         "SpecTwinkleScale",
         "DiffuseWrap",
         "SpecPower",
         "shadowLightSpecularDiffuse",
-    ];
+    ],
+};
+
+/// A pixel program with the three rock samplers and the lightmap, the cube reflection (and, where
+/// a permutation reads them, the shadow map, the distance cube and the Zone lookup) and the
+/// rock's wrap, detail and specular constants.
+const ROCK: Shape = Shape {
+    samplers: &[
+        "RockColourSampler",
+        "RockColourNormalSampler",
+        "RockDetailNormalSampler",
+        "lightmapSampler",
+        "cubeReflectionTexSampler",
+    ],
+    other: &[
+        "shadowMapSampler",
+        "cubeDistanceTexSampler",
+        "zoneAnisoLookupTexSampler",
+    ],
+    constants: &[
+        "DetailScale",
+        "DetailNormalStrength",
+        "ReflectivityBlur",
+        "Wrap",
+        "SpecPower",
+        "shadowLightSpecularDiffuse",
+    ],
+};
+
+/// Whether a material file has a pixel program of this shape.
+fn declares(file: &[u8], shape: &Shape) -> bool {
     gcn::scan(file).into_iter().any(|(_, program)| {
         let Ok(program) = program else {
             return false;
@@ -162,16 +219,16 @@ fn declares_snow(file: &[u8]) -> bool {
             .iter()
             .map(|s| s.name.as_str())
             .collect();
-        SAMPLERS.iter().all(|s| names.contains(s))
+        shape.samplers.iter().all(|s| names.contains(s))
             && names
                 .iter()
-                .all(|n| SAMPLERS.contains(n) || OTHER.contains(n))
-            && CONSTANTS.iter().all(|c| program.names_constant(c))
+                .all(|n| shape.samplers.contains(n) || shape.other.contains(n))
+            && shape.constants.iter().all(|c| program.names_constant(c))
     })
 }
 
-/// The material's constants as the three glow-table entries, `None` where one is unauthored.
-fn entries(material: &Material) -> Option<[Emissive; 3]> {
+/// The snow material's constants as the three glow-table entries, `None` where one is unauthored.
+fn entries(material: &Material) -> Option<Vec<Emissive>> {
     let value = |hash: u32| material.param(hash).and_then(|v| v.first().copied());
     let triple = |hash: u32| -> Option<[f32; 3]> {
         let v = material.param(hash)?;
@@ -180,7 +237,7 @@ fn entries(material: &Material) -> Option<[Emissive; 3]> {
     let (strength, colour) = (value(FRESNEL_STRENGTH)?, triple(FRESNEL_COLOUR)?);
     let (spec_strength, spec_colour) = (value(SPEC_STRENGTH)?, triple(SPEC_COLOUR)?);
     let product = |k: f32, c: [f32; 3]| [k * c[0], k * c[1], k * c[2]];
-    Some([
+    Some(vec![
         Emissive {
             tint: product(strength, colour),
             offset: value(FRESNEL_MIN)?,
@@ -209,8 +266,25 @@ fn entries(material: &Material) -> Option<[Emissive; 3]> {
     ])
 }
 
-/// Admits each snow material whose pictures decode and whose submeshes all carry the vertex
-/// attributes, binding its drift normal third (into `normals`) and writing its three entries.
+/// The rock material's constants as one glow-table entry, `None` where one is unauthored.
+fn rock_entries(material: &Material) -> Option<Vec<Emissive>> {
+    let value = |hash: u32| material.param(hash).and_then(|v| v.first().copied());
+    Some(vec![Emissive {
+        tint: [
+            value(ROCK_DETAIL_STRENGTH)?,
+            value(ROCK_DETAIL_SCALE)?,
+            value(SPEC_STRENGTH)?,
+        ],
+        offset: value(SPEC_POWER)?,
+        scale: value(ROCK_BLUR)?,
+        rate: 0.0,
+        program: [PROGRAM_OMEGA_ROCK, value(ROCK_WRAP)?],
+    }])
+}
+
+/// Admits each snow or rock material whose pictures decode and whose submeshes all carry the
+/// vertex attributes its program reads, binding its first normal third (into `normals`) and
+/// writing its entries.
 pub(super) fn plan(
     decoded: &psp2::Model,
     ps4: bool,
@@ -227,9 +301,23 @@ pub(super) fn plan(
     let mut cache: std::collections::HashMap<String, Option<Arc<ModelTexture>>> =
         std::collections::HashMap::new();
     for (index, material) in decoded.materials.iter().enumerate() {
-        if !textures(&material.name).is_some_and(|file| declares_snow(&file)) {
+        let Some(file) = textures(&material.name) else {
             continue;
-        }
+        };
+        let rock = if declares(&file, &SNOW) {
+            false
+        } else if declares(&file, &ROCK) {
+            true
+        } else {
+            continue;
+        };
+        let unread = |report: &mut Report| {
+            if rock {
+                report.rock_unread += 1;
+            } else {
+                report.snow_unread += 1;
+            }
+        };
         let readable = decoded
             .submeshes
             .iter()
@@ -237,9 +325,12 @@ pub(super) fn plan(
             .all(|s| {
                 let n = s.positions.len();
                 n > 0
-                    && s.ps4_nova_colour.len() == n
-                    && s.ps4_vertex_colour2.len() == n
                     && s.tangents.len() == n
+                    && if rock {
+                        s.lightmap_texcoords.len() == n
+                    } else {
+                        s.ps4_nova_colour.len() == n && s.ps4_vertex_colour2.len() == n
+                    }
             });
         let mut picture = |hash: u32| {
             let path = material.sampler(hash).filter(|p| !p.is_empty())?;
@@ -252,33 +343,66 @@ pub(super) fn plan(
                 })
                 .clone()
         };
-        let (drift, small, large) = (picture(DRIFT), picture(DETAIL), picture(DETAIL_LARGE));
-        let (Some(drift), Some(small), Some(large), Some(entries), true) =
-            (drift, small, large, entries(material), readable)
-        else {
-            report.snow_unread += 1;
+        let (first, small, large, entries) = if rock {
+            (
+                picture(ROCK_NORMAL),
+                picture(ROCK_DETAIL_NORMAL),
+                None,
+                rock_entries(material),
+            )
+        } else {
+            let large = picture(DETAIL_LARGE);
+            (
+                picture(DRIFT),
+                picture(DETAIL),
+                Some(large),
+                entries(material),
+            )
+        };
+        let (Some(first), Some(small), Some(large), Some(entries), true) = (
+            first,
+            small,
+            large.map_or(Some(None), |l| l.map(Some)),
+            entries,
+            readable,
+        ) else {
+            unread(report);
             continue;
         };
-        if material.sampler(TEXTURE1).is_none() {
-            report.snow_unread += 1;
+        if material
+            .sampler(if rock { ROCK_COLOUR } else { TEXTURE1 })
+            .is_none()
+        {
+            unread(report);
             continue;
         }
-        let first = emissive
-            .windows(3)
+        let count = entries.len();
+        let slot = emissive
+            .windows(count)
             .position(|w| w == entries.as_slice())
             .or_else(|| {
-                (emissive.len() + 3 < crate::mesh::rcs::EMISSIVE_LIMIT).then(|| {
+                (emissive.len() + count < crate::mesh::rcs::EMISSIVE_LIMIT).then(|| {
                     emissive.extend(entries);
-                    emissive.len() - 3
+                    emissive.len() - count
                 })
-            });
-        let Some(slot) = first.and_then(|f| u32::try_from(f + 1).ok()) else {
-            report.snow_unread += 1;
+            })
+            .and_then(|f| u32::try_from(f + 1).ok());
+        let Some(slot) = slot else {
+            unread(report);
             continue;
         };
-        normals.bind(index, drift);
-        out.bound[index] = Some(Bound { slot, small, large });
-        report.snow_materials += 1;
+        normals.bind(index, first);
+        out.bound[index] = Some(Bound {
+            slot,
+            small,
+            large,
+            rock,
+        });
+        if rock {
+            report.rock_materials += 1;
+        } else {
+            report.snow_materials += 1;
+        }
     }
     out
 }
@@ -295,6 +419,13 @@ mod tests {
             (DRIFT, "DriftNormalTexture"),
             (DETAIL, "snowNormDetailTexture"),
             (DETAIL_LARGE, "snowNormDetailLargeTexture"),
+            (ROCK_COLOUR, "RockColour"),
+            (ROCK_NORMAL, "RockColourNormal"),
+            (ROCK_DETAIL_NORMAL, "RockDetailNormal"),
+            (ROCK_DETAIL_STRENGTH, "DetailNormalStrength"),
+            (ROCK_DETAIL_SCALE, "DetailScale"),
+            (ROCK_BLUR, "ReflectivityBlur"),
+            (ROCK_WRAP, "Wrap"),
             (DIFFUSE_WRAP, "DiffuseWrap"),
             (FRESNEL_MIN, "FresnelMin"),
             (FRESNEL_SCALE, "FresnelScale"),

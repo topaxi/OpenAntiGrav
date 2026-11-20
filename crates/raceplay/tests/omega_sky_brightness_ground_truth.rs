@@ -162,6 +162,70 @@ fn snow_is_drawn_by_its_own_program(loaded: &race::Loaded) {
     );
 }
 
+/// `DC_Rocks` is drawn by its pixel program: the track model carries the mode's entry with the
+/// material's own constants (read back from the model), and more than 10,000 vertices name it.
+fn rock_is_drawn_by_its_own_program(loaded: &race::Loaded) {
+    use oag_mesh::mesh::PROGRAM_OMEGA_ROCK;
+    let source = source().expect("the source the load used");
+    let mut archives = oag_omega::open(&source).expect("opening the Omega source");
+    let blob = archives
+        .read_name(r"Data\Environments\10_sebenco_climb\track.final.rcsmodel")
+        .expect("the circuit's model");
+    let model = oag_rcs::rcsmodel::psp2::parse(&blob).expect("parses");
+    let material = model
+        .materials
+        .iter()
+        .find(|m| {
+            m.name
+                .to_ascii_lowercase()
+                .ends_with("/dc_rocks1.rcsmaterial")
+        })
+        .expect("the circuit's rock material");
+    let authored = |name: &str| {
+        material
+            .param(oag_rcs::rcsmaterial::name_hash(name))
+            .unwrap_or_else(|| panic!("{name} is authored"))[0]
+    };
+    let table = &loaded.track_model.emissive;
+    let first = table
+        .iter()
+        .position(|e| e.program[0] == PROGRAM_OMEGA_ROCK)
+        .expect("a rock entry in the glow table");
+    let entry = &table[first];
+    let close =
+        |a: f32, b: f32, what: &str| assert!((a - b).abs() < 1e-5, "{what}: {a} against {b}");
+    close(
+        entry.tint[0],
+        authored("DetailNormalStrength"),
+        "DetailNormalStrength",
+    );
+    close(entry.tint[1], authored("DetailScale"), "DetailScale");
+    close(entry.tint[2], authored("SpecStrength"), "SpecStrength");
+    close(entry.offset, authored("SpecPower"), "SpecPower");
+    close(
+        entry.scale,
+        authored("ReflectivityBlur"),
+        "ReflectivityBlur",
+    );
+    close(entry.program[1], authored("Wrap"), "Wrap");
+    let slot = u32::try_from(first + 1).expect("a small index");
+    let named = loaded
+        .track_model
+        .vertices
+        .iter()
+        .filter(|v| oag_mesh::mesh::slots::material_index(v.slots) == slot)
+        .count();
+    assert!(named > 10_000, "{named} vertices name the rock entry");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|l| l.contains("rock material(s) lit by their own pixel program")),
+        "{:#?}",
+        loaded.report
+    );
+}
+
 #[test]
 #[ignore = "needs the corrected Omega extraction"]
 fn sebenco_climb_dome_is_scaled_by_its_authored_brightness() {
@@ -171,6 +235,7 @@ fn sebenco_climb_dome_is_scaled_by_its_authored_brightness() {
         return;
     };
     snow_is_drawn_by_its_own_program(&loaded);
+    rock_is_drawn_by_its_own_program(&loaded);
 }
 
 #[test]

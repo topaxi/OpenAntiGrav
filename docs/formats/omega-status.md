@@ -2785,12 +2785,11 @@ material and the vertices that name them (dropping the wire leaves 0 vertices na
 | whole frame mean abs against the original | | 39.86 | 36.15 |
 
 Seen: the mountain goes from a lilac wash to white snow with blue shadow, with the drifts and ridges of the original's; the rocks and the boulders
-(`rt_snow_ref`, generic) are unchanged. **All 24 Omega race pairs re-rendered before and after** (`scripts/compare-rerender-ours.py`'s `rerender` on copies, the 22 of the sky lane's sweep plus the two Zone pairs): 23 are pixel-identical (0 pixels differ), Sebenco Climb differs on 107,725 pixels (5.20 % of the frame).
+(`dc_rocks1`, not `rt_snow_ref`, which this frame does not draw; generic here, drawn by "The rock program" below) are unchanged. **All 24 Omega race pairs re-rendered before and after** (`scripts/compare-rerender-ours.py`'s `rerender` on copies, the 22 of the sky lane's sweep plus the two Zone pairs): 23 are pixel-identical (0 pixels differ), Sebenco Climb differs on 107,725 pixels (5.20 % of the frame).
 
-**What is left of the box** (30.4). Skipping `rt_snow1` changes 20.0 % of the box's pixels by more than 25 grey; skipping every material whose name holds `snow` (the
-`jd_sebenco_snowfade_*` overlays, `snowtile`, `rt_snow_ref`, the `Sebenco_snow` family) changes 59.5 % (box mean 139.5 without them, from 100.1), and the dome 15.0 %. So
-about 40 % of the box is **other snow-named materials, still generic**: the next lane. The rest: the dome's bloom (the red channel 20 short, the sky lane), the far
-scenery and the boulder, the snow's remaining 6 % (the original's bloom; the vertex-light count of the permutation the race binds), and the HUD region the box overlaps.
+**What is left of the box** (30.4). The 59.5 % above matched the needle `snow` against texture paths as well as material names, so it counted materials that only
+name a snow *picture*; `omega-snow-rest` ("The rock program", below) splits it. The rest: the dome's bloom (the red channel 20 short, the sky lane), the far scenery, the
+snow's remaining 6 % (the original's bloom; the vertex-light count of the permutation the race binds), and the HUD region the box overlaps.
 
 **Smaller facts.** The Nova decode is the vertex program's per vertex (`scale * pow(NOVAColor.rgb, power)` interpolated, then the bias in the fragment, which `vs_main` already
 computes into `lit_light.yzw`); doing it per pixel instead moved 131 pixels by one level. `--circuit-lighting simplified` moves 514,030 pixels of this frame before and after the
@@ -2801,6 +2800,79 @@ change and none of the 68,500 snow pixels (the option does not reach these draws
 `hd-race/talons-pack` re-rendered before and after: **0 pixels differ**. 2048 (Vita): **checked, differs**: the DLC1 pack's `Sebenco_Climb` (`PCSA00015` and `PCSF00007` `dlc1.psarc`) ships
 `fc07_SnowBlendVertColour` with `and_snow3alpha`, no `rt_snow1` or `rt_snow` in the base, DLC or patch archives (listed), and its programs are GXP with unread operands; the plan is `ps4`-gated;
 `2048-vita/sebenco-climb` and `2048-vita/moa-therma`: **0 pixels differ**. The same `NOVAColor` + `VertexColour2` declaration is used by other Omega materials on this circuit; they stay generic.
+
+## The rock program (2026-11-20, `omega-snow-rest`)
+
+**Claim tested:** the snow-named materials other than `RT_snow1` that own about 40 % of Sebenco Climb's box `1100,40,300,160` are drawn by their own pixel
+programs, so the box (133.2 against the original's 162.3, bias -29.1) and those materials' own pixels move toward the original. **False as worded, and the part
+that could be wired does not move the mean.**
+
+**Census** (`OAG_SKIP_MATERIAL=<needle>`, pixels that change by more than 25 grey against the unskipped frame, `rt_snow1` already wired; the frame is 1920x1080):
+
+| Needle | Material | Box `1100,40,300,160` | Frame |
+| --- | --- | --- | --- |
+| `snow` (all) | everything below, by name or by picture path | 46.0 % | 8.62 % |
+| `rt_snow1` | the snow mountain (wired) | 29.8 % | 2.78 % |
+| `snow_norway` / `dc_rocks` | **`dc_rocks1`**, matched only by its `snow_norway_drift_n` sampler: the boulders and cliffs | **18.0 %** | 0.55 % |
+| `materials/sebenco_snow` | `Sebenco_snow`, `_just_snow` (slots 231, 264, 265, 266, 283) | 1.1 % | 0.55 % |
+| `snowfade` | `jd_*2uvoverlay*` buildings that overlay `jd_sebenco_snowfade_*` | 1.5 % | 3.51 % |
+| `snowtile` | `jd_sebenco_snowtile_01` | 0.0 % | 0.03 % |
+| `rt_snow_ref` | one submesh | 0.0 % (not drawn in this frame) | 0.00 % |
+
+So the "other snow" is mostly **one rock material**; the materials with `snow` in their name own about 2 % of the box. `Sebenco_snow*` is drawn (the previous section's
+"named by no model" was wrong: slots 231 to 283 of `track.final.rcsmodel`), and the boulder is `dc_rocks1`, not `rt_snow_ref`.
+
+**The program** (`gcn_dump data02.psarc data/environments/10_Sebenco_Climb/Materials/DC_Rocks1.rcsmaterial --at 0xca64`; confidence 85, decoded GCN, no run). The race
+submeshes declare `position, normal, tangent, uv1, lightmapUV` (no `NOVAColor`), so the lightmapped permutations: vertex `@0xc424` (94 instructions) with pixel `@0xca64`
+(290, no shadow map), or `@0xab44` with `@0xb264` (395, shadow map). Which one the race binds was not read (70); `@0xca64` is read and drawn:
+
+```text
+n1 = RockColourNormal(uv)      n2 = RockDetailNormal(uv * DetailScale)       z = 2 n1.z - 1     h = 1 + DetailNormalStrength (2 n2.z - 2)
+L  = (h (2 n1.xy - 1) + DetailNormalStrength z (2 n2.xy - 1),  z h)          N = normalise(T L.x + B L.y + N0 L.z)
+w(x) = sat((x + Wrap) / (1 + Wrap))
+Fsl  = 0.75 + 0.25 w(N.SL) + SLSD.y w(R.SL)^SLSD.x                           (the tarmac roads' factor)
+D    = w(N.L) liveLighting0diffuse LM.a + nova Fsl                           nova = scale pow(LM.rgb, power) + bias
+spec = liveLighting0specular LM.a w(R.L)^e 0.06981317 / max(0.06981317, 0.17453294 k)     e = SpecPower (1 - 0.75 k)
+out  = fog(rock D + rock SpecStrength (2 n2.z - 1) (spec + ReflectivityStrength refl cube))
+```
+
+`k = reflectiveBlurCoeffs.z + ReflectivityBlur * reflectiveBlurCoeffs.w`; the engine's constant reads `(1.72285, 2, 0, 1)` live (`panel-displacement.md`), so `k = ReflectivityBlur`
+(0.8 on `dc_rocks1`), the exponent 6.8 and the lobe's scale 0.5. The program's second normal (`T L.x + (B + cross(N, T)) L.y + N0 L.z`) is used only for the cube reflection's
+Fresnel and is not drawn. **Constants** of `dc_rocks1`: `DetailNormalStrength` 1, `DetailScale` 10, `ReflectivityBlur` 0.8, `Wrap` 0.5, `SpecStrength` 0.1, `SpecPower` 17.02,
+`ReflectivityMin` 0.163, `ReflectivityScale` 0.1, `ReflectivityPower` 1, `ReflectivityStrength` 0.2. **Not drawn:** the cube reflection (`cubeReflectionTex` is bound by the
+engine; it enters multiplied by `ReflectivityStrength * 0.1 * rock`, at most about 0.005 of the picture, so it is small; recipe to read it: the table walk of
+`scripts/wipeout-pc-crowd-light-live.py` for the cube's slot) and the shadow term `S` of the shadow-mapped permutation.
+
+**Wired** (`omega-snow-rest`): the rock is a second family of `psp2::snow` (`declares(file, &ROCK)` on the pixel programs' samplers and constants, not a name; every submesh must
+carry a lightmap pair and a tangent), one glow-table entry of mode `PROGRAM_OMEGA_ROCK` (22), the colour normal third and the detail normal fourth, `omega_rock.wesl` called from
+`shade.wesl`'s normal, light-sum and specular sites, off in a Zone frame and under CIRCUIT LIGHTING `simplified`. Test: `omega_sky_brightness_ground_truth` (the entry's constants
+read back from the model, more than 10,000 vertices naming it, the loader line); with the admission dropped it fails.
+
+**Measured** (frozen mask: the 11,427 pixels the `dc_rocks` skip changes; theirs 127.4):
+
+| | mask mean / bias / mean abs | box mean / bias / mean abs | frame raw mean / mean abs |
+| --- | --- | --- | --- |
+| before | 102.0 / -25.4 / 25.5 | 133.2 / -29.1 / 30.4 | 85.77 / 36.15 |
+| after | 99.9 / -27.5 / 28.0 | 133.0 / -29.2 / 30.6 | 85.76 / 36.16 |
+| ablation: `Fsl` forced to 1 | 107.1 / -20.3 / 20.9 | 134.2 / -28.1 / 29.5 | 85.80 / 36.12 |
+| ablation: no sun, no lobe | 90.2 / -37.2 / 37.2 | 131.0 / -31.2 / 32.5 | 85.71 / 36.22 |
+| ablation: normal only (generic light) | 102.1 / -25.3 / 25.4 | 133.2 / -29.1 / 30.4 | 85.77 / 36.15 |
+
+**The mean does not move toward the original; the structure does.** The rock's high-pass contrast (5x5 box, interior of the mask) goes 4.78 to 6.99 against the original's
+6.75: the two normal maps give the surface its grain. The light terms are the program's, and `Fsl` (0.75 to about 1) darkens by 7 grey, which `Fsl = 1` would not; it is
+kept because the road and the snow carry the same factor. The rock sits 22 grey under the original at every distance beyond 16 pixels from the snow (and 44 under within 6),
+and the whole frame sits 18 under (103.77 against 85.77): an offset every surface shares, the original's bloom and exposure, not this program. All 24 Omega pairs, `hd/sebenco-climb`, `hd-race/talons-pack` and the two Vita pairs
+re-rendered before and after: Sebenco differs on 12,244 pixels (0.59 %), **the other 23 Omega pairs (including both Zone pairs), `hd/sebenco-climb`, `hd-race/talons-pack`,
+`2048-vita/sebenco-climb` and `2048-vita/moa-therma` are pixel-identical**: `DC_Rocks` is not drawn on another Omega pair's frame, or not through this permutation (Moa Therma and Tech De Ra ship the family; the reason they do not move was not traced).
+
+**Open, in box order:** `Sebenco_snow*` (1.1 % of the box, programs `@0x33e4`-`@0x10804` over `snowSampler`, `textureforblendSampler`, `rockSampler`, `snownormSampler`,
+`rocknorm1Sampler`, a different program from `RT_snow1`'s, 154 to 369 instructions); the `snowfade` overlay buildings (1.5 % of the box but 3.5 % of the frame, 27 grey mean abs:
+check `PROGRAM_UV_OVERLAY` first); the shadow term `S`; the cube. The box's residual is the original's frame-wide brightness, not a material.
+
+**Cross-checks.** 2048 (Vita): **not checkable** here: its programs are GXP with unread operands, and no Vita `DC_Rocks` file was listed; the plan is `ps4`-gated and
+`2048-vita/sebenco-climb` and `moa-therma` re-render with 0 pixels differing. Omega's 2048-mode library (`environments2048/shared/objectlibrary/materials/DC_Rocks*.rcsmaterial`)
+is the same family and goes through the same admission; no 2048-mode pair moved. HD: **checked, differs** (`hd-track-tone.md` reads HD's `DC_Rocks` on rcsmaterial microcode with
+its own blend); `hd/sebenco-climb` and `hd-race/talons-pack` 0 pixels differ.
 
 ## The diffuse coordinate that writes `1 - v` (2026-11-20, `omega-uv-flip`)
 
