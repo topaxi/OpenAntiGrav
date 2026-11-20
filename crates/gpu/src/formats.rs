@@ -140,8 +140,9 @@ impl SceneStore {
 
     /// [`Self::texel_encode`] for a gain above 1: the factor a gamma-domain multiply of the
     /// texel needs so the light it decodes to is about `gain` times the texel's own. The curve
-    /// is not a power, so the match is exact at a middle texel and a few percent off in the
-    /// darkest ones (1.51 reads 1.2 % high at a texel of 0.5, 5 % low at 0.2).
+    /// is not a power, so the match is exact at no texel and always low: for a gain of 1.51 the
+    /// decoded light is 1.9 % short at a texel of 0.5 and 6.4 % short at 0.2, and for 2.264
+    /// 3.4 % and 11.5 %.
     #[must_use]
     pub fn texel_gain(self, gain: f32) -> f32 {
         let g = gain.max(0.0);

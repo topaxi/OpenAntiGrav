@@ -2560,7 +2560,7 @@ are the open part, not checked here.
 
 **Claim tested:** Omega's HD-mode sky is drawn by the law its own sky and fog programs compute, so the two sky boxes improve
 (`omega/sebenco-climb` snow sky `1100,40,300,160`: theirs 162.3, ours 97.3, bias -65.0; `omega/modesto-heights` sky gap
-`800,160,240,100`: theirs 192.4, ours 156.4, bias -36.0). **Half true.** The dome is drawn by one tiny program,
+`800,160,240,100`: theirs 192.4, ours 156.4, bias -36.0). **Modesto's box: true. Sebenco's box: false for the sky program.** The dome is drawn by one tiny program,
 `SkyBrightness * texture`, which ours did not apply; wiring it cuts the sky-pixel mean absolute error on Moa, Sebenco and Modesto
 (38.4 to 13.5, 37.5 to 14.3, 43.4 to 33.8) and moves Modesto's box 156.4 to 207.7 (an overshoot, below). **Sebenco's box is not the dome**: the dome owns 15 % of its pixels, the snow
 mountain materials 48 % (below), so that box moves 97.3 to 100.1 only.
@@ -2595,7 +2595,7 @@ colour by `SceneStore::texel_gain(Lighting.Sky brightness)`. The dome's shade is
 is exact at no texel and reads 1.9 % (1.51) and 3.4 % (2.264) low at a texel of 0.5, 6 % and 11 % low at 0.2, never high
 (`a_texel_gain_decodes_to_about_the_gain`). **An exact multiply after `decode` needs a per-draw field the uniform block has no
 free slot for** (34 test files mirror its layout); recorded as the follow-up. Tests: `omega_sky_brightness_ground_truth`
-(Sebenco, Modesto, and Sol of the 2048 lineage: the loaded dome's vertex colour is the authored gain and the loader line names it),
+(Sebenco of the HD lineage and Sol of the 2048 lineage: the loaded dome's vertex colour is the authored gain and the loader line names it),
 `texel_gain` unit test. The 2048 (Vita) dome keeps colour 1.0.
 
 **Measured, sky-only pixels** (the pixels `OAG_SKIP_MATERIAL=sky` changes by more than 25 grey, HUD boxes left out; mean grey,
@@ -2617,9 +2617,10 @@ ours minus theirs; base to wired; theirs in brackets):
 **Why Modesto overshoots, and why that is not the law.** Sebenco's tone map is pinned (`E` 0.555 and `t1` 0.612 equal ours'), so its
 sky is a direct read: the G and B channels land (143.0/192.7 against 154.2/199.8) and the red is short by 20 (the original's bloom
 adds the same light to every channel and a dark channel gains most after the curve; ours draws none there). On Modesto ours'
-exposure is `E` 0.868 against the original's 0.60 (the dim-scene symptom of the luma read), and an exposure forced to 0.6 on the
-wired build (a temporary `Tonemap` override, not kept) gives sky pixels 133.6/157.5/184.4 against 134.5/157.3/180.8: **bias +0.2,
-every channel within 4**. The same override without the gain reads bias -41.0 (113.1 against 154.1). So the law is right and
+exposure is `E` 0.868 against the original's 0.60 (the dim-scene symptom of the luma read), and an exposure forced to 0.6 on a
+prototype build (a temporary `Tonemap` override, not kept, with the gain `B^(1/2.4)` = 1.406, 1.5 % below the committed sRGB-encode
+factor 1.428, so the committed build reads about 2 to 3 grey higher) gives sky pixels 133.6/157.5/184.4 against 134.5/157.3/180.8:
+**bias +0.2, every channel within 4**. The same override without the gain reads bias -41.0 (113.1 against 154.1). So the law is right and
 Modesto's remaining sky error is the rest of its scene being too dark for `LAvg`.
 
 **Whole frames, all 22 Omega race pairs re-rendered** (raw mean grey ours / theirs, mean absolute grey to the original; before to

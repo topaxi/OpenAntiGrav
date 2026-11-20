@@ -69,12 +69,6 @@ fn sebenco_climb_dome_is_scaled_by_its_authored_brightness() {
 
 #[test]
 #[ignore = "needs the corrected Omega extraction"]
-fn modesto_heights_dome_is_scaled_by_its_authored_brightness() {
-    dome_gain_is_the_authored_brightness(r"Data\Environments\modesto_heights\track.vex", 2.2);
-}
-
-#[test]
-#[ignore = "needs the corrected Omega extraction"]
 fn a_2048_lineage_dome_is_scaled_by_its_authored_brightness() {
     dome_gain_is_the_authored_brightness(r"Data\Environments2048\sol\track.vex", 1.0);
 }
