@@ -34,11 +34,9 @@
 //!   the craft's own spline parameter. A draw with no scale reads `255`, about
 //!   2 % under the bare colours, which is what a craft over Talon's open road
 //!   reads live (`250` or `251`).
-//! - **A craft's hull and the start laser take it.** 16 of 113 lit-branch models carried a
-//!   light list live; the other 97 were never rebuilt, so the GE drew them
-//!   unlit. Which models those are is not mapped beyond the hull and the start laser's
-//!   two textures ([`mark_rig_vertices`], `docs/ghidra/functions/psp-pulse-usa/scene-light.md`,
-//!   "The start laser"), so everything else keeps the stand-in rig.
+//! - **A craft's hull and every normal-carrying, colourless vertex of the circuit take it**
+//!   ([`mark_rig_vertices`], `docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "Which
+//!   models take the rig").
 //! - The slots the directionals leave are the circuit's `wopoint`/`wospot` lights,
 //!   chosen per craft: see [`super::HullPointLights`]. They reach the grid hull on Tech
 //!   de Ra, The Amphiseum and Fort Gale, and none does on Talon's Junction.
@@ -135,29 +133,37 @@ impl HullLights {
     }
 }
 
-/// Marks the colourless vertices of every draw in `model` whose diffuse texture is named
-/// in `labels` as lit by the circuit's GE rig ([`HullLights::TRACK_LIT`]), and returns how
-/// many it marked. A vertex with a colour is already lit and keeps it.
+/// Marks every vertex of `model` that has normals and no colour as lit by the circuit's GE
+/// rig ([`HullLights::TRACK_LIT`]), and returns how many it marked. Draws whose diffuse
+/// texture label contains one of `held_back` (case-insensitive) keep the stand-in.
 ///
-/// The original rebuilds a GE light list for some models only; `labels` names the textures
-/// of the ones measured to be among them, so every other lit-branch track model keeps the
-/// stand-in.
-pub fn mark_rig_vertices(model: &mut crate::mesh::Model, labels: &[&str]) -> usize {
-    let mut marked = 0;
-    let named = |draw: &crate::mesh::DrawCall| {
+/// This is the batch rule of `Mesh_SetBatchLighting`: a batch with normals and without vertex
+/// colours replays its model's light list, and a track model's list is rebuilt every frame
+/// from the circuit's own light nodes. A vertex with a colour is already lit and keeps it; a
+/// vertex of a batch with no normals draws unlit (`lit` 0.0, set where the model is built)
+/// and is not touched here (`docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "Which
+/// models take the rig").
+pub fn mark_rig_vertices(model: &mut crate::mesh::Model, held_back: &[&str]) -> usize {
+    let held = |draw: &crate::mesh::DrawCall| {
         draw.texture
             .and_then(|t| model.textures.get(t))
             .and_then(Option::as_ref)
-            .is_some_and(|t| labels.iter().any(|l| t.label.eq_ignore_ascii_case(l)))
+            .is_some_and(|t| {
+                let label = t.label.to_ascii_lowercase();
+                held_back
+                    .iter()
+                    .any(|h| label.contains(&h.to_ascii_lowercase()))
+            })
     };
     let ranges: Vec<std::ops::Range<u32>> = model
         .draws
         .iter()
         .chain(&model.alpha_tested_draws)
         .chain(&model.transparent_draws)
-        .filter(|draw| named(draw))
+        .filter(|draw| !held(draw))
         .map(|draw| draw.range.clone())
         .collect();
+    let mut marked = 0;
     for range in ranges {
         for at in range {
             let vertex = &mut model.vertices[model.indices[at as usize] as usize];
