@@ -24,6 +24,9 @@ pub(crate) struct EditorScreen {
     pub(crate) status: String,
     /// The campaign being written and the menus rebuilt to list it, off the render thread.
     pub(crate) saving: Option<oag_thread::Task<Saved>>,
+    /// The word for the button that fills the grid: the face button Back displaced
+    /// (`Roles::help`), set each tick by the session.
+    pub(crate) fill_key: String,
 }
 
 /// What the screen shows, owned so a [`View`] can borrow it.
@@ -66,6 +69,7 @@ impl EditorScreen {
             pulse: SelectorPulse::default(),
             status: String::new(),
             saving: None,
+            fill_key: "TRIANGLE".to_string(),
         }
     }
 
@@ -110,11 +114,7 @@ impl EditorScreen {
                         "SETTINGS",
                         key("OAG_EDITOR_KEY_SELECT", "SELECT"),
                     ),
-                    Action::Fill => (
-                        "OAG_EDITOR_ACTION_FILL",
-                        "FILL GRID",
-                        key("OAG_EDITOR_KEY_TRIANGLE", "TRIANGLE"),
-                    ),
+                    Action::Fill => ("OAG_EDITOR_ACTION_FILL", "FILL GRID", self.fill_key.clone()),
                     Action::Name => ("OAG_EDITOR_ACTION_NAME", "NAME", model.name().to_string()),
                     Action::Save => (
                         "OAG_EDITOR_ACTION_SAVE",

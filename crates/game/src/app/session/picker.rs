@@ -22,6 +22,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::{records, unlock};
 use log::{debug, warn};
+use oag_gameplay::input::Button;
 use oag_raceplay::catalogue;
 use oag_ui_screens::picker::{self, Details, Entry, Event, Kind, Picker};
 
@@ -437,12 +438,33 @@ impl Session {
             (None, _, LiveryAxis::Skin) => String::new(),
             (None, _, LiveryAxis::Variant) => self.settings.race.opening_variant(title).to_string(),
         };
+        // Each team's own description for `Team Help`, worded: `TeamSelection_Update` writes the
+        // overlay's `Team Ship Help` from the selected team's `HelpText` on every change, so a
+        // team that authors none (every PS2 team) writes an empty string and the paragraph is
+        // blank (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "`Team Ship Help` is
+        // set per team", and the PS2's `0x001bd368`).
+        let help_texts = entries
+            .iter()
+            .map(|entry| {
+                Some(
+                    shell
+                        .team_details
+                        .iter()
+                        .find(|team| team.id == entry.id)
+                        .and_then(|team| team.help_text.as_deref())
+                        .and_then(|id| shell.strings.get(id))
+                        .map(str::to_string)
+                        .unwrap_or_default(),
+                )
+            })
+            .collect();
         let model = Picker::new(
             Kind::Ship,
             entries,
             Some(team_id.as_str()),
             Some(livery.as_str()),
         )
+        .with_help_texts(help_texts)
         .with_fixed_livery(crate::livery_row::fixed_row(title, mode));
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.
@@ -592,7 +614,16 @@ impl Session {
 
     /// One tick of an open picker: its input, and what came of it.
     pub(crate) fn tick_picker(&mut self, pointer: &oag_ui::pointer::Pointer) {
-        let roles = self.roles();
+        // Help opens on the button the screen's own `Redirect` to its Help authors.
+        let authored_help = match &self.stage {
+            Stage::Menu(stage) => stage
+                .picker
+                .as_ref()
+                .and_then(|picker| picker.layout.help.as_ref())
+                .map_or(Button::Triangle, |help| help.button),
+            _ => Button::Triangle,
+        };
+        let roles = self.roles_with_help(authored_help);
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
@@ -600,6 +631,9 @@ impl Session {
             return;
         };
         picker.model.set_roles(roles);
+        picker
+            .model
+            .set_help_available(picker.layout.help.is_some());
         picker.refresh_info();
         picker.poll_preview(&self.gpu);
         // A split-screen seat's screen reads its own device and no other.
@@ -635,7 +669,7 @@ impl Session {
     }
 
     pub(crate) fn handle_picker(&mut self, event: Event) {
-        self.play_navs([event.nav()]);
+        self.play_navs(event.nav());
         // JOIN GAME's Ship Select (LAN or online) comes from the join row, not from a Track
         // Select, so BACK has no Track Select to return to either.
         let joining = self.lan_picking_ship() || self.online_picking_ship();
@@ -671,6 +705,8 @@ impl Session {
             }
         }
         match (kind, event) {
+            // The overlay is the model's own state and draws from it; nothing else follows.
+            (_, Event::Help) => {}
             (Kind::Track, Event::Moved) => {
                 if let Some(entry) = picker.model.selected() {
                     self.settings.race.track = entry.id.clone();

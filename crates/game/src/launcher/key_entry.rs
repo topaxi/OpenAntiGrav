@@ -277,7 +277,7 @@ impl KeyEntry {
     }
 
     /// One tick of pad input.
-    pub fn update(&mut self, input: &mut Input) -> Outcome {
+    pub fn update(&mut self, input: &mut Input, back: Button) -> Outcome {
         let count = self.cells().len();
         let actions = count - HEX_CELLS;
         let (row, column) = self.position();
@@ -300,7 +300,7 @@ impl KeyEntry {
         if input.take(Button::Square) {
             self.delete();
         }
-        if input.take(Button::Circle) {
+        if input.take(back) {
             return Outcome::Cancelled;
         }
         if input.take(Button::Start) {

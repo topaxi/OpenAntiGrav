@@ -27,6 +27,7 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
             &strings,
             &skin,
             None,
+            oag_gameplay::input::Button::Circle,
         )
         .unwrap_or_else(|e| panic!("{kind:?} is named by the flag's own help: {e:#}"));
         assert!(!list.is_empty(), "{kind:?} drew nothing");
@@ -59,6 +60,7 @@ fn every_prompt_the_flag_names_draws_something_and_an_unknown_one_errors() {
         &strings,
         &skin,
         None,
+        oag_gameplay::input::Button::Circle,
     )
     .expect_err("an unknown prompt has to be an error, not an empty picture");
     assert!(format!("{error:#}").contains("qwerty"));
@@ -84,6 +86,7 @@ fn tag_entry_with_no_source_is_an_error_not_an_empty_picture() {
         &strings,
         &skin,
         None,
+        oag_gameplay::input::Button::Circle,
     )
     .expect_err("no --race source means nothing was read");
     assert!(format!("{error:#}").contains("source"));
@@ -291,7 +294,16 @@ fn the_player_grids_open_on_the_stored_name_and_tag() {
         tag: "ZOE".into(),
     };
     for (kind, shown) in [("player-name-grid", "zoe"), ("player-tag-grid", "ZOE")] {
-        let list = prompt_draws(kind, "winston", &player, &strings, &skin, None).expect("draws");
+        let list = prompt_draws(
+            kind,
+            "winston",
+            &player,
+            &strings,
+            &skin,
+            None,
+            oag_gameplay::input::Button::Circle,
+        )
+        .expect("draws");
         assert!(
             list.iter().any(
                 |draw| matches!(draw, oag_ui::frontend::Draw::Text { text, .. }

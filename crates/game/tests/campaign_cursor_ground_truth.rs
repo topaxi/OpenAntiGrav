@@ -841,6 +841,9 @@ struct Screen {
     reach: &'static str,
     here: &'static str,
     away: &'static str,
+    /// The screen authors a Help: the button that is not Back opens it, so it is pressed again to
+    /// close it before Back is tried.
+    helps: bool,
 }
 
 const RACE_PAGE: Screen = Screen {
@@ -848,6 +851,7 @@ const RACE_PAGE: Screen = Screen {
     reach: "boot; select racebox; press cross; until page=race; ticks 10",
     here: "page=race",
     away: "page!=race",
+    helps: false,
 };
 const TRACK_PICKER: Screen = Screen {
     tag: "track-picker",
@@ -855,6 +859,7 @@ const TRACK_PICKER: Screen = Screen {
             press cross; until screen=picker; ticks 10",
     here: "screen.id=track-select",
     away: "screen.id!=track-select",
+    helps: true,
 };
 const SHIP_PICKER: Screen = Screen {
     tag: "ship-picker",
@@ -862,6 +867,7 @@ const SHIP_PICKER: Screen = Screen {
             press cross; until screen=picker; press cross; until screen.id=ship-select; ticks 10",
     here: "screen.id=ship-select",
     away: "screen.id!=ship-select",
+    helps: true,
 };
 /// The on-screen keyboard OPTIONS > PLAYER NAME opens.
 const NAME_PROMPT: Screen = Screen {
@@ -870,6 +876,7 @@ const NAME_PROMPT: Screen = Screen {
             press cross; until screen=prompt; ticks 10",
     here: "screen=prompt",
     away: "screen!=prompt",
+    helps: false,
 };
 /// The pause screen of a time trial, on its GAME OPTIONS page.
 const PAUSE_OPTIONS: Screen = Screen {
@@ -881,6 +888,7 @@ const PAUSE_OPTIONS: Screen = Screen {
             press cross; until page=options; ticks 10",
     here: "page=options",
     away: "page!=options",
+    helps: false,
 };
 
 /// `(back, other)`: the face button the screen leaves on and the one it does not, under `choice`
@@ -914,8 +922,15 @@ fn leaves_on_the_resolved_button(image: &Path, screen: &Screen, original: &'stat
         profile.drive_on(
             image,
             &format!(
-                "{}; press {other}; ticks 30; expect {}; press {back}; ticks 30; expect {}",
-                screen.reach, screen.here, screen.away
+                "{}; press {other}; ticks 30; expect {}; {}press {back}; ticks 30; expect {}",
+                screen.reach,
+                screen.here,
+                if screen.helps {
+                    format!("press {other}; ticks 10; ")
+                } else {
+                    String::new()
+                },
+                screen.away
             ),
             &format!("{choice}.jsonl"),
         );
@@ -1003,4 +1018,178 @@ fn hd_race_page_still_leaves_on_the_circle() {
         return;
     };
     leaves_on_the_resolved_button(&image, &RACE_PAGE, "circle");
+}
+
+/// A race to its first few hundred ticks from the main menu.
+const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
+     select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; ";
+
+/// Photo mode and the replay viewer, which read the device apart from the front end, leave on the
+/// resolved Back and not on the circle: one launch inside a race (photo mode, then Escape in it)
+/// and one that watches the race it recorded.
+///
+/// `original` is the pressing's own Back, so the button that is not Back is the one Back left over
+/// (`Roles::help`: it resets the photo camera and does nothing in the viewer).
+fn photo_and_viewer_leave_on_the_resolved_button(
+    image: &Path,
+    original: &'static str,
+    choice: &str,
+) {
+    let profile = Profile::fresh(&format!("photo-viewer-{choice}-{original}"));
+    let (back, other) = buttons(original, choice);
+    println!("photo mode and the viewer, MENU BACK {choice}: {back} leaves, {other} does not");
+    profile.menu_back(choice);
+    // Photo mode: the button that is not Back leaves it up; Back leaves; Escape leaves on any
+    // choice. The launch ends mid-race, which records the race for the viewer below.
+    profile.drive_on(
+        image,
+        &format!(
+            "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 5; press {other}; ticks 10; expect photo=free; \
+             press {back}; until photo=none within 50; \
+             escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 5; escape; until photo=none within 50; quit"
+        ),
+        "photo.jsonl",
+    );
+    // The viewer: the recording opens, the button that is not Back changes nothing, Back leaves
+    // for the REPLAYS page (`stage=menu`).
+    profile.drive_on(
+        image,
+        &format!(
+            "boot; select replays; press cross; until page=replays; select watch_replay; \
+             press cross; until replay=playing within 4000; ticks 30; press {other}; ticks 10; \
+             expect stage=race; press {back}; until stage=menu within 100; expect replay!=playing"
+        ),
+        "viewer.jsonl",
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_photo_mode_and_viewer_leave_on_the_triangle_under_original() {
+    let Some(image) = ps2() else { return };
+    photo_and_viewer_leave_on_the_resolved_button(&image, "triangle", "original");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_photo_mode_and_viewer_leave_on_the_circle_under_circle() {
+    let Some(image) = ps2() else { return };
+    photo_and_viewer_leave_on_the_resolved_button(&image, "triangle", "circle");
+}
+
+/// The PSP leaves on the circle as before.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn pulse_psp_photo_mode_and_viewer_still_leave_on_the_circle() {
+    let Some(image) = psp() else { return };
+    photo_and_viewer_leave_on_the_resolved_button(&image, "circle", "original");
+}
+
+/// On a selection screen that authors a Help, the face button Back left over opens it, Back
+/// closes it without leaving, and Back then leaves, under every choice of MENU BACK: one launch
+/// per choice. `original` is the pressing's own Back, so the Help button is the other one.
+fn help_opens_on_the_displaced_button(image: &Path, screen: &Screen, original: &'static str) {
+    let profile = Profile::fresh(&format!("{}-help", screen.tag));
+    for choice in ["original", "circle", "triangle"] {
+        let (back, other) = buttons(original, choice);
+        println!(
+            "{}: MENU BACK {choice}: {other} opens Help, {back} closes it and then leaves",
+            screen.tag
+        );
+        profile.menu_back(choice);
+        profile.drive_on(
+            image,
+            &format!(
+                "{reach}; expect screen.help=closed; press {other}; ticks 10; \
+                 expect screen.help=open; expect {here}; press {back}; ticks 10; \
+                 expect screen.help=closed; expect {here}; press {other}; ticks 10; \
+                 expect screen.help=open; press {other}; ticks 10; expect screen.help=closed; \
+                 press {back}; ticks 30; expect {away}",
+                reach = screen.reach,
+                here = screen.here,
+                away = screen.away
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_track_select_opens_track_help_on_the_circle() {
+    let Some(image) = ps2() else { return };
+    help_opens_on_the_displaced_button(&image, &TRACK_PICKER, "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_ship_select_opens_team_help_on_the_circle() {
+    let Some(image) = ps2() else { return };
+    help_opens_on_the_displaced_button(&image, &SHIP_PICKER, "triangle");
+}
+
+/// The PSP authors its Help on the triangle and still leaves on the circle.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_track_select_opens_track_help_on_the_triangle() {
+    let Some(image) = psp() else { return };
+    help_opens_on_the_displaced_button(&image, &TRACK_PICKER, "circle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_ship_select_opens_team_help_on_the_triangle() {
+    let Some(image) = psp() else { return };
+    help_opens_on_the_displaced_button(&image, &SHIP_PICKER, "circle");
+}
+
+/// Assegai's own description (`MSC_TEAMDES_ASS`), the team Ship Select opens on.
+const ASSEGAI_HELP: &str = "The Assegai's exceptional handling model forms the core of the United African \
+     Nations' new ship, which has ably demonstrated solid all-round abilities in other areas.";
+
+/// `Team Help`'s second paragraph is the selected team's own description (the PSP's team definition
+/// authors a `helpText` per team): Assegai's on the team the
+/// screen opens on, and another team's once the selection has moved (`TeamSelection_Update` writes
+/// `Team Ship Help` from the team's `HelpText` on every change).
+fn team_help_describes_the_selected_team(image: &Path, help: &str) {
+    let profile = Profile::fresh(&format!("team-help-text-{help}"));
+    profile.drive_on(
+        image,
+        &format!(
+            "{reach}; press {help}; ticks 10; expect screen.help=open; \
+             expect screen.help_text=\"{ASSEGAI_HELP}\"; press {help}; ticks 10; \
+             press down; ticks 10; press {help}; ticks 10; expect screen.help=open; \
+             expect screen.help_text!=\"{ASSEGAI_HELP}\"",
+            reach = SHIP_PICKER.reach
+        ),
+        "text.jsonl",
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_team_help_describes_the_selected_team() {
+    let Some(image) = psp() else { return };
+    team_help_describes_the_selected_team(&image, "triangle");
+}
+
+/// The PS2's team definition authors no `HelpText`, and its `TeamSelection_Update` (`0x001bd368`)
+/// writes `Team Ship Help` from the team's empty field all the same: the second paragraph is blank
+/// for every team.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_team_help_has_no_team_paragraph() {
+    let Some(image) = ps2() else { return };
+    let profile = Profile::fresh("team-help-text-ps2");
+    profile.drive_on(
+        &image,
+        &format!(
+            "{}; press circle; ticks 10; expect screen.help=open; expect screen.help_text=\"\"",
+            SHIP_PICKER.reach
+        ),
+        "text.jsonl",
+    );
 }

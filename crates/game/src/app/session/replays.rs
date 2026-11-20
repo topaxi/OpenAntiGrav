@@ -474,6 +474,7 @@ impl Session {
         let space = oag_present::perf::grid(surface);
         let rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
+        let roles = self.roles();
         let controls = &mut self.controls;
         let view = controls.view();
         // The playhead's speed: a trigger scrubs (R2 on, L2 back) and the right stick's
@@ -485,7 +486,7 @@ impl Session {
             back: controls.view_take(Button::Left),
             forward: controls.view_take(Button::Right),
             faster: controls.view_take(Button::Up) | controls.view_take(Button::Down),
-            leave: controls.view_take(Button::Circle) | pointer.back,
+            leave: controls.view_take(roles.back) | pointer.back,
             photo: controls.view_take(Button::Select),
             previous: controls.view_take(Button::L),
             next: controls.view_take(Button::R),

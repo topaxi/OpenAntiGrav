@@ -140,19 +140,33 @@ fn the_pad_walks_the_grid_types_and_cancels() {
     let mut e = entry();
     let mut input = Input::default();
     input.inject_press(Button::Right);
-    assert_eq!(e.update(&mut input), Outcome::Pending);
+    assert_eq!(e.update(&mut input, Button::Circle), Outcome::Pending);
     input.inject_press(Button::Cross);
-    assert_eq!(e.update(&mut input), Outcome::Pending);
+    assert_eq!(e.update(&mut input, Button::Circle), Outcome::Pending);
     assert_eq!(e.digits, "1");
     input.inject_press(Button::Down);
-    e.update(&mut input);
+    e.update(&mut input, Button::Circle);
     assert_eq!(e.selected(), Cell::Hex('9'), "second row, same column");
     input.inject_press(Button::Down);
-    e.update(&mut input);
+    e.update(&mut input, Button::Circle);
     // The action row has fewer cells; the column lands on one of them.
     assert_eq!(e.selected(), Cell::Clear);
     input.inject_press(Button::Circle);
-    assert_eq!(e.update(&mut input), Outcome::Cancelled);
+    assert_eq!(e.update(&mut input, Button::Circle), Outcome::Cancelled);
+}
+
+#[test]
+fn the_prompt_cancels_on_the_back_it_is_handed_and_not_on_the_circle() {
+    let mut e = entry();
+    let mut input = Input::default();
+    input.inject_press(Button::Circle);
+    assert_eq!(
+        e.update(&mut input, Button::Triangle),
+        Outcome::Pending,
+        "the circle is not Back when Back is the triangle"
+    );
+    input.inject_press(Button::Triangle);
+    assert_eq!(e.update(&mut input, Button::Triangle), Outcome::Cancelled);
 }
 
 #[test]

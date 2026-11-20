@@ -83,6 +83,13 @@ pub struct Screen {
     /// one (`Grid Selection`, `Cell Selection`); how a drive sees a re-entry resume it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pulse_ms: Option<u32>,
+    /// `open` or `closed` on a screen that has a Help overlay to open (a selection screen whose
+    /// XML authors one), else `None`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help: Option<&'static str>,
+    /// The selected entry's own description in the Help overlay (a team's `Team Ship Help`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help_text: Option<String>,
 }
 
 /// The race the game resolved: what it launched, or is racing.
@@ -232,7 +239,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `title`, `focus`, `opening_reads`, `demo`, `humans`, and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
+    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `humans`, and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -245,6 +252,8 @@ impl State {
             "opening_reads" => one(self.opening_reads.clone()),
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
+            "screen.help" => one(screen.and_then(|s| s.help).map(str::to_string)),
+            "screen.help_text" => one(screen.and_then(|s| s.help_text.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
@@ -304,6 +313,8 @@ impl State {
                 | "page"
                 | "screen"
                 | "screen.id"
+                | "screen.help"
+                | "screen.help_text"
                 | "title"
                 | "focus"
                 | "photo"

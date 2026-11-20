@@ -4,7 +4,11 @@ use super::*;
 use oag_raceplay::photo::Pad;
 
 fn words<'a>(say: &'a dyn Fn(&str) -> String, button: &'a dyn Fn(Button) -> String) -> Words<'a> {
-    Words { say, button }
+    Words {
+        say,
+        button,
+        roles: oag_ui::roles::Roles::DEFAULT,
+    }
 }
 
 fn texts(list: &[Draw]) -> Vec<String> {
@@ -220,4 +224,30 @@ fn a_shot_under_way_shows_its_progress_and_the_way_out_and_nothing_else() {
         vec!["PROGRESS  37 / 120".to_string(), "ANY_INPUT".to_string()],
         "no chips and no help while the frames are drawn"
     );
+}
+
+/// The legend names the buttons Back and the camera reset are on, handed in as the roles: the
+/// PS2's `original` has the triangle leave and the circle reset.
+#[test]
+fn the_legend_names_the_buttons_the_roles_hand_it() {
+    let say = |id: &str| id.trim_start_matches("OAG_PHOTO_").to_string();
+    let button = |b: Button| b.to_string().to_uppercase();
+    let draw = |roles| {
+        let photo = Photo::new(0, true, None);
+        let words = Words {
+            say: &say,
+            button: &button,
+            roles,
+        };
+        texts(&draw_list(&photo, (483.0, 272.0), &words, None, None))
+    };
+    let ps2 = draw(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    assert!(ps2.iter().any(|t| t.contains("TRIANGLE BACK")), "{ps2:?}");
+    assert!(ps2.iter().any(|t| t.contains("CIRCLE RESET")), "{ps2:?}");
+    let psp = draw(oag_ui::roles::Roles::DEFAULT);
+    assert!(psp.iter().any(|t| t.contains("CIRCLE BACK")), "{psp:?}");
+    assert!(psp.iter().any(|t| t.contains("TRIANGLE RESET")), "{psp:?}");
 }

@@ -296,6 +296,7 @@ pub fn read(
         ],
         hd: None,
         hd_track: Some(Box::new(extra)),
+        help: None,
         ready: String::new(),
         name_scale: 1.0,
         entry_pitch: None,

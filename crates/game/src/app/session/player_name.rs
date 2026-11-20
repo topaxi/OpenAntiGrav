@@ -90,10 +90,7 @@ impl Session {
         let entry_labels = tag_entry::Labels {
             title: title.clone(),
             confirm: accept.clone(),
-            hint: self.say(
-                "OAG_TAG_ENTRY_HINT",
-                "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
-            ),
+            hint: self.tag_entry_hint(),
         };
         let accepts: fn(char) -> bool = if purpose == Purpose::PlayerName {
             player::allowed
@@ -113,10 +110,7 @@ impl Session {
                     title,
                     delete: self.say("OAG_KEYBOARD_DELETE", "DEL"),
                     accept,
-                    hint: self.say(
-                        "OAG_KEYBOARD_HINT",
-                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
-                    ),
+                    hint: self.keyboard_hint(),
                 };
                 Prompt::typing(
                     purpose,

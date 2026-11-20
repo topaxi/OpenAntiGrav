@@ -560,6 +560,16 @@ impl MenuStage {
                 .extend(footer::hd_nav(&self.nav_legend, picker));
             let layers = crate::campaign::gate_glow(self.frontend_glow, layers);
             let (flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
+            // The screen's Help goes over the page, its footer and the 3D preview, in a pass of
+            // its own after them (below): its dimming covers the craft too.
+            let help_draws: Vec<Draw> = match &picker.layout.help {
+                Some(help) if picker.model.help_open() => help.draw(
+                    &|src| picker.placed(src),
+                    &self.text_atlas,
+                    picker.model.help_text(),
+                ),
+                _ => Vec::new(),
+            };
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {
                     rect: overlay_rect(self.skin.space(), viewport),
@@ -601,6 +611,20 @@ impl MenuStage {
                     viewport,
                     target_size,
                     (self.skin.space(), self.renderer.inset()),
+                );
+            }
+            if !help_draws.is_empty() {
+                // A second pass into the same encoder: its quads need a buffer of their own.
+                self.renderer.renew_quad_buffer(&gpu.device);
+                self.renderer.render_with(
+                    wgpu::LoadOp::Load,
+                    &gpu.device,
+                    &gpu.queue,
+                    encoder,
+                    view,
+                    &help_draws,
+                    viewport,
+                    None,
                 );
             }
             return Ok(());

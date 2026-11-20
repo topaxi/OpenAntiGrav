@@ -375,7 +375,6 @@ ids = [
     "OAG_EDITOR_FIELD_CLASS_TO",
     "OAG_EDITOR_HINT_SAVE",
     "OAG_EDITOR_KEY_SELECT",
-    "OAG_EDITOR_KEY_TRIANGLE",
     "OAG_EDITOR_KEY_START",
     "OAG_EDITOR_ACTION_FILL",
     "OAG_EDITOR_ACTION_SETTINGS",
@@ -506,6 +505,9 @@ ids = [
     "OAG_HINTS_MENU_KEYS",
     "OAG_HINTS_SHELL_KEYS",
     "OAG_HINTS_RACE_KEYS",
+    # The face-button words the shell key hint and the keyboard hints name.
+    "OAG_HINTS_BUTTON_CIRCLE",
+    "OAG_HINTS_BUTTON_TRIANGLE",
     # Suffixes appended onto the two deferred key-hint sentences above - see
     # this file's own header.
     "OAG_HINTS_ESC_TO_MENU",

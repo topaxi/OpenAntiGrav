@@ -48,7 +48,7 @@ fn a_row_that_will_not_open_is_stepped_over() {
 
     let mut input = Input::new();
     press(&mut input, Button::Down);
-    assert!(launcher.update(&mut input).is_none());
+    assert!(launcher.update(&mut input, Button::Circle).is_none());
     assert_eq!(launcher.cursor(), 2, "the broken row is not landed on");
 }
 
@@ -58,11 +58,11 @@ fn the_cursor_wraps_in_both_directions() {
     let mut input = Input::new();
 
     press(&mut input, Button::Up);
-    launcher.update(&mut input);
+    launcher.update(&mut input, Button::Circle);
     assert_eq!(launcher.cursor(), 1);
 
     press(&mut input, Button::Down);
-    launcher.update(&mut input);
+    launcher.update(&mut input, Button::Circle);
     assert_eq!(launcher.cursor(), 0);
 }
 
@@ -74,7 +74,7 @@ fn a_list_with_nothing_playable_neither_moves_nor_picks() {
     let mut input = Input::new();
 
     press(&mut input, Button::Down);
-    assert!(launcher.update(&mut input).is_none());
+    assert!(launcher.update(&mut input, Button::Circle).is_none());
     assert_eq!(launcher.cursor(), 0);
     assert!(!launcher.has_playable());
     assert!(launcher.pick().is_none());
@@ -86,9 +86,12 @@ fn confirming_returns_the_source_under_the_cursor() {
     let mut input = Input::new();
 
     press(&mut input, Button::Down);
-    launcher.update(&mut input);
+    launcher.update(&mut input, Button::Circle);
     press(&mut input, Button::Cross);
-    assert_eq!(launcher.update(&mut input).unwrap(), "data/images/b.chd");
+    assert_eq!(
+        launcher.update(&mut input, Button::Circle).unwrap(),
+        "data/images/b.chd"
+    );
 }
 
 /// START confirms as well as CROSS, the way it does everywhere else in the
@@ -99,7 +102,10 @@ fn start_confirms_too() {
     let mut input = Input::new();
 
     press(&mut input, Button::Start);
-    assert_eq!(launcher.update(&mut input).unwrap(), "data/images/a.chd");
+    assert_eq!(
+        launcher.update(&mut input, Button::Circle).unwrap(),
+        "data/images/a.chd"
+    );
 }
 
 /// A held key must not walk the list: the press is consumed on the frame it
@@ -114,12 +120,12 @@ fn a_held_button_moves_once() {
     let mut input = Input::new();
 
     press(&mut input, Button::Down);
-    launcher.update(&mut input);
+    launcher.update(&mut input, Button::Circle);
     assert_eq!(launcher.cursor(), 1);
 
     // Same mask again: held, not pressed.
     input.begin_frame(Button::Down.bit());
-    launcher.update(&mut input);
+    launcher.update(&mut input, Button::Circle);
     assert_eq!(launcher.cursor(), 1);
 }
 
@@ -425,14 +431,14 @@ fn confirming_a_locked_row_opens_the_prompt_and_circle_closes_it() {
     let mut input = Input::new();
     press(&mut input, Button::Cross);
     assert_eq!(
-        l.update(&mut input),
+        l.update(&mut input, Button::Circle),
         None,
         "opening the prompt picks nothing"
     );
     assert!(l.typing_is_open());
     // The prompt owns the d-pad now: it does not move the list cursor.
     press(&mut input, Button::Circle);
-    assert_eq!(l.update(&mut input), None);
+    assert_eq!(l.update(&mut input, Button::Circle), None);
     assert!(!l.typing_is_open());
 }
 
@@ -455,7 +461,7 @@ fn the_prompt_replaces_the_list_and_a_desk_keyboard_types_into_it() {
     let mut l = Launcher::new(vec![locked("enc.iso")]);
     let mut input = Input::new();
     press(&mut input, Button::Cross);
-    l.update(&mut input);
+    l.update(&mut input, Button::Circle);
     l.type_digit('a');
     l.type_digit('Z');
     l.type_digit('0');
@@ -476,7 +482,7 @@ fn a_paste_request_is_serviced_once_and_only_where_a_clipboard_exists() {
     let mut l = Launcher::new(vec![locked("enc.iso")]).with_paste(true);
     let mut input = Input::new();
     press(&mut input, Button::Cross);
-    l.update(&mut input);
+    l.update(&mut input, Button::Circle);
     l.request_paste();
     assert!(l.take_paste_request());
     assert!(!l.take_paste_request());
@@ -485,7 +491,7 @@ fn a_paste_request_is_serviced_once_and_only_where_a_clipboard_exists() {
 
     let mut none = Launcher::new(vec![locked("enc.iso")]);
     press(&mut input, Button::Cross);
-    none.update(&mut input);
+    none.update(&mut input, Button::Circle);
     none.request_paste();
     assert!(!none.take_paste_request());
 }
@@ -570,7 +576,7 @@ fn a_dropped_key_with_the_prompt_open_is_submitted_through_it() {
     let mut l = Launcher::new(vec![locked("a.iso")]);
     let mut input = Input::new();
     press(&mut input, Button::Cross);
-    l.update(&mut input);
+    l.update(&mut input, Button::Circle);
     assert!(l.typing_is_open());
     l.dropped_key_with(
         GOOD_KEY,

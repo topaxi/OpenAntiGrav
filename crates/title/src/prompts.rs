@@ -134,6 +134,9 @@ pub struct MenuButtons {
 impl MenuButtons {
     /// `choice` on a pressing whose own back button is `original` and whose Help screen opens on
     /// `authored_help`.
+    ///
+    /// Help is the authored button unless Back takes it, and then the other face button: the one
+    /// Back displaced.
     #[must_use]
     pub fn resolve(original: Prompt, choice: MenuBack, authored_help: Prompt) -> Self {
         let back = match choice {
@@ -144,7 +147,7 @@ impl MenuButtons {
         Self {
             back,
             help: if authored_help == back {
-                original
+                exchanged(back)
             } else {
                 authored_help
             },
@@ -175,8 +178,32 @@ mod tests {
             for help in [Prompt::Circle, Prompt::Triangle] {
                 let buttons = MenuButtons::resolve(original, MenuBack::Original, help);
                 assert_eq!(buttons.back, original);
-                assert_eq!(buttons.help, help);
+                // A screen that authors its Help on the button the pressing backs on gets the
+                // other face button: the two never share one.
+                let expected = if help == original {
+                    exchanged(original)
+                } else {
+                    help
+                };
+                assert_eq!(buttons.help, expected);
+                assert_ne!(buttons.help, buttons.back);
                 assert!(!buttons.glyph_swap);
+            }
+        }
+    }
+
+    /// Back and Help are never the same button, whatever the screen authors and the player picks.
+    #[test]
+    fn back_and_help_never_share_a_button() {
+        for original in [Prompt::Circle, Prompt::Triangle] {
+            for choice in ALL_CHOICES {
+                for help in [Prompt::Circle, Prompt::Triangle] {
+                    let buttons = MenuButtons::resolve(original, choice, help);
+                    assert_ne!(
+                        buttons.help, buttons.back,
+                        "{original:?} {choice:?} {help:?}"
+                    );
+                }
             }
         }
     }

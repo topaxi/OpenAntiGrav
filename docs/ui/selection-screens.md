@@ -655,8 +655,10 @@ keeps all three rows and launches from `START` as before.
   in the same directory.
 - ~~Which curve the original's `Distance(m)` sums~~ - none: it prints the authored `<Physical Length>` (closed 2026-10-29, above).
 - The `Loyalty` counter, once anything keeps one.
-- The `Track Help` / `Team Help` overlays and `Pre Race Music Select`: read
-  (they are on the same XML) and not drawn.
+- ~~The `Track Help` / `Team Help` overlays~~ **drawn** (`docs/ui/back-and-help.md`, "The pickers' Help
+  overlays"); `Pre Race Music Select` (a `MusicList`, not a Help overlay) and `Tournament Help` (no
+  `Tournament C` screen model) are still read and not drawn, and Team Help draws `MSC_TEAMDES_ASS` for
+  every team as authored.
 - The outline's glow.
 - The `small` face: the footer's `Help` / `Music playlist` prompts are
   authored in it and drawn in the menu face scaled by 17/22, since that face

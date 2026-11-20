@@ -110,6 +110,11 @@ impl Session {
         self.poll_editor_save();
         let filled = self.word("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED");
         let roles = self.roles();
+        let fill_key = crate::app::hints::button_word(
+            self.shell.as_ref().map(|shell| &shell.strings),
+            roles.help,
+        )
+        .to_uppercase();
         let buttons = self.controls.buttons_mut();
         let pad = Pad {
             up: buttons.take(Button::Up),
@@ -129,6 +134,9 @@ impl Session {
         let Some(campaign) = stage.campaign.as_mut() else {
             return;
         };
+        if let Some(screen) = campaign.editor.as_mut() {
+            screen.fill_key = fill_key;
+        }
         let events = {
             let Some(screen) = campaign.editor.as_ref() else {
                 return;
@@ -401,10 +409,7 @@ impl Session {
             title: self.word("OAG_EDITOR_NAME_TITLE", "NAME YOUR CAMPAIGN"),
             delete: self.word("OAG_KEYBOARD_DELETE", "DEL"),
             accept: self.word("OAG_KEYBOARD_ACCEPT", "OK"),
-            hint: self.word(
-                "OAG_KEYBOARD_HINT",
-                "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
-            ),
+            hint: self.keyboard_hint(),
         };
         let Stage::Menu(stage) = &mut self.stage else {
             return;
@@ -436,10 +441,7 @@ impl Session {
             title: self.word("OAG_EDITOR_SEED_TITLE", "TYPE A SEED"),
             delete: self.word("OAG_KEYBOARD_DELETE", "DEL"),
             accept: self.word("OAG_KEYBOARD_ACCEPT", "OK"),
-            hint: self.word(
-                "OAG_KEYBOARD_HINT",
-                "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
-            ),
+            hint: self.keyboard_hint(),
         };
         let Stage::Menu(stage) = &mut self.stage else {
             return;

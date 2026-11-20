@@ -262,6 +262,15 @@ impl Picker {
         if pointer.is_idle() || self.locked {
             return out;
         }
+        if self.help_open {
+            // The overlay takes the tick whole: a click or the secondary button closes it, and
+            // neither a hover nor a click moves the selection underneath.
+            if pointer.clicked || pointer.back {
+                self.help_open = false;
+                out.push(Event::Help);
+            }
+            return out;
+        }
         if pointer.scroll != 0 {
             out.extend(self.step_entry(pointer.scroll.signum()));
             self.scroll.settle(&hex_extent());

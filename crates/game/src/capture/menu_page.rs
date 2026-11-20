@@ -533,6 +533,13 @@ pub(super) fn menu_page(
         list.extend(nav_legend_draws);
         list.extend(ticker_draws);
         let clip = ticker_clip(&list);
+        let back = crate::prompts::roles(
+            title,
+            platform,
+            settings.controls.menu_back_value(),
+            oag_gameplay::input::Button::Triangle,
+        )
+        .back;
         list.extend(prompt_draws(
             kind,
             &name,
@@ -540,6 +547,7 @@ pub(super) fn menu_page(
             strings,
             skin,
             source,
+            back,
         )?);
         return Ok((list, clip));
     }
@@ -639,6 +647,7 @@ fn prompt_draws(
     strings: &oag_ui::language::StringTable,
     skin: &oag_ui::menu::Skin,
     source: Option<&str>,
+    back: oag_gameplay::input::Button,
 ) -> Result<Vec<oag_ui::frontend::Draw>> {
     let say = |id: &str, english: &str| strings.get_or_fallback(id, english).to_string();
     let say_of = |id: &str, english: &str| strings.get_or_fallback(id, english).replace("%s", name);
@@ -651,10 +660,7 @@ fn prompt_draws(
                 oag_ui_screens::tag_entry::Labels {
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
-                    hint: say(
-                        "OAG_TAG_ENTRY_HINT",
-                        "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
-                    ),
+                    hint: crate::app::hints::tag_entry_hint(Some(strings), back),
                 },
                 oag_ui_screens::prompt::accepts,
                 name,
@@ -701,10 +707,7 @@ fn prompt_draws(
                 oag_ui_screens::tag_entry::Labels {
                     title: say(id, english),
                     confirm: say("OAG_KEYBOARD_ACCEPT", "OK"),
-                    hint: say(
-                        "OAG_TAG_ENTRY_HINT",
-                        "LEFT/RIGHT CELL   UP/DOWN GLYPH   CROSS/START ACCEPT   CIRCLE CANCEL",
-                    ),
+                    hint: crate::app::hints::tag_entry_hint(Some(strings), back),
                 },
                 accepts,
                 if kind == "player-name" {
@@ -736,10 +739,7 @@ fn prompt_draws(
                     title: say(id, english),
                     delete: say("OAG_KEYBOARD_DELETE", "DEL"),
                     accept: say("OAG_KEYBOARD_ACCEPT", "OK"),
-                    hint: say(
-                        "OAG_KEYBOARD_HINT",
-                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
-                    ),
+                    hint: crate::app::hints::keyboard_hint(Some(strings), back),
                 },
                 if kind == "player-name-grid" {
                     &player.name
@@ -757,10 +757,7 @@ fn prompt_draws(
                     title: say("OAG_PILOT_RENAME_TITLE", "RENAME PILOT"),
                     delete: say("OAG_KEYBOARD_DELETE", "DEL"),
                     accept: say("OAG_KEYBOARD_ACCEPT", "OK"),
-                    hint: say(
-                        "OAG_KEYBOARD_HINT",
-                        "CROSS TYPE   SQUARE DELETE   START ACCEPT   CIRCLE CANCEL",
-                    ),
+                    hint: crate::app::hints::keyboard_hint(Some(strings), back),
                 },
                 name,
                 oag_raceplay::pilots::MAX_NAME,
