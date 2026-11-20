@@ -424,7 +424,7 @@ class default 0.7 s (`enebletransition` is a typo and matches nothing, so the au
 `TeamSelectionScreen_Update` restarts it on a step with `Widget_ResetTransition(Logo)` and no delay. It
 reproduces the 84 grabs' slab speed (6.28 px per frame measured, 0.69 to 0.72 s implied) and shapes.
 Confidence 85 for the geometry (code), 80 for the 0.7 s ramp and the restart, 40 for the 0 to 2
-frame offset between the press and the reset. Ready to wire (`oag_ui`'s banner `Image`).
+frame offset between the press and the reset. **Wired** (`hd-banner-wipe`, numbers in [image-widget.md](image-widget.md), "Wired").
 
 ## Omega and 2048
 

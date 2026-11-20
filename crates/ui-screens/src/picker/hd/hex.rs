@@ -475,11 +475,7 @@ pub(super) fn draw(
         _ => Face::Lock,
     };
     // Only a selection that moved after the screen opened is a step.
-    let since = if picker.since_selection() < picker.seconds() {
-        picker.since_selection()
-    } else {
-        f32::INFINITY
-    };
+    let since = picker.seconds_since_step().unwrap_or(f32::INFINITY);
     draw_cells(
         grid,
         (picker.index(), picker.entries().len(), picker.pan(), since),

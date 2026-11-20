@@ -59,7 +59,9 @@
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
-use oag_ui::screen::{BlockWidget, Node, Screen, Screens, Text, argb_to_rgba, parse, parse_argb};
+use oag_ui::screen::{
+    BlockWidget, Node, Screen, Screens, Text, Vwipe, Window, argb_to_rgba, parse, parse_argb,
+};
 
 use super::{Details, FaceScales, Layout, Picker};
 
@@ -163,6 +165,9 @@ pub struct TeamScreen {
     /// the selected team's own `FE\Logo.gtf` at runtime, which is the only
     /// per-team texture of that name on the disc (twelve, one per team).
     pub logo: Option<[f32; 4]>,
+    /// The `Logo`'s `transitiontype="vwipe"`: the team step replays it,
+    /// see [`logo_draw`].
+    pub logo_wipe: Option<Vwipe>,
     /// `AlwaysSolidColor` per `Block` name - the darker remainder of a stat
     /// bar, `0xff646464` on all five.
     pub solid: Vec<(String, u32)>,
@@ -354,6 +359,7 @@ fn walk(
                     number(child, "width").unwrap_or(0.0),
                     number(child, "height").unwrap_or(0.0),
                 ]);
+                out.logo_wipe = screens.vwipe_from_node(child);
             }
             "block" => {
                 if let (Some(block), Some(solid)) =
@@ -432,6 +438,33 @@ pub(crate) fn block_arrow(
     });
 }
 
+/// The `Logo` quad, `step` the widget's `vwipe` and the seconds since the team moved: the
+/// original resets the widget's alpha on every step and plays the wipe
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"). Without a step
+/// since the screen opened, the finished logo; the page-entry delay and ramp are not
+/// measured. The ramp starts at the press: the original's start is 0 to 2 frames later.
+fn logo_draw(rect: [f32; 4], step: Option<(Vwipe, f32)>, placed: Placed) -> Draw {
+    let [x, y, width, height] = rect;
+    let (texels_wide, texels_high) = (placed.width as f32, placed.height as f32);
+    let whole = Window {
+        top: 0.0,
+        height: 1.0,
+    };
+    let window = step
+        .and_then(|(wipe, age)| Vwipe::window(wipe.alpha(age)))
+        .unwrap_or(whole);
+    Draw::Sprite {
+        rect: [x, y + height * window.top, width, height * window.height],
+        uv: placed.sheet_rect([
+            0.0,
+            texels_high * window.top,
+            texels_wide,
+            texels_high * window.height,
+        ]),
+        color: [1.0, 1.0, 1.0, 1.0],
+    }
+}
+
 /// The body of the screen - see the module doc for what is and is not here.
 pub(super) fn body(
     picker: &Picker,
@@ -464,11 +497,11 @@ pub(super) fn body(
         }) = Some(&entry.details)
         && let Some(placed) = sprites(logo)
     {
-        out.push(Draw::Sprite {
+        out.push(logo_draw(
             rect,
-            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
-            color: [1.0, 1.0, 1.0, 1.0],
-        });
+            extra.logo_wipe.zip(picker.seconds_since_step()),
+            placed,
+        ));
     }
     draw_labels(&extra.labels, &mut out);
     out.extend(crate::campaign::hd::cell_brackets::draws(

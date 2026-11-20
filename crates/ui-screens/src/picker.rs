@@ -365,6 +365,12 @@ impl Picker {
         self.since_selection
     }
 
+    /// Seconds since the selection moved, `None` while it has not moved since the screen opened.
+    #[must_use]
+    pub fn seconds_since_step(&self) -> Option<f32> {
+        (self.since_selection < self.seconds).then_some(self.since_selection)
+    }
+
     /// Sets [`Self::since_selection`], for a still drawn a known time after a step.
     pub fn set_since_selection(&mut self, seconds: f32) {
         self.since_selection = seconds;
