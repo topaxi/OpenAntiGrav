@@ -210,8 +210,8 @@ frames; one of the unread vtable slots (`0x001b7898`, `0x001b79c0`, `0x001b7ae8`
 
 ## What is still unread
 
-- Who arms the delay countdown `+0xa0` from `+0x74` on page entry (the Logo's authored `delay="0.5"` plays
-  once per page entry, then a 0.7 s ramp); the page-entry timeline is not measured here.
+- ~~Who arms the delay countdown `+0xa0` from `+0x74` on page entry~~: `Widget_ArmTransition`, see "Page entry" below,
+  and wired ("Wired: page entry").
 - The exact frame at which Team Selection resets the Logo relative to the press (see above).
 - `hscale` (`+0x120 = 4`, used by the thin lines of `Track Select`): only `dVar43 = width * alpha` is read.
 - Image vtable slots 12 to 14 (`0x001b7898`, `0x001b7ae8`, `0x001b8d78`).
@@ -236,13 +236,13 @@ Banner box `190,185,680,335`, mean absolute grey against the original, ours at p
 (bare at k04, k06, k08, k19; the slab at k10 near the top, k15 and k29 near the apex). **The unread start offset shows**: starting
 the ramp 0, 1 or 2 frames after the press gives k10 16.83, 15.61, 16.69; k15 16.22, 16.03, 15.48; k29 16.02, 15.80, 15.98; k19
 16.07, 16.07, 16.23; no single offset is best for all, so none is applied (the offset is 0 to 2 frames, unpinned, above).
-Not played: the screen's opening (the original waits the authored `Delay`, then ramps; the arming is unread), so a
-fresh screen draws the finished logo; the other `vwipe` images (below).
+The screen's opening plays too since `hd-vwipe-wire` ("Wired: page entry"); the other `vwipe` images follow.
 
 **Other screens that author `vwipe`** (DATA06 and the patch archives, `Image` tags): Team Selection `Logo` (played), Track
 Selection's circuit emblem (192x192; `TrackSelectionScreen_SelectCircuit` restarts it), `cellmode_definition` (9), `racebox` (5),
 `recordgrid` (6), `showunlocks` (3), `controls_definition_ps3` (4), `credits` (2), `additional` (1), `network` (44). `hscale`:
-Track Selection's two lines, `endrace` (16), `network` (11). None of these plays yet: each needs the page's own entry clock.
+Track Selection's two lines, `endrace` (16), `network` (11). The census read through the update chain and in the archive layering
+is "Wired: page entry" below (the Track Selection emblem, Cell and Grid Selection play; the rest are not drawn from HD's XML).
 
 ## Page entry: who arms the `Delay`, and when each page's wipe starts (2026-11-20, `hd-vwipe-pages`)
 
@@ -336,18 +336,69 @@ hold the same time). Confidence for the 0.37 s: 65.
 
 ### What to wire
 
-Per `Image`: read `delay` (the XML key, matched case-insensitively by `Widget_ParseChildXml`; an unset one is 0) as well as
-the in-time, and hold the wipe at `s = 0` (nothing drawn: `Image_Render` returns while `+0xa0 > 0`) until `delay` seconds after
-the frame the page becomes the current one, then ramp. Today `Screens::vwipe_from_node` reads only the in-time. The page-entry
-clock starts when the page's present flag rises, not at the button press (Team Selection's came 0.76 to 0.80 s of wall time after it in the emulator, Racebox's within a frame: wire it as "`delay` after our
-page becomes current", not as a latency). Two page-specific rules: Cell Selection's four emblems add the 0.37 s hold; a changed
-cell (`TrackSelectionScreen_SelectCircuit`, the cell screen's refresh) re-arms with the delay again where the caller is
-`Widget_ArmTransition`, and without it where the caller is `Widget_ResetTransition` (the circuit emblem's restart).
+Wired by `hd-vwipe-wire` ("Wired: page entry" below). The rule, kept here as the measured contract: per `Image`, read `delay` (the XML key,
+matched case-insensitively by `Widget_ParseChildXml`; an unset one is 0) as well as the in-time, and hold the wipe at `s = 0`
+(nothing drawn: `Image_Render` returns while `+0xa0 > 0`) until `delay` seconds after the frame the page becomes the current one, then
+ramp. The page-entry clock starts when the page's present flag rises, not at the button press (Team Selection's came 0.76 to 0.80 s
+of wall time after it in the emulator, Racebox's within a frame: it is "`delay` after our page becomes current", not a latency). Two
+page-specific rules: Cell Selection's four emblems add the 0.37 s hold; a changed cell (`TrackSelectionScreen_SelectCircuit`, the
+cell screen's refresh) re-arms with the delay again where the caller is `Widget_ArmTransition`, and without it where the caller is
+`Widget_ResetTransition` (the circuit emblem's restart).
+
+## Wired: page entry (2026-11-20, `hd-vwipe-wire`)
+
+Each `vwipe` Image waits its authored `delay` from the frame its page becomes current, then ramps over its in-time, the law of
+"Page entry" above. Nothing is drawn while the delay runs (`Image_Render` returns while `+0xa0` is above 0; the slab
+`Vwipe::window(0)` would give is not drawn).
+
+- **Law as coded** (`oag_ui::screen::wipe`): `Vwipe` carries `delay` (the XML key, matched case-insensitively, unset 0) beside
+  the in-time. `Vwipe::entry_alpha(since_entry)` is `None` while `since_entry - delay + 1/60` is within half a frame of 0 and
+  otherwise the linear ramp of `since_entry - delay + 1/60`: the first ramp frame holds one `dt` already (RAM, Racebox
+  `Item 315`: nothing for 26 frames, `s = 1/30` on frame 27, whole on frame 56). Half a frame of slack keeps an accumulated clock
+  off the wrong frame (`an_accumulated_clock_starts_the_ramp_on_the_same_frame`, delays 0.25, 0.45, 0.5, 0.6, 1.2).
+  `Window::cut` cuts a sprite's rect and its sampled rows together at the window's fractions, so any Image (a sub-rect `U`/`V`,
+  not only a whole texture) wipes; `entry_draw` is the one function that waits, cuts and finishes. `EntryClock` is the
+  page's since-open clock; a still states it or draws it `finished`.
+- **Where it plays** (the pages of ours that draw HD's XML): Team Selection (`picker::hd`, the Logo: 0.5 s delay, 0.7 s ramp;
+  a team step still replays from the press with no delay, `Widget_ResetTransition` not `Widget_ArmTransition`), Track Select
+  (`picker::hd::track`, the `Emblem`: 0.6 s, 0.5 s), Grid Selection (`campaign::hd::hd_grid_draw_list`, `unlockboxbrackets`
+  0.45 s and the unlock box's `flyerlogo` 0.65 s), Cell Selection (`hd_cell_draw_list`, `flyerlogo` 0.8 s and the four
+  emblems, `cell_emblems::ENTRY_HOLD_SECONDS` = 0.37 s before their own 0.05, 0.125, 0.2, 0.275 s; confidence 65, what ends the
+  hold is unread). The clock is `Picker::entry` on the two pickers and `GridSelection::entry`/`CellSelection::entry` on the
+  campaign pages, zero where the page is built and ticked beside the pulse. **Not wired because ours draws no such widget**: Racebox
+  (`Single Player`'s `Item 315`/`BigIcon` are `menu.toml` rows of ours, not HD's `racebox_definition.xml` screen), Controls,
+  Credits and Race Records (the same: `menu.toml` pages, Race Records a text table), the network pages, Show Unlocks and
+  SoundTest (no HD-XML screen drawn). Their delays are checked against the XML below, so a page that starts drawing its images
+  takes the law from `Screens::vwipe_from_node` and `entry_draw`.
+- **Stills**: `--menu-entry-seconds T` is the page's clock on `ship-select`, `track-select`, `grid-select` and `cell-select`
+  (`Picker::set_entry` / the model's `entry_mut`); no stated time is `EntryClock::finished()`, so every recorded `hd/menu-*`
+  pair and its Omega twin renders pixel for pixel as before (ten pairs, 0 differing pixels against the binary of main
+  `aac673ca4`). It is not `--menu-picker-seconds`, which a pair script sets to the seconds that turn the craft to the original's
+  turntable angle (not the page's age) and which also drives the picker's own turntable and slideshow.
+- **Disc ground truth** (`crates/ui/tests/vwipe_ground_truth.rs`, through Fury's update chain, the files the original serves): per
+  page, the authored `(name, delay)` set equals what RAM read, in frames at 60 Hz: Controls 15 and 42; Credits 36 and 48;
+  Race Records 36, 48, 48, 60, 60, 72; `Single Player` 27 and 48; Track Select 36; Team Selection 30; Grid Selection 27 and
+  39; Cell Selection `flyerlogo` 48 and the emblems 3, 8, 12, 17; Show Unlocks (6 each) and SoundTest (12) are authored by the
+  same file and **inherited, unmeasured**. **No XML-versus-RAM delay disagrees.** The widget-count gap (XML 76, RAM 71)
+  is partly named now: `racebox_definition.xml` holds three more `vwipe` images outside any `Screen` (an unnamed 0.45 s,
+  `WeaponBG` 0.5 s, its `WeaponIcon` 0.55 s) that RAM never showed under `Single Player`, `Cell Selection` authors an unnamed 0.5 s
+  image (in 0.4 s) beside RAM's five, and the older `selection_definition.xml` copies of Team Selection and Track Creation carry
+  an unnamed 0.3 s and 0.25 s image that Fury's own `team_selection_definition.xml`/`track_selection_definition.xml` no longer
+  serve (RAM: one each). The three are asserted by name in `the_xml_authors_widgets_ram_did_not_show`.
+- **Open**: a cell or circuit change re-arms with the delay again where the caller is `Widget_ArmTransition` (the cell
+  screen's refresh), and the Track Select emblem's restart on a circuit step is `Widget_ResetTransition` (no delay): neither is
+  replayed (the emblems and the emblem stay finished after the page entry). The unlock box's corner brackets are children of
+  `unlockboxbrackets` and ours draws them from the first frame (whether they follow the image's wipe is unread). The Cell emblem hold's
+  end is unread.
 
 ## Omega and 2048
 
-- **Omega: checked, applies in part; wired by lineage, unmeasured.** Omega's Ship Select runs the same `picker::hd` layout and
-  its `team_selection_definition.xml` authors the same `Logo`, so a step plays the wipe there (`--menu-page ship-select
+- **Omega: checked, applies in part; wired by lineage, unmeasured.** Its own copies of the files author the same delays on the pages
+  RAM measured (`omega_authors_the_delays_ram_showed_on_hd_where_its_screens_are_hds`: Controls, Credits, `Single Player`,
+  Team Selection's Logo 30, Grid Selection 27 and 39 (also its Fury and 2048 variants), Cell Selection's flyerlogo and emblems);
+  **checked, differs**: Race Records' six images sit in a `logos_group` under `Race Records Base`, and Track Select adds a
+  `TrackPreview` image at 0.4 s (24 frames) that ours does not draw. Omega's Ship Select runs the same `picker::hd` layout and
+  its `team_selection_definition.xml` authors the same `Logo`, so the page entry and a step play the wipe there (`--menu-page ship-select
   --menu-picker-step-seconds 0.15` shows the slab, 0.45 the slab on its way up, 5 the finished logo). The draw law below is not read in Omega. `eboot-ps4-omega-eu-v107.bin` has the same `Image` `<Values>` parser
   (`FUN_01462af0`, `strcasecmp` key match; `transitiontype` at `0x01463323`, the `vwipe` string referenced at
   `0x0146376e`), and its post-loop sets `+0x1c4` to `vwipe` = 2 and `hscale` = 4, exactly HD's two modes, plus
@@ -357,4 +408,5 @@ cell (`TrackSelectionScreen_SelectCircuit`, the cell screen's refresh) re-arms w
   and the `2.25`/`4.5` constants were not searched for in the x86 code, so the three-phase law is HD's;
   Omega's `vwipe` geometry is a lineage inheritance, unmeasured.
 - **2048: checked, shares the key.** `vwipe` is a string in `eboot-vita-2048-eu-v104.elf` (`0x8143b1d4`);
-  parser and draw not read.
+  parser and draw not read. Ours draws 2048's front end through `oag_ui::frontend::wipeout2048`, not the `picker::hd` and
+  `campaign::hd` draws that play the entry wipe, so nothing of 2048's moves (checked, applies, not wired).

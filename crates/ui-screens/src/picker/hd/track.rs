@@ -443,7 +443,11 @@ pub(in crate::picker) fn body(
             continue;
         }
         if let Some(placed) = sprites(&image.src) {
-            out.push(sprite(image, placed, None));
+            out.extend(oag_ui::screen::entry_draw(
+                image.wipe,
+                picker.entry().seconds(),
+                sprite(image, placed, None),
+            ));
         }
     }
     draw_labels(&extra.common.labels, &mut out);

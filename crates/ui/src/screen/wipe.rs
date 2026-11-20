@@ -191,7 +191,11 @@ pub fn entry_draw(wipe: Option<Vwipe>, since_entry: f32, draw: Draw) -> Option<D
         return Some(draw);
     };
     let (rect, uv) = window.cut(*rect, *uv);
-    Some(Draw::Sprite { rect, uv, color: *color })
+    Some(Draw::Sprite {
+        rect,
+        uv,
+        color: *color,
+    })
 }
 
 #[cfg(test)]

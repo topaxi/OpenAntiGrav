@@ -202,13 +202,15 @@ pub(super) fn campaign_page(
     // raced under, draws exactly the fresh-profile numbers either way.
     records: &crate::records::Store,
     // `--menu-picker-seconds`: how long after the screen opened `Selector`'s
-    // pulse is drawn at (`SelectorPulse`) and the entry wipes have run; `None` draws the
-    // pulse at clock 0 and the wipes finished.
+    // pulse is drawn at (`SelectorPulse`); `None` draws it at clock 0.
     pulse_seconds: Option<f32>,
     // `--menu-model-seconds`: the moment of its own animation the flyer card is drawn
     // at ([`crate::flyer::Flyers::card_seconds`]); `None` draws it at
     // [`crate::flyer::SETTLED_SECONDS`].
     card_seconds: Option<f32>,
+    // `--menu-entry-seconds`: how long the page's `vwipe` images have run; `None` draws them
+    // finished.
+    entry_seconds: Option<f32>,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let campaign = crate::campaign::load(
         archives,
@@ -272,7 +274,7 @@ pub(super) fn campaign_page(
         &mut campaign.sprites,
     );
     *sprites = campaign.sprites;
-    let page_clock = pulse_seconds.map_or(oag_ui::screen::EntryClock::finished(), |seconds| {
+    let page_clock = entry_seconds.map_or(oag_ui::screen::EntryClock::finished(), |seconds| {
         oag_ui::screen::EntryClock::at(seconds)
     });
     let is_hd = crate::campaign::draws_hd_campaign(title);
