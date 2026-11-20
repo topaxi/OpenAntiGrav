@@ -723,6 +723,20 @@ fn omega_amphiseums_constant_families_draw_their_constants() {
         archives.iter_mut().find_map(|a| a.read_path(p).ok())
     })
     .expect("builds");
+    // The 907 spectator placeholders (`emissive`, `EmissiveColour` 0.5566) are crowd-entity
+    // shapes: each is replaced by a bind-pose rig, every entity name parses to a group.
+    let decoded = oag_rcs::rcsmodel::psp2::parse(&blob).expect("parses");
+    assert_eq!(
+        super::omega_crowd_shadowed_check::crowd_entity_submeshes(&decoded).0,
+        907,
+        "Amphiseum's crowd-entity shapes"
+    );
+    super::omega_crowd_shadowed_check::check_crowd_entities_hidden(
+        "amphiseum",
+        &decoded,
+        &model,
+        &report,
+    );
     assert_eq!(
         report.constant_diffuse_materials,
         29,

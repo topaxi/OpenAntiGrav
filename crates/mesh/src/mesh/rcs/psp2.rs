@@ -294,7 +294,7 @@ fn build_planned(
     };
     model.anim_nodes = plan.anim_nodes;
     // Omega's crowd-entity shapes are replaced by rig instances (`psp2::crowd_rigs`).
-    crowd_rigs::instance(&mut decoded, ps4, &mut *textures, &mut report);
+    let rig_chunks = crowd_rigs::instance(&mut decoded, ps4, &mut *textures, &mut report);
     let decoded = decoded;
     report.panel.sky_reflection = model.sky_reflection.is_some();
     // Each material's own scroll, resolved before any vertex is written; the
@@ -820,7 +820,10 @@ fn build_planned(
             // circuit's `.pvs`, whose bitmaps are indexed by exactly this
             // number (`oag_rcs::hd_pvs`, the `Psp2` dialect). `None` when the
             // node table did not read, which the PVS test always allows.
-            chunk: submesh.mesh.and_then(|mesh| u32::try_from(mesh).ok()),
+            chunk: submesh
+                .mesh
+                .and_then(|mesh| u32::try_from(mesh).ok())
+                .or_else(|| rig_chunks.get(&submesh.record).copied()),
             // A Vita material authors no PSP-style reference.
             alpha_test_ref: None,
         });

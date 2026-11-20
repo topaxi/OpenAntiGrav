@@ -383,6 +383,23 @@ fn check_crowd_rig(
 ) {
     assert_eq!(model.submeshes.len(), 1, "{name}");
     let sub = &model.submeshes[0];
+    // The three spellings the mesh builder's crowd program admits: `female09` ships the bare one
+    // and `male07_shadow` the plain `_NormalizeTS` one.
+    let material = &model.materials[sub.material.expect("a material")].name;
+    let stem = material
+        .rsplit('/')
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    assert!(
+        [
+            "crowd_diffuse_normal_bonecount4_normalizets.rcsmaterial",
+            "crowd_diffuse_normal_bonecount4.rcsmaterial",
+            "crowd_diffuse_normal_shadow_bonecount4_normalizets.rcsmaterial",
+        ]
+        .contains(&stem.as_str()),
+        "{name}: {material}"
+    );
     let verts = sub.positions.len();
     assert_eq!(sub.stride, 36, "{name}");
     assert!(

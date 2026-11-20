@@ -80,29 +80,35 @@ fn rig_stem(group: usize) -> String {
 /// Adds one rig submesh per crowd-entity shape that sits on a node, with the rig's material
 /// appended to the model's table. Does nothing for a model that is not Omega's, or when a rig's
 /// file is not there.
+///
+/// Returns each rig submesh's [`psp2::SubMesh::record`] with the mesh object of the entity it
+/// stands for: the join key into the circuit's `.pvs`, so a rig is culled with its placeholder.
+/// The rig's own `mesh` stays `None` so nothing reads it as the crowd-entity shape or a track shape.
 pub(super) fn instance(
     decoded: &mut psp2::Model,
     ps4: bool,
     textures: Textures<'_>,
     report: &mut Report,
-) {
+) -> HashMap<usize, u32> {
+    let mut chunks = HashMap::new();
     if !ps4 {
-        return;
+        return chunks;
     }
-    let entities: Vec<(usize, Option<usize>)> = decoded
+    let entities: Vec<(usize, usize, Option<usize>)> = decoded
         .scene
         .meshes
         .iter()
-        .filter(|m| m.is_crowd_entity())
-        .filter_map(|m| Some((m.node?, group(&m.name))))
+        .enumerate()
+        .filter(|(_, m)| m.is_crowd_entity())
+        .filter_map(|(i, m)| Some((i, m.node?, group(&m.name))))
         .collect();
     if entities.is_empty() {
-        return;
+        return chunks;
     }
     let mut rigs: HashMap<String, Option<psp2::Model>> = HashMap::new();
     let mut materials: HashMap<String, usize> = HashMap::new();
     let mut record = usize::MAX / 2;
-    for (node, group) in entities {
+    for (mesh, node, group) in entities {
         let Some(group) = group else {
             report.crowd_rigs_missing += 1;
             continue;
@@ -139,6 +145,9 @@ pub(super) fn instance(
         let mut placed = sub.clone();
         record += 1;
         placed.record = record;
+        if let Ok(mesh) = u32::try_from(mesh) {
+            chunks.insert(record, mesh);
+        }
         placed.mesh = None;
         placed.node = Some(node);
         placed.material = Some(index);
@@ -151,6 +160,7 @@ pub(super) fn instance(
         decoded.submeshes.push(placed);
         report.crowd_rigs += 1;
     }
+    chunks
 }
 
 #[cfg(test)]
