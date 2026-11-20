@@ -1004,3 +1004,71 @@ fn hd_race_page_still_leaves_on_the_circle() {
     };
     leaves_on_the_resolved_button(&image, &RACE_PAGE, "circle");
 }
+
+/// A race to its first few hundred ticks from the main menu.
+const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
+     select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; ";
+
+/// Photo mode and the replay viewer, which read the device apart from the front end, leave on the
+/// resolved Back and not on the circle: one launch inside a race (photo mode, then Escape in it)
+/// and one that watches the race it recorded.
+///
+/// `original` is the pressing's own Back, so the button that is not Back is the one Back left over
+/// (`Roles::help`: it resets the photo camera and does nothing in the viewer).
+fn photo_and_viewer_leave_on_the_resolved_button(
+    image: &Path,
+    original: &'static str,
+    choice: &str,
+) {
+    let profile = Profile::fresh(&format!("photo-viewer-{choice}-{original}"));
+    let (back, other) = buttons(original, choice);
+    println!("photo mode and the viewer, MENU BACK {choice}: {back} leaves, {other} does not");
+    profile.menu_back(choice);
+    // Photo mode: the button that is not Back leaves it up; Back leaves; Escape leaves on any
+    // choice. The launch ends mid-race, which records the race for the viewer below.
+    profile.drive_on(
+        image,
+        &format!(
+            "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 5; press {other}; ticks 10; expect photo=free; \
+             press {back}; until photo=none within 50; \
+             escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 5; escape; until photo=none within 50; quit"
+        ),
+        "photo.jsonl",
+    );
+    // The viewer: the recording opens, the button that is not Back changes nothing, Back leaves
+    // for the REPLAYS page (`stage=menu`).
+    profile.drive_on(
+        image,
+        &format!(
+            "boot; select replays; press cross; until page=replays; select watch_replay; \
+             press cross; until replay=playing within 4000; ticks 30; press {other}; ticks 10; \
+             expect stage=race; press {back}; until stage=menu within 100; expect replay!=playing"
+        ),
+        "viewer.jsonl",
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_photo_mode_and_viewer_leave_on_the_triangle_under_original() {
+    let Some(image) = ps2() else { return };
+    photo_and_viewer_leave_on_the_resolved_button(&image, "triangle", "original");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and a GPU"]
+fn pulse_ps2_photo_mode_and_viewer_leave_on_the_circle_under_circle() {
+    let Some(image) = ps2() else { return };
+    photo_and_viewer_leave_on_the_resolved_button(&image, "triangle", "circle");
+}
+
+/// The PSP leaves on the circle as before.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU"]
+fn pulse_psp_photo_mode_and_viewer_still_leave_on_the_circle() {
+    let Some(image) = psp() else { return };
+    photo_and_viewer_leave_on_the_resolved_button(&image, "circle", "original");
+}

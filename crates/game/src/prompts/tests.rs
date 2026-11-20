@@ -244,6 +244,17 @@ fn the_roles_a_screen_is_handed_on_every_title_pressing_and_choice() {
             "Pure PS2 {choice:?}"
         );
     }
+    // A screen that authors no Help button (the default is the triangle) on the PS2, where Back
+    // is the triangle: Help is the circle, not the button Back is on.
+    assert_eq!(
+        roles(
+            oag_pulse::TITLE,
+            Platform::Ps2,
+            MenuBack::Original,
+            triangle
+        ),
+        (triangle, circle)
+    );
     // A Help the disc authors on the square is not a face button Back displaces.
     assert_eq!(
         roles(
