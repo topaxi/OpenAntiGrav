@@ -5,7 +5,7 @@
 
 use log::error;
 
-use crate::prompts::substitution;
+use crate::prompts::{glyphs_exchanged, substitution};
 use crate::{boot, movie};
 use oag_raceplay::pilots;
 use oag_ui::menu;
@@ -204,12 +204,41 @@ impl Session {
 }
 
 impl Session {
+    /// Whether the front end reads the circle and the triangle exchanged this tick
+    /// (`oag_title::prompts::MenuButtons::input_swap`): the player chose the triangle for Back,
+    /// and a menu, a paused race or an end-of-race screen owns the buttons. A running race and
+    /// photo mode keep the physical ones (the circle is the absorb there).
+    pub(super) fn menu_face_swap(&self) -> bool {
+        let Some(shell) = &self.shell else {
+            return false;
+        };
+        let owns_buttons = match &self.stage {
+            Stage::Race(stage) => {
+                self.photo.is_none() && (self.paused() || stage.endrace.is_some())
+            }
+            _ => true,
+        };
+        owns_buttons
+            && shell
+                .title
+                .menu_buttons(
+                    shell.platform,
+                    self.settings.controls.menu_back_value(),
+                    oag_title::prompts::Prompt::Triangle,
+                )
+                .input_swap
+    }
+
     /// Sets this frame's prompt substitution on the stage's renderer.
     ///
     /// Every frame rather than on change: a stage built since the last frame
     /// has a fresh renderer, and the substitution is a handful of pairs.
     pub(super) fn refresh_prompts(&mut self) {
-        let Some(title) = self.shell.as_ref().map(|shell| shell.title) else {
+        let Some((title, platform)) = self
+            .shell
+            .as_ref()
+            .map(|shell| (shell.title, shell.platform))
+        else {
             return;
         };
         let style = self.settings.controls.prompt_style_value();
@@ -225,8 +254,10 @@ impl Session {
             );
         }
         let controls = &self.controls;
-        let substitution =
-            substitution(title.prompts, family, &|button| controls.bound_keys(button));
+        let exchange = glyphs_exchanged(title, platform, &self.settings);
+        let substitution = substitution(title.prompts, family, exchange, &|button| {
+            controls.bound_keys(button)
+        });
         match &mut self.stage {
             Stage::Frontend(stage) => stage.renderer.set_prompt_substitution(substitution),
             Stage::Menu(stage) => stage.renderer.set_prompt_substitution(substitution),

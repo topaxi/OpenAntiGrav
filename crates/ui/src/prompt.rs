@@ -22,7 +22,7 @@
 use std::borrow::Cow;
 use std::sync::OnceLock;
 
-use oag_title::prompts::{Prompts, Scope};
+use oag_title::prompts::{Prompt, Prompts, Scope};
 
 use crate::font::{Atlas, Cell};
 
@@ -235,6 +235,27 @@ impl Substitution {
             self.pairs.push((*stand_in, sub_char(index, art_cell)));
         }
         self
+    }
+
+    /// The disc's own glyphs with the stand-ins for `a` and `b` exchanged: the circle's glyph
+    /// where the triangle's was written, and the reverse. Nothing when the table lacks either
+    /// ([`Prompts::UNREAD`], a title that has not read its glyphs).
+    #[must_use]
+    pub fn exchanging(prompts: &Prompts, a: Prompt, b: Prompt) -> Self {
+        let stand_in = |wanted: Prompt| {
+            prompts
+                .glyphs
+                .iter()
+                .find(|(_, prompt)| *prompt == wanted)
+                .map(|&(stand_in, _)| stand_in)
+        };
+        let (Some(a), Some(b)) = (stand_in(a), stand_in(b)) else {
+            return Self::none();
+        };
+        Self {
+            pairs: vec![(a, b), (b, a)],
+            scope: Some(prompts.scope),
+        }
     }
 
     /// Whether this changes nothing.

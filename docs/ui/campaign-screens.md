@@ -486,7 +486,64 @@ the footer's key hint says.
 **Open: the rest of the PS2 front end.** Every other screen still leaves on the circle
 (`oag_ui::menu`, the pickers, the pause menu), while the PS2's footers draw the triangle beside
 `Back`. `FrontEnd::back_button` is the one place to read it from; wiring it through the other
-screens needs a census of which PS2 screens author a `triangle` or `circle` of their own.
+screens needs a census of which PS2 screens author a `triangle` or `circle` of their own. The player's
+own choice of Back is wired for every screen ("Menu back", below).
+
+## Menu back, 2026-11-20 (CONTROLS > MENU BACK)
+
+A maintainer request: "I'm more used to using (B) over (Y) for back", and the default is the original's.
+`[controls] menu_back` is `original` (the default), `circle` or `triangle`
+(`oag_title::prompts::MenuBack`); the CONTROLS row MENU BACK offers the three as words, because a button
+glyph in the row would be exchanged by the very substitution the row controls.
+
+**One resolver**: `oag_title::Title::menu_buttons(platform, choice, authored_help)` returns
+`oag_title::prompts::MenuButtons`: the physical `back` and `help`, whether the front end's input is
+exchanged, and whether footer glyphs are. `original` returns `FrontEnd::back_button(platform)` and
+the screen's authored Help with both flags off, which is exactly the build before this row existed. Help is the
+screen's authored button unless Back takes it, and then it is the button Back displaced.
+
+| title and pressing | choice | back | help | input exchanged | footer glyphs exchanged |
+| --- | --- | --- | --- | --- | --- |
+| Pulse PS2 | original | triangle | circle | no | no |
+| Pulse PS2 | circle | circle | triangle | no | yes |
+| Pulse PS2 | triangle | triangle | circle | yes | no |
+| every other title and pressing | original | circle | triangle | no | no |
+| every other title and pressing | circle | circle | triangle | no | no |
+| every other title and pressing | triangle | triangle | circle | yes | yes |
+
+(`oag_game::prompts::tests::the_choice_resolves_on_every_title_and_pressing`, and the pure table in
+`oag_title::prompts::tests`.)
+
+**How each screen follows**, with no per-screen choice:
+
+- `Grid Selection` and `Cell Selection` take their buttons as arguments (`with_back_button`,
+  `with_buttons`) and are handed `back` and `help` as the front end reads them (`cell_buttons`,
+  `oag_game::app::campaign_stage`).
+- Every screen that leaves on the circle in its own code (`oag_ui::menu`, the pickers, the pause menu,
+  the end-of-race pages, the prompts) follows from `Controls::set_face_swap`: under `triangle` the keyboard
+  slot's button state reads the circle as the triangle and the reverse, and a click's `Controls::tap`
+  names the button the reader sees. The swap is **on** in a menu, in a paused race and on an end-of-race screen, and **off** while a race
+  runs (the circle is the absorb there) and in photo mode, whose own button state the replay viewer and photo
+  mode read (`Controls::view_take`) (`Session::menu_face_swap`).
+- A footer's glyph is a stand-in codepoint the disc authored for its own Back button, so
+  `glyph_swap` exchanges the circle's and the triangle's stand-ins through the prompt substitution
+  (`oag_ui::prompt::Substitution::exchanging` for the disc's glyphs, `oag_game::prompts::substitution`
+  for PromptFont's and the keyboard's key). On Pulse's PS2 a `circle` choice draws the circle
+  beside `Back` on every footer; on any pressing a `triangle` choice draws the triangle.
+- Escape and the secondary mouse button emit Back directly and are unchanged. The keyboard's keys follow
+  the pad's mapping as before: Backspace, `Z` and `Y` are the circle button, `V` the triangle.
+
+**Checked.** `campaign_cursor_ground_truth::menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_triangle`
+drives Pulse PS2 EU's Cell Selection with `circle`: the circle leaves to Grid Selection, a second circle
+leaves the campaign, the triangle opens Cell Help, and `original` keeps the circle on Help.
+`oag_input::tests::face_swap_*` cover the exchange itself. A `triangle`
+choice is not drivable through `--drive` (its `press` names the button the screen reads, after the exchange),
+so its physical effect is the unit test, not a still.
+
+The LAN, online and join lobbies read the devices' presses (`Controls::device_presses`), which the same
+swap exchanges.
+**The PS2 pressing's other screens** still back on the circle under `original`, as above; `triangle` makes
+them leave on the triangle the footer draws.
 
 ## Pulse's medal hexagons filled from HD's atlas, 2026-11-12 (`oag.hd-medals`)
 

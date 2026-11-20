@@ -85,22 +85,53 @@ pub fn glyph_name(prompt: Prompt, family: PromptFamily, key: Option<&str>) -> St
 ///
 /// `bound_keys` answers which keys the keyboard currently binds to a button;
 /// only the keyboard family reads it.
+///
+/// `exchange` draws the circle's and the triangle's glyphs the other way round
+/// (`oag_title::prompts::MenuButtons::glyph_swap`): the disc authors a footer for its own Back
+/// button and the player has chosen the other.
 #[must_use]
 pub fn substitution(
     prompts: &Prompts,
     family: Option<PromptFamily>,
+    exchange: bool,
     bound_keys: &dyn Fn(Button) -> Vec<&'static str>,
 ) -> Substitution {
     let Some(family) = family else {
-        return Substitution::none();
+        return if exchange {
+            Substitution::exchanging(prompts, Prompt::Circle, Prompt::Triangle)
+        } else {
+            Substitution::none()
+        };
     };
     let mut out = Substitution::none();
-    for (index, (_, prompt)) in prompts.glyphs.iter().enumerate() {
-        let key = bound_keys(button_of(*prompt)).into_iter().next();
-        let name = glyph_name(*prompt, family, key);
+    for (index, (_, authored)) in prompts.glyphs.iter().enumerate() {
+        let prompt = if exchange {
+            oag_title::prompts::exchanged(*authored)
+        } else {
+            *authored
+        };
+        let key = bound_keys(button_of(prompt)).into_iter().next();
+        let name = glyph_name(prompt, family, key);
         out = out.with(prompts, index, art_index(&name));
     }
     out
+}
+
+/// Whether `title`'s footers on `platform` draw the circle's and the triangle's glyphs
+/// exchanged under `settings`: the chosen Back button is not the one the disc authored them for.
+#[must_use]
+pub fn glyphs_exchanged(
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+    settings: &crate::settings::Settings,
+) -> bool {
+    title
+        .menu_buttons(
+            platform,
+            settings.controls.menu_back_value(),
+            Prompt::Triangle,
+        )
+        .glyph_swap
 }
 
 /// Sets `renderer`'s substitution for a capture: no device to follow, so only
@@ -108,12 +139,15 @@ pub fn substitution(
 pub fn install(
     renderer: &mut crate::render::Renderer,
     title: &oag_title::Title,
+    platform: oag_disc::Platform,
     settings: &crate::settings::Settings,
 ) {
+    let exchange = glyphs_exchanged(title, platform, settings);
     let bindings = settings.controls.live_bindings();
     renderer.set_prompt_substitution(substitution(
         title.prompts,
         forced_family(settings.controls.prompt_style_value()),
+        exchange,
         &|button| bindings.names_for(button),
     ));
 }

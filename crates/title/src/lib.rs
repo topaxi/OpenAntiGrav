@@ -857,7 +857,8 @@ impl Eq for CircuitPose {}
 
 impl FrontEnd {
     /// The control `backward` and `cancel` are on `platform`'s pressing: [`Self::back_button_ps2`]
-    /// on a PS2, the circle everywhere else.
+    /// on a PS2, the circle everywhere else. What the player's CONTROLS choice is relative to
+    /// ([`Self::menu_buttons`]).
     #[must_use]
     pub fn back_button(&self, platform: Platform) -> prompts::Prompt {
         match platform {
@@ -1080,7 +1081,23 @@ pub struct ForeignSerial {
 }
 
 impl Title {
-    /// The shared identity `team` (an id as this title spells it) is kept under.
+    /// What `choice` makes the front end's Back and Help buttons on `platform`'s pressing, for a
+    /// Help screen the disc opens on `authored_help`. The one place that decides; a title with no
+    /// front end of its own backs on the circle.
+    #[must_use]
+    pub fn menu_buttons(
+        &self,
+        platform: Platform,
+        choice: prompts::MenuBack,
+        authored_help: prompts::Prompt,
+    ) -> prompts::MenuButtons {
+        let original = self.front_end.map_or(prompts::Prompt::Circle, |front_end| {
+            front_end.back_button(platform)
+        });
+        prompts::MenuButtons::resolve(original, choice, authored_help)
+    }
+
+    /// The shared identity `team (an id as this title spells it) is kept under.
     #[must_use]
     pub fn team_identity(&self, team: &str) -> String {
         team::identity_of(self.teams, team)

@@ -193,6 +193,7 @@ impl Session {
                         campaign.flyers,
                         campaign.circuit_emblems,
                         custom,
+                        self.settings.controls.menu_back_value(),
                     );
                     stage.resume_selector(phases);
                     stage.set_medal_art(medal_art);

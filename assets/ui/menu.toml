@@ -1962,6 +1962,19 @@ string_id = "OAG_CONTROLS_RUMBLE"
 setting = "controls.rumble"
 values = ["none", "original", "ps3", "ps4"]
 
+# The face button the front end leaves a screen on. `original` is each title's own
+# (`oag_title::FrontEnd::back_button`: the circle, and on Pulse's PS2 the triangle); `circle`
+# and `triangle` are B and Y on an Xbox-layout pad. The button a choice displaces opens Help
+# instead (`oag_title::prompts::MenuButtons`). The values are words, not button glyphs: the
+# prompt substitution this row controls would exchange a glyph in the row's own value.
+[[page.entry]]
+id = "menu_back"
+kind = "choice"
+label = "MENU BACK"
+string_id = "OAG_CONTROLS_MENU_BACK"
+setting = "controls.menu_back"
+values = ["original", "circle", "triangle"]
+
 # A page of its own, with a live picture of the overlay beside the rows
 # (`oag_game::touch_controls::preview`). Only a touchscreen has an overlay to
 # set, so `Definition::drop_touch_controls` takes this row away off Android

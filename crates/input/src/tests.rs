@@ -761,3 +761,58 @@ fn seated_keyboards_fly_their_seats_from_the_first_tick() {
     assert_eq!(flying.get(0).stick_y, 1.0, "A is slot 0");
     assert_eq!(flying.get(1).stick_x, 1.0, "B is slot 1");
 }
+
+#[test]
+fn face_swap_exchanges_the_circle_and_the_triangle_in_the_button_state_only() {
+    let mut controls = Controls::without_pad();
+    controls.set_face_swap(true);
+    controls.set_key(&Key::Character("z".into()), true);
+    let snapshot = controls.player_snapshots();
+    assert!(
+        controls.buttons().is_pressed(Button::Triangle),
+        "Z is the circle, read as the triangle"
+    );
+    assert!(!controls.buttons().is_pressed(Button::Circle));
+    assert!(
+        snapshot
+            .get(controls.keyboard_slot())
+            .buttons
+            .is_pressed(Button::Triangle)
+    );
+    // The viewer reads the device, not the front end's frame.
+    assert!(controls.view_take(Button::Circle));
+    assert!(!controls.view_take(Button::Triangle));
+}
+
+#[test]
+fn a_tap_arrives_as_the_button_it_names_under_face_swap() {
+    let mut controls = Controls::without_pad();
+    controls.set_face_swap(true);
+    controls.tap(Button::Circle);
+    controls.player_snapshots();
+    assert!(controls.buttons().is_pressed(Button::Circle));
+    assert!(!controls.buttons().is_pressed(Button::Triangle));
+}
+
+#[test]
+fn without_face_swap_a_button_is_the_button() {
+    let mut controls = Controls::without_pad();
+    controls.set_key(&Key::Character("z".into()), true);
+    controls.player_snapshots();
+    assert!(controls.buttons().is_pressed(Button::Circle));
+    assert!(!controls.buttons().is_pressed(Button::Triangle));
+}
+
+#[test]
+fn face_swap_exchanges_the_presses_the_lobby_screens_read() {
+    let mut controls = Controls::without_pad();
+    controls.set_face_swap(true);
+    controls.set_key(&Key::Character("z".into()), true);
+    controls.player_snapshots();
+    let all = controls
+        .device_presses()
+        .iter()
+        .fold(0, |all, press| all | press.buttons);
+    assert_eq!(all & Button::Triangle.bit(), Button::Triangle.bit());
+    assert_eq!(all & Button::Circle.bit(), 0);
+}

@@ -15,6 +15,7 @@ use oag_input::music::MusicBindings;
 use oag_input::pad::TriggerMode;
 use oag_input::prompt::PromptStyle;
 use oag_physics::pilot_assist::Level;
+use oag_title::prompts::MenuBack;
 
 /// How the pilot's buttons reach the ship.
 ///
@@ -113,6 +114,12 @@ pub struct Controls {
     /// `docs/ui/button-prompts.md`.
     #[serde(default = "default_prompt_style")]
     pub prompt_style: String,
+    /// The face button the front end leaves a screen on: `original` (each title's and pressing's
+    /// own), `circle` or `triangle` (`oag_title::prompts::MenuBack`). A **token**, like `scheme`:
+    /// a bad value reads as `original`. The button it displaces opens Help instead
+    /// (`oag_title::prompts::MenuButtons`, `docs/ui/campaign-screens.md`, "Menu back").
+    #[serde(default = "default_menu_back")]
+    pub menu_back: String,
     /// Pilot Assist for the player's craft: `off`, `normal` or `extreme`
     /// (`oag_physics::pilot_assist::Level`), the three levels 2048 offers and every
     /// title now does. A corridor spring that yaws the craft off a wall it is
@@ -145,6 +152,10 @@ fn default_pilot_assist() -> Level {
 
 fn default_prompt_style() -> String {
     PromptStyle::default().name().to_string()
+}
+
+fn default_menu_back() -> String {
+    MenuBack::default().name().to_string()
 }
 
 /// `[controls] pilot_assist` on disk: a level's token, reading the old switch's bool too.
@@ -184,6 +195,12 @@ impl Controls {
     #[must_use]
     pub fn music_bindings(&self) -> (MusicBindings, Vec<String>) {
         MusicBindings::from_pairs(self.music.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+    }
+
+    /// [`Self::menu_back`] as a value, `original` for a token this build does not know.
+    #[must_use]
+    pub fn menu_back_value(&self) -> MenuBack {
+        MenuBack::from_name(&self.menu_back).unwrap_or_default()
     }
 
     /// [`Self::prompt_style`] as a value, `auto` for a token this build does
@@ -377,6 +394,7 @@ impl Default for Controls {
             touch_opacity: default_touch_opacity(),
             bindings: default_bindings(),
             prompt_style: default_prompt_style(),
+            menu_back: default_menu_back(),
             pilot_assist: default_pilot_assist(),
             music: BTreeMap::new(),
         }

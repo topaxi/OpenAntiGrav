@@ -325,6 +325,7 @@ impl Session {
             if self.windowed_race() && !self.keys_by_window() {
                 self.controls.let_go_extra_seats();
             }
+            self.controls.set_face_swap(self.menu_face_swap());
             let inputs = self.controls.player_snapshots();
             // Taken every tick so a press made while paused or in a menu is spent there, and
             // acted on only by the unpaused race arm below.
