@@ -268,6 +268,9 @@ pub struct ViewSetup {
     /// The drawn reticle's grids and law, off the loaded HUD: [`SimSetup::sight`]'s lock
     /// grid seen from this machine's screen ([`Sighting::view_sight`]).
     pub sight: Sighting,
+    /// The track's authored section-visibility rows, for the multiplayer tag gate
+    /// (`oag_hud::player_tags::in_view_row`). `None` where the track names no sections.
+    pub track_sections: Option<oag_vex::pvs::TrackPvs>,
 }
 
 /// A build without the `view` feature draws and plays nothing, so it has nothing to build
@@ -369,6 +372,7 @@ impl ViewSetup {
             gantry_seconds: None,
             camera_override: None,
             sight: Sighting::default(),
+            track_sections: None,
         }
     }
 }

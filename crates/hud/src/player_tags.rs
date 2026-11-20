@@ -6,6 +6,8 @@
 //!
 //! - a tag's fade rises by `dt * 1.2` up to 1 ([`step_fade`]);
 //! - the anchor is the craft raised by `fade * 2.0` units ([`raise`]), projected to the screen;
+//! - a craft is tagged only where the view's track-section row holds its section ([`in_view_row`],
+//!   `FUN_0883e37c`);
 //! - alpha is `min(fade, f(distance))`, `f` being 1 up to 20 units and falling linearly to 0 at
 //!   60 ([`alpha`]); the option off forces it to 0;
 //! - the colour is white, the scale and font are the `PlrTag` label's own.
@@ -14,15 +16,28 @@
 //! worked out where the camera is ([`Readout::player_tags`]), and the label only supplies the
 //! face, the scale and the alignment.
 //!
-//! **Chosen, not measured:** the raise runs along the craft's own up (the original's axis is
-//! unread), and only the other person-flown craft are tagged (the original tags every active
-//! slot of a multiplayer race, which on this engine's grid are the people; an AI craft's slot
-//! is not offered a name). The name is the lobby's where the race has one and `Player N`
-//! otherwise.
+//! The raise runs along the world's Y axis, not the craft's own up: the original adds it to the
+//! second float of the craft's translation row. The local craft has no tag (its kind byte is 0,
+//! and a tag is active only for a non-zero one).
+//!
+//! **Chosen, not measured:** only the other person-flown craft are tagged (the original tags
+//! every craft built with a non-zero kind, AI included; whether a multiplayer race has any is
+//! unread). The name is the lobby's where the race has one and `Player N` otherwise.
 
 use crate::draw::{Context, Frame};
 use crate::{Readout, VertAlign};
 use oag_ui::frontend::Draw;
+
+/// Whether a craft in track section `section` is tagged in a view whose visible-section row is
+/// `row` (`FUN_0883e37c`): the row's bit for the section is set. A section outside `0..64`, or
+/// one the track does not name (`None`), is tagged unconditionally.
+#[must_use]
+pub fn in_view_row(section: Option<u8>, row: u64) -> bool {
+    match section {
+        Some(section) if section < 64 => row & (1u64 << section) != 0,
+        _ => true,
+    }
+}
 
 /// How fast a tag fades in, per second (`dt * 1.2`).
 pub const FADE_IN_PER_SECOND: f32 = 1.2;
@@ -54,6 +69,14 @@ pub fn step_fade(fade: f32, dt: f32) -> f32 {
 #[must_use]
 pub fn raise(fade: f32) -> f32 {
     fade * RAISE
+}
+
+/// Where the tag anchors for a craft at `position` (world space): raised along the world's Y by
+/// [`raise`], whatever way the craft banks (`Hud_UpdateMultiplayerTags` adds it to the
+/// translation row's second float).
+#[must_use]
+pub fn anchor(position: [f32; 3], fade: f32) -> [f32; 3] {
+    [position[0], position[1] + raise(fade), position[2]]
 }
 
 /// The tag's alpha at `distance` world units from the camera. `on` is the option: off forces 0.

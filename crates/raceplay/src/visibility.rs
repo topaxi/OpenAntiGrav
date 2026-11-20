@@ -186,6 +186,12 @@ impl TrackVisibility {
         !self.pvs.is_empty()
     }
 
+    /// The section partition, where the track names sections.
+    #[must_use]
+    pub fn pvs(&self) -> Option<&oag_vex::pvs::TrackPvs> {
+        self.has_sections().then_some(&self.pvs)
+    }
+
     /// How many authored LOD-swap pairs the track carries, for the load
     /// report.
     #[must_use]

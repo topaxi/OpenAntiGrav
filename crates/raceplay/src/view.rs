@@ -70,6 +70,8 @@ pub struct RaceView {
     pub(super) camera_shake_on: bool,
     /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
     pub(super) player_tags_on: bool,
+    /// The track's section-visibility rows, which gate a multiplayer tag by the viewer's section.
+    pub(super) track_sections: Option<oag_vex::pvs::TrackPvs>,
     /// The seat's wall-contact effects: the camera shake, the collision sparks and
     /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
     pub(super) contact: super::contact_fx::ContactFx,
