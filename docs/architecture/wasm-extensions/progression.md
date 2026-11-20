@@ -649,10 +649,12 @@ race_again = true             # false: the results page offers no RACE AGAIN for
 
 **Binding.** The start description carries the campaign and event keys, and the
 `[run]` table names the module. A rules module otherwise "runs in every race the
-mod is on for" unless it declines, so the host passes the run to the named module
-only, and only in a race launched from this campaign. Another module of the mod, or
-the same module in a Single Race, sees an empty run and campaign key 0, and
-`oag_wants_race` already lets it decline.
+mod is on for" unless it declines, so the host calls `race-start` and `race-end` on
+the named module only, and only in a race launched from this campaign (maintainer,
+2026-11-20; [progression-challenge.md](progression-challenge.md), objection 18). Any
+other module that is on, of this mod or another, still ticks as usual but is never
+called at a race's start or end, so exactly one module fills the slot table. In a
+Single Race no module gets either call.
 
 The mod declares `simulation = true`, so every race of the campaign is MODDED. The
 campaign page names this, as the MODS page does.

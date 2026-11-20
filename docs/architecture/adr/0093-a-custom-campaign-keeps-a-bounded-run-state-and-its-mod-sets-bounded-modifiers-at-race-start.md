@@ -79,11 +79,14 @@ ratings, not computed from handling.
 2. **Binding.** `[run] module` names a module the mod lists in `[extension.rules]`.
    Only that module sees the run, and only in a race launched from that campaign;
    the start description carries the campaign and event keys. The mod declares
-   `simulation = true`, so every race of the campaign is MODDED.
+   `simulation = true`, so every race of the campaign is MODDED. **Only that module
+   gets `race-start` and `race-end`**: another module that is on still ticks as usual
+   but is never called at a race's start or end, and outside a run campaign no module
+   is, so one writer fills the slot table (maintainer, 2026-11-20).
 3. **Two optional guest exports.** `oag_race_start` and `oag_race_end`, with a
    second host-written buffer a guest names by `oag_run`, the pattern of
-   `oag_wants_race` and `oag_track`. `race-start` reads the run state, replies with
-   commands and **sets the module's initial tick state** (the only way the run reaches
+   `oag_wants_race` and `oag_track`. `race-start` reads the run state, fills the
+   slot table (decision 4) and **sets the module's initial tick state** (the only way the run reaches
    `tick`, which never sees the run bytes); it cannot write the run. **A fault in
    `race-start`** (a trap, spent fuel, a malformed reply, a non-finite factor) **refuses
    the launch**: the player is back on the campaign page with a line naming the mod and
@@ -238,7 +241,8 @@ out-of-range factor as the host does, with a warning its test harness can assert
 (decisions 3 and 4; objection 16, answered). `race-start` fills a per-slot table, zero meaning
 untouched, with spare columns, instead of sending commands; the run cap is 4,096
 bytes in a run buffer of its own size (decisions 1 and 4; objection 17 and question
-14, answered).
+14, answered). Only the campaign's bound module is called at race start
+and end (decision 2; objection 18, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in

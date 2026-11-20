@@ -492,6 +492,11 @@ fault" does not say whose. The precedent for a shared factor is `scale-thrust`:
 may send start commands; another module's is a fault of that module. Revisit with
 the composition question (README open question 8).
 
+**Answered by the maintainer (2026-11-20): the bound module only.** Stricter than
+proposed: no other module is called at race start or end at all, so there is nothing
+to fault (ADR-0093 decision 2, progression.md section 7). Composition stays README
+open question 8.
+
 ## Nits
 
 19. **Open question 9 is already answered.** The manifest key `drives_ai_pickup`
