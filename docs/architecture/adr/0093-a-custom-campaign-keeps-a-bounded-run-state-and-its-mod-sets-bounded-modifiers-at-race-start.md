@@ -21,7 +21,7 @@ here in place instead of superseding it.
   in v1", and ADR-0080 decision 7 (a blob reaches a race at `race-start` only, and
   nothing flows back). A sim `race-end` now produces bytes that persist. Why this
   stays within the reason for the rule: the record is host-owned, listed and clearable
-  on the MODS page, one per campaign, staged and committed by the host (never written
+  on the MODS page, one per campaign, committed by the host (never written
   by the guest directly), capped at 1,024 bytes, never read by a second mod, and
   single-player.
 - the "no replacing a recovered law or a disc table" row of the README's section 3
@@ -70,8 +70,7 @@ ratings, not computed from handling.
 
 1. **A run.** A custom campaign that declares a `[run]` table has, per profile, one
    **run**: opaque bytes of at most `MAX_RUN_BYTES` = 1,024 (raw, before base64), a
-   `u64` seed drawn when the run is created, an event ordinal, and a staged copy
-   (`pending`). It is a table of the records `Store` keyed like the campaign's
+   `u64` seed drawn when the run is created, and an event ordinal. It is a table of the records `Store` keyed like the campaign's
    progress rows (`<title slug>/mod:<mod id>/<campaign id>`), saved by
    `records::save_in_background`. It is not the ADR-0080 tune, which is one blob per
    mod and title.
@@ -84,7 +83,9 @@ ratings, not computed from handling.
    `oag_wants_race` and `oag_track`. `race-start` reads the run state, replies with
    commands and **sets the module's initial tick state** (the only way the run reaches
    `tick`, which never sees the run bytes); it cannot write the run. `race-end` reads
-   the result (including the medal tier the host evaluated) and the final tick state,
+   the result (including the medal tier the host evaluated, the event's best medal
+   before this race as `prior_tier`, and the event's position in the campaign as
+   `event_index`) and the final tick state,
    and writes the new run bytes. ABI revision 7.
 4. **Modifiers.** At race start the mod may send `set-modifier{slot, param, factor}`
    for a closed list of `Handling` parameters. The host owns each range, scales the
@@ -114,16 +115,21 @@ ratings, not computed from handling.
    a `Weapon::Extension` whose `pickup-fire` reply sends `give-shield`, the new
    `give-autopilot` and `clear-pickup`. One kind per mod stays; the recipe is
    selected from state.
-6. **Stage and commit.** An event ends at the two sites that record a medal today:
+6. **Commit on exit.** An event ends at the two sites that record a medal today:
    the finish site for a lap-count mode, the escape site for Zone, Speed Lap and an
    abandoned Time Trial. The race goes on as it does today (the world steps on under
    the results; Zone runs until the player leaves), and `race-end`, the mod's own
    award and end-of-run logic, runs **once, when the player exits the race**, not at
-   the finish moment (maintainer, 2026-11-20). Its output is staged together with the medal the race earned, both saved at the finish. They are
-   committed when the player leaves the results for the campaign screens, before any
-   choice screen opens. RACE AGAIN and RESTART RACE discard it
-   and restart from the committed bytes. Quitting before the finish stages nothing.
-   Replay rebuilds, demos, unofficial runs and split screens never call `race-end`.
+   the finish moment (maintainer, 2026-11-20). Its output is **committed at once**,
+   ordinal + 1, in one records save; nothing is staged. The medal is recorded at its
+   site as today, one code path for every campaign. A replay of a cleared event is the
+   mod's to judge: `prior_tier` and `event_index` let it decide in one comparison
+   whether a finish earns anything. RACE AGAIN is an exit: `race-end` runs and commits,
+   then the event relaunches from the new run. A campaign may hide RACE AGAIN with
+   `[run] race_again = false` (default `true`). RESTART RACE before the medal is
+   captured writes nothing, and nor does quitting a lap-target race before its finish.
+   A crash between the medal and the exit keeps the medal and leaves the run as it
+   was. Replay rebuilds, demos, unofficial runs and split screens never call `race-end`.
 7. **A choice screen** is an ADR-0080 screen named by `[run] choice_screen`, opened by
    the host after a finish whose `race-end` asked for it. It receives the run bytes and
    may return replacement bytes, as a second allowed output beside `save`
@@ -148,7 +154,7 @@ ratings, not computed from handling.
     what the campaign's rules open: data rows in the campaign file (a team or a
     variant, opened from the start, by an event's medal, or by a run flag), and the
     run's own unlock set, which the mod adds to at `race-end` (`unlock{team,
-    variant}` into the run record, staged and committed like the run bytes). The
+    variant}` into the run record, committed with the run bytes). The
     global unlocks are never written by a campaign, and a campaign's own unlocks
     never leak into the Race Box or another campaign. Mechanism detail:
     `progression.md` section 7.1.
@@ -169,7 +175,10 @@ gated on its own ground truth, and neither applies in Zone, at least for now (de
 4; objection 1, answered). An event of every mode ends where its medal is recorded
 today (the finish site, or the escape site for Zone, Speed Lap and an abandoned Time
 Trial); the race keeps running as today and `race-end` runs once, when the player exits
-the race (decision 6; objection 2, answered).
+the race (decision 6; objection 2, answered). Nothing is staged: `race-end` gets `prior_tier` and
+`event_index`, its output commits on exit, RACE AGAIN is an exit that commits, and a
+campaign may hide RACE AGAIN with a `[run] race_again` flag (decision 6; objections 3
+and 6, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, the
@@ -184,9 +193,10 @@ page that shows stats when the craft is preset, and every other item in
 - **Keep the run in the sim module's tick blob.** It dies with the race; persisting it
   would make the host snapshot a blob the guest cannot tell from scratch state.
   Rejected.
-- **Commit at the finish.** It is how medals work today, and it lets a retry farm
-  rewards. Rejected for decision 6, at the cost of touching the two `record_result`
-  call sites in `oag-game`.
+- **Stage the run bytes and the medal, commit on leaving, discard on RACE AGAIN** (the
+  first draft). It closes RACE AGAIN but not re-entering a cleared event from the grid,
+  and sends a `[run]` campaign down a second path through both `record_result` sites.
+  Rejected for `prior_tier` and a commit on exit (decision 6).
 - **Let `race-start` write the run state.** A retry re-applies a start-time write on
   top of itself. Rejected: `race-start` stays a pure function of (bytes, seed,
   ordinal, race).
@@ -232,9 +242,12 @@ the same race. Every disc number stays the source of truth.
   (`race-start`/`race-end`, `setup.tune`, the frontend world) are designs, not code.
   Capabilities 4 and 5 are blocked until ADR-0080 is accepted and built; if it is
   rejected they have no home.
-- **Staging the medal changes shared code.** The finish site and the escape site in
-  `oag-game` serve every campaign; a `[run]` campaign takes a different path through
-  them, which is a regression surface for the disc campaigns.
+- **The race exit calls a guest.** The results page's exits and the escape site in
+  `oag-game` serve every campaign; for a `[run]` campaign they now call `race-end` and
+  save the run. The medal path itself is unchanged.
+- **Farming is the mod's job.** The host gives `prior_tier` and `event_index` and
+  enforces nothing; a mod that ignores them pays out on every replay of a cleared
+  event.
 - **A clamp where the convention is a fault.** An author can ship a module whose
   rewards are silently weaker than intended; only the load report says so.
 - **Per-track records are lost for a modified race.** No leaderboard pollution, and

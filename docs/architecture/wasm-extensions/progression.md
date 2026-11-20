@@ -51,8 +51,7 @@ A **run** is one playthrough of one custom campaign by one profile. It has:
 - `seed`: a `u64` the host draws once when the run is created, so the guest can
   derive reward rolls without an RNG stream (section 4.3).
 - `ordinal`: how many events the run has committed.
-- `pending`: the bytes and the medal a finish staged, not yet committed (section 5).
-- `offer_pending`: a flag, set when a committed finish asked for a choice and the player has not picked.
+- `offer_pending`: a flag, set when a committed `race-end` asked for a choice and the player has not picked.
 
 The host stores it in the records `Store` as a sibling table of `campaign` and
 `loyalty`, **keyed like the campaign's progress rows**
@@ -139,7 +138,7 @@ anyway. *Rejected: a 4 KiB cap.* It needs the buffer to grow past `IO_LEN`, whic
 guest has been built against, for a use no example needs.
 
 ```rust
-/// What the finish site tells `race-end`. 32 bytes. Fixed layout, little endian.
+/// What the host tells `race-end` on the exit from the race. Fixed layout, little endian.
 pub struct RunResult {
     pub slot: u8,          // the person's slot
     pub finished: bool,    // crossed the line (false: wrecked, eliminated, timed out)
@@ -147,11 +146,13 @@ pub struct RunResult {
     pub laps: u8,
     pub tier: u8,          // index into the campaign's medal tiers, 0 = best; 255 = none
     pub rung: u8,          // difficulty rung, as the campaign screens use it
+    pub prior_tier: u8,    // the event's best medal before this race (`Store::campaign_medal`); 255 = none
+    pub event_index: u8,   // the event's position in the campaign file, so a cleared set is a bitmask
     pub ticks: u32,        // race clock at the finish
     pub best_lap_ticks: u32,
     pub shield: f32,       // left at the finish
     pub shield_max: f32,
-    // 4 bytes spare
+    // 2 bytes spare
 }
 
 /// What `race-end` may add to its reply besides new run bytes.
@@ -381,32 +382,36 @@ reward, if wanted later, is `scale-thrust`, which acts after the law in every mo
 
 ## 5. Capability 1: the lifecycle of the run state
 
-Two bytes-in, one bytes-out, and one commit point.
+Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 
 | Event | What happens to the run |
 | --- | --- |
 | Campaign entered, no run | Host creates a run: empty bytes, a drawn `seed`, ordinal 0 |
-| NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `pending`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
+| NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `offer_pending`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
 | An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write |
-| The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. When the player **exits the race**, `Race::end_run(result)` calls `race-end` once; its output is **staged** as `pending` together with the medal this race earned, and saved |
-| The player leaves the results for the campaign screens, or presses CONTINUE | **Commit**: `pending` becomes `bytes`, the staged medal is recorded, ordinal += 1, and `offer_pending` is set if `race-end` asked for an offer. Then the choice screen opens, if there is one (section 8.1) |
-| RACE AGAIN on the results page, or RESTART RACE in the pause menu | `pending` and the staged medal are **discarded**; the race restarts from the committed bytes |
-| QUIT RACE or escape **before** the finish, in a mode with a lap target | No `race-end`, nothing staged, committed bytes untouched |
-| The game closes or crashes after the finish, before leaving | The staged bytes and the staged medal were saved together with the finish, and neither is live yet; the next launch commits both (and sets `offer_pending`), so the pair never splits |
-| A replay rebuild, `--from-png`, a demo, an unofficial run, a split screen | `race-end` is not called, nothing is staged |
+| The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. Nothing is written to the run yet |
+| The player **exits the race** (leaves the results for the campaign screens, presses CONTINUE, or, in Zone and Speed Lap, escapes) | `Race::end_run(result)` calls `race-end` once with `prior_tier` and `event_index`. **Commit** at once, in one records save: its output becomes `bytes`, ordinal += 1, and `offer_pending` is set if it asked for an offer. Then the choice screen opens, if there is one (section 8.1) |
+| RACE AGAIN on the results page | An exit: `race-end` runs and commits as above, then the event relaunches from the **new** run bytes (after the offer, if one was asked for). Hidden when the campaign sets `[run] race_again = false` |
+| RESTART RACE in the pause menu, before the medal is captured | Nothing was written; the race restarts from the same committed bytes |
+| QUIT RACE or escape **before** the finish, in a mode with a lap target | No `race-end`, nothing written, committed bytes untouched |
+| The game closes or crashes after the medal is captured, before the exit | The medal is kept, as today; `race-end` never ran, so the run is as it was. A replay of the event then sees the medal as `prior_tier` |
+| A replay rebuild, `--from-png`, a demo, an unofficial run, a split screen | `race-end` is not called, nothing is written |
 
-**Why stage the medal too.** Today the medal is recorded at the finish
-(`Launch::record_result`, called from the finish site in `Session::frame` and the
-escape site in `Session::escape`, behind `result_saved`) and is never downgraded. In
-a run campaign a gold medal that unlocks the next event would survive a RACE AGAIN
-that discards the reward, so a player could farm unlocks and re-roll rewards
-separately. For a campaign with a `[run]` table the host stages both and commits
-both. This touches the two `record_result` call sites, which are in `oag-game`.
+**Why nothing is staged (maintainer, 2026-11-20).** The first draft staged the run
+bytes and the medal at the finish, committed them on leaving and discarded them on
+RACE AGAIN. That closed RACE AGAIN but not the grid: a cleared event stays enterable,
+and each finish rolled a fresh reward
+([progression-challenge.md](progression-challenge.md), objections 3 and 6). Instead the
+guest gets `prior_tier` (the host has it, `Store::campaign_medal`) and `event_index`,
+and decides in one comparison whether a finish earns anything; the host enforces
+nothing. The medal is recorded at its site as today, and the run commits on exit, so
+both `record_result` sites keep one path for every campaign.
 
-**Why RACE AGAIN hands the committed bytes.** `restart_parked_race` and the results
-page's restart relaunch with the same `Launch`. If they handed the staged bytes, a
-retry after a good reward would start from the reward, and a retry after a bad one
-could keep re-rolling. Handing the committed bytes makes a retry the same race.
+**RACE AGAIN.** It is an exit like any other: `race-end` runs and commits, and the
+relaunch starts from the new run, so a retry is a new event of the run, judged by the
+mod through `prior_tier`. A campaign that wants no quick retry sets `[run] race_again =
+false`, and the results page offers no RACE AGAIN for its events; the player re-enters
+from the grid.
 
 **Where an event ends (maintainer, 2026-11-20).** At the two sites that record a
 medal today (`Launch::record_result`): the finish site in `Session::frame` for a
@@ -427,7 +432,7 @@ and where `race_is_unofficial()` is true.
 ### 5.1 Replays, ghosts, records, network
 
 - **Replay.** `ModUse` gains an optional `run`: the **input** bytes the race started
-  from (not the staged output), the `seed`, the `ordinal`, the campaign and event
+  from (not the committed output), the `seed`, the `ordinal`, the campaign and event
   keys. Base64 in the TOML, capped at `MAX_RUN_BYTES` on the raw bytes, like the
   tune proposal. A rebuild (`Options::recorded_mods`, `apply_recorded`) feeds those to
   `race-start` and never reads the local store; the applied record in section 4.1 is
@@ -448,8 +453,9 @@ and where `race_is_unofficial()` is true.
 
 ### 5.2 Rejected alternatives for capability 1
 
-- *Commit at the finish.* Simpler, and it is how medals work today. Rejected: it
-  makes RACE AGAIN farm rewards (above).
+- *Stage the run bytes and the medal, commit on leaving, discard on RACE AGAIN.* The
+  first draft. Rejected: it leaves the grid open to farming and sends a `[run]`
+  campaign down a second path through both `record_result` sites (above).
 - *Let `race-start` write the run state too.* A retry would re-apply a start-time
   write on top of itself. Read-only at start keeps `race-start` a pure function of
   (bytes, seed, ordinal, race).
@@ -539,6 +545,7 @@ module = "ext/run.wasm"       # a module the mod lists in [extension.rules]; the
 run_bytes = 256               # the run state's length, at most MAX_RUN_BYTES (1024); the module's tick blob has its own oag_state_len
 new_run = "clear-medals"      # "clear-medals" (default) | "keep-medals"
 choice_screen = "reward"      # optional: an [[extension.screen]] id, opened after a finish that offered
+race_again = true             # false: the results page offers no RACE AGAIN for this campaign's events
 
 [[run.stat]]                  # capability 5, section 8; at most 8
 id = "engine"
@@ -590,7 +597,7 @@ run_flag = "feisar-concept"   # opened when the run's unlock set holds this name
   unlock set. A campaign with no module can still define its own unlocks.
 - **From the run.** A sim module adds names to the run's unlock set at `race-end`
   with `unlock{name}` (new reply command; the set lives in the run record beside the
-  run bytes, at most 64 names of 32 bytes, staged and committed with them). NEW RUN
+  run bytes, at most 64 names of 32 bytes, committed with them). NEW RUN
   clears it; medal-based rows survive a new run, because medals are the campaign's
   progress, not the run's.
 - **Scope.** Under `source = "own"` the campaign's events offer only what its rules
@@ -615,14 +622,13 @@ A mod screen (ADR-0080), named by `[run] choice_screen`. The flow:
 1. `race-end` rolls the offers from `seed` and `ordinal` (a pure function; the
    frontend world has no RNG and no determinism, and the roll belongs in sim code)
    and writes them into the run bytes, with `END_OFFER`.
-2. The player leaves the results page. The host **commits first** (section 5: the
-   staged bytes become the committed run bytes, the medal is recorded), then opens the
-   screen with `open-context.run` set to the committed bytes.
+2. The player exits the race. The host **commits first** (section 5: `race-end`'s
+   output becomes the committed run bytes), then opens the screen with
+   `open-context.run` set to the committed bytes.
 3. The screen draws a `choice` or `list` widget from the offers it parses out of the
    run bytes. On accept it returns `reply.run` with the pick applied and `close: true`;
    the host writes that straight over the committed bytes and clears `offer_pending`.
-   There is no second staging: the pick happens after the commit, so a RACE AGAIN can
-   no longer discard the race that offered it, and a crash before the pick leaves
+   The pick happens after the commit, and a crash before the pick leaves
    `offer_pending` set.
 
 **Back.** Back writes nothing. `offer_pending` stays set, and the screen re-opens at
@@ -773,7 +779,7 @@ exactly as before (`VANILLA_FOLD`).
 
 1. The ABI: `oag_run` and the two exports, `RunResult`, codes 39 to 41, revision 7,
    the SDK `Run` trait and its test harness. No engine meaning yet.
-2. The run record in the `Store`, the `[run]` table, `NEW RUN`, stage and commit, the
+2. The run record in the `Store`, the `[run]` table, `NEW RUN`, the commit on exit, the
    replay `run` field, the no-record rule.
 3. `set-modifier` for the settled parameters, `SlotMods` in the hash; a
    disc-backed ground truth in the shape of `energy_turbo_ground_truth` (a +20 %

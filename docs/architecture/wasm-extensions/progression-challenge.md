@@ -170,6 +170,10 @@ event's position in the campaign file, so a cleared set is a bitmask). With thos
 guest decides in one comparison whether a finish earns anything. Then see objection 6:
 the staging can go.
 
+**Answered by the maintainer (2026-11-20): `prior_tier`, no staging.** `race-end` gets
+`prior_tier` and `event_index` and decides itself whether a replay earns anything
+(ADR-0093 decision 6, progression.md section 5). Answered together with objection 6.
+
 ### 4. Capabilities 4 and 5 are decided inside an ADR whose base is undecided (blocks accepting decisions 7 and 8)
 
 **Evidence.** ADR-0080 has been Proposed since 2026-10-29 and nothing of the
@@ -222,6 +226,11 @@ is the committed run, saved in the same `save_in_background` call as the medal. 
 `[run]` campaign the results page offers no RACE AGAIN once the result is recorded;
 the player re-enters from the grid and the guest sees `prior_tier`. RESTART RACE
 before the end is unchanged (nothing was written). One code path for every campaign.
+
+**Answered by the maintainer (2026-11-20): drop the staging, keep RACE AGAIN.**
+`race-end` runs once when the player exits the race (objection 2's answer) and commits
+at once. RACE AGAIN is an exit: it commits, then relaunches from the new run. A mod
+that wants no RACE AGAIN sets `[run] race_again = false`.
 
 ### 7. Make the records write atomic before a run lives in it
 
