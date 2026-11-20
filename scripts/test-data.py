@@ -293,13 +293,10 @@ def fingerprints(listing: dict, shared: str, cache: dict) -> dict[str, dict]:
             else []
         )
         own = file_hash(Path(suite["binary-path"]), cache)
+        code = digest(own, *sorted(bins.get(suite["package-id"], [])), *listed)
         out[binary_id] = {
-            "fingerprint": digest(
-                own,
-                *sorted(bins.get(suite["package-id"], [])),
-                *listed,
-                shared,
-            ),
+            "fingerprint": digest(code, shared),
+            "code": code,
             "tests": len(suite["testcases"]),
         }
     return out
@@ -350,16 +347,31 @@ def parse_partition(text: str) -> Partition:
 
 
 def run_id(part: Partition | None, full: bool, current: dict[str, dict]) -> str:
-    """Names a run: the same for every slice of one tree and one set of flags."""
+    """Names a run: the same for every slice of one set of binaries and flags.
+
+    Only the binaries (`code`) name it, not the shared inputs: `data/` is
+    shared with other lanes and moves during a forty minute run (a comparison
+    pair written by another member), and a run that restarted on every such
+    move would never finish. The run records the fingerprints of its first
+    slice instead, as an unsliced run records the ones taken before it, so an
+    input that moved makes the next run skip nothing."""
     return digest(
         f"{part.mode}:{part.total}" if part else "whole",
         f"full={full}",
-        *(f"{b}={f['fingerprint']}" for b, f in sorted(current.items())),
+        *(f"{b}={f['code']}" for b, f in sorted(current.items())),
     )
 
 
-def new_run(rid: str, total: int, skipped: list[str]) -> dict:
-    return {"id": rid, "m": total, "skipped": skipped, "slices": {}}
+def new_run(
+    rid: str, total: int, skipped: list[str], current: dict[str, dict]
+) -> dict:
+    return {
+        "id": rid,
+        "m": total,
+        "skipped": skipped,
+        "fingerprints": {b: f["fingerprint"] for b, f in current.items()},
+        "slices": {},
+    }
 
 
 def absorb_slice(
@@ -390,7 +402,7 @@ def settle(
     for b, f in current.items():
         if b in run["skipped"]:
             continue
-        fingerprint = f["fingerprint"]
+        fingerprint = run["fingerprints"][b]
         greens = recorded.get(b, {})
         if b not in other and len(passed.get(b, ())) == f["tests"]:
             greens.pop(fingerprint, None)
@@ -540,7 +552,7 @@ def main() -> int:
                 for b, f in current.items()
                 if f["fingerprint"] in recorded.get(b, {})
             )
-        run = new_run(rid, part.total if part else 1, skipped)
+        run = new_run(rid, part.total if part else 1, skipped, current)
     else:
         # Fixed by the run's first slice: see "Slices" in the module docstring.
         skipped = [b for b in run["skipped"] if b in current]
@@ -652,13 +664,16 @@ def selftest() -> int:
     """The rules above, on made-up listings; needs no build and no data."""
 
     def current(**tests: int) -> dict[str, dict]:
-        return {b: {"fingerprint": f"fp-{b}", "tests": n} for b, n in tests.items()}
+        return {
+            b: {"fingerprint": f"fp-{b}", "code": f"code-{b}", "tests": n}
+            for b, n in tests.items()
+        }
 
     def names(binary: str, *idx: int) -> dict[str, set[str]]:
         return {binary: {f"t{i}" for i in idx}}
 
     def start(cur, total, skipped=()):
-        return new_run("id", total, list(skipped))
+        return new_run("id", total, list(skipped), cur)
 
     # Argument parsing.
     for text, want in {
@@ -744,11 +759,19 @@ def selftest() -> int:
     absorb_slice(run, 1, names("whole", 0), set())
     assert settle(rec, cur, run, "now")[1] == ["whole"]
 
-    # A tree that changed between slices is another run.
+    # A binary rebuilt between slices is another run; a moved input is not, and
+    # the run records the fingerprint it started with.
     a, b = current(x=1), current(x=1)
-    b["x"]["fingerprint"] = "other"
+    b["x"]["code"] = "other"
     part = parse_partition("1/2")
     assert run_id(part, False, a) != run_id(part, False, b)
+    moved = current(x=1)
+    moved["x"]["fingerprint"] = "data moved"
+    assert run_id(part, False, a) == run_id(part, False, moved)
+    run, rec = start(a, 1), {}
+    absorb_slice(run, 1, names("x", 0), set())
+    settle(rec, moved, run, "now")
+    assert rec == {"x": {"fp-x": "now"}}, rec
     assert run_id(part, False, a) != run_id(part, True, a)
     assert run_id(part, False, a) != run_id(parse_partition("1/3"), False, a)
     assert run_id(part, False, a) == run_id(parse_partition("2/2"), False, a)
