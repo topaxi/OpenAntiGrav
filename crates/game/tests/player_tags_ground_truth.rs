@@ -26,6 +26,10 @@ fn two_people(tags: bool) -> Option<race::Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
+    assert!(
+        loaded.view.track_sections.is_some(),
+        "the circuit's section rows did not reach the view, so the tag gate would be off"
+    );
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     oag_game::split_screen::apply(&mut race, 2, oag_render::viewport::Cut::Horizontal);
     race.set_player_tags(tags);

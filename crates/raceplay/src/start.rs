@@ -162,6 +162,7 @@ impl Race {
             intro_voice,
             airbrake_graphics,
             sight: view_sight,
+            track_sections,
         } = view;
         let score_pace = crate::score_pace::ScorePace::of(score_law, difficulty);
 
@@ -815,6 +816,7 @@ impl Race {
                 hull_shake_on: true,
                 camera_shake_on: true,
                 player_tags_on: false,
+                track_sections,
                 contact: super::contact_fx::ContactFx::new(),
                 pair_contacts: [None; oag_gameplay::MAX_SHIPS],
                 field_sparks: Default::default(),

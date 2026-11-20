@@ -1637,7 +1637,7 @@ Cases 0, 2 and 3 end with `cam+0x1e8 = FUN_0883e434(cam+0x1e4)`, which is
 craft advanced** along the circuit (about one step per 40 to 60 frames, 700 frames), and equals
 the value the function wrote back each frame (`node_byte` in the log). It looks like the craft's current
 track section; the structure `entity+0xae4` points to was not read, so this is a **hypothesis** and
-`FUN_0883e434` is not renamed. **It is not a cut input**: `Camera_UpdateSpectator` cuts by `cam+0x1d4`, the
+`FUN_0883e434` is not renamed here (renamed `Craft_GetSectionByte`, 68, on [hud-game-options.md](hud-game-options.md)). **It is not a cut input**: `Camera_UpdateSpectator` cuts by `cam+0x1d4`, the
 current station, whatever the mode is, and clears `+0x1e8` to `-1` with the ten second timer (the same
 frame it is written again).
 

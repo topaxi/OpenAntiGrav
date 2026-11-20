@@ -500,6 +500,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         gantry_seconds: None,
         camera_override: None,
         sight: Sighting::default(),
+        track_sections: None,
     }
 }
 
