@@ -725,9 +725,11 @@ run_flag = "feisar-concept"   # opened when the run's unlock set holds this name
 - **Validation.** A team or variant the disc does not ship is refused at load by
   name, as a missing team is today (`custom-campaign.md`).
 
-Open: whether `unlock` should also be available to a campaign without `[run]` (a
-medal-only campaign does not need it), and whether a variant row may name a mod's
-own livery once mods ship liveries.
+- **Mod liveries (maintainer, 2026-11-20).** Once mods ship liveries, a variant row
+  may name a livery the same mod ships, checked at load like a disc variant; another
+  mod's livery is refused. Wired when mod liveries exist.
+
+Open: whether run flags should also be available to a campaign without `[run]`.
 
 ## 8. Capabilities 4 and 5: the choice screen and mod-defined stats
 

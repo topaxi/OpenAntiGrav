@@ -209,7 +209,8 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
     variant}` into the run record, committed with the run bytes). The
     global unlocks are never written by a campaign directly (loyalty and XP earned by
     racing are paid as for any race, decision 9), and a campaign's own unlocks
-    never leak into the Race Box or another campaign. Mechanism detail:
+    never leak into the Race Box or another campaign. Once mods ship liveries, a
+    variant row may name one the same mod ships (maintainer, 2026-11-20). Mechanism detail:
     `progression.md` section 7.1.
 11. **Build order.** Prerequisite, owned outside this ADR: the records file is written
     atomically (temp file, then rename), a general rule for every profile file that the
