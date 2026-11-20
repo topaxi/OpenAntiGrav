@@ -36,7 +36,7 @@ pub(super) fn ps3_sky_model(
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     if mesh::rcs::psp2::is_psp2(geometry) {
-        psp2_sky_model(archives, track, report)
+        psp2_sky_model(archives, track, (title, store), report)
     } else {
         hd_sky_model(archives, track, title.race, mode, store, report)
     }
@@ -204,6 +204,14 @@ const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
 /// `Sky height offset` are authored too and left unread: their consumer is
 /// unlocated.
 ///
+/// **Omega's dome is `Sky brightness` times its texture** ([`oag_title::Looks::sky_brightness`]):
+/// its pixel program multiplies the sampled texel by its `SkyBrightness` constant, which reads
+/// equal to the lighting object's authored key, and by nothing else
+/// (`docs/formats/omega-status.md`, "The sky dome's pixel program"). The dome's shading is a
+/// multiply of the encoded texel by its vertex colour, so the gain rides there as the factor
+/// [`oag_gpu::formats::SceneStore::texel_gain`] gives. 2048 (Vita) authors the key too and its
+/// program is unread, so its dome keeps the plain texture.
+///
 /// **Zone's sky swap is not wired.** `data/Tex/zoneSky.gxt` exists on the
 /// disc, the same file HD's `Data/Tex/ZoneSky.gtf` names, but nothing here
 /// reads it - a Zone race draws the circuit's own dome, same as every other
@@ -213,6 +221,7 @@ const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
 pub(super) fn psp2_sky_model(
     archives: &mut oag_assets::Archives,
     track: &str,
+    (title, store): (&'static oag_title::Title, oag_gpu::formats::SceneStore),
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     let name = psp2_sky_sibling_name(track)?;
@@ -249,12 +258,24 @@ pub(super) fn psp2_sky_model(
     // the model's own centre, which `finish_bounds` inside `psp2::build`
     // already measured as the dome's origin.
     let authored_radius = model.radius;
-    let rotation = envsettings_name(track)
+    let env = envsettings_name(track)
         .and_then(|name| archives.read_name(&name).ok())
         .and_then(|blob| String::from_utf8(blob).ok())
-        .and_then(|text| EnvSettings::parse(&text).ok())
+        .and_then(|text| EnvSettings::parse(&text).ok());
+    let rotation = env
+        .as_ref()
         .and_then(|env| env.scalar(oag_tables::envsettings::SKY_ROTATION))
         .unwrap_or(0.0);
+    let brightness = title
+        .looks
+        .sky_brightness
+        .applies(archives.layout.platform)
+        .then(|| {
+            env.as_ref()
+                .and_then(|env| env.scalar(oag_tables::envsettings::SKY_BRIGHTNESS))
+        })
+        .flatten();
+    let gain = brightness.map_or(1.0, |b| store.texel_gain(b));
     let (sin, cos) = rotation.to_radians().sin_cos();
     if authored_radius > 0.0 {
         let scale = PSP2_SKY_TARGET_RADIUS / authored_radius;
@@ -270,6 +291,9 @@ pub(super) fn psp2_sky_model(
             // Left at `psp2::build`'s default of `1.0`, the stand-in light
             // rig would shade one side of the dome as if it were geometry.
             vertex.lit = 0.0;
+            for channel in &mut vertex.colour[..3] {
+                *channel *= gain;
+            }
         }
         model.radius *= scale;
         for draw in &mut model.draws {
@@ -285,8 +309,11 @@ pub(super) fn psp2_sky_model(
         "{name}: the circuit's sky dome, {}, rescaled from its authored radius of \
          {authored_radius:.2} unit(s) to {PSP2_SKY_TARGET_RADIUS:.0} to clear the near \
          plane at any field of view, turned {rotation} degree(s) by `Sky rotation` (sign \
-         chosen, not measured)",
+         chosen, not measured){}",
         built.describe(),
+        brightness.map_or_else(String::new, |b| format!(
+            ", times {b} (`Sky brightness`, the dome pixel program's `SkyBrightness`)"
+        )),
     ));
     Some(model)
 }

@@ -933,6 +933,11 @@ pub struct Looks {
     /// (`docs/ghidra/functions/vita-2048-eu-v104/exposure.md`); Omega registers
     /// the same programs and runs none of them.
     pub wo_composite: Rule,
+    /// The circuit's dome is drawn at `Lighting.Sky brightness` times its texture in
+    /// linear light: the dome's pixel program multiplies the sampled texel by its
+    /// `SkyBrightness` constant and by nothing else (no fog, no vertex colour). Omega's
+    /// (`docs/formats/omega-status.md`, "The sky dome's pixel program").
+    pub sky_brightness: Rule,
 }
 
 /// The LOD bias [`Looks::material_lod_bias`] applies, in levels: the filter
@@ -1006,6 +1011,7 @@ impl Looks {
             texels_srgb: Rule::UNREAD,
             final_composite_half_texel: Rule::UNREAD,
             wo_composite: Rule::UNREAD,
+            sky_brightness: Rule::UNREAD,
         }
     }
 }

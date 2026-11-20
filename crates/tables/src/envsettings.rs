@@ -209,6 +209,9 @@ pub const SKY_COLOUR: &str = "Lighting.Sky colour";
 /// `"Lighting.Sky rotation"`. One number, degrees, -40 to 300.
 pub const SKY_ROTATION: &str = "Lighting.Sky rotation";
 
+/// `"Lighting.Sky brightness"`. One number, 0.5 to 3.
+pub const SKY_BRIGHTNESS: &str = "Lighting.Sky brightness";
+
 /// `"Fog.Fog Color"`. Three numbers, reaching 1.85.
 pub const FOG_COLOUR: &str = "Fog.Fog Color";
 
