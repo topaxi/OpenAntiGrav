@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [pulse]
-updated: 2026-11-19
-summary: "Nine unlock-predicate functions untraced; the two-axis unlock reading rests on XML plus one capture"
+updated: 2026-11-20
+summary: "Unlock predicates traced, two-axis read confirmed; the PSP ignores the GS disable mask; PS2 mask and record fields open"
 ---
 
 # Pulse's race box is read on both pressings, and the code side is unblocked
@@ -164,15 +164,23 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
   whoever has one: START -> Track Select -> Ship Select -> race, then
   Circle back through both.
 
-- **The nine unlock-predicate functions behind `Definition_IsUnlocked` are
-  unnamed and untraced.** This is what "circuits gate on a named grid" and
-  "craft variants gate on loyalty" need to become a confirmed mechanism
-  rather than an XML reading corroborated by one live capture.
+- ~~**The nine unlock-predicate functions behind `Definition_IsUnlocked` are
+  unnamed and untraced.**~~ **2026-11-20: closed.** All nine are traced
+  (`Unlock_ContextMet` named, the other eight were already on
+  `race-campaign.md`); the combine law and a census of Pulse's 85 `<Unlock>`
+  rows are in `race-box-screens.md`, "The nine row-loop callees". The two-axis
+  reading holds as a data convention over one evaluator, and ours matches it on
+  every shipped Pulse row. Left open there: the `+0x99` hidden byte and the
+  `vtable+0xd4` class check (`Definition_IsUnlocked(x, 1)`), neither with a
+  Pulse effect seen.
 
-- **`GSDisableEntriesBitField` is undecoded.** Read as "bit N disables entry
-  N", confidence 72 - self-consistent on Pulse's `0xFA` over seven entries and
-  on HD's `0xF0` over five, and in both cases every bit at or above the entry
-  count is set. Nothing traced to the consuming code.
+- ~~**`GSDisableEntriesBitField` is undecoded.**~~ **2026-11-20: partly.**
+  The list reader skips entry N when bit N of the plain
+  `DisableEntriesBitField` is set (84). The disc authors only the `GS`
+  attribute, stored apart (`+0xfc`) and not tested by the list's entry loop, and
+  the PSP shows the `Mode` entries `0xFA` would drop, so the PSP does not apply
+  it. Open: the reader of `+0xfc` (the menu-class reader at `0x088b5a60` also
+  stores both and tests neither), and whether the PS2 prunes by the `GS` value.
 
 - **Six fields in the serialised race record have no authored row**:
   `Locked`, `damage`, `AICount`, `laps`, `ship`, `ShipChoice`. `ShipChoice="Yes"`
@@ -211,10 +219,7 @@ screens (`Definition::drop_rows_picked_on_screen`). Docs:
 
 ## Next Steps
 
-1. Trace the nine unlock-predicate functions
-   (`race-box-screens.md#definition_isunlocked-and-the-two-axis-unlock-read`)
-   to turn the two-unlock-axis reading from an XML-plus-one-capture
-   corroboration into a confirmed mechanism.
+1. ~~Trace the nine unlock-predicate functions~~ **Done 2026-11-20.** Next on this thread: read the `GS` mask on the PS2 executable (`ps2-pulse-eu` is not open on the bridge) to see whether Single Player prunes by it.
 2. Run a proper `bulk_fuzzy_match` sweep (descending thresholds,
    collision-filtered, each candidate individually `diff_functions`-checked)
    against `psp-pulse-eu` for the fourteen functions that had no exact-hash
