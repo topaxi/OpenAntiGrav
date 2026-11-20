@@ -82,7 +82,7 @@ fn a_stand_in_the_atlas_lacks_gets_no_cells() {
 #[test]
 fn applying_a_substitution_swaps_only_the_stand_ins() {
     let cross = art_index("sony-a").unwrap();
-    let substitution = Substitution::none().with(&PROMPTS, 0, Some(cross));
+    let substitution = Substitution::none().with(&PROMPTS, 0, Some(cross), Prompt::Cross);
     let out = substitution.apply("PRESS A TO GO", false);
     assert_eq!(out.chars().filter(|c| *c == 'A').count(), 0);
     assert_eq!(out.chars().count(), "PRESS A TO GO".chars().count());
@@ -99,7 +99,7 @@ fn a_buttons_face_table_leaves_other_faces_alone() {
         scope: Scope::ButtonsFace,
         glyphs: &[('A', Prompt::Cross)],
     };
-    let substitution = Substitution::none().with(&TABLE, 0, art_index("xbox-a"));
+    let substitution = Substitution::none().with(&TABLE, 0, art_index("xbox-a"), Prompt::Cross);
     assert_eq!(substitution.apply("A", false), "A");
     assert_ne!(substitution.apply("A", true), "A");
 }

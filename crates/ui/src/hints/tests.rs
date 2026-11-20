@@ -1,0 +1,165 @@
+use super::*;
+use oag_title::prompts::{Prompts, Scope};
+
+const TABLE: Prompts = Prompts {
+    scope: Scope::AnyFace,
+    glyphs: &[
+        ('X', Prompt::Cross),
+        ('Y', Prompt::Circle),
+        ('Z', Prompt::Triangle),
+        ('Q', Prompt::Up),
+    ],
+};
+
+const BUTTONS_ONLY: Prompts = Prompts {
+    scope: Scope::ButtonsFace,
+    glyphs: &[('X', Prompt::Cross)],
+};
+
+fn text(role: Option<&'static str>, x: f32, y: f32, align: Align, words: &str) -> Draw {
+    match role {
+        None => Draw::Text {
+            x,
+            y,
+            scale: 1.0,
+            color: [1.0; 4],
+            border: None,
+            align,
+            text: words.to_string(),
+            wrap_width: None,
+        },
+        Some(role) => Draw::FacedText {
+            role,
+            x,
+            y,
+            scale: 1.0,
+            color: [1.0; 4],
+            border: None,
+            align,
+            text: words.to_string(),
+            wrap_width: None,
+        },
+    }
+}
+
+fn found(list: &[Draw], clip: Option<usize>, substitution: &Substitution) -> Vec<Hint> {
+    let atlas = Atlas::build();
+    scan(list, clip, substitution, &|role| {
+        Some(Face {
+            atlas: &atlas,
+            buttons: role == Some("Buttons"),
+        })
+    })
+}
+
+fn width(words: &str) -> f32 {
+    crate::font::measure(&Atlas::build(), words)
+}
+
+#[test]
+fn a_glyph_that_opens_a_string_is_a_hint_spanning_its_word() {
+    let list = [text(None, 40.0, 200.0, Align::Left, "Y BACK")];
+    let hints = found(&list, None, &Substitution::reading(&TABLE));
+    assert_eq!(hints.len(), 1);
+    assert_eq!(hints[0].press, Press::Button(Button::Circle));
+    assert_eq!(hints[0].rect[0], 40.0);
+    assert_eq!(hints[0].rect[1], 200.0);
+    assert!((hints[0].rect[2] - width("Y BACK")).abs() < 0.01);
+}
+
+#[test]
+fn a_string_of_pairs_is_one_hint_each() {
+    let list = [text(None, 10.0, 0.0, Align::Left, "X OK  Y BACK")];
+    let hints = found(&list, None, &Substitution::reading(&TABLE));
+    let presses: Vec<_> = hints.iter().map(|hint| hint.press).collect();
+    assert_eq!(
+        presses,
+        [Press::Button(Button::Cross), Press::Button(Button::Circle)]
+    );
+    assert!(hints[0].rect[0] + hints[0].rect[2] <= hints[1].rect[0]);
+}
+
+#[test]
+fn a_glyph_alone_takes_the_word_beside_it_on_its_row() {
+    let list = [
+        text(None, 40.0, 200.0, Align::Left, "X"),
+        text(None, 60.0, 200.0, Align::Left, "OK"),
+        text(None, 60.0, 100.0, Align::Left, "ABOVE"),
+        text(None, 300.0, 200.0, Align::Left, "FAR"),
+    ];
+    let hints = found(&list, None, &Substitution::reading(&TABLE));
+    assert_eq!(hints.len(), 1);
+    assert_eq!(hints[0].press, Press::Button(Button::Cross));
+    assert_eq!(hints[0].rect[0], 40.0);
+    assert!((hints[0].rect[0] + hints[0].rect[2] - (60.0 + width("OK"))).abs() < 0.01);
+}
+
+#[test]
+fn a_glyph_in_a_sentence_is_not_a_hint() {
+    let list = [text(None, 40.0, 200.0, Align::Left, "PRESS X TO GO")];
+    assert!(found(&list, None, &Substitution::reading(&TABLE)).is_empty());
+}
+
+#[test]
+fn a_d_pad_glyph_is_not_a_hint() {
+    let list = [text(None, 40.0, 200.0, Align::Left, "Q MOVE")];
+    assert!(found(&list, None, &Substitution::reading(&TABLE)).is_empty());
+}
+
+#[test]
+fn a_buttons_face_table_reads_glyphs_in_that_face_only() {
+    let substitution = Substitution::reading(&BUTTONS_ONLY);
+    let letters = [text(Some("Default"), 40.0, 0.0, Align::Left, "X OK")];
+    assert!(found(&letters, None, &substitution).is_empty());
+    let glyphs = [text(Some("Buttons"), 40.0, 0.0, Align::Left, "X OK")];
+    assert_eq!(found(&glyphs, None, &substitution).len(), 1);
+}
+
+#[test]
+fn the_glyph_as_drawn_is_the_button_under_an_exchange() {
+    let list = [
+        text(None, 40.0, 200.0, Align::Left, "Y BACK"),
+        text(None, 140.0, 200.0, Align::Left, "Z HELP"),
+    ];
+    let exchanged = Substitution::exchanging(&TABLE, Prompt::Circle, Prompt::Triangle);
+    let hints = found(&list, None, &exchanged);
+    assert_eq!(
+        hints.iter().map(|hint| hint.press).collect::<Vec<_>>(),
+        [
+            Press::Button(Button::Triangle),
+            Press::Button(Button::Circle)
+        ],
+        "the circle's stand-in is drawn as the triangle, so it taps the triangle"
+    );
+    let plain = found(&list, None, &Substitution::reading(&TABLE));
+    assert_eq!(plain[0].press, Press::Button(Button::Circle));
+}
+
+#[test]
+fn the_clipped_line_and_wrapped_text_are_never_hints() {
+    let mut wrapped = text(None, 40.0, 0.0, Align::Left, "X OK");
+    if let Draw::Text { wrap_width, .. } = &mut wrapped {
+        *wrap_width = Some(100.0);
+    }
+    let list = [text(None, 40.0, 200.0, Align::Left, "X OK"), wrapped];
+    assert!(found(&list, Some(0), &Substitution::reading(&TABLE)).is_empty());
+}
+
+#[test]
+fn alignment_moves_the_rect_with_the_string() {
+    let list = [text(None, 200.0, 0.0, Align::Right, "X OK")];
+    let hints = found(&list, None, &Substitution::reading(&TABLE));
+    assert!((hints[0].rect[0] - (200.0 - width("X OK"))).abs() < 0.01);
+}
+
+#[test]
+fn hit_answers_the_hint_under_the_point() {
+    let list = [text(None, 40.0, 200.0, Align::Left, "Y BACK")];
+    let hints = found(&list, None, &Substitution::reading(&TABLE));
+    assert_eq!(
+        hit(&hints, (45.0, 203.0)),
+        Some(Press::Button(Button::Circle))
+    );
+    assert_eq!(hit(&hints, (39.0, 203.0)), None);
+    assert_eq!(hit(&hints, (45.0, 150.0)), None);
+}

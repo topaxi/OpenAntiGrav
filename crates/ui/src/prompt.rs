@@ -216,7 +216,12 @@ impl Atlas {
 pub struct Substitution {
     /// `(stand-in, replacement)`, the replacement a [`sub_char`].
     pairs: Vec<(char, char)>,
+    /// The control each replacement glyph depicts, by stand-in: what [`Self::button_drawn`]
+    /// answers for a stand-in this substitution redraws.
+    depicted: Vec<(char, Prompt)>,
     scope: Option<Scope>,
+    /// The title's table, so the glyphs left as the disc draws them can be read as well.
+    table: Option<Prompts>,
 }
 
 impl Substitution {
@@ -226,13 +231,33 @@ impl Substitution {
         Self::default()
     }
 
-    /// Replaces stand-in number `index` of `prompts` with art cell
-    /// `art_cell`. A prompt with no art is left as the disc draws it.
+    /// Nothing replaced, but `prompts` known: every glyph draws as the disc wrote it and
+    /// [`Self::button_drawn`] reads it by the table.
     #[must_use]
-    pub fn with(mut self, prompts: &Prompts, index: usize, art_cell: Option<usize>) -> Self {
+    pub fn reading(prompts: &Prompts) -> Self {
+        Self {
+            scope: Some(prompts.scope),
+            table: Some(*prompts),
+            ..Self::default()
+        }
+    }
+
+    /// Replaces stand-in number `index` of `prompts` with art cell
+    /// `art_cell`, a glyph that depicts `depicts`. A prompt with no art is left as the disc
+    /// draws it.
+    #[must_use]
+    pub fn with(
+        mut self,
+        prompts: &Prompts,
+        index: usize,
+        art_cell: Option<usize>,
+        depicts: Prompt,
+    ) -> Self {
         self.scope = Some(prompts.scope);
+        self.table = Some(*prompts);
         if let (Some((stand_in, _)), Some(art_cell)) = (prompts.glyphs.get(index), art_cell) {
             self.pairs.push((*stand_in, sub_char(index, art_cell)));
+            self.depicted.push((*stand_in, depicts));
         }
         self
     }
@@ -252,10 +277,37 @@ impl Substitution {
         let (Some(a), Some(b)) = (stand_in(a), stand_in(b)) else {
             return Self::none();
         };
+        let prompt_of = |wanted: char| prompts.prompt_of(wanted);
         Self {
             pairs: vec![(a, b), (b, a)],
+            depicted: [(a, b), (b, a)]
+                .into_iter()
+                .filter_map(|(from, to)| prompt_of(to).map(|prompt| (from, prompt)))
+                .collect(),
             scope: Some(prompts.scope),
+            table: Some(*prompts),
         }
+    }
+
+    /// The control the glyph drawn for `ch` depicts: the replacement's when this substitution
+    /// redraws `ch`, else the disc's own. `None` for a letter, which includes a stand-in in a
+    /// face the title's table does not hold glyphs in (`in_buttons_face` is whether the text is
+    /// drawn in the title's buttons face, as for [`Self::apply`]).
+    #[must_use]
+    pub fn button_drawn(&self, ch: char, in_buttons_face: bool) -> Option<Prompt> {
+        if self.scope == Some(Scope::ButtonsFace) && !in_buttons_face {
+            return None;
+        }
+        if let Some(&(_, prompt)) = self.depicted.iter().find(|(stand_in, _)| *stand_in == ch) {
+            return Some(prompt);
+        }
+        self.table?.prompt_of(ch)
+    }
+
+    /// Whether the title's glyphs are known, so [`Self::button_drawn`] can answer.
+    #[must_use]
+    pub fn reads_prompts(&self) -> bool {
+        self.table.is_some_and(|table| !table.glyphs.is_empty())
     }
 
     /// Whether this changes nothing.

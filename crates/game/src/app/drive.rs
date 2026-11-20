@@ -299,6 +299,20 @@ impl Driver {
                     .button(left, winit::event::ElementState::Released);
                 self.frame(None)?;
             }
+            Step::ClickHint(button) => {
+                // A drive draws only the frames it is asked for, and the hints are read off a
+                // drawn frame, as a player's click lands on what they saw.
+                self.session.gpu.output.draw_next = true;
+                self.frame(None)?;
+                let (x, y) = self.session.hint_pixel(*button).ok_or_else(|| {
+                    anyhow!(
+                        "no hint on screen depicts {button:?} (hints: {})",
+                        self.last.hints.as_deref().unwrap_or("none")
+                    )
+                })?;
+                self.exec(&Step::Mouse { x, y })?;
+                self.exec(&Step::Click)?;
+            }
             Step::Ticks(n) => {
                 for _ in 0..*n {
                     self.frame(None)?;
@@ -421,6 +435,15 @@ fn state_of(session: &mut Session) -> State {
     {
         state.race = resolved(session);
     }
+    state.hints = Some(
+        session
+            .hint_buttons()
+            .iter()
+            .map(|button| format!("{button:?}").to_ascii_lowercase())
+            .collect::<Vec<_>>()
+            .join(","),
+    )
+    .filter(|names| !names.is_empty());
     (state.replay, state.replay_at) = session.replay_names();
     (state.replay_follow, state.replay_hud) = session.replay_view_names();
     state.notice = session

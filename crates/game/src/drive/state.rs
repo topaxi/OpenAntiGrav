@@ -214,6 +214,11 @@ pub struct State {
     /// How many slots a person flies, on `stage=race`: `0` in a demo.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub humans: Option<usize>,
+    /// The buttons the key and button hints last drawn depict, comma separated and in the order
+    /// they are drawn; absent when none is up. A drive only draws the frames it is asked for, so
+    /// this is as of the last one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hints: Option<String>,
 }
 
 impl State {
@@ -239,7 +244,7 @@ impl State {
     /// focused row's id, setting and label, so `focus=launch` and `focus="LAUNCH RACE"` both hold.
     ///
     /// Keys: `stage`, `frontend`, `map_event`, `page`, `screen` (the overlay kind, `page` when none),
-    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `humans`, and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
+    /// `screen.id`, `screen.help` (`open` or `closed`, where the screen has a Help), `title`, `focus`, `opening_reads`, `demo`, `humans`, `hints` (the buttons the hints on screen depict), and `race.title|track|track_file|team|variant|mode|source|craft_source|target`.
     #[must_use]
     pub fn get(&self, key: &str) -> Vec<String> {
         let screen = self.screen.as_ref();
@@ -267,6 +272,12 @@ impl State {
             "demo" => one(self.demo.clone()),
             "hud" => one(self.hud.clone()),
             "humans" => one(self.humans.map(|humans| humans.to_string())),
+            "hints" => self
+                .hints
+                .iter()
+                .flat_map(|names| names.split(','))
+                .map(str::to_string)
+                .collect(),
             "focus" => screen
                 .and_then(|s| s.focus.as_ref())
                 .map(|f| {
@@ -329,6 +340,7 @@ impl State {
                 | "demo"
                 | "hud"
                 | "humans"
+                | "hints"
                 | "opening_reads"
         ) || key.strip_prefix("race.").is_some_and(|rest| {
             matches!(
