@@ -1153,9 +1153,15 @@ fn a_team_step_replays_the_logos_vwipe() {
     };
     close(logo_rect(&picker), [160.0, 185.0, 512.0, 12.8]);
     picker.tick(0.35);
-    close(logo_rect(&picker), [160.0, 185.0 + 128.0 * 0.675, 512.0, 12.8]);
+    close(
+        logo_rect(&picker),
+        [160.0, 185.0 + 128.0 * 0.675, 512.0, 12.8],
+    );
     picker.tick(0.175);
-    close(logo_rect(&picker), [160.0, 185.0 + 128.0 * 0.1125, 512.0, 12.8]);
+    close(
+        logo_rect(&picker),
+        [160.0, 185.0 + 128.0 * 0.1125, 512.0, 12.8],
+    );
     picker.tick(0.105);
     close(logo_rect(&picker), [160.0, 185.0, 512.0, 128.0 * 0.55]);
     picker.tick(0.35);
