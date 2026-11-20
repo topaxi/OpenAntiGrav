@@ -702,6 +702,10 @@ open = true               # offered from the start
 team = "Qirex"
 requires = [{ event = "gate-run", medal = "silver" }]   # the ADR-0077 rule shape
 
+[[unlocks.team]]
+team = "Auricom"
+requires_points = { grid = "opening", points = 12 }   # the tiers' points law
+
 [[unlocks.variant]]
 team = "Feisar"
 variant = "concept1"      # a title's variant/skin name, checked against the disc at load
@@ -729,7 +733,13 @@ run_flag = "feisar-concept"   # opened when the run's unlock set holds this name
   may name a livery the same mod ships, checked at load like a disc variant; another
   mod's livery is refused. Wired when mod liveries exist.
 
-Open: whether run flags should also be available to a campaign without `[run]`.
+- **Without a module (maintainer, 2026-11-20).** A campaign with no `[run]` module uses
+  `open`, `requires` (every listed medal, so "all gold" works) and **`requires_points
+  = { grid = "opening", points = 12 }`**, the tiers' own points law (`grid_points_met`,
+  [custom-campaign.md](../../formats/custom-campaign.md), "Tier"), which covers "enough
+  progress" and, at the grid's maximum, "gold everywhere". One rule shape for cells,
+  tiers and unlocks; no separate counting form. A `run_flag` row needs a `[run]`
+  module; without one the campaign is refused at load, naming the row.
 
 ## 8. Capabilities 4 and 5: the choice screen and mod-defined stats
 

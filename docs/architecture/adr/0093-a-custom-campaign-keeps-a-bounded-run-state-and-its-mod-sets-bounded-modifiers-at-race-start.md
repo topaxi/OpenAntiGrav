@@ -204,7 +204,8 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
     offers) and define its own: `[unlocks] source = "global"` (default) or `"own"`.
     Under `"own"` Team Selection, for that campaign's events only, offers exactly
     what the campaign's rules open: data rows in the campaign file (a team or a
-    variant, opened from the start, by an event's medal, or by a run flag), and the
+    variant, opened from the start, by an event's medal, by points on a grid under the
+    tiers' own points law, or by a run flag; a run flag needs a `[run]` module), and the
     run's own unlock set, which the mod adds to at `race-end` (`unlock{team,
     variant}` into the run record, committed with the run bytes). The
     global unlocks are never written by a campaign directly (loyalty and XP earned by
@@ -278,7 +279,10 @@ answered). There is no data-only modifier table, now or later: changing the craf
 takes a wasm module (question 7, answered). Damage taken and damage dealt are per-slot
 factors; projectiles already carry their owner (decision 5; question 8, answered). Runs are
 single-player now; online, later, every seat shares the host's run (decision 9;
-question 16, answered). The seed is drawn per run, or
+question 16, answered). Own-unlock rows may require points on a grid, the tiers'
+own law, so a campaign without a module can unlock on progress; a run flag needs a
+module; a variant row may name the mod's own livery once mods ship them (decision 10;
+section 7.1's open items, answered). The seed is drawn per run, or
 fixed by `[run] seed` (decision 1; question 13, answered).
 
 **Not decided here:** the open items of `progression.md` section 12 and section 7.1.
