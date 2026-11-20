@@ -1638,6 +1638,18 @@ The 2026-10-26 normals change (a vertex normal carried through its node's rotati
 four pairs' hull region by 0.17 to 0.27 grey (MAD) under the stand-in rig, all on the airbrake flaps; under the
 circuit's lights rotated and unrotated normals score within 0.13 of each other.
 
+## Pure's scenery takes the circuit's rig (2026-11-20, `pure-drift`)
+
+The four Classic-league pairs (`karbonis`, `mandrashee`, `manor-top`, `sagarmartha`) moved toward the original when
+`pulse-lit-scenery` (`631b83151`) landed: mean grey against the original 17.2 to 9.7, 23.1 to 12.4, 38.6 to 14.1, 26.5 to
+9.3. The change recorded Pure as not wired, but `mark_rig_vertices` runs under the `hull_lights` rule, which Pure has. A GE
+frame of Karbonis, Manor Top and Vineta K shows the original drawing every track batch with normals and no colour with
+lighting on (188 of 188, 198 of 199, 16 of 71 where the rest is the craft's extra pass), under the circuit's own list: on the
+Classic circuits an ambient light and no directional, `0xfefefe` with every light disabled. So the move is Pure's own law, not
+a leak. The other ten Pure pairs moved by at most 0.04. Evidence, the census table and the bisect:
+[`psp-pure-usa/scene-light.md`](../ghidra/functions/psp-pure-usa/scene-light.md), "The track takes the rig" (confidence 85;
+three circuits, one boot each; Pure's twin of `Vex_UpdateLightLists` not located by address).
+
 ## Pure's HUD text outline (2026-11-05, `pure-hud-glow`)
 
 Ours drew Pure's HUD digits with a dark, near-opaque halo where the original draws a soft light one. Two causes, both
