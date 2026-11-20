@@ -1,7 +1,7 @@
 //! What a title's engine does to a Zone race's frame beyond the stage table.
 
 /// How a Zone race's frame differs from any other race's on the same circuit: the light
-/// every chunk is drawn under, and the `HDR and Bloom` values the post chain runs with in
+/// every chunk is drawn under, the probe tint every craft hull takes, and the `HDR and Bloom` values the post chain runs with in
 /// place of the circuit's authored ones.
 ///
 /// HD/Fury's frame preparation does both in one arm, every frame of a Zone race: it
@@ -35,4 +35,8 @@ pub struct ZoneFrame {
     /// `Bloom feedback`, a key no circuit authors: the resolve's weight of twice its
     /// feedback buffer against the scene.
     pub feedback: f32,
+    /// What the showing stage's `Track.Base Colour Highlight` is multiplied by to make the
+    /// probe gain every craft hull takes, its probe desaturated to the luma; `None` where
+    /// the hull keeps its own tint.
+    pub hull_probe_tint_scale: Option<f32>,
 }

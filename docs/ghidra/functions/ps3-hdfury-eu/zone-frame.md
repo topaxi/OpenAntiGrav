@@ -227,10 +227,10 @@ after.
   boost and takes the rest; static only, and `ZONE_FRAME` is applied in Zone
   alone. Zone Battle (mode 13) takes the common tail, the Zone values but
   radial contribution `0.1`; not wired.
-- **The hull.** The original's Zone hull reads `(60, 85, 98)` over the craft
-  box against ours' `(33, 56, 62)`. Not a Zone-surface chunk; which light the
-  hull's programs take in a Zone frame is unread (the same `+0x4b0` byte is
-  the first address to check against the hull's ambient source).
+- **The hull.** Read in [zone-hull-light.md](zone-hull-light.md): the `+0x4b0`
+  byte does not reach the hull (no hull draw reads it); its probe tint is twice the
+  stage's `Track.Base Colour Highlight` (wired), and a factor of about two in the
+  hull's brightness is still unexplained there.
 - **`*0x009384e1`**, the byte that sends modes 6 and 14 to their own arms:
   read `0` live here and in [eliminator-flip.md](eliminator-flip.md); its
   meaning is still unread.

@@ -126,6 +126,38 @@ fn hd_files_parse_and_share_the_fifteen_stage_ladder() {
             "{path} should carry the same 15-stage ladder"
         );
         check_aniso_ramps(name, &effect);
+        check_hull_probe_tint(name, &effect);
+    }
+    // Fury's Zone races on the twelve circuits read `DATA02`'s revision of `zonemode`.
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", image.display());
+    let mut archive = oag_assets::psarc::Archive::open(&spec).expect("the archive opens");
+    let bytes = archive
+        .read_path("/data/environments/zonemode.effectsettings")
+        .expect("the entry reads");
+    let text = String::from_utf8(bytes).expect("UTF-8");
+    let effect = EffectSettings::parse(&text).expect("it parses");
+    check_hull_probe_tint("zonemode (DATA02)", &effect);
+}
+
+/// **Twice a stage's `Track.Base Colour Highlight` is the probe tint the original's Zone hull
+/// programs read live** (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`): `(0.69804,
+/// 1.00392, 2.0)` at `Sub Venom` of `DATA02`'s `zonemode` (Vineta K), and `0.69804` grey at
+/// `Sub Flash` of `zonemodedlc3` (`Zone_1`).
+fn check_hull_probe_tint(name: &str, effect: &EffectSettings) {
+    let (stage, live) = match name {
+        "zonemode (DATA02)" => (1, [0.69804, 1.003_92, 2.0]),
+        "zonemodedlc3" => (3, [0.69804; 3]),
+        _ => return,
+    };
+    let highlight = effect
+        .stage_palette(stage)
+        .and_then(|palette| palette.track_base_colour_highlight)
+        .unwrap_or_else(|| panic!("{name} stage {stage} authors the highlight"));
+    for (got, want) in highlight.iter().zip(live) {
+        assert!(
+            (2.0 * got - want).abs() < 1e-4,
+            "{name} stage {stage}: 2 x {highlight:?} against the live {live:?}"
+        );
     }
 }
 
