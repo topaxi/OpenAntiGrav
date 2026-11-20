@@ -193,6 +193,9 @@ Two structural facts to expect, both different from every other binary here:
 - [team-selection-model.md](team-selection-model.md) - `TeamSelection_Screen`'s craft: the
   update that writes over the `ShipModel` widget's authored pose every frame, the depth fit on
   the model's `<FE Length>`, the `Model_Item` attribute table and lens.
+- [image-widget.md](image-widget.md) - the front end's `Image` widget: the `<Values>` parser, the
+  `vwipe`/`hscale` transition modes, the draw that turns the widget's alpha into a sweeping slab and a
+  growing quad, the linear alpha ramp and its restart on a Team Selection step.
 - [front-end-model-lighting.md](front-end-model-lighting.md) - what a front-end model is lit
   with: `FrontEnd_LoadEnvSettings` loads `data/fe/fe.fury.EnvSettings` or `fe.envsettings` into the
   front end's own block, `FeModel_DrawAtOrigin` binds it to the race's light parameters, and the
