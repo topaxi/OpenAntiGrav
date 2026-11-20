@@ -92,6 +92,21 @@ behind on the half radar and `1.0` on the full. The earlier note that the `0x6dc
 float-load hit was a search that missed the `movw r0, #0x6dc` / `add` addressing this function
 uses (`0x81194e60`, `0x81194f42`).
 
+**The six dots of the placed frame, explained (2026-11-20, `pair-upkeep`).** `Race::radar_blips` fills dot `N` for every grid slot below
+`ship_count` except the player's own, so a placed-field frame with the player ahead of slots 1 to 3 and behind slot 4 draws 7 others minus the one
+ahead (the half radar places only `f < 0`) = **6 dots**: the 3 placed craft plus slots 5 to 7, left on the grid behind the player and inside
+200 units. That is the law as read (a craft that is not placed still has a slot); the rendered positions of slots 5 to 7 were not checked.
+
+**The sign of `x`, what is and is not known (confidence 55 for "the original's row at `+0x10` is the craft's left").** Rows at body `+0x08`
+(Vita; `+0x10` here) and `+0x28` (`+0x30`) are rows 0 and 2 of a three-row basis the engine keeps as (left, up, forward) in every title
+recorded (`track.md` "Start Position" row 0 is the left axis; the Vita hull matrix read off Vita3K for the `mall` pair is `(-0.75,0,0)`,
+`(0,0.75,0)`, `(0,0,-0.75)`, so facing `-z` with `+y` up row 0 is `-x`, our left). If the radar's row is the left axis, `x = -(t * r * hw)` with `r`
+dotted against **left** puts a craft behind and to the right on the **right** of the origin, the natural map, and ours (which dots against
+`right`) draws it on the left. Not closed: no recorded live read shows that the body's `+0x08` row equals the hull matrix's row 0 rather than
+its negation (`scripts/vita-2048-pair.py`'s own comment calls the body rows "right, up, forward" while its `basis_rows` writes a cross product
+that is the left), so the code is unchanged. A capture closes it: a Vita3K race (`scripts/vita-2048-pair.py`) with the player ahead of one craft that is
+to one side, read as the body rows plus a frame showing the dot (the grid at rest puts the player last on Altima, so no dot shows there).
+
 **Not checked against a capture.** No frame of the original with an opponent behind the player
 exists in the checked-in captures, and the 1.07 loop reads the player's frame rows at `+0x10` and
 `+0x30` without naming which of our axes the original's handedness maps them to: ours takes them as
