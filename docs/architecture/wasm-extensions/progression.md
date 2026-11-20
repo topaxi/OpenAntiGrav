@@ -543,8 +543,9 @@ and where `race_is_unofficial()` is true.
   per-track record is withheld.
 - **Network.** Single-player. The lobby carries no run state, the start description
   has campaign key 0 in a lobby race, and a run module declines it in
-  `oag_wants_race`. A campaign shared by a host (all seats on the same bytes) is the
-  same question as the per-seat tune (README open question 13).
+  `oag_wants_race`. **Later (maintainer, 2026-11-20):** once network races run
+  guests, an online run campaign uses the host's run for every seat (co-op), carried
+  in `RaceParams` like a `sim` pick and checked by the applied record's hash at tick 0.
 - **MODS page.** Lists the run's size and offers CLEAR, as for the tune blob. Turning
   the mod off hides the run; uninstalling leaves an orphan the page lists. Whether
   uninstall deletes it is README open question 16.
@@ -987,4 +988,6 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 15. **ADR-0080's fate.** **Settled for ADR-0093 (maintainer, 2026-11-20):** the
     choice screen and the stats are split into ADR-0094, so the run, modifiers and
     pickups no longer wait for the frontend world. ADR-0094 still does, as drafted.
-16. **A per-seat run on the wire**, with README open question 13.
+16. **A per-seat run on the wire.** **Settled (maintainer, 2026-11-20):**
+    single-player now; online later, every seat shares the host's run (co-op), not a
+    run per seat (section 5.1).

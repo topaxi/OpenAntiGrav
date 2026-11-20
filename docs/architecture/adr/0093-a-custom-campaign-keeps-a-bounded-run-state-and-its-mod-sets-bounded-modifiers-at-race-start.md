@@ -195,6 +195,9 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    modded records table, which would give such a race a personal best of its own, is
    later work outside this ADR.
    Run state is single-player: a lobby race carries none and the module declines it.
+   When network races run guests, a run campaign online uses **the host's run for
+   every seat** (co-op progress, carried in `RaceParams` like a `sim` pick); that is
+   the direction, built with the network work (maintainer, 2026-11-20).
 10. **Own unlocks** (maintainer, 2026-11-19). A campaign may opt out of the global
     ship and variant unlocks (the title's loyalty and `<Unlock>` rows,
     `oag_game::unlock`, that decide which teams, hulls and skins Team Selection
@@ -272,7 +275,9 @@ advances the ordinal (decisions 1 and 6; question 3's mechanism, answered). NEW 
 host row with a confirm, which a mod screen may also request (decision 6; question 2,
 answered). There is no data-only modifier table, now or later: changing the craft
 takes a wasm module (question 7, answered). Damage taken and damage dealt are per-slot
-factors; projectiles already carry their owner (decision 5; question 8, answered). The seed is drawn per run, or
+factors; projectiles already carry their owner (decision 5; question 8, answered). Runs are
+single-player now; online, later, every seat shares the host's run (decision 9;
+question 16, answered). The seed is drawn per run, or
 fixed by `[run] seed` (decision 1; question 13, answered).
 
 **Not decided here:** the open items of `progression.md` section 12 and section 7.1.
@@ -358,5 +363,5 @@ the same race. Every disc number stays the source of truth.
   Assist fly an adaptation of the reference plan, not a plan learned from scratch.
 - **More weapon-lineage rows.** Each new per-ship pickup field and `give-autopilot`
   needs its row in `docs/gameplay/weapon-lineage.md` when built.
-- **Run state is single-player.** Netplay needs a per-seat story, the same open
-  question as the per-seat tune.
+- **Run state is single-player for now.** Online, a run campaign will share the
+  host's run across seats (co-op); a per-seat run is not planned.
