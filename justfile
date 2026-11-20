@@ -65,7 +65,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -201,6 +201,18 @@ test:
 test-data *ARGS:
     python3 scripts/test-data.py "$@"
 
+# The lead's full `test-data` as M slices (`-n M`, default 4), each under its own
+# `flock -o` on the shared gate lock so a member's gate waits at most one slice.
+# Never wrap it in `flock`: it takes the lock itself (same rule as `bench-render`).
+# See `scripts/test-data.py`, "Slices", for what is recorded when.
+lead-test-data *ARGS:
+    bash scripts/lead-test-data.sh "$@"
+
+# The record rule and the argument parsing of `test-data --partition`, on made-up
+# listings. Offline, no build.
+check-test-data-script:
+    python3 scripts/test-data.py selftest
+
 # A member lane's gate: every check in `check` in full, but only the tests the
 # branch's change can reach. `scripts/affected.py` says what it selected and
 # why: the packages that link a changed one, narrowed to the test modules that
@@ -213,7 +225,7 @@ test-data *ARGS:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
