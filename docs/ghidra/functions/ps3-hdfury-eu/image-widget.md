@@ -275,7 +275,7 @@ of these is the hook of Controls, Credits, Race Records, Racebox, Grid Selection
 `Widget_UpdateTransition` then does `+0xa0 -= dt` each frame and ramps `+0x9c` the frame the countdown reaches 0
 (the `+0x9c += dt` is in the same call, so the first ramp frame is the frame the countdown crosses 0).
 
-### What RAM shows (8 pages, 2 to 3 entries each, one boot)
+### What RAM shows (8 pages, 2 to 4 entries each, two boots for four of them)
 
 At the frame a page is entered its root's present flag (`+0xc4`) rises and, in the same frame (same poll or the next
 2 ms), every `vwipe` widget under it reads `+0xa0` = its authored `Delay` (`+0x74`) exactly, `s = 0.01` for that first
@@ -296,7 +296,7 @@ the game-second figures are the measurement.
 | Team Selection (the `Logo`) | `Logo` (0.5, **0.7**) | 30, 42 | 3 entries; the flag rises 0.76 to 0.80 s after the press (the page switch), the countdown starts there |
 | Campaign grid (`Grid Selection Fury`) | `unlockboxbrackets` (0.45, 0.5), `flyerlogo` (0.65, 0.5) | 27 and 39, 30 | 3 entries + 1 `discover` |
 | Cell Selection (`Cell Selection`) | `flyerlogo` (0.8, 0.5) | 48, 30 | 3 entries |
-| Cell Selection emblems | `Event Emblem` 0.05, `Track Emblem` 0.125, `Speed Class Emblem` 0.2, `Weapons Emblem` 0.275 (in 0.3) | **24 frames (0.4 s hold) plus 3, 8, 12, 17**; 18 | 3 entries |
+| Cell Selection emblems | `Event Emblem` 0.05, `Track Emblem` 0.125, `Speed Class Emblem` 0.2, `Weapons Emblem` 0.275 (in 0.3) | **22 frames (0.37 s hold) plus 3, 8, 12, 17**; 18 | 3 entries + 2 on a second boot |
 
 **Stopped at aimed countdowns** (`rpcs3-hd-vwipe.py stop`, Racebox, game stopped through the GDB stub, read in the stop and again
 0.3 s later, equal every time): stopping when `Item 315`'s countdown read at or below 0.6, 0.3, 0.1 and at its first ramp frame
@@ -304,15 +304,17 @@ gave `+0xa0` = 0.4333, 0.2995, 0.0835 and -0.0 (authored 0.45), the beside `BigI
 0.35, so both count the same game-seconds from one arming frame (0.45 s at the last stop for both). At the last stop
 `Item 315` read `+0x9c` = 0.0164 (one `dt`) and `s` = 0.0328 = `+0x9c / 0.5`, while `BigIcon` was still at `s` 0.001: the ramp
 starts on the frame the countdown crosses 0, with one `dt` already added. Confidence for the law (start = `Delay` after
-the present flag rises, ramp = in-time, linear): 80 (eight pages, 2 to 4 entries each, one boot; what would raise it: a second
-boot and a page-hook breakpoint).
+the present flag rises, ramp = in-time, linear): 80 (eight pages, 2 to 4 entries each; a second boot repeated Racebox, Track Select, Grid Selection Fury and Cell Selection with the same
+numbers and, at other addresses, the same 71 widgets; what would raise it: a page-hook breakpoint).
 
-**Cell Selection's emblems wait a 0.4 s hold before their own delay.** Their `+0xa0` reads the authored value minus one frame
-for the first 0.39 to 0.42 game-seconds (0.416, 0.389, 0.398 in three entries, from the `flyerlogo` countdown as the clock):
-the cell screen's refresh (`0x002181a8`, which re-textures the four emblems and calls `Widget_ArmTransition` on each) runs every
-frame until then, re-arming them each time. The `flyerlogo` beside them is armed once and starts at its own 0.8 s. What
-ends the 0.4 s is unread (it is not an asset load: the first entry and the later ones hold the same time). Confidence for
-the 0.4 s: 65.
+**Cell Selection's emblems wait a hold of about 0.37 s before their own delay.** Their `+0xa0` reads the authored value minus one
+frame for the first 0.39 to 0.42 game-seconds after the page's arming (the last re-arm, from the `flyerlogo` countdown as the clock:
+0.416, 0.389, 0.398 and 0.40 in four entries): the cell screen's refresh (`0x002181a8`, which re-textures the four emblems and calls
+`Widget_ArmTransition` on each) runs every frame until then, re-arming them each time. The `flyerlogo` beside them is armed once and
+starts at its own 0.8 s. The ramp start of each emblem, measured as game-seconds on the `flyerlogo` clock less its own delay, is 0.349
+to 0.399 (mean 0.372) over 20 starts in 5 entries on two boots, so the emblems start `0.37 + Delay` after entry (0.42, 0.50, 0.57, 0.65 s),
+about 22 frames of hold at 60 Hz. What ends the hold is unread (it is not an asset load: the first entry and the later ones
+hold the same time). Confidence for the 0.37 s: 65.
 
 ### Not reached
 
@@ -334,7 +336,7 @@ Per `Image`: read `delay` (the XML key, matched case-insensitively by `Widget_Pa
 the in-time, and hold the wipe at `s = 0` (nothing drawn: `Image_Render` returns while `+0xa0 > 0`) until `delay` seconds after
 the frame the page becomes the current one, then ramp. Today `Screens::vwipe_from_node` reads only the in-time. The page-entry
 clock starts when the page's present flag rises, not at the button press (Team Selection's is 0.76 to 0.80 s after it,
-Racebox's within a frame). Two page-specific rules: Cell Selection's four emblems add the 0.4 s hold; a changed
+Racebox's within a frame). Two page-specific rules: Cell Selection's four emblems add the 0.37 s hold; a changed
 cell (`TrackSelectionScreen_SelectCircuit`, the cell screen's refresh) re-arms with the delay again where the caller is
 `Widget_ArmTransition`, and without it where the caller is `Widget_ResetTransition` (the circuit emblem's restart).
 
