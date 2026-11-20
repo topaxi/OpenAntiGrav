@@ -154,6 +154,7 @@ fn medal_image(name: &str) -> Image {
         reveal: Vec::new(),
         transition: 0.0,
         start_enabled: true,
+        wipe: None,
     }
 }
 
@@ -293,6 +294,7 @@ fn a_target_medal_widget_crops_through_the_plain_image_path_with_no_extra_help()
         reveal: Vec::new(),
         transition: 0.0,
         start_enabled: true,
+        wipe: None,
     };
     let placed = medal_atlas_placed();
     let Draw::Sprite { rect, uv, color } = image_draw(&image, placed) else {
@@ -756,7 +758,19 @@ fn fury_grid_list(unlock_pending: bool) -> Vec<Draw> {
 }
 
 fn fury_grid_list_at(unlock_pending: bool, count: usize, index: usize) -> Vec<Draw> {
-    let screens = oag_ui::screen::Screens::from_xml(FURY_GRID_FIXTURE);
+    fury_grid_list_with(
+        FURY_GRID_FIXTURE,
+        (unlock_pending, count, index),
+        oag_ui::screen::EntryClock::default(),
+    )
+}
+
+fn fury_grid_list_with(
+    xml: &str,
+    (unlock_pending, count, index): (bool, usize, usize),
+    entry: oag_ui::screen::EntryClock,
+) -> Vec<Draw> {
+    let screens = oag_ui::screen::Screens::from_xml(xml);
     let layout = Layout {
         screen: screens.by_name("Grid Selection Fury").unwrap().clone(),
         scale: [1.0, 1.0],
@@ -776,6 +790,7 @@ fn fury_grid_list_at(unlock_pending: bool, count: usize, index: usize) -> Vec<Dr
     grids.extend((1..count).map(|_| grid("b", 0)));
     let mut model = GridSelection::new(grids);
     model.step(i32::try_from(index).unwrap());
+    *model.entry_mut() = entry;
     let skin = oag_ui::menu::Skin::new(
         oag_pulse::FRONT_END.menu.unwrap(),
         oag_display::space::Space::HD,
@@ -990,4 +1005,81 @@ fn the_unlock_panel_carries_its_corner_marks_only_while_it_shows() {
     };
     assert_eq!(corners(&fury_grid_list(true)), 4);
     assert_eq!(corners(&fury_grid_list(false)), 0);
+}
+
+/// The unlock box's `unlockboxbrackets` image authors `vwipe` with `delay="0.45"` (27 frames) on
+/// the grid page, as RAM read it: nothing before the page has been up 27 frames, a slab on the
+/// frame the countdown crosses 0 and the whole quad when the 0.5 s ramp is out. This fails if the
+/// delay or the model's entry clock is dropped.
+#[test]
+fn the_grids_unlock_box_waits_its_delay_and_then_wipes() {
+    let xml = FURY_GRID_FIXTURE.replace(
+        r#"<Values x="168" y="708" width="440""#,
+        r#"<Values transitiontype="vwipe" delay="0.45" EnableTransition="0.5" x="168" y="708" width="440""#,
+    );
+    let heights_at = |frame: u32| -> Vec<f32> {
+        let mut entry = oag_ui::screen::EntryClock::default();
+        for _ in 0..frame {
+            entry.tick(1.0 / 60.0);
+        }
+        fury_grid_list_with(&xml, (true, 2, 0), entry)
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[0] == 168.0 => Some(rect[3]),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(heights_at(0), Vec::<f32>::new());
+    assert_eq!(
+        heights_at(26),
+        Vec::<f32>::new(),
+        "the last frame of the delay"
+    );
+    let first = heights_at(27);
+    assert_eq!(first.len(), 1, "{first:?}");
+    assert!(
+        (first[0] - 16.8).abs() < 1e-3,
+        "{first:?}: a slab a tenth tall"
+    );
+    assert_eq!(heights_at(60), [168.0], "whole once the ramp is out");
+}
+
+/// The unlock panel's dot pattern is a small texture tiled over a 440 by 168 rect (the dots on
+/// screen): it wipes by the same law, the cut keeping the tile size, not appearing whole.
+#[test]
+fn a_tiled_unlock_panel_wipes_too() {
+    let xml = FURY_GRID_FIXTURE.replace(
+        r#"<Values x="168" y="708" width="440" height="168""#,
+        r#"<Values transitiontype="vwipe" delay="0.45" EnableTransition="0.5" TxtrWidth="440" TxtrHeight="168" x="168" y="708" width="440" height="168""#,
+    );
+    let at = |frame: u32| -> Vec<(f32, f32)> {
+        let mut entry = oag_ui::screen::EntryClock::default();
+        for _ in 0..frame {
+            entry.tick(1.0 / 60.0);
+        }
+        fury_grid_list_with(&xml, (true, 2, 0), entry)
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::TiledSprite { rect, repeat, .. } if rect[0] == 168.0 => {
+                    Some((rect[3], repeat[1]))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(at(26), Vec::<(f32, f32)>::new(), "the delay");
+    let first = at(27);
+    assert_eq!(first.len(), 1, "{first:?}");
+    assert!(
+        (first[0].0 - 16.8).abs() < 1e-3,
+        "{first:?}: a tenth of the height"
+    );
+    let whole = at(60);
+    assert_eq!(whole.len(), 1);
+    assert!((whole[0].0 - 168.0).abs() < 1e-3);
+    assert!(
+        (first[0].1 / whole[0].1 - 0.1).abs() < 1e-4,
+        "the tile size holds"
+    );
 }

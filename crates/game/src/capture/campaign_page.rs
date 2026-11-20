@@ -208,6 +208,9 @@ pub(super) fn campaign_page(
     // at ([`crate::flyer::Flyers::card_seconds`]); `None` draws it at
     // [`crate::flyer::SETTLED_SECONDS`].
     card_seconds: Option<f32>,
+    // `--menu-entry-seconds`: how long the page's `vwipe` images have run; `None` draws them
+    // finished.
+    entry_seconds: Option<f32>,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let campaign = crate::campaign::load(
         archives,
@@ -271,6 +274,9 @@ pub(super) fn campaign_page(
         &mut campaign.sprites,
     );
     *sprites = campaign.sprites;
+    let page_clock = entry_seconds.map_or(oag_ui::screen::EntryClock::finished(), |seconds| {
+        oag_ui::screen::EntryClock::at(seconds)
+    });
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
     // above for why this reads the real file rather than always `None`.
@@ -471,6 +477,7 @@ pub(super) fn campaign_page(
                     hd_grids.iter().map(&summarise).collect(),
                 );
                 model.set_index(tier);
+                *model.entry_mut() = page_clock;
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
                 oag_ui_screens::campaign::hd::hd_grid_draw_list(
                     &model,
@@ -500,12 +507,13 @@ pub(super) fn campaign_page(
                 // `oag_ui_screens::campaign::CellSelection::difficulty`'s own doc for
                 // the RPCS3 measurement. Already inside `is_hd` here, so
                 // unconditional.
-                let model = crate::campaign::with_opening_difficulty(
+                let mut model = crate::campaign::with_opening_difficulty(
                     cell_model(cells, tier).with_difficulty(&difficulty_of),
                     records,
                     &campaign_title,
                     true,
                 );
+                *model.entry_mut() = page_clock;
                 let grid_summary = grid
                     .map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
                         summarise(grid)

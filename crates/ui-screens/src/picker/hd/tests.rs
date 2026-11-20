@@ -106,7 +106,10 @@ fn the_child_screen_carries_the_parents_widgets_and_its_own_title() {
     assert_eq!(extra.logo, Some([160.0, 185.0, 512.0, 128.0]));
     assert_eq!(
         extra.logo_wipe,
-        Some(oag_ui::screen::Vwipe { seconds: 0.7 }),
+        Some(oag_ui::screen::Vwipe {
+            seconds: 0.7,
+            delay: 0.5
+        }),
         "`enebletransition` matches no key, so the class default stands"
     );
     assert_eq!(
@@ -1096,27 +1099,22 @@ fn the_authored_corner_marks_and_block_arrow_are_drawn() {
     assert!(none.iter().all(|draw| !matches!(draw, Draw::Sprite { .. })));
 }
 
-/// A team step replays the `Logo`'s `vwipe` from the press
-/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"): a slab a tenth of the
-/// quad tall at the top, then lower, back up, and the finished logo after 0.7 s. The screen's
-/// opening and a settled screen draw it whole.
-#[test]
-fn a_team_step_replays_the_logos_vwipe() {
-    const LOGO: &str = "Data/Ships/A/FE/Logo.gtf";
-    let layout = layout();
-    let extra = layout.hd.as_deref().unwrap();
-    let sprites = |name: &str| {
-        (name == LOGO).then_some(Placed {
-            x: 1000,
-            y: 0,
-            width: 512,
-            height: 128,
-            quad_extent: None,
-            quad_centre: None,
-            blend: None,
-            scale: [1.0, 1.0],
-        })
-    };
+const LOGO: &str = "Data/Ships/A/FE/Logo.gtf";
+
+fn logo_sprites(name: &str) -> Option<Placed> {
+    (name == LOGO).then_some(Placed {
+        x: 1000,
+        y: 0,
+        width: 512,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    })
+}
+
+fn logo_picker() -> Picker {
     let mut entries = vec![hex_team("A"), hex_team("B")];
     for entry in &mut entries {
         let Details::Ship { logo, .. } = &mut entry.details else {
@@ -1124,7 +1122,69 @@ fn a_team_step_replays_the_logos_vwipe() {
         };
         *logo = Some(LOGO.to_string());
     }
-    let mut picker = Picker::new(Kind::Ship, entries, Some("A"), None).with_entries_across();
+    Picker::new(Kind::Ship, entries, Some("A"), None).with_entries_across()
+}
+
+/// The Logo's rect, `None` when the page draws no logo quad.
+fn logo_rect_of(picker: &Picker, layout: &Layout) -> Option<[f32; 4]> {
+    let extra = layout.hd.as_deref().unwrap();
+    let draws = body(picker, layout, extra, &Frame::default(), &logo_sprites);
+    let rects: Vec<[f32; 4]> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, uv, .. } if uv[0] >= 1000.0 => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    assert!(rects.len() <= 1, "{draws:?}");
+    rects.first().copied()
+}
+
+/// A page opened draws no logo for the authored `delay` (0.5 s, 30 frames: `Item 315`'s
+/// countdown in RAM crosses 0 on its delay's frame), then plays the 0.7 s ramp
+/// (`image-widget.md`, "Page entry"). A still that states the page's wipes finished draws it
+/// whole. This fails if the delay or the entry clock is dropped.
+#[test]
+fn a_fresh_screen_waits_the_logos_delay_then_wipes() {
+    let layout = layout();
+    let mut picker = logo_picker();
+    let at = |picker: &Picker| logo_rect_of(picker, &layout);
+    assert_eq!(at(&picker), None, "frame 0 of the page");
+    for _ in 0..29 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(at(&picker), None, "frame 29, the last of the delay");
+    picker.tick(1.0 / 60.0);
+    let first = at(&picker).expect("frame 30 is the first ramp frame");
+    assert!(
+        (first[3] - 12.8).abs() < 1e-3,
+        "{first:?}: a slab a tenth tall"
+    );
+    assert!(first[1] < 185.0 + 128.0 * 0.1, "{first:?}: near the top");
+    for _ in 0..42 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(
+        at(&picker),
+        Some([160.0, 185.0, 512.0, 128.0]),
+        "the ramp is over"
+    );
+
+    let mut settled = logo_picker();
+    settled.set_entry(oag_ui::screen::EntryClock::finished());
+    assert_eq!(at(&settled), Some([160.0, 185.0, 512.0, 128.0]));
+}
+
+/// A team step replays the `Logo`'s `vwipe` from the press
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"): a slab a tenth of the
+/// quad tall at the top, then lower, back up, and the finished logo after 0.7 s. The step does
+/// not wait the delay again. The screen's opening and a settled screen draw it whole.
+#[test]
+fn a_team_step_replays_the_logos_vwipe() {
+    let layout = layout();
+    let extra = layout.hd.as_deref().unwrap();
+    let sprites = logo_sprites;
+    let mut picker = logo_picker();
     let logo_rect = |picker: &Picker| {
         let draws = body(picker, &layout, extra, &Frame::default(), &sprites);
         let rects: Vec<[f32; 4]> = draws
@@ -1138,7 +1198,7 @@ fn a_team_step_replays_the_logos_vwipe() {
         rects[0]
     };
     let whole = [160.0, 185.0, 512.0, 128.0];
-    picker.tick(1.0);
+    picker.tick(1.3);
     assert_eq!(logo_rect(&picker), whole, "no step yet");
 
     let mut input = Input::default();

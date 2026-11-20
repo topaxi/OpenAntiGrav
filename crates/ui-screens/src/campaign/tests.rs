@@ -847,6 +847,7 @@ fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
         reveal: Vec::new(),
         transition: 0.0,
         start_enabled: true,
+        wipe: None,
     };
     let medal = Image {
         name: Some("Medal_0_0".to_string()),
@@ -978,4 +979,21 @@ fn a_fixed_lock_replaces_the_neighbour_rule_for_its_cell() {
     assert!(!model.cell_shows_lock(2, 0));
     assert_eq!(model.locked_names(), ["grid0_0_0"]);
     assert_eq!(model.selected().unwrap().name, "grid0_1_0");
+}
+
+/// One tick moves both clocks a page keeps: `Selector`'s pulse and the entry clock its `vwipe`
+/// images wait on. The stage's per-frame call is this one, so a page whose entry clock stopped
+/// would keep its wiped images hidden for good.
+#[test]
+fn a_tick_advances_the_pulse_and_the_entry_clock_of_both_screens() {
+    let mut grid = GridSelection::new(Vec::new());
+    let mut cell = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    for _ in 0..30 {
+        grid.tick(1.0 / 60.0);
+        cell.tick(1.0 / 60.0);
+    }
+    assert!((grid.pulse().seconds() - 0.5).abs() < 1e-4);
+    assert!((grid.entry().seconds() - 0.5).abs() < 1e-4);
+    assert!((cell.pulse().seconds() - 0.5).abs() < 1e-4);
+    assert!((cell.entry().seconds() - 0.5).abs() < 1e-4);
 }

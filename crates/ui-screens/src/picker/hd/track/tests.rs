@@ -410,3 +410,63 @@ fn a_horizontal_drag_pans_the_circuits_along_the_row_and_wraps() {
     assert!((near(&found, centre) - centre).abs() < 1e-2);
     assert!((near(&moved, centre + pitch * 0.5) - centre - pitch * 0.5).abs() < 1e-2);
 }
+
+/// The circuit's `Emblem` authors `vwipe` with `delay="0.6"`: nothing for 36 frames after the page
+/// opens, then the slab and the ramp, whole after 0.5 s more
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Page entry"). This fails if the delay
+/// or the entry clock is dropped.
+#[test]
+fn the_emblem_waits_its_delay_and_then_wipes() {
+    let xml = XML.replace(
+        r#"<Image name="Emblem"><Values x="110""#,
+        r#"<Image name="Emblem"><Values transitiontype="vwipe" delay="0.6" EnableTransition="0.5" x="110""#,
+    );
+    let screens = Screens::from_xml_with_fallback_globals(&xml, &[]);
+    let layout = read(
+        &xml,
+        &screens,
+        &strings(),
+        FaceScales::default(),
+        [1920.0, 1080.0],
+    )
+    .expect("both screens are there");
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let emblem_height = |picker: &Picker| {
+        let emblem_sheet = |name: &str| {
+            name.to_ascii_lowercase()
+                .contains("trackselectemblem_fury")
+                .then(|| sheet("trackselectemblem_bw").expect("a placement"))
+        };
+        let draws = body(picker, &layout, extra, &Frame::default(), &emblem_sheet);
+        let found: Vec<f32> = draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[0] == 270.0 && rect[2] == 192.0 => Some(rect[3]),
+                _ => None,
+            })
+            .collect();
+        assert!(found.len() <= 1, "{found:?}");
+        found.first().copied()
+    };
+    let mut picker = grid();
+    assert_eq!(emblem_height(&picker), None, "frame 0");
+    for _ in 0..35 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(
+        emblem_height(&picker),
+        None,
+        "frame 35, the last of the delay"
+    );
+    picker.tick(1.0 / 60.0);
+    let first = emblem_height(&picker).expect("frame 36 is the first ramp frame");
+    assert!((first - 19.2).abs() < 1e-3, "{first}: a slab a tenth tall");
+    for _ in 0..30 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(
+        emblem_height(&picker),
+        Some(192.0),
+        "whole when the ramp is out"
+    );
+}

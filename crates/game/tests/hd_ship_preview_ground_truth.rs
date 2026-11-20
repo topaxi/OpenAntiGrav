@@ -1055,3 +1055,93 @@ fn the_model_row_follows_the_discs_unlock_rows(
         title.name
     );
 }
+
+/// Feisar's Ship Select, `--menu-entry-seconds` as given (`None` is the flag absent), as RGBA.
+fn ship_select_entry_still(
+    image: &std::path::Path,
+    entry_seconds: Option<&str>,
+) -> oag_texture::replacer::Image {
+    let dir = std::env::temp_dir().join("oag-hd-entry-wipe-ground-truth");
+    std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
+    std::fs::write(
+        dir.join("config/oag/settings.toml"),
+        "[race]\nteam = \"Feisar\"\n",
+    )
+    .expect("a settings file");
+    let out = dir.join(format!("{}.png", entry_seconds.unwrap_or("none")));
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args([
+            "--no-audio",
+            "--size",
+            "1920x1080",
+            "--menu-page",
+            "ship-select",
+        ])
+        .args(["--fury-tint", "0", "--no-hull-shake"]);
+    if let Some(seconds) = entry_seconds {
+        command.args(["--menu-entry-seconds", seconds]);
+    }
+    let status = command
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page ship-select");
+    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot")).expect("a PNG")
+}
+
+/// Pixels of `a` and `b` that differ by more than 40 in a channel inside `[left, top, right, bottom]`.
+fn differing(
+    a: &oag_texture::replacer::Image,
+    b: &oag_texture::replacer::Image,
+    frame: [u32; 4],
+) -> usize {
+    let mut count = 0;
+    for y in frame[1]..frame[3] {
+        for x in frame[0]..frame[2] {
+            let at = ((y * a.width + x) * 4) as usize;
+            if (0..3).any(|c| a.rgba[at + c].abs_diff(b.rgba[at + c]) > 40) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// Team Selection's `Logo` waits its authored 0.5 s from the page opening and ramps over 0.7 s
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Wired: page entry"): at 0.3 s the
+/// banner panel is bare, at 0.6 s a slab of the logo shows, at 1.3 s the logo is whole, and a
+/// still with no stated time is the whole logo. This fails if the delay, the entry clock or its
+/// flag is dropped: with any of them gone the 0.3 s still shows the logo.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn the_team_logo_waits_its_delay_and_wipes_on_the_page_entry() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let logo = [260, 220, 640, 330];
+    let settled = ship_select_entry_still(&image, None);
+    let whole = ship_select_entry_still(&image, Some("1.3"));
+    let waiting = ship_select_entry_still(&image, Some("0.3"));
+    let slab = ship_select_entry_still(&image, Some("0.6"));
+    assert_eq!(
+        differing(&settled, &whole, logo),
+        0,
+        "no stated time is finished"
+    );
+    let ink = differing(&waiting, &whole, logo);
+    assert!(
+        ink > 3000,
+        "the whole logo is {ink} pixels over the bare panel"
+    );
+    let slab_ink = differing(&waiting, &slab, logo);
+    assert!(
+        (100..ink / 2).contains(&slab_ink),
+        "0.6 s is a slab: {slab_ink} of {ink} pixels"
+    );
+}

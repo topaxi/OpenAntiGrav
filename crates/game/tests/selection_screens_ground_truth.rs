@@ -821,12 +821,15 @@ fn hd_reads_its_own_team_selection() {
     assert_eq!(ship.panel, [160.0, 170.0, 506.0, 156.0]);
     assert_eq!(ship.preview, [705.0, 170.0, 1052.0, 650.0]);
     assert_eq!(extra.logo, Some([160.0, 185.0, 512.0, 128.0]));
-    // The disc's `Logo` authors `transitiontype="vwipe"` with `enebletransition="0.5"`, a key
-    // the executable does not know: the 0.7 s class default stands
-    // (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`).
+    // The disc's `Logo` authors `transitiontype="vwipe"` with `delay="0.5"` and
+    // `enebletransition="0.5"`, a key the executable does not know: the 0.7 s class default
+    // stands (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`).
     assert_eq!(
         extra.logo_wipe,
-        Some(oag_ui::screen::Vwipe { seconds: 0.7 })
+        Some(oag_ui::screen::Vwipe {
+            seconds: 0.7,
+            delay: 0.5
+        })
     );
     let model = extra.ship_model.expect("ShipModel");
     assert_eq!(model.origin, [1220.0, 412.0]);

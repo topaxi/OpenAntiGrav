@@ -30,7 +30,7 @@ use oag_gameplay::input::{Button, Input};
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
-use oag_ui::screen::{Fill, Image, Screen, Screens, Text};
+use oag_ui::screen::{EntryClock, Fill, Image, Screen, Screens, Text};
 
 mod body;
 pub mod borrow;
@@ -189,6 +189,10 @@ pub struct Picker {
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
     since_selection: f32,
+    /// Seconds since the page became current, which its `vwipe` images count their `delay` from.
+    /// Separate from [`Self::seconds`] so a still can state the wipes finished without moving the
+    /// craft's turntable or the slideshow.
+    entry: EntryClock,
     /// Whether the entries move left/right and the livery up/down - see
     /// [`Self::with_entries_across`].
     across: bool,
@@ -230,6 +234,7 @@ impl Picker {
             variant: 0,
             seconds: 0.0,
             since_selection: 0.0,
+            entry: EntryClock::default(),
             across: false,
             columns: 0,
             scroll: oag_ui::kinetic::Kinetic::default(),
@@ -371,6 +376,18 @@ impl Picker {
         (self.since_selection < self.seconds).then_some(self.since_selection)
     }
 
+    /// The clock the page's `vwipe` images wait their `delay` on.
+    #[must_use]
+    pub fn entry(&self) -> EntryClock {
+        self.entry
+    }
+
+    /// Sets [`Self::entry`], for a still drawn a stated time after the page opened
+    /// ([`EntryClock::finished`] for a still with none).
+    pub fn set_entry(&mut self, entry: EntryClock) {
+        self.entry = entry;
+    }
+
     /// Sets [`Self::since_selection`], for a still drawn a known time after a step.
     pub fn set_since_selection(&mut self, seconds: f32) {
         self.since_selection = seconds;
@@ -380,6 +397,7 @@ impl Picker {
     pub fn tick(&mut self, dt: f32) {
         self.seconds += dt;
         self.since_selection += dt;
+        self.entry.tick(dt);
         self.scroll.tick(dt, &pointer::hex_extent());
     }
 

@@ -53,7 +53,7 @@ pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
 pub use touch::{CanvasLabel, Include, TouchButton};
-pub use wipe::{IMAGE_RAMP_SECONDS, Vwipe, Window};
+pub use wipe::{EntryClock, FRAME_SECONDS, IMAGE_RAMP_SECONDS, Vwipe, Window, entry_draw};
 
 /// One `Text` widget.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -275,6 +275,10 @@ pub struct Image {
     /// default - `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
     /// `Element_UpdateFade` section.
     pub start_enabled: bool,
+    /// The widget's `transitiontype="vwipe"` with its `delay` and in-time, when it authors one.
+    /// It replaces the alpha fade ([`Self::transition`]); a page that plays it reads an
+    /// [`EntryClock`] through [`entry_draw`].
+    pub wipe: Option<Vwipe>,
 }
 
 /// A `<Watch watch="Class" value="Vector">`: the widgets the screen draws while

@@ -156,6 +156,10 @@ pub struct Options {
     /// With `--menu-page ship-select`, seconds since a selection step - see
     /// the CLI flag's own docs. `None` draws no step.
     pub menu_picker_step_seconds: Option<f32>,
+    /// With `--menu-page` on HD/Fury or Omega's selection and campaign screens, seconds since the
+    /// page became current, which its `vwipe` images count their `delay` from - see the CLI flag's
+    /// own docs. `None` draws every wipe finished.
+    pub menu_entry_seconds: Option<f32>,
     /// With `--menu-page track-select`/`ship-select`, the previewed model's
     /// own animation time; with `grid-select`/`cell-select`, the flyer card's -
     /// see the CLI flag's own docs. `None` takes `menu_picker_seconds` on the
@@ -748,6 +752,7 @@ pub fn run(
                     distance,
                     options.menu_picker_seconds,
                     options.menu_picker_step_seconds,
+                    options.menu_entry_seconds,
                     false,
                 );
                 // The shared two-person page: the second half on the next team, the first
@@ -779,6 +784,7 @@ pub fn run(
                         distance,
                         options.menu_picker_seconds,
                         options.menu_picker_step_seconds,
+                        options.menu_entry_seconds,
                         true,
                     );
                     let (mut second_list, _) = picker_page(
@@ -799,6 +805,7 @@ pub fn run(
                         distance,
                         options.menu_picker_seconds,
                         options.menu_picker_step_seconds,
+                        options.menu_entry_seconds,
                         false,
                     );
                     // The second half is the base (it brings the screen's own backdrop and
@@ -914,6 +921,7 @@ pub fn run(
                     &records,
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
+                    options.menu_entry_seconds,
                 )?;
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)

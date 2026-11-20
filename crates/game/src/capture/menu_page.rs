@@ -919,6 +919,9 @@ pub(super) fn picker_page(
     // `--menu-picker-step-seconds` - seconds since a selection step, for the
     // craft's swap on a title that draws the race hull.
     step_seconds: Option<f32>,
+    // `--menu-entry-seconds` - seconds since the page became current, for its `vwipe` images;
+    // `None` draws them finished.
+    entry_seconds: Option<f32>,
     // Draw over what is already on screen rather than over the screen's own backdrop: the
     // second half of the shared two-person page.
     over: bool,
@@ -1015,6 +1018,11 @@ pub(super) fn picker_page(
         picker = picker.with_rows(grid_columns);
     }
     picker.tick(seconds.unwrap_or(SETTLED_SECONDS));
+    picker.set_entry(
+        entry_seconds.map_or(oag_ui::screen::EntryClock::finished(), |s| {
+            oag_ui::screen::EntryClock::at(s)
+        }),
+    );
     if let Some(since) = step_seconds {
         picker.set_since_selection(since);
     }

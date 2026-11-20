@@ -15,6 +15,7 @@ mod menu_skin;
 mod prompt_glyphs_ground_truth;
 mod pure_frame_ground_truth;
 mod text_display_type_ground_truth;
+mod vwipe_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

@@ -176,6 +176,7 @@ impl Screens {
             y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             width,
             height,
+            wipe: self.vwipe_from_node(node),
         })
     }
 
@@ -224,6 +225,7 @@ impl Screens {
             reveal: Vec::new(),
             transition: 0.0,
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
+            wipe: self.vwipe_from_node(node),
         }
     }
 
