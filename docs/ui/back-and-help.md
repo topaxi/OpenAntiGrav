@@ -38,7 +38,8 @@ below leave out the directions, `start`, `none` and the movie-skip screens.
 | `Team Selection` | `triangle` to `Team Help`; `square` to `Pre Race Music Select` | `circle` to `Team HelpSingle`; `square` to the music select | Help, Music |
 | `Tournament C` | `triangle` to `Tournament Help` | `circle` | Help |
 | `Track Creation` | `triangle` to `Track Help` | `circle` to `Track HelpSingle` | Help |
-| `Single Player`, `Split ScreenH`, `Split ScreenV`, `Cell Creation`, `Team SelectionSplit`, `Tournament CSplitH`/`V`, `Track CreationSplit` | no such screen in the PSP's XML | `circle` to each screen's own Help; `Cell Creation`'s `square` opens `Create Menu` | Help |
+| `Single Player`, `Split ScreenH`, `Split ScreenV`, `Cell Creation`, `Tournament CSplitH`/`V`, `Track CreationSplit` | no such screen in the PSP's XML | `circle` to each screen's own Help; `Cell Creation`'s `square` opens `Create Menu` | Help |
+| `Team SelectionSplit` | no such screen in the PSP's XML | **no face-button `Redirect`**: `Team HelpSplit` is named only by a `Watch` on the directions (which freezes the page while it is up); what presents it is not in the XML | none authored |
 | `Stats - 1` to `Stats - 12` | `forward="circle"` to `Profile` | `forward="triangle"` to `Profile` | Back |
 | `DisplayProfileLoadList` and the other seven memory-card lists | none | `forward="triangle"` to `Manage Profile` | Back |
 
@@ -165,8 +166,10 @@ preview is a pass of its own over the finished picture). `--drive` reports it as
 - **Open: the screens left undrawn.** `Tournament C` has no screen model in this build (so
   `Tournament Help` has nothing to open from), and `Pre Race Music Select` is a `MusicList` widget,
   not a Help overlay. Their footers are unchanged.
-- **Pulse's split screens** (`Team HelpSplit`, `Track HelpSpilt`) are not read: the shared Ship
-  Select's two halves open none.
+- **Pulse's split screens.** `Track CreationSplit`'s `Track HelpSpilt` is `Track HelpSingle` with a 488-high
+  dim (a diff of the two screens), and a split race's Track Select is read from `Track Creation`, so
+  its Help is the one above. `Team SelectionSplit` authors no face-button `Redirect` to `Team HelpSplit`
+  (census table), so the shared Ship Select's halves open none.
 
 ## Tests
 
