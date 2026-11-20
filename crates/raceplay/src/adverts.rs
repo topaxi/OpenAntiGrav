@@ -40,6 +40,8 @@ pub struct Billboards {
     pub adverts: Vec<Card>,
     /// The slots a Zone race shows the stage's shared target on, see [`crate::zone_equaliser`].
     pub zone_equaliser: Vec<u32>,
+    /// Whether that target draws the equaliser's bars, see `oag_title::Adverts::zone_equaliser_bars`.
+    pub zone_equaliser_bars: bool,
 }
 
 /// The slot a card fills, drawn through the camera its own file authors.

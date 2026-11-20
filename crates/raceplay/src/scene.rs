@@ -615,6 +615,7 @@ impl Scene {
             gantry,
             adverts,
             zone_equaliser,
+            zone_equaliser_bars,
         } = billboards;
         let cache_scope = mesh_render::BuildCacheScope::open();
         cache_scope.lit_by(&light);
@@ -829,6 +830,7 @@ impl Scene {
             &mut track,
             &placeholders,
             &zone_equaliser,
+            zone_equaliser_bars,
         )
         .map(std::cell::RefCell::new);
         let adverts = if adverts.is_empty() {

@@ -806,6 +806,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             gantry,
             adverts,
             zone_equaliser,
+            zone_equaliser_bars: title.adverts.is_some_and(|spec| spec.zone_equaliser_bars),
         },
         collision_model,
         sky_model,

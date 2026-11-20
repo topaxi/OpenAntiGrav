@@ -80,7 +80,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--rights", type=int, default=4,
                     help="RIGHT presses on RACE TYPE from Single Race: Time Trial, Speed Lap, Eliminator, Zone")
-    ap.add_argument("--at", default="30,31,60", help="wall seconds after the release to read at")
+    ap.add_argument("--at", default="0,1,2", help="wall seconds after the music starts to read at")
+    ap.add_argument("--music-wait", type=float, default=150.0)
     ap.add_argument("--boot-secs", type=float, default=400.0)
     args = ap.parse_args()
     at = [float(s) for s in args.at.split(",")]
@@ -181,8 +182,16 @@ def main():
         texels = u32(header, 8) if 0xC0000000 <= u32(header, 8) < 0xD0000000 else None
         meta["texels"] = None if texels is None else "%#x" % texels
         gdb = Debugger(port=int(drive.GDB_SERVER.rsplit(":", 1)[1])) if data is None and texels else None
+        # Music first: wait for a held band above 0.3 (up to `--music-wait` seconds), then read at the offsets.
+        while time.time() - released < args.music_wait:
+            held = struct.unpack(">16f", guest.read(STAGE_BLOCK + 0x32F8, 0x40))
+            if max(held) > 0.3:
+                break
+            time.sleep(0.5)
+        music = time.time() - released
+        print("music at %.1f s after the release" % music, flush=True)
         for k, offset in enumerate(at):
-            while time.time() - released < offset:
+            while time.time() - released < music + offset:
                 time.sleep(0.02)
             stamp = time.time() - released
             if data is not None:

@@ -160,6 +160,8 @@ pub fn texels() -> Vec<u8> {
 pub struct Live {
     texture: wgpu::Texture,
     equaliser: Equaliser,
+    /// The title's `zone_equaliser_bars`: without it every frame is the bare grid.
+    bars: bool,
 }
 
 #[cfg(feature = "view")]
@@ -172,6 +174,7 @@ impl Live {
         tint: Option<[u8; 4]>,
         style: Option<u8>,
     ) {
+        let style = style.filter(|_| self.bars);
         if self.equaliser.step(held, tint, style) {
             upload(queue, &self.texture, &self.equaliser.texels());
         }
@@ -203,13 +206,15 @@ fn upload(queue: &dyn oag_gpu::writes::Writes, texture: &wgpu::Texture, texels: 
 
 #[cfg(feature = "view")]
 /// Points every placeholder material of `track` whose slot is in `slots` at the target,
-/// the bare grid until the first [`Live::step`]. `None` when no slot shows it.
+/// the bare grid until the first [`Live::step`], and for good unless `bars`. `None` when
+/// no slot shows it.
 pub(super) fn bind_into(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     track: &mut Drawable,
     placeholders: &[(usize, u32)],
     slots: &[u32],
+    bars: bool,
 ) -> Option<Live> {
     if slots.is_empty() {
         return None;
@@ -236,7 +241,11 @@ pub(super) fn bind_into(
             track.set_albedo(device, queue, texture_slot, &view, true);
         }
     }
-    Some(Live { texture, equaliser })
+    Some(Live {
+        texture,
+        equaliser,
+        bars,
+    })
 }
 
 #[cfg(test)]
