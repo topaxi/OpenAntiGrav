@@ -7,7 +7,7 @@
 //! system has such a thing, and a file that cannot be read is an error, never a reason to make
 //! another key over it.
 //!
-//! The write is atomic (temp file, then rename), like `rejoin.toml`.
+//! The write is atomic and owner-only (`profile::write_private`).
 
 use std::path::{Path, PathBuf};
 
@@ -118,22 +118,7 @@ fn write(path: &Path, key: &PlayerKey) -> Result<()> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    let temp = path.with_extension("toml.tmp");
-    write_private(&temp, &text).with_context(|| format!("writing {}", temp.display()))?;
-    std::fs::rename(&temp, path).with_context(|| format!("replacing {}", path.display()))
-}
-
-/// Writes `text` to a file only its owner can read, where the system has such a thing.
-fn write_private(path: &Path, text: &str) -> std::io::Result<()> {
-    use std::io::Write;
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path)?.write_all(text.as_bytes())
+    crate::profile::write_private(path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 #[cfg(test)]

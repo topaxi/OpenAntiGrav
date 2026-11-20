@@ -102,7 +102,7 @@ pub fn is_built_in_name(name: &str) -> bool {
 
 /// Checks a name a player typed, **before** it is ever joined onto a path.
 ///
-/// [`write_pilot`], [`rename_pilot`] and [`delete_pilot`] all build a path
+/// [`pilot_path`], [`rename_pilot`] and [`delete_pilot`] all build a path
 /// with `dir.join(format!("{name}.toml"))`, and every one of them is public.
 /// So the invariant lives here rather than in whichever on-screen keyboard
 /// happens to be offering the characters: a charset the keyboard cannot type
@@ -620,26 +620,16 @@ pub fn template(pilot: &Pilot) -> String {
 /// ordinary case for a built-in with no file: the caller falls back to
 /// [`template`] rather than treating this as fatal.
 pub fn read_pilot_text(dir: &Path, name: &str) -> Result<String> {
-    let path = dir.join(format!("{name}.toml"));
+    let path = pilot_path(dir, name);
     std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))
 }
 
-/// Writes one pilot's text to disk, creating `dir` if this is the first pilot
-/// saved on this machine.
-///
-/// **Never panics on a write failure.** A missing config directory is not the
-/// only way this can fail - the directory can exist and not be writable,
-/// which [`directory`] cannot see coming - so both are an [`Err`] the caller
-/// must show the player, the same way a race that fails to load is reported
-/// rather than unwound.
-///
-/// # Errors
-///
-/// If `dir` cannot be created, or the file cannot be written.
-pub fn write_pilot(dir: &Path, name: &str, text: &str) -> Result<()> {
-    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
-    let path = dir.join(format!("{name}.toml"));
-    std::fs::write(&path, text).with_context(|| format!("writing {}", path.display()))
+/// Where `name`'s pilot file is in `dir`. The editor writes it through the profile's atomic
+/// write (`oag_game::profile`, ADR-0095): a crash while saving must not take a hand-authored
+/// pilot with it.
+#[must_use]
+pub fn pilot_path(dir: &Path, name: &str) -> std::path::PathBuf {
+    dir.join(format!("{name}.toml"))
 }
 
 /// One entry the grid may draw from.

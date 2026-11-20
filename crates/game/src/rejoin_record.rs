@@ -147,9 +147,7 @@ pub fn store_to(path: &Path, title: &str, rejoin: &Rejoin, now: u64) -> Result<(
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    let temp = path.with_extension("toml.tmp");
-    std::fs::write(&temp, text).with_context(|| format!("writing {}", temp.display()))?;
-    std::fs::rename(&temp, path).with_context(|| format!("replacing {}", path.display()))
+    crate::profile::write_bytes(path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 /// The seat saved for `title` in the file at `path`, if it has not expired by `now`. A record

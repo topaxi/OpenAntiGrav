@@ -11,14 +11,34 @@
 //! few MiB per origin, far above what these two files reach. Ghosts and pilot
 //! files are binary or a directory and stay unpersisted on the web.
 //! See docs/tools/web.md.
+//!
+//! **Every write is atomic** (ADR-0095): [`write`], [`write_bytes`] and
+//! [`write_private`] stage the new content in `<name>.tmp` beside the file, flush it to the disk
+//! and rename it over the old one, so an interrupted write leaves the previous file readable.
+//! A file under the profile folder is never written by `std::fs::write`.
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use dirs::config_dir;
 #[cfg(not(target_arch = "wasm32"))]
-pub use std::fs::{create_dir_all, read_to_string, rename, write};
+pub use std::fs::{create_dir_all, read_to_string, rename};
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use native::{write, write_bytes, write_private};
 
 #[cfg(target_arch = "wasm32")]
-pub use web::{config_dir, create_dir_all, read_to_string, rename, write};
+pub use web::{
+    config_dir, create_dir_all, read_to_string, rename, write, write_bytes, write_private,
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+mod native;
+
+/// Makes the next [`write`] on this thread die after `bytes` bytes of the new content, leaving its
+/// temp file as a crashed process would.
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) fn cut_the_next_write_after(bytes: usize) {
+    native::CUT_AFTER.with(|cut| cut.set(Some(bytes)));
+}
 
 #[cfg(target_arch = "wasm32")]
 mod web {
@@ -58,7 +78,8 @@ mod web {
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "never saved"))
     }
 
-    /// As [`std::fs::write`], for text.
+    /// As [`std::fs::write`], for text. One `setItem` is all or nothing (the Storage standard
+    /// leaves the old value when the quota throws), so it needs no temp file (ADR-0095).
     ///
     /// # Errors
     /// The quota is spent, or there is no `localStorage` in this browser.
@@ -68,6 +89,28 @@ mod web {
         storage()?
             .set_item(&key(path.as_ref()), text)
             .map_err(failed)
+    }
+
+    /// As [`std::fs::write`] for a file that is not text: the web keeps none.
+    ///
+    /// # Errors
+    /// Always, [`io::ErrorKind::Unsupported`].
+    pub fn write_bytes(_path: impl AsRef<Path>, _contents: impl AsRef<[u8]>) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "binary files are not kept on the web",
+        ))
+    }
+
+    /// A secret is not put where any script of the origin can read it.
+    ///
+    /// # Errors
+    /// Always, [`io::ErrorKind::Unsupported`].
+    pub fn write_private(_path: impl AsRef<Path>, _contents: impl AsRef<[u8]>) -> io::Result<()> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "a secret is not kept in localStorage",
+        ))
     }
 
     /// As [`std::fs::rename`].

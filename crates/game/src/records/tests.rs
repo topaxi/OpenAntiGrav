@@ -1121,3 +1121,52 @@ fn a_run_that_named_a_circuit_files_under_that_one() {
         Key::new("Wipeout Pulse", Some(named), "zone", "venom")
     );
 }
+
+fn scratch_records(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("oag-records-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("a scratch directory");
+    dir.join("records.toml")
+}
+
+fn store_with_a_gold() -> Store {
+    let mut store = Store::default();
+    store.record(key("16_track"), observation_with_medal(Some(Medal::Gold)));
+    store
+}
+
+/// A crash while the file is being written must not cost the player their medals: the file on
+/// disk stays the previous save, and loading it neither moves it aside nor starts empty.
+#[test]
+fn a_save_cut_short_keeps_the_medals_of_the_save_before() {
+    let file = scratch_records("cut");
+    let before = store_with_a_gold();
+    write_to(&file, &before).expect("the first save");
+
+    let mut after = before.clone();
+    after.record(key("17_track"), observation_with_medal(Some(Medal::Silver)));
+    crate::profile::cut_the_next_write_after(40);
+    assert!(write_to(&file, &after).is_err(), "the cut save fails");
+
+    let loaded = load_at(&file);
+    assert_eq!(loaded.rows(), before.rows(), "the previous save is whole");
+    assert!(
+        !file.with_file_name("records.toml.invalid").exists(),
+        "nothing was moved aside as unparsable"
+    );
+}
+
+#[test]
+fn a_half_written_temp_file_is_ignored_on_load_and_replaced_by_the_next_save() {
+    let file = scratch_records("stray");
+    let before = store_with_a_gold();
+    write_to(&file, &before).expect("a save");
+    let stray = file.with_file_name("records.toml.tmp");
+    std::fs::write(&stray, "[[records]]\nkey = \"1").expect("a stray temp file");
+
+    assert_eq!(load_at(&file).rows(), before.rows());
+
+    write_to(&file, &before).expect("the next save");
+    assert!(!stray.exists(), "the next save replaced the stray");
+    assert_eq!(load_at(&file).rows(), before.rows());
+}

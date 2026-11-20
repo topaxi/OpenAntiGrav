@@ -1109,7 +1109,12 @@ pub fn load() -> Store {
     let Some(path) = path() else {
         return Store::default();
     };
-    let text = match crate::profile::read_to_string(&path) {
+    load_at(&path)
+}
+
+/// [`load`] from `path`: what the file holds, with every degradation `load` lists.
+fn load_at(path: &std::path::Path) -> Store {
+    let text = match crate::profile::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Store::default(),
         Err(e) => {
@@ -1132,7 +1137,7 @@ pub fn load() -> Store {
                 "{}.invalid",
                 path.file_name().unwrap_or_default().to_string_lossy()
             ));
-            match crate::profile::rename(&path, &backup) {
+            match crate::profile::rename(path, &backup) {
                 Ok(()) => error!(
                     "{} would not parse ({e:#}); moved aside to {} and starting with no race \
                      records",

@@ -163,11 +163,8 @@ pub fn write_auto_in(root: &Path, title: &str, unix: u64, replay: &Replay) -> Re
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    let partial = path.with_extension(format!("{EXTENSION}.partial"));
-    std::fs::write(&partial, replay.to_bytes())
-        .with_context(|| format!("writing {}", partial.display()))?;
-    std::fs::rename(&partial, &path)
-        .with_context(|| format!("renaming {} into place", partial.display()))?;
+    crate::profile::write_bytes(&path, replay.to_bytes())
+        .with_context(|| format!("writing {}", path.display()))?;
     prune_in(root);
     Ok(path)
 }
