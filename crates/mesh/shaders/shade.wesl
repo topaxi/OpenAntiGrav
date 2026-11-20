@@ -7,7 +7,7 @@ import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, 
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
-import package::hull_normal::{hull_normal};
+import package::hull_normal::{hull_frame, hull_normal};
 import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
@@ -256,7 +256,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
     } else if simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
-        n_hull = hull_normal(material_sample(MATERIAL_PAD_MASK, in.texcoord), n, in.tangent);
+        let map = material_sample(MATERIAL_PAD_MASK, in.texcoord);
+        // The crowd's programs weight the map's `z` by `eye - position` (`row_tint.w`, the entry's `offset`).
+        let third = select(n, scene.fog.camera - in.world, crowd_lit && row_tint.w > 0.5);
+        n_hull = hull_frame(map, n, in.tangent, third);
         n_lit = n_hull;
     }
     // The water's normal is its scrolled taps' sum (`water.wesl`), for the light, the
