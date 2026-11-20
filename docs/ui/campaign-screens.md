@@ -522,9 +522,9 @@ screen's authored button unless Back takes it, and then it is the button Back di
 - Every screen that leaves on the circle in its own code (`oag_ui::menu`, the pickers, the pause menu,
   the end-of-race pages, the prompts) follows from `Controls::set_face_swap`: under `triangle` the keyboard
   slot's button state reads the circle as the triangle and the reverse, and a click's `Controls::tap`
-  names the button the reader sees. The swap is **off while a race runs**, where the circle is the absorb
-  (`Session::menu_face_swap`: on in a menu, a paused race and an end-of-race screen; off in photo mode, whose
-  own state the replay viewer and photo mode read, `Controls::view_take`).
+  names the button the reader sees. The swap is **on** in a menu, in a paused race and on an end-of-race screen, and **off** while a race
+  runs (the circle is the absorb there) and in photo mode, whose own button state the replay viewer and photo
+  mode read (`Controls::view_take`) (`Session::menu_face_swap`).
 - A footer's glyph is a stand-in codepoint the disc authored for its own Back button, so
   `glyph_swap` exchanges the circle's and the triangle's stand-ins through the prompt substitution
   (`oag_ui::prompt::Substitution::exchanging` for the disc's glyphs, `oag_game::prompts::substitution`
@@ -536,7 +536,7 @@ screen's authored button unless Back takes it, and then it is the button Back di
 **Checked.** `campaign_cursor_ground_truth::menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_triangle`
 drives Pulse PS2 EU's Cell Selection with `circle`: the circle leaves to Grid Selection, a second circle
 leaves the campaign, the triangle opens Cell Help, and `original` keeps the circle on Help.
-`oag_input::tests::face_swap_*` cover the exchange itself. Confidence 90 for the mechanism; a `triangle`
+`oag_input::tests::face_swap_*` cover the exchange itself. A `triangle`
 choice is not drivable through `--drive` (its `press` names the button the screen reads, after the exchange),
 so its physical effect is the unit test, not a still.
 
