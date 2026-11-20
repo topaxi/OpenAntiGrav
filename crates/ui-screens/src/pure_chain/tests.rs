@@ -195,3 +195,14 @@ fn a_medal_is_inked_and_the_screen_is_drawn_on_the_skins_own_background_and_titl
         "the medal word in its ink"
     );
 }
+
+#[test]
+fn the_chain_backs_out_on_the_button_it_is_handed() {
+    let mut choice = Choice::new(String::new(), String::new(), PITCH, rows(3));
+    choice.set_roles(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    assert!(choice.update(&mut tick(&[Button::Circle])).is_empty());
+    assert_eq!(choice.update(&mut tick(&[Button::Triangle])), [Event::Back]);
+}

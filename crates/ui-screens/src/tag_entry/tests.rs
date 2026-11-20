@@ -448,3 +448,17 @@ fn a_light_authored_title_keeps_its_own_colour() {
     let (ink, _) = title_over_panel(0xFF33_A6B9);
     assert_eq!(ink, argb_to_rgba(0xFF33_A6B9));
 }
+
+#[test]
+fn the_tag_entry_cancels_on_the_button_it_is_handed() {
+    let mut entry = TagEntry::new(labels(), geometry(3), ALPHABET, "ab");
+    entry.set_roles(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    assert_eq!(entry.update(&mut tick(&[Button::Circle])), Outcome::Pending);
+    assert_eq!(
+        entry.update(&mut tick(&[Button::Triangle])),
+        Outcome::Cancelled
+    );
+}

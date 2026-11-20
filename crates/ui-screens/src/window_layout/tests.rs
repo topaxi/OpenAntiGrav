@@ -419,3 +419,14 @@ fn one_window_only_says_why_in_place_of_the_hint() {
     assert!(texts(&locked).contains(&"ONE WINDOW ONLY".to_string()));
     assert!(!texts(&locked).contains(&"HOW MANY WINDOWS".to_string()));
 }
+
+#[test]
+fn the_layout_screen_backs_out_on_the_button_it_is_handed() {
+    let mut picker = picker(2, 1);
+    picker.set_roles(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    assert!(press(&mut picker, Button::Circle).is_empty());
+    assert_eq!(press(&mut picker, Button::Triangle), [Event::Back]);
+}

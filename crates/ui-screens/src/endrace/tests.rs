@@ -100,3 +100,20 @@ fn the_no_medal_glyph_shows_only_on_a_medal_less_campaign_race() {
         .shows_no_medal_glyph()
     );
 }
+
+#[test]
+fn the_menu_backs_on_the_button_it_is_handed() {
+    let mut menu = options();
+    menu.set_roles(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    let mut input = Input::new();
+    press(&mut input, Button::Circle);
+    assert!(
+        menu.update(&mut input).is_empty(),
+        "the circle is Help there"
+    );
+    press(&mut input, Button::Triangle);
+    assert_eq!(menu.update(&mut input), vec![Event::Back]);
+}

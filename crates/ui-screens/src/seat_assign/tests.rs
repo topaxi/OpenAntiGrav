@@ -304,3 +304,14 @@ fn no_head_count_has_more_rows_than_the_grid_holds() {
         assert!(screen.rows().ends_with(&[Row::Auto, Row::Start, Row::Back]));
     }
 }
+
+#[test]
+fn the_seat_screen_backs_out_on_the_button_it_is_handed() {
+    let mut screen = three();
+    screen.set_roles(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    assert!(screen.press(0, press(Button::Circle)).is_empty());
+    assert_eq!(screen.press(0, press(Button::Triangle)), [Event::Back]);
+}

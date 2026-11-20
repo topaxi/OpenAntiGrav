@@ -815,3 +815,146 @@ fn menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_tr
         "original keeps the PS2's circle on Help"
     );
 }
+
+// Back on every front-end screen: `oag_title::Title::menu_buttons` resolves the button the title,
+// the pressing and the player's MENU BACK choice leave on (`docs/ui/back-and-help.md`). Pulse's PS2
+// pressing leaves on the triangle where its executable binds `backward`
+// (`docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence"), the PSP and HD on the circle.
+// The campaign screens are the tests above.
+
+const RACE_PAGE: &str = "boot; select racebox; press cross; until page=race; ticks 10";
+const TRACK_PICKER: &str = "boot; select racebox; press cross; until page=race; select launch_race; press cross; \
+     until screen=picker; ticks 10";
+const SHIP_PICKER: &str = "boot; select racebox; press cross; until page=race; \
+     select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; ticks 10";
+/// The on-screen keyboard OPTIONS > PLAYER NAME opens.
+const NAME_PROMPT: &str = "boot; select options; press cross; ticks 10; select edit_player_name; \
+     press cross; until screen=prompt; ticks 10";
+/// The pause screen of a time trial, on its GAME OPTIONS page.
+const PAUSE_OPTIONS: &str = "boot; select racebox; press cross; until page=race; \
+     set race.mode=time_trial; select launch_race; press cross; until screen=picker; press cross; \
+     until screen.id=ship-select; press cross; until stage=race within 4000; ticks 400; \
+     press start; until stage=menu; expect page=pause; ticks 5; select \"Game options\"; \
+     press cross; until page=options; ticks 10";
+
+/// Where the game is in the last state a run reported.
+fn place(states: &[Value]) -> String {
+    let state = states.last().expect("the run reported a state");
+    format!(
+        "{}/{}/{}/{}",
+        state["stage"], state["page"], state["screen"]["kind"], state["screen"]["id"]
+    )
+}
+
+/// `(back, other)`: the face button the screen leaves on and the one it does not, under `choice`
+/// on a pressing whose own Back is `original`.
+fn buttons(original: &'static str, choice: &str) -> (&'static str, &'static str) {
+    let other = |button: &'static str| {
+        if button == "circle" {
+            "triangle"
+        } else {
+            "circle"
+        }
+    };
+    match choice {
+        "circle" => ("circle", "triangle"),
+        "triangle" => ("triangle", "circle"),
+        _ => (original, other(original)),
+    }
+}
+
+/// On `reach`, `back` leaves the screen and `other` does not, for every choice of MENU BACK.
+fn leaves_on_the_resolved_button(image: &Path, tag: &str, reach: &str, original: &'static str) {
+    let profile = Profile::fresh(tag);
+    let drive = |choice: &str, press: &str, log: &str| {
+        profile.menu_back(choice);
+        let tail = if press.is_empty() {
+            String::new()
+        } else {
+            format!("press {press}; ")
+        };
+        place(&profile.drive_on(image, &format!("{reach}; {tail}ticks 30"), log))
+    };
+    let stays = drive("original", "", "stays.jsonl");
+    for choice in ["original", "circle", "triangle"] {
+        let (back, other) = buttons(original, choice);
+        assert_ne!(
+            drive(choice, back, &format!("{choice}-{back}.jsonl")),
+            stays,
+            "{tag}: {back} leaves under {choice}"
+        );
+        assert_eq!(
+            drive(choice, other, &format!("{choice}-{other}.jsonl")),
+            stays,
+            "{tag}: {other} does not leave under {choice}"
+        );
+    }
+}
+
+fn ps2() -> Option<std::path::PathBuf> {
+    oag_testdata::image("pulse-ps2-eu.chd")
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_race_page_leaves_on_the_triangle() {
+    let Some(image) = ps2() else { return };
+    leaves_on_the_resolved_button(&image, "ps2-race-page", RACE_PAGE, "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_track_picker_leaves_on_the_triangle() {
+    let Some(image) = ps2() else { return };
+    leaves_on_the_resolved_button(&image, "ps2-track-picker", TRACK_PICKER, "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_ship_picker_leaves_on_the_triangle() {
+    let Some(image) = ps2() else { return };
+    leaves_on_the_resolved_button(&image, "ps2-ship-picker", SHIP_PICKER, "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_keyboard_prompt_cancels_on_the_triangle() {
+    let Some(image) = ps2() else { return };
+    leaves_on_the_resolved_button(&image, "ps2-name-prompt", NAME_PROMPT, "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_pause_menu_page_leaves_on_the_triangle() {
+    let Some(image) = ps2() else { return };
+    leaves_on_the_resolved_button(&image, "ps2-pause-options", PAUSE_OPTIONS, "triangle");
+}
+
+/// The PSP leaves on the circle as before, and follows MENU BACK = `triangle` without the input
+/// exchange this replaced.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_screens_still_leave_on_the_circle() {
+    let Some(image) = oag_testdata::image("pulse-psp-eu.chd") else {
+        return;
+    };
+    for (tag, reach) in [
+        ("psp-race-page", RACE_PAGE),
+        ("psp-track-picker", TRACK_PICKER),
+        ("psp-name-prompt", NAME_PROMPT),
+        ("psp-pause-options", PAUSE_OPTIONS),
+    ] {
+        leaves_on_the_resolved_button(&image, tag, reach, "circle");
+    }
+}
+
+/// HD leaves on the circle as before.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_race_page_still_leaves_on_the_circle() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    leaves_on_the_resolved_button(&image, "hd-race-page", RACE_PAGE, "circle");
+}

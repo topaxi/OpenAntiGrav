@@ -152,3 +152,30 @@ fn the_grid_plays_the_same_cues_for_the_pointer() {
     assert_eq!(grid.pointer(&back, &skin), Outcome::Cancelled);
     assert_eq!(grid.take_nav(), [Nav::Decline]);
 }
+
+/// The PS2's Back is the triangle: a dialog, a keyboard and a tag entry cancel on the buttons
+/// they are handed and ignore the circle, which is Help there.
+#[test]
+fn a_prompt_cancels_on_the_back_button_it_is_handed() {
+    let ps2 = oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    };
+    let mut dialog = confirm();
+    dialog.set_roles(ps2);
+    assert_eq!(
+        dialog.update(&mut tick(&[Button::Circle])),
+        Outcome::Pending
+    );
+    assert_eq!(
+        dialog.update(&mut tick(&[Button::Triangle])),
+        Outcome::Cancelled
+    );
+    let mut grid = keyboard("", 8);
+    grid.set_roles(ps2);
+    assert_eq!(grid.update(&mut tick(&[Button::Circle])), Outcome::Pending);
+    assert_eq!(
+        grid.update(&mut tick(&[Button::Triangle])),
+        Outcome::Cancelled
+    );
+}
