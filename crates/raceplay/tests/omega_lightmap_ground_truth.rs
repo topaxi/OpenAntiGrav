@@ -18,8 +18,9 @@
 
 use oag_raceplay as race;
 use oag_tables::envsettings::{
-    EnvSettings, NOVA_PRELIT, OMEGA_SUN_DIFFUSE_INTENSITY, OMEGA_SUN_SPECULAR_COLOUR,
-    OMEGA_SUN_SPECULAR_INTENSITY, PSP2_SUN_DIFFUSE_COLOUR,
+    EnvSettings, NOVA_PRELIT, OMEGA_SHADOW_LIGHT_DIRECTION, OMEGA_SHADOW_LIGHT_SPECULAR,
+    OMEGA_SUN_DIFFUSE_INTENSITY, OMEGA_SUN_SPECULAR_COLOUR, OMEGA_SUN_SPECULAR_INTENSITY,
+    PSP2_SUN_DIFFUSE_COLOUR,
 };
 
 fn source() -> Option<String> {
@@ -205,6 +206,16 @@ fn tech_de_ras_authored_triple_reaches_the_rig() {
             "specular channel {i}"
         );
     }
+    // The tarmac roads' shadow-light factor reads the authored direction (normalised) and its
+    // power and scale pair; dropping the loader call leaves the zero a rig is built with.
+    let shadow = env
+        .direction(OMEGA_SHADOW_LIGHT_DIRECTION)
+        .expect("Omega authors a shadow light direction");
+    let [power, scale] = env
+        .vec2(OMEGA_SHADOW_LIGHT_SPECULAR)
+        .expect("and its specular power and scale");
+    assert_eq!(light.shadow_light, [shadow[0], shadow[1], shadow[2], 1.0]);
+    assert_eq!(light.shadow_light_specular, [power, scale, 0.0, 0.0]);
     assert_eq!(light.nova, 1.0, "the Omega rig is flagged");
     assert_eq!(light.prelit_scale, [2.5; 3]);
     assert_eq!(light.prelit_power, [2.0; 3]);

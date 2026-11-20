@@ -205,6 +205,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let panel_entry = (in.slots >> 24u) & 63u;
     let panel = panel_entry != 0u && row_scale.z > 14.5 && row_scale.z < 15.5
         && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    // **Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads** (mode 14, below).
+    let tarmac_entry = (in.slots >> 24u) & 63u;
+    let tarmac = tarmac_entry != 0u && row_scale.z > 13.5 && row_scale.z < 14.5;
     let uv_grad = uv_gradients(in.texcoord);
     var panel_uv = in.texcoord;
     if panel {
@@ -549,8 +552,25 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             }
         }
         let spu = select(in.spu_light, vec3<f32>(0.0), simplified_lighting != 0.0);
+        // **The tarmac roads' shadow-light factor on the prelit term** (Omega's lightmapped
+        // programs, `docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`):
+        //
+        //     Fsl = 0.75 + 0.25 sat(N.SL) + SLSD.y sat(R.SL)^SLSD.x
+        //
+        // `N` the mapped normal, `R` the view reflected about it, `SL` the circuit's authored
+        // `Lighting.ShadowLight direction`. Applied to the road family read here; the other
+        // lightmapped families carry it too and are unread (`omega-status.md`).
+        var shadow_light_factor = 1.0;
+        if tarmac && nova && scene.light.shadow_light.w > 0.5 {
+            let seen = normalize(scene.fog.camera - in.world);
+            let r = reflect(-seen, n_lit);
+            let sl = scene.light.shadow_light.xyz;
+            shadow_light_factor = 0.75 + 0.25 * clamp(dot(n_lit, sl), 0.0, 1.0)
+                + scene.light.shadow_light_specular.y
+                    * pow(clamp(dot(r, sl), 0.0, 1.0), scene.light.shadow_light_specular.x);
+        }
         let lit_sum = select(
-            hull_ambient + prelit + vertex_light_term + sun_diffuse + spu,
+            hull_ambient + prelit * shadow_light_factor + vertex_light_term + sun_diffuse + spu,
             in.colour.rgb * (hull_ambient + sun_diffuse + spu),
             colour_factor,
         );
@@ -761,8 +781,6 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     //
     // over the albedo, dirt first. The vertex colour carries the dirt pair here, so the tint
     // below is white on this mode. The taps are mixed in the domain `picture` is sampled in.
-    let tarmac_entry = (in.slots >> 24u) & 63u;
-    let tarmac = tarmac_entry != 0u && row_scale.z > 13.5 && row_scale.z < 14.5;
     if tarmac {
         let dirt = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy);
         let markings = material_sample(MATERIAL_FIFTH_MAP, in.lightmap_texcoord.zw);
@@ -1474,6 +1492,24 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 vec3<f32>(fract(level)),
             );
             sky_reflection = sky * (reflectivity.x * gloss * fresnel) * weight;
+        }
+
+        // **The tarmac roads' sun lobe** (mode 14, `mesh::rcs::psp2::tarmac`), read off the lit
+        // programs (`data05` `@0xbd44`):
+        //
+        //     spec = sun_specular G LM.a sat(R.L)^SpecPower
+        //     G    = mix(Dm.a (1 - Dirt.a), MarkingsSpec Dm.a, Markings.a)
+        //
+        // `R` the view reflected about the mapped normal; the program's `reflectiveBlurCoeffs.z`
+        // lane widens the lobe and reads 0 live, so the exponent is the plain `SpecPower` (the
+        // entry's `scale`, `MarkingsSpec` its tint `z`). It replaces the generic specular.
+        if tarmac && row_scale.x > 0.0 {
+            let r = reflect(-to_eye, n_lit);
+            let lobe = pow(clamp(dot(r, scene.light.direction), 0.0, 1.0), row_scale.x);
+            let dirt_cover = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy).a;
+            let markings_cover = material_sample(MATERIAL_FIFTH_MAP, in.lightmap_texcoord.zw).a;
+            let gloss = mix(first.a * (1.0 - dirt_cover), row_tint.z * first.a, markings_cover);
+            specular = scene.light.sun_specular.rgb * (gloss * mask * lobe * rig_on);
         }
 
         // The authored path shades in linear light, as the RSX does: the samples

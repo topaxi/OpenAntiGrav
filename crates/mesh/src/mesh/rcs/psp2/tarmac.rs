@@ -11,7 +11,8 @@
 //! ```
 //!
 //! The two layers ride the fifth (markings) and sixth (dirt) bindings and a glow-table entry of
-//! mode [`PROGRAM_TARMAC`]. The coordinates: the markings pair in `texcoord2` (the shader's
+//! mode [`PROGRAM_TARMAC`], which also carries the lit programs' sun lobe: `SpecPower` in the
+//! entry's `scale` and `MarkingsSpec` in its tint's `z` (the shader's own comment has the law). The coordinates: the markings pair in `texcoord2` (the shader's
 //! `lightmap_texcoord.zw`), the dirt pair in `colour.xy` with `colour.zw` left at `1`, because
 //! the road has no authored vertex colour and the vertex format has no room for a fourth pair.
 //! The fragment stage treats the vertex colour as white on this mode.
@@ -40,6 +41,10 @@ const DIRT: u32 = 0xc7aa_b177;
 pub const DIRT_SWITCH: &str = "OAG_TARMAC_DIRT";
 /// The `EmissiveTexture` sampler's hash: `~crc32("EmissiveTexture")`.
 const EMISSIVE: u32 = 0xb1f2_a176;
+/// `~crc32("MarkingsSpec")`: the gloss the markings layer carries.
+const MARKINGS_SPEC: u32 = 0x69e0_c263;
+/// `~crc32("SpecPower")`: the sun lobe's exponent.
+const SPEC_POWER: u32 = 0x05fe_c07d;
 
 /// One admitted material: its glow-table slot (entry index plus one) and its fifth and sixth
 /// pictures (here the markings and the dirt; the panel-map road's panel map and reflection mask,
@@ -141,10 +146,18 @@ pub(super) fn plan(
             continue;
         };
         let has_emissive = matches!(emissive_picture, Some(Some(_)));
+        let param = |hash| material.param(hash).and_then(|v| v.first().copied());
+        // The lit programs' sun lobe: `SpecPower` in `scale`, `MarkingsSpec` in the tint's `z`.
+        // A material that authors neither draws no lobe (`scale` 0).
+        let spec_power = param(SPEC_POWER).filter(|p| p.is_finite() && *p > 0.0);
         let entry = Emissive {
-            tint: [if has_emissive { 1.0 } else { 0.0 }, dirt_weight, 0.0],
+            tint: [
+                if has_emissive { 1.0 } else { 0.0 },
+                dirt_weight,
+                param(MARKINGS_SPEC).unwrap_or(0.0),
+            ],
             offset: 0.0,
-            scale: 0.0,
+            scale: spec_power.unwrap_or(0.0),
             rate: 0.0,
             program: [PROGRAM_TARMAC, 0.0],
         };
@@ -179,6 +192,8 @@ mod tests {
         assert_eq!(MARKINGS, name_hash("Markings"));
         assert_eq!(DIRT, name_hash("Dirt"));
         assert_eq!(EMISSIVE, name_hash("EmissiveTexture"));
+        assert_eq!(MARKINGS_SPEC, name_hash("MarkingsSpec"));
+        assert_eq!(SPEC_POWER, name_hash("SpecPower"));
     }
 
     #[test]
