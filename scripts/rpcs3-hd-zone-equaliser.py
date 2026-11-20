@@ -181,7 +181,9 @@ def main():
         # The header's third word is the texel address (`0xc5420000` on the first read).
         texels = u32(header, 8) if 0xC0000000 <= u32(header, 8) < 0xD0000000 else None
         meta["texels"] = None if texels is None else "%#x" % texels
-        gdb = Debugger(port=int(drive.GDB_SERVER.rsplit(":", 1)[1])) if data is None and texels else None
+        # The stub halts the emulator when it attaches (`rpcs3_debugger`): connected only at the first
+        # target read, after the music wait, never during it.
+        gdb = None
         # Music first: wait for a held band above 0.3 (up to `--music-wait` seconds), then read at the offsets.
         while time.time() - released < args.music_wait:
             held = struct.unpack(">16f", guest.read(STAGE_BLOCK + 0x32F8, 0x40))
@@ -199,6 +201,8 @@ def main():
             elif texels:
                 # Not grid-like through /proc (a render target RPCS3 keeps on the GPU): the stub, paused.
                 (out / ("target-proc-%d.bin" % k)).write_bytes(guest.read(texels, SIDE * SIDE * 4))
+                if gdb is None:
+                    gdb = Debugger(port=int(drive.GDB_SERVER.rsplit(":", 1)[1]))
                 gdb.pause()
                 try:
                     (out / ("target-gdb-%d.bin" % k)).write_bytes(gdb.read(texels, SIDE * SIDE * 4))

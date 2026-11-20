@@ -549,11 +549,12 @@ impl Scene {
             drawable.write_zone_vis(queue, zone_spectrum, zone_tint, last);
         }
         drop(written);
-        // The equaliser target is the stage pass's, drawn once a frame whatever the views.
+        // The equaliser target is the stage pass's, drawn once a frame whatever the views:
+        // not again for a split's later view, a later window or the portal's view.
         if let (Some(equaliser), Some(grade), true) = (
             &self.zone_equaliser,
             &self.zone_grade,
-            self.does_frame_work(),
+            self.does_frame_work() && portal.is_none(),
         ) {
             equaliser.borrow_mut().step(
                 queue,
