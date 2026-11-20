@@ -1634,9 +1634,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   the tiling pair, weighted by the glow entry's tint `x`), a glow-table entry of mode
   `PROGRAM_TARMAC` (14) selects the combine in `shade.wesl`; the markings pair rides `texcoord2`
   and the dirt pair `colour.xy` (`colour.zw` = 1, tint forced white on the mode) because the
-  vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the roads' normal-map
-  blend with `MarkingsNormal`. (The specular weighting by `MarkingsSpec` and the shadow-light factor are wired since
-  `omega-2048-road`: "The tarmac roads' lit programs" below.)
+  vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the specular
+  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`. (The shadow-light factor is wired since
+  `omega-2048-road`; the lobe is read and waits for the track's shadow term: "The tarmac roads' lit programs" below.)
   **Result on `arena-2048`** (private copy of the pair, recorded flags, 1920 x 1080; mean RGB of
   the three boxes): original (86,122,114) (131,138,128) (124,132,123); before this change
   (74,115,108) (139,147,137) (95,129,120); after (72,111,105) (117,125,118) (83,114,107). The
@@ -2520,9 +2520,10 @@ alpha is unread, so Vita stays on lane 0 outside the alpha-lit families and thes
 ## The tarmac roads' lit programs (2026-11-20, `omega-2048-road`)
 
 **Claim tested:** Omega's 2048-mode road is drawn by the law its own GCN road program computes, so the road box on
-`capital-reach-2048` (46.98) and `empire-climb-2048` (45.11) improves measurably. **False.** The terms the program
-computes that ours did not are now wired, they are the program's own, and the two frames move by +0.28 and +0.14 grey
-(noise under the 0.3 bar, and the wrong way): the gap on these two roads is not in this program.
+`capital-reach-2048` (46.98) and `empire-climb-2048` (45.11) improves measurably. **False.** The one term the program
+computes that ours did not draw and that could be wired from authored data, the shadow-light factor, moves the two
+frames +0.28 and -0.14 grey (under the 0.3 bar both ways): the gap on these two roads is not in this program. The sun
+lobe was read, wired, measured and **taken out again** (below).
 
 **Census.** Capital Reach (`bridge`) and Empire Climb (`tower`) draw their road through
 `tarmac_markings_dirt_markingsnormal` (36.0 % and 60.0 % of the frame, `compare-decompose.py --road tarmac`); the
@@ -2556,36 +2557,40 @@ Which variant the race binds on a tarmac draw was not read; on the panel road al
 so `@0xa764` is assumed here (confidence 70).
 
 **Wired** (`omega-2048-road`): `Light::shadow_light` and `shadow_light_specular` (`Light::with_shadow_light`, filled by
-`envsettings_light` on PS4 only), the factor on the prelit term and the lobe in `shade.wesl`'s mode-14 path, `SpecPower`
-(`scale`) and `MarkingsSpec` (tint `z`) on the road's glow-table entry. The lobe reads the dirt alpha unconditionally
-(`DIRT_SWITCH` stays the colour layer's). Tests: `omega_tarmac_lit_path` (the factor scales the prelit term; the lobe is
-weighted by the markings gloss and the dirt alpha), `omega_lightmap_ground_truth` (the loader reaches the rig from Tech De
-Ra's file), `envsettings::tests::a_pair_is_exactly_two_numbers`.
+`envsettings_light` on PS4 only) and the factor on the prelit term in `shade.wesl`'s mode-14 path. Tests:
+`omega_tarmac_lit_path::the_shadow_light_factor_scales_the_prelit_term`, `omega_lightmap_ground_truth` (the loader
+reaches the rig from Tech De Ra's file), `envsettings::tests::a_pair_is_exactly_two_numbers`.
 
-**Measured** (the pairs' recorded flags, 1920x1080, ours re-rendered, `compare-decompose.py` and boxes; ours' adaptive
-exposure moves with every bright pixel, so a term that adds highlights can lower a box it does not touch). Before to after:
+**Read, not drawn: the sun lobe.** It was wired (an entry carrying `SpecPower` and `MarkingsSpec`, the lobe weighted by the
+gloss `G` with the dirt alpha unconditional) and measured against the factor alone: Capital Reach 47.26 either way, Empire
+Climb 44.97 with the factor alone and 45.25 with the lobe, Subway, Downtown, Arena and the Zone pair unchanged by it. The
+lobe is `LM.a * S` in the original and ours has no `S`: it draws crack glints on Empire's near road, including inside the
+craft's shadow, that the original's smoother road lacks, and scored no better on any of the five tarmac pairs, so it was removed
+(the shader block, its test and the entry fields). Draw it with the factor once the track receives `S` (below).
+
+**Measured** (the pairs' recorded flags, 1920x1080, ours re-rendered; `compare-decompose.py` and fixed boxes, mean abs
+grey and bias, ours minus theirs). Factor alone, before to after:
 
 | | Capital Reach | Empire Climb |
 | --- | --- | --- |
-| whole frame (raw mean grey) | 46.98 to 47.26 | 45.11 to 45.25 |
-| road region `LF`, `bias`, `G` | 27.6 to 28.3, -3.5 to -5.5, 0.91 to 0.95 | 29.8 to 29.5, -8.2 to -8.6, 1.08 to 1.14 |
-| box A mean abs grey, bias | near left `440x240+200+560`: 28.54 to 29.03, -12.4 to -15.3 | tarmac `700x120+620+380`: 42.60 to 43.07, -20.9 to -23.5 |
-| box B | mid `600x160+380+400`: 64.49 to 65.99, -45.6 to -48.1 | near left `400x200+160+640`: 25.67 to 24.96, -0.9 to -2.2 |
-| box C | right `360x200+1500+560`: 17.26 to 17.42, +0.8 to -0.7 | right `400x200+1380+560`: 39.04 to 38.91, +6.2 to +0.7 |
+| whole frame (raw mean grey) | 46.98 to 47.26 | 45.11 to 44.97 |
+| road region `LF`, `bias`, `G` | 27.6 to 28.3, -3.5 to -5.5, 0.91 to 0.95 | 29.8 to 29.5, -8.2 to -9.4, 1.08 to 1.09 |
+| box 1 mean abs grey, bias | near left `440x240+200+560`: 28.54 to 29.03, -12.4 to -15.3 | tarmac `700x120+620+380`: 42.60 to 42.87, -20.9 to -22.7 |
+| box 2 | mid `600x160+380+400`: 64.49 to 65.99, -45.6 to -48.1 (the 480 px pose offset pollutes it) | near left `400x200+160+640`: 25.67 to 25.31, -0.9 to -3.7 |
+| box 3 | right `360x200+1500+560`: 17.26 to 17.42, +0.8 to -0.7 | right `400x200+1380+560`: 39.04 to 38.95, +6.2 to +1.7 |
 
-Per term: the lobe alone moves Capital 0.00 and Empire +0.30; the factor on top moves Capital +0.28 and Empire -0.16.
-Capital's mid box carries the known 480 px pose offset. By eye (near road, ours before, after, theirs, one crop each): the lobe
-puts a mild sheen and crack glints on Empire's near road, the original's road is smoother and warmer; Capital's near left
-road stays warmer (R/G 1.14) than the original's neutral grey (1.07).
+The other tarmac-road pairs' whole frame, before to after: `subway-2048` 30.38 to 30.38, `downtown-2048` 26.97 to 26.72,
+`arena-2048` 33.15 to 32.84, `zone-capital-reach-2048-z5` 68.96 to 69.17. Three of the six improve, two worsen by 0.2 to 0.3,
+none leaves the noise band except Arena's -0.31. The factor is the program's: the originals' road is brighter than ours on both
+pairs (Empire's far road, box 1, is the sun glare and exposure the earlier lanes found; Capital's near road is neutral grey
+in the original and warm in ours, R/G 1.07 against 1.14).
 
-**Where the gap is instead.** (1) The race's program takes the shadow map: its sun term and its lobe are `LM.a * S`, with
+**Where the gap is instead.** The race's program takes the shadow map: its sun term and its lobe are `LM.a * S`, with
 `S = min(1, pcf(shadowMap) * exp2(clamp(c0 + c1 z, c2, c3)))` (`@0xa764` `@0x14c`, `@0x1a8`, `@0x488`-`@0x4b0`; the
-coefficients are `shadowCoeffs`). Ours has the baked `LM.a` only on the track, so the lobe glints sit in the craft's
-shadow where the original has none, and Capital's sun on the road is over-present: with the road's sun term switched off
-(a probe, not kept) Capital's whole frame goes 46.98 to 45.41 (Empire 45.11 to 56.86, which needs its sun). (2) Empire's far
-road (box A, bias -21 to -23) is the sun glare and exposure the earlier lanes found, not the program. Next: the track as a shadow
-receiver (a shadow-map pass over the track casters; ours' hull map is `sun_occlusion`), then the dirt layer's colour, which the
-corrected gloss does not settle.
+coefficients are `shadowCoeffs`). Ours has the baked `LM.a` only on the track, so Capital's sun on the road is over-present:
+with the road's sun term switched off (a probe, not kept) Capital's whole frame goes 46.98 to 45.41 (Empire 45.11 to 56.86,
+which needs its sun). Next: the track as a shadow receiver (a shadow-map pass over the track casters; ours' hull map is
+`sun_occlusion`), then the lobe, then the dirt layer's colour.
 
 **2048 (Vita): checked, applies, not wired.** Vita authors `Lighting.ShadowLight direction` and its nova prelit programs
 read `shadowLightDirection` as the same shading uniform (`ship-shadows.md`, "Which light"), but 2048 carries no tarmac family

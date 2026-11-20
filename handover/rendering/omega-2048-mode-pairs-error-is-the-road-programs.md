@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [omega]
 updated: 2026-11-20
-summary: "2048-mode pairs: alpha lane, tarmac Fsl and lobe wired; left: track shadow receiver, panel-road Fsl, crowd lights, Metro Park terrain"
+summary: "2048-mode pairs: alpha lane, tarmac Fsl wired; left: track shadow receiver and lobe, panel-road Fsl, crowd lights, Metro Park terrain"
 difficulty: medium (40)
 ---
 
@@ -62,8 +62,8 @@ a correct detail fix can raise it).
      then moves `modesto-heights` +0.07 and `empire-climb` +0.09), and whether Omega's `tarmac_*` and brick programs gate their specular by it: Capital Reach and Empire
      Climb did not move (47.00, 45.11), so their error is not this. Their tarmac lit program is now read and wired
      (`omega-2048-road`, [`omega-status.md`](../../docs/formats/omega-status.md), "The tarmac roads' lit programs"):
-     the shadow-light factor and the sun lobe move them +0.28 and +0.14 grey, so the road program is not their gap
-     either; the lead is the track as a shadow receiver (below, Next Steps 3).
+     the shadow-light factor moves them +0.28 and -0.14 grey, so the road program is not their gap
+     either (the lobe is read and not drawn until the track has the shadow term); the lead is the track as a shadow receiver (below, Next Steps 3).
    - **The march reshapes Sol's strips** (3.3 % of the frame moves by more than 8 levels) but does not raise road
      `G` (no-march probe 0.77 against 0.75): the `G` rise is the sheen's. Compare the strips' lit far wall by eye
      on a pose that looks down at the road.
@@ -98,8 +98,9 @@ a correct detail fix can raise it).
    (`tarmac` `@0xa764`, panel road `0xe144`/`0x14284`); their sun term and sun lobe are `LM.a * S`, `S = min(1, pcf(shadowMap)
    * exp2(clamp(c0 + c1 z, c2, c3)))` with the coefficients in `shadowCoeffs`. Ours has the baked `LM.a` only on the track
    (`sun_occlusion` is the hull's). Evidence it matters: with the tarmac sun switched off Capital Reach's whole frame goes
-   46.98 to 45.41, the original's near road is neutral grey where ours is warm, and ours' lobe glints sit in the craft's shadow.
-   Read the pass that fills the map (casters, matrix, `shadowCoeffs` meaning) first (half a day, RE), then wire (a day).
+   46.98 to 45.41 and the original's near road is neutral grey where ours is warm.
+   Read the pass that fills the map (casters, matrix, `shadowCoeffs` meaning) first (half a day, RE), then wire (a day), then
+   the tarmac sun lobe (read and measured, taken out for want of `S`: `omega-status.md`).
 4. The panel-map road's shadow-light factor (above): apply `shadow_light_factor` to that family (an hour) and measure
    Sol, Queens Mall, Altima and Unity Square.
 5. The tarmac dirt layer's colour (`OAG_TARMAC_DIRT`) is still off by default; revisit after the shadow receiver.

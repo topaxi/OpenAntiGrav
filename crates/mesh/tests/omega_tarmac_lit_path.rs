@@ -256,49 +256,6 @@ fn the_shadow_light_factor_scales_the_prelit_term() {
     );
 }
 
-/// The lit programs' sun lobe: `sun_specular * G * LM.a * sat(R.L)^SpecPower`, `SpecPower` in the
-/// entry's `scale` and `G = mix(Dm.a (1 - Dirt.a), MarkingsSpec Dm.a, Markings.a)`.
-#[test]
-fn the_sun_lobe_is_weighted_by_the_markings_gloss_and_the_dirt_alpha() {
-    let instance = wgpu::Instance::default();
-    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
-        eprintln!("no GPU adapter: skipping");
-        return;
-    };
-    let (device, queue) = pollster::block_on(
-        adapter.request_device(&mesh_render::device_descriptor("tarmac road", &adapter)),
-    )
-    .expect("requesting the device");
-    let clear = [0, 0, 0, 0];
-    let opaque = [255, 255, 255, 255];
-    let at = |markings: [u8; 4], dirt: [u8; 4], spec_power: f32, markings_spec: f32| {
-        let mut road = model(PROGRAM_TARMAC, &[markings], &[dirt], 0.5, 0.5);
-        road.emissive[0].scale = spec_power;
-        road.emissive[0].tint = [0.0, 0.0, markings_spec];
-        let mut scene = Scene::off();
-        scene.light = Light::authored([0.0, 0.0, 1.0], [0.0; 3], [0.0; 3], [1.0; 3], [1.0; 3], 0.0)
-            .with_sun_specular([0.5; 3]);
-        scene.fog.camera = [0.0, 0.0, 100.5];
-        draw(&device, &queue, &road, scene)
-    };
-    let off = at(clear, clear, 0.0, 1.0);
-    let lobe = at(clear, clear, 50.0, 1.0);
-    assert!(
-        lobe[0] > off[0] + 40,
-        "a camera on the light's reflection sees the lobe: {lobe:?} against {off:?}"
-    );
-    let dirty = at(clear, opaque, 50.0, 1.0);
-    assert!(
-        dirty[0] < lobe[0] - 40,
-        "the dirt's alpha takes the gloss off even with its colour layer off: {dirty:?}"
-    );
-    let marked_dull = at(opaque, clear, 50.0, 0.0);
-    assert!(
-        marked_dull[0] < lobe[0] - 40,
-        "a markings texel takes MarkingsSpec for the gloss, 0 here: {marked_dull:?}"
-    );
-}
-
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [

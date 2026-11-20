@@ -1494,24 +1494,6 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             sky_reflection = sky * (reflectivity.x * gloss * fresnel) * weight;
         }
 
-        // **The tarmac roads' sun lobe** (mode 14, `mesh::rcs::psp2::tarmac`), read off the lit
-        // programs (`data05` `@0xbd44`):
-        //
-        //     spec = sun_specular G LM.a sat(R.L)^SpecPower
-        //     G    = mix(Dm.a (1 - Dirt.a), MarkingsSpec Dm.a, Markings.a)
-        //
-        // `R` the view reflected about the mapped normal; the program's `reflectiveBlurCoeffs.z`
-        // lane widens the lobe and reads 0 live, so the exponent is the plain `SpecPower` (the
-        // entry's `scale`, `MarkingsSpec` its tint `z`). It replaces the generic specular.
-        if tarmac && row_scale.x > 0.0 {
-            let r = reflect(-to_eye, n_lit);
-            let lobe = pow(clamp(dot(r, scene.light.direction), 0.0, 1.0), row_scale.x);
-            let dirt_cover = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy).a;
-            let markings_cover = material_sample(MATERIAL_FIFTH_MAP, in.lightmap_texcoord.zw).a;
-            let gloss = mix(first.a * (1.0 - dirt_cover), row_tint.z * first.a, markings_cover);
-            specular = scene.light.sun_specular.rgb * (gloss * mask * lobe * rig_on);
-        }
-
         // The authored path shades in linear light, as the RSX does: the samples
         // are sRGB-decoded and lit by the authored magnitudes. On a gamma target
         // the result is saturated (the stand-in for HD's exposure stage) and
