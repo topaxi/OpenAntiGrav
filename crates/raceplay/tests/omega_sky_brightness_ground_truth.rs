@@ -202,7 +202,11 @@ fn rock_is_drawn_by_its_own_program(loaded: &race::Loaded) {
     close(entry.tint[1], authored("DetailScale"), "DetailScale");
     close(entry.tint[2], authored("SpecStrength"), "SpecStrength");
     close(entry.offset, authored("SpecPower"), "SpecPower");
-    close(entry.scale, authored("ReflectivityBlur"), "ReflectivityBlur");
+    close(
+        entry.scale,
+        authored("ReflectivityBlur"),
+        "ReflectivityBlur",
+    );
     close(entry.program[1], authored("Wrap"), "Wrap");
     let slot = u32::try_from(first + 1).expect("a small index");
     let named = loaded

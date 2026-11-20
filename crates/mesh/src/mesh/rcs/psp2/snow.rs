@@ -359,9 +359,13 @@ pub(super) fn plan(
                 entries(material),
             )
         };
-        let (Some(first), Some(small), Some(large), Some(entries), true) =
-            (first, small, large.map_or(Some(None), |l| l.map(Some)), entries, readable)
-        else {
+        let (Some(first), Some(small), Some(large), Some(entries), true) = (
+            first,
+            small,
+            large.map_or(Some(None), |l| l.map(Some)),
+            entries,
+            readable,
+        ) else {
             unread(report);
             continue;
         };

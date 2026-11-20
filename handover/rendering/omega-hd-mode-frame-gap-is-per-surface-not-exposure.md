@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega]
 updated: 2026-11-20
-summary: "Omega HD-mode per-surface gap: sky dome and the RT_snow1 snow program wired; open: the other NOVA-lit families, bloom, Modesto E, snow shadow map"
+summary: "Omega HD-mode per-surface gap: sky, RT_snow1 and DC_Rocks wired; open: Sebenco_snow, snowfade overlays, bloom, Modesto E, shadow map"
 difficulty: medium (45)
 ---
 
@@ -40,6 +40,11 @@ original's luma ring, read".
    **Left open:** the same NOVA-lit family on other Omega materials (`NOVAColor` + `VertexColour2` on the PS4 declaration; the loader reads both now), which
    stay generic; `reflectiveBlurCoeffs.z` (read as 0), the vertex-light count of the permutation the race binds (`@0xf6e4` is one light), the shadow-map
    permutations (`@0xc2c4`, `@0x110e4`, `S` on the track), `rt_snow_ref` (three more samplers and a cube reflection).
+2b. **DONE 2026-11-20 (`omega-snow-rest`)**: Sebenco's other "snow" materials, censused ([`omega-status.md`](../../docs/formats/omega-status.md), "The rock program"):
+   the box's 18 % is `dc_rocks1` (matched by its drift-normal picture), not snow-named materials (`Sebenco_snow*` 1.1 %, `snowfade` overlays 1.5 %). `DC_Rocks` is drawn by
+   its lightmapped program `@0xca64` (two normal maps, wrapped sun, `Fsl`, lobe): the rock's grain matches (high-pass 4.78 to 6.99, theirs 6.75), the mean does not
+   (-25.4 to -27.5 on its mask, box 133.2 to 133.0): the rock sits 22 grey under at every distance from the snow, and the whole frame 18. **Left open:** `Sebenco_snow*`
+   (own program, 154 to 369 instructions), the `snowfade` overlays (3.5 % of the frame, `PROGRAM_UV_OVERLAY` first), the cube and `S`.
 3. **An exact linear sky gain**: the dome's gain is a gamma-domain multiply by the sRGB encode of the gain (1.9 to 3.4 % low at a
    mid texel, 6 to 11 % low at 0.2); an exact multiply after `decode` needs a per-draw uniform slot (the block has none and 34 test files
    mirror it). Also: read the frame-constant table's own `SkyBrightness` (recipe in `omega-status.md`).
