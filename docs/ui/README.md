@@ -24,7 +24,8 @@ unlocks, modes), is the census in [hud-assets.md](hud-assets.md).
 
 Which controller's button glyphs a prompt draws, and how the device is told
 apart (including under Steam Input), are in
-[button-prompts.md](button-prompts.md).
+[button-prompts.md](button-prompts.md). Which button leaves a screen and which
+opens its Help, per title and pressing, is in [back-and-help.md](back-and-help.md).
 
 The player's name and tag, and when they are asked for, are in
 [player-name.md](player-name.md). The attract demo an untouched main menu starts, and

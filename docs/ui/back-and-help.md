@@ -15,7 +15,10 @@ executable binds those abstract controls to a pad bit:
   authors it on the triangle, and the footers draw the pair that way round.
 
 A screen that wants a different button for something names it in its own `Redirect`
-(`forward="circle"`), and that wins over any rule.
+(`forward="circle"`), and that wins over any rule. Our parser reads the abstract names as the PSP's
+(`oag_core::buttons::button_from_name`: `backward`, `cancel` are the circle), which is harmless today: the only
+consumer of a parsed `Redirect` button (`Screen::redirect_for`) is 2048's boot chain
+(`oag_ui::frontend::wipeout2048`), and no Pulse screen's Back goes through an XML redirect.
 
 ## Census of the authored redirects
 
@@ -51,9 +54,10 @@ the movie screens skip on any face button, the in-game and photo screens on `squ
 re-ships HD's and 2048's files (`forward="backward"` on `Records` and `Cell Selection`, `forward="cancel"` on
 `WOW Download`). 2048 adds `circle` on `Demo Build Vita Lobby` and `Demo_Definition`'s
 `dlcTestScreen`, and `start` on its tutorial movies. So the only title whose `backward` is not the
-circle is Pulse on the PS2. Omega's and 2048's `backward` binding is the circle by lineage (HD's
-`Stats` pages author it) and by their executables' button tables, not measured on the PS4 or the
-Vita: **checked, differs: not at all, but not measured there**.
+circle is Pulse on the PS2. For Omega and 2048 the resolver is **ported** (the same table, tested for
+both: `the_roles_a_screen_is_handed_on_every_title_pressing_and_choice`); that their `backward` is the circle is
+**inherited from HD by lineage and open**: HD's `Stats` pages author it, and the static read of the button-name
+parser in Omega's `eboot.bin` and 2048's executable was not done.
 
 ## The resolver
 
@@ -133,10 +137,11 @@ them is `Roles::help` on `Picker`.
 
 - `oag_ui::roles::tests` and a `..._on_the_button_it_is_handed` test on every model above;
 - `oag_game::prompts::tests::the_roles_a_screen_is_handed_on_every_title_pressing_and_choice`;
-- `campaign_cursor_ground_truth` (disc-backed, `#[ignore]`d): Pulse PS2 EU's race page, track picker,
-  ship picker, keyboard prompt and pause page leave on the resolved button and not on the other, for
-  every choice (`pulse_ps2_*`); the PSP's four screens and HD's race page still leave on the circle
-  (`pulse_psp_screens_still_leave_on_the_circle`, `hd_race_page_still_leaves_on_the_circle`); the
-  campaign screens are the tests of the same file above them.
+- `campaign_cursor_ground_truth` (disc-backed, `#[ignore]`d): on Pulse PS2 EU's race page, track picker,
+  ship picker, keyboard prompt and pause GAME OPTIONS page, for each choice of MENU BACK one launch presses
+  the button that is not Back (`expect` the screen still up), then Back (`expect` it left): `pulse_ps2_*`.
+  The PSP's race page, track picker, prompt and pause page, and HD's race page, still leave on the circle
+  (`pulse_psp_*`, `hd_race_page_still_leaves_on_the_circle`). The campaign screens are the tests of the same
+  file above them.
 - All 33 menu comparison pairs (2048, HD, Omega, Pulse PSP, Pulse PS2, Pure) re-rendered with the build
   before this change and after it are byte-identical: no pair moved.
