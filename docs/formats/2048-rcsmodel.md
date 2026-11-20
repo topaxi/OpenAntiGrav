@@ -605,9 +605,9 @@ carries scale 100; the figures are 1.69 to 1.75 tall after it).
 Pinned by `omega_race_ground_truth::data00_rcsmodels_decode_and_close_completely` (625 files,
 38,403 submeshes, 0 unpaired, `check_crowd_rig` on each of the 40 rigs) and by
 `psp2_flat_census_ground_truth::omega_data00` / `omega_declaration_ground_truth::data00_...`
-(620 files, 38,403 submeshes, every record resolves its declaration). **2048 (Vita): checked, does
-not apply**: no Vita file has a pair this gap would take (`unpaired_pointers` is zero on
-every Vita file, and the gap is not tried on one); 2048 ships no `Data/Crowd/Rigs`.
+(620 files, 38,403 submeshes, every record resolves its declaration). **2048 (Vita): checked, differs**: no
+Vita file has a pair this gap would take (`unpaired_pointers` is zero on every Vita file, and
+the gap is not tried on one), and 2048's base package lists no `crowd/rigs` path.
 
 ## The flat-submesh census, and the record pointer
 
