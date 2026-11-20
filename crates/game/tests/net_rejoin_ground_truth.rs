@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
+use oag_testdata::exec::{self, spawn};
+
 const IMAGE: &str = "pulse-psp-eu.chd";
 const TRACK: &str = "Data\\Environments\\01_Track\\track.vex";
 
@@ -46,27 +48,30 @@ impl Drop for Proc {
     }
 }
 
-/// The `oag-server` binary built beside this crate's `oag-game`. Built here, not found, so a
-/// test never runs a server older than the source (`cargo nextest` builds only what it tests).
-fn server_binary() -> PathBuf {
-    static BUILT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-    BUILT
-        .get_or_init(|| {
-            let game = Path::new(env!("CARGO_BIN_EXE_oag-game"));
-            let dir = game.parent().expect("the game binary's directory");
-            let profile = dir.file_name().and_then(|n| n.to_str()).unwrap_or("debug");
-            let mut build = Command::new(env!("CARGO"));
-            build.args(["build", "-p", "oag-net", "--bin", "oag-server"]);
-            if profile != "debug" {
-                build.args(["--profile", profile]);
-            }
-            let status = build.status().expect("cargo runs");
-            assert!(status.success(), "oag-server builds");
-            let server = dir.join("oag-server");
-            assert!(server.exists(), "{} was built", server.display());
-            server
-        })
-        .clone()
+/// A private copy, in `dest`, of the `oag-server` binary built beside this crate's `oag-game`.
+///
+/// The server is built here, not found, so a test never runs a server older than the source
+/// (`cargo nextest` builds only what it tests); the copy is what runs
+/// (`oag_testdata::exec`).
+fn server_binary(dest: &Path) -> PathBuf {
+    let game = Path::new(env!("CARGO_BIN_EXE_oag-game"));
+    let dir = game.parent().expect("the game binary's directory");
+    let profile = dir.file_name().and_then(|n| n.to_str()).unwrap_or("debug");
+    let build = || {
+        let mut build = Command::new(env!("CARGO"));
+        build.args(["build", "-p", "oag-net", "--bin", "oag-server"]);
+        if profile != "debug" {
+            build.args(["--profile", profile]);
+        }
+        let status = build.status().expect("cargo runs");
+        assert!(status.success(), "oag-server builds");
+    };
+    exec::private_copy(
+        Path::new(env!("CARGO_TARGET_TMPDIR")),
+        &dir.join("oag-server"),
+        dest,
+        build,
+    )
 }
 
 /// A lobby and the directory its clients keep their profiles in.
@@ -95,22 +100,23 @@ impl Lab {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("no-mods")).expect("a scratch directory");
         let log = File::create(dir.join("lobby.log")).expect("a log");
-        let lobby = Command::new(server_binary())
-            .arg("lobby")
-            .arg("--image")
-            .arg(&image)
-            .args(["--listen", "127.0.0.1:0", "--race-listen", "127.0.0.1:0"])
-            .args([
-                "--countdown-ms",
-                "200",
-                "--max-ticks",
-                &max_ticks.to_string(),
-            ])
-            .args(extra)
-            .stdout(log.try_clone().expect("a handle"))
-            .stderr(log)
-            .spawn()
-            .expect("the lobby starts");
+        let lobby = spawn(
+            Command::new(server_binary(&dir))
+                .arg("lobby")
+                .arg("--image")
+                .arg(&image)
+                .args(["--listen", "127.0.0.1:0", "--race-listen", "127.0.0.1:0"])
+                .args([
+                    "--countdown-ms",
+                    "200",
+                    "--max-ticks",
+                    &max_ticks.to_string(),
+                ])
+                .args(extra)
+                .stdout(log.try_clone().expect("a handle"))
+                .stderr(log),
+        )
+        .expect("the lobby starts");
         let mut lab = Self {
             dir,
             image,
@@ -170,23 +176,24 @@ impl Lab {
     fn game_env(&self, who: &str, log: &str, args: &[&str], env: &[(&str, &str)]) -> Proc {
         let profile = self.dir.join(who);
         let out = File::create(self.dir.join(format!("{log}.log"))).expect("a log");
-        let child = Command::new(env!("CARGO_BIN_EXE_oag-game"))
-            .envs(env.iter().copied())
-            .arg(&self.image)
-            .args(["--no-audio", "--no-intro", "--net-bot"])
-            .args(args)
-            .env("XDG_CONFIG_HOME", profile.join("config"))
-            .env("XDG_DATA_HOME", profile.join("data"))
-            .env("XDG_STATE_HOME", profile.join("state"))
-            .env("OAG_MODS", self.dir.join("no-mods"))
-            .env("OAG_TRACKS", self.dir.join("no-tracks"))
-            .env_remove("WAYLAND_DISPLAY")
-            .env_remove("DISPLAY")
-            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
-            .stdout(out.try_clone().expect("a handle"))
-            .stderr(out)
-            .spawn()
-            .expect("oag-game starts");
+        let child = spawn(
+            Command::new(env!("CARGO_BIN_EXE_oag-game"))
+                .envs(env.iter().copied())
+                .arg(&self.image)
+                .args(["--no-audio", "--no-intro", "--net-bot"])
+                .args(args)
+                .env("XDG_CONFIG_HOME", profile.join("config"))
+                .env("XDG_DATA_HOME", profile.join("data"))
+                .env("XDG_STATE_HOME", profile.join("state"))
+                .env("OAG_MODS", self.dir.join("no-mods"))
+                .env("OAG_TRACKS", self.dir.join("no-tracks"))
+                .env_remove("WAYLAND_DISPLAY")
+                .env_remove("DISPLAY")
+                .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+                .stdout(out.try_clone().expect("a handle"))
+                .stderr(out),
+        )
+        .expect("oag-game starts");
         Proc(child)
     }
 
