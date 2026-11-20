@@ -1519,3 +1519,5 @@
 0x08826490	function	Race_BindTagCrafts	78	hud-game-options.md
 0x0881b86c	function	MpTagHud_Construct	75	hud-game-options.md
 0x0881be58	function	MpTagHud_BindPlayerStatus	70	hud-game-options.md
+0x0888e6e8	function	Unlock_ContextMet	84	race-box-screens.md
+0x088a9f3c	function	ListWidget_ReadElement	75	race-box-screens.md

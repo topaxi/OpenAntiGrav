@@ -137,6 +137,16 @@ the corroboration; the consuming code is unread, which is what holds the score
 under 85. The field is listed as undecoded in
 [fe-menu-definitions](fe-menu-definitions.md).
 
+**Traced 2026-11-20 (PSP USA, `race-box-screens.md`, "`GSDisableEntriesBitField`
+and `DisableEntriesBitField`").** The list widget's element reader
+(`ListWidget_ReadElement`, `0x088a9f3c`, 75) skips `Entry` number N at parse
+time when bit N of the **plain** `DisableEntriesBitField` (`+0xf8`) is set
+(84). The disc authors only the `GS` form, which that reader stores in a
+separate field (`+0xfc`) its entry loop never tests, and the PSP's Single
+Player list does offer Time Trial, Speed Lap, Zone and Head to Head: so on the
+PSP `0xFA` removes nothing. Whether the PS2 prunes by the `GS` value is open
+(PS2 not checked); the "bit N" reading above stays the PS2/HD hypothesis.
+
 ## Pulse - `Track Creation` and `Team Selection`
 
 `Data\Plugins\PI001\GUI\Selection_Definition.xml`.

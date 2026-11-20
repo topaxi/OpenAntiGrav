@@ -212,23 +212,25 @@ lifetime statistics table the profile accumulates, menu music included: that is 
   offer all 24 circuits - see
   [ppsspp-debugger.md](../../../reverse-engineering/ppsspp-debugger.md#every-circuit-not-three-the-dev-unlock-byte-2026-09-29).
 - otherwise it walks a linked list at `+0x9c` - the `<Unlock>` rows
-  `race-setup.md` already reads from `Definition.xml` - and calls one of nine
-  unnamed predicate functions per entry (`FUN_0888e6e8`,
-  `FUN_0888e86c`/`FUN_0888e9e0`/`FUN_0888ea30`/`FUN_0888ebd8`, and four
-  companion "has this unlock type" gates). **Named-unlock entries OR
-  together** (any one passing unlocks the item) while **empty-name entries
-  AND together** - matching an `Exclusive="true"` row needing every
-  condition against a plain named unlock needing only one. None of the nine
-  predicates were individually traced; that is real remaining work, not
-  guessed at here.
+  `race-setup.md` already reads from `Definition.xml` - and calls nine
+  callees per row: the context filter `Unlock_ContextMet` (`FUN_0888e6e8`),
+  four guards (`Unlock_MedalValue`, `Unlock_MedalCountValue`,
+  `Unlock_LoyaltyValue`, `Unlock_GridName`) and four predicates
+  (`Unlock_MedalMet`, `Unlock_MedalCountMet`, `Unlock_LoyaltyMet`,
+  `Unlock_GridPointsMet`). All nine are traced; the table and the
+  combine law are under
+  [The nine row-loop callees](#the-nine-row-loop-callees-traced-2026-11-20).
+  (An earlier version of this passage read the combine as "named entries OR,
+  empty-name entries AND"; the code is the `Exclusive` split below.)
 
 **Traced 2026-10-02 (headless decompile of `/pulse/BOOT-psp-pulse-usa.BIN`),
 confidence 88: the row combine and the `Team` row.** Per `<Unlock>` row
-the loop first runs `FUN_0888e6e8`, the **context filter**: a row naming
-`Class`, `Team`, `Track`, `Tournament`, `Mode` or `Grid` context attributes
-(row fields `+0x8..+0x1c`) applies only when each matches the live front-end
-global of that name, case-insensitively; a row that does not match is
-skipped. Then:
+the loop first runs `FUN_0888e6e8`, the **context filter**
+(`Unlock_ContextMet`): a row naming `ClassIs`, `TeamIs`, `TrackIs`,
+`TournamentIs`, `ModeIs` or `GridIs` (row fields `+0x8..+0x1c`, see
+`Definition_ParseUnlock` in `race-campaign.md`) applies only when each
+matches the live front-end global of the bare name, case-insensitively; a row
+that does not match is skipped. Then:
 
 - **Non-`Exclusive` row** (`*row == 0`): each condition the row names
   (`Medal`, `MedalCount`, `Loyalty`, `Grid`) is ANDed into a running result
@@ -264,6 +266,118 @@ greyed and not priced. `TeamSelection_Update` draws the `Loyalty` block with
 team's own total and the bar is `150 * min(total, 100000) / 100000` pixels in
 integer arithmetic. Not run live on PPSSPP: the static read is unambiguous
 and the lane drew no breakpoint.
+
+### The nine row-loop callees, traced 2026-11-20
+
+Headless-bridge decompile of `/pulse/BOOT-psp-pulse-usa.BIN`. The nine callees
+`Definition_IsUnlocked` (`0x0888e29c`) makes per `<Unlock>` row, in call order
+(the first eight already have pages and `names.tsv` rows in `race-campaign.md`;
+the new row is the first):
+
+| Address | Name | Conf | Law |
+| --- | --- | ---: | --- |
+| `0x0888e6e8` | `Unlock_ContextMet` | 84 | Returns 0 unless every context field the row names equals the live front-end global of that name (`strcasecmp`, fetched by `FUN_08888de4(name, 0)`): `+0x08` `Class`, `+0x0c` `Team`, `+0x10` `Track`, `+0x14` `Tournament`, `+0x18` `Mode`, `+0x1c` `Grid`. An absent field passes. |
+| `0x0888ef80` | `Unlock_MedalValue` | 85 | `Medal` string to ordinal, absent `0xff` (guard). |
+| `0x0888e86c` | `Unlock_MedalMet` | 72 | `0xff` fails; a saved medal at least that good for the row's track/tournament (helpers `FUN_0888ed4c`, `FUN_0888ee54` unnamed). |
+| `0x0888f034` | `Unlock_MedalCountValue` | 80 | `MedalCount` (guard, 0 = absent). |
+| `0x0888e9e0` | `Unlock_MedalCountMet` | 80 | 0 fails; `required <= FUN_0888a414()` (profile total medals). |
+| `0x0888f064` | `Unlock_LoyaltyValue` | 82 | `atoi(Loyalty)` at `+0x40`, 0 when absent (guard). |
+| `0x0888ea30` | `Unlock_LoyaltyMet` | 82 | 0 or no team name fails; `Team="any"` (`0x08a7d5ec`) is the best single team, else that team's record word (`record+8`) `>= required`. |
+| `0x0888ef1c` | `Unlock_GridName` | 82 | `Grid` at `+0x30`; `asSelected` (`0x08a7d5f0`) resolves to the live `Grid` global; null when absent (guard). |
+| `0x0888ebd8` | `Unlock_GridPointsMet` | 85 | Null grid name fails; the named `PI_Grid` (case-insensitive) must have `Grid_PointsEarned >= RequiredPoints` (`+0xa4`). |
+
+`Unlock_TeamName` (`0x0888edfc`, 78) is the same indirection for the loyalty
+`Team` (`+0x24`): absent or `asSelected` is the live `Team` global.
+
+**Combine law** (`Definition_IsUnlocked`, read from the full decompile, 88):
+state `ok` starts true, `chain` starts true. Per row, after
+`Unlock_ContextMet` passes:
+
+- Row **not** `Exclusive`: for each of Medal, MedalCount, Loyalty, Grid whose
+  guard returns non-empty, `ok = chain & Met(row)` and `chain = ok`. A row naming
+  none of them changes nothing.
+- Row `Exclusive` (the string `Exclusive` equals `true` or `1`,
+  `0x08a7d688`/`0x08a7d690`, case-insensitive): `ok = chain = false`, then
+  `MedalMet`, `MedalCountMet`, `LoyaltyMet`, `GridPointsMet` in that order,
+  **any** passing returns true from the whole function at once. The `*Met`
+  calls here are unguarded, which is safe because each re-checks its own
+  field (`0xff` / 0 / null name).
+- The result is `ok`. So a failed `Exclusive` row poisons `chain`: a later
+  non-`Exclusive` row can no longer restore `ok`, only a later `Exclusive` row
+  that passes can.
+- `TimePlayed` (`+0x3c`) is parsed by `Definition_ParseUnlock` and read by no
+  predicate in this loop: it never gates anything on Pulse PSP (80).
+
+**The two-axis reading, checked against code: holds, with a refinement.**
+There is one evaluator and no "circuit axis" or "craft axis" in the code. The
+axes are what the data authors. Census of `Data\Plugins\PI001\Definition.xml`
+on Pulse USA (`oag-wad cat data/images/pulse-psp-usa.chd:PSP_GAME/USRDIR/Data.wad
+'Data\Plugins\PI001\Definition.xml' --expand`): 85 `<Unlock>` rows, every one
+of two shapes: 21 `<Unlock Grid="GridN">` (non-`Exclusive`), all on `PI_Track`
+(24 tracks, 3 without a row); 64 `<Unlock Team="..." loyalty="N"
+Exclusive="true">`, 32 on `PI_TeamModel` and 32 on `PI_ModelSkin`, two per leaf.
+No row authors a `*Is` context, `Medal`, `MedalCount` or `TimePlayed`.
+Confidence 90 on the code law (decompile, two callers walked:
+`TrackSelection_PopulateList` and `FUN_088ea08c`), 90 on the census (exact
+counts from the shipped file, not runtime).
+
+**Ours against the law (`oag_game::unlock`, `oag_raceplay::catalogue`).**
+Equivalent on every shipped Pulse row; nothing to wire:
+
+- Tracks: `Gate::offers` evaluates the one `Grid` row through
+  `race_campaign::grid_points_met` (`Unlock_GridPointsMet`).
+- Variants: `loyalty_unlocked` implements the `Exclusive`/non-`Exclusive`
+  combine for the loyalty condition, including the poisoned `chain`
+  (`unlocked = false` is never restored by a later plain row), and `any` as the
+  best single team.
+- Where ours would diverge on data the disc does not ship: a track with two
+  rows or an `Exclusive` grid row (ours reads one `unlock_grid`); any row with a
+  `*Is` context, `Medal`, `MedalCount` or `Grid="asSelected"`; a row with no
+  `Team` (original: the selected team, ours: no team, locked). Pure authors
+  `MedalCount`/`Track`/`Tournament` rows and is its own lane
+  (`pure-campaign.md`).
+- Not modelled and not traced: the `+0x99` always-hidden byte (zeroed by
+  `FUN_0888e1dc` at `0x0888e218`; the other writers are in a different class)
+  and the class-level `vtable+0xd4` virtual that `Definition_IsUnlocked(x, 1)`
+  adds.
+- PS2 and `psp-pulse-eu`: not checked, no program open on the bridge. Pulse
+  EU and USA `Definition.xml` are identical (`race-setup.md`, census).
+
+### `GSDisableEntriesBitField` and `DisableEntriesBitField`, 2026-11-20
+
+Two attribute strings, parsed side by side by two XML element readers:
+
+| Reader | Address | Strings | `Values` writes | `Entry` handling |
+| --- | --- | --- | --- | --- |
+| list widget (`ListWidget_ReadElement`, 75) | `0x088a9f3c` | `0x08a7f3d8`, `0x08a7f3f0` | `DisableEntriesBitField` to `+0xf8`, `GSDisableEntriesBitField` to `+0xfc` (both `Xml_AttributeAsIntHex`) | **tests `+0xf8`** |
+| a menu-class reader (unnamed) | `0x088b5a60` | `0x08a80198`, `0x08a801b0` | same two offsets | does **not** test either; creates every entry |
+
+In the list reader the running index is the global `DAT_08ab17d0`, reset to 0
+at the end of each `Values` element and incremented per `Entry`. An `Entry`
+is built only when `(+0xf8 & (1 << index)) == 0`; otherwise it is skipped (the
+counter still advances). So **bit N of `DisableEntriesBitField` removes entry N
+at parse time** (84; the old "read as bit N disables entry N, 72" is now code,
+for the plain attribute). The consumer of `+0xfc` is **not located**: the
+nearest `lw 0xfc(...)` candidate, `FUN_088a7a5c`, is a draw routine for a
+different widget (it uses `+0xfc` as a depth flag). The class that holds
+`+0xfc` may test it elsewhere (a hypothesis under 50, no rename).
+
+What the disc authors, from `Data\Plugins\PI001\GUI\RaceBox_Definition.xml`
+(PSP USA): **only the `GS` form, twice**: the `Mode` list's `Values`
+`GSDisableEntriesBitField="0xFA"` (seven entries: Arcade 0, Head2Head 1, Time
+Trial 2, Speed Lap 3, Tournament 4, Zone 5, Elimination 6) and the `RBMode`
+menu's `0x06`. Zero plain `DisableEntriesBitField`; `Selection_Definition.xml`
+has neither. Corroboration from play: the 2026-08-10 PPSSPP observation
+(`race-setup.md`, Weapons row) reached Time Trial, Speed Lap, Zone and Head to
+Head in the PSP's Single Player list, which `0xFA` would remove if the PSP
+applied it as a disable mask. So on PSP **the `GS` mask does not remove the
+`Mode` entries**: the entry loop tests `+0xf8` only, and `+0xf8` is never
+authored (conf 80: code plus the capture). "GS" reads as a PS2 (Graphics
+Synthesizer) variant; whether the PS2 build's equivalent loop tests the `GS`
+value and so prunes the `Mode` list (Split Screen V's three-entry `0xFA` keeps
+Arcade and Head2Head and drops Tournament, which fits) is the open question,
+PS2 not checked here. Ours parses neither attribute and shows all seven modes,
+which matches the PSP.
 
 ### `Top->Ship` has a confirmed referent after all
 
@@ -727,10 +841,13 @@ own authored numbers agreeing on a scale factor, not from PS2 code.
   The `Team="any"` combine was traced 2026-10-02 (above) and craft variants
   are now gated; see `oag_game::unlock::loyalty_unlocked`.
 
-- Of the nine unlock-predicate functions inside `Definition_IsUnlocked`, the
+- ~~Of the nine unlock-predicate functions inside `Definition_IsUnlocked`, the
   Medal/MedalCount/Loyalty/Grid ones are named and read (`race-campaign.md`);
   `FUN_0888e6e8` (the context filter above) and the four companion "has this
-  unlock type" gates are still unnamed.
+  unlock type" gates are still unnamed.~~ **Closed 2026-11-20**: the "four
+  companion gates" are the four `*Value`/`GridName` guards `race-campaign.md`
+  already named; `FUN_0888e6e8` is `Unlock_ContextMet`. See
+  [the nine row-loop callees](#the-nine-row-loop-callees-traced-2026-11-20).
 - `Mode == 6` reading as "Custom Race" is a 55-confidence hypothesis, not a
   finding - no enum table was located. **An enum table has since been located**
   (`0x08ab062c`, see [`race-campaign.md`](race-campaign.md)) and in *that* table
