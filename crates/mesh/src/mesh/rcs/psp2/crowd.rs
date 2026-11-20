@@ -172,7 +172,13 @@ mod tests {
             assert!(entry(&material(plain, &both), false).is_none(), "{plain}");
         }
         let one = [(SHADOWED, vec![0.1])];
-        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha_shadow", &one), true).is_none());
+        assert!(
+            entry(
+                &material("crowd_sprite_diffuse_normal_alpha_shadow", &one),
+                true
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -183,7 +189,10 @@ mod tests {
             assert_eq!(e.program, [PROGRAM_CROWD, 1.0]);
             assert_eq!(e.offset, 1.0);
         }
-        let twin = material(FAMILIES[0], &[(SHADOWED, vec![0.1]), (AMBIENT, vec![0.7; 3])]);
+        let twin = material(
+            FAMILIES[0],
+            &[(SHADOWED, vec![0.1]), (AMBIENT, vec![0.7; 3])],
+        );
         assert_eq!(entry(&twin, true).expect("admitted").offset, 1.0);
     }
 }

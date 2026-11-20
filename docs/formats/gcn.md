@@ -127,6 +127,8 @@ scaled for a reflection, a detail map), so the mesh keeps only what the instance
 programs are GXP/USSE and no operand is read ([gxp.md](gxp.md)), so no equivalent rule exists and 2048's own circuits stay
 unbound.
 
+**Which vector a normal map's `z` lane weights** (`oag_rcs::gcn::third_axis_is_eye`, 2026-11-20, `omega-crowd-normal`). `Program::normal_z_attribute` finds the sample whose `2t - 1` decode feeds a multiply and returns the interpolant the decoded `z` lane is multiplied by; the interpolant's input-list entry gives a vertex output by its slot byte, and its `__atg_paramK` name gives the `exp paramK`; `output_is_eye_vector` is true when each lane of that export is a `v_sub_f32` of an `eyePositionWorldSpace` component. A vertex program's second constant buffer (the patch compile's `ViewDep`) is told from the descriptor registers it loads through, since its header usage records are unread. The crowd materials' unshadowed permutations weight `z` by the eye vector; the shadow-receiving ones weight it by the normal ([omega-status.md](omega-status.md), "The crowd sprite's frame"). Confidence 85 for the slot rule (12 other permutations resolve to a normal-only export), 70 for the constant buffer rule. 2048 (Vita): checked, not checkable here (GXP operands unread).
+
 ## Census
 
 `crates/rcs/tests/gcn_ground_truth.rs`, one test per archive plus one per eboot;

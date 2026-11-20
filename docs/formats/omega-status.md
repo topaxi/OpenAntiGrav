@@ -2416,8 +2416,9 @@ readable statically.** Three different things sit under the old "crowd region" n
   `_shadow` pair and 944 plain sprite triangles; its crowd is 0.0 % of the frame (716 px), under the pose mismatch
   of item 5, so it cannot judge a change.
 - **Program** (`gcn_dump` of the material, `Shdr` `0x41a4` sprite and `0x3c04` `crowd_diffuse_normal`, confidence 92): both
-  are `T * (constantAmbientColour + liveLighting0diffuse * sat(N.L))` under fog, `N = nx T + ny B + nz N0` from the
-  vertex program's own frame (`0x3bc4`: `B = cross(N, T) * tangent.w * worldScaleInv`), normalised, `N.L` in world
+  are `T * (constantAmbientColour + liveLighting0diffuse * sat(N.L))` under fog, `N = nx T + ny B + nz V` from the
+  vertex program's own frame (`0x3bc4`: `B = cross(N0, T) * tangent.w * worldScaleInv`, `V = eye - position`; this lane first
+  read the third axis as the vertex normal `N0`, corrected in "The crowd sprite's frame" below), normalised, `N.L` in world
   space. `0x3c04` **never reads the diffuse alpha** (`dmask:0x7`) and has no kill: `crowd_diffuse_normal`'s alpha is
   its "specular in alpha" lane, not coverage. A probe that routed the plain materials through the `_shadow` path with
   `Shadowed = 1`, `Ambient = 0` (the same formula without the generic path's prelit, vertex-light and mask terms)
@@ -2552,6 +2553,38 @@ agree.
 **2048: checked, differs.** Vita's crowds are `fc06_lambert_alpha`/`fc08_effects_crowd` (no `Shadowed`/`Ambient`); the
 read is of Omega's native port, and Vita3K's constants for them were not read. HD: the front end and the sky/fog consumers
 are the open part, not checked here.
+
+## The crowd sprite's frame (2026-11-20, `omega-crowd-normal`)
+
+**Claim tested:** the plain crowd sprites on Sol are lit the way the original lights them because ours builds their normal by the route their vertex program uses. **Half true.** The route is read and wired (the programs take the eye vector, not the vertex normal, as the map's `z` axis); the Sol plain-sprite box moves from +64.5 to +47.6, not to 0, and **the white silhouettes that make that box look wrong are not that material's pixels** (below).
+
+**The route** (`gcn_dump` of `Crowd_Sprite_Diffuse_Normal_Alpha`, `oag_rcs::gcn::third_axis_is_eye`, confidence 85). Vertex program `0x3bc4` (base compile; the patch's `0x3ea4` is the same code with `eyePositionWorldSpace` in the second constant buffer, `ViewDep`) exports `param2 = cross(N_w, T_w) * tangent.w * worldScaleInv` (the bitangent), `param3 = eyePositionWorldSpace - world position` (three `v_sub_f32`), `param4 = N_w` and `param5 = T_w`. Pixel program `0x41a4` (the sun; `0x4f44` adds one vertex light, same frame) declares the vertex outputs in slots 0, 1, 2, 4, 5 (uv, bitangent, `param3`, `param5`, dead), not slot 3 (`param4`, the normal), and builds `N = nx * T + ny * B + nz * V` from the decoded `2t - 1` map: the `z` lane is multiplied by `attr3`, the interpolant of slot 2, which is `eye - position`. **The vertex normal is never read by the pixel program**; it only builds `B`. The normalised sum is dotted with `liveLighting0direction` as before. With the map's `z` near 1 the lit normal is the unit vector to the camera, bent by `x T + y B` over the camera distance (hundreds of units): each figure is lit as turned to the camera, which is why none shows its card's own facing.
+
+*How the slot is read, and why it is trusted.* A pixel `attrN` is the Nth entry of the program's input list (position first); an input's slot byte names the vertex output with the same slot byte; that output's `__atg_paramK` name is the `exp paramK` that carries it. Checked on the 12 shadow-receiving, specular and Nova permutations of the same two materials (`0x87c4`, `0x9704`, `0xa8c4`, `0xb9a4`, `0xca44`, `0xdd64` and the patch's six): in every one the `z` weight resolves to an export that depends on the `normal` input alone, and the two unshadowed ones resolve to an export that depends on `position` alone. A mapping that was wrong would not give twelve consistent frames. The dead slot is the last vertex output in both compiles (`param6` here, `param7` on the vertex-light variants), declared by the pixel program and never read. The vertex-program constant buffer is told from the descriptor registers it loads through (a vertex program's header usage records are unread): the distinct descriptor registers, ascending, against the buffers by API slot, ascending; refused when the counts differ (confidence 70, unit-checked on the patch compile's `ViewDep`).
+
+**Which materials.** `third_axis_is_eye` over a file's vertex and pixel pairs, **leaving out the permutations that read `shadowLightDirection`** (they weight `z` by the normal): `crowd_sprite_diffuse_normal_alpha`, `crowd_diffuse_normal` and their `_shadow` twins are eye on both compiles (2 pairs each, 2 eye); the skinned `_BoneCount4` crowd is not (0 of 3). The original picks the unshadowed permutation for the crowd draws: the `_shadow` sprite's staged pixel block is the 96-byte plain layout without `shadowLightDirection` (`omega-crowd-live`, confidence 80 for the `_shadow` sprite), and the plain materials are inferred to pick it too (70). **Not wired, and a lead:** the same census marks the unshadowed permutations of non-crowd props eye too (`Diffuse_Normal`, `tracktexture_with_normal`, `grassmudrock_blend_diffuse_normal_conditional`, `fc10_lambert_normal_alpha_uscroll`, `cb_treeleaf_normal`, `nr_crowd_bustle*`; ship materials in part). Applying the eye frame to every Omega normal-mapped draw as a probe moved Capital Reach 47.26 to 42.89 and Empire Climb 44.97 to 54.17, so it is not a general law until the permutation each draw takes is known; the crowd's is the one with evidence.
+
+**Wired** (`mesh::rcs::psp2::crowd`, `hull_normal.wesl`): a crowd material whose file reads eye gets a `PROGRAM_CROWD` entry with `offset = 1`; the plain materials are the `_shadow` twins' sum with `Shadowed = 1`, `Ambient = 0` (the earlier probe left every pixel unchanged, so no formula moves); `shade.wesl` takes `scene.fog.camera - in.world` as the frame's third axis where the entry says so (`hull_frame`). The loader report says `{n} with the eye frame`. Tests: `gcn_ground_truth::the_crowd_materials_weight_the_normal_maps_z_by_the_eye_vector` (both compiles, and the skinned crowd as the control), `omega_crowd_shadowed_check` (every crowd vertex of Sol, Queens Mall and Rockway carries the entry with the eye frame), `omega_crowd_lit_path::the_eye_frame_lights_a_figure_turned_away_as_if_it_faced_the_camera` (drop the shader's third axis and the figure reads dark).
+
+**Measured** (`scripts/compare-decompose.py`'s pair renders, 1920x1080, masks pinned per material from the committed build's skip renders; ours minus theirs, grey; before is main `6a33cf67d`):
+
+| Pair, material (pinned px) | Bias before | Bias after | Mean abs before | Mean abs after |
+| --- | ---: | ---: | ---: | ---: |
+| Sol plain sprite (15,198) | +64.5 | +47.6 | 78.9 | 64.0 |
+| Sol `_shadow` sprite (11,955) | +9.4 | +3.3 | 40.7 | 36.8 |
+| Sol `crowd_diffuse_normal` (344) | +32.8 | +11.5 | 79.2 | 67.4 |
+| Empire plain sprite (6,420) | -4.7 | -24.0 | 44.1 | 36.6 |
+| Empire `crowd_diffuse_normal` (8,441) | -49.9 | -54.8 | 69.3 | 67.8 |
+| Capital `_shadow` sprite (454) | -86.8 | -90.1 | 88.1 | 90.5 |
+| Whole frame mean abs: Sol / Empire / Capital | | | 32.71 / 44.97 / 47.26 | 32.54 / 44.94 / 47.26 |
+
+The mean absolute error falls on five of six boxes; the signed bias goes more negative where ours was already too dark (Empire, Capital: the scene-wide exposure of the thread `omega-hd-exposure`). Whole frames are within noise (under 0.3 grey). HD `hd-race/talons-pack` and `2048-vita/moa-therma`: 0 differing pixels before and after (the entry is built for a PS4 model only).
+
+**What the box cannot show.** Under the Sol plain-sprite mask the original is a flat 45 to 55 grey whatever ours draws there (binned by ours' value, theirs stays 45 to 55): the original's crowd stands in other places (the port randomises it boot to boot), so the mask holds ours' figures against the original's floor. The box is a bias of a placement difference as much as of lighting. **The white silhouettes** in the Sol frame (13,122 near-white pixels in the stands) are **in neither the plain nor the `_shadow` mask**, are untouched by `OAG_SKIP_MATERIAL=crowd` and by a debug return at the end of `lit_texel` for every `PROGRAM_CROWD` draw, and are not `fc06_lambert_emmissive_alpha`. They are another draw (the animated `Data\crowd` rigs are the first candidate: the skinned `_BoneCount4` materials, the one family `third_axis_is_eye` says is not eye, are not admitted by `crowd.rs`); finding which draw is the next read. The earlier lane's "1,287 white pixels that take another route" are the same thing.
+
+**Open:** the permutation the original takes for the plain sprite is unread (70); a live read would stage the pixel block of a plain sprite draw (the five-field layout) against the shadow-receiving one (`shadowLightDirection` between the direction and the fog).
+
+**2048 (Vita): checked, differs.** Vita draws crowds through `fc06_lambert_alpha` and `fc08_effects_crowd` (no `crowd_*` material), and its GXP programs' operands are unread, so the frame is not checkable there. HD (PS3): the hull programs build `N = nx T + ny B + nz N0` (`hd-ship-materials.md`, "Hull normal maps"); a Cg frame read for HD's crowd is not done.
 
 ## The alpha lane (2026-11-19, `omega-road-programs`)
 

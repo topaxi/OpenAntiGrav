@@ -562,3 +562,56 @@ fn the_reflective_sea_programs_carry_the_two_opposite_taps_in_every_variant() {
         assert_eq!(gcn::scrolled_edge(&bytes), None, "{entry}");
     }
 }
+
+/// The crowd sprite's frame (`docs/formats/omega-status.md`, "The crowd sprite's frame"): the
+/// unshadowed permutations of the four crowd materials weight the normal map's `z` lane by the
+/// vertex program's `eyePositionWorldSpace - position`, in the base compile (one constant buffer)
+/// and the patch's (the eye position in `ViewDep`); the skinned crowd's programs take the normal.
+/// Each file lists two such permutations (the sun, and the sun with one vertex light).
+#[test]
+#[ignore = "needs the Omega extraction"]
+fn the_crowd_materials_weight_the_normal_maps_z_by_the_eye_vector() {
+    let eye = [
+        (
+            "omega-eu/uroot/data00.psarc",
+            "Data/environments2048/shared/objectlibrary/materials/Crowd_Sprite_Diffuse_Normal_Alpha.rcsmaterial",
+        ),
+        (
+            "omega-eu/uroot/data00.psarc",
+            "Data/environments2048/shared/objectlibrary/materials/Crowd_Diffuse_Normal.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data08.psarc",
+            "data/environments2048/shared/objectlibrary/materials/Crowd_Sprite_Diffuse_Normal_Alpha.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data08.psarc",
+            "data/environments2048/shared/objectlibrary/materials/Crowd_Diffuse_Normal.rcsmaterial",
+        ),
+    ];
+    let skinned = (
+        "omega-eu-patch/uroot/data08.psarc",
+        "data/crowd/Materials/Crowd_Diffuse_Normal_BoneCount4.rcsmaterial",
+    );
+    let read = |(rel, entry): (&str, &str)| {
+        let path = path(rel)?;
+        let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+        Some(archive.read_path(entry).expect("the material reads"))
+    };
+    for case in eye {
+        let Some(bytes) = read(case) else { return };
+        let found = gcn::third_axis_is_eye(&bytes);
+        assert_eq!(
+            found,
+            gcn::EyeFrame { pairs: 2, eye: 2 },
+            "{}: {}",
+            case.0,
+            case.1
+        );
+        assert!(found.is_eye());
+    }
+    let Some(bytes) = read(skinned) else { return };
+    let found = gcn::third_axis_is_eye(&bytes);
+    assert!(found.pairs > 0 && found.eye == 0, "{found:?}");
+    assert!(!found.is_eye());
+}

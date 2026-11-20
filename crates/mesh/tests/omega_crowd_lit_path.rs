@@ -190,6 +190,67 @@ fn the_crowd_is_lit_by_shadowed_times_ambient_plus_light() {
     );
 }
 
+/// A crowd sprite facing away from the sun (`N0 = -z`, the sun along `+z`) with a flat normal map
+/// and a tangent, its entry's `offset` `eye` (the eye frame).
+fn framed_model(eye: f32) -> Model {
+    let mut model = model(PROGRAM_CROWD, 0.0, 1.0);
+    model.emissive[0].offset = eye;
+    // Tangent `+x`, bitangent scale `+1`: bytes `2b - 1` give `(1, 0, 0)` and `w = 255`.
+    let tangent = u32::from_le_bytes([255, 128, 128, 255]);
+    for vertex in &mut model.vertices {
+        vertex.normal = [0.0, 0.0, -1.0];
+        vertex.tangent = tangent;
+    }
+    // The map's `(0, 0, 1)`: every lane of the lit normal comes from the frame's third axis.
+    model.pad_masks = vec![texture("normal map", &[[128, 128, 255, 255]])];
+    model
+}
+
+/// The crowd programs weight the normal map's `z` lane by `eye - position`, not by the vertex
+/// normal (`mesh::rcs::psp2::crowd`, `oag_rcs::gcn::third_axis_is_eye`): a figure facing away from
+/// the sun is lit by it when the eye is on the sun's side, and only with the entry's eye frame.
+#[test]
+fn the_eye_frame_lights_a_figure_turned_away_as_if_it_faced_the_camera() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) = pollster::block_on(
+        adapter.request_device(&mesh_render::device_descriptor("crowd sprite", &adapter)),
+    )
+    .expect("requesting the device");
+    const AMBIENT_COLOUR: f32 = 0.3;
+    const SUN: f32 = 0.4;
+    let at = |model: &Model| {
+        let mut scene = Scene::off();
+        scene.light = mesh_render::Light::authored(
+            [0.0, 0.0, 1.0],
+            [SUN; 3],
+            [AMBIENT_COLOUR; 3],
+            [1.0; 3],
+            [1.0; 3],
+            0.0,
+        );
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        draw(&device, &queue, model, scene)
+    };
+    let albedo = (f32::from(GREY[0]) / 255.0).powf(2.2);
+    let encode = |linear: f32| (linear.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0).round() as u8;
+    let lit = encode(albedo * (AMBIENT_COLOUR + SUN));
+    let dark = encode(albedo * AMBIENT_COLOUR);
+    let eye = at(&framed_model(1.0));
+    let normal = at(&framed_model(0.0));
+    assert!(
+        eye[0].abs_diff(lit) <= 2,
+        "with the eye frame {eye:?}, want {lit}: sun-lit as turned to the camera"
+    );
+    assert!(
+        normal[0].abs_diff(dark) <= 2,
+        "without it {normal:?}, want {dark}: a figure facing away from the sun is dark"
+    );
+}
+
 /// Identity camera and model, so clip space is model space.
 fn uniforms() -> Vec<u8> {
     let identity: [[f32; 4]; 4] = [

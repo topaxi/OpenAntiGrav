@@ -45,9 +45,7 @@ pub fn check(
         if !crowd(material) {
             continue;
         }
-        let shadowed = material
-            .param(name_hash("Shadowed"))
-            .map_or(1.0, |p| p[0]);
+        let shadowed = material.param(name_hash("Shadowed")).map_or(1.0, |p| p[0]);
         let ambient = material
             .param(name_hash("Ambient"))
             .map_or([0.0; 3], |p| [0, 1, 2].map(|i| p[i]));

@@ -127,9 +127,9 @@ impl Program<'_> {
         else {
             return false;
         };
-        let Some((k, export)) = self.instructions.iter().enumerate().find(|(_, i)| {
-            matches!(i.detail, Detail::Export { target: t, .. } if t == 32 + target)
-        }) else {
+        let Some((k, export)) = self.instructions.iter().enumerate().find(
+            |(_, i)| matches!(i.detail, Detail::Export { target: t, .. } if t == 32 + target),
+        ) else {
             return false;
         };
         let lanes: Vec<u8> = export
@@ -163,12 +163,15 @@ impl Program<'_> {
     /// when the counts differ).
     fn constant_loaded(&self, k: usize, sgpr: u8) -> Option<&str> {
         let reflection = self.reflection.as_ref().ok()?;
-        let (first, load) = self.instructions[..k].iter().rev().find_map(|i| match i.dst[0] {
-            Some(Operand::Sgpr { first, count }) if (first..first + count).contains(&sgpr) => {
-                Some((first, i))
-            }
-            _ => None,
-        })?;
+        let (first, load) = self.instructions[..k]
+            .iter()
+            .rev()
+            .find_map(|i| match i.dst[0] {
+                Some(Operand::Sgpr { first, count }) if (first..first + count).contains(&sgpr) => {
+                    Some((first, i))
+                }
+                _ => None,
+            })?;
         if !load.name.is_some_and(|n| n.starts_with("s_buffer_load")) {
             return None;
         }
