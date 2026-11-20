@@ -640,3 +640,72 @@ fn a_2048_stage_publishes_its_zone_colours_and_an_hd_one_does_not() {
     let hd = hd_grade();
     assert_eq!(hd.zone_uniform().stage_light[0][3], 0.0);
 }
+
+/// `Track.Base Colour Highlight` of `Start` and `Sub Venom`, verbatim from
+/// `/data/environments/zonemode.effectsettings`, with `Sub Venom`'s rig.
+const HD_HIGHLIGHT_STAGES: &str = concat!(
+    "\"0 Start.Lighting.Constant Ambient Colour\"=1.000000 1.000000 1.000000 0.000000\n",
+    "\"0 Start.Track.Base Colour Highlight\"=0.349020 0.501961 1.000000\n",
+    "\"1 Sub Venom.Lighting.Constant Ambient Colour\"=1.500000 1.500000 1.500000 0.000000\n",
+    "\"1 Sub Venom.Track.Base Colour Highlight\"=0.349020 0.501961 1.000000\n",
+    "\"2 Venom.Lighting.Constant Ambient Colour\"=1.500000 1.500000 1.500000 0.000000\n",
+    "\"2 Venom.Track.Base Colour Highlight\"=0.000000 0.282353 0.019608\n",
+);
+
+fn highlight_grade(scale: Option<f32>) -> ZoneGrade {
+    let table = EffectSettings::parse(HD_HIGHLIGHT_STAGES).expect("it parses");
+    ZoneGrade::new(
+        "zonemode.effectsettings".to_string(),
+        table,
+        None,
+        Vec::new(),
+        Vec::new(),
+    )
+    .expect("it names stages")
+    .with_hull_probe_tint(scale)
+}
+
+/// HD's Zone frame tints every hull's probe by twice the showing stage's `Track.Base Colour
+/// Highlight`, `.w` 1 (the luma): `(0.69804, 1.00392, 2.0, 1.0)` is what the live hull
+/// program read at `Sub Venom` on Vineta K
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). A title without the scale
+/// leaves each hull its own tint.
+#[test]
+fn a_zone_hull_takes_twice_the_stages_track_highlight_as_its_probe_tint() {
+    let mut grade = highlight_grade(Some(2.0));
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    let tint = grade.light(circuit_light()).hull_probe_tint;
+    let live = [0.69804, 1.003_92, 2.0, 1.0];
+    for (got, want) in tint.iter().zip(live) {
+        assert!(
+            (got - want).abs() < 1e-4,
+            "{tint:?} against the live {live:?}"
+        );
+    }
+    let off = highlight_grade(None);
+    assert_eq!(off.light(circuit_light()).hull_probe_tint, [0.0; 4]);
+}
+
+/// Mid-sweep the tint is the stage blend's, as `Environment_UpdateStageBlend` writes it.
+#[test]
+fn a_zone_hull_tint_cross_fades_with_the_stage() {
+    let mut grade = highlight_grade(Some(2.0));
+    grade.request_stage(1);
+    grade.commit();
+    grade.set_weight(1.0);
+    grade.request_stage(2);
+    grade.commit();
+    grade.set_weight(0.5);
+    let palette = grade.palette();
+    let [r, g, b] = palette
+        .track_base_colour_highlight
+        .expect("both stages author it");
+    let tint = grade.light(circuit_light()).hull_probe_tint;
+    assert_eq!(tint, [2.0 * r, 2.0 * g, 2.0 * b, 1.0]);
+    assert!(
+        tint[1] < 1.003_92 && tint[1] > 2.0 * 0.282_353,
+        "between the two stages: {tint:?}"
+    );
+}

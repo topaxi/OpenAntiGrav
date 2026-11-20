@@ -130,6 +130,9 @@ struct Light {
     hull_diffuse: array<vec4<f32>, 4>,
     // Omega's `liveLighting0specular` (`mesh_render::Light::sun_specular`); zero elsewhere.
     sun_specular: vec4<f32>,
+    // The probe gain every craft hull takes in HD's Zone frame where `.w` is 1.0, the
+    // probe desaturated to its luma (`mesh_render::Light::hull_probe_tint`); zero elsewhere.
+    hull_probe_tint: vec4<f32>,
 };
 
 // One of the two colour groups a Zone stage authors - `mesh_render::ZoneSet`.

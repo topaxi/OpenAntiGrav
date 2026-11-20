@@ -335,6 +335,11 @@ pub const ZONE_FRAME: &oag_title::ZoneFrame = &oag_title::ZoneFrame {
     vertical_size: 1.0,
     horizontal_size: 1.0,
     feedback: -0.4,
+    // `Environment_UpdateStageBlend` stores the blended `Track.Base Colour Highlight`
+    // times `2.0` (`0x007b1f50`) to the settings block's `+0x510`, `.w` forced to
+    // `2 * 0.5`, at `0x003db260`: the hull programs' `iblScalePower`. Live on RPCS3 at two
+    // stages of two files (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`).
+    hull_probe_tint_scale: Some(2.0),
 };
 
 /// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.
