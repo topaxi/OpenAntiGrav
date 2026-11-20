@@ -190,6 +190,11 @@ world and records only). A second for start-time modifiers, after objection 1. T
 choice and the stats get their own ADR once objections 14 and 15 are answered; as
 proposed there they need no frontend world, so they stop depending on ADR-0080.
 
+**Answered by the maintainer (2026-11-20): two ADRs.** ADR-0093 keeps everything that
+needs no frontend world (the run, the exports, modifiers, pickup parameters, own
+unlocks, replays and records). The choice screen and the stats moved to ADR-0094,
+Proposed, to be settled with objections 14 and 15.
+
 ### 5. A modified craft invalidates the learned speed plan (blocks modifiers on AI slots and `give-autopilot` on a modified craft)
 
 **Evidence.** The AI, the Autopilot pickup and Pilot Assist drive a speed plan

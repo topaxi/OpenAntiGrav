@@ -8,7 +8,9 @@ summary: "ADR-0093 and progression.md draft a campaign run state, race-start mod
 # A campaign run state and race-start modifiers are drafted, not accepted
 
 [ADR-0093](../../docs/architecture/adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
-(*Proposed*, editable until merged) and
+(*Proposed*, editable until merged), its split-out
+[ADR-0094](../../docs/architecture/adr/0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md)
+(the choice screen and stats, *Proposed*) and
 [progression.md](../../docs/architecture/wasm-extensions/progression.md) describe how a
 mod builds a custom campaign whose races change the craft and the pickups. No crate,
 no ABI revision and no mod author skill text changed. The branch was not merged by the

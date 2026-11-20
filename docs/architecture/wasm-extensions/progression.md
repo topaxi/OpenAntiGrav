@@ -2,9 +2,11 @@
 
 **Challenged, unresolved:** [progression-challenge.md](progression-challenge.md) lists 25 numbered objections to this draft (5 block a decision) and a smaller first slice; read it beside this page.
 
-**Status: a design draft, nothing built (2026-11-19).** The decision record is
-[ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md),
-status *Proposed*. This page holds the proposed surface of `oag-ext-abi` and
+**Status: a design draft, nothing built (2026-11-19).** The decision records are
+[ADR-0093](../adr/0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md)
+(the run, modifiers, pickups, unlocks; sections 2 to 7) and
+[ADR-0094](../adr/0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md)
+(the choice screen and the stats; section 8), both *Proposed*. This page holds the proposed surface of `oag-ext-abi` and
 `oag-ext` as Rust signatures, the lifecycle of the data, and the open questions.
 It changes no crate: `crates/ext-abi`, `crates/ext` and the mod author skill stay
 as they are until the maintainer accepts the ADR. Every number here is **chosen,
@@ -615,6 +617,9 @@ own livery once mods ship liveries.
 
 ## 8. Capabilities 4 and 5: the choice screen and mod-defined stats
 
+Decided in [ADR-0094](../adr/0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md),
+split out of ADR-0093 so the run needs no frontend world (maintainer, 2026-11-20).
+
 ### 8.1 The choice screen
 
 A mod screen (ADR-0080), named by `[run] choice_screen`. The flow:
@@ -684,7 +689,7 @@ handling**.
   is dropped with a load-report line. The authored base bar is untouched.
 
 **The narrowing.** README section 3 and ADR-0080 say a disc screen never gains
-behaviour a mod invented, and Ship Select is a disc screen. ADR-0093 narrows this by
+behaviour a mod invented, and Ship Select is a disc screen. ADR-0094 narrows this by
 one allowance: **a campaign that declares `[[run.stat]]` adds display-only rows and
 bonus segments to the stat panel of the Ship Select it launches, for that campaign
 only.** No input, no new page, no change to what the screen does. Without the
@@ -834,6 +839,7 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
     table.
 14. **The cap.** 1,024 bytes fits the second buffer and the copy into the tick blob.
     A campaign with a large unlock table would want more.
-15. **ADR-0080's fate.** Capabilities 4 and 5 wait for the frontend world. If the
-    maintainer rejects that world, they have no home.
+15. **ADR-0080's fate.** **Settled for ADR-0093 (maintainer, 2026-11-20):** the
+    choice screen and the stats are split into ADR-0094, so the run, modifiers and
+    pickups no longer wait for the frontend world. ADR-0094 still does, as drafted.
 16. **A per-seat run on the wire**, with README open question 13.

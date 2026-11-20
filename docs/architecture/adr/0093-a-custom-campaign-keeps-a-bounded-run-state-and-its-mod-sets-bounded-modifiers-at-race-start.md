@@ -1,6 +1,6 @@
 # ADR-0093: A custom campaign keeps a bounded run state, and its mod sets bounded modifiers at race start
 
-**Challenged, unresolved:** [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md) lists 25 numbered objections to this proposal (5 block a decision) and a smaller first slice; read it before accepting.
+**Challenged, being answered:** [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md) lists 25 numbered objections to this proposal (5 block a decision) and a smaller first slice; each answered one says so under it.
 
 ## Status
 
@@ -26,16 +26,17 @@ here in place instead of superseding it.
   single-player.
 - the "no replacing a recovered law or a disc table" row of the README's section 3
   and the same words in ADR-0079 decision 6 (decision 4): a bounded multiplier on the
-  disc's number is not a replacement;
-- the "a disc screen never gains behaviour a mod invented" clause of ADR-0066
-  decision 4, ADR-0079 decision 6 and ADR-0080 decision 2 (decision 8);
-- ADR-0080 decision 6, "the only output is one blob" of a screen (decision 7).
+  disc's number is not a replacement.
+
+**Split** (maintainer, 2026-11-20): the choice screen and the mod's stats, which lean
+on the frontend world, are [ADR-0094](0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md). This ADR needs no frontend
+world and does not narrow ADR-0080 decisions 2 or 6.
 
 **Builds on** [ADR-0077](0077-a-custom-campaign-compiles-to-the-titles-own-grid.md)
 (custom campaigns; not edited, the `[run]` table is an optional addition under
 [ADR-0064](0064-project-toml-files-declare-a-toml-schema.md)),
 [ADR-0079](0079-extensions-are-sandboxed-webassembly-guests-behind-two-worlds.md)
-(the worlds), ADR-0080 (the frontend world, itself *Proposed*),
+(the worlds),
 [ADR-0055](0055-replays-are-inputs-and-a-ghost-is-poses.md) and
 [ADR-0091](0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md)
 (replays), and [ADR-0070](0070-the-network-transport-is-webtransport.md) (the
@@ -130,17 +131,9 @@ ratings, not computed from handling.
    captured writes nothing, and nor does quitting a lap-target race before its finish.
    A crash between the medal and the exit keeps the medal and leaves the run as it
    was. Replay rebuilds, demos, unofficial runs and split screens never call `race-end`.
-7. **A choice screen** is an ADR-0080 screen named by `[run] choice_screen`, opened by
-   the host after a finish whose `race-end` asked for it. It receives the run bytes and
-   may return replacement bytes, as a second allowed output beside `save`
-   (narrowing ADR-0080 decision 6). The offers are rolled in `race-end` from the run's
-   seed and ordinal, because the frontend world has no seeded RNG.
-8. **Stats.** `[[run.stat]]` rows name a byte offset, a kind and a style in the run
-   bytes. The host draws them and interprets nothing else. A campaign that declares
-   them may add **display-only** rows and bonus segments to the stat panel of the
-   Ship Select it launches, for that campaign only (the one allowance that narrows
-   "a disc screen gains no mod behaviour"). A title bar is never recomputed from scaled
-   handling.
+7. **A choice screen:** moved to [ADR-0094](0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md) decision 1. Until it is built,
+   `race-end` picks the reward itself.
+8. **Stats:** moved to ADR-0094 decision 2.
 9. **Replays, ghosts, records, network.** The replay header's `ModUse` carries the run
    input bytes, seed, ordinal and keys (base64, capped on raw bytes). Playback never
    reads the local store. There is no ghost (ADR-0091 decision 5). A race whose start
@@ -159,8 +152,8 @@ ratings, not computed from handling.
     never leak into the Race Box or another campaign. Mechanism detail:
     `progression.md` section 7.1.
 11. **Build order.** The run record and the ABI first, then modifiers, then pickup
-    parameters and `give-autopilot`, then the frontend world and the screen. A campaign
-    can ship with `race-end` choosing the reward by itself before the screen lands.
+    parameters and `give-autopilot`. The choice and the stats follow under ADR-0094. A
+    campaign ships with `race-end` choosing the reward by itself before they land.
 
 **Settled by the maintainer (2026-11-19):** an out-of-range modifier is clamped, never
 a fault; whether a failed race ends a run is the mod's choice; whether the player may
@@ -178,11 +171,11 @@ Trial); the race keeps running as today and `race-end` runs once, when the playe
 the race (decision 6; objection 2, answered). Nothing is staged: `race-end` gets `prior_tier` and
 `event_index`, its output commits on exit, RACE AGAIN is an exit that commits, and a
 campaign may hide RACE AGAIN with a `[run] race_again` flag (decision 6; objections 3
-and 6, answered).
+and 6, answered). The choice screen and the stats are split into ADR-0094; this ADR
+needs no frontend world (objection 4 and question 15, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
-a data-first modifier table, a per-owner damage scale, the
-page that shows stats when the craft is preset, and every other item in
+a data-first modifier table, a per-owner damage scale, and every other item in
 `progression.md` section 12.
 
 ## Alternatives considered
@@ -212,14 +205,6 @@ page that shows stats when the craft is preset, and every other item in
   assumes. Rejected for 1,024 and a second buffer.
 - **The run in the tick buffer's state region.** At `race-start` the region is the
   module's own state and the output needs a second one. Rejected.
-- **A screen that returns only the pick, with `race-start` applying it.** Keeps the
-  transition in deterministic code, but the Ship Select rows must show the pick before
-  the next race starts, and the pick would be a second replay input. Rejected.
-- **A screen that rolls the offers.** No seeded RNG on the UI side. Rejected.
-- **Stats on a mod screen's canvas only.** The player would see the craft and the
-  title's bars on one screen and the mod's stats on another, and the canvas would need
-  disc data a mod may not yet read (README open question 15). Rejected as the only
-  path; kept as the fallback if the maintainer refuses the allowance in decision 8.
 - **More pickup kinds per mod for several combined rewards.** Changes what the cap of
   32 means and renumbers the craft record codes. Rejected for one kind selected by
   state.
@@ -238,10 +223,8 @@ the same race. Every disc number stays the source of truth.
 
 **Bad.**
 
-- **The README overstates the built ABI.** Three of the pieces this depends on
-  (`race-start`/`race-end`, `setup.tune`, the frontend world) are designs, not code.
-  Capabilities 4 and 5 are blocked until ADR-0080 is accepted and built; if it is
-  rejected they have no home.
+- **The README overstates the built ABI.** `race-start`, `race-end` and `setup.tune`
+  are designs, not code; this ADR builds the first two.
 - **The race exit calls a guest.** The results page's exits and the escape site in
   `oag-game` serve every campaign; for a `[run]` campaign they now call `race-end` and
   save the run. The medal path itself is unchanged.
