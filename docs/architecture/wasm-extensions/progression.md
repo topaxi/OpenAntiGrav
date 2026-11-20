@@ -969,8 +969,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 6. **Do `TopEnd` and `scale-thrust` compose freely?** They are different levers:
    `TopEnd` scales the plateau arm inside the law, `scale-thrust` the finished force
    after it. At the plateau both multiply the force, so the largest effective factor
-   is 2.0 x 2.0 = 4.0. The alternative bounds the product by `MAX_THRUST_FACTOR`, so a
-   reward would shrink the headroom of a per-tick boost.
+   is 2.0 x 2.0 = 4.0. **Settled (maintainer, 2026-11-20): they stack freely.** Each
+   is bounded on its own; a levelled engine still gets a boost at full strength, and
+   how fast a late run gets is the campaign's balance.
 7. **A data-first modifier table** (`[[run.modifier]]`) beside the guest path.
    **Settled (maintainer, 2026-11-20): never.** A campaign that changes the craft has
    a wasm module (section 4.3).

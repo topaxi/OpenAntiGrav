@@ -120,6 +120,8 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    (the plateau, so terminal speed). Each is refused until a held-throttle ground
    truth shows its effect. Neither acts in a Zone event, whose speed path reads
    neither field; that is accepted, Zone being its own mode (maintainer, 2026-11-20).
+   `TopEnd` and the per-tick `scale-thrust` stack freely, each bounded on its own (a
+   product of up to 4.0 at the plateau).
    `Grip` is also clamped per craft to `0.9 * 60 / (grip * 1.5)`, below which the
    slide correction cannot overshoot (maintainer, 2026-11-20).
    Factors are applied **before the speed plans are built**: each modified slot, AI or
@@ -282,7 +284,8 @@ single-player now; online, later, every seat shares the host's run (decision 9;
 question 16, answered). Own-unlock rows may require points on a grid, the tiers'
 own law, so a campaign without a module can unlock on progress; a run flag needs a
 module; a variant row may name the mod's own livery once mods ship them (decision 10;
-section 7.1's open items, answered). The seed is drawn per run, or
+section 7.1's open items, answered). `TopEnd` and `scale-thrust` stack freely (decision 4;
+question 6, answered). The seed is drawn per run, or
 fixed by `[run] seed` (decision 1; question 13, answered).
 
 **Not decided here:** the open items of `progression.md` section 12 and section 7.1.
