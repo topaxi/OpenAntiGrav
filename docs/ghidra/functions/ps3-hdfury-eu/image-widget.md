@@ -357,7 +357,8 @@ Each `vwipe` Image waits its authored `delay` from the frame its page becomes cu
   `Item 315`: nothing for 26 frames, `s = 1/30` on frame 27, whole on frame 56). Half a frame of slack keeps an accumulated clock
   off the wrong frame (`an_accumulated_clock_starts_the_ramp_on_the_same_frame`, delays 0.25, 0.45, 0.5, 0.6, 1.2).
   `Window::cut` cuts a sprite's rect and its sampled rows together at the window's fractions, so any Image (a sub-rect `U`/`V`,
-  not only a whole texture) wipes; `entry_draw` is the one function that waits, cuts and finishes. `EntryClock` is the
+  not only a whole texture) wipes; a tiled quad (the unlock panel's `dot.gtf` pattern over 440 by 168) is cut the same way with
+  its repeat along the height scaled, so the dots keep their size (the pattern restarts at the cut: negligible on a dot grid); `entry_draw` is the one function that waits, cuts and finishes. `EntryClock` is the
   page's since-open clock; a still states it or draws it `finished`.
 - **Where it plays** (the pages of ours that draw HD's XML): Team Selection (`picker::hd`, the Logo: 0.5 s delay, 0.7 s ramp;
   a team step still replays from the press with no delay, `Widget_ResetTransition` not `Widget_ArmTransition`), Track Select
@@ -375,16 +376,20 @@ Each `vwipe` Image waits its authored `delay` from the frame its page becomes cu
   pair and its Omega twin renders pixel for pixel as before (ten pairs, 0 differing pixels against the binary of main
   `aac673ca4`). It is not `--menu-picker-seconds`, which a pair script sets to the seconds that turn the craft to the original's
   turntable angle (not the page's age) and which also drives the picker's own turntable and slideshow.
-- **Disc ground truth** (`crates/ui/tests/vwipe_ground_truth.rs`, through Fury's update chain, the files the original serves): per
+- **Disc ground truth** (`crates/ui/tests/vwipe_ground_truth.rs`, through Fury's update chain over the disc; every copy of every
+  front-end XML in the archives' own path lists, the served copy being the highest-numbered archive that authors the screen): per
   page, the authored `(name, delay)` set equals what RAM read, in frames at 60 Hz: Controls 15 and 42; Credits 36 and 48;
-  Race Records 36, 48, 48, 60, 60, 72; `Single Player` 27 and 48; Track Select 36; Team Selection 30; Grid Selection 27 and
-  39; Cell Selection `flyerlogo` 48 and the emblems 3, 8, 12, 17; Show Unlocks (6 each) and SoundTest (12) are authored by the
-  same file and **inherited, unmeasured**. **No XML-versus-RAM delay disagrees.** The widget-count gap (XML 76, RAM 71)
-  is partly named now: `racebox_definition.xml` holds three more `vwipe` images outside any `Screen` (an unnamed 0.45 s,
-  `WeaponBG` 0.5 s, its `WeaponIcon` 0.55 s) that RAM never showed under `Single Player`, `Cell Selection` authors an unnamed 0.5 s
-  image (in 0.4 s) beside RAM's five, and the older `selection_definition.xml` copies of Team Selection and Track Creation carry
-  an unnamed 0.3 s and 0.25 s image that Fury's own `team_selection_definition.xml`/`track_selection_definition.xml` no longer
-  serve (RAM: one each). The three are asserted by name in `the_xml_authors_widgets_ram_did_not_show`.
+  Race Records 36, 48, 48, 60, 60, 72; `Single Player` 27 and 48; Track Select 36; Team Selection 30; **Grid Selection Fury** 27 and
+  39 (read from `DATA06`'s `CellMode_Definition.xml`, the only copy that authors the screen RAM measured, not the non-Fury `Grid
+  Selection` beside it); Cell Selection `flyerlogo` 48 and the emblems 3, 8, 12, 17 (`DATA06`'s copy: five widgets, as RAM);
+  Show Unlocks (6 each) and SoundTest (12) are authored by the served file and **inherited, unmeasured**. **No XML-versus-RAM
+  delay disagrees**, and every page RAM built matches the served XML widget for widget except network `GameLobby` (XML 20, RAM
+  18; the page was not entered). The "XML 76 against RAM 71" census was a count across stale copies: `DATA02`'s
+  `CellMode_Definition.xml` has an unnamed 0.5 s image (in 0.4 s) on `Cell Selection` that `DATA06`'s does not, and
+  `selection_definition.xml` carries an unnamed 0.3 s (`Team Selection`) and 0.25 s (`Track Creation`) image that Fury's own
+  `team_selection_definition.xml`/`track_selection_definition.xml` no longer author. What stays unexplained in RAM terms:
+  `racebox_definition.xml` holds three `vwipe` images outside any `Screen` (an unnamed 0.45 s, `WeaponBG` 0.5 s, its `WeaponIcon`
+  0.55 s) that RAM never showed under `Single Player`. All asserted by name in `the_xml_authors_widgets_ram_did_not_show`.
 - **Open**: a cell or circuit change re-arms with the delay again where the caller is `Widget_ArmTransition` (the cell
   screen's refresh), and the Track Select emblem's restart on a circuit step is `Widget_ResetTransition` (no delay): neither is
   replayed (the emblems and the emblem stay finished after the page entry). The unlock box's corner brackets are children of

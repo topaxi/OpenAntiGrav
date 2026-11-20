@@ -133,10 +133,9 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Frame chrome (closed 2026-10-08): the title's size and offset against the
   0.904 layout scale remain; the quad-buffer bug that dropped the rules on every
   flyer page is fixed (`Renderer::renew_quad_buffer`)
-- Page transitions: none on Campaign Select/Grid/Cell (`--menu-anim-phase`
-  draws identical pixels). The screens author per-widget `transition`/`delay`
-  keys and `transitiontype="vwipe"` on the emblems, not curves
-  (`docs/ui/campaign-screens.md`, "Still open")
+- Page transitions: Campaign Select/Grid/Cell play the `vwipe` Images' entry wipes since 2026-11-20 (`hd-vwipe-wire`);
+  the other per-widget `transition`/`delay` keys (`bBg_0_0`, the right column) and the title scramble are not played
+  (`--menu-anim-phase` draws identical pixels; `docs/ui/campaign-screens.md`, "Still open")
 - Main Menu and Racebox setup are our own tree, not HD's pages
 - Layout scale: the original is drawn at about 0.904 of the authored space,
   offset (+150, -8); ours is 1:1. Not applied: may be the maintainer's

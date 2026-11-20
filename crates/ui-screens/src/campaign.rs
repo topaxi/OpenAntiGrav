@@ -384,6 +384,12 @@ impl GridSelection {
         &mut self.entry
     }
 
+    /// Advances the screen's clocks by one tick: `Selector`'s pulse and the page's entry clock.
+    pub fn tick(&mut self, dt: f32) {
+        self.pulse.tick(dt);
+        self.entry.tick(dt);
+    }
+
     #[must_use]
     pub fn grids(&self) -> &[GridSummary] {
         &self.grids
@@ -763,6 +769,12 @@ impl CellSelection {
 
     pub fn entry_mut(&mut self) -> &mut EntryClock {
         &mut self.entry
+    }
+
+    /// Advances the screen's clocks by one tick: `Selector`'s pulse and the page's entry clock.
+    pub fn tick(&mut self, dt: f32) {
+        self.pulse.tick(dt);
+        self.entry.tick(dt);
     }
 
     /// Attaches each cell's own earned medal difficulty alongside

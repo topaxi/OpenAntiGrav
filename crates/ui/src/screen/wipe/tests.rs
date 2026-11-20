@@ -177,6 +177,23 @@ fn an_entry_draw_waits_cuts_and_finishes() {
     assert_eq!((rect[0], rect[2], uv[0], uv[2]), (10.0, 200.0, 64.0, 100.0));
     assert_eq!(entry_draw(wipe, 3.0, sprite()), Some(sprite()));
     assert_eq!(entry_draw(None, 0.0, sprite()), Some(sprite()));
+    // A tiled pattern is cut at the same fractions and keeps its tile size: 2 tiles down the
+    // whole quad, a tenth of that down a tenth of it.
+    let tiled = Draw::TiledSprite {
+        rect: [10.0, 100.0, 200.0, 50.0],
+        uv: [64.0, 32.0, 16.0, 16.0],
+        repeat: [12.5, 2.0],
+        color: [1.0; 4],
+    };
+    assert_eq!(entry_draw(wipe, 0.2, tiled.clone()), None);
+    let Some(Draw::TiledSprite { rect, uv, repeat, .. }) = entry_draw(wipe, 0.45, tiled.clone())
+    else {
+        panic!("a tiled slab");
+    };
+    assert!((rect[1] - (100.0 + 50.0 * top)).abs() < 1e-3 && (rect[3] - 5.0).abs() < 1e-4);
+    assert_eq!((uv, repeat[0]), ([64.0, 32.0, 16.0, 16.0], 12.5));
+    assert!((repeat[1] - 0.2).abs() < 1e-5, "{repeat:?}");
+    assert_eq!(entry_draw(wipe, 3.0, tiled.clone()), Some(tiled));
     assert_eq!(
         entry_draw(wipe, EntryClock::finished().seconds(), sprite()),
         Some(sprite())

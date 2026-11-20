@@ -1044,3 +1044,42 @@ fn the_grids_unlock_box_waits_its_delay_and_then_wipes() {
     );
     assert_eq!(heights_at(60), [168.0], "whole once the ramp is out");
 }
+
+/// The unlock panel's dot pattern is a small texture tiled over a 440 by 168 rect (the dots on
+/// screen): it wipes by the same law, the cut keeping the tile size, not appearing whole.
+#[test]
+fn a_tiled_unlock_panel_wipes_too() {
+    let xml = FURY_GRID_FIXTURE.replace(
+        r#"<Values x="168" y="708" width="440" height="168""#,
+        r#"<Values transitiontype="vwipe" delay="0.45" EnableTransition="0.5" TxtrWidth="440" TxtrHeight="168" x="168" y="708" width="440" height="168""#,
+    );
+    let at = |frame: u32| -> Vec<(f32, f32)> {
+        let mut entry = oag_ui::screen::EntryClock::default();
+        for _ in 0..frame {
+            entry.tick(1.0 / 60.0);
+        }
+        fury_grid_list_with(&xml, (true, 2, 0), entry)
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::TiledSprite { rect, repeat, .. } if rect[0] == 168.0 => {
+                    Some((rect[3], repeat[1]))
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(at(26), Vec::<(f32, f32)>::new(), "the delay");
+    let first = at(27);
+    assert_eq!(first.len(), 1, "{first:?}");
+    assert!(
+        (first[0].0 - 16.8).abs() < 1e-3,
+        "{first:?}: a tenth of the height"
+    );
+    let whole = at(60);
+    assert_eq!(whole.len(), 1);
+    assert!((whole[0].0 - 168.0).abs() < 1e-3);
+    assert!(
+        (first[0].1 / whole[0].1 - 0.1).abs() < 1e-4,
+        "the tile size holds"
+    );
+}

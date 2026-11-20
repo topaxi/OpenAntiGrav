@@ -179,24 +179,38 @@ impl Screens {
 
 /// `draw`, the plain quad of an image that may author a `vwipe`, as the page shows it
 /// `since_entry` seconds after it became current: nothing while the delay runs, the window of the
-/// ramp, then the quad whole. A draw that is not a plain sprite is shown whole once the delay is
-/// out.
+/// ramp, then the quad whole. A tiled quad (a small pattern repeated over a larger rect) is cut
+/// the same way, its repeat count along the height scaled with the window so the pattern keeps
+/// its size; where the cut starts it restarts the pattern. Any other draw is shown whole once the
+/// delay is out.
 #[must_use]
 pub fn entry_draw(wipe: Option<Vwipe>, since_entry: f32, draw: Draw) -> Option<Draw> {
     let Some(wipe) = wipe else {
         return Some(draw);
     };
     let alpha = wipe.entry_alpha(since_entry)?;
-    let (Some(window), Draw::Sprite { rect, uv, color }) = (Vwipe::window(alpha), &draw) else {
+    let Some(window) = Vwipe::window(alpha) else {
         return Some(draw);
     };
-    let (rect, uv) = window.cut(*rect, *uv);
-    Some(Draw::Sprite {
-        rect,
-        uv,
-        color: *color,
+    Some(match draw {
+        Draw::Sprite { rect, uv, color } => {
+            let (rect, uv) = window.cut(rect, uv);
+            Draw::Sprite { rect, uv, color }
+        }
+        Draw::TiledSprite {
+            rect,
+            uv,
+            repeat,
+            color,
+        } => {
+            let (rect, _) = window.cut(rect, uv);
+            Draw::TiledSprite {
+                rect,
+                uv,
+                repeat: [repeat[0], repeat[1] * window.height],
+                color,
+            }
+        }
+        other => other,
     })
 }
-
-#[cfg(test)]
-mod tests;
