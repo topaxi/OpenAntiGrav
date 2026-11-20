@@ -54,8 +54,14 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
 // strength. The draw names it: `uniforms.env_gain` is the rgb scale and `uniforms.env_desat`
 // the `.w` (`oag_raceplay::env_probes::ProbeTint`).
 fn probe_tint(texel: vec3<f32>) -> vec3<f32> {
+    let luma = dot(texel, vec3<f32>(0.300049, 0.589844, 0.109985));
+    // HD's Zone frame: one tint for every craft hull, from the stage table, over the hull's
+    // own (`mesh_render::Light::hull_probe_tint`).
+    if uniforms.env_layer > 0.5 && scene.light.hull_probe_tint.w > 0.5 {
+        return luma * scene.light.hull_probe_tint.rgb;
+    }
     let scaled = texel * uniforms.env_gain;
-    let grey = vec3<f32>(dot(texel, vec3<f32>(0.300049, 0.589844, 0.109985)) * uniforms.env_gain);
+    let grey = vec3<f32>(luma * uniforms.env_gain);
     return mix(scaled, grey, uniforms.env_desat);
 }
 

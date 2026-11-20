@@ -1040,6 +1040,12 @@ pub(super) fn zone_grade(
                         .is_some_and(|frame| frame.lit_by_stage_alone),
                 )
             })
+            .map(|grade| {
+                grade.with_hull_probe_tint(
+                    race.zone_frame
+                        .and_then(|frame| frame.hull_probe_tint_scale),
+                )
+            })
             .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
             .map(|grade| {
                 if mode == oag_race::Mode::Detonator {

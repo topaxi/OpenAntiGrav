@@ -93,6 +93,12 @@ pub struct Light {
     /// Omega's `shadowLightSpecularDiffuse`: `Lighting.ShadowLight specular power scale`, power in
     /// `x` and scale in `y`; `zw` unused.
     pub shadow_light_specular: [f32; 4],
+    /// The probe tint (`iblScalePower`) every craft hull of the frame takes in place of its
+    /// own, where `.w` is `1.0`: HD/Fury's Zone frame, whose stage blend writes the tint
+    /// from the stage table (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). The
+    /// rgb is the probe gain, and the probe is taken as its luma. Zero on every other
+    /// frame, where each hull's own tint stands. See [`Light::with_hull_probe_tint`].
+    pub hull_probe_tint: [f32; 4],
 }
 
 impl Light {
@@ -127,6 +133,7 @@ impl Light {
             prelit_power: [1.0; 3],
             prelit_bias: 0.0,
             sun_specular: [0.0; 4],
+            hull_probe_tint: [0.0; 4],
             shadow_light: [0.0; 4],
             shadow_light_specular: [0.0; 4],
             hull: crate::mesh_render::HullLights::OFF,
@@ -170,6 +177,7 @@ impl Light {
             prelit_power: std::array::from_fn(|i| prelit_power[i].max(1e-3)),
             prelit_bias: 0.0,
             sun_specular: [0.0; 4],
+            hull_probe_tint: [0.0; 4],
             shadow_light: [0.0; 4],
             shadow_light_specular: [0.0; 4],
             hull: crate::mesh_render::HullLights::OFF,
@@ -224,6 +232,15 @@ impl Light {
         }
     }
 
+    /// This rig with the probe gain every craft hull takes, desaturated, over the hull's own
+    /// tint: [`Self::hull_probe_tint`].
+    #[must_use]
+    pub fn with_hull_probe_tint(self, gain: [f32; 3]) -> Self {
+        Self {
+            hull_probe_tint: [gain[0], gain[1], gain[2], 1.0],
+            ..self
+        }
+    }
     /// This rig with Omega's shadow light, the factor the lightmapped programs multiply the
     /// prelit term by (`docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`, "What is recovered
     /// and not wired"):

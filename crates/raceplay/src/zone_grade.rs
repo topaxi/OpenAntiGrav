@@ -217,6 +217,9 @@ pub struct ZoneGrade {
     /// Every chunk of the frame is lit by the stage's ambient and sun alone. See
     /// [`Self::with_stage_light`].
     stage_lit: bool,
+    /// The scale on `Track.Base Colour Highlight` that makes every craft hull's probe gain.
+    /// See [`Self::with_hull_probe_tint`].
+    hull_probe_tint_scale: Option<f32>,
     /// The stage is a lap counter's ([`Self::show_stage`]), not a zone ladder's: a
     /// Detonator race. See [`Self::with_lap_stages`].
     lap_stages: bool,
@@ -248,6 +251,7 @@ impl ZoneGrade {
             lap_stages: false,
             arena: false,
             stage_lit: false,
+            hull_probe_tint_scale: None,
         })
     }
 
@@ -287,6 +291,14 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_stage_light(mut self, stage_lit: bool) -> Self {
         self.stage_lit = stage_lit;
+        self
+    }
+
+    /// Whether, and by what scale, the showing stage's `Track.Base Colour Highlight` is the
+    /// probe gain every craft hull takes ([`oag_title::ZoneFrame::hull_probe_tint_scale`]).
+    #[must_use]
+    pub fn with_hull_probe_tint(mut self, scale: Option<f32>) -> Self {
+        self.hull_probe_tint_scale = scale;
         self
     }
 
@@ -770,6 +782,17 @@ impl ZoneGrade {
         // `authored` clears Omega's sun lobe colour too; a stage tints the diffuse sun only.
         let [r, g, b, _] = base.sun_specular;
         let graded = graded.with_sun_specular([r, g, b]);
+        // The hull tint is the cross-faded stage's, as the original's own stage blend
+        // writes it (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`).
+        let graded = match (
+            self.hull_probe_tint_scale,
+            palette.track_base_colour_highlight,
+        ) {
+            (Some(scale), Some(highlight)) => {
+                graded.with_hull_probe_tint(highlight.map(|c| c * scale))
+            }
+            _ => graded,
+        };
         // **`authored` clears Omega's prelit flag and bias**, so a graded
         // Omega rig would silently go back to HD's combination. Omega ships no
         // Zone palette today (`zone_palette: None`), so nothing reaches this
