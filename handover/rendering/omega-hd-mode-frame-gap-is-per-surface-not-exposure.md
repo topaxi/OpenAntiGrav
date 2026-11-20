@@ -20,7 +20,7 @@ original's luma ring, read".
   0.60 against ours' 0.868 on Modesto. Neither "equal" nor "1.6 times" holds across the four.
 - Inverting the original's frames with its own `E`, `t1` and curve puts the excess in surfaces: Sebenco sky and far building about 2.3 to
   2.5 times ours, floor and wall 1.1 to 1.4; Modesto 1.4 to 2.2 everywhere (sky most); Moa sky and floor 1.0, stands 1.4, stripe road 1.6;
-  Amphiseum ceiling and stands 0.67 to 0.73 (ours brighter). Bloom (ours draws none) inflates the bright rows, saturation deflates them.
+  Amphiseum ceiling and stands 0.67 to 0.73 (ours brighter). Bloom inflates the bright rows (ours draws it on Modesto, Moa and Amphiseum, none on Sebenco; the original's adds 3.5 grey there, below), saturation deflates them.
 - Not known: which scene term carries it. The sky and fog consumers in the 1.07 eboot are unread (`FUN_015eda20` is only the registrar);
   `Lighting.Sky brightness` does not predict the sign; no texel of Sebenco's luma image reaches 0.97 where the other circuits reach 1.6 to 8
   (whether the HDR fog colour `0.646 1.18 1.85` is clamped on far geometry, or the sky draws with no brightness term, is open).
@@ -29,15 +29,14 @@ original's luma ring, read".
 
 - **Measured by `omega-frame-offset` (native port, bloom knocked out live, [`omega-status.md`](../../docs/formats/omega-status.md), "HD-mode frame offset: which stage carries it"):** no post stage
   (bloom, curve, `E`, encode) is the frame-wide offset. The original's bloom adds **3.5 grey** to Sebenco (2 boots, 10 samples, sd 0.4), almost all of it the per-material
-  mask term `AlphaScale * mask.a` that ours does not draw (ours draws 0.00 there); the lit Senco sign alone is 11 grey. Closure on Sebenco: ours' scene scaled by the ring's
-  1.30 through the original's curve plus that bloom is 102.4 grey against theirs 103.8, so about 13 of the 18 grey is scene radiance before the curve and 3.5 is bloom.
+  mask term `AlphaScale * mask.a` that ours does not draw (ours draws 0.00 there); the lit Senco sign alone is 9 to 12 grey (boot means). Ours' `LAvg` on the current tree was not re-read (the 0.1756 is from `13b22ac77`, before the sky, snow and rock programs; an inversion of the current frame gives at least 0.187, so the ring ratio is about 1.2, not 1.30): scaling ours' scene by 1.18 to 1.23 through the original's curve plus that bloom gives 97.4 to 99.6 grey against theirs 103.8, so about 8 to 10 of the 18 grey is scene radiance before the curve, 3.5 is bloom and **4 to 6 grey is unattributed** (a global gain understates it: the sky and far scenery are the dark surfaces).
   Moa, Modesto and Amphiseum read below the method's noise (1 to 2.5 grey); do not wire the mask against Amphiseum (ours already +4.3).
 
 ## Next Steps
 
 0. **Bloom mask (small, 3.5 grey on Sebenco):** read `exp mrt1`'s second half off each material's program (`oag_rcs::gcn`, recipe in
    [`tonemap.md`](../../docs/ghidra/functions/ps4-omega-eu/tonemap.md), "The mask, not drawn") and add `AlphaScale * mask` to `fs_bright`; acceptance is the original's
-   knockout numbers above (Sebenco +3.5, building-left box +11, snow sky +1.4, floor and wall 0) with Amphiseum not rising. The knockout script
+   knockout numbers above (Sebenco +3.5, building-left box +9 to +12, snow sky +1.4, floor and wall 0) with Amphiseum not rising. The knockout script
    (`scripts/wipeout-pc-bloom-knockout.py`, `scripts/omega-bloom-knockout-effect.py`) gives the acceptance numbers for any circuit; the `E` write (`cL`) answers late and
    contaminates later grabs, `highthr` wedges the port: do not use them.
 
@@ -64,6 +63,6 @@ original's luma ring, read".
    mid texel, 6 to 11 % low at 0.2); an exact multiply after `decode` needs a per-draw uniform slot (the block has none and 34 test files
    mirror it). Also: read the frame-constant table's own `SkyBrightness` (recipe in `omega-status.md`).
 4. Modesto's `E` (0.868 against the original's 0.60) is the symptom of its dim scene: the other surfaces (left structure, right wall,
-   floor, 1.4 to 2.2 times ours) are the lane that closes it. Bloom (ours draws none on the sky) is the red channel's 20 grey on Sebenco.
+   floor, 1.4 to 2.2 times ours) are the lane that closes it. Bloom is 3.5 grey of Sebenco's 18, not the red channel's 20 (`omega-frame-offset`, above).
 5. Acceptance numbers for any wiring: ours' `LAvg` on the four pairs should reach 0.229, 0.472, 0.42 and 0.132 (the readback patch
    is not kept; `omega_tonemap`'s `frameL` is the quantity), and Modesto's `E` should fall to about 0.6.

@@ -6,7 +6,9 @@
 A knockout grab's effect is its Rec.709 grey (sRGB values, the pair tables' grey) minus the mean of the two base grabs on
 either side of it, because the grid camera drifts between grabs (two bases 0.06 s apart differ by 8 to 14 grey per pixel and
 by under 1 in the frame mean). A sample is dropped when its two bases are identical (the port had ended: its last frame
-stays on screen) or when the poke was overwritten before the grab (`held_after_run` below `pokes`).
+stays on screen) or when the poke was overwritten before the grab: for `nobloom` every site must still hold the poke
+(`held_after_run` equals `pokes`), for `nomask` at least one (the block has many copies and the game rewrites some of them each
+frame, so its effect is a lower bound on the mask's share).
 """
 import json
 import sys
@@ -32,7 +34,7 @@ def samples(run, condition):
     frames = {r["label"]: grey("%s/%s.png" % (run, r["label"])) for r in rows}
     labels = [r["label"] for r in rows]
     for i, r in enumerate(rows):
-        if r["condition"] != condition or i == 0 or i + 1 >= len(rows) or r["held_after_run"] < r["pokes"]:
+        if r["condition"] != condition or i == 0 or i + 1 >= len(rows) or r["held_after_run"] < (r["pokes"] if condition == "nobloom" else 1):
             continue
         before, after = frames[labels[i - 1]], frames[labels[i + 1]]
         if np.array_equal(before, after):
