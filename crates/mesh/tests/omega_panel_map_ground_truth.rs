@@ -14,7 +14,9 @@
 use std::path::Path;
 
 use oag_mesh::mesh::rcs::psp2;
-use oag_mesh::mesh::{BlockFormat, PROGRAM_PANEL_MAP, Texels, sky_paraboloid, slots};
+use oag_mesh::mesh::{
+    BlockFormat, PROGRAM_CROWD, PROGRAM_PANEL_MAP, Texels, sky_paraboloid, slots,
+};
 
 const ARCHIVES: [&str; 9] = [
     "ps4/omega-eu/uroot/data00.psarc",
@@ -87,6 +89,25 @@ fn sols_panel_map_road_marches_and_its_sky_is_the_reflection_map() {
         super::omega_crowd_shadowed_check::crowd_entity_submeshes(&decoded),
         (203, 60_697),
         "Sol's crowd-entity shapes: the fc01_colour_emissive silhouettes"
+    );
+    // The `_shadow` rigs' skinned material authors the pair the crowd program reads.
+    let twin = oag_rcs::rcsmodel::psp2::parse(
+        &archives
+            .iter_mut()
+            .find_map(|a| a.read_path("Data/crowd/Rigs/male01_shadow.rcsmodel").ok())
+            .expect("a shadow rig"),
+    )
+    .expect("parses");
+    let material = &twin.materials[0];
+    let shadowed = material
+        .param(oag_rcs::rcsmaterial::name_hash("Shadowed"))
+        .expect("Shadowed")[0];
+    assert!(
+        model
+            .emissive
+            .iter()
+            .any(|e| { e.program == [PROGRAM_CROWD, shadowed] && e.offset == 1.0 }),
+        "a crowd entry carries the shadow rig's Shadowed {shadowed} and the eye frame"
     );
     assert!(report.panel.materials > 0, "{}", report.describe());
     assert_eq!(report.panel.unread, 0, "{}", report.describe());

@@ -149,6 +149,12 @@ pub struct Report {
     /// the stand draws no figure there (`docs/formats/omega-status.md`, "The crowd-entity shapes").
     /// Counted apart from [`Self::hidden`].
     pub crowd_entities: usize,
+    /// Crowd-entity shapes given a `Data/Crowd/Rigs` figure in the bind pose (`psp2::crowd_rigs`).
+    pub crowd_rigs: usize,
+    /// Vertices of those rigs, which [`crate::mesh::Model::vertices`] holds beside the file's own.
+    pub crowd_rig_vertices: usize,
+    /// Crowd-entity shapes whose rig file did not read; they draw nothing.
+    pub crowd_rigs_missing: usize,
     /// Model nodes the skeleton did not name, placed by the model's own bind
     /// matrix - see [`placement::Plan::unmatched`].
     pub unmatched_nodes: usize,
@@ -391,8 +397,8 @@ impl Report {
                 String::new()
             } else {
                 format!(
-                    ", {} crowd-entity submesh(es) not drawn (the original's rigs are not loaded)",
-                    self.crowd_entities
+                    ", {} crowd-entity placeholder(s) not drawn, {} replaced by a rig in its bind pose, the group's clip not played ({} missing)",
+                    self.crowd_entities, self.crowd_rigs, self.crowd_rigs_missing
                 )
             };
             format!(

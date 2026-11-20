@@ -46,6 +46,7 @@ mod alpha_emissive;
 mod alpha_product;
 mod chevron;
 mod crowd;
+mod crowd_rigs;
 mod emissive_add;
 mod flat_constant;
 mod glow;
@@ -276,7 +277,7 @@ fn build_planned(
     textures: Textures<'_>,
     water: Water,
 ) -> Result<(Model, Report)> {
-    let decoded = psp2::parse(model_blob)
+    let mut decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let plan = planner(&decoded.scene);
     let ps4 = psp2::is_ps4(model_blob);
@@ -292,6 +293,9 @@ fn build_planned(
         ..Report::default()
     };
     model.anim_nodes = plan.anim_nodes;
+    // Omega's crowd-entity shapes are replaced by rig instances (`psp2::crowd_rigs`).
+    let rig_chunks = crowd_rigs::instance(&mut decoded, ps4, &mut *textures, &mut report);
+    let decoded = decoded;
     report.panel.sky_reflection = model.sky_reflection.is_some();
     // Each material's own scroll, resolved before any vertex is written; the
     // glow layer's emissive texture is decoded here too, so a layer exists
@@ -816,7 +820,10 @@ fn build_planned(
             // circuit's `.pvs`, whose bitmaps are indexed by exactly this
             // number (`oag_rcs::hd_pvs`, the `Psp2` dialect). `None` when the
             // node table did not read, which the PVS test always allows.
-            chunk: submesh.mesh.and_then(|mesh| u32::try_from(mesh).ok()),
+            chunk: submesh
+                .mesh
+                .and_then(|mesh| u32::try_from(mesh).ok())
+                .or_else(|| rig_chunks.get(&submesh.record).copied()),
             // A Vita material authors no PSP-style reference.
             alpha_test_ref: None,
         });

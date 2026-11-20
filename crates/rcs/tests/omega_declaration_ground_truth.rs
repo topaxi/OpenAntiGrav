@@ -108,13 +108,19 @@ fn sweep(name: &str) -> Option<Survey> {
         let mut any = false;
         for s in &model.submeshes {
             survey.submeshes += 1;
-            let at = s.record + vertex_decl::PS4_DECLARATION_POINTER;
-            let word = u64::from_le_bytes(cpu_bytes[at..at + 8].try_into().unwrap());
-            let Some(decl) = usize::try_from(word)
+            let word_at = |at: usize| u64::from_le_bytes(cpu_bytes[at..at + 8].try_into().unwrap());
+            let direct = usize::try_from(word_at(s.record + vertex_decl::PS4_DECLARATION_POINTER))
                 .ok()
                 .and_then(|w| declarations.get(&w))
-                .filter(|d| d.stride == s.stride)
-            else {
+                .filter(|d| d.stride == s.stride);
+            // A skinned record (`PS4_DECLARED_BUFFER_POINTER_GAP`) holds a pointer to a slot at
+            // `+0x18`, and the slot holds the header's address.
+            let indirect = || {
+                let slot = usize::try_from(word_at(s.record + 0x18)).ok()?;
+                let header = usize::try_from(word_at(slot)).ok()?;
+                declarations.get(&header).filter(|d| d.stride == s.stride)
+            };
+            let Some(decl) = direct.or_else(indirect) else {
                 continue;
             };
             survey.resolved += 1;
@@ -225,7 +231,7 @@ fn every_record_resolves(name: &str, files: usize, submeshes: usize, lightmapped
 #[test]
 #[ignore = "needs the corrected Omega extraction"]
 fn data00_records_point_at_their_own_declarations() {
-    every_record_resolves("data00.psarc", 579, 38_362, 5_302);
+    every_record_resolves("data00.psarc", 620, 38_403, 5_302);
 }
 
 #[test]

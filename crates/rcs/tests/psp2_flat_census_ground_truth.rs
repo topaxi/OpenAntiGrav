@@ -238,8 +238,20 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
         } else {
             Some(u32::from_le_bytes(cpu_bytes[at..at + 4].try_into().unwrap()) as usize)
         };
+        // A skinned PS4 record (`PS4_DECLARED_BUFFER_POINTER_GAP`) keeps its declaration two
+        // pointers deep: `+0x18` names a slot that holds the header's address.
+        let indirect = || {
+            let word_at = |at: usize| {
+                usize::try_from(u64::from_le_bytes(
+                    cpu_bytes[at..at + 8].try_into().unwrap(),
+                ))
+                .ok()
+            };
+            by_header.get(&word_at(word_at(s.record + 0x18)?)?)
+        };
         let Some(own) = word
             .and_then(|w| by_header.get(&w))
+            .or_else(|| if ps4 { indirect() } else { None })
             .filter(|d| d.stride == s.stride)
         else {
             continue;
@@ -349,7 +361,11 @@ fn census_of(blob: &[u8], ps4: bool) -> Census {
             psp2::BUFFER_POINTER_GAP,
             psp2::SKY_BUFFER_POINTER_GAP,
             psp2::PS4_BUFFER_POINTER_GAP,
-        ] {
+            psp2::PS4_DECLARED_BUFFER_POINTER_GAP,
+        ]
+        .into_iter()
+        .filter(|&gap| ps4 || gap != psp2::PS4_DECLARED_BUFFER_POINTER_GAP)
+        {
             let width = if ps4 { 8 } else { 4 };
             let p = s.record + psp2::INDEX_POINTER + gap;
             let Some(w) = cpu_bytes.get(p..p + width) else {
@@ -1013,7 +1029,7 @@ macro_rules! omega {
 omega!(
     omega_data00,
     "ps4/omega-eu/uroot/data00.psarc",
-    pin(625, 38_362, (14_438, 2_849_186), 0, (0, 0), 0)
+    pin(625, 38_403, (14_438, 2_849_186), 0, (0, 0), 0)
         .with_uv1_float(235, 0)
         .with_uv_dirt(122, 122)
         .with_boxes(&OMEGA_DATA00_BOXES)
