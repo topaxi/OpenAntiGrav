@@ -8,6 +8,7 @@
 //! gate.
 
 use super::*;
+use oag_ui::font;
 use oag_ui::language::StringTable;
 
 /// A screen carrying `tips` and nothing else this source authors.
@@ -99,7 +100,7 @@ fn wrapping_fits_every_line_and_keeps_every_word() {
     let atlas = Atlas::build();
     let text = "Actuating the left or right airbrake through a corner turns tighter \
                 without shedding speed";
-    let lines = wrap(&atlas, text, 1.0, 200.0);
+    let lines = font::wrap(&atlas, text, 1.0, 200.0);
     assert!(lines.len() > 1, "{lines:?}");
     for line in &lines {
         assert!(
@@ -119,7 +120,7 @@ fn wrapping_fits_every_line_and_keeps_every_word() {
 #[test]
 fn a_word_wider_than_the_column_is_kept_whole() {
     let atlas = Atlas::build();
-    let lines = wrap(&atlas, "antigravitational", 1.0, 10.0);
+    let lines = font::wrap(&atlas, "antigravitational", 1.0, 10.0);
     assert_eq!(lines, ["antigravitational"]);
 }
 

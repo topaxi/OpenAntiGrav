@@ -315,6 +315,7 @@ impl Screens {
                 .unwrap_or(false)
                 .then_some(viewport_width)
                 .flatten(),
+            push_height: node.flag("PushHeight").unwrap_or(false),
             transition: 0.0,
         }
     }

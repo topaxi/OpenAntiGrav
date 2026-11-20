@@ -7,6 +7,7 @@
 
 use oag_tables::race_campaign::{Cell, Difficulty, Medal, MedalTiers, Mode};
 
+use oag_ui::font::{Atlas, wrap};
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
@@ -797,30 +798,64 @@ const TIER_OUTLINE_TINT: u32 = 0x7f34_acc2;
 /// (`down arrow`), full white otherwise. Measured, confidence 85.
 const ARROW_DISABLED_TINT: u32 = 0xff50_5050;
 
-/// `Cell Help`'s own overlay, drawn as a **static** panel - every widget on
-/// that screen at its own authored position, with no animation at all. The
-/// disc's own copy scrolls a `Viewport`/`Animation` timeline
-/// (`LimitVerticalScroll="10"`) that would let `Main Help`/`Speed Class
-/// Help`/`Event Help` slide up past each other; `oag_ui::screen::Screens::
-/// collect_widgets` already discards a timeline like that everywhere else in
-/// this crate and keeps the widget, so drawing the three stacked at their
-/// own `y` (all near the panel's own top, since nothing here shifts them
-/// down to make room) is the honest next step rather than a scripted one -
-/// see `docs/ui/campaign-screens.md`'s own `[Open]` entry. `Speed Class
-/// Help`/`Event Help` are the disc's own literal authored text
-/// (`MSC_LOAD_VENOM`/`MSC_EVENT_SR`) regardless of the cell actually
-/// selected - no per-cell substitution for either idstring is traced (see
-/// `docs/ghidra/functions/psp-pulse-usa/race-campaign.md`), so this build
-/// does not invent one.
+/// `Cell Help`'s own overlay: every widget on that screen at its authored position, with no
+/// animation.
+///
+/// The disc's copy scrolls its three paragraphs through a `Viewport`/`Animation` timeline
+/// (`LimitVerticalScroll="10"`); `oag_ui::screen::Screens::collect_widgets` discards a timeline
+/// like that everywhere else in this crate and keeps the widget, so this draws the panel as the
+/// timeline's first key shows it.
+///
+/// **The paragraphs flow.** `Main Help`, `Speed Class Help` and `Event Help` each author
+/// `PushHeight="true"` ([`Text::push_height`]): the paragraph's `y` is its distance below the
+/// bottom of the one before, which is what the original's own capture shows (a paragraph's gap
+/// equals the authored `y`, `docs/ui/campaign-screens.md`, "Back and Help on the PS2, and how `Cell Help` is laid out"). Drawing each at its raw
+/// `y` laid all three over each other near the panel's top. The height of a paragraph is its
+/// wrapped lines (`oag_ui::font::wrap`, the wrap the renderer draws it with, over `atlas`, the
+/// primary face the `small` font draws in) times the atlas's line height.
+///
+/// `Speed Class Help`/`Event Help` are the disc's own literal authored text
+/// (`MSC_LOAD_VENOM`/`MSC_EVENT_SR`) regardless of the cell actually selected: no per-cell
+/// substitution for either idstring is traced (`docs/ghidra/functions/psp-pulse-usa/race-campaign.md`),
+/// so this build does not invent one.
+///
+/// Draw it **above** the page ([`Layers::body`]'s end): the panel's own `0xE0000000` backdrop is
+/// what dims the page behind it.
 #[must_use]
-pub fn cell_help_draw(layout: &Layout, sprites: &dyn Fn(&str) -> Option<Placed>) -> Vec<Draw> {
+pub fn cell_help_draw(
+    layout: &Layout,
+    sprites: &dyn Fn(&str) -> Option<Placed>,
+    atlas: &Atlas,
+) -> Vec<Draw> {
     let screen = &layout.screen;
     let mut out = screen.plain_draws(sprites);
+    let mut bottom = 0.0_f32;
     for text in &screen.texts {
         let Some(content) = text.string.as_deref() else {
             continue;
         };
-        out.push(text_draw(text, content, layout));
+        let top = if text.push_height {
+            bottom + text.y
+        } else {
+            text.y
+        };
+        let placed = Text {
+            y: top,
+            ..text.clone()
+        };
+        let draw = text_draw(&placed, content, layout);
+        if let Draw::Text {
+            scale,
+            wrap_width: Some(width),
+            ..
+        } = &draw
+        {
+            let lines = wrap(atlas, content, *scale, *width).len();
+            bottom = top + lines as f32 * atlas.line_height * scale;
+        } else {
+            bottom = top;
+        }
+        out.push(draw);
     }
     out
 }

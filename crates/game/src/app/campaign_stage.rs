@@ -12,6 +12,7 @@
 //! `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
 //! section.
 
+use oag_gameplay::input::Button;
 use oag_tables::race_campaign;
 use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
 
@@ -172,6 +173,8 @@ pub(crate) struct CampaignStage {
     /// `docs/ui/campaign-screens.md`'s `Open` entry on why not the
     /// authored `Viewport`/`Animation` scroll timeline.
     cell_help: Option<oag_ui_screens::campaign::Layout>,
+    /// The buttons `Cell Selection` opens `Cell Help` on and leaves on, see [`cell_buttons`].
+    cell_buttons: (Button, Button),
     /// The front-end root's own `Confirm`/`Back` legend - `None` on a
     /// source whose `Skin.xml` this pass could not read at all (logged when
     /// that happens, see `crate::campaign::read_footer`).
@@ -260,6 +263,32 @@ pub(crate) struct CampaignStage {
     medal_art: oag_ui_screens::campaign::MedalArt,
 }
 
+/// The buttons `Cell Selection` opens `Cell Help` on and leaves on, as `(help, back)`.
+///
+/// Help is the one the screen's own `Redirect` to `Cell Help` authors: the PSP's
+/// `forward="triangle"`, the PS2's `forward="circle"`. Back is the pressing's own
+/// (`oag_title::FrontEnd::back_button`: the PS2 binds it to the triangle). A screen that authors no
+/// such redirect keeps the PSP's triangle.
+fn cell_buttons(
+    cell_layout: &oag_ui_screens::campaign::Layout,
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+) -> (Button, Button) {
+    let help = cell_layout
+        .screen
+        .redirects
+        .iter()
+        .find(|redirect| redirect.goto.as_deref() == Some("Cell Help"))
+        .and_then(|redirect| redirect.forward)
+        .unwrap_or(Button::Triangle);
+    let back = title
+        .front_end
+        .map_or(oag_title::prompts::Prompt::Circle, |front_end| {
+            front_end.back_button(platform)
+        });
+    (help, crate::prompts::button_of(back))
+}
+
 impl CampaignStage {
     #[allow(
         clippy::too_many_arguments,
@@ -286,6 +315,7 @@ impl CampaignStage {
         custom: Option<crate::campaign::custom::Custom>,
     ) -> Self {
         let title = title_ref.name.to_string();
+        let cell_buttons = cell_buttons(&cell_layout, title_ref, platform);
         let ticker_tips = crate::records::ticker_tips(
             ticker.as_ref(),
             &strings,
@@ -350,6 +380,7 @@ impl CampaignStage {
             grid_range,
             active_campaign: None,
             cell_help,
+            cell_buttons,
             nav_legend,
             ticker,
             ticker_tips,
@@ -941,6 +972,7 @@ impl CampaignStage {
                     .map(to_campaign_difficulty)
             })
             .with_medal_art(self.medal_art.clone())
+            .with_buttons(self.cell_buttons.0, self.cell_buttons.1)
             .with_tiers(self.tiers.clone());
             match &self.custom {
                 Some(custom) => model

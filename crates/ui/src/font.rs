@@ -1006,6 +1006,37 @@ pub fn measure(atlas: &Atlas, text: &str) -> f32 {
         .sum()
 }
 
+/// Breaks `text` into lines no wider than `max_width` in screen units.
+///
+/// Measured through the atlas that will draw it rather than by character count,
+/// because the disc's fonts are proportional - a line of `MISSILES` and a line
+/// of `illillil` are the same length in characters and nothing like it on
+/// screen. A single word longer than `max_width` is left over-long rather than
+/// broken mid-word: it cannot be made to fit, and hyphenating it would invent
+/// text.
+#[must_use]
+pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{line} {word}")
+        };
+        if !line.is_empty() && measure(atlas, &candidate) * scale > max_width {
+            out.push(std::mem::take(&mut line));
+            line = word.to_string();
+        } else {
+            line = candidate;
+        }
+    }
+    if !line.is_empty() {
+        out.push(line);
+    }
+    out
+}
+
 /// Writes the opaque patch solid fills sample, and returns its cell.
 ///
 /// Two by two rather than a single texel so that linear filtering, which a real

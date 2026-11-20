@@ -292,6 +292,9 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     // Read off the PS2 pressing's own `Skin.xml`/`MainMenu_Definition.xml`,
     // not scaled from the PSP's - see `frontend::PS2_MENU_SKIN`'s own doc.
     menu_ps2: Some(frontend::PS2_MENU_SKIN),
+    // The PS2 executable binds `backward`/`cancel` to the triangle, the PSP's to the circle:
+    // `docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence".
+    back_button_ps2: Some(oag_title::prompts::Prompt::Triangle),
     // Pulse authors the `FEGlobals`/`<Menu>` vocabulary `MenuSkin` describes,
     // not the touch-icon idiom `TouchFrontEnd` does - see ADR-0054.
     touch: None,

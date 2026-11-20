@@ -537,7 +537,7 @@ impl Screen {
         });
 
         if let Some(tip) = self.tip() {
-            for (row, line) in wrap(atlas, tip, self.text(TIP_SCALE), TIP_WIDTH)
+            for (row, line) in font::wrap(atlas, tip, self.text(TIP_SCALE), TIP_WIDTH)
                 .into_iter()
                 .take(TIP_LINES)
                 .enumerate()
@@ -627,37 +627,6 @@ impl Screen {
 
         out
     }
-}
-
-/// Breaks `text` into lines no wider than `max_width` in screen units.
-///
-/// Measured through the atlas that will draw it rather than by character count,
-/// because the disc's fonts are proportional - a line of `MISSILES` and a line
-/// of `illillil` are the same length in characters and nothing like it on
-/// screen. A single word longer than `max_width` is left over-long rather than
-/// broken mid-word: it cannot be made to fit, and hyphenating it would invent
-/// text.
-#[must_use]
-pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
-    let mut out: Vec<String> = Vec::new();
-    let mut line = String::new();
-    for word in text.split_whitespace() {
-        let candidate = if line.is_empty() {
-            word.to_string()
-        } else {
-            format!("{line} {word}")
-        };
-        if !line.is_empty() && font::measure(atlas, &candidate) * scale > max_width {
-            out.push(std::mem::take(&mut line));
-            line = word.to_string();
-        } else {
-            line = candidate;
-        }
-    }
-    if !line.is_empty() {
-        out.push(line);
-    }
-    out
 }
 
 /// What a shortened label is marked with.

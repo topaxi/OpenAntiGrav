@@ -112,6 +112,11 @@ with the same XML string. Recorded as a difference rather than reconciled.
 Confidence **90** for the PS2 side, read off the disassembly; the PSP side is
 not re-verified here, since this session did not open `BOOT.BIN`.
 
+**Wired for `Cell Selection` (2026-11-20).** The PS2 footer draws the triangle beside `Back` and
+`Cell Selection`'s `Cell Help` redirect is `forward="circle"` on the PS2 (`forward="triangle"` on the
+PSP): `oag_title::FrontEnd::back_button_ps2` carries the triangle, `docs/ui/campaign-screens.md`,
+"Back and Help on the PS2" has the walk. The other PS2 screens are still open.
+
 ## Accessors
 
 | Address | Name | Conf |

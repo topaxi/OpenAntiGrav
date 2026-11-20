@@ -7,7 +7,7 @@
 //! super::*` reaches `Quad`, `MODE_ATLAS` and the rest unchanged, the same
 //! seam `frontend/draw.rs` already uses for `Frontend`.
 //!
-//! **The wrapping itself is [`crate::loading::wrap`], not a new algorithm.**
+//! **The wrapping itself is [`oag_ui::font::wrap`], not a new algorithm.**
 //! `loading.rs` already measures a loading tip through the atlas and breaks it
 //! at word boundaries for exactly this reason; a second copy here would be the
 //! hand-transcribed-table mistake `CLAUDE.md` warns about, just for code
@@ -16,7 +16,7 @@
 //! [`Draw::Text`]: oag_ui::frontend::Draw::Text
 
 use super::*;
-use crate::loading::wrap;
+use oag_ui::font::wrap;
 
 /// Which atlas [`Renderer::push_text`]/[`Renderer::push_wrapped_text`] draw
 /// a line of text from.
@@ -205,7 +205,7 @@ impl Renderer {
     }
 
     /// A [`Draw::Text`] or [`Draw::FacedText`] whose `wrap_width` is set:
-    /// `text` split into lines by [`crate::loading::wrap`], each drawn
+    /// `text` split into lines by [`oag_ui::font::wrap`], each drawn
     /// exactly as one call to [`Self::push_text`] would, stacked downward
     /// from `y` by the chosen atlas's own line height at `scale` - the same
     /// quantity a real font's `.fnt` carries and menu rows already step by.

@@ -356,6 +356,41 @@ fn triangle_opens_help_and_suspends_movement() {
     assert!(!model.help_open());
 }
 
+/// The PS2 pressing opens `Cell Help` on the circle and leaves on the triangle
+/// (`CellSelection::with_buttons`); the PSP's own buttons do neither. Fails if the model reads
+/// the PSP's buttons whatever it was told.
+#[test]
+fn the_ps2_pressing_leaves_on_triangle_and_opens_help_on_circle() {
+    let cells = || {
+        vec![
+            race_cell("g_0_0", "16_Track"),
+            race_cell("g_1_0", "16_Track"),
+        ]
+    };
+    let mut input = Input::new();
+
+    let mut ps2 = CellSelection::new(cells()).with_buttons(Button::Circle, Button::Triangle);
+    press(&mut input, Button::Triangle);
+    assert_eq!(ps2.update(&mut input), vec![Event::Back]);
+    assert!(!ps2.help_open());
+    press(&mut input, Button::Circle);
+    assert_eq!(ps2.update(&mut input), vec![Event::Help]);
+    assert!(ps2.help_open());
+    press(&mut input, Button::Triangle);
+    assert_eq!(
+        ps2.update(&mut input),
+        vec![Event::Help],
+        "triangle closes the overlay rather than backing out"
+    );
+    assert!(!ps2.help_open());
+
+    let mut psp = CellSelection::new(cells());
+    press(&mut input, Button::Circle);
+    assert_eq!(psp.update(&mut input), vec![Event::Back]);
+    press(&mut input, Button::Triangle);
+    assert_eq!(psp.update(&mut input), vec![Event::Help]);
+}
+
 /// [`GridSummary::from_grid_with_medals`]'s own reason to exist: a real
 /// progress source moves `Medals`/`Points` off the fresh-profile `"0/.."`
 /// this crate otherwise draws.

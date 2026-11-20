@@ -6,11 +6,11 @@
 //! the state the original keeps in statics: whether the tip or the mode page is up, and the slide.
 
 use oag_title::loading::TipClass;
-use oag_ui::font::Atlas;
+use oag_ui::font::{Atlas, wrap};
 use oag_ui::frontend::{Backdrop, Draw, EventIcon, GameTip, LaunchedCard};
 
+use super::Screen;
 use super::assets::GameTipSet;
-use super::{Screen, wrap};
 
 /// The slide's step a draw, and how far it goes (`CampaignEventCard_DrawCellPanel`:
 /// `x - (1 - (1 - s)^2) * 202`, `s += 0.08`).
