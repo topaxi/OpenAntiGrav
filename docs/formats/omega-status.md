@@ -2405,6 +2405,55 @@ normal-map `N.L`) are still unread. The diagnostic of giving the plain sprite th
 (`0.12178`, `0.777`) reached Sol +39.7 and Queens Mall +6.4, which the lane alone now matches, so that stand-in is
 not needed.
 
+**The plain crowd's light inputs, read (2026-11-20, `omega-crowd-light`): the program is ours' formula; the inputs are not
+readable statically.** Three different things sit under the old "crowd region" number, and only one is a plain sprite:
+
+- **Sol** (`environments2048/sol`): the plain `crowd_sprite_diffuse_normal_alpha` is 780 triangles in two instances
+  (`#345` 9 submeshes, `#346` 3, both with no parameter): the few tall foreground figures. The 128,452-triangle dense
+  crowd is the `_shadow` sprite. **Empire Climb** (`tower`) has no `_shadow` material: its crowd is the 3D
+  `crowd_diffuse_normal` (335,577 triangles) and 2,155 plain sprite triangles. **Capital Reach** (`bridge`) is the
+  `_shadow` pair and 944 plain sprite triangles; its crowd is 0.0 % of the frame (716 px), under the pose mismatch
+  of item 5, so it cannot judge a change.
+- **Program** (`gcn_dump` of the material, `Shdr` `0x41a4` sprite and `0x3c04` `crowd_diffuse_normal`, confidence 92): both
+  are `T * (constantAmbientColour + liveLighting0diffuse * sat(N.L))` under fog, `N = nx T + ny B + nz N0` from the
+  vertex program's own frame (`0x3bc4`: `B = cross(N, T) * tangent.w * worldScaleInv`), normalised, `N.L` in world
+  space. `0x3c04` **never reads the diffuse alpha** (`dmask:0x7`) and has no kill: `crowd_diffuse_normal`'s alpha is
+  its "specular in alpha" lane, not coverage. A probe that routed the plain materials through the `_shadow` path with
+  `Shadowed = 1`, `Ambient = 0` (the same formula without the generic path's prelit, vertex-light and mask terms)
+  left every pixel of all three pairs unchanged: **ours' generic path already computes the program**, so the
+  discrepancy is in what it is fed. The static candidates for a permutation are `0x41a4` (sun), `0x4f44` (plus one
+  vertex light) and the SH-probe twin `0x7904`; probes are per craft slot (`hull-tone.md`, "The probe file"), so a
+  static crowd draw does not take it.
+- **Per material, signed bias (ours minus theirs, grey, pixels owned by that material's skip render, masks pinned
+  from the committed build), `mean|err|`** at 1920x1080: Sol plain sprite 15,198 px **+64.5, 78.9** (ours 111.1, theirs
+  46.6); Sol `_shadow` sprite 11,955 px +9.4, 40.7; Sol `crowd_diffuse_normal` 344 px +32.8, 79.2; Empire plain sprite
+  6,420 px -6.0, 44.0; Empire `crowd_diffuse_normal` 8,441 px **-51.2, 69.9** (ours 45.3, theirs 96.5); Capital
+  `_shadow` 454 px -86.9, 88.1. The merged crowd-region numbers of the alpha-lane lane (Sol +38.2, Empire -37.2,
+  Capital -55.8) are weighted sums of these.
+- **Sol, what ours draws** (debug renders of `N.L`, the bound ambient and sun, the raw normal-map and diffuse taps,
+  the frame's `fract(uv)`): every plain-sprite figure is either fully sun-lit or fully dark (`N.L` is near 1 or near 0
+  per figure, 15,198 px with 2,351 of them at 231 grey against the original's 51), the sun term is
+  `(7.6, 5.4, 3.7) * N.L` against an ambient near 0.8, and the original draws none of them sun-lit. Scaling the
+  plain sum by the `_shadow` sprite's `Shadowed` 0.1 gives Sol plain +64.5 to -11.1, so the original's plain sprites
+  carry about a tenth of ours' light on this circuit; negating `N.L` gives +52.1 and moves Empire's plain sprite
+  -6.0 to -14.9 (not the law). Both are diagnostics, not wired. The atlas (`crowd_avatars_22x4`, BC7 sRGB; its `_n`
+  BC7 UNORM, `2x - 1`) decodes to real figures and normals, so it is not a texture fault. **Open and odd:** a set of
+  plain-sprite figures (1,287 white pixels that the plain skip render removes) did not respond to any debug return
+  placed at the end of the lit stage, while the `Shadowed` probe darkened them: they take another route through the
+  fragment function than the lit sum. That is the first thing to chase.
+- **Empire Climb is not a crowd program.** The non-crowd structure beside the crowd (the same 8 px-dilated band, the
+  crowd masks removed) is ours / theirs 0.69 against the crowd's 0.61, and the frame's sky is -64.7: the dimness is
+  the scene-wide exposure and sun, the thread `omega-hd-exposure` works. It is not claimed for the crowd.
+- **What would settle the inputs: a live read of the crowd draw's constant block.** The pixel block is `dw0
+  constantAmbientColour`, `dw4 liveLighting0diffuse`, `dw8 liveLighting0direction`, `dw12 fogColour`, `dw16
+  fadeResCoeffs` (80 bytes; many prop programs share it). On the native port (`scripts/wipeout-pc-road-sheen-live.py`'s
+  walk to a 2048 grid, `--game-mode 2048 --track-steps 6 --class-steps 2` for Sol) find the staged copies by Sol's
+  exact `liveLighting0direction` followed after four bytes by `fogColour` and read the three floats at `dw0` and `dw4`:
+  they say whether the crowd's sun and ambient are per draw or the global frame constants. Global means the cause is
+  ours' `N` or a route, per draw means a per-object light the engine computes. Not run: a pad seat was not assigned.
+- **2048: checked, differs** (as below: Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`). Omega
+  ships a PS4 `fc08_effects_crowd` on Sol (336 triangles, 120 px, bias +9.6) whose program is unread.
+
 **2048 (Vita) crowd: checked, differs.** Vita's circuits (`data/art/published/environments/<circuit>/track.rcsmodel`,
 Sol, Queens Mall, Altima, Arena read with `psp2_material_dump`) draw their crowds through `fc06_lambert_alpha` and
 `fc08_effects_crowd` (technique names `CrowdGenShader_crowd_avatars_22x4SG`), not a `crowd_sprite_*` or `crowd_*` material,
