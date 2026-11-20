@@ -97,8 +97,14 @@ ratings, not computed from handling.
    the README's "no replacing a disc table" row without contradicting its reason.
 5. **Pickup parameters.** Per slot, at race start: `count` (rockets per press, mines
    per drop, cannon rounds), duration (Turbo, Shield, Autopilot) and strength (Turbo
-   only, which is `Param::TurboStrength` of decision 4). Durations and the cannon's rounds are
-   per-ship fields, never edits to the race-wide weapon tables. A combined pickup is
+   only, which is `Param::TurboStrength` of decision 4). A `count` only goes down:
+   it is clamped to `1..=` the craft's own count (the authored `number_of_rockets` and
+   `number_of_mines` on 2048 and Omega, the defaults 3 and 5 elsewhere), so a
+   campaign can start a craft on one rocket and level it back up to two and three,
+   and its progression ends at today's limit. Below the craft's own number it is a
+   reduction of the disc's value, not a replacement past it (decision 4's rule).
+   Durations and the cannon's rounds are per-ship fields, never edits to the
+   race-wide weapon tables. A combined pickup is
    a `Weapon::Extension` whose `pickup-fire` reply sends `give-shield`, the new
    `give-autopilot` and `clear-pickup`. One kind per mod stays; the recipe is
    selected from state.
@@ -145,6 +151,9 @@ a fault; whether a failed race ends a run is the mod's choice; whether the playe
 skip an offer is the mod's choice; a campaign may scale the AI's craft as well as the
 player's (`progression.md` section 12, questions 1, 3, 5 and 11); a campaign may opt
 out of the global ship and variant unlocks and define its own (decision 10).
+**Settled 2026-11-20:** a pickup `count` may only go down from the craft's own count
+(decision 5); a campaign that levels a pickup up climbs back to today's limit and no
+further (`progression-challenge.md` objection 12, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 `TopSpeed` as a parameter, a data-first modifier table, a per-owner damage scale, the

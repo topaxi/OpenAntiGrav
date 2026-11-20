@@ -446,12 +446,18 @@ what the engine already has.
 
 | Parameter | Weapon | Where it lives today | Range (chosen) | Needs |
 | --- | --- | --- | --- | --- |
-| `count` | Rocket | `Ship::weapon_counts.rockets`, `1..=MAX_ROCKETS` = 3 (`oag_weapons::counts`) | 1 to 3 | Nothing. The machinery exists: 2048 and Omega author `number_of_rockets` per craft; Pulse, Pure and HD default to 3 |
-| `count` | Mine | `weapon_counts.mines`, `1..=MAX_MINES` = 5 | 1 to 5 | Nothing |
+| `count` | Rocket | `Ship::weapon_counts.rockets`, `1..=MAX_ROCKETS` = 3 (`oag_weapons::counts`) | 1 to the craft's own count (settled 2026-11-20: down only) | Nothing. The machinery exists: 2048 and Omega author `number_of_rockets` per craft; Pulse, Pure and HD default to 3 |
+| `count` | Mine | `weapon_counts.mines`, `1..=MAX_MINES` = 5 | 1 to the craft's own count (down only) | Nothing |
 | `count` | Cannon | `Held::cannon_rounds`, armed from the race-wide `<Stats rounds>` | 1 to 32 | A per-ship starting-rounds field |
 | `Duration` | Turbo, Shield, Autopilot | race-wide `WeaponStats::simple` (`<Stats time>`) | 0.25 to 4.0 | A per-ship scale, read where the pickup starts. Editing the shared table would change every craft, the AI's too |
 | strength | Turbo | `Handling::engine.turbo` (per ship) | 0.5 to 2.0 | Named `Param::TurboStrength` and sent with `set-modifier`; no other weapon has a strength to scale |
 | strength | Shield | none: the Shield absorbs all damage for its time | n/a | Breakable armour is the mod's own logic (`hit`, `clear-shield`) |
+
+**Counts only go down (maintainer, 2026-11-20).** A `count` is clamped to
+`1..=` the craft's own number, the authored per-craft count on 2048 and Omega and
+the default elsewhere. Taking a pickup away and giving it back is the intended
+use: a campaign can start a craft on one rocket per press and level the pickup up
+to two and then three, and the progression ends where today's limit is.
 
 **Hard bounds.** More than three rockets or five mines needs a larger volley array
 and mine pool, which are hashed projectile state: an engine change with its own

@@ -298,6 +298,12 @@ section 3 row names "a weapon pad's grant".
 wants it, make it a signed delta clamped to the engine bounds and list it among the
 narrowed statements.
 
+**Answered by the maintainer (2026-11-20): keep counts, down only.** Going only down
+is the point: a campaign may start a craft on one rocket and level the pickup up to
+two and three, ending at today's limit. The count is clamped to `1..=` the craft's
+own count (ADR-0093 decision 5), which keeps decision 4's rule: it reduces the
+disc's number and never replaces it past it.
+
 ### 13. `set-pickup-duration` duplicates built commands for two of its three weapons
 
 **Evidence.** A guest can already hold a Shield past its time with `hold-shield`
