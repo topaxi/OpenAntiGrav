@@ -349,6 +349,7 @@ impl Session {
             .device_presses()
             .iter()
             .fold(0, |all, press| all | press.buttons);
+        let back = self.roles().back;
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
@@ -374,7 +375,7 @@ impl Session {
                 events.push(Event::Start);
             }
         }
-        if presses & Button::Circle.bit() != 0 {
+        if presses & back.bit() != 0 {
             events.push(Event::Back);
         }
         events.extend(screen.pointer(pointer, skin));

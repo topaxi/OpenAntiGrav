@@ -20,15 +20,15 @@ const NET_OVER_TICKS: u32 = 60;
 use oag_ui::{font, menu};
 
 /// What the end screens of a multi-window race read from every seat, not only the keyboard's
-/// slot: the menu's move, confirm and back, the photo's spectator pad. **Chosen, not measured.**
-const END_SCREEN_BUTTONS: [Button; 7] = [
+/// slot, besides Back (`Roles::back`): the menu's move and confirm, the photo's spectator pad.
+/// **Chosen, not measured.**
+const END_SCREEN_BUTTONS: [Button; 6] = [
     Button::Up,
     Button::Down,
     Button::Left,
     Button::Right,
     Button::Cross,
     Button::Start,
-    Button::Circle,
 ];
 
 use crate::app::hints;
@@ -325,7 +325,7 @@ impl Session {
             if self.windowed_race() && !self.keys_by_window() {
                 self.controls.let_go_extra_seats();
             }
-            self.controls.set_face_swap(self.menu_face_swap());
+            let roles = self.roles();
             let inputs = self.controls.player_snapshots();
             // Taken every tick so a press made while paused or in a menu is spent there, and
             // acted on only by the unpaused race arm below.
@@ -499,7 +499,7 @@ impl Session {
             if matches!(self.stage, Stage::Race(_))
                 && self.photo.is_none()
                 && self.paused()
-                && crate::pause::leaves(self.pause, self.controls.take_presses(Button::Circle))
+                && crate::pause::leaves(self.pause, self.controls.take_presses(roles.back))
             {
                 self.escape();
                 // The remaining steps this frame owed belong to whatever is on
@@ -592,6 +592,7 @@ impl Session {
                     stage
                         .frontend
                         .set_pad_driving(!self.pointer.pointer_spoke_last());
+                    stage.frontend.set_roles(roles);
                     stage.frontend.set_view_stick(self.controls.view().right);
                     self.pointer
                         .set_mouse_pans(stage.frontend.wants_mouse_pan());
@@ -792,6 +793,10 @@ impl Session {
                     // right-click that cancelled a keyboard, must not also
                     // land on the row beneath it.
                     let prompt_was_open = stage.prompt.is_some();
+                    if let Some(prompt) = stage.prompt.as_mut() {
+                        prompt.set_roles(roles);
+                    }
+                    stage.menu.set_roles(roles);
                     let mut prompt_navs = Vec::new();
                     let finished = Session::tick_prompt(
                         stage,
@@ -931,7 +936,9 @@ impl Session {
                         // click in any window drive it (`docs/rendering/multi-window.md`).
                         let windowed = stage.race.windowed();
                         if windowed {
-                            self.controls.fold_presses(&END_SCREEN_BUTTONS);
+                            let mut folded = END_SCREEN_BUTTONS.to_vec();
+                            folded.push(roles.back);
+                            self.controls.fold_presses(&folded);
                         }
                         let grid = pointer::in_grid(pointer, space, rect, 1.0);
                         let grid = if windowed {
@@ -948,7 +955,7 @@ impl Session {
                     // screen, so it is here too. Not through the resume
                     // countdown, which nobody leaves.
                     if pointer.back && matches!(self.pause, crate::pause::State::Paused { .. }) {
-                        self.controls.tap(Button::Circle);
+                        self.controls.tap(roles.back);
                     }
                     // Same shape as the finished arm above and for the same
                     // reason: the audio is not simulation state, so ticking

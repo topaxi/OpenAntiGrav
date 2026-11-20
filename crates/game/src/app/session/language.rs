@@ -204,29 +204,26 @@ impl Session {
 }
 
 impl Session {
-    /// Whether the front end reads the circle and the triangle exchanged this tick
-    /// (`oag_title::prompts::MenuButtons::input_swap`): the player chose the triangle for Back,
-    /// and a menu, a paused race or an end-of-race screen owns the buttons. A running race and
-    /// photo mode keep the physical ones (the circle is the absorb there).
-    pub(super) fn menu_face_swap(&self) -> bool {
+    /// The buttons a front-end screen leaves and opens Help on, for a screen that authors no Help
+    /// button of its own (`oag_title::Title::menu_buttons`).
+    pub(super) fn roles(&self) -> oag_ui::roles::Roles {
+        self.roles_with_help(oag_gameplay::input::Button::Triangle)
+    }
+
+    /// [`Self::roles`] for a screen whose own `Redirect` opens Help on `authored_help`.
+    pub(super) fn roles_with_help(
+        &self,
+        authored_help: oag_gameplay::input::Button,
+    ) -> oag_ui::roles::Roles {
         let Some(shell) = &self.shell else {
-            return false;
+            return oag_ui::roles::Roles::default();
         };
-        let owns_buttons = match &self.stage {
-            Stage::Race(stage) => {
-                self.photo.is_none() && (self.paused() || stage.endrace.is_some())
-            }
-            _ => true,
-        };
-        owns_buttons
-            && shell
-                .title
-                .menu_buttons(
-                    shell.platform,
-                    self.settings.controls.menu_back_value(),
-                    oag_title::prompts::Prompt::Triangle,
-                )
-                .input_swap
+        crate::prompts::roles(
+            shell.title,
+            shell.platform,
+            self.settings.controls.menu_back_value(),
+            authored_help,
+        )
     }
 
     /// Sets this frame's prompt substitution on the stage's renderer.

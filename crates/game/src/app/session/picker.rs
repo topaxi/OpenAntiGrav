@@ -592,12 +592,14 @@ impl Session {
 
     /// One tick of an open picker: its input, and what came of it.
     pub(crate) fn tick_picker(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        let roles = self.roles();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(picker) = stage.picker.as_mut() else {
             return;
         };
+        picker.model.set_roles(roles);
         picker.refresh_info();
         picker.poll_preview(&self.gpu);
         // A split-screen seat's screen reads its own device and no other.
@@ -615,6 +617,7 @@ impl Session {
         if let Some(partner) = stage.partner.as_deref_mut() {
             partner.refresh_info();
             partner.poll_preview(&self.gpu);
+            partner.model.set_roles(roles);
             let seat = partner.seat.map_or(1, |(seat, _)| seat);
             partner_events = partner.model.update(&mut seat::input(
                 self.split_lobby.as_ref(),

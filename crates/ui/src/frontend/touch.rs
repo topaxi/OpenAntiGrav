@@ -172,6 +172,8 @@ pub struct TouchState {
     /// composition root supplies them, which draws the grid as the file
     /// authors it and nothing more.
     pub extra: Vec<ExtraTile>,
+    /// The pad buttons that leave a screen and open Home, see [`Frontend::set_roles`].
+    pub roles: crate::roles::Roles,
     /// Screens left through [`Frontend::redirect_touch`], most recent last -
     /// what a `redirect="PreviousScreen"` tap pops. `Manual3D`'s own tick and
     /// `Team_Definition.xml`'s `select_button` both author that literal
@@ -361,8 +363,8 @@ impl Frontend {
                 return;
             }
             for (button, target) in [
-                (Button::Triangle, w2048::HOME),
-                (Button::Circle, w2048::GAME_MODE_CHOICE),
+                (self.touch.roles.help, w2048::HOME),
+                (self.touch.roles.back, w2048::GAME_MODE_CHOICE),
             ] {
                 if input.is_pressed(button) {
                     input.consume_press(button);
@@ -404,14 +406,14 @@ impl Frontend {
             input.consume_press(Button::Start);
             self.touch.pad_cursor = true;
             self.activate_touch(&current, self.touch.selected);
-        } else if input.is_pressed(Button::Circle) {
-            input.consume_press(Button::Circle);
+        } else if self.touch.roles.back_pressed(input) {
+            self.touch.roles.take_back(input);
             self.touch.pad_cursor = true;
             self.go_back(&current, &tiles);
         }
     }
 
-    /// Circle on a grid: the screen's own tick - the unlabelled button the file
+    /// Back on a grid: the screen's own tick - the unlabelled button the file
     /// authors at the bottom right, which `Home` and the sub-screens leave by -
     /// else the way the screen was entered by (`PreviousScreen`'s stack).
     /// **Chosen, not measured**: the original's grids answer touch only.
@@ -431,8 +433,14 @@ impl Frontend {
             let label = tick.name.clone();
             self.redirect_touch(current, &label, &target);
         } else if !self.touch.history.is_empty() {
-            self.redirect_touch(current, "Circle", "PreviousScreen");
+            self.redirect_touch(current, "Back", "PreviousScreen");
         }
+    }
+
+    /// The buttons the pad leaves a screen on and opens Home on, from
+    /// `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: crate::roles::Roles) {
+        self.touch.roles = roles;
     }
 
     /// The pad is the device in use, or is not (the composition root's read

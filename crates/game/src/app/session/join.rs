@@ -60,12 +60,14 @@ impl Session {
         let presses = self.controls.device_presses().to_vec();
         let connected = self.controls.connected_pads();
         let told_apart = self.controls.keyboards_told_apart();
+        let roles = self.roles();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(open) = stage.join.as_mut() else {
             return;
         };
+        open.lobby_mut().set_back(roles.back);
         let named = open
             .lobby()
             .seats()
@@ -219,12 +221,14 @@ impl Session {
     /// Escape on the open screen: the keyboard pressing back, so it gives up
     /// its seat if it has one and leaves the screen if it has none.
     pub(crate) fn escape_join(&mut self) {
+        let roles = self.roles();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(open) = stage.join.as_mut() else {
             return;
         };
+        open.lobby_mut().set_back(roles.back);
         // Escape is the keyboard pressing back: the keyboard that sat last, else the anonymous one.
         let device = open
             .lobby()
@@ -236,7 +240,7 @@ impl Session {
             .unwrap_or(Device::Keyboard);
         let outcome = open.lobby_mut().press(oag_input::lobby::Press {
             device,
-            buttons: oag_gameplay::input::Button::Circle.bit(),
+            buttons: roles.back.bit(),
         });
         self.sync_join_names();
         self.handle_join(outcome);

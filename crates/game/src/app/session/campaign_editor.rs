@@ -37,8 +37,8 @@ struct Pad {
     left: bool,
     right: bool,
     cross: bool,
-    circle: bool,
-    triangle: bool,
+    back: bool,
+    other: bool,
     square: bool,
     start: bool,
     select: bool,
@@ -109,6 +109,7 @@ impl Session {
     pub(crate) fn tick_campaign_editor(&mut self, pointer: &oag_ui::pointer::Pointer) {
         self.poll_editor_save();
         let filled = self.word("OAG_EDITOR_FILLED", "GRID FILLED FROM THE SEED");
+        let roles = self.roles();
         let buttons = self.controls.buttons_mut();
         let pad = Pad {
             up: buttons.take(Button::Up),
@@ -116,8 +117,8 @@ impl Session {
             left: buttons.take(Button::Left),
             right: buttons.take(Button::Right),
             cross: buttons.take(Button::Cross),
-            circle: buttons.take(Button::Circle),
-            triangle: buttons.take(Button::Triangle),
+            back: buttons.take(roles.back),
+            other: buttons.take(roles.help),
             square: buttons.take(Button::Square),
             start: buttons.take(Button::Start),
             select: buttons.take(Button::Select),
@@ -180,12 +181,12 @@ impl Session {
                     _ => nav = Some(Nav::Stepped(None)),
                 }
             }
-            if pad.triangle {
+            if pad.other {
                 model.fill();
                 screen.status = filled.clone();
                 nav = Some(Nav::Accept);
             }
-            if pad.circle {
+            if pad.back {
                 model.set_page(Page::Event);
                 nav = Some(Nav::Decline);
             }
@@ -206,7 +207,7 @@ impl Session {
                 model.cycle(1);
                 nav = Some(Nav::Stepped(None));
             }
-            if pad.circle {
+            if pad.back {
                 model.back();
                 nav = Some(Nav::Decline);
             }
@@ -229,9 +230,9 @@ impl Session {
                 model.confirm();
                 nav = Some(Nav::Accept);
             }
-            leave = pad.circle;
+            leave = pad.back;
         }
-        if pad.triangle && model.page() == Page::Event && model.has(model.cursor()) {
+        if pad.other && model.page() == Page::Event && model.has(model.cursor()) {
             model.clear();
             nav = Some(Nav::Decline);
         }

@@ -182,11 +182,7 @@ fn the_choice_resolves_on_every_title_and_pressing() {
                 MenuButtons::resolve(original, MenuBack::Original, authored)
             );
             assert_eq!((kept.back, kept.help), (original, authored));
-            assert!(
-                !kept.input_swap && !kept.glyph_swap,
-                "{} {platform:?}",
-                title.name
-            );
+            assert!(!kept.glyph_swap, "{} {platform:?}", title.name);
             let circle = title.menu_buttons(platform, MenuBack::Circle, authored);
             assert_eq!(circle.back, Prompt::Circle, "{} {platform:?}", title.name);
             assert_eq!(circle.help, Prompt::Triangle, "{} {platform:?}", title.name);
@@ -198,7 +194,6 @@ fn the_choice_resolves_on_every_title_and_pressing() {
                 title.name
             );
             assert_eq!(triangle.help, Prompt::Circle, "{} {platform:?}", title.name);
-            assert!(triangle.input_swap);
         }
     }
 }

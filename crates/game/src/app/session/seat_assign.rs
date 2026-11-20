@@ -88,12 +88,14 @@ impl Session {
     /// marker, then the pointer.
     pub(crate) fn tick_seat_assign(&mut self, pointer: &oag_ui::pointer::Pointer) {
         let presses = self.controls.device_presses().to_vec();
+        let roles = self.roles();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(open) = stage.assign.as_mut() else {
             return;
         };
+        open.screen_mut().set_roles(roles);
         let lobby = open.layout().join().lobby().clone();
         let mut events = Vec::new();
         for press in presses {

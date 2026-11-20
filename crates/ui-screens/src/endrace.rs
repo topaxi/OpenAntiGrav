@@ -502,6 +502,8 @@ impl MenuOption {
 /// `EndRace Menu`: the option list and the just-driven run's own best lap.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EndRaceMenu {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     options: Vec<MenuOption>,
     index: usize,
     /// Each option's own `Block_Update` state, index for index with
@@ -515,10 +517,16 @@ pub struct EndRaceMenu {
 }
 
 impl EndRaceMenu {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     #[must_use]
     pub fn new(options: Vec<MenuOption>, new_best_lap_ticks: Option<u32>) -> Self {
         let focus = vec![oag_ui::menu::block::Focus::default(); options.len()];
         Self {
+            roles: oag_ui::roles::Roles::default(),
             options,
             index: 0,
             focus,
@@ -576,7 +584,7 @@ impl EndRaceMenu {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         out

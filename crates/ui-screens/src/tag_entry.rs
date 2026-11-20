@@ -203,6 +203,8 @@ pub struct Labels {
 /// [`crate::prompt::Keyboard`] has one.
 #[derive(Debug, Clone)]
 pub struct TagEntry {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     labels: Labels,
     geometry: Geometry,
     alphabet: Vec<char>,
@@ -213,6 +215,11 @@ pub struct TagEntry {
 }
 
 impl TagEntry {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A `TagEntry` opened on `initial`, cycling through `alphabet`.
     ///
     /// **`initial` is filtered against `alphabet`, silently**: a character
@@ -232,6 +239,7 @@ impl TagEntry {
             }
         }
         Self {
+            roles: oag_ui::roles::Roles::default(),
             labels,
             geometry,
             alphabet,
@@ -384,7 +392,7 @@ impl TagEntry {
         if input.take(Button::Square) {
             self.edit(crate::prompt::Edit::Delete);
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             self.navs.push(Nav::Decline);
             return Outcome::Cancelled;
         }

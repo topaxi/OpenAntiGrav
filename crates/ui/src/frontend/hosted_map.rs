@@ -72,7 +72,7 @@ impl Frontend {
         let Some(host) = self.map_host.as_mut() else {
             return false;
         };
-        for button in [Button::Circle, Button::Triangle] {
+        for button in [self.touch.roles.back, self.touch.roles.help] {
             if input.is_pressed(button) {
                 input.consume_press(button);
                 host.left = true;

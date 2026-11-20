@@ -12,7 +12,6 @@ use std::sync::atomic::Ordering;
 
 use log::{debug, info, warn};
 use oag_ffmpeg::{Pin, Progress};
-use oag_gameplay::input::Button;
 use oag_ui_screens::prompt::Confirm;
 
 use crate::ffmpeg_prompt::{prompt_labels, status_text};
@@ -50,8 +49,9 @@ impl Session {
     /// Every menu tick: finishes a download that ended, cancels one the player backed out of,
     /// and makes the offer once.
     pub(crate) fn sync_ffmpeg(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        let back = self.roles().back;
         if let Some(fetch) = &mut self.ffmpeg.fetch {
-            let cancel = self.controls.buttons_mut().take(Button::Circle) || pointer.back;
+            let cancel = self.controls.buttons_mut().take(back) || pointer.back;
             if cancel {
                 fetch.progress.cancel.store(true, Ordering::Relaxed);
             }

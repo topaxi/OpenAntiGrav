@@ -173,7 +173,7 @@ impl Menu {
         if input.take(Button::Square) {
             out.extend(self.reset());
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             out.extend(self.back());
         }
         out

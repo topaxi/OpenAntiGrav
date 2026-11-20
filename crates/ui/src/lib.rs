@@ -21,6 +21,7 @@ pub mod menu;
 pub mod placeholder;
 pub mod pointer;
 pub mod prompt;
+pub mod roles;
 pub mod scene_backdrop;
 pub mod screen;
 pub mod state_machine;
