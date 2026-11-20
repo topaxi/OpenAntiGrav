@@ -715,7 +715,7 @@ fn build_planned(
                 ),
             );
             let (colour, sun_mask, lightmap_texcoord, texcoord2) = match snow_vertex {
-                Some((colour, sun_mask, pair, second)) => (colour, sun_mask, pair, second),
+                Some(v) => (v.colour, v.sun_mask, v.lightmap_texcoord, v.texcoord2),
                 None => (colour, sun_mask, lightmap_texcoord, texcoord2),
             };
             // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).

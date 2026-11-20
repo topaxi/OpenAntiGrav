@@ -95,24 +95,36 @@ impl Plan {
         self.of(material).map(|b| b.large.clone())
     }
 
-    /// The vertex a snow submesh writes: `colour`, `sun_mask`, the lightmap pair and the second
-    /// pair, from `NOVAColor`, `VertexColour2` and `VertexColour1`.
-    pub fn vertex(
-        &self,
-        material: Option<usize>,
-        (nova, tint, mask): (Option<&[u8; 4]>, Option<&[u8; 4]>, Option<&[u8; 4]>),
-    ) -> Option<([f32; 4], f32, [f32; 2], [f32; 2])> {
+    /// The vertex a snow submesh writes, from its `NOVAColor`, `VertexColour2` and
+    /// `VertexColour1` bytes: `None` for any other material.
+    pub fn vertex(&self, material: Option<usize>, bytes: Attributes<'_>) -> Option<Vertex> {
         self.of(material)?;
         let unit = |b: u8| f32::from(b) / 255.0;
+        let (nova, tint, mask) = bytes;
         let (nova, tint) = (nova?, tint?);
         let mask = mask.map_or(1.0, |m| unit(m[0]));
-        Some((
-            [unit(nova[0]), unit(nova[1]), unit(nova[2]), 1.0],
-            unit(nova[3]),
-            [unit(tint[0]), unit(tint[1])],
-            [unit(tint[2]), mask],
-        ))
+        Some(Vertex {
+            colour: [unit(nova[0]), unit(nova[1]), unit(nova[2]), 1.0],
+            sun_mask: unit(nova[3]),
+            lightmap_texcoord: [unit(tint[0]), unit(tint[1])],
+            texcoord2: [unit(tint[2]), mask],
+        })
     }
+}
+
+/// The bytes a snow vertex reads: `NOVAColor`, `VertexColour2`, `VertexColour1`.
+pub(super) type Attributes<'a> = (
+    Option<&'a [u8; 4]>,
+    Option<&'a [u8; 4]>,
+    Option<&'a [u8; 4]>,
+);
+
+/// The fields [`Plan::vertex`] fills in `GpuVertex`.
+pub(super) struct Vertex {
+    pub colour: [f32; 4],
+    pub sun_mask: f32,
+    pub lightmap_texcoord: [f32; 2],
+    pub texcoord2: [f32; 2],
 }
 
 /// Whether a material file declares the snow program's shape: a pixel program with exactly the five
