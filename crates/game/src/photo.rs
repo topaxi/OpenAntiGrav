@@ -352,6 +352,9 @@ pub struct Words<'a> {
     pub say: &'a dyn Fn(&str) -> String,
     /// The name of a button and the first key bound to it, as `CROSS (ENTER)`.
     pub button: &'a dyn Fn(Button) -> String,
+    /// The buttons that leave the mode and, on the face button Back displaced, reset the camera
+    /// (`docs/ui/back-and-help.md`).
+    pub roles: oag_ui::roles::Roles,
 }
 
 /// The screen over the picture: the chips along the top, a message from the last shot, and the
@@ -498,7 +501,7 @@ pub fn draw_list(
             "{} {}    {} {}",
             button(Button::Cross),
             say(strings::TAKE),
-            button(Button::Circle),
+            button(words.roles.back),
             say(strings::BACK),
         ),
         format!(
@@ -507,7 +510,7 @@ pub fn draw_list(
             say(strings::CAMERA),
             button(Button::Square),
             say(strings::HUD),
-            button(Button::Triangle),
+            button(words.roles.help),
             say(strings::RESET),
         ),
         format!(

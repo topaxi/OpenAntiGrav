@@ -631,9 +631,9 @@ impl Launcher {
     /// Edges are consumed the way [`oag_ui::menu::Menu::update`] consumes them,
     /// and for the same reason: one press is one press whichever device saw it,
     /// and a held key must not walk the list.
-    pub fn update(&mut self, input: &mut Input) -> Option<String> {
+    pub fn update(&mut self, input: &mut Input, back: Button) -> Option<String> {
         if let Some(entry) = &mut self.entry {
-            let outcome = entry.update(input);
+            let outcome = entry.update(input, back);
             self.settle(outcome);
             return None;
         }

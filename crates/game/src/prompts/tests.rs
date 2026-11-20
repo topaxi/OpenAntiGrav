@@ -255,3 +255,13 @@ fn the_roles_a_screen_is_handed_on_every_title_pressing_and_choice() {
         (circle, Button::Square)
     );
 }
+
+/// The chooser runs before a title is known: `triangle` is honoured, and `original` and `circle`
+/// take the platform-neutral circle.
+#[test]
+fn the_disc_chooser_leaves_on_the_players_choice_and_the_circle_otherwise() {
+    use oag_title::prompts::MenuBack;
+    assert_eq!(chooser_back(MenuBack::Original), Button::Circle);
+    assert_eq!(chooser_back(MenuBack::Circle), Button::Circle);
+    assert_eq!(chooser_back(MenuBack::Triangle), Button::Triangle);
+}

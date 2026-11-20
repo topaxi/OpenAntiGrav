@@ -232,6 +232,7 @@ impl super::Session {
         let space = oag_present::perf::grid(surface);
         let rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
+        let roles = self.roles();
         let controls = &mut self.controls;
         let view = controls.view();
         let mut pad = Pad {
@@ -239,12 +240,12 @@ impl super::Session {
             right: view.right,
             select: controls.view_held(Button::Select),
             square: controls.view_held(Button::Square),
-            reset: controls.view_take(Button::Triangle),
+            reset: controls.view_take(roles.help),
             previous: controls.view_take(Button::L),
             next: controls.view_take(Button::R),
             help: controls.view_take(Button::Start),
             shot: controls.view_take(Button::Cross),
-            leave: controls.view_take(Button::Circle),
+            leave: controls.view_take(roles.back),
             drag: pointer.drag,
             scroll: pointer.scroll as f32,
         };
@@ -478,6 +479,7 @@ impl super::Session {
             &Words {
                 say: &say_id,
                 button: &button,
+                roles: self.roles(),
             },
             open.message.as_ref().map(|(text, _)| text.as_str()),
             self.photo_progress(),

@@ -62,6 +62,21 @@ pub fn roles(
     }
 }
 
+/// The button that leaves the disc chooser's key prompt under `choice`.
+///
+/// The chooser runs before any title is known, so there is no pressing's own Back to follow: the
+/// player's `circle` or `triangle` holds, and `original` takes the platform-neutral circle
+/// (`docs/ui/back-and-help.md`, "What stays on the physical button").
+#[must_use]
+pub fn chooser_back(choice: oag_title::prompts::MenuBack) -> Button {
+    match choice {
+        oag_title::prompts::MenuBack::Triangle => Button::Triangle,
+        oag_title::prompts::MenuBack::Original | oag_title::prompts::MenuBack::Circle => {
+            Button::Circle
+        }
+    }
+}
+
 /// The PromptFont code-name for a key's name as `oag_input::keys` spells it.
 fn key_glyph(name: &str) -> String {
     match name {

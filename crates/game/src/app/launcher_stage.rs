@@ -29,11 +29,11 @@ pub(crate) struct LauncherStage {
 
 impl LauncherStage {
     /// One tick: move the cursor, and take a confirmation if one arrives.
-    pub(crate) fn update(&mut self, input: &mut Input) {
+    pub(crate) fn update(&mut self, input: &mut Input, back: oag_gameplay::input::Button) {
         if self.picked.is_some() {
             return;
         }
-        self.picked = self.launcher.update(input);
+        self.picked = self.launcher.update(input, back);
         if self.launcher.take_paste_request()
             && let Some(text) = crate::app::clipboard::read()
         {

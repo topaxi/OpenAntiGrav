@@ -568,7 +568,10 @@ impl Session {
                 // In the tick loop with everything else, so a held key is read
                 // as one press at the same 60 Hz the menus read theirs at.
                 Stage::Launcher(stage) => {
-                    stage.update(self.controls.buttons_mut());
+                    stage.update(
+                        self.controls.buttons_mut(),
+                        crate::prompts::chooser_back(self.settings.controls.menu_back_value()),
+                    );
                     // The chooser draws in the PSP's grid, having no source
                     // to take one from - see `Stage::launcher`.
                     stage.pointer(&pointer::in_grid(pointer, Space::PSP, rect, 1.0));
