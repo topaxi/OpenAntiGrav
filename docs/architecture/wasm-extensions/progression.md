@@ -677,7 +677,10 @@ split out of ADR-0093 so the run needs no frontend world (maintainer, 2026-11-20
 
 ### 8.1 The choice screen
 
-A mod screen (ADR-0080), named by `[run] choice_screen`. The flow:
+A mod screen (ADR-0080), named by `[run] choice_screen`; kept over a host-drawn page
+with an `oag_run_pick` export (maintainer, 2026-11-20;
+[progression-challenge.md](progression-challenge.md), objection 14), so a campaign owns
+its reward screen's look. The flow:
 
 1. `race-end` rolls the offers from `seed` and `ordinal` (a pure function; the
    frontend world has no RNG and no determinism, and the roll belongs in sim code)

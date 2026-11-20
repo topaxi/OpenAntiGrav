@@ -400,6 +400,11 @@ ordinal, pick index) that returns the new run bytes. All run logic stays in one
 deterministic module with one layout. No dependency on ADR-0080 and no narrowing of
 its decision 6.
 
+**Answered by the maintainer (2026-11-20): the mod screen, as drafted.** The choice
+stays an ADR-0080 screen that returns the new run bytes, so a campaign owns its
+reward screen; it waits for the frontend world (ADR-0094 decision 1, progression.md
+section 8.1).
+
 ### 15. Stats by byte offset make the campaign file a second copy of the guest's layout
 
 **Evidence.** `[[run.stat]]` (section 7) has the host read `u8` or `u16` values at

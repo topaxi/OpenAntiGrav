@@ -8,11 +8,11 @@ by the maintainer, so the run state can be accepted and built without waiting fo
 frontend world. Nothing is built. **This ADR stays editable until it is merged into
 `main`, and becomes immutable only then.**
 
-**Challenged, unresolved:** objections 4, 14 and 15 of
+**Challenged, being answered:** objections 14 and 15 of
 [`wasm-extensions/progression-challenge.md`](../wasm-extensions/progression-challenge.md)
-propose a host-drawn offer page with a third sim export and guest-reported stat rows,
-which would remove this ADR's dependency on ADR-0080. The two decisions below are the
-first draft's, moved here unchanged until those objections are answered.
+proposed a host-drawn offer page with a third sim export and guest-reported stat rows.
+Objection 14 is answered: the choice stays a mod screen (decision 1). Objection 15 is
+open.
 
 **Would narrow**, if accepted as drafted:
 
@@ -42,7 +42,9 @@ world that would host both is a Proposed design, and nothing of it is built.
    beside `save` (narrowing ADR-0080 decision 6). The offers are rolled in `race-end`
    from the run's seed and ordinal, because the frontend world has no seeded RNG.
    Whether the player may skip an offer is the mod's choice, per offer (maintainer,
-   2026-11-19).
+   2026-11-19). **Settled (maintainer, 2026-11-20):** the choice is a mod screen as
+   drafted, not a host-drawn page, so a campaign owns its reward screen's art and
+   layout; it waits for the frontend world.
 2. **Stats.** `[[run.stat]]` rows name a byte offset, a kind and a style in the run
    bytes. The host draws them and interprets nothing else. A campaign that declares
    them may add **display-only** rows and bonus segments to the stat panel of the
@@ -50,8 +52,7 @@ world that would host both is a Proposed design, and nothing of it is built.
    "a disc screen gains no mod behaviour"). A title bar is never recomputed from scaled
    handling.
 
-**Not decided here:** the host-drawn offer page and `oag_run_pick` (challenge objection
-14), guest-reported stat rows (objection 15), the page that shows stats when the craft
+**Not decided here:** guest-reported stat rows (objection 15), the page that shows stats when the craft
 is preset (`progression.md` section 12, question 10), and ADR-0080's own fate
 (question 15).
 
@@ -62,6 +63,10 @@ is preset (`progression.md` section 12, question 10), and ADR-0080's own fate
   the next race starts, and the pick would be a second replay input. Rejected in the
   first draft; reopened by challenge objection 14.
 - **A screen that rolls the offers.** No seeded RNG on the UI side. Rejected.
+- **A host-drawn offer page and a third sim export, `oag_run_pick`** (challenge
+  objection 14). No frontend world needed and all run logic in one deterministic
+  module, but no custom art or layout. Rejected by the maintainer (2026-11-20): the
+  reward screen is the campaign's own.
 - **Stats on a mod screen's canvas only.** The player would see the craft and the
   title's bars on one screen and the mod's stats on another, and the canvas would need
   disc data a mod may not yet read (README open question 15). Rejected as the only
