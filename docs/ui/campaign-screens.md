@@ -4114,7 +4114,7 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 
 Geometry, one settled RPCS3 frame (Feisar selected, fresh profile of the
 maintainer's save): first column centre = the authored origin `x=272`, column
-pitch 72.2, row pitch 82.8, odd columns half a row lower, hexagon 88x76. **70**:
+pitch 72.2, row pitch 82.8, the columns of odd teams half a row lower (a team rule, not a window-slot rule: 24 rest grabs, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The banner and the hex column on a step"), hexagon 88x76. **70**:
 one frame, in authored units through the page scale of "The layout scale"
 below, which rests on one clean anchor (the stat blocks' 545-unit spacing).
 

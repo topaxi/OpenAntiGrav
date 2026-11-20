@@ -360,11 +360,58 @@ Omega shares `hull_swap` and so takes the 3-frame cut by lineage (HD's front end
 
 **Verdict for the claim**: the settle start per team, the turn and the zoom match (the law is exact in RAM, the turn and zoom terms are zero on a
 step); the craft box during the settle is at the rest pair's floor; the single term that differs is the cut: 3 frames (once 4) against ours' 4,
-a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step: in the two grabs read
-by eye (frames 6 and 10) the team banner is blank, then part drawn, and the hex column is shifted, where ours draws both finished (not measured);
+a one-frame difference (17 ms, a second at most) on the first visible frame. Open: the rest of the page's step, measured in "The banner and the hex column on a step" below (not wired);
 the cold first visit of a team (craft absent past frame 10); `FitMotion`'s alternation phase after the cut (ours fixed, the original's the
 press's frame). **2048: checked, not checkable** (no Team Selection fit in v1.04; the constant run is absent). **Omega: checked, differs**: the
 eased fields are never read there (above), so a step has no settle to compare.
+
+## The banner and the hex column on a step (2026-11-20, `hd-step-banner`)
+
+The question: do the `CHOOSE TEAM` logo block and the `NAVIGATE TEAM` hex column step the way ours do. **Written before the
+measuring, what would falsify "ours matches"**: the original's banner showing the new team's logo whole from the frame after the cut; the
+hex box on the step pairs at the rest floor. **Both fire: ours did not match, and the hex column's largest term is now wired** (the banner is not).
+Boxes on the 1920x1080 pairs: banner `190,185,680,335`, hex column `190,355,680,960`, mean absolute grey difference (the seven
+pairs of `hd-step-gap`, ours at picture lag 3); the floor is the same box on the rest grabs of the same team (`hd-settle-step`'s `b2_rest`, twelve teams, **keyed by the
+team the grab shows, `after.name`: the grab is taken after the press, so `before.name` is the neighbour**; an earlier pass of this lane keyed it wrong and read the phase law backwards).
+
+| Pair | Team (index) | Banner box | Banner floor (rest) | Hex box before | Hex box after | Hex floor before / after |
+| --- | --- | --- | --- | --- | --- | --- |
+| k04 | Assegai (7) | 29.66 | 13.60 | 16.80 | 16.80 | 21.85 / 4.20 |
+| k06 | Harimau (9) | 19.27 | 14.32 | 21.53 | 21.53 | 22.73 / 4.38 |
+| k08 | Icaras (11) | 18.76 | 14.26 | 27.62 | 22.63 | 21.91 / 3.95 |
+| k10 | Qirex (1) | 20.54 | 13.83 | 27.69 | 14.05 | 21.84 / 4.06 |
+| k15 | Triakis (4) | 17.15 | 13.79 | 3.98 | 3.98 | 4.07 / 4.07 |
+| k19 | Goteki (5) | 25.97 | 14.13 | 22.09 | 3.99 | 22.09 / 4.20 |
+| k29 | EGX (6) | 15.41 | 14.56 | 4.03 | 4.03 | 4.13 / 4.13 |
+
+Whole-frame mean grey of those pairs, before to after: k04 4.55 and k06 5.83 (unchanged), k08 7.06 to 6.35, k10 7.53 to 5.58, k15 3.78 and k29 3.77 (unchanged), k19 6.34 to 3.75. The twelve rest pairs (`ours_step.py`-style
+renders at `--fury-adapted-luma 0.016046`): hex box mean 13.08 to 4.12, whole frame 4.66 to 3.38; the six odd teams 21.8 to 22.7 to 3.95 to 4.38, the six even teams unchanged (3.98 to 4.30).
+
+- **The hex column's half-row phase follows the team index: wired.** The columns of odd teams sit half a row lower than an even team's, in the window's centre
+  column and in its neighbours alike (the rest grabs of all twelve teams on two boots: every even team matches ours' old fixed even phase at 3.98 to 4.30, every odd one misses
+  at 21.8 to 22.7; the step pairs agree: Triakis and EGX at 3.98 and 4.03, Harimau, Icaras, Qirex, Goteki at 21 to 28). The docs' "odd columns sit half a row lower" was a window-slot rule fitted on Feisar (team 0, even).
+  `HexGrid::phase_by_entry` (set on the authored `Team Selection` grid only; `TrackHexSelection`'s grid is unmeasured and keeps the window slots), `HexGrid::cells_at`. Confidence 90 (24 rest grabs on two boots plus 84 step grabs).
+- **The step's lattice transition**: through original frames 0 to 3 the column is the old team's picture (0.0 to 1.1 against the old team's rest grab, 24 grabs); at 4 it
+  starts to move, half way by 8 (21.8 against the new team's rest grab, 26.8 against the old), the new team's rest picture at **11** (0.0 to 1.1, then flat through frame 129).
+  The distances to both ends exceed the 21 between them at frames 4 to 7 (up to 26), so it is a slide with other things moving (icons, the ring), not a blend of two phases.
+  Ours holds the previous phase for `PHASE_HOLD_SECONDS` (4 frames) and then takes the new one: a step where the original slides over frames 4 to 10; k04 and k06 sit in the hold (16.80 and 21.53 as before), k08 and k10 after it (27.6 to 22.6 and 27.7 to 14.1). The slide itself is open.
+- **The selection ring is a separate outline, not the cell's edge**: displaced to the right of the cell at frames 4 to 10 (about a third of a column by eye) and pulsing white, pink, dark red and absent from frame to frame
+  (white at frames 19, 41 and 69, dark red at 21, absent at 11, 13, 15, 17 and 23 on 20 grabs). Ours draws it fixed and constant. Open.
+- **The banner's fill is a standing difference, not the step.** The panel (`LogoOutline`'s 432x144 `HD_LightGrey` quad) reads 31 in every original frame
+  and 50 in ours: the open item in `docs/ui/campaign-screens.md` ("the original's alpha reads about `0x50`; cause unread", `0x50` of `0x64` is 31). Over the banner box that is the floor (13.6 to 14.6 with the logo whole on both sides).
+- **The logo is a timed reveal, deterministic by frame.** 84 grabs over frames 0 to 129 (two boots of `hd-settle-step`, one of this lane: `rpcs3-hd-ship-step.py capture
+  --aims 12,...,130`, 20 steps), crop rows counted from y=200:
+  frames 0 to 2 the old logo; **3 to 7 the bare panel (mean grey 30.10 in all 28 grabs)**; 8 to 15 a slab about 12 px tall sweeping **down** at 6.5 px a frame (top row
+  26, 33, 39, 45, 52 to 59, 65 to 72 at frames 8, 9, 10, 11, 13, 15; the four grabs at frame 10 and at frame 11 agree to the row); 17 to 23 bare; 25 to 29 the slab
+  sweeping **up** (top row 82, 69, 49 at 25, 27, 29); 33 and 37 bare; 41 a band 30 rows tall; **45 the whole logo** (rows 35 to 85, the extent of every later grab), whole at 51 and in every later grab.
+  Ours draws the finished logo at frame 0. The authored `transitiontype="vwipe"`, `delay="0.5"`, `enebletransition="0.5"` are the likely source: **the shape is not a plain wipe** (a plain wipe is monotone; this is two
+  sweeps and a gap), which is why it is not wired (a stand-in would be invented). Confidence 85 for the timeline, 40 for the vwipe reading.
+- **Where the banner lives.** `/hdfury/EBOOT-ps3-hdfury-eu.elf`: the attribute-name table of the `Image` widget class at `0x008ad680` is registered by `FUN_0052ea7c` (`0x0052ea7c`; it
+  loads `transitiontype` at `0x0078b828`, `vwipe` at `0x0078b860`, `hscale` after it, `ImageModel_Item` next). The enum's consumer (the `Image` draw) is **unread**. The only
+  spellings of the key in the binary are `EnableTransition` (`0x00786f90`) and `Delay` (`0x00786fd8`): the XML's `enebletransition` is a typo with no string of its own, so the authored
+  0.5 s may be dead and a default applied (unread, 30). Campaign Select's emblems author the same `vwipe` (`docs/ui/campaign-screens.md`, "Still open (item 4)"), so the reading is the shared widget transition; nothing in `oag_ui` plays it. `HexSelection` (class name `0x0078b348`) has no code read at all.
+- **Omega: the hex phase is inherited by lineage, unmeasured; the banner is checked, applies, not wired.** `data09`'s `team_selection_definition.xml` authors the same `Logo` (`delay="0.5" enebletransition="0.5"`, `transitiontype="vwipe"`, 512x128 at y 15)
+  and the same `HexSelection` with `rows="9"` and `Scale="0.8"`; it reaches the same authored branch, so `phase_by_entry` is on for Omega too (no Omega frame of the lattice exists; its `eboot` was not read).
 
 ## Omega and 2048
 
