@@ -2109,6 +2109,26 @@ circuit with a U-turn.
 - **Re-make.** `scripts/psp-pulse-pair.py --port P --home $PP_HOME --out D --track 16_Track --state <ppst> --layout forward --mid-lap
   --air-brakes --autopilot off --ram-write "craft_pose=..." --meta <json>`, then `scripts/compare-flap-region.py D --box 185,148,275,210`.
 
+### The same recipe on a pack (2026-11-20, `pair-upkeep`): `talons-alongside` with both air brakes out
+
+`scripts/psp-pulse-pair.py --field --mid-lap --air-brakes` now passes ours `--pose-flaps` too (the field path built its flags without it,
+so a `--field --air-brakes` pair drew ours stowed). A pack state with the flaps out is made from `race-talons-venom-alongside.ppst`:
+load it into a running instance, write the player record's Autopilot timer (`record+0x148`) to 0 (a running Autopilot flies the craft
+and ignores the pad: the first attempt, pad held with the Autopilot on, read `airbrake_l/r` 0.00 and 0.00 and was refused), hold thrust
+and both shoulders through one debugger connection for 0.3 s, and make the pause-menu save while that connection still holds them (the
+same save made after the script's connection closed was a bad state that never resumed). Then `psp-pulse-pair.py --port P --home $PP_HOME
+--out D --track 16_Track --team Assegai --state <that ppst> --field --layout forward --mid-lap --air-brakes --autopilot off
+--ram-write "autopilot_timer=..."`.
+
+- **Result.** Pack frame (place 5 of 8, 24 parity checks, `compare_provenance.py scan --strict` 0 problems): left 100.00, right 100.00 at
+  the pose's stop. Whole-frame mean grey difference **4.66** (RMSE 0.062, edge NCC 0.31); the same frame with ours stowed reads 4.81.
+  Hull crops (4x): the original's lower flap fins are drawn on both of ours' with `--pose-flaps` and missing with it off.
+- **Repeat.** Two grabs from two instance boots: `theirs.png` RMSE 3.1 of 65535 (4.8e-5) apart, same clock bits (37.9077 s).
+- **Not matched.** (1) The original draws the green Autopilot-pickup hexagon top centre although the timer is 0; ours draws none
+  (whole-frame grey 4.68, 3.82 with that 75x60 box masked). (2) The frame is the presented one (lag 1) and the brakes decay 8.4 a tick once the pad is
+  released at the load: row 0 reads 100, the row the frame shows 91.6, and ours draws row 0's 100. (3) This is a new moment (race clock 37.91, HUD 27.99 s,
+  359 km/h), not the stored pair's 38.41 s, so 4.66 is not like-for-like with that pair's 2.35.
+
 ## Provenance: the trust model (2026-10-21, `ref-provenance`)
 
 A pair is only as good as the original frame in it, and three things made a bad original look fine on
