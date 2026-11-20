@@ -729,10 +729,11 @@ under the 0.3 noise line and its road bias grows (+10.8 to +13.9): the white lin
 panels in the original are not this cause (open).
 
 **HD: ported.** HD's circuits ship the same materials and flip the same way, read off the RSX microcode
-(`skin::flips`, `hd_uv_flip_ground_truth`). **Omega: checked, applies, not wired.** Omega ships
-`Data/environments/modesto_heights/materials/Track_Wall.rcsmaterial` (`data02.psarc`) and its GCN vertex program
-(`gcn_dump`, `Shdr @0x2e44`) starts `v_sub_f32 v0, 1.0, v9` on `Uv1`: the same `1 - v`. There is no GCN reader for it, so
-`uv_flip::plan` flips nothing on a PS4 model; Omega's Modesto wall is drawn with the authored `v`.
+(`skin::flips`, `hd_uv_flip_ground_truth`). **Omega: ported, dormant.** Omega's GCN vertex programs of
+`Track_Wall` (Modesto Heights, Talons Junction) and Ubermall's `D_S_N_R_uvflip` (9 files with their `_1` and `_2`) write the
+same `1 - v` (`v_sub_f32 v0, 1.0, v9` on `Uv1`) and `oag_rcs::gcn::flips_v` reads them, with `uv_flip::plan` acting on a PS4
+model. **Checked, differs:** Omega's Amphiseum and Tech De Ra `track_surface` do not flip, and no Omega model names a
+flipping file, so no Omega frame moves ([omega-status.md](omega-status.md), "The diffuse coordinate that writes `1 - v`").
 
 ### Moa Therma's road is `diffuse_normal_specular` #16, and its inputs are the light's (not wired)
 
