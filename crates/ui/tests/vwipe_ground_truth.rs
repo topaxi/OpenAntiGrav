@@ -9,7 +9,6 @@ use oag_ui::screen::{Screens, Vwipe};
 
 const FURY: &str = "data/extracted/ps3-update-chain/BCES00664";
 const PS3_IMAGE: &str = "hdfury-ps3-eu-dec.iso";
-const GUI: &str = r"Data\Plugins\Frontend\Gui";
 
 /// One `vwipe` Image: the file, the screens it sits under (outermost first), its name.
 #[derive(Debug, Clone, PartialEq)]
