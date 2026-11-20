@@ -24,7 +24,8 @@ original's luma ring, read".
 - Not known: which scene term carries it. The sky and fog consumers in the 1.07 eboot are unread (`FUN_015eda20` is only the registrar);
   `Lighting.Sky brightness` does not predict the sign; no texel of Sebenco's luma image reaches 0.97 where the other circuits reach 1.6 to 8
   (whether the HDR fog colour `0.646 1.18 1.85` is clamped on far geometry, or the sky draws with no brightness term, is open).
-- Moa's stands belong to the queued crowd-lighting lane.
+- **Read live by `omega-crowd-live` (native port, Sebenco Climb three boots, Sol two):** the bound `constantAmbientColour`, `liveLighting0diffuse` and direction, specular, `fogColour` (HDR `0.646 1.18 1.85`, unclamped in the constant) and the lighting object's `Sky brightness 1.51` equal the file's authored values, which ours feeds (ratio 1.000; [`omega-status.md`](../../docs/formats/omega-status.md), "Crowd and scene light inputs, read live"). So the per-surface excess is not a bound light constant: it is inside the sky, far-building and fog programs and their textures. That narrows the first step below to reading those programs, not their inputs.
+- Moa's stands belong to the queued crowd-lighting lane (its Sol counterpart is closed: inputs equal ours').
 
 ## Next Steps
 

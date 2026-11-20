@@ -2450,7 +2450,7 @@ readable statically.** Three different things sit under the old "crowd region" n
   walk to a 2048 grid, `--game-mode 2048 --track-steps 6 --class-steps 2` for Sol) find the staged copies by Sol's
   exact `liveLighting0direction` followed after four bytes by `fogColour` and read the three floats at `dw0` and `dw4`:
   they say whether the crowd's sun and ambient are per draw or the global frame constants. Global means the cause is
-  ours' `N` or a route, per draw means a per-object light the engine computes. Not run: a pad seat was not assigned.
+  ours' `N` or a route, per draw means a per-object light the engine computes. **Run 2026-11-20 (`omega-crowd-live`): global, and equal to ours' ([below](#crowd-and-scene-light-inputs-read-live-2026-11-20-omega-crowd-live)).**
 - **2048: checked, differs** (as below: Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`). Omega
   ships a PS4 `fc08_effects_crowd` on Sol (336 triangles, 120 px, bias +9.6) whose program is unread.
 
@@ -2463,6 +2463,92 @@ and none of those materials authors `Shadowed` or `Ambient` (the only parameters
 **2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
 `tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
+## Crowd and scene light inputs, read live (2026-11-20, `omega-crowd-live`)
+
+**Claim tested:** the light inputs bound to Sol's crowd draws (`constantAmbientColour`, `liveLighting0diffuse` and its
+direction, `Shadowed`, `Ambient`) can be read from the original, and the sky and fog inputs on Sebenco Climb where
+reachable; each equals what ours binds or differs by a stated factor. **Read: yes. Result: equal, ratio 1.000 on every
+input, on both circuits.** The plain crowd's dimness (Sol +64.5, the figures lit all or nothing) is therefore not the
+bound ambient, sun or `Shadowed`.
+
+**Method** (`scripts/wipeout-pc-crowd-light-live.py`, reads only; walk and rig as `wipeout-pc-omega-pair.py`, seat 2, about
+150 s a boot). The port is frozen with `SIGSTOP` two frames after the HUD shows and its guest memory is read through
+`/proc/<pid>/mem`: (1) the frame-constant table (an entry is `~crc32(name)` with the value pointer at `+0x10`, as in
+`wipeout-pc-road-sheen-live.py`; about 125 to 280 entries per name, the most common pointer into the image or heap is the
+live one, a stale entry reads junk in its fourth lane); (2) every copy of the live `fogColour` xyz in memory, dumped with the
+64 bytes before it and the 48 after it. The `_shadow` crowd sprite's pixel constant block is 96 bytes
+(`gcn_dump Crowd_Sprite_Diffuse_Normal_Alpha_Shadow` `0x21e4`, 122 instructions): `dw0 Shadowed`, `dw1-3 Ambient`,
+`dw4 constantAmbientColour`, `dw8 liveLighting0diffuse`, `dw12 liveLighting0direction`, `dw16 fogColour`, `dw20
+fadeResCoeffs`; the plain programs (`0x41a4`, `0x3c04`) are its last 80 bytes. A block that starts with Sol's authored
+`Shadowed 0.12178` and `Ambient 0.776742` is therefore the crowd sprite's by construction.
+Written before the capture: "global" is falsified by a staged block whose `dw4`, `dw8` or `dw12` differs from the table,
+"equal" by a value outside 0.92 to 1.08 of ours' per channel.
+
+**Sol (`environments2048/sol`, 2048 mode, speed class A), original against ours' bound value** (ours: `authored_light`
+passes the file's `Lighting.*` keys through unchanged; the sun is colour times `Sun diffuse intensity`):
+
+| Input | Original, live | Ours (file) | Ratio |
+| --- | --- | --- | --- |
+| `constantAmbientColour` | `0.8, 1.0, 1.2` | `Constant ambient colour` `0.8 1 1.2` | 1.000 |
+| `liveLighting0diffuse` | `7.608, 5.352, 3.72` | `0.951 0.669 0.465` times `8` | 1.000 |
+| `liveLighting0direction` | `-0.10534, 0.57405, -0.81202` | `Sun direction`, normalised | 1.000 |
+| `liveLighting0specular` | `6.096, 3.2627, 1.6` | `Sun specular colour` times `1` | 1.000 |
+| `shadowLightDirection` | `0.79075, -0.37501, -0.48381` | `ShadowLight direction` `0.79073 -0.375 -0.4838` | 1.000 |
+| `fogColour` | `0.34, 0.49, 0.566`, `w 0.00012` | `Fog colour` `0.34 0.49 0.566 0.000117` | 1.000 |
+| crowd sprite `Shadowed`, `Ambient` | `0.12178`, `0.77674` x3 | the material records `0.12178`, `0.776742` | 1.000 |
+
+The crowd sprite's block was found 54 times (boot A) and 52 times (boot B), 8 and 9 of them with the main view's
+`fadeResCoeffs`: every one carries `constantAmbientColour 0.8 1 1.2`, `liveLighting0diffuse 7.608 5.352 3.72` and the
+frame direction. **There is no per-draw light**: among the plain-layout blocks (the frame direction before `fogColour`)
+of the main view, the ones that differ are the hull's probe blocks (`probeOffsetAndDiffuse` `x/8, K, K` in the slot where
+the plain layout has the ambient), offset copies of them, and junk. One further `constantAmbientColour`, `0.5, 0.8, 1.0`
+(114 and 123 blocks, the same sun), appears only with `fadeResCoeffs (100, 0.0333, 0.00391, 0.00391)`, the 256 x 256
+pass (its `zw` is `1/256`; the main view's `(40000, 0, 0.00052, 0.00093)` is `1/1920, 1/1080`): a probe or reflection
+capture with its own ambient, not the picture. The same `fadeResCoeffs` pair splits the crowd sprite's own blocks 46/8 and
+43/9 between the 256 pass and the main view. A second `Shadowed 0.2`, `Ambient 0.0688 0.1199 0.183` block (78 + 14
+copies, same frame constants) is another crowd material on the circuit; 46 `Shadowed 0.2` records exist.
+
+**Sebenco Climb (HD mode, `10_sebenco_climb`), three boots** (the third after the pointer filter below):
+
+| Input | Original, live | Ours (file) | Ratio |
+| --- | --- | --- | --- |
+| `constantAmbientColour` | `0.18039, 0.22745, 0.35294` | `Constant ambient colour` | 1.000 |
+| `liveLighting0diffuse` | `0.3, 0.3, 0.3` | `Sun diffuse colour 1 1 1` times `0.3` | 1.000 |
+| `liveLighting0direction` | `-0.31888, 0.93355, -0.1637` | `Sun direction` | 1.000 |
+| `liveLighting0specular` | `12, 12, 12` | `4 4 4` times `3` | 1.000 |
+| `fogColour` | `0.64639, 1.18384, 1.85203`, `w 0.0005` | `Fog colour` (HDR, above 1) | 1.000 |
+| lighting object at `0x800eb2898` | `Sky height offset -85.102`, `Sky scale 3.13`, `Sky brightness 1.51`, `Ship diffuse brightness 0.5` | the same four keys | 1.000 |
+
+Staged plain-layout blocks carry the same values (5,975, 5,480 and 4,402 blocks with the frame ambient, sun and
+direction in the three boots). So the 2.3 to 2.5 times sky, the 1.4 stands and the 1.6 stripe road of the luma read are **not** carried by
+any bound ambient, sun, direction, specular, fog colour or `Sky brightness` value: ours feeds the same numbers. The HDR fog
+colour (`1.18, 1.85`) reaches the pixel constant unclamped, so a clamp, if there is one, is in a program or in the target,
+not in the constant. What differs is therefore inside the programs and their textures: the sky material's program and the
+sky cube, the consumers of `Sky brightness` and `Fog colour` (still unread in the 1.07 eboot), and for the crowd the
+normal `N` the lit sum is given.
+
+**What this leaves for the Sol plain sprite.** The program is ours' formula and its inputs are ours' inputs, so the
+original's "no figure sun-lit" and ours' "each figure fully lit or fully dark" come from `N.L`: the normal-map decode, the
+vertex program's TBN (`0x3bc4`, `worldScaleInv`), the world matrix of the crowd instances, or the permutation the draw
+selects (`0x41a4` against `0x4f44`/`0x7904`). The next read is the crowd draw's **vertex** constant block (`world`,
+`worldScaleInv`, `eyePositionWorldSpace`), found the same way (a copy of Sol's `worldScaleInv` followed by `fogColour`).
+
+**Also answers the Omega 2048 road's globals.** The panel-map road programs read the same frame constants; on Sol they
+equal the file's (sun, specular, ambient, `ShadowLight` direction, fog). The road's material parameters are separate.
+
+**Confidence.** The frame constants equal the file's authored values: 92 (two Sol boots, three Sebenco boots, the table and
+thousands of staged copies agree). The crowd sprite's draw reads exactly these: 80 (identified by the staged block's
+`Shadowed`/`Ambient` prefix, 8 and 9 copies with the main view's fade; a copy in memory is a staging copy, not a captured
+bind). That ours binds the same numbers: 85 (read from `authored_light`, `Light::authored` and the crowd path in
+`shade.wesl`, and the earlier debug renders' `(7.6, 5.4, 3.7)`; not re-read from a running build). One caution on the table
+read: a hit of the hash that is not an entry can sit in the most common pointer (boot B of Sebenco picked a pointer that
+reads zeros); the script keeps only pointers into the image or heap, and the staged blocks, which do not depend on it,
+agree.
+
+**2048: checked, differs.** Vita's crowds are `fc06_lambert_alpha`/`fc08_effects_crowd` (no `Shadowed`/`Ambient`); the
+read is of Omega's native port, and Vita3K's constants for them were not read. HD: the front end and the sky/fog consumers
+are the open part, not checked here.
 
 ## The alpha lane (2026-11-19, `omega-road-programs`)
 
