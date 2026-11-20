@@ -195,6 +195,8 @@ pub struct Report {
     pub crowd_materials: usize,
     /// Of those, materials left to the generic reading: the glow table was full.
     pub crowd_unread: usize,
+    /// Of the admitted, ones whose programs weight the normal map's `z` lane by the eye vector.
+    pub crowd_eye_frames: usize,
     /// Materials of the `alpha_emissive` families that add the picture's alpha times `glowtinrt`
     /// after the light (`psp2::alpha_emissive`).
     pub alpha_emissive_materials: usize,
@@ -403,8 +405,8 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} crowd material(s) lit by Shadowed * (Ambient + light) ({} left to the generic reading)",
-                self.crowd_materials, self.crowd_unread
+                "; {} crowd material(s) lit by Shadowed * (Ambient + light), {} with the eye frame ({} left to the generic reading)",
+                self.crowd_materials, self.crowd_eye_frames, self.crowd_unread
             )
         };
         let alpha_emissive = if self.alpha_emissive_materials + self.alpha_emissive_unread == 0 {

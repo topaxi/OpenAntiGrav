@@ -1,21 +1,30 @@
-//! Omega's `_shadow` crowd materials: `crowd_sprite_diffuse_normal_alpha_shadow` and
-//! `crowd_diffuse_normal_shadow`.
+//! Omega's crowd materials: `crowd_sprite_diffuse_normal_alpha` and `crowd_diffuse_normal`, and
+//! their `_shadow` twins.
 //!
-//! Their lit pixel program ends `Shadowed * T * (Ambient + constantAmbientColour + sun *
-//! sat(N.L))` (`docs/formats/omega-status.md`, "The crowd's law", confidence 70): the material
-//! authors `Shadowed` (`0.12178`) as a factor on the whole picture and `Ambient` (`0.777`) as a
-//! term inside the bracket. The generic lit path reads neither, which draws these stands too
-//! bright. The plain `crowd_sprite_diffuse_normal_alpha` and `crowd_diffuse_normal` programs
-//! declare neither uniform and are not admitted (`gcn_dump` of both materials' `Shdr` tables).
+//! The `_shadow` twins' lit pixel program ends `Shadowed * T * (Ambient + constantAmbientColour +
+//! sun * sat(N.L))` (`docs/formats/omega-status.md`, "The crowd's law", confidence 70): the
+//! material authors `Shadowed` (`0.12178`) as a factor on the whole picture and `Ambient`
+//! (`0.777`) as a term inside the bracket. The generic lit path reads neither, which draws these
+//! stands too bright. The plain programs declare neither uniform: they are the same sum with
+//! `Shadowed = 1` and `Ambient = 0`, and are admitted only for the frame below.
+//!
+//! **The frame.** The unshadowed permutations of all four materials weight the normal map's `z`
+//! lane by the vertex program's `eyePositionWorldSpace - position`, not by the vertex normal
+//! (`oag_rcs::gcn::third_axis_is_eye`, "The crowd sprite's frame"): each figure is lit as turned
+//! to the camera. A material is given that frame when its file reads so; one that does not keeps
+//! the vertex normal.
 //!
 //! Carried by a glow-table entry of mode [`PROGRAM_CROWD`]: `tint` is `Ambient`, `program[1]`
-//! is `Shadowed`. The fragment stage replaces the light sum for the draw and multiplies the
-//! lit result by `Shadowed`. Admitted by material name and by both parameters being authored,
-//! so a material of the same name that does not author them keeps the generic reading.
+//! is `Shadowed`, `offset` is `1` for the eye frame. The fragment stage replaces the light sum
+//! for the draw and multiplies the lit result by `Shadowed`. A `_shadow` twin is admitted by
+//! material name and by both parameters being authored, so a material of the same name that
+//! does not author them keeps the generic reading.
 
+use oag_rcs::gcn;
 use oag_rcs::rcsmodel::psp2::{self, material::Material};
 
 use super::Report;
+use crate::mesh::rcs::Textures;
 use crate::mesh::{Emissive, PROGRAM_CROWD, slots};
 
 /// `~crc32("Shadowed")`.
@@ -23,10 +32,14 @@ const SHADOWED: u32 = 0x3699_7860;
 /// `~crc32("Ambient")`.
 const AMBIENT: u32 = 0x7353_24ab;
 
+/// The twins that author `Shadowed` and `Ambient`.
 const FAMILIES: [&str; 2] = [
     "crowd_sprite_diffuse_normal_alpha_shadow",
     "crowd_diffuse_normal_shadow",
 ];
+
+/// The plain materials, whose programs are the twins' with `Shadowed = 1` and `Ambient = 0`.
+const PLAIN: [&str; 2] = ["crowd_sprite_diffuse_normal_alpha", "crowd_diffuse_normal"];
 
 /// Per material, the glow-table slot (entry index plus one) it was admitted with.
 #[derive(Default)]
@@ -43,36 +56,48 @@ impl Plan {
     }
 }
 
-/// The entry of a crowd material: `Ambient` as the tint, `Shadowed` in the program's second lane.
-fn entry(material: &Material) -> Option<Emissive> {
+/// The entry of a crowd material: `Ambient` as the tint, `Shadowed` in the program's second lane,
+/// `offset` `1` where the material's programs take the eye frame. A plain material is admitted
+/// only with that frame, since it is the only thing the entry changes for it.
+fn entry(material: &Material, eye_frame: bool) -> Option<Emissive> {
     let stem = material.name.rsplit(['/', '\\']).next()?;
     let stem = stem.trim_suffix(".rcsmaterial");
-    if !FAMILIES.iter().any(|f| stem.eq_ignore_ascii_case(f)) {
+    let named = |list: &[&str]| list.iter().any(|f| stem.eq_ignore_ascii_case(f));
+    let (shadowed, tint) = if named(&FAMILIES) {
+        let ambient = material.param(AMBIENT)?;
+        let channel = |i: usize| ambient.get(i).copied();
+        (
+            *material.param(SHADOWED)?.first()?,
+            [channel(0)?, channel(1)?, channel(2)?],
+        )
+    } else if named(&PLAIN) && eye_frame {
+        (1.0, [0.0; 3])
+    } else {
         return None;
-    }
-    let shadowed = *material.param(SHADOWED)?.first()?;
-    let ambient = material.param(AMBIENT)?;
-    let channel = |i: usize| ambient.get(i).copied();
+    };
     Some(Emissive {
-        tint: [channel(0)?, channel(1)?, channel(2)?],
-        offset: 0.0,
+        tint,
+        offset: f32::from(u8::from(eye_frame)),
         scale: 0.0,
         rate: 0.0,
         program: [PROGRAM_CROWD, shadowed],
     })
 }
 
-/// Admits each crowd material that authors `Shadowed` and `Ambient`, writing its entry into
-/// `emissive`. Empty on every model but Omega's: only a PS4 model is asked.
+/// Admits each crowd material, writing its entry into `emissive`. Empty on every model but
+/// Omega's: only a PS4 model is asked.
 pub(super) fn plan(
     decoded: &psp2::Model,
     ps4: bool,
     emissive: &mut Vec<Emissive>,
+    textures: Textures<'_>,
     report: &mut Report,
 ) -> Plan {
     let mut out = Plan::default();
     for material in &decoded.materials {
-        let admitted = entry(material).filter(|_| ps4);
+        let eye_frame = ps4
+            && textures(&material.name).is_some_and(|file| gcn::third_axis_is_eye(&file).is_eye());
+        let admitted = entry(material, eye_frame).filter(|_| ps4);
         let slot = admitted.and_then(|entry| {
             let at = emissive.iter().position(|e| *e == entry).or_else(|| {
                 (emissive.len() + 1 < crate::mesh::rcs::EMISSIVE_LIMIT).then(|| {
@@ -83,7 +108,10 @@ pub(super) fn plan(
             at.and_then(|at| u32::try_from(at + 1).ok())
         });
         match (admitted, slot) {
-            (Some(_), Some(_)) => report.crowd_materials += 1,
+            (Some(entry), Some(_)) => {
+                report.crowd_materials += 1;
+                report.crowd_eye_frames += usize::from(entry.offset > 0.5);
+            }
             (Some(_), None) => report.crowd_unread += 1,
             _ => {}
         }
@@ -128,20 +156,34 @@ mod tests {
             "crowd_sprite_diffuse_normal_alpha_shadow",
             &[(SHADOWED, vec![0.121_78]), (AMBIENT, vec![0.777; 3])],
         );
-        let e = entry(&m).expect("admitted");
+        let e = entry(&m, false).expect("admitted");
         assert_eq!(e.tint, [0.777; 3]);
         assert_eq!(e.program, [PROGRAM_CROWD, 0.121_78]);
+        assert_eq!(e.offset, 0.0);
     }
 
     #[test]
-    fn only_the_two_families_that_author_both_parameters_are_admitted() {
+    fn only_the_two_twins_that_author_both_parameters_are_admitted_without_the_frame() {
         let both = [(SHADOWED, vec![0.1]), (AMBIENT, vec![0.7; 3])];
         for family in FAMILIES {
-            assert!(entry(&material(family, &both)).is_some(), "{family}");
+            assert!(entry(&material(family, &both), false).is_some(), "{family}");
         }
-        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha", &both)).is_none());
-        assert!(entry(&material("crowd_diffuse_normal", &both)).is_none());
+        for plain in PLAIN {
+            assert!(entry(&material(plain, &both), false).is_none(), "{plain}");
+        }
         let one = [(SHADOWED, vec![0.1])];
-        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha_shadow", &one)).is_none());
+        assert!(entry(&material("crowd_sprite_diffuse_normal_alpha_shadow", &one), true).is_none());
+    }
+
+    #[test]
+    fn a_plain_crowd_material_with_the_eye_frame_is_the_twin_with_shadowed_one_and_no_ambient() {
+        for plain in PLAIN {
+            let e = entry(&material(plain, &[]), true).expect("admitted");
+            assert_eq!(e.tint, [0.0; 3]);
+            assert_eq!(e.program, [PROGRAM_CROWD, 1.0]);
+            assert_eq!(e.offset, 1.0);
+        }
+        let twin = material(FAMILIES[0], &[(SHADOWED, vec![0.1]), (AMBIENT, vec![0.7; 3])]);
+        assert_eq!(entry(&twin, true).expect("admitted").offset, 1.0);
     }
 }

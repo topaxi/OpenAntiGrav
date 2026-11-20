@@ -18,13 +18,20 @@
 // small. It saves a varying: the vertex stage already uses locations 0 to 14
 // with the tangent, and the GL backend, best effort, has the least room.
 fn hull_normal(texel: vec4<f32>, n: vec3<f32>, tangent: vec4<f32>) -> vec3<f32> {
+    return hull_frame(texel, n, tangent, n);
+}
+
+// The same frame with the map's `z` lane on `third` instead of `N0`: Omega's crowd programs weight
+// it by the unnormalised vector from the surface to the eye (`mesh::rcs::psp2::crowd`), so the
+// map's `x` and `y` bend a view-facing normal by a part in a few hundred. `B` still comes from `N0`.
+fn hull_frame(texel: vec4<f32>, n: vec3<f32>, tangent: vec4<f32>, third: vec3<f32>) -> vec3<f32> {
     let t = tangent.xyz;
     var scale = tangent.w * 2.0 - 1.0;
     if abs(scale) < 0.01 {
         scale = 0.0;
     }
     let b = cross(n, t) * scale;
-    let mapped = (texel.x * 2.0 - 1.0) * t + (texel.y * 2.0 - 1.0) * b + (texel.z * 2.0 - 1.0) * n;
+    let mapped = (texel.x * 2.0 - 1.0) * t + (texel.y * 2.0 - 1.0) * b + (texel.z * 2.0 - 1.0) * third;
     // A degenerate sum keeps the vertex normal rather than normalising zero.
     if dot(mapped, mapped) < 1.0e-12 {
         return n;

@@ -361,7 +361,7 @@ fn build_planned(
         &mut report,
     );
     // Omega's crowd sprites carry `Shadowed` and `Ambient` in the lit sum (`psp2::crowd`).
-    let crowd = crowd::plan(&decoded, ps4, &mut glow.emissive, &mut report);
+    let crowd = crowd::plan(&decoded, ps4, &mut glow.emissive, &mut *textures, &mut report);
     // Anulpha Pass's chevrons add their emissive mask and wave after the light.
     let chevron = chevron::plan(
         &decoded,
