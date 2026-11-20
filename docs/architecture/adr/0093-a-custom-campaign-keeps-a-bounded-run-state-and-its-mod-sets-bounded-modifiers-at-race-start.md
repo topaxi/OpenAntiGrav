@@ -85,8 +85,8 @@ ratings, not computed from handling.
    commands and **sets the module's initial tick state** (the only way the run reaches
    `tick`, which never sees the run bytes); it cannot write the run. `race-end` reads
    the result (including the medal tier the host evaluated, the event's best medal
-   before this race as `prior_tier`, and the event's position in the campaign as
-   `event_index`) and the final tick state,
+   before this race as `prior_tier`, the event's position in the campaign as
+   `event_index`, and a `score`: zones reached in Zone, kills in Eliminator) and the final tick state,
    and writes the new run bytes. ABI revision 7.
 4. **Modifiers.** At race start the mod may send `set-modifier{slot, param, factor}`
    for a closed list of `Handling` parameters. The host owns each range, scales the
@@ -126,7 +126,11 @@ ratings, not computed from handling.
    abandoned Time Trial. The race goes on as it does today (the world steps on under
    the results; Zone runs until the player leaves), and `race-end`, the mod's own
    award and end-of-run logic, runs **once, when the player exits the race**, not at
-   the finish moment (maintainer, 2026-11-20). Its output is **committed at once**,
+   the finish moment (maintainer, 2026-11-20). What it reads is **latched** inside the
+   sim on the tick the person's race ends (the result fields and a copy of the module's
+   tick state, plain data, no guest call); Zone and Speed Lap latch at the leave. So
+   the same race and inputs give the same run bytes, however long the player stays on
+   the results. Its output is **committed at once**,
    ordinal + 1, in one records save; nothing is staged. The medal is recorded at its
    site as today, one code path for every campaign. A replay of a cleared event is the
    mod's to judge: `prior_tier` and `event_index` let it decide in one comparison
@@ -183,7 +187,9 @@ needs no frontend world (objection 4 and question 15, answered). A modified craf
 reference speed plan per slot before the plans are built, and `give-autopilot` runs on
 any craft (decisions 4 and 5; objection 5, answered). An atomic records write is a
 general rule for every profile file, decided in its own ADR outside this one, and a
-prerequisite of the run record (decision 11; objection 7, answered).
+prerequisite of the run record (decision 11; objection 7, answered). `race-end` gets a
+`score` (zones or kills) and reads a result and tick state latched in the sim on the
+tick the person's race ends (decisions 3 and 6; objection 8, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in

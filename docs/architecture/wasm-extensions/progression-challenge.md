@@ -283,6 +283,9 @@ the module's blob inside the sim on the tick the person's race ends (plain data,
 guest call), and build `RunResult` from the latch. The escape-site modes use the
 state at the leave, which is the player's own timing.
 
+**Answered by the maintainer (2026-11-20): score and latch, as proposed.** ADR-0093
+decisions 3 and 6, progression.md sections 3 and 5.
+
 ### 9. A tournament event is unspecified
 
 **Evidence.** A campaign event may be a tournament with several legs

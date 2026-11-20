@@ -112,7 +112,7 @@ pub const RUN_RESULT_AT: usize = RUN_IN_AT + MAX_RUN_BYTES; // RunResult, race-e
 pub const RUN_OUT_LEN_AT: usize = RUN_RESULT_AT + RunResult::LEN; // u32, race-end only
 pub const RUN_OUT_AT: usize = RUN_OUT_LEN_AT + 4;    // [u8; MAX_RUN_BYTES]: at race-start the guest's initial TICK state
                                                       // (its length is the module's oag_state_len); at race-end the new RUN state
-pub const RUN_TICK_AT: usize = RUN_OUT_AT + MAX_RUN_BYTES; // [u8; MAX_STATE_BYTES], race-end only: the final tick state
+pub const RUN_TICK_AT: usize = RUN_OUT_AT + MAX_RUN_BYTES; // [u8; MAX_STATE_BYTES], race-end only: the tick state latched at the race's end
 pub const RUN_REPLY_AT: usize = RUN_TICK_AT + MAX_STATE_BYTES; // count u32, then 12-byte command records
 // const _: () = assert!(RUN_REPLY_AT + 4 + COMMAND_LEN * MAX_START_COMMANDS <= IO_LEN); // about 4,000 of 4,096
 ```
@@ -151,6 +151,7 @@ pub struct RunResult {
     pub prior_tier: u8,    // the event's best medal before this race (`Store::campaign_medal`); 255 = none
     pub event_index: u8,   // the event's position in the campaign file, so a cleared set is a bitmask
     pub ticks: u32,        // race clock at the finish
+    pub score: u32,        // zones reached in Zone, kills in Eliminator, 0 elsewhere
     pub best_lap_ticks: u32,
     pub shield: f32,       // left at the finish
     pub shield_max: f32,
@@ -432,6 +433,15 @@ abandoned Time Trial, where leaving is how the mode ends
 as it does today: the world keeps stepping under the results, and Zone runs until the
 player leaves. The mod's award and end-of-run logic (`race-end`) runs once, when the
 player exits the race, not at the finish moment.
+
+**The latch (maintainer, 2026-11-20).** The world keeps stepping under the results,
+by a frame-dependent number of ticks, so a state read at the exit would differ between
+two machines with the same inputs. On the tick the person's race ends the sim
+**latches** the `RunResult` fields and a copy of the module's tick state (plain data
+in the race state, no guest call); `race-end` is built from the latch at the exit.
+Zone and Speed Lap latch at the leave, which is the player's own moment. A run is then
+a function of its races' inputs ([progression-challenge.md](progression-challenge.md),
+objection 8).
 
 **Who calls `race-end`.** `oag-game`, on the exit from a race whose medal was
 captured, with the tier the medal site evaluated, through `Race::end_run(RunResult) -> Option<RunOut>` in
