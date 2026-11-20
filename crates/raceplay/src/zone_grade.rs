@@ -1033,6 +1033,21 @@ impl ZoneGrade {
         Some([r, g, b])
     }
 
+    /// The equaliser target's bar colour: [`Self::palette`]'s cross-faded `EQ colour tint`,
+    /// which `Environment_UpdateStageBlend` blends from stage `n` and the stage before
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`, "The colours"; read live,
+    /// confidence 90).
+    #[must_use]
+    pub fn equaliser_tint(&self) -> Option<[u8; 4]> {
+        self.palette().eq_colour_tint
+    }
+
+    /// The equaliser style of the requested stage, see [`crate::zone_equaliser::style`].
+    #[must_use]
+    pub fn equaliser_style(&self) -> Option<u8> {
+        crate::zone_equaliser::style(self.blend.requested)
+    }
+
     /// What the load report says about this table.
     #[must_use]
     pub fn describe(&self) -> String {

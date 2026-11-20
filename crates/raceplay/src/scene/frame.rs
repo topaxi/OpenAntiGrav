@@ -549,6 +549,20 @@ impl Scene {
             drawable.write_zone_vis(queue, zone_spectrum, zone_tint, last);
         }
         drop(written);
+        // The equaliser target is the stage pass's, drawn once a frame whatever the views:
+        // not again for a split's later view, a later window or the portal's view.
+        if let (Some(equaliser), Some(grade), true) = (
+            &self.zone_equaliser,
+            &self.zone_grade,
+            self.does_frame_work() && portal.is_none(),
+        ) {
+            equaliser.borrow_mut().step(
+                queue,
+                zone_spectrum,
+                grade.equaliser_tint(),
+                grade.equaliser_style(),
+            );
+        }
         // **The craft get the same scene with the Zone half switched off**,
         // because the disc says they are not in it. The twelve
         // `data/materials/ships/*.rcsmaterial` in `DATA03.PSARC` carry no Zone

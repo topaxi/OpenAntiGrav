@@ -255,8 +255,8 @@ pub(super) fn build(
     }
     if !equaliser.is_empty() {
         report.push(format!(
-            "Zone race: billboard slot(s) {equaliser:?} show the stage's shared 512x512 target, \
-             drawn as the equaliser's grid with no bar lit ({})",
+            "Zone race: billboard slot(s) {equaliser:?} show the stage's shared 512x512 \
+             equaliser target ({})",
             crate::zone_equaliser::PROVENANCE,
         ));
     }

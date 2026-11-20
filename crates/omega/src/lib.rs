@@ -353,6 +353,7 @@ pub const TITLE: &Title = &Title {
         flip_v: false,
         wrap: true,
         zone_shares_one_texture: true,
+        zone_equaliser_bars: false,
         gantry_card: true,
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,
