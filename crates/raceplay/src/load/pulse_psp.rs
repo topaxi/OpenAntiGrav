@@ -87,15 +87,12 @@ pub(super) fn finish(
     }
 }
 
-/// The track textures whose batches the original draws under a GE light list of their own
-/// (the circuit's rig): the start laser's strip and its travelling pulse. Read off one frame of
-/// Basilico's grid, where a lighting list is replayed at the strip's draw and its draw alone
-/// (`docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "The start laser").
+/// Textures of animated flash sprites. Giving them the rig moved the two circuits that draw
+/// them (`de-konstruct-black`, `outpost-7-black`) the wrong way and nothing else, and no GE
+/// dump of the original has one in frame, so they keep the stand-in until measured
+/// (`docs/ghidra/functions/psp-pulse-usa/scene-light.md`, "Which models take the rig").
 #[cfg(feature = "view")]
-const RIG_LIT_TEXTURES: &[&str] = &[
-    "startline_laser_ADD_GLOW.tga",
-    "startline_laserpulse_ADD_GLOW.tga",
-];
+const RIG_HELD_BACK: &[&str] = &["camflash", "cameraflash"];
 
 #[cfg(feature = "view")]
 /// Lights the hulls with the circuit's own light nodes, built at the bare
@@ -123,9 +120,9 @@ fn light_hulls(
                 4 - directionals.min(4),
             ));
             loaded.light.hull = hull;
-            let marked = mesh_render::mark_rig_vertices(&mut loaded.track_model, RIG_LIT_TEXTURES);
+            let marked = mesh_render::mark_rig_vertices(&mut loaded.track_model, RIG_HELD_BACK);
             loaded.report.push(format!(
-                "start laser: {marked} colourless vertices lit by the circuit's rig, as the original's own list lights them"
+                "track rig: {marked} colourless vertices with normals lit by the circuit's own light list, as the original's lit batches are"
             ));
             if shine_lit {
                 loaded.view.hull_points.pass =
