@@ -1,33 +1,37 @@
 ---
-status: measure
+status: re-first
 titles: [omega]
 updated: 2026-11-20
-summary: "Omega HD-mode frames: tone map is not the gap; Sebenco and Moa are dark in sky and far scenery; read the original luma ring next"
+summary: "Omega HD-mode: original's scene luma read live: 1.23-1.64x ours on Sebenco/Moa/Modesto, equal on Amphiseum, by surface; read sky/fog consumers"
 difficulty: medium (45)
 ---
 
-# Omega's HD-mode frames: the gap is per-surface light, not exposure
+# Omega's HD-mode frames: the scene's light level differs by surface, exposure does not
 
-2026-11-20, `omega-hd-exposure`. Evidence, boxes and the read recipe:
-[`omega-status.md`](../../docs/formats/omega-status.md), "HD-mode frame brightness: the tone map is not the gap".
+2026-11-20, `omega-hd-exposure` then `omega-luma-read`. Evidence, boxes, the ring layout and the per-pair numbers:
+[`omega-status.md`](../../docs/formats/omega-status.md), "HD-mode frame brightness: the tone map is not the gap" and "the
+original's luma ring, read".
 
 ## Open
 
-- Dark pairs, by surface: Sebenco Climb (-22.3 signed bias) sky and far scenery (snow -65, far building -41, floor and wall
-  -13 to -17); Modesto Heights (+0.9) the sky only (-36); Moa Therma (-14.2) the stands (-16.1) and stripe road (-14.6),
-  sky level. The Amphiseum (+5.0) has no brightness gap (ceiling and stands are brighter in ours; its 49.1 is
-  decorrelation). Moa's stands belong to the queued crowd-lighting lane.
-- Not known: whether the original's scene luma on the same frame is ours' (Sebenco 0.1756, Moa 0.3851) or x1.6 brighter.
-- No texel of Sebenco's luma image reaches 0.97, where the other circuits reach 1.6 to 8: not located, so whether the HDR
-  fog colour (`0.646 1.18 1.85`) is clamped on far geometry, or the sky draws at its texel with no brightness term, is open.
-- `Lighting.Sky brightness` does not predict the sign across five circuits, so a plain multiplier is refuted. The sky and
-  fog consumers in the 1.07 eboot are unread (the 2048-mode lane found the registrar `FUN_015eda20`, not a consumer).
+- **Settled by `omega-luma-read` (native port, eight boots, ring read through `/proc/<pid>/mem`):** the original's whole-frame scene luma
+  (`LAvg`, settled at the grab) is Sebenco 0.2290/0.2299, Moa 0.4720/0.4740, Modesto 0.4197/0.4299, Amphiseum 0.1324/0.1325 against ours'
+  0.1756, 0.3851, 0.2621, 0.1333: ratios 1.30, 1.23, 1.60 to 1.64, 0.99. `E` equals ours on Sebenco, Moa and Amphiseum (pinned) and is
+  0.60 against ours' 0.868 on Modesto. Neither "equal" nor "1.6 times" holds across the four.
+- Inverting the original's frames with its own `E`, `t1` and curve puts the excess in surfaces: Sebenco sky and far building about 2.3 to
+  2.5 times ours, floor and wall 1.1 to 1.4; Modesto 1.4 to 2.2 everywhere (sky most); Moa sky and floor 1.0, stands 1.4, stripe road 1.6;
+  Amphiseum ceiling and stands 0.67 to 0.73 (ours brighter). Bloom (ours draws none) inflates the bright rows, saturation deflates them.
+- Not known: which scene term carries it. The sky and fog consumers in the 1.07 eboot are unread (`FUN_015eda20` is only the registrar);
+  `Lighting.Sky brightness` does not predict the sign; no texel of Sebenco's luma image reaches 0.97 where the other circuits reach 1.6 to 8
+  (whether the HDR fog colour `0.646 1.18 1.85` is clamped on far geometry, or the sky draws with no brightness term, is open).
+- Moa's stands belong to the queued crowd-lighting lane.
 
 ## Next Steps
 
-1. Read the original's luma ring: native port, `SIGSTOP` after the pair grab, guest pointer `0x021dbdb8`, ring at the object's
-   `+0x1d8` (N-1 slots; offset unconfirmed, `ToneMap_UpdateCoefficients` is unresolved on 1.07; raw luma versus past `LAvg`
-   not pinned); one boot per circuit. Needs a pad seat and the game copy.
-2. If the ratio is near 1: the gap is shading of the sky and far surfaces; read the sky and fog consumers. If near 1.6: look
-   for a scene-wide light term the loader does not read.
-3. Locate Sebenco's brightest luma texels (256 to 1920 scaling) to split the sky from clamped fog.
+1. RE: find the consumers of `Lighting.Sky brightness`, `Lighting.Fog colour` and the sky material in the 1.07 eboot (patch program
+   `/omega/eboot-ps4-omega-eu-v107.bin`) and read what multiplies the sky and far geometry; the Sebenco snow sky (2.3 to 2.5 times ours)
+   is the test case, Moa's sky (1.0) the control.
+2. Acceptance numbers for any wiring: ours' `LAvg` on the four pairs should reach 0.229, 0.472, 0.42 and 0.132 (the readback patch
+   is not kept; `omega_tonemap`'s `frameL` is the quantity), and Modesto's `E` should fall to about 0.6.
+3. Re-read the ring on Vineta K, Metropia and the other seven HD-mode circuits if the wiring is to be checked beyond these four (one boot
+   is 80 s; the recipe is in `omega-status.md`).
