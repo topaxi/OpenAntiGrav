@@ -169,4 +169,24 @@ fn the_zone_hulls_paint_binds_its_normal_map_and_its_chunks_carry_the_tangent() 
         tangents.len() < model.vertices.len(),
         "the light cells and the glass carry none"
     );
+    check_fresnel_base(&model);
+}
+
+/// Of the hull's probe-lit materials only `zoneship01` carries a `fresnelBase`, the `0.1234`
+/// its `IBL` block declares (`0x743ea80b`), beside its reflectivity `0.7`. The main paint,
+/// `diffuse_with_specular_from_alpha_n` (reflectivity `0.2532`), has none, because its block
+/// has no such term (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`, "The rim term").
+fn check_fresnel_base(model: &mesh::Model) {
+    let probe_lit: Vec<[f32; 3]> = model
+        .emissive
+        .iter()
+        .filter(|entry| (entry.rate - mesh::REFLECTION_RATE).abs() < f32::EPSILON)
+        .map(|entry| entry.tint)
+        .collect();
+    let rimmed: Vec<&[f32; 3]> = probe_lit.iter().filter(|tint| tint[1] != 0.0).collect();
+    assert_eq!(rimmed, [&[0.7, 0.1234, 0.0]], "of {probe_lit:?}");
+    assert!(
+        probe_lit.contains(&[0.2532, 0.0, 0.0]),
+        "the main paint has no rim: {probe_lit:?}"
+    );
 }

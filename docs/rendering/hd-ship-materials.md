@@ -679,7 +679,10 @@ first sheet of this section was framed on Vineta K and is not the comparison. Tw
 - **The hull's gloss gap that remains** is brightness: the original's hull reads white, ours light grey. The live
   `directionalLight0Colour` is `(1.144, 1.091, 1.906)` in both frames and its direction `(0.577, 0.577, 0.577)`
   (Zone_1's `Sun direction`); where the colour comes from, and what ours feeds, is not compared. The original frame
-  is also visibly bloomed and tone-mapped brighter overall.
+  is also visibly bloomed and tone-mapped brighter overall. **Read 2026-11-20 (`zone-hull-fable`):** the pale panels
+  are `zoneship01`, whose `IBL` block adds an untinted rim `fresnelBase + (1 - fresnelBase) * (1 - N.V)^5`
+  (`0x743ea80b`, `0.1234`) to the lit albedo; wired, and the flat panels land within 1 byte of the original
+  ([zone-hull-light.md](../ghidra/functions/ps3-hdfury-eu/zone-hull-light.md), "The rim term").
 - **`dg_zonelights1`** (five chunks, one material) is the hull's side light cells. Block 17, from the microcode:
 
   ```text

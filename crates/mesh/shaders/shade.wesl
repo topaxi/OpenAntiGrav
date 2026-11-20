@@ -1411,6 +1411,18 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 * (texel.a * row_tint.x);
         }
 
+        // **The rim term** of a hull material whose `IBL` program declares `fresnelBase`
+        // (`tint.y` of the same entry, `mesh::rcs::probe_lit`): `base + (1 - base) * (1 - N.V)^5`,
+        // one scalar added to every channel of the lit albedo, so neither the albedo nor the
+        // probe tint colours it - `@0x25`..`@0x47` of `zoneship01`'s `IBL` block
+        // (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`, "The rim term").
+        var hull_rim = 0.0;
+        if uniforms.env_layer > 0.5 && probe_entry != 0u && row_scale.y > 7.5 && row_scale.y < 8.5
+            && row_tint.y > 0.0 {
+            let grazing = clamp(1.0 - dot(to_eye, normalize(n_hull)), 0.0, 1.0);
+            hull_rim = row_tint.y + (1.0 - row_tint.y) * pow(grazing, 5.0);
+        }
+
         // **Scenery glass's reflection of the sky** (`slots` entry of rate 9, `mesh::rcs::window_glass`):
         // `probe_tint(sky(reflect(-V, N))) * reflectivity`, added before the fog like the hull's. The
         // map is the circuit's `sky.gtf` as the engine's `paraboloidReflectionTex`
@@ -1595,7 +1607,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let lit_linear = scene.light.output_scale
             * ((surface_linear * program_light * pane_cover + program_specular) * program_multiplier
                 + zone_glow_term + glow_linear + pad_glow + mag_glow + chevron_glow + probe_reflection
-                + sky_reflection);
+                + sky_reflection + vec3<f32>(hull_rim));
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

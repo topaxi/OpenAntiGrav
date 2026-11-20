@@ -29,7 +29,7 @@ below) already cover.
 
 **Two copies of `hd_leachbeam_ball_glow` ship, and they differ.** `DATA00`'s
 (28,368 bytes) bakes `0.9` into block `@0x19b0`; `DATA02`'s (29,984) moves it
-into a model parameter, `0x743ea80b` (no preimage), which the LeachBall's own
+into a model parameter, `0x743ea80b` (`fresnelBase`), which the LeachBall's own
 `.rcsmodel` authors as `0.1` - `(1 - p)` is the same `0.9` - and additionally
 multiplies the output alpha by `VertexColour1.w`. The race's own
 `oag_assets::Archives` for HD serves `DATA00`'s (pinned by
