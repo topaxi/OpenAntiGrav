@@ -85,9 +85,10 @@ fn omega_snow(entry: u32, in: VertexOutput, lit_normal: vec3<f32>) -> OmegaSnow 
     // The Fresnel factor on the whole diffuse.
     let rim = pow(max(1.0 - dot(lit_normal, seen), 0.0), spec_row.y);
     let f = fresnel.w + program.x * rim;
-    // The authored Nova decode of the baked colour, scaled by the shadow light's factor.
-    let nova = scene.light.prelit_scale * pow(in.colour.rgb, scene.light.prelit_power)
-        + vec3<f32>(scene.light.prelit_bias);
+    // The authored Nova decode of the baked colour, which the vertex program does per vertex
+    // (`vs_main` leaves `scale * pow(colour, power)` in `lit_light.yzw`), then the bias; scaled
+    // by the shadow light's factor below.
+    let nova = in.lit_light.yzw + vec3<f32>(scene.light.prelit_bias);
     var shadow_factor = 1.0;
     if scene.light.shadow_light.w > 0.5 {
         let sl = scene.light.shadow_light.xyz;
