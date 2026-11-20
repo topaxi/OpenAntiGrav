@@ -3,7 +3,7 @@
 //! ```text
 //! oag-wad list    <archive> [--names <file>]   directory listing
 //! oag-wad tags    <archive>                    inventory the blob type tags
-//! oag-wad extract <archive> -o <dir>           extract every blob
+//! oag-wad extract <archive> -o <dir> [--png] [--expand]   extract every blob
 //! oag-wad hash    <name>                       hash a name, for spot checks
 //! ```
 //!
@@ -137,6 +137,10 @@ enum Command {
         /// Also write a .png beside every blob that decodes as a texture.
         #[arg(long)]
         png: bool,
+        /// Also write the expanded text (`.xml`) beside every blob that is shortened front-end
+        /// XML, which `scripts/fe-redirect-census.py` reads.
+        #[arg(long)]
+        expand: bool,
     },
 }
 
@@ -160,7 +164,12 @@ fn main() -> Result<()> {
             expand,
         } => cat(&archive, &entry, expand),
         Command::Sounds { archive, bank, cue } => sounds(&archive, bank.as_deref(), cue.as_deref()),
-        Command::Extract { archive, out, png } => extract(&archive, &out, png),
+        Command::Extract {
+            archive,
+            out,
+            png,
+            expand,
+        } => extract(&archive, &out, png, expand),
     }
 }
 
@@ -594,7 +603,7 @@ fn verify(spec: &str) -> Result<()> {
     }
 }
 
-fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
+fn extract(spec: &str, out: &Path, want_png: bool, want_expand: bool) -> Result<()> {
     let mut archive = Archive::open(spec)?;
     let entries = archive.directory().entries.clone();
 
@@ -640,6 +649,13 @@ fn extract(spec: &str, out: &Path, want_png: bool) -> Result<()> {
 
         std::fs::write(out.join(&name), &data).with_context(|| format!("writing {name}"))?;
         written += data.len() as u64;
+
+        if want_expand && fexml::is_fexml(&data) {
+            let xml_name = format!("{i:05}_{:08x}.xml", entry.name_hash);
+            let text = fexml::expand(&data).with_context(|| format!("expanding {name}"))?;
+            std::fs::write(out.join(&xml_name), text)
+                .with_context(|| format!("writing {xml_name}"))?;
+        }
 
         if let (true, Some(tex)) = (want_png, texture) {
             textures += 1;
