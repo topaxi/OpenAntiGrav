@@ -33,13 +33,25 @@ const SHADOWED: u32 = 0x3699_7860;
 const AMBIENT: u32 = 0x7353_24ab;
 
 /// The twins that author `Shadowed` and `Ambient`.
-const FAMILIES: [&str; 2] = [
+const FAMILIES: [&str; 3] = [
     "crowd_sprite_diffuse_normal_alpha_shadow",
     "crowd_diffuse_normal_shadow",
+    "crowd_diffuse_normal_shadow_bonecount4_normalizets",
 ];
 
 /// The plain materials, whose programs are the twins' with `Shadowed = 1` and `Ambient = 0`.
-const PLAIN: [&str; 2] = ["crowd_sprite_diffuse_normal_alpha", "crowd_diffuse_normal"];
+const PLAIN: [&str; 3] = [
+    "crowd_sprite_diffuse_normal_alpha",
+    "crowd_diffuse_normal",
+    "crowd_diffuse_normal_bonecount4_normalizets",
+];
+
+/// Whether `material` is one of the rigs' skinned twins, whose pixel programs are the unskinned
+/// ones' (`gcn_dump` of both: 52/119/125/115 instructions plain, 60/128/131/123 shadowed) and whose
+/// vertex programs read `eyePositionWorldSpace` as theirs do.
+fn skinned(material: &Material) -> bool {
+    material.name.to_ascii_lowercase().contains("_bonecount4_")
+}
 
 /// Per material, the glow-table slot (entry index plus one) it was admitted with.
 #[derive(Default)]
@@ -96,7 +108,9 @@ pub(super) fn plan(
     let mut out = Plan::default();
     for material in &decoded.materials {
         let eye_frame = ps4
-            && textures(&material.name).is_some_and(|file| gcn::third_axis_is_eye(&file).is_eye());
+            && (skinned(material)
+                || textures(&material.name)
+                    .is_some_and(|file| gcn::third_axis_is_eye(&file).is_eye()));
         let admitted = entry(material, eye_frame).filter(|_| ps4);
         let slot = admitted.and_then(|entry| {
             let at = emissive.iter().position(|e| *e == entry).or_else(|| {
