@@ -1634,8 +1634,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   the tiling pair, weighted by the glow entry's tint `x`), a glow-table entry of mode
   `PROGRAM_TARMAC` (14) selects the combine in `shade.wesl`; the markings pair rides `texcoord2`
   and the dirt pair `colour.xy` (`colour.zw` = 1, tint forced white on the mode) because the
-  vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the specular
-  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`.
+  vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the roads' normal-map
+  blend with `MarkingsNormal`. (The specular weighting by `MarkingsSpec` and the shadow-light factor are wired since
+  `omega-2048-road`: "The tarmac roads' lit programs" below.)
   **Result on `arena-2048`** (private copy of the pair, recorded flags, 1920 x 1080; mean RGB of
   the three boxes): original (86,122,114) (131,138,128) (124,132,123); before this change
   (74,115,108) (139,147,137) (95,129,120); after (72,111,105) (117,125,118) (83,114,107). The
@@ -2515,6 +2516,81 @@ program writes the texel's alpha out and adds `D^2` (`2048-material-params.md`, 
 now wired with the window family, and lane 3 everywhere then gives `moa-therma` 27.53 against 27.56 with the two wired, while
 `modesto-heights` +0.07 and `empire-climb` +0.09 stay worse. 2048's own programs are GXP: which others gate by the diffuse
 alpha is unread, so Vita stays on lane 0 outside the alpha-lit families and these two until each family's gate lane is read.
+
+## The tarmac roads' lit programs (2026-11-20, `omega-2048-road`)
+
+**Claim tested:** Omega's 2048-mode road is drawn by the law its own GCN road program computes, so the road box on
+`capital-reach-2048` (46.98) and `empire-climb-2048` (45.11) improves measurably. **False.** The terms the program
+computes that ours did not are now wired, they are the program's own, and the two frames move by +0.28 and +0.14 grey
+(noise under the 0.3 bar, and the wrong way): the gap on these two roads is not in this program.
+
+**Census.** Capital Reach (`bridge`) and Empire Climb (`tower`) draw their road through
+`tarmac_markings_dirt_markingsnormal` (36.0 % and 60.0 % of the frame, `compare-decompose.py --road tarmac`); the
+`road_alphaspec_normal_emissive_panelmap1[_mask]` materials the circuits also carry, and the speed and weapon pads,
+change no pixel by more than 25 grey on either pose (0.0 %). Every road submesh (`DECL_SUB` on `bridge` sub 3658, `tower`
+sub 2881) carries `lightmapUV`, `tangent`, `uvMarkings` and `uv1_uvDirt` and no `NOVAColor`: the lightmapped variants.
+
+**The program** (`gcn_dump data05.psarc data/environments2048/shared/objectlibrary/materials/tarmac_markings_dirt_markingsnormal.rcsmaterial --at <offset>`;
+the patch's copy ships): the lightmapped lit variants are `@0xbd44` (241 instructions, no shadow map) and `@0xa764`
+(342, `shadowMapSampler` and `shadowCoeffs`; `data00`'s are `@0xbc44` and `@0xa684`). The two are read to the same
+law apart from the shadow term (confidence 88, decoded GCN, no run):
+
+```text
+nova  = pow(LM.rgb, power) * scale + bias                         (the authored Nova triple; unchanged)
+Fsl   = 0.75 + 0.25 sat(N.SL) + SLSD.y sat(R.SL)^SLSD.x          (0x4e4 `0.75`, `0.25 sat(N.SL)`)
+lit   = nova * Fsl + liveLighting0diffuse * LM.a * S * sat(N.L)    S = the shadow map's term, 1 in @0xbd44
+G     = mix(Dm.a (1 - Dirt.a), MarkingsSpec Dm.a, Markings.a)
+spec  = liveLighting0specular * G * LM.a * S * sat(R.L)^SpecPower   (reflectiveBlurCoeffs.z reads 0 live: plain power)
+out   = fog(Dm.rgb mixed by Dirt, Markings * lit + spec)
+```
+
+`N` is the normal-mapped world normal, `R` the view reflected about it. `SL` and `SLSD` are the circuit's authored
+`Lighting.ShadowLight direction` (normalised, as the executable does) and `Lighting.ShadowLight specular power scale`:
+the live reads on Sol `(0.7908, -0.375, -0.4838)` and Queens Mall `(-0.3068, 0.4453, -0.8412)`
+([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), "Frame constants read live")
+equal the authored triples (Sol exactly, Queens Mall `(-0.31, 0.45, -0.85)` after normalising), so **no live read is
+needed for the factor** (the thread's "its source in the lighting data" is the envsettings). Capital Reach authors
+`(-0.414, 0.943, -0.850)` and `(10, 1)`, Empire Climb `(0, -0.320, -0.947)` and `(10, 1)`. `liveLighting0specular` is the
+authored specular colour times its intensity (Sol `6.096 3.263 1.6` times 1 equals the live read), which ours already carried.
+Which variant the race binds on a tarmac draw was not read; on the panel road all eight staged blocks had the shadow-map layout,
+so `@0xa764` is assumed here (confidence 70).
+
+**Wired** (`omega-2048-road`): `Light::shadow_light` and `shadow_light_specular` (`Light::with_shadow_light`, filled by
+`envsettings_light` on PS4 only), the factor on the prelit term and the lobe in `shade.wesl`'s mode-14 path, `SpecPower`
+(`scale`) and `MarkingsSpec` (tint `z`) on the road's glow-table entry. The lobe reads the dirt alpha unconditionally
+(`DIRT_SWITCH` stays the colour layer's). Tests: `omega_tarmac_lit_path` (the factor scales the prelit term; the lobe is
+weighted by the markings gloss and the dirt alpha), `omega_lightmap_ground_truth` (the loader reaches the rig from Tech De
+Ra's file), `envsettings::tests::a_pair_is_exactly_two_numbers`.
+
+**Measured** (the pairs' recorded flags, 1920x1080, ours re-rendered, `compare-decompose.py` and boxes; ours' adaptive
+exposure moves with every bright pixel, so a term that adds highlights can lower a box it does not touch). Before to after:
+
+| | Capital Reach | Empire Climb |
+| --- | --- | --- |
+| whole frame (raw mean grey) | 46.98 to 47.26 | 45.11 to 45.25 |
+| road region `LF`, `bias`, `G` | 27.6 to 28.3, -3.5 to -5.5, 0.91 to 0.95 | 29.8 to 29.5, -8.2 to -8.6, 1.08 to 1.14 |
+| box A mean abs grey, bias | near left `440x240+200+560`: 28.54 to 29.03, -12.4 to -15.3 | tarmac `700x120+620+380`: 42.60 to 43.07, -20.9 to -23.5 |
+| box B | mid `600x160+380+400`: 64.49 to 65.99, -45.6 to -48.1 | near left `400x200+160+640`: 25.67 to 24.96, -0.9 to -2.2 |
+| box C | right `360x200+1500+560`: 17.26 to 17.42, +0.8 to -0.7 | right `400x200+1380+560`: 39.04 to 38.91, +6.2 to +0.7 |
+
+Per term: the lobe alone moves Capital 0.00 and Empire +0.30; the factor on top moves Capital +0.28 and Empire -0.16.
+Capital's mid box carries the known 480 px pose offset. By eye (near road, ours before, after, theirs, one crop each): the lobe
+puts a mild sheen and crack glints on Empire's near road, the original's road is smoother and warmer; Capital's near left
+road stays warmer (R/G 1.14) than the original's neutral grey (1.07).
+
+**Where the gap is instead.** (1) The race's program takes the shadow map: its sun term and its lobe are `LM.a * S`, with
+`S = min(1, pcf(shadowMap) * exp2(clamp(c0 + c1 z, c2, c3)))` (`@0xa764` `@0x14c`, `@0x1a8`, `@0x488`-`@0x4b0`; the
+coefficients are `shadowCoeffs`). Ours has the baked `LM.a` only on the track, so the lobe glints sit in the craft's
+shadow where the original has none, and Capital's sun on the road is over-present: with the road's sun term switched off
+(a probe, not kept) Capital's whole frame goes 46.98 to 45.41 (Empire 45.11 to 56.86, which needs its sun). (2) Empire's far
+road (box A, bias -21 to -23) is the sun glare and exposure the earlier lanes found, not the program. Next: the track as a shadow
+receiver (a shadow-map pass over the track casters; ours' hull map is `sun_occlusion`), then the dirt layer's colour, which the
+corrected gloss does not settle.
+
+**2048 (Vita): checked, applies, not wired.** Vita authors `Lighting.ShadowLight direction` and its nova prelit programs
+read `shadowLightDirection` as the same shading uniform (`ship-shadows.md`, "Which light"), but 2048 carries no tarmac family
+and its light table (`FUN_8101d068`) is not this lane's. **HD and `2048-vita/moa-therma`:** re-rendered before and after
+(`hd-race/talons-pack` 23.06, `2048-vita/moa-therma` 27.56): pixel-identical.
 
 ## The port's anisotropy (2026-11-16, `port-aniso`)
 

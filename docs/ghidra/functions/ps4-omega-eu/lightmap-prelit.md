@@ -168,7 +168,11 @@ channel.
   one fixed form**. The patch's `.EnvSettings` authors `Lighting.ShadowLight
   direction` and `Lighting.ShadowLight specular power scale`. This renderer
   carries no shadow-light rig; the factor is left at 1 (**chosen, not
-  measured**).
+  measured**). **Wired for the `tarmac_*` road family** (`omega-2048-road`, 2026-11-20,
+  [`omega-status.md`](../../../formats/omega-status.md), "The tarmac roads' lit programs"): `Light::shadow_light`
+  carries the authored `Lighting.ShadowLight direction` and `specular power scale`, which equal the live read
+  ([`panel-displacement.md`](panel-displacement.md)). The other lightmapped families (the panel-map road, the
+  `diffuse_normal_specular` brick) are not given the factor yet.
 - **Vertex-colour variant** (above): the same curve, on a path whose role bits
   the PS4 material container does not yet provide.
 
