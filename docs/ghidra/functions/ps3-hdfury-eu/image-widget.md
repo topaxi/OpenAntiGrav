@@ -34,6 +34,7 @@ Scores follow the rubric's decompilation-plus-agreement band: the reading is una
 | `0x001b7720` | `Image_Update` | 72 |
 | `0x00164bd0` | `Widget_UpdateTransition` | 85 |
 | `0x00164df8` | `Widget_ResetTransition` | 85 |
+| `0x00165018` | `Widget_ArmTransition` | 85 |
 | `0x0016e580` | `Widget_ParseChildXml` | 75 |
 
 Vtable `0x00866210` (word index -> OPD -> code; the parser is called through `+0x48` by
@@ -242,6 +243,100 @@ fresh screen draws the finished logo; the other `vwipe` images (below).
 Selection's circuit emblem (192x192; `TrackSelectionScreen_SelectCircuit` restarts it), `cellmode_definition` (9), `racebox` (5),
 `recordgrid` (6), `showunlocks` (3), `controls_definition_ps3` (4), `credits` (2), `additional` (1), `network` (44). `hscale`:
 Track Selection's two lines, `endrace` (16), `network` (11). None of these plays yet: each needs the page's own entry clock.
+
+## Page entry: who arms the `Delay`, and when each page's wipe starts (2026-11-20, `hd-vwipe-pages`)
+
+Measured in RPCS3 RAM (cold boot, own instance, `scripts/rpcs3-hd-vwipe.py`; game not paused: the widgets are polled
+every 1 to 3 ms, 2 to 5 polls a frame). **Every front-end page's widget tree exists from boot**, so each `Image` widget is
+one heap address for the whole session (`scan` finds the 71 `vwipe` widgets by the vtable word `0x866210` and a `+0x120`
+with bit 2: Controls 2, ControlsP2 2, Credits 2, Race Records 6, Show Unlocks Root 3, Single Player 2, MP Select 2, Grid
+Selection 2, Grid Selection Fury 2, Cell Selection 5, Team Selection 1, TrackSelectionTopLevel 1, SoundTest 1, Edit
+Settings 2, Game List 18, GameLobby 18, FilterList 2). At rest every one reads `s = 0`, `+0x9c = 0`, `+0xa0 = 0` (or a
+few frames' leftover below 0).
+
+### The arming: `Widget_ArmTransition` (`0x00165018`)
+
+```
+Widget_ArmTransition(w):                 // recursive over +0x14 children / +0x10 siblings (unrolled eight deep)
+    w+0xa0 = w+0x74                       // the delay countdown := the authored Delay
+    w+0x9c = 0 ; w+0x68 = 0               // timer and alpha restart
+    for each child: Widget_ArmTransition(child)
+```
+
+It is `Widget_ResetTransition` (`0x00164df8`, above) plus the one store that function leaves out, `+0xa0 = +0x74`. The
+`0x00878208` data reference is a vtable slot. Callers (`get_xrefs_to`, 55 call sites in 22 functions): `TrackSelectionScreen_OnEnter_q`
+(`0x0025d454`), `0x00252c10` (`0x00253440`, the function before `TeamSelectionScreen_Update`), `ShowUnlocks_Screen`
+(`0x0024d010`, `0x0024d5b4`), the cell screen's refresh `0x002181a8` (six sites, one per widget it re-textures) and
+`0x002452f0`, `0x002587a0`, `0x00225490` (7), `0x0021a570` (6), `0x0021f488`, `0x0021f9e8` (4), `0x0021c9d8`,
+`0x001c5278` (16), `0x001c4a10`, `0x001c2e00`, `0x001c2ef8`, `0x001a3d80`, `0x001a6460`, `0x001a7db8`, `0x001a8250` and
+`0x00202d28` (an unnamed helper the cell refresh calls with a widget and a string, so probably a text setter). Which
+of these is the hook of Controls, Credits, Race Records, Racebox, Grid Selection and Team Selection is unread (only
+`TrackSelectionScreen_OnEnter_q` and `ShowUnlocks_Screen` are named); the RAM reads above do not depend on it. `Image_Update` has no arming.
+`Widget_UpdateTransition` then does `+0xa0 -= dt` each frame and ramps `+0x9c` the frame the countdown reaches 0
+(the `+0x9c += dt` is in the same call, so the first ramp frame is the frame the countdown crosses 0).
+
+### What RAM shows (8 pages, 2 to 3 entries each, one boot)
+
+At the frame a page is entered its root's present flag (`+0xc4`) rises and, in the same frame (same poll or the next
+2 ms), every `vwipe` widget under it reads `+0xa0` = its authored `Delay` (`+0x74`) exactly, `s = 0.01` for that first
+poll and 0.001 after, then `+0xa0` falls by `dt` a frame. The ramp (`+0x9c` above 0) starts the frame it crosses 0 and
+runs the in-time (`+0x6c`) to `s = 1`. **So the wipe starts `Delay` game-seconds after the page-entry frame and runs `+0x6c`
+seconds**; at 60 Hz (`dt` = 1/60) that is `ceil(Delay * 60)` frames of nothing and `0.5 * 60` = 30 frames of ramp. The
+emulator's `dt` was 16.7 ms on Racebox, Cell Selection and Grid Selection, 17.7 to 21 ms on Credits, Race Records and
+Team Selection and 16.7 to 18.5 on Track Selection (the game's timestep is variable), so frame counts below are at 60 Hz and
+the game-second figures are the measurement.
+
+| Page (root, TTY screen) | Widget (authored `Delay`, in-time) | Start after entry (60 Hz frames), ramp | Seen |
+| --- | --- | --- | --- |
+| Controls (`Controls Menu` then `Controls`) | `Item 1957` (0.25, 0.5), `Item 1958` (0.7, 0.5) | 15 and 42 frames, 30 | 1 clean entry + 1 `discover` entry; armed value 0.25 / 0.70 exactly |
+| Credits (Extras tab, `Credits`) | `Item 5349` (0.6, 0.5), `Logo` (0.8, 0.5) | 36 and 48, 30 | 2 entries |
+| Race Records (Records tab, `Race Records`) | `Item 1830` 0.6, `TaskLogo` 0.8, `Item 1834` 0.8, `TrackLogo` 1.0, `Item 1837` 1.0, `ClassLogo` 1.2 (in 0.5) | 36, 48, 48, 60, 60, 72; 30 | 3 entries, first-sight countdown = authored in all 18 |
+| Racebox (`Single Player`) | `Item 315` (0.45, 0.5), `BigIcon` (0.8, 0.5) | 27 and 48, 30 | 4 entries (3 timed + 1 `discover`) |
+| Track Select (`Track Creation` in the TTY, root `TrackSelectionTopLevel`) | `Emblem` (0.6, 0.5) | 36, 30 | 3 timed entries + 1 `discover`; `+0xa0` 0.6 at the flag's frame |
+| Team Selection (the `Logo`) | `Logo` (0.5, **0.7**) | 30, 42 | 3 entries; the flag rises 0.76 to 0.80 s after the press (the page switch), the countdown starts there |
+| Campaign grid (`Grid Selection Fury`) | `unlockboxbrackets` (0.45, 0.5), `flyerlogo` (0.65, 0.5) | 27 and 39, 30 | 3 entries + 1 `discover` |
+| Cell Selection (`Cell Selection`) | `flyerlogo` (0.8, 0.5) | 48, 30 | 3 entries |
+| Cell Selection emblems | `Event Emblem` 0.05, `Track Emblem` 0.125, `Speed Class Emblem` 0.2, `Weapons Emblem` 0.275 (in 0.3) | **24 frames (0.4 s hold) plus 3, 8, 12, 17**; 18 | 3 entries |
+
+**Stopped at aimed countdowns** (`rpcs3-hd-vwipe.py stop`, Racebox, game stopped through the GDB stub, read in the stop and again
+0.3 s later, equal every time): stopping when `Item 315`'s countdown read at or below 0.6, 0.3, 0.1 and at its first ramp frame
+gave `+0xa0` = 0.4333, 0.2995, 0.0835 and -0.0 (authored 0.45), the beside `BigIcon` (authored 0.8) at 0.7833, 0.6495, 0.4335,
+0.35, so both count the same game-seconds from one arming frame (0.45 s at the last stop for both). At the last stop
+`Item 315` read `+0x9c` = 0.0164 (one `dt`) and `s` = 0.0328 = `+0x9c / 0.5`, while `BigIcon` was still at `s` 0.001: the ramp
+starts on the frame the countdown crosses 0, with one `dt` already added. Confidence for the law (start = `Delay` after
+the present flag rises, ramp = in-time, linear): 80 (eight pages, 2 to 4 entries each, one boot; what would raise it: a second
+boot and a page-hook breakpoint).
+
+**Cell Selection's emblems wait a 0.4 s hold before their own delay.** Their `+0xa0` reads the authored value minus one frame
+for the first 0.39 to 0.42 game-seconds (0.416, 0.389, 0.398 in three entries, from the `flyerlogo` countdown as the clock):
+the cell screen's refresh (`0x002181a8`, which re-textures the four emblems and calls `Widget_ArmTransition` on each) runs every
+frame until then, re-arming them each time. The `flyerlogo` beside them is armed once and starts at its own 0.8 s. What
+ends the 0.4 s is unread (it is not an asset load: the first entry and the later ones hold the same time). Confidence for
+the 0.4 s: 65.
+
+### Not reached
+
+- **Network** (`MP Select`, `Game List`, `GameLobby`, `Edit Settings`, `FilterList`, 44 widgets): the ONLINE tab opens
+  `NetLoginPage` and falls back to `Main Menu` without a PSN session, so no network page was entered. The authored
+  `Delay` and in-time of all 44 are in RAM at rest (`scan`): GameLobby 0.5 to 0.95 (in 0.3), Game List 0.35 to 0.9 (in
+  0.3), `MP Select` 0.45 and 0.8 (in 0.5), `Edit Settings` 0.45 and 0.8, `FilterList` 0 (in 0.5 and 0.7). By the same
+  arming, they start `Delay` after entry; unmeasured.
+- **Show Unlocks** (`dots`, `closed`, `open`: `Delay` 0.1, in 0.5): the screen flashed through after a quit-race and left
+  by itself, so its entry timeline was not polled. Its arming caller is `0x0024d5b4`; by the same function it starts 0.1 s
+  after entry, unmeasured.
+- **`additional`**: the options page itself (`Additional`, the tab bar) has no `vwipe` that moves (`discover` saw 0 of 71
+  move on entry, twice); the one `additional_definition.xml` `vwipe` is `SoundTest`'s `Item 1150` (`Delay` 0.2, in 0.5), a
+  page this lane did not reach.
+
+### What to wire
+
+Per `Image`: read `delay` (the XML key, matched case-insensitively by `Widget_ParseChildXml`; an unset one is 0) as well as
+the in-time, and hold the wipe at `s = 0` (nothing drawn: `Image_Render` returns while `+0xa0 > 0`) until `delay` seconds after
+the frame the page becomes the current one, then ramp. Today `Screens::vwipe_from_node` reads only the in-time. The page-entry
+clock starts when the page's present flag rises, not at the button press (Team Selection's is 0.76 to 0.80 s after it,
+Racebox's within a frame). Two page-specific rules: Cell Selection's four emblems add the 0.4 s hold; a changed
+cell (`TrackSelectionScreen_SelectCircuit`, the cell screen's refresh) re-arms with the delay again where the caller is
+`Widget_ArmTransition`, and without it where the caller is `Widget_ResetTransition` (the circuit emblem's restart).
 
 ## Omega and 2048
 
