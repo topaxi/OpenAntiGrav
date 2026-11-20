@@ -487,6 +487,15 @@ pub struct SubMesh {
     /// type), and it is not a baked light: 2048's blended water edge reads `.x` and `.y` as the
     /// two lanes of its alpha chain (`docs/rendering/water.md`, "2048 (Vita)").
     pub vita_vertex_colour1: Vec<[u8; 4]>,
+    /// `VertexColour2` on the PS4 (four normalised bytes), one RGBA per vertex, from the record's
+    /// own declaration; empty on the Vita and where the declaration names none. Omega's snow
+    /// programs multiply `.rgb` into the picture.
+    pub ps4_vertex_colour2: Vec<[u8; 4]>,
+    /// `NOVAColor` on the PS4 (four normalised bytes), one RGBA per vertex, from the record's own
+    /// declaration; empty on the Vita (whose [`Self::colours`] carries it) and where the
+    /// declaration names none. The vertex program decodes `.rgb` by the Nova triple and passes
+    /// `.a` on as the sun's mask.
+    pub ps4_nova_colour: Vec<[u8; 4]>,
     /// Bytes per vertex, derived from the buffer's own length rather than read
     /// from a field - see [`Model::parse`].
     pub stride: usize,
@@ -1001,6 +1010,24 @@ fn one(
             vita_vertex_colour1.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
         }
     }
+    let ps4_colour = |pick: fn(&vertex_decl::VertexDecl) -> Option<&vertex_decl::Attribute>| {
+        let mut out = Vec::new();
+        if let Some(off) = own
+            .filter(|_| ps4)
+            .and_then(pick)
+            .map(|attr| usize::from(attr.offset))
+            && stride >= off + 4
+        {
+            out.reserve_exact(vertex_count);
+            for v in 0..vertex_count {
+                let at = vertex_at + v * stride + off;
+                out.push([file[at], file[at + 1], file[at + 2], file[at + 3]]);
+            }
+        }
+        out
+    };
+    let ps4_vertex_colour2 = ps4_colour(vertex_decl::VertexDecl::vertex_colour2);
+    let ps4_nova_colour = ps4_colour(vertex_decl::VertexDecl::ps4_nova_colour);
     Some(SubMesh {
         record,
         mesh: None,
@@ -1019,6 +1046,8 @@ fn one(
         tangents,
         colours,
         vita_vertex_colour1,
+        ps4_vertex_colour2,
+        ps4_nova_colour,
         stride,
     })
 }

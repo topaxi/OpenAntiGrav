@@ -2679,8 +2679,7 @@ five samplers (`Texture1`, `DriftNormalTexture`, two snow-normal detail scales, 
 `Sebenco_snow`, `Sebenco_snow_just_snow` and their `_new`/`_1`/`_2` twins) run 255 to 485 instructions. Ours draws these through the
 generic path: HD's `sebenco_snow` has its own wiring (`mesh::rcs::snow_rock`, read off PS3 microcode) and the GCN programs have none.
 In the frame the original's mountain is white with a bright sheen where ours is lilac, which a sun specular of 12 times
-`SpecStrength` and a Fresnel colour would produce and the generic ambient-plus-sun sum cannot. Read order for the next lane: the
-Fresnel and specular tail (`@0x5b0`-`@0x7b0`), then the detail-normal blend (`@0x2d8`-`@0x3b0`).
+`SpecStrength` and a Fresnel colour would produce and the generic ambient-plus-sun sum cannot. **Read and wired by `omega-snow-program` ("The snow program", below).**
 
 **Cross-checks.** 2048 (Vita): **checked, applies, not wired.** `altima`'s `SkyCube.rcsmaterial` carries the parameter name
 `SkyBrightness` and the same circuits author `Lighting.Sky brightness`, but its pixel program is USSE and unread, so the multiply is
@@ -2688,6 +2687,93 @@ not stated for it and its dome keeps the plain texture (`2048-vita/moa-therma` r
 HD: **checked, differs** (its sky is a `sky.gtf` cubemap with `Sky colour` bytes and no `Sky brightness`,
 `renderer.md`, "The sky law, read off live draws"); the HD race pair (`hd-race/talons-pack`) re-rendered before and after: 0 pixels
 differ.
+
+## The snow program (2026-11-20, `omega-snow-program`)
+
+**Claim tested:** Omega's `RT_snow1` snow family on Sebenco Climb is drawn by the law its own GCN program computes, so the
+snow-owned part of the box `1100,40,300,160` on `omega/sebenco-climb` improves (box 100.1 against theirs 162.3, bias -62.1,
+mean abs 62.5, 48 % snow by the sky lane's census). **True.** The box reads **133.2** (bias -29.1, mean abs 30.4), the snow pixels of the
+whole frame go from mean 93.9 against theirs 186.3 (bias -92.4, mean abs 92.7) to **176.2** (bias -10.1, mean abs 15.3), and the whole frame's
+mean abs against the original goes 39.86 to 36.15 (raw mean grey 81.85 to 85.77, theirs 103.77).
+
+**The materials in the frame.** `rt_snow1` is 23 submeshes and 84,203 triangles of the circuit model (`track.final.rcsmodel`, data02), the one
+snow material the race draws besides `rt_snow_ref` (one submesh, three more samplers, left generic); the `Sebenco_snow*` family is named by
+no model. Every `rt_snow1` submesh declares `position`, `normal`, `tangent`, `Uv1`, `VertexColour1`, `VertexColour2` and `NOVAColor` and no
+`lightmapUV` (`psp2_material_dump` `DECL_SUB`). The file ships ten pixel permutations (189 to 419 instructions); the inputs pick the one
+**with `NOVAColor`, no lightmap, no shadow map and no vertex light: pixel `@0xaa24` (308 instructions) with vertex `@0xa1e4` (111)**
+(the pixel's nine inputs are the vertex's nine outputs; the 419-instruction `@0x110e4` this thread named first is the lightmapped, shadow-mapped
+permutation, whose vertex program takes `lightmapUV`, and the `@0x12424` fog read in the sky section is its sibling's). Which permutation the race
+binds for the vertex-light count is unread (confidence 70): the 1-vertex-light permutation `@0xf6e4` is the same law with one more term.
+
+**The law** (confidence 85, decoded GCN `oag_rcs::gcn`, no run; the shared core was read on `@0x110e4` first, then `@0xaa24` against it):
+
+```text
+vertex:  attr1 = (VertexColour2.rgb, VertexColour1.x)      attr2.w = NOVAColor.a      attr4 = scale * |NOVAColor.rgb|^power + bias
+         attr5 = bitangent  attr6 = eye - position  attr7 = N  attr8 = T            fog F = exp(-(density * depth)^2) in attr0.w
+pixel:   m   = attr1.w                                      drift mask
+         d   = lerp((0.21952, 0.21952, 1), 2 DriftNormal(uv) - 1, m)
+         s   = 2 (Detail(uv * snownormDetailScale) + DetailLarge(uv * snownormDetailLargeScale)).xy - 2     h = 1 + Strength (2 (b1 + b2) - 3)
+         n   = normalise(Strength d.z s + d.xy h,  d.z h)  as  n.x T + n.y B + n.z N
+         F   = FresnelMin + FresnelScale (1 - N.V)^FresnelPower
+         w(x) = sat((x + DiffuseWrap) / (1 + DiffuseWrap))
+         Fsl = 0.75 + 0.25 w(N.SL) + SLSD.y w(R.SL)^SLSD.x                       SL, SLSD the circuit's ShadowLight
+         D   = w(N.L) liveLighting0diffuse attr2.w + attr4 Fsl                   (attr2.xyz is 0 in this permutation)
+         out = fog(F FresnelStrength FresnelColour attr1.rgb Texture1 D
+                   + SpecStrength SpecColour liveLighting0specular Texture2(uv * SpecTwinkleScale).a attr2.w w(R.L)^SpecPower)
+```
+
+`Texture1` and `Texture2` are both `and_snow3alpha` (one picture, its alpha the specular gloss); the drift normal is `glacier_detail_001_less_n`,
+the small detail `powdersnow_less_n`, the large one `ground_beach_wet_sand_uk_001_n`. **The constants are the material's own** (`~crc32` of their
+names; the record authors thirteen): `DiffuseWrap` 2.624, `FresnelMin` 1, `FresnelScale` 2.151, `FresnelPower` 1.749, `FresnelStrength` 0.709,
+`FresnelColour` `(0.787, 0.850, 0.897)`, `SpecStrength` 0.1, `SpecColour` `(1, 0.876, 1)`, `SpecPower` 10, `SpecTwinkleScale` 3.78,
+`snownormDetailStrength` 1.631, `snownormDetailScale` 14.66, `snownormDetailLargeScale` 12.29. **Two terms carry the move, by ablation** (each zeroed once on a temporary build, box and snow pixels; wired 133.2 and 176.2): the diffuse wrap set to 0 gives box 119.7
+and snow pixels 142.2 (mean abs 45.8); the Fresnel factor set to 1 gives 118.0 and 141.3 (mean abs 46.9); neither, the generic path, 100.1 and 93.9. A surface
+turned 90 degrees from the sun takes 0.73 of it with the wrap (ours took none), and the Fresnel factor multiplies the whole diffuse by 1 to 3.15 (the picture is also scaled by
+`FresnelStrength * FresnelColour`, 0.56, at a facing normal); ours' generic path gave a constant ambient plus `sat(N.L)`, and Omega's NOVA programs carry no constant ambient.
+`liveLighting0specular` is the sun's (12 on this circuit),
+so the lobe is `0.1 * 12 * gloss` of a near-white colour: a bright sheen where the normal turns the sun to the eye.
+
+**Not read, assumed.** `reflectiveBlurCoeffs.z` is engine-bound and read as 0 (it reads 0 live on the sea, `panel-displacement.md`): the lobe is the plain
+`SpecPower` and its scale is 1; with `z` at 1 the exponent falls to 2.5 and the lobe to 0.4 of it. The Fresnel factor uses the same bumped normal as
+the lighting; the program builds a second normal from `cross(N, T)` for `N.V` and one from the interpolated bitangent for the rest, which agree where the
+tangent's sign is +1 and the scale is 1. The track's shadow map (`S`, the road's `LM.a * S`) is not applied to the snow: the permutation has none, but the
+sun is gated by the baked `NOVAColor.a`, which ours does carry.
+
+**Wired** (`omega-snow-program`): `oag_rcs::rcsmodel::psp2::SubMesh::{ps4_vertex_colour2, ps4_nova_colour}` (additive readers), the loader's `psp2::snow`
+(admits a material whose pixel programs declare exactly the five snow samplers and the lit constants, by `oag_rcs::gcn::scan`, not by name; every
+submesh must carry the attributes), three glow-table entries of mode `PROGRAM_OMEGA_SNOW` (21) holding the constants above, the drift normal third and the
+details fourth and fifth, and `omega_snow.wesl` called from `shade.wesl`'s normal, light-sum and specular sites. Gated off by the shader's `simplified_lighting` (below).
+Test: `omega_sky_brightness_ground_truth::sebenco_climb_dome_is_scaled_by_its_authored_brightness` also pins the entries' constants against the model's own
+material and the vertices that name them (dropping the wire leaves 0 vertices naming the entry and fails it).
+
+**Measured** (`omega/sebenco-climb`, 1920x1080, the pair's recorded flags, ours re-rendered with the binary before and after; grey = Rec. 709 luma):
+
+| | theirs | before | after |
+| --- | --- | --- | --- |
+| box `1100,40,300,160` mean grey, bias, mean abs | 162.3 | 100.1, -62.1, 62.5 | 133.2, -29.1, 30.4 |
+| box mean RGB | 149/164/183 | 85/102/127 | 117/135/159 |
+| snow pixels (3.30 % of the frame, `OAG_SKIP_MATERIAL=rt_snow1` changes them by more than 25 grey, HUD boxes left out): mean, bias, mean abs | 186.3 | 93.9, -92.4, 92.7 | 176.2, -10.1, 15.3 |
+| snow pixels' mean RGB | 170/189/213 (their frame's, same mask) | 79/95/129 | 158/179/207 |
+| whole frame raw mean grey | 103.77 | 81.85 | 85.77 |
+| whole frame mean abs against the original | | 39.86 | 36.15 |
+
+Seen: the mountain goes from a lilac wash to white snow with blue shadow, with the drifts and ridges of the original's; the rocks and the boulders
+(`rt_snow_ref`, generic) are unchanged. **All 24 Omega race pairs re-rendered before and after** (`scripts/compare-rerender-ours.py`'s `rerender` on copies, the 22 of the sky lane's sweep plus the two Zone pairs): 23 are pixel-identical (0 pixels differ), Sebenco Climb differs on 107,725 pixels (5.20 % of the frame).
+
+**What is left of the box** (30.4). Skipping `rt_snow1` changes 20.0 % of the box's pixels by more than 25 grey; skipping every material whose name holds `snow` (the
+`jd_sebenco_snowfade_*` overlays, `snowtile`, `rt_snow_ref`, the `Sebenco_snow` family) changes 59.5 % (box mean 139.5 without them, from 100.1), and the dome 15.0 %. So
+about 40 % of the box is **other snow-named materials, still generic**: the next lane. The rest: the dome's bloom (the red channel 20 short, the sky lane), the far
+scenery and the boulder, the snow's remaining 6 % (the original's bloom; the vertex-light count of the permutation the race binds), and the HUD region the box overlaps.
+
+**Smaller facts.** The Nova decode is the vertex program's per vertex (`scale * pow(NOVAColor.rgb, power)` interpolated, then the bias in the fragment, which `vs_main` already
+computes into `lit_light.yzw`); doing it per pixel instead moved 131 pixels by one level. `--circuit-lighting simplified` moves 514,030 pixels of this frame before and after the
+change and none of the 68,500 snow pixels (the option does not reach these draws), so the generic fallback the mode leaves under `simplified_lighting` is not exercised in a render here
+(unverified; it reads `NOVAColor.a` as the sun mask and draws no normal map).
+
+**Cross-checks.** HD: **checked, differs** (HD's `sebenco_snow` is its own wired program on rcsmaterial microcode, `mesh::rcs::snow_rock`; `rt_snow1` is Omega's); `hd/sebenco-climb` and
+`hd-race/talons-pack` re-rendered before and after: **0 pixels differ**. 2048 (Vita): **checked, differs**: the DLC1 pack's `Sebenco_Climb` (`PCSA00015` and `PCSF00007` `dlc1.psarc`) ships
+`fc07_SnowBlendVertColour` with `and_snow3alpha`, no `rt_snow1` or `rt_snow` in the base, DLC or patch archives (listed), and its programs are GXP with unread operands; the plan is `ps4`-gated;
+`2048-vita/sebenco-climb` and `2048-vita/moa-therma`: **0 pixels differ**. The same `NOVAColor` + `VertexColour2` declaration is used by other Omega materials on this circuit; they stay generic.
 
 ## The diffuse coordinate that writes `1 - v` (2026-11-20, `omega-uv-flip`)
 

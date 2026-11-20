@@ -8,6 +8,7 @@ import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, fl
 import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
 import package::hull_normal::{hull_frame, hull_normal};
+import package::omega_snow::{OmegaSnow, omega_snow, omega_snow_normal};
 import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
@@ -178,6 +179,11 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **Omega's `_shadow` crowds** (`Emissive::program` mode 16, `mesh::rcs::psp2::crowd`): the light
     // is `Ambient + constantAmbientColour + sun * sat(N.L)` and the lit picture is times `Shadowed`.
     let crowd_lit = row_scale.z > 15.5 && row_scale.z < 16.5;
+    // **Omega's `RT_snow1`** (mode 21, `mesh::rcs::psp2::snow`, `omega_snow.wesl`): its own normal
+    // blend, Fresnel-weighted wrapped diffuse and sun lobe. Off under CIRCUIT LIGHTING `simplified`.
+    let omega_snow_entry = (in.slots >> 24u) & 63u;
+    let omega_snow_on = omega_snow_entry != 0u && row_scale.z > 20.5 && row_scale.z < 21.5
+        && simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
     // **HD's scrolled-tap water** (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`):
     // 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`, 4 `water_noref`; 0 elsewhere.
     let water_entry = (in.slots >> 24u) & 63u;
@@ -255,6 +261,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let bump = material_sample_grad(MATERIAL_PAD_MASK, panel_uv, uv_grad[0], uv_grad[1]);
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
+    } else if omega_snow_on {
+        n_hull = omega_snow_normal(omega_snow_entry, in, n);
+        n_lit = n_hull;
     } else if simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
         let map = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         // The crowd's programs weight the map's `z` by `eye - position` (`row_tint.w`, the entry's `offset`).
@@ -280,6 +289,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
 
+    var omega_snow_lit: OmegaSnow;
+    if omega_snow_on {
+        omega_snow_lit = omega_snow(omega_snow_entry, in, n_lit);
+    }
     let ndl_raw = dot(n_lit, scene.light.direction);
     let ndl = clamp(ndl_raw, 0.0, 1.0);
     // The specular's facing term in every HD lit program: `MOV_SAT x8` of the unsaturated
@@ -628,6 +641,12 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         if crowd_lit {
             authored = row_tint.rgb + scene.light.ambient + sun_diffuse;
             sun_light = sun_diffuse;
+        }
+        // Omega's snow: the Fresnel-weighted wrapped sun plus the Nova term, multiplying the picture
+        // and the vertex tint (`omega_snow.wesl`); its specular replaces the generic one below.
+        if omega_snow_on {
+            authored = omega_snow_lit.diffuse;
+            sun_light = omega_snow_lit.sun;
         }
     }
 
@@ -1361,6 +1380,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 specular = scene.light.sun_specular.rgb * (pow(facing, row_scale.x) * mask * rig_on * in.lit_light.x)
                     * highlight;
             }
+        }
+
+        if omega_snow_on {
+            specular = omega_snow_lit.specular;
         }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it
