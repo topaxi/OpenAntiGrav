@@ -110,16 +110,17 @@ stub (the `/proc` copy is all zero until the stub has paused the emulator once).
 | --- | --- |
 | 1 | stage 1 at 4 and 6 s after the release (bands all 0), stage 2 at 40 s (bands live, the two floats, `zoneTexVis`, tints); target texels not found (the header's address was not read through the stub) |
 | 2 | a dropped RACE TYPE press loaded Detonator (`GetMode()==8`), stopped |
-| 3 | stage 1, bands 0 at 30, 52 and 74 s: the race sat on the grid. Target via the stub: exactly two values, lines `0xff000000` and ground `0x60000000` |
-| 4 | stage 1, no band above 0.3 within 150 s, same bare grid |
+| 3 | the script attached the GDB stub right after the release, and the stub **halts the emulator on connect** (`scripts/rpcs3_debugger.py`): the race was frozen on the grid, bands 0. Target via the stub: exactly two values, lines `0xff000000` and ground `0x60000000` |
+| 4 | the same attach, the same frozen grid |
+| 5 | stub attached only after the music: the menu walk stopped on `Launch Game`, no race |
 
-So the bars were not caught in the target. The ground reads `0x60000000` after a minute of
-silence; the first read at the race start (billboards.md) found `0x60010101`. Ours keeps the
-ground at `1/255` (the start pair's value), rounding the fade to nearest so it holds there:
+So the bars were not caught in the target; runs 3 and 4 say nothing about the music. The ground
+reads `0x60000000` there; the first read at the race start (billboards.md) found `0x60010101`. Ours
+keeps the ground at `1/255` (the start pair's value), rounding the fade to nearest so it holds there:
 **chosen**, a one-count difference in a texel the Zone grade darkens to black.
 
-**Recipe for the missing read** (one boot): the same script with the race released and music
-playing (run 1's state at 40 s), then `target-gdb-<k>.bin` against `meta.json`'s `held`: band `b`'s
+**Recipe for the missing read** (one boot): the same script as committed (it attaches the stub only
+once a held band passes 0.3), then `target-gdb-<k>.bin` against `meta.json`'s `held`: band `b`'s
 column `x = 32 b + 5` should be the cap colour from row `ceil(510 - 508 held[b] - 0.5)` for 16 rows,
 the halved tint below to row 509, ground at `x = 32 b`.
 
@@ -152,7 +153,7 @@ gating).
 
 ## Other titles
 
-- **Omega: checked, not wired.** `Scene_PrepareFrame_q` reads `-508.0` and `526.0` from `.rodata`
+- **Omega: checked, applies, not wired.** `Scene_PrepareFrame_q` reads `-508.0` and `526.0` from `.rodata`
   (`0x01804c34`, `0x01804c3c`, the read at `0x015c8ea0`), the same pair as HD's style 0; the
   neighbouring constants differ (`31.0`, `528.0`, `544.0`), and the loop is unread.
   `Adverts::zone_equaliser_bars` is `false`: the bare grid.
