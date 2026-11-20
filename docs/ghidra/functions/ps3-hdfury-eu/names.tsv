@@ -1022,3 +1022,9 @@
 0x00164df8	function	Widget_ResetTransition	85	image-widget.md
 0x0016e580	function	Widget_ParseChildXml	75	image-widget.md
 0x00165018	function	Widget_ArmTransition	85	image-widget.md
+0x0018f540	function	Bracket_Construct	75	image-widget.md
+0x0018f450	function	Bracket_Update	80	image-widget.md
+0x0018f0b0	function	Bracket_Render	80	image-widget.md
+0x002197d0	function	CellSelection_OnEnter	80	image-widget.md
+0x0021a570	function	CellSelection_Update	80	image-widget.md
+0x002181a8	function	CellSelection_Refresh	80	image-widget.md

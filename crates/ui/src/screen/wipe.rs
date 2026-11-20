@@ -23,6 +23,11 @@ pub const FRAME_SECONDS: f32 = 1.0 / 60.0;
 /// "How the XML selects the transition"). Confidence 80.
 pub const IMAGE_RAMP_SECONDS: f32 = 0.7;
 
+/// Seconds a `Bracket` takes to ramp its alpha when the XML authors neither `EnableTransition` nor
+/// `Transition`: the class default its constructor stores (`0x3dcccccd` at `+0x6c`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "The corner brackets"). Confidence 75.
+pub const BRACKET_RAMP_SECONDS: f32 = 0.1;
+
 /// A `vwipe` image: how long its alpha takes to run 0 to 1, and how long the page waits first.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vwipe {
@@ -115,8 +120,14 @@ impl Vwipe {
     /// keeps an accumulated clock off the wrong side of that frame.
     #[must_use]
     pub fn entry_alpha(self, since_entry: f32) -> Option<f32> {
-        let ramp = since_entry - self.delay + FRAME_SECONDS;
-        (ramp > FRAME_SECONDS * 0.5).then(|| self.alpha(ramp))
+        self.ramp_seconds(since_entry).map(|ramp| self.alpha(ramp))
+    }
+
+    /// Seconds the ramp has run `since_entry` seconds after the page became current, `None`
+    /// while the `delay` runs; [`Self::entry_alpha`] without the division by the in-time.
+    #[must_use]
+    pub fn ramp_seconds(self, since_entry: f32) -> Option<f32> {
+        ramp_seconds(self.delay, since_entry)
     }
 
     /// The alpha after `elapsed` seconds of the ramp: `clamp(elapsed, 0, T) / T`.
@@ -177,6 +188,17 @@ impl Screens {
     }
 }
 
+/// Seconds a widget armed with `delay` has ramped `since_entry` seconds after its page became
+/// current, `None` while the countdown runs. The countdown starts at the delay on the arming
+/// frame and falls a frame at a time; the first ramp frame is the one it crosses 0 on and already
+/// holds one frame. Half a frame of slack keeps an accumulated clock off the wrong side of that
+/// frame.
+#[must_use]
+pub fn ramp_seconds(delay: f32, since_entry: f32) -> Option<f32> {
+    let ramp = since_entry - delay + FRAME_SECONDS;
+    (ramp > FRAME_SECONDS * 0.5).then_some(ramp)
+}
+
 /// `draw`, the plain quad of an image that may author a `vwipe`, as the page shows it
 /// `since_entry` seconds after it became current: nothing while the delay runs, the window of the
 /// ramp, then the quad whole. A tiled quad (a small pattern repeated over a larger rect) is cut
@@ -188,11 +210,34 @@ pub fn entry_draw(wipe: Option<Vwipe>, since_entry: f32, draw: Draw) -> Option<D
     let Some(wipe) = wipe else {
         return Some(draw);
     };
-    let alpha = wipe.entry_alpha(since_entry)?;
-    let Some(window) = Vwipe::window(alpha) else {
-        return Some(draw);
+    Some(windowed(wipe.entry_alpha(since_entry)?, draw))
+}
+
+/// [`entry_draw`] for a widget the original restarts with `Widget_ResetTransition`: the alpha and
+/// the ramp timer go back to 0 and the countdown is left alone, so a page that has finished
+/// waiting replays the wipe from the restart with no delay, and one still waiting keeps waiting
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"). `since_restart` is
+/// `None` until the widget was first restarted.
+#[must_use]
+pub fn restart_draw(
+    wipe: Option<Vwipe>,
+    since_entry: f32,
+    since_restart: Option<f32>,
+    draw: Draw,
+) -> Option<Draw> {
+    let (Some(wipe), Some(age)) = (wipe, since_restart) else {
+        return entry_draw(wipe, since_entry, draw);
     };
-    Some(match draw {
+    let ramp = wipe.ramp_seconds(since_entry)?;
+    Some(windowed(wipe.alpha(ramp.min(age)), draw))
+}
+
+/// `draw` cut to the window of a wipe at `alpha`, whole at 1.
+fn windowed(alpha: f32, draw: Draw) -> Draw {
+    let Some(window) = Vwipe::window(alpha) else {
+        return draw;
+    };
+    match draw {
         Draw::Sprite { rect, uv, color } => {
             let (rect, uv) = window.cut(rect, uv);
             Draw::Sprite { rect, uv, color }
@@ -212,5 +257,8 @@ pub fn entry_draw(wipe: Option<Vwipe>, since_entry: f32, draw: Draw) -> Option<D
             }
         }
         other => other,
-    })
+    }
 }
+
+#[cfg(test)]
+mod tests;

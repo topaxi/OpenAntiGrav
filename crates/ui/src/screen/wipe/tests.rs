@@ -186,7 +186,9 @@ fn an_entry_draw_waits_cuts_and_finishes() {
         color: [1.0; 4],
     };
     assert_eq!(entry_draw(wipe, 0.2, tiled.clone()), None);
-    let Some(Draw::TiledSprite { rect, uv, repeat, .. }) = entry_draw(wipe, 0.45, tiled.clone())
+    let Some(Draw::TiledSprite {
+        rect, uv, repeat, ..
+    }) = entry_draw(wipe, 0.45, tiled.clone())
     else {
         panic!("a tiled slab");
     };
@@ -198,4 +200,44 @@ fn an_entry_draw_waits_cuts_and_finishes() {
         entry_draw(wipe, EntryClock::finished().seconds(), sprite()),
         Some(sprite())
     );
+}
+
+/// `Widget_ResetTransition` leaves the countdown alone: a page past its delay replays from the
+/// restart (a slab on the press, whole after the in-time), a page still inside its delay keeps
+/// waiting, and a widget never restarted draws as on entry.
+#[test]
+fn a_restart_replays_from_the_press_and_keeps_the_countdown() {
+    let wipe = Some(Vwipe {
+        seconds: 0.5,
+        delay: 0.45,
+    });
+    let height = |draw: Option<Draw>| match draw {
+        Some(Draw::Sprite { rect, .. }) => Some(rect[3]),
+        other => panic!("{other:?}"),
+    };
+    let slab = height(restart_draw(wipe, 3.0, Some(0.0), sprite())).expect("drawn");
+    assert!(
+        (slab - 5.0).abs() < 1e-4,
+        "{slab}: a tenth of the 50 tall quad"
+    );
+    assert_eq!(
+        restart_draw(wipe, 3.0, Some(0.6), sprite()),
+        Some(sprite()),
+        "whole 0.5 s on"
+    );
+    assert_eq!(
+        restart_draw(wipe, 0.2, Some(0.0), sprite()),
+        None,
+        "the opening delay still runs"
+    );
+    assert_eq!(
+        restart_draw(wipe, 0.5, Some(0.3), sprite()),
+        entry_draw(wipe, 0.5, sprite()),
+        "a press from before the delay ended changes nothing: the ramp counts from the delay's end"
+    );
+    assert_eq!(
+        restart_draw(wipe, 3.0, None, sprite()),
+        entry_draw(wipe, 3.0, sprite())
+    );
+    assert_eq!(restart_draw(None, 0.0, Some(0.0), sprite()), Some(sprite()));
 }

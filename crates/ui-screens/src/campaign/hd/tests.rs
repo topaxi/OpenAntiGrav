@@ -123,6 +123,47 @@ fn cell_selection_difficulty_starts_at_medium_and_wraps() {
     assert_eq!(model.difficulty(), Difficulty::Medium);
 }
 
+/// A cell step and a rung step are the two ways the cell screen's refresh runs while it is up, and
+/// each re-arms the emblems; a step at a frozen clock (a still) records nothing, and a step that
+/// goes nowhere arms nothing. This fails if either path stops noting the refresh.
+#[test]
+fn a_cell_step_and_a_rung_step_note_where_the_entry_clock_stood() {
+    use oag_gameplay::input::{Button, Input};
+
+    let race = |name: &str| Cell {
+        name: name.to_string(),
+        ..cell(Mode::Race, Some("16_Track"))
+    };
+    let mut model = CellSelection::new(vec![race("grid0_0_0"), race("grid0_1_0")]);
+    assert_eq!(model.refreshed_at(), None);
+    model.tick(0.5);
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    model.update(&mut input);
+    assert_eq!(model.refreshed_at(), Some(0.5), "a cell step");
+    model.tick(0.25);
+    model.cycle_difficulty();
+    assert_eq!(model.refreshed_at(), Some(0.75), "a rung step");
+    model.tick(0.25);
+    model.select_by_name("grid0_1_0");
+    assert_eq!(
+        model.refreshed_at(),
+        Some(0.75),
+        "the cell it is already on"
+    );
+    model.select_by_name("grid0_0_0");
+    assert_eq!(model.refreshed_at(), Some(1.0), "another cell");
+    let mut still = CellSelection::new(vec![race("grid0_0_0"), race("grid0_1_0")]);
+    *still.entry_mut() = oag_ui::screen::EntryClock::finished();
+    still.cycle_difficulty();
+    assert_eq!(
+        still.refreshed_at(),
+        None,
+        "a finished still stays finished"
+    );
+}
+
 #[test]
 fn square_on_the_pad_cycles_difficulty_and_emits_the_event() {
     use oag_gameplay::input::{Button, Input};
@@ -1043,6 +1084,52 @@ fn the_grids_unlock_box_waits_its_delay_and_then_wipes() {
         "{first:?}: a slab a tenth tall"
     );
     assert_eq!(heights_at(60), [168.0], "whole once the ramp is out");
+}
+
+/// The unlock box's corner marks are a `Bracket` of their own inside the `unlockboxbrackets` image:
+/// the image's wipe does not cut them, the bracket's own `delay="0.4"` holds them back (24 frames),
+/// and they then open out from a third of the way in over the class's 0.1 s (`Bracket_Update`
+/// skips the draw while its countdown runs). This fails if the grid page's clock is not passed to
+/// the brackets.
+#[test]
+fn the_unlock_boxs_corner_marks_wait_their_own_delay_and_open_out() {
+    let xml = FURY_GRID_FIXTURE.replace(
+        "<Bracket><Values corner",
+        r#"<Bracket delay="0.4"><Values corner"#,
+    );
+    // The 16 by 16 marks, as their top-left corners.
+    let marks_at = |frame: u32| -> Vec<[f32; 2]> {
+        let mut entry = oag_ui::screen::EntryClock::default();
+        for _ in 0..frame {
+            entry.tick(1.0 / 60.0);
+        }
+        fury_grid_list_with(&xml, (true, 2, 0), entry)
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => {
+                    Some([rect[0], rect[1]])
+                }
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(marks_at(0), Vec::<[f32; 2]>::new());
+    assert_eq!(
+        marks_at(23),
+        Vec::<[f32; 2]>::new(),
+        "the last frame of the delay"
+    );
+    // Frame 24 holds one frame of the 6-frame ramp: a sixth of the way out, so the marks sit
+    // 5/6 of a third of the box in from its corners.
+    let first = marks_at(24);
+    assert_eq!(first.len(), 4, "{first:?}");
+    let inset_x = 448.0 * (5.0 / 6.0) / 3.0;
+    let inset_y = 176.0 * (5.0 / 6.0) / 3.0;
+    assert!((first[0][0] - (160.0 + inset_x)).abs() < 1e-2, "{first:?}");
+    assert!((first[0][1] - (700.0 + inset_y)).abs() < 1e-2, "{first:?}");
+    let settled = marks_at(60);
+    assert_eq!(settled[0], [160.0, 700.0]);
+    assert_eq!(settled[3], [160.0 + 448.0 - 16.0, 700.0 + 176.0 - 16.0]);
 }
 
 /// The unlock panel's dot pattern is a small texture tiled over a 440 by 168 rect (the dots on

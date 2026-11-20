@@ -585,6 +585,10 @@ pub struct CellSelection {
     pulse: pulse::SelectorPulse,
     /// Seconds since the page became current, which its `vwipe` images count their `delay` from.
     entry: EntryClock,
+    /// Where [`Self::entry`] stood when the selected cell last changed or the rung last stepped,
+    /// `None` until one did: the cell screen's refresh re-arms its emblems then, see
+    /// [`Self::refreshed_at`].
+    refreshed_at: Option<f32>,
     /// The rung the `DifficultyButton` widget's square-button prompt
     /// currently shows (built by [`draw::cell_draw_list`]), and what
     /// `crate::app::session::campaign` (`oag_game`) records alongside a
@@ -683,6 +687,7 @@ impl CellSelection {
             tier_targets: Vec::new(),
             pulse: pulse::SelectorPulse::default(),
             entry: EntryClock::default(),
+            refreshed_at: None,
             difficulty: Difficulty::Medium,
         }
     }
@@ -769,6 +774,28 @@ impl CellSelection {
 
     pub fn entry_mut(&mut self) -> &mut EntryClock {
         &mut self.entry
+    }
+
+    /// Where [`Self::entry`] stood when the selected cell last changed or the rung last stepped:
+    /// both end in `CellSelection`'s refresh, which re-arms the four emblems' `Delay`
+    /// (`Widget_ArmTransition`), so they replay their wipe from there
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Re-arming"). `None` until one
+    /// did, and for a still whose clock is not running.
+    #[must_use]
+    pub fn refreshed_at(&self) -> Option<f32> {
+        self.refreshed_at
+    }
+
+    /// Sets [`Self::refreshed_at`], for a still drawn a stated time after a change.
+    pub fn set_refreshed_at(&mut self, at: Option<f32>) {
+        self.refreshed_at = at;
+    }
+
+    fn note_refresh(&mut self) {
+        let now = self.entry.seconds();
+        if now.is_finite() {
+            self.refreshed_at = Some(now);
+        }
     }
 
     /// Advances the screen's clocks by one tick: `Selector`'s pulse and the page's entry clock.
@@ -861,6 +888,7 @@ impl CellSelection {
     /// such a cell has regardless of which rung is asked for.
     pub fn cycle_difficulty(&mut self) {
         self.difficulty = self.difficulty.next();
+        self.note_refresh();
     }
 
     #[must_use]
@@ -882,6 +910,9 @@ impl CellSelection {
     /// [`GridSelection::set_index`]'s own out-of-range clamp makes.
     pub fn select_by_name(&mut self, name: &str) {
         if let Some(index) = self.cells.iter().position(|cell| cell.name == name) {
+            if index != self.index {
+                self.note_refresh();
+            }
             self.index = index;
         }
     }
@@ -1072,6 +1103,7 @@ impl CellSelection {
         }
         if let Some((index, _, _)) = best {
             self.index = index;
+            self.note_refresh();
             true
         } else {
             false

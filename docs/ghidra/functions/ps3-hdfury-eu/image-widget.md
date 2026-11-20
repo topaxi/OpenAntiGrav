@@ -36,6 +36,12 @@ Scores follow the rubric's decompilation-plus-agreement band: the reading is una
 | `0x00164df8` | `Widget_ResetTransition` | 85 |
 | `0x00165018` | `Widget_ArmTransition` | 85 |
 | `0x0016e580` | `Widget_ParseChildXml` | 75 |
+| `0x0018f540` | `Bracket_Construct` | 75 |
+| `0x0018f450` | `Bracket_Update` | 80 |
+| `0x0018f0b0` | `Bracket_Render` | 80 |
+| `0x002197d0` | `CellSelection_OnEnter` | 80 |
+| `0x0021a570` | `CellSelection_Update` | 80 |
+| `0x002181a8` | `CellSelection_Refresh` | 80 |
 
 Vtable `0x00866210` (word index -> OPD -> code; the parser is called through `+0x48` by
 `Widget_ParseChildXml`, which fixes its slot):
@@ -313,12 +319,15 @@ numbers and, at other addresses, the same 71 widgets; what would raise it: a pag
 
 **Cell Selection's emblems wait a hold of about 0.37 s before their own delay.** Their `+0xa0` reads the authored value minus one
 frame for the first 0.39 to 0.42 game-seconds after the page's arming (the last re-arm, from the `flyerlogo` countdown as the clock:
-0.416, 0.389, 0.398 and 0.40 in four entries): the cell screen's refresh (`0x002181a8`, which re-textures the four emblems and calls
-`Widget_ArmTransition` on each) runs every frame until then, re-arming them each time. The `flyerlogo` beside them is armed once and
-starts at its own 0.8 s. The ramp start of each emblem, measured as game-seconds on the `flyerlogo` clock less its own delay, is 0.349
-to 0.399 (mean 0.372) over 20 starts in 5 entries on two boots, so the emblems start `0.37 + Delay` after entry (0.42, 0.50, 0.57, 0.65 s),
-about 22 frames of hold at 60 Hz. What ends the hold is unread (it is not an asset load: the first entry and the later ones
-hold the same time). Confidence for the 0.37 s: 65.
+0.416, 0.389, 0.398 and 0.40 in four entries). **What makes the hold is read (2026-11-20, `hd-vwipe-rearm`):** the top block of
+`CellSelection_Update` (`0x0021a570`) re-arms six widgets (`Event Emblem`, `Track Reverse`, `Track Emblem`, `Speed Class Emblem`,
+`Weapons Emblem`, `RightColumnText`) with `Widget_ArmTransition` on every frame that a countdown at `+0x118` is above 0, and
+`CellSelection_OnEnter` (`0x002197d0`) sets that countdown to the float behind TOC `+0x2b94` = 0.4 (`0x00766bac`); each frame
+subtracts `dt` and the block stops at 0 (threshold `0x008b011c` = 0). So the last re-arm is the last frame that starts above 0, at
+`0.4 - dt` to `0.4` s after the entry (0.383 to 0.4 s at 60 Hz), and the emblems then count their own delay from it. The measured
+0.349 to 0.399 s (mean 0.372, 20 ramp starts, two boots) sits a frame and a half under the code's band, polling lag being the
+likely gap; ours keeps the measured 0.37. The `flyerlogo` beside them is armed once and starts at its own 0.8 s. Confidence for
+the 0.4 s countdown: 80 (decompile; the three floats read from the file); for ours at 0.37: 65.
 
 ### Not reached
 
@@ -390,11 +399,75 @@ Each `vwipe` Image waits its authored `delay` from the frame its page becomes cu
   `team_selection_definition.xml`/`track_selection_definition.xml` no longer author. What stays unexplained in RAM terms:
   `racebox_definition.xml` holds three `vwipe` images outside any `Screen` (an unnamed 0.45 s, `WeaponBG` 0.5 s, its `WeaponIcon`
   0.55 s) that RAM never showed under `Single Player`. All asserted by name in `the_xml_authors_widgets_ram_did_not_show`.
-- **Open**: a cell or circuit change re-arms with the delay again where the caller is `Widget_ArmTransition` (the cell
-  screen's refresh), and the Track Select emblem's restart on a circuit step is `Widget_ResetTransition` (no delay): neither is
-  replayed (the emblems and the emblem stay finished after the page entry). The unlock box's corner brackets are children of
-  `unlockboxbrackets` and ours draws them from the first frame (whether they follow the image's wipe is unread). The Cell emblem hold's
-  end is unread.
+- **Open** (the first three closed by `hd-vwipe-rearm`, "Re-arming" and "The corner brackets" below): the Cell emblem hold's end
+  is read, not re-measured; the Omega-only `TrackPreview` (0.4 s) is unwired.
+
+## Re-arming: who restarts a wipe after the page is up (2026-11-20, `hd-vwipe-rearm`)
+
+Callers of `Widget_ResetTransition` (`0x00164df8`, 11 sites) and `Widget_ArmTransition` (`0x00165018`, 56 sites) were read in
+the EBOOT (`get_xrefs_to`). Only these two reach a widget our pages draw after the page opens:
+
+| Where | What | Call | Ours |
+| --- | --- | --- | --- |
+| `TeamSelectionScreen_Update` (`0x00254348`, `0x002557bc`) | team step, `Logo` | Reset: no delay | wired earlier (`restart_draw`) |
+| `TrackSelectionScreen_SelectCircuit` (`0x0025c340`, call `0x0025cb8c`) | circuit step, `Emblem` (TOC `+0x4ae0`, string `Emblem`) | Reset: no delay | wired |
+| `CellSelection_Refresh` (`0x002181a8`, six sites) | cell changed, rung stepped | Arm: the delay again | wired |
+
+`SelectCircuit` returns at once when the circuit index is the one already shown (`+0xfc == param_2` and the flag at
+`+0x114` of its item clear), so a step to the same entry restarts nothing; ours restarts on a step in a one-entry list too
+(`land_on`), which no shipped list has. The up/down switch between a circuit and its reverse is a move to another item, so it
+restarts the emblem in both. Reset zeroes the alpha and the ramp timer and leaves the countdown, so a step inside the opening
+delay waits out the rest of it (`oag_ui::screen::restart_draw`: the ramp counts from the later of the delay's end and the press).
+
+`CellSelection_Refresh` runs from three places: `CellSelection_OnEnter` (`0x0021a474`), `CellSelection_Update` when the selected
+cell pointer (`+0xf0`) differs from the one under the cursor (`0x0021aa40`), and on the `Square` rung step (`+0x104 = (+0x104 +
+1) % 3`, `0x0021b004`). It re-textures the four emblems (and sets `Track Reverse` visible only for a reversible track) and calls
+`Widget_ArmTransition` on `Event Emblem`, `Track Emblem`, `Track Reverse` (that one only when the track reverses),
+`Speed Class Emblem`, `Weapons Emblem` and `RightColumnText`. So a change replays the four emblems' wipes from the change after
+their own delays (0.05, 0.125, 0.2, 0.275 s), with **no 0.37 s hold**: the hold is `CellSelection_Update`'s per-frame block, which
+only `OnEnter` feeds (a change inside the first 0.4 s adds nothing the hold does not). Ours: `CellSelection::refreshed_at` records
+the entry clock at a cell change or a rung step, `cell_emblems::since_armed` takes the later of that and the hold's end. Neither
+`Track Reverse` nor `RightColumnText` is a `vwipe` image.
+
+**Not wired, same call, recorded:** `Arm` is recursive over the widget's children, so a change also re-arms every child of the
+four emblems (the `Event Title`, `Track Title`, `Speed Class Title` and `Weapons Title` `Text` widgets, the arrows, `Track
+Reverse`, and each emblem's two `Bracket` children, delays 0.1 to 0.325 s) and of `RightColumnText` (its `Bracket`, 0.3 s, and the
+`RC ...` texts). A `transition="0"` widget with a `delay` draws nothing until the delay is out (`Widget_UpdateTransition` keeps
+alpha at 0.001 and `Image_Render` returns), so on a change the original blanks and brings back that text column in stages; ours
+draws no delay on a `Text`, an arrow or those brackets, so only the four emblem icons replay. Omega: the same files and
+`picker::hd::track` / `campaign::hd` run its pages, so this is wired by lineage and unmeasured there (checked, applies).
+
+**Test**: a pad step on a settled `Cell Selection` hides all four emblems the same instant and brings them back in order
+(`cell_rearm_tests`), the rung step the same, a still with no clock stays finished; the track emblem restarts at a step and keeps
+waiting inside the opening delay (`picker::hd::track::tests::a_circuit_step_replays_the_emblems_wipe_without_the_delay`);
+`CampaignStage::tick_ticker` advances the open page's clock on both screens
+(`app::campaign_stage::tests::the_stages_tick_advances_the_open_pages_entry_clock`). Stills: `--menu-picker-step-seconds T` on
+`track-select` and, with the cell page, `cell-select` (the cell or rung changed `T` seconds ago; the page `--menu-entry-seconds`
+old, 10 s with none).
+
+## The corner brackets (2026-11-20, `hd-vwipe-rearm`)
+
+`<Bracket>` is its own widget class (`Bracket_Item.cpp`: constructor `0x0018f540`, vtable `0x00865568`), not part of the `Image`
+it is written inside. It has its own `delay` attribute (the generic child parser), and:
+
+- `Bracket_Update` (`0x0018f450`, vtable slot 3, reached through the thunk at `0x0018f4d8` that runs `Widget_UpdateTransition`)
+  returns before it queues the widget while `+0xa0` (the countdown) is above 0: nothing is drawn during the `delay`.
+- The in-time is the class default stored by the constructor, `+0x6c` = the float at `0x008ac6bc` = `0x3dcccccd` = **0.1 s**, unless
+  the tag authors `EnableTransition` or `Transition` (none on the disc does).
+- `Bracket_Render` (`0x0018f0b0`, slot 7) with alpha `s` below 1: `dx = (1 - s) * width * (1/3)`, `dy = (1 - s) * height * (1/3)`
+  (`+0xb0` is the width and `+0xac` the height here, unlike `Image`; constants `0x008ac6a4` = 1.0, `0x008ac6a0` = 0.3333), and
+  each corner mark sits `dx`, `dy` in from its corner. So the marks open out from a third of the way in to the corners.
+- The image's `vwipe` does not cut a bracket: `unlockboxbrackets` wipes its `dot.gtf` panel from 0.45 s, its `Bracket` appears at
+  0.4 s and is out by 0.5 s.
+
+`Grid Selection Fury`'s `unlockboxbrackets` carries `<Bracket delay="0.4">`; every `<Bracket>` in `CellMode_Definition.xml`
+authors a `delay` too (0.1 to 0.675 s). **Wired for the Grid page's unlock box only** (`Bracket::inset`,
+`cell_brackets::draws(.., since_entry)` from `GridSelection::entry`; sheet at 0.35, 0.43, 0.46, 0.5, 0.9, 1.3 s). Cell Selection,
+Team Selection and Track Select draw their brackets from frame 0 as before: each such bracket counts its delay from its own arming
+(the cell page's sit under the re-armed emblems, the target rows under `Target Title`), page-entry and per-parent clocks that no RAM
+read covered. Confidence 75 for the bracket law (decompile of three functions, constants read from the file; no RAM watch of a
+bracket countdown); what would raise it: the countdown of a `Bracket` widget at the Grid page's entry. Omega: its Grid page draws
+through the same `campaign::hd` code, wired by lineage; the Omega `Bracket` class was not read (checked, applies, unread).
 
 ## Omega and 2048
 

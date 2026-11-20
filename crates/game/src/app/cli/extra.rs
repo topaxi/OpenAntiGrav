@@ -156,6 +156,11 @@ pub(crate) struct MenuArgs {
     /// (`docs/ui/selection-screens.md`, "The craft's swap"). A still has no
     /// step to be after, so this stands for one: the screen is otherwise
     /// settled, or `--menu-picker-seconds` after it opened. `None` draws no step.
+    ///
+    /// Also `--menu-page track-select` (the circuit `Emblem`'s wipe restarts at a step) and, on
+    /// HD/Fury and Omega, `--menu-page cell-select`, where it is the seconds since the cell or the
+    /// rung last changed, which re-arms the four emblems' wipes; the page is then
+    /// `--menu-entry-seconds` old, or 10 s old with none.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_picker_step_seconds: Option<f32>,
 

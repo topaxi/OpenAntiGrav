@@ -41,6 +41,15 @@ const TINT: u32 = 0xFF96_9696;
 /// ends the hold is unread.
 pub const ENTRY_HOLD_SECONDS: f32 = 0.37;
 
+/// Seconds the emblems have counted their `delay` for: from the end of the entry hold, or from the
+/// last time the cell or the rung changed once the hold is over. The per-frame re-arm that makes
+/// the hold stops when its 0.4 s countdown ends, so a change inside the hold arms nothing the
+/// hold does not, and one after it arms the `delay` alone.
+#[must_use]
+pub fn since_armed(entry: EntryClock, refreshed_at: Option<f32>) -> f32 {
+    entry.seconds() - refreshed_at.map_or(ENTRY_HOLD_SECONDS, |at| at.max(ENTRY_HOLD_SECONDS))
+}
+
 /// The barcode strip the screen authors under the hex field; on no sheet until
 /// this names it, since nothing else draws it.
 pub const BARCODE_SRC: &str = r"Data\FE\Images\flyerbarcode.gtf";
@@ -144,7 +153,7 @@ pub(super) fn draws(
     cell: &Cell,
     track_emblems: &HashMap<String, String>,
     sprites: &dyn Fn(&str) -> Option<Placed>,
-    entry: EntryClock,
+    since_armed: f32,
 ) -> Vec<Draw> {
     slots
         .iter()
@@ -171,11 +180,7 @@ pub(super) fn draws(
                 start_enabled: true,
                 wipe: slot.wipe,
             };
-            entry_draw(
-                image.wipe,
-                entry.seconds() - ENTRY_HOLD_SECONDS,
-                image_draw(&image, placed),
-            )
+            entry_draw(image.wipe, since_armed, image_draw(&image, placed))
         })
         .collect()
 }

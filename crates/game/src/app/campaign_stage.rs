@@ -1290,6 +1290,90 @@ mod tests {
         assert_eq!(selected(&model), "grid0_3_1");
     }
 
+    /// A stage over two bare grids (one cell each): enough screen to tick, no art.
+    fn bare_stage() -> super::CampaignStage {
+        let grid = |name: &str| oag_tables::race_campaign::Grid {
+            name: name.to_string(),
+            required_points: 0,
+            locked: false,
+            group: None,
+            unlock_grid: None,
+            cells: vec![cell(&format!("{name}_0_0"))],
+            campaign: None,
+            title_color: None,
+            text_color: None,
+            flyer_name: None,
+            billboard_name: None,
+        };
+        let layout = || oag_ui_screens::campaign::Layout {
+            screen: oag_ui::screen::Screen::default(),
+            scale: [1.0, 1.0],
+            faces: oag_ui_screens::picker::FaceScales::default(),
+        };
+        super::CampaignStage::new(
+            vec![grid("grid0"), grid("grid1")],
+            layout(),
+            layout(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            oag_ui::language::StringTable::default(),
+            oag_hud::sprite::Sheet::build(&[], &mut Vec::new()),
+            oag_hd::TITLE,
+            oag_disc::Platform::Ps3,
+            oag_ui::language::CircuitNames::default(),
+            crate::records::Store::default(),
+            None,
+            std::collections::HashMap::new(),
+            None,
+        )
+    }
+
+    /// The page-entry clock the `vwipe` images count their `delay` on runs off the stage's tick,
+    /// on `Grid Selection` and on `Cell Selection`, and starts at zero when a page opens. This
+    /// fails if `tick_ticker` stops ticking the open page (a pulse-only tick, say).
+    #[test]
+    fn the_stages_tick_advances_the_open_pages_entry_clock() {
+        use super::Screen;
+        let mut stage = bare_stage();
+        let Screen::Grid(model) = &stage.screen else {
+            panic!("two grids open on Grid Selection");
+        };
+        assert_eq!(model.entry().seconds(), 0.0);
+        for _ in 0..30 {
+            stage.tick_ticker(1.0 / 60.0);
+        }
+        let Screen::Grid(model) = &stage.screen else {
+            panic!("still on Grid Selection");
+        };
+        assert!(
+            (model.entry().seconds() - 0.5).abs() < 1e-4,
+            "Grid Selection"
+        );
+
+        assert!(stage.open_cell_selection(0));
+        let Screen::Cell { model, .. } = &stage.screen else {
+            panic!("a cell page");
+        };
+        assert_eq!(
+            model.entry().seconds(),
+            0.0,
+            "a new page starts its own clock"
+        );
+        for _ in 0..12 {
+            stage.tick_ticker(1.0 / 60.0);
+        }
+        let Screen::Cell { model, .. } = &stage.screen else {
+            panic!("still on Cell Selection");
+        };
+        assert!(
+            (model.entry().seconds() - 0.2).abs() < 1e-4,
+            "Cell Selection"
+        );
+    }
+
     /// One grid with nothing ahead of it skips `Grid Selection`, on any title; several grids,
     /// HD/Omega's `Campaign Selection`, an empty campaign and the editor keep it.
     #[test]
