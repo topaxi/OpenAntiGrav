@@ -55,6 +55,7 @@ fn geometry(length: u32) -> Geometry {
             display_type: oag_ui::screen::DisplayType::default(),
             delay: 0.0,
             wrap_width: None,
+            push_height: false,
             transition: 0.0,
         }),
         bars: Vec::new(),

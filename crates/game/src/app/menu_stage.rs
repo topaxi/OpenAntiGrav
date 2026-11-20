@@ -784,19 +784,20 @@ impl MenuStage {
                             let ticker = campaign.ticker_draw(faces, &default_measure);
                             ticker_draw = ticker.clone();
                             footer_overlay.extend(ticker);
-                            // `Cell Help`'s own static overlay - drawn last, over
-                            // everything else, while `triangle` has it open. See
-                            // `oag_ui_screens::campaign::draw::cell_help_draw`'s own doc
-                            // for why it is static rather than scripted.
-                            if model.help_open()
+                            // `Cell Help`'s overlay, over the page and its dimming
+                            // backdrop with it: see `cell_help_draw`'s own doc.
+                            let help = if model.help_open()
                                 && let Some(cell_help) = campaign.cell_help_layout()
                             {
-                                footer_overlay.extend(oag_ui_screens::campaign::cell_help_draw(
+                                oag_ui_screens::campaign::cell_help_draw(
                                     cell_help,
                                     &|src| campaign.sprites.get(src),
-                                ));
-                            }
-                            oag_ui_screens::campaign::cell_draw_list(
+                                    &self.text_atlas,
+                                )
+                            } else {
+                                Vec::new()
+                            };
+                            let mut layers = oag_ui_screens::campaign::cell_draw_list(
                                 model,
                                 campaign.cell_layout(),
                                 &self.skin,
@@ -806,7 +807,9 @@ impl MenuStage {
                                 frozen_race,
                                 &|src| campaign.sprites.get(src),
                                 &footer_overlay,
-                            )
+                            );
+                            layers.body.extend(help);
+                            layers
                         }
                     }
                 }

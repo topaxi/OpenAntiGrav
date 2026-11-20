@@ -495,6 +495,14 @@ pub struct FrontEnd {
     /// `None` for every title but Pulse. Falls back to [`Self::menu`], so filling
     /// this in only narrows an approximation.
     pub menu_ps2: Option<&'static menu::MenuSkin>,
+    /// The control this title's PS2 pressing binds the front end's `backward` and `cancel` to, where
+    /// that is not the circle every other pressing binds. `None`: circle.
+    ///
+    /// Pulse's PS2 executable parses both names to the triangle's pad bit and the PSP's to the
+    /// circle's (`docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence"), and the PS2
+    /// front end's own footers draw the triangle beside `Back`. The screens that read this are
+    /// listed in `docs/ui/campaign-screens.md`, "Back and Help on the PS2".
+    pub back_button_ps2: Option<prompts::Prompt>,
     /// How this title lays a touch-icon front end out, for a title that authors
     /// *that* vocabulary instead of [`menu::MenuSkin`]'s. See
     /// [`touch::TouchFrontEnd`].
@@ -848,6 +856,16 @@ pub struct CircuitPose {
 impl Eq for CircuitPose {}
 
 impl FrontEnd {
+    /// The control `backward` and `cancel` are on `platform`'s pressing: [`Self::back_button_ps2`]
+    /// on a PS2, the circle everywhere else.
+    #[must_use]
+    pub fn back_button(&self, platform: Platform) -> prompts::Prompt {
+        match platform {
+            Platform::Ps2 => self.back_button_ps2.unwrap_or(prompts::Prompt::Circle),
+            _ => prompts::Prompt::Circle,
+        }
+    }
+
     /// The touch layout when the touch front end *is* the title's front end
     /// (2048): it authors no menu of its own vocabulary. A title with both
     /// (Omega: HD's menus plus 2048's campaign map) returns `None` here, and

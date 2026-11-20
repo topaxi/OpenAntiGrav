@@ -23,7 +23,6 @@
 
 use std::path::PathBuf;
 
-use oag_game::loading;
 use oag_ui::font::Atlas;
 use oag_ui::language::roles;
 use oag_ui::{font, screen};
@@ -91,7 +90,7 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
     let atlas = Atlas::from_font(&real_font);
 
     let width = legal.wrap_width.unwrap();
-    let lines = loading::wrap(&atlas, text, legal.scale, width);
+    let lines = oag_ui::font::wrap(&atlas, text, legal.scale, width);
     assert_eq!(
         lines.len(),
         2,

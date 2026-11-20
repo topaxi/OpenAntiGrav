@@ -306,6 +306,8 @@ pub struct GridSelection {
     medal_art: MedalArt,
     /// The campaign's medal tiers, see [`Self::with_tiers`].
     tiers: MedalTiers,
+    /// The button that leaves, see [`Self::with_back_button`].
+    back_button: Button,
 }
 
 impl GridSelection {
@@ -320,7 +322,16 @@ impl GridSelection {
             swipe: hd::Swipe::default(),
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
+            back_button: Button::Circle,
         }
+    }
+
+    /// Leaves on `back` in place of the circle: the pressing's own
+    /// (`oag_title::FrontEnd::back_button`).
+    #[must_use]
+    pub fn with_back_button(mut self, back: Button) -> Self {
+        self.back_button = back;
+        self
     }
 
     /// Draws the tier hexes' swatches in `tiers`' colours: a campaign mod's own list.
@@ -532,7 +543,7 @@ impl GridSelection {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(Button::Circle) {
+        if input.take(self.back_button) {
             out.push(Event::Back);
         }
         out
@@ -574,6 +585,10 @@ pub struct CellSelection {
     fixed_locks: Vec<Option<bool>>,
     index: usize,
     help_open: bool,
+    /// The button that opens `Cell Help`, see [`Self::with_buttons`].
+    help_button: Button,
+    /// The button that leaves for `Grid Selection`, see [`Self::with_buttons`].
+    back_button: Button,
     /// What a cell's medal hex is filled with, see [`Self::with_medal_art`].
     medal_art: MedalArt,
     /// The campaign's medal tiers, see [`Self::with_tiers`].
@@ -682,6 +697,8 @@ impl CellSelection {
             difficulties,
             fixed_locks: Vec::new(),
             help_open: false,
+            help_button: Button::Triangle,
+            back_button: Button::Circle,
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
             tier_targets: Vec::new(),
@@ -690,6 +707,18 @@ impl CellSelection {
             refreshed_at: None,
             difficulty: Difficulty::Medium,
         }
+    }
+
+    /// Opens `Cell Help` on `help` and leaves on `back`, in place of the PSP's triangle and circle.
+    ///
+    /// The help button is the one the screen's own `Redirect` to `Cell Help` authors (the PSP's
+    /// `forward="triangle"`, the PS2's `forward="circle"`); the back button is the pressing's
+    /// (`oag_title::FrontEnd::back_button`).
+    #[must_use]
+    pub fn with_buttons(mut self, help: Button, back: Button) -> Self {
+        self.help_button = help;
+        self.back_button = back;
+        self
     }
 
     /// Names, scores and colours the medals by `tiers`: a campaign mod's own list.
@@ -1117,13 +1146,18 @@ impl CellSelection {
     /// nothing" rather than modelling a redirect loop.
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
-        if input.take(Button::Triangle) {
-            self.help_open.toggle();
-            out.push(Event::Help);
-            return out;
-        }
         if self.help_open {
-            if input.take(Button::Cross) || input.take(Button::Circle) {
+            // `Cell Help` closes on any of cross, triangle and circle: its own three `Redirect`s,
+            // the same on both pressings.
+            let closed = [
+                self.help_button,
+                Button::Cross,
+                Button::Triangle,
+                Button::Circle,
+            ]
+            .into_iter()
+            .fold(false, |closed, button| input.take(button) | closed);
+            if closed {
                 self.help_open = false;
                 out.push(Event::Help);
             }
@@ -1131,6 +1165,11 @@ impl CellSelection {
             input.take(Button::Down);
             input.take(Button::Left);
             input.take(Button::Right);
+            return out;
+        }
+        if input.take(self.help_button) {
+            self.help_open = true;
+            out.push(Event::Help);
             return out;
         }
         if input.take(Button::Down) && self.step(0.0, 1.0) {
@@ -1148,7 +1187,7 @@ impl CellSelection {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(Button::Circle) {
+        if input.take(self.back_button) {
             out.push(Event::Back);
         }
         // `Square` is unbound on this screen in this build - nothing else

@@ -143,6 +143,9 @@ pub struct Text {
     /// inset" as the general rule; 95 that it is right for this screen. See
     /// `docs/architecture/frontend-boot.md`.
     pub wrap_width: Option<f32>,
+    /// `PushHeight="true"`: the widget's `y` is an offset below the bottom of the text before it
+    /// in the same `Viewport`, not a position of its own. `Cell Help`'s three paragraphs author it.
+    pub push_height: bool,
 }
 
 impl Text {

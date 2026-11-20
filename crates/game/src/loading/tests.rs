@@ -93,36 +93,6 @@ fn tips_are_found_however_deeply_the_xml_nests_them() {
     assert_eq!(tips(xml, &strings), ["deep"]);
 }
 
-/// Every line fits, and nothing is lost or duplicated in the middle.
-#[test]
-fn wrapping_fits_every_line_and_keeps_every_word() {
-    let atlas = Atlas::build();
-    let text = "Actuating the left or right airbrake through a corner turns tighter \
-                without shedding speed";
-    let lines = wrap(&atlas, text, 1.0, 200.0);
-    assert!(lines.len() > 1, "{lines:?}");
-    for line in &lines {
-        assert!(
-            font::measure(&atlas, line) <= 200.0,
-            "{line:?} is {} wide",
-            font::measure(&atlas, line)
-        );
-    }
-    assert_eq!(
-        lines.join(" "),
-        text.split_whitespace().collect::<Vec<_>>().join(" ")
-    );
-}
-
-/// A word that cannot fit is left over-long rather than cut in half or
-/// dropped.
-#[test]
-fn a_word_wider_than_the_column_is_kept_whole() {
-    let atlas = Atlas::build();
-    let lines = wrap(&atlas, "antigravitational", 1.0, 10.0);
-    assert_eq!(lines, ["antigravitational"]);
-}
-
 /// The tail survives, which is the half that names the asset.
 #[test]
 fn eliding_keeps_the_end_of_a_label() {

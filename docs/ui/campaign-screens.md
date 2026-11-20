@@ -378,11 +378,10 @@ applies its plan. A disc-backed test holds Omega's 167 parsed cells to it; see
 [`omega-status.md`](../formats/omega-status.md#campaign-confirming-a-cell-starts-its-race-2026-09-30)
 for what a walk found (no `Team Selection`, no EndRace screens yet).
 
-`Cell Help` (`triangle`) is modelled as a boolean toggle
-(`CellSelection::help_open`) that suspends movement while open, matching
+`Cell Help` (the PSP's `triangle`, the PS2's `circle`: see "Back and Help on the PS2") is modelled
+as a boolean toggle (`CellSelection::help_open`) that suspends movement while open, matching
 the disc's own `Watch` element redirecting every directional press back to
-`Cell Help` while it is the present screen - but the overlay itself is not
-drawn yet; see [Open](#open).
+`Cell Help` while it is the present screen. The overlay draws as a panel over the page.
 
 ## The hex look, 2026-09-14: an outline always, a medal-colour swatch only where earned
 
@@ -437,6 +436,57 @@ never resolved, because `crates/game/src/campaign.rs` read them with `archives.r
 They now go through `oag_pulse::read_image`, which retries the PS2 build's `.mip` to `.pct` rewrite every other Pulse texture load
 already gets. PSP output is unchanged. Nothing else on these two screens has been audited on PS2 beyond the selector position
 (below) and the ticker clip (above).
+
+## Back and Help on the PS2, and how `Cell Help` is laid out, 2026-11-20
+
+A player on Pulse PS2 EU pressed the pad's top face button (Triangle) to leave `Cell Selection` and got
+`Cell Help` instead, with its three paragraphs drawn over each other (GitHub issue 27). Three defects:
+
+1. **The buttons are the PSP's on the PS2.** The model opened `Cell Help` on the triangle and left
+   on the circle, on every pressing. The PS2 disc authors it the other way round, from two
+   sources that agree:
+   - `Cell Selection`'s own `Redirect` to `Cell Help` is `forward="triangle"` in the PSP's
+     `CellMode_Definition.xml` and `forward="circle"` in the PS2's (`WADS2.WAD`), and the PS2's
+     footer draws the triangle glyph beside `Back` and the circle beside `Help` (`--menu-page
+     cell-select` on `pulse-ps2-eu.chd` shows it);
+   - the PS2 executable parses `backward` and `cancel` to the triangle's pad bit, the PSP's to the
+     circle's (`docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence", confidence 90).
+
+   `CellSelection::with_buttons` takes both. The help button is read off the screen's own
+   `Redirect` whose `goto` is `Cell Help` (`cell_buttons` in `oag_game::app::campaign_stage`); the
+   back button is `oag_title::FrontEnd::back_button(platform)`, from the new
+   `FrontEnd::back_button_ps2` (Pulse: triangle; every other title and pressing: circle). `Cell
+   Help` itself still closes on cross, triangle or circle, as both discs' three `Redirect`s say.
+   Confidence 90 for the buttons, 95 that the PS2 footer shows them. Not measured against a running
+   PCSX2: both the redirect and the footer are the disc's own data.
+2. **The paragraphs did not flow.** `Main Help`, `Speed Class Help` and `Event Help` author
+   `PushHeight="true"`: each `y` (15, 10, 10 on the PSP) is the gap below the paragraph before.
+   They were drawn at their raw `y`, all three near the panel's top. `Text::push_height` reads the
+   attribute and `cell_help_draw` stacks the paragraphs by wrapped height (`oag_ui::font::wrap`
+   over the primary face, times its line height). Against
+   `data/reference/psp-campaign-screens/cell-help-overlay-t0.png`: the first line's centre and the
+   gap between paragraphs agree within a pixel on the PSP's 480 by 272 grid (first line centre 25 against 24, the third paragraph 164 against 163.5).
+3. **The panel was drawn under the page.** The overlay went into `Layers::chrome`, which paints
+   below `Layers::body`, so the panel's own `0xE0000000` backdrop never dimmed the page and the
+   page's rows drew over the text ("SINGLE RACE" through the paragraphs). It is now the end of the
+   body. The original dims the page behind the panel
+   (`cell-help-overlay-t0.png`); ours does the same.
+
+**Checked on the other pressings and titles.** PSP: Back and Help are unchanged, the flow and
+layer fixes apply. Pure ships no `CellMode_Definition.xml` (its campaign is the League and
+Tournament chain), so it has no `Cell Help`. HD, Fury and Omega ship no `Cell Help` screen, so
+`cell_help` is `None` there and the buttons stay the defaults; their stills are unchanged.
+
+`Grid Selection`, the next screen in the flow, leaves on the same button (`GridSelection::with_back_button`),
+so a second triangle carries on to the main menu; `campaign_cursor_ground_truth::cell_selection_backs_out_on_the_pressings_own_button`
+walks both. Escape and the secondary mouse button emit `Event::Back` directly and are unchanged; the keyboard's
+Backspace, `Z` and `Y` are the circle button, so on the PS2 they open `Cell Help` and `V` (the triangle) leaves, as
+the footer's key hint says.
+
+**Open: the rest of the PS2 front end.** Every other screen still leaves on the circle
+(`oag_ui::menu`, the pickers, the pause menu), while the PS2's footers draw the triangle beside
+`Back`. `FrontEnd::back_button` is the one place to read it from; wiring it through the other
+screens needs a census of which PS2 screens author a `triangle` or `circle` of their own.
 
 ## Pulse's medal hexagons filled from HD's atlas, 2026-11-12 (`oag.hd-medals`)
 
