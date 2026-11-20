@@ -40,9 +40,7 @@ the instruction stream (`li v0,0x6` at `0x08898ce8` and `0x08898d10`).
 ## What the disc agrees on
 
 - The footers on the Pure EU disc draw the triangle beside `BACK` and the circled cross beside
-  `CONFIRM` (`FE_BACK_BUTTON`, `FE_CONFIRM_BUTTON`, in the `Stats` face: `Ϊ` U+03AA and `έ`
-  U+03AD, read off the strings the footer draws). Back and Help buttons are the player's and the
-  title's, `oag_title::Title::menu_buttons`.
+  `CONFIRM` (in the `Stats` face: `Ϊ` U+03AA and `έ` U+03AD, read off the strings the footer draws).
 - The front-end XML names no face button for Back on either Pure disc: `scripts/fe-redirect-census.py
   --buttons` over `FE.wad`, `FEData.wad` and `Data.wad` (EU and USA, expanded) lists only
   `forward="cancel"` on `WOW Download` (with `Cancel` text `Press X to Cancel`), `forward="any"`
@@ -53,12 +51,13 @@ the instruction stream (`li v0,0x6` at `0x08898ce8` and `0x08898d10`).
 ## The prompt table
 
 Pure's `Stats` face holds four filled discs beside its outlined set: `ά` U+03AC, `έ` U+03AD, `Ϊ`
-U+03AA and `Ϋ` U+03AB (the circled cross and triangle are confirmed in use; the circle and the
-square by the shape of the cell, 75), and the outlined `ή ί ΰ` that are not read.
+U+03AA and `Ϋ` U+03AB (the circled cross and triangle are what the footers draw; the circle is
+confirmed by the footer drawn under MENU BACK `circle`; the square by the shape of the cell, 75),
+and the outlined `ή ί ΰ` that are not read.
 `oag_pure::prompts::PROMPTS` carries the four discs after the six of the menus' face, so the
 footers get the device's glyph and the hints depict the control the glyph shows.
 
 ## Cross-title
 
-**Pulse PSP** binds the same names to the circle (`../psp-pulse-usa/input.md`, 92); **Pulse PS2** to the
+**Pulse PSP** binds the same names to the circle (`../psp-pulse-usa/input.md`, 88); **Pulse PS2** to the
 triangle. **HD, Omega, 2048**: not read here (`docs/ui/back-and-help.md`, "The resolver"). **Pure PS2**: no such pressing.

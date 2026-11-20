@@ -16,7 +16,7 @@
 use oag_title::prompts::{Prompt, Prompts};
 
 /// The cells whose pictures were read: `Pulse_20.fnt`, the PS2's `Pulse_14.fnt` and
-/// `Pulse_20.fnt`, `PS_BUTTONS.fnt` (HD and Omega) and Pure's `FX300ANG.fnt`,
+/// `Pulse_20.fnt`, `PS_BUTTONS.fnt` (HD and Omega), Pure's `FX300ANG.fnt` and its `Stats` face,
 /// `ε` the circled cross, `γ` circle, `δ` square, `β` triangle, `Λ`/`Ν` the
 /// L and R boxes. (face, codepoint, FNV-1a of the cell's alpha.)
 const READ: &[(&str, char, u64)] = &[
@@ -50,6 +50,10 @@ const READ: &[(&str, char, u64)] = &[
     ("pure FX300ANG", 'β', 0xc3b7_fb23_0dac_0df2),
     ("pure FX300ANG", 'Λ', 0xa8bb_9a28_78bb_fac8),
     ("pure FX300ANG", 'Ν', 0xe507_8f31_5a51_bc99),
+    ("pure Stats", 'έ', 0xd990_cd33_295a_7714),
+    ("pure Stats", 'Ϋ', 0x947f_8e7f_3b36_d8bb),
+    ("pure Stats", 'ά', 0x7301_25d0_f8de_c8be),
+    ("pure Stats", 'Ϊ', 0x6778_6809_4401_2bee),
     ("omega PS_BUTTONS", 'ε', 0xe8c8_99be_ef4a_50f6),
     ("omega PS_BUTTONS", 'γ', 0xaec2_5828_1904_e572),
     ("omega PS_BUTTONS", 'δ', 0x72fe_59ee_68f6_1caa),
@@ -130,7 +134,8 @@ fn hds_six_stand_ins_are_six_different_buttons() {
     check(&font, oag_hd::prompts::PROMPTS, "PS_BUTTONS");
 }
 
-/// Pure's six, in its menu face `FX300ANG.fnt`.
+/// Pure's six, in its menu face `FX300ANG.fnt`; the table's other four are the footers' discs in
+/// the `Stats` face (`pures_footer_discs_are_four_different_buttons`).
 #[test]
 #[ignore = "needs data/images/pure-psp-eu.chd"]
 fn pures_six_stand_ins_are_six_different_buttons() {
@@ -141,7 +146,41 @@ fn pures_six_stand_ins_are_six_different_buttons() {
     ) else {
         return;
     };
-    check(&font, oag_pure::prompts::PROMPTS, "pure FX300ANG");
+    let menus = Prompts {
+        scope: oag_pure::prompts::PROMPTS.scope,
+        glyphs: &oag_pure::prompts::PROMPTS.glyphs[..6],
+    };
+    check(&font, &menus, "pure FX300ANG");
+}
+
+/// Pure's footer discs, in the `Stats` face its footers draw in: `έ` the circled cross, `Ϋ` the
+/// circle, `ά` the square, `Ϊ` the triangle.
+#[test]
+#[ignore = "needs data/images/pure-psp-eu.chd"]
+fn pures_footer_discs_are_four_different_buttons() {
+    let Some(image) = oag_testdata::image("pure-psp-eu.chd") else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&image.display().to_string(), oag_pure::TITLE)
+        .expect("open the disc");
+    let plugins = oag_pure::TITLE
+        .front_end
+        .map_or::<&[&str], _>(&[], |front_end| front_end.language_plugins);
+    let mut report = Vec::new();
+    let languages =
+        oag_ui::language::load::load_languages(&mut archives, plugins, None, &mut report);
+    let stats = languages
+        .iter()
+        .find_map(|language| language.font(oag_ui::language::roles::STATS))
+        .expect("a plugin fills in the Stats slot")
+        .to_string();
+    let font = archives.read_font(&stats).expect("the face reads");
+    let discs = Prompts {
+        scope: oag_pure::prompts::PROMPTS.scope,
+        glyphs: &oag_pure::prompts::PROMPTS.glyphs[6..],
+    };
+    assert_eq!(discs.glyphs.len(), 4);
+    check(&font, &discs, "pure Stats");
 }
 
 /// Omega's six, in `PS_BUTTONS.fnt` (HD's face at twice the size).

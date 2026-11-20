@@ -8,12 +8,12 @@
 //! (`docs/ui/button-prompts.md`). The strings carry them inline: `Press ε to
 //! Continue`, `Press β to Cancel`.
 //!
-//! The footers' own `Confirm` and `Back` are in the `Stats` face instead, as filled discs:
-//! `FE_CONFIRM_BUTTON` is `έ` and `FE_BACK_BUTTON` is `Ϊ` (read off the strings the footer draws
-//! on the Pure EU disc, 85, where the footer shows the circled cross beside `CONFIRM` and the
-//! triangle beside `BACK`). The face's other two discs are `Ϋ` (the circle) and `ά` (the square),
-//! read off the face's cells (75: the same size and style as the two seen in use, never drawn by a
-//! footer). Its outlined variants (`ή ί ΰ`) are not read.
+//! The footers' own `Confirm` and `Back` are in the `Stats` face instead, as filled discs: `έ` is the
+//! cross and `Ϊ` the triangle (the footers the Pure EU disc draws show the circled cross beside
+//! `CONFIRM` and the triangle beside `BACK`). The face's other two discs are `Ϋ`, the circle (the
+//! footer drawn under MENU BACK `circle`), and `ά`, the square (read off the shape of its cell, 75;
+//! no footer draws it). The outlined variants (`ή ί ΰ`) are not read.
+//! `docs/ui/button-prompts.md`, "Other titles".
 
 use oag_title::prompts::{Prompt, Prompts, Scope};
 
