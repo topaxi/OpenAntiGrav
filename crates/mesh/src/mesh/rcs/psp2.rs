@@ -435,10 +435,19 @@ fn build_planned(
                 .collect();
             super::isolate::excludes_psp2(submesh.material, None, &paths)
         };
-        place.hidden |= filtered;
+        // Omega's track loader swaps every crowd-entity shape for rig instances and clears its
+        // draw bits; the rigs are not loaded, so the placeholder's flat `Colour` is not drawn
+        // either (`oag_rcs::rcsmodel::psp2::nodes::CROWD_ENTITY_FLAGS`).
+        let crowd_entity = ps4
+            && submesh
+                .mesh
+                .and_then(|m| decoded.scene.meshes.get(m))
+                .is_some_and(|m| m.is_crowd_entity());
+        place.hidden |= filtered || crowd_entity;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
-        report.hidden += usize::from(place.hidden && !place.unplaced);
+        report.crowd_entities += usize::from(crowd_entity && !filtered);
+        report.hidden += usize::from(place.hidden && !place.unplaced && !crowd_entity);
         // `fc01_dummy`'s fragment program samples nothing and declares one
         // uniform, `fogColour`; its three instructions leave the circuit's fog
         // colour as the pixel (docs/formats/2048-material-params.md, "What

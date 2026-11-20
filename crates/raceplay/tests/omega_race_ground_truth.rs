@@ -275,6 +275,54 @@ fn omegas_hd_hulls_match_2048s_ports_on_submeshes_triangles_and_materials() {
     }
 }
 
+/// A mesh object carries `CROWD_ENTITY_FLAGS` exactly when its shape is named `crowdentity`
+/// (17,701 of 17,701 over `data00` to `data04`), the placeholder the builder does not draw
+/// (`mesh::rcs::psp2`). Drop the flag's reading and `is_crowd_entity` fails here by name.
+fn check_crowd_entity_flag(file: &str, model: &oag_rcs::rcsmodel::psp2::Model) {
+    for mesh in &model.scene.meshes {
+        let named = mesh.name.to_ascii_lowercase().contains("crowdentity");
+        assert_eq!(
+            mesh.is_crowd_entity(),
+            named,
+            "{file}: {} carries flags {:#06x}",
+            mesh.name,
+            mesh.flags
+        );
+    }
+}
+
+/// 2048's models carry no crowd-entity shape: its crowds are sprite materials, so nothing of
+/// the Omega rule applies to a Vita frame.
+#[test]
+#[ignore = "needs the extracted 2048 package"]
+fn vita_models_carry_no_crowd_entity_shapes() {
+    let Some(vita) = oag_testdata::exact("data/extracted/vita/PCSF00007/base/PSP2/data.psarc")
+    else {
+        return;
+    };
+    let mut vita = oag_assets::psarc::Archive::open(&vita.display().to_string()).expect("open");
+    let names: Vec<String> = vita
+        .paths()
+        .iter()
+        .filter(|p| p.to_ascii_lowercase().ends_with(".rcsmodel"))
+        .cloned()
+        .collect();
+    let mut parsed = 0;
+    for name in &names {
+        let blob = vita.read_path(name).expect("read");
+        let Ok(model) = oag_rcs::rcsmodel::psp2::parse(&blob) else {
+            continue;
+        };
+        parsed += 1;
+        check_crowd_entity_flag(name, &model);
+        assert!(
+            !model.scene.meshes.iter().any(|m| m.is_crowd_entity()),
+            "{name}"
+        );
+    }
+    assert!(parsed > 500, "{parsed} of {} models parsed", names.len());
+}
+
 /// Every `.rcsmodel` in one archive decodes through the 2048 reader: the three
 /// sections add up to the file, the relocation sites pair into submeshes (with
 /// the handful of leftovers each archive is known to have), and every
@@ -297,6 +345,7 @@ fn census(number: &str, files: usize, submeshes: usize, unpaired: usize) {
         seen += 1;
         found += model.submeshes.len();
         leftover += model.unpaired_pointers;
+        check_crowd_entity_flag(name, &model);
         for s in &model.submeshes {
             assert!(s.material.is_some(), "{name}: a submesh names no material");
         }

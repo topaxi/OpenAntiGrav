@@ -80,6 +80,14 @@ fn sols_panel_map_road_marches_and_its_sky_is_the_reflection_map() {
     )
     .expect("parses");
     super::omega_crowd_shadowed_check::check("sol", &decoded, &model, &report);
+    super::omega_crowd_shadowed_check::check_crowd_entities_hidden(
+        "sol", &decoded, &model, &report,
+    );
+    assert_eq!(
+        super::omega_crowd_shadowed_check::crowd_entity_submeshes(&decoded),
+        (203, 60_697),
+        "Sol's crowd-entity shapes: the fc01_colour_emissive silhouettes"
+    );
     assert!(report.panel.materials > 0, "{}", report.describe());
     assert_eq!(report.panel.unread, 0, "{}", report.describe());
     let mut carried = 0usize;

@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [omega]
-updated: 2026-11-16
+updated: 2026-11-20
 summary: "Omega Amphiseum: front-row spectators (emissive, 919 figures) draw grey, upper stands still light, glow constant families unwired"
 difficulty: medium (40)
 ---
@@ -13,9 +13,7 @@ difficulty: medium (40)
 
 ## Open
 
-1. **The 919 `emissive` figures** (slot 350, 907 node-bound 582-triangle people, `EmissiveColour` 0.5566 grey) draw as grey silhouettes
-   where the original shows coloured spectators. Their program is a constant, so the colour is supplied by something else: a runtime material
-   swap per crowd entity, or a pass the original draws them in. Needs Ghidra on how the engine binds crowd entities.
+1. ~~**The 919 `emissive` figures**~~ **Not drawn any more** (`omega-sol-silhouettes`, 2026-11-20): the 907 node-bound people are the track's crowd-entity shapes (mesh flags `0x0401`), which the original's loader replaces with `Data/Crowd/Rigs` instances (`omega-status.md`, "The crowd-entity shapes"); Omega draws nothing there. Amphiseum frame 49.20 to 48.71. **Open:** the rigs themselves (skinned `_BoneCount4` crowd materials, 82 rig files, six clips, instanced at the `CrowdEntity` nodes) (the other 12 of the 919 are not looked at).
 2. **Upper stands and far crowd** read lighter than the original with white speckle: `nr_crowd_bustle` and the stand seats on Omega (probably
    the same material swap; not read).
 3. **Constant-only glow programs** `dc_constantglow`, `dc_glowlightband` (Moa Therma), `cf_constantcolourglow` (Sebenco): same shape as
@@ -25,5 +23,5 @@ difficulty: medium (40)
 
 ## Next Steps
 
-- Ghidra: how `Crowd` entities get their material (item 1), then item 2.
+- Item 1 answered (the loader swaps entities for rigs); the rigs are the open lane. Item 2: `nr_crowd_bustle` and the seats are not entity shapes (flags `0x0101`/`0x0201`), so the swap does not explain them; unread.
 - 2048 has `emissive` in two files; its program is unread, loader gate is `ps4` only.

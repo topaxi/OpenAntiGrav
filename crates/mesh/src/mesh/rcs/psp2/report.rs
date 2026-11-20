@@ -144,6 +144,11 @@ pub struct Report {
     /// where they go. Counted apart from [`Self::hidden`], which is the
     /// file's own choice. See [`placement::Placement::unplaced`].
     pub unplaced: usize,
+    /// Submeshes of a track's crowd-entity shapes ([`oag_rcs::rcsmodel::psp2::nodes::CROWD_ENTITY_FLAGS`]),
+    /// not emitted: Omega replaces each with a `Data/Crowd/Rigs` instance, which is not loaded, so
+    /// the stand draws no figure there (`docs/formats/omega-status.md`, "The crowd-entity shapes").
+    /// Counted apart from [`Self::hidden`].
+    pub crowd_entities: usize,
     /// Model nodes the skeleton did not name, placed by the model's own bind
     /// matrix - see [`placement::Plan::unmatched`].
     pub unmatched_nodes: usize,
@@ -377,8 +382,16 @@ impl Report {
                     self.unplaced
                 )
             };
+            let crowd = if self.crowd_entities == 0 {
+                String::new()
+            } else {
+                format!(
+                    ", {} crowd-entity submesh(es) not drawn (the original's rigs are not loaded)",
+                    self.crowd_entities
+                )
+            };
             format!(
-                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{unplaced}{frozen}{unmatched}",
+                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{crowd}{unplaced}{frozen}{unmatched}",
                 self.node_bound, self.moving, self.anim_nodes
             )
         };
