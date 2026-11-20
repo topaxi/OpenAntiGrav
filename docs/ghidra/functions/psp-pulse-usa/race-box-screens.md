@@ -537,6 +537,32 @@ a sibling `<Image name="{label} Bar">`'s fill fraction to
 `scale * min(value, max) / max` - the generic widget both `Speed`/`Thrust`/
 `Handling`/`Shield`/`Loyalty` on `Team Selection` go through.
 
+### `Team Ship Help` is set per team from its own `HelpText` (read 2026-11-20)
+
+`TeamSelection_Update`'s selection-changed branch (the one that rewrites the stat bars and the
+`honey` counter) ends the counter write with three calls, at `0x088eb0c8`-`0x088eb0f4`:
+
+```
+state  = StateMachine_FindState(screen+0xcc, "Team Help", 1)     ; the Help screen nested in this one
+widget = FUN_088906b0(state, "Team Ship Help", 1)                ; the widget by name
+FUN_088cd0f4(widget, selectedTeam + 0x360, 0, 1)                 ; SetText, the helper TrackSelection_SetIntRow also uses
+```
+
+`selectedTeam + 0x360` is a 16-byte string field that `TeamDefinition_ParseElement` (`0x088c2a38`)
+fills from the team's `HelpText` attribute (`Xml_AttributeAsString(attr, team + 0x360, 0x10)`, the
+`HelpText` string at `0x08a810a0`): `MSC_TEAMDES_ASS` for Assegai, one id per team in
+`Definition.xml` (`helpText="MSC_TEAMDES_<team>"`, 15 characters and a NUL). So the second paragraph of
+`Team Help` is the **selected team's own description**, set each time the selection changes, and the
+`MSC_TEAMDES_ASS` its XML authors is only the default the widget opens with. `FUN_088cd0f4` is the
+same setter the screen uses for the string ids `ER_SUG_SHIP`/`ER_FOR_SHIP` and
+`TrackSelection_SetIntRow` uses for a label id, so the field is an id the text widget resolves
+(80), not a literal sentence. The first paragraph (`Main Help`, `MSC_HELP_RC_SS`) has no setter.
+
+Confidence 90 that the paragraph is set per selected team from `+0x360`; 90 that `+0x360` is the team's
+`HelpText`; 80 that the widget resolves the id through the string table rather than drawing it. The PS2
+executable was not re-read: its `Team HelpSingle` authors the same two widgets and the same default
+(inherited from the PSP). No function was renamed.
+
 ## `LeftLayer`'s own `transition` attribute is a fade duration
 
 Both screens' info panel is wrapped in `Data\Plugins\PI001\GUI\

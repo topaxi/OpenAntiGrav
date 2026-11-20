@@ -17,6 +17,9 @@ use super::FaceScales;
 use crate::campaign;
 use oag_ui::font::Atlas;
 
+/// The widget `Team Help` shows the selected team's description in.
+const SHIP_HELP: &str = "Team Ship Help";
+
 /// A selection screen's Help overlay and the button its own `Redirect` opens it on.
 #[derive(Debug, Clone)]
 pub struct Help {
@@ -53,8 +56,27 @@ impl Help {
     }
 
     /// The overlay over the page and its dimming backdrop: draw it above the page.
+    ///
+    /// `ship_help` is the selected team's own description, which `TeamSelection_Update` writes into
+    /// the `Team Ship Help` widget each time the selection changes
+    /// (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "`Team Ship Help` is set per team");
+    /// `None` leaves the text the XML authors.
     #[must_use]
-    pub fn draw(&self, sprites: &dyn Fn(&str) -> Option<Placed>, atlas: &Atlas) -> Vec<Draw> {
-        campaign::cell_help_draw(&self.layout, sprites, atlas)
+    pub fn draw(
+        &self,
+        sprites: &dyn Fn(&str) -> Option<Placed>,
+        atlas: &Atlas,
+        ship_help: Option<&str>,
+    ) -> Vec<Draw> {
+        let Some(text) = ship_help else {
+            return campaign::cell_help_draw(&self.layout, sprites, atlas);
+        };
+        let mut layout = self.layout.clone();
+        for widget in &mut layout.screen.texts {
+            if widget.name.as_deref() == Some(SHIP_HELP) {
+                widget.string = Some(text.to_string());
+            }
+        }
+        campaign::cell_help_draw(&layout, sprites, atlas)
     }
 }

@@ -438,12 +438,27 @@ impl Session {
             (None, _, LiveryAxis::Skin) => String::new(),
             (None, _, LiveryAxis::Variant) => self.settings.race.opening_variant(title).to_string(),
         };
+        // Each team's own description for `Team Help`, worded: `TeamSelection_Update` sets the
+        // overlay's `Team Ship Help` from the selected team's `HelpText`.
+        let help_texts = entries
+            .iter()
+            .map(|entry| {
+                shell
+                    .team_details
+                    .iter()
+                    .find(|team| team.id == entry.id)
+                    .and_then(|team| team.help_text.as_deref())
+                    .and_then(|id| shell.strings.get(id))
+                    .map(str::to_string)
+            })
+            .collect();
         let model = Picker::new(
             Kind::Ship,
             entries,
             Some(team_id.as_str()),
             Some(livery.as_str()),
         )
+        .with_help_texts(help_texts)
         .with_fixed_livery(crate::livery_row::fixed_row(title, mode));
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.

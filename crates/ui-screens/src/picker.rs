@@ -220,6 +220,9 @@ pub struct Picker {
     fixed_livery: bool,
     /// Whether the screen has a Help overlay to open - see [`Self::set_help_available`].
     help_available: bool,
+    /// Each entry's own description for the Help overlay, parallel to the entries - see
+    /// [`Self::with_help_texts`].
+    help_texts: Vec<Option<String>>,
     /// Whether the Help overlay is up. It takes the tick whole.
     help_open: bool,
 }
@@ -237,6 +240,20 @@ impl Picker {
         if !available {
             self.help_open = false;
         }
+    }
+
+    /// Gives each entry its own description for the Help overlay (`Team Help`'s `Team Ship Help`),
+    /// parallel to the entries, already worded. An entry with none keeps the XML's text.
+    #[must_use]
+    pub fn with_help_texts(mut self, texts: Vec<Option<String>>) -> Self {
+        self.help_texts = texts;
+        self
+    }
+
+    /// The selected entry's own Help description, if it has one.
+    #[must_use]
+    pub fn help_text(&self) -> Option<&str> {
+        self.help_texts.get(self.index)?.as_deref()
     }
 
     /// Whether the screen has a Help overlay to open ([`Self::set_help_available`]).
@@ -280,6 +297,7 @@ impl Picker {
             locked: false,
             fixed_livery: false,
             help_available: false,
+            help_texts: Vec::new(),
             help_open: false,
         };
         out.variant = variant

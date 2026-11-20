@@ -625,6 +625,7 @@ fn picker_screen(picker: &oag_ui_screens::picker::Picker) -> Screen {
         help: picker
             .has_help()
             .then(|| if picker.help_open() { "open" } else { "closed" }),
+        help_text: picker.help_text().map(str::to_string),
     }
 }
 
@@ -703,5 +704,6 @@ fn page_screen(stage: &MenuStage) -> Screen {
         busy: stage.change.is_some(),
         pulse_ms: None,
         help: None,
+        help_text: None,
     }
 }

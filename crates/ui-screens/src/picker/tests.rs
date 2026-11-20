@@ -1273,7 +1273,7 @@ fn a_screen_reads_the_help_its_own_redirect_names_on_the_face_button_it_authors(
         "a screen that authors none has none"
     );
     let words: Vec<String> = help
-        .draw(&|_| None, &oag_ui::font::Atlas::build())
+        .draw(&|_| None, &oag_ui::font::Atlas::build(), None)
         .into_iter()
         .filter_map(|draw| match draw {
             Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),
@@ -1366,4 +1366,43 @@ fn a_click_or_the_secondary_button_closes_help_and_picks_nothing() {
         ..Default::default()
     };
     assert_eq!(picker.pointer(&secondary, &[]), vec![Event::Help]);
+}
+
+#[test]
+fn team_help_shows_the_selected_teams_own_description_in_team_ship_help() {
+    let xml = help_xml("triangle", "Track Help").replace(
+        r#"<Text idstring="MSC_HELP_RB_CS" font="small" x="20" y="100"></Text>"#,
+        r#"<Text name="Main Help" idstring="MSC_HELP_RB_CS" font="small" x="20" y="10"></Text>
+<Text name="Team Ship Help" idstring="MSC_HELP_RB_CS" font="small" x="20" y="40"></Text>"#,
+    );
+    let layout = Layout::read(
+        &Screens::from_xml(&xml),
+        Kind::Track,
+        &help_strings(),
+        FaceScales::default(),
+        PSP,
+    )
+    .expect("reads");
+    let help = layout.help.as_ref().expect("has help");
+    let words = |ship: Option<&str>| -> Vec<String> {
+        help.draw(&|_| None, &oag_ui::font::Atlas::build(), ship)
+            .into_iter()
+            .filter_map(|draw| match draw {
+                Draw::Text { text, .. } | Draw::FacedText { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(words(None), ["Pick a circuit", "Pick a circuit"]);
+    assert_eq!(
+        words(Some("Qirex text")),
+        ["Pick a circuit", "Qirex text"],
+        "only the Team Ship Help widget is replaced"
+    );
+    let picker = Picker::new(Kind::Track, entries(), Some("03_Track"), None).with_help_texts(vec![
+        None,
+        Some("second".into()),
+        None,
+    ]);
+    assert_eq!(picker.help_text(), Some("second"));
 }

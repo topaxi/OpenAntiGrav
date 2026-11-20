@@ -564,7 +564,11 @@ impl MenuStage {
             // preview is not drawn under it (below).
             let help_open = picker.model.help_open();
             if help_open && let Some(help) = &picker.layout.help {
-                flat.extend(help.draw(&|src| picker.placed(src), &self.text_atlas));
+                flat.extend(help.draw(
+                    &|src| picker.placed(src),
+                    &self.text_atlas,
+                    picker.model.help_text(),
+                ));
             }
             let list: Vec<Draw> = if frozen_race {
                 std::iter::once(Draw::Fill {

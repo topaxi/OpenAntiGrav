@@ -1145,3 +1145,34 @@ fn pulse_psp_ship_select_opens_team_help_on_the_triangle() {
     let Some(image) = psp() else { return };
     help_opens_on_the_displaced_button(&image, &SHIP_PICKER, "circle");
 }
+
+/// Assegai's own description (`MSC_TEAMDES_ASS`), the team Ship Select opens on.
+const ASSEGAI_HELP: &str = "The Assegai's exceptional handling model forms the core of the United African \
+     Nations' new ship, which has ably demonstrated solid all-round abilities in other areas.";
+
+/// `Team Help`'s second paragraph is the selected team's own description (the PSP's team definition
+/// authors a `helpText` per team; the PS2's authors none, so its overlay keeps the XML's default):
+/// Assegai's on the team the
+/// screen opens on, and another team's once the selection has moved (`TeamSelection_Update` writes
+/// `Team Ship Help` from the team's `HelpText` on every change).
+fn team_help_describes_the_selected_team(image: &Path, help: &str) {
+    let profile = Profile::fresh(&format!("team-help-text-{help}"));
+    profile.drive_on(
+        image,
+        &format!(
+            "{reach}; press {help}; ticks 10; expect screen.help=open; \
+             expect screen.help_text=\"{ASSEGAI_HELP}\"; press {help}; ticks 10; \
+             press down; ticks 10; press {help}; ticks 10; expect screen.help=open; \
+             expect screen.help_text!=\"{ASSEGAI_HELP}\"",
+            reach = SHIP_PICKER.reach
+        ),
+        "text.jsonl",
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_team_help_describes_the_selected_team() {
+    let Some(image) = psp() else { return };
+    team_help_describes_the_selected_team(&image, "triangle");
+}

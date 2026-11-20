@@ -87,6 +87,9 @@ pub struct Screen {
     /// XML authors one), else `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub help: Option<&'static str>,
+    /// The selected entry's own description in the Help overlay (a team's `Team Ship Help`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub help_text: Option<String>,
 }
 
 /// The race the game resolved: what it launched, or is racing.
@@ -250,6 +253,7 @@ impl State {
             "screen" => one(screen.map(|s| s.kind.clone())),
             "screen.id" => one(screen.map(|s| s.id.clone())),
             "screen.help" => one(screen.and_then(|s| s.help).map(str::to_string)),
+            "screen.help_text" => one(screen.and_then(|s| s.help_text.clone())),
             "title" => one(screen.map(|s| s.title.clone())),
             "photo" => one(self.photo.clone()),
             "photo_fx" => one(self.photo_fx.clone()),
@@ -310,6 +314,7 @@ impl State {
                 | "screen"
                 | "screen.id"
                 | "screen.help"
+                | "screen.help_text"
                 | "title"
                 | "focus"
                 | "photo"
