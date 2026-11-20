@@ -473,6 +473,13 @@ Overlap the regions by call: `race-start` never uses the result or the final tic
 state, `race-end` never uses the command reply. Start `MAX_RUN_BYTES` at 256 (the
 example uses 6); raising a cap later breaks nobody, lowering one does.
 
+**Answered by the maintainer (2026-11-20): a per-slot table, and 4 KiB.** AI slots
+are allowed (settled), so the premise "person slots only" is gone. `race-start` fills
+a fixed table, a row per grid slot (16 factor columns with 8 spare, 4 counts, 3
+durations, 80 bytes), zero meaning untouched; no command cap. The run cap goes up, not
+down: 4,096 bytes, in a run buffer of its own size (16 KiB) with regions overlapped by
+call (progression.md section 3).
+
 ### 18. Two modules may both send start commands, and the draft does not say who wins
 
 **Evidence.** Any module exporting `oag_race_start` gets the call (section 7,

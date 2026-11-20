@@ -29,6 +29,9 @@ lead: the maintainer reviews it first.
   "Still open from this slice".
 - Mod stat rows on a title's own Ship Select (Pulse Team Selection, HD and Omega Ship
   Select): a follow-up of ADR-0094 decision 2 (maintainer, 2026-11-20).
+- Replay compression: a replay header now carries a run of up to 4 KiB (ADR-0093
+  decision 1, 2026-11-20); the maintainer expects it to compress well and favour
+  compressing replay files again.
 - A per-leg `race-end` for tournaments (rewards between legs): later, by the
   maintainer's answer to challenge objection 9 (2026-11-20).
 - The frontend world (ADR-0080) is unbuilt, so the choice screen and the stat rows have

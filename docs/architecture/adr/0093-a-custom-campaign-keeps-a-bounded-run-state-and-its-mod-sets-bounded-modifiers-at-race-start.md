@@ -22,7 +22,7 @@ here in place instead of superseding it.
   nothing flows back). A sim `race-end` now produces bytes that persist. Why this
   stays within the reason for the rule: the record is host-owned, listed and clearable
   on the MODS page, one per campaign, committed by the host (never written
-  by the guest directly), capped at 1,024 bytes, never read by a second mod, and
+  by the guest directly), capped at 4,096 bytes, never read by a second mod, and
   single-player.
 - the "no replacing a recovered law or a disc table" row of the README's section 3
   and the same words in ADR-0079 decision 6 (decision 4): a bounded multiplier on the
@@ -70,7 +70,7 @@ ratings, not computed from handling.
 ## Decision
 
 1. **A run.** A custom campaign that declares a `[run]` table has, per profile, one
-   **run**: opaque bytes of at most `MAX_RUN_BYTES` = 1,024 (raw, before base64), a
+   **run**: opaque bytes of at most `MAX_RUN_BYTES` = 4,096 (raw, before base64; maintainer, 2026-11-20), a
    `u64` seed drawn when the run is created, an event ordinal, and, only after a
    faulted `race-end`, the latch it still owes (decision 6). It is a table of the records `Store` keyed like the campaign's
    progress rows (`<title slug>/mod:<mod id>/<campaign id>`), saved by
@@ -94,8 +94,11 @@ ratings, not computed from handling.
    before this race as `prior_tier`, the event's position in the campaign as
    `event_index`, and a `score`: zones reached in Zone, kills in Eliminator) and the final tick state,
    and writes the new run bytes. ABI revision 7.
-4. **Modifiers.** At race start the mod may send `set-modifier{slot, param, factor}`
-   for a closed list of `Handling` parameters. The host owns each range, scales the
+4. **Modifiers.** At race start the mod fills a **per-slot table** in the run buffer
+   (one row per grid slot: a factor per parameter of a closed list of `Handling`
+   parameters, with spare columns for later ones, the pickup counts and durations;
+   **zero means untouched**, so an all-zero table is a stock race; maintainer,
+   2026-11-20). The host owns each range, scales the
    slot's `Ship::handling` once, and records the applied factors in `Extensions`
    state, which is hashed after the `slots.is_empty()` early return, so no vanilla
    hash moves and a replay on other bytes fails at tick 0. An out-of-range factor is
@@ -232,7 +235,10 @@ content never pays for mod features, mod content may be slower (decisions 5 and 
 objection 13, answered). The guest SDK exposes `race_start` and `race_end` as default
 methods on `Extension` with a `Run` blob type and craft handles, and clamps an
 out-of-range factor as the host does, with a warning its test harness can assert on
-(decisions 3 and 4; objection 16, answered).
+(decisions 3 and 4; objection 16, answered). `race-start` fills a per-slot table, zero meaning
+untouched, with spare columns, instead of sending commands; the run cap is 4,096
+bytes in a run buffer of its own size (decisions 1 and 4; objection 17 and question
+14, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in
@@ -261,8 +267,13 @@ a data-first modifier table, a per-owner damage scale, and every other item in
   closed `Param` list.
 - **A per-tick modifier command.** Needs a timer or re-sending and keeps the factor out
   of the applied record. `scale-thrust` already covers per-tick thrust. Rejected.
-- **A 4 KiB run state.** Needs a buffer larger than `IO_LEN`, which every built guest
-  assumes. Rejected for 1,024 and a second buffer.
+- **A 1,024-byte run state in a 4 KiB run buffer** (the first draft). Fits, tightly,
+  but a campaign with per-event histories outgrows it, and lowering a cap later breaks
+  campaigns while raising one does not. Rejected for 4,096 bytes in a run buffer of
+  its own size (16 KiB).
+- **A race-start command list** (`set-modifier` and its siblings, 64 at most). A full
+  grid of 16 crafts with 14 settings each is 224 commands. Rejected for the per-slot
+  table.
 - **The run in the tick buffer's state region.** At `race-start` the region is the
   module's own state and the output needs a second one. Rejected.
 - **More pickup kinds per mod for several combined rewards.** Changes what the cap of

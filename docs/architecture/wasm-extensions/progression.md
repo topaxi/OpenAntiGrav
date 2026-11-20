@@ -47,9 +47,8 @@ behaviour" rule (section 8).
 
 A **run** is one playthrough of one custom campaign by one profile. It has:
 
-- `bytes`: the **run state**, opaque to the host, at most `MAX_RUN_BYTES` = 1,024
-  (the size of a module's tick state blob, so a guest can copy it whole). The cap
-  is on raw bytes.
+- `bytes`: the **run state**, opaque to the host, at most `MAX_RUN_BYTES` = 4,096
+  (maintainer, 2026-11-20; section 3). The cap is on raw bytes.
 - `seed`: a `u64` the host draws once when the run is created, so the guest can
   derive reward rolls without an RNG stream (section 4.3).
 - `ordinal`: how many events the run has committed.
@@ -86,19 +85,21 @@ as every revision change is.
 ```rust
 // crates/ext-abi, new module `run`. Proposed.
 
-/// The most run-state bytes a campaign may keep. Chosen.
-pub const MAX_RUN_BYTES: usize = 1024;
-/// Commands a race-start reply may carry: 8 slots x 8 parameters, with room. Chosen.
-pub const MAX_START_COMMANDS: usize = 64;
+/// The most run-state bytes a campaign may keep (maintainer, 2026-11-20). Chosen.
+pub const MAX_RUN_BYTES: usize = 4096;
+/// The run buffer's own size, independent of the tick buffer's `IO_LEN`, so raising
+/// `MAX_RUN_BYTES` later is a host change and a guest rebuild, nothing else. Chosen.
+pub const RUN_IO_LEN: usize = 16384;
 
 /// Guest exports (core wasm, no imports):
-///   oag_run() -> u32          // address of an IO_LEN-byte run buffer in the guest's memory
-///   oag_race_start() -> u32   // 0 on success; once per race, after the grid is placed
-///   oag_race_end() -> u32     // 0 on success; once, at the finish site, see section 5
+///   oag_run() -> u32          // address of a RUN_IO_LEN-byte run buffer in the guest's memory
+///   oag_race_start() -> u32   // 0 on success; once per race (per leg), after the grid is placed
+///   oag_race_end() -> u32     // 0 on success; once, on the exit from the event, see section 5
 ///
 /// Both calls get a fresh pooled instance, like `oag_wants_race`. The run buffer is a
 /// second buffer, like the track region; the tick buffer is untouched.
-pub const RUN_ABI_AT: usize = 0;
+
+// The header, the same for both calls.
 // Bytes 0..RACE_LEN: a `RaceInfo` (title, class, mode, weapons, campaign flag, people,
 // crafts, options), so a guest already knows how to read the first part.
 pub const RUN_CAMPAIGN_AT: usize = RACE_LEN;      // u32: channel_key of the campaign id
@@ -110,36 +111,69 @@ pub const RUN_PEOPLE_AT: usize = RUN_ACTIVE_AT + 4;  // u32: slots flown by a pe
 pub const RUN_TEAMS_AT: usize = RUN_PEOPLE_AT + 4;   // [u32; MAX_CRAFTS]: channel_key of each team identity
 pub const RUN_LEN_AT: usize = RUN_TEAMS_AT + 4 * MAX_CRAFTS; // u32: length of the run state in
 pub const RUN_IN_AT: usize = RUN_LEN_AT + 4;         // [u8; MAX_RUN_BYTES]
-pub const RUN_RESULT_AT: usize = RUN_IN_AT + MAX_RUN_BYTES; // RunResult, race-end only
-pub const RUN_OUT_LEN_AT: usize = RUN_RESULT_AT + RunResult::LEN; // u32, race-end only
-pub const RUN_OUT_AT: usize = RUN_OUT_LEN_AT + 4;    // [u8; MAX_RUN_BYTES]: at race-start the guest's initial TICK state
-                                                      // (its length is the module's oag_state_len); at race-end the new RUN state
-pub const RUN_TICK_AT: usize = RUN_OUT_AT + MAX_RUN_BYTES; // [u8; MAX_STATE_BYTES], race-end only: the tick state latched at the race's end
-pub const RUN_REPLY_AT: usize = RUN_TICK_AT + MAX_STATE_BYTES; // count u32, then 12-byte command records
-// const _: () = assert!(RUN_REPLY_AT + 4 + COMMAND_LEN * MAX_START_COMMANDS <= IO_LEN); // about 4,000 of 4,096
+pub const RUN_CALL_AT: usize = RUN_IN_AT + MAX_RUN_BYTES; // the per-call region, overlapped by call
+
+// race-start's region.
+pub const START_TICK_AT: usize = RUN_CALL_AT;        // [u8; MAX_STATE_BYTES]: the initial TICK state the guest
+                                                     // writes (on a later tournament leg it holds the carried latch)
+pub const START_TABLE_AT: usize = START_TICK_AT + MAX_STATE_BYTES; // [SlotStart; MAX_CRAFTS], zeroed by the host
+
+// race-end's region.
+pub const END_RESULT_AT: usize = RUN_CALL_AT;        // RunResult
+pub const END_TICK_AT: usize = END_RESULT_AT + RunResult::LEN; // [u8; MAX_STATE_BYTES]: the tick state latched at the race's end
+pub const END_OUT_LEN_AT: usize = END_TICK_AT + MAX_STATE_BYTES; // u32
+pub const END_OUT_AT: usize = END_OUT_LEN_AT + 4;    // [u8; MAX_RUN_BYTES]: the new RUN state
+pub const END_FLAGS_AT: usize = END_OUT_AT + MAX_RUN_BYTES; // u32: END_OFFER
+pub const END_STATS_AT: usize = END_FLAGS_AT + 4;    // count u32, then [Stat; MAX_RUN_STATS] (ADR-0094)
+pub const END_UNLOCKS_AT: usize = END_STATS_AT + 4 + 8 * MAX_RUN_STATS; // count u32, then up to 8 names of 32 bytes (section 7.1)
+// const _: () = assert!(END_UNLOCKS_AT + 4 + 8 * 32 <= RUN_IO_LEN); // about 9,700 of 16,384
+
+/// One grid slot's settings for this race. **Zero means untouched** in every field
+/// (no valid factor or count is zero), so an all-zero table is a stock race and a
+/// guest that zeroes the region by accident changes nothing. 80 bytes.
+pub struct SlotStart {
+    pub factor: [f32; 16],   // index Param - 1; 8 used, 8 spare for later parameters
+    pub count: [u8; 4],      // rockets, mines, cannon rounds, spare
+    pub duration: [f32; 3],  // Turbo, Shield, Autopilot
+}
 ```
 
-**Why a second buffer, and the 1,024 cap.** The tick buffer is 4,096 bytes with 1,024
-reserved for the state blob, so a run state of up to 4 KiB (ADR-0080's cap for a
-screen blob) cannot sit beside a race description, an output run state and a reply
-inside it. The second buffer fits, tightly: the fixed header is about 120 bytes,
-plus the run state in (1,024), the result, the output region (1,024), the final tick
-state at race-end (1,024) and 64 x 12 reply bytes come to about 4,000 of the 4,096.
-A guest that wants more than 1,024 bytes keeps a compact encoding.
+**Why a second buffer, sized on its own (maintainer, 2026-11-20).** The run state may
+be up to 4 KiB, ADR-0080's cap for a screen blob, so it cannot sit in the 4,096-byte
+tick buffer. The run buffer is `RUN_IO_LEN` = 16 KiB, a size of its own, and the two
+calls overlap their regions: `race-start` never reads the result or the latch, and
+`race-end` never writes the slot table. `race-end`'s side is the larger, at about
+9,700 bytes (the header of 116 and the run in, the result, the latch, the run out,
+flags, stats and unlock names). The guest's memory grows by 16 KiB, inside one wasm
+page.
+
+**What 4 KiB costs, and what it is worth.** Base64 in `records.toml`, a full run is
+about 5,500 characters per campaign, and a replay header carries the run it started
+from, up to about 5.5 KB more per replay. Nothing of it reaches `World`, the snapshot
+or the hash. A 4 KiB run cannot be copied whole into the 1,024-byte tick state; the
+guest copies what the race needs. Raising the cap later breaks nobody, lowering it
+would, so it starts where a campaign with per-event histories and large tables fits.
+Replays may then favour compression again; recorded in the handover thread.
+
+**Why a slot table, not commands (maintainer, 2026-11-20;
+[progression-challenge.md](progression-challenge.md), objection 17).** A full grid is 16
+crafts with 14 settings each, 224 commands, past any command cap that fits beside the
+run state. The table is 1,280 bytes for every slot and every setting, has no count cap
+and no duplicate to fault on, and a non-finite value is the one fault left. The spare
+factor columns take the next parameters without moving the layout.
 
 **How the run reaches `tick`.** The tick call never sees the run bytes. `race-start`
-reads them and **sets the module's initial tick state** in the output region (its
-length is `oag_state_len`, as the manifest checks it); the tick state is already in
-the race state and the hash, so a recipe the guest copied there at race start is
-what a `pickup-fire` handler reads at tick 100. This is the README's WIT shape
-(`race-start ... -> list<u8>`, "returns the initial blob"). At race-end the same
-region is the new run state, and the final tick state arrives beside it, so the race
-can hand what it counted to the run.
+reads them and **sets the module's initial tick state** in `START_TICK_AT` (its length
+is `oag_state_len`, as the manifest checks it); the tick state is already in the race
+state and the hash, so a recipe the guest copied there at race start is what a
+`pickup-fire` handler reads at tick 100. This is the README's WIT shape (`race-start
+... -> list<u8>`, "returns the initial blob"). At `race-end` the latched tick state
+arrives beside the result, so the race can hand what it counted to the run.
 
 *Rejected: put the run state in the tick buffer's state region.* At `race-start` the
 region is the module's own (zeroed) tick state, and the output needs a second region
-anyway. *Rejected: a 4 KiB cap.* It needs the buffer to grow past `IO_LEN`, which every
-guest has been built against, for a use no example needs.
+anyway. *Rejected: a command list for `race-start`* (the first draft, 64 commands): see
+above.
 
 ```rust
 /// What the host tells `race-end` on the exit from the race. Fixed layout, little endian.
@@ -171,16 +205,13 @@ So `race-end` is called from `oag-game` through a method on the race
 
 ### New commands
 
-Codes **39 and up**: the gaps at 4, 7 and 15 in `CommandKind` are not reused.
-Codes 39 to 41 are valid only in an `oag_race_start` reply, and 42 only in a `tick`
-reply (anywhere else is a fault, like `pickup-roll` off slot 0).
+Code **39**: the gaps at 4, 7 and 15 in `CommandKind` are not reused. `race-start`
+sends no commands (it fills the slot table above), and `race-end`'s offer, stats and
+unlock names are fields of its own region.
 
 | Code | Command | Where valid | Meaning |
 | --- | --- | --- | --- |
-| 39 | `set-modifier{slot, param, factor}` | race-start reply | scale one handling parameter of that slot's craft (section 4) |
-| 40 | `set-pickup-count{slot, weapon, count}` | race-start reply | rockets per press, mines per drop, cannon rounds (section 6) |
-| 41 | `set-pickup-duration{slot, weapon, factor}` | race-start reply | how long a Turbo, Shield or Autopilot lasts, for that slot only (section 6) |
-| 42 | `give-autopilot{slot}` | tick reply | starts the title's Autopilot for its authored time, as `give-shield` starts the Shield (section 6) |
+| 39 | `give-autopilot{slot}` | tick reply | starts the title's Autopilot for its authored time (times the slot's duration override), as `give-shield` starts the Shield (section 6) |
 
 ```rust
 // crates/ext-abi: closed vocabularies, `coded!` like Weapon and Cue.
@@ -193,15 +224,12 @@ coded! { Param: u16, first 1 {
     Grip,           // antigrav.grip_ground and antigrav.grip_air
     ShieldMax,      // dimensions.shield: the maximum and the start
     TurboStrength,  // engine.turbo
-} }
+} }                 // at most 16: SlotStart::factor has 16 columns
 
 /// Valid factor range per parameter, owned by the host. Chosen.
 pub const fn modifier_range(param: Param) -> (f32, f32);
 
 pub enum Command { /* the existing variants, and: */
-    SetModifier { slot: Slot, param: Param, factor: f32 },
-    SetPickupCount { slot: Slot, weapon: Weapon, count: u8 },
-    SetPickupDuration { slot: Slot, weapon: Weapon, factor: f32 },  // Turbo, Shield, Autopilot only
     GiveAutopilot { slot: Slot },
 }
 ```
@@ -274,8 +302,8 @@ what `cargo test` shows is what a player gets, and the harness's warning list le
 test assert none were clamped. The first draft's `Err(Refused::Range)` is gone: with a
 `let _ =` it dropped the whole reward in silence.
 
-`blob!` serves the run state (`MAX_RUN_BYTES` equals `MAX_STATE_BYTES`, so its size
-assert fits); the draft's `run_state!` is dropped. The test harness gains
+`blob!` serves the run state too, its size asserted against `MAX_RUN_BYTES` for
+`type Run` and `MAX_STATE_BYTES` for `type State`; the draft's `run_state!` is dropped. The test harness gains
 `oag_ext::test::start::<E>(&info, &run)` and `::end::<E>(&info, &result, &latch, &run)`,
 which go through the host's own writer and decoder.
 
@@ -322,8 +350,8 @@ an index.
 **Where a factor is applied.** Once, after the grid is placed and the title's
 `Handling` is loaded, and **before `begin_speed_plans`**, multiplied into the slot's
 `Ship::handling` (a per-ship copy, so one slot's factor never reaches another). A factor of exactly `1.0` skips the
-multiply, so no vanilla bit moves. Two commands for one slot and parameter are a
-fault; a slot with no craft is a fault.
+multiply, so no vanilla bit moves. A zero in the slot table means untouched; a
+non-zero value on a slot with no craft, or a non-finite one, is a fault.
 
 **The speed plan (maintainer, 2026-11-20).** The AI, the Autopilot and Pilot Assist
 drive a plan learned per hull at race load from that hull's `Handling`
@@ -534,7 +562,7 @@ what the engine already has.
 | `count` | Mine | `weapon_counts.mines`, `1..=MAX_MINES` = 5 | 1 to the craft's own count (down only) | Nothing |
 | `count` | Cannon | `Held::cannon_rounds`, armed from the race-wide `<Stats rounds>` | 1 to 32 | A per-ship starting-rounds field |
 | `Duration` | Turbo, Shield, Autopilot | race-wide `WeaponStats::simple` (`<Stats time>`) | 0.25 to 4.0 | A per-ship scale, read where the pickup starts. Editing the shared table would change every craft, the AI's too |
-| strength | Turbo | `Handling::engine.turbo` (per ship) | 0.5 to 2.0 | Named `Param::TurboStrength` and sent with `set-modifier`; no other weapon has a strength to scale |
+| strength | Turbo | `Handling::engine.turbo` (per ship) | 0.5 to 2.0 | Named `Param::TurboStrength`, a factor column of the slot table; no other weapon has a strength to scale |
 | strength | Shield | none: the Shield absorbs all damage for its time | n/a | Breakable armour is the mod's own logic (`hit`, `clear-shield`) |
 
 **Counts only go down (maintainer, 2026-11-20).** A `count` is clamped to
@@ -572,7 +600,7 @@ guest's reply to that event:
 
 1. `give-shield{slot}` (built): the title's Shield for its authored time, not
    refreshing a running one.
-2. `give-autopilot{slot}` (**new, code 42**): the title's Autopilot for its authored
+2. `give-autopilot{slot}` (**new, code 39**): the title's Autopilot for its authored
    time, mirroring `give-shield`. It follows the Autopilot's recovered rules
    ([autopilot.md](../../ghidra/functions/psp-pulse-usa/autopilot.md)): a running one
    is not refreshed, an absorb cancels it, a fire does not, and a craft whose
@@ -611,7 +639,7 @@ id = "long-haul"
 
 [run]
 module = "ext/run.wasm"       # a module the mod lists in [extension.rules]; the only module that sees the run
-run_bytes = 256               # the run state's length, at most MAX_RUN_BYTES (1024); the module's tick blob has its own oag_state_len
+run_bytes = 256               # the run state's length, at most MAX_RUN_BYTES (4096); the module's tick blob has its own oag_state_len
 new_run = "clear-medals"      # "clear-medals" (default) | "keep-medals"
 choice_screen = "reward"      # optional: an [[extension.screen]] id, opened after a finish that offered
 race_again = true             # false: the results page offers no RACE AGAIN for this campaign's events
@@ -803,7 +831,7 @@ impl Extension for LongHaul {
                 let Some(craft) = obs.craft(slot) else { continue };
                 let _ = reply.give_shield(&craft);
                 if state.recipe > 0 {
-                    let _ = reply.give_autopilot(&craft);        // new, code 42
+                    let _ = reply.give_autopilot(&craft);        // new, code 39
                 }
                 let _ = reply.clear_pickup(&craft);
             }
@@ -866,11 +894,11 @@ file, then rename), under a general ADR for every profile file (maintainer,
 Each step is its own merge, with a proof that a race with no run module hashes
 exactly as before (`VANILLA_FOLD`).
 
-1. The ABI: `oag_run` and the two exports, `RunResult`, codes 39 to 41, revision 7,
+1. The ABI: `oag_run` and the two exports, `RunResult`, the slot table, code 39, revision 7,
    the SDK `Run` trait and its test harness. No engine meaning yet.
 2. The run record in the `Store`, the `[run]` table, `NEW RUN`, the commit on exit, the
    replay `run` field, the no-record rule.
-3. `set-modifier` for the settled parameters, `SlotMods` in the hash; a
+3. The slot table's factors for the settled parameters, `SlotMods` in the hash; a
    disc-backed ground truth in the shape of `energy_turbo_ground_truth` (a +20 %
    `TopEnd`, a +20 % `Launch` and a doubled `ShieldMax` against stock on one circuit).
 4. Pickup parameters: counts, then the per-ship duration scales; `give-autopilot`
@@ -915,7 +943,7 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
     **Settled (maintainer, 2026-11-20):** the campaign page's stats block, which every
     event has (section 8.2).
 11. **Slots beyond the person's.** **Settled (maintainer, 2026-11-19): allowed.**
-    `set-modifier` accepts any grid slot, so a campaign may scale the AI's craft too
+    The slot table has a row for every grid slot, so a campaign may scale the AI's craft too
     (README section 3: a third-party mod is the player's choice). **Settled
     (2026-11-20):** a scaled craft adapts the reference speed plan per slot before the
     plans are built (section 4.1).
@@ -925,8 +953,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 13. **The run seed's source.** Drawn from the OS at run creation and stored. A
     campaign that wants the same rolls on every run needs a fixed seed in the `[run]`
     table.
-14. **The cap.** 1,024 bytes fits the second buffer and the copy into the tick blob.
-    A campaign with a large unlock table would want more.
+14. **The cap.** **Settled (maintainer, 2026-11-20): 4,096 bytes**, in a run buffer of
+    its own size (`RUN_IO_LEN` = 16 KiB), so a later raise is a host change and a
+    rebuild (section 3).
 15. **ADR-0080's fate.** **Settled for ADR-0093 (maintainer, 2026-11-20):** the
     choice screen and the stats are split into ADR-0094, so the run, modifiers and
     pickups no longer wait for the frontend world. ADR-0094 still does, as drafted.
