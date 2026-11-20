@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-18
-summary: "HD taps, setting, enhanced, 2048 fc15/fc17, planar read and Omega's own sea landed; next planar pass, lender loader, Omega Zone model"
+updated: 2026-11-20
+summary: "HD taps, setting, enhanced, 2048 fc15/fc17, HD planar reflection, Omega sea landed; next Omega/2048 planar, lender loader, Omega Zone model"
 categories: [rendering, frontend]
 size: XL (60)
 difficulty: medium (55)
@@ -143,10 +143,15 @@ map.**
 
 ## Open
 
-- **LANDED (`water-hdsea`): a stopgap for the sea's planar term** (water.md, "The sea's
-  stand-in for the planar term"): `Reflectivity * encode(sky)`, chosen, not measured; the
-  sea is within 10 luma levels of the original in the three crops. The planar lane deletes
-  the sea's `encode(sky)` branch in `shade.wesl` when it draws the real target.
+- **LANDED (`planar-water`, 2026-11-20): HD's planar reflection** (water.md, "The planar
+  reflection, drawn"; track-reflect.md under `docs/ghidra/functions/ps3-hdfury-eu/`): the reflect job, its
+  mirror, its eye test and its doubled sun and prelit lights read in the executable; under
+  `original` on HD the bit-3 chunks and the sky are drawn into a 960x540 target the sea reads raw.
+  Moa Therma's sea crops 144.9/136.4/97.6 against the original's 144.8/138.2/96.9 (stand-in
+  143.8/132.5/94.8). The sky stand-in stays only where no target is bound (front-end capture,
+  viewer). Left: who fills the reflect list and how it is culled (ours skips the frustum), the
+  refract job below `h` on a sea circuit, the target's frame cost at 800p/1080p/4K, and Omega's
+  and 2048's copies (step 4's `wohdmeshreflect` half).
 - The planar reflection is read on HD Moa Therma (water.md, "The planar reflection, read off
   live frames"); unread: Chenghou's and Modesto's seas (recipe there), bit 1 as the mirror, and
   Omega's and 2048's copies of the same passes.
@@ -260,7 +265,8 @@ Ranked. Hours are for one member on an idle machine.
    The RPCS3 sea pair the HD taps lane left open is made (sea-crop luma: original 140, `off`
    139, `original` 105; `original` reads 35 levels darker than the original and worse than
    `off` by MAE until lane 4 lands).
-4. **The planar reflection** (`oag-wire`, opus, 8 h; **ready to wire**, lane 3 read the camera, target and constants). A mirrored
+4. **The planar reflection: HD LANDED (`planar-water`), 2048 and Omega open** (`oag-wire`, opus, 6 h for the
+   rest; the HD target in `scene::behind_glass` is the mechanism to reuse). A mirrored
    pass over render-flag bit-3 chunks (HD) and `wohdmeshreflect` meshes (2048,
    Omega, `psp2::refraction_only`'s split generalised), sampled through
    `reflectProject` with the `distortion` offset. Acceptance: target set
