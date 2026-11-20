@@ -20,7 +20,9 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use log::{debug, info, warn};
-use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState, Region};
+use smithay_client_toolkit::compositor::{
+    CompositorHandler, CompositorState, FrameCallbackData, Region,
+};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::calloop::EventLoop;
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
@@ -30,9 +32,7 @@ use smithay_client_toolkit::shell::wlr_layer::{
     Anchor, KeyboardInteractivity, Layer, LayerShell, LayerShellHandler, LayerSurface,
     LayerSurfaceConfigure,
 };
-use smithay_client_toolkit::{
-    delegate_compositor, delegate_layer, delegate_output, delegate_registry, registry_handlers,
-};
+use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 use wayland_client::globals::registry_queue_init;
 use wayland_client::protocol::{wl_output, wl_surface};
 use wayland_client::{Connection, Proxy, QueueHandle};
@@ -237,7 +237,8 @@ impl Pace for Pacer {
         if !gate.open() {
             return false;
         }
-        self.surface.frame(&self.qh, self.surface.clone());
+        self.surface
+            .frame(&self.qh, FrameCallbackData(self.surface.clone()));
         gate.asked = Some(Instant::now());
         true
     }
@@ -531,7 +532,5 @@ impl ProvidesRegistryState for State {
     registry_handlers![OutputState];
 }
 
-delegate_compositor!(State);
-delegate_output!(State);
-delegate_layer!(State);
 delegate_registry!(State);
+delegate_dispatch2!(State);
