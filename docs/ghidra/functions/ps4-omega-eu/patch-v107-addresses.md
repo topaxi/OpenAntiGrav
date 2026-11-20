@@ -193,7 +193,7 @@ pointer). Not yet read: the coefficient texture and the running `LAvg` the GPU p
 `+0x1e0` end, `+0x1e8` capacity of a `float[4]` (`N - 1` for `Exposure time` 0.0833, weights at `+0x1f8`, five `1.0f`); each frame writes one
 slot, round-robin, and `+0xc2` (a byte of the dword at `+0xc0`) is the index just written, `+0xc1` alternates 0 and 1 (ping-pong, not
 confirmed). A slot is the **raw whole-frame luma of the scene target** (it steps 0.351 to 0.228 in one write at a camera cut, which the
-rate limit would forbid for `LAvg`), 1.0 on fades, not a past `LAvg` as [tonemap](tonemap.md)'s per-frame row reads it. The object's pointer
+rate limit would forbid for `LAvg`; mid fly-over four slots spread 0.024 against at most 0.0125 for four rate-limited `LAvg` values), 1.0 on fades. That settles which luminance the ring holds: the frame's own luma, as [tonemap](tonemap.md)'s law line `target` says, and not a past `LAvg` (the CPU row's "reads back the previous coefficient texture's luminance" does not say which texel). The object's pointer
 value varies by boot, read it through `0x021dbdb8`. Results and recipe: [omega-status](../../../formats/omega-status.md#hd-mode-frame-brightness-the-originals-luma-ring-read-2026-11-20-omega-luma-read).
 `ToneMap_UpdateCoefficients` is still unresolved on 1.07; the layout above comes from the data, not from its decompilation.
 

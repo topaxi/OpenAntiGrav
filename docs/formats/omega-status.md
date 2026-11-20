@@ -2696,7 +2696,7 @@ not `E` and not a global gain.
 
 The port (`scripts/wipeout-pc-omega-pair.py`'s `Rig`, the same walk as the gallery pairs, a fresh save, Feisar, HD mode, `OAG_PAD_SEAT=2`)
 was booted once per circuit and again (eight boots), and `/proc/<gow3-probe pid>/mem` was read in a loop (1 ms sleep, a row kept
-whenever the object or the ring changed, 2,500 to 3,500 rows a boot) from MAIN MENU until the frame the pair script would pick (first HUD
+whenever the object or the ring changed, 2,500 to 3,500 rows a boot; `scripts/wipeout-pc-tonemap-ring.py`, one boot of about 80 s: `OAG_PAD_SEAT=N UV_OFFLINE=1 python3 scripts/emu-run.py -- python3 scripts/wipeout-pc-tonemap-ring.py --scratch <dir>/inst/a --game <the port's game directory> --port <the port's checkout> --out <dir>/runs/<circuit>-a --track-steps N`, with N the Rights on Track Select from Vineta K: Moa 2, Sebenco 5, Modesto 8, Amphiseum 9; it prints the ring, its mean, `E` and `t1` and writes `samples.jsonl`, `frozen.json` and the frames) from MAIN MENU until the frame the pair script would pick (first HUD
 frame plus 2), then the port was `SIGSTOP`ped and the object and every pointer in it dumped. The loop only reads: no stop, no write.
 
 - **Pointer:** guest `0x021dbdb8` (host `0x800000000 + 0x11dbdb8`) holds the `ToneMap_Instance` pointer, `0x210` bytes
@@ -2714,7 +2714,10 @@ frame plus 2), then the port was `SIGSTOP`ped and the object and every pointer i
   0.228 in one write (a drop of 0.12), where the executable's rate limit `response / 60` would allow 0.004 a frame
   (`tonemap.md`, "The law"). Fades read 1.0 (0.97 to 1.0 for about 20 s of loading and the white-out before the race), so the
   slot is the whole-frame mean luma of the scene target, fade and all. That agrees with `tonemap.md`'s "stores it in the ring" (the
-  luminance chain's mean) and not with "the previous coefficient texture's `LAvg`" (confidence 80, one cut seen on each of the eight boots).
+  luminance chain's mean, and with `tonemap.md`'s own law line `target = (L + sum of the previous N-1 frames' L) / N`) and not with a past `LAvg`
+  read back from texel 1 of the coefficient target (confidence 80). Two more readings: mid fly-over on Sebenco (22.6 s before the grab) the four
+  slots read 0.3608, 0.3843, 0.3739 and 0.3674, a spread of 0.024 where four consecutive rate-limited `LAvg` values (0.0042 a frame) could
+  differ by at most 0.0125; and the cut's step is seen on each of the eight boots.
 - **State proof per boot** (the pair script's name-crop and Feisar logo references no longer exist, so the object proves the circuit):
   `+0x98/+0x9c` (`Exposure minimum/maximum`), `+0x80` (lum a) and `+0x88 * 60` (response) equal each circuit's own patch `.EnvSettings`
   (Sebenco 0.555/4, 0.079, 0.25; Moa 0/1, 0.4, 0.5; Modesto 0.5/2, 0.18, 0.4; Amphiseum 0.4/2, 0.25, 0.3), `+0xb8` is 1.0 (the SDR set),
@@ -2737,7 +2740,7 @@ LAvg, min, max) * cL`, `t1 = max(srcA + srcB * LAvg, 0.01)`); ours from the `ome
 | Moa Therma | 0.4720, 0.4740 | 1.000 (max) | 1.570, 1.573 | 0.3851 | 1.000 (max) | 1.465 | 1.23, 1.23 | partial |
 | Modesto Heights | 0.4197, 0.4299 | 0.609, 0.599 | 1.000 | 0.2621 | 0.868 | 1.000 | 1.60, 1.64 | about 1.6 |
 
-Boot to boot the ring mean agrees to 0.1 to 2.4 % (Modesto's boot A was still falling 0.01 a second, its scene settling). The ring's history
+Boot to boot the ring mean agrees to 0.1 to 2.4 % (a ninth boot, the committed script's first run, read the Amphiseum at 0.1318) (Modesto's boot A was still falling 0.01 a second, its scene settling). The ring's history
 before the grab, mean of the four slots, relative to the pick grab (seconds; run A; loading and the fly-over are the intro, not the grid):
 
 | Pair | -30 s | -20 s | -10 s | -5 s | -2 s | -1 s | -0.5 s | grab |
@@ -2781,7 +2784,7 @@ good to about 0.2, not to the digit. What survives them: **Sebenco's sky and far
 1.1 to 1.4; Modesto is brighter everywhere (1.4 to 2.2, sky most); Moa's sky and floor match and its stands and stripe road are 1.4 to 1.6;
 the Amphiseum's ceiling and stands are brighter in ours (0.67 to 0.73).** That reproduces `omega-hd-exposure`'s box table (sky and far
 scenery dark on Sebenco, sky on Modesto, stands and stripe road on Moa) as a scene-radiance gap, and puts a number on it that the tone map
-passes through one for one on the three circuits where `E` is pinned or `b = 0`.
+passes through one for one on Sebenco (`E` pinned, `b = 0`) and the Amphiseum; on Moa `t1` moves with `LAvg` (1.57 against 1.465) and on Modesto `E` does.
 
 ### What this decides
 
