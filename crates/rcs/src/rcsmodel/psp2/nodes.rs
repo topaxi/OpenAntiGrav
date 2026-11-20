@@ -42,8 +42,9 @@
 //!                ([`MeshObject::vex_hash`])
 //!   +0x08  u16   node index into the table above, or 0xffff for a static
 //!                mesh authored in world space
-//!   +0x0a  u16   unread flags: 0x0101 or 0x0201 on a node-bound mesh,
-//!                0x0101 (or 0x0306, 26 times) on a static one
+//!   +0x0a  u16   flags: 0x0101 or 0x0201 on a node-bound mesh,
+//!                0x0101 (or 0x0306, 26 times) on a static one;
+//!                0x0401 on a track's crowd-entity shapes ([`CROWD_ENTITY_FLAGS`])
 //!   +0x10  u32   offset of the shape's name, NUL-terminated
 //!   +0x14  u32   submesh count
 //!   +0x1c  u32   offset of u32[submesh count]: each submesh object's offset;
@@ -177,11 +178,28 @@ pub struct MeshObject {
     pub vex_hash: u32,
     /// Index into [`Scene::nodes`], or `None` for a static mesh.
     pub node: Option<usize>,
-    /// The unread `+0x0a` word.
+    /// The `+0x0a` word. Only [`CROWD_ENTITY_FLAGS`] is read; `0x0101`/`0x0201` (static, node-bound)
+    /// and `0x0306`/`0x0501` (crowd rigs, `LODs.rcsmodel`) are not.
     pub flags: u16,
     /// Offsets, within the CPU section, of each submesh's record - the value
     /// [`super::SubMesh::record`] carries for the same submesh.
     pub submesh_records: Vec<usize>,
+}
+
+/// The `+0x0a` flags value of a track's crowd-entity shapes (`trackcrowd:crowdentity<N>_<M>Shape`):
+/// 17,701 of 17,701 such shapes over Omega's `data00` to `data04`, and no other mesh object of any
+/// model. Compared whole, not as a bit: `LODs.rcsmodel`'s `LOD1Shape` carries `0x0501`. Omega's
+/// track loader (`FUN_0162a390`) walks the model's objects for the name `CrowdEntity`, spawns a
+/// `Data/Crowd/Rigs` instance per entity and clears draw bits on the shape
+/// (`docs/formats/omega-status.md`, "The crowd-entity shapes"). 2048's models carry none.
+pub const CROWD_ENTITY_FLAGS: u16 = 0x0401;
+
+impl MeshObject {
+    /// Whether this is a crowd-entity shape, the placeholder the original replaces with rigs.
+    #[must_use]
+    pub const fn is_crowd_entity(&self) -> bool {
+        self.flags == CROWD_ENTITY_FLAGS
+    }
 }
 
 /// The node table and mesh objects of one model.

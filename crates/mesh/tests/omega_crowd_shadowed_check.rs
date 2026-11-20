@@ -10,6 +10,11 @@
 //! the count of such vertices is the count the file holds, so no other plan has ORed a second
 //! slot into a crowd vertex. Remove the builder's `crowd::plan` call, or the eye frame, and
 //! every count here reads zero or fails.
+//!
+//! Also holds that the track's crowd-entity shapes (the mesh objects carrying
+//! `CROWD_ENTITY_FLAGS`) draw nothing: the report counts exactly the file's submeshes of those
+//! shapes and the model carries their vertices fewer than the file holds (nothing else lost
+//! where the file hides no node). Drop the builder's crowd-entity hiding and the count reads zero.
 
 use oag_mesh::mesh::rcs::psp2;
 use oag_mesh::mesh::{Model, PROGRAM_CROWD, slots};
@@ -76,4 +81,43 @@ pub fn check(
         entries, expected,
         "{name}: every vertex of a crowd submesh names the crowd entry, and no other does"
     );
+}
+
+/// The submeshes of the file's crowd-entity shapes, and how many vertices they hold.
+pub fn crowd_entity_submeshes(decoded: &oag_rcs::rcsmodel::psp2::Model) -> (usize, usize) {
+    decoded
+        .submeshes
+        .iter()
+        .filter(|s| {
+            s.mesh
+                .and_then(|m| decoded.scene.meshes.get(m))
+                .is_some_and(|m| m.is_crowd_entity())
+        })
+        .fold((0, 0), |(n, v), s| (n + 1, v + s.positions.len()))
+}
+
+/// What hiding the crowd-entity shapes did to `model`: `report` counts the file's submeshes of
+/// them, `model` lost their vertices and nothing else.
+pub fn check_crowd_entities_hidden(
+    name: &str,
+    decoded: &oag_rcs::rcsmodel::psp2::Model,
+    model: &Model,
+    report: &psp2::Report,
+) {
+    let (submeshes, vertices) = crowd_entity_submeshes(decoded);
+    assert!(
+        submeshes > 0,
+        "{name}: the file holds no crowd-entity shape"
+    );
+    assert_eq!(report.crowd_entities, submeshes, "{name}");
+    let file: usize = decoded.submeshes.iter().map(|s| s.positions.len()).sum();
+    let emitted = model.vertices.len() + vertices;
+    if report.hidden + report.unplaced == 0 {
+        assert_eq!(
+            emitted, file,
+            "{name}: the model holds the file's vertices less the crowd entities'"
+        );
+    } else {
+        assert!(emitted <= file, "{name}: {emitted} of {file}");
+    }
 }
