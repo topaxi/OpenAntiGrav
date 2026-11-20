@@ -299,14 +299,14 @@ impl Driver {
                     .button(left, winit::event::ElementState::Released);
                 self.frame(None)?;
             }
-            Step::ClickHint(button) => {
+            Step::ClickHint(press) => {
                 // A drive draws only the frames it is asked for, and the hints are read off a
                 // drawn frame, as a player's click lands on what they saw.
                 self.session.gpu.output.draw_next = true;
                 self.frame(None)?;
-                let (x, y) = self.session.hint_pixel(*button).ok_or_else(|| {
+                let (x, y) = self.session.hint_pixel(*press).ok_or_else(|| {
                     anyhow!(
-                        "no hint on screen depicts {button:?} (hints: {})",
+                        "no hint on screen presses {press:?} (hints: {})",
                         self.last.hints.as_deref().unwrap_or("none")
                     )
                 })?;
@@ -437,9 +437,12 @@ fn state_of(session: &mut Session) -> State {
     }
     state.hints = Some(
         session
-            .hint_buttons()
+            .hint_presses()
             .iter()
-            .map(|button| format!("{button:?}").to_ascii_lowercase())
+            .map(|press| match press {
+                oag_ui::hints::Press::Button(button) => format!("{button:?}").to_ascii_lowercase(),
+                oag_ui::hints::Press::Escape => "escape".to_string(),
+            })
             .collect::<Vec<_>>()
             .join(","),
     )

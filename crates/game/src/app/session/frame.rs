@@ -363,7 +363,7 @@ impl Session {
                 break;
             }
             // A click on a key or button hint is that button's press, ahead of what is under it.
-            self.tick_hints(&mut pointer, rect);
+            self.tick_hints(&mut pointer);
             // The further windows' too, every tick, so a click made mid-race is spent and the end
             // screens (the finished arm below) see only what happened since the line.
             let seat_pointers = self.seat_pointers();

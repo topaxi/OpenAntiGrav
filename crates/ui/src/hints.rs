@@ -260,6 +260,99 @@ fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
     out
 }
 
+/// One entry of a legend line: words, and the press a click on them makes when they name a key
+/// or a button.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Entry {
+    /// The press a click on the entry makes; `None` for words that name no single control (a
+    /// stick, two buttons, a modifier held while another is used).
+    pub press: Option<Press>,
+    /// The separator drawn before the entry.
+    pub lead: &'static str,
+    /// The words, key name included: `CROSS (ENTER) TAKE PHOTO`.
+    pub text: String,
+}
+
+impl Entry {
+    /// An entry with no separator before it.
+    #[must_use]
+    pub fn new(press: Option<Press>, text: impl Into<String>) -> Self {
+        Self {
+            press,
+            lead: "",
+            text: text.into(),
+        }
+    }
+
+    /// An entry for pad button `button`.
+    #[must_use]
+    pub fn button(button: Button, text: impl Into<String>) -> Self {
+        Self::new(Some(Press::Button(button)), text)
+    }
+
+    /// This entry after `lead`.
+    #[must_use]
+    pub const fn after(mut self, lead: &'static str) -> Self {
+        self.lead = lead;
+        self
+    }
+}
+
+/// The text a legend line draws: its entries, each after its separator.
+#[must_use]
+pub fn line_text(entries: &[Entry]) -> String {
+    entries
+        .iter()
+        .flat_map(|entry| [entry.lead, entry.text.as_str()])
+        .collect()
+}
+
+/// Where one legend line is drawn: a single `Draw::Text` of [`line_text`].
+#[derive(Debug, Clone, Copy)]
+pub struct Line<'a> {
+    pub entries: &'a [Entry],
+    /// The line's anchor (`Draw::Text::x`), left, middle or right by `align`.
+    pub x: f32,
+    /// The line's top edge.
+    pub y: f32,
+    pub align: Align,
+    /// How tall a hint on the line is.
+    pub height: f32,
+}
+
+/// The hints of legend `lines` drawn at `scale` in `atlas`: one rectangle for each entry that
+/// names a press, over the words as the face lays them out.
+#[must_use]
+pub fn legend(atlas: &Atlas, scale: f32, lines: &[Line]) -> Vec<Hint> {
+    let mut out = Vec::new();
+    for line in lines {
+        let width = advance(atlas, &line_text(line.entries)) * scale;
+        let left = match line.align {
+            Align::Left => line.x,
+            Align::Centre => line.x - width / 2.0,
+            Align::Right => line.x - width,
+        };
+        let mut before = String::new();
+        for entry in line.entries {
+            before.push_str(entry.lead);
+            let start = advance(atlas, &before) * scale;
+            before.push_str(&entry.text);
+            if let Some(press) = entry.press {
+                out.push(Hint {
+                    press,
+                    rect: [
+                        left + start,
+                        line.y,
+                        advance(atlas, &entry.text) * scale,
+                        line.height,
+                    ],
+                });
+            }
+        }
+    }
+    out
+}
+
 /// The press of the first hint under `at`.
 #[must_use]
 pub fn hit(hints: &[Hint], at: (f32, f32)) -> Option<Press> {

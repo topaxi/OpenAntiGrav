@@ -47,6 +47,7 @@ use oag_gameplay::input::{Button, Input};
 use oag_title::Title;
 
 use oag_ui::frontend::{Align, Draw};
+use oag_ui::hints::{Entry, Hint, Line, Press};
 
 use oag_display::space::SCREEN;
 
@@ -889,7 +890,13 @@ fn list_draw(launcher: &Launcher) -> Vec<Draw> {
     // Always drawn, and at the bottom rather than after the notes: the keys are
     // what a player needs on the first frame, and a screen where they vanish as
     // soon as something is wrong is a screen that helps least when it matters.
-    out.push(text(MARGIN, SCREEN.1 - 20.0, 1.0, DIM, HINT));
+    out.push(text(
+        MARGIN,
+        SCREEN.1 - 20.0,
+        1.0,
+        DIM,
+        &oag_ui::hints::line_text(&hint_entries()),
+    ));
 
     // The build's own short commit hash and commit date, bottom right - `env!` reads
     // `oag_net::GIT_HASH`, set at compile time by `oag-net`'s `build.rs`. This is the one
@@ -973,7 +980,38 @@ const UNAVAILABLE_COLOUR: [f32; 4] = [0.55, 0.36, 0.36, 1.0];
 /// 32 hex digits and a line ending. Anything bigger is a disc image.
 const KEY_FILE_MAX: u64 = 256;
 
-const HINT: &str = "UP/DOWN CHOOSE   ENTER OR X START   ESCAPE QUIT";
+/// How tall a footer hint is: the engine's own 5x7 face is 7 rows at scale 1, and a row of
+/// the list is [`ROW`].
+const HINT_HEIGHT: f32 = ROW;
+
+/// The list's footer keys: ENTER and X start the row under the cursor (the cross), ESCAPE quits.
+fn hint_entries() -> Vec<Entry> {
+    vec![
+        Entry::new(None, "UP/DOWN CHOOSE"),
+        Entry::button(Button::Cross, "ENTER OR X START").after("   "),
+        Entry::new(Some(Press::Escape), "ESCAPE QUIT").after("   "),
+    ]
+}
+
+/// The key hints [`draw_list`] puts on screen: the footer's, or the disc-key prompt's.
+#[must_use]
+pub fn hints(launcher: &Launcher) -> Vec<Hint> {
+    if let Some(entry) = launcher.entry() {
+        return entry.hints();
+    }
+    if launcher.notice().is_some() {
+        return Vec::new();
+    }
+    let entries = hint_entries();
+    let line = Line {
+        entries: &entries,
+        x: MARGIN,
+        y: SCREEN.1 - 20.0,
+        align: Align::Left,
+        height: HINT_HEIGHT,
+    };
+    oag_ui::hints::legend(oag_ui::font::builtin(), 1.0, &[line])
+}
 
 #[cfg(test)]
 mod tests;

@@ -17,7 +17,7 @@
 //! key                              a key no button is bound to went down
 //! mouse 640 360                    the mouse moved to this window pixel
 //! click                            the primary mouse button went down and up
-//! click hint <button>              click the key or button hint on screen that depicts this button (the footer's `(O) Help`)
+//! click hint <button>              click the key or button hint on screen that presses this button, or `escape` (the footer's `(O) Help`)
 //! ticks 120                        let this many ticks pass
 //! screenshot out.png               draw the next frame offscreen into a PNG
 //! drop shot.png                    a file dropped on the window (a screenshot of ours opens in the replay viewer on the main menu or in a demo)
@@ -130,7 +130,7 @@ pub enum Step {
     /// The primary mouse button went down and up.
     Click,
     /// The same click, on the middle of the hint on screen that depicts this button.
-    ClickHint(Button),
+    ClickHint(oag_ui::hints::Press),
     /// Let this many ticks pass.
     Ticks(u32),
     /// Write the next frame to this PNG.
@@ -167,7 +167,7 @@ impl std::fmt::Display for Step {
             Self::Key => f.write_str("key"),
             Self::Mouse { x, y } => write!(f, "mouse {x} {y}"),
             Self::Click => f.write_str("click"),
-            Self::ClickHint(button) => write!(f, "click hint {button:?}"),
+            Self::ClickHint(press) => write!(f, "click hint {press:?}"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
             Self::Screenshot(path) => write!(f, "screenshot {}", path.display()),
             Self::Drop(path) => write!(f, "drop {}", path.display()),
@@ -400,10 +400,14 @@ impl Script {
             "key" if words.is_empty() => Step::Key,
             "click" if words.is_empty() => Step::Click,
             "click" => match words.as_slice() {
-                [hint, button] if hint == "hint" => Step::ClickHint(
-                    oag_core::buttons::button_from_name(button)
-                        .ok_or_else(|| format!("{button:?} is not a button"))?,
-                ),
+                [hint, name] if hint == "hint" => Step::ClickHint(if name == "escape" {
+                    oag_ui::hints::Press::Escape
+                } else {
+                    oag_ui::hints::Press::Button(
+                        oag_core::buttons::button_from_name(name)
+                            .ok_or_else(|| format!("{name:?} is not a button or escape"))?,
+                    )
+                }),
                 _ => return Err("click takes nothing, or `hint <button>`".into()),
             },
             "mouse" => match words.as_slice() {

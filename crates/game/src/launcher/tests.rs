@@ -184,7 +184,7 @@ fn the_key_hint_is_always_drawn() {
         assert!(
             list.iter().any(|draw| matches!(
                 draw,
-                Draw::Text { text, .. } if text == HINT
+                Draw::Text { text, .. } if *text == oag_ui::hints::line_text(&hint_entries())
             )),
             "no hint drawn"
         );

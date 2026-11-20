@@ -1,4 +1,6 @@
 use super::*;
+use oag_gameplay::input::Button;
+use oag_ui::hints::Press;
 
 const GRID: (f32, f32) = (480.0, 272.0);
 
@@ -169,8 +171,14 @@ fn past_the_last_agreeing_second_the_banner_says_pose_view_and_names_a_short_tra
 #[test]
 fn what_the_screen_draws_stays_in_the_top_band_inside_the_chip_row() {
     let keys = [
-        "CROSS PLAY  LEFT RIGHT SKIP  UP SPEED".to_string(),
-        "L1 R1 CRAFT  SQUARE HUD  L2 R2 SCRUB  R-STICK JOG".to_string(),
+        vec![Entry::new(
+            None,
+            "CROSS PLAY  LEFT RIGHT SKIP  UP SPEED".to_string(),
+        )],
+        vec![Entry::new(
+            None,
+            "L1 R1 CRAFT  SQUARE HUD  L2 R2 SCRUB  R-STICK JOG".to_string(),
+        )],
     ];
     let first = chip_rect(CHIPS[0], GRID);
     let last = chip_rect(CHIPS[CHIPS.len() - 1], GRID);
@@ -217,4 +225,35 @@ fn a_notice_is_a_band_across_the_middle_with_its_text_wrapped_inside_the_width()
         &list[1],
         Draw::Text { wrap_width: Some(wrap), .. } if *wrap < GRID.0
     ));
+}
+
+/// A key legend entry that names one control is a hint, and its rectangle lies on the words the
+/// line draws: fails if the hint list and the draw stop sharing one layout.
+#[test]
+fn a_key_hint_sits_over_its_words_on_the_line_drawn() {
+    let keys = [vec![
+        Entry::button(Button::Cross, "CROSS PLAY".to_string()),
+        Entry::new(None, "LEFT RIGHT SKIP".to_string()).after("  "),
+        Entry::button(Button::Up, "UP SPEED".to_string()).after("  "),
+    ]];
+    let hints = legend_hints(&view(), GRID, &keys);
+    let presses: Vec<_> = hints.iter().map(|hint| hint.press).collect();
+    assert_eq!(
+        presses,
+        [Press::Button(Button::Cross), Press::Button(Button::Up)]
+    );
+    let line = draw_list(&view(), GRID, &say, &keys)
+        .into_iter()
+        .find_map(|draw| match draw {
+            Draw::Text { text, x, y, .. } if text.contains("CROSS PLAY") => Some((text, x, y)),
+            _ => None,
+        })
+        .expect("the line of keys is drawn");
+    let atlas = oag_ui::font::builtin();
+    let at = |text: &str| oag_ui::font::measure(atlas, text) * SCALE;
+    let left = line.1 - at(&line.0) / 2.0;
+    let cross_at = left + at(&line.0[..line.0.find("CROSS").unwrap()]);
+    assert!((hints[0].rect[0] - cross_at).abs() < 0.01);
+    assert!((hints[0].rect[2] - at("CROSS PLAY")).abs() < 0.01);
+    assert_eq!(hints[0].rect[1], line.2);
 }

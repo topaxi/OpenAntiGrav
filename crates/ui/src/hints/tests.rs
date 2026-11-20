@@ -163,3 +163,46 @@ fn hit_answers_the_hint_under_the_point() {
     assert_eq!(hit(&hints, (39.0, 203.0)), None);
     assert_eq!(hit(&hints, (45.0, 150.0)), None);
 }
+
+#[test]
+fn a_legend_line_puts_a_rect_over_each_entry_that_names_a_press() {
+    let atlas = Atlas::build();
+    let entries = [
+        Entry::button(Button::Cross, "X OK"),
+        Entry::new(None, "STICK MOVE").after("   "),
+        Entry::new(Some(Press::Escape), "ESC QUIT").after("   "),
+    ];
+    let line = Line {
+        entries: &entries,
+        x: 16.0,
+        y: 100.0,
+        align: Align::Left,
+        height: 10.0,
+    };
+    assert_eq!(line_text(&entries), "X OK   STICK MOVE   ESC QUIT");
+    let hints = legend(&atlas, 1.0, &[line]);
+    assert_eq!(hints.len(), 2);
+    assert_eq!(hints[0].press, Press::Button(Button::Cross));
+    assert_eq!(hints[0].rect, [16.0, 100.0, width("X OK"), 10.0]);
+    assert_eq!(hints[1].press, Press::Escape);
+    let start = 16.0 + width("X OK   STICK MOVE   ");
+    assert!((hints[1].rect[0] - start).abs() < 0.01);
+    assert!((hints[1].rect[2] - width("ESC QUIT")).abs() < 0.01);
+}
+
+#[test]
+fn a_centred_legend_line_is_centred_as_a_whole() {
+    let atlas = Atlas::build();
+    let entries = [Entry::button(Button::Square, "SQ HUD")];
+    let line = Line {
+        entries: &entries,
+        x: 200.0,
+        y: 0.0,
+        align: Align::Centre,
+        height: 9.0,
+    };
+    let hints = legend(&atlas, 0.5, &[line]);
+    let half = width("SQ HUD") * 0.5;
+    assert!((hints[0].rect[0] - (200.0 - half / 2.0)).abs() < 0.01);
+    assert!((hints[0].rect[2] - half).abs() < 0.01);
+}

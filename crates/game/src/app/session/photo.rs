@@ -450,15 +450,16 @@ impl super::Session {
         info!("photo mode closed ({:?})", open.origin);
     }
 
-    /// The mode's screen as an overlay draw list in the grid `grid`: empty when it is not open.
-    /// It goes over the surface, after the picture a shot reads.
-    pub(crate) fn photo_screen(&self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
+    /// Runs `f` on the mode's photo, the words its screen is worded with and the state of the
+    /// mode; `None` when it is not open.
+    fn with_photo_words<R>(
+        &self,
+        f: impl FnOnce(&oag_raceplay::photo::Photo, &Words, &Open) -> R,
+    ) -> Option<R> {
         let (Some(open), Stage::Race(stage)) = (self.photo.as_ref(), &self.stage) else {
-            return Vec::new();
+            return None;
         };
-        let Some(photo) = stage.race.photo() else {
-            return Vec::new();
-        };
+        let photo = stage.race.photo()?;
         // The disc's own word for a row where the title's disc has one, else the project's.
         let say_id = |id: &str| {
             self.shell
@@ -473,17 +474,35 @@ impl super::Session {
                 None => name,
             }
         };
-        photo::draw_list(
-            photo,
-            grid,
-            &Words {
-                say: &say_id,
-                button: &button,
-                roles: self.roles(),
-            },
-            open.message.as_ref().map(|(text, _)| text.as_str()),
-            self.photo_progress(),
-        )
+        let words = Words {
+            say: &say_id,
+            button: &button,
+            roles: self.roles(),
+        };
+        Some(f(photo, &words, open))
+    }
+
+    /// The mode's screen as an overlay draw list in the grid `grid`: empty when it is not open.
+    /// It goes over the surface, after the picture a shot reads.
+    pub(crate) fn photo_screen(&self, grid: (f32, f32)) -> Vec<oag_ui::frontend::Draw> {
+        self.with_photo_words(|photo, words, open| {
+            photo::draw_list(
+                photo,
+                grid,
+                words,
+                open.message.as_ref().map(|(text, _)| text.as_str()),
+                self.photo_progress(),
+            )
+        })
+        .unwrap_or_default()
+    }
+
+    /// The hints of the mode's key legend in the grid `grid`: none when it is not open.
+    pub(crate) fn photo_hints(&self, grid: (f32, f32)) -> Vec<oag_ui::hints::Hint> {
+        self.with_photo_words(|photo, words, _| {
+            photo::legend_hints(photo, grid, words, self.photo_progress().is_some())
+        })
+        .unwrap_or_default()
     }
 
     /// The drive's reading of the picture controls while the mode is open.

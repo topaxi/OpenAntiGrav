@@ -622,6 +622,14 @@ pub struct Atlas {
     outlined: bool,
 }
 
+/// The built-in set, built once: what the engine's own screens (photo mode, the viewer, the disc
+/// chooser) draw in, and so what their hints are laid out in.
+#[must_use]
+pub fn builtin() -> &'static Atlas {
+    static BUILTIN: std::sync::OnceLock<Atlas> = std::sync::OnceLock::new();
+    BUILTIN.get_or_init(Atlas::build)
+}
+
 impl Atlas {
     /// Builds the atlas.
     #[must_use]
