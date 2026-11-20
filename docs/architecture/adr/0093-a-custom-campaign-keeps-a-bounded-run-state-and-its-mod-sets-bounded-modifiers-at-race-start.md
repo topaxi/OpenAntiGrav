@@ -114,8 +114,12 @@ ratings, not computed from handling.
    a `Weapon::Extension` whose `pickup-fire` reply sends `give-shield`, the new
    `give-autopilot` and `clear-pickup`. One kind per mod stays; the recipe is
    selected from state.
-6. **Stage and commit.** The finish site calls `race-end` once, and its output is
-   staged together with the medal the race earned, both saved at the finish. They are
+6. **Stage and commit.** An event ends at the two sites that record a medal today:
+   the finish site for a lap-count mode, the escape site for Zone, Speed Lap and an
+   abandoned Time Trial. The race goes on as it does today (the world steps on under
+   the results; Zone runs until the player leaves), and `race-end`, the mod's own
+   award and end-of-run logic, runs **once, when the player exits the race**, not at
+   the finish moment (maintainer, 2026-11-20). Its output is staged together with the medal the race earned, both saved at the finish. They are
    committed when the player leaves the results for the campaign screens, before any
    choice screen opens. RACE AGAIN and RESTART RACE discard it
    and restart from the committed bytes. Quitting before the finish stages nothing.
@@ -162,7 +166,10 @@ out of the global ship and variant unlocks and define its own (decision 10).
 further (`progression-challenge.md` objection 12, answered). The draft's `Thrust` and
 `TopSpeed` are replaced by `Launch` (`accelcap`) and `TopEnd` (`engine.amount`), each
 gated on its own ground truth, and neither applies in Zone, at least for now (decision
-4; objection 1, answered).
+4; objection 1, answered). An event of every mode ends where its medal is recorded
+today (the finish site, or the escape site for Zone, Speed Lap and an abandoned Time
+Trial); the race keeps running as today and `race-end` runs once, when the player exits
+the race (decision 6; objection 2, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, the

@@ -388,10 +388,10 @@ Two bytes-in, one bytes-out, and one commit point.
 | Campaign entered, no run | Host creates a run: empty bytes, a drawn `seed`, ordinal 0 |
 | NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `pending`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
 | An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write |
-| The person's craft finishes (or is wrecked or eliminated) | `Race::end_run(result)` calls `race-end` once; its output is **staged** as `pending` together with the medal this race earned, and saved |
+| The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. When the player **exits the race**, `Race::end_run(result)` calls `race-end` once; its output is **staged** as `pending` together with the medal this race earned, and saved |
 | The player leaves the results for the campaign screens, or presses CONTINUE | **Commit**: `pending` becomes `bytes`, the staged medal is recorded, ordinal += 1, and `offer_pending` is set if `race-end` asked for an offer. Then the choice screen opens, if there is one (section 8.1) |
 | RACE AGAIN on the results page, or RESTART RACE in the pause menu | `pending` and the staged medal are **discarded**; the race restarts from the committed bytes |
-| QUIT RACE or escape **before** the finish | No `race-end`, nothing staged, committed bytes untouched |
+| QUIT RACE or escape **before** the finish, in a mode with a lap target | No `race-end`, nothing staged, committed bytes untouched |
 | The game closes or crashes after the finish, before leaving | The staged bytes and the staged medal were saved together with the finish, and neither is live yet; the next launch commits both (and sets `offer_pending`), so the pair never splits |
 | A replay rebuild, `--from-png`, a demo, an unofficial run, a split screen | `race-end` is not called, nothing is staged |
 
@@ -408,8 +408,17 @@ page's restart relaunch with the same `Launch`. If they handed the staged bytes,
 retry after a good reward would start from the reward, and a retry after a bad one
 could keep re-rolling. Handing the committed bytes makes a retry the same race.
 
-**Who calls `race-end`.** The finish site in `oag-game`, after it evaluated the
-medal tier, through `Race::end_run(RunResult) -> Option<RunOut>` in
+**Where an event ends (maintainer, 2026-11-20).** At the two sites that record a
+medal today (`Launch::record_result`): the finish site in `Session::frame` for a
+lap-count mode, and the escape site in `Session::escape` for Zone, Speed Lap and an
+abandoned Time Trial, where leaving is how the mode ends
+([progression-challenge.md](progression-challenge.md), objection 2). The race goes on
+as it does today: the world keeps stepping under the results, and Zone runs until the
+player leaves. The mod's award and end-of-run logic (`race-end`) runs once, when the
+player exits the race, not at the finish moment.
+
+**Who calls `race-end`.** `oag-game`, on the exit from a race whose medal was
+captured, with the tier the medal site evaluated, through `Race::end_run(RunResult) -> Option<RunOut>` in
 `oag-raceplay`'s simulation half, which owns the instances. It is not part of
 `Race::tick_body`. It is single-player only: it is skipped where
 `stage.race.view_state().viewport_count() > 1`, the same guard the result save uses,

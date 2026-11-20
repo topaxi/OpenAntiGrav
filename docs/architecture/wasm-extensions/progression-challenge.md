@@ -145,6 +145,11 @@ and an abandoned Time Trial. `race-end` is called wherever `Launch::record_resul
 is called and nowhere else. The "quit stages nothing" row then applies only to modes
 with a lap target.
 
+**Answered by the maintainer (2026-11-20): both medal sites.** An event ends where its
+medal is recorded today, the finish site or the escape site. The race goes on as it
+does today, and `race-end` (the mod's award and end-of-run logic) runs once, when the
+player exits the race (ADR-0093 decision 6, progression.md section 5).
+
 ### 3. Replaying a committed event farms rewards, and the staging does not stop it (blocks decision 6 as the answer to "a retry must not farm")
 
 **Evidence.** The lifecycle table has no row for launching an event again after its
