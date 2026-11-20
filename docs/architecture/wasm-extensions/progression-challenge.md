@@ -540,8 +540,9 @@ without the draft saying what "no write" does to the ordinal.
 answered by `drives_ai_pickup`; the side effects named in the table; `RunResult`
 offsets; `oag_run_len` instead of `[run] run_bytes`; the `ModUse` wording). Nit 24 fell
 with objection 15. Nit 25 is taken separately. The worked example's faults were fixed
-with objection 16; the ordinal on a run that writes nothing is taken with "how a mod
-ends a run".
+with objection 16. The ordinal on a run that writes nothing was answered with "how a
+mod ends a run" the same day: every committed `race-end` advances it (ADR-0093
+decision 1).
 
 ## Edge cases asked about, and where each stands
 

@@ -51,7 +51,10 @@ A **run** is one playthrough of one custom campaign by one profile. It has:
   (maintainer, 2026-11-20; section 3). The cap is on raw bytes.
 - `seed`: a `u64` the host draws once when the run is created, so the guest can
   derive reward rolls without an RNG stream (section 4.3).
-- `ordinal`: how many events the run has committed.
+- `ordinal`: how many `race-end` calls the run has committed. Every commit advances
+  it, changed bytes or not, so a failed race moves the offer rolls on (maintainer,
+  2026-11-20).
+- `over`: set when a committed `race-end` asked to end the run (`END_RUN_OVER`).
 - `end_owed`: only after a faulted `race-end`, the latched `RunResult` and tick state
   it still owes (about 1.1 KiB), until RETRY or DISCARD settles it (section 5).
 - `offer_pending`: a flag, set when a committed `race-end` asked for a choice and the player has not picked.
@@ -199,7 +202,8 @@ pub struct RunResult {
 // SHIELD 20, SHIELD_MAX 24. RunResult::LEN = 32: 28 used, 4 spare.
 
 /// What `race-end` may add to its reply besides new run bytes.
-pub const END_OFFER: u32 = 1; // open the run's choice screen before the campaign screen
+pub const END_OFFER: u32 = 1;    // open the run's choice screen before the campaign screen
+pub const END_RUN_OVER: u32 = 2; // the run is over: the campaign page shows its summary and only NEW RUN
 ```
 
 `tier` comes from the host: the medal is evaluated in `oag-game`
@@ -296,6 +300,7 @@ impl StartReply<'_> {
 pub struct EndReply<'a> { /* private */ }
 impl EndReply<'_> {
     pub fn offer(&mut self);                                                   // sets END_OFFER
+    pub fn end_run(&mut self);                                                 // sets END_RUN_OVER
     pub fn stat(&mut self, string_id: &str, value: u16, max: u16) -> Result<(), Refused>; // ADR-0094, at most 8
     pub fn unlock(&mut self, name: &str) -> Result<(), Refused>;               // section 7.1
 }
@@ -452,8 +457,9 @@ Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 | Event | What happens to the run |
 | --- | --- |
 | Campaign entered, no run | Host creates a run: all zero bytes of the module's run length (`oag_run_len`), a drawn `seed`, ordinal 0 |
-| NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `offer_pending`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
-| An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write |
+| NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `offer_pending`, `over`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
+| An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write. Refused while the run is `over` |
+| A committed `race-end` set `END_RUN_OVER` | The run is marked `over`, with its final bytes and stat rows kept. The campaign page shows that summary and offers only NEW RUN (maintainer, 2026-11-20) |
 | The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. Nothing is written to the run yet |
 | The player **exits the race** (leaves the results for the campaign screens, presses CONTINUE, or, in Zone and Speed Lap, escapes) | `Race::end_run(result)` calls `race-end` once with `prior_tier` and `event_index`. **Commit** at once, in one records save: its output becomes `bytes`, ordinal += 1, and `offer_pending` is set if it asked for an offer. Then the choice screen opens, if there is one (section 8.1) |
 | RACE AGAIN on the results page | An exit: `race-end` runs and commits as above, then the event relaunches from the **new** run bytes (after the offer, if one was asked for). Hidden when the campaign sets `[run] race_again = false` |
@@ -925,8 +931,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    screen action. A host row works with no screen and cannot be hidden by a mod.
 3. **Does a failed race commit?** **Settled (maintainer, 2026-11-19): the mod
    decides.** `race-end` gets `finished` and `tier` and chooses whether the run goes
-   on; the host imposes no rule. Open only in mechanism: how the mod says "the run is
-   over" (a flag in the reply, a status byte the host reads, or the mod's own screen).
+   on; the host imposes no rule. **Mechanism settled (2026-11-20):** an `END_RUN_OVER`
+   flag in `race-end`'s reply; the campaign page then shows the run's summary and only
+   NEW RUN (section 5).
 4. **A modded records table.** **Settled (maintainer, 2026-11-20): later, outside
    ADR-0093.** The "no `[[record]]` for a modified race" rule drops personal bests
    until a separate modded table (README phase 2) is built; it is already owed in the

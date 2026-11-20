@@ -71,7 +71,8 @@ ratings, not computed from handling.
 
 1. **A run.** A custom campaign that declares a `[run]` table has, per profile, one
    **run**: opaque bytes of at most `MAX_RUN_BYTES` = 4,096 (raw, before base64; maintainer, 2026-11-20), a
-   `u64` seed drawn when the run is created, an event ordinal, and, only after a
+   `u64` seed drawn when the run is created, an event ordinal (every committed
+   `race-end` advances it, changed bytes or not), an `over` flag, and, only after a
    faulted `race-end`, the latch it still owes (decision 6). It is a table of the records `Store` keyed like the campaign's
    progress rows (`<title slug>/mod:<mod id>/<campaign id>`), saved by
    `records::save_in_background`. It is not the ADR-0080 tune, which is one blob per
@@ -159,7 +160,11 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    `[run] race_again = false` (default `true`). RESTART RACE before the medal is
    captured writes nothing, and nor does quitting a lap-target race before its finish.
    A crash between the medal and the exit keeps the medal and leaves the run as it
-   was. **A fault in `race-end`** keeps the medal and saves the latch in the run
+   was. **Ending a run** (maintainer, 2026-11-20): `race-end` may set `END_RUN_OVER`
+   beside `END_OFFER`. The host marks the run over and keeps its final bytes and stat
+   rows; the campaign page then shows that summary and offers only NEW RUN, and the
+   campaign's events refuse to launch until the player starts one. **A fault in
+   `race-end`** keeps the medal and saves the latch in the run
    record as an owed end; the run bytes and ordinal are untouched. Until it is settled
    the campaign's events refuse to launch, and its page offers RETRY (run `race-end`
    on the saved latch again, for example after a mod update) or DISCARD (drop the
@@ -253,9 +258,11 @@ barrel roll and Eliminator side effects, `RunResult` has offset constants, and t
 length is an `oag_run_len` export (a new run is that many zeroes), not a campaign-file
 key. `Grip` is clamped per craft to a safety ceiling,
 `0.9 * 60 / (grip * 1.5)`, so the slide correction never overshoots (decision 4; nit
-25).
+25). A mod ends a run with an `END_RUN_OVER` flag from `race-end`; the campaign
+page then shows the run's summary and only NEW RUN. Every committed `race-end`
+advances the ordinal (decisions 1 and 6; question 3's mechanism, answered).
 
-**Not decided here:** how a mod ends a run (the mechanism), a data-first modifier table, a per-owner damage scale, and every other item in
+**Not decided here:** a data-first modifier table, a per-owner damage scale, and every other item in
 `progression.md` section 12.
 
 ## Alternatives considered
