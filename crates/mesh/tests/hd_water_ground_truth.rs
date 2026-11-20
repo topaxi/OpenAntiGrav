@@ -102,7 +102,7 @@ fn every_water_setting_reaches_the_build_and_only_hd_s_laws_draw_the_taps() {
 
 /// The sea's table entry carries the material's own `Reflectivity` (Moa Therma 0.3, Ubermall
 /// 0.36; `docs/rendering/water.md`, "HD/Fury: `reflectplane_dc_seawater`"), which the shader
-/// weights the sea's stand-in sky reflection by. Dropping the lane leaves a sea with no
+/// weights the planar reflection by (or the sky stand-in, where no target is bound). Dropping the lane leaves a sea with no
 /// reflection term and fails here.
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
