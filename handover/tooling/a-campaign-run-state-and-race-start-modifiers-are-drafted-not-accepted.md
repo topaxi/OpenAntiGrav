@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-11-20
-summary: "ADR-0093 and progression.md draft a campaign run state, race-start modifiers, pickup parameters, a choice screen and stats; waiting on review"
+summary: "ADR-0093 (run, modifiers, pickups, unlocks) and ADR-0094 (choice, stats) reviewed 2026-11-20, all answered; awaiting merge"
 ---
 
 # A campaign run state and race-start modifiers are drafted, not accepted
@@ -14,15 +14,15 @@ summary: "ADR-0093 and progression.md draft a campaign run state, race-start mod
 [progression.md](../../docs/architecture/wasm-extensions/progression.md) describe how a
 mod builds a custom campaign whose races change the craft and the pickups. No crate,
 no ABI revision and no mod author skill text changed. The branch was not merged by the
-lead: the maintainer reviews it first.
+lead: the maintainer merges it. The review walked every challenge objection and
+section 12 question with the maintainer on 2026-11-20; each answer is recorded in the
+ADRs, `progression.md` and under its objection in `progression-challenge.md`.
 
 ## Open
 
-- The maintainer's review of the ADR. Every decision in it, and the sixteen open
-  questions at the end of `progression.md`, are unsettled. The ones that change the
-  design most: clamp or fault at race start (1), the commit rule that stages the medal
-  with the run state (section 5), the Ship Select allowance for mod stats (section 8.2),
-  and whether the AI may be scaled (11).
+- ADR-0093 decision 11 names the atomic records write by description: the general ADR
+  is being written by the drive's `profile-atomic-writes` lane. Link its number before
+  the merge, or accept the unlinked reference.
 - The modded records table (personal bests for a modified race): later, outside
   ADR-0093 (maintainer, 2026-11-20); already owed in
   [custom-race-modes-and-campaigns.md](../gameplay/custom-race-modes-and-campaigns.md),
@@ -34,9 +34,9 @@ lead: the maintainer reviews it first.
   compressing replay files again.
 - A per-leg `race-end` for tournaments (rewards between legs): later, by the
   maintainer's answer to challenge objection 9 (2026-11-20).
-- The frontend world (ADR-0080) is unbuilt, so the choice screen and the stat rows have
-  no home until it lands. The README's `race-start`, `race-end` and `setup.tune` are not
-  in ABI revision 6 either.
+- The frontend world (ADR-0080) is unbuilt, so ADR-0094's choice screen waits for it
+  (its stat rows on the campaign page do not). The README's `race-start`, `race-end`
+  and `setup.tune` are not in ABI revision 6 either.
 - `Launch` (`accelcap`) and `TopEnd` (`engine.amount`) replace `Thrust` and `TopSpeed`
   (maintainer, 2026-11-20); each needs a held-throttle ground truth at factors 1.0 and
   2.0 on one circuit and class before it ships. Neither applies in Zone.
@@ -45,10 +45,10 @@ lead: the maintainer reviews it first.
 
 ## Next Steps
 
-1. Review ADR-0093; change it in place or reject it. Accepting it also decides whether
-   ADR-0080 proceeds.
-2. If accepted, build in the order of `progression.md` section 11: the ABI and the run
-   record, then modifiers (with a disc-backed ground truth), then pickup parameters and
-   `give-autopilot` (with weapon-lineage rows), then the frontend world and the screen.
+1. The maintainer decides ADR-0093's status and merges the branch.
+2. Build in the order of `progression.md` section 11: the ABI (revision 7, SDK, mod
+   author skill), then the run and its lifecycle (the first playable slice), then
+   modifiers (`Launch` and `TopEnd` after their ground truths), pickups, own unlocks;
+   then ADR-0094.
 3. When the ABI changes, update the mod author skill in the same change.
-4. Delete this file once the ADR is merged and the build steps have their own threads.
+4. Delete this file once the ADRs are merged and the build steps have their own threads.
