@@ -527,6 +527,10 @@ open question 8.
     ([cornering-ground-truth.md](../../physics/cornering-ground-truth.md)), which
     gives 0.5 at factor 2.0. **Unsettled** for other craft: a census of the largest
     authored `grip_ground` and `grip_air` per title settles the range.
+    **Answered by the maintainer (2026-11-20): a per-craft safety clamp.** The host
+    clamps the factor to `0.9 * 60 / (grip * 1.5)` for each craft, with a load-report
+    warning; the census becomes documentation (ADR-0093 decision 4, progression.md
+    section 4.1).
 
 The worked example has small faults of its own: both offers can be the same reward
 (`roll % 3` twice), `mix` is not an SDK function, and a failed race writes nothing

@@ -338,7 +338,7 @@ guest names a slot, a parameter and a factor.
 | `Turning` | `turning.amount` | 0.5 to 2.0 | Yaw authority, no speed factor |
 | `Airbrake` | `airbrake.amount`, `airbrake.turn` | 0.5 to 2.0 | The two gains that shape airbrake steering; the other five fields stay |
 | `Brake` | `brakes.amount` | 0.5 to 2.0 | Stored negative; a positive factor keeps the sign |
-| `Grip` | `antigrav.grip_ground`, `antigrav.grip_air` | 0.5 to 2.0 | |
+| `Grip` | `antigrav.grip_ground`, `antigrav.grip_air` | 0.5 to 2.0, and at most each craft's own safety ceiling | The slide correction removes `grip * |k| * (1.5 in a roll payout) / 60` of the sideways speed a tick (`airbrake.rs`; confidence 92 in [cornering-ground-truth.md](../../physics/cornering-ground-truth.md)), and overshoots past 1. The host clamps the factor per craft to `0.9 * 60 / (grip * 1.5)`, for the larger of `grip_ground` and `grip_air`, with a load-report warning (maintainer, 2026-11-20; challenge nit 25). A census of the largest authored grip per title is documentation, not a blocker |
 | `ShieldMax` | `dimensions.shield` | 0.25 to 4.0 | The maximum and the start together ("It is the maximum as well as the start", `params.rs`), so the host sets the slot's pool to the new maximum; `shield-delta`'s bound follows the new maximum. **Also scales** the barrel roll's shield cost and the Eliminator's lap refill, both fractions of `dimensions.shield` |
 | `TurboStrength` | `engine.turbo` | 0.5 to 2.0 | Per ship already; the Turbo pickup's boost. **Also scales** the barrel roll's landing boost, which adds `engine.turbo` while `roll_payout_timer` runs, in Zone too (`engine.rs`) |
 

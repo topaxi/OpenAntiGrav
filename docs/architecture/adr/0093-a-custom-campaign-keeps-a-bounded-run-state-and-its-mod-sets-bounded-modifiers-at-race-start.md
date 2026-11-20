@@ -118,6 +118,8 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
    (the plateau, so terminal speed). Each is refused until a held-throttle ground
    truth shows its effect. Neither acts in a Zone event, whose speed path reads
    neither field; that is accepted, Zone being its own mode (maintainer, 2026-11-20).
+   `Grip` is also clamped per craft to `0.9 * 60 / (grip * 1.5)`, below which the
+   slide correction cannot overshoot (maintainer, 2026-11-20).
    Factors are applied **before the speed plans are built**: each modified slot, AI or
    person, counts as its own hull and adapts the reference plan under the existing
    40,000-step budget, so the AI, the Autopilot and Pilot Assist fly a plan for the
@@ -249,7 +251,9 @@ and end (decision 2; objection 18, answered). Nits 19 to 23 taken as proposed: t
 pickup is the built `drives_ai_pickup`, `TurboStrength` and `ShieldMax` name their
 barrel roll and Eliminator side effects, `RunResult` has offset constants, and the run
 length is an `oag_run_len` export (a new run is that many zeroes), not a campaign-file
-key.
+key. `Grip` is clamped per craft to a safety ceiling,
+`0.9 * 60 / (grip * 1.5)`, so the slide correction never overshoots (decision 4; nit
+25).
 
 **Not decided here:** how a mod ends a run (the mechanism), a data-first modifier table, a per-owner damage scale, and every other item in
 `progression.md` section 12.
