@@ -90,11 +90,14 @@ title, pressing and choice) and `oag_title::prompts::tests`.
 | Screen | Model | Back is |
 | --- | --- | --- |
 | Menu pages, the pause menu's sub-pages, REPLAYS and every settings page | `oag_ui::menu::Menu` | `Roles::back` (`Menu::set_roles`); at the pause root Back is silent, as `backward="none"` authors |
-| Track Select, Ship Select, Team Selection, the split seats' pickers | `oag_ui_screens::picker::Picker` | `Roles::back` |
+| Track Select, Ship Select, Team Selection, the split seats' pickers | `oag_ui_screens::picker::Picker` | `Roles::back`; Help `Roles::help`, seeded from the screen's own `Redirect` to its Help (`picker::help::Help::button`) |
 | Campaign Selection, Grid Selection | `CampaignSelection`, `GridSelection` | `Roles::back` |
 | Cell Selection | `CellSelection` | `Roles::back`; Help `Roles::help`, seeded from the screen's own `Redirect` to `Cell Help` (`authored_cell_help`) |
 | End of race: `EndRace Menu` | `EndRaceMenu` | `Roles::back`; the original authors no Back here (the results pages and the menu answer a confirm), so it is the Back cue only |
-| The on-screen keyboard, the tag entry, yes/no dialogs | `Keyboard`, `TagEntry`, `Confirm` | `Roles::back` cancels |
+| The on-screen keyboard, the tag entry, yes/no dialogs | `Keyboard`, `TagEntry`, `Confirm` | `Roles::back` cancels; their hint lines name it (`OAG_KEYBOARD_HINT`, `OAG_TAG_ENTRY_HINT`, below) |
+| Photo mode | `Session::tick_photo` | `Roles::back` leaves; the camera reset is `Roles::help`, the face button Back displaced; the legend names both |
+| The replay viewer | `Session::tick_viewer` | `Roles::back` leaves (inside a title; the viewer has no Help) |
+| The disc chooser's key prompt | `Launcher::update` | `oag_game::prompts::chooser_back`: no title is known, so MENU BACK `circle` or `triangle` as chosen, else the platform-neutral circle |
 | Pure's chain, the window layout and seat assignment screens, the LAN and online lobbies and the local join screen | `pure_chain::Choice`, `window_layout::Picker`, `SeatAssign`, `Lobby::set_back` | `Roles::back` |
 | The campaign editor | `Session::tick_campaign_editor` | `Roles::back`; the editor's second face action is `Roles::help` |
 | 2048's touch front end | `oag_ui::frontend::Frontend` | `Roles::back` (`Frontend::set_roles`); `Roles::help` is its Home key |
@@ -105,11 +108,17 @@ title, pressing and choice) and `oag_title::prompts::tests`.
 
 - **A race that runs.** The circle is the absorb (`oag_raceplay::weapons`) and the triangle is not
   Back there; nothing reads `Roles`.
-- **Photo mode, the replay viewer and the screenshot notice.** They read the device through
-  `Controls::view_take` and the notice's own spent-buttons list, apart from the front end's
-  frame; they are ours and have no original Back to follow. Open: they leave on the circle on the PS2 too.
-- **The disc chooser** (`oag-game --launcher`), before any title is known: no title, so the PSP's circle.
-- **Escape and the secondary mouse button** emit Back directly on every screen, on every title.
+- **The screenshot notice.** It dismisses on the notice's own spent-buttons list, apart from the
+  front end's frame.
+- **Photo mode and the replay viewer inside a race** read the device through `Controls::view_take`,
+  apart from the front end's frame, but take the buttons from `Roles` all the same: they are ours and
+  have no original Back, so they follow the pressing's (Pulse PS2: the triangle) and the player's
+  choice like every screen. The running race itself reads no roles.
+- **The disc chooser** (`oag-game --launcher`), before any title is known, has no pressing's own
+  Back to follow: it takes MENU BACK `circle` or `triangle` when the player chose one, and the
+  platform-neutral circle for `original`.
+- **Escape and the secondary mouse button** emit Back directly on every screen, on every title,
+  photo mode and the viewer included.
 - **The keyboard's keys** stay bound to the buttons they always were (Backspace, `Z` and `Y` are the
   circle, `V` the triangle), so on the PS2 under `original` `V` leaves.
 
@@ -123,25 +132,60 @@ it is the displaced button. The same resolver decides both halves, so a footer a
 cannot disagree. Stills (Pulse PS2 EU): `original` draws the triangle beside `Back` and the circle
 beside `Help` on Track Select; `circle` draws them exchanged.
 
-The window title's key hint (`OAG_HINTS_SHELL_KEYS`, "backspace, circle or escape goes back") is
-prose in twenty languages naming the circle: it is wrong on the PS2 and under `triangle`, and open.
+## Key hints
 
-## Not built
+The line printed when the menus open (`OAG_HINTS_SHELL_KEYS`, `crates/game/src/app/hints.rs`) names
+the keys bound to the resolved Back (`Controls::bound_keys`, the live table, so a rebind shows) and
+the pad button's word (`OAG_HINTS_BUTTON_CIRCLE`/`_TRIANGLE`) through its `%s`: `backspace, z, y,
+circle or escape goes back` on every title and pressing but Pulse's PS2 under `original` or
+`triangle`, where it reads `v, triangle or escape goes back`. The on-screen keyboard's and the tag
+entry's hint lines (`OAG_KEYBOARD_HINT`, `OAG_TAG_ENTRY_HINT`) take the button's word the same way,
+and the campaign editor's fill key names the face button Back displaced. English, German and
+Brazilian Portuguese carry the placeholder (machine translations, `human = false`); French names the
+two button words in its `[untranslated]` table and falls back to English with the rest of its hints.
+German's old sentence named the key `Rücktaste`; the key names now come from the binding table and
+are not translated.
 
-The pickers' Help screens (`Track Help`, `Team Help`, `Tournament Help`, `Pre Race Music Select`)
-are authored on the screens above and not drawn (`docs/ui/selection-screens.md`, "Open"), so the
-PS2's footers draw `Help` beside the circle on Track Select and the circle does nothing. Wiring
-them is `Roles::help` on `Picker`.
+## The pickers' Help overlays
+
+`Track Creation` and `Team Selection` each author a `Redirect` whose `forward` is a face button and
+whose `goto` is the screen's Help: `Track Help`, `Team Help` (`triangle`) on the PSP, `Track
+HelpSingle`, `Team HelpSingle` (`circle`) on the PS2. `oag_ui_screens::picker::help::Help` reads that
+screen off the same XML (`Layout::help`), the picker opens it on `Roles::help` and closes it on
+cross, triangle or circle (the three `Redirect`s the overlay authors: Back closes it and does not
+leave), or on a click or the secondary button, and `oag_game` draws it with
+`campaign::cell_help_draw` over the page and its footer, without the 3D preview under it (the
+preview is a pass of its own over the finished picture). `--drive` reports it as `screen.help`
+(`open` or `closed`, only on a screen that has one).
+
+- **Team Help's second paragraph** is the disc's own `MSC_TEAMDES_ASS` (Assegai's description) for
+  every team, as authored: the widget is named `Team Ship Help` and the team catalogue carries a
+  `helpText` per team (`MSC_TEAMDES_<team>`), so the original very likely swaps it per selected
+  team, but no trace of that setter was read (confidence 55), so none is invented.
+- **Open: the screens left undrawn.** `Tournament C` has no screen model in this build (so
+  `Tournament Help` has nothing to open from), and `Pre Race Music Select` is a `MusicList` widget,
+  not a Help overlay. Their footers are unchanged.
+- **Pulse's split screens** (`Team HelpSplit`, `Track HelpSpilt`) are not read: the shared Ship
+  Select's two halves open none.
 
 ## Tests
 
 - `oag_ui::roles::tests` and a `..._on_the_button_it_is_handed` test on every model above;
-- `oag_game::prompts::tests::the_roles_a_screen_is_handed_on_every_title_pressing_and_choice`;
+- `oag_game::prompts::tests::the_roles_a_screen_is_handed_on_every_title_pressing_and_choice`, and
+  `oag_title::prompts::tests::back_and_help_never_share_a_button` (Pulse's PS2 under `original`
+  with a screen that authors no Help once handed Back and Help the triangle);
+- `oag_game::app::hints::tests` (the hint sentence on every title, pressing and choice, and that
+  every language words the Back button through `%s`);
+- `oag_ui_screens::picker::tests` (`help_opens_on_the_roles_help_...`, `on_the_ps2_the_circle_helps...`);
 - `campaign_cursor_ground_truth` (disc-backed, `#[ignore]`d): on Pulse PS2 EU's race page, track picker,
   ship picker, keyboard prompt and pause GAME OPTIONS page, for each choice of MENU BACK one launch presses
   the button that is not Back (`expect` the screen still up), then Back (`expect` it left): `pulse_ps2_*`.
   The PSP's race page, track picker, prompt and pause page, and HD's race page, still leave on the circle
   (`pulse_psp_*`, `hd_race_page_still_leaves_on_the_circle`). The campaign screens are the tests of the same
-  file above them.
+  file above them. Photo mode and the replay viewer leave on the triangle under `original` and on the circle
+  under `circle` on Pulse PS2 EU, on the circle on the PSP (`..._photo_mode_and_viewer_...`; Escape leaves photo mode
+  on every choice, and the camera reset sits on the other face button); Track Select and Ship Select open
+  Track Help and Team Help on `Roles::help`, Back closes the overlay and then leaves, for each choice on both
+  pressings (`..._opens_..._help_on_the_...`).
 - All 33 menu comparison pairs (2048, HD, Omega, Pulse PSP, Pulse PS2, Pure) re-rendered with the build
   before this change and after it are byte-identical: no pair moved.

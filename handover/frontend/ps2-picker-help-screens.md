@@ -1,29 +1,34 @@
 ---
-status: ready-to-wire
+status: re-first
 titles: [pulse]
 updated: 2026-11-20
-summary: "Pulse's pickers author Help screens (Track, Team, Tournament, Music) not drawn; the PS2 footer's Help does nothing; key-hint string names the circle"
-difficulty: medium (50)
+summary: "Track Help and Team Help are drawn; Team Help's per-team paragraph, Pre Race Music Select, Tournament Help and the split screens' Help are not"
+difficulty: medium (45)
 ---
 
-# The pickers' Help screens, and a key hint that names the circle
+# What is left of the pickers' Help screens
 
-Back and Help come from one resolver on every front-end screen now (`docs/ui/back-and-help.md`); two
-leftovers of that lane are open.
+`Track Help` and `Team Help` are drawn on both pressings, opened on `Roles::help` and closed on
+cross, triangle, circle or a click (`docs/ui/back-and-help.md`, "The pickers' Help overlays").
+Photo mode, the replay viewer, the disc chooser and the key hints follow the resolved Back.
 
 ## Open
 
-- `Track Creation`/`Track Select`, `Team Selection`, `Tournament C` and `Pre Race Music Select` author a Help
-  (or music) overlay on a face button (`forward="triangle"` on the PSP, `circle` on the PS2), read in
-  `docs/ui/selection-screens.md` ("Open") and not drawn. The PS2's footers draw `Help` beside the circle on
-  Track Select and the circle does nothing. `Picker` already holds `Roles::help`; the screens are the work.
-- `OAG_HINTS_SHELL_KEYS` ("backspace, circle or escape goes back", twenty languages) names the circle, which is Help on
-  the PS2 and not Back under MENU BACK = `triangle`. It is the window title's key hint, prose with no codepoint
-  to substitute.
-- Photo mode, the replay viewer and the disc chooser leave on the circle on every pressing: they read the
-  device (`Controls::view_take`) or run before a title is known.
+- **Team Help's second paragraph** (`Team Ship Help`, authored `MSC_TEAMDES_ASS`) draws Assegai's text for
+  every team. The team catalogue carries `helpText="MSC_TEAMDES_<team>"` per team and the widget is named in
+  `TeamSelection`'s string block (`docs/formats/race-setup.md`), so the original probably swaps it per team;
+  the setter was not traced (55). Read it in Ghidra (`TeamSelection` update on the PSP), then set the text from
+  the selected `Entry`.
+- **`Pre Race Music Select`** (`Music Redirect`, `forward="square"`) is a `MusicList`, not a Help overlay:
+  it needs its own widget and the playlist behind it. The footer's `Music playlist` is drawn and does nothing.
+- **`Tournament Help`** has no `Tournament C` screen model to open from.
+- **The split screens' Help** (`Team HelpSplit`, `Track HelpSpilt`, the PS2's `Single Player` and `Split Screen*`
+  pages) is not read: `Layout::read_split` builds no `Layout::help`.
+- **The 3D preview is not drawn under an open Help**: it is a pass over the finished picture, so a dimmed
+  craft or circuit under the overlay needs a second 2D pass above it.
 
 ## Next Steps
 
-1. Draw `Track Help`/`Team Help` from the XML on `Picker::help_open`, opened by `Roles::help`, closed by cross, triangle or circle as `Cell Help` is.
-2. Build the key-hint sentence from the resolved Back button's bound keys (`oag_input::keys::bound_keys`).
+1. Trace `Team Ship Help`'s setter and wire the per-team paragraph.
+2. Read the split screens' Help in `Layout::read_split`.
+3. `Pre Race Music Select`: the `MusicList` widget, on `square`.
