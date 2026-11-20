@@ -967,6 +967,13 @@ pub struct Scene {
     /// everywhere no wave is in flight, and for every draw that is not a
     /// race's own scene.
     pub quake: QuakeWave,
+    /// Wipeout HD's planar sea reflection, as the sea program reads it: `x` the engine's
+    /// `distortion` (`Water.Water distortion`, the world units the mapped normal's `x` and `z`
+    /// push the sampled point), `y` 1.0 where the reflection target is bound in the
+    /// behind-the-glass slot (with [`Self::refraction`] its matrix) and 0.0 everywhere else,
+    /// where the sea keeps its sky stand-in. `zw` unused. See
+    /// `docs/rendering/water.md`, "The planar reflection, drawn".
+    pub sea_reflection: [f32; 4],
 }
 
 /// One frame of the Quake wave, in the four registers Wipeout HD's `StaticQuake`
@@ -1024,6 +1031,7 @@ impl Scene {
             craft_shadow: [CraftShadow::NONE; super::shadow_map::OCCLUSION_LAYERS as usize],
             refraction: Mat4::IDENTITY.to_cols_array_2d(),
             quake: QuakeWave::off(),
+            sea_reflection: [0.0; 4],
         }
     }
 }

@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd, omega]
-updated: 2026-11-17
-summary: "HD sea reflection is planar (camera unread); Omega's Sebenco pond is rt_snow_ref, unwired; ice facing term open"
+updated: 2026-11-20
+summary: "HD sea planar reflection drawn (planar-water); Omega's Sebenco pond is rt_snow_ref, unwired; ice facing term open"
 ---
 
 # Sebenco and Vineta K: scalar maps fixed, ice water drawn; the sea's reflection and Omega's water stay open
@@ -46,6 +46,11 @@ lane wide is a scalar, not the colour".
   Moa Therma's sea has HD's interface, Amphiseum's `water` reads a cube, and the pond of Omega's `track.final.rcsmodel` draws with `rt_snow_ref`
   (`Sebenco_ice` ships in the archive and no submesh of that model uses it; census on the same page). HD's sea reflection is a planar target fed by render-flag bit-3
   chunks, not the paraboloid; its camera is unread. Lanes: [water-setting-across-titles.md](water-setting-across-titles.md).
+- **2026-11-20 (`planar-water`): the camera is read and the reflection drawn.** The reflect job, the mirror
+  `y' = h - y` off `Water plane height`, the eye test and the doubled sun and prelit lights are read in the
+  executable (`docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md`) and drawn under `original` on HD
+  (`docs/rendering/water.md`, "The planar reflection, drawn"); Moa Therma's sea crops are within 2 levels
+  of a new RPCS3 frame. What is left of it lives in the water thread.
 
 ## Next Steps
 

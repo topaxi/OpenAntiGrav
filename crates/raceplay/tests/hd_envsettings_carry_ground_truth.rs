@@ -119,6 +119,7 @@ fn a_slice_of_environments_builds_its_bloom_chain(slice: usize) {
             loaded.wo_composite.is_none(),
             "{track}: HD drew Wipeout 2048's composite"
         );
+        the_screen_space_target_is_the_circuits_own(track, &loaded.behind_glass);
         if loaded.hd_bloom.is_some() {
             built.push(*track);
         } else {
@@ -166,6 +167,76 @@ fn environments_slice_2_build_their_bloom_chain() {
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn environments_slice_3_build_their_bloom_chain() {
     a_slice_of_environments_builds_its_bloom_chain(3);
+}
+
+/// The circuit's one screen-space target, as the original fills it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/track-reflect.md`): under `original` (the default
+/// law) a circuit whose sea samples the planar reflection gets the mirror at its authored
+/// `Water plane height` -50 and `Water distortion` 40 and its render flag bit 3 chunks (Moa
+/// Therma 257, Ubermall 73; Chenghou and Modesto none, the sky alone); Vineta K keeps the
+/// behind-the-glass target; every other circuit has neither. Drop the load's mirror and the
+/// four sea circuits fail here.
+fn the_screen_space_target_is_the_circuits_own(track: &str, target: &race::BehindGlassModels) {
+    let chunks = |group: &Option<oag_mesh::mesh::Model>| group.as_ref().map_or(0, |m| m.mesh_count);
+    let drawn = (
+        chunks(&target.groups.alternate_fog),
+        chunks(&target.groups.primary_fog),
+    );
+    let reflected = match track {
+        "/data/environments/03_track/track.vex" => Some(257),
+        "/data/environments/05_ubermall/track.vex" => Some(73),
+        "/data/environments/04_chenghou_project/track.vex"
+        | "/data/environments/modesto_heights/track.vex" => Some(0),
+        _ => None,
+    };
+    match reflected {
+        Some(count) => {
+            let mirror = target
+                .mirror
+                .unwrap_or_else(|| panic!("{track}: no planar target"));
+            assert_eq!(
+                (mirror.plane_height, mirror.distortion),
+                (-50.0, 40.0),
+                "{track}"
+            );
+            assert_eq!(drawn, (0, count), "{track}: the reflected chunks");
+            assert_eq!(target.size, (960, 540), "{track}: the target's size");
+        }
+        None => {
+            assert!(
+                target.mirror.is_none(),
+                "{track}: a planar target with no sea"
+            );
+            let glass = track == "/data/environments/01_vineta_k/track.vex";
+            assert_eq!(
+                drawn != (0, 0),
+                glass,
+                "{track}: the behind-the-glass chunks {drawn:?}"
+            );
+        }
+    }
+}
+
+/// Under `off` the sea reads no planar target, so Moa Therma builds none.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_planar_target_is_built_only_under_original() {
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        track: Some("/data/environments/03_track/track.vex".to_string()),
+        water: oag_display::display::Water::Off,
+        ..race::Options::default()
+    })
+    .expect("loading Moa Therma");
+    assert!(
+        loaded.behind_glass.mirror.is_none(),
+        "a planar target under off"
+    );
+    assert!(loaded.behind_glass.groups.is_empty(), "chunks under off");
 }
 
 /// The two lists this file reasons over still say 5 of 16. Needs no disc.

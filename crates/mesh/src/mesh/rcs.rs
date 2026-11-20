@@ -218,7 +218,9 @@ use setup::{MaterialSetup, material_setup};
 
 mod scene;
 use scene::Setup;
-pub use scene::{BehindGlass, View, build_scene, build_scene_views, build_scene_with};
+pub use scene::{
+    BehindGlass, View, build_reflection, build_scene, build_scene_views, build_scene_with,
+};
 
 /// Whether a chunk's declaration names no texture coordinate.
 ///

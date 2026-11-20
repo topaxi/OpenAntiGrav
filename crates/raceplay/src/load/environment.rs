@@ -635,6 +635,41 @@ pub(super) fn envsettings_alternate_fog(
     Some(mesh_render::Fog::authored_exp2(colour, density))
 }
 
+/// The circuit's planar reflection numbers (`Water.Water plane height` and `Water distortion`),
+/// for a circuit whose sea samples the reflection target. A missing value takes the
+/// executable's own default (-50 and 40, `Environment_RegisterLightingSchema` at `0x003a83d8`),
+/// which every circuit with a planar sea also authors.
+pub(super) fn envsettings_mirror(
+    archives: &mut oag_assets::Archives,
+    track: &str,
+    report: &mut Vec<String>,
+) -> crate::scene::behind_glass::Mirror {
+    use oag_tables::envsettings::{WATER_DISTORTION, WATER_PLANE_HEIGHT};
+    let env = envsettings_name(track)
+        .and_then(|name| read_circuit_envsettings(archives, &name))
+        .and_then(|(_, blob)| String::from_utf8(blob).ok())
+        .and_then(|text| EnvSettings::parse(&text).ok());
+    let default = crate::scene::behind_glass::Mirror::DEFAULT;
+    let mirror = crate::scene::behind_glass::Mirror {
+        plane_height: env
+            .as_ref()
+            .and_then(|env| env.scalar(WATER_PLANE_HEIGHT))
+            .unwrap_or(default.plane_height),
+        distortion: env
+            .as_ref()
+            .and_then(|env| env.scalar(WATER_DISTORTION))
+            .unwrap_or(default.distortion),
+    };
+    report.push(format!(
+        "{track}: planar sea reflection mirrored about y = {} (water plane height {}), \
+         distortion {}",
+        mirror.plane_height / 2.0,
+        mirror.plane_height,
+        mirror.distortion
+    ));
+    mirror
+}
+
 mod bloom;
 mod exposure;
 mod light;

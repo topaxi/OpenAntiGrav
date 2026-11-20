@@ -18,7 +18,7 @@ map is the sky"), [the 2048 pass page](../ghidra/functions/vita-2048-eu-v104/ref
 | Pulse PSP (disc) | textured meshes (`NewSeaTest`, `sea`, `water`, `NWaterfall*`) | authored texture-offset tracks where a material has one, not surveyed per surface | none | 85 |
 | Pulse, Vostok Reef (PS2 disc, PSP download) | the above plus a **caustic pass**: flagged batches redrawn with a ripple texture projected from above | 16 frames at 30 fps | none | 75 (PSP code), 90 (which data) |
 | Pure | textured meshes, and on Vineta K the **caustic pass** (Pulse's, from the 16 frames embedded in the `.vex`: 352 of 1,335 batches flagged) | 16 frames at 30 fps | none | 85 (code is Pulse's), 90 (which data), 70 (picture, no GE list) |
-| HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3: a 960 x 540 R5G6B5 target drawn under the main camera mirrored about y = -25 (Moa Therma, read live) | 85 (program), 88 (which chunks), 90 (target, camera, constants) |
+| HD/Fury sea (`reflectplane_dc_seawater`) | flat colour, two wave-normal taps, sun diffuse and specular, **planar reflection** | taps scroll `u + 0.05 t` and `-u + 0.05 t` | `screenSpaceReflectionTex` through `reflectProject`, fed by chunks with render flag bit 3: a 960 x 540 R5G6B5 target drawn under the main camera mirrored about y = -25 (Moa Therma, read live) | 85 (program), 88 (which chunks), 90 (target, camera, constants), 85 (the reflect job and its doubled lights, read in the executable) |
 | HD Vineta K (`water_test_2`, `water_noref`) | vertex colour times light, three wave taps | three scales and rates per material | `paraboloidReflectionTex` (the sky) | 90 |
 | HD Amphiseum (`water`) | flat colour, two wave taps | as the sea, in the fragment program | `paraboloidReflectionTex` | 85 |
 | 2048 own circuits (`fc15`/`fc17_effects_vscroll_water`) | flat colour, **one** wave normal map (RGB, through the tangent frame), sun diffuse and Phong specular weighted by the map's alpha | `u + 0.05 t` (`fc15`); `v + Speed t` (`fc17`) | none | 85 (`fc15`), 85 (`fc17` colour, specular, scroll, alpha chain), 75 (which lanes feed it, below) |
@@ -764,7 +764,7 @@ the place to start.
 | Pulse Vostok Reef caustics (PS2 disc) | under `original`: the pass (255 of 257 flagged batches; two under an animated node are left out), frame by the world clock; under `off`, nothing | a PCSX2 frame, the mesh fog |
 | HD `water_test_2`, `water_noref` | under `original`: the three scrolled taps through the chunk's frame, `water_test_2` lit vertex colour plus vertex colour times the sky reflection, `water_noref` the sky reflection times `a` (or `0.2 a + 0.4`) plus the generic glint (`mesh::rcs::water`, `PROGRAM_WATER`); under `off`, lit vertex colour or black plus fog | `water_noref`'s own glint (`sat(a * 0x697f57e3)`, power `0x2a2dc10b`) |
 | HD `sebenco_ice` | the three-colour lerp (`mesh::rcs::ice`) | bump-perturbed facing, own specular |
-| HD `reflectplane_dc_seawater` | under `original`: `light * ColourConstant + sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L)` over the two scrolled taps, through the chunk's frame (`mesh::rcs::water`); under `off`, the generic reading, where the non-lightmapped slots (Ubermall, Chenghou, Modesto's plain slot) add `DiffuseTexture1`, a normal map, as a glow | the planar reflection (`Reflectivity * R`) |
+| HD `reflectplane_dc_seawater` | under `original`: `light * ColourConstant + sun * SpecularColour * sat(N.H)^SpecularPower * sat(8 N.L) + Reflectivity * R` over the two scrolled taps, through the chunk's frame (`mesh::rcs::water`), `R` the planar reflection target ("The planar reflection, drawn"); under `off`, the generic reading, where the non-lightmapped slots (Ubermall, Chenghou, Modesto's plain slot) add `DiffuseTexture1`, a normal map, as a glow | nothing known on Moa Therma; Ubermall's pool and the shore strip are not compared |
 | HD `water` (Amphiseum) | under `original`: the two taps, `light * ColourConstant + Reflectivity * probeTint(sky)`; under `off`, generic | nothing known |
 | 2048 `fc15_effects_vscroll_water` | under `original`: the constant colour, unsquared, times light through one RGB normal map scrolled `u + 0.05 t` and the tangent frame, plus the map-alpha-weighted Phong highlight (`mesh::rcs::psp2::water`, kind `VITA_SEA_KIND`, HD's `sea_block` layout with the second tap at weight zero); under `off`, the flat colour | the program's `liveLighting0specular` is the scene sun here (the circuit's authored `Sun specular colour` is not wired); Altima's basin is within 2.4 levels of the original, no other circuit's sea is compared |
 | 2048 `fc17_*` (Altima's edge sheets, Park) | under `original`: the authored `Watercolour`, unsquared, times light through the normal map scrolled `v + Speed t`, plus `SpecularColour` Phong; the edge blended by `vc.y * Opacity + (1 - vc.y) a vc.x` (`mesh::rcs::psp2::water`, kinds 7 and 8); under `off`, the normal map drawn as a picture (`VITA_FAULTS`) | the lightmapped program's `shadowLightSpecularDiffuse` weights; Altima's edge is within 2.5 levels of the original on three of four boxes, Park's sea is not compared |
@@ -869,8 +869,71 @@ about half the frame sea) and Amphiseum (the pool, kind 2: a grid frame) are pix
 before and after, since only the sea's kind reads the new lane and the encoding. Pinned by
 `mesh::rcs::water::tests::a_tap_entry_is_scale_then_scroll` (the header's lane) and
 `hd_water_ground_truth::the_sea_entry_carries_its_materials_reflectivity` (Moa Therma 0.3,
-Ubermall 0.36 off the disc). The planar lane replaces this stand-in: delete the sea's
-`encode(sky)` branch there.
+Ubermall 0.36 off the disc). The stand-in is now drawn only where no planar target is bound (the
+next section).
+
+### The planar reflection, drawn (2026-11-20, `planar-water`)
+
+**What the original does, read off the executable** ([track-reflect.md](../ghidra/functions/ps3-hdfury-eu/track-reflect.md)):
+one screen-space target per frame, cleared opaque black; `Scene_PrepareFrame` (`0x003aa888`) runs the
+reflect job when the eye is above `Water plane height` `h` (`env + 0x528`, default -50) and the refract
+job otherwise (88). The reflect job (`TrackReflect_RenderJob`, `0x006cf358`, 85) draws the sky, then the
+reflect chunk list (`0x00403a30`, fogged by bit 5 as the glass target is) under the main view-projection
+composed with the mirror `y' = h - y` (plane `h / 2`, 90 with the live fit), cull face front, the main
+eye unchanged, and with **`directionalLight0Colour` and `prelitScaleSpecular` bound at 2.0 times the
+sun colour and the prelit scale** (`w` kept; `0x003ab074`..`0x003ab118`, the constant at `0x007b0da0`; 85).
+The sea fetches the target on unit 3 with gamma nibble 0, raw (read live on the frame below, 85).
+
+**What ours draws, `graphics.water = original`, HD only.** `oag_raceplay`'s `scene::behind_glass` target
+gains a mirror mode (`Mirror`): on an HD circuit whose sea (`reflectplane_dc_seawater`) draws and that has
+no behind-the-glass chunk (every such circuit), the load builds the render flag bit 3 chunks
+(`oag_rcs::rcsmodel::RENDER_REFLECTED`; Moa Therma 257, Ubermall 73, Chenghou and Modesto none, so their
+target holds the sky alone, as read live on Chenghou) as two fog groups (`mesh::rcs::build_reflection`),
+reads `Water plane height` and `Water distortion` off the circuit's `track.envsettings`, and draws them
+and the sky into a 960 x 540 target ahead of the main view under `flip_x * VP * mirror(h)`. The clip flip
+cancels the mirror's winding, so every draw keeps its own material cull; the sky cube is placed at
+`mirror(eye)`, which the mirror carries back round the camera. The target's groups read their own scene
+blocks with the sun and the prelit scale doubled (`SceneKind::Reflection`, `GlassAlternate`). The sea
+(kind 1 in `shade.wesl`) adds `Reflectivity * R`, `R` read at its point pushed `distortion * (N.x, 0,
+N.z)` through `scene.refraction` (the main view-projection, flipped as the target is drawn) and taken
+**as stored**, `encode(saturate(light))`, as the console's raw fetch of an encoded surface reads it. It is
+bound in the behind-the-glass slot, as the original binds one surface for either job. Where no target is
+bound (`scene.sea_reflection.y` 0: a front-end capture, the viewer) the sea keeps the sky stand-in above.
+
+Chosen, not measured: the reflect pass keeps the visible set and does not cull against the main view's
+frustum (that would drop a tower's top, off screen but seen in the sea; how the original culls its list is
+unread); below `h` the target is cleared and nothing drawn (what the refract job puts there on a sea
+circuit is unread; no Moa Therma camera goes below -50).
+
+**Against the original.** A new RPCS3 frame (the October state is refused by RPCS3 0.0.43; recipe in
+track-reflect.md, "Live corroboration"): Moa Therma, the craft placed at `210 38 -380` facing `-z`,
+lap clock 39.66 s, world clock offset 39.994 s, the main view-projection decomposed to eye
+`(211.906, 37.665, -367.965)`, forward `(0.0892, -0.0916, -0.9918)`, field of view 60.08. Ours at that
+camera, `--size 1920x1080 --ticks 2652 --no-hull-shake --world-clock-offset 39.994178771972656`, the HD
+render profile's `water` set (the lap clock reads 0.39.6 on both, and the yacht is out of both frames).
+Crops (fixed before the after frame was rendered): `gap` `(560,520)-(940,600)`, the sea between the tower
+and the horizon; `foreground` `(0,640)-(780,840)`, the tower's reflection and the ring's shadow; `shadow`
+`(1100,700)-(1700,800)`, inside the ring's shadow. Rec. 709 luma, 0 to 255, and MAE against the original:
+
+| Crop | Original | `off` | `original` before (sky stand-in) | `original` now (planar) |
+| --- | ---: | ---: | ---: | ---: |
+| gap | 144.8 | 153.0, 9.3 | 143.8, 4.7 | **144.9, 1.7** |
+| foreground | 138.2 | 141.9, 19.7 | 132.5, 10.4 | **136.4, 6.3** |
+| shadow | 96.9 | 63.4, 39.9 | 94.8, 7.5 | **97.6, 3.9** |
+
+Mean RGB in the gap: original `(130.0, 149.1, 144.9)`, now `(130.2, 149.3, 144.9)`. **What a player sees**:
+the tower stands in its own reflection, broken by the ripples, the sea brightens to the horizon with the
+mirrored sky, and the ring's shadow on the water is lifted by the unshadowed reflection, as in the original.
+Two variants measured on the way, both worse: the target read linear and saturated (gap 116.4, foreground
+108.7, shadow 46.3: the sea far too dark) and the sky cube left at the eye (the target held the tower alone).
+**The doubled lights** change only the reflected scenery: with them off, 26,893 pixels differ by at most 10
+levels, all in the tower's reflection, and the foreground crop reads 135.8 instead of 136.4.
+
+**Everything else is unchanged.** Re-rendered with main (`6a7f4dcbb`) and with this change, the
+compare-page race pairs are pixel-identical (0 pixels differ): Pulse PSP `talons-alongside`, 2048
+`moa-therma`, Omega `moa-therma`, and all 15 HD race pairs (`hd-race/talons-pack` and the 14 under `hd/`,
+Moa Therma, Ubermall, Chenghou and Modesto included: none of their poses frames the sea). The target
+is built only on an HD circuit whose sea draws under `original`, and the sea is the only reader.
 
 ## Enhanced: this project's own water on Pulse and Pure
 
@@ -997,7 +1060,10 @@ frame of Omega's own sea was taken (shadPS4 was not run in this lane).
 
 1. Chenghou's and Modesto's seas, Ubermall's pool, and whether bit 1 marks the mirror
    (the planar reflection's other values are read on Moa Therma, "The planar reflection,
-   read off live frames", with the recipe for these).
+   read off live frames", with the recipe for these). The planar reflection is drawn
+   ("The planar reflection, drawn"); left from it: who fills the reflect list and how it is
+   culled, the refract job's content below `h` on a sea circuit, the 5-6-5 quantisation, and the
+   target's frame cost at 800p, 1080p and 4K (not measured).
 2. Vostok Reef on PCSX2 or PPSSPP (with the download pack): a frame of the
    caustic pass to compare against ours (batch state `0x202`'s blend is read: additive by alpha).
 4. Omega: what `reflectProject` holds (the program hands it `eye - P`), `distortion`, and the

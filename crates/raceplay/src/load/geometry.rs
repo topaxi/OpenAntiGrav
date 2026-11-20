@@ -162,6 +162,7 @@ pub(super) fn track_model(
                         behind = crate::BehindGlassModels {
                             groups,
                             alternate_fog: None,
+                            mirror: None,
                             size: mesh::rcs::psp2::refraction_only::target_size(
                                 oag_rcs::rcsmodel::psp2::is_ps4(geometry),
                             ),
@@ -195,9 +196,25 @@ pub(super) fn track_model(
             );
             match built {
                 Ok((model, mut groups, built)) => {
+                    report.push(format!("{track}: {}", built.describe()));
+                    // HD's sea samples the planar reflection target under `original`; a
+                    // circuit with no behind-the-glass chunk fills that one target with it
+                    // (`scene::behind_glass`, "The planar reflection").
+                    let mirror = (groups.is_empty()
+                        && water == oag_display::display::Water::Original
+                        && built.water_chunks.sea > 0)
+                        .then(|| super::environment::envsettings_mirror(archives, track, report));
+                    if mirror.is_some() {
+                        match mesh::rcs::build_reflection(track, track_blob, geometry, &model) {
+                            Ok(reflected) => groups = reflected,
+                            Err(error) => report.push(format!(
+                                "{track}: the planar reflection's chunks will not build \
+                                 ({error:#}); the target holds the sky alone"
+                            )),
+                        }
+                    }
                     groups.alternate_fog = groups.alternate_fog.map(biased);
                     groups.primary_fog = groups.primary_fog.map(biased);
-                    report.push(format!("{track}: {}", built.describe()));
                     // The pair the target's alternate group is fogged with, read
                     // only for a circuit that has one, so no other report moves.
                     let alternate_fog = (!groups.is_empty())
@@ -210,7 +227,12 @@ pub(super) fn track_model(
                         crate::BehindGlassModels {
                             groups,
                             alternate_fog,
-                            ..crate::BehindGlassModels::default()
+                            size: if mirror.is_some() {
+                                crate::scene::behind_glass::REFLECTION_SIZE
+                            } else {
+                                crate::BehindGlassModels::default().size
+                            },
+                            mirror,
                         },
                     )
                 }

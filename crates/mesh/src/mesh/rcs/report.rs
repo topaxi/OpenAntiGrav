@@ -657,7 +657,7 @@ impl Report {
             0 => String::new(),
             _ if self.water_taps_drawn > 0 => format!(
                 ", {} water material(s) drawn with their scrolled normal taps ({} sea, {} sky-lit, \
-                 {} lit-colour, {} glint chunks); the planar reflection is NOT drawn (water setting: {})",
+                 {} lit-colour, {} glint chunks); the sea samples the planar reflection target where a race draws one (water setting: {})",
                 self.water_taps_drawn,
                 self.water_chunks.sea,
                 self.water_chunks.sky,
