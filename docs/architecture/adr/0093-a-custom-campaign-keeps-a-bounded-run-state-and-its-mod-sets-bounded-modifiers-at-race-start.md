@@ -266,9 +266,10 @@ key. `Grip` is clamped per craft to a safety ceiling,
 page then shows the run's summary and only NEW RUN. Every committed `race-end`
 advances the ordinal (decisions 1 and 6; question 3's mechanism, answered). NEW RUN is a
 host row with a confirm, which a mod screen may also request (decision 6; question 2,
-answered).
+answered). There is no data-only modifier table, now or later: changing the craft
+takes a wasm module (question 7, answered).
 
-**Not decided here:** a data-first modifier table, a per-owner damage scale, and every other item in
+**Not decided here:** a per-owner damage scale, and every other item in
 `progression.md` section 12.
 
 ## Alternatives considered
@@ -308,9 +309,11 @@ answered).
   state.
 - **A host-typed run schema.** The host would own a schema mods must fit; the brief is
   numbers the mod interprets itself. Rejected.
-- **A declarative modifier table as the only path.** The shape of a reward is the
-  mod's point and a formula table grows into a poor scripting language. Rejected as
-  the only path; possible on top (open question 7).
+- **A declarative modifier table** (`[[run.modifier]]`), as the only path or beside
+  the guest. The shape of a reward is the mod's point, a formula table grows into a
+  poor scripting language, and a campaign with no module has nothing to count levels
+  with, so the host would own a run schema. Rejected outright by the maintainer
+  (2026-11-20): a campaign that changes the craft has a wasm module.
 
 ## Consequences
 

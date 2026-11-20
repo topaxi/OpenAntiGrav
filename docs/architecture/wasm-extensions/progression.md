@@ -440,8 +440,9 @@ reward, if wanted later, is `scale-thrust`, which acts after the law in every mo
   stat = "engine_level", per_level = 0.1`). Data first is the project's habit for
   race rules. It is rejected as the only path because the shape of a reward is the
   mod's whole point (stacking, caps, trade-offs), and a formula table grows into a
-  worse scripting language. It stays a possible addition on top of the guest path
-  (open question 7).
+  worse scripting language. **Rejected outright** (maintainer, 2026-11-20), also
+  beside the guest path: a campaign with no module has nothing to count levels with,
+  so the host would own a run schema. Changing the craft takes a wasm module.
 - *A per-tick modifier command.* Needs a timer or re-sending, keeps the factor out of
   the applied record, and the brief asks for race start only. `scale-thrust` already
   covers the per-tick thrust case.
@@ -946,9 +947,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    after it. At the plateau both multiply the force, so the largest effective factor
    is 2.0 x 2.0 = 4.0. The alternative bounds the product by `MAX_THRUST_FACTOR`, so a
    reward would shrink the headroom of a per-tick boost.
-7. **A data-first modifier table** (`[[run.modifier]]`) beside the guest path, for
-   authors who do not want to write wasm (the project prefers rules as data where
-   data can say it).
+7. **A data-first modifier table** (`[[run.modifier]]`) beside the guest path.
+   **Settled (maintainer, 2026-11-20): never.** A campaign that changes the craft has
+   a wasm module (section 4.3).
 8. **Per-owner damage scale.** Needs the `Craft` trait and projectile ownership; not
    in this draft.
 9. **The AI and a mod pickup.** **Answered by the build:** the manifest key
