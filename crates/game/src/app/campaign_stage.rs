@@ -356,6 +356,7 @@ impl CampaignStage {
                     })
                     .collect(),
             )
+            .with_back_button(cell_buttons.1)
             .with_tiers(tiers.clone());
             // A mod campaign on HD's screens has no `Campaign Selection` ahead
             // of it, and HD's grid pages one tier at a time.
@@ -884,6 +885,7 @@ impl CampaignStage {
                 .collect(),
         )
         .with_per_page(1)
+        .with_back_button(self.cell_buttons.1)
         .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
         let mut model = model;
@@ -1156,6 +1158,7 @@ impl CampaignStage {
                 })
                 .collect(),
         )
+        .with_back_button(self.cell_buttons.1)
         .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
         if self.has_selection() {

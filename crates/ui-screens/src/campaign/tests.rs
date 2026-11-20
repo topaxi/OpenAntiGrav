@@ -391,6 +391,36 @@ fn the_ps2_pressing_leaves_on_triangle_and_opens_help_on_circle() {
     assert_eq!(psp.update(&mut input), vec![Event::Help]);
 }
 
+/// `Grid Selection` leaves on the same button, so a second press of it from `Cell Selection`
+/// carries on to the main menu rather than doing nothing.
+#[test]
+fn the_ps2_pressing_leaves_grid_selection_on_triangle_too() {
+    let grids = || {
+        vec![GridSummary {
+            name: "grid0".to_string(),
+            cell_count: 8,
+            max_points: 24,
+            required_points: 12,
+            gold_medals: 0,
+            points_earned: 0,
+            locked: false,
+            flyer_name: None,
+        }]
+    };
+    let mut input = Input::new();
+    let mut ps2 = GridSelection::new(grids()).with_back_button(Button::Triangle);
+    press(&mut input, Button::Triangle);
+    assert_eq!(ps2.update(&mut input), vec![Event::Back]);
+    press(&mut input, Button::Circle);
+    assert!(
+        ps2.update(&mut input).is_empty(),
+        "circle is not Back on the PS2"
+    );
+    let mut psp = GridSelection::new(grids());
+    press(&mut input, Button::Circle);
+    assert_eq!(psp.update(&mut input), vec![Event::Back]);
+}
+
 /// [`GridSummary::from_grid_with_medals`]'s own reason to exist: a real
 /// progress source moves `Medals`/`Points` off the fresh-profile `"0/.."`
 /// this crate otherwise draws.

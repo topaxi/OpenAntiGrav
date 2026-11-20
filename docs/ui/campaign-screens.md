@@ -477,6 +477,12 @@ layer fixes apply. Pure ships no `CellMode_Definition.xml` (its campaign is the 
 Tournament chain), so it has no `Cell Help`. HD, Fury and Omega ship no `Cell Help` screen, so
 `cell_help` is `None` there and the buttons stay the defaults; their stills are unchanged.
 
+`Grid Selection`, the next screen in the flow, leaves on the same button (`GridSelection::with_back_button`),
+so a second triangle carries on to the main menu; `campaign_cursor_ground_truth::cell_selection_backs_out_on_the_pressings_own_button`
+walks both. Escape and the secondary mouse button emit `Event::Back` directly and are unchanged; the keyboard's
+Backspace, `Z` and `Y` are the circle button, so on the PS2 they open `Cell Help` and `V` (the triangle) leaves, as
+the footer's key hint says.
+
 **Open: the rest of the PS2 front end.** Every other screen still leaves on the circle
 (`oag_ui::menu`, the pickers, the pause menu), while the PS2's footers draw the triangle beside
 `Back`. `FrontEnd::back_button` is the one place to read it from; wiring it through the other

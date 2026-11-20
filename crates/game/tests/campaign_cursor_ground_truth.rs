@@ -696,6 +696,22 @@ fn cell_selection_backs_out_on_the_pressings_own_button() {
         last_campaign(&states).0
     };
     assert_eq!(level(&ps2, "press triangle", "ps2-triangle.jsonl"), "grid");
+    // A second triangle leaves Grid Selection for the main menu.
+    let states = profile.drive_on(
+        &ps2,
+        &format!(
+            "{OPEN}; press cross; until screen.id=cell; ticks 20; press triangle; \
+             until screen.id=grid; ticks 20; press triangle; until screen!=campaign"
+        ),
+        "ps2-twice.jsonl",
+    );
+    assert_ne!(
+        states
+            .last()
+            .and_then(|state| state["screen"]["kind"].as_str()),
+        Some("campaign"),
+        "the second triangle left the campaign"
+    );
     assert_eq!(
         level(&ps2, "press circle", "ps2-circle.jsonl"),
         "cell",

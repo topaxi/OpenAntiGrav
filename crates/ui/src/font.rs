@@ -1276,3 +1276,5 @@ mod tests {
 mod fold_tests;
 #[cfg(test)]
 mod reduce_tests;
+#[cfg(test)]
+mod wrap_tests;

@@ -306,6 +306,8 @@ pub struct GridSelection {
     medal_art: MedalArt,
     /// The campaign's medal tiers, see [`Self::with_tiers`].
     tiers: MedalTiers,
+    /// The button that leaves, see [`Self::with_back_button`].
+    back_button: Button,
 }
 
 impl GridSelection {
@@ -320,7 +322,16 @@ impl GridSelection {
             swipe: hd::Swipe::default(),
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
+            back_button: Button::Circle,
         }
+    }
+
+    /// Leaves on `back` in place of the circle: the pressing's own
+    /// (`oag_title::FrontEnd::back_button`).
+    #[must_use]
+    pub fn with_back_button(mut self, back: Button) -> Self {
+        self.back_button = back;
+        self
     }
 
     /// Draws the tier hexes' swatches in `tiers`' colours: a campaign mod's own list.
@@ -532,7 +543,7 @@ impl GridSelection {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(Button::Circle) {
+        if input.take(self.back_button) {
             out.push(Event::Back);
         }
         out
