@@ -145,7 +145,11 @@ fn declares_snow(file: &[u8]) -> bool {
         let Ok(reflection) = &program.reflection else {
             return false;
         };
-        let names: Vec<&str> = reflection.samplers.iter().map(|s| s.name.as_str()).collect();
+        let names: Vec<&str> = reflection
+            .samplers
+            .iter()
+            .map(|s| s.name.as_str())
+            .collect();
         SAMPLERS.iter().all(|s| names.contains(s))
             && names
                 .iter()

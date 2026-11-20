@@ -22,7 +22,10 @@ fn source() -> Option<String> {
     Some(path.display().to_string())
 }
 
-fn dome_gain_is_the_authored_brightness(track: &str, authored_at_least: f32) -> Option<race::Loaded> {
+fn dome_gain_is_the_authored_brightness(
+    track: &str,
+    authored_at_least: f32,
+) -> Option<race::Loaded> {
     let source = source()?;
     let mut archives = oag_omega::open(&source).expect("opening the Omega source");
     let name = track.replace(".vex", ".envsettings");
@@ -79,7 +82,11 @@ fn snow_is_drawn_by_its_own_program(loaded: &race::Loaded) {
     let material = model
         .materials
         .iter()
-        .find(|m| m.name.to_ascii_lowercase().ends_with("/rt_snow1.rcsmaterial"))
+        .find(|m| {
+            m.name
+                .to_ascii_lowercase()
+                .ends_with("/rt_snow1.rcsmaterial")
+        })
         .expect("the circuit's snow material");
     let authored = |name: &str| {
         material
@@ -92,10 +99,15 @@ fn snow_is_drawn_by_its_own_program(loaded: &race::Loaded) {
         .position(|e| e.program[0] == PROGRAM_OMEGA_SNOW)
         .expect("a snow entry in the glow table");
     let [fresnel, spec, blend] = [&table[first], &table[first + 1], &table[first + 2]];
-    let close = |a: f32, b: f32, what: &str| assert!((a - b).abs() < 1e-5, "{what}: {a} against {b}");
+    let close =
+        |a: f32, b: f32, what: &str| assert!((a - b).abs() < 1e-5, "{what}: {a} against {b}");
     close(fresnel.offset, authored("FresnelMin")[0], "FresnelMin");
     close(fresnel.scale, authored("FresnelScale")[0], "FresnelScale");
-    close(fresnel.program[1], authored("DiffuseWrap")[0], "DiffuseWrap");
+    close(
+        fresnel.program[1],
+        authored("DiffuseWrap")[0],
+        "DiffuseWrap",
+    );
     close(
         fresnel.tint[1],
         authored("FresnelStrength")[0] * authored("FresnelColour")[1],
@@ -103,10 +115,26 @@ fn snow_is_drawn_by_its_own_program(loaded: &race::Loaded) {
     );
     close(spec.rate, authored("FresnelPower")[0], "FresnelPower");
     close(spec.offset, authored("SpecPower")[0], "SpecPower");
-    close(spec.scale, authored("SpecTwinkleScale")[0], "SpecTwinkleScale");
-    close(blend.tint[0], authored("snownormDetailStrength")[0], "snownormDetailStrength");
-    close(blend.tint[1], authored("snownormDetailScale")[0], "snownormDetailScale");
-    close(blend.tint[2], authored("snownormDetailLargeScale")[0], "snownormDetailLargeScale");
+    close(
+        spec.scale,
+        authored("SpecTwinkleScale")[0],
+        "SpecTwinkleScale",
+    );
+    close(
+        blend.tint[0],
+        authored("snownormDetailStrength")[0],
+        "snownormDetailStrength",
+    );
+    close(
+        blend.tint[1],
+        authored("snownormDetailScale")[0],
+        "snownormDetailScale",
+    );
+    close(
+        blend.tint[2],
+        authored("snownormDetailLargeScale")[0],
+        "snownormDetailLargeScale",
+    );
     let slot = u32::try_from(first + 1).expect("a small index");
     let named: Vec<_> = loaded
         .track_model
@@ -114,14 +142,21 @@ fn snow_is_drawn_by_its_own_program(loaded: &race::Loaded) {
         .iter()
         .filter(|v| oag_mesh::mesh::slots::material_index(v.slots) == slot)
         .collect();
-    assert!(named.len() > 10_000, "{} vertices name the snow entry", named.len());
+    assert!(
+        named.len() > 10_000,
+        "{} vertices name the snow entry",
+        named.len()
+    );
     for v in &named {
         assert_eq!(v.colour[3], 1.0);
         assert!((0.0..=1.0).contains(&v.sun_mask), "{}", v.sun_mask);
         assert!((0.0..=1.0).contains(&v.texcoord2[1]), "{}", v.texcoord2[1]);
     }
     assert!(
-        loaded.report.iter().any(|l| l.contains("snow material(s) lit by their own pixel program")),
+        loaded
+            .report
+            .iter()
+            .any(|l| l.contains("snow material(s) lit by their own pixel program")),
         "{:#?}",
         loaded.report
     );

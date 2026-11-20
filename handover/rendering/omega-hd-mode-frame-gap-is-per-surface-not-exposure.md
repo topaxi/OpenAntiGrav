@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega]
 updated: 2026-11-20
-summary: "Omega HD-mode per-surface gap: sky dome wired (SkyBrightness x texture); open: Sebenco snow programs (RT_snow1 419 instr), bloom, Modesto E"
+summary: "Omega HD-mode per-surface gap: sky dome and the RT_snow1 snow program wired; open: the other NOVA-lit families, bloom, Modesto E, snow shadow map"
 difficulty: medium (45)
 ---
 
@@ -33,11 +33,13 @@ original's luma ring, read".
    (`Looks::sky_brightness`; [`omega-status.md`](../../docs/formats/omega-status.md), "The sky dome's pixel program"). Sky-only pixels,
    ours minus theirs: Moa -36.4 to -2.3, Sebenco -36.8 to -12.8; Modesto -14.5 to +23.1 (+0.2 with `E` pinned to the original's 0.6).
    Fog's curve is read off `RT_snow1`'s vertex program and is ours'.
-2. **The Sebenco mountain (the box the dome does not own):** the snow family's GCN programs are unwired. Read `RT_snow1`'s lit variant
-   (`data08.psarc`, `Materials/RT_snow1.rcsmaterial` `@0x110e4`, 419 instructions) from the Fresnel and specular tail
-   (`@0x5b0`-`@0x7b0`: `SpecStrength * SpecColour * liveLighting0specular` with `liveLighting0specular` 12) and the detail-normal blend
-   (`@0x2d8`-`@0x3b0`), then the siblings (`RT_snow`, `RT_snow_ref`, `Sebenco_snow*`). Test case: box `1100,40,300,160` (theirs 162.3,
-   ours 100.1).
+2. **DONE 2026-11-20 (`omega-snow-program`)**: the Sebenco mountain (`RT_snow1`, 84,203 triangles) is drawn by its own program, the vertex-lit
+   permutation `@0xaa24` (`NOVAColor`, no lightmap, no shadow map): a drift-plus-detail normal, `F * FresnelStrength * FresnelColour * VertexColour2 * tex * D`
+   with a diffuse wrap of 2.62, and a sun lobe ([`omega-status.md`](../../docs/formats/omega-status.md), "The snow program"). Box `1100,40,300,160`
+   100.1 to 133.2 (theirs 162.3), snow pixels 93.9 to 176.2 (theirs 186.3); the other 23 Omega race pairs, HD and 2048 are pixel-identical.
+   **Left open:** the same NOVA-lit family on other Omega materials (`NOVAColor` + `VertexColour2` on the PS4 declaration; the loader reads both now), which
+   stay generic; `reflectiveBlurCoeffs.z` (read as 0), the vertex-light count of the permutation the race binds (`@0xf6e4` is one light), the shadow-map
+   permutations (`@0xc2c4`, `@0x110e4`, `S` on the track), `rt_snow_ref` (three more samplers and a cube reflection).
 3. **An exact linear sky gain**: the dome's gain is a gamma-domain multiply by the sRGB encode of the gain (1.9 to 3.4 % low at a
    mid texel, 6 to 11 % low at 0.2); an exact multiply after `decode` needs a per-draw uniform slot (the block has none and 34 test files
    mirror it). Also: read the frame-constant table's own `SkyBrightness` (recipe in `omega-status.md`).
