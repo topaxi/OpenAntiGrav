@@ -305,10 +305,19 @@ means, so it cannot choose a range, and two engine versions could silently re-po
 an index.
 
 **Where a factor is applied.** Once, after the grid is placed and the title's
-`Handling` is loaded, multiplied into the slot's `Ship::handling` (a per-ship copy,
-so one slot's factor never reaches another). A factor of exactly `1.0` skips the
+`Handling` is loaded, and **before `begin_speed_plans`**, multiplied into the slot's
+`Ship::handling` (a per-ship copy, so one slot's factor never reaches another). A factor of exactly `1.0` skips the
 multiply, so no vanilla bit moves. Two commands for one slot and parameter are a
 fault; a slot with no craft is a fault.
+
+**The speed plan (maintainer, 2026-11-20).** The AI, the Autopilot and Pilot Assist
+drive a plan learned per hull at race load from that hull's `Handling`
+(`crates/raceplay/src/speed_plan.rs`: `HullPlans`, `other_hulls`, `flown_by`). A
+modified slot, AI or person, counts as its own hull and **adapts the reference plan**
+under the existing 40,000-step budget, the path other hulls already take. A search
+from scratch (12 to 24 times a race start's CPU) is not used. Load grows by one
+adaptation per distinct modified craft; the plan is close, not optimal
+([progression-challenge.md](progression-challenge.md), objection 5).
 
 **Clamp, not fault.** The existing commands fault on an out-of-range value
 (README section 1.2: "never a silent clamp"). Here the host clamps to the range and
@@ -514,6 +523,10 @@ guest's reply to that event:
    ([autopilot.md](../../ghidra/functions/psp-pulse-usa/autopilot.md)): a running one
    is not refreshed, an absorb cancels it, a fire does not, and a craft whose
    Autopilot runs is granted nothing by a pad. It starts `Ship::autopilot_timer`.
+   It runs on any craft, a modified one included, on the slot's adapted plan
+   (section 4.1). The maintainer's observation (2026-11-20, not a measurement): the
+   pickup Autopilot holds the spline hard and has not been seen to crash, even on a
+   poor plan.
 3. `clear-pickup{slot}`.
 
 Both durations use the slot's `Duration` scale, so a reward can lengthen the
@@ -829,8 +842,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 10. **Which page shows stats when Team Selection is skipped** (preset craft).
 11. **Slots beyond the person's.** **Settled (maintainer, 2026-11-19): allowed.**
     `set-modifier` accepts any grid slot, so a campaign may scale the AI's craft too
-    (README section 3: a third-party mod is the player's choice). Open: the learned
-    speed plan a scaled AI craft invalidates (`progression-challenge.md`).
+    (README section 3: a third-party mod is the player's choice). **Settled
+    (2026-11-20):** a scaled craft adapts the reference speed plan per slot before the
+    plans are built (section 4.1).
 12. **`TopSpeed`.** **Settled (maintainer, 2026-11-20):** replaced by `Launch`
     (`accelcap`) and `TopEnd` (`engine.amount`), each gated on its own held-throttle
     ground truth; neither applies in Zone (section 4.2).

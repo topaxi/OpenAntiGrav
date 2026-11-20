@@ -216,6 +216,13 @@ factors before `begin_speed_plans`, and learn the person's Autopilot and Pilot A
 plan from the modified `Handling`. Defer `give-autopilot` until a ground truth shows
 a modified craft's Autopilot laps without wall contact.
 
+**Answered by the maintainer (2026-11-20): adapt per slot, allow `give-autopilot`.**
+AI slots stay allowed (settled 2026-11-19). Factors are applied before the speed plans
+are built, and each modified slot adapts the reference plan under the 40,000-step
+budget. `give-autopilot` runs on any craft: the maintainer has seen the pickup
+Autopilot hold the spline hard without a crash, even on a poor plan (an observation,
+not a measurement). ADR-0093 decisions 4 and 5, progression.md sections 4.1 and 6.
+
 ## Should change
 
 ### 6. Commit where the medal commits; drop the staging

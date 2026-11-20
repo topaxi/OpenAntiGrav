@@ -103,6 +103,10 @@ ratings, not computed from handling.
    (the plateau, so terminal speed). Each is refused until a held-throttle ground
    truth shows its effect. Neither acts in a Zone event, whose speed path reads
    neither field; that is accepted, Zone being its own mode (maintainer, 2026-11-20).
+   Factors are applied **before the speed plans are built**: each modified slot, AI or
+   person, counts as its own hull and adapts the reference plan under the existing
+   40,000-step budget, so the AI, the Autopilot and Pilot Assist fly a plan for the
+   craft they drive (maintainer, 2026-11-20).
 5. **Pickup parameters.** Per slot, at race start: `count` (rockets per press, mines
    per drop, cannon rounds), duration (Turbo, Shield, Autopilot) and strength (Turbo
    only, which is `Param::TurboStrength` of decision 4). A `count` only goes down:
@@ -115,7 +119,8 @@ ratings, not computed from handling.
    race-wide weapon tables. A combined pickup is
    a `Weapon::Extension` whose `pickup-fire` reply sends `give-shield`, the new
    `give-autopilot` and `clear-pickup`. One kind per mod stays; the recipe is
-   selected from state.
+   selected from state. `give-autopilot` works on any craft, a modified one included,
+   flying the slot's adapted plan.
 6. **Commit on exit.** An event ends at the two sites that record a medal today:
    the finish site for a lap-count mode, the escape site for Zone, Speed Lap and an
    abandoned Time Trial. The race goes on as it does today (the world steps on under
@@ -172,7 +177,9 @@ the race (decision 6; objection 2, answered). Nothing is staged: `race-end` gets
 `event_index`, its output commits on exit, RACE AGAIN is an exit that commits, and a
 campaign may hide RACE AGAIN with a `[run] race_again` flag (decision 6; objections 3
 and 6, answered). The choice screen and the stats are split into ADR-0094; this ADR
-needs no frontend world (objection 4 and question 15, answered).
+needs no frontend world (objection 4 and question 15, answered). A modified craft adapts the
+reference speed plan per slot before the plans are built, and `give-autopilot` runs on
+any craft (decisions 4 and 5; objection 5, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in
@@ -242,8 +249,11 @@ the same race. Every disc number stays the source of truth.
   speed path never reads; a Zone event of a run campaign flies the stock engine.
 - **Hard engine bounds remain.** Three rockets and five mines are the sizes of hashed
   arrays; more is an engine change with its own proof.
-- **A mod can scale the AI.** The AI obeys the player's physics, so a slot's factor
-  works on it too; whether to allow that is open (question 11).
+- **A mod can scale the AI** (allowed, maintainer 2026-11-19). The AI obeys the
+  player's physics, so a slot's factor works on it too. Each distinct modified craft
+  costs one plan adaptation at load.
+- **An adapted plan is close, not optimal.** A modified craft's AI, Autopilot and Pilot
+  Assist fly an adaptation of the reference plan, not a plan learned from scratch.
 - **More weapon-lineage rows.** Each new per-ship pickup field and `give-autopilot`
   needs its row in `docs/gameplay/weapon-lineage.md` when built.
 - **Run state is single-player.** Netplay needs a per-seat story, the same open
