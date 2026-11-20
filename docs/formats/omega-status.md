@@ -2689,6 +2689,22 @@ HD: **checked, differs** (its sky is a `sky.gtf` cubemap with `Sky colour` bytes
 `renderer.md`, "The sky law, read off live draws"); the HD race pair (`hd-race/talons-pack`) re-rendered before and after: 0 pixels
 differ.
 
+## The diffuse coordinate that writes `1 - v` (2026-11-20, `omega-uv-flip`)
+
+**Claim tested:** Omega materials whose GCN vertex program writes `(u, 1 - v)` are drawn with the flip, decided per file from the program, and the pairs that use one improve. **Half true: the reader and the wiring exist; no Omega circuit draws a file that flips, so no pair moves.**
+
+**The reader** (`oag_rcs::gcn::flips_v`, `crates/rcs/src/gcn/texcoord.rs`, confidence 85). A vertex program fetches `Uv1` into `vU, vU+1` and a flipping one computes `v_sub_f32 d, 1.0, vU+1` and exports `(vU, d)`: Modesto's `Track_Wall` (`gcn_dump`, `Shdr @0x2e44`) is `c  v_sub_f32 v0, 1.0, v9` ... `100  exp param1 v8, v0, v1, v1`, with `v9` overwritten later (`0x48`), after the subtract. Read: an `exp paramN` whose first lane is `vU`, never written, and whose second lane was last written by a plain `v_sub_f32` of the literal 1.0 and `vU+1` (no negate, abs, omod or clamp), `vU+1` itself untouched before that subtract. A file flips when it has a program that fetches `Uv1` and every such program does (the rule `gxp::texcoord_flip` has). Other shapes read as not flipping: a multiply-add that folds the flip (`neg=1` `v_mad_f32` rows), a flip after a transform of the coordinate, `v_sub_f32` of a constant. Wired in `mesh::rcs::psp2::uv_flip::plan`, which now picks the GCN or the GXP reader by the model's platform.
+
+**Census** (`gcn_ground_truth`, every `.rcsmaterial` of `data00`-`data05`, `data07`-`data09` of the base and the patch, a ratchet per archive): **9 files flip, 0 are mixed, every other file has no flipping program.** They are 3 materials with their `_1` and `_2` permutations (the PS4 Pro compile), in `data02` (base) and again in `data05` and `data08` (patch): Modesto Heights `Track_Wall`, Talons Junction `Track_Wall`, and Ubermall's `Materials_DLC/D_S_N_R_uvflip` (named for it). 2048's Amphiseum and Tech De Ra `track_surface` twins do **not** flip on Omega (**checked, differs**): no Omega `track_surface` program matches the shape
+
+**Why nothing moves.** No `.rcsmodel` of Omega's base or patch archives names any of the nine files (a byte search of every model of `data00`, `data01`, `data02`, `data04`, `data05`, `data08` for `track_wall.rcsmaterial`, `track_wall_1`, `track_wall_2` and `d_s_n_r_uvflip`: no hit; the `track_wall` string that does occur in the circuits' models is a shape name). The loader's report line `N material(s) write 1 - v` is absent for all 22 Omega circuits the race pairs use (`Environments`: `01_vineta_k` to `modesto_heights`, `tech_de_ra`, `amphiseum`, `talons_junction`, `05_ubermall`; `Environments2048`: `altima` to `tower`). The files ship with the circuits and are not drawn. Omega's Modesto right wall already shows the panel and hex rows at the authored `v`, and re-rendering `omega/modesto-heights` before and after is **0 differing pixels** (mean grey 40.72 both). `2048-vita/modesto-heights` (28.59 to 21.81, the flip still read from its GXP programs) and `hd-race/talons-pack` are 0 differing pixels against a build without this change.
+
+**Pinned by** `gcn_ground_truth` (the 9 files per archive; empty with the reader dropped), unit tests on hand-built instruction words in `gcn::texcoord` (including a `vU+1` overwritten before the subtract), and `uv_flip::tests` (Omega's `Track_Wall` flips through the GCN reader, its `Track_Surface` and the Vita reader do not).
+
+**Also found, not wired:** Amphiseum's `01_Normal_Diffuse_SpecularonAlpha_LH` (and `_1`, `_2`; `LH` for left-handed) exports `(1 - u, v)` (`v_sub_f32 v0, 1.0, v8`, `exp param1 v0, v9, v1, v1`), a mirror in `u` rather than a flip. No Omega model names it either.
+
+**2048 (Vita): ported** (`gxp::texcoord_flip`, own ground truth). **HD: ported** (`skin::flips`).
+
 ## The alpha lane (2026-11-19, `omega-road-programs`)
 
 **Claim tested:** Omega's materials sample their diffuse map's **alpha** as the surface alpha; ours read the red lane.

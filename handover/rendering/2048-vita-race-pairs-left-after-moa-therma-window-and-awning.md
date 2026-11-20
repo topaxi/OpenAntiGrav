@@ -31,9 +31,9 @@ fifteen `2048-vita` pairs re-render pixel-identical.
   the craft's hdships materials are not in the `OAG_SKIP_MATERIAL` filter, so a craft mask needs a second render.
 - **Amphiseum** (27.94 after the flip, whole frame bias +11.4): the left road box fell 47.96 to 30.17 but the original's blue
   panels and dark road under the white lines are still not ours (ours brighter, bias +10.8 to +13.9 over the road): not read.
-- **Omega: the `1 - v` flip is checked, applies, not wired.** Omega's Modesto `Track_Wall` (`data02.psarc`) starts its GCN vertex
-  program `v_sub_f32 v0, 1.0, v9` on `Uv1`; its Amphiseum and Tech De Ra track materials were not read. A GCN reader that
-  mirrors `oag_rcs::gxp::texcoord_flip` (the `v_sub_f32 1.0` on the `Uv1` input) would let `psp2::uv_flip::plan` act on a PS4 model.
+- **Omega: the `1 - v` flip is ported (`oag_rcs::gcn::flips_v`) and dormant.** Nine Omega material files flip (`Track_Wall` of Modesto Heights and
+  Talons Junction, Ubermall's `D_S_N_R_uvflip`, each with `_1` and `_2`); no Omega model names one, so no pair moves. Omega's
+  Amphiseum and Tech De Ra `track_surface` do not flip (`docs/formats/omega-status.md`, "The diffuse coordinate that writes `1 - v`").
 - **Arena (a base circuit) now takes the window term too**, with no kept pair to score it: a Vita3K Arena grid pair would
   measure it.
 - **The base copies of `fc10_Lambert_2UV_Emissive`** (54 `ReflectMap` programs in `data.psarc`) were not walked for the
