@@ -2570,6 +2570,99 @@ init calls on a road material's draw, and whether Vita3K honours one (its anisot
 `0x522800` is the likely key and was not mapped to the S#); the same A/B on the Zone and the remaining HD-mode
 circuits (only Vineta K was logged in HD mode).
 
+## HD-mode frame brightness: the tone map is not the gap (2026-11-20, `omega-hd-exposure`)
+
+**Claim tested:** Omega's HD-mode race frames are darker than the original's because ours applies the wrong exposure, tone
+map or scene light, with The Amphiseum ("the original is much brighter than ours"), Modesto Heights, Sebenco Climb and
+Moa Therma as the evidence. **Result: false as a tone-map claim, and false as a brightness claim on two of the four.**
+Method: ours re-rendered from each pair's own flags (main `13b22ac77`, 16x anisotropy, as the page records) against the
+stored `theirs.png`; a local, uncommitted readback of the chain's `(LAvg, t0, t1, E)` and of its 256x256 luma image at the
+screenshot frame (a `COPY_SRC` on the state buffer and the ladder's first target, mapped in `Drop`; the patch is not kept).
+
+**Signed bias and mean absolute grey, 1920x1080, whole frame** (Rec.709 grey, ours minus theirs; the stored pair's
+`ours.png` and the re-render are identical to the digit):
+
+| Pair | theirs mean | ours mean | signed bias | mean abs | ours `LAvg` | ours `E` | regime |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| The Amphiseum | 83.5 | 88.6 | **+5.0** | 49.1 | 0.133 | 2.00 | pinned at `Exposure maximum` 2 |
+| Modesto Heights | 90.8 | 91.7 | **+0.9** | 40.8 | 0.261 | 0.868 | unclamped |
+| Sebenco Climb | 103.8 | 81.5 | **-22.3** | 40.2 | 0.175 | 0.555 | pinned at `Exposure minimum` 0.555 |
+| Moa Therma | 110.2 | 96.1 | **-14.2** | 36.4 | 0.384 | 1.00 | pinned at `Exposure maximum` 1 |
+
+The mean absolute grey (the 49.1 the gallery notes) is dominated by pixel decorrelation, not by brightness: The Amphiseum
+and Modesto have no brightness gap at all (their luminance quantiles 5/25/50/75/95 read 9/36/67/119/230 against
+8/34/70/131/234 and 5/34/67/130/236 against 11/40/74/123/229), and the Amphiseum's gallery note "the original is much
+brighter than ours" does not hold on main (ours is 5 grey brighter). Over all twelve HD-mode pairs the signed bias is
+Vineta K -4.9, Anulpha Pass -4.1, Chenghou Project +4.8, Metropia -16.6, Ubermall -1.5, Sol 2 -7.3, Modesto +0.9,
+Talon's Junction -1.9, Tech De Ra -0.6, Sebenco -22.3, Moa -14.1, The Amphiseum +5.1: no common gain.
+
+**Named boxes** (`x,y,w,h` of the 1920x1080 frame, clear of the HUD and the craft; theirs, ours, signed bias, mean abs;
+box means move with pose decorrelation, read the sign and the spread between boxes, not the digit):
+
+| Pair | Box | theirs | ours | bias | mean abs |
+| --- | --- | --- | --- | --- | --- |
+| Amphiseum | ceiling/sky `300,110,460,130` | 103.0 | 142.9 | +39.9 | 55.4 |
+| | stands right `1150,190,560,130` | 85.2 | 110.4 | +25.1 | 62.5 |
+| | road left `60,520,480,230` | 106.8 | 103.7 | -3.2 | 54.0 |
+| | wall left `0,380,576,120` | 74.4 | 80.9 | +6.5 | 47.2 |
+| Modesto | sky gap `800,160,240,100` | 192.4 | 156.4 | -36.0 | 46.0 |
+| | left structure `0,120,600,200` | 65.2 | 58.7 | -6.5 | 37.6 |
+| | right wall `1160,380,640,180` | 73.5 | 74.0 | +0.5 | 34.8 |
+| | floor left `100,600,460,120` | 128.7 | 135.6 | +6.8 | 31.1 |
+| Sebenco | snow sky `1100,40,300,160` | 162.3 | 97.3 | -65.0 | 65.2 |
+| | building left `0,200,640,200` | 93.3 | 51.8 | -41.5 | 50.6 |
+| | yellow floor `700,480,560,100` | 121.0 | 104.3 | -16.8 | 23.7 |
+| | wall right `1200,380,600,200` | 67.6 | 54.5 | -13.0 | 21.3 |
+| Moa | sky/city `1160,60,440,120` | 126.9 | 126.2 | -0.7 | 37.8 |
+| | stands left `0,200,500,200` | 116.1 | 100.0 | -16.1 | 56.1 |
+| | floor left `300,640,360,220` | 141.3 | 139.0 | -2.3 | 33.2 |
+| | stripe road `660,500,500,80` | 96.0 | 81.4 | -14.6 | 23.7 |
+
+**Why a gain is not the cause.**
+
+1. **Ours' exposure is the executable's law and is not ramping.** The grab is stable from tick 10 to 300 (Sebenco 81.5, 81.4,
+   81.5, 81.2). That only shows ours is stable: ours starts settled by construction (`omega_tonemap`, "The first frame starts
+   settled"), so it says nothing about the original's first frames.
+2. **"The original is still adapting at the grab" fails as a common cause.** Starting the history at zero as the executable
+   does and stepping the chain N times per frame, Sebenco matches theirs at N about 20 (107.1 against 103.8) and Moa at 10 to
+   20, but Modesto at N=20 reads 120.7 against theirs 90.8, Talon's 122.2 against 93.6, Tech De Ra 135.1 against 99.5, and
+   they match theirs only once settled (N 40). One frame count cannot fit both groups (confidence 80).
+3. **Where ours is clamped, a brighter original needs brighter scene light, and the tone map is the same.** Sebenco's author
+   pins `Exposure minimum` 0.555 and `b` 0 (`E = 0.079 / LAvg`), so ours is at the minimum: a darker or brighter scene moves
+   the output one for one. Forcing ours' `E` to 0.9 reproduces the original's luminance quantiles
+   (q10 to q95: 35/57/95/141/230 against 33/58/97/140/219), which is a x1.6 scene factor, **but it is not uniform**: at
+   `E` 0.9 the snow sky is still -38 and the far building -25 while the yellow floor is +16 and the right wall +4.5. Moa
+   (`Exposure maximum` 1, ours at 1.0) needs about x1.4 and cannot be raised by any exposure; its sky and floor boxes
+   already match (-0.7, -2.3), its stands and stripe road are 15 grey dark. The Amphiseum (ours at the maximum 2.0) is
+   5 grey bright.
+4. **Ours' luma input is not inflated by an HDR tail.** The luma image's 99th percentile is 0.82 and its maximum 1.0 on
+   Sebenco (0.7 to 2.7 and 3.7 to 8 on the others), skipping the sky changes `LAvg` 0.175 to 0.170, and the centre 64x64 or
+   128x128 means are 0.237 and 0.183 against the full mean 0.176 (so which ladder level the coefficient pass samples,
+   `tonemap.md`'s confidence-60 reading, moves `LAvg` by at most 35 % on Sebenco and cannot explain a x1.6 gap).
+
+**What the data supports: per-surface light, concentrated in the sky and the far scenery.** The deficit is largest where
+the surface is far or the sky: Sebenco snow -65 and far building -41 against floor and wall -13 to -17, Modesto's sky gap
+-36 against floor +7 and wall +0.5. `Lighting.Sky brightness` (Sebenco 1.51, Modesto 2.264, Moa 2.0, Metropia 2.2,
+Amphiseum 0.5) does not predict the sign (Moa's sky is level at 2.0, the Amphiseum's ceiling is 40 grey bright at 0.5), the
+same mixed result the 2048-mode lane recorded ("Where the WipEout 2048 mode pairs' error is", sky). Not wired.
+
+**The one value that would separate "same scene, different exposure" from "different scene" is the original's own luma
+history.** Read recipe, not run (no pad seat in this lane's brief, and a native-port boot needs the 47 GiB game copy):
+in the native port launched through `scripts/wipeout-pc-omega-pair.py` the object is a heap pointer held at guest
+`0x021dbdb8` ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md), "The ToneMap object, read live
+through the pointer"; host address image base `0x800000000` plus the offset from Ghidra's `0x01000000`); after the pair
+script's `SIGSTOP`, read the 5-slot luma ring `ToneMap_SetHistoryWeights` sizes at the object's `+0x1d8` (`begin`/`end`
+float pointers, `+0x1f8` the weights). Its mean is the original's `LAvg` on the same frame as `theirs.png`, to compare with
+ours' `frameL` above (Sebenco 0.1756, Moa 0.3851, Amphiseum 0.1333, Modesto 0.2621): a ratio near 1 means the scene is the
+same and the gap is how pixels are shaded; a ratio near 1.6 on Sebenco means the original's scene is brighter before the
+curve. The coefficient texture (`LAvg`, `E`) lives in GPU memory and cannot be read this way.
+
+**Closed negatives:** a global exposure or gain (the signed bias spans -22 to +5 over twelve pairs); an HDR tail inflating
+ours' `LAvg`; the original still adapting at the grab as a common cause; `Sky brightness` as a sky multiplier (sign
+mixed). **Unchanged by this lane:** no code, no table; the HD and 2048 frames are untouched. **2048: checked, differs** (its
+programs read a held exposure under Vita3K, `compare-page.md`, "Vita3K never writes the bloom gate's target back"; there
+is no adaptive chain on that side to compare).
+
 ## See also
 
 - [`omega-frontend.md`](omega-frontend.md) - the front-end census this page's
