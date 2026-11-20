@@ -1072,3 +1072,61 @@ fn pulse_psp_photo_mode_and_viewer_still_leave_on_the_circle() {
     let Some(image) = psp() else { return };
     photo_and_viewer_leave_on_the_resolved_button(&image, "circle", "original");
 }
+
+/// On a selection screen that authors a Help, the face button Back left over opens it, Back
+/// closes it without leaving, and Back then leaves, under every choice of MENU BACK: one launch
+/// per choice. `original` is the pressing's own Back, so the Help button is the other one.
+fn help_opens_on_the_displaced_button(image: &Path, screen: &Screen, original: &'static str) {
+    let profile = Profile::fresh(&format!("{}-help", screen.tag));
+    for choice in ["original", "circle", "triangle"] {
+        let (back, other) = buttons(original, choice);
+        println!(
+            "{}: MENU BACK {choice}: {other} opens Help, {back} closes it and then leaves",
+            screen.tag
+        );
+        profile.menu_back(choice);
+        profile.drive_on(
+            image,
+            &format!(
+                "{reach}; expect screen.help=closed; press {other}; ticks 10; \
+                 expect screen.help=open; expect {here}; press {back}; ticks 10; \
+                 expect screen.help=closed; expect {here}; press {other}; ticks 10; \
+                 expect screen.help=open; press {other}; ticks 10; expect screen.help=closed; \
+                 press {back}; ticks 30; expect {away}",
+                reach = screen.reach,
+                here = screen.here,
+                away = screen.away
+            ),
+            &format!("{choice}.jsonl"),
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_track_select_opens_track_help_on_the_circle() {
+    let Some(image) = ps2() else { return };
+    help_opens_on_the_displaced_button(&image, &TRACK_PICKER, "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_ship_select_opens_team_help_on_the_circle() {
+    let Some(image) = ps2() else { return };
+    help_opens_on_the_displaced_button(&image, &SHIP_PICKER, "triangle");
+}
+
+/// The PSP authors its Help on the triangle and still leaves on the circle.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_track_select_opens_track_help_on_the_triangle() {
+    let Some(image) = psp() else { return };
+    help_opens_on_the_displaced_button(&image, &TRACK_PICKER, "circle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_ship_select_opens_team_help_on_the_triangle() {
+    let Some(image) = psp() else { return };
+    help_opens_on_the_displaced_button(&image, &SHIP_PICKER, "circle");
+}

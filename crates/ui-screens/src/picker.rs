@@ -239,6 +239,12 @@ impl Picker {
         }
     }
 
+    /// Whether the screen has a Help overlay to open ([`Self::set_help_available`]).
+    #[must_use]
+    pub fn has_help(&self) -> bool {
+        self.help_available
+    }
+
     /// Whether the Help overlay is up.
     #[must_use]
     pub fn help_open(&self) -> bool {
