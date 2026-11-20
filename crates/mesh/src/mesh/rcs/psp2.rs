@@ -59,6 +59,7 @@ pub mod refraction_only;
 mod report;
 mod shield_lightning;
 mod sky_reflection;
+mod snow;
 mod static_hologram;
 mod tarmac;
 mod transparency;
@@ -336,6 +337,14 @@ fn build_planned(
     let uv_flip = uv_flip::plan(&decoded, ps4, &mut *textures, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let mut normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    // Omega's `RT_snow1` binds its drift normal third and two detail normals after it.
+    let snow = snow::plan(
+        &decoded,
+        ps4,
+        (&mut normals, &mut glow.emissive),
+        &mut *textures,
+        &mut report,
+    );
     // 2048's own seas scroll a normal map, bound third as the PS4's are.
     let sea = water::plan(
         &decoded,
@@ -695,6 +704,20 @@ fn build_planned(
                 ),
                 _ => (colour, 1.0),
             };
+            // Omega's snow: `NOVAColor` in the colour and `sun_mask`, `VertexColour2` and the drift
+            // mask in the two coordinate pairs (`psp2::snow`).
+            let snow_vertex = snow.vertex(
+                submesh.material,
+                (
+                    submesh.ps4_nova_colour.get(i),
+                    submesh.ps4_vertex_colour2.get(i),
+                    submesh.colours.get(i),
+                ),
+            );
+            let (colour, sun_mask, lightmap_texcoord, texcoord2) = match snow_vertex {
+                Some((colour, sun_mask, pair, second)) => (colour, sun_mask, pair, second),
+                None => (colour, sun_mask, lightmap_texcoord, texcoord2),
+            };
             // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).
             let colour = match submesh.colours.get(i) {
                 Some(&[r, ..]) if glass.is_ice(submesh.material) => {
@@ -726,7 +749,8 @@ fn build_planned(
                     | chevron.role(submesh.material)
                     | glass.role(submesh.material)
                     | sea.role(submesh.material)
-                    | blend.role(submesh.material),
+                    | blend.role(submesh.material)
+                    | snow.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
@@ -811,6 +835,7 @@ fn build_planned(
             &tarmac,
             &chevron,
             &blend,
+            &snow,
         ),
         pictures,
         &mut model,
@@ -831,6 +856,7 @@ type Plans<'a> = (
     &'a tarmac::Plan,
     &'a chevron::Plan,
     &'a vertex_blend::Plan,
+    &'a snow::Plan,
 );
 
 /// Binds each draw to its own submesh's material's texture.
@@ -843,7 +869,7 @@ type Plans<'a> = (
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add, tarmac, chevron, blend): Plans<'_>,
+    (glow, twin, normals, emissive_add, tarmac, chevron, blend, snow): Plans<'_>,
     mut diffuses: Pictures,
     model: &mut Model,
     report: &mut Report,
@@ -988,14 +1014,15 @@ fn bind_textures(
                         .or_else(|| blend.second(Some(index)).cloned()),
                 );
             }
-            if tarmac.any() || chevron.any() {
+            if tarmac.any() || chevron.any() || snow.any() {
                 let layers = tarmac.of(Some(index));
                 let pulse = chevron.of(Some(index));
                 debug_assert_eq!(model.fifth_maps.len(), at);
                 model.fifth_maps.push(
                     layers
                         .and_then(|l| l.fifth.clone())
-                        .or_else(|| pulse.map(|p| p.emask.clone())),
+                        .or_else(|| pulse.map(|p| p.emask.clone()))
+                        .or_else(|| snow.large(Some(index))),
                 );
                 debug_assert_eq!(model.sixth_maps.len(), at);
                 model.sixth_maps.push(
@@ -1004,12 +1031,13 @@ fn bind_textures(
                         .or_else(|| pulse.map(|p| p.wave.clone())),
                 );
             }
-            if twin.any() || tarmac.any() {
+            if twin.any() || tarmac.any() || snow.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);
                 model.wave_maps.push(
                     twin_here
                         .and_then(|t| t.bars.clone())
-                        .or_else(|| tarmac.of(Some(index)).and_then(|l| l.emissive.clone())),
+                        .or_else(|| tarmac.of(Some(index)).and_then(|l| l.emissive.clone()))
+                        .or_else(|| snow.small(Some(index))),
                 );
             }
             if glow.has_layers()

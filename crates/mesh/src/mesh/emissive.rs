@@ -114,6 +114,11 @@ pub const PROGRAM_PANEL_MAP: f32 = 15.0;
 /// picture is multiplied by `program[1]`, its `Shadowed`. See `super::rcs::psp2`'s `crowd`.
 pub const PROGRAM_CROWD: f32 = 16.0;
 
+/// [`Emissive::program`]'s mode for Omega's `RT_snow1`: the pixel program's normal blend (drift
+/// third, small detail fourth, large detail fifth), Fresnel-weighted wrapped diffuse and sun lobe;
+/// the entry and the two after it carry its constants. See `super::rcs::psp2`'s `snow`.
+pub const PROGRAM_OMEGA_SNOW: f32 = 21.0;
+
 /// [`Emissive::program`]'s mode for HD's scrolled-tap water (`super::rcs::water`): the
 /// normal is the weighted sum of the third binding read at the entry's taps, `program[1]` the
 /// family. The entry carries the colour, reflection weight and specular power, the next one
