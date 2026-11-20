@@ -930,22 +930,35 @@ file, then rename), under a general ADR for every profile file (maintainer,
 2026-11-20; [progression-challenge.md](progression-challenge.md), objection 7).
 
 Each step is its own merge, with a proof that a race with no run module hashes
-exactly as before (`VANILLA_FOLD`).
+exactly as before (`VANILLA_FOLD`) and keeps `World`'s size (ADR-0093 decision 12).
+Reconciled with the maintainer's answers of 2026-11-20.
 
-1. The ABI: `oag_run` and the two exports, `RunResult`, the slot table, code 39, revision 7,
-   the SDK `Run` trait and its test harness. No engine meaning yet.
-2. The run record in the `Store`, the `[run]` table, `NEW RUN`, the commit on exit, the
-   replay `run` field, the no-record rule.
-3. The slot table's factors for the settled parameters, `SlotMods` in the hash; a
-   disc-backed ground truth in the shape of `energy_turbo_ground_truth` (a +20 %
-   `TopEnd`, a +20 % `Launch` and a doubled `ShieldMax` against stock on one circuit).
-4. Pickup parameters: counts, then the per-ship duration scales; `give-autopilot`
-   with its lineage row.
-5. The frontend world (ADR-0080), then the choice screen and the Ship Select
-   allowance.
+1. **The ABI, revision 7.** `oag_run`, `oag_run_len`, `oag_race_start`,
+   `oag_race_end`; the run buffer (`RUN_IO_LEN`), `RunResult` with its offsets, the
+   slot table (all-zero only until step 3 gives it meaning), `END_OFFER` and
+   `END_RUN_OVER`, the stat and unlock fields; code 39 reserved. The SDK's default
+   methods, `type Run`, `GridCraft`, the clamping reply and the test harness. The mod
+   author skill in the same change.
+2. **The run and its lifecycle.** The run record in the `Store`; the `[run]` table
+   (`module`, `race_again`, `seed`, `new_run`); the latch at the end tick; the commit
+   on exit at both medal sites; tournament carry; `END_RUN_OVER`, the summary and the
+   NEW RUN row with its confirm; the owed end with RETRY and DISCARD; a `race-start`
+   fault refusing the launch; the replay `run` field; the no-record rule. **This is
+   the first playable slice:** `race-end` picks the reward and the tick applies it
+   through built commands (`scale-thrust`, `hold-shield`, `give-shield`).
+3. **Modifiers.** The slot table's factors for `Turning`, `Airbrake`, `Brake`, `Grip`
+   (per-craft safety clamp), `ShieldMax`, `TurboStrength`, `DamageTaken`,
+   `DamageDealt`; `SlotMods` in the extension state and the hash; factors applied
+   before the speed plans, each modified slot adapting the reference plan. `Launch`
+   and `TopEnd` each open after their held-throttle ground truth.
+4. **Pickups.** Counts (down only), the three duration overrides behind one grant
+   helper, `give-autopilot` (code 39), `CRAFT_AUTOPILOT`; weapon-lineage rows.
+5. **Own unlocks** (decision 10, section 7.1): data rows, `requires_points`, run
+   flags, Team Selection scope.
+6. **ADR-0094.** Guest stat rows on the campaign page (no frontend world needed);
+   then, once ADR-0080 is built, the choice screen; Ship Select rows as its follow-up.
 
-Steps 1 to 4 need no frontend world. A campaign can ship a fixed progression table
-chosen by `race-end` alone (the module picks the reward) before step 5 lands.
+Steps 1 to 5 need no frontend world.
 
 ## 12. Open questions
 

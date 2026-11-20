@@ -217,9 +217,12 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
     `progression.md` section 7.1.
 11. **Build order.** Prerequisite, owned outside this ADR: the records file is written
     atomically (temp file, then rename), a general rule for every profile file that the
-    maintainer moved to its own ADR (2026-11-20). Then the run record and the ABI, then modifiers, then pickup
-    parameters and `give-autopilot`. The choice and the stats follow under ADR-0094. A
-    campaign ships with `race-end` choosing the reward by itself before they land.
+    maintainer moved to its own ADR (2026-11-20). Then: the ABI (revision 7, the
+    SDK and the mod author skill); the run and its lifecycle, the first playable
+    slice, where `race-end` picks the reward and the tick applies it through built
+    commands; modifiers (`Launch` and `TopEnd` after their ground truths); pickup
+    parameters and `give-autopilot`; own unlocks. The stats and the choice follow under
+    ADR-0094. Detail: `progression.md` section 11.
 12. **Original content pays nothing** (maintainer, 2026-11-20). A race with no module
     keeps `World`'s size, its snapshot, its hash and its per-tick work exactly as
     today. State only a mod needs (the applied factors, the pickup overrides, the
