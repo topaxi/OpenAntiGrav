@@ -11,6 +11,11 @@
 //! rig (one frame of each of six circuits' grids: every such batch bar the hull's extra pass is
 //! drawn with lighting on and the circuit's lights, `docs/ghidra/functions/psp-pulse-usa/scene-light.md`,
 //! "Which models take the rig"). Only the animated flash sprites keep the stand-in.
+//!
+//! Pure's PSP binary draws its track the same way: one frame of Karbonis, Manor Top and Vineta K
+//! draws every colourless batch with normals under `LIGHTINGENABLE` 1 and the circuit's own
+//! ambient list, bar the hull's extra pass
+//! (`docs/ghidra/functions/psp-pure-usa/scene-light.md`, "The track takes the rig").
 
 use oag_mesh::mesh_render::HullLights;
 use oag_raceplay as race;
@@ -150,5 +155,61 @@ fn the_flash_sprites_keep_the_stand_in() {
     assert!(
         flash.iter().all(|&lit| lit == 1.0),
         "the flash sprites are held back from the rig"
+    );
+}
+
+/// Pure's Classic-league circuits author an ambient light and no directional: the original's list
+/// there is that ambient (`0xfefefe` on Karbonis) with every light disabled, and the scenery's
+/// colourless batches draw under it, near white. A track left on the stand-in rig reads 6 to 16
+/// grey darker than the original on these four circuits.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn pures_classic_scenery_takes_the_circuits_ambient_rig() {
+    let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        track: Some(r"Data\ClassicsNS\01_Karbonis\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading the race");
+    let model = &loaded.track_model;
+    assert!(
+        loaded.light.hull.enabled(),
+        "Karbonis authors an ambient light"
+    );
+    assert_eq!(
+        loaded.light.hull.ambient, [1.0; 4],
+        "an ambient light and no directional: the original draws the batches under 0xfefefe"
+    );
+    let lits: Vec<f32> = model
+        .draws
+        .iter()
+        .chain(&model.alpha_tested_draws)
+        .chain(&model.transparent_draws)
+        .flat_map(|draw| draw.range.clone())
+        .map(|at| model.vertices[model.indices[at as usize] as usize].lit)
+        .collect();
+    assert!(
+        lits.iter().all(|&lit| lit != 1.0),
+        "no colourless vertex with normals is left on the stand-in on Karbonis"
+    );
+    let marked = lits
+        .iter()
+        .filter(|&&lit| lit == HullLights::TRACK_LIT)
+        .count();
+    assert!(
+        marked > 10_000,
+        "the scenery's colourless batches take the rig: {marked} vertices"
+    );
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.starts_with("track rig: ") && !line.starts_with("track rig: 0 ")),
+        "the loader reports the marking: {:?}",
+        loaded.report
     );
 }
