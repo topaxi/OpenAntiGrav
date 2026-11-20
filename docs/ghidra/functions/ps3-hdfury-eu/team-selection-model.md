@@ -410,8 +410,21 @@ renders at `--fury-adapted-luma 0.016046`): hex box mean 13.08 to 4.12, whole fr
   loads `transitiontype` at `0x0078b828`, `vwipe` at `0x0078b860`, `hscale` after it, `ImageModel_Item` next). The enum's consumer (the `Image` draw) is **unread**. The only
   spellings of the key in the binary are `EnableTransition` (`0x00786f90`) and `Delay` (`0x00786fd8`): the XML's `enebletransition` is a typo with no string of its own, so the authored
   0.5 s may be dead and a default applied (unread, 30). Campaign Select's emblems author the same `vwipe` (`docs/ui/campaign-screens.md`, "Still open (item 4)"), so the reading is the shared widget transition; nothing in `oag_ui` plays it. `HexSelection` (class name `0x0078b348`) has no code read at all.
+  **Superseded 2026-11-20 (`hd-banner-transition`): the table and `FUN_0052ea7c` named here are not the `Image` widget's (a different module TOC); the transition law is [image-widget.md](image-widget.md).**
 - **Omega: the hex phase is inherited by lineage, unmeasured; the banner is checked, applies, not wired.** `data09`'s `team_selection_definition.xml` authors the same `Logo` (`delay="0.5" enebletransition="0.5"`, `transitiontype="vwipe"`, 512x128 at y 15)
   and the same `HexSelection` with `rows="9"` and `Scale="0.8"`; it reaches the same authored branch, so `phase_by_entry` is on for Omega too (no Omega frame of the lattice exists; its `eboot` was not read).
+
+## The banner's transition: recovered (2026-11-20, `hd-banner-transition`)
+
+The banner logo's reveal is the `Image` widget's `vwipe` mode, read in [image-widget.md](image-widget.md):
+`Image_Render` (`0x001b6398`) turns the widget's alpha `s` into a 0.1 H slab sweeping down (`s` 0 to 0.4,
+row `2.25 s H`), back up (0.4 to 0.8, row `(0.9 - 2.25 (s - 0.4)) H`), then a quad growing from the top
+(0.8 to 1.0, height `(0.1 + 4.5 (s - 0.8)) H`); `s` is `Widget_UpdateTransition`'s linear ramp over the
+class default 0.7 s (`enebletransition` is a typo and matches nothing, so the authored 0.5 s is dead);
+`TeamSelectionScreen_Update` restarts it on a step with `Widget_ResetTransition(Logo)` and no delay. It
+reproduces the 84 grabs' slab speed (6.28 px per frame measured, 0.69 to 0.72 s implied) and shapes.
+Confidence 85 for the geometry (code), 80 for the 0.7 s ramp and the restart, 40 for the 0 to 2
+frame offset between the press and the reset. Ready to wire (`oag_ui`'s banner `Image`).
 
 ## Omega and 2048
 
