@@ -532,6 +532,13 @@ The worked example has small faults of its own: both offers can be the same rewa
 (`roll % 3` twice), `mix` is not an SDK function, and a failed race writes nothing
 without the draft saying what "no write" does to the ordinal.
 
+**Answered by the maintainer (2026-11-20): nits 19 to 23 as proposed** (question 9
+answered by `drives_ai_pickup`; the side effects named in the table; `RunResult`
+offsets; `oag_run_len` instead of `[run] run_bytes`; the `ModUse` wording). Nit 24 fell
+with objection 15. Nit 25 is taken separately. The worked example's faults were fixed
+with objection 16; the ordinal on a run that writes nothing is taken with "how a mod
+ends a run".
+
 ## Edge cases asked about, and where each stands
 
 | Case | Finding |

@@ -245,10 +245,13 @@ out-of-range factor as the host does, with a warning its test harness can assert
 untouched, with spare columns, instead of sending commands; the run cap is 4,096
 bytes in a run buffer of its own size (decisions 1 and 4; objection 17 and question
 14, answered). Only the campaign's bound module is called at race start
-and end (decision 2; objection 18, answered).
+and end (decision 2; objection 18, answered). Nits 19 to 23 taken as proposed: the AI's use of a mod
+pickup is the built `drives_ai_pickup`, `TurboStrength` and `ShieldMax` name their
+barrel roll and Eliminator side effects, `RunResult` has offset constants, and the run
+length is an `oag_run_len` export (a new run is that many zeroes), not a campaign-file
+key.
 
-**Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
-a data-first modifier table, a per-owner damage scale, and every other item in
+**Not decided here:** how a mod ends a run (the mechanism), a data-first modifier table, a per-owner damage scale, and every other item in
 `progression.md` section 12.
 
 ## Alternatives considered

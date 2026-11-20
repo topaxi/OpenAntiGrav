@@ -29,7 +29,7 @@ not exist.
 | Sim world: one `tick` per module per tick, state blob of at most 1,024 bytes, 96 commands a reply | **Built** | `oag_ext_abi::MAX_STATE_BYTES`, `MAX_COMMANDS`, `REVISION` = 6 |
 | `oag_wants_race`: asked once at race load, sees a 20-byte `RaceInfo` (title, class, mode, weapons, `RACE_CAMPAIGN` bit, people, craft, four option bytes) | **Built** | `crates/ext-abi/src/race.rs`; [hooks.md](hooks.md#choosing-its-races-oag_wants_race-abi-1-revision-6) |
 | A second host-written buffer a guest asks for by export (`oag_track`) | **Built** | `crates/ext-abi/src/track.rs`; the precedent for section 3 |
-| Replay header `mods` list with module hash, picks, state bytes | **Built** | `oag_replay::header::ModUse`; [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) |
+| Replay header `mods` list with module hash, picks, and the state blob's length (`state_bytes: u32`, not the bytes) | **Built** | `oag_replay::header::ModUse`; [ADR-0091](../adr/0091-a-modded-race-records-its-inputs-and-its-header-names-the-modules.md) |
 | `give-shield`, `hold-shield`, `clear-shield`, `give-pickup`, `pickup-roll`, `Weapon::Extension` with `pickup-fire` and `pickup-absorbed` | **Built** | [README](README.md#and-energy-turbo-2026-10-29), "Breakable armour from the Shield" |
 | Custom campaigns (`campaigns/<id>.toml`), progress rows `<title slug>/mod:<mod id>/<campaign id>` | **Built** for Pulse, HD, Omega | [custom-campaign.md](../../formats/custom-campaign.md) |
 | `race-start` and `race-end` as guest exports | **Not built.** The README's WIT lists them; the ABI has neither | `crates/ext-abi/src/lib.rs` header lists the exports |
@@ -93,6 +93,8 @@ pub const RUN_IO_LEN: usize = 16384;
 
 /// Guest exports (core wasm, no imports):
 ///   oag_run() -> u32          // address of a RUN_IO_LEN-byte run buffer in the guest's memory
+///   oag_run_len() -> u32      // the run state's length, at most MAX_RUN_BYTES, checked at load like
+///                             // oag_state_len; the SDK emits it from `type Run`. A new run is this many zeroes
 ///   oag_race_start() -> u32   // 0 on success; once per race (per leg), after the grid is placed
 ///   oag_race_end() -> u32     // 0 on success; once, on the exit from the event, see section 5
 ///
@@ -191,8 +193,10 @@ pub struct RunResult {
     pub best_lap_ticks: u32,
     pub shield: f32,       // left at the finish
     pub shield_max: f32,
-    // 2 bytes spare
 }
+// Offsets, as every oag-ext-abi record has them: SLOT 0, FINISHED 1, PLACE 2, LAPS 3,
+// TIER 4, RUNG 5, PRIOR_TIER 6, EVENT_INDEX 7, TICKS 8, SCORE 12, BEST_LAP_TICKS 16,
+// SHIELD 20, SHIELD_MAX 24. RunResult::LEN = 32: 28 used, 4 spare.
 
 /// What `race-end` may add to its reply besides new run bytes.
 pub const END_OFFER: u32 = 1; // open the run's choice screen before the campaign screen
@@ -335,8 +339,8 @@ guest names a slot, a parameter and a factor.
 | `Airbrake` | `airbrake.amount`, `airbrake.turn` | 0.5 to 2.0 | The two gains that shape airbrake steering; the other five fields stay |
 | `Brake` | `brakes.amount` | 0.5 to 2.0 | Stored negative; a positive factor keeps the sign |
 | `Grip` | `antigrav.grip_ground`, `antigrav.grip_air` | 0.5 to 2.0 | |
-| `ShieldMax` | `dimensions.shield` | 0.25 to 4.0 | The maximum and the start together ("It is the maximum as well as the start", `params.rs`), so the host sets the slot's pool to the new maximum; `shield-delta`'s bound follows the new maximum |
-| `TurboStrength` | `engine.turbo` | 0.5 to 2.0 | Per ship already; the Turbo pickup's boost |
+| `ShieldMax` | `dimensions.shield` | 0.25 to 4.0 | The maximum and the start together ("It is the maximum as well as the start", `params.rs`), so the host sets the slot's pool to the new maximum; `shield-delta`'s bound follows the new maximum. **Also scales** the barrel roll's shield cost and the Eliminator's lap refill, both fractions of `dimensions.shield` |
+| `TurboStrength` | `engine.turbo` | 0.5 to 2.0 | Per ship already; the Turbo pickup's boost. **Also scales** the barrel roll's landing boost, which adds `engine.turbo` while `roll_payout_timer` runs, in Zone too (`engine.rs`) |
 
 **Not offered, with the reason:** `physical.mass` (two copies, `Dimensions`' and
 `Body::mass`, "keeping them equal is the integration layer's job" in
@@ -447,7 +451,7 @@ Two bytes-in, one bytes-out, and one commit point: the exit from the race.
 
 | Event | What happens to the run |
 | --- | --- |
-| Campaign entered, no run | Host creates a run: empty bytes, a drawn `seed`, ordinal 0 |
+| Campaign entered, no run | Host creates a run: all zero bytes of the module's run length (`oag_run_len`), a drawn `seed`, ordinal 0 |
 | NEW RUN (a row on the campaign's page, host-drawn, proposed) | Clears `bytes`, `offer_pending`, ordinal and the seed; clears this campaign's medal rows if the campaign says `new_run = "clear-medals"` (section 7) |
 | An event is launched | Host reads the committed bytes into the start description; `race-start` runs; no write |
 | The person's craft finishes (or is wrecked or eliminated), or, in Zone, Speed Lap or an abandoned Time Trial, the player leaves | The medal is captured at its site as today, and the race goes on running as today. Nothing is written to the run yet |
@@ -622,9 +626,11 @@ behaviour the run state selects: the guest reads its recipe from its tick state
 more kinds per mod; it changes what `MAX` means and renumbers every craft record
 code a guest may have hard-coded.
 
-**The AI.** Today the AI fires a mod pickup through the Turbo's gate
-(`Driver::affords_boost`, "a straight, nobody close ahead"), which is wrong for a
-defensive combination. Open question 9.
+**The AI.** By default the AI fires a mod pickup through the Turbo's gate
+(`Driver::affords_boost`, "a straight, nobody close ahead"). A module that sets the
+built manifest key `drives_ai_pickup` decides itself when an AI craft uses its pickup
+(`crates/mod/src/manifest.rs`; `On::guest_drives_ai_pickup`), so a defensive
+combination fires when the module says (question 9, answered by the build).
 
 ## 7. The campaign file and the manifest (draft)
 
@@ -639,7 +645,6 @@ id = "long-haul"
 
 [run]
 module = "ext/run.wasm"       # a module the mod lists in [extension.rules]; the only module that sees the run
-run_bytes = 256               # the run state's length, at most MAX_RUN_BYTES (4096); the module's tick blob has its own oag_state_len
 new_run = "clear-medals"      # "clear-medals" (default) | "keep-medals"
 choice_screen = "reward"      # optional: an [[extension.screen]] id, opened after a finish that offered
 race_again = true             # false: the results page offers no RACE AGAIN for this campaign's events
@@ -938,9 +943,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    data can say it).
 8. **Per-owner damage scale.** Needs the `Craft` trait and projectile ownership; not
    in this draft.
-9. **The AI and a mod pickup.** The Turbo's gate is wrong for a defensive combination.
-   Options: the manifest names a gate (`never`, `turbo`, `under-fire`), or the AI never
-   holds mod pickups in a run campaign.
+9. **The AI and a mod pickup.** **Answered by the build:** the manifest key
+   `drives_ai_pickup` lets the module decide when an AI craft uses its pickup; the
+   Turbo's gate is only the default (section 6; challenge nit 19).
 10. **Which page shows stats when Team Selection is skipped** (preset craft).
     **Settled (maintainer, 2026-11-20):** the campaign page's stats block, which every
     event has (section 8.2).
