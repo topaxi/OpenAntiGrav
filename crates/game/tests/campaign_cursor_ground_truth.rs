@@ -841,6 +841,9 @@ struct Screen {
     reach: &'static str,
     here: &'static str,
     away: &'static str,
+    /// The screen authors a Help: the button that is not Back opens it, so it is pressed again to
+    /// close it before Back is tried.
+    helps: bool,
 }
 
 const RACE_PAGE: Screen = Screen {
@@ -848,6 +851,7 @@ const RACE_PAGE: Screen = Screen {
     reach: "boot; select racebox; press cross; until page=race; ticks 10",
     here: "page=race",
     away: "page!=race",
+    helps: false,
 };
 const TRACK_PICKER: Screen = Screen {
     tag: "track-picker",
@@ -855,6 +859,7 @@ const TRACK_PICKER: Screen = Screen {
             press cross; until screen=picker; ticks 10",
     here: "screen.id=track-select",
     away: "screen.id!=track-select",
+    helps: true,
 };
 const SHIP_PICKER: Screen = Screen {
     tag: "ship-picker",
@@ -862,6 +867,7 @@ const SHIP_PICKER: Screen = Screen {
             press cross; until screen=picker; press cross; until screen.id=ship-select; ticks 10",
     here: "screen.id=ship-select",
     away: "screen.id!=ship-select",
+    helps: true,
 };
 /// The on-screen keyboard OPTIONS > PLAYER NAME opens.
 const NAME_PROMPT: Screen = Screen {
@@ -870,6 +876,7 @@ const NAME_PROMPT: Screen = Screen {
             press cross; until screen=prompt; ticks 10",
     here: "screen=prompt",
     away: "screen!=prompt",
+    helps: false,
 };
 /// The pause screen of a time trial, on its GAME OPTIONS page.
 const PAUSE_OPTIONS: Screen = Screen {
@@ -881,6 +888,7 @@ const PAUSE_OPTIONS: Screen = Screen {
             press cross; until page=options; ticks 10",
     here: "page=options",
     away: "page!=options",
+    helps: false,
 };
 
 /// `(back, other)`: the face button the screen leaves on and the one it does not, under `choice`
@@ -914,8 +922,15 @@ fn leaves_on_the_resolved_button(image: &Path, screen: &Screen, original: &'stat
         profile.drive_on(
             image,
             &format!(
-                "{}; press {other}; ticks 30; expect {}; press {back}; ticks 30; expect {}",
-                screen.reach, screen.here, screen.away
+                "{}; press {other}; ticks 30; expect {}; {}press {back}; ticks 30; expect {}",
+                screen.reach,
+                screen.here,
+                if screen.helps {
+                    format!("press {other}; ticks 10; ")
+                } else {
+                    String::new()
+                },
+                screen.away
             ),
             &format!("{choice}.jsonl"),
         );
