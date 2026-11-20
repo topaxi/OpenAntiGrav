@@ -24,7 +24,7 @@ use std::collections::HashMap;
 
 use oag_tables::race_campaign::{Cell, Mode};
 use oag_ui::frontend::{Draw, Placed};
-use oag_ui::screen::{Image, Slot};
+use oag_ui::screen::{EntryClock, Image, Slot, entry_draw};
 
 use super::super::draw::image_draw;
 
@@ -33,6 +33,42 @@ const DIRECTORY: &str = r"Data\FE\Images";
 
 /// The colour the frame draws them in: `150,150,150`, the headings' grey.
 const TINT: u32 = 0xFF96_9696;
+
+/// Seconds after the page opens before the four emblems' own `delay` starts counting: the cell
+/// screen's refresh re-arms them every frame until then
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Cell Selection's emblems wait a
+/// hold"). Measured at confidence 65: 0.349 to 0.399 s over 20 ramp starts, mean 0.372, and what
+/// ends the hold is unread.
+pub const ENTRY_HOLD_SECONDS: f32 = 0.37;
+
+/// Seconds the emblems have counted their `delay` for: from the end of the entry hold, or from the
+/// last time the cell or the rung changed once the hold is over. The per-frame re-arm that makes
+/// the hold stops when its 0.4 s countdown ends, so a change inside the hold arms nothing the
+/// hold does not, and one after it arms the `delay` alone.
+#[must_use]
+pub fn since_armed(entry: EntryClock, refreshed_at: Option<f32>) -> f32 {
+    entry.seconds() - refreshed_at.map_or(ENTRY_HOLD_SECONDS, |at| at.max(ENTRY_HOLD_SECONDS))
+}
+
+/// The widgets `CellSelection_Refresh` and the entry hold re-arm (`Widget_ArmTransition`, recursive
+/// over children), by name: the four emblems and `RightColumnText`. A [`Bracket`] written inside
+/// one counts its `delay` from the same arming; any other bracket on the page counts from the
+/// page's entry alone.
+///
+/// [`Bracket`]: oag_ui::screen::Bracket
+const REARMED: [&str; 5] = [
+    "Event Emblem",
+    "Track Emblem",
+    "Speed Class Emblem",
+    "Weapons Emblem",
+    "RightColumnText",
+];
+
+/// Whether the cell refresh re-arms a bracket written inside the widget named `group`.
+#[must_use]
+pub fn rearms_brackets(group: Option<&str>) -> bool {
+    group.is_some_and(|name| REARMED.contains(&name))
+}
 
 /// The barcode strip the screen authors under the hex field; on no sheet until
 /// this names it, since nothing else draws it.
@@ -137,6 +173,7 @@ pub(super) fn draws(
     cell: &Cell,
     track_emblems: &HashMap<String, String>,
     sprites: &dyn Fn(&str) -> Option<Placed>,
+    since_armed: f32,
 ) -> Vec<Draw> {
     slots
         .iter()
@@ -161,8 +198,9 @@ pub(super) fn draws(
                 reveal: Vec::new(),
                 transition: 0.0,
                 start_enabled: true,
+                wipe: slot.wipe,
             };
-            Some(image_draw(&image, placed))
+            entry_draw(image.wipe, since_armed, image_draw(&image, placed))
         })
         .collect()
 }

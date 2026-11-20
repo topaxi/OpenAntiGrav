@@ -12,6 +12,7 @@
 //! `docs/ui/campaign-screens.md`'s "Wipeout HD/Fury: `Campaign Selection`"
 //! section.
 
+use oag_gameplay::input::Button;
 use oag_tables::race_campaign;
 use oag_ui_screens::campaign::selection::{Campaign, CampaignSelection};
 
@@ -172,6 +173,8 @@ pub(crate) struct CampaignStage {
     /// `docs/ui/campaign-screens.md`'s `Open` entry on why not the
     /// authored `Viewport`/`Animation` scroll timeline.
     cell_help: Option<oag_ui_screens::campaign::Layout>,
+    /// The buttons `Cell Selection` opens `Cell Help` on and leaves on, see [`cell_buttons`].
+    cell_buttons: (Button, Button),
     /// The front-end root's own `Confirm`/`Back` legend - `None` on a
     /// source whose `Skin.xml` this pass could not read at all (logged when
     /// that happens, see `crate::campaign::read_footer`).
@@ -260,6 +263,43 @@ pub(crate) struct CampaignStage {
     medal_art: oag_ui_screens::campaign::MedalArt,
 }
 
+/// The buttons `Cell Selection` opens `Cell Help` on and leaves on, as `(help, back)`, in the
+/// frame the screens read their input in.
+///
+/// Help is the one the screen's own `Redirect` to `Cell Help` authors: the PSP's
+/// `forward="triangle"`, the PS2's `forward="circle"`. Back is the pressing's own
+/// (`oag_title::FrontEnd::back_button`: the PS2 binds it to the triangle), or the player's
+/// choice (`oag_title::Title::menu_buttons`), which also moves the button it displaces. A
+/// screen that authors no such redirect keeps the PSP's triangle.
+fn cell_buttons(
+    cell_layout: &oag_ui_screens::campaign::Layout,
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+    choice: oag_title::prompts::MenuBack,
+) -> (Button, Button) {
+    let authored_help = cell_layout
+        .screen
+        .redirects
+        .iter()
+        .find(|redirect| redirect.goto.as_deref() == Some("Cell Help"))
+        .and_then(|redirect| redirect.forward)
+        .unwrap_or(Button::Triangle);
+    let prompt = match authored_help {
+        Button::Circle => oag_title::prompts::Prompt::Circle,
+        _ => oag_title::prompts::Prompt::Triangle,
+    };
+    let buttons = title.menu_buttons(platform, choice, prompt);
+    let help = if matches!(authored_help, Button::Circle | Button::Triangle) {
+        crate::prompts::button_of(buttons.logical(buttons.help))
+    } else {
+        authored_help
+    };
+    (
+        help,
+        crate::prompts::button_of(buttons.logical(buttons.back)),
+    )
+}
+
 impl CampaignStage {
     #[allow(
         clippy::too_many_arguments,
@@ -284,8 +324,10 @@ impl CampaignStage {
         flyers: Option<crate::flyer::Flyers>,
         circuit_emblems: std::collections::HashMap<String, String>,
         custom: Option<crate::campaign::custom::Custom>,
+        menu_back: oag_title::prompts::MenuBack,
     ) -> Self {
         let title = title_ref.name.to_string();
+        let cell_buttons = cell_buttons(&cell_layout, title_ref, platform, menu_back);
         let ticker_tips = crate::records::ticker_tips(
             ticker.as_ref(),
             &strings,
@@ -326,6 +368,7 @@ impl CampaignStage {
                     })
                     .collect(),
             )
+            .with_back_button(cell_buttons.1)
             .with_tiers(tiers.clone());
             // A mod campaign on HD's screens has no `Campaign Selection` ahead
             // of it, and HD's grid pages one tier at a time.
@@ -350,6 +393,7 @@ impl CampaignStage {
             grid_range,
             active_campaign: None,
             cell_help,
+            cell_buttons,
             nav_legend,
             ticker,
             ticker_tips,
@@ -473,11 +517,11 @@ impl CampaignStage {
         self.ticker_elapsed += dt.max(0.0);
         match &mut self.screen {
             Screen::Grid(model) => {
-                model.pulse_mut().tick(dt);
+                model.tick(dt);
                 self.selector_phases.grid = *model.pulse();
             }
             Screen::Cell { model, .. } => {
-                model.pulse_mut().tick(dt);
+                model.tick(dt);
                 self.selector_phases.cell = *model.pulse();
             }
             Screen::Selection(_) => {}
@@ -853,6 +897,7 @@ impl CampaignStage {
                 .collect(),
         )
         .with_per_page(1)
+        .with_back_button(self.cell_buttons.1)
         .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
         let mut model = model;
@@ -941,6 +986,7 @@ impl CampaignStage {
                     .map(to_campaign_difficulty)
             })
             .with_medal_art(self.medal_art.clone())
+            .with_buttons(self.cell_buttons.0, self.cell_buttons.1)
             .with_tiers(self.tiers.clone());
             match &self.custom {
                 Some(custom) => model
@@ -1124,6 +1170,7 @@ impl CampaignStage {
                 })
                 .collect(),
         )
+        .with_back_button(self.cell_buttons.1)
         .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
         if self.has_selection() {
@@ -1288,6 +1335,91 @@ mod tests {
         let mut model = CellSelection::new(vec![locked_cell("grid0_2_1"), cell("grid0_3_1")]);
         CellCursor::default().restore(&mut model);
         assert_eq!(selected(&model), "grid0_3_1");
+    }
+
+    /// A stage over two bare grids (one cell each): enough screen to tick, no art.
+    fn bare_stage() -> super::CampaignStage {
+        let grid = |name: &str| oag_tables::race_campaign::Grid {
+            name: name.to_string(),
+            required_points: 0,
+            locked: false,
+            group: None,
+            unlock_grid: None,
+            cells: vec![cell(&format!("{name}_0_0"))],
+            campaign: None,
+            title_color: None,
+            text_color: None,
+            flyer_name: None,
+            billboard_name: None,
+        };
+        let layout = || oag_ui_screens::campaign::Layout {
+            screen: oag_ui::screen::Screen::default(),
+            scale: [1.0, 1.0],
+            faces: oag_ui_screens::picker::FaceScales::default(),
+        };
+        super::CampaignStage::new(
+            vec![grid("grid0"), grid("grid1")],
+            layout(),
+            layout(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            oag_ui::language::StringTable::default(),
+            oag_hud::sprite::Sheet::build(&[], &mut Vec::new()),
+            oag_hd::TITLE,
+            oag_disc::Platform::Ps3,
+            oag_ui::language::CircuitNames::default(),
+            crate::records::Store::default(),
+            None,
+            std::collections::HashMap::new(),
+            None,
+            oag_title::prompts::MenuBack::Original,
+        )
+    }
+
+    /// The page-entry clock the `vwipe` images count their `delay` on runs off the stage's tick,
+    /// on `Grid Selection` and on `Cell Selection`, and starts at zero when a page opens. This
+    /// fails if `tick_ticker` stops ticking the open page (a pulse-only tick, say).
+    #[test]
+    fn the_stages_tick_advances_the_open_pages_entry_clock() {
+        use super::Screen;
+        let mut stage = bare_stage();
+        let Screen::Grid(model) = &stage.screen else {
+            panic!("two grids open on Grid Selection");
+        };
+        assert_eq!(model.entry().seconds(), 0.0);
+        for _ in 0..30 {
+            stage.tick_ticker(1.0 / 60.0);
+        }
+        let Screen::Grid(model) = &stage.screen else {
+            panic!("still on Grid Selection");
+        };
+        assert!(
+            (model.entry().seconds() - 0.5).abs() < 1e-4,
+            "Grid Selection"
+        );
+
+        assert!(stage.open_cell_selection(0));
+        let Screen::Cell { model, .. } = &stage.screen else {
+            panic!("a cell page");
+        };
+        assert_eq!(
+            model.entry().seconds(),
+            0.0,
+            "a new page starts its own clock"
+        );
+        for _ in 0..12 {
+            stage.tick_ticker(1.0 / 60.0);
+        }
+        let Screen::Cell { model, .. } = &stage.screen else {
+            panic!("still on Cell Selection");
+        };
+        assert!(
+            (model.entry().seconds() - 0.2).abs() < 1e-4,
+            "Cell Selection"
+        );
     }
 
     /// One grid with nothing ahead of it skips `Grid Selection`, on any title; several grids,

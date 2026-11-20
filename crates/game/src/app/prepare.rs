@@ -457,6 +457,7 @@ impl Pending {
                 source: source.to_string(),
                 movies: options.cache.clone(),
                 audio: oag_source::cache::default_audio_cache_dir(),
+                dlc: self.dlc.clone(),
                 refresh_video: self.cli.refresh_video,
             }),
         })

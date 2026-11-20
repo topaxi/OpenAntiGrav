@@ -68,6 +68,12 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // A named mode plays `ready`, `HBEAT` and `go`, an event `Go_NGP`; the spacing is Pulse's lent,
     // chosen, not measured: see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
+    // Not read on 2048's executable (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`,
+    // "Omega and 2048").
+    hud_waits_for_go: oag_title::pre_race::Sourced::inherited(
+        &["zone"],
+        "Wipeout Omega Collection",
+    ),
     // Omega's re-shipped craft update carries HD's grid clamp, unread on this build: see `LAUNCH_HOVER`.
     launch_hover: Some(&LAUNCH_HOVER),
     hover_rig: None,
@@ -99,6 +105,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: Some(ZONE_STAGES),
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: false,
     game_options: oag_title::race::GameOptions::NONE,

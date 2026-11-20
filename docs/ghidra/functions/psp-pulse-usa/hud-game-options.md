@@ -10,6 +10,11 @@ The XML side (the lists and their entries) is in `docs/ui/menus-original.md`, "G
 | `0x0881ba58` | `Hud_UpdateMultiplayerTags` | 80 | Per-frame update of the eight player tags (`PlrTag0`-`PlrTag7`) |
 | `0x08ab083d` | `g_multiplayer_tags_on` | 88 | The `Multiplayer Tags` option as a byte: `FE_ON` 1, `FE_OFF` 0 |
 | `0x08966848` | `MpTag_GetPlayerName` | 70 | A slot's name: `table + slot*0x2c + 0xc4` when its first byte is set, else the string `ONL_CRJ_PLAYER` (looked up through the language table) |
+| `0x0883e37c` | `Craft_IsInVisibleSection` | 80 | The tag gate: the craft's section bit in the view's 64-bit section row; see "The gate" |
+| `0x0883e434` | `Craft_GetSectionByte` | 68 | `*(char *)(*(craft + 0xae4) + 0x60)`, the craft's track-section byte |
+| `0x08826490` | `Race_BindTagCrafts` | 78 | Fills the eight tag entries from the grid; an entry is active when `craft+0x368 != 0` |
+| `0x0881b86c` | `MpTagHud_Construct` | 75 | Builds the `MPTag_HUD` object (multiplayer constructors only) |
+| `0x0881be58` | `MpTagHud_BindPlayerStatus` | 70 | Binds it to the registered `"PLAYER_HUD"` block |
 | `0x08919c2c` | `Hud_WarpVertexY` | 92 | The `Dynamic HUD` warp: a vertex's new `y` from its `(x, y)`; see "The warp" |
 | `0x088a686c` | `Image_SetVertexCount` | 85 | An image's strip length (`+0x10c`, at least 4) and its segment count (`+0x110 = n / 2 - 1`) |
 | `0x08919cf8` | `Text_BuildGlyphQuads` | 72 | Lays a string's glyphs out as sprites, or as two triangles each with every corner through `Hud_WarpVertexY` while the warp is on |
@@ -114,19 +119,65 @@ row ([menus-original.md](../../../ui/menus-original.md), "Game Options").
 
 `Hud_Update` writes `FE_OFF` to 0 and `FE_ON` to 1 in `g_multiplayer_tags_on` (a value that is neither leaves it). The
 only reader is `Hud_UpdateMultiplayerTags`, which drives the eight `PlrTag` text widgets of `MPTag_HUD.xml` (`hud+0x48`
-is the widget array, `hud+0x40` the eight-entry source list, stride 0x10):
+is the widget array). `hud+0x40` is the registered `"PLAYER_HUD"` block (`PlayerStatus+0x48`,
+[race-progress.md](race-progress.md)), and the eight tag entries are its tail: stride 0x10 from block `+0x60`
+(`PlayerStatus+0xa8`), `{craft, active byte, fade, spare}`. `PlayerStatus_Construct` (`0x0883b044`) zeroes them.
+Read 2026-11-20 (`pulse-multiplayer-tags`) in `/pulse/BOOT-psp-pulse-usa.BIN`.
 
-1. A slot whose active byte (`entry+0x64`) is clear, or whose craft `FUN_0883e37c` rejects, gets the empty string.
+**What fills the entries** (`Race_BindTagCrafts`, `0x08826490`, confidence 78; three callers in the
+multiplayer race set-up, `FUN_08825758`, `FUN_08825bb0`, `FUN_08825ee4`): for each grid slot `i < DAT_08b30f90` it
+stores the race manager's craft (`manager+0x78+4i`) in entry `i` and sets the active byte to `craft+0x368 != 0`; slots
+past the count get the active byte cleared. `craft+0x368` is the **kind** `Craft_Construct_q` is given as its second
+argument: `Race_CreatePlayer` (`0x0882821c`) passes **0**, `Race_SpawnAiRacer` (`0x088253f8`, a `NULL input` driver)
+passes **1**, `Race_CreateAiRacer` (`0x088285e0`, an `AI input N` driver) passes **2**. So **the local player's craft
+never gets a tag** (confidence 85: the one kind-0 builder is the player's, and the entry is active only for a non-zero
+kind), and every other craft does, human-driven or AI. The MPTag HUD itself (`MpTagHud_Construct`, `0x0881b86c`,
+confidence 75, loads `MPTag_HUD`) is built only by `MPRace_Construct`, `MPTimeTrial_Construct` and
+`MPTournament_Construct`; `Race_CreatePlayer` binds it to `PLAYER_HUD` through `MpTagHud_BindPlayerStatus`
+(`0x0881be58`, 70). Whether a multiplayer race ever builds a kind-2 (AI) craft is **unread**.
+
+Per entry, each frame:
+
+1. A slot whose active byte is clear, or whose craft `Craft_IsInVisibleSection` (`0x0883e37c`) rejects, gets the empty
+   string. **The fade is left as it was** (it is not reset), so a tag that leaves the view and returns resumes its fade.
 2. A craft in `Ship_State` 1 or 2 gets a tag: its fade `entry+0x68` rises by `dt * 1.2` up to 1.
-3. The anchor is the craft's position (`craft+0x794` block, `+0x30/+0x34/+0x38`) **raised by `fade * 2.0` units**, projected to
-   the screen by `FUN_08819900`, which also returns the distance `d`.
+3. The anchor is the craft's translation row (`craft+0x794` block, `+0x30/+0x34/+0x38/+0x3c`) with **`+0x34` increased by
+   `fade * 2.0`**: the raise runs along the **world's Y axis**, not the craft's own up (the rotation rows are never read;
+   confidence 90, the decompile adds to exactly one float and the instruction reads `+0x34`). It is projected to the
+   screen by `FUN_08819900`, which also returns the distance `d`.
 4. Alpha is `min(fade, f(d))` with `f = 1` up to `d = 20`, then falling linearly to 0 at `d = 60`
    (`(40 - (d - 20)) / 40`, constants `0x08a79980` = 20.0 and `0x08a79984` = 40.0).
 5. **`g_multiplayer_tags_on == 0` forces the alpha to 0**, so the option hides the tag, it does not stop the update.
 6. Colour is white, `alpha << 24 | 0xffffff`; the scale is 0.5 (the XML's own); the text is `MpTag_GetPlayerName` of the
    craft's slot (`craft+0x364`).
 
-Confidence 80. Unread: what `FUN_0883e37c` tests (it compares the display's viewport mask against the craft's, which
-reads as "visible in this view", confidence 50), and whether the local player's own craft gets a tag. Ours: wired as
-`oag_hud::player_tags` (law and tests) and `oag_raceplay`'s `player_tags` (fades, projection, names); `docs/ui/menus-original.md`,
-"Game Options" lists what is chosen.
+### The gate, `Craft_IsInVisibleSection` (`0x0883e37c`), confidence 80
+
+```
+idx = Craft_GetSectionByte(craft)                // 0x0883e434: *(char *)(*(craft + 0xae4) + 0x60)
+if (idx & 0xffffffc0) == 0:                          // 0..63
+    return (Gfx_GetVisibleSectionMask(g_display) & (1 << idx)) != 0     // DAT_08a7b928/2c is the 64-bit constant 1
+return true                                          // a negative or 64+ byte: always tagged
+```
+
+It is **the track-section visibility test, not a viewport test**: the craft's section byte (the one
+[camera.md](camera.md) saw count up 12, 13, ... 19 along a circuit, and `ai-controls.md` ties to the current spline
+point at `craft+0xae4`) against the 64-bit row `Gfx_GetVisibleSectionMask` hands the draws, which is
+`g_display + 0x5bb8 + 8 * view_section` with `view_section` (`0x08ab10a0`) the section the view publishes
+([section-view-cull.md](section-view-cull.md), [clouds.md](clouds.md)). So a craft whose section the viewer's authored
+row does not reach (round a corner, behind a hill) has no tag; there is **no frustum half** in this gate, only the mask.
+The earlier reading "visible in this view, viewport mask" (confidence 50) is replaced. The signature Ghidra shows
+(`FUN_0883e37c(void)`) lost its argument: the craft is passed in `a0` and goes straight to `0x0883e434`.
+`0x0883e434` is renamed `Craft_GetSectionByte` at 68 (the `_q` is derived) (two lines of evidence: the live count along the circuit, and its
+use as a bit index below 64 against the section row).
+
+**Ours:** `oag_hud::player_tags` carries the law (`in_view_row`, `anchor`, the fade and alpha), `oag_raceplay`'s
+`player_tags` the wiring: the anchor is raised along world Y; a craft is tagged only where the viewer's section row
+(`oag_vex::pvs::TrackPvs::visible_from` of the viewer craft's section, the raw unpadded row, whatever `[graphics]
+pvs_culling` says) holds the target's section, a track that names no sections gates nothing, and a fade holds while the
+gate rejects. Tests: `crates/hud/src/player_tags/tests.rs`, `crates/game/tests/player_tags_ground_truth.rs`.
+**Chosen, not measured:** only the other person-flown craft are tagged (the original also tags AI craft, if a
+multiplayer race has any); the `Player N` fallback (the original's is one shared string); the viewer's section is the
+craft's own, as `Camera_UpdateSpectatorView` publishes it, not a chase camera's; the Concave warp on the tags is
+unread (their screen is not the `HUD` group). Not measured on the running game: a multiplayer race cannot be staged
+on PPSSPP here (no ad-hoc peer), and the `MPTag_HUD` object exists only in the three multiplayer constructors.

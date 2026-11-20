@@ -777,11 +777,17 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         zoom_ring: title.race.zoom_ring.or(borrowed_zoom),
         zoom_borrowed: borrowed_zoom.is_some(),
         capture_hud: options.hud,
+        hud_waits_for_go: title
+            .race
+            .hud_waits_for_go
+            .value
+            .contains(&options.mode.name()),
         hull_shake: title.race.hull_shake.map(|shake| shake.value),
         now_playing,
         world_clock_offset: options.world_clock_offset,
         gantry_seconds: options.gantry_seconds,
         camera_override: options.camera,
+        track_sections: visibility.as_ref().and_then(|v| v.pvs().cloned()),
     };
     let mut loaded = Loaded {
         started: None,
@@ -801,6 +807,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             gantry,
             adverts,
             zone_equaliser,
+            zone_equaliser_bars: title.adverts.is_some_and(|spec| spec.zone_equaliser_bars),
         },
         collision_model,
         sky_model,

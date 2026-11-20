@@ -137,7 +137,7 @@ use oag_ui::frontend::{Draw, Placed};
 use oag_ui::language::{CircuitNames, StringTable};
 use oag_ui::menu::{Frame, Layers, Picture, Skin};
 use oag_ui::pointer::{Pointer, contains};
-use oag_ui::screen::Image;
+use oag_ui::screen::{EntryClock, Image, entry_draw};
 
 use super::draw::{
     cell_title, centred_selector_draw, fill_draw, hex_slot_xy, image_draw, laps_line, medal_line,
@@ -148,6 +148,8 @@ use super::{CellSelection, Event, GridSelection, GridSummary, Layout, hex_rect};
 
 #[cfg(test)]
 mod cell_field_tests;
+#[cfg(test)]
+mod cell_rearm_tests;
 #[cfg(test)]
 mod target_rows_tests;
 #[cfg(test)]
@@ -166,6 +168,13 @@ use unlock::{POINTS_GROUP, UnlockKind, unlock_box};
 // directly already is.
 #[allow(unused_imports)]
 use medal::{hd_difficulty_id, hd_medal_frame, hd_target_title, hd_tinted_medal_draw};
+
+/// An ordinary image as the page shows it `entry` after it became current: its `vwipe`, when it
+/// authors one, waits its `delay` and ramps (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`,
+/// "Page entry"); nothing while it waits.
+fn wiped(image: &Image, placed: Placed, entry: EntryClock) -> Option<Draw> {
+    entry_draw(image.wipe, entry.seconds(), image_draw(image, placed))
+}
 
 /// HD's own page title idstring - `<Text name="ScreenTitle"><Values idstring="FE_RC">`,
 /// distinct from Pulse's `FE_RACE_CAM` (`crate::campaign::draw::grid_draw_list`'s
@@ -253,7 +262,7 @@ pub fn hd_grid_draw_list(
             let Some(placed) = sprites(&logo.src) else {
                 continue;
             };
-            out.push(image_draw(&logo, placed));
+            out.extend(wiped(&logo, placed, model.entry()));
             continue;
         }
         let Some(placed) = sprites(&image.src) else {
@@ -266,13 +275,17 @@ pub fn hd_grid_draw_list(
         {
             let mut arrow = image.clone();
             arrow.color = color;
-            out.push(image_draw(&arrow, placed));
+            out.extend(wiped(&arrow, placed, model.entry()));
             continue;
         }
-        out.push(image_draw(image, placed));
+        out.extend(wiped(image, placed, model.entry()));
     }
     if unlock.is_some() {
-        out.extend(cell_brackets::draws(&screen.brackets, sprites));
+        out.extend(cell_brackets::draws(
+            &screen.brackets,
+            sprites,
+            model.entry().seconds(),
+        ));
     }
     let Some(selected) = model.selected() else {
         layers.body = out;
@@ -415,7 +428,20 @@ pub fn hd_cell_draw_list(
     // unlocked tier: how many points the tier still needs to open the next
     // grid, over the next grid's logo. Nothing once the tier's own figure
     // is met or when there is no next grid.
-    out.extend(cell_brackets::draws(&screen.brackets, sprites));
+    // A bracket inside a re-armed widget counts from that arming (the entry hold, then each cell
+    // or rung change); the target rows' own brackets from the page's entry.
+    let armed = cell_emblems::since_armed(model.entry(), model.refreshed_at());
+    out.extend(cell_brackets::draws_by(
+        &screen.brackets,
+        sprites,
+        &|bracket| {
+            if cell_emblems::rearms_brackets(bracket.group.as_deref()) {
+                armed
+            } else {
+                model.entry().seconds()
+            }
+        },
+    ));
     out.extend(cell_emblems::rule(&screen.slots));
     let remaining = grid_summary
         .required_points
@@ -466,7 +492,7 @@ pub fn hd_cell_draw_list(
                 let mut logo = image.clone();
                 logo.src = super::flyer::logo_entry(next);
                 if let Some(placed) = sprites(&logo.src) {
-                    out.push(image_draw(&logo, placed));
+                    out.extend(wiped(&logo, placed, model.entry()));
                 }
                 continue;
             }
@@ -497,7 +523,7 @@ pub fn hd_cell_draw_list(
             }
             continue;
         }
-        out.push(image_draw(image, placed));
+        out.extend(wiped(image, placed, model.entry()));
     }
     let Some(cell) = model.selected() else {
         layers.body = out;
@@ -527,6 +553,7 @@ pub fn hd_cell_draw_list(
         cell,
         art.track_emblems,
         sprites,
+        cell_emblems::since_armed(model.entry(), model.refreshed_at()),
     ));
     let targets_visible = true;
     let targets = cell.targets_for_difficulty(model.difficulty());

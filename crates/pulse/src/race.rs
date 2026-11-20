@@ -44,6 +44,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_announcer: Some(ZONE_ANNOUNCER),
     eliminator_skin: Some(ships::ELIMINATOR_SKIN),
     countdown_voice: Some(COUNTDOWN_VOICE),
+    hud_waits_for_go: oag_title::pre_race::Sourced::chosen(&[]),
     launch_hover: None,
     hover_rig: None,
     zone_hover_rig: Some(&ZONE_HOVER_RIG),
@@ -67,6 +68,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: None,
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
     // `Additional_Definition.xml`'s `Settings` screen on the PSP discs (USA and EU) lists

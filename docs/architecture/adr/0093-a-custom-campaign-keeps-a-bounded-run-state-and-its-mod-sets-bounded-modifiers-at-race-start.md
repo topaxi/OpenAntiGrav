@@ -6,8 +6,8 @@
 
 **Accepted** (2026-11-20, by the maintainer, after the review of
 `progression-challenge.md`; proposed 2026-11-19). Nothing is built. Immutable once
-merged into `main`; to be merged after decision 11 links the general atomic-write
-ADR.
+merged into `main`. Decision 11's prerequisite is
+[ADR-0095](0095-every-file-under-the-profile-folder-is-written-atomically.md), Accepted and built.
 
 **Narrows** these statements without editing them, as
 [ADR-0080](0080-a-wasm-mod-may-own-a-screen-and-save-a-small-blob.md) narrowed
@@ -222,7 +222,8 @@ breaks; it needs a combining rule for several slot tables and, once this ADR is 
     `progression.md` section 7.1.
 11. **Build order.** Prerequisite, owned outside this ADR: the records file is written
     atomically (temp file, then rename), a general rule for every profile file that the
-    maintainer moved to its own ADR (2026-11-20). Then: the ABI (revision 7, the
+    maintainer moved to its own ADR (2026-11-20):
+    [ADR-0095](0095-every-file-under-the-profile-folder-is-written-atomically.md), built 2026-11-20. Then: the ABI (revision 7, the
     SDK and the mod author skill); the run and its lifecycle, the first playable
     slice, where `race-end` picks the reward and the tick applies it through built
     commands; modifiers (`Launch` and `TopEnd` after their ground truths); pickup

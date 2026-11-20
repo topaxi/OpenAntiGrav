@@ -405,7 +405,8 @@ mod emissive;
 pub use emissive::{
     ALPHA_EMISSIVE_SPECULAR_MAP, Emissive, PROGRAM_BILLBOARD, PROGRAM_BW_GLASS, PROGRAM_CHEVRON,
     PROGRAM_CROWD, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_ICE_GLASS,
-    PROGRAM_PANEL_MAP, PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_SHIELD_LIGHTNING,
+    PROGRAM_OMEGA_ROCK, PROGRAM_OMEGA_SNOW, PROGRAM_PANEL_MAP, PROGRAM_PICTURE_ADD,
+    PROGRAM_PICTURE_ALPHA_EMISSIVE, PROGRAM_REFLECT_MAP, PROGRAM_SHIELD_LIGHTNING,
     PROGRAM_SHINE_MASK, PROGRAM_SNOW, PROGRAM_STATIC_HOLOGRAM, PROGRAM_TARMAC, PROGRAM_TWIN_BLEND,
     PROGRAM_UV_OVERLAY, PROGRAM_VERTEX_BLEND, PROGRAM_WATER, REFLECTION_RATE,
     WINDOW_REFLECTION_RATE, ZONE_EXEMPT_RATE,
@@ -873,19 +874,32 @@ fn build_class(
                                 n
                             }
                         }),
-                        colour: v.colour.map_or([0.75, 0.78, 0.82, 1.0], |c| {
-                            [
-                                f32::from(c[0]) / 255.0,
-                                f32::from(c[1]) / 255.0,
-                                f32::from(c[2]) / 255.0,
-                                f32::from(c[3]) / 255.0,
-                            ]
-                        }),
+                        colour: v.colour.map_or_else(
+                            || {
+                                if v.normal.is_some() {
+                                    [0.75, 0.78, 0.82, 1.0]
+                                } else {
+                                    [1.0; 4]
+                                }
+                            },
+                            |c| {
+                                [
+                                    f32::from(c[0]) / 255.0,
+                                    f32::from(c[1]) / 255.0,
+                                    f32::from(c[2]) / 255.0,
+                                    f32::from(c[3]) / 255.0,
+                                ]
+                            },
+                        ),
                         texcoord: v.texcoord.unwrap_or([0.0, 0.0]),
                         // No PSP or PS2 model authors a lightmap; the white 1x1
                         // bound for them makes the shader's multiply identity.
                         lightmap_texcoord: [0.0, 0.0],
-                        lit: if v.colour.is_some() { 0.0 } else { 1.0 },
+                        lit: if v.colour.is_some() || v.normal.is_none() {
+                            0.0
+                        } else {
+                            1.0
+                        },
                         anim,
                         xform,
                         sun_mask: 1.0,

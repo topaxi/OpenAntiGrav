@@ -31,7 +31,7 @@ for the other half now reads:
   2. `Sound_PlayBankCue(*0x00b6cc28, "HBEAT", 0x400, ...)` at `0x000567f8`: the dry path, the name at
      `0x0077cbe8` (`'HBEAT'`, a heartbeat cue in the same speech banks, `HBEAT` is in `speech.bnk`,
      `speech_zone.bnk`, `speech_elim.bnk`, `speech_zbattle.bnk` and `speech_det.bnk`).
-  It then resets the HUD (`0x000cf970` per player) and stores the phase (`+0x1970`).
+  It then calls `0x000cf970` per player, which stops and frees four sound handles (`+0x5f00`..`+0x5f0c`; not a HUD reset, [hud-start-gate.md](hud-start-gate.md)), and stores the phase (`+0x1970`).
 - **Phase 2** (`0x000566bc`) calls `0x003048c0(8)` and `0x000a4d18(2)` and plays **no cue**: neither `go` nor
   `LAUNCHSEQ` is started here.
 - The strings `ready` and `HBEAT` sit beside `RaceManager.cpp` in the string pool, and `scripts/ps3-toc.py attrib`

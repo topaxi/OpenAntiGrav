@@ -169,8 +169,9 @@ the engine's own reader: 46,005 entries over the nine archives (`data00` 10,926,
   (shield bar colours, arcs), `shield_percent`, `message_slots` are HD's
   readings; every name they carry is authored by Omega's layouts
   (`the_widget_names_title_data_inherits_are_authored_by_omegas_layouts`), which
-  proves the names match, not the values. `zone_speed_classes` is `None`: the
-  Zone ladder draws no class text.
+  proves the names match, not the values. `zone_speed_classes` is Omega's own table off its
+  executable ([zone-speed-class-ladder.md](../ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md)): an
+  HD-lineage Zone race draws `FLASH` beside zone 5 and `SUB-RAPIER` on the next-class row, as the original's frame does.
 
 Frames, 1920x1080, `--race --ticks 700/900/1500` on `data/extracted/ps4`:
 time trial, two moments: the timers move; Arcade; zone;
@@ -995,7 +996,7 @@ The three changes, each with what it rests on:
      17 / 22,527 triangles / 5 materials and 15 / 29,643 / 4, **identical** to
      2048's ports of them (vertex counts differ - Omega re-welded them). All
      the 1,272 Omega `.rcsmodel` entries all decode, with 90 unpaired pointers in total
-     (82 in the crowd rigs, 2 on `sol`, 6 in the front-end scenes). The Vita
+     (82 in the crowd rigs and `start.rcsmodel`, **closed 2026-11-20** by a fourth PS4 record shape: 8 remain, 2 on `sol`, 6 in the front-end scenes). The Vita
      corpus is unaffected by construction: a gap is only consulted for a site
      no known gap paired, and no Vita site goes unpaired.
    - *Materials, by the header's own table - confidence 95 (was 75, by name
@@ -1421,7 +1422,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   which renders brighter (0.375 -> 0.461 mean luminance, 0.43 % -> 1.65 %
   clipped) and plausible. The Zone rig rebuild (`ZoneGrade::light`) now carries
   the Omega flag through, though Omega ships no Zone palette today
-  (`zone_palette: None`), so no Omega Zone race reaches it.
+  (`zone_palette: None`), so no Omega Zone race reaches it. (2026-11-19: an HD-lineage circuit does take
+  HD's title-wide table through `ZONE_FALLBACK`; Omega's own ladder was read and is HD's, so zone 5 is stage 4,
+  see [zone-speed-class-ladder.md](../ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md).)
 
   Read by eye (`*-before-after.png`): Tech De Ra's blown-white upper walls now
   carry panel shading, and Anulpha Pass's walls and floor take a deeper baked
@@ -1632,7 +1635,8 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `PROGRAM_TARMAC` (14) selects the combine in `shade.wesl`; the markings pair rides `texcoord2`
   and the dirt pair `colour.xy` (`colour.zw` = 1, tint forced white on the mode) because the
   vertex has no fourth pair. **Not wired:** `tarmac_dirt` and `tarmac_dirt_emissive`, the specular
-  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`.
+  weighting by `MarkingsSpec`, the roads' normal-map blend with `MarkingsNormal`. (The shadow-light factor is wired since
+  `omega-2048-road`; the lobe is read and waits for the track's shadow term: "The tarmac roads' lit programs" below.)
   **Result on `arena-2048`** (private copy of the pair, recorded flags, 1920 x 1080; mean RGB of
   the three boxes): original (86,122,114) (131,138,128) (124,132,123); before this change
   (74,115,108) (139,147,137) (95,129,120); after (72,111,105) (117,125,118) (83,114,107). The
@@ -1686,8 +1690,9 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   shadow direction`, no debug gates; `shadowCoeffs` and `CastShipShadows` are
   Omega's own), `original` stays `Unbuilt` - [ship-shadows.md](../ghidra/functions/vita-2048-eu-v104/ship-shadows.md).
 - **`.EnvSettings` is read through 2048's reader** and its sun colour was read
-  as the diffuse colour alone (above). The
-  patch's copy carries no HDR/bloom block, so the read bloom chain is off.
+  as the diffuse colour alone (above). The patch's `data08` copy does carry the
+  `Bloom.*`, `BloomHDR.*` and `Tonemap*.*` blocks (read 2026-11-20, `omega-frame-offset`; the earlier "no HDR/bloom block"
+  meant none under HD's key names), and the chain is drawn since 2026-11-04.
 - **Music plays** (`omega-music`, 2026-10-05): a race plays 17 of the 29
   `PI_Music` songs, the front end plays its own loop. A song is a Wwise
   `Music_Track` state: `Set_Music_Track_<location>__frontend` sets it, the
@@ -2335,7 +2340,10 @@ Ranked, by what each would remove:
    `Sky height offset`, `Sky scale` and `Sky brightness` at `+0x158`, `+0x15c` and `+0x160` of the object
    `FUN_015eda20` fills (the `LEA RSI` before each key's `LEA RDX` at `0x015edcee` to `0x015edd43`; confidence 75 for
    the offsets); the consumer was not found (the function has over 50 callers). Scaling the dome by it, linear or
-   gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired.
+   gamma, moves the five by -2.4 to +4.6 raw grey with mixed signs: not wired. **Read since**: its consumer is the dome's pixel program, `SkyBrightness * texture` in linear light,
+   and the gain is wired for Omega ("The sky dome's pixel program"); re-measured with it, three of the ten 2048-mode pairs improve by a
+   grey or more (Sol 32.71 to 29.57, Queens Mall 43.72 to 42.58, Empire Climb 44.97 to 43.94), four do not move, two move by 0.01 and
+   Metro Park gets worse by 0.22.
 4. **The crowd sprites draw white**: Sol's stands +112 against the original, Queens Mall +57, Subway +68, Arena +64;
    drawing no sprite at all takes Sol from 45.55 to 42.48. **Half read** (2026-11-16, `omega-crowd-shadowed`): the
    `_shadow` materials are lit by their `Shadowed` and `Ambient` (below) and moved; the plain
@@ -2402,6 +2410,56 @@ normal-map `N.L`) are still unread. The diagnostic of giving the plain sprite th
 (`0.12178`, `0.777`) reached Sol +39.7 and Queens Mall +6.4, which the lane alone now matches, so that stand-in is
 not needed.
 
+**The plain crowd's light inputs, read (2026-11-20, `omega-crowd-light`): the program is ours' formula; the inputs are not
+readable statically.** Three different things sit under the old "crowd region" number, and only one is a plain sprite:
+
+- **Sol** (`environments2048/sol`): the plain `crowd_sprite_diffuse_normal_alpha` is 780 triangles in two instances
+  (`#345` 9 submeshes, `#346` 3, both with no parameter): the few tall foreground figures. The 128,452-triangle dense
+  crowd is the `_shadow` sprite. **Empire Climb** (`tower`) has no `_shadow` material: its crowd is the 3D
+  `crowd_diffuse_normal` (335,577 triangles) and 2,155 plain sprite triangles. **Capital Reach** (`bridge`) is the
+  `_shadow` pair and 944 plain sprite triangles; its crowd is 0.0 % of the frame (716 px), under the pose mismatch
+  of item 5, so it cannot judge a change.
+- **Program** (`gcn_dump` of the material, `Shdr` `0x41a4` sprite and `0x3c04` `crowd_diffuse_normal`, confidence 92): both
+  are `T * (constantAmbientColour + liveLighting0diffuse * sat(N.L))` under fog, `N = nx T + ny B + nz V` from the
+  vertex program's own frame (`0x3bc4`: `B = cross(N0, T) * tangent.w * worldScaleInv`, `V = eye - position`; this lane first
+  read the third axis as the vertex normal `N0`, corrected in "The crowd sprite's frame" below), normalised, `N.L` in world
+  space. `0x3c04` **never reads the diffuse alpha** (`dmask:0x7`) and has no kill: `crowd_diffuse_normal`'s alpha is
+  its "specular in alpha" lane, not coverage. A probe that routed the plain materials through the `_shadow` path with
+  `Shadowed = 1`, `Ambient = 0` (the same formula without the generic path's prelit, vertex-light and mask terms)
+  left every pixel of all three pairs unchanged: **ours' generic path already computes the program**, so the
+  discrepancy is in what it is fed. The static candidates for a permutation are `0x41a4` (sun), `0x4f44` (plus one
+  vertex light) and the SH-probe twin `0x7904`; probes are per craft slot (`hull-tone.md`, "The probe file"), so a
+  static crowd draw does not take it.
+- **Per material, signed bias (ours minus theirs, grey, pixels owned by that material's skip render, masks pinned
+  from the committed build), `mean|err|`** at 1920x1080: Sol plain sprite 15,198 px **+64.5, 78.9** (ours 111.1, theirs
+  46.6); Sol `_shadow` sprite 11,955 px +9.4, 40.7; Sol `crowd_diffuse_normal` 344 px +32.8, 79.2; Empire plain sprite
+  6,420 px -6.0, 44.0; Empire `crowd_diffuse_normal` 8,441 px **-51.2, 69.9** (ours 45.3, theirs 96.5); Capital
+  `_shadow` 454 px -86.9, 88.1. The merged crowd-region numbers of the alpha-lane lane (Sol +38.2, Empire -37.2,
+  Capital -55.8) are weighted sums of these.
+- **Sol, what ours draws** (debug renders of `N.L`, the bound ambient and sun, the raw normal-map and diffuse taps,
+  the frame's `fract(uv)`): every plain-sprite figure is either fully sun-lit or fully dark (`N.L` is near 1 or near 0
+  per figure, 15,198 px with 2,351 of them at 231 grey against the original's 51), the sun term is
+  `(7.6, 5.4, 3.7) * N.L` against an ambient near 0.8, and the original draws none of them sun-lit. Scaling the
+  plain sum by the `_shadow` sprite's `Shadowed` 0.1 gives Sol plain +64.5 to -11.1, so the original's plain sprites
+  carry about a tenth of ours' light on this circuit; negating `N.L` gives +52.1 and moves Empire's plain sprite
+  -6.0 to -14.9 (not the law). Both are diagnostics, not wired. The atlas (`crowd_avatars_22x4`, BC7 sRGB; its `_n`
+  BC7 UNORM, `2x - 1`) decodes to real figures and normals, so it is not a texture fault. **Open and odd:** a set of
+  plain-sprite figures (1,287 white pixels that the plain skip render removes) did not respond to any debug return
+  placed at the end of the lit stage, while the `Shadowed` probe darkened them: they take another route through the
+  fragment function than the lit sum. That is the first thing to chase.
+- **Empire Climb is not a crowd program.** The non-crowd structure beside the crowd (the same 8 px-dilated band, the
+  crowd masks removed) is ours / theirs 0.69 against the crowd's 0.61, and the frame's sky is -64.7: the dimness is
+  the scene-wide exposure and sun, the thread `omega-hd-exposure` works. It is not claimed for the crowd.
+- **What would settle the inputs: a live read of the crowd draw's constant block.** The pixel block is `dw0
+  constantAmbientColour`, `dw4 liveLighting0diffuse`, `dw8 liveLighting0direction`, `dw12 fogColour`, `dw16
+  fadeResCoeffs` (80 bytes; many prop programs share it). On the native port (`scripts/wipeout-pc-road-sheen-live.py`'s
+  walk to a 2048 grid, `--game-mode 2048 --track-steps 6 --class-steps 2` for Sol) find the staged copies by Sol's
+  exact `liveLighting0direction` followed after four bytes by `fogColour` and read the three floats at `dw0` and `dw4`:
+  they say whether the crowd's sun and ambient are per draw or the global frame constants. Global means the cause is
+  ours' `N` or a route, per draw means a per-object light the engine computes. **Run 2026-11-20 (`omega-crowd-live`): global, and equal to ours' ([below](#crowd-and-scene-light-inputs-read-live-2026-11-20-omega-crowd-live)).**
+- **2048: checked, differs** (as below: Vita draws crowds through `fc06_lambert_alpha`/`fc08_effects_crowd`). Omega
+  ships a PS4 `fc08_effects_crowd` on Sol (336 triangles, 120 px, bias +9.6) whose program is unread.
+
 **2048 (Vita) crowd: checked, differs.** Vita's circuits (`data/art/published/environments/<circuit>/track.rcsmodel`,
 Sol, Queens Mall, Altima, Arena read with `psp2_material_dump`) draw their crowds through `fc06_lambert_alpha` and
 `fc08_effects_crowd` (technique names `CrowdGenShader_crowd_avatars_22x4SG`), not a `crowd_sprite_*` or `crowd_*` material,
@@ -2411,6 +2469,457 @@ and none of those materials authors `Shadowed` or `Ambient` (the only parameters
 **2048 (Vita) lineage of the leading cause.** The road families are **checked, differs**: 2048's roads are
 `fc16_phong_alphaspec_normal_emissive` with `track_a_floor_ds` (above, "Altima's road drew flat pink") and carry no
 `tarmac_*` material (the tarmac section above), so neither Omega road program has a 2048 counterpart to read.
+
+## Crowd and scene light inputs, read live (2026-11-20, `omega-crowd-live`)
+
+**Claim tested:** the light inputs bound to Sol's crowd draws (`constantAmbientColour`, `liveLighting0diffuse` and its
+direction, `Shadowed`, `Ambient`) can be read from the original, and the sky and fog inputs on Sebenco Climb where
+reachable; each equals what ours binds or differs by a stated factor. **Read: yes. Result: equal, ratio 1.000 on every
+input, on both circuits.** The plain crowd's dimness (Sol +64.5, the figures lit all or nothing) is therefore not the
+bound ambient, sun or `Shadowed`.
+
+**Method** (`scripts/wipeout-pc-crowd-light-live.py`, reads only; walk and rig as `wipeout-pc-omega-pair.py`, seat 2, about
+150 s a boot). The port is frozen with `SIGSTOP` when the walk's grab loop ends (about five or six grabs after the HUD shows, still before GO: TOTAL reads `0.00.00` in `frozen.png`) and its guest memory is read through
+`/proc/<pid>/mem`: (1) the frame-constant table (an entry is `~crc32(name)` with the value pointer at `+0x10`, as in
+`wipeout-pc-road-sheen-live.py`; 125 to 420 entries per name across boots, the most common pointer into the image or heap is the
+live one, a stale entry reads junk in its fourth lane); (2) every copy of the live `fogColour` xyz in memory, dumped with the
+64 bytes before it and the 48 after it. The `_shadow` crowd sprite's pixel constant block is 96 bytes
+(`gcn_dump Crowd_Sprite_Diffuse_Normal_Alpha_Shadow` `0x21e4`, 122 instructions): `dw0 Shadowed`, `dw1-3 Ambient`,
+`dw4 constantAmbientColour`, `dw8 liveLighting0diffuse`, `dw12 liveLighting0direction`, `dw16 fogColour`, `dw20
+fadeResCoeffs`; the plain programs (`0x41a4`, `0x3c04`) are its last 80 bytes. A block that starts with Sol's authored
+`Shadowed 0.12178` and `Ambient 0.776742` is therefore the crowd sprite's by construction.
+Written before the capture: "global" is falsified by a staged block whose `dw4`, `dw8` or `dw12` differs from the table,
+"equal" by a value outside 0.92 to 1.08 of ours' per channel.
+
+**Sol (`environments2048/sol`, 2048 mode, speed class A), original against ours' bound value** (ours: `authored_light`
+passes the file's `Lighting.*` keys through unchanged; the sun is colour times `Sun diffuse intensity`; **measured**, not only read: `oag_raceplay::load` of `environments2048\sol` gives `ambient [0.8, 1.0, 1.2]`, `sun [7.608, 5.352, 3.72]`, `dir [-0.105345, 0.574048, -0.812017]`, `sun_specular [6.096, 3.2627, 1.6]`, and of `environments\10_sebenco_climb` `ambient [0.1804, 0.2275, 0.3529]`, `sun [0.3, 0.3, 0.3]`, `dir [-0.31888, 0.93355, -0.16370]`, `sun_specular [12, 12, 12]`, both with `output_scale 1`, because Omega leaves `lit_output_halved` unread; a one-off test, not kept):
+
+| Input | Original, live | Ours (file) | Ratio |
+| --- | --- | --- | --- |
+| `constantAmbientColour` | `0.8, 1.0, 1.2` | `Constant ambient colour` `0.8 1 1.2` | 1.000 |
+| `liveLighting0diffuse` | `7.608, 5.352, 3.72` | `0.951 0.669 0.465` times `8` | 1.000 |
+| `liveLighting0direction` | `-0.10534, 0.57405, -0.81202` | `Sun direction`, normalised | 1.000 |
+| `liveLighting0specular` | `6.096, 3.2627, 1.6` | `Sun specular colour` times `1` | 1.000 |
+| `shadowLightDirection` | `0.79075, -0.37501, -0.48381` | `ShadowLight direction` `0.79073 -0.375 -0.4838` | 1.000 |
+| `fogColour` | `0.34, 0.49, 0.566`, `w 0.00012` | `Fog colour` `0.34 0.49 0.566 0.000117` | 1.000 |
+| crowd sprite `Shadowed`, `Ambient` | `0.12178`, `0.77674` x3 | the material records `0.12178`, `0.776742` | 1.000 |
+
+The crowd sprite's block was found 54 times (boot A) and 52 times (boot B), 8 and 9 of them with the main view's
+`fadeResCoeffs`: every one carries `constantAmbientColour 0.8 1 1.2`, `liveLighting0diffuse 7.608 5.352 3.72` and the
+frame direction. **There is no per-draw light**: among the plain-layout blocks (the frame direction before `fogColour`)
+of the main view, the ones that differ are the hull's probe blocks (`probeOffsetAndDiffuse` `x/8, K, K` in the slot where
+the plain layout has the ambient), offset copies of them, and junk. One further `constantAmbientColour`, `0.5, 0.8, 1.0`
+(114 and 123 blocks, the same sun), appears only with `fadeResCoeffs (100, 0.0333, 0.00391, 0.00391)`, the 256 x 256
+pass (its `zw` is `1/256`; the main view's `(40000, 0, 0.00052, 0.00093)` is `1/1920, 1/1080`): a probe or reflection
+capture with its own ambient, not the picture. The same `fadeResCoeffs` pair splits the crowd sprite's own blocks 46/8 and
+43/9 between the 256 pass and the main view. A second `Shadowed 0.2`, `Ambient 0.0688 0.1199 0.183` block (78 + 14
+copies, same frame constants) is another crowd material on the circuit; 46 `Shadowed 0.2` records exist.
+
+**Sebenco Climb (HD mode, `10_sebenco_climb`), three boots** (the third after the pointer filter below):
+
+| Input | Original, live | Ours (file) | Ratio |
+| --- | --- | --- | --- |
+| `constantAmbientColour` | `0.18039, 0.22745, 0.35294` | `Constant ambient colour` | 1.000 |
+| `liveLighting0diffuse` | `0.3, 0.3, 0.3` | `Sun diffuse colour 1 1 1` times `0.3` | 1.000 |
+| `liveLighting0direction` | `-0.31888, 0.93355, -0.1637` | `Sun direction` | 1.000 |
+| `liveLighting0specular` | `12, 12, 12` | `4 4 4` times `3` | 1.000 |
+| `fogColour` | `0.64639, 1.18384, 1.85203`, `w 0.0005` | `Fog colour` (HDR, above 1) | 1.000 |
+| lighting object at `0x800eb2898` | `Sky height offset -85.102`, `Sky scale 3.13`, `Sky brightness 1.51`, `Ship diffuse brightness 0.5` | the same four keys | 1.000 |
+
+Staged plain-layout blocks carry the same values (5,975, 5,480 and 4,402 blocks with the frame ambient, sun and
+direction in the three boots). So the 2.3 to 2.5 times sky, the 1.4 stands and the 1.6 stripe road of the luma read are **not** carried by
+any bound ambient, sun, direction, specular, fog colour or `Sky brightness` value: ours feeds the same numbers. The HDR fog
+colour (`1.18, 1.85`) reaches the pixel constant unclamped, so a clamp, if there is one, is in a program or in the target,
+not in the constant. What differs is therefore inside the programs and their textures: the sky material's program and the
+sky cube, the consumers of `Sky brightness` and `Fog colour` (still unread in the 1.07 eboot), and for the crowd the
+normal `N` the lit sum is given.
+
+**What this leaves for the Sol plain sprite.** The program is ours' formula and its inputs are ours' inputs, so the
+original's "no figure sun-lit" and ours' "each figure fully lit or fully dark" come from `N.L`: the normal-map decode, the
+vertex program's TBN (`0x3bc4`, `worldScaleInv`), the world matrix of the crowd instances, or the permutation the draw
+selects (`0x41a4` against `0x4f44`/`0x7904`). The next read is the crowd draw's **vertex** constant block (`world`,
+`worldScaleInv`, `eyePositionWorldSpace`), found the same way (a copy of Sol's `worldScaleInv` followed by `fogColour`).
+
+**Also answers the Omega 2048 road's globals.** The panel-map road programs read the same frame constants; on Sol they
+equal the file's (sun, specular, ambient, `ShadowLight` direction, fog). The road's material parameters are separate.
+
+**Confidence.** The frame constants equal the file's authored values: 92 (two Sol boots, three Sebenco boots, the table and
+thousands of staged copies agree). The `_shadow` crowd sprite's draw reads exactly these: 80 (identified by the staged
+block's `Shadowed`/`Ambient` prefix, 8 and 9 copies with the main view's fade; a copy in memory is a staging copy, not a
+captured bind). The **plain** sprite (`0x41a4`, the `+64.5` figures) has no prefix to identify its block: its inputs are
+inferred from every main-view plain-layout block carrying the frame constants, 70. That ours' loaded rig holds the same
+numbers: 92 (measured from `Loaded.light` above; the shader's own use of it is the earlier debug render's
+`(7.6, 5.4, 3.7)` and the code read of `shade.wesl`'s crowd path). One caution on the table
+read: a hit of the hash that is not an entry can sit in the most common pointer (boot B of Sebenco picked a pointer that
+reads zeros); the script keeps only pointers into the image or heap, and the staged blocks, which do not depend on it,
+agree.
+
+**2048: checked, differs.** Vita's crowds are `fc06_lambert_alpha`/`fc08_effects_crowd` (no `Shadowed`/`Ambient`); the
+read is of Omega's native port, and Vita3K's constants for them were not read. HD: the front end and the sky/fog consumers
+are the open part, not checked here.
+
+## The crowd sprite's frame (2026-11-20, `omega-crowd-normal`)
+
+**Claim tested:** the plain crowd sprites on Sol are lit the way the original lights them because ours builds their normal by the route their vertex program uses. **Half true.** The route is read and wired (the programs take the eye vector, not the vertex normal, as the map's `z` axis); the Sol plain-sprite box moves from +64.5 to +47.6, not to 0, and **the white silhouettes that make that box look wrong are not that material's pixels** (below).
+
+**The route** (`gcn_dump` of `Crowd_Sprite_Diffuse_Normal_Alpha`, `oag_rcs::gcn::third_axis_is_eye`, confidence 85). Vertex program `0x3bc4` (base compile; the patch's `0x3ea4` is the same code with `eyePositionWorldSpace` in the second constant buffer, `ViewDep`) exports `param2 = cross(N_w, T_w) * tangent.w * worldScaleInv` (the bitangent), `param3 = eyePositionWorldSpace - world position` (three `v_sub_f32`), `param4 = N_w` and `param5 = T_w`. Pixel program `0x41a4` (the sun; `0x4f44` adds one vertex light, same frame) declares the vertex outputs in slots 0, 1, 2, 4, 5 (uv, bitangent, `param3`, `param5`, dead), not slot 3 (`param4`, the normal), and builds `N = nx * T + ny * B + nz * V` from the decoded `2t - 1` map: the `z` lane is multiplied by `attr3`, the interpolant of slot 2, which is `eye - position`. **The vertex normal is never read by the pixel program**; it only builds `B`. The normalised sum is dotted with `liveLighting0direction` as before. With the map's `z` near 1 the lit normal is the unit vector to the camera, bent by `x T + y B` over the camera distance (hundreds of units): each figure is lit as turned to the camera, which is why none shows its card's own facing.
+
+*How the slot is read, and why it is trusted.* A pixel `attrN` is the Nth entry of the program's input list (position first); an input's slot byte names the vertex output with the same slot byte; that output's `__atg_paramK` name is the `exp paramK` that carries it. Checked on the 12 shadow-receiving, specular and Nova permutations of the same two materials (`0x87c4`, `0x9704`, `0xa8c4`, `0xb9a4`, `0xca44`, `0xdd64` and the patch's six): in every one the `z` weight resolves to an export that depends on the `normal` input alone, and the two unshadowed ones resolve to an export that depends on `position` alone. A mapping that was wrong would not give twelve consistent frames. The dead slot is the last vertex output in both compiles (`param6` here, `param7` on the vertex-light variants), declared by the pixel program and never read. The vertex-program constant buffer is told from the descriptor registers it loads through (a vertex program's header usage records are unread): the distinct descriptor registers, ascending, against the buffers by API slot, ascending; refused when the counts differ (confidence 70, unit-checked on the patch compile's `ViewDep`).
+
+**Which materials.** `third_axis_is_eye` over a file's vertex and pixel pairs, **leaving out the permutations that read `shadowLightDirection`** (they weight `z` by the normal): `crowd_sprite_diffuse_normal_alpha`, `crowd_diffuse_normal` and their `_shadow` twins are eye on both compiles (2 pairs each, 2 eye); the skinned `_BoneCount4` crowd is not (0 of 3). The original picks the unshadowed permutation for the crowd draws: the `_shadow` sprite's staged pixel block is the 96-byte plain layout without `shadowLightDirection` (`omega-crowd-live`, confidence 80 for the `_shadow` sprite), and the plain materials are inferred to pick it too (70). **Not wired, and a lead:** the same census marks the unshadowed permutations of non-crowd props eye too (`Diffuse_Normal`, `tracktexture_with_normal`, `grassmudrock_blend_diffuse_normal_conditional`, `fc10_lambert_normal_alpha_uscroll`, `cb_treeleaf_normal`, `nr_crowd_bustle*`; ship materials in part). Applying the eye frame to every Omega normal-mapped draw as a probe moved Capital Reach 47.26 to 42.89 and Empire Climb 44.97 to 54.17, so it is not a general law until the permutation each draw takes is known; the crowd's is the one with evidence.
+
+**Wired** (`mesh::rcs::psp2::crowd`, `hull_normal.wesl`): a crowd material whose file reads eye gets a `PROGRAM_CROWD` entry with `offset = 1`; the plain materials are the `_shadow` twins' sum with `Shadowed = 1`, `Ambient = 0` (the earlier probe left every pixel unchanged, so no formula moves); `shade.wesl` takes `scene.fog.camera - in.world` as the frame's third axis where the entry says so (`hull_frame`). The loader report says `{n} with the eye frame`. Tests: `gcn_ground_truth::the_crowd_materials_weight_the_normal_maps_z_by_the_eye_vector` (both compiles, and the skinned crowd as the control), `omega_crowd_shadowed_check` (every crowd vertex of Sol, Queens Mall and Rockway carries the entry with the eye frame), `omega_crowd_lit_path::the_eye_frame_lights_a_figure_turned_away_as_if_it_faced_the_camera` (drop the shader's third axis and the figure reads dark).
+
+**Measured** (`scripts/compare-decompose.py`'s pair renders, 1920x1080, masks pinned per material from the committed build's skip renders; ours minus theirs, grey; before is main `6a33cf67d`):
+
+| Pair, material (pinned px) | Bias before | Bias after | Mean abs before | Mean abs after |
+| --- | ---: | ---: | ---: | ---: |
+| Sol plain sprite (15,198) | +64.5 | +47.6 | 78.9 | 64.0 |
+| Sol `_shadow` sprite (11,955) | +9.4 | +3.3 | 40.7 | 36.8 |
+| Sol `crowd_diffuse_normal` (344) | +32.8 | +11.5 | 79.2 | 67.4 |
+| Empire plain sprite (6,420) | -4.7 | -24.0 | 44.1 | 36.6 |
+| Empire `crowd_diffuse_normal` (8,441) | -49.9 | -54.8 | 69.3 | 67.8 |
+| Capital `_shadow` sprite (454) | -86.8 | -90.1 | 88.1 | 90.5 |
+| Whole frame mean abs: Sol / Empire / Capital | | | 32.71 / 44.97 / 47.26 | 32.54 / 44.94 / 47.26 |
+
+**"None in full sun" is not met:** under the Sol plain mask the pixels at or above 230 grey, the sun-lit figures (231 grey against the original's 51 in the earlier read), fall from 1,206 to 357, and 160 to 230 from 3,028 to 1,988; a figure still reads sun-lit where the eye is on the sun's side of its card. The mean absolute error falls on five of six boxes; the signed bias goes more negative where ours was already too dark (Empire, Capital: the scene-wide exposure of the thread `omega-hd-exposure`). Whole frames are within noise (under 0.3 grey). HD `hd-race/talons-pack` and `2048-vita/moa-therma`: 0 differing pixels before and after (the entry is built for a PS4 model only).
+
+**What the box cannot show.** Under the Sol plain-sprite mask the original is a flat 45 to 55 grey whatever ours draws there (binned by ours' value, theirs stays 45 to 55): the original's crowd stands in other places (the port randomises it boot to boot), so the mask holds ours' figures against the original's floor. The box is a bias of a placement difference as much as of lighting. **The white silhouettes** in the Sol frame (13,122 near-white pixels in the stands; **closed**: [the crowd-entity shapes](#the-crowd-entity-shapes-2026-11-20-omega-sol-silhouettes), `fc01_colour_emissive` placeholders, no longer drawn) are **in neither the plain nor the `_shadow` mask**, are untouched by `OAG_SKIP_MATERIAL=crowd` and by a debug return at the end of `lit_texel` for every `PROGRAM_CROWD` draw, and are not `fc06_lambert_emmissive_alpha`. They are another draw (the animated `Data\crowd` rigs are the first candidate: the skinned `_BoneCount4` materials, the one family `third_axis_is_eye` says is not eye, are not admitted by `crowd.rs`); finding which draw is the next read. The earlier lane's "1,287 white pixels that take another route" are **not** these: they were removed by the plain skip render, so they are plain-sprite pixels, and with a debug return at the end of `lit_texel` no pixel under the plain mask stays white (0 of 15,198 above 240 grey), so every in-mask pixel reaches the lit sum. The silhouettes are a separate draw outside every crowd mask.
+
+**Open:** the permutation the original takes for the plain sprite is unread (70); a live read would stage the pixel block of a plain sprite draw (the five-field layout) against the shadow-receiving one (`shadowLightDirection` between the direction and the fog).
+
+**2048 (Vita): checked, differs.** Vita draws crowds through `fc06_lambert_alpha` and `fc08_effects_crowd` (no `crowd_*` material), and its GXP programs' operands are unread, so the frame is not checkable there. HD (PS3): the hull programs build `N = nx T + ny B + nz N0` (`hd-ship-materials.md`, "Hull normal maps"); a Cg frame read for HD's crowd is not done.
+
+## The crowd-entity shapes (2026-11-20, `omega-sol-silhouettes`)
+
+**Claim tested:** the white silhouettes in Sol's stands (13,122 near-white pixels the original draws dark or as lit figures) are drawn the way the original draws them. **False as stated, and closed another way: they are placeholders the original does not draw, and Omega no longer draws them.** The original draws animated `Data\Crowd\Rigs` figures there; those are not loaded (open, below).
+
+**What draws them (confidence 90).** An `OAG_SKIP_SLOT` bisection over `Data\environments2048\sol\track.final.rcsmodel`'s 376 material slots (each half-skip rendered, the white count under the mask read) puts them in **slot 5, `shared/objectlibrary/materials/fc01_colour_emissive.rcsmaterial`**: no texture, one parameter `Colour` (hash `02ab9f07`) = `(1, 1, 0)`, 203 submeshes, 60,697 vertices, every one of them a mesh object named `trackcrowd:...crowdentityN_MShape`. Its program (`gcn_dump`, vertex `0x29c4`, 55 instructions, position only; pixel `0x2d64`) exports `mix(Colour, fogColour.rgb, fog)` with no sampler and no light: a flat placeholder colour. That is why `OAG_SKIP_MATERIAL=crowd` (needle on the material and texture paths), the tint switch and a `lit_texel` return did not touch them. The other slots whose skip drops the white count (4, 66, 105, 272, 331, 339, 0.6 to 5 kpx each) are real scenery whites (balloon, panel-map road, billboard) in the raw white mask, not the silhouettes.
+
+**The marker is the mesh object's flags, not a name (confidence 95).** Every crowd-entity shape carries `+0x0a` flags `0x0401`; the track's other mesh objects carry `0x0101` or `0x0201`, the crowd rigs `0x0306`, `LODs.rcsmodel`'s 119 shapes `0x0501`. Census over every `.rcsmodel` of `data00` to `data04`: **17,701 mesh objects carry `0x0401` and 17,701 are named `crowdentity`, the same objects** (319 on `data00`, 3,860 on `data01`, 11,104 on `data02`, none on `data03`, 2,418 on `data04`). Compared whole, not as a bit: `LODs.rcsmodel` has `0x0501`. `oag_rcs::rcsmodel::psp2::nodes::MeshObject::is_crowd_entity` reads it; `crates/raceplay/tests/omega_race_ground_truth.rs` (`check_crowd_entity_flag`, run in every archive's census) holds it.
+
+**What the original does with them (confidence 70).** Omega's track loader (`v1.07 eboot`, `FUN_0162a390`; strings at `0x01890cc1` `Data/Crowd/Rigs/`, `0x01890ce9` `|crowdentity%d|LOD1|LOD1Shape`, `0x01890dbf` `CrowdEntity`) first looks up sixty `|crowdentity%d|LOD1|LOD1Shape` and `LOD2Shape` mesh objects by hash in a library model (`LODs.rcsmodel`: 119 meshes), then walks the track model's mesh objects for a name containing `CrowdEntity`. For each it reads the digits and the `w`/`s` suffix letters to pick a crowd group, draws a random value for the instance, pushes an instance record (`FUN_0163d3c0`) and **clears draw bits of the object's runtime flag word (`& 0xfffffff9` when animated crowds are on, `& 0xfffffff8` when off)**. The bit meanings are not read, so the claim is: the loader replaces each entity with a rig instance and takes the placeholder out of the draw; it is not read what the flag word's bits are. The frames agree: at those positions the original shows lit coloured figures and no yellow or white flat shapes. The game has an option for it (`Animation.Animated crowd in split-screen`, `0x0188dbb0`).
+
+**Wired (Omega only).** `psp2::build` does not emit a submesh of a mesh object with `is_crowd_entity()` when the model is PS4's, counts them apart from `hidden` (`Report::crowd_entities`: Sol 203, Amphiseum 907, Vineta K 758). Each is replaced by a rig figure: [the crowd rigs](#the-crowd-rigs-2026-11-20-omega-crowd-rigs).
+
+**Boxes** (Sol, 1920x1080, ours minus theirs in grey; mask = the pixels `OAG_SKIP_SLOT=5` changes by more than 25 grey after the frame gain is divided out, outside the HUD boxes, pinned from the render before the change: 23,774 px, of which 7,967 are at or above 235 grey before):
+
+| mask | bias before | after | mean abs before | after |
+| --- | ---: | ---: | ---: | ---: |
+| slot-5 pixels (23,774) | +75.9 | -21.8 | 95.7 | 35.8 |
+| of them white before (7,967) | +200.7 | -13.6 | 200.8 | 38.2 |
+
+The brief's 13,122 was counted with a looser threshold on the whole frame; the raw `ours > 235 and ours - theirs > 60` mask is 15,571 px and holds 4 to 5 kpx of the balloon and the road. Whole frame 29.41 to 28.81 (bias -2.61 to -3.67). The 8 px ring around the mask is unchanged (mean abs 46.1 to 46.3). **What is left is not the placeholder's: ours is 22 grey too dark under the mask** (26.5 against 48.3), because the original draws rigs there and ours draws the dark stand. Across all 24 Omega race pairs the whole-frame mean abs against the original is flat or better (Metropia 32.30 to 31.17, Chenghou 27.36 to 26.71, Vineta K 25.77 to 24.82, Amphiseum 49.20 to 48.71, Moa Therma 35.95 to 35.29, Sol 29.41 to 28.81; Sebenco Climb +0.04, Modesto +0.02); `anulpha-pass`, `sol-2` and `zone-vineta-k-z5` draw no crowd entity and are pixel-identical. `hd-race/talons-pack` and `2048-vita/moa-therma`: 0 differing pixels.
+
+**Amphiseum.** The 907 grey node-bound people of the thread `omega-amphiseum-spectators-draw-grey-and-the-stands-stay-light` (the `emissive` material, `EmissiveColour` 0.5566) are these shapes: "a runtime swap per crowd entity" is the loader above. They no longer draw; each is replaced by a rig.
+
+**2048 (Vita): checked, differs.** Not one mesh object of any Vita archive (`data`, `dlc1`, `dlc2`, `data1`, `data2`) carries `0x0401` or the name `crowdentity` (0 of every parsed `.rcsmodel`; `vita_models_carry_no_crowd_entity_shapes`): its crowds are sprite materials, so nothing of this rule applies to a Vita frame. HD (PS3): not checked (a Cg model, no `psp2` reader); its crowds are `NR_crowd_bustle` materials.
+
+**Open.** Moved to [the crowd rigs](#the-crowd-rigs-2026-11-20-omega-crowd-rigs).
+
+## The crowd rigs (2026-11-20, `omega-crowd-rigs`)
+
+**Claim tested:** Omega's `Data/Crowd/Rigs` people stand at the track's `crowdentity` positions on Sol, as the original draws them, and under Sol's silhouette mask ours moves from 26.5 toward the original's 48.3. **Partly true.** A figure stands at each of Sol's 203, Amphiseum's 907 and Vineta K's 758 entities, in the bind pose; the mask mean and bias move toward the original (26.7 to 29.1 against 48.5, bias -21.7 to -19.3) and the mean absolute grey does not (35.8 to 36.8): the figures are thin, high-contrast and posed unlike the original's animated ones, so a pixel the empty stand matched by being dark is now a mismatched figure edge. The whole frame moves 28.65 to 28.66 (under the 0.3 noise floor). Steps 1 to 3 below landed; the clip does not play.
+
+**Step 1: the 82 unpaired pointers are the rigs' and `start.rcsmodel`'s (confidence 85).** 41 records, vertex pointer 200 bytes past the index pointer, the declaration two pointers deep: [`2048-rcsmodel.md`](2048-rcsmodel.md#omegas-skinned-record-a-fourth-gap-200-bytes-2026-11-20-omega-crowd-rigs). `data00` closes to 0 unpaired (625 files, 38,403 submeshes); the 40 rigs decode with weights summing to one, bone indices inside their skeleton and node ids equal to the skeleton's.
+
+**Which rig stands where (`FUN_0162a390`, v1.07 eboot; confidence 85, static read of the loader, its init table and strings, not a live instance).** The tail from `0x0163138a` loads 40 rigs, `Data/Crowd/Rigs/<name>` `.rcsmodel` and `.rcsskeleton`, named by the pointer table at `0x0198fb20` (strings from `0x01890af5`): slots 0 to 4 `Male01..05`, 5 to 9 `Female01..05`, 10 to 19 their `_Shadow` twins, 20 to 29 `Male06..10`, `Female06..10`, 30 to 39 their twins. Per mesh object it finds `CrowdEntity` by a case-insensitive scan, `sscanf`s the digits `N` (1 when none), looks for `s` and `w` among the two characters after the digits, and forms the group index `N - 1 + 15 * (s + 2 * w)`, clamped to 59. The 60-entry group table is written by `FUN_0163b720` (a static initialiser, `0x0201e500`, one `u32` pair per group: rig slot, clip): groups `0..14` are slots `0 1 1 2 2 3 3 4 4 0 5 6 7 8 9` with clips `0 0 1 1 2 2 3 3 4 4 5 5 5 5 5`, and each later block of 15 adds 10 to the slot (`s`: the shadow twin; `w`: the second texture group; both: the twin of that). **So the digits pick the person, `s` the shadowed twin and `w` the `06..10` set; nothing random picks the rig** (`rand()` draws the clip's start offset, below). On Sol: `6` is `Male04`, `9` `Male05`, `11` `Female01`, `14` `Female04`, and the 51 `s` entities their twins. The six clips (`FUN_0163d6f0` strings at `0x0201bf18`): `male_01_folded_arms`, `male_02_frontrow_aggressive`, `..._aggressive2`, `..._aggressive3`, `male_05_aggressive_long`, `female_05_cheering`. `psp2::crowd_rigs::group` and `rig_stem` replay this and are unit-tested against it; the plain rigs `male01..05` and `female01..05` share a geometry per gender and half (four shapes, 452, 565, 492 and 524 vertices), told apart by their UVs into `crowd_group_01d`/`02d`.
+
+**How it draws.** `psp2::crowd_rigs::instance` merges one rig submesh per entity into the decoded model before the build plans it: vertices times 100 (the skeleton's root bone is scale 100; the figures are 1.69 to 1.75 tall after it), node-bound to the entity's own node so the existing placement bakes its bind matrix (Sol's entities carry uniform scales of 2.28 to 2.41, and the placeholder is 1.74 tall in the node's space, so a figure is about 4 units tall), the rig's material appended to the table, `mesh` left `None` (so nothing reads the rig as the entity or a track shape) and the entity's mesh index carried as the draw's PVS chunk (it is culled with its placeholder). Confidence 70 for the placement: the frame agrees (figure heights on the right stand's front row match the original's within about 10 % by eye), and the instance record's reciprocal of the node's rms scale (`fVar25`, stored beside the group and the start offset) is **read and its use is not**. A hidden or unplaced entity node draws no rig, as its placeholder did not.
+
+**The skinned materials take the crowd program.** `Crowd_Diffuse_Normal_BoneCount4`, `..._NormalizeTS` and `Crowd_Diffuse_Normal_Shadow_BoneCount4_NormalizeTS` have the same pixel programs as their unskinned twins instruction for instruction (`gcn_dump --summary`: 52/119/125/115 for `_NormalizeTS`, 52/104/110/100 for the bare family, 60/128/131/123 shadowed) and vertex programs that add `skinPalette` and read `eyePositionWorldSpace`; `third_axis_is_eye` reads the skinned vertex programs as not eye-framed (its pattern does not see through the palette), so `psp2::crowd` treats the three names as eye-framed by that identity (confidence 80). Two disc quirks the census pins: `female09` ships the bare `Crowd_Diffuse_Normal_BoneCount4`, and `male07_shadow` the plain `_NormalizeTS` material, not the shadow one. `Shadowed`/`Ambient` come from the `_shadow` twin's own two parameters (a crowd entry carrying the `male01_shadow` rig's `Shadowed` is pinned in `omega_panel_map_ground_truth`).
+
+**Boxes** (Sol 1920x1080; mask = the pixels `OAG_SKIP_SLOT=5` changes by more than 25 grey on a build that draws the placeholders, **rebuilt**: 23,213 px, no frame-gain division, no HUD exclusion, against the previous report's 23,774; the same baseline reproduces its numbers to within 0.2: ours 26.7 against 26.5, theirs 48.5 against 48.3, mean abs 35.8):
+
+| | before | after |
+| --- | ---: | ---: |
+| ours, mean grey (theirs 48.5) | 26.7 | 29.1 |
+| ours minus theirs, bias | -21.7 | -19.3 |
+| mean absolute grey | 35.8 | 36.8 |
+| whole frame mean absolute grey | 28.65 | 28.66 |
+
+Before the crowd program was given to the skinned materials the same figures drew through the generic lit path: mask mean 41.6, bias -6.9, mean abs 43.7 (brighter, worse where it counts). **All 24 Omega race pairs** (before = this branch's binary with the rigs left out by a temporary environment switch, not `main`; all 1920x1080, `compare-rerender-ours` flags on copies of the pairs): `anulpha-pass`, `sol-2` and `zone-vineta-k-z5` are pixel-identical (no entity); 21 move, none by more than 0.13 grey of whole-frame mean absolute grey against the original (all under the 0.3 noise floor): better `modesto-heights` -0.13, `vineta-k` -0.05, `metropia` -0.04, `chenghou-project` -0.03, `talons-junction` -0.02, `subway-2048` -0.01; worse `the-amphiseum` +0.06, `moa-therma` +0.06, `altima-2048` +0.04, `queens-mall-2048` +0.03, `square-2048` +0.03, `tech-de-ra` +0.02, `empire-climb-2048` +0.02, `sebenco-climb` +0.02, `sol-2048` +0.01, `ubermall` +0.01, `metro-park-2048` +0.01; level `arena-2048`, `capital-reach-2048`, `downtown-2048`, `zone-capital-reach-2048-z5`. Pixels differing by more than 10 grey: 17.9 k on Modesto, 16.8 k Amphiseum, 15.9 k Vineta K, 14.7 k Moa Therma, 13.0 k Metropia. **`hd-race/talons-pack` and `2048-vita/moa-therma`: 0 differing pixels.**
+
+**Open (nothing here is a guess drawn as fact).**
+- **The pose.** Bind pose: arms out at about 30 degrees. The group's clip is unread in use: per-vertex skinning (the weights and indices are decoded, `SubMesh::skin_weights`) with a skeleton and clip frame (`rcsskeleton`, `rcsanimclip` read; `rig::NodeMotion::sample`) would pose a frozen frame on the CPU; playing it needs a palette in the vertex stage. The start offset is `-(rand * 4.5 + 0.5)`-shaped, from the pair `(5.0, 0.5)` at `0x0201bf4c` (the product `rand * -9.313226e-10` is `rand / 2^30`; the exact range is unread).
+- **The draw bits** `FUN_0162a390` clears on the placeholder's flag word at `+0x24` (`& 0xfffffff9` when animated crowds are on, `& 0xfffffff8` when off; the switch is `DAT_0201280c`/`DAT_02012811`/`DAT_02012810`/`DAT_02212c38`) are unread; with animated crowds off the loader pushes no instance and what draws in the placeholder's place is unknown (ours draws the rig in every case).
+- **Density.** The original's stands look fuller than ours at the same camera (hundreds of figures on Sol's left stand against about 100): whether one entity stands for more than one instance is unread.
+- **LODs.** `LODs.rcsmodel`'s 60 `LOD1`/`LOD2` quads per group are the distance shapes; unused.
+- **2048 (Vita): checked, differs.** 2048's base package lists no `crowd/rigs` path (0 hits of 18,430 entries), none of its `.rcsmodel` has a `0x0401` shape (`vita_models_carry_no_crowd_entity_shapes`) and no Vita file has a gap-200 pair; its crowds are sprite materials. **HD (PS3): checked, differs**: none of the seven `DATA00..06.PSARC` lists a `crowd/rigs` path (0 hits of 11,564 entries); its crowds are `NR_crowd_bustle` sprite materials.
+
+## The sky dome's pixel program (2026-11-20, `omega-sky-program`)
+
+**Claim tested:** Omega's HD-mode sky is drawn by the law its own sky and fog programs compute, so the two sky boxes improve
+(`omega/sebenco-climb` snow sky `1100,40,300,160`: theirs 162.3, ours 97.3, bias -65.0; `omega/modesto-heights` sky gap
+`800,160,240,100`: theirs 192.4, ours 156.4, bias -36.0). **Modesto's box: true. Sebenco's box: false for the sky program.** The dome is drawn by one tiny program,
+`SkyBrightness * texture`, which ours did not apply; wiring it cuts the sky-pixel mean absolute error on Moa, Sebenco and Modesto
+(38.4 to 13.5, 37.5 to 14.3, 43.4 to 33.8) and moves Modesto's box 156.4 to 207.7 (an overshoot, below). **Sebenco's box is not the dome**: the dome owns 15 % of its pixels, the snow
+mountain materials 48 % (below), so that box moves 97.3 to 100.1 only.
+
+**Census** (`OAG_SKIP_MATERIAL`, 1920x1080, a pixel counts when it changes by more than 25 grey): the dome (`skycube.rcsmodel`,
+six faces, `SkyCube.rcsmaterial` and its `_1`/`_2` twins) draws 79 % of Modesto's box, 15 % of Sebenco's and 1.6 % of
+Sebenco's frame (6.0 % of Modesto's, 1.5 % of Moa's). The rest of Sebenco's box is `RT_snow1` (a material needle `rt_snow`
+brightens the box 97 to 109 when skipped), the "snow" family as a whole 48 % of the box pixels. The dome material's pixel
+programs carry no fog and no vertex colour.
+
+**The program** (`gcn_dump data08.psarc data/environments/10_Sebenco_Climb/SkyCube/SkyCube.rcsmaterial --at 0x9e4`; the three
+pixel variants `@0x9e4`, `@0x1864`, `@0x2304` are the same 52 instructions, on `environments2048` and `modesto_heights` too;
+data02, data05 and data08 ship three revisions of it; confidence 90, decoded GCN, no run):
+
+```text
+t   = image_sample(Texture1Sampler, attr1.xy)              @0x2c, dmask 0x7
+out = SkyBrightness * t.rgb                                 @0xd0-@0xd8, mrt0 as f16
+```
+
+The rest is the two motion-vector targets (`mrt1`, `mrt2`: the position over `max(0.5, w)` against `fadeResCoeffs`). The face
+`.gnf` is BC7 `ChannelType::Srgb` (descriptor word `0x26900008`; 4096x4096 with mips by its 22,374,656 bytes), so the multiply is in linear light.
+`SkyBrightness` is **engine-bound, not material-authored**: the material table holds no record for it (its `~crc32` appears
+only in the three pixel programs' reflection, `@0xd50`, `@0x1bd0`, `@0x2670`). The lighting object's `Sky brightness` (`+0x160`,
+read live as 1.51 on Sebenco, equal to the key: "Crowd and scene light inputs, read live") is the candidate; the frame-constant
+table's own `SkyBrightness` entry was not read (**read recipe**: `scripts/wipeout-pc-crowd-light-live.py`'s table walk for
+`~crc32("SkyBrightness")`, or the staged 32-byte block with `SkyBrightness` at dw0 and the main view's `fadeResCoeffs`
+`(40000, 0, 1/1920, 1/1080)` at dw4 to dw7). The fit below is the evidence the two are equal (confidence 75).
+
+**Wired** (`omega-sky-program`): `Looks::sky_brightness` (Omega, `Measured`) and `psp2_sky_model` multiplying the dome's vertex
+colour by `SceneStore::texel_gain(Lighting.Sky brightness)`. The dome's shade is `decode(texel * colour)` in the gamma domain
+(`shade.wesl`, the stand-in path), so a linear gain `B` is carried as the sRGB encode of `B` (1.198 for 1.51, 1.428 for 2.264); that
+is exact at no texel and reads 1.9 % (1.51) and 3.4 % (2.264) low at a texel of 0.5, 6 % and 11 % low at 0.2, never high
+(`a_texel_gain_decodes_to_about_the_gain`). **An exact multiply after `decode` needs a per-draw field the uniform block has no
+free slot for** (34 test files mirror its layout); recorded as the follow-up. Tests: `omega_sky_brightness_ground_truth`
+(Sebenco of the HD lineage and Sol of the 2048 lineage: the loaded dome's vertex colour is the authored gain and the loader line names it),
+`texel_gain` unit test. The 2048 (Vita) dome keeps colour 1.0.
+
+**Measured, sky-only pixels** (the pixels `OAG_SKIP_MATERIAL=sky` changes by more than 25 grey, HUD boxes left out; mean grey,
+ours minus theirs; base to wired; theirs in brackets):
+
+| Pair | sky px | authored `Sky brightness` | bias | mean abs grey | mean RGB ours (theirs) |
+| --- | --- | --- | --- | --- | --- |
+| Moa Therma (control) | 1.48 % | 2.0 | -36.4 to -2.3 | 38.4 to 13.5 | 62.6/108.1/108.5 to 81.4/146.4/146.7 (95.1/145.9/143.1) |
+| Sebenco Climb | 1.57 % | 1.51 | -36.8 to -12.8 | 37.5 to 14.3 | 75.9/117.2/159.2 to 90.7/143.0/192.7 (111.0/154.2/199.8) |
+| Modesto Heights | 5.96 % | 2.264 | -14.5 to +23.1 | 43.4 to 33.8 | 121.4/142.1/169.3 to 158.7/180.9/196.2 (134.5/157.3/180.8) |
+
+**The two named boxes** (`compare` boxes, ours re-rendered at the pair's recorded flags; mean grey, bias ours minus theirs, mean absolute grey):
+
+| Box | theirs | ours before | ours after | bias before to after | mean abs before to after |
+| --- | --- | --- | --- | --- | --- |
+| Sebenco snow sky `1100,40,300,160` | 162.3 | 97.3 | 100.1 | -65.0 to -62.1 | 65.2 to 62.5 |
+| Modesto sky gap `800,160,240,100` | 192.4 | 156.4 | 207.7 | -36.0 to +15.2 | 46.0 to 30.9 |
+
+**Why Modesto overshoots, and why that is not the law.** Sebenco's tone map is pinned (`E` 0.555 and `t1` 0.612 equal ours'), so its
+sky is a direct read: the G and B channels land (143.0/192.7 against 154.2/199.8) and the red is short by 20 (the original's bloom
+adds the same light to every channel and a dark channel gains most after the curve; ours draws none there). On Modesto ours'
+exposure is `E` 0.868 against the original's 0.60 (the dim-scene symptom of the luma read), and an exposure forced to 0.6 on a
+prototype build (a temporary `Tonemap` override, not kept, with the gain `B^(1/2.4)` = 1.406, 1.5 % below the committed sRGB-encode
+factor 1.428, so the committed build reads about 2 to 3 grey higher) gives sky pixels 133.6/157.5/184.4 against 134.5/157.3/180.8:
+**bias +0.2, every channel within 4**. The same override without the gain reads bias -41.0 (113.1 against 154.1). So the law is right and
+Modesto's remaining sky error is the rest of its scene being too dark for `LAvg`.
+
+**Whole frames, all 22 Omega race pairs re-rendered** (raw mean grey ours / theirs, mean absolute grey to the original; before to
+after). HD mode: Anulpha 21.19 to 20.94, Chenghou 27.44 to 27.36, Metropia 32.14 to 32.13, Modesto 40.77 to 39.08, Sebenco 40.23 to
+39.86, Sol 2 32.54 to 31.40, Talons 27.89 to 26.89, Tech De Ra 27.76 (0 pixels differ), Amphiseum 49.11 (unchanged), Ubermall 20.28
+to 20.19, Vineta K 28.45 to 25.80, Moa Therma 36.39 to 35.95. 2048 mode: Altima, Arena, Subway unchanged, Capital Reach 47.26
+(unchanged), Downtown 26.72 to 26.71, Empire Climb 44.97 to 43.94, Metro Park 43.67 to 43.89 (+0.22, the one worse), Queens Mall 43.72
+to 42.58, Sol 32.71 to 29.57, Square 25.96 to 25.95. Seven pairs move the whole frame more than 0.3 grey (Modesto -0.25 is the
+nearest miss); the raw mean moves toward the original on all seven, and Metro Park's mean absolute grey is the one that gets worse.
+
+**Fog: Omega's curve is read now.** The vertex program of `RT_snow1`'s lit variant (`@0x12424`, 120 instructions) computes
+`t = fogColour.w * v7`, `F = exp2(1.4427 * (-t * t))` and passes it as `attr1.w`; the pixel program ends
+`out = lit * F + fogColour.rgb * (1 - F)` (`@0x7b0-@0x7d8`) with `fogColour` unclamped. That is `exp(-(density * depth)^2)`,
+ours' curve (confidence 85; one material, `v7` taken to be the view depth, whose definition was not traced). The loader still
+labels Omega's fog **INHERITED** from HD; the label is stale for the HD-lineage circuits' materials and left for the loader's next
+change. Fog is not what the Sebenco mountain misses: drawing no fog moves the box 100.1 to 96.5, four times the density
+128.4, a brightening by the HDR fog colour.
+
+**What owns Sebenco's box: the snow programs (open, not wired).** `RT_snow1`'s lit variant is 419 instructions with constants
+`snownormDetailStrength/Scale/LargeScale`, `Fresnel{Min,Scale,Power,Strength,Colour}`, `SpecStrength`, `SpecColour`, `SpecTwinkleScale`,
+`DiffuseWrap`, `SpecPower`, `liveLighting0specular` (12, 12, 12 on this circuit), `shadowLightSpecularDiffuse` and a shadow map, over
+five samplers (`Texture1`, `DriftNormalTexture`, two snow-normal detail scales, `Texture2`). The siblings (`RT_snow`, `RT_snow_ref`,
+`Sebenco_snow`, `Sebenco_snow_just_snow` and their `_new`/`_1`/`_2` twins) run 255 to 485 instructions. Ours draws these through the
+generic path: HD's `sebenco_snow` has its own wiring (`mesh::rcs::snow_rock`, read off PS3 microcode) and the GCN programs have none.
+In the frame the original's mountain is white with a bright sheen where ours is lilac, which a sun specular of 12 times
+`SpecStrength` and a Fresnel colour would produce and the generic ambient-plus-sun sum cannot. **Read and wired by `omega-snow-program` ("The snow program", below).**
+
+**Cross-checks.** 2048 (Vita): **checked, applies, not wired.** `altima`'s `SkyCube.rcsmaterial` carries the parameter name
+`SkyBrightness` and the same circuits author `Lighting.Sky brightness`, but its pixel program is USSE and unread, so the multiply is
+not stated for it and its dome keeps the plain texture (`2048-vita/moa-therma` re-rendered before and after: 0 pixels differ).
+HD: **checked, differs** (its sky is a `sky.gtf` cubemap with `Sky colour` bytes and no `Sky brightness`,
+`renderer.md`, "The sky law, read off live draws"); the HD race pair (`hd-race/talons-pack`) re-rendered before and after: 0 pixels
+differ.
+
+## The snow program (2026-11-20, `omega-snow-program`)
+
+**Claim tested:** Omega's `RT_snow1` snow family on Sebenco Climb is drawn by the law its own GCN program computes, so the
+snow-owned part of the box `1100,40,300,160` on `omega/sebenco-climb` improves (box 100.1 against theirs 162.3, bias -62.1,
+mean abs 62.5, 48 % snow by the sky lane's census). **True.** The box reads **133.2** (bias -29.1, mean abs 30.4), the snow pixels of the
+whole frame go from mean 93.9 against theirs 186.3 (bias -92.4, mean abs 92.7) to **176.2** (bias -10.1, mean abs 15.3), and the whole frame's
+mean abs against the original goes 39.86 to 36.15 (raw mean grey 81.85 to 85.77, theirs 103.77).
+
+**The materials in the frame.** `rt_snow1` is 23 submeshes and 84,203 triangles of the circuit model (`track.final.rcsmodel`, data02), the one
+snow material the race draws besides `rt_snow_ref` (one submesh, three more samplers, left generic); the `Sebenco_snow*` family is named by
+no model. Every `rt_snow1` submesh declares `position`, `normal`, `tangent`, `Uv1`, `VertexColour1`, `VertexColour2` and `NOVAColor` and no
+`lightmapUV` (`psp2_material_dump` `DECL_SUB`). The file ships ten pixel permutations (189 to 419 instructions); the inputs pick the one
+**with `NOVAColor`, no lightmap, no shadow map and no vertex light: pixel `@0xaa24` (308 instructions) with vertex `@0xa1e4` (111)**
+(the pixel's nine inputs are the vertex's nine outputs; the 419-instruction `@0x110e4` this thread named first is the lightmapped, shadow-mapped
+permutation, whose vertex program takes `lightmapUV`, and the `@0x12424` fog read in the sky section is its sibling's). Which permutation the race
+binds for the vertex-light count is unread (confidence 70): the 1-vertex-light permutation `@0xf6e4` is the same law with one more term.
+
+**The law** (confidence 85, decoded GCN `oag_rcs::gcn`, no run; the shared core was read on `@0x110e4` first, then `@0xaa24` against it):
+
+```text
+vertex:  attr1 = (VertexColour2.rgb, VertexColour1.x)      attr2.w = NOVAColor.a      attr4 = scale * |NOVAColor.rgb|^power + bias
+         attr5 = bitangent  attr6 = eye - position  attr7 = N  attr8 = T            fog F = exp(-(density * depth)^2) in attr0.w
+pixel:   m   = attr1.w                                      drift mask
+         d   = lerp((0.21952, 0.21952, 1), 2 DriftNormal(uv) - 1, m)
+         s   = 2 (Detail(uv * snownormDetailScale) + DetailLarge(uv * snownormDetailLargeScale)).xy - 2     h = 1 + Strength (2 (b1 + b2) - 3)
+         n   = normalise(Strength d.z s + d.xy h,  d.z h)  as  n.x T + n.y B + n.z N
+         F   = FresnelMin + FresnelScale (1 - N.V)^FresnelPower
+         w(x) = sat((x + DiffuseWrap) / (1 + DiffuseWrap))
+         Fsl = 0.75 + 0.25 w(N.SL) + SLSD.y w(R.SL)^SLSD.x                       SL, SLSD the circuit's ShadowLight
+         D   = w(N.L) liveLighting0diffuse attr2.w + attr4 Fsl                   (attr2.xyz is 0 in this permutation)
+         out = fog(F FresnelStrength FresnelColour attr1.rgb Texture1 D
+                   + SpecStrength SpecColour liveLighting0specular Texture2(uv * SpecTwinkleScale).a attr2.w w(R.L)^SpecPower)
+```
+
+`Texture1` and `Texture2` are both `and_snow3alpha` (one picture, its alpha the specular gloss); the drift normal is `glacier_detail_001_less_n`,
+the small detail `powdersnow_less_n`, the large one `ground_beach_wet_sand_uk_001_n`. **The constants are the material's own** (`~crc32` of their
+names; the record authors thirteen): `DiffuseWrap` 2.624, `FresnelMin` 1, `FresnelScale` 2.151, `FresnelPower` 1.749, `FresnelStrength` 0.709,
+`FresnelColour` `(0.787, 0.850, 0.897)`, `SpecStrength` 0.1, `SpecColour` `(1, 0.876, 1)`, `SpecPower` 10, `SpecTwinkleScale` 3.78,
+`snownormDetailStrength` 1.631, `snownormDetailScale` 14.66, `snownormDetailLargeScale` 12.29. **Two terms carry the move, by ablation** (each zeroed once on a temporary build, box and snow pixels; wired 133.2 and 176.2): the diffuse wrap set to 0 gives box 119.7
+and snow pixels 142.2 (mean abs 45.8); the Fresnel factor set to 1 gives 118.0 and 141.3 (mean abs 46.9); neither, the generic path, 100.1 and 93.9. A surface
+turned 90 degrees from the sun takes 0.73 of it with the wrap (ours took none), and the Fresnel factor multiplies the whole diffuse by 1 to 3.15 (the picture is also scaled by
+`FresnelStrength * FresnelColour`, 0.56, at a facing normal); ours' generic path gave a constant ambient plus `sat(N.L)`, and Omega's NOVA programs carry no constant ambient.
+`liveLighting0specular` is the sun's (12 on this circuit),
+so the lobe is `0.1 * 12 * gloss` of a near-white colour: a bright sheen where the normal turns the sun to the eye.
+
+**Not read, assumed.** `reflectiveBlurCoeffs.z` is engine-bound and read as 0 (it reads 0 live on the sea, `panel-displacement.md`): the lobe is the plain
+`SpecPower` and its scale is 1; with `z` at 1 the exponent falls to 2.5 and the lobe to 0.4 of it. The Fresnel factor uses the same bumped normal as
+the lighting; the program builds a second normal from `cross(N, T)` for `N.V` and one from the interpolated bitangent for the rest, which agree where the
+tangent's sign is +1 and the scale is 1. The track's shadow map (`S`, the road's `LM.a * S`) is not applied to the snow: the permutation has none, but the
+sun is gated by the baked `NOVAColor.a`, which ours does carry.
+
+**Wired** (`omega-snow-program`): `oag_rcs::rcsmodel::psp2::SubMesh::{ps4_vertex_colour2, ps4_nova_colour}` (additive readers), the loader's `psp2::snow`
+(admits a material whose pixel programs declare exactly the five snow samplers and the lit constants, by `oag_rcs::gcn::scan`, not by name; every
+submesh must carry the attributes), three glow-table entries of mode `PROGRAM_OMEGA_SNOW` (21) holding the constants above, the drift normal third and the
+details fourth and fifth, and `omega_snow.wesl` called from `shade.wesl`'s normal, light-sum and specular sites. Gated off by the shader's `simplified_lighting` (below).
+Test: `omega_sky_brightness_ground_truth::sebenco_climb_dome_is_scaled_by_its_authored_brightness` also pins the entries' constants against the model's own
+material and the vertices that name them (dropping the wire leaves 0 vertices naming the entry and fails it).
+
+**Measured** (`omega/sebenco-climb`, 1920x1080, the pair's recorded flags, ours re-rendered with the binary before and after; grey = Rec. 709 luma):
+
+| | theirs | before | after |
+| --- | --- | --- | --- |
+| box `1100,40,300,160` mean grey, bias, mean abs | 162.3 | 100.1, -62.1, 62.5 | 133.2, -29.1, 30.4 |
+| box mean RGB | 149/164/183 | 85/102/127 | 117/135/159 |
+| snow pixels (3.30 % of the frame, `OAG_SKIP_MATERIAL=rt_snow1` changes them by more than 25 grey, HUD boxes left out): mean, bias, mean abs | 186.3 | 93.9, -92.4, 92.7 | 176.2, -10.1, 15.3 |
+| snow pixels' mean RGB | 170/189/213 (their frame's, same mask) | 79/95/129 | 158/179/207 |
+| whole frame raw mean grey | 103.77 | 81.85 | 85.77 |
+| whole frame mean abs against the original | | 39.86 | 36.15 |
+
+Seen: the mountain goes from a lilac wash to white snow with blue shadow, with the drifts and ridges of the original's; the rocks and the boulders
+(`dc_rocks1`, not `rt_snow_ref`, which this frame does not draw; generic here, drawn by "The rock program" below) are unchanged. **All 24 Omega race pairs re-rendered before and after** (`scripts/compare-rerender-ours.py`'s `rerender` on copies, the 22 of the sky lane's sweep plus the two Zone pairs): 23 are pixel-identical (0 pixels differ), Sebenco Climb differs on 107,725 pixels (5.20 % of the frame).
+
+**What is left of the box** (30.4). The 59.5 % above matched the needle `snow` against texture paths as well as material names, so it counted materials that only
+name a snow *picture*; `omega-snow-rest` ("The rock program", below) splits it. The rest: the dome's bloom (the red channel 20 short, the sky lane), the far scenery, the
+snow's remaining 6 % (the original's bloom; the vertex-light count of the permutation the race binds), and the HUD region the box overlaps.
+
+**Smaller facts.** The Nova decode is the vertex program's per vertex (`scale * pow(NOVAColor.rgb, power)` interpolated, then the bias in the fragment, which `vs_main` already
+computes into `lit_light.yzw`); doing it per pixel instead moved 131 pixels by one level. `--circuit-lighting simplified` moves 514,030 pixels of this frame before and after the
+change and none of the 68,500 snow pixels (the option does not reach these draws), so the generic fallback the mode leaves under `simplified_lighting` is not exercised in a render here
+(unverified; it reads `NOVAColor.a` as the sun mask and draws no normal map).
+
+**Cross-checks.** HD: **checked, differs** (HD's `sebenco_snow` is its own wired program on rcsmaterial microcode, `mesh::rcs::snow_rock`; `rt_snow1` is Omega's); `hd/sebenco-climb` and
+`hd-race/talons-pack` re-rendered before and after: **0 pixels differ**. 2048 (Vita): **checked, differs**: the DLC1 pack's `Sebenco_Climb` (`PCSA00015` and `PCSF00007` `dlc1.psarc`) ships
+`fc07_SnowBlendVertColour` with `and_snow3alpha`, no `rt_snow1` or `rt_snow` in the base, DLC or patch archives (listed), and its programs are GXP with unread operands; the plan is `ps4`-gated;
+`2048-vita/sebenco-climb` and `2048-vita/moa-therma`: **0 pixels differ**. The same `NOVAColor` + `VertexColour2` declaration is used by other Omega materials on this circuit; they stay generic.
+
+## The rock program (2026-11-20, `omega-snow-rest`)
+
+**Claim tested:** the snow-named materials other than `RT_snow1` that own about 40 % of Sebenco Climb's box `1100,40,300,160` are drawn by their own pixel
+programs, so the box (133.2 against the original's 162.3, bias -29.1) and those materials' own pixels move toward the original. **False as worded, and the part
+that could be wired does not move the mean.**
+
+**Census** (`OAG_SKIP_MATERIAL=<needle>`, pixels that change by more than 25 grey against the unskipped frame, `rt_snow1` already wired; the frame is 1920x1080):
+
+| Needle | Material | Box `1100,40,300,160` | Frame |
+| --- | --- | --- | --- |
+| `snow` (all) | everything below, by name or by picture path | 46.0 % | 8.62 % |
+| `rt_snow1` | the snow mountain (wired) | 29.8 % | 2.78 % |
+| `snow_norway` / `dc_rocks` | **`dc_rocks1`**, matched only by its `snow_norway_drift_n` sampler: the boulders and cliffs | **18.0 %** | 0.55 % |
+| `materials/sebenco_snow` | `Sebenco_snow`, `_just_snow` (slots 231, 264, 265, 266, 283) | 1.1 % | 0.55 % |
+| `snowfade` | `jd_*2uvoverlay*` buildings that overlay `jd_sebenco_snowfade_*` | 1.5 % | 3.51 % |
+| `snowtile` | `jd_sebenco_snowtile_01` | 0.0 % | 0.03 % |
+| `rt_snow_ref` | one submesh | 0.0 % (not drawn in this frame) | 0.00 % |
+
+So the "other snow" is mostly **one rock material**; the materials with `snow` in their name own about 2 % of the box. `Sebenco_snow*` is drawn (the previous section's
+"named by no model" was wrong: slots 231 to 283 of `track.final.rcsmodel`), and the boulder is `dc_rocks1`, not `rt_snow_ref`.
+
+**The program** (`gcn_dump data02.psarc data/environments/10_Sebenco_Climb/Materials/DC_Rocks1.rcsmaterial --at 0xca64`; confidence 85, decoded GCN, no run). The race
+submeshes declare `position, normal, tangent, uv1, lightmapUV` (no `NOVAColor`), so the lightmapped permutations: vertex `@0xc424` (94 instructions) with pixel `@0xca64`
+(290, no shadow map), or `@0xab44` with `@0xb264` (395, shadow map). Which one the race binds was not read (70); `@0xca64` is read and drawn:
+
+```text
+n1 = RockColourNormal(uv)      n2 = RockDetailNormal(uv * DetailScale)       z = 2 n1.z - 1     h = 1 + DetailNormalStrength (2 n2.z - 2)
+L  = (h (2 n1.xy - 1) + DetailNormalStrength z (2 n2.xy - 1),  z h)          N = normalise(T L.x + B L.y + N0 L.z)
+w(x) = sat((x + Wrap) / (1 + Wrap))
+Fsl  = 0.75 + 0.25 w(N.SL) + SLSD.y w(R.SL)^SLSD.x                           (the tarmac roads' factor)
+D    = w(N.L) liveLighting0diffuse LM.a + nova Fsl                           nova = scale pow(LM.rgb, power) + bias
+spec = liveLighting0specular LM.a w(R.L)^e 0.06981317 / max(0.06981317, 0.17453294 k)     e = SpecPower (1 - 0.75 k)
+out  = fog(rock D + rock SpecStrength (2 n2.z - 1) (spec + ReflectivityStrength refl cube))
+```
+
+`k = reflectiveBlurCoeffs.z + ReflectivityBlur * reflectiveBlurCoeffs.w`; the engine's constant reads `(1.72285, 2, 0, 1)` live (`panel-displacement.md`), so `k = ReflectivityBlur`
+(0.8 on `dc_rocks1`), the exponent 6.8 and the lobe's scale 0.5. The program's second normal (`T L.x + (B + cross(N, T)) L.y + N0 L.z`) is used only for the cube reflection's
+Fresnel and is not drawn. **Constants** of `dc_rocks1`: `DetailNormalStrength` 1, `DetailScale` 10, `ReflectivityBlur` 0.8, `Wrap` 0.5, `SpecStrength` 0.1, `SpecPower` 17.02,
+`ReflectivityMin` 0.163, `ReflectivityScale` 0.1, `ReflectivityPower` 1, `ReflectivityStrength` 0.2. **Not drawn:** the cube reflection (`cubeReflectionTex` is bound by the
+engine; it enters multiplied by `ReflectivityStrength * 0.1 * rock`, at most about 0.005 of the picture, so it is small; recipe to read it: the table walk of
+`scripts/wipeout-pc-crowd-light-live.py` for the cube's slot) and the shadow term `S` of the shadow-mapped permutation.
+
+**Wired** (`omega-snow-rest`): the rock is a second family of `psp2::snow` (`declares(file, &ROCK)` on the pixel programs' samplers and constants, not a name; every submesh must
+carry a lightmap pair and a tangent), one glow-table entry of mode `PROGRAM_OMEGA_ROCK` (22), the colour normal third and the detail normal fourth, `omega_rock.wesl` called from
+`shade.wesl`'s normal, light-sum and specular sites, off in a Zone frame and under CIRCUIT LIGHTING `simplified`. Test: `omega_sky_brightness_ground_truth` (the entry's constants
+read back from the model, more than 10,000 vertices naming it, the loader line); with the admission dropped it fails.
+
+**Measured** (frozen mask: the 11,427 pixels the `dc_rocks` skip changes; theirs 127.4):
+
+| | mask mean / bias / mean abs | box mean / bias / mean abs | frame raw mean / mean abs |
+| --- | --- | --- | --- |
+| before | 102.0 / -25.4 / 25.5 | 133.2 / -29.1 / 30.4 | 85.77 / 36.15 |
+| after | 99.9 / -27.5 / 28.0 | 133.0 / -29.2 / 30.6 | 85.76 / 36.16 |
+| ablation: `Fsl` forced to 1 | 107.1 / -20.3 / 20.9 | 134.2 / -28.1 / 29.5 | 85.80 / 36.12 |
+| ablation: no sun, no lobe | 90.2 / -37.2 / 37.2 | 131.0 / -31.2 / 32.5 | 85.71 / 36.22 |
+| ablation: normal only (generic light) | 102.1 / -25.3 / 25.4 | 133.2 / -29.1 / 30.4 | 85.77 / 36.15 |
+
+**The mean does not move toward the original; the structure does.** The rock's high-pass contrast (5x5 box, interior of the mask) goes 4.78 to 6.99 against the original's
+6.75: the two normal maps give the surface its grain. The light terms are the program's, and `Fsl` (0.75 to about 1) darkens by 7 grey, which `Fsl = 1` would not; it is
+kept because the road and the snow carry the same factor. The rock sits 22 grey under the original at every distance beyond 16 pixels from the snow (and 44 under within 6),
+and the whole frame sits 18 under (103.77 against 85.77): an offset every surface shares, the original's bloom and exposure, not this program. All 24 Omega pairs, `hd/sebenco-climb`, `hd-race/talons-pack` and the two Vita pairs
+re-rendered before and after: Sebenco differs on 12,244 pixels (0.59 %), **the other 23 Omega pairs (including both Zone pairs), `hd/sebenco-climb`, `hd-race/talons-pack`,
+`2048-vita/sebenco-climb` and `2048-vita/moa-therma` are pixel-identical**: `DC_Rocks` is not drawn on another Omega pair's frame, or not through this permutation (Moa Therma and Tech De Ra ship the family; the reason they do not move was not traced).
+
+**Open, in box order:** `Sebenco_snow*` (1.1 % of the box, programs `@0x33e4`-`@0x10804` over `snowSampler`, `textureforblendSampler`, `rockSampler`, `snownormSampler`,
+`rocknorm1Sampler`, a different program from `RT_snow1`'s, 154 to 369 instructions); the `snowfade` overlay buildings (1.5 % of the box but 3.5 % of the frame, 27 grey mean abs:
+check `PROGRAM_UV_OVERLAY` first); the shadow term `S`; the cube. The box's residual is the original's frame-wide brightness, not a material.
+
+**Cross-checks.** 2048 (Vita): **not checkable** here: its programs are GXP with unread operands, and no Vita `DC_Rocks` file was listed; the plan is `ps4`-gated and
+`2048-vita/sebenco-climb` and `moa-therma` re-render with 0 pixels differing. Omega's 2048-mode library (`environments2048/shared/objectlibrary/materials/DC_Rocks*.rcsmaterial`)
+is the same family and goes through the same admission; no 2048-mode pair moved. HD: **checked, differs** (`hd-track-tone.md` reads HD's `DC_Rocks` on rcsmaterial microcode with
+its own blend); `hd/sebenco-climb` and `hd-race/talons-pack` 0 pixels differ.
+
+## The diffuse coordinate that writes `1 - v` (2026-11-20, `omega-uv-flip`)
+
+**Claim tested:** Omega materials whose GCN vertex program writes `(u, 1 - v)` are drawn with the flip, decided per file from the program, and the pairs that use one improve. **Half true: the reader and the wiring exist; no Omega circuit draws a file that flips, so no pair moves.**
+
+**The reader** (`oag_rcs::gcn::flips_v`, `crates/rcs/src/gcn/texcoord.rs`, confidence 85). A vertex program fetches `Uv1` into `vU, vU+1` and a flipping one computes `v_sub_f32 d, 1.0, vU+1` and exports `(vU, d)`: Modesto's `Track_Wall` (`gcn_dump`, `Shdr @0x2e44`) is `c  v_sub_f32 v0, 1.0, v9` ... `100  exp param1 v8, v0, v1, v1`, with `v9` overwritten later (`0x48`), after the subtract. Read: an `exp paramN` whose first lane is `vU`, never written, and whose second lane was last written by a plain `v_sub_f32` of the literal 1.0 and `vU+1` (no negate, abs, omod or clamp), `vU+1` itself untouched before that subtract. A file flips when it has a program that fetches `Uv1` and every such program does (the rule `gxp::texcoord_flip` has). Other shapes read as not flipping: a multiply-add that folds the flip (`neg=1` `v_mad_f32` rows), a flip after a transform of the coordinate, `v_sub_f32` of a constant. Wired in `mesh::rcs::psp2::uv_flip::plan`, which now picks the GCN or the GXP reader by the model's platform.
+
+**Census** (`gcn_ground_truth`, every `.rcsmaterial` of `data00`-`data05`, `data07`-`data09` of the base and the patch, a ratchet per archive): **9 files flip, 0 are mixed, every other file has no flipping program.** They are 3 materials with their `_1` and `_2` permutations (the PS4 Pro compile), in `data02` (base) and again in `data05` and `data08` (patch): Modesto Heights `Track_Wall`, Talons Junction `Track_Wall`, and Ubermall's `Materials_DLC/D_S_N_R_uvflip` (named for it). 2048's Amphiseum and Tech De Ra `track_surface` twins do **not** flip on Omega (**checked, differs**): no Omega `track_surface` program matches the shape
+
+**Why nothing moves.** No `.rcsmodel` of Omega's base or patch archives names any of the nine files (a byte search of every model of `data00`, `data01`, `data02`, `data04`, `data05`, `data08` for `track_wall.rcsmaterial`, `track_wall_1`, `track_wall_2` and `d_s_n_r_uvflip`: no hit; the `track_wall` string that does occur in the circuits' models is a shape name). The loader's report line `N material(s) write 1 - v` is absent for all 22 Omega circuits the race pairs use (`Environments`: `01_vineta_k` to `modesto_heights`, `tech_de_ra`, `amphiseum`, `talons_junction`, `05_ubermall`; `Environments2048`: `altima` to `tower`). The files ship with the circuits and are not drawn. Omega's Modesto right wall already shows the panel and hex rows at the authored `v`, and re-rendering `omega/modesto-heights` before and after is **0 differing pixels** (mean grey 40.72 both). `2048-vita/modesto-heights` (28.59 to 21.81, the flip still read from its GXP programs) and `hd-race/talons-pack` are 0 differing pixels against a build without this change.
+
+**Pinned by** `gcn_ground_truth` (the 9 files per archive; empty with the reader dropped), unit tests on hand-built instruction words in `gcn::texcoord` (including a `vU+1` overwritten before the subtract), and `uv_flip::tests` (Omega's `Track_Wall` flips through the GCN reader, its `Track_Surface` and the Vita reader do not).
+
+**Also found, not wired:** Amphiseum's `01_Normal_Diffuse_SpecularonAlpha_LH` (and `_1`, `_2`; `LH` for left-handed) exports `(1 - u, v)` (`v_sub_f32 v0, 1.0, v8`, `exp param1 v0, v9, v1, v1`), a mirror in `u` rather than a flip. No Omega model names it either.
+
+**2048 (Vita): ported** (`gxp::texcoord_flip`, own ground truth). **HD: ported** (`skin::flips`).
 
 ## The alpha lane (2026-11-19, `omega-road-programs`)
 
@@ -2423,7 +2932,8 @@ banners, the trees and shrubs on Metro Park and the red slab that stood under th
 drawn with the red channel as coverage. Omega's programs gate by the diffuse alpha (the panel road, `0xe144`, confidence
 94; the crowd's alpha test at 0.5, `0x4224`, `0x41a4`; "The crowd's law" above). The build now gives every PS4
 material `slots::DEFAULT` (lane 3); Vita keeps lane 0 except the alpha-lit families, whose programs are read to take
-`T.www` (`lit_alpha`).
+`T.www` (`lit_alpha`) and, since `vita-race-pairs` (2026-11-19), Moa Therma's reflective window and awning
+(`2048-material-params.md`, "The reflective window and the awning").
 
 **Measured** (`scripts/compare-rerender-ours.py`'s `rerender` on copies of every Omega, `2048-vita` and `2048` pair, the
 binary before and after; the raw mean grey is dominated by decorrelation, so read the signs and the regions):
@@ -2456,9 +2966,98 @@ alpha-lit; dropping the build's `slots::DEFAULT` turns Anulpha Pass's count into
 **2048 (Vita): ported for the alpha-lit families, checked, applies, not wired for the rest.** The same re-render on the
 Vita pairs with lane 3 everywhere moved `anulpha-pass` 16.71 to 11.14 (the alpha-lit families, wired), and
 `moa-therma` 32.55 to 34.23, `tech-de-ra` +0.25, `mall` +0.15, `empire-climb` +0.09, `ubermall` -0.43, `talons-junction`
--0.28: mixed. `moa-therma`'s change is the hull going darker (the hull's probe reflection reads `texel.a * row_tint.x`),
-and 2048's own programs are GXP: which of them gate by the diffuse alpha is unread, so Vita stays on lane 0
-outside the alpha-lit families until each family's gate lane is read.
+-0.28: mixed. **Corrected 2026-11-19 (`vita-race-pairs`): `moa-therma`'s change was not the hull** (the hull box
+does not move, 38.12 either way) **but the Feisar awning, `dc_diffusetexturealphaemissive`, drawn by its red lane**: its
+program writes the texel's alpha out and adds `D^2` (`2048-material-params.md`, "The reflective window and the awning"),
+now wired with the window family, and lane 3 everywhere then gives `moa-therma` 27.53 against 27.56 with the two wired, while
+`modesto-heights` +0.07 and `empire-climb` +0.09 stay worse. 2048's own programs are GXP: which others gate by the diffuse
+alpha is unread, so Vita stays on lane 0 outside the alpha-lit families and these two until each family's gate lane is read.
+
+## The tarmac roads' lit programs (2026-11-20, `omega-2048-road`)
+
+**Claim tested:** Omega's 2048-mode road is drawn by the law its own GCN road program computes, so the road box on
+`capital-reach-2048` (46.98) and `empire-climb-2048` (45.11) improves measurably. **False.** The one term the program
+computes that ours did not draw and that could be wired from authored data, the shadow-light factor, moves the two
+frames +0.28 and -0.14 grey (under the 0.3 bar both ways): the gap on these two roads is not in this program. The sun
+lobe was read, wired, measured and **taken out again** (below).
+
+**Census.** Capital Reach (`bridge`) and Empire Climb (`tower`) draw their road through
+`tarmac_markings_dirt_markingsnormal` (36.0 % and 60.0 % of the frame, `compare-decompose.py --road tarmac`); the
+`road_alphaspec_normal_emissive_panelmap1[_mask]` materials the circuits also carry, and the speed and weapon pads,
+change no pixel by more than 25 grey on either pose (0.0 %). Every road submesh (`DECL_SUB` on `bridge` sub 3658, `tower`
+sub 2881) carries `lightmapUV`, `tangent`, `uvMarkings` and `uv1_uvDirt` and no `NOVAColor`: the lightmapped variants.
+
+**The program** (`gcn_dump data05.psarc data/environments2048/shared/objectlibrary/materials/tarmac_markings_dirt_markingsnormal.rcsmaterial --at <offset>`;
+the patch's copy ships): the lightmapped lit variants are `@0xbd44` (241 instructions, no shadow map) and `@0xa764`
+(342, `shadowMapSampler` and `shadowCoeffs`; `data00`'s are `@0xbc44` and `@0xa684`). The two are read to the same
+law apart from the shadow term (confidence 88, decoded GCN, no run):
+
+```text
+nova  = pow(LM.rgb, power) * scale + bias                         (the authored Nova triple; unchanged)
+Fsl   = 0.75 + 0.25 sat(N.SL) + SLSD.y sat(R.SL)^SLSD.x          (0x4e4 `0.75`, `0.25 sat(N.SL)`)
+lit   = nova * Fsl + liveLighting0diffuse * LM.a * S * sat(N.L)    S = the shadow map's term, 1 in @0xbd44
+G     = mix(Dm.a (1 - Dirt.a), MarkingsSpec Dm.a, Markings.a)
+spec  = liveLighting0specular * G * LM.a * S * sat(R.L)^SpecPower   (reflectiveBlurCoeffs.z reads 0 live: plain power)
+out   = fog(Dm.rgb mixed by Dirt, Markings * lit + spec)
+```
+
+`N` is the normal-mapped world normal, `R` the view reflected about it. `SL` and `SLSD` are the circuit's authored
+`Lighting.ShadowLight direction` (normalised, as the executable does) and `Lighting.ShadowLight specular power scale`:
+the live reads on Sol `(0.7908, -0.375, -0.4838)` and Queens Mall `(-0.3068, 0.4453, -0.8412)`
+([panel-displacement.md](../ghidra/functions/ps4-omega-eu/panel-displacement.md), "Frame constants read live")
+equal the authored triples (Sol exactly, Queens Mall `(-0.31, 0.45, -0.85)` after normalising), so **no live read is
+needed for the factor** (the thread's "its source in the lighting data" is the envsettings). Capital Reach authors
+`(-0.414, 0.943, -0.850)` and `(10, 1)`, Empire Climb `(0, -0.320, -0.947)` and `(10, 1)`. `liveLighting0specular` is the
+authored specular colour times its intensity (Sol `6.096 3.263 1.6` times 1 equals the live read), which ours already carried.
+Which variant the race binds on a tarmac draw was not read; on the panel road all eight staged blocks had the shadow-map layout,
+so `@0xa764` is assumed here (confidence 70).
+
+**Settled 2026-11-20 (`omega-shadow-map`):** the race binds the shadow-map permutation on the tarmac. Forcing `S` to 0 through
+`shadowCoeffs` on the native port takes Capital Reach's sunlit streaks from 154 to 96 grey (confidence 90), and forcing it to 1
+moves nothing on that grid: no craft shadow is visible there, so **Capital Reach's whole-frame gap is not `S`**
+([track-shadow.md](../ghidra/functions/ps4-omega-eu/track-shadow.md), [shadows.md](../rendering/shadows.md),
+"Omega's own `S`").
+
+**Wired** (`omega-2048-road`): `Light::shadow_light` and `shadow_light_specular` (`Light::with_shadow_light`, filled by
+`envsettings_light` on PS4 only) and the factor on the prelit term in `shade.wesl`'s mode-14 path. Tests:
+`omega_tarmac_lit_path::the_shadow_light_factor_scales_the_prelit_term`, `omega_lightmap_ground_truth` (the loader
+reaches the rig from Tech De Ra's file), `envsettings::tests::a_pair_is_exactly_two_numbers`.
+
+**Read, not drawn: the sun lobe.** It was wired (an entry carrying `SpecPower` and `MarkingsSpec`, the lobe weighted by the
+gloss `G` with the dirt alpha unconditional) and measured against the factor alone: Capital Reach 47.26 either way, Empire
+Climb 44.97 with the factor alone and 45.25 with the lobe, Subway, Downtown, Arena and the Zone pair unchanged by it. The
+lobe is `LM.a * S` in the original and ours has no `S`: it draws crack glints on Empire's near road, including inside the
+craft's shadow, that the original's smoother road lacks, and scored no better on any of the five tarmac pairs, so it was removed
+(the shader block, its test and the entry fields). Draw it with the factor once the track receives `S` (below).
+
+**Measured** (the pairs' recorded flags, 1920x1080, ours re-rendered; `compare-decompose.py` and fixed boxes, mean abs
+grey and bias, ours minus theirs). Factor alone, before to after:
+
+| | Capital Reach | Empire Climb |
+| --- | --- | --- |
+| whole frame (raw mean grey) | 46.98 to 47.26 | 45.11 to 44.97 |
+| road region `LF`, `bias`, `G` | 27.6 to 28.3, -3.5 to -5.5, 0.91 to 0.95 | 29.8 to 29.5, -8.2 to -9.4, 1.08 to 1.09 |
+| box 1 mean abs grey, bias | near left `440x240+200+560`: 28.54 to 29.03, -12.4 to -15.3 | tarmac `700x120+620+380`: 42.60 to 42.87, -20.9 to -22.7 |
+| box 2 | mid `600x160+380+400`: 64.49 to 65.99, -45.6 to -48.1 (the 480 px pose offset pollutes it) | near left `400x200+160+640`: 25.67 to 25.31, -0.9 to -3.7 |
+| box 3 | right `360x200+1500+560`: 17.26 to 17.42, +0.8 to -0.7 | right `400x200+1380+560`: 39.04 to 38.95, +6.2 to +1.7 |
+
+The other tarmac-road pairs' whole frame, before to after: `subway-2048` 30.38 to 30.38, `downtown-2048` 26.97 to 26.72,
+`arena-2048` 33.15 to 32.84, `zone-capital-reach-2048-z5` 68.96 to 69.17. Three of the six improve, two worsen by 0.2 to 0.3,
+none leaves the noise band except Arena's -0.31. The factor is the program's: the originals' road is brighter than ours on both
+pairs (Empire's far road, box 1, is the sun glare and exposure the earlier lanes found; Capital's near road is neutral grey
+in the original and warm in ours, R/G 1.07 against 1.14).
+
+**Where the gap is instead.** The race's program takes the shadow map: its sun term and its lobe are `LM.a * S`, with
+`S = min(1, pcf(shadowMap) * exp2(clamp(c0 + c1 z, c2, c3)))` (`@0xa764` `@0x14c`, `@0x1a8`, `@0x488`-`@0x4b0`; the
+coefficients are `shadowCoeffs`). Ours has the baked `LM.a` only on the track, so Capital's sun on the road is over-present:
+with the road's sun term switched off (a probe, not kept) Capital's whole frame goes 46.98 to 45.41 (Empire 45.11 to 56.86,
+which needs its sun). Next: the track as a shadow receiver (a shadow-map pass over the track casters; ours' hull map is
+`sun_occlusion`), then the lobe, then the dirt layer's colour.
+
+**2048 (Vita): checked, applies, not wired.** Vita authors `Lighting.ShadowLight direction` and its nova prelit programs
+read `shadowLightDirection` as the same shading uniform (`ship-shadows.md`, "Which light"), but 2048 carries no tarmac family
+and its light table (`FUN_8101d068`) is not this lane's. **HD and `2048-vita/moa-therma`:** re-rendered before and after
+(`hd-race/talons-pack` 23.06, `2048-vita/moa-therma` 27.56): pixel-identical.
 
 ## The port's anisotropy (2026-11-16, `port-aniso`)
 
@@ -2566,6 +3165,360 @@ profile keeps `off`, an unmeasured default. The decisive check: the filter and a
 init calls on a road material's draw, and whether Vita3K honours one (its anisotropic override setting). **Open:** which S# each road material binds (the material's `+0x20` state word
 `0x522800` is the likely key and was not mapped to the S#); the same A/B on the Zone and the remaining HD-mode
 circuits (only Vineta K was logged in HD mode).
+
+## HD-mode frame brightness: the tone map is not the gap (2026-11-20, `omega-hd-exposure`)
+
+**Claim tested:** Omega's HD-mode race frames are darker than the original's because ours applies the wrong exposure, tone
+map or scene light, with The Amphiseum ("the original is much brighter than ours"), Modesto Heights, Sebenco Climb and
+Moa Therma as the evidence. **Result: false as a tone-map claim, and false as a brightness claim on two of the four.**
+Method: ours re-rendered from each pair's own flags (main `13b22ac77`, 16x anisotropy, as the page records) against the
+stored `theirs.png`; a local, uncommitted readback of the chain's `(LAvg, t0, t1, E)` and of its 256x256 luma image at the
+screenshot frame (a `COPY_SRC` on the state buffer and the ladder's first target, mapped in `Drop`; the patch is not kept).
+
+**Signed bias and mean absolute grey, 1920x1080, whole frame** (Rec.709 grey, ours minus theirs; the stored pair's
+`ours.png` and the re-render are identical to the digit):
+
+| Pair | theirs mean | ours mean | signed bias | mean abs | ours `LAvg` | ours `E` | regime |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| The Amphiseum | 83.5 | 88.6 | **+5.0** | 49.1 | 0.133 | 2.00 | pinned at `Exposure maximum` 2 |
+| Modesto Heights | 90.8 | 91.7 | **+0.9** | 40.8 | 0.261 | 0.868 | unclamped |
+| Sebenco Climb | 103.8 | 81.5 | **-22.3** | 40.2 | 0.175 | 0.555 | pinned at `Exposure minimum` 0.555 |
+| Moa Therma | 110.2 | 96.1 | **-14.2** | 36.4 | 0.384 | 1.00 | pinned at `Exposure maximum` 1 |
+
+The mean absolute grey (the 49.1 the gallery notes) is dominated by pixel decorrelation, not by brightness: The Amphiseum
+and Modesto have no brightness gap at all (their luminance quantiles 5/25/50/75/95 read 9/36/67/119/230 against
+8/34/70/131/234 and 5/34/67/130/236 against 11/40/74/123/229), and the Amphiseum's gallery note "the original is much
+brighter than ours" does not hold on main (ours is 5 grey brighter). Over all twelve HD-mode pairs the signed bias is
+Vineta K -4.9, Anulpha Pass -4.1, Chenghou Project +4.8, Metropia -16.6, Ubermall -1.5, Sol 2 -7.3, Modesto +0.9,
+Talon's Junction -1.9, Tech De Ra -0.6, Sebenco -22.3, Moa -14.1, The Amphiseum +5.1: no common gain.
+
+**Named boxes** (`x,y,w,h` of the 1920x1080 frame, clear of the HUD and the craft; theirs, ours, signed bias, mean abs;
+box means move with pose decorrelation, read the sign and the spread between boxes, not the digit):
+
+| Pair | Box | theirs | ours | bias | mean abs |
+| --- | --- | --- | --- | --- | --- |
+| Amphiseum | ceiling/sky `300,110,460,130` | 103.0 | 142.9 | +39.9 | 55.4 |
+| | stands right `1150,190,560,130` | 85.2 | 110.4 | +25.1 | 62.5 |
+| | road left `60,520,480,230` | 106.8 | 103.7 | -3.2 | 54.0 |
+| | wall left `0,380,576,120` | 74.4 | 80.9 | +6.5 | 47.2 |
+| Modesto | sky gap `800,160,240,100` | 192.4 | 156.4 | -36.0 | 46.0 |
+| | left structure `0,120,600,200` | 65.2 | 58.7 | -6.5 | 37.6 |
+| | right wall `1160,380,640,180` | 73.5 | 74.0 | +0.5 | 34.8 |
+| | floor left `100,600,460,120` | 128.7 | 135.6 | +6.8 | 31.1 |
+| Sebenco | snow sky `1100,40,300,160` | 162.3 | 97.3 | -65.0 | 65.2 |
+| | building left `0,200,640,200` | 93.3 | 51.8 | -41.5 | 50.6 |
+| | yellow floor `700,480,560,100` | 121.0 | 104.3 | -16.8 | 23.7 |
+| | wall right `1200,380,600,200` | 67.6 | 54.5 | -13.0 | 21.3 |
+| Moa | sky/city `1160,60,440,120` | 126.9 | 126.2 | -0.7 | 37.8 |
+| | stands left `0,200,500,200` | 116.1 | 100.0 | -16.1 | 56.1 |
+| | floor left `300,640,360,220` | 141.3 | 139.0 | -2.3 | 33.2 |
+| | stripe road `660,500,500,80` | 96.0 | 81.4 | -14.6 | 23.7 |
+
+**Why a gain is not the cause.**
+
+1. **Ours' exposure is the executable's law and is not ramping.** The grab is stable from tick 10 to 300 (Sebenco 81.5, 81.4,
+   81.5, 81.2). That only shows ours is stable: ours starts settled by construction (`omega_tonemap`, "The first frame starts
+   settled"), so it says nothing about the original's first frames.
+2. **"The original is still adapting at the grab" fails as a common cause.** Starting the history at zero as the executable
+   does and stepping the chain N times per frame, Sebenco matches theirs at N about 20 (107.1 against 103.8) and Moa at 10 to
+   20, but Modesto at N=20 reads 120.7 against theirs 90.8, Talon's 122.2 against 93.6, Tech De Ra 135.1 against 99.5, and
+   they match theirs only once settled (N 40). One frame count cannot fit both groups (confidence 80).
+3. **Where ours is clamped, a brighter original needs brighter scene light, and the tone map is the same.** Sebenco's author
+   pins `Exposure minimum` 0.555 and `b` 0 (`E = 0.079 / LAvg`), so ours is at the minimum: a darker or brighter scene moves
+   the output one for one. Forcing ours' `E` to 0.9 reproduces the original's luminance quantiles
+   (q10 to q95: 35/57/95/141/230 against 33/58/97/140/219), which is a x1.6 scene factor, **but it is not uniform**: at
+   `E` 0.9 the snow sky is still -38 and the far building -25 while the yellow floor is +16 and the right wall +4.5. Moa
+   (`Exposure maximum` 1, ours at 1.0) would need about x1.4 from `E`, which its clamp forbids (`t1` grows with `LAvg`, so
+   a lower `LAvg` does brighten it through the curve: 96.1 rises to 108 as the unprimed sweep's `LAvg` falls), but its
+   sky/city, floor and wall boxes already match (-0.7, -2.3, -1.0), so any global gain, through `E` or `t1`, would
+   overshoot them; only its stands (-16.1) and stripe road (-14.6) are dark. The Amphiseum (ours at the maximum 2.0) is
+   5 grey bright.
+4. **Ours' luma input is not inflated by an HDR tail.** The luma image's 99th percentile is 0.82 and no texel reaches 0.97 on
+   Sebenco (the other circuits reach 1.6 to 8; where Sebenco's luma sits relative to the sky or far geometry was not
+   located, so whether the HDR fog colour is clamped there is open), skipping the sky changes `LAvg` 0.175 to 0.170, and the centre 64x64 or
+   128x128 means are 0.237 and 0.183 against the full mean 0.176 (so which ladder level the coefficient pass samples,
+   `tonemap.md`'s confidence-60 reading, moves `LAvg` by at most 35 % on Sebenco and cannot explain a x1.6 gap).
+
+**What the data supports: per-surface light, a different surface on each pair** (confidence 85 that it is not a global
+exposure or gain: the signed bias spans -22 to +5 over twelve pairs, and at a forced `E` the Sebenco boxes still split from
+-38 to +16, which does not depend on `LAvg`). Sebenco: sky and far scenery (snow -65 and far building -41 against floor and
+wall -13 to -17). Modesto: the sky only (-36 against floor +7 and wall +0.5). Moa: the stands (-16.1) and the stripe road
+(-14.6), sky level; the stands belong to the queued Omega crowd-lighting lane. The Amphiseum: its ceiling truss (+39.9) and
+stands (+25.1) are brighter in ours, and its frame carries no sky (the decomposition's sky region is 0.0 % of the frame). `Lighting.Sky brightness` (Sebenco 1.51, Modesto 2.264, Moa 2.0, Metropia 2.2,
+Amphiseum 0.5) does not predict the sign (Moa's sky is level at 2.0, the Amphiseum's ceiling is 40 grey bright at 0.5), the
+same mixed result the 2048-mode lane recorded ("Where the WipEout 2048 mode pairs' error is", sky). Not wired.
+
+**The one value that would separate "same scene, different exposure" from "different scene" is the original's own luma
+history** (read since: [the next section](#hd-mode-frame-brightness-the-originals-luma-ring-read-2026-11-20-omega-luma-read)). Read recipe, not run at the time (no pad seat in this lane's brief, and a native-port boot needs the 47 GiB game copy):
+in the native port launched through `scripts/wipeout-pc-omega-pair.py` the object is a heap pointer held at guest
+`0x021dbdb8` ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md), "The ToneMap object, read live
+through the pointer"; host address image base `0x800000000` plus the offset from Ghidra's `0x01000000`); after the pair
+script's `SIGSTOP`, read the history ring `ToneMap_SetHistoryWeights` sizes at the object's `+0x1d8` (N-1 slots, 4 on these
+circuits; the begin/end pointer layout is inferred from the weights vector at `+0x1f8`, which was read live, the ring itself
+was not). `ToneMap_UpdateCoefficients` is unresolved on 1.07, so **confirm the ring's offset before trusting a mean**, and
+whether the slots hold raw frame luma or past `LAvg` is not pinned (they agree once settled). Its mean is the original's
+`LAvg` on the same frame as `theirs.png`, to compare with ours' `frameL` above (Sebenco 0.1756, Moa 0.3851, Amphiseum 0.1333,
+Modesto 0.2621): a ratio near 1 means the scene is the same and the gap is how pixels are shaded; a ratio near 1.6 on
+Sebenco means the original's scene is brighter before the curve. The coefficient texture (`LAvg`, `E`) is read back by the
+CPU on hardware (`ToneMap_UpdateCoefficients`), so a direct read of it is not tried here, not ruled out.
+
+**Closed negatives:** a global exposure or gain (the signed bias spans -22 to +5 over twelve pairs); an HDR tail inflating
+ours' `LAvg`; the original still adapting at the grab as a common cause; `Sky brightness` as a sky multiplier (sign
+mixed). **Unchanged by this lane:** no code, no table; the HD and 2048 frames are untouched. **2048: checked, differs** (2048
+runs `wo_composite`'s exposure, not this cubic chain, and its references are drawn at the held 1.15 because Vita3K never
+writes the bloom gate's target back, `oag_raceplay::Options::exposure_hold`).
+
+## HD-mode frame brightness: the original's luma ring, read (2026-11-20, `omega-luma-read`)
+
+**Claim decided:** at the grab frame of `omega/sebenco-climb`, `modesto-heights`, `moa-therma` and `the-amphiseum`, the original's adapted
+luminance and exposure are either about equal to ours (so the dark sky and scenery is per-surface shading) or about 1.6 times brighter in
+scene terms (so the scene's light level is the cause). **Written down before the first boot:** the deciding number is the ratio of the
+original's `LAvg` to ours' (Sebenco 0.1756, Moa 0.3851, Modesto 0.2621, Amphiseum 0.1333), not `E`, because `E` is pinned on three of the
+four circuits (a brighter scene leaves a pinned `E` unchanged); bands 0.85 to 1.18 "about equal", 1.4 or more "about 1.6 times", between
+"partial"; the claim would have been unreadable if the ring were zero or constant, if its length were not `N - 1` for the circuit's own
+`Tonemap.Exposure time`, or if `+0x80..+0x9c` did not match the circuit's `.EnvSettings`. None of those happened.
+
+**Result: neither alternative holds across the four.** The original's whole-frame luma, read live, is **1.23 to 1.64 times ours on Sebenco,
+Moa and Modesto and equal on The Amphiseum**, and the pixel-level split inside each frame shows it is concentrated in some surfaces. The
+exposure is not the lever: `E` is identical to ours on three circuits (pinned) and 0.60 against ours' 0.868 on Modesto, where ours' dim
+scene is compensated by a larger `E` than the original needs. So the gap is the scene's light level, surface by surface (confidence 80),
+not `E` and not a global gain.
+
+### What was read, and how
+
+The port (`scripts/wipeout-pc-omega-pair.py`'s `Rig`, the same walk as the gallery pairs, a fresh save, Feisar, HD mode, `OAG_PAD_SEAT=2`)
+was booted once per circuit and again (eight boots), and `/proc/<gow3-probe pid>/mem` was read in a loop (1 ms sleep, a row kept
+whenever the object or the ring changed, 2,500 to 3,500 rows a boot; `scripts/wipeout-pc-tonemap-ring.py`, one boot of about 80 s: `OAG_PAD_SEAT=N UV_OFFLINE=1 python3 scripts/emu-run.py -- python3 scripts/wipeout-pc-tonemap-ring.py --scratch <dir>/inst/a --game <the port's game directory> --port <the port's checkout> --out <dir>/runs/<circuit>-a --track-steps N`, with N the Rights on Track Select from Vineta K: Moa 2, Sebenco 5, Modesto 8, Amphiseum 9; it prints the ring, its mean, `E` and `t1` and writes `samples.jsonl`, `frozen.json` and the frames) from MAIN MENU until the frame the pair script would pick (first HUD
+frame plus 2), then the port was `SIGSTOP`ped and the object and every pointer in it dumped. The loop only reads: no stop, no write.
+
+- **Pointer:** guest `0x021dbdb8` (host `0x800000000 + 0x11dbdb8`) holds the `ToneMap_Instance` pointer, `0x210` bytes
+  ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md), "The ToneMap object, read live through the
+  pointer"). Its value is not fixed across boots (`0x100243d740` on six of the eight, `0x10024695e0` and `0x1002a32220` on two): always read
+  it through the global.
+- **The ring, confirmed by reading it** (confidence 90; one binary, eight boots, capped at 94 by the rubric): `+0x1d8` begin, `+0x1e0` end,
+  `+0x1e8` capacity, a `float[4]` (`N - 1` with `N = round(0.08333334 * 60) = 5`, `+0xc4` = 0.2 on all eight boots), the weights vector at
+  `+0x1f8..+0x208` (five `1.0f`). **Each ring write is one frame**: the slots are written round-robin, about one every 30 to 40 ms in this
+  headless port (27 to 30 frames a second of ring writes under the headless compositor, whatever the engine's 240 FPS profile steps by), and the
+  only other field of the object that moves is `+0xc0`: its byte `+0xc2` is the index of the slot written last (0, 1, 2, 3 in turn, checked
+  against the slot that changed on 14 consecutive writes), and `+0xc1` alternates 0, 1 (the coefficient texture's ping-pong; reading, not
+  confirmed).
+- **What a slot holds: raw per-frame luma, not the adapted value.** Across the race-start camera cut on Sebenco the slots step from 0.351 to
+  0.228 in one write (a drop of 0.12), where the executable's rate limit `response / 60` would allow 0.004 a frame
+  (`tonemap.md`, "The law"). Fades read 1.0 (0.97 to 1.0 for about 20 s of loading and the white-out before the race), so the
+  slot is the whole-frame mean luma of the scene target, fade and all. That agrees with `tonemap.md`'s "stores it in the ring" (the
+  luminance chain's mean, and with `tonemap.md`'s own law line `target = (L + sum of the previous N-1 frames' L) / N`) and not with a past `LAvg`
+  read back from texel 1 of the coefficient target (confidence 80). Two more readings: mid fly-over on Sebenco (22.6 s before the grab) the four
+  slots read 0.3608, 0.3843, 0.3739 and 0.3674, a spread of 0.024 where four consecutive rate-limited `LAvg` values (0.0042 a frame) could
+  differ by at most 0.0125; and the cut's step is seen on each of the eight boots.
+- **State proof per boot** (the pair script's name-crop and Feisar logo references no longer exist, so the object proves the circuit):
+  `+0x98/+0x9c` (`Exposure minimum/maximum`), `+0x80` (lum a) and `+0x88 * 60` (response) equal each circuit's own patch `.EnvSettings`
+  (Sebenco 0.555/4, 0.079, 0.25; Moa 0/1, 0.4, 0.5; Modesto 0.5/2, 0.18, 0.4; Amphiseum 0.4/2, 0.25, 0.3), `+0xb8` is 1.0 (the SDR set),
+  `+0x8c` is 1.0 on all eight boots. All eight picked frames were read by eye in one montage: the right circuit each time, the grid before GO (timer 0.0.0, 0 KM/H, no countdown digit).
+- **Adapted luma at the grab.** The original's `LAvg` (the GPU's coefficient texture, not readable here) was replayed from the ring's
+  own per-frame luma sequence, one ring write a frame, from the object's creation at `P = 0` as the executable starts, with the law of
+  `tonemap.md` (target over the last 5 values or the last 4, both give the same answer to 0.001). At the frozen moment the replay and the
+  ring mean differ by 0.0001 to 0.0011 on every boot: **the original is settled at the grab** (a rate limit of 0.0042 to 0.0083 a frame
+  against 27 to 89 frames since the last cut: no adaptation transient, confidence 80; it is a replay of a law, not a read of `P`).
+
+### The original's numbers
+
+Ring mean (`LAvg` settled), boot A then boot B; `E` and `t1` derived from it with the object's own coefficients (`E = clamp((a + b * LAvg) /
+LAvg, min, max) * cL`, `t1 = max(srcA + srcB * LAvg, 0.01)`); ours from the `omega-hd-exposure` readback:
+
+| Pair | original `LAvg` (A, B) | original `E` | original `t1` | ours `LAvg` | ours `E` | ours `t1` | ratio `LAvg` | band |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| The Amphiseum | 0.1324, 0.1325 | 2.000 (max) | 1.000 | 0.1333 | 2.000 (max) | 1.000 | 0.99, 0.99 | equal |
+| Sebenco Climb | 0.2290, 0.2299 | 0.555 (min) | 0.612 | 0.1756 | 0.555 (min) | 0.612 | 1.30, 1.31 | partial |
+| Moa Therma | 0.4720, 0.4740 | 1.000 (max) | 1.570, 1.573 | 0.3851 | 1.000 (max) | 1.465 | 1.23, 1.23 | partial |
+| Modesto Heights | 0.4197, 0.4299 | 0.609, 0.599 | 1.000 | 0.2621 | 0.868 | 1.000 | 1.60, 1.64 | about 1.6 |
+
+Boot to boot the ring mean agrees to 0.1 to 2.4 % (a ninth boot, the committed script's first run, read the Amphiseum at 0.1318) (Modesto's boot A was still falling 0.01 a second, its scene settling). The ring's history
+before the grab, mean of the four slots, relative to the pick grab (seconds; run A; loading and the fly-over are the intro, not the grid):
+
+| Pair | -30 s | -20 s | -10 s | -5 s | -2 s | -1 s | -0.5 s | grab |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Amphiseum | 0.989 | 0.089 | 0.069 | 0.086 | 0.076 | 0.132 | 0.133 | 0.133 |
+| Sebenco | 0.989 | 0.196 | 0.369 | 0.444 | 0.373 | 0.352 | 0.230 | 0.230 |
+| Moa | 0.989 | 0.645 | 0.703 | 0.632 | 0.577 | 0.588 | 0.472 | 0.471 |
+| Modesto | 0.989 | 0.445 | 0.804 | 0.712 | 0.697 | 0.434 | 0.425 | 0.419 |
+
+(0.989 is the loading screen's fade; the camera cut from the circuit presentation to the grid is the step in the last second.)
+
+**Sampling is not the explanation** (confidence 70): the Amphiseum's ring mean (0.1324) matches ours' whole-frame mean (0.1333) to 1 %
+while ours' centre 64x64 mean is 0.0859 and its centre 128x128 mean 0.091. No one centre-crop statistic of ours' luma image gives a
+constant ratio across the four (centre 64: 0.97, 1.90, 1.46, 1.54 against the Sebenco, Moa, Modesto, Amphiseum originals), so the
+confidence-60 reading in `tonemap.md` (the coefficient pass samples the whole-frame mean) is now **supported by the one circuit
+where ours and the original agree** and not contradicted by the others.
+
+### Where the original's scene is brighter: the output frames, inverted (corroboration, confidence 65)
+
+The original's `theirs.png` is the curve's output (sRGB-encoded) plus bloom. Inverting it with the object's own parameters
+(sRGB decode, the cubic through `(0, 0)` and `(t1, 1)` with the end slopes of `+0x90/+0x94`, divide by `E`, Rec.601 luma) gives a scene
+luma that can be compared with the same inversion applied to ours' frame, since both pass through the same law; ours' inversion
+recovers 96 % (Sebenco), 94 % (Modesto), 80 % (Moa) and 83 % (Amphiseum) of ours' own known `LAvg` (the shortfall is the clip at `t1`).
+Whole frame, theirs over ours: Sebenco 1.41, Moa 1.28, Modesto 1.48, Amphiseum 0.93, against the ring's 1.30, 1.23, 1.60, 0.99. The
+two independent readings agree on the sign and order. **Per box** (the `omega-hd-exposure` boxes; ranges are boot A to boot B):
+
+| Pair | box | theirs over ours (inverted scene luma) | saturated pixels, theirs |
+| --- | --- | --- | --- |
+| Sebenco | snow sky / building left | 2.3 to 2.5 / 2.3 to 2.5 | 6 to 9 % / 0 % |
+| | yellow floor / wall right | 1.15 to 1.21 / 1.08 to 1.41 | 0 % |
+| Moa | sky/city / floor left | 1.04 / 1.01 to 1.05 | 0 % / 5 % |
+| | stands left / stripe road | 1.42 / 1.6 | 12 % / 3 % |
+| Modesto | sky gap / left structure | 2.2 / 1.80 | 22 to 42 % / 2 % |
+| | right wall / floor left | 1.72 / 1.42 | 4 % / 9 to 10 % |
+| Amphiseum | ceiling / stands right | 0.67 / 0.73 | 5 % / 4 % |
+| | road left / wall left | 1.05 / 0.90 | 4 % / 1 % |
+
+Caveats that bind these ratios: bloom adds to the original's bright pixels after the curve and the inversion reads it as scene (it
+inflates the sky and ceiling rows); the clip at `t1` makes saturated boxes lower bounds; the pose differs by a few pixels, so a box ratio is
+good to about 0.2, not to the digit. What survives them: **Sebenco's sky and far scenery are about 2.3 times ours and its near surfaces
+1.1 to 1.4; Modesto is brighter everywhere (1.4 to 2.2, sky most); Moa's sky and floor match and its stands and stripe road are 1.4 to 1.6;
+the Amphiseum's ceiling and stands are brighter in ours (0.67 to 0.73).** That reproduces `omega-hd-exposure`'s box table (sky and far
+scenery dark on Sebenco, sky on Modesto, stands and stripe road on Moa) as a scene-radiance gap, and puts a number on it that the tone map
+passes through one for one on Sebenco (`E` pinned, `b = 0`) and the Amphiseum; on Moa `t1` moves with `LAvg` (1.57 against 1.465) and on Modesto `E` does.
+
+### What this decides
+
+1. **Exposure and the tone map are not the cause** (confidence 85): `E` equals ours on Amphiseum, Sebenco and Moa (all pinned), `t1`
+   on Amphiseum and Sebenco (1.57 against 1.465 on Moa), and ours' Modesto `E` (0.868) is 1.45 times the original's (0.60): ours' dim scene (`LAvg` 0.262 against 0.42)
+   asks for more gain than the original needs, which is a symptom, not a cause.
+2. **The scene's light level differs from ours, by surface and not by one factor** (confidence 80):
+   whole-frame scene luma is 1.3 (Sebenco), 1.23 (Moa), 1.6 (Modesto) times ours and equal on the Amphiseum, with sky and far scenery
+   about 2.3 times ours on Sebenco and a 1.4 to 2.2 spread on Modesto. A lighting term that is a constant times ours' would be wrong on
+   the Amphiseum (0.67 to 0.73 on two boxes) and on Moa's sky and floor (1.0).
+3. **The earlier claim "scene luma equal, the gap is shading" is false** for Sebenco, Moa and Modesto (ring ratios 1.23 to 1.64 over
+   two boots each); the earlier claim that it is **not a global gain** stands, now on the original's own ring.
+
+**Not decided here:** which scene term carries it. The sky and fog consumers in the 1.07 eboot are still unread
+(`FUN_015eda20` is the registrar), `Lighting.Sky brightness` still does not predict the sign across the five circuits, and a 2.3 times
+sky on Sebenco with a 1.1 times floor does not look like the sun or ambient terms; sky radiance (and bloom, which ours does not draw)
+are the leads. **Not wired.** No code, no table.
+
+**2048 cross-check: checked, differs.** 2048 reads no `ToneMap` object (its `wo_composite` has no luma ring), so the read does not port; the
+Omega object's `+0x1d8` ring is Omega's. The 2048-mode pairs' brightness (`omega-2048-holistic`) was not re-read.
+**Repeats:** each circuit twice, one boot apart, ring means within 2.4 %; **confidence** per row above; one binary (the 1.07 patch eboot),
+one pose per circuit (the grid before GO), HD mode only.
+
+## HD-mode frame offset: which stage carries it (2026-11-20, `omega-frame-offset`)
+
+**Claim tested:** Omega's frame-wide darkness against the original (Sebenco Climb about 18 grey under, Moa Therma 14 under) is
+carried by one named stage of the post chain (bloom, the tone curve, the exposure `E`, or the gamma and encode), not by the scene.
+**Written down before the first boot:** bloom would be a *minority* of the offset (the ring puts scene luma at 1.30 times ours on
+Sebenco with `E` pinned and `b = 0`, so a post stage can only be the remainder); it would be *the* stage if the original's frame
+with its bloom knocked out sat at least 12 grey under the original's own on Sebenco while ours' bloom stayed under 4; it would be
+*not* the stage if that difference were under 6; a poke that leaves the frame byte-identical hit a dead copy and is not a result.
+**Result: no post stage is the offset.** The tone curve and `E` are the original's law with the original's numbers on three of the
+four pairs, the encode is the shared sRGB encode, and bloom is **3.5 grey of Sebenco's 18** (ours draws none there). The rest, 14.6 grey
+on Sebenco, is before the curve: scene radiance (the ring puts the original's scene luma 1.2 to 1.3 times ours) and an unattributed
+4 to 6 grey that a global gain does not reach (the closure below).
+
+### Method
+
+Ours: the four pairs re-rendered from their own flags with the current tree (`408f6fe6e`, anisotropy 16x as the pairs record it)
+and, for the bloom stage, a local uncommitted switch that zeroes `BloomScale` (the render is otherwise identical; not kept). Theirs:
+the native port (`scripts/wipeout-pc-bloom-knockout.py`; seat 5, own sway, own profile, a copy of the port checkout, no audio). The
+script walks to the grid as the pair script does, freezes the port (`SIGSTOP`), scans its memory for the circuit's own `Bloom.*`
+values read from its `.EnvSettings` (`Blend factors`, and `Threshold, Offset, Scale, Power, cBrightness x3, AlphaScale` as one
+block), then alternates: poke while frozen, run 0.06 s, freeze, `grim` grab, restore, run, freeze, base grab. **`nobloom`** writes
+`Blend factors[0]` (the composite's `BloomScale`) to 0 in the env object's copy and the level array's (`+0` of a `0x108` stride):
+2 sites, held (read back after the run) on every sample counted. **`nomask`** writes `AlphaScale` to 0 in the block's guest copies
+(4 to 22 hits; some are overwritten per frame, so it is a lower bound on the mask's share). The effect is the knockout's Rec.709
+grey (sRGB values) minus the mean of its two neighbouring base grabs, as `scripts/omega-bloom-knockout-effect.py` computes it,
+because the grid camera drifts: two bases 0.06 s apart differ by 8 to 14 grey per pixel and by under 1 in the frame mean. A sample is
+dropped when its bases are identical (the port had ended: after about 14 to 30 stop and continue cycles its GPU log reads "Wrong PM4
+type 1" and the last frame stays up) or when the poke did not hold. Boots counted for bloom: Sebenco 2 (D, E), Modesto 3, Moa 2, Amphiseum 2. Not counted: two Sebenco boots that wedged on the first
+poke of an earlier script (a poke into the host's copies of the constants), one that failed on a write, one Modesto boot that raced
+another circuit, and two Sebenco boots (F, G) that ran the exposure poke (below) before the bloom knockout: the exposure answers a
+poke several frames late, so their base grabs after it are contaminated and their `nobloom` reads +6.9 and +9.3 (brighter, impossible
+for an additive term).
+
+A boot proves its circuit by the scan: the circuit's own bloom constants are found (1 `Blend factors` hit, 1 level-array hit) or
+the script finds none. One Modesto boot raced another circuit (Track Select stepped wrong) and found 0 hits: discarded.
+
+### Per stage, ours against the original, same pairs
+
+| Stage | Sebenco Climb | Modesto Heights | Moa Therma | The Amphiseum |
+| --- | --- | --- | --- | --- |
+| Frame grey, theirs / ours / signed bias | 103.8 / 85.7 / **-18.1** | 90.8 / 91.5 / +0.7 | 110.2 / 96.3 / **-14.0** | 83.5 / 87.8 / +4.3 |
+| 1. Scene luma before the curve (`LAvg`), theirs against ours (ours at `13b22ac77`) | 0.229 against 0.176: **1.30** | 0.42 against 0.262: 1.60 | 0.472 against 0.385: 1.23 | 0.132 against 0.133: 0.99 |
+| 2. Exposure `E` (min, max pins), theirs / ours (`13b22ac77`) | 0.555 / 0.555 | **0.60 / 0.868** | 1.0 / 1.0 | 2.0 / 2.0 |
+| 3. Curve end `t1`, theirs / ours (`13b22ac77`) | 0.612 / 0.612 | 1.0 / 1.0 | 1.571 / 1.465 | 1.0 / 1.0 |
+| 4. Bloom the original adds (whole frame, grey) | **+3.5** sd 0.4 (boots +3.15, +3.73; 10 samples) | 0.2 to 5.1 (boots +5.1, +0.4, +0.2) | -0.8 to +1.4, about 0 | 1.4 to 4.8 (2 boots, 7 samples) |
+| 4. Bloom ours adds | **0.00** | +3.42 | +0.63 | +6.49 |
+| 5. Flat HUD yellow (position hexagon, R G B median), theirs / ours | 233 233 39 / 219 219 16 | 233 233 35 / 217 217 15 | 233 233 35 / 217 217 14 | 233 233 33 / 219 218 15 |
+
+Stages 1 to 3 are the earlier lanes' live reads (`omega-luma-read`, the ring and the object's own coefficients). **The "ours" values of rows 1 to 3 are from `13b22ac77`**, before the sky, snow and rock programs brightened ours' frame (Sebenco 81.5 to 85.7 grey, its snow box 97.3 to 133.0); they were not re-read on `408f6fe6e`. An inversion of the current bloom-free frames (a lower bound: the clip at `t1` hides the brightest surfaces; it recovered 96 % on Sebenco on the old tree) puts ours' Sebenco `LAvg` at 0.187 or more (ratio 1.23 or less, about 1.18 at the old recovery), and Modesto's, Moa's and Amphiseum's inversions are too lossy to use (74 to 83 % recovery). Stage 4 is this lane's. Sebenco's bloom by box (grey the knockout removes, two boots): building left **-9.1 and -11.7** by boot (the lit Senco sign),
+snow sky -1.4, yellow floor and right wall 0.0. Moa's sky/city reads -4.1 and +2.0 on its two boots (it flips sign: drift, so no
+claim); Modesto's boxes move together with the frame mean (drift again).
+
+**The mask term carries most of it.** Zeroing `AlphaScale` alone (`nomask`, samples with at least one copy held) removes -2.37 and -3.18 of the boot means -3.15 and -3.73 (75 and 85 %; 4 and 5 samples; only 1 of 4 and 1 of 6 `full`-block copies held, so the true share is at least this), building left -6.4 and -10.3 against -9.1 and -11.7. The
+threshold term (`Threshold 0.944`, `Offset 1`, `Scale 2.55`) is what ours draws; the per-material mask `AlphaScale * mask.a`
+(`AlphaScale 0.928` on Sebenco) is what it does not ([`tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md), "The mask, not
+drawn"). The mask's contribution is therefore real and sign-correct on Sebenco, but it is a 3.5 grey term, not the offset.
+
+**Closure, Sebenco (a model, confidence 50).** Ours' no-bloom frame decoded, its curve inverted (`t1 0.612`, the angles of
+`.EnvSettings`), the scene scaled by a gain, run through the original's curve and encoded; then the original's measured bloom
+(3.5) added. The ring's ratio against the **current** tree is not re-read (rows 1 to 3 above), so the gain is a range:
+
+| Gain on ours' scene | Frame grey | Bias against theirs 103.8 | With the original's bloom +3.5 | Bias |
+| --- | --- | --- | --- | --- |
+| 1.00 | 85.7 | -18.1 | 89.2 | -14.6 |
+| 1.18 (ring ratio at the old recovery) | 93.9 | -9.8 | 97.4 | -6.3 |
+| 1.23 (the inversion's upper bound) | 96.1 | -7.7 | 99.6 | -4.2 |
+| 1.30 (the old-tree ratio; stale: it predates the sky, snow and rock programs) | 98.9 | -4.8 | 102.4 | -1.3 |
+
+So of Sebenco's 18.1 grey, bloom is 3.5, a scene-radiance gain of 1.18 to 1.23 is 8 to 10, and **4 to 6 grey is unattributed**:
+a global gain understates a gap that sits in the sky and far scenery (2.3 times ours, `omega-luma-read`), which the 1.0 to 1.3
+range does not reach. Moa the same way with its old-tree ratio 1.23 gives 101.9 (bias -8.3, its bloom about 0), Modesto's ring 1.60
+with the original's lower `E` is a net 1.12 on the output and overshoots (96.5 against 90.8; the gap is the sky alone, -36 against
++0.5 on the wall, `omega-hd-exposure`), and the Amphiseum needs no gain (0.99: 80.8 against 83.5, ours' bloom on top 87.3 against
+ours' own 87.8). These three used old-tree ratios and are indicative only.
+
+**Render lag, checked on the same data.** The exposure poke below answers late, so the bloom knockout was checked for it: in
+Sebenco boots D and E the base grab after a knockout reads the same as the one before it (whole-frame grey 98.6 then 98.6, 97.1 then
+96.8, 98.3 then 97.3; the mean of the 9 pairs differs by 0.3), while the knockout grab itself reads 3.4 to 4.3 lower, and `nomask`
+and `nobloom` reach the same level (94.6 against 94.8). So the knockout grab is the settled state, not a frame the pipeline had half
+applied, and 3.5 is not an underestimate from lag (confidence 70).
+
+### What this settles, and what it does not
+
+1. **The tone curve and the exposure are not the stage** (confidence 85): identical numbers on Sebenco, Moa (`t1` 1.571 against
+   1.465, from the higher `LAvg`), Amphiseum; Modesto's `E` is the symptom of its dim scene.
+2. **Bloom is a stage, and it is 3.5 grey on Sebenco, not the offset** (confidence 80: two boots, ten samples, a sd of 0.4, with
+   the poke read back). The prediction written before the boots held: a minority (19 %). On Modesto, Moa and Amphiseum the knockout
+   is below this method's noise (about 1 to 2.5 grey on the whole-frame mean) and the boots disagree: **unread** there. Ours already
+   draws bloom on those three (+3.4, +0.6, +6.5), none on Sebenco (nothing in its frame reaches `Threshold` 0.944 after the curve),
+   so wiring the mask would add to Sebenco, and Amphiseum (`AlphaScale 6`, ours already 5 grey bright, ring ratio 0.99) is the
+   circuit where it must not overshoot.
+3. **The remaining offset is before the curve** (the ring, confidence 80, stands from `omega-luma-read`): about 8 to 10 grey on
+   Sebenco is a scene-radiance gain and 4 to 6 is unattributed, in the sky and far scenery; it is per surface, not one gain (Moa and
+   Modesto above).
+4. **Encode and presenter: not shown to be the stage** (confidence 60). The shared sRGB encode and the cubic are the same law in
+   ours and in the inversion that recovers 96 % of ours' own `LAvg`; the one flat-colour comparison available (the HUD, drawn after the
+   composite in both, since its yellow is 233 on every circuit in theirs and 217 to 219 in ours) shows ours' flat HUD yellow
+   **14 to 16 levels lower in red and green and 19 to 24 lower in blue**, the same across all four circuits, so it is a HUD colour
+   difference (ours 6 % darker and more saturated), not a scene stage: Amphiseum and Modesto have no scene gap and show it equally.
+   **Open, not this lane's:** the HUD yellow.
+5. **Not done:** the exposure poke (`ehalf`: `cL` at the ToneMap object's `+0x8c` written to 0.5, held on every sample) did not give
+   the frame the curve predicts (predicted grey 0.675 times the base; observed 1.02 and 1.16 times, one of twelve samples within
+   3 grey), and its effect outlives the restore by several frames (the grabs after it carry it), so the original's `E` answers
+   a write late or through a second path (the coefficient texture is
+   read back by the CPU): the curve and encode were not validated against the original by a knockout. A poke of the bright-pass
+   `Threshold` to 2 (`highthr`, which leaves only the mask) wedged the port's GPU queue twice, on the host's copies; the script now
+   writes only the guest's own range and does not run it by default.
+
+**Comparison environment.** `scripts/compare-environment.toml` sets no bloom, tone map or exposure key for Omega (only 16x
+anisotropy, 1920x1080, `shadows = "original"`), and the pair flags carry none: ours runs the title's own chain with the circuit's
+authored `Bloom.*` and `Tonemap.*`. No mismatch. **Stale text found:** `crates/omega/src/lib.rs`'s comment on `EXTRA_CANDIDATES` and
+this page's "`.EnvSettings` is read through 2048's reader" bullet say the patch's copy carries no bloom block so the chain is off in a
+race; the patch's `data08` copies of all four circuits carry `Bloom.*`, `BloomHDR.*` and `Tonemap*.*` and ours draws the chain on three
+of them (the measured +3.4, +0.6, +6.5 above). **Not run:** the HD and 2048 paths. **2048: checked, differs** (no bloom block in its
+`.envsettings`, [`tonemap.md`](../ghidra/functions/ps4-omega-eu/tonemap.md)); HD: not checked (`hd_bloom` is another chain).
+
+**Repeats and limits.** Sebenco two boots,
+Modesto three valid and one wrong circuit, Moa two, Amphiseum two (one had a single valid sample); one binary (1.07 eboot), HD mode,
+the grid before GO. Raw captures are kept off the tree.
 
 ## See also
 

@@ -7,7 +7,9 @@ import package::bindings::{emissive_scale, emissive_tint, env_probe_tex, scene, 
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
 import package::glow::{glow_first, glow_pad, glow_second};
 import package::holo::{holo_billboard};
-import package::hull_normal::{hull_normal};
+import package::hull_normal::{hull_frame, hull_normal};
+import package::omega_rock::{OmegaRock, omega_rock};
+import package::omega_snow::{OmegaSnow, omega_snow, omega_snow_normal};
 import package::own_shield::{own_shield, own_shield_shading};
 import package::panel::{panel_march};
 import package::pad::{pad_normal};
@@ -53,8 +55,14 @@ fn env_probe_uv(n: vec3<f32>) -> vec2<f32> {
 // strength. The draw names it: `uniforms.env_gain` is the rgb scale and `uniforms.env_desat`
 // the `.w` (`oag_raceplay::env_probes::ProbeTint`).
 fn probe_tint(texel: vec3<f32>) -> vec3<f32> {
+    let luma = dot(texel, vec3<f32>(0.300049, 0.589844, 0.109985));
+    // HD's Zone frame: one tint for every craft hull, from the stage table, over the hull's
+    // own (`mesh_render::Light::hull_probe_tint`).
+    if uniforms.env_layer > 0.5 && scene.light.hull_probe_tint.w > 0.5 {
+        return luma * scene.light.hull_probe_tint.rgb;
+    }
     let scaled = texel * uniforms.env_gain;
-    let grey = vec3<f32>(dot(texel, vec3<f32>(0.300049, 0.589844, 0.109985)) * uniforms.env_gain);
+    let grey = vec3<f32>(luma * uniforms.env_gain);
     return mix(scaled, grey, uniforms.env_desat);
 }
 
@@ -178,6 +186,18 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // **Omega's `_shadow` crowds** (`Emissive::program` mode 16, `mesh::rcs::psp2::crowd`): the light
     // is `Ambient + constantAmbientColour + sun * sat(N.L)` and the lit picture is times `Shadowed`.
     let crowd_lit = row_scale.z > 15.5 && row_scale.z < 16.5;
+    // **Omega's `RT_snow1`** (mode 21, `mesh::rcs::psp2::snow`, `omega_snow.wesl`): its own normal
+    // blend, Fresnel-weighted wrapped diffuse and sun lobe. Off under CIRCUIT LIGHTING `simplified`.
+    let omega_snow_entry = (in.slots >> 24u) & 63u;
+    let omega_snow_on = omega_snow_entry != 0u && row_scale.z > 20.5 && row_scale.z < 21.5
+        && simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    // **Omega's `DC_Rocks`** (mode 22, `mesh::rcs::psp2::snow`, `omega_rock.wesl`): its own normal
+    // blend, wrapped sun, shadow-light factor and sun lobe. Off under CIRCUIT LIGHTING `simplified`.
+    let omega_rock_on = omega_snow_entry != 0u && row_scale.z > 21.5 && row_scale.z < 22.5
+        && simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    // A Zone frame lights the surface with its own program, never this permutation's.
+    let omega_rock_drawn = omega_rock_on && !zone_plain
+        && !(zone_program != 0.0 && scene.zone.shape.w > 0.5);
     // **HD's scrolled-tap water** (`Emissive::program` mode 17, `oag_mesh::mesh::rcs::water`):
     // 1 the sea, 2 Amphiseum's pool, 3 `water_test_2`, 4 `water_noref`; 0 elsewhere.
     let water_entry = (in.slots >> 24u) & 63u;
@@ -205,6 +225,9 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let panel_entry = (in.slots >> 24u) & 63u;
     let panel = panel_entry != 0u && row_scale.z > 14.5 && row_scale.z < 15.5
         && dot(in.tangent.xyz, in.tangent.xyz) > 0.25;
+    // **Omega's `tarmac_markings_dirt_markingsnormal[_emis]` roads** (mode 14, below).
+    let tarmac_entry = (in.slots >> 24u) & 63u;
+    let tarmac = tarmac_entry != 0u && row_scale.z > 13.5 && row_scale.z < 14.5;
     let uv_grad = uv_gradients(in.texcoord);
     var panel_uv = in.texcoord;
     if panel {
@@ -227,6 +250,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The mapped normal feeds the sun's `N.L`, the specular's `N.H` and the probe
     // lookups; a pad takes its own frame above and has no tangent.
     var n_hull = n;
+    var omega_rock_lit: OmegaRock;
     // **Sebenco's snow-capped rock** (`Emissive::program` mode 4, `oag_mesh::mesh::rcs::snow_rock`):
     // the mask (third binding, second pair) mixes the snow's normal (fourth) with the rock's
     // (sixth) before the frame, and the rock (fifth) into the snow below. Both normals and the
@@ -252,8 +276,18 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let bump = material_sample_grad(MATERIAL_PAD_MASK, panel_uv, uv_grad[0], uv_grad[1]);
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
+    } else if omega_snow_on {
+        n_hull = omega_snow_normal(omega_snow_entry, in, n);
+        n_lit = n_hull;
+    } else if omega_rock_on {
+        omega_rock_lit = omega_rock(omega_snow_entry, in, n);
+        n_hull = omega_rock_lit.normal;
+        n_lit = n_hull;
     } else if simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
-        n_hull = hull_normal(material_sample(MATERIAL_PAD_MASK, in.texcoord), n, in.tangent);
+        let map = material_sample(MATERIAL_PAD_MASK, in.texcoord);
+        // The crowd's programs weight the map's `z` by `eye - position` (`row_tint.w`, the entry's `offset`).
+        let third = select(n, scene.fog.camera - in.world, crowd_lit && row_tint.w > 0.5);
+        n_hull = hull_frame(map, n, in.tangent, third);
         n_lit = n_hull;
     }
     // The water's normal is its scrolled taps' sum (`water.wesl`), for the light, the
@@ -274,6 +308,10 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     let fill = max(dot(n, normalize(vec3<f32>(-0.5, 0.2, -0.7))), 0.0);
     let stand_in = vec3<f32>(0.15 + 0.75 * key + 0.25 * fill);
 
+    var omega_snow_lit: OmegaSnow;
+    if omega_snow_on {
+        omega_snow_lit = omega_snow(omega_snow_entry, in, n_lit);
+    }
     let ndl_raw = dot(n_lit, scene.light.direction);
     let ndl = clamp(ndl_raw, 0.0, 1.0);
     // The specular's facing term in every HD lit program: `MOV_SAT x8` of the unsaturated
@@ -549,8 +587,25 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             }
         }
         let spu = select(in.spu_light, vec3<f32>(0.0), simplified_lighting != 0.0);
+        // **The tarmac roads' shadow-light factor on the prelit term** (Omega's lightmapped
+        // programs, `docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`):
+        //
+        //     Fsl = 0.75 + 0.25 sat(N.SL) + SLSD.y sat(R.SL)^SLSD.x
+        //
+        // `N` the mapped normal, `R` the view reflected about it, `SL` the circuit's authored
+        // `Lighting.ShadowLight direction`. Applied to the road family read here; the other
+        // lightmapped families carry it too and are unread (`omega-status.md`).
+        var shadow_light_factor = 1.0;
+        if tarmac && nova && scene.light.shadow_light.w > 0.5 {
+            let seen = normalize(scene.fog.camera - in.world);
+            let r = reflect(-seen, n_lit);
+            let sl = scene.light.shadow_light.xyz;
+            shadow_light_factor = 0.75 + 0.25 * clamp(dot(n_lit, sl), 0.0, 1.0)
+                + scene.light.shadow_light_specular.y
+                    * pow(clamp(dot(r, sl), 0.0, 1.0), scene.light.shadow_light_specular.x);
+        }
         let lit_sum = select(
-            hull_ambient + prelit + vertex_light_term + sun_diffuse + spu,
+            hull_ambient + prelit * shadow_light_factor + vertex_light_term + sun_diffuse + spu,
             in.colour.rgb * (hull_ambient + sun_diffuse + spu),
             colour_factor,
         );
@@ -591,10 +646,32 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             authored = scene.light.ambient + scene.light.sun * ndl;
             sun_light = scene.light.sun * ndl;
         }
+        // **A chunk on its Zone program** is the same `Ambient` permutation where the title's
+        // Zone frame is read to be one (`shape.w`): `light * surface` with the stage's ambient
+        // and sun as the light, never the circuit's lightmap or baked vertex light. A material
+        // whose plain program is fed no scene light is lit here too:
+        // every material's Zone variant has a compile that declares the ambient constant
+        // (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone surface's light").
+        if zone_program != 0.0 && scene.zone.shape.w > 0.5 {
+            authored = scene.light.ambient + scene.light.sun * ndl;
+            sun_light = scene.light.sun * ndl;
+        }
         // The `_shadow` crowd's sum: no prelit or vertex-light term, the material's `Ambient` added.
         if crowd_lit {
             authored = row_tint.rgb + scene.light.ambient + sun_diffuse;
             sun_light = sun_diffuse;
+        }
+        // Omega's snow: the Fresnel-weighted wrapped sun plus the Nova term, multiplying the picture
+        // and the vertex tint (`omega_snow.wesl`); its specular replaces the generic one below.
+        if omega_snow_on {
+            authored = omega_snow_lit.diffuse;
+            sun_light = omega_snow_lit.sun;
+        }
+        // Omega's rock: the Nova term times the shadow light's factor plus the wrapped sun gated by
+        // the lightmap's alpha (`omega_rock.wesl`).
+        if omega_rock_drawn {
+            sun_light = scene.light.sun * (omega_rock_lit.wrapped * mask);
+            authored = prelit * omega_rock_lit.shadow_factor + sun_light;
         }
     }
 
@@ -751,8 +828,6 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     //
     // over the albedo, dirt first. The vertex colour carries the dirt pair here, so the tint
     // below is white on this mode. The taps are mixed in the domain `picture` is sampled in.
-    let tarmac_entry = (in.slots >> 24u) & 63u;
-    let tarmac = tarmac_entry != 0u && row_scale.z > 13.5 && row_scale.z < 14.5;
     if tarmac {
         let dirt = material_sample(MATERIAL_SIXTH_MAP, in.colour.xy);
         let markings = material_sample(MATERIAL_FIFTH_MAP, in.lightmap_texcoord.zw);
@@ -1043,6 +1118,18 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         let mask = material_sample(MATERIAL_PAD_MASK, in.texcoord);
         emissive_add = select(vec3<f32>(mask.a), decode(mask.rgb), glow_program < 8.5) * glow_tint_offset.rgb;
     }
+    // **2048's `fc10_Lambert_2UV_Emissive`** (mode 19, `mesh::rcs::psp2::emissive_add`): `D.a * R^2`
+    // after the light, `R` the third binding (`ReflectMap`) at `0.5 + 0.5 * reflect(-V, N).xy`.
+    if glow_program > 18.5 && glow_program < 19.5 {
+        let r = reflect(-normalize(scene.fog.camera - in.world), n);
+        let map = material_sample(MATERIAL_PAD_MASK, vec2<f32>(0.5) + 0.5 * r.xy);
+        emissive_add = decode(map.rgb) * texel.a * glow_tint_offset.rgb;
+    }
+    // **2048's `dc_diffusetexturealphaemissive`** (mode 20): the lit picture's square joins the sum
+    // (`mad light, D^2, D^2`), neither lit nor shadowed.
+    if glow_program > 19.5 && glow_program < 20.5 {
+        emissive_add = decode(picture.rgb) * glow_tint_offset.rgb;
+    }
     // **HD's emissive-in-alpha families** (`Emissive::program` mode 12, `mesh::rcs::alpha_emissive`):
     // `MAD H.xyz, T.wwww, C, lit`, `T` the picture's own fetch and `C` the material's emissive
     // colour in the entry's tint. The mask is the unit-0 alpha; a `dn_diffuse_specular_emiss` entry (second lane set) binds its SpecularTexture third, read in the specular below. The Zone
@@ -1318,6 +1405,13 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
                 specular = scene.light.sun_specular.rgb * (pow(facing, row_scale.x) * mask * rig_on * in.lit_light.x)
                     * highlight;
             }
+        }
+
+        if omega_snow_on {
+            specular = omega_snow_lit.specular;
+        }
+        if omega_rock_drawn {
+            specular = omega_rock_lit.specular * albedo_linear * (mask * rig_on);
         }
 
         // **The reflection probe**, on the hull materials whose `IBL` variant declares it

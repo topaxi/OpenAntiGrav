@@ -176,6 +176,7 @@ impl Screens {
             y: self.number(node.value("y")).unwrap_or(0.0) + offset.1,
             width,
             height,
+            wipe: self.vwipe_from_node(node),
         })
     }
 
@@ -197,6 +198,12 @@ impl Screens {
                 .and_then(parse_argb)
                 .unwrap_or(0xffff_ffff),
             corner: node.flag("corner").unwrap_or(false),
+            delay: self.number(node.value("delay")).unwrap_or(0.0).max(0.0),
+            seconds: self
+                .number(node.value("EnableTransition"))
+                .or_else(|| self.number(node.value("Transition")))
+                .unwrap_or(super::BRACKET_RAMP_SECONDS),
+            group: None,
         })
     }
 
@@ -224,6 +231,7 @@ impl Screens {
             reveal: Vec::new(),
             transition: 0.0,
             start_enabled: node.flag("StartEnabled").unwrap_or(true),
+            wipe: self.vwipe_from_node(node),
         }
     }
 
@@ -308,6 +316,7 @@ impl Screens {
                 .unwrap_or(false)
                 .then_some(viewport_width)
                 .flatten(),
+            push_height: node.flag("PushHeight").unwrap_or(false),
             transition: 0.0,
         }
     }

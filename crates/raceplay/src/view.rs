@@ -70,6 +70,8 @@ pub struct RaceView {
     pub(super) camera_shake_on: bool,
     /// Whether other people's multiplayer tags are drawn ([`super::Race::set_player_tags`]).
     pub(super) player_tags_on: bool,
+    /// The track's section-visibility rows, which gate a multiplayer tag by the viewer's section.
+    pub(super) track_sections: Option<oag_vex::pvs::TrackPvs>,
     /// The seat's wall-contact effects: the camera shake, the collision sparks and
     /// what paces them. See [`ContactFx`](super::contact_fx::ContactFx).
     pub(super) contact: super::contact_fx::ContactFx,
@@ -83,6 +85,9 @@ pub struct RaceView {
     pub(super) camera_override: Option<CameraOverride>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].
     pub(super) capture_hud: Option<crate::CaptureHud>,
+    /// Whether the HUD stays hidden until the race is released
+    /// (`oag_title::RaceDefaults::hud_waits_for_go`).
+    pub(super) hud_waits_for_go: bool,
     /// The song-name marquee ([`crate::now_playing`]), when the title authors one.
     pub(super) now_playing: Option<crate::now_playing::View>,
     /// Seconds added to the world meshes' animation clock. See [`crate::Options::world_clock_offset`].

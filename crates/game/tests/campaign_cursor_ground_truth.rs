@@ -25,6 +25,17 @@ impl Profile {
         Self(dir)
     }
 
+    /// Writes `[controls] menu_back = <choice>` into this profile's settings.
+    fn menu_back(&self, choice: &str) {
+        let dir = self.0.join("config/oag");
+        std::fs::create_dir_all(&dir).expect("a config directory");
+        std::fs::write(
+            dir.join("settings.toml"),
+            format!("[controls]\nmenu_back = \"{choice}\"\n"),
+        )
+        .expect("settings.toml");
+    }
+
     /// One launch of Pulse on `script`; the states it reported.
     fn drive(&self, script: &str, log: &str) -> Vec<Value> {
         let image = oag_testdata::image("pulse-psp-eu.chd").expect("pulse-psp-eu.chd");
@@ -669,5 +680,138 @@ fn a_grid_filled_from_a_seed_in_the_editor_is_saved_with_its_setting() {
             .all(|c| ["flash", "rapier"].contains(&c.as_str()))
             && classes.len() == 2,
         "{classes:?}"
+    );
+}
+
+/// On Pulse's PS2 pressing `Cell Selection` leaves on the triangle and opens `Cell Help` on the
+/// circle: its executable binds `backward` to the triangle and its `CellMode_Definition.xml`
+/// authors `forward="circle"` on the `Cell Help` redirect, with `Back` drawn beside a triangle
+/// (`docs/ui/campaign-screens.md`, "Back and Help on the PS2"). The PSP's buttons are the other way
+/// round, and do the PSP's thing.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd and pulse-psp-eu.chd"]
+fn cell_selection_backs_out_on_the_pressings_own_button() {
+    let (Some(ps2), Some(psp)) = (
+        oag_testdata::image("pulse-ps2-eu.chd"),
+        oag_testdata::image("pulse-psp-eu.chd"),
+    ) else {
+        return;
+    };
+    let profile = Profile::fresh("back-buttons");
+    let level = |image: &Path, tail: &str, log: &str| {
+        let states = profile.drive_on(
+            image,
+            &format!("{OPEN}; press cross; until screen.id=cell; ticks 20; {tail}; ticks 20"),
+            log,
+        );
+        last_campaign(&states).0
+    };
+    assert_eq!(level(&ps2, "press triangle", "ps2-triangle.jsonl"), "grid");
+    // A second triangle leaves Grid Selection for the main menu.
+    let states = profile.drive_on(
+        &ps2,
+        &format!(
+            "{OPEN}; press cross; until screen.id=cell; ticks 20; press triangle; \
+             until screen.id=grid; ticks 20; press triangle; until screen!=campaign"
+        ),
+        "ps2-twice.jsonl",
+    );
+    assert_ne!(
+        states
+            .last()
+            .and_then(|state| state["screen"]["kind"].as_str()),
+        Some("campaign"),
+        "the second triangle left the campaign"
+    );
+    assert_eq!(
+        level(&ps2, "press circle", "ps2-circle.jsonl"),
+        "cell",
+        "circle opens Cell Help on the PS2, it does not leave"
+    );
+    assert_eq!(level(&psp, "press circle", "psp-circle.jsonl"), "grid");
+    assert_eq!(
+        level(&psp, "press triangle", "psp-triangle.jsonl"),
+        "cell",
+        "triangle opens Cell Help on the PSP, it does not leave"
+    );
+}
+
+/// With `Cell Help` open a direction moves nothing, and the pressing's help button closes it again.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn cell_help_opened_on_the_ps2_circle_freezes_the_cursor_until_it_closes() {
+    let Some(ps2) = oag_testdata::image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("ps2-help");
+    let open = format!("{OPEN}; press cross; until screen.id=cell; ticks 20");
+    let held = profile.drive_on(
+        &ps2,
+        &format!("{open}; press circle; ticks 10; press down; ticks 20"),
+        "held.jsonl",
+    );
+    let (first, last) = first_and_last_cell(&held);
+    assert_eq!(first, last, "Cell Help is open: down moved nothing");
+    let freed = profile.drive_on(
+        &ps2,
+        &format!("{open}; press circle; ticks 10; press circle; ticks 10; press down; ticks 20"),
+        "freed.jsonl",
+    );
+    let (first, last) = first_and_last_cell(&freed);
+    assert_ne!(first, last, "Cell Help closed: down moves the cursor again");
+}
+
+/// The CONTROLS row MENU BACK = `circle` puts Back on the circle on Pulse's PS2, where the disc
+/// binds it to the triangle: `Cell Selection` and `Grid Selection` leave on the circle, and Help,
+/// which the circle opened, moves to the triangle (`docs/ui/campaign-screens.md`, "Menu back").
+/// `original` is the previous test's behaviour.
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_triangle() {
+    let Some(ps2) = oag_testdata::image("pulse-ps2-eu.chd") else {
+        return;
+    };
+    let profile = Profile::fresh("menu-back-circle");
+    profile.menu_back("circle");
+    let level = |tail: &str, log: &str| {
+        let states = profile.drive_on(
+            &ps2,
+            &format!("{OPEN}; press cross; until screen.id=cell; ticks 20; {tail}; ticks 20"),
+            log,
+        );
+        last_campaign(&states).0
+    };
+    assert_eq!(level("press circle", "circle.jsonl"), "grid");
+    assert_eq!(
+        level("press triangle", "triangle.jsonl"),
+        "cell",
+        "triangle opens Cell Help once circle is Back"
+    );
+    let states = profile.drive_on(
+        &ps2,
+        &format!(
+            "{OPEN}; press cross; until screen.id=cell; ticks 20; press circle; \
+             until screen.id=grid; ticks 20; press circle; until screen!=campaign"
+        ),
+        "twice.jsonl",
+    );
+    assert_ne!(
+        states
+            .last()
+            .and_then(|state| state["screen"]["kind"].as_str()),
+        Some("campaign"),
+        "the second circle left the campaign"
+    );
+    let original = Profile::fresh("menu-back-original");
+    original.menu_back("original");
+    let states = original.drive_on(
+        &ps2,
+        &format!("{OPEN}; press cross; until screen.id=cell; ticks 20; press circle; ticks 20"),
+        "original.jsonl",
+    );
+    assert_eq!(
+        last_campaign(&states).0,
+        "cell",
+        "original keeps the PS2's circle on Help"
     );
 }

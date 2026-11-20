@@ -92,7 +92,9 @@ fn the_first_cell_draws_four_emblems_and_a_frame_of_corner_marks() {
     let Some(opened) = open() else { return };
     let campaign = &opened.campaign;
     let grid = campaign.grids.get(8).expect("Fury's first grid");
-    let model = CellSelection::new(grid.cells.clone());
+    let mut model = CellSelection::new(grid.cells.clone());
+    // The settled page: the emblems' entry wipes are over.
+    *model.entry_mut() = oag_ui::screen::EntryClock::finished();
     let skin = oag_ui::menu::Skin::new(
         oag_hd::frontend::MENU_SKIN,
         oag_display::space::Space::HD,

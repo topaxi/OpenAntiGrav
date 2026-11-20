@@ -182,11 +182,8 @@ pub fn save_to(path: &Path, key: &Key, replay: &Replay) -> Result<bool> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    let partial = path.with_extension(format!("{EXTENSION}.partial"));
-    std::fs::write(&partial, replay.to_bytes())
-        .with_context(|| format!("writing {}", partial.display()))?;
-    std::fs::rename(&partial, path)
-        .with_context(|| format!("renaming {} into place", partial.display()))?;
+    crate::profile::write_bytes(path, replay.to_bytes())
+        .with_context(|| format!("writing {}", path.display()))?;
     Ok(true)
 }
 

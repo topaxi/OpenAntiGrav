@@ -860,8 +860,9 @@ inside `-6.0 < d < 6.0`, the same bound `Rocket_HitCraft`'s own caller
    `Plasmas_Update` pass-two teardown already read above.
 2. Calls `Plasma_SpawnDetonation` (`0x0886ac88`) **inline**, gated on
    `FUN_0883e37c`, in addition to the unconditional call pass-two makes for
-   any destroy-bit entity. Whether this double-fires the flash or
-   `FUN_0883e37c` degates the second call is not chased here - `blast_models`
+   any destroy-bit entity. `FUN_0883e37c` is the craft's section bit in the view's
+   section row ([hud-game-options.md](hud-game-options.md), "The gate"), so the inline call is skipped for a craft
+   outside the view's row; whether it also double-fires the flash is not chased here - `blast_models`
    owns that function and this page does not touch it.
 3. Plays `PLASMAHITSHIP` (`0x08a7c998`) through the bolt's own emitter and
    immediately stops and clears that emitter (`+0x5c = 0`) - which is why

@@ -296,6 +296,39 @@ pub const PICKUP_COLOURS: [Option<u32>; 14] = {
 /// (`docs/ghidra/functions/ps4-omega-eu/omega-pickup-table.md`, "The fade").
 pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 
+/// The class name over `ZONE`: fourteen `{ zoneThreshold, stringId }` records at `0x0197b890`
+/// (1.07 patch program; base file offset `0x915080`), 16 bytes each, descending from 75 to 0.
+/// `FUN_012992b0` compares the zone counter (a float read from the race's per-slot array) against
+/// the same thresholds, unrolled as compares, takes the first one it has reached and writes that
+/// record's string into the `SpeedClass` widget.
+///
+/// Thresholds and ids are HD's own table byte for byte
+/// (`docs/ghidra/functions/ps3-hdfury-eu/zone-speed-class-table.md`), read here off Omega's
+/// executable in both packages, so this is **measured on Omega**, not inherited
+/// (`docs/ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md`). Rung `n` begins at
+/// `rung_zones[n]`; the walker is keyed on the zone, so the HUD reads the zone and not the
+/// grade's stage. The 2048-lineage circuits read 2048's own [`ART_2048`] set instead.
+pub const ZONE_SPEED_CLASSES: &oag_title::ZoneSpeedClasses = &oag_title::ZoneSpeedClasses {
+    ids: &[
+        Some("MSC_SVENOM"),
+        Some("Venom"),
+        Some("MSC_SFLASH"),
+        Some("Flash"),
+        Some("MSC_SRAPIER"),
+        Some("Rapier"),
+        Some("MSC_SPHANTOM"),
+        Some("Phantom"),
+        Some("MSC_SPPHANTOM"),
+        Some("MSC_ZEN"),
+        Some("IG_HUD_SUPZEN"),
+        Some("IG_HUD_SUBSON"),
+        Some("IG_HUD_MACH1"),
+        Some("IG_HUD_SUPSON"),
+    ],
+    rung_zones: Some(&[0, 2, 3, 5, 7, 12, 16, 20, 27, 35, 42, 50, 60, 75]),
+    caption_hidden_from_zone: None,
+};
+
 /// How Omega's HUD sprites reach the screen, [`oag_title::Title::hud_art`].
 ///
 /// **Measured**: the layouts themselves, and that every atlas of the five roots
@@ -304,8 +337,7 @@ pub const PICKUP_FADE_RATE_PERCENT: u16 = 150;
 /// `sights` (the widget names are checked to exist in Omega's layouts),
 /// `runtime` and `shield_percent` - nobody has run Omega. `message_slots` and
 /// `lap_hud` are read off its own executable (see their comments).
-/// `zone_speed_classes` is `None`: Omega's class names are unmeasured, so the
-/// Zone ladder's class text draws nothing rather than HD's list.
+/// `zone_speed_classes` is [`ZONE_SPEED_CLASSES`], Omega's own table off its executable.
 pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     always_on: oag_hd::hud::ALWAYS_ON,
     raster: false,
@@ -350,7 +382,7 @@ pub const ART: &oag_title::HudArt = &oag_title::HudArt {
     bar_models: None,
     time_ladder_captions: None,
     pickup_icon_uv: None,
-    zone_speed_classes: None,
+    zone_speed_classes: Some(ZONE_SPEED_CLASSES),
     shield_percent: false,
     sub_weapon_line: true,
     speed_full_kmh: 700,

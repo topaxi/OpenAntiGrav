@@ -512,6 +512,38 @@ fn a_step_starts_the_hull_at_the_last_models_depth_and_settles() {
     }
 }
 
+/// The cut after a step is 3 screen frames from the selection (`hull_swap::GAP_FRAMES`; the
+/// original's craft is absent at RAM frames 3 to 5 and back at 6, `team-selection-model.md`,
+/// "The step against RAM"): the picture 2 frames after a step draws no craft, 3 frames after it
+/// draws the new one. The frame-6 step pair reads this frame.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images and a GPU adapter"]
+fn a_step_cuts_the_craft_for_three_frames_and_not_four() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let frames = |n: f32| format!("{:.5}", n / 60.0);
+    let empty = ship_select_still(&image, "Harimau", "0.001");
+    let drawn = |step: &str| {
+        let still = ship_select_still(&image, "Harimau", step);
+        let frame = [740, 200, 1660, 740];
+        let mut changed = 0;
+        for y in frame[1]..frame[3] {
+            for x in frame[0]..frame[2] {
+                let at = ((y * still.width + x) * 4) as usize;
+                changed += usize::from(
+                    (0..3).any(|c| still.rgba[at + c].abs_diff(empty.rgba[at + c]) > 40),
+                );
+            }
+        }
+        changed
+    };
+    let (two, three) = (drawn(&frames(2.0)), drawn(&frames(3.0)));
+    eprintln!("pixels beyond the empty frame: {two} at 2 frames, {three} at 3");
+    assert!(two < 1000, "the craft is still cut at 2 frames: {two}");
+    assert!(three > 20_000, "the craft is back at 3 frames: {three}");
+}
+
 /// The live screen through `--drive`, the real session ticking the picker, a press of the pad
 /// and frames read back: after a step right (Assegai to Mirage on a fresh profile) the settled
 /// hull is the width the capture draws for Mirage at rest. A screen that does not tick the fit
@@ -529,7 +561,7 @@ fn the_live_screen_draws_the_hull_where_the_fit_rests_it() {
     let script = format!(
         "boot; select racebox; press cross; until page=race; select launch_race; \
          press cross; until screen=picker; press cross; until screen.id=ship-select; \
-         until opening_reads=landed; ticks 120; press right; ticks 1; screenshot {gap}; \
+         until opening_reads=landed; ticks 120; press right; screenshot {gap}; \
          ticks 240; screenshot {settled}; quit",
         gap = shot("gap").display(),
         settled = shot("settled").display(),
@@ -1021,5 +1053,95 @@ fn the_model_row_follows_the_discs_unlock_rows(
         hd_era, 12,
         "{}: twelve HD-era teams gate their models",
         title.name
+    );
+}
+
+/// Feisar's Ship Select, `--menu-entry-seconds` as given (`None` is the flag absent), as RGBA.
+fn ship_select_entry_still(
+    image: &std::path::Path,
+    entry_seconds: Option<&str>,
+) -> oag_texture::replacer::Image {
+    let dir = std::env::temp_dir().join("oag-hd-entry-wipe-ground-truth");
+    std::fs::create_dir_all(dir.join("config/oag")).expect("a temp directory");
+    std::fs::write(
+        dir.join("config/oag/settings.toml"),
+        "[race]\nteam = \"Feisar\"\n",
+    )
+    .expect("a settings file");
+    let out = dir.join(format!("{}.png", entry_seconds.unwrap_or("none")));
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args([
+            "--no-audio",
+            "--size",
+            "1920x1080",
+            "--menu-page",
+            "ship-select",
+        ])
+        .args(["--fury-tint", "0", "--no-hull-shake"]);
+    if let Some(seconds) = entry_seconds {
+        command.args(["--menu-entry-seconds", seconds]);
+    }
+    let status = command
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page ship-select");
+    oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot")).expect("a PNG")
+}
+
+/// Pixels of `a` and `b` that differ by more than 40 in a channel inside `[left, top, right, bottom]`.
+fn differing(
+    a: &oag_texture::replacer::Image,
+    b: &oag_texture::replacer::Image,
+    frame: [u32; 4],
+) -> usize {
+    let mut count = 0;
+    for y in frame[1]..frame[3] {
+        for x in frame[0]..frame[2] {
+            let at = ((y * a.width + x) * 4) as usize;
+            if (0..3).any(|c| a.rgba[at + c].abs_diff(b.rgba[at + c]) > 40) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// Team Selection's `Logo` waits its authored 0.5 s from the page opening and ramps over 0.7 s
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Wired: page entry"): at 0.3 s the
+/// banner panel is bare, at 0.6 s a slab of the logo shows, at 1.3 s the logo is whole, and a
+/// still with no stated time is the whole logo. This fails if the delay, the entry clock or its
+/// flag is dropped: with any of them gone the 0.3 s still shows the logo.
+#[test]
+#[ignore = "needs hdfury-ps3-eu-dec.iso under data/images"]
+fn the_team_logo_waits_its_delay_and_wipes_on_the_page_entry() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let logo = [260, 220, 640, 330];
+    let settled = ship_select_entry_still(&image, None);
+    let whole = ship_select_entry_still(&image, Some("1.3"));
+    let waiting = ship_select_entry_still(&image, Some("0.3"));
+    let slab = ship_select_entry_still(&image, Some("0.6"));
+    assert_eq!(
+        differing(&settled, &whole, logo),
+        0,
+        "no stated time is finished"
+    );
+    let ink = differing(&waiting, &whole, logo);
+    assert!(
+        ink > 3000,
+        "the whole logo is {ink} pixels over the bare panel"
+    );
+    let slab_ink = differing(&waiting, &slab, logo);
+    assert!(
+        (100..ink / 2).contains(&slab_ink),
+        "0.6 s is a slab: {slab_ink} of {ink} pixels"
     );
 }

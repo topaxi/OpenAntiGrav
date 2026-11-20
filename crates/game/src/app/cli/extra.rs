@@ -136,6 +136,18 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_picker_seconds: Option<f32>,
 
+    /// With `--menu-page ship-select`/`track-select`/`grid-select`/`cell-select` on HD/Fury or
+    /// Omega, draw the page this many seconds after it became current, for its `vwipe` images.
+    ///
+    /// Each waits its authored `delay` from the page's entry and then ramps over its in-time
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Wired: page entry"), so `0.6`
+    /// shows Team Selection's logo (0.5 s delay) a slab into its wipe. `None` draws every one
+    /// finished, which is what a still of the settled page is. Apart from
+    /// `--menu-picker-seconds`, which a pair script sets to the seconds that turn the craft to
+    /// the original's turntable angle: that is not the page's age.
+    #[arg(long, value_name = "SECONDS")]
+    pub(crate) menu_entry_seconds: Option<f32>,
+
     /// With `--menu-page ship-select` on a title that draws the race hull,
     /// draw the screen this many seconds after a selection step.
     ///
@@ -144,6 +156,11 @@ pub(crate) struct MenuArgs {
     /// (`docs/ui/selection-screens.md`, "The craft's swap"). A still has no
     /// step to be after, so this stands for one: the screen is otherwise
     /// settled, or `--menu-picker-seconds` after it opened. `None` draws no step.
+    ///
+    /// Also `--menu-page track-select` (the circuit `Emblem`'s wipe restarts at a step) and, on
+    /// HD/Fury and Omega, `--menu-page cell-select`, where it is the seconds since the cell or the
+    /// rung last changed, which re-arms the four emblems' wipes; the page is then
+    /// `--menu-entry-seconds` old, or 10 s old with none.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_picker_step_seconds: Option<f32>,
 

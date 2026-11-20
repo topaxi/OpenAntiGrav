@@ -89,6 +89,9 @@ pub const UVSET1_HASH: u32 = 0x49f7_6806;
 pub const UV1_UV2_HASH: u32 = 0x1aef_e524;
 /// `~crc32("VertexColour1")`: four normalised bytes per vertex (type nibble 11 on PS4).
 pub const VERTEX_COLOUR1_HASH: u32 = 0x7493_d450;
+/// `~crc32("VertexColour2")`: four normalised bytes per vertex on the PS4 (type nibble 11); the
+/// vertex input of Omega's snow programs, whose `.rgb` tints the picture.
+pub const VERTEX_COLOUR2_HASH: u32 = 0xed9a_85ea;
 /// `~crc32("uv1_uvDirt")`: four halves, the tiling pair in `.xy` and the dirt pair in `.zw`. The
 /// vertex input of Omega's `tarmac_*` road programs, which name no `Uv1`.
 pub const UV1_UVDIRT_HASH: u32 = 0x273a_b13e;
@@ -107,6 +110,19 @@ pub const VITA_UBYTE4_NORM: u8 = 4;
 /// `~crc32("barsUV_blendUV")`: one four-lane half attribute, the bars' pair in `.xy` and the
 /// wipe's in `.zw`. The same hash HD's `nr_twinblend` names its `v[8]` by.
 pub const BARS_BLEND_HASH: u32 = 0x0e7e_a5a8;
+
+/// The attribute at offset 24 of a skinned PS4 vertex (`Data/crowd/Rigs`): four `u16` skin weights,
+/// normalised. The name's `~crc32` is this value; the name itself is not recovered, so the role is
+/// measured: on all 40 rigs' 21,344 vertices the four lanes sum to 65,533 to 65,535 (confidence 90).
+pub const SKIN_WEIGHTS_HASH: u32 = 0xf076_8d21;
+/// The attribute at offset 32 of a skinned PS4 vertex: four `u8` bone indices into the sibling
+/// `.rcsskeleton`'s node list (every index is below the skeleton's node count on all 40 rigs).
+/// Name not recovered; see [`SKIN_WEIGHTS_HASH`].
+pub const SKIN_INDICES_HASH: u32 = 0x4517_7157;
+/// The type nibble of [`SKIN_WEIGHTS_HASH`]: four unsigned normalised `u16`.
+pub const PS4_USHORT4_NORM: u8 = 9;
+/// The type nibble of [`SKIN_INDICES_HASH`]: four unsigned bytes.
+pub const PS4_UBYTE4: u8 = 0xa;
 
 /// The type nibble of a PS4 two-component half-float attribute: `Uv1`,
 /// `lightmapUV` and every other coordinate set on all 43 layouts of
@@ -193,6 +209,23 @@ impl VertexDecl {
     #[must_use]
     pub fn vertex_colour1(&self) -> Option<&Attribute> {
         self.attribute(VERTEX_COLOUR1_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == PS4_UBYTE4_NORM)
+    }
+
+    /// `VertexColour2`, four normalised bytes on the PS4. Only sound on a declaration reached
+    /// through the record's own pointer.
+    #[must_use]
+    pub fn vertex_colour2(&self) -> Option<&Attribute> {
+        self.attribute(VERTEX_COLOUR2_HASH)
+            .filter(|a| a.components == 4 && a.gxm_type == PS4_UBYTE4_NORM)
+    }
+
+    /// `NOVAColor` on the PS4, four unsigned normalised bytes (the Vita's is
+    /// [`Self::nova_colour`]). Only sound on a declaration reached through the record's own
+    /// pointer.
+    #[must_use]
+    pub fn ps4_nova_colour(&self) -> Option<&Attribute> {
+        self.attribute(NOVA_COLOUR_HASH)
             .filter(|a| a.components == 4 && a.gxm_type == PS4_UBYTE4_NORM)
     }
 

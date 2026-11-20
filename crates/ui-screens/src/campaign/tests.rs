@@ -356,6 +356,71 @@ fn triangle_opens_help_and_suspends_movement() {
     assert!(!model.help_open());
 }
 
+/// The PS2 pressing opens `Cell Help` on the circle and leaves on the triangle
+/// (`CellSelection::with_buttons`); the PSP's own buttons do neither. Fails if the model reads
+/// the PSP's buttons whatever it was told.
+#[test]
+fn the_ps2_pressing_leaves_on_triangle_and_opens_help_on_circle() {
+    let cells = || {
+        vec![
+            race_cell("g_0_0", "16_Track"),
+            race_cell("g_1_0", "16_Track"),
+        ]
+    };
+    let mut input = Input::new();
+
+    let mut ps2 = CellSelection::new(cells()).with_buttons(Button::Circle, Button::Triangle);
+    press(&mut input, Button::Triangle);
+    assert_eq!(ps2.update(&mut input), vec![Event::Back]);
+    assert!(!ps2.help_open());
+    press(&mut input, Button::Circle);
+    assert_eq!(ps2.update(&mut input), vec![Event::Help]);
+    assert!(ps2.help_open());
+    press(&mut input, Button::Triangle);
+    assert_eq!(
+        ps2.update(&mut input),
+        vec![Event::Help],
+        "triangle closes the overlay rather than backing out"
+    );
+    assert!(!ps2.help_open());
+
+    let mut psp = CellSelection::new(cells());
+    press(&mut input, Button::Circle);
+    assert_eq!(psp.update(&mut input), vec![Event::Back]);
+    press(&mut input, Button::Triangle);
+    assert_eq!(psp.update(&mut input), vec![Event::Help]);
+}
+
+/// `Grid Selection` leaves on the same button, so a second press of it from `Cell Selection`
+/// carries on to the main menu rather than doing nothing.
+#[test]
+fn the_ps2_pressing_leaves_grid_selection_on_triangle_too() {
+    let grids = || {
+        vec![GridSummary {
+            name: "grid0".to_string(),
+            cell_count: 8,
+            max_points: 24,
+            required_points: 12,
+            gold_medals: 0,
+            points_earned: 0,
+            locked: false,
+            flyer_name: None,
+        }]
+    };
+    let mut input = Input::new();
+    let mut ps2 = GridSelection::new(grids()).with_back_button(Button::Triangle);
+    press(&mut input, Button::Triangle);
+    assert_eq!(ps2.update(&mut input), vec![Event::Back]);
+    press(&mut input, Button::Circle);
+    assert!(
+        ps2.update(&mut input).is_empty(),
+        "circle is not Back on the PS2"
+    );
+    let mut psp = GridSelection::new(grids());
+    press(&mut input, Button::Circle);
+    assert_eq!(psp.update(&mut input), vec![Event::Back]);
+}
+
 /// [`GridSummary::from_grid_with_medals`]'s own reason to exist: a real
 /// progress source moves `Medals`/`Points` off the fresh-profile `"0/.."`
 /// this crate otherwise draws.
@@ -847,6 +912,7 @@ fn hex_rect_prefers_outline_over_an_oversized_medal_atlas() {
         reveal: Vec::new(),
         transition: 0.0,
         start_enabled: true,
+        wipe: None,
     };
     let medal = Image {
         name: Some("Medal_0_0".to_string()),
@@ -978,4 +1044,21 @@ fn a_fixed_lock_replaces_the_neighbour_rule_for_its_cell() {
     assert!(!model.cell_shows_lock(2, 0));
     assert_eq!(model.locked_names(), ["grid0_0_0"]);
     assert_eq!(model.selected().unwrap().name, "grid0_1_0");
+}
+
+/// One tick moves both clocks a page keeps: `Selector`'s pulse and the entry clock its `vwipe`
+/// images wait on. The stage's per-frame call is this one, so a page whose entry clock stopped
+/// would keep its wiped images hidden for good.
+#[test]
+fn a_tick_advances_the_pulse_and_the_entry_clock_of_both_screens() {
+    let mut grid = GridSelection::new(Vec::new());
+    let mut cell = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    for _ in 0..30 {
+        grid.tick(1.0 / 60.0);
+        cell.tick(1.0 / 60.0);
+    }
+    assert!((grid.pulse().seconds() - 0.5).abs() < 1e-4);
+    assert!((grid.entry().seconds() - 0.5).abs() < 1e-4);
+    assert!((cell.pulse().seconds() - 0.5).abs() < 1e-4);
+    assert!((cell.entry().seconds() - 0.5).abs() < 1e-4);
 }

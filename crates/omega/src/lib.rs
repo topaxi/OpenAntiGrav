@@ -285,6 +285,13 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::Measured,
         },
+        // The dome's pixel program is `SkyBrightness * texture` (`docs/formats/omega-status.md`,
+        // "The sky dome's pixel program"), and the constant is the circuit's authored
+        // `Lighting.Sky brightness`.
+        sky_brightness: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::Measured,
+        },
         // HD's shield law with the cockpit-floored target alpha; the colour is each team's own
         // `ShieldColour` (`docs/ghidra/functions/ps4-omega-eu/shield.md`).
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {
@@ -346,6 +353,7 @@ pub const TITLE: &Title = &Title {
         flip_v: false,
         wrap: true,
         zone_shares_one_texture: true,
+        zone_equaliser_bars: false,
         gantry_card: true,
         adverts_unlit: true,
         card_store: oag_title::adverts::CardStore::R5G6B5Linear,

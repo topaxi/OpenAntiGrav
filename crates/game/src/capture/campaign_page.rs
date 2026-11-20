@@ -8,6 +8,10 @@
 
 use anyhow::{Context, Result};
 
+/// How long a still's `Cell Selection` has been open when `--menu-picker-step-seconds` stands for
+/// a cell change and `--menu-entry-seconds` states no age: past the emblems' entry hold.
+const STILL_PAGE_AGE_SECONDS: f32 = 10.0;
+
 /// Which Race Campaign screen a `--menu-page` name asks for, and whose: a
 /// trailing `=<mod id>/<campaign id>` draws a mod campaign (ADR-0077) found on
 /// the mod search path, e.g. `cell-select@1=oag.example-campaign/night-run`.
@@ -208,6 +212,10 @@ pub(super) fn campaign_page(
     // at ([`crate::flyer::Flyers::card_seconds`]); `None` draws it at
     // [`crate::flyer::SETTLED_SECONDS`].
     card_seconds: Option<f32>,
+    // `--menu-entry-seconds`: how long the page's `vwipe` images have run; `None` draws them
+    // finished. `--menu-picker-step-seconds`: seconds since the cell or the rung changed on
+    // `Cell Selection`, `None` for no change.
+    (entry_seconds, step_seconds): (Option<f32>, Option<f32>),
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let campaign = crate::campaign::load(
         archives,
@@ -271,6 +279,9 @@ pub(super) fn campaign_page(
         &mut campaign.sprites,
     );
     *sprites = campaign.sprites;
+    let page_clock = entry_seconds.map_or(oag_ui::screen::EntryClock::finished(), |seconds| {
+        oag_ui::screen::EntryClock::at(seconds)
+    });
     let is_hd = crate::campaign::draws_hd_campaign(title);
     // A cell's own best saved medal, by `name` - see `records`' own doc
     // above for why this reads the real file rather than always `None`.
@@ -471,6 +482,7 @@ pub(super) fn campaign_page(
                     hd_grids.iter().map(&summarise).collect(),
                 );
                 model.set_index(tier);
+                *model.entry_mut() = page_clock;
                 flyer_name = model.selected().and_then(|grid| grid.flyer_name.clone());
                 oag_ui_screens::campaign::hd::hd_grid_draw_list(
                     &model,
@@ -500,12 +512,20 @@ pub(super) fn campaign_page(
                 // `oag_ui_screens::campaign::CellSelection::difficulty`'s own doc for
                 // the RPCS3 measurement. Already inside `is_hd` here, so
                 // unconditional.
-                let model = crate::campaign::with_opening_difficulty(
+                let mut model = crate::campaign::with_opening_difficulty(
                     cell_model(cells, tier).with_difficulty(&difficulty_of),
                     records,
                     &campaign_title,
                     true,
                 );
+                *model.entry_mut() = page_clock;
+                if let Some(since) = step_seconds {
+                    // A page already open for `entry_seconds`, or for [`STILL_PAGE_AGE_SECONDS`]
+                    // with none stated, whose cell changed `since` seconds ago.
+                    let entry = entry_seconds.unwrap_or(STILL_PAGE_AGE_SECONDS);
+                    *model.entry_mut() = oag_ui::screen::EntryClock::at(entry);
+                    model.set_refreshed_at(Some((entry - since).max(0.0)));
+                }
                 let grid_summary = grid
                     .map_or(oag_ui_screens::campaign::GridSummary::empty(), |grid| {
                         summarise(grid)

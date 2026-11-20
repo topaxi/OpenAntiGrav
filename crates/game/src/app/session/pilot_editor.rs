@@ -68,6 +68,18 @@ enum RenameModel {
 /// has no shell at all. Nothing can open one of these prompts without menus,
 /// so `None` is unreachable from the pilot editor - but it is the honest
 /// signature, and it costs one `and_then`.
+/// Writes one pilot's text, making `dir` on the first pilot saved on this machine. The write is
+/// atomic (`profile::write_bytes`): a crash mid-save leaves the pilot as it was.
+///
+/// # Errors
+/// `dir` cannot be made or the file cannot be written.
+fn write_pilot(dir: &std::path::Path, name: &str, text: &str) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let path = pilots::pilot_path(dir, name);
+    crate::profile::write_bytes(&path, text).with_context(|| format!("writing {}", path.display()))
+}
+
 fn say(strings: Option<&StringTable>, id: &str, english: &str) -> String {
     strings
         .and_then(|table| table.get(id))
@@ -281,7 +293,7 @@ impl Session {
                 return;
             }
         };
-        if let Err(e) = pilots::write_pilot(&dir, &name, &edited) {
+        if let Err(e) = write_pilot(&dir, &name, &edited) {
             error!("cannot save {name}: {e:#}");
             return;
         }
@@ -330,7 +342,7 @@ impl Session {
             n += 1;
         };
 
-        if let Err(e) = pilots::write_pilot(&dir, &name, &pilots::template(&base)) {
+        if let Err(e) = write_pilot(&dir, &name, &pilots::template(&base)) {
             error!("cannot create {name}: {e:#}");
             return;
         }

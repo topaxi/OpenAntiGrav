@@ -135,6 +135,25 @@ impl SceneStore {
         if c >= 1.0 {
             return 1.0;
         }
+        self.encode_curve(c)
+    }
+
+    /// [`Self::texel_encode`] for a gain above 1: the factor a gamma-domain multiply of the
+    /// texel needs so the light it decodes to is about `gain` times the texel's own. The curve
+    /// is not a power, so the match is exact at no texel and always low: for a gain of 1.51 the
+    /// decoded light is 1.9 % short at a texel of 0.5 and 6.4 % short at 0.2, and for 2.264
+    /// 3.4 % and 11.5 %.
+    #[must_use]
+    pub fn texel_gain(self, gain: f32) -> f32 {
+        let g = gain.max(0.0);
+        if g <= 1.0 {
+            self.texel_encode(g)
+        } else {
+            self.encode_curve(g)
+        }
+    }
+
+    fn encode_curve(self, c: f32) -> f32 {
         match self {
             Self::Encoded | Self::SrgbTexels => {
                 if c <= 0.003_130_8 {
@@ -166,6 +185,23 @@ mod tests {
             v / 12.92
         } else {
             ((v + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    /// A gain above 1 encoded for the gamma-domain multiply decodes back to about the gain at a
+    /// middle texel, never above it, and a gain of 1 or less is the clamped encode.
+    #[test]
+    fn a_texel_gain_decodes_to_about_the_gain() {
+        for store in [SceneStore::Encoded, SceneStore::SrgbTexels] {
+            for gain in [1.51_f32, 2.264, 3.0] {
+                let factor = store.texel_gain(gain);
+                assert!(factor > 1.0, "{gain}: {factor}");
+                let light = store.texel_decode((0.5 * factor).min(1.0)) / store.texel_decode(0.5);
+                assert!((light / gain - 1.0).abs() < 0.08, "{gain}: {light}");
+                assert!(light <= gain * 1.0001, "{gain}: {light}");
+            }
+            assert_eq!(store.texel_gain(1.0), 1.0);
+            assert_eq!(store.texel_gain(0.5), store.texel_encode(0.5));
         }
     }
 

@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-18
-summary: "Fury flyer cards go through the front end's bloom chain; light binding, hexagon field in the scene, swing and widget pose (0x001d3f08) open"
+updated: 2026-11-20
+summary: "Fury flyer cards go through the front end's bloom chain; light binding, swing and widget pose (0x001d3f08) open"
 ---
 
 # HD/Fury's flyer cards are drawn; light, bloom, the swing and the widget's own pose are open
@@ -32,13 +32,10 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
   finished field before its chain (`flyer::Layer::Scene`, `render::SceneLayer`); `FURY_GAIN` is the stand-in where
   no chain runs. Evidence and the frames: `docs/ghidra/functions/ps3-hdfury-eu/front-end-model-lighting.md`, "The
   flyer card is drawn before the resolve". Open from it:
-  - ~~**The black hexagon field is in the original's scene and not in ours**~~ WRONG PREMISE (`hd-menu-grid`,
-    2026-11-19): `bBg_x_y` is authored on `Cell Selection` only; `Grid Selection` (the `menu-grid-select` pair, mean
-    grey 7.25) has no hexagon, so the `(34, 1, 1)` against `(36.9, 1.6, 1.6)` gap there is something else (unread;
-    see `front-end-model-lighting.md`, "The scene mean"). What stays open: on `Cell Selection` the 32 `bBg` are
-    drawn by ours over the page, after the resolve; whether the original draws them into the scene (so they lower
-    the adapted exposure, ours 2.33 against 2.50) is unmeasured, the `menu-cell-select` pair reads 3.44 grey. Wiring
-    needs a Renderer path that rasterises a `Draw` sublist into the `STORED_FORMAT` scene layer. Small (30).
+  - ~~**The black hexagon field is in the original's scene and not in ours**~~ CLOSED (maintainer, 2026-11-20:
+    in HD these are cards, not a hex field to move). `bBg_x_y` is authored on `Cell Selection` only and
+    `Grid Selection` has no hexagon (`hd-menu-grid`, 2026-11-19); both pairs are now under 5 grey
+    (`menu-grid-select` 2.86, `menu-cell-select` 2.81). No lane.
   - **Ship Select's backdrop runs the track block.** The read there is the model screens' block too; the hull is
     not in the scene (its level is a constant exposure). Putting the hull into the scene layer would give it the
     chain's bloom and retire `FrontEndTone::adapted_fury`. Medium (40). Measured 2026-11-18 (`hd-menu-ship`,
@@ -55,7 +52,7 @@ are in `docs/ui/campaign-screens.md`, "The flyer behind `Grid Selection`" and
 - **The card's clock** (2026-11-19, `hd-grid-card-phase`): `--menu-model-seconds` poses the Fury card at the original's clock for a pair, read from RAM
   with the game stopped (`scripts/hd_flyer_clock.py`, `ps3-hdfury-eu/flyer-item.md`). Open: the **live loop** (the card plays `[3, 6)` s for ever in the
   original, ours is static at 3.0; needs per-frame geometry rewrite, `clip_to_shape` changes the triangles), the **flash near 5.6 s** (hooked arrows
-  for about 0.05 s, ours matches only at the exact second) and the five hidden glitch textures. Omega's pair is not re-shot with the flag.
+  for about 0.05 s, ours matches only at the exact second) and the five hidden glitch textures. Omega's pair is not re-shot with the flag. The lazy build, the flag and the `[3, 6)` wrap are pinned (`campaign-screens.md`, "The card's clock").
 - **The back card** draws on `Cell Selection` face-on (`CELL_POSE`, rectangle
   measured, `BACK_STRETCH` chosen); its wordmark glow draws (the chain's bloom). The wordmark stands 6 pixels right
   of the original's and the stripes reach the card's right edge where the original leaves a margin (the pair

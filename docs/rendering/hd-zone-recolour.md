@@ -242,6 +242,31 @@ Evidence, the per-material census and the 2048/Omega check:
 gantry's card (`oag_mesh::mesh::ZONE_EXEMPT_RATE`, chosen) is probably this
 same flag, unchecked.
 
+## The Zone surface's light, and the frame's post chain (2026-11-19, `zone-grade-sky`)
+
+**A chunk on its Zone program is lit by the stage alone, and the frame is
+resolved at `0.6` of its light.** `Scene_PrepareFrame`'s Zone arm switches
+every draw's lightmap and baked-vertex sources off, writes the `HDR and Bloom`
+block from a table of its own (adaption boost `5.0`, blur sizes `1.0`,
+whatever the circuit authors) and sets `Bloom feedback` to `-0.4`, which the
+resolve turns into `1.4 * scene - 0.8 * quarter-res scene`:
+
+```text
+light   = stage Constant Ambient Colour + saturate(N.L) * stage Sun colour
+colour  = light * surface + glow          ; surface as in the first section
+out     = 0.5 * fogged colour
+final   = saturate(lerp(scene, 2 * feedbackBuffer, -0.4) * exposure + bloom)
+```
+
+At Sub Venom (`Constant Ambient Colour` 1.5) a scenery chunk is `0.75 *
+zoneTex * Scene.Texture Colour`: Vineta K's buildings read near white, as the
+original draws them, where this port lit them by the circuit's lightmap and
+showed them grey-brown. Addresses, the live read (RPCS3, the settings block
+and the scene target of one paused frame) and the confidence per law:
+[zone-frame.md](../ghidra/functions/ps3-hdfury-eu/zone-frame.md). Wired as
+`oag_title::ZoneFrame` (`oag_hd::race::ZONE_FRAME`), HD/Fury alone; the pair
+`hd/zone-vineta-k-z5` moves 28.77 -> 7.42.
+
 ## The light-bar term in a Zone race (2026-11-19, `zone-pair-score`)
 
 **A chunk drawn through the Zone surface adds no `_ne.a * colour` light bar.**
@@ -302,12 +327,16 @@ checked against HD's `is_track` chunk by chunk.
 | `2048-vita/zone-dlc-vineta-k-z5` | 86.04 | 62.92 | 93 / 58, 162 / 135, 38 / 25 |
 | `omega/zone-vineta-k-z5` | 74.25 | 72.92 | 39 / 53, 118 / 94, 30 / 47 |
 
-**Omega's colour is still wrong, and the stage is the suspect.** The structure matches (dark road,
+**Omega's colour is still wrong, and the stage is not the cause.** The structure matches (dark road,
 lime lines) but the hue is HD's Flash purple where the original is olive green (frame mean
 `87 103 39`). Rendered at each of stages 1 to 12, none matches; the closest is stage 9 (`71 63 25`,
-mean absolute difference 52.5 against 71.4 at stage 4, the stage HD's ladder gives at zone 5). Omega's
-Zone HUD table and stage writer are unread (the ladder is inherited from HD, `oag_omega::race`), so
-this is a lead for the Omega Zone lane, not a wire: one frame cannot pick the ladder. rmse
+mean absolute difference 52.5 against 71.4 at stage 4). **Omega's own ladder was then read** (lane
+`omega-zone-ladder`, [zone-speed-class-ladder.md](../ghidra/functions/ps4-omega-eu/zone-speed-class-ladder.md)):
+its Zone HUD walker carries HD's fourteen thresholds and stores `14 - i`, so zone 5 is stage 4 on Omega
+too. The gap is the surface, not the ladder: with the shape-name Track rule off (every chunk on the
+Scene group) the walls turn olive (mean RGB `114 139 39` against the original's `38 58 6`, hue right,
+three times too bright) and the road pale blue-white against the original's dark olive, so neither
+group's HD law reproduces Omega's road. Omega's GCN surface programs are the unread part. rmse
 0.340 -> 0.372 on that pair is this hue gap.
 
 **HD is unchanged**: `hd/zone-vineta-k-z5` re-rendered with this change is pixel-identical to main's

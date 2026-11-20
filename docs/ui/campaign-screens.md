@@ -378,11 +378,10 @@ applies its plan. A disc-backed test holds Omega's 167 parsed cells to it; see
 [`omega-status.md`](../formats/omega-status.md#campaign-confirming-a-cell-starts-its-race-2026-09-30)
 for what a walk found (no `Team Selection`, no EndRace screens yet).
 
-`Cell Help` (`triangle`) is modelled as a boolean toggle
-(`CellSelection::help_open`) that suspends movement while open, matching
+`Cell Help` (the PSP's `triangle`, the PS2's `circle`: see "Back and Help on the PS2") is modelled
+as a boolean toggle (`CellSelection::help_open`) that suspends movement while open, matching
 the disc's own `Watch` element redirecting every directional press back to
-`Cell Help` while it is the present screen - but the overlay itself is not
-drawn yet; see [Open](#open).
+`Cell Help` while it is the present screen. The overlay draws as a panel over the page.
 
 ## The hex look, 2026-09-14: an outline always, a medal-colour swatch only where earned
 
@@ -437,6 +436,114 @@ never resolved, because `crates/game/src/campaign.rs` read them with `archives.r
 They now go through `oag_pulse::read_image`, which retries the PS2 build's `.mip` to `.pct` rewrite every other Pulse texture load
 already gets. PSP output is unchanged. Nothing else on these two screens has been audited on PS2 beyond the selector position
 (below) and the ticker clip (above).
+
+## Back and Help on the PS2, and how `Cell Help` is laid out, 2026-11-20
+
+A player on Pulse PS2 EU pressed the pad's top face button (Triangle) to leave `Cell Selection` and got
+`Cell Help` instead, with its three paragraphs drawn over each other (GitHub issue 27). Three defects:
+
+1. **The buttons are the PSP's on the PS2.** The model opened `Cell Help` on the triangle and left
+   on the circle, on every pressing. The PS2 disc authors it the other way round, from two
+   sources that agree:
+   - `Cell Selection`'s own `Redirect` to `Cell Help` is `forward="triangle"` in the PSP's
+     `CellMode_Definition.xml` and `forward="circle"` in the PS2's (`WADS2.WAD`), and the PS2's
+     footer draws the triangle glyph beside `Back` and the circle beside `Help` (`--menu-page
+     cell-select` on `pulse-ps2-eu.chd` shows it);
+   - the PS2 executable parses `backward` and `cancel` to the triangle's pad bit, the PSP's to the
+     circle's (`docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence", confidence 90).
+
+   `CellSelection::with_buttons` takes both. The help button is read off the screen's own
+   `Redirect` whose `goto` is `Cell Help` (`cell_buttons` in `oag_game::app::campaign_stage`); the
+   back button is `oag_title::FrontEnd::back_button(platform)`, from the new
+   `FrontEnd::back_button_ps2` (Pulse: triangle; every other title and pressing: circle). `Cell
+   Help` itself still closes on cross, triangle or circle, as both discs' three `Redirect`s say.
+   Confidence 90 for the buttons, 95 that the PS2 footer shows them. Not measured against a running
+   PCSX2: both the redirect and the footer are the disc's own data.
+2. **The paragraphs did not flow.** `Main Help`, `Speed Class Help` and `Event Help` author
+   `PushHeight="true"`: each `y` (15, 10, 10 on the PSP) is the gap below the paragraph before.
+   They were drawn at their raw `y`, all three near the panel's top. `Text::push_height` reads the
+   attribute and `cell_help_draw` stacks the paragraphs by wrapped height (`oag_ui::font::wrap`
+   over the primary face, times its line height). Against
+   `data/reference/psp-campaign-screens/cell-help-overlay-t0.png`: the first line's centre and the
+   gap between paragraphs agree within a pixel on the PSP's 480 by 272 grid (first line centre 25 against 24, the third paragraph 164 against 163.5).
+3. **The panel was drawn under the page.** The overlay went into `Layers::chrome`, which paints
+   below `Layers::body`, so the panel's own `0xE0000000` backdrop never dimmed the page and the
+   page's rows drew over the text ("SINGLE RACE" through the paragraphs). It is now the end of the
+   body. The original dims the page behind the panel
+   (`cell-help-overlay-t0.png`); ours does the same.
+
+**Checked on the other pressings and titles.** PSP: Back and Help are unchanged, the flow and
+layer fixes apply. Pure ships no `CellMode_Definition.xml` (its campaign is the League and
+Tournament chain), so it has no `Cell Help`. HD, Fury and Omega ship no `Cell Help` screen, so
+`cell_help` is `None` there and the buttons stay the defaults; their stills are unchanged.
+
+`Grid Selection`, the next screen in the flow, leaves on the same button (`GridSelection::with_back_button`),
+so a second triangle carries on to the main menu; `campaign_cursor_ground_truth::cell_selection_backs_out_on_the_pressings_own_button`
+walks both. Escape and the secondary mouse button emit `Event::Back` directly and are unchanged; the keyboard's
+Backspace, `Z` and `Y` are the circle button, so on the PS2 they open `Cell Help` and `V` (the triangle) leaves, as
+the footer's key hint says.
+
+**Open: the rest of the PS2 front end.** Every other screen still leaves on the circle
+(`oag_ui::menu`, the pickers, the pause menu), while the PS2's footers draw the triangle beside
+`Back`. `FrontEnd::back_button` is the one place to read it from; wiring it through the other
+screens needs a census of which PS2 screens author a `triangle` or `circle` of their own. The player's
+own choice of Back is wired for every screen ("Menu back", below).
+
+## Menu back, 2026-11-20 (CONTROLS > MENU BACK)
+
+A maintainer request: "I'm more used to using (B) over (Y) for back", and the default is the original's.
+`[controls] menu_back` is `original` (the default), `circle` or `triangle`
+(`oag_title::prompts::MenuBack`); the CONTROLS row MENU BACK offers the three as words, because a button
+glyph in the row would be exchanged by the very substitution the row controls.
+
+**One resolver**: `oag_title::Title::menu_buttons(platform, choice, authored_help)` returns
+`oag_title::prompts::MenuButtons`: the physical `back` and `help`, whether the front end's input is
+exchanged, and whether footer glyphs are. `original` returns `FrontEnd::back_button(platform)` and
+the screen's authored Help with both flags off, which is exactly the build before this row existed. Help is the
+screen's authored button unless Back takes it, and then it is the button Back displaced.
+
+| title and pressing | choice | back | help | input exchanged | footer glyphs exchanged |
+| --- | --- | --- | --- | --- | --- |
+| Pulse PS2 | original | triangle | circle | no | no |
+| Pulse PS2 | circle | circle | triangle | no | yes |
+| Pulse PS2 | triangle | triangle | circle | yes | no |
+| every other title and pressing | original | circle | triangle | no | no |
+| every other title and pressing | circle | circle | triangle | no | no |
+| every other title and pressing | triangle | triangle | circle | yes | yes |
+
+(`oag_game::prompts::tests::the_choice_resolves_on_every_title_and_pressing`, and the pure table in
+`oag_title::prompts::tests`.)
+
+**How each screen follows**, with no per-screen choice:
+
+- `Grid Selection` and `Cell Selection` take their buttons as arguments (`with_back_button`,
+  `with_buttons`) and are handed `back` and `help` as the front end reads them (`cell_buttons`,
+  `oag_game::app::campaign_stage`).
+- Every screen that leaves on the circle in its own code (`oag_ui::menu`, the pickers, the pause menu,
+  the end-of-race pages, the prompts) follows from `Controls::set_face_swap`: under `triangle` the keyboard
+  slot's button state reads the circle as the triangle and the reverse, and a click's `Controls::tap`
+  names the button the reader sees. The swap is **on** in a menu, in a paused race and on an end-of-race screen, and **off** while a race
+  runs (the circle is the absorb there) and in photo mode, whose own button state the replay viewer and photo
+  mode read (`Controls::view_take`) (`Session::menu_face_swap`).
+- A footer's glyph is a stand-in codepoint the disc authored for its own Back button, so
+  `glyph_swap` exchanges the circle's and the triangle's stand-ins through the prompt substitution
+  (`oag_ui::prompt::Substitution::exchanging` for the disc's glyphs, `oag_game::prompts::substitution`
+  for PromptFont's and the keyboard's key). On Pulse's PS2 a `circle` choice draws the circle
+  beside `Back` on every footer; on any pressing a `triangle` choice draws the triangle.
+- Escape and the secondary mouse button emit Back directly and are unchanged. The keyboard's keys follow
+  the pad's mapping as before: Backspace, `Z` and `Y` are the circle button, `V` the triangle.
+
+**Checked.** `campaign_cursor_ground_truth::menu_back_circle_leaves_cell_selection_on_the_circle_and_moves_help_to_the_triangle`
+drives Pulse PS2 EU's Cell Selection with `circle`: the circle leaves to Grid Selection, a second circle
+leaves the campaign, the triangle opens Cell Help, and `original` keeps the circle on Help.
+`oag_input::tests::face_swap_*` cover the exchange itself. A `triangle`
+choice is not drivable through `--drive` (its `press` names the button the screen reads, after the exchange),
+so its physical effect is the unit test, not a still.
+
+The LAN, online and join lobbies read the devices' presses (`Controls::device_presses`), which the same
+swap exchanges.
+**The PS2 pressing's other screens** still back on the circle under `original`, as above; `triangle` makes
+them leave on the triangle the footer draws.
 
 ## Pulse's medal hexagons filled from HD's atlas, 2026-11-12 (`oag.hd-medals`)
 
@@ -2361,6 +2468,15 @@ script-made pair; 3.0 s gives 6.08 and 6.65 on the two measured), unpaused grabs
 second (a 0.05 s step either way scores 6.7), so one grab in three or four lands on it wrong (4.83 above); the five glitch textures stay hidden
 (`UNREAD_EFFECTS`).
 
+**Pinned** (`hd_flyer_ground_truth`, 2026-11-19): a load builds no card (`Flyers::waiting_len` 16, `builds` 0); thirty frames of one grid build its
+card once and draw it identically, a second grid builds one more, and going back builds none (the live menu's browse path is the same `draw` with
+`card_seconds` at its default; no scripted front-end walk reaches Grid Selection headless, so the live path is covered at that call, not by a menu
+walk). `09_blitzed` at 3.0 s differs from 4.5 s by 81009 bytes of a 1280x720 scene layer, no flag is the 3.0 s picture, and the same holds through
+`oag-game --menu-page grid-select --menu-model-seconds`. **A bug the pins found**: nothing wrapped the clock, so `--menu-model-seconds 6.5` drew a
+card the original never shows. `flyer::card_clock` now takes a clock at or past 6.0 round into `[3, 6)` (6.5 draws as 3.5, which is not the raw 6.5 and
+not 2.5); it is the identity on 3.0, so the default picture is unchanged. The wrap uses the period of the constructor's two floats (3 s), which is
+what the render function's single subtraction settles to; a clock below 3.0 passes through.
+
 ### The two cards, 2026-09-30
 
 `FuryCampaignFlyerModel` and `HDCampaignFlyerModel` draw the two flyers the
@@ -4058,10 +4174,17 @@ Vineta K's own footage to a few grey levels).
   (`loading-screen.md` reads only the quad it draws), so the route is a fit, good to
   one frame (510 against 509).
 - **First view of a circuit.** The clip has to be transcoded once (lossless AV1;
-  `ffmpeg`, about 30 s for Anulpha Pass on a loaded machine, cached after), and the
-  prefetch does not warm the sixteen `preview.bik` files, so the panel stays empty
-  for that long on a first visit (live walk, Xvfb: Vineta K within 8 s, Anulpha Pass
-  empty until its transcode finished, then Vineta K back in 4 s).
+  `ffmpeg`), cached after. Cold, measured 2026-11-19 on an idle desktop: 29.6 s and
+  41.0 s for Vineta K's clip in two runs, 44.4 s in a third, the panel empty for
+  that long. `--prefetch` now converts the sixteen `preview.bik` files (every
+  circuit Track Select lists, a DLC pack's included, keyed by `oag_game::clip::cache_key`,
+  the key the screen looks up): the whole sixteen took 795 s in one process, and
+  afterwards a circuit opens from the cache in 22 to 83 ms (four circuits timed).
+  The prefetch's plan is pinned in `hd_movie_ground_truth` (the plan's keys equal
+  `cache_key` over every `fe/preview.bik` the disc walk finds: 16). Each transcode writes a `.part` file beside the cache file and renames it into
+  place (`movie::transcode::write_atomically`), so a first view during the prefetch
+  never reads a half-written clip. The boot's two 1080p logo reels and the other front-end Bink files are not
+  prefetched (a different key, and 98 s for the logo reel alone).
 - **The sound.** The four Zone circuits' clips carry a track; ours plays none.
 - **Omega: checked, differs.** Its `Track_Selection_Definition.xml` (`data09`)
   authors the same `FlyByMovie` at the same X/Y with `Loading_Icon.bik`, but no
@@ -4098,7 +4221,7 @@ the front end's own. Drawn by `oag_ui_screens::picker::hd::hex`:
 
 Geometry, one settled RPCS3 frame (Feisar selected, fresh profile of the
 maintainer's save): first column centre = the authored origin `x=272`, column
-pitch 72.2, row pitch 82.8, odd columns half a row lower, hexagon 88x76. **70**:
+pitch 72.2, row pitch 82.8, the columns of odd teams half a row lower (a team rule, not a window-slot rule: 24 rest grabs, `docs/ghidra/functions/ps3-hdfury-eu/team-selection-model.md`, "The banner and the hex column on a step"), hexagon 88x76. **70**:
 one frame, in authored units through the page scale of "The layout scale"
 below, which rests on one clean anchor (the stat blocks' 545-unit spacing).
 
@@ -4998,8 +5121,10 @@ emulator), so flagged for the lead rather than scoped away.
 **Still open** (item 4, page transitions): the screen authors per-widget
 `transition`/`delay` keys (`bBg_0_0` 0.4 s, the emblems 0.05 to 0.275 s, the
 right column 0.35 to 0.625 s, `EnableTransition` 0.3/0.5), not curves, and the
-page-in is a vertical wipe (`transitiontype="vwipe"`) on the emblems; nothing here
-plays them. A tween measured off `trans-campsel-original.png` remains the next step.
+page-in is a vertical wipe (`transitiontype="vwipe"`) on the emblems and the flyer logos, which
+Grid and Cell Selection play since `hd-vwipe-wire` (each `vwipe` Image waits its `delay` from the page entry,
+`oag_ui::screen::entry_draw`; the emblems add a 0.37 s hold; `docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`,
+"Wired: page entry"); the other per-widget `transition`/`delay` keys (`bBg_0_0`, the right column) are not played. A tween measured off `trans-campsel-original.png` remains the next step.
 
 ### The `Selector` pulse (2026-10-29, `pulse-menu-clock`)
 

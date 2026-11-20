@@ -95,7 +95,7 @@ pub(super) fn open(
     // with nothing to read.
     let audio = match &header.audio {
         None => None,
-        Some(track) => match ensure_source(cache_dir, key, "mp4", blob) {
+        Some(track) => match super::transcode::ensure_source(cache_dir, key, "mp4", blob) {
             Ok(source) => Some(track::mp4_audio(track, source, key)),
             Err(e) => {
                 warn!("{key}'s audio track could not be cached for decoding: {e:#}");
@@ -141,20 +141,6 @@ pub(super) fn open(
     }
 }
 
-/// Writes `blob` under `cache_dir` as `{key}.{ext}`, unless a file already
-/// there is already the right length - see `bink::ensure_source`, which this
-/// mirrors exactly for the same reason.
-fn ensure_source(cache_dir: &Path, key: &str, ext: &str, blob: &[u8]) -> Result<PathBuf> {
-    std::fs::create_dir_all(cache_dir)
-        .with_context(|| format!("creating {}", cache_dir.display()))?;
-    let path = cache_dir.join(format!("{key}.{ext}"));
-    let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
-    if !already_written {
-        std::fs::write(&path, blob).with_context(|| format!("writing {}", path.display()))?;
-    }
-    Ok(path)
-}
-
 /// Converts an MP4 file into lossless AV1 under the cache.
 ///
 /// The input is the **whole file**, exactly as [`bink::transcode`] hands over
@@ -181,7 +167,7 @@ fn transcode(blob: &[u8], to: Conversion<'_>, frames: Frames) -> Result<FrameSto
     std::fs::create_dir_all(cache_dir)
         .with_context(|| format!("creating {}", cache_dir.display()))?;
 
-    let source = ensure_source(cache_dir, key, "mp4", blob)?;
+    let source = super::transcode::ensure_source(cache_dir, key, "mp4", blob)?;
 
     run_ffmpeg(&source, &out, None, frames, watch)?;
 

@@ -439,7 +439,7 @@
 0x0887a230	function	SceneLight_CallLightingList	78	mesh-draw.md
 0x08879b14	function	SceneLight_Rebuild	75	mesh-draw.md
 0x0887a4f0	function	SceneLight_BuildLightingList	88	scene-light.md
-0x08912358	function	Vex_UpdateLightLists	65	mesh-draw.md
+0x08912358	function	Vex_UpdateLightLists	85	mesh-draw.md
 0x0887a018	function	SceneLight_InitLists	65	mesh-draw.md
 0x08840c74	function	Craft_Construct	65	camera.md
 0x08885a1c	function	Tripod_LookAt	65	camera.md
@@ -1514,3 +1514,8 @@
 0x0880b794	function	Profile_PickFavouriteWeapon	80	race-box-screens.md
 0x08809e48	function	Profile_Deserialize	80	race-box-screens.md
 0x08b31774	data	g_profile	90	race-box-screens.md
+0x0883e37c	function	Craft_IsInVisibleSection	80	hud-game-options.md
+0x0883e434	function	Craft_GetSectionByte	68	hud-game-options.md
+0x08826490	function	Race_BindTagCrafts	78	hud-game-options.md
+0x0881b86c	function	MpTagHud_Construct	75	hud-game-options.md
+0x0881be58	function	MpTagHud_BindPlayerStatus	70	hud-game-options.md

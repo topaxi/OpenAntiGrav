@@ -78,6 +78,8 @@ struct Block {
     /// for why this is a list rather than one value: the assertion is that a
     /// visualiser block carries exactly one, from a two-element set.
     negative_saturating_literals: Vec<f32>,
+    /// The block declares `constantAmbientColour`: its light has the scene's ambient in it.
+    declares_ambient: bool,
 }
 
 /// Every fragment block on one archive that names a Zone parameter or sampler.
@@ -195,6 +197,9 @@ fn zone_blocks(archive: &str) -> Vec<Block> {
                 samples_zone_texture: sampled(&zone_textures),
                 samples_vis: sampled(&[vis]),
                 negative_saturating_literals,
+                declares_ambient: declared
+                    .parameters
+                    .contains(&name_hash("constantAmbientColour")),
             });
         }
     }
@@ -516,4 +521,37 @@ fn no_billboard_or_crowd_material_compiles_an_ungated_visualiser() {
              sweep is not finding the family it is supposed to refute"
         );
     }
+}
+
+/// **Every material's Zone variant has a compile lit by the scene's ambient.**
+///
+/// A Zone frame draws every chunk on its `Ambient` permutation (no lightmap, no baked
+/// vertex light), whose program is `colour = light * surface + glow` with `light =
+/// constantAmbientColour + ...`. Per material file, counted over the circuit shape: the
+/// files with a Zone block, and those of them none of whose Zone blocks declares the
+/// ambient constant. None: the families whose plain program is fed no scene light (the
+/// signs, the glow tubes) are lit in their Zone variant like every other surface (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone
+/// surface's light").
+#[test]
+#[ignore]
+fn every_zone_material_has_an_ambient_lit_zone_block() {
+    let Some(_) = image() else {
+        return;
+    };
+    let blocks: Vec<Block> = ALL_ARCHIVES.iter().flat_map(|a| zone_blocks(a)).collect();
+    let mut lit: std::collections::BTreeMap<&str, bool> = std::collections::BTreeMap::new();
+    for block in blocks.iter().filter(|b| b.shape == Shape::Base) {
+        *lit.entry(block.path.as_str()).or_default() |= block.declares_ambient;
+    }
+    let unlit: BTreeSet<&str> = lit
+        .iter()
+        .filter(|(_, lit)| !**lit)
+        .map(|(path, _)| path.rsplit('/').next().unwrap_or(path))
+        .collect();
+    let files = lit.values().filter(|lit| !**lit).count();
+    assert_eq!(
+        (lit.len(), files),
+        (1_442, 0),
+        "materials with a Zone block, and those with no ambient-lit one: {unlit:?}"
+    );
 }

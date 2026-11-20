@@ -214,6 +214,12 @@ pub struct ZoneGrade {
     /// The race runs on one of the title's Zone arenas, whose materials
     /// compile the aniso shape. See [`Self::with_arena`].
     arena: bool,
+    /// Every chunk of the frame is lit by the stage's ambient and sun alone. See
+    /// [`Self::with_stage_light`].
+    stage_lit: bool,
+    /// The scale on `Track.Base Colour Highlight` that makes every craft hull's probe gain.
+    /// See [`Self::with_hull_probe_tint`].
+    hull_probe_tint_scale: Option<f32>,
     /// The stage is a lap counter's ([`Self::show_stage`]), not a zone ladder's: a
     /// Detonator race. See [`Self::with_lap_stages`].
     lap_stages: bool,
@@ -244,6 +250,8 @@ impl ZoneGrade {
             pinned: false,
             lap_stages: false,
             arena: false,
+            stage_lit: false,
+            hull_probe_tint_scale: None,
         })
     }
 
@@ -274,6 +282,23 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_arena(mut self, arena: bool) -> Self {
         self.arena = arena;
+        self
+    }
+
+    /// Whether the title's Zone frame lights every chunk by the stage's ambient and sun
+    /// alone, with no lightmap or baked vertex light
+    /// ([`oag_title::ZoneFrame::lit_by_stage_alone`]).
+    #[must_use]
+    pub fn with_stage_light(mut self, stage_lit: bool) -> Self {
+        self.stage_lit = stage_lit;
+        self
+    }
+
+    /// Whether, and by what scale, the showing stage's `Track.Base Colour Highlight` is the
+    /// probe gain every craft hull takes ([`oag_title::ZoneFrame::hull_probe_tint_scale`]).
+    #[must_use]
+    pub fn with_hull_probe_tint(mut self, scale: Option<f32>) -> Self {
+        self.hull_probe_tint_scale = scale;
         self
     }
 
@@ -757,6 +782,17 @@ impl ZoneGrade {
         // `authored` clears Omega's sun lobe colour too; a stage tints the diffuse sun only.
         let [r, g, b, _] = base.sun_specular;
         let graded = graded.with_sun_specular([r, g, b]);
+        // The hull tint is the cross-faded stage's, as the original's own stage blend
+        // writes it (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`).
+        let graded = match (
+            self.hull_probe_tint_scale,
+            palette.track_base_colour_highlight,
+        ) {
+            (Some(scale), Some(highlight)) => {
+                graded.with_hull_probe_tint(highlight.map(|c| c * scale))
+            }
+            _ => graded,
+        };
         // **`authored` clears Omega's prelit flag and bias**, so a graded
         // Omega rig would silently go back to HD's combination. Omega ships no
         // Zone palette today (`zone_palette: None`), so nothing reaches this
@@ -935,7 +971,12 @@ impl ZoneGrade {
             track_outer,
             scene_outer,
             aniso_power,
-            shape: [if self.arena { 1.0 } else { 0.0 }, 0.0, 0.0, 0.0],
+            shape: [
+                if self.arena { 1.0 } else { 0.0 },
+                0.0,
+                0.0,
+                if self.stage_lit { 1.0 } else { 0.0 },
+            ],
             aniso,
             ..off
         }
@@ -990,6 +1031,21 @@ impl ZoneGrade {
         let palette = self.table.stage_palette(self.blend.current)?;
         let [r, g, b, _] = palette.eq_colour_tint?;
         Some([r, g, b])
+    }
+
+    /// The equaliser target's bar colour: [`Self::palette`]'s cross-faded `EQ colour tint`,
+    /// which `Environment_UpdateStageBlend` blends from stage `n` and the stage before
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`, "The colours"; read live,
+    /// confidence 90).
+    #[must_use]
+    pub fn equaliser_tint(&self) -> Option<[u8; 4]> {
+        self.palette().eq_colour_tint
+    }
+
+    /// The equaliser style of the requested stage, see [`crate::zone_equaliser::style`].
+    #[must_use]
+    pub fn equaliser_style(&self) -> Option<u8> {
+        crate::zone_equaliser::style(self.blend.requested)
     }
 
     /// What the load report says about this table.

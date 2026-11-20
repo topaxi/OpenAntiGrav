@@ -17,7 +17,7 @@ const XML: &str = r#"<Variable global="Grey" name="Grey"><Values String="0xff969
     <MiniText><Values y="-30" idstring="RC_CHOOSE_TEAM" color="FEGlobals->Grey"></Values></MiniText>
     <Bracket><Values corner="true" Y="0" Width="506" Height="156"></Values></Bracket>
     <Bracket><Values corner="true" Y="196" Width="506" Height="600"></Values></Bracket>
-    <Image name="Logo"><Values x="0" y="15" width="512" height="128"></Values></Image>
+    <Image name="Logo"><Values transitiontype="vwipe" delay="0.5" enebletransition="0.5" x="0" y="15" width="512" height="128"></Values></Image>
     <Bracket><Values corner="true" middle="true" X="545" Width="1052" Height="650"></Values></Bracket>
     <HexSelection name="hexselection" OffsetX="112" OffsetY="225"><Values columns="5" rows="7" SelectedLockCol="0xFF808080" SelectedLockColFade="0xFF242424" HexCol="0x64808080" HexColFade="0x32808080" SelectedColumnCol="0x64ff0000"></Values></HexSelection>
   </Item>
@@ -104,6 +104,14 @@ fn the_child_screen_carries_the_parents_widgets_and_its_own_title() {
     assert_eq!(layout.panel, [160.0, 170.0, 506.0, 156.0]);
     assert_eq!(layout.preview, [705.0, 170.0, 1052.0, 650.0]);
     assert_eq!(extra.logo, Some([160.0, 185.0, 512.0, 128.0]));
+    assert_eq!(
+        extra.logo_wipe,
+        Some(oag_ui::screen::Vwipe {
+            seconds: 0.7,
+            delay: 0.5
+        }),
+        "`enebletransition` matches no key, so the class default stands"
+    );
     assert_eq!(
         extra.ship_model.map(|model| model.origin),
         Some([1220.0, 412.0])
@@ -993,6 +1001,67 @@ fn a_scaled_honeycomb_shrinks_its_pitch_and_its_cells() {
     assert!((b[0].rect[2] - 0.8 * a[0].rect[2]).abs() < 1e-3);
 }
 
+/// `Team Selection`'s columns alternate their half-row shift with the team's index, not with
+/// their slot in the window: the centre column of an odd team sits half a row lower than an
+/// even team's, and the grid `TrackHexSelection` builds keeps the window's slots.
+#[test]
+fn the_team_grids_half_row_follows_the_team_index() {
+    let layout = layout();
+    let grid = layout
+        .hd
+        .as_deref()
+        .unwrap()
+        .hex
+        .expect("the team screen authors a honeycomb");
+    assert!(grid.phase_by_entry);
+    let centre_y = |grid: &hex::HexGrid, selected: usize| {
+        let cells = grid.cells(selected, 12, 0.0);
+        cells
+            .iter()
+            .find(|c| c.offset == 0 && c.row == 0)
+            .unwrap()
+            .rect[1]
+    };
+    let half = hex::PITCH[1] * grid.scale * 0.5;
+    assert!((centre_y(&grid, 1) - centre_y(&grid, 0) - half).abs() < 1e-3);
+    assert!((centre_y(&grid, 2) - centre_y(&grid, 0)).abs() < 1e-3);
+    // A neighbour keeps its team's phase: team 1's column is lowered next to team 0 selected.
+    let right = |g: &hex::HexGrid| {
+        g.cells(0, 12, 0.0)
+            .iter()
+            .find(|c| c.offset == 1 && c.row == 0)
+            .unwrap()
+            .rect[1]
+    };
+    assert!((right(&grid) - centre_y(&grid, 0) - half).abs() < 1e-3);
+    // Through the first frames of a step the columns keep the previous team's phase.
+    let held = |since: f32| {
+        grid.cells_at(1, 12, 0.0, since)
+            .iter()
+            .find(|c| c.offset == 0 && c.row == 0)
+            .unwrap()
+            .rect[1]
+    };
+    assert!((held(0.0) - centre_y(&grid, 0)).abs() < 1e-3);
+    assert!((held(hex::PHASE_HOLD_SECONDS) - centre_y(&grid, 1)).abs() < 1e-3);
+    // The drawn grid takes the hold: a picker a frame after a step draws other rects than a settled one.
+    let extra = layout.hd.as_deref().unwrap();
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    picker.tick(1.0);
+    let settled = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
+    picker.set_since_selection(0.0);
+    let stepped = body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n));
+    assert_ne!(settled, stepped);
+    picker.set_since_selection(1.0);
+    assert_eq!(
+        settled,
+        body(&picker, &layout, extra, &Frame::default(), &|n| sheet(n))
+    );
+    let track = hex::HexGrid::unauthored([100.0, 200.0], 5, 7);
+    assert!(!track.phase_by_entry);
+    assert!((centre_y(&track, 1) - centre_y(&track, 0)).abs() < 1e-3);
+}
+
 fn art(src: &str) -> Option<Placed> {
     let (x, size) = match src {
         crate::campaign::hd::cell_brackets::SRC => (100, 16),
@@ -1028,4 +1097,208 @@ fn the_authored_corner_marks_and_block_arrow_are_drawn() {
     assert_eq!(from(200.0), 1, "{draws:?}");
     let none = body(&picker, &layout, extra, &Frame::default(), &|_| None);
     assert!(none.iter().all(|draw| !matches!(draw, Draw::Sprite { .. })));
+}
+
+const LOGO: &str = "Data/Ships/A/FE/Logo.gtf";
+
+fn logo_sprites(name: &str) -> Option<Placed> {
+    (name == LOGO).then_some(Placed {
+        x: 1000,
+        y: 0,
+        width: 512,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    })
+}
+
+fn logo_picker() -> Picker {
+    let mut entries = vec![hex_team("A"), hex_team("B")];
+    for entry in &mut entries {
+        let Details::Ship { logo, .. } = &mut entry.details else {
+            unreachable!()
+        };
+        *logo = Some(LOGO.to_string());
+    }
+    Picker::new(Kind::Ship, entries, Some("A"), None).with_entries_across()
+}
+
+/// The Logo's rect, `None` when the page draws no logo quad.
+fn logo_rect_of(picker: &Picker, layout: &Layout) -> Option<[f32; 4]> {
+    let extra = layout.hd.as_deref().unwrap();
+    let draws = body(picker, layout, extra, &Frame::default(), &logo_sprites);
+    let rects: Vec<[f32; 4]> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, uv, .. } if uv[0] >= 1000.0 => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    assert!(rects.len() <= 1, "{draws:?}");
+    rects.first().copied()
+}
+
+/// A page opened draws no logo for the authored `delay` (0.5 s, 30 frames: `Item 315`'s
+/// countdown in RAM crosses 0 on its delay's frame), then plays the 0.7 s ramp
+/// (`image-widget.md`, "Page entry"). A still that states the page's wipes finished draws it
+/// whole. This fails if the delay or the entry clock is dropped.
+#[test]
+fn a_fresh_screen_waits_the_logos_delay_then_wipes() {
+    let layout = layout();
+    let mut picker = logo_picker();
+    let at = |picker: &Picker| logo_rect_of(picker, &layout);
+    assert_eq!(at(&picker), None, "frame 0 of the page");
+    for _ in 0..29 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(at(&picker), None, "frame 29, the last of the delay");
+    picker.tick(1.0 / 60.0);
+    let first = at(&picker).expect("frame 30 is the first ramp frame");
+    assert!(
+        (first[3] - 12.8).abs() < 1e-3,
+        "{first:?}: a slab a tenth tall"
+    );
+    assert!(first[1] < 185.0 + 128.0 * 0.1, "{first:?}: near the top");
+    for _ in 0..42 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(
+        at(&picker),
+        Some([160.0, 185.0, 512.0, 128.0]),
+        "the ramp is over"
+    );
+
+    let mut settled = logo_picker();
+    settled.set_entry(oag_ui::screen::EntryClock::finished());
+    assert_eq!(at(&settled), Some([160.0, 185.0, 512.0, 128.0]));
+}
+
+/// A team step replays the `Logo`'s `vwipe` from the press
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step"): a slab a tenth of the
+/// quad tall at the top, then lower, back up, and the finished logo after 0.7 s. The step does
+/// not wait the delay again. The screen's opening and a settled screen draw it whole.
+#[test]
+fn a_team_step_replays_the_logos_vwipe() {
+    let layout = layout();
+    let extra = layout.hd.as_deref().unwrap();
+    let sprites = logo_sprites;
+    let mut picker = logo_picker();
+    let logo_rect = |picker: &Picker| {
+        let draws = body(picker, &layout, extra, &Frame::default(), &sprites);
+        let rects: Vec<[f32; 4]> = draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, uv, .. } if uv[0] >= 1000.0 => Some(*rect),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(rects.len(), 1, "{draws:?}");
+        rects[0]
+    };
+    let whole = [160.0, 185.0, 512.0, 128.0];
+    picker.tick(1.3);
+    assert_eq!(logo_rect(&picker), whole, "no step yet");
+
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    assert_eq!(picker.update(&mut input), vec![Event::Moved]);
+    let close = |got: [f32; 4], want: [f32; 4]| {
+        assert!(
+            got.iter().zip(want).all(|(a, b)| (a - b).abs() < 1e-3),
+            "{got:?} vs {want:?}"
+        );
+    };
+    close(logo_rect(&picker), [160.0, 185.0, 512.0, 12.8]);
+    picker.tick(0.35);
+    close(
+        logo_rect(&picker),
+        [160.0, 185.0 + 128.0 * 0.675, 512.0, 12.8],
+    );
+    picker.tick(0.175);
+    close(
+        logo_rect(&picker),
+        [160.0, 185.0 + 128.0 * 0.1125, 512.0, 12.8],
+    );
+    picker.tick(0.105);
+    close(logo_rect(&picker), [160.0, 185.0, 512.0, 128.0 * 0.55]);
+    picker.tick(0.35);
+    assert_eq!(logo_rect(&picker), whole, "the ramp is over after 0.7 s");
+}
+
+/// The corner marks the page has out, as the top-left corners of the 16 by 16 sprites, with the
+/// three brackets' `delay`s authored as the disc does (0.2, 0.2, 0.9 s).
+fn corner_marks(picker: &Picker) -> Vec<[f32; 2]> {
+    let mut delays = ["0.2", "0.2", "0.90"].into_iter();
+    let xml = XML
+        .split("<Bracket>")
+        .enumerate()
+        .map(|(index, part)| match index {
+            0 => part.to_string(),
+            _ => format!(
+                "<Bracket delay=\"{}\">{part}",
+                delays.next().expect("three brackets")
+            ),
+        })
+        .collect::<String>();
+    let layout = layout_of(&xml);
+    let extra = layout.hd.as_deref().unwrap();
+    let corners = |name: &str| {
+        name.ends_with("corner2.gtf").then_some(Placed {
+            x: 0,
+            y: 0,
+            width: 16,
+            height: 16,
+            quad_extent: None,
+            quad_centre: None,
+            blend: None,
+            scale: [1.0, 1.0],
+        })
+    };
+    body(picker, &layout, extra, &Frame::default(), &corners)
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => {
+                Some([rect[0], rect[1]])
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The three `Bracket`s count their own `delay` from the page's entry: none at first, the two panel
+/// frames (0.2 s) and then the ship frame (0.9 s), each opening out over 0.1 s. A team step
+/// re-arms only the `Logo`, so the marks stay out. This fails if the entry clock is not passed to
+/// the brackets (they would all be out at frame 0).
+#[test]
+fn the_brackets_wait_their_delays_from_the_pages_entry() {
+    let mut picker = picker_of(&["A", "B", "C"], "B");
+    assert!(corner_marks(&picker).is_empty(), "frame 0");
+    picker.tick(0.19);
+    assert!(corner_marks(&picker).is_empty(), "inside the 0.2 s delay");
+    picker.tick(0.05);
+    assert_eq!(corner_marks(&picker).len(), 8, "the two panel frames open");
+    picker.tick(0.5);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        8,
+        "the ship frame is still waiting"
+    );
+    picker.tick(0.2);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        12,
+        "the ship frame (0.9 s) is out"
+    );
+    let mut input = Input::default();
+    input.begin_frame(0);
+    input.begin_frame(1 << Button::Right as u32);
+    picker.update(&mut input);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        12,
+        "a team step re-arms no bracket"
+    );
 }

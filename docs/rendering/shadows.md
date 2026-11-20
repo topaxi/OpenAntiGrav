@@ -791,7 +791,60 @@ default there; the rest of this section is what was learned and what blocks it.
 - **Omega: checked, differs** (confidence 75). It has none of 2048's two debug
   keys or `Ship shadow direction`; it has `shadowCoeffs`, `CastShipShadows`,
   `CastNoShipShadows` and `Ship diffuse brightness (shadow)`, which 2048 lacks.
-  Its cast axis is not recovered. Omega is not built on 2048's reading.
+  Its cast axis is the sun: see [Omega's own `S`](#omegas-own-s-read-and-measured-live-2026-11-20-omega-shadow-map).
+  Omega is not built on 2048's reading.
+
+## Omega's own `S`, read and measured live (2026-11-20, `omega-shadow-map`)
+
+Evidence: [track-shadow.md](../ghidra/functions/ps4-omega-eu/track-shadow.md) (1.07 addresses, live knockouts on the native
+port). This settles the "unrecovered cast axis" above and replaces the 2026-10-19 reading that Omega's axis was unread.
+
+- **Cast axis: `normalize(Lighting.Sun direction)`** (confidence 90): static data flow from the key's registration to the light
+  basis, and live the light view's forward column equals `liveLighting0direction` to four digits on Capital Reach. Not
+  `ShadowLight direction` (a shading uniform, as on 2048) and not a ship-shadow vector (Omega has none).
+- **Fit: three orthographic cascades** (confidence 80) by camera-view depth `[0.5, 38.9]`, `[34.1, 110.9]`, `[101.3, 254.9]`,
+  each fitted to the light-space bounds of the caster spheres in its band, the light eye 300 units up `D` from the camera. A
+  caster's sphere is first pushed `clamp(2.5 / |D.y|, 4, 8)` down the light (confidence 85).
+- **Encoding: an exponential shadow map** (exponent 80; confidence 70) read as
+  `S = min(1, pcf(shadowMap) * exp2(clamp(c0 + c1 z, -80, 0)))` with `shadowCoeffs`' fourth row (confidence 85).
+- **How dark: the receiver's sun term goes entirely** (confidence 80). `S` multiplies the sun diffuse and the sun lobe and
+  nothing else; inside a craft's shadow on Metro Park's grid the frame equals the frame with `S` forced to 0 (0.85 to 1.04 of the
+  sun term, five shadows). The prelit (Nova) and ambient terms stay.
+- **Receivers**: the tarmac and brick roads, the grass, and the hull (the hull's `shadow` weight in
+  [hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md)).
+- **Casters**: model instances flagged at `+0x110` bit 1 and a second, gated list; on both grids only craft shadows were seen
+  (confidence 55 for the set).
+
+**What it means for the pairs.** On Capital Reach's grid no map shadow is visible (`S = 1` moves no region past frame noise in
+two boots): the sun reaches the road only in the baked `LM.a` streaks, and no craft stands in one. **Capital Reach's whole-frame
+gap is not `S`.** On Metro Park's grid every craft on the sunlit brick and grass casts one.
+
+**Why `Title::original_shadows` stays `Unbuilt` on Omega.** This project's coverage mode already applies Omega's receiver law
+(`shadowed()` removes the surface's own sun share, `sun_removed`, where `sun_known`), and its craft maps are fitted along the
+circuit's `light.direction`, which is Omega's axis. Rendered with `--shadows original`, Metro Park's player shadow on the left
+grass lands where the original's does, and the other craft's shadows fall on the same side with the same elongation (offset by
+the grid poses, which differ between ours and the original). But the same tier turns on HD's per-craft **sun-occlusion and
+self-shadow passes** (`render_sun_occlusion`, gated on an authored sun and no occluder hulls), and on Omega they darken the
+player's hull: its box (`730x560+600+520`) is 114.3 under `off` and 91.9 under `original`, a 22.4 grey drop, where the
+original's same box does not respond to `S = 1` (106.1 on, 104.4 knocked out; 80.0 with `S = 0`, so the hull does receive `S`,
+and `S` is 1 there on the grid). Against the adopted original frame the hull box's mean absolute grey improves 45.56 to 34.66
+(bias +9.2 to -13.1), but that is ours' known hull excess ([hull-tone.md](../ghidra/functions/ps4-omega-eu/hull-tone.md))
+cancelled by a darkening the original does not apply, not a matched shadow. Omega's hull reads `S` from the same cascades, not
+HD's road mask. Scored on the original's shadow mask (Metro Park, hull excluded, ours `off` then `original`): mean absolute grey
+43.85 to 42.57, bias -1.04 to -7.99 (the mask is from a second boot of the port, whole-frame MAE 13.2 against the adopted frame).
+That the receiver law holds on each Omega material is read from the shader (`sun_known` is set on the generic combine), not
+checked per draw: Metro Park's brick, its conditional-blender grass and the tarmac may each fall back to the `MAP_STRENGTH`
+multiply.
+
+**The compare page already draws `original` on Omega.** `scripts/compare-environment.toml` writes `shadows = "original"` into
+ours' settings file for every platform, so the adopted Omega pairs carry the coverage tier and HD's hull sun occlusion today
+(Metro Park's adopted frame matches a `--shadows original` render on the hull box, 91.5 against 91.9, and the left-grass shadow,
+68.6 against 68.8; `off` reads 114.3 and 84.4). Flipping `Title::original_shadows` changes the player's default only and moves no
+pair. Building `original` on Omega properly means scoping the sun-occlusion pass off by title data (which **will** move the Omega
+pairs, the hull first) and reading the second caster list; until then the default stays `off`.
+
+**2048: checked, differs.** 2048 casts along `Ship shadow direction` into one map out to 60 units; Omega along the sun into
+three exponential cascades out to 254.9.
 
 ## Pushing it further, and what it is actually blocked on
 

@@ -88,6 +88,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     eliminator_skin: None,
     // Measured on PSP USA, Time Trial (2026-10-19): see `COUNTDOWN_VOICE`.
     countdown_voice: Some(COUNTDOWN_VOICE),
+    hud_waits_for_go: oag_title::pre_race::Sourced::chosen(&[]),
     launch_hover: None,
     hover_rig: None,
     zone_hover_rig: None,
@@ -113,6 +114,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stages: None,
     // Unread on this title - see `oag_title::ZoneTransition`.
     zone_transition: None,
+    zone_frame: None,
     zoom_ring: None,
     borrows_zoom_ring: true,
     game_options: oag_title::race::GameOptions::NONE,

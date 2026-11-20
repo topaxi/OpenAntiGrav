@@ -46,6 +46,7 @@ mod alpha_emissive;
 mod alpha_product;
 mod chevron;
 mod crowd;
+mod crowd_rigs;
 mod emissive_add;
 mod flat_constant;
 mod glow;
@@ -59,10 +60,12 @@ pub mod refraction_only;
 mod report;
 mod shield_lightning;
 mod sky_reflection;
+mod snow;
 mod static_hologram;
 mod tarmac;
 mod transparency;
 mod twin_blend;
+mod uv_flip;
 mod uv_keys;
 mod vertex_blend;
 pub mod water;
@@ -274,7 +277,7 @@ fn build_planned(
     textures: Textures<'_>,
     water: Water,
 ) -> Result<(Model, Report)> {
-    let decoded = psp2::parse(model_blob)
+    let mut decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let plan = planner(&decoded.scene);
     let ps4 = psp2::is_ps4(model_blob);
@@ -290,6 +293,9 @@ fn build_planned(
         ..Report::default()
     };
     model.anim_nodes = plan.anim_nodes;
+    // Omega's crowd-entity shapes are replaced by rig instances (`psp2::crowd_rigs`).
+    let rig_chunks = crowd_rigs::instance(&mut decoded, ps4, &mut *textures, &mut report);
+    let decoded = decoded;
     report.panel.sky_reflection = model.sky_reflection.is_some();
     // Each material's own scroll, resolved before any vertex is written; the
     // glow layer's emissive texture is decoded here too, so a layer exists
@@ -331,8 +337,18 @@ fn build_planned(
     );
     // `mt_tunnelrefraction` and `cl_tunnelrefraction` read the refraction target.
     let glass = refraction::plan(&decoded.materials, &mut glow.emissive, &mut report);
+    // Materials whose vertex programs write `1 - v` into the diffuse coordinate.
+    let uv_flip = uv_flip::plan(&decoded, ps4, &mut *textures, &mut report);
     // A PS4 submesh with a tangent reads a normal map, bound third.
     let mut normals = normal_map::plan(&decoded, ps4, &twin, &mut *textures, &mut report);
+    // Omega's `RT_snow1` binds its drift normal third and two detail normals after it.
+    let snow = snow::plan(
+        &decoded,
+        ps4,
+        (&mut normals, &mut glow.emissive),
+        &mut *textures,
+        &mut report,
+    );
     // 2048's own seas scroll a normal map, bound third as the PS4's are.
     let sea = water::plan(
         &decoded,
@@ -358,7 +374,13 @@ fn build_planned(
         &mut report,
     );
     // Omega's crowd sprites carry `Shadowed` and `Ambient` in the lit sum (`psp2::crowd`).
-    let crowd = crowd::plan(&decoded, ps4, &mut glow.emissive, &mut report);
+    let crowd = crowd::plan(
+        &decoded,
+        ps4,
+        &mut glow.emissive,
+        &mut *textures,
+        &mut report,
+    );
     // Anulpha Pass's chevrons add their emissive mask and wave after the light.
     let chevron = chevron::plan(
         &decoded,
@@ -417,10 +439,19 @@ fn build_planned(
                 .collect();
             super::isolate::excludes_psp2(submesh.material, None, &paths)
         };
-        place.hidden |= filtered;
+        // Omega's track loader swaps every crowd-entity shape for rig instances and clears its
+        // draw bits; the rigs are not loaded, so the placeholder's flat `Colour` is not drawn
+        // either (`oag_rcs::rcsmodel::psp2::nodes::CROWD_ENTITY_FLAGS`).
+        let crowd_entity = ps4
+            && submesh
+                .mesh
+                .and_then(|m| decoded.scene.meshes.get(m))
+                .is_some_and(|m| m.is_crowd_entity());
+        place.hidden |= filtered || crowd_entity;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
-        report.hidden += usize::from(place.hidden && !place.unplaced);
+        report.crowd_entities += usize::from(crowd_entity && !filtered);
+        report.hidden += usize::from(place.hidden && !place.unplaced && !crowd_entity);
         // `fc01_dummy`'s fragment program samples nothing and declares one
         // uniform, `fogColour`; its three instructions leave the circuit's fog
         // colour as the pixel (docs/formats/2048-material-params.md, "What
@@ -518,6 +549,12 @@ fn build_planned(
         } else {
             role
         };
+        // A reflective window gates its reflection by the diffuse alpha (`emissive_add`).
+        let role = if emissive_add.alpha_gated(submesh.material) {
+            role | crate::mesh::slots::DEFAULT
+        } else {
+            role
+        };
         report.lit_alpha_submeshes += usize::from(alpha_lit && !place.hidden);
         // **A vertex-lit surface**: a submesh whose declaration names `NOVAColor` and no
         // lightmap. Its vertex program lays `scale * rgb + bias` on the baked colour and passes
@@ -612,7 +649,10 @@ fn build_planned(
             // through `(0, 0)` is indistinguishable from one with no texture
             // bound at all, which is what `report.diffuse_texture` being
             // `None` already says.
-            let texcoord = submesh.texcoords.get(i).copied().unwrap_or([0.0, 0.0]);
+            let texcoord = uv_flip.apply(
+                submesh.material,
+                submesh.texcoords.get(i).copied().unwrap_or([0.0, 0.0]),
+            );
             // The atlas coordinate a lightmapped submesh's own declaration
             // names, and nothing where it names none - so a Vita model, which
             // never has one, is unchanged to the bit.
@@ -677,6 +717,20 @@ fn build_planned(
                 ),
                 _ => (colour, 1.0),
             };
+            // Omega's snow: `NOVAColor` in the colour and `sun_mask`, `VertexColour2` and the drift
+            // mask in the two coordinate pairs (`psp2::snow`).
+            let snow_vertex = snow.vertex(
+                submesh.material,
+                (
+                    submesh.ps4_nova_colour.get(i),
+                    submesh.ps4_vertex_colour2.get(i),
+                    submesh.colours.get(i),
+                ),
+            );
+            let (colour, sun_mask, lightmap_texcoord, texcoord2) = match snow_vertex {
+                Some(v) => (v.colour, v.sun_mask, v.lightmap_texcoord, v.texcoord2),
+                None => (colour, sun_mask, lightmap_texcoord, texcoord2),
+            };
             // `rt_icetunnel` weights its grab by the baked colour's red (`refraction::is_ice`).
             let colour = match submesh.colours.get(i) {
                 Some(&[r, ..]) if glass.is_ice(submesh.material) => {
@@ -708,7 +762,8 @@ fn build_planned(
                     | chevron.role(submesh.material)
                     | glass.role(submesh.material)
                     | sea.role(submesh.material)
-                    | blend.role(submesh.material),
+                    | blend.role(submesh.material)
+                    | snow.role(submesh.material),
                 xform: place.xform,
                 sun_mask,
                 specular_exponent: crate::mesh::DEFAULT_SPECULAR_EXPONENT,
@@ -765,7 +820,10 @@ fn build_planned(
             // circuit's `.pvs`, whose bitmaps are indexed by exactly this
             // number (`oag_rcs::hd_pvs`, the `Psp2` dialect). `None` when the
             // node table did not read, which the PVS test always allows.
-            chunk: submesh.mesh.and_then(|mesh| u32::try_from(mesh).ok()),
+            chunk: submesh
+                .mesh
+                .and_then(|mesh| u32::try_from(mesh).ok())
+                .or_else(|| rig_chunks.get(&submesh.record).copied()),
             // A Vita material authors no PSP-style reference.
             alpha_test_ref: None,
         });
@@ -793,6 +851,7 @@ fn build_planned(
             &tarmac,
             &chevron,
             &blend,
+            &snow,
         ),
         pictures,
         &mut model,
@@ -813,6 +872,7 @@ type Plans<'a> = (
     &'a tarmac::Plan,
     &'a chevron::Plan,
     &'a vertex_blend::Plan,
+    &'a snow::Plan,
 );
 
 /// Binds each draw to its own submesh's material's texture.
@@ -825,7 +885,7 @@ type Plans<'a> = (
 /// missing archive entry costs one lookup rather than one per submesh.
 fn bind_textures(
     decoded: &psp2::Model,
-    (glow, twin, normals, emissive_add, tarmac, chevron, blend): Plans<'_>,
+    (glow, twin, normals, emissive_add, tarmac, chevron, blend, snow): Plans<'_>,
     mut diffuses: Pictures,
     model: &mut Model,
     report: &mut Report,
@@ -970,14 +1030,15 @@ fn bind_textures(
                         .or_else(|| blend.second(Some(index)).cloned()),
                 );
             }
-            if tarmac.any() || chevron.any() {
+            if tarmac.any() || chevron.any() || snow.any() {
                 let layers = tarmac.of(Some(index));
                 let pulse = chevron.of(Some(index));
                 debug_assert_eq!(model.fifth_maps.len(), at);
                 model.fifth_maps.push(
                     layers
                         .and_then(|l| l.fifth.clone())
-                        .or_else(|| pulse.map(|p| p.emask.clone())),
+                        .or_else(|| pulse.map(|p| p.emask.clone()))
+                        .or_else(|| snow.large(Some(index))),
                 );
                 debug_assert_eq!(model.sixth_maps.len(), at);
                 model.sixth_maps.push(
@@ -986,12 +1047,13 @@ fn bind_textures(
                         .or_else(|| pulse.map(|p| p.wave.clone())),
                 );
             }
-            if twin.any() || tarmac.any() {
+            if twin.any() || tarmac.any() || snow.any() {
                 debug_assert_eq!(model.wave_maps.len(), at);
                 model.wave_maps.push(
                     twin_here
                         .and_then(|t| t.bars.clone())
-                        .or_else(|| tarmac.of(Some(index)).and_then(|l| l.emissive.clone())),
+                        .or_else(|| tarmac.of(Some(index)).and_then(|l| l.emissive.clone()))
+                        .or_else(|| snow.small(Some(index))),
                 );
             }
             if glow.has_layers()

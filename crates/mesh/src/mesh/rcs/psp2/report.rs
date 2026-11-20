@@ -24,6 +24,9 @@ pub struct Report {
     /// from what the file authored, the same reasoning
     /// [`Self::authored_normals`] already applies to its own fallback.
     pub non_finite_texcoords: usize,
+    /// Material slots whose vertex programs write `1 - v` into the diffuse coordinate
+    /// ([`super::uv_flip`]).
+    pub flipped_v_materials: usize,
     /// Vertices whose submesh's declaration named a `tangent` attribute for
     /// this stride, so [`psp2::SubMesh::tangents`] carries one - **not** a
     /// count of non-zero/well-formed tangents the way [`Self::authored_normals`]
@@ -141,6 +144,17 @@ pub struct Report {
     /// where they go. Counted apart from [`Self::hidden`], which is the
     /// file's own choice. See [`placement::Placement::unplaced`].
     pub unplaced: usize,
+    /// Submeshes of a track's crowd-entity shapes ([`oag_rcs::rcsmodel::psp2::nodes::CROWD_ENTITY_FLAGS`]),
+    /// not emitted: Omega replaces each with a `Data/Crowd/Rigs` instance, which is not loaded, so
+    /// the stand draws no figure there (`docs/formats/omega-status.md`, "The crowd-entity shapes").
+    /// Counted apart from [`Self::hidden`].
+    pub crowd_entities: usize,
+    /// Crowd-entity shapes given a `Data/Crowd/Rigs` figure in the bind pose (`psp2::crowd_rigs`).
+    pub crowd_rigs: usize,
+    /// Vertices of those rigs, which [`crate::mesh::Model::vertices`] holds beside the file's own.
+    pub crowd_rig_vertices: usize,
+    /// Crowd-entity shapes whose rig file did not read; they draw nothing.
+    pub crowd_rigs_missing: usize,
     /// Model nodes the skeleton did not name, placed by the model's own bind
     /// matrix - see [`placement::Plan::unmatched`].
     pub unmatched_nodes: usize,
@@ -192,6 +206,19 @@ pub struct Report {
     pub crowd_materials: usize,
     /// Of those, materials left to the generic reading: the glow table was full.
     pub crowd_unread: usize,
+    /// Of the admitted, ones whose programs weight the normal map's `z` lane by the eye vector.
+    pub crowd_eye_frames: usize,
+    /// Omega's `RT_snow1`-shaped materials drawn by their own pixel program (`psp2::snow`).
+    pub snow_materials: usize,
+    /// Of that shape, materials left to the generic reading: a submesh without `NOVAColor`,
+    /// `VertexColour2` or a tangent, a constant unauthored, a picture that would not decode or a
+    /// full glow table.
+    pub snow_unread: usize,
+    /// Omega's `DC_Rocks`-shaped materials drawn by their own pixel program (`psp2::snow`).
+    pub rock_materials: usize,
+    /// Of that shape, materials left to the generic reading: a submesh without a lightmap pair
+    /// or a tangent, a constant unauthored, a picture that would not decode or a full glow table.
+    pub rock_unread: usize,
     /// Materials of the `alpha_emissive` families that add the picture's alpha times `glowtinrt`
     /// after the light (`psp2::alpha_emissive`).
     pub alpha_emissive_materials: usize,
@@ -290,6 +317,14 @@ impl Report {
                 self.non_finite_texcoords
             )
         };
+        let flipped = if self.flipped_v_materials == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} material(s) write 1 - v into the diffuse coordinate (read off their vertex programs)",
+                self.flipped_v_materials
+            )
+        };
         let tangents = (if self.decoded_tangents == 0 {
             String::new()
         } else if self.normal_maps.submeshes == 0 {
@@ -358,8 +393,16 @@ impl Report {
                     self.unplaced
                 )
             };
+            let crowd = if self.crowd_entities == 0 {
+                String::new()
+            } else {
+                format!(
+                    ", {} crowd-entity placeholder(s) not drawn, {} replaced by a rig in its bind pose, the group's clip not played ({} missing)",
+                    self.crowd_entities, self.crowd_rigs, self.crowd_rigs_missing
+                )
+            };
             format!(
-                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{unplaced}{frozen}{unmatched}",
+                "; {} node-bound submesh(es), {} moving on {} animated node(s){hidden}{crowd}{unplaced}{frozen}{unmatched}",
                 self.node_bound, self.moving, self.anim_nodes
             )
         };
@@ -392,8 +435,24 @@ impl Report {
             String::new()
         } else {
             format!(
-                "; {} crowd material(s) lit by Shadowed * (Ambient + light) ({} left to the generic reading)",
-                self.crowd_materials, self.crowd_unread
+                "; {} crowd material(s) lit by Shadowed * (Ambient + light), {} with the eye frame ({} left to the generic reading)",
+                self.crowd_materials, self.crowd_eye_frames, self.crowd_unread
+            )
+        };
+        let snow = if self.snow_materials + self.snow_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} snow material(s) lit by their own pixel program ({} left to the generic reading)",
+                self.snow_materials, self.snow_unread
+            )
+        };
+        let rock = if self.rock_materials + self.rock_unread == 0 {
+            String::new()
+        } else {
+            format!(
+                "; {} rock material(s) lit by their own pixel program ({} left to the generic reading)",
+                self.rock_materials, self.rock_unread
             )
         };
         let alpha_emissive = if self.alpha_emissive_materials + self.alpha_emissive_unread == 0 {
@@ -463,7 +522,7 @@ impl Report {
         let hull_colour = self.hull_colour.describe();
         format!(
             "{} triangle(s) over {} submesh(es), {texture}, {} authored \
-             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
+             normal(s) (rest off face normals); {} unaccounted GPU pointer(s){poisoned}{placeholders}{zone_colours}{track_shapes}{scrolls}{twins}{holograms}{tangents}{flipped}{lightmaps}{see_through}{nodes}{gnf}{lighting_only}{alpha_product}{flat_constants}{emissive_add}{tarmac}{crowd}{snow}{rock}{vertex_blend}{alpha_emissive}{lightning}{refraction}{uv_keys}{panel}{hull_colour}",
             self.triangles, self.submeshes, self.authored_normals, self.unpaired
         )
     }

@@ -442,6 +442,9 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                              "weapons": "off (settings [race] weapons)"})
     pair.rec["original"]["layout"] = layout
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
+    if args.air_brakes:
+        flags += ["--pose-flaps"]
+        pair.rec["ours"]["air_brakes"] = "ours --pose-flaps: the flaps drawn at the pose row's airbrake_l/airbrake_r"
     base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0,
             "--field-from", out / "field.csv", "--field-warmup",
             "--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (

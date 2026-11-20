@@ -24,8 +24,9 @@ use oag_vex::probes::{self, IRRADIANCE_SIZE, Probes, REFLECTION_SIZE, Taps};
 ///
 /// Read live on RPCS3 (Zone mode, zones 3 and 4, two frames; Talon's Junction and Metropia
 /// before): the engine writes `(4, 4, 4, 0)` in a race and `(0.698, 0.698, 0.698, 1)` in a
-/// Zone race. What moves it inside a Zone race (the stage, the zone number) is not read:
-/// both frames were at the `Sub Flash` stage, so the one value is carried for the whole mode.
+/// `Sub Flash` Zone race. In HD's Zone frame the stage table sets it for every hull instead
+/// (`mesh_render::Light::hull_probe_tint`, `docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`);
+/// [`Self::ZONE`] stands where a title's frame carries none.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct ProbeTint {
     /// The rgb scale, the same on all three channels everywhere it was read.

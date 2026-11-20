@@ -17,9 +17,9 @@ use oag_hud::loading_layout::{Align as At, Draw as Kind, Element, Layout};
 use oag_ui::frontend::{Align, Draw};
 
 use super::wording::{counts, percentage, step_line};
-use super::{Phase, Progress, Screen, counted, elide, estimated_fraction, fraction, wrap};
+use super::{Phase, Progress, Screen, counted, elide, estimated_fraction, fraction};
 use oag_display::space::Space;
-use oag_ui::font::Atlas;
+use oag_ui::font::{Atlas, wrap};
 
 /// Where the grid sits in the screen's space, with the Safe Area applied.
 ///

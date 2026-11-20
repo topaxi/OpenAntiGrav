@@ -157,6 +157,7 @@ pub mod sound;
 mod transition;
 mod variants;
 mod zone_circuit;
+mod zone_frame;
 pub use crate::speed::SpeedClasses;
 pub use announcer::{
     CountdownEvent, CountdownVoice, SequenceTick, StartCue, ZoneAnnouncer, ZoneClassAnnouncer,
@@ -174,6 +175,7 @@ pub use variants::{
     livery_variant, split_livery,
 };
 pub use zone_circuit::ZoneCircuit;
+pub use zone_frame::ZoneFrame;
 
 /// The circuit and team a race falls back to on one title.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -260,6 +262,13 @@ pub struct RaceDefaults {
     pub eliminator_skin: Option<&'static str>,
     /// Measured `ready`/`go` start-voice banks, or `None` (plays nothing): [`CountdownVoice`].
     pub countdown_voice: Option<&'static CountdownVoice>,
+    /// The modes, by `oag_race::Mode::name`, whose HUD draws nothing until the race is released
+    /// (the `go` step): the whole HUD, grid and countdown alike. HD's Zone race manager holds the
+    /// HUD's draw gate shut from the grid and opens it in the released phase; a single race
+    /// leaves it open through the countdown
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`). Empty: every mode draws its HUD
+    /// from the first tick the flyby allows.
+    pub hud_waits_for_go: crate::pre_race::Sourced<&'static [&'static str]>,
     /// The hover target the craft holds on the grid and releases after the green
     /// light, or `None` where not measured: [`crate::launch_hover::LaunchHover`].
     pub launch_hover: Option<&'static crate::launch_hover::LaunchHover>,
@@ -315,6 +324,10 @@ pub struct RaceDefaults {
     /// HD/Fury: 2048 fades by a factor nothing traced writes, and Pulse and Pure
     /// ship no stage table.
     pub zone_transition: Option<&'static ZoneTransition>,
+    /// What this title's engine does to a Zone race's frame beyond the stage table: the
+    /// light its chunks are drawn under and the `HDR and Bloom` values it runs with, over the
+    /// circuit's own. See [`ZoneFrame`]. `None` where unread, every title but HD/Fury.
+    pub zone_frame: Option<&'static ZoneFrame>,
     /// HD/Fury's zoom-streak ring (see [`crate::ZoomRing`]); `None` on every other title.
     pub zoom_ring: Option<&'static crate::ZoomRing>,
     /// Whether the player may switch on a borrowed copy of HD's zoom-streak ring

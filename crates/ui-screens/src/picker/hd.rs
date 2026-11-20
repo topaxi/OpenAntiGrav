@@ -59,7 +59,10 @@
 use oag_ui::frontend::{Align, Draw, Placed};
 use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
-use oag_ui::screen::{BlockWidget, Node, Screen, Screens, Text, argb_to_rgba, parse, parse_argb};
+use oag_ui::screen::{
+    BlockWidget, EntryClock, Node, Screen, Screens, Text, Vwipe, argb_to_rgba, entry_draw, parse,
+    parse_argb, restart_draw,
+};
 
 use super::{Details, FaceScales, Layout, Picker};
 
@@ -163,6 +166,9 @@ pub struct TeamScreen {
     /// the selected team's own `FE\Logo.gtf` at runtime, which is the only
     /// per-team texture of that name on the disc (twelve, one per team).
     pub logo: Option<[f32; 4]>,
+    /// The `Logo`'s `transitiontype="vwipe"`: the team step replays it,
+    /// see [`logo_draw`].
+    pub logo_wipe: Option<Vwipe>,
     /// `AlwaysSolidColor` per `Block` name - the darker remainder of a stat
     /// bar, `0xff646464` on all five.
     pub solid: Vec<(String, u32)>,
@@ -344,6 +350,7 @@ fn walk(
                     selected_lock: colour("SelectedLockCol").unwrap_or(0xff80_8080),
                     selected_lock_fade: colour("SelectedLockColFade").unwrap_or(0xff24_2424),
                     ring: hex::TEAM_RING,
+                    phase_by_entry: true,
                 });
             }
             "image" if child.attr("name") == Some("Logo") => {
@@ -353,6 +360,7 @@ fn walk(
                     number(child, "width").unwrap_or(0.0),
                     number(child, "height").unwrap_or(0.0),
                 ]);
+                out.logo_wipe = screens.vwipe_from_node(child);
             }
             "block" => {
                 if let (Some(block), Some(solid)) =
@@ -431,6 +439,33 @@ pub(crate) fn block_arrow(
     });
 }
 
+/// The `Logo` quad as the page shows it, `None` while it waits out its authored `delay`.
+///
+/// The widget's countdown is armed at the page's entry with its `delay` and the ramp then runs
+/// its in-time; a team step resets the alpha without re-arming the delay, so the wipe replays
+/// from the press (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "On a step" and "Page
+/// entry"). With no wipe authored the quad is whole. The ramp after a step starts at the press:
+/// the original's start is 0 to 2 frames later.
+fn logo_draw(
+    rect: [f32; 4],
+    wipe: Option<Vwipe>,
+    clocks: (EntryClock, Option<f32>),
+    placed: Placed,
+) -> Option<Draw> {
+    let (entry, step) = clocks;
+    let uv = placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]);
+    restart_draw(
+        wipe,
+        entry.seconds(),
+        step,
+        Draw::Sprite {
+            rect,
+            uv,
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+    )
+}
+
 /// The body of the screen - see the module doc for what is and is not here.
 pub(super) fn body(
     picker: &Picker,
@@ -451,7 +486,11 @@ pub(super) fn body(
             continue;
         }
         if let Some(placed) = sprites(&image.src) {
-            out.push(sprite(image, placed, None));
+            out.extend(entry_draw(
+                image.wipe,
+                picker.entry().seconds(),
+                sprite(image, placed, None),
+            ));
         }
     }
     let Some(entry) = picker.selected() else {
@@ -463,16 +502,18 @@ pub(super) fn body(
         }) = Some(&entry.details)
         && let Some(placed) = sprites(logo)
     {
-        out.push(Draw::Sprite {
+        out.extend(logo_draw(
             rect,
-            uv: placed.sheet_rect([0.0, 0.0, placed.width as f32, placed.height as f32]),
-            color: [1.0, 1.0, 1.0, 1.0],
-        });
+            extra.logo_wipe,
+            (picker.entry(), picker.seconds_since_step()),
+            placed,
+        ));
     }
     draw_labels(&extra.labels, &mut out);
     out.extend(crate::campaign::hd::cell_brackets::draws(
         &screen.brackets,
         sprites,
+        picker.entry().seconds(),
     ));
     if let Some(grid) = &extra.hex {
         hex::draw(grid, picker, sprites, &mut out);

@@ -496,6 +496,11 @@ optional = true
 type = "string"
 optional = true
 
+# original, circle or triangle: the face button the front end leaves a screen on.
+[types.controls.menu_back]
+type = "string"
+optional = true
+
 # A level's name; the old on/off switch is still read.
 [types.controls.pilot_assist]
 oneof = ["string", "boolean"]

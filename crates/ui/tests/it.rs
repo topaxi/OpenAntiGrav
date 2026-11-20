@@ -9,12 +9,14 @@
 //! A new test file is only compiled once it is listed here, and
 //! `every_test_file_is_listed` below fails until it is.
 
+mod bracket_ground_truth;
 mod menu_layout_ground_truth;
 mod menu_schema;
 mod menu_skin;
 mod prompt_glyphs_ground_truth;
 mod pure_frame_ground_truth;
 mod text_display_type_ground_truth;
+mod vwipe_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into
 /// nothing, and its tests stop running without a word.

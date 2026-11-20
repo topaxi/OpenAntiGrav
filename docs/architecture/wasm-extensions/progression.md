@@ -936,7 +936,8 @@ counts; **not checkable until the build** for the panel on Omega.
 
 Prerequisite, outside this design: the records file is written atomically (temp
 file, then rename), under a general ADR for every profile file (maintainer,
-2026-11-20; [progression-challenge.md](progression-challenge.md), objection 7).
+2026-11-20; [progression-challenge.md](progression-challenge.md), objection 7):
+[ADR-0095](../adr/0095-every-file-under-the-profile-folder-is-written-atomically.md), built 2026-11-20.
 
 Each step is its own merge, with a proof that a race with no run module hashes
 exactly as before (`VANILLA_FOLD`) and keeps `World`'s size (ADR-0093 decision 12).

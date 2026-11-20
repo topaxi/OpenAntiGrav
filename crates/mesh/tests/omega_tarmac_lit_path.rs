@@ -14,7 +14,7 @@ use std::sync::Arc;
 use oag_mesh::mesh::{
     Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, PROGRAM_TARMAC, Texels, slots,
 };
-use oag_mesh::mesh_render::{self, Anisotropy, Scene, UNIFORMS_SIZE};
+use oag_mesh::mesh_render::{self, Anisotropy, Light, Scene, UNIFORMS_SIZE};
 
 const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const SIZE: u32 = 64;
@@ -210,6 +210,49 @@ fn dirt_then_markings_are_laid_over_the_diffuse_by_their_own_alpha() {
     assert_eq!(
         plain, asphalt,
         "an entry that is not the mode draws no layers"
+    );
+}
+
+/// A lightmapped tarmac road under no sun: the prelit term alone, times the shadow-light factor
+/// `0.75 + 0.25 sat(N.SL) + scale sat(R.SL)^power` where the rig carries one
+/// (`docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`). `N` and `R` are the model's
+/// `+z` normal and the camera's reflection, so `SL` along `x` is the factor's `0.75` floor and
+/// `SL` along `z` is `0.75 + 0.25 + scale`.
+#[test]
+fn the_shadow_light_factor_scales_the_prelit_term() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) = pollster::block_on(
+        adapter.request_device(&mesh_render::device_descriptor("tarmac road", &adapter)),
+    )
+    .expect("requesting the device");
+    let clear = [0, 0, 0, 0];
+    let mut road = model(PROGRAM_TARMAC, &[clear], &[clear], 0.5, 0.5);
+    road.lightmaps = vec![texture("atlas", &[[128, 128, 128, 255]])];
+    for v in &mut road.vertices {
+        v.slots |= slots::SECOND_IS_LIGHTMAP;
+    }
+    let at = |light: Light| {
+        let mut scene = Scene::off();
+        scene.light = light.with_nova_prelit(1.0, 0.0, 1.0);
+        scene.fog.camera = [0.0, 0.0, 100.5];
+        draw(&device, &queue, &road, scene)
+    };
+    let rig = || Light::authored([0.0, 0.0, 1.0], [0.0; 3], [0.0; 3], [1.0; 3], [1.0; 3], 0.0);
+    let plain = at(rig());
+    assert!(plain[0] > 16, "the prelit term lights the road: {plain:?}");
+    let floor = at(rig().with_shadow_light([1.0, 0.0, 0.0], 10.0, 1.0));
+    assert!(
+        floor[0] + 6 < plain[0],
+        "a shadow light edge-on to the road leaves 0.75 of the prelit term: {floor:?} against {plain:?}"
+    );
+    let lobe = at(rig().with_shadow_light([0.0, 0.0, 1.0], 1.0, 1.0));
+    assert!(
+        lobe[0] > plain[0] + 20,
+        "a shadow light along the reflection adds its lobe: {lobe:?} against {plain:?}"
     );
 }
 

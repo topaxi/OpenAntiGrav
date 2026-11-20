@@ -45,16 +45,20 @@
 //! its census are on `docs/formats/gcn.md`; the instruction set is [`isa`].
 
 mod factor;
+mod frame;
 pub mod isa;
 mod lightning;
 mod opcodes;
 mod sample;
 mod sea;
+mod texcoord;
 
 pub use factor::{Factor, input_is_factor};
+pub use frame::{EyeFrame, third_axis_is_eye};
 pub use lightning::{LightningRates, lightning_rates};
 pub use sample::{SignedSamplers, SignedTextures, signed_samplers};
 pub use sea::{ScrolledEdge, Sea, SeaTaps, scrolled_edge, sea};
+pub use texcoord::{TexcoordFlip, flips_v};
 
 use core::fmt;
 use core::ops::Range;

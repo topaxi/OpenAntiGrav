@@ -1,49 +1,53 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-19
-summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 36.83 after the sky dome and light-bar fixes; the pre-GO HUD gate, white scenery and sky exposure remain"
+updated: 2026-11-20
+summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 7.27 after the hull probe tint; board glyph and a 2x hull brightness gap remain"
 ---
 
-# HD Zone start pair: what is left after the sky dome and light-bar fixes
+# HD Zone start pair: what is left after the Zone frame's light and post chain
 
 The adopted pair `hd/zone-vineta-k-z5` (Vineta K, Zone start, stage 1 Sub
-Venom) moved 53.04 -> 36.83 mean grey (rmse 0.322 -> 0.219) on two fixes:
-the Zone gradient dome as the sky
-(`docs/ghidra/functions/ps3-hdfury-eu/zone-sky.md`, "The dome's colours, and
-the dome is what the frame shows") and no `_ne` light bar on the Zone surface
-(`docs/rendering/hd-zone-recolour.md`, "The light-bar term in a Zone race").
+Venom) moved 53.04 -> 28.77 mean grey on the sky dome, the light-bar term, the
+zone equaliser and the pre-GO HUD gate, and 28.77 -> 7.42 (rmse 0.165 ->
+0.085) on the Zone frame itself
+(`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`): the Zone surface lit by
+the stage's ambient instead of the circuit's lightmap (17.04), then the Zone
+`HDR and Bloom` block and the resolve's `Bloom feedback` `-0.4` (7.42). The
+white scenery, the sky's 17 % and the dome's flat band are closed by those
+three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
+1.32, the craft 1.92.
 
 ## Open
 
-- **The Zone HUD before GO** (about 7 grey on the zone list and gauge). The
-  original's frame (lap clock 0.0) draws no Zone HUD; ours at `--ticks 0`
-  (race clock -4.53 s) draws the zone list, header and gauge. Not found in
-  `RaceManager_UpdateCountdown` (`0x00057690`): it writes bytes `+0x68`
-  (countdown running) and `+0x69` (released) of `*(*0x008a6890 = 0x0098767c)
-  + 0x40` and calls `RaceManager_SetPhase(2)`; the readers of those two bytes
-  are the next thing to read, then the per-player HUD reset `0x000cf970` that
-  phase 1 calls (`countdown-voice.md`). `Hud_Update` (`0x0009e3d0`) is 1,400
-  decompiled lines and gates per widget; no whole-HUD gate seen in its first
-  part. Whether the gate is Zone-only is unknown: no HD pair sits in a
-  countdown outside Zone.
 - **Which countdown moment the original's frame is.** The gantry board shows
-  a glyph ours does not (ours' board assembly starts at tick 63). The pair's
+  a glyph ours does not (ours' board assembly starts at tick 63). The live
+  read for the HUD gate (`docs/ghidra/functions/ps3-hdfury-eu/hud-start-gate.md`)
+  saw the same `3` glyph in phase 1, the countdown, so the frame is inside the
+  countdown; the HUD gate is phase-based, so it needs no re-timing. The pair's
   `--ticks 0` may be earlier than the original's moment; pinning it needs the
   countdown timer read in the same pause (`RaceManager +0x1958 - +0x1968`).
-  A pair-timing question for the lead, not a board law.
-- **White scenery.** The original draws Vineta K's buildings and billboards
-  near white (`Scene.Texture Colour` 0.72/0.91/0.96 plus rim terms); ours
-  shows some of them pale grey-brown with window texture, and the whole frame
-  darker (bias -15 to -22 grey outside the sky). Unread which chunks.
-- **Sky exposure.** Ours' dome reads about 17 % brighter than the original's
-  at eye level, uniformly.
-- **The dome's band is flatter than read.** The frame rises less toward
-  the zenith than `tan(e) / 0.75` (zone-sky.md); the band geometry stays at
-  the static 82.
+  A pair-timing question for the lead, not a board law. 1.32 grey.
+- **The hull's light in a Zone frame: half read.** The hull's probe tint is twice
+  the stage's `Track.Base Colour Highlight` (wired; pair 7.42 -> 7.27, craft box
+  38.56 -> 33.58,
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). The hull is still about
+  half as bright as the original's (left pod red 44 against 88). Ruled out: probe data
+  (live = Vineta K probe 210), SPU light, sun (0), tint, and the probe decode (the
+  non-Zone `hd/vineta-k` hull matches). Next reads on that page, "Still open".
+- **A pulse's history in the feedback term.** The resolve's feedback buffer is
+  the zoom ring's history target; ours resolves against the frame's own
+  quarter-res scene, so a damage pulse in a Zone race is not in the term.
+- **Radial bloom.** A Zone race enables it (contribution `0.04`); the port has
+  no radial pass.
+- **Detonator and Zone Battle** take their own arms of the same block
+  (zone-frame.md, "The Zone arm"); `oag_hd::race::ZONE_FRAME` is applied in
+  Zone alone.
 - **2048 on HD-lineage circuits draws the same grey Flash sky** (zone-sky.md,
   "2048 and Omega"): checked, applies, not wired; the port draws the circuit
   dome there. Omega's Flash frame shows peach instead: differs, unread.
+- **2048 and Omega have no Zone frame law read.** Both end the Zone frame in
+  `wo_composite_zone_fp` (Omega also `wo_composite_zone_hdfury_fp`), unread.
 - **The adopted pair's provenance says zone 1, score 0 were read off the
   original's HUD**, but the frame draws no HUD; the values are the race's
   start state, not a reading.
@@ -53,7 +57,12 @@ the dome is what the frame shows") and no `_ne` light bar on the Zone surface
 
 ## Next Steps
 
-1. `get_xrefs_to` the byte fields `+0x68`/`+0x69` of the object at
-   `0x0098767c + 0x40` in the PS3 executable; find the HUD draw's gate.
+1. After this lands, re-render the pair from the main checkout:
+   `just compare-rerender-ours --only hd/zone-vineta-k-z5 --no-build` (7.27
+   expected).
 2. Read the countdown timer beside the pair's grab and re-time ours'
    `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
+3. The hull's remaining factor of two: match unit 0's 64-byte heads (`0x0a780100`)
+   against `zoneship_faisar`'s textures, then the live program's tail past `@0x5f`,
+   then ours' scene target against `target-01920000.bin` (zone-hull-light.md, "Still
+   open"). Recipe: `HOOK_TEX_RE='0\.69804' scripts/rpcs3-hd-zone-frame.py --small 2500`.

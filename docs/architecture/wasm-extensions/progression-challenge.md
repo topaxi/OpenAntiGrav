@@ -260,8 +260,9 @@ re-exports `rename`). It is a small change that stands alone and should land fir
 `rejoin_record.toml`, `music.toml` and the identity file are already written temp then
 rename; `records.toml` and the settings are not, and an unparsable `records.toml` is
 moved aside so the player starts with no records. Every profile file gets the atomic
-write through one helper, under its own general ADR and thread (handed to the drive's
-orchestrator). ADR-0093 decision 11 names it as a prerequisite of the run record.
+write through one helper, under its own general ADR:
+[ADR-0095](../adr/0095-every-file-under-the-profile-folder-is-written-atomically.md), built 2026-11-20.
+ADR-0093 decision 11 names it as a prerequisite of the run record.
 
 ### 8. `RunResult` misses what two modes are scored on, and its tick state depends on frame pacing
 

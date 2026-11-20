@@ -410,7 +410,7 @@ pub(super) fn text_for(
         "NextSpeedClass" => readout
             .zone_next_in
             .and(classes)
-            .and_then(|classes| classes.id_for(readout.zone_stage + 1))
+            .and_then(|classes| classes.id_for(classes.rung(readout.zone_stage, readout.zone) + 1))
             .map(|id| strings.get_or_id(id).to_string()),
 
         // Separators, authored as literals. Drawn only when both sides have a

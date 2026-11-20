@@ -645,7 +645,11 @@ pub struct Zone {
     /// replaces the albedo. All 25 materials of `zone_1`..`zone_4` carry
     /// `zoneAnisoPalette` and none `zoneBaseInner`
     /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-palette-textures.md`, "The
-    /// port"). `.yzw` unused.
+    /// port"). `.w` is `1.0` where the title's Zone frame lights every chunk on its Zone
+    /// program by the stage's ambient and sun alone, with no lightmap or baked vertex
+    /// light (HD/Fury's `Ambient` permutation,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`, "The Zone surface's light");
+    /// `0.0` leaves the chunk its own light. `.yz` unused.
     pub shape: [f32; 4],
     /// The four `zoneAnisoPalette` ramps, Scene inner, Scene outer, Track
     /// inner, Track outer: the 17 texels `Environment_BuildAnisoPalette`

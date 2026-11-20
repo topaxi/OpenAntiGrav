@@ -59,7 +59,7 @@ const WEIGHTS: [&str; 4] = [
 
 impl Program<'_> {
     /// The last instruction before `k` that writes vector register `register`.
-    fn writer_of(&self, k: usize, register: u8) -> Option<(usize, &Instruction)> {
+    pub(super) fn writer_of(&self, k: usize, register: u8) -> Option<(usize, &Instruction)> {
         self.instructions[..k]
             .iter()
             .enumerate()

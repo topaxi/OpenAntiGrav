@@ -40,6 +40,7 @@ mod settings;
 mod tag_input;
 mod touch;
 mod widgets;
+mod wipe;
 pub use block::BlockWidget;
 pub use color::{argb_to_rgba, parse_argb};
 pub use display_type::DisplayType;
@@ -52,6 +53,10 @@ pub use reveal::{RevealKey, interpolate_reveal};
 pub use settings::{TouchList, TouchListEntry, TouchSlider};
 pub use tag_input::TagInput;
 pub use touch::{CanvasLabel, Include, TouchButton};
+pub use wipe::{
+    BRACKET_RAMP_SECONDS, EntryClock, FRAME_SECONDS, IMAGE_RAMP_SECONDS, Vwipe, Window, entry_draw,
+    ramp_seconds, restart_draw,
+};
 
 /// One `Text` widget.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -138,6 +143,9 @@ pub struct Text {
     /// inset" as the general rule; 95 that it is right for this screen. See
     /// `docs/architecture/frontend-boot.md`.
     pub wrap_width: Option<f32>,
+    /// `PushHeight="true"`: the widget's `y` is an offset below the bottom of the text before it
+    /// in the same `Viewport`, not a position of its own. `Cell Help`'s three paragraphs author it.
+    pub push_height: bool,
 }
 
 impl Text {
@@ -273,6 +281,10 @@ pub struct Image {
     /// default - `docs/ghidra/functions/psp-pure-eu/title-screen.md`'s
     /// `Element_UpdateFade` section.
     pub start_enabled: bool,
+    /// The widget's `transitiontype="vwipe"` with its `delay` and in-time, when it authors one.
+    /// It replaces the alpha fade ([`Self::transition`]); a page that plays it reads an
+    /// [`EntryClock`] through [`entry_draw`].
+    pub wipe: Option<Vwipe>,
 }
 
 /// A `<Watch watch="Class" value="Vector">`: the widgets the screen draws while
@@ -676,6 +688,33 @@ impl Screens {
     /// offset contributes zero, which is every container the boot screens
     /// use, so nothing already measured moves.
     fn collect_widgets(
+        &self,
+        screen: &mut Screen,
+        child: &Node,
+        viewport_width: Option<f32>,
+        offset: (f32, f32),
+        transition: f32,
+        fallback_images: &[(&str, &str)],
+    ) {
+        let first_bracket = screen.brackets.len();
+        self.collect_widget(
+            screen,
+            child,
+            viewport_width,
+            offset,
+            transition,
+            fallback_images,
+        );
+        if let Some(name) = child.attr("name") {
+            for bracket in &mut screen.brackets[first_bracket..] {
+                bracket.group.get_or_insert_with(|| name.to_string());
+            }
+        }
+    }
+
+    /// One node of [`Self::collect_widgets`], without the bookkeeping that names the brackets it
+    /// reached.
+    fn collect_widget(
         &self,
         screen: &mut Screen,
         child: &Node,

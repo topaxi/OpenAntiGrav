@@ -24,6 +24,22 @@ fn reads_every_arity_the_file_uses() {
     assert_eq!(env.flag("Lighting.Use Lens Flare"), Some(true));
 }
 
+#[test]
+fn a_pair_is_exactly_two_numbers() {
+    let env = EnvSettings::parse(concat!(
+        "\"Lighting.ShadowLight specular power scale\"=10 1\n",
+        "\"Lighting.ShadowLight direction\"=0 -0.32015 -0.94736\n",
+    ))
+    .expect("it parses");
+    assert_eq!(env.vec2(OMEGA_SHADOW_LIGHT_SPECULAR), Some([10.0, 1.0]));
+    assert_eq!(
+        env.vec2(OMEGA_SHADOW_LIGHT_DIRECTION),
+        None,
+        "three numbers"
+    );
+    assert_eq!(env.vec2("Lighting.Absent"), None);
+}
+
 /// **The trap the whole `is_integer` field exists for.**
 ///
 /// `Sky colour` is bytes and `ambient color` is normalised floats, and the only

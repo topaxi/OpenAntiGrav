@@ -739,11 +739,14 @@ Pulse rows), default on, seeded and shown only where the title lists it, and not
 only drops our extra tiles). The text comes off the disc's `MPTag_HUD.xml` (`PlrTag0`: `HUD` face, scale 0.5, centred, white,
 border alpha 0.25; the eight labels share it, a ground-truth test pins that) and is placed where the lock-on reticle is,
 projected through each view's own camera at the craft's drawn pose.
-**Chosen, not measured:** the raise runs along the craft's own up (the original's axis is unread); only other person-flown
-craft are tagged (no AI craft); a name is the lobby's where the race has one, else seat 1's stored player name (`SimRace::set_person_names`), and otherwise
+**Read from the executable** ([hud-game-options.md](../ghidra/functions/psp-pulse-usa/hud-game-options.md), "Multiplayer Tags"):
+the 2-unit raise runs along the world's Y axis, the local player's own craft never has a tag, and the gate
+(`FUN_0883e37c`, confidence 80) is the track-section row: a craft is tagged only where the viewer's section row holds its
+section. **Chosen, not measured:** only other person-flown craft are tagged (the original also tags AI craft; whether a
+multiplayer race has any is unread); a name is the lobby's where the race has one, else seat 1's stored player name (`SimRace::set_person_names`), and otherwise
 `Player N`, the maintainer's stop gap (the original falls back to one shared string, `ONL_CRJ_PLAYER`, for every
-unnamed slot); and there is no occlusion test, because the original's own gate (`FUN_0883e37c`) reads as a viewport test, so a tag
-shows through a wall. A craft behind a view's camera has no tag in that view.
+unnamed slot). There is no occlusion test beyond that section row (a tag shows through a wall inside a visible section, as the
+original's does). A craft behind a view's camera has no tag in that view.
 
 **Checked against the other titles** (the Pulse rule: an invented Pulse row is checked for the others, not widened to them):
 
@@ -753,7 +756,12 @@ shows through a wall. A craft behind a view's camera has no tag in that view.
   (`GhostOption`, "Ghost Ships Visible") exist, with no `Auto Load Ghost` and no `Dynamic HUD`. **Checked, applies, not wired**:
   HD races a ghost (Pulse's recipe, chosen not measured) with no way to hide it. `Multiplayer Tags` is also listed: **checked,
   applies, not wired** (`HudLayouts::player_tags` is `None` for HD, whose `mptag_hud.xml` and the 1920x1080 label face are unread
-  here; the engine path is title-blind once a title names the layout and lists the row).
+  here; the engine path is title-blind once a title names the layout and lists the row). **Read 2026-11-20
+(`EBOOT-ps3-hdfury-eu.elf`)**: HD's `Hud_Update` (`0x0009e3d0`) reads the `Multiplayer Tags` list value (the string at
+`0x0077fd58`, referenced at `0x0009f8e8`) and compares it with `FE_OFF`, so the option acts there (confidence 70; the
+byte it writes and the per-frame tag update were not followed). Pulse's section-row gate does **not** transplant: HD's
+visibility is one bit per `.rcsmodel` chunk per cell, not 64 sections ([hd-pvs.md](../formats/hd-pvs.md)), so HD's gate
+(if it has one) is a different test: **checked, differs** for the gate, **applies, not wired** for the row.
 - **Omega**: Omega's front end is HD's (`PI001`), but nobody has read Omega's own `Settings` list: **not checkable** from this
   lane. Its pause screen authors `FE_GHOST` (the ghost ship's visibility, seen live on shadPS4 in Time Trial and Speed Lap,
   `docs/ui/pause-menu.md`, "Omega"), so this build offers GHOST SHIPS VISIBLE there on that evidence alone, **inherited from HD**

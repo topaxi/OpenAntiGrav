@@ -253,6 +253,9 @@ pub struct ViewSetup {
     pub zoom_borrowed: bool,
     /// [`Options::hud`], carried through to the readout.
     pub capture_hud: Option<CaptureHud>,
+    /// Whether this race's HUD stays hidden until the race is released:
+    /// `oag_title::RaceDefaults::hud_waits_for_go` naming the race's mode.
+    pub hud_waits_for_go: bool,
     /// The song-name marquee, read at load for a title that authors one.
     pub now_playing: Option<crate::now_playing::View>,
     /// [`Options::world_clock_offset`], carried to the scene's animation clock.
@@ -265,6 +268,9 @@ pub struct ViewSetup {
     /// The drawn reticle's grids and law, off the loaded HUD: [`SimSetup::sight`]'s lock
     /// grid seen from this machine's screen ([`Sighting::view_sight`]).
     pub sight: Sighting,
+    /// The track's authored section-visibility rows, for the multiplayer tag gate
+    /// (`oag_hud::player_tags::in_view_row`). `None` where the track names no sections.
+    pub track_sections: Option<oag_vex::pvs::TrackPvs>,
 }
 
 /// A build without the `view` feature draws and plays nothing, so it has nothing to build
@@ -360,11 +366,13 @@ impl ViewSetup {
             zoom_ring: None,
             zoom_borrowed: false,
             capture_hud: None,
+            hud_waits_for_go: false,
             now_playing: None,
             world_clock_offset: 0.0,
             gantry_seconds: None,
             camera_override: None,
             sight: Sighting::default(),
+            track_sections: None,
         }
     }
 }

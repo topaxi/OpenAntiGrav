@@ -177,7 +177,27 @@ fn tangent_w_reader(p: &Program<'_>) -> Option<String> {
     Some(format!("{} {law}", first.name.unwrap_or("?")))
 }
 
-fn sweep(rel: &str) -> Option<Survey> {
+/// The material files whose vertex programs write `1 - v` into `Uv1` (`gcn::flips_v`), by
+/// archive entry path, and the ones where only some of the programs that fetch `Uv1` do.
+#[derive(Default, Debug, PartialEq, Eq)]
+struct Flips {
+    flipping: Vec<String>,
+    mixed: Vec<String>,
+}
+
+impl Flips {
+    fn add(&mut self, entry: &str, file: &[u8]) {
+        let found = gcn::flips_v(file);
+        if found.is_flip() {
+            self.flipping.push(entry.to_string());
+        } else if found.is_mixed() {
+            self.mixed
+                .push(format!("{entry} {}/{}", found.flipping, found.programs));
+        }
+    }
+}
+
+fn sweep(rel: &str) -> Option<(Survey, Flips)> {
     let path = path(rel)?;
     let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
     let materials: Vec<String> = archive
@@ -187,16 +207,18 @@ fn sweep(rel: &str) -> Option<Survey> {
         .cloned()
         .collect();
     let mut survey = Survey::default();
+    let mut flips = Flips::default();
     for m in materials {
         let bytes = archive.read_path(&m).expect("every entry reads");
         survey.files += 1;
         survey.add(&bytes, !is_variant(&m));
+        flips.add(&m, &bytes);
     }
-    Some(survey)
+    Some((survey, flips))
 }
 
-fn holds(rel: &str, expected: &str) {
-    let Some(s) = sweep(rel) else { return };
+fn holds(rel: &str, expected: &str, flips: &str) {
+    let Some((s, found)) = sweep(rel) else { return };
     assert!(
         s.refused.is_empty(),
         "{rel}: refused programs {:?}",
@@ -212,14 +234,19 @@ fn holds(rel: &str, expected: &str) {
         s.tangent_w
     );
     assert_eq!(format!("{s:?}"), expected, "{rel}");
+    assert_eq!(
+        format!("{found:?}"),
+        flips,
+        "{rel}: the files that write 1 - v"
+    );
 }
 
 macro_rules! archive {
-    ($test:ident, $rel:literal, $expected:literal) => {
+    ($test:ident, $rel:literal, $expected:literal, $flips:literal) => {
         #[test]
         #[ignore = "needs the Omega extraction"]
         fn $test() {
-            holds($rel, $expected);
+            holds($rel, $expected, $flips);
         }
     };
 }
@@ -227,47 +254,56 @@ macro_rules! archive {
 archive!(
     base_data00,
     "omega-eu/uroot/data00.psarc",
-    "Survey { files: 2993, tags: 138837, pixel: 31332, vertex: 107505, other_stage: 0, instructions: 16862339, pro_programs: 83658, plain_files: 991, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 6162, \"VOP1 85\": 3712, \"VOP1 86\": 158803, \"VOP1 87\": 4424, \"VOP1 88\": 68246, \"VOP1 91\": 3120, \"VOP2 50\": 13722, \"VOP2 51\": 6983, \"VOP2 53\": 546590, \"VOP2 55\": 32, \"VOP2 57\": 157748, \"VOP2 58\": 191566, \"VOPC 201\": 2888, \"VOPC 203\": 550, \"VOPC 204\": 80, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 7282, \"v_mad_mixhi_f16 raw\": 16, \"v_mad_mixlo_f16 raw\": 24, \"v_mul_f32 raw\": 10879, \"w not fetched\": 1695} }"
+    "Survey { files: 2993, tags: 138837, pixel: 31332, vertex: 107505, other_stage: 0, instructions: 16862339, pro_programs: 83658, plain_files: 991, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 6162, \"VOP1 85\": 3712, \"VOP1 86\": 158803, \"VOP1 87\": 4424, \"VOP1 88\": 68246, \"VOP1 91\": 3120, \"VOP2 50\": 13722, \"VOP2 51\": 6983, \"VOP2 53\": 546590, \"VOP2 55\": 32, \"VOP2 57\": 157748, \"VOP2 58\": 191566, \"VOPC 201\": 2888, \"VOPC 203\": 550, \"VOPC 204\": 80, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 7282, \"v_mad_mixhi_f16 raw\": 16, \"v_mad_mixlo_f16 raw\": 24, \"v_mul_f32 raw\": 10879, \"w not fetched\": 1695} }",
+    "Flips { flipping: [], mixed: [] }"
 );
 archive!(
     base_data01,
     "omega-eu/uroot/data01.psarc",
-    "Survey { files: 1601, tags: 152141, pixel: 30731, vertex: 121410, other_stage: 0, instructions: 19406731, pro_programs: 94424, plain_files: 530, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 4486, \"VOP1 86\": 177967, \"VOP1 87\": 3834, \"VOP1 88\": 77275, \"VOP1 91\": 2036, \"VOP2 50\": 12398, \"VOP2 51\": 2883, \"VOP2 53\": 590849, \"VOP2 56\": 8, \"VOP2 57\": 174496, \"VOP2 58\": 212835, \"VOPC 201\": 2064, \"VOPC 203\": 1374}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 13392, \"v_mad_mixhi_f16 raw\": 10, \"v_mad_mixlo_f16 raw\": 30, \"v_mul_f32 raw\": 16760, \"w not fetched\": 630} }"
+    "Survey { files: 1601, tags: 152141, pixel: 30731, vertex: 121410, other_stage: 0, instructions: 19406731, pro_programs: 94424, plain_files: 530, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 4486, \"VOP1 86\": 177967, \"VOP1 87\": 3834, \"VOP1 88\": 77275, \"VOP1 91\": 2036, \"VOP2 50\": 12398, \"VOP2 51\": 2883, \"VOP2 53\": 590849, \"VOP2 56\": 8, \"VOP2 57\": 174496, \"VOP2 58\": 212835, \"VOPC 201\": 2064, \"VOPC 203\": 1374}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 13392, \"v_mad_mixhi_f16 raw\": 10, \"v_mad_mixlo_f16 raw\": 30, \"v_mul_f32 raw\": 16760, \"w not fetched\": 630} }",
+    "Flips { flipping: [], mixed: [] }"
 );
 archive!(
     base_data02,
     "omega-eu/uroot/data02.psarc",
-    "Survey { files: 2549, tags: 240668, pixel: 49385, vertex: 191283, other_stage: 0, instructions: 31015298, pro_programs: 149718, plain_files: 849, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 8957, \"VOP1 85\": 10296, \"VOP1 86\": 283613, \"VOP1 87\": 6989, \"VOP1 88\": 122732, \"VOP1 91\": 3604, \"VOP2 50\": 22898, \"VOP2 51\": 5913, \"VOP2 53\": 939264, \"VOP2 55\": 10, \"VOP2 57\": 270277, \"VOP2 58\": 328951, \"VOPC 201\": 5388, \"VOPC 203\": 2426}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 20238, \"v_mul_f32 raw\": 25242, \"w not fetched\": 990} }"
+    "Survey { files: 2549, tags: 240668, pixel: 49385, vertex: 191283, other_stage: 0, instructions: 31015298, pro_programs: 149718, plain_files: 849, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 8957, \"VOP1 85\": 10296, \"VOP1 86\": 283613, \"VOP1 87\": 6989, \"VOP1 88\": 122732, \"VOP1 91\": 3604, \"VOP2 50\": 22898, \"VOP2 51\": 5913, \"VOP2 53\": 939264, \"VOP2 55\": 10, \"VOP2 57\": 270277, \"VOP2 58\": 328951, \"VOPC 201\": 5388, \"VOPC 203\": 2426}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 20238, \"v_mul_f32 raw\": 25242, \"w not fetched\": 990} }",
+    "Flips { flipping: [\"Data/environments/talons_junction/Materials/Track_Wall_1.rcsmaterial\", \"Data/environments/modesto_heights/materials/Track_Wall.rcsmaterial\", \"Data/environments/05_ubermall/Materials_DLC/D_S_N_R_uvflip_2.rcsmaterial\", \"Data/environments/05_ubermall/Materials_DLC/D_S_N_R_uvflip_1.rcsmaterial\", \"Data/environments/talons_junction/Materials/Track_Wall.rcsmaterial\", \"Data/environments/talons_junction/Materials/Track_Wall_2.rcsmaterial\", \"Data/environments/05_ubermall/Materials_DLC/D_S_N_R_uvflip.rcsmaterial\", \"Data/environments/modesto_heights/materials/Track_Wall_2.rcsmaterial\", \"Data/environments/modesto_heights/materials/Track_Wall_1.rcsmaterial\"], mixed: [] }"
 );
 archive!(
     base_data03,
     "omega-eu/uroot/data03.psarc",
-    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }"
+    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }",
+    "Flips { flipping: [], mixed: [] }"
 );
 archive!(
     base_data04,
     "omega-eu/uroot/data04.psarc",
-    "Survey { files: 768, tags: 66112, pixel: 11314, vertex: 54798, other_stage: 0, instructions: 8168620, pro_programs: 40486, plain_files: 256, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 1398, \"VOP1 85\": 2738, \"VOP1 86\": 80438, \"VOP1 87\": 1364, \"VOP1 88\": 34510, \"VOP1 91\": 226, \"VOP2 50\": 5572, \"VOP2 51\": 1706, \"VOP2 53\": 275328, \"VOP2 57\": 78840, \"VOP2 58\": 99072, \"VOPC 201\": 80, \"VOPC 203\": 392, \"VOPC 204\": 80}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 3220, \"v_mul_f32 raw\": 4025} }"
+    "Survey { files: 768, tags: 66112, pixel: 11314, vertex: 54798, other_stage: 0, instructions: 8168620, pro_programs: 40486, plain_files: 256, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 1398, \"VOP1 85\": 2738, \"VOP1 86\": 80438, \"VOP1 87\": 1364, \"VOP1 88\": 34510, \"VOP1 91\": 226, \"VOP2 50\": 5572, \"VOP2 51\": 1706, \"VOP2 53\": 275328, \"VOP2 57\": 78840, \"VOP2 58\": 99072, \"VOPC 201\": 80, \"VOPC 203\": 392, \"VOPC 204\": 80}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 3220, \"v_mul_f32 raw\": 4025} }",
+    "Flips { flipping: [], mixed: [] }"
 );
 archive!(
     patch_data05,
     "omega-eu-patch/uroot/data05.psarc",
-    "Survey { files: 7912, tags: 597755, pixel: 122752, vertex: 475003, other_stage: 0, instructions: 76459359, pro_programs: 368274, plain_files: 2627, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 21003, \"VOP1 85\": 16746, \"VOP1 86\": 775470, \"VOP1 87\": 251696, \"VOP1 88\": 537848, \"VOP1 91\": 7434, \"VOP2 50\": 50542, \"VOP2 51\": 33801, \"VOP2 53\": 2657704, \"VOP2 55\": 644, \"VOP2 57\": 747456, \"VOP2 58\": 824492, \"VOPC 201\": 10420, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 44132, \"v_mad_mixhi_f16 raw\": 22, \"v_mad_mixlo_f16 raw\": 58, \"v_mul_f32 raw\": 56906, \"w not fetched\": 3315} }"
+    "Survey { files: 7912, tags: 597755, pixel: 122752, vertex: 475003, other_stage: 0, instructions: 76459359, pro_programs: 368274, plain_files: 2627, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 21003, \"VOP1 85\": 16746, \"VOP1 86\": 775470, \"VOP1 87\": 251696, \"VOP1 88\": 537848, \"VOP1 91\": 7434, \"VOP2 50\": 50542, \"VOP2 51\": 33801, \"VOP2 53\": 2657704, \"VOP2 55\": 644, \"VOP2 57\": 747456, \"VOP2 58\": 824492, \"VOPC 201\": 10420, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 44132, \"v_mad_mixhi_f16 raw\": 22, \"v_mad_mixlo_f16 raw\": 58, \"v_mul_f32 raw\": 56906, \"w not fetched\": 3315} }",
+    "Flips { flipping: [\"data/environments/talons_junction/Materials/Track_Wall_1.rcsmaterial\", \"data/environments/modesto_heights/materials/Track_Wall.rcsmaterial\", \"data/environments/05_Ubermall/Materials_DLC/D_S_N_R_uvflip_2.rcsmaterial\", \"data/environments/05_Ubermall/Materials_DLC/D_S_N_R_uvflip_1.rcsmaterial\", \"data/environments/talons_junction/Materials/Track_Wall.rcsmaterial\", \"data/environments/talons_junction/Materials/Track_Wall_2.rcsmaterial\", \"data/environments/05_Ubermall/Materials_DLC/D_S_N_R_uvflip.rcsmaterial\", \"data/environments/modesto_heights/materials/Track_Wall_2.rcsmaterial\", \"data/environments/modesto_heights/materials/Track_Wall_1.rcsmaterial\"], mixed: [] }"
 );
 archive!(
     patch_data07,
     "omega-eu-patch/uroot/data07.psarc",
-    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }"
+    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }",
+    "Flips { flipping: [], mixed: [] }"
 );
 archive!(
     patch_data08,
     "omega-eu-patch/uroot/data08.psarc",
-    "Survey { files: 7874, tags: 589851, pixel: 121403, vertex: 468448, other_stage: 0, instructions: 75911790, pro_programs: 363258, plain_files: 2615, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 20943, \"VOP1 85\": 6450, \"VOP1 86\": 765587, \"VOP1 87\": 251533, \"VOP1 88\": 533624, \"VOP1 91\": 7452, \"VOP2 50\": 42696, \"VOP2 51\": 33830, \"VOP2 53\": 2636839, \"VOP2 55\": 674, \"VOP2 56\": 4, \"VOP2 57\": 689156, \"VOP2 58\": 737620, \"VOPC 201\": 10344, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 44092, \"v_mad_mixhi_f16 raw\": 40, \"v_mad_mixlo_f16 raw\": 40, \"v_mul_f32 raw\": 57006, \"w not fetched\": 3315} }"
+    "Survey { files: 7874, tags: 589851, pixel: 121403, vertex: 468448, other_stage: 0, instructions: 75911790, pro_programs: 363258, plain_files: 2615, plain_pro_or_unknown: 0, refused: {}, unknown: {\"VOP1 84\": 20943, \"VOP1 85\": 6450, \"VOP1 86\": 765587, \"VOP1 87\": 251533, \"VOP1 88\": 533624, \"VOP1 91\": 7452, \"VOP2 50\": 42696, \"VOP2 51\": 33830, \"VOP2 53\": 2636839, \"VOP2 55\": 674, \"VOP2 56\": 4, \"VOP2 57\": 689156, \"VOP2 58\": 737620, \"VOPC 201\": 10344, \"VOPC 203\": 4742, \"VOPC 204\": 160, \"VOPC 206\": 64}, reflection: {}, vertex_inputs: {}, tangent_w: {\"v_mad_mix_f32 raw\": 44092, \"v_mad_mixhi_f16 raw\": 40, \"v_mad_mixlo_f16 raw\": 40, \"v_mul_f32 raw\": 57006, \"w not fetched\": 3315} }",
+    "Flips { flipping: [\"data/environments/talons_junction/Materials/Track_Wall_1.rcsmaterial\", \"data/environments/modesto_heights/Materials/Track_Wall.rcsmaterial\", \"data/environments/05_Ubermall/Materials_DLC/D_S_N_R_uvflip_2.rcsmaterial\", \"data/environments/05_Ubermall/Materials_DLC/D_S_N_R_uvflip_1.rcsmaterial\", \"data/environments/talons_junction/Materials/Track_Wall.rcsmaterial\", \"data/environments/talons_junction/Materials/Track_Wall_2.rcsmaterial\", \"data/environments/05_Ubermall/Materials_DLC/D_S_N_R_uvflip.rcsmaterial\", \"data/environments/modesto_heights/Materials/Track_Wall_2.rcsmaterial\", \"data/environments/modesto_heights/Materials/Track_Wall_1.rcsmaterial\"], mixed: [] }"
 );
 archive!(
     patch_data09,
     "omega-eu-patch/uroot/data09.psarc",
-    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }"
+    "Survey { files: 0, tags: 0, pixel: 0, vertex: 0, other_stage: 0, instructions: 0, pro_programs: 0, plain_files: 0, plain_pro_or_unknown: 0, refused: {}, unknown: {}, reflection: {}, vertex_inputs: {}, tangent_w: {} }",
+    "Flips { flipping: [], mixed: [] }"
 );
 
 fn eboot(rel: &str, expected: &str) {
@@ -561,4 +597,57 @@ fn the_reflective_sea_programs_carry_the_two_opposite_taps_in_every_variant() {
         let bytes = read(&format!("data/environments2048/{entry}.rcsmaterial"));
         assert_eq!(gcn::scrolled_edge(&bytes), None, "{entry}");
     }
+}
+
+/// The crowd sprite's frame (`docs/formats/omega-status.md`, "The crowd sprite's frame"): the
+/// unshadowed permutations of the four crowd materials weight the normal map's `z` lane by the
+/// vertex program's `eyePositionWorldSpace - position`, in the base compile (one constant buffer)
+/// and the patch's (the eye position in `ViewDep`); the skinned crowd's programs take the normal.
+/// Each file lists two such permutations (the sun, and the sun with one vertex light).
+#[test]
+#[ignore = "needs the Omega extraction"]
+fn the_crowd_materials_weight_the_normal_maps_z_by_the_eye_vector() {
+    let eye = [
+        (
+            "omega-eu/uroot/data00.psarc",
+            "Data/environments2048/shared/objectlibrary/materials/Crowd_Sprite_Diffuse_Normal_Alpha.rcsmaterial",
+        ),
+        (
+            "omega-eu/uroot/data00.psarc",
+            "Data/environments2048/shared/objectlibrary/materials/Crowd_Diffuse_Normal.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data08.psarc",
+            "data/environments2048/shared/objectlibrary/materials/Crowd_Sprite_Diffuse_Normal_Alpha.rcsmaterial",
+        ),
+        (
+            "omega-eu-patch/uroot/data08.psarc",
+            "data/environments2048/shared/objectlibrary/materials/Crowd_Diffuse_Normal.rcsmaterial",
+        ),
+    ];
+    let skinned = (
+        "omega-eu-patch/uroot/data08.psarc",
+        "data/crowd/Materials/Crowd_Diffuse_Normal_BoneCount4.rcsmaterial",
+    );
+    let read = |(rel, entry): (&str, &str)| {
+        let path = path(rel)?;
+        let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+        Some(archive.read_path(entry).expect("the material reads"))
+    };
+    for case in eye {
+        let Some(bytes) = read(case) else { return };
+        let found = gcn::third_axis_is_eye(&bytes);
+        assert_eq!(
+            found,
+            gcn::EyeFrame { pairs: 2, eye: 2 },
+            "{}: {}",
+            case.0,
+            case.1
+        );
+        assert!(found.is_eye());
+    }
+    let Some(bytes) = read(skinned) else { return };
+    let found = gcn::third_axis_is_eye(&bytes);
+    assert!(found.pairs > 0 && found.eye == 0, "{found:?}");
+    assert!(!found.is_eye());
 }

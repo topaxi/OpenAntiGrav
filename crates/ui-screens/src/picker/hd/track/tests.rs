@@ -410,3 +410,192 @@ fn a_horizontal_drag_pans_the_circuits_along_the_row_and_wraps() {
     assert!((near(&found, centre) - centre).abs() < 1e-2);
     assert!((near(&moved, centre + pitch * 0.5) - centre - pitch * 0.5).abs() < 1e-2);
 }
+
+/// The circuit's `Emblem` authors `vwipe` with `delay="0.6"`: nothing for 36 frames after the page
+/// opens, then the slab and the ramp, whole after 0.5 s more
+/// (`docs/ghidra/functions/ps3-hdfury-eu/image-widget.md`, "Page entry"). This fails if the delay
+/// or the entry clock is dropped.
+#[test]
+fn the_emblem_waits_its_delay_and_then_wipes() {
+    let xml = XML.replace(
+        r#"<Image name="Emblem"><Values x="110""#,
+        r#"<Image name="Emblem"><Values transitiontype="vwipe" delay="0.6" EnableTransition="0.5" x="110""#,
+    );
+    let screens = Screens::from_xml_with_fallback_globals(&xml, &[]);
+    let layout = read(
+        &xml,
+        &screens,
+        &strings(),
+        FaceScales::default(),
+        [1920.0, 1080.0],
+    )
+    .expect("both screens are there");
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let emblem_height = |picker: &Picker| {
+        let emblem_sheet = |name: &str| {
+            name.to_ascii_lowercase()
+                .contains("trackselectemblem_fury")
+                .then(|| sheet("trackselectemblem_bw").expect("a placement"))
+        };
+        let draws = body(picker, &layout, extra, &Frame::default(), &emblem_sheet);
+        let found: Vec<f32> = draws
+            .iter()
+            .filter_map(|draw| match draw {
+                Draw::Sprite { rect, .. } if rect[0] == 270.0 && rect[2] == 192.0 => Some(rect[3]),
+                _ => None,
+            })
+            .collect();
+        assert!(found.len() <= 1, "{found:?}");
+        found.first().copied()
+    };
+    let mut picker = grid();
+    assert_eq!(emblem_height(&picker), None, "frame 0");
+    for _ in 0..35 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(
+        emblem_height(&picker),
+        None,
+        "frame 35, the last of the delay"
+    );
+    picker.tick(1.0 / 60.0);
+    let first = emblem_height(&picker).expect("frame 36 is the first ramp frame");
+    assert!((first - 19.2).abs() < 1e-3, "{first}: a slab a tenth tall");
+    for _ in 0..30 {
+        picker.tick(1.0 / 60.0);
+    }
+    assert_eq!(
+        emblem_height(&picker),
+        Some(192.0),
+        "whole when the ramp is out"
+    );
+}
+
+fn wiped_layout() -> Layout {
+    let xml = XML.replace(
+        r#"<Image name="Emblem"><Values x="110""#,
+        r#"<Image name="Emblem"><Values transitiontype="vwipe" delay="0.6" EnableTransition="0.5" x="110""#,
+    );
+    let screens = Screens::from_xml_with_fallback_globals(&xml, &[]);
+    read(
+        &xml,
+        &screens,
+        &strings(),
+        FaceScales::default(),
+        [1920.0, 1080.0],
+    )
+    .expect("both screens are there")
+}
+
+fn drawn_emblem_height(picker: &Picker, layout: &Layout) -> Option<f32> {
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let emblem_sheet = |name: &str| {
+        name.to_ascii_lowercase()
+            .contains("trackselectemblem_fury")
+            .then(|| sheet("trackselectemblem_bw").expect("a placement"))
+    };
+    body(picker, layout, extra, &Frame::default(), &emblem_sheet)
+        .iter()
+        .find_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[0] == 270.0 && rect[2] == 192.0 => Some(rect[3]),
+            _ => None,
+        })
+}
+
+/// `TrackSelectionScreen_SelectCircuit` restarts the `Emblem` with `Widget_ResetTransition`, which
+/// leaves its countdown alone: a circuit step after the page has settled replays the wipe at once
+/// (a slab on the press, whole 0.5 s on), and one inside the opening delay keeps waiting for it.
+/// This fails if the step is not passed to the emblem.
+#[test]
+fn a_circuit_step_replays_the_emblems_wipe_without_the_delay() {
+    let layout = wiped_layout();
+    let mut picker = grid();
+    picker.tick(2.0);
+    assert_eq!(drawn_emblem_height(&picker, &layout), Some(192.0));
+    press(&mut picker, Button::Right);
+    let slab = drawn_emblem_height(&picker, &layout).expect("no delay after a step");
+    assert!((slab - 19.2).abs() < 1e-3, "{slab}: a slab a tenth tall");
+    picker.tick(0.5);
+    assert_eq!(drawn_emblem_height(&picker, &layout), Some(192.0));
+
+    let mut early = grid();
+    early.tick(0.2);
+    press(&mut early, Button::Right);
+    assert_eq!(
+        drawn_emblem_height(&early, &layout),
+        None,
+        "the opening delay is still running"
+    );
+}
+
+/// The corner marks the page has out, as the top-left corners of the 16 by 16 sprites, with the
+/// three brackets' `delay`s authored as the disc does (0.2, 0.3, 1.0 s).
+fn corner_marks(picker: &Picker) -> Vec<[f32; 2]> {
+    let mut delays = ["0.2", "0.3", "1.0"].into_iter();
+    let xml = XML
+        .split("<Bracket>")
+        .enumerate()
+        .map(|(index, part)| match index {
+            0 => part.to_string(),
+            _ => format!(
+                "<Bracket delay=\"{}\">{part}",
+                delays.next().expect("three brackets")
+            ),
+        })
+        .collect::<String>();
+    let screens = Screens::from_xml_with_fallback_globals(&xml, &[]);
+    let layout = read(
+        &xml,
+        &screens,
+        &strings(),
+        FaceScales::default(),
+        [1920.0, 1080.0],
+    )
+    .expect("both screens are there");
+    let extra = layout.hd_track.as_deref().expect("hd");
+    let corners = |name: &str| {
+        name.ends_with("corner2.gtf")
+            .then_some(oag_ui::frontend::Placed {
+                x: 0,
+                y: 0,
+                width: 16,
+                height: 16,
+                quad_extent: None,
+                quad_centre: None,
+                blend: None,
+                scale: [1.0, 1.0],
+            })
+    };
+    body(picker, &layout, extra, &Frame::default(), &corners)
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Sprite { rect, .. } if rect[2] == 16.0 && rect[3] == 16.0 => {
+                Some([rect[0], rect[1]])
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The three `Bracket`s count their own `delay` from the page's entry (0.2, 0.3 and 1.0 s), each
+/// opening out over 0.1 s, and a circuit step re-arms none of them (it restarts the `Emblem`
+/// alone). This fails if the entry clock is not passed to the brackets.
+#[test]
+fn the_brackets_wait_their_delays_from_the_pages_entry() {
+    let mut picker = grid();
+    assert!(corner_marks(&picker).is_empty(), "frame 0");
+    picker.tick(0.19);
+    assert!(corner_marks(&picker).is_empty(), "inside the 0.2 s delay");
+    picker.tick(0.05);
+    assert_eq!(corner_marks(&picker).len(), 4, "the circuit panel opens");
+    picker.tick(0.1);
+    assert_eq!(corner_marks(&picker).len(), 8, "the hex selector (0.3 s)");
+    picker.tick(0.8);
+    assert_eq!(corner_marks(&picker).len(), 12, "the model frame (1.0 s)");
+    press(&mut picker, Button::Right);
+    assert_eq!(
+        corner_marks(&picker).len(),
+        12,
+        "a circuit step re-arms no bracket"
+    );
+}

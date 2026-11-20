@@ -138,6 +138,7 @@ pub(crate) fn run_windowless(
             source: options.source.clone(),
             movies: options.cache.clone(),
             audio: oag_source::cache::default_audio_cache_dir(),
+            dlc: options.dlc.clone(),
             refresh_video: cli.refresh_video,
         })
     });
@@ -316,6 +317,7 @@ pub(crate) fn run_windowless(
                 menu_anim_phase: cli.menu_args.menu_anim_phase,
                 menu_picker_seconds: cli.menu_args.menu_picker_seconds,
                 menu_picker_step_seconds: cli.menu_args.menu_picker_step_seconds,
+                menu_entry_seconds: cli.menu_args.menu_entry_seconds,
                 menu_model_seconds: cli.menu_args.menu_model_seconds,
                 menu_movie_frame: cli.menu_args.menu_movie_frame,
                 menu_ticker: cli.menu_args.menu_ticker.clone(),

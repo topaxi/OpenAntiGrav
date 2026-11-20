@@ -233,6 +233,73 @@ pub(super) fn run_ffmpeg(
     frames: Frames,
     watch: Watch<'_>,
 ) -> Result<()> {
+    write_atomically(output, |part| {
+        encode(input, part, input_format, frames, watch)
+    })
+}
+
+/// Runs `write` against a temporary file beside `output` and renames it into
+/// place when `write` succeeds, so a reader (or a second writer of the same
+/// key, as a prefetch and a screen can be) sees a complete file or none. The
+/// temporary is removed on failure.
+pub(super) fn write_atomically(
+    output: &Path,
+    write: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let mut name = output.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(
+        ".{}-{}.part",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let part = output.with_file_name(name);
+    let result = write(&part).and_then(|()| {
+        std::fs::rename(&part, output)
+            .with_context(|| format!("moving {} into place", part.display()))
+    });
+    if result.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    result
+}
+
+/// Writes `blob` under `cache_dir` as `{key}.{ext}`, unless a file already
+/// there is already the right length - the same trust model
+/// [`cached`] applies to the video cache, extended to the source file
+/// a container-hosted audio track reads back.
+///
+/// Needed because a transcode's own write of this file only happens on a
+/// video-cache **miss**: a movie whose picture is already cached would
+/// otherwise leave a track with nothing on disk to decode. Writing it here
+/// unconditionally (well, unconditionally on there being a track worth
+/// reading at all) means the audio route never depends on whether the video
+/// route happened to run this time.
+pub(super) fn ensure_source(
+    cache_dir: &Path,
+    key: &str,
+    ext: &str,
+    blob: &[u8],
+) -> Result<PathBuf> {
+    std::fs::create_dir_all(cache_dir)
+        .with_context(|| format!("creating {}", cache_dir.display()))?;
+    let path = cache_dir.join(format!("{key}.{ext}"));
+    let already_written = std::fs::metadata(&path).is_ok_and(|m| m.len() == blob.len() as u64);
+    if !already_written {
+        write_atomically(&path, |part| {
+            std::fs::write(part, blob).with_context(|| format!("writing {}", part.display()))
+        })?;
+    }
+    Ok(path)
+}
+
+fn encode(
+    input: &Path,
+    output: &Path,
+    input_format: Option<&str>,
+    frames: Frames,
+    watch: Watch<'_>,
+) -> Result<()> {
     if ffmpeg_missing() {
         bail!(
             "ffmpeg is not on PATH. Install it to see the intro video; \

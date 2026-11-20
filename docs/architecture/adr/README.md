@@ -103,6 +103,7 @@ out to be wrong.
 | [0092](0092-a-player-hosted-race-is-a-room-whose-owner-runs-the-race-host.md) | A player-hosted race is a lobby room whose owner runs the race host | **Proposed** (2026-11-17); version one built: an opened port probed by the lobby, a key pair per player, a ban file |
 | [0093](0093-a-custom-campaign-keeps-a-bounded-run-state-and-its-mod-sets-bounded-modifiers-at-race-start.md) | A custom campaign keeps a bounded run state, and its mod sets bounded modifiers at race start | **Accepted** (2026-11-20; proposed 2026-11-19); merged after the atomic-write ADR link; narrows the README's "no replacing a disc table" row; choice screen and stats split into ADR-0094; nothing built |
 | [0094](0094-a-campaign-run-offers-a-choice-between-races-and-shows-the-mods-stats.md) | A campaign run offers a choice between races and shows the mod's stats | **Proposed** (2026-11-20); split out of ADR-0093; editable until merged to `main`; nothing built |
+| [0095](0095-every-file-under-the-profile-folder-is-written-atomically.md) | Every file under the profile folder is written atomically | **Accepted** (2026-11-20); one temp-file-and-rename helper (`profile::write`), flushed, web one `setItem` |
 
 ## Format
 

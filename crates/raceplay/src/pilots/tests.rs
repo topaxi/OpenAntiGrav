@@ -372,17 +372,12 @@ fn reading_a_missing_pilot_file_is_an_error_not_a_panic() {
     assert!(read_pilot_text(&scratch.0, "nobody-home").is_err());
 }
 
-/// The write path creates the directory on the first pilot saved on this
-/// machine, the same as `settings::save` does for the settings file.
 #[test]
-fn writing_a_pilot_creates_the_directory_if_it_is_missing() {
+fn a_pilot_file_is_its_name_and_toml_in_the_directory() {
     let scratch = Scratch::with(&[]);
-    // A directory `Scratch` never created - `write_pilot` has to make it.
-    let dir = scratch.0.join("nested");
-    write_pilot(&dir, "winston", "look = [0.9, 1.0]\n").expect("a fresh directory is not fatal");
     assert_eq!(
-        std::fs::read_to_string(dir.join("winston.toml")).expect("the file exists"),
-        "look = [0.9, 1.0]\n"
+        pilot_path(&scratch.0, "winston"),
+        scratch.0.join("winston.toml")
     );
 }
 

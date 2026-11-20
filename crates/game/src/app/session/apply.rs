@@ -900,6 +900,16 @@ impl Session {
                     return;
                 }
             },
+            // Applies now: the next tick's `Controls::set_face_swap` and the next frame's
+            // prompt substitution read it; a screen already open keeps the buttons it was
+            // built with until it is reopened.
+            "controls.menu_back" => match oag_title::prompts::MenuBack::from_name(&text) {
+                Some(choice) => self.settings.controls.menu_back = choice.name().to_string(),
+                None => {
+                    warn!("ignoring {setting} = {text:?}: not original, circle or triangle");
+                    return;
+                }
+            },
             "controls.touch_go_zones" => match text.as_str() {
                 // Read by the next tick's `feed_touch`.
                 "on" => self.settings.controls.touch_go_zones = true,

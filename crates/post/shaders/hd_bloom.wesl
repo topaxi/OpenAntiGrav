@@ -48,7 +48,9 @@ struct Constants {
     scene_max: vec2<f32>,
     // A stated adapted luma, written by `fs_adapt` instead of the lerp; negative for none.
     pinned_luma: f32,
-    unused: f32,
+    // The resolve's `scaleFeedback`: "Bloom feedback" (no circuit authors it; a Zone
+    // race writes its own). Only `fs_encode` reads it.
+    feedback: f32,
 }
 
 @group(0) @binding(0) var source_tex: texture_2d<f32>;
@@ -60,6 +62,8 @@ struct Constants {
 @group(0) @binding(3) var state_tex: texture_2d<f32>;
 // Third input: the blurred bloom, for the resolve. Dummy elsewhere.
 @group(0) @binding(4) var bloom_tex: texture_2d<f32>;
+// Fourth input: the resolve's feedback buffer, the quarter-res scene. Dummy elsewhere.
+@group(0) @binding(5) var feedback_tex: texture_2d<f32>;
 
 // A source coordinate inside the drawn rectangle.
 //
@@ -341,16 +345,26 @@ fn resolve_scene_tap(uv: vec2<f32>) -> vec3<f32> {
 // arithmetic that fills its `scale` parameter (FUN_003e3268/FUN_003df7c0,
 // all four parameter names settled by crc32 preimage):
 //
-//   scale = <Tone maximum brightness>
-//         - min(adapted * <Tone adaption boost>, <Tone darkening clamp>)
-//   out   = saturate(scene * scale + bloom * scaleAdd + tint)
+//   scale    = <Tone maximum brightness>
+//            - min(adapted * <Tone adaption boost>, <Tone darkening clamp>)
+//   feedback = lerp(scene, 2 * feedbackBuffer, feedbackBuffer.a * scaleFeedback)
+//   out      = saturate(feedback * scale + bloom * scaleAdd + tint)
 //
 // with `scaleAdd` fed 1.0 (the constant at 0x8b7cec) and the bloom added
-// AFTER the exposure scale - the microcode's own operand order. Two terms
-// are inert at authored defaults and left out: the `scaleFeedback` mix
-// toward a feedback buffer (its parameter is `Bloom feedback` + a runtime
-// float; no circuit file authors the key, default 0) and the persistent
-// `fullscreenTintColour` (an event tint this renderer does not model).
+// AFTER the exposure scale - the microcode's own operand order.
+//
+// `scaleFeedback` is `Bloom feedback` plus a runtime float that read 0.0 live.
+// No circuit authors the key, so it is 0.0 and the lerp is the scene, except in
+// a Zone race, where the engine writes -0.4 every frame: `1.4 * scene - 0.8 *
+// feedbackBuffer`, which on a flat surface is `0.6 * scene` and across an edge
+// an unsharp mask. The feedback buffer is the quarter-res scene (its alpha
+// reads 255 everywhere live, so the weight is `scaleFeedback` alone). It is
+// the buffer the zoom ring's history draw blends into, at weight zero outside
+// a boost or damage pulse; this reads the frame's own quarter-res scene, so a
+// pulse in a Zone race is not in it
+// (docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md, "The feedback term").
+// The persistent `fullscreenTintColour` (an event tint this renderer does not
+// model) is left out.
 //
 // The encode at the end is the ROP's sRGB encode on write (`SET_SHADER_PACKER`
 // is 1 on the scene and ladder draws), the same piecewise curve `scene_tap`
@@ -367,7 +381,12 @@ fn fs_encode(in: VertexOutput) -> @location(0) vec4<f32> {
             adapted * constants.tone_adaption_boost,
             constants.tone_darkening_clamp,
         );
-    let resolved = clamp(scene * scale + bloom, vec3<f32>(0.0), vec3<f32>(1.0));
+    var mixed = scene;
+    if constants.feedback != 0.0 {
+        let history = surface(textureSample(feedback_tex, source_sampler, drawn(uv))).rgb;
+        mixed = mix(scene, 2.0 * history, constants.feedback);
+    }
+    let resolved = clamp(mixed * scale + bloom, vec3<f32>(0.0), vec3<f32>(1.0));
     return vec4<f32>(srgb_encode(resolved), 1.0);
 }
 

@@ -1235,7 +1235,7 @@ previous pass on this subsystem got wrong.
 | `0x0887a230` | function | `SceneLight_CallLightingList` | 78 |
 | `0x08879b14` | function | `SceneLight_Rebuild` | 75 |
 | `0x0887a4f0` | function | `SceneLight_BuildLightingList` | 88, since 2026-09-23 - see [scene-light.md](scene-light.md) |
-| `0x08912358` | function | `Vex_UpdateLightLists_q` | 65 |
+| `0x08912358` | function | `Vex_UpdateLightLists` | 85 |
 | `0x0887a018` | function | `SceneLight_InitLists_q` | 65 |
 | `0x08abf500` | data | `g_envmap_light_basis_angle_x` | 90 |
 | `0x08abf504` | data | `g_envmap_light_basis_angle_y` | 90 |
@@ -1253,8 +1253,8 @@ partly inferred: `SceneLight_BuildLightingList`'s list contents are fully read
 (and since 2026-09-23 matched to the disc live, which lifts it to 88 - see
 [scene-light.md](scene-light.md))
 while its return value's meaning (an accumulated light colour) is not,
-`Vex_UpdateLightLists_q` writes both light lists correctly but its trigger was
-never read, and `SceneLight_InitLists_q` only writes bare `RET`s and a flag.
+`Vex_UpdateLightLists` writes both light lists correctly; its trigger is `SceneNode_SubmitTree`'s
+slot `+0x34` call (see [scene-light.md](scene-light.md), "Which models take the rig"), and `SceneLight_InitLists_q` only writes bare `RET`s and a flag.
 
 **Deliberately not named:** `FUN_0881129c` (a two-argument colour setter used by
 `FUN_0890d3ac`, body unread), `FUN_08927550`, `FUN_08928174`, `FUN_08944544`,

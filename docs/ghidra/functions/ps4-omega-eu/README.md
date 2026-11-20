@@ -61,8 +61,12 @@ unnamed rather than forced.
   site passes: the race load is 8 (10 on 1.07), `0x01252b86` passes 7, and state 5 has no caller.
 - [engine-light.md](engine-light.md) - `EngineLightData.xml` feeds one vertex light per craft:
   its colour by era, Fury skin and mag strip, the 32-slot table, six lights a draw.
+- [track-shadow.md](track-shadow.md) - the track shadow `S`: three exponential cascades cast along `Sun direction`, the
+  sun term removed whole inside a shadow; live knockouts on the port (1.07 addresses, no `names.tsv` rows).
 - [hull-tone.md](hull-tone.md) - the unlit hull's 1.6x: live knockouts of the lighting object on the port;
   sun constant equal, the diffuse combination left.
+- [zone-speed-class-ladder.md](zone-speed-class-ladder.md) - the Zone ladder is HD's table and `14 - i`, beside
+  2048's 17-record one; the hue gap is not the ladder
 - [zone-craft.md](zone-craft.md) - Zone loads one shared `hdships\Zone` hull for
   every craft; the pick selects a livery.
 - [particle-paths.md](particle-paths.md) - the `Data/Particles` versus

@@ -114,6 +114,16 @@ pub const PROGRAM_PANEL_MAP: f32 = 15.0;
 /// picture is multiplied by `program[1]`, its `Shadowed`. See `super::rcs::psp2`'s `crowd`.
 pub const PROGRAM_CROWD: f32 = 16.0;
 
+/// [`Emissive::program`]'s mode for Omega's `RT_snow1`: the pixel program's normal blend (drift
+/// third, small detail fourth, large detail fifth), Fresnel-weighted wrapped diffuse and sun lobe;
+/// the entry and the two after it carry its constants. See `super::rcs::psp2`'s `snow`.
+pub const PROGRAM_OMEGA_SNOW: f32 = 21.0;
+
+/// [`Emissive::program`]'s mode for Omega's `DC_Rocks`: the colour normal third and the detail
+/// normal fourth blended into the frame, the wrapped sun, the shadow-light factor and a specular
+/// lobe, from one entry. See `super::rcs::psp2`'s `snow`.
+pub const PROGRAM_OMEGA_ROCK: f32 = 22.0;
+
 /// [`Emissive::program`]'s mode for HD's scrolled-tap water (`super::rcs::water`): the
 /// normal is the weighted sum of the third binding read at the entry's taps, `program[1]` the
 /// family. The entry carries the colour, reflection weight and specular power, the next one
@@ -128,6 +138,17 @@ pub const PROGRAM_VERTEX_BLEND: f32 = 18.0;
 /// [`Emissive::program`]'s mode for 2048's plain `diffuse_normal_specular_emmissive`: the third
 /// binding's **alpha**, unsquared, times the entry's tint, added like [`PROGRAM_EMISSIVE_ADD`].
 pub const PROGRAM_EMISSIVE_ALPHA_MASK: f32 = 9.0;
+
+/// [`Emissive::program`]'s mode for 2048's `fc10_Lambert_2UV_Emissive`: the third binding (its
+/// `ReflectMap`) read at `0.5 + 0.5 * R.xy`, `R` the view vector reflected about the world normal,
+/// squared, times the **picture's alpha**, added after the light and before the fog. See
+/// `super::rcs::psp2`'s `emissive_add`.
+pub const PROGRAM_REFLECT_MAP: f32 = 19.0;
+
+/// [`Emissive::program`]'s mode for 2048's `dc_diffusetexturealphaemissive`: the lit picture's
+/// own square, `D^2`, added after the light and before the fog (`rgb = D^2 * (light + 1)`), the
+/// output alpha the picture's. See `super::rcs::psp2`'s `emissive_add`.
+pub const PROGRAM_PICTURE_ADD: f32 = 20.0;
 
 /// [`Emissive::program`]'s mode for Omega's `rt_icetunnel`: the tunnel glass's refraction term
 /// (`2 * Constant1 * a * grab`, `a` the vertex colour's red, carried in `colour.a`), with the

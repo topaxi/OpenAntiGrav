@@ -127,6 +127,15 @@ pub const OMEGA_SUN_SPECULAR_COLOUR: &str = "Lighting.Sun specular colour";
 /// (`0x019404b0`).
 pub const OMEGA_SUN_SPECULAR_INTENSITY: &str = "Lighting.Sun specular intensity";
 
+/// Omega's `"Lighting.ShadowLight direction"`: the `shadowLightDirection` the lightmapped programs'
+/// shadow-light factor dots against (`docs/ghidra/functions/ps4-omega-eu/lightmap-prelit.md`).
+/// Three numbers, normalised by the executable. 2048 authors the same key.
+pub const OMEGA_SHADOW_LIGHT_DIRECTION: &str = "Lighting.ShadowLight direction";
+
+/// Omega's `"Lighting.ShadowLight specular power scale"`: the exponent and weight of that
+/// factor's lobe, `(10, 1)` on every circuit read.
+pub const OMEGA_SHADOW_LIGHT_SPECULAR: &str = "Lighting.ShadowLight specular power scale";
+
 /// `"Lighting.Prelit ambient colour scale"`. Three numbers: the scale in
 /// `prelit = scale * lightmap.rgb ^ power`, from the circuit's fragment
 /// microcode (`docs/ghidra/functions/ps3-hdfury-eu/renderer.md`).
@@ -199,6 +208,9 @@ pub const SKY_COLOUR: &str = "Lighting.Sky colour";
 
 /// `"Lighting.Sky rotation"`. One number, degrees, -40 to 300.
 pub const SKY_ROTATION: &str = "Lighting.Sky rotation";
+
+/// `"Lighting.Sky brightness"`. One number, 0.5 to 3.
+pub const SKY_BRIGHTNESS: &str = "Lighting.Sky brightness";
 
 /// `"Fog.Fog Color"`. Three numbers, reaching 1.85.
 pub const FOG_COLOUR: &str = "Fog.Fog Color";
@@ -380,6 +392,15 @@ impl EnvSettings {
     pub fn scalar(&self, key: &str) -> Option<f32> {
         match self.entries.get(key)?.numbers.as_slice() {
             [only] => Some(*only),
+            _ => None,
+        }
+    }
+
+    /// Two numbers, for a key that carries exactly two.
+    #[must_use]
+    pub fn vec2(&self, key: &str) -> Option<[f32; 2]> {
+        match self.entries.get(key)?.numbers.as_slice() {
+            [x, y] => Some([*x, *y]),
             _ => None,
         }
     }

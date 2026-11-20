@@ -36,7 +36,7 @@ pub(super) fn ps3_sky_model(
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     if mesh::rcs::psp2::is_psp2(geometry) {
-        psp2_sky_model(archives, track, report)
+        psp2_sky_model(archives, track, (title, store), report)
     } else {
         hd_sky_model(archives, track, title.race, mode, store, report)
     }
@@ -204,6 +204,14 @@ const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
 /// `Sky height offset` are authored too and left unread: their consumer is
 /// unlocated.
 ///
+/// **Omega's dome is `Sky brightness` times its texture** ([`oag_title::Looks::sky_brightness`]):
+/// its pixel program multiplies the sampled texel by its `SkyBrightness` constant, which reads
+/// equal to the lighting object's authored key, and by nothing else
+/// (`docs/formats/omega-status.md`, "The sky dome's pixel program"). The dome's shading is a
+/// multiply of the encoded texel by its vertex colour, so the gain rides there as the factor
+/// [`oag_gpu::formats::SceneStore::texel_gain`] gives. 2048 (Vita) authors the key too and its
+/// program is unread, so its dome keeps the plain texture.
+///
 /// **Zone's sky swap is not wired.** `data/Tex/zoneSky.gxt` exists on the
 /// disc, the same file HD's `Data/Tex/ZoneSky.gtf` names, but nothing here
 /// reads it - a Zone race draws the circuit's own dome, same as every other
@@ -213,6 +221,7 @@ const PSP2_SKY_TARGET_RADIUS: f32 = 32.0;
 pub(super) fn psp2_sky_model(
     archives: &mut oag_assets::Archives,
     track: &str,
+    (title, store): (&'static oag_title::Title, oag_gpu::formats::SceneStore),
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
     let name = psp2_sky_sibling_name(track)?;
@@ -249,12 +258,24 @@ pub(super) fn psp2_sky_model(
     // the model's own centre, which `finish_bounds` inside `psp2::build`
     // already measured as the dome's origin.
     let authored_radius = model.radius;
-    let rotation = envsettings_name(track)
+    let env = envsettings_name(track)
         .and_then(|name| archives.read_name(&name).ok())
         .and_then(|blob| String::from_utf8(blob).ok())
-        .and_then(|text| EnvSettings::parse(&text).ok())
+        .and_then(|text| EnvSettings::parse(&text).ok());
+    let rotation = env
+        .as_ref()
         .and_then(|env| env.scalar(oag_tables::envsettings::SKY_ROTATION))
         .unwrap_or(0.0);
+    let brightness = title
+        .looks
+        .sky_brightness
+        .applies(archives.layout.platform)
+        .then(|| {
+            env.as_ref()
+                .and_then(|env| env.scalar(oag_tables::envsettings::SKY_BRIGHTNESS))
+        })
+        .flatten();
+    let gain = brightness.map_or(1.0, |b| store.texel_gain(b));
     let (sin, cos) = rotation.to_radians().sin_cos();
     if authored_radius > 0.0 {
         let scale = PSP2_SKY_TARGET_RADIUS / authored_radius;
@@ -270,6 +291,9 @@ pub(super) fn psp2_sky_model(
             // Left at `psp2::build`'s default of `1.0`, the stand-in light
             // rig would shade one side of the dome as if it were geometry.
             vertex.lit = 0.0;
+            for channel in &mut vertex.colour[..3] {
+                *channel *= gain;
+            }
         }
         model.radius *= scale;
         for draw in &mut model.draws {
@@ -285,8 +309,11 @@ pub(super) fn psp2_sky_model(
         "{name}: the circuit's sky dome, {}, rescaled from its authored radius of \
          {authored_radius:.2} unit(s) to {PSP2_SKY_TARGET_RADIUS:.0} to clear the near \
          plane at any field of view, turned {rotation} degree(s) by `Sky rotation` (sign \
-         chosen, not measured)",
+         chosen, not measured){}",
         built.describe(),
+        brightness.map_or_else(String::new, |b| format!(
+            ", times {b} (`Sky brightness`, the dome pixel program's `SkyBrightness`)"
+        )),
     ));
     Some(model)
 }
@@ -793,7 +820,8 @@ pub(super) fn staging(
     let hd_bloom = (ps3_geometry && !wo_title)
         .then(|| envsettings_bloom(archives, track, report))
         .flatten()
-        .map(|params| bloom::for_title(params, title));
+        .map(|params| bloom::for_title(params, title))
+        .map(|params| bloom::for_mode(params, title.race, mode));
     let omega_tonemap = (geometry == GeometryKind::Ps4)
         .then(|| envsettings_tonemap(archives, track, report))
         .flatten()
@@ -1006,6 +1034,18 @@ pub(super) fn zone_grade(
             // HD/Fury's sphere out of the craft; `None` on 2048, whose rate is
             // unread. See `oag_title::ZoneTransition`.
             .map(|grade| grade.with_transition(race.zone_transition))
+            .map(|grade| {
+                grade.with_stage_light(
+                    race.zone_frame
+                        .is_some_and(|frame| frame.lit_by_stage_alone),
+                )
+            })
+            .map(|grade| {
+                grade.with_hull_probe_tint(
+                    race.zone_frame
+                        .and_then(|frame| frame.hull_probe_tint_scale),
+                )
+            })
             .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
             .map(|grade| {
                 if mode == oag_race::Mode::Detonator {
@@ -1151,15 +1191,18 @@ pub(super) fn cloud_layer(
 /// Pure's Chenghou Project, whose sky cube is six 81-vertex faces with neither colour
 /// nor normals: in a recorded GE list every one draws with `LIGHTINGENABLE` 0 and
 /// `MATERIALAMBIENT` `0xffffff` (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`,
-/// "The sky"). Left to `mesh::build`'s defaults they took the stand-in rig and its
-/// grey, and the sky read 72 grey where the original reads about 110. A sky vertex
-/// that authors a colour is prelit already and is left alone.
+/// "The sky"). A vertex with no normals already builds unlit and white (`mesh::build`, the
+/// same GE rule for every batch); one with normals and no colour took the stand-in rig and
+/// its grey, and the sky read 72 grey where the original reads about 110, so it is made
+/// unlit here too. A sky vertex that authors a colour is prelit already and is left alone.
 pub(super) fn unlit_sky(sky: &mut oag_mesh::mesh::Model, report: &mut Vec<String>) {
     let mut unlit = 0usize;
     for vertex in &mut sky.vertices {
         if vertex.lit > 0.5 {
             vertex.lit = 0.0;
             vertex.colour = [1.0; 4];
+            unlit += 1;
+        } else if vertex.lit == 0.0 && vertex.colour == [1.0; 4] {
             unlit += 1;
         }
     }

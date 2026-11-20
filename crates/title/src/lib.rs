@@ -103,8 +103,8 @@ pub use race::{
     CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, GuestRoster, RaceDefaults,
     SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant, TeamVariants, TrackBanks,
     VariantJoin, WwiseBank, WwiseCue, WwiseCues, WwiseState, WwiseTeamSwitch, ZoneAnnouncer,
-    ZoneCircuit, ZoneClassAnnouncer, ZoneClassTone, ZoneCraft, ZoneFallback, ZonePalette,
-    ZoneStageTextures, ZoneStages, ZoneTeamStep, ZoneTransition,
+    ZoneCircuit, ZoneClassAnnouncer, ZoneClassTone, ZoneCraft, ZoneFallback, ZoneFrame,
+    ZonePalette, ZoneStageTextures, ZoneStages, ZoneTeamStep, ZoneTransition,
 };
 pub use touch::{TouchButton, TouchFrontEnd};
 pub use track_alias::TrackAlias;
@@ -495,6 +495,14 @@ pub struct FrontEnd {
     /// `None` for every title but Pulse. Falls back to [`Self::menu`], so filling
     /// this in only narrows an approximation.
     pub menu_ps2: Option<&'static menu::MenuSkin>,
+    /// The control this title's PS2 pressing binds the front end's `backward` and `cancel` to, where
+    /// that is not the circle every other pressing binds. `None`: circle.
+    ///
+    /// Pulse's PS2 executable parses both names to the triangle's pad bit and the PSP's to the
+    /// circle's (`docs/ghidra/functions/ps2-pulse-eu/input.md`, "The divergence"), and the PS2
+    /// front end's own footers draw the triangle beside `Back`. The screens that read this are
+    /// listed in `docs/ui/campaign-screens.md`, "Back and Help on the PS2".
+    pub back_button_ps2: Option<prompts::Prompt>,
     /// How this title lays a touch-icon front end out, for a title that authors
     /// *that* vocabulary instead of [`menu::MenuSkin`]'s. See
     /// [`touch::TouchFrontEnd`].
@@ -848,6 +856,17 @@ pub struct CircuitPose {
 impl Eq for CircuitPose {}
 
 impl FrontEnd {
+    /// The control `backward` and `cancel` are on `platform`'s pressing: [`Self::back_button_ps2`]
+    /// on a PS2, the circle everywhere else. What the player's CONTROLS choice is relative to
+    /// ([`Self::menu_buttons`]).
+    #[must_use]
+    pub fn back_button(&self, platform: Platform) -> prompts::Prompt {
+        match platform {
+            Platform::Ps2 => self.back_button_ps2.unwrap_or(prompts::Prompt::Circle),
+            _ => prompts::Prompt::Circle,
+        }
+    }
+
     /// The touch layout when the touch front end *is* the title's front end
     /// (2048): it authors no menu of its own vocabulary. A title with both
     /// (Omega: HD's menus plus 2048's campaign map) returns `None` here, and
@@ -1062,7 +1081,23 @@ pub struct ForeignSerial {
 }
 
 impl Title {
-    /// The shared identity `team` (an id as this title spells it) is kept under.
+    /// What `choice` makes the front end's Back and Help buttons on `platform`'s pressing, for a
+    /// Help screen the disc opens on `authored_help`. The one place that decides; a title with no
+    /// front end of its own backs on the circle.
+    #[must_use]
+    pub fn menu_buttons(
+        &self,
+        platform: Platform,
+        choice: prompts::MenuBack,
+        authored_help: prompts::Prompt,
+    ) -> prompts::MenuButtons {
+        let original = self.front_end.map_or(prompts::Prompt::Circle, |front_end| {
+            front_end.back_button(platform)
+        });
+        prompts::MenuButtons::resolve(original, choice, authored_help)
+    }
+
+    /// The shared identity `team (an id as this title spells it) is kept under.
     #[must_use]
     pub fn team_identity(&self, team: &str) -> String {
         team::identity_of(self.teams, team)

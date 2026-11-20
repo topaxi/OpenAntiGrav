@@ -471,3 +471,10 @@ one speaker driven would settle it in one reading.
 - [zone-effectsettings-loader.md](zone-effectsettings-loader.md) - the
   twenty-sixth pass, which found the writer and left this question open
 - `docs/formats/effectsettings.md` - the `EQ` key cluster and the play report
+
+## 2026-11-20: two of the open items closed
+
+From [zone-equaliser.md](zone-equaliser.md), read live on RPCS3: the per-frame gain `lfs f0,0x4(r4)` is
+the stage entry's `+0x34` (`r4 = entry + 0x30`), `1.0` at stages 1 and 2; `r17` carries the stage's
+cross-faded `EQ colour tint` and the smooth slots its `EQ analogue colour tint` (stage 2's words against
+the live `zoneTexVis` texels, within one count). The same held bands draw the billboard target's bars.

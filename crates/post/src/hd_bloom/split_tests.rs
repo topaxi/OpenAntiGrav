@@ -19,6 +19,7 @@ fn params(eight_bit: bool) -> Params {
         tone_adaption_boost: 1.0,
         tone_darkening_clamp: 0.9,
         tone_maximum_brightness: 1.0,
+        feedback: 0.0,
         final_half_texel: false,
         eight_bit,
         store: if eight_bit {
