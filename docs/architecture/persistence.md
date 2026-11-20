@@ -20,6 +20,15 @@ Read `settings.rs`'s and `pilots.rs`'s own module docs first if you have not -
 handling, and this page assumes both are already familiar rather than
 re-explaining them.
 
+Every file in this table that the game rewrites is written atomically
+([ADR-0095](adr/0095-every-file-under-the-profile-folder-is-written-atomically.md)): the new
+content goes to `<file>.tmp` beside it, is flushed, and is renamed over the old file, through
+`oag_game::profile` (`write`, `write_bytes`, `write_private`). A crash mid-save leaves the previous
+file; a `<file>.tmp` left behind is ignored on load and replaced by the next save. The rejoin
+record (`<state dir>/oag/`) and `identity.toml` (owner-only) go the same way. The web build keeps
+`settings.toml`, `records.toml` and `music.toml` as one `localStorage` item each, which is already
+all or nothing.
+
 ## What is in `records.toml`
 
 One `[[records]]` row per `(title, track, mode, class)` combination a player
@@ -222,7 +231,8 @@ to want that - `records.toml` never fails a boot and never panics. A file
 this build cannot fully make sense of degrades, in order:
 
 1. **One malformed row** is dropped and logged; every other row is kept.
-2. **The whole document not parsing as TOML at all** moves the file aside to
+2. **The whole document not parsing as TOML at all** (a hand edit gone wrong: a crash during a
+   save no longer produces one, ADR-0095) moves the file aside to
    `records.toml.invalid` next to itself, rather than overwriting it in
    place, and starts empty.
 3. **No config directory on this platform** is silent - the same case

@@ -203,3 +203,27 @@ fn a_table_entry_has_its_percent_s_replaced_by_the_name() {
         "NO winston HERE"
     );
 }
+
+/// A pilot file is hand-authored; a crash while the editor saves it must leave it as it was.
+#[test]
+fn a_pilot_save_cut_short_keeps_the_hand_written_file() {
+    let dir = std::env::temp_dir().join(format!("oag-pilot-save-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let nested = dir.join("pilots");
+
+    write_pilot(&nested, "winston", "# mine\nwander = [0.3, 0.6]\n")
+        .expect("a fresh directory is not fatal");
+    assert_eq!(
+        std::fs::read_to_string(nested.join("winston.toml")).unwrap(),
+        "# mine\nwander = [0.3, 0.6]\n"
+    );
+
+    crate::profile::cut_the_next_write_after(5);
+    assert!(write_pilot(&nested, "winston", "wander = [0.1, 0.2]\n").is_err());
+    assert_eq!(
+        std::fs::read_to_string(nested.join("winston.toml")).unwrap(),
+        "# mine\nwander = [0.3, 0.6]\n",
+        "the editor's interrupted save left the pilot whole"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

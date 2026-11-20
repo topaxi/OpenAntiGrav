@@ -97,7 +97,7 @@ pub fn load_from(path: &Path, title: &str) -> Option<RaceMusicState> {
 }
 
 /// Writes `state` as `title`'s place in the file at `path`, keeping every other
-/// title's, through a temp file and a rename.
+/// title's, atomically (`profile::write`).
 ///
 /// # Errors
 /// A directory or file that cannot be written.
@@ -124,9 +124,7 @@ pub fn store_to(path: &Path, title: &str, state: &RaceMusicState) -> Result<()> 
         crate::profile::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    let temp = path.with_extension("toml.tmp");
-    crate::profile::write(&temp, text).with_context(|| format!("writing {}", temp.display()))?;
-    crate::profile::rename(&temp, path).with_context(|| format!("replacing {}", path.display()))
+    crate::profile::write(path, text).with_context(|| format!("writing {}", path.display()))
 }
 
 /// Before a run's first race: puts the saved place for `title` back into `audio`
