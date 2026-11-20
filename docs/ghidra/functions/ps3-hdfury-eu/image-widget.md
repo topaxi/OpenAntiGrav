@@ -199,9 +199,10 @@ code's 0.7 s, from an independent number. The slab thickness agrees too: 11 to 1
 11.5 to 12). Phase C and the end: `g` reaches 0.69 (ink rows 35 to 85 of a 115 px quad) at `s = 0.93`,
 frame about 43 to 44; the grabs show a 30-row band at 41 and the whole logo at 45.
 
-The reset lands at **picture frame 4.3 to 5.0** (game frame 1.3 to 2.0 at lag 3) rather than frame 3
-(game frame 0): the first ink at 8 and the line fit say the ramp starts one to two frames after the
-selection moved. The old logo is gone at frame 3 (the texture swap) as the bare panel shows. The one to
+The offset between the press and the ramp's start depends on the unpinned quad height H: **picture frame 3.2
+(H = 128, T = 0.77 s: no offset) to 5.0 (H = 115, T = 0.69 s)**, i.e. 0 to 2 game frames after the press at
+lag 3. Pinning the Logo quad's height at 1080p from the safe-area layout would close it (a wiring lane has
+ours at rest, which matches the original's). The first ink at 8 is consistent with all three rows. The old logo is gone at frame 3 (the texture swap) as the bare panel shows. The one to
 two frame offset is **unread**: it is either the screen detecting the step a frame or two after the
 settle starts, or the new texture's async load (`Async`, `FUN_002de5c8`) making the widget skip its first
 frames; one of the unread vtable slots (`0x001b7898`, `0x001b79c0`, `0x001b7ae8`) may hold it.

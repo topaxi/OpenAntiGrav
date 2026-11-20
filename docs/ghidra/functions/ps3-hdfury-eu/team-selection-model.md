@@ -423,7 +423,7 @@ row `2.25 s H`), back up (0.4 to 0.8, row `(0.9 - 2.25 (s - 0.4)) H`), then a qu
 class default 0.7 s (`enebletransition` is a typo and matches nothing, so the authored 0.5 s is dead);
 `TeamSelectionScreen_Update` restarts it on a step with `Widget_ResetTransition(Logo)` and no delay. It
 reproduces the 84 grabs' slab speed (6.28 px per frame measured, 0.69 to 0.72 s implied) and shapes.
-Confidence 85 for the geometry (code), 80 for the 0.7 s ramp and the restart, 40 for the one to two
+Confidence 85 for the geometry (code), 80 for the 0.7 s ramp and the restart, 40 for the 0 to 2
 frame offset between the press and the reset. Ready to wire (`oag_ui`'s banner `Image`).
 
 ## Omega and 2048
