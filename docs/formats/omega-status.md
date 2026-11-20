@@ -2473,9 +2473,9 @@ input, on both circuits.** The plain crowd's dimness (Sol +64.5, the figures lit
 bound ambient, sun or `Shadowed`.
 
 **Method** (`scripts/wipeout-pc-crowd-light-live.py`, reads only; walk and rig as `wipeout-pc-omega-pair.py`, seat 2, about
-150 s a boot). The port is frozen with `SIGSTOP` two frames after the HUD shows and its guest memory is read through
+150 s a boot). The port is frozen with `SIGSTOP` when the walk's grab loop ends (about five or six grabs after the HUD shows, still before GO: TOTAL reads `0.00.00` in `frozen.png`) and its guest memory is read through
 `/proc/<pid>/mem`: (1) the frame-constant table (an entry is `~crc32(name)` with the value pointer at `+0x10`, as in
-`wipeout-pc-road-sheen-live.py`; about 125 to 280 entries per name, the most common pointer into the image or heap is the
+`wipeout-pc-road-sheen-live.py`; 125 to 420 entries per name across boots, the most common pointer into the image or heap is the
 live one, a stale entry reads junk in its fourth lane); (2) every copy of the live `fogColour` xyz in memory, dumped with the
 64 bytes before it and the 48 after it. The `_shadow` crowd sprite's pixel constant block is 96 bytes
 (`gcn_dump Crowd_Sprite_Diffuse_Normal_Alpha_Shadow` `0x21e4`, 122 instructions): `dw0 Shadowed`, `dw1-3 Ambient`,
@@ -2486,7 +2486,7 @@ Written before the capture: "global" is falsified by a staged block whose `dw4`,
 "equal" by a value outside 0.92 to 1.08 of ours' per channel.
 
 **Sol (`environments2048/sol`, 2048 mode, speed class A), original against ours' bound value** (ours: `authored_light`
-passes the file's `Lighting.*` keys through unchanged; the sun is colour times `Sun diffuse intensity`):
+passes the file's `Lighting.*` keys through unchanged; the sun is colour times `Sun diffuse intensity`; **measured**, not only read: `oag_raceplay::load` of `environments2048\sol` gives `ambient [0.8, 1.0, 1.2]`, `sun [7.608, 5.352, 3.72]`, `dir [-0.105345, 0.574048, -0.812017]`, `sun_specular [6.096, 3.2627, 1.6]`, and of `environments\10_sebenco_climb` `ambient [0.1804, 0.2275, 0.3529]`, `sun [0.3, 0.3, 0.3]`, `dir [-0.31888, 0.93355, -0.16370]`, `sun_specular [12, 12, 12]`, both with `output_scale 1`, because Omega leaves `lit_output_halved` unread; a one-off test, not kept):
 
 | Input | Original, live | Ours (file) | Ratio |
 | --- | --- | --- | --- |
@@ -2538,10 +2538,12 @@ selects (`0x41a4` against `0x4f44`/`0x7904`). The next read is the crowd draw's 
 equal the file's (sun, specular, ambient, `ShadowLight` direction, fog). The road's material parameters are separate.
 
 **Confidence.** The frame constants equal the file's authored values: 92 (two Sol boots, three Sebenco boots, the table and
-thousands of staged copies agree). The crowd sprite's draw reads exactly these: 80 (identified by the staged block's
-`Shadowed`/`Ambient` prefix, 8 and 9 copies with the main view's fade; a copy in memory is a staging copy, not a captured
-bind). That ours binds the same numbers: 85 (read from `authored_light`, `Light::authored` and the crowd path in
-`shade.wesl`, and the earlier debug renders' `(7.6, 5.4, 3.7)`; not re-read from a running build). One caution on the table
+thousands of staged copies agree). The `_shadow` crowd sprite's draw reads exactly these: 80 (identified by the staged
+block's `Shadowed`/`Ambient` prefix, 8 and 9 copies with the main view's fade; a copy in memory is a staging copy, not a
+captured bind). The **plain** sprite (`0x41a4`, the `+64.5` figures) has no prefix to identify its block: its inputs are
+inferred from every main-view plain-layout block carrying the frame constants, 70. That ours' loaded rig holds the same
+numbers: 92 (measured from `Loaded.light` above; the shader's own use of it is the earlier debug render's
+`(7.6, 5.4, 3.7)` and the code read of `shade.wesl`'s crowd path). One caution on the table
 read: a hit of the hash that is not an entry can sit in the most common pointer (boot B of Sebenco picked a pointer that
 reads zeros); the script keeps only pointers into the image or heap, and the staged blocks, which do not depend on it,
 agree.
