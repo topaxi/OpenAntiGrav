@@ -2,7 +2,7 @@
 status: re-first
 titles: [omega]
 updated: 2026-11-20
-summary: "Omega HD-mode: original's scene luma read live: 1.23-1.64x ours on Sebenco/Moa/Modesto, equal on Amphiseum, by surface; read sky/fog consumers"
+summary: "Omega HD-mode per-surface gap: sky dome wired (SkyBrightness x texture); open: Sebenco snow programs (RT_snow1 419 instr), bloom, Modesto E"
 difficulty: medium (45)
 ---
 
@@ -29,10 +29,19 @@ original's luma ring, read".
 
 ## Next Steps
 
-1. RE: find the consumers of `Lighting.Sky brightness`, `Lighting.Fog colour` and the sky material in the 1.07 eboot (patch program
-   `/omega/eboot-ps4-omega-eu-v107.bin`) and read what multiplies the sky and far geometry; the Sebenco snow sky (2.3 to 2.5 times ours)
-   is the test case, Moa's sky (1.0) the control.
-2. Acceptance numbers for any wiring: ours' `LAvg` on the four pairs should reach 0.229, 0.472, 0.42 and 0.132 (the readback patch
+1. **DONE 2026-11-20 (`omega-sky-program`)**: the sky dome is `SkyBrightness * texture` and is wired for Omega
+   (`Looks::sky_brightness`; [`omega-status.md`](../../docs/formats/omega-status.md), "The sky dome's pixel program"). Sky-only pixels,
+   ours minus theirs: Moa -36.4 to -2.3, Sebenco -36.8 to -12.8; Modesto -14.5 to +23.1 (+0.2 with `E` pinned to the original's 0.6).
+   Fog's curve is read off `RT_snow1`'s vertex program and is ours'.
+2. **The Sebenco mountain (the box the dome does not own):** the snow family's GCN programs are unwired. Read `RT_snow1`'s lit variant
+   (`data08.psarc`, `Materials/RT_snow1.rcsmaterial` `@0x110e4`, 419 instructions) from the Fresnel and specular tail
+   (`@0x5b0`-`@0x7b0`: `SpecStrength * SpecColour * liveLighting0specular` with `liveLighting0specular` 12) and the detail-normal blend
+   (`@0x2d8`-`@0x3b0`), then the siblings (`RT_snow`, `RT_snow_ref`, `Sebenco_snow*`). Test case: box `1100,40,300,160` (theirs 162.3,
+   ours 100.1).
+3. **An exact linear sky gain**: the dome's gain is a gamma-domain multiply by the sRGB encode of the gain (1.9 to 3.4 % low at a
+   mid texel, 6 to 11 % low at 0.2); an exact multiply after `decode` needs a per-draw uniform slot (the block has none and 34 test files
+   mirror it). Also: read the frame-constant table's own `SkyBrightness` (recipe in `omega-status.md`).
+4. Modesto's `E` (0.868 against the original's 0.60) is the symptom of its dim scene: the other surfaces (left structure, right wall,
+   floor, 1.4 to 2.2 times ours) are the lane that closes it. Bloom (ours draws none on the sky) is the red channel's 20 grey on Sebenco.
+5. Acceptance numbers for any wiring: ours' `LAvg` on the four pairs should reach 0.229, 0.472, 0.42 and 0.132 (the readback patch
    is not kept; `omega_tonemap`'s `frameL` is the quantity), and Modesto's `E` should fall to about 0.6.
-3. Re-read the ring on Vineta K, Metropia and the other seven HD-mode circuits if the wiring is to be checked beyond these four (one boot
-   is 80 s; the recipe is in `omega-status.md`).
