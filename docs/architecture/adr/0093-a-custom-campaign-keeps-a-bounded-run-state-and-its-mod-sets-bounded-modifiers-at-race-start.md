@@ -95,6 +95,12 @@ ratings, not computed from handling.
    other commands; settled by the maintainer, `progression.md` question 1). This is a bounded
    multiplier on the disc's own number, never a replacement value, and so narrows
    the README's "no replacing a disc table" row without contradicting its reason.
+   The engine is two parameters, named for the two arms of the measured force law
+   (`T = 2 * min(throttle * amount, 0.5 * speed + accelcap)`): **`Launch`** scales
+   `engine.accelcap` (acceleration from rest) and **`TopEnd`** scales `engine.amount`
+   (the plateau, so terminal speed). Each is refused until a held-throttle ground
+   truth shows its effect. Neither acts in a Zone event, whose speed path reads
+   neither field; that is accepted, Zone being its own mode (maintainer, 2026-11-20).
 5. **Pickup parameters.** Per slot, at race start: `count` (rockets per press, mines
    per drop, cannon rounds), duration (Turbo, Shield, Autopilot) and strength (Turbo
    only, which is `Param::TurboStrength` of decision 4). A `count` only goes down:
@@ -153,10 +159,13 @@ player's (`progression.md` section 12, questions 1, 3, 5 and 11); a campaign may
 out of the global ship and variant unlocks and define its own (decision 10).
 **Settled 2026-11-20:** a pickup `count` may only go down from the craft's own count
 (decision 5); a campaign that levels a pickup up climbs back to today's limit and no
-further (`progression-challenge.md` objection 12, answered).
+further (`progression-challenge.md` objection 12, answered). The draft's `Thrust` and
+`TopSpeed` are replaced by `Launch` (`accelcap`) and `TopEnd` (`engine.amount`), each
+gated on its own ground truth, and neither applies in Zone, at least for now (decision
+4; objection 1, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
-`TopSpeed` as a parameter, a data-first modifier table, a per-owner damage scale, the
+a data-first modifier table, a per-owner damage scale, the
 page that shows stats when the craft is preset, and every other item in
 `progression.md` section 12.
 
@@ -224,8 +233,10 @@ the same race. Every disc number stays the source of truth.
 - **Per-track records are lost for a modified race.** No leaderboard pollution, and
   no personal best either, until the modded records table exists.
 - **A closed parameter list is a ceiling,** like the command set in ADR-0079. A
-  parameter outside the list waits for a host change, and `TopSpeed` is on the list
-  and refused until it is measured.
+  parameter outside the list waits for a host change, and `Launch` and `TopEnd` are
+  on the list and refused until their ground truths land.
+- **No engine reward in Zone.** `Launch` and `TopEnd` scale `Handling` fields the Zone
+  speed path never reads; a Zone event of a run campaign flies the stock engine.
 - **Hard engine bounds remain.** Three rockets and five mines are the sizes of hashed
   arrays; more is an engine change with its own proof.
 - **A mod can scale the AI.** The AI obeys the player's physics, so a slot's factor

@@ -179,8 +179,8 @@ reply (anywhere else is a fault, like `pickup-roll` off slot 0).
 ```rust
 // crates/ext-abi: closed vocabularies, `coded!` like Weapon and Cue.
 coded! { Param: u16, first 1 {
-    Thrust,         // engine.amount
-    TopSpeed,       // UNSETTLED, see section 4.2
+    Launch,         // engine.accelcap: acceleration from rest (section 4.2)
+    TopEnd,         // engine.amount: the plateau, so terminal speed (section 4.2)
     Turning,        // turning.amount
     Airbrake,       // airbrake.amount and airbrake.turn
     Brake,          // brakes.amount (stored negative; a positive factor keeps the sign)
@@ -283,8 +283,8 @@ guest names a slot, a parameter and a factor.
 
 | `Param` | Field scaled (`oag_physics::Handling`) | Range (chosen) | Notes |
 | --- | --- | --- | --- |
-| `Thrust` | `engine.amount` | 0.5 to 2.0 | Same ceiling as `MAX_THRUST_FACTOR`. Composes with the per-tick `scale-thrust`: independent factors, the product is not re-bounded (open question 6) |
-| `TopSpeed` | **unsettled** | 0.75 to 1.5 | section 4.2 |
+| `Launch` | `engine.accelcap` | 0.5 to 2.0, provisional | The cap arm of the force law: acceleration from rest. Refused until its ground truth lands (section 4.2) |
+| `TopEnd` | `engine.amount` | 0.5 to 2.0, provisional | The plateau arm: terminal speed, growing about with the square root of the factor. Refused until its ground truth lands (section 4.2). Composes with the per-tick `scale-thrust` (open question 6) |
 | `Turning` | `turning.amount` | 0.5 to 2.0 | Yaw authority, no speed factor |
 | `Airbrake` | `airbrake.amount`, `airbrake.turn` | 0.5 to 2.0 | The two gains that shape airbrake steering; the other five fields stay |
 | `Brake` | `brakes.amount` | 0.5 to 2.0 | Stored negative; a positive factor keeps the sign |
@@ -309,7 +309,7 @@ fault; a slot with no craft is a fault.
 
 **Clamp, not fault.** The existing commands fault on an out-of-range value
 (README section 1.2: "never a silent clamp"). Here the host clamps to the range and
-writes a **named load-report warning** (`mod <id>: Thrust factor 3.2 for slot 0
+writes a **named load-report warning** (`mod <id>: TopEnd factor 3.2 for slot 0
 clamped to 2.0`), which is not silent. Reason: a fault at `race-start` would turn the
 module off for the race, so the player would fly the stock craft with no hint that
 their rewards did not apply. A non-finite value is still a fault. This departs from
@@ -336,19 +336,32 @@ A race with no run module hashes nothing for it. A restored snapshot also restor
 `Ship::handling` (it is in `World`), so the record is for the hash, not for
 re-applying.
 
-### 4.2 Top speed is unsettled
+### 4.2 The engine: `Launch` and `TopEnd` (maintainer, 2026-11-20)
 
-hooks.md says a true top-speed scale needs one more `Environment` field. In the
-force law `engine.accelcap` is the "base of the thrust ceiling: `cap = 0.5 * speed +
-accelcap`" (`params.rs`), but whether scaling it moves terminal speed in proportion
-is unmeasured. Two candidates: scale `accelcap`, or add an `Environment::top_speed`
-term defaulting to the identity (bit-identical for every race that does not set it,
-as for `extension_thrust`).
+The engine law is `T = 2 * min(throttle * amount, 0.5 * speed + accelcap)`
+(`oag_physics::engine::engine`; the cap arm at confidence 95 in
+[force-balance-ground-truth.md](../../physics/force-balance-ground-truth.md)). From
+rest the cap arm binds, so `accelcap` sets the launch; at speed the plateau arm binds,
+so `engine.amount` sets terminal speed. The draft's `Thrust` (on `engine.amount`) and
+`TopSpeed` (on `accelcap`) had the two the wrong way round
+([progression-challenge.md](progression-challenge.md), objection 1). The engine is
+therefore two parameters, named for what each does:
 
-*What would settle it:* a held-throttle run on one circuit and class with `accelcap`
-at 1.0, 1.25 and 1.5, read as terminal speed (the shape of `wall_penalty_ground_truth`),
-compared with a candidate `Environment` term. Until then `TopSpeed` is **listed and
-refused** (a command naming it is a malformed record), so no guest builds on it.
+- **`Launch`** scales `engine.accelcap`: a quicker getaway and recovery from a wall,
+  no change to terminal speed.
+- **`TopEnd`** scales `engine.amount`: derived from the law (not measured) on HD
+  Feisar, a factor of 1.1 gives about +5 % terminal speed and 2.0 about +43 %, with
+  stock acceleration through the stock speed range.
+
+**Ground truth first.** Each is listed and **refused** (a command naming it is a
+malformed record) until a held-throttle run on one circuit and class, at factors 1.0
+and 2.0, confirms its effect (the shape of `wall_penalty_ground_truth`). The ranges
+are provisional until then.
+
+**Not in Zone.** A Zone event's `auto_speed` branch replaces the throttle path and
+reads neither field, so both are inert there. Accepted: Zone is its own mode, and a
+run campaign's Zone events fly the stock engine, at least for now. A Zone engine
+reward, if wanted later, is `scale-thrust`, which acts after the law in every mode.
 
 ### 4.3 Rejected alternatives for capability 2
 
@@ -706,7 +719,7 @@ impl Run for LongHaul {
         let h = Haul::read(s.run());                              // zeroed when the run is new
         state.recipe = h.recipe;                                  // the first tick sees this
         for slot in s.slots().filter(|&sl| s.is_person(sl)) {
-            let _ = out.modifier(slot, Param::Thrust, 1.0 + 0.1 * f32::from(h.engine));
+            let _ = out.modifier(slot, Param::TopEnd, 1.0 + 0.1 * f32::from(h.engine));
             let _ = out.modifier(slot, Param::ShieldMax, 1.0 + 0.25 * f32::from(h.shield));
             let _ = out.pickup_duration(slot, Weapon::Shield, 1.0 + 0.5 * f32::from(h.recipe));
         }
@@ -755,7 +768,7 @@ exactly as before (`VANILLA_FOLD`).
    replay `run` field, the no-record rule.
 3. `set-modifier` for the settled parameters, `SlotMods` in the hash; a
    disc-backed ground truth in the shape of `energy_turbo_ground_truth` (a +20 %
-   `Thrust` and a doubled `ShieldMax` against stock on one circuit).
+   `TopEnd`, a +20 % `Launch` and a doubled `ShieldMax` against stock on one circuit).
 4. Pickup parameters: counts, then the per-ship duration scales; `give-autopilot`
    with its lineage row.
 5. The frontend world (ADR-0080), then the choice screen and the Ship Select
@@ -780,9 +793,11 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
    fuller answer and is not built.
 5. **May the player skip the offer?** **Settled (maintainer, 2026-11-19): the mod
    decides**, per offer (skippable, or blocking until a pick); the host offers both.
-6. **Do `Thrust` and `scale-thrust` compose freely?** Each is bounded on its own, so
-   the largest effective factor is 2.0 x 2.0 = 4.0. The alternative bounds the product
-   by `MAX_THRUST_FACTOR`, so a reward would shrink the headroom of a per-tick boost.
+6. **Do `TopEnd` and `scale-thrust` compose freely?** They are different levers:
+   `TopEnd` scales the plateau arm inside the law, `scale-thrust` the finished force
+   after it. At the plateau both multiply the force, so the largest effective factor
+   is 2.0 x 2.0 = 4.0. The alternative bounds the product by `MAX_THRUST_FACTOR`, so a
+   reward would shrink the headroom of a per-tick boost.
 7. **A data-first modifier table** (`[[run.modifier]]`) beside the guest path, for
    authors who do not want to write wasm (the project prefers rules as data where
    data can say it).
@@ -796,7 +811,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
     `set-modifier` accepts any grid slot, so a campaign may scale the AI's craft too
     (README section 3: a third-party mod is the player's choice). Open: the learned
     speed plan a scaled AI craft invalidates (`progression-challenge.md`).
-12. **`TopSpeed`** (section 4.2): the measurement that settles it.
+12. **`TopSpeed`.** **Settled (maintainer, 2026-11-20):** replaced by `Launch`
+    (`accelcap`) and `TopEnd` (`engine.amount`), each gated on its own held-throttle
+    ground truth; neither applies in Zone (section 4.2).
 13. **The run seed's source.** Drawn from the OS at run creation and stored. A
     campaign that wants the same rolls on every run needs a fixed seed in the `[run]`
     table.

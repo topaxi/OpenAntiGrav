@@ -1,7 +1,7 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-11-19
+updated: 2026-11-20
 summary: "ADR-0093 and progression.md draft a campaign run state, race-start modifiers, pickup parameters, a choice screen and stats; waiting on review"
 ---
 
@@ -24,8 +24,9 @@ lead: the maintainer reviews it first.
 - The frontend world (ADR-0080) is unbuilt, so the choice screen and the stat rows have
   no home until it lands. The README's `race-start`, `race-end` and `setup.tune` are not
   in ABI revision 6 either.
-- `TopSpeed` has no field: scaling `engine.accelcap` is unmeasured. The measurement is a
-  held-throttle terminal speed at accelcap 1.0, 1.25 and 1.5 on one circuit and class.
+- `Launch` (`accelcap`) and `TopEnd` (`engine.amount`) replace `Thrust` and `TopSpeed`
+  (maintainer, 2026-11-20); each needs a held-throttle ground truth at factors 1.0 and
+  2.0 on one circuit and class before it ships. Neither applies in Zone.
 - Omega's Ship Select stat panel was not read (HD's front end or the 2048 panel);
   `team-grid.md` records it as checked, applies, not wired.
 

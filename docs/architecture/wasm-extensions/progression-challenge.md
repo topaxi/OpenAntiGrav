@@ -123,6 +123,11 @@ A reward that makes the engine stronger is already expressible with `scale-thrus
 re-sent each tick from the tick state ([hooks.md](hooks.md): "`scale-thrust` above
 1.0 is the mod's engine scale"). The first slice needs no engine parameter at all.
 
+**Answered by the maintainer (2026-11-20): `Launch` and `TopEnd`.** The second option:
+`Launch` scales `accelcap`, `TopEnd` scales `engine.amount`, each refused until its
+held-throttle ground truth lands. Neither applies in Zone, which is its own mode, at
+least for now (ADR-0093 decision 4, progression.md section 4.2).
+
 ### 2. Zone and Speed Lap events never reach `race-end` (blocks capability 1 for two of seven modes)
 
 **Evidence.** `RaceSim::finished` never turns true for Speed Lap or Zone;
