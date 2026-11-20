@@ -234,6 +234,7 @@ coded! { Param: u16, first 1 {
     ShieldMax,      // dimensions.shield: the maximum and the start
     TurboStrength,  // engine.turbo
     DamageTaken,    // damage reaching this craft's shield (section 6); not a Handling field
+    DamageDealt,    // damage this craft's weapons do, by the impact's owner (section 6); not a Handling field
 } }                 // at most 16: SlotStart::factor has 16 columns
 
 /// Valid factor range per parameter, owned by the host. Chosen.
@@ -588,13 +589,14 @@ to two and then three, and the progression ends where today's limit is.
 and mine pool, which are hashed projectile state: an engine change with its own
 proof, not a range edit.
 
-**Damage (maintainer, 2026-11-20).** `DamageTaken` is a factor column of the slot table
-(a spare column, `Param` 9): it scales the damage that reaches that craft's shield,
-read where damage is applied through the same override helper as the durations, so a
-race with no module is untouched. Range 0.25 to 4.0, chosen. Damage *dealt* (a scale
-on the firer) needs each projectile to carry its owner through the `Craft` trait to
-where damage lands, and is left for its own design (open question 8). The weapon
-tables stay race-wide.
+**Damage (maintainer, 2026-11-20).** Two factor columns of the slot table (spare
+columns, `Param` 9 and 10): `DamageTaken` on the craft that is hit, `DamageDealt` on
+the craft that fired. Every projectile already carries its owner, and every `Impact`
+copies it (`crates/weapons/src/projectile/flight.rs`; the same owner credits an
+Eliminator kill to `Standing::kills`), so the impact site scales the damage by
+`target.DamageTaken * owner.DamageDealt` through the same override helper as the
+durations, and a race with no module is untouched. Range 0.25 to 4.0 each, chosen. The
+weapon tables stay race-wide.
 
 **Where the overrides live (maintainer, 2026-11-20).** The cannon's starting rounds
 and the three duration scales (Turbo, Shield, Autopilot, all kept) are **not** fields
@@ -959,9 +961,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 7. **A data-first modifier table** (`[[run.modifier]]`) beside the guest path.
    **Settled (maintainer, 2026-11-20): never.** A campaign that changes the craft has
    a wasm module (section 4.3).
-8. **Per-owner damage scale.** **Half settled (maintainer, 2026-11-20):** damage
-   *taken* is the `DamageTaken` column now (section 6); damage *dealt* needs the
-   `Craft` trait and projectile ownership and is later, in its own design.
+8. **Per-owner damage scale.** **Settled (maintainer, 2026-11-20):** `DamageTaken`
+   and `DamageDealt` are slot-table columns now (section 6). The draft's premise was
+   wrong: projectiles already carry their owner, as Eliminator's kill credit shows.
 9. **The AI and a mod pickup.** **Answered by the build:** the manifest key
    `drives_ai_pickup` lets the module decide when an AI craft uses its pickup; the
    Turbo's gate is only the default (section 6; challenge nit 19).
