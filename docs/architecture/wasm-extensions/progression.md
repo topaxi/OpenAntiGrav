@@ -49,7 +49,8 @@ A **run** is one playthrough of one custom campaign by one profile. It has:
 
 - `bytes`: the **run state**, opaque to the host, at most `MAX_RUN_BYTES` = 4,096
   (maintainer, 2026-11-20; section 3). The cap is on raw bytes.
-- `seed`: a `u64` the host draws once when the run is created, so the guest can
+- `seed`: a `u64` the host draws from the OS once when the run is created (or the
+  campaign's fixed `[run] seed`, so every run rolls the same), so the guest can
   derive reward rolls without an RNG stream (section 4.3).
 - `ordinal`: how many `race-end` calls the run has committed. Every commit advances
   it, changed bytes or not, so a failed race moves the offer rolls on (maintainer,
@@ -662,6 +663,7 @@ module = "ext/run.wasm"       # a module the mod lists in [extension.rules]; the
 new_run = "clear-medals"      # "clear-medals" (default) | "keep-medals"
 choice_screen = "reward"      # optional: an [[extension.screen]] id, opened after a finish that offered
 race_again = true             # false: the results page offers no RACE AGAIN for this campaign's events
+# seed = 1234                 # optional: every run of this campaign uses this seed, so the same rolls
 
 # Stats are reported by the guest at race-end (section 8.2); the campaign file declares none.
 ```
@@ -974,9 +976,9 @@ chosen by `race-end` alone (the module picks the reward) before step 5 lands.
 12. **`TopSpeed`.** **Settled (maintainer, 2026-11-20):** replaced by `Launch`
     (`accelcap`) and `TopEnd` (`engine.amount`), each gated on its own held-throttle
     ground truth; neither applies in Zone (section 4.2).
-13. **The run seed's source.** Drawn from the OS at run creation and stored. A
-    campaign that wants the same rolls on every run needs a fixed seed in the `[run]`
-    table.
+13. **The run seed's source.** **Settled (maintainer, 2026-11-20):** drawn from the
+    OS at run creation and stored; a campaign may fix it with `[run] seed` so every run
+    rolls the same.
 14. **The cap.** **Settled (maintainer, 2026-11-20): 4,096 bytes**, in a run buffer of
     its own size (`RUN_IO_LEN` = 16 KiB), so a later raise is a host change and a
     rebuild (section 3).

@@ -71,7 +71,8 @@ ratings, not computed from handling.
 
 1. **A run.** A custom campaign that declares a `[run]` table has, per profile, one
    **run**: opaque bytes of at most `MAX_RUN_BYTES` = 4,096 (raw, before base64; maintainer, 2026-11-20), a
-   `u64` seed drawn when the run is created, an event ordinal (every committed
+   `u64` seed drawn from the OS when the run is created (or the campaign's fixed
+   `[run] seed`, so every run rolls the same; maintainer, 2026-11-20), an event ordinal (every committed
    `race-end` advances it, changed bytes or not), an `over` flag, and, only after a
    faulted `race-end`, the latch it still owes (decision 6). It is a table of the records `Store` keyed like the campaign's
    progress rows (`<title slug>/mod:<mod id>/<campaign id>`), saved by
@@ -271,7 +272,8 @@ advances the ordinal (decisions 1 and 6; question 3's mechanism, answered). NEW 
 host row with a confirm, which a mod screen may also request (decision 6; question 2,
 answered). There is no data-only modifier table, now or later: changing the craft
 takes a wasm module (question 7, answered). Damage taken is a per-slot factor now; damage
-dealt is later (decision 5; question 8, half answered).
+dealt is later (decision 5; question 8, half answered). The seed is drawn per run, or
+fixed by `[run] seed` (decision 1; question 13, answered).
 
 **Not decided here:** a damage-dealt scale (it needs projectile ownership), and every other item in
 `progression.md` section 12.
