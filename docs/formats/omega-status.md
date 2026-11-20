@@ -2657,7 +2657,7 @@ Amphiseum 0.5) does not predict the sign (Moa's sky is level at 2.0, the Amphise
 same mixed result the 2048-mode lane recorded ("Where the WipEout 2048 mode pairs' error is", sky). Not wired.
 
 **The one value that would separate "same scene, different exposure" from "different scene" is the original's own luma
-history.** Read recipe, not run (no pad seat in this lane's brief, and a native-port boot needs the 47 GiB game copy):
+history** (read since: [the next section](#hd-mode-frame-brightness-the-originals-luma-ring-read-2026-11-20-omega-luma-read)). Read recipe, not run at the time (no pad seat in this lane's brief, and a native-port boot needs the 47 GiB game copy):
 in the native port launched through `scripts/wipeout-pc-omega-pair.py` the object is a heap pointer held at guest
 `0x021dbdb8` ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md), "The ToneMap object, read live
 through the pointer"; host address image base `0x800000000` plus the offset from Ghidra's `0x01000000`); after the pair
@@ -2675,6 +2675,135 @@ ours' `LAvg`; the original still adapting at the grab as a common cause; `Sky br
 mixed). **Unchanged by this lane:** no code, no table; the HD and 2048 frames are untouched. **2048: checked, differs** (2048
 runs `wo_composite`'s exposure, not this cubic chain, and its references are drawn at the held 1.15 because Vita3K never
 writes the bloom gate's target back, `oag_raceplay::Options::exposure_hold`).
+
+## HD-mode frame brightness: the original's luma ring, read (2026-11-20, `omega-luma-read`)
+
+**Claim decided:** at the grab frame of `omega/sebenco-climb`, `modesto-heights`, `moa-therma` and `the-amphiseum`, the original's adapted
+luminance and exposure are either about equal to ours (so the dark sky and scenery is per-surface shading) or about 1.6 times brighter in
+scene terms (so the scene's light level is the cause). **Written down before the first boot:** the deciding number is the ratio of the
+original's `LAvg` to ours' (Sebenco 0.1756, Moa 0.3851, Modesto 0.2621, Amphiseum 0.1333), not `E`, because `E` is pinned on three of the
+four circuits (a brighter scene leaves a pinned `E` unchanged); bands 0.85 to 1.18 "about equal", 1.4 or more "about 1.6 times", between
+"partial"; the claim would have been unreadable if the ring were zero or constant, if its length were not `N - 1` for the circuit's own
+`Tonemap.Exposure time`, or if `+0x80..+0x9c` did not match the circuit's `.EnvSettings`. None of those happened.
+
+**Result: neither alternative holds across the four.** The original's whole-frame luma, read live, is **1.23 to 1.64 times ours on Sebenco,
+Moa and Modesto and equal on The Amphiseum**, and the pixel-level split inside each frame shows it is concentrated in some surfaces. The
+exposure is not the lever: `E` is identical to ours on three circuits (pinned) and 0.60 against ours' 0.868 on Modesto, where ours' dim
+scene is compensated by a larger `E` than the original needs. So the gap is the scene's light level, surface by surface (confidence 80),
+not `E` and not a global gain.
+
+### What was read, and how
+
+The port (`scripts/wipeout-pc-omega-pair.py`'s `Rig`, the same walk as the gallery pairs, a fresh save, Feisar, HD mode, `OAG_PAD_SEAT=2`)
+was booted once per circuit and again (eight boots), and `/proc/<gow3-probe pid>/mem` was read in a loop (1 ms sleep, a row kept
+whenever the object or the ring changed, 2,500 to 3,500 rows a boot) from MAIN MENU until the frame the pair script would pick (first HUD
+frame plus 2), then the port was `SIGSTOP`ped and the object and every pointer in it dumped. The loop only reads: no stop, no write.
+
+- **Pointer:** guest `0x021dbdb8` (host `0x800000000 + 0x11dbdb8`) holds the `ToneMap_Instance` pointer, `0x210` bytes
+  ([patch-v107-addresses](../ghidra/functions/ps4-omega-eu/patch-v107-addresses.md), "The ToneMap object, read live through the
+  pointer"). Its value is not fixed across boots (`0x100243d740` on six of the eight, `0x10024695e0` and `0x1002a32220` on two): always read
+  it through the global.
+- **The ring, confirmed by reading it** (confidence 90; one binary, eight boots, capped at 94 by the rubric): `+0x1d8` begin, `+0x1e0` end,
+  `+0x1e8` capacity, a `float[4]` (`N - 1` with `N = round(0.08333334 * 60) = 5`, `+0xc4` = 0.2 on all eight boots), the weights vector at
+  `+0x1f8..+0x208` (five `1.0f`). **Each ring write is one frame**: the slots are written round-robin, about one every 30 to 40 ms in this
+  headless port (27 to 30 frames a second of ring writes under the headless compositor, whatever the engine's 240 FPS profile steps by), and the
+  only other field of the object that moves is `+0xc0`: its byte `+0xc2` is the index of the slot written last (0, 1, 2, 3 in turn, checked
+  against the slot that changed on 14 consecutive writes), and `+0xc1` alternates 0, 1 (the coefficient texture's ping-pong; reading, not
+  confirmed).
+- **What a slot holds: raw per-frame luma, not the adapted value.** Across the race-start camera cut on Sebenco the slots step from 0.351 to
+  0.228 in one write (a drop of 0.12), where the executable's rate limit `response / 60` would allow 0.004 a frame
+  (`tonemap.md`, "The law"). Fades read 1.0 (0.97 to 1.0 for about 20 s of loading and the white-out before the race), so the
+  slot is the whole-frame mean luma of the scene target, fade and all. That agrees with `tonemap.md`'s "stores it in the ring" (the
+  luminance chain's mean) and not with "the previous coefficient texture's `LAvg`" (confidence 80, one cut seen on each of the eight boots).
+- **State proof per boot** (the pair script's name-crop and Feisar logo references no longer exist, so the object proves the circuit):
+  `+0x98/+0x9c` (`Exposure minimum/maximum`), `+0x80` (lum a) and `+0x88 * 60` (response) equal each circuit's own patch `.EnvSettings`
+  (Sebenco 0.555/4, 0.079, 0.25; Moa 0/1, 0.4, 0.5; Modesto 0.5/2, 0.18, 0.4; Amphiseum 0.4/2, 0.25, 0.3), `+0xb8` is 1.0 (the SDR set),
+  `+0x8c` is 1.0 on all eight boots. All eight picked frames were read by eye in one montage: the right circuit each time, the grid before GO (timer 0.0.0, 0 KM/H, no countdown digit).
+- **Adapted luma at the grab.** The original's `LAvg` (the GPU's coefficient texture, not readable here) was replayed from the ring's
+  own per-frame luma sequence, one ring write a frame, from the object's creation at `P = 0` as the executable starts, with the law of
+  `tonemap.md` (target over the last 5 values or the last 4, both give the same answer to 0.001). At the frozen moment the replay and the
+  ring mean differ by 0.0001 to 0.0011 on every boot: **the original is settled at the grab** (a rate limit of 0.0042 to 0.0083 a frame
+  against 27 to 89 frames since the last cut: no adaptation transient, confidence 80; it is a replay of a law, not a read of `P`).
+
+### The original's numbers
+
+Ring mean (`LAvg` settled), boot A then boot B; `E` and `t1` derived from it with the object's own coefficients (`E = clamp((a + b * LAvg) /
+LAvg, min, max) * cL`, `t1 = max(srcA + srcB * LAvg, 0.01)`); ours from the `omega-hd-exposure` readback:
+
+| Pair | original `LAvg` (A, B) | original `E` | original `t1` | ours `LAvg` | ours `E` | ours `t1` | ratio `LAvg` | band |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| The Amphiseum | 0.1324, 0.1325 | 2.000 (max) | 1.000 | 0.1333 | 2.000 (max) | 1.000 | 0.99, 0.99 | equal |
+| Sebenco Climb | 0.2290, 0.2299 | 0.555 (min) | 0.612 | 0.1756 | 0.555 (min) | 0.612 | 1.30, 1.31 | partial |
+| Moa Therma | 0.4720, 0.4740 | 1.000 (max) | 1.570, 1.573 | 0.3851 | 1.000 (max) | 1.465 | 1.23, 1.23 | partial |
+| Modesto Heights | 0.4197, 0.4299 | 0.609, 0.599 | 1.000 | 0.2621 | 0.868 | 1.000 | 1.60, 1.64 | about 1.6 |
+
+Boot to boot the ring mean agrees to 0.1 to 2.4 % (Modesto's boot A was still falling 0.01 a second, its scene settling). The ring's history
+before the grab, mean of the four slots, relative to the pick grab (seconds; run A; loading and the fly-over are the intro, not the grid):
+
+| Pair | -30 s | -20 s | -10 s | -5 s | -2 s | -1 s | -0.5 s | grab |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Amphiseum | 0.989 | 0.089 | 0.069 | 0.086 | 0.076 | 0.132 | 0.133 | 0.133 |
+| Sebenco | 0.989 | 0.196 | 0.369 | 0.444 | 0.373 | 0.352 | 0.230 | 0.230 |
+| Moa | 0.989 | 0.645 | 0.703 | 0.632 | 0.577 | 0.588 | 0.472 | 0.471 |
+| Modesto | 0.989 | 0.445 | 0.804 | 0.712 | 0.697 | 0.434 | 0.425 | 0.419 |
+
+(0.989 is the loading screen's fade; the camera cut from the circuit presentation to the grid is the step in the last second.)
+
+**Sampling is not the explanation** (confidence 70): the Amphiseum's ring mean (0.1324) matches ours' whole-frame mean (0.1333) to 1 %
+while ours' centre 64x64 mean is 0.0859 and its centre 128x128 mean 0.091. No one centre-crop statistic of ours' luma image gives a
+constant ratio across the four (centre 64: 0.97, 1.90, 1.46, 1.54 against the Sebenco, Moa, Modesto, Amphiseum originals), so the
+confidence-60 reading in `tonemap.md` (the coefficient pass samples the whole-frame mean) is now **supported by the one circuit
+where ours and the original agree** and not contradicted by the others.
+
+### Where the original's scene is brighter: the output frames, inverted (corroboration, confidence 65)
+
+The original's `theirs.png` is the curve's output (sRGB-encoded) plus bloom. Inverting it with the object's own parameters
+(sRGB decode, the cubic through `(0, 0)` and `(t1, 1)` with the end slopes of `+0x90/+0x94`, divide by `E`, Rec.601 luma) gives a scene
+luma that can be compared with the same inversion applied to ours' frame, since both pass through the same law; ours' inversion
+recovers 96 % (Sebenco), 94 % (Modesto), 80 % (Moa) and 83 % (Amphiseum) of ours' own known `LAvg` (the shortfall is the clip at `t1`).
+Whole frame, theirs over ours: Sebenco 1.41, Moa 1.28, Modesto 1.48, Amphiseum 0.93, against the ring's 1.30, 1.23, 1.60, 0.99. The
+two independent readings agree on the sign and order. **Per box** (the `omega-hd-exposure` boxes; ranges are boot A to boot B):
+
+| Pair | box | theirs over ours (inverted scene luma) | saturated pixels, theirs |
+| --- | --- | --- | --- |
+| Sebenco | snow sky / building left | 2.3 to 2.5 / 2.3 to 2.5 | 6 to 9 % / 0 % |
+| | yellow floor / wall right | 1.15 to 1.21 / 1.08 to 1.41 | 0 % |
+| Moa | sky/city / floor left | 1.04 / 1.01 to 1.05 | 0 % / 5 % |
+| | stands left / stripe road | 1.42 / 1.6 | 12 % / 3 % |
+| Modesto | sky gap / left structure | 2.2 / 1.80 | 22 to 42 % / 2 % |
+| | right wall / floor left | 1.72 / 1.42 | 4 % / 9 to 10 % |
+| Amphiseum | ceiling / stands right | 0.67 / 0.73 | 5 % / 4 % |
+| | road left / wall left | 1.05 / 0.90 | 4 % / 1 % |
+
+Caveats that bind these ratios: bloom adds to the original's bright pixels after the curve and the inversion reads it as scene (it
+inflates the sky and ceiling rows); the clip at `t1` makes saturated boxes lower bounds; the pose differs by a few pixels, so a box ratio is
+good to about 0.2, not to the digit. What survives them: **Sebenco's sky and far scenery are about 2.3 times ours and its near surfaces
+1.1 to 1.4; Modesto is brighter everywhere (1.4 to 2.2, sky most); Moa's sky and floor match and its stands and stripe road are 1.4 to 1.6;
+the Amphiseum's ceiling and stands are brighter in ours (0.67 to 0.73).** That reproduces `omega-hd-exposure`'s box table (sky and far
+scenery dark on Sebenco, sky on Modesto, stands and stripe road on Moa) as a scene-radiance gap, and puts a number on it that the tone map
+passes through one for one on the three circuits where `E` is pinned or `b = 0`.
+
+### What this decides
+
+1. **Exposure and the tone map are not the cause** (confidence 85): `E` equals ours on Amphiseum, Sebenco and Moa (all pinned), `t1`
+   on Amphiseum and Sebenco (1.57 against 1.465 on Moa), and ours' Modesto `E` (0.868) is 1.45 times the original's (0.60): ours' dim scene (`LAvg` 0.262 against 0.42)
+   asks for more gain than the original needs, which is a symptom, not a cause.
+2. **The scene's light level differs from ours, by surface and not by one factor** (confidence 80):
+   whole-frame scene luma is 1.3 (Sebenco), 1.23 (Moa), 1.6 (Modesto) times ours and equal on the Amphiseum, with sky and far scenery
+   about 2.3 times ours on Sebenco and a 1.4 to 2.2 spread on Modesto. A lighting term that is a constant times ours' would be wrong on
+   the Amphiseum (0.67 to 0.73 on two boxes) and on Moa's sky and floor (1.0).
+3. **The earlier claim "scene luma equal, the gap is shading" is false** for Sebenco, Moa and Modesto (ring ratios 1.23 to 1.64 over
+   two boots each); the earlier claim that it is **not a global gain** stands, now on the original's own ring.
+
+**Not decided here:** which scene term carries it. The sky and fog consumers in the 1.07 eboot are still unread
+(`FUN_015eda20` is the registrar), `Lighting.Sky brightness` still does not predict the sign across the five circuits, and a 2.3 times
+sky on Sebenco with a 1.1 times floor does not look like the sun or ambient terms; sky radiance (and bloom, which ours does not draw)
+are the leads. **Not wired.** No code, no table.
+
+**2048 cross-check: checked, differs.** 2048 reads no `ToneMap` object (its `wo_composite` has no luma ring), so the read does not port; the
+Omega object's `+0x1d8` ring is Omega's. The 2048-mode pairs' brightness (`omega-2048-holistic`) was not re-read.
+**Repeats:** each circuit twice, one boot apart, ring means within 2.4 %; **confidence** per row above; one binary (the 1.07 patch eboot),
+one pose per circuit (the grid before GO), HD mode only.
 
 ## See also
 
