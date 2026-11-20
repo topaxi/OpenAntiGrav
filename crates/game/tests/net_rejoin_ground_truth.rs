@@ -14,6 +14,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
+use oag_testdata::exec::{self, spawn};
+
 const IMAGE: &str = "pulse-psp-eu.chd";
 const TRACK: &str = "Data\\Environments\\01_Track\\track.vex";
 
@@ -46,55 +48,30 @@ impl Drop for Proc {
     }
 }
 
-/// Held while a child is spawned and while a binary is copied, so a child forked by one test
-/// thread never inherits another thread's write handle on a file it is about to exec
-/// (`ETXTBSY`). A test per process (nextest) never contends for it.
-static SPAWN: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn spawn(command: &mut Command) -> std::io::Result<Child> {
-    let _one_at_a_time = SPAWN.lock().unwrap_or_else(|e| e.into_inner());
-    command.spawn()
-}
-
 /// A private copy, in `dest`, of the `oag-server` binary built beside this crate's `oag-game`.
 ///
 /// The server is built here, not found, so a test never runs a server older than the source
-/// (`cargo nextest` builds only what it tests). It is then copied, and the copy is what runs:
-/// every cargo build that relinks or re-lays `target/<profile>/oag-server` (another test's, or
-/// the run's own, with a different feature set) leaves the copy alone, so no process ever
-/// writes a file this test is about to exec. The build and the copy happen under one lock
-/// shared by every test process, so no other build lands between them.
+/// (`cargo nextest` builds only what it tests); the copy is what runs
+/// (`oag_testdata::exec`).
 fn server_binary(dest: &Path) -> PathBuf {
     let game = Path::new(env!("CARGO_BIN_EXE_oag-game"));
     let dir = game.parent().expect("the game binary's directory");
     let profile = dir.file_name().and_then(|n| n.to_str()).unwrap_or("debug");
-    let lock = File::create(Path::new(env!("CARGO_TARGET_TMPDIR")).join("oag-server-build.lock"))
-        .expect("the build lock");
-    lock.lock().expect("the build lock is taken");
-    let mut build = Command::new(env!("CARGO"));
-    build.args(["build", "-p", "oag-net", "--bin", "oag-server"]);
-    if profile != "debug" {
-        build.args(["--profile", profile]);
-    }
-    let status = build.status().expect("cargo runs");
-    assert!(status.success(), "oag-server builds");
-    let built = dir.join("oag-server");
-    let copy = dest.join("oag-server");
-    let _one_at_a_time = SPAWN.lock().unwrap_or_else(|e| e.into_inner());
-    let stamp = |path: &Path| {
-        let meta = std::fs::metadata(path).expect("the built server");
-        (meta.len(), meta.modified().ok())
+    let build = || {
+        let mut build = Command::new(env!("CARGO"));
+        build.args(["build", "-p", "oag-net", "--bin", "oag-server"]);
+        if profile != "debug" {
+            build.args(["--profile", profile]);
+        }
+        let status = build.status().expect("cargo runs");
+        assert!(status.success(), "oag-server builds");
     };
-    let before = stamp(&built);
-    std::fs::copy(&built, &copy).expect("the server is copied");
-    assert_eq!(
-        stamp(&built),
-        before,
-        "{} changed while it was copied",
-        built.display()
-    );
-    assert_eq!(stamp(&copy).0, before.0, "the copy is whole");
-    copy
+    exec::private_copy(
+        Path::new(env!("CARGO_TARGET_TMPDIR")),
+        &dir.join("oag-server"),
+        dest,
+        build,
+    )
 }
 
 /// A lobby and the directory its clients keep their profiles in.

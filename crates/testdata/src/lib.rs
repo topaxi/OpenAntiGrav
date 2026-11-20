@@ -28,6 +28,8 @@
 //! nothing - which is exactly what happens in a fresh worktree, where `data/`
 //! is gitignored and does not travel. Run `just link-data` there.
 
+pub mod exec;
+
 use std::path::{Path, PathBuf};
 
 /// This checkout's root, from the crate that is compiled into the test.
