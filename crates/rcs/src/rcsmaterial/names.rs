@@ -237,6 +237,9 @@ pub const KNOWN_PARAMETER_NAMES: &[&str] = &[
     "aspect_ratio_U",
     "aspect_ratio_V",
     "texture2overlaystrength",
+    // Omega's GCN copy of `zoneship01` declares it in the clear
+    // (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`, "The rim term").
+    "fresnelBase",
 ];
 
 /// The uniform names Wipeout 2048's Vita material records author, recovered by

@@ -184,13 +184,13 @@ archive!(
     base_data00,
     "omega-eu",
     "data00.psarc",
-    "Survey { files: 620, materials: 4918, uniforms: 6833, samplers: 7236, other_kinds: 0, unbound: 3290, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2722, named_samplers: 3597, glow_layers: 16, plain_scrolls: 2 }"
+    "Survey { files: 620, materials: 4918, uniforms: 6833, samplers: 7236, other_kinds: 0, unbound: 3290, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2724, named_samplers: 3597, glow_layers: 16, plain_scrolls: 2 }"
 );
 archive!(
     base_data01,
     "omega-eu",
     "data01.psarc",
-    "Survey { files: 304, materials: 5871, uniforms: 5959, samplers: 11004, other_kinds: 0, unbound: 2879, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2512, named_samplers: 9266, glow_layers: 128, plain_scrolls: 0 }"
+    "Survey { files: 304, materials: 5871, uniforms: 5959, samplers: 11004, other_kinds: 0, unbound: 2879, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 2513, named_samplers: 9266, glow_layers: 128, plain_scrolls: 0 }"
 );
 archive!(
     base_data02,
@@ -220,13 +220,13 @@ archive!(
     patch_data07,
     "omega-eu-patch",
     "data07.psarc",
-    "Survey { files: 1, materials: 6, uniforms: 13, samplers: 10, other_kinds: 0, unbound: 6, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 6, named_samplers: 4, glow_layers: 0, plain_scrolls: 0 }"
+    "Survey { files: 1, materials: 6, uniforms: 13, samplers: 10, other_kinds: 0, unbound: 6, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 7, named_samplers: 4, glow_layers: 0, plain_scrolls: 0 }"
 );
 archive!(
     patch_data08,
     "omega-eu-patch",
     "data08.psarc",
-    "Survey { files: 99, materials: 1051, uniforms: 990, samplers: 597, other_kinds: 0, unbound: 1051, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 391, named_samplers: 165, glow_layers: 0, plain_scrolls: 0 }"
+    "Survey { files: 99, materials: 1051, uniforms: 990, samplers: 597, other_kinds: 0, unbound: 1051, dropped: 0, pool_gaps: 0, stray_words: 0, wrong_width: 0, named_uniforms: 393, named_samplers: 165, glow_layers: 0, plain_scrolls: 0 }"
 );
 archive!(
     patch_data09,

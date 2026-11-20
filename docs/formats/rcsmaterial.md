@@ -1575,6 +1575,7 @@ never the strings, so 0 of 300 preimage against the whole shader corpus.
 | `0x336d2dcc` | `V_Offset` | 47 | `scrollingalpha`, `hd_muzzleflash` |
 | `0x1028bf46` | `Transparency` | 16 | `glass_colour_spec_trans` |
 | `0x8f2fe704` | `UV_offset` | 5 | `hd_plasmaring_glow` and the explosion glows |
+| `0x743ea80b` | `fresnelBase` | 3 | `zoneship01` (the Zone ship's rim, [zone-hull-light.md](../ghidra/functions/ps3-hdfury-eu/zone-hull-light.md)) and two weapon glows; named by Omega's and 2048's clear copies of `zoneship01`, not by the `EBOOT.elf` sweep |
 
 `uvScale`/`uvOffset` being the two commonest parameters on the disc, and always
 appearing together and in equal number, looked like the static half of the same
