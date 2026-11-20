@@ -764,8 +764,8 @@ sees the craft and the title's bars on one screen and the mod's stats on another
 which needs the disc data README open question 15 has not decided a mod may read.
 
 **Preset craft.** A campaign event with `craft = { team = ... }` skips Team Selection
-(custom-campaign.md, "Preset craft"). The stat rows then show on the event's page
-instead; which page is open question 10.
+(custom-campaign.md, "Preset craft"). Its stats show in the campaign page's stats
+block, as for every event (question 10, settled 2026-11-20).
 
 ## 9. A worked example
 
