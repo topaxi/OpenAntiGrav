@@ -375,6 +375,12 @@ and three weapon-lineage rows for this. Only the Autopilot has no existing lever
 `give-autopilot` (objection 5). The combined pickup stays: shield plus boost is
 `give-shield`, `scale-thrust` and `clear-pickup` today.
 
+**Answered by the maintainer (2026-11-20): keep all three, outside `World`.** The
+built commands only approximate a longer pad Shield or Turbo, so the Turbo, Shield and
+Autopilot scales stay, as per-slot overrides in the extension state behind one grant
+helper. The rule behind it: original content must not regress, mod content may be
+slower (ADR-0093 decisions 5 and 12, progression.md section 6).
+
 ### 14. The choice does not need the frontend world, and should not live in it
 
 **Evidence.** In section 8.1 a frontend guest parses the run bytes, applies the pick

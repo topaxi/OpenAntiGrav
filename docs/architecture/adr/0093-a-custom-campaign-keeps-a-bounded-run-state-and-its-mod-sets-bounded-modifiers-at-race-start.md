@@ -121,8 +121,11 @@ ratings, not computed from handling.
    campaign can start a craft on one rocket and level it back up to two and three,
    and its progression ends at today's limit. Below the craft's own number it is a
    reduction of the disc's value, not a replacement past it (decision 4's rule).
-   Durations and the cannon's rounds are per-ship fields, never edits to the
-   race-wide weapon tables. A combined pickup is
+   Durations (Turbo, Shield, Autopilot, all three kept; maintainer, 2026-11-20) and the
+   cannon's rounds are per-slot overrides held **only in the extension state**, never
+   fields of `World` or `Ship` and never edits to the race-wide weapon tables: every
+   grant site goes through one helper that reads the slot's override when a module is
+   loaded and the table's value otherwise (decision 12). A combined pickup is
    a `Weapon::Extension` whose `pickup-fire` reply sends `give-shield`, the new
    `give-autopilot` and `clear-pickup`. One kind per mod stays; the recipe is
    selected from state. `give-autopilot` works on any craft, a modified one included,
@@ -186,6 +189,12 @@ ratings, not computed from handling.
     maintainer moved to its own ADR (2026-11-20). Then the run record and the ABI, then modifiers, then pickup
     parameters and `give-autopilot`. The choice and the stats follow under ADR-0094. A
     campaign ships with `race-end` choosing the reward by itself before they land.
+12. **Original content pays nothing** (maintainer, 2026-11-20). A race with no module
+    keeps `World`'s size, its snapshot, its hash and its per-tick work exactly as
+    today. State only a mod needs (the applied factors, the pickup overrides, the
+    latch) lives in the extension state, allocated (on the heap if need be) only when
+    a module is loaded; the vanilla path costs at most a check that no override is
+    there. A modded race may be slower or larger.
 
 **Settled by the maintainer (2026-11-19):** an out-of-range modifier is clamped, never
 a fault; whether a failed race ends a run is the mod's choice; whether the player may
@@ -217,7 +226,10 @@ leg; a per-leg `race-end` is for later (decision 6; objection 9, answered). A fa
 fault in `race-end` keeps the medal and saves the latch as an owed end, settled by
 RETRY or DISCARD before the campaign launches again (decision 6). A modified race
 withholds only its per-track record; loyalty and XP are paid. The modded records table
-is later work (decision 9; objection 11 and question 4, answered).
+is later work (decision 9; objection 11 and question 4, answered). All three pickup
+durations stay, held as per-slot overrides in the extension state only; original
+content never pays for mod features, mod content may be slower (decisions 5 and 12;
+objection 13, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in

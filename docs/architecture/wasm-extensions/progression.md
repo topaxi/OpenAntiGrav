@@ -537,9 +537,18 @@ proof, not a range edit. Damage per weapon is not offered: the weapon tables are
 race-wide, a per-owner damage scale touches the `Craft` trait and every projectile
 (open question 8).
 
-The per-ship fields (`cannon_rounds` start, three duration scales) join
-`Ship::weapon_counts` as **load-time data written once, unhashed in `Ship`, hashed in
-`SlotMods`** (section 4.1). Each new `Weapons` field or trigger needs its row in
+**Where the overrides live (maintainer, 2026-11-20).** The cannon's starting rounds
+and the three duration scales (Turbo, Shield, Autopilot, all kept) are **not** fields
+of `Ship` or `World`. They are per-slot overrides in `SlotMods`, the extension state of
+section 4.1, which exists (heap-allocated if need be) only when a module is loaded.
+Every grant site (pads, the AI, `give-shield`, `give-autopilot`; today
+`crates/raceplay/src/weapons.rs`, `field/opponent_weapons.rs`, `field.rs`) goes through
+one helper that returns the table's `simple.time` times the slot's override, or the
+table's value when there is none. So a race with no module keeps `World`'s size, its
+snapshot, its hash and its per-tick work unchanged, and pays at most a "no override"
+check at a grant; a modded race may be slower or larger. Measured against the
+alternative of three `Ship` fields: +96 bytes of `World` (+0.5 %) and +0.3 % per
+snapshot avoided for every vanilla race. Each new `Weapons` field or trigger needs its row in
 `docs/gameplay/weapon-lineage.md`, "Checked axes", when it is built; the counts
 already have theirs.
 
