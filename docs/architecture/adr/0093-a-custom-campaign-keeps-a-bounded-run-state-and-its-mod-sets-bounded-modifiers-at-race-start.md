@@ -156,7 +156,9 @@ ratings, not computed from handling.
     global unlocks are never written by a campaign, and a campaign's own unlocks
     never leak into the Race Box or another campaign. Mechanism detail:
     `progression.md` section 7.1.
-11. **Build order.** The run record and the ABI first, then modifiers, then pickup
+11. **Build order.** Prerequisite, owned outside this ADR: the records file is written
+    atomically (temp file, then rename), a general rule for every profile file that the
+    maintainer moved to its own ADR (2026-11-20). Then the run record and the ABI, then modifiers, then pickup
     parameters and `give-autopilot`. The choice and the stats follow under ADR-0094. A
     campaign ships with `race-end` choosing the reward by itself before they land.
 
@@ -179,7 +181,9 @@ campaign may hide RACE AGAIN with a `[run] race_again` flag (decision 6; objecti
 and 6, answered). The choice screen and the stats are split into ADR-0094; this ADR
 needs no frontend world (objection 4 and question 15, answered). A modified craft adapts the
 reference speed plan per slot before the plans are built, and `give-autopilot` runs on
-any craft (decisions 4 and 5; objection 5, answered).
+any craft (decisions 4 and 5; objection 5, answered). An atomic records write is a
+general rule for every profile file, decided in its own ADR outside this one, and a
+prerequisite of the run record (decision 11; objection 7, answered).
 
 **Not decided here:** how a mod ends a run (the mechanism), the AI's use of a mod pickup,
 a data-first modifier table, a per-owner damage scale, and every other item in

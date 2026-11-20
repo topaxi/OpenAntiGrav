@@ -792,6 +792,10 @@ counts; **not checkable until the build** for the panel on Omega.
 
 ## 11. Order of building (proposed)
 
+Prerequisite, outside this design: the records file is written atomically (temp
+file, then rename), under a general ADR for every profile file (maintainer,
+2026-11-20; [progression-challenge.md](progression-challenge.md), objection 7).
+
 Each step is its own merge, with a proof that a race with no run module hashes
 exactly as before (`VANILLA_FOLD`).
 
