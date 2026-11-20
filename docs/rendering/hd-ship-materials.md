@@ -669,12 +669,13 @@ first sheet of this section was framed on Vineta K and is not the comparison. Tw
   towards its own luma (`@0x28`-`@0x31` of the `_n` block), so a Zone hull's probe light and reflection are grey and
   a fifth as strong. Ours multiplied by a constant 4, which is the chrome and the iridescence. **Wired**:
   `oag_raceplay::env_probes::ProbeTint` (`ENGINE` and `ZONE`), carried in the model uniform's two spare floats
-  (`env_gain`, `env_desat`), `shade.wesl`'s `probe_tint`. Confidence 85 for the two values at that stage; **what moves
-  the value inside a Zone race is not read** (both frames were at `Sub Flash`; the stage table's per-stage
-  `Lighting.Sky reflection colour` is `0 0 0` at stages 0, 7, 13 and 14 and magenta at 6, the obvious untested
-  driver), so the one value is carried for the whole mode. Source: `Scene_PrepareFrame` copies a vec4 at
-  `object+0x510` to `block+0x7c40` (`0x003ab100`), which is the shader parameter; `(4, 4, 4, 0)` is written there at
-  `0x003abb10`-`0x003abb28` on the path where the byte at `r17` is 0, and the other path (`0x003ad748`) is unread.
+  (`env_gain`, `env_desat`), `shade.wesl`'s `probe_tint`. Confidence 85 for the two values at that stage. **What moves it, read 2026-11-20
+  (`zone-craft-light`):** twice the stage blend of `Track.Base Colour Highlight`, `.w` 1, written to
+  `EnvSettings+0x510` by `Environment_UpdateStageBlend` at `0x003db260`; `Sub Venom` on Vineta K reads
+  `(0.69804, 1.00392, 2.0, 1.0)`. Wired per stage as `mesh_render::Light::hull_probe_tint`; see
+  [zone-hull-light.md](../ghidra/functions/ps3-hdfury-eu/zone-hull-light.md). `Scene_PrepareFrame` copies
+  `object+0x510` to `block+0x7c40` (`0x003ab100`), the shader parameter; `(4, 4, 4, 0)` is written there at
+  `0x003abb10`-`0x003abb28` on the ordinary arm.
 - **The hull's gloss gap that remains** is brightness: the original's hull reads white, ours light grey. The live
   `directionalLight0Colour` is `(1.144, 1.091, 1.906)` in both frames and its direction `(0.577, 0.577, 0.577)`
   (Zone_1's `Sun direction`); where the colour comes from, and what ours feeds, is not compared. The original frame

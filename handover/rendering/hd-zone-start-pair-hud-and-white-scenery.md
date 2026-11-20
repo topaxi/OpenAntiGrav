@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd]
-updated: 2026-11-19
-summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 7.42 after the Zone frame light, bloom block and feedback; board glyph and hull light remain"
+updated: 2026-11-20
+summary: "HD Zone start pair (hd/zone-vineta-k-z5) at 7.27 after the hull probe tint; board glyph and a 2x hull brightness gap remain"
 ---
 
 # HD Zone start pair: what is left after the Zone frame's light and post chain
@@ -28,11 +28,13 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
   `--ticks 0` may be earlier than the original's moment; pinning it needs the
   countdown timer read in the same pause (`RaceManager +0x1958 - +0x1968`).
   A pair-timing question for the lead, not a board law. 1.32 grey.
-- **The hull's light in a Zone frame.** The original's Zone hull reads
-  `(60, 85, 98)` over the craft box, ours `(33, 56, 62)`: 1.92 grey. The hull
-  is not a Zone-surface chunk; whether `EnvSettings + 0x4b0` (cleared by the
-  Zone arm at `0x003ad8fc`) changes the hull's ambient source is the first
-  thing to read (zone-frame.md, "Open").
+- **The hull's light in a Zone frame: half read.** The hull's probe tint is twice
+  the stage's `Track.Base Colour Highlight` (wired; pair 7.42 -> 7.27, craft box
+  38.56 -> 33.58,
+  `docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`). The hull is still about
+  half as bright as the original's (left pod red 44 against 88). Ruled out: probe data
+  (live = Vineta K probe 210), SPU light, sun (0), tint, and the probe decode (the
+  non-Zone `hd/vineta-k` hull matches). Next reads on that page, "Still open".
 - **A pulse's history in the feedback term.** The resolve's feedback buffer is
   the zoom ring's history target; ours resolves against the frame's own
   quarter-res scene, so a damage pulse in a Zone race is not in the term.
@@ -60,6 +62,7 @@ three. By region after: sky 0.10, scenery 1.93, road and pads 1.50, the board
    expected).
 2. Read the countdown timer beside the pair's grab and re-time ours'
    `--ticks` if the moments differ (proposal to the lead; the pair is adopted).
-3. The hull: dump one Zone frame with `scripts/rpcs3-hd-zone-frame.py`, match
-   the hull draws' programs (`scripts/rsx_fp_match.py`) and read which ambient
-   variant they are.
+3. The hull's remaining factor of two: match unit 0's 64-byte heads (`0x0a780100`)
+   against `zoneship_faisar`'s textures, then the live program's tail past `@0x5f`,
+   then ours' scene target against `target-01920000.bin` (zone-hull-light.md, "Still
+   open"). Recipe: `HOOK_TEX_RE='0\.69804' scripts/rpcs3-hd-zone-frame.py --small 2500`.
