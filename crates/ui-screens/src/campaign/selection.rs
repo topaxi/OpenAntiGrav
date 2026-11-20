@@ -378,15 +378,26 @@ fn selector_outline(chooser: &Chooser, selected: Campaign) -> [Draw; 4] {
 /// rather than up/down.
 #[derive(Debug, Clone)]
 pub struct CampaignSelection {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     index: usize,
     chooser: Chooser,
 }
 
 impl CampaignSelection {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// On the list's first entry, the measured default.
     #[must_use]
     pub fn new(chooser: Chooser) -> Self {
-        Self { index: 0, chooser }
+        Self {
+            index: 0,
+            chooser,
+            roles: oag_ui::roles::Roles::default(),
+        }
     }
 
     /// Starts on `campaign` already selected - what a caller returning to
@@ -398,7 +409,11 @@ impl CampaignSelection {
         let index = campaign
             .index()
             .min(chooser.entries.len().saturating_sub(1));
-        Self { index, chooser }
+        Self {
+            index,
+            chooser,
+            roles: oag_ui::roles::Roles::default(),
+        }
     }
 
     #[must_use]
@@ -439,7 +454,7 @@ impl CampaignSelection {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         out

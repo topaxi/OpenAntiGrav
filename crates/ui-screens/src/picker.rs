@@ -180,6 +180,8 @@ impl Event {
 /// pose.
 #[derive(Debug, Clone)]
 pub struct Picker {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     kind: Kind,
     entries: Vec<Entry>,
     index: usize,
@@ -214,6 +216,11 @@ pub struct Picker {
 }
 
 impl Picker {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A picker over `entries`, opened on `selected` when that id is one of
     /// them and on the first otherwise, with `variant` chosen the same way
     /// among the selected entry's liveries.
@@ -228,6 +235,7 @@ impl Picker {
             .and_then(|id| entries.iter().position(|entry| entry.id == id))
             .unwrap_or(0);
         let mut out = Self {
+            roles: oag_ui::roles::Roles::default(),
             kind,
             entries,
             index,
@@ -443,7 +451,7 @@ impl Picker {
     pub fn update(&mut self, input: &mut Input) -> Vec<Event> {
         let mut out = Vec::new();
         if self.locked {
-            if input.take(Button::Circle) {
+            if self.roles.take_back(input) {
                 out.push(Event::Back);
             }
             return out;
@@ -473,7 +481,7 @@ impl Picker {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         out

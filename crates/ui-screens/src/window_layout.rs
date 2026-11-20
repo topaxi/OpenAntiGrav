@@ -146,6 +146,8 @@ pub enum Event {
 /// The screen: the layout being chosen and where the cursor is.
 #[derive(Debug, Clone)]
 pub struct Picker {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     labels: Labels,
     /// How many people the windows are dealt across: the join screen's seats.
     people: usize,
@@ -253,6 +255,11 @@ pub(crate) fn legible(ink: [f32; 4]) -> [f32; 4] {
 pub(crate) const MAX_ROWS: usize = 8;
 
 impl Picker {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A screen for `people` seated people, starting from `windows` (what was chosen last,
     /// or one window), over `monitors` (their names, in the platform's order) and with
     /// `fullscreen` as the mode now.
@@ -290,6 +297,7 @@ impl Picker {
             }
         }
         Self {
+            roles: oag_ui::roles::Roles::default(),
             labels,
             people,
             windows,
@@ -519,7 +527,7 @@ impl Picker {
         if input.take(Button::Right) {
             out.extend(self.adjust(row, 1));
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         if input.take(Button::Start) {

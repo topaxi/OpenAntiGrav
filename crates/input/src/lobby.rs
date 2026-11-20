@@ -68,6 +68,8 @@ pub struct Lobby<D = gilrs::GamepadId> {
     seats: Vec<Device<D>>,
     /// How many seats there are: the grid's, or fewer where a race box authored a head count.
     capacity: usize,
+    /// The button that leaves a seat, or the lobby: [`Self::set_back`].
+    back: Button,
 }
 
 impl<D> Default for Lobby<D> {
@@ -75,6 +77,7 @@ impl<D> Default for Lobby<D> {
         Self {
             seats: Vec::new(),
             capacity: oag_gameplay::MAX_PLAYERS,
+            back: Button::Circle,
         }
     }
 }
@@ -92,7 +95,14 @@ impl<D: Copy + PartialEq> Lobby<D> {
         Self {
             seats: Vec::new(),
             capacity: capacity.clamp(1, oag_gameplay::MAX_PLAYERS),
+            back: Button::Circle,
         }
+    }
+
+    /// The button [`Self::press`] reads as Back: the circle until a front end says otherwise
+    /// (`oag_title::Title::menu_buttons`).
+    pub fn set_back(&mut self, back: Button) {
+        self.back = back;
     }
 
     /// How many seats there are.
@@ -157,7 +167,7 @@ impl<D: Copy + PartialEq> Lobby<D> {
     }
 
     /// What `press` does. Several buttons at once are taken in the order Start,
-    /// Cross, Circle, so one press cannot join and leave in the same tick. **Start from a
+    /// Cross, Back, so one press cannot join and leave in the same tick. **Start from a
     /// device with no seat joins**, as it does on HD and Omega (`FE_GUEST_JOIN`, "PLAYER 2
     /// PRESS START TO JOIN"); from a seated device it begins.
     pub fn press(&mut self, press: Press<D>) -> Outcome {
@@ -166,8 +176,8 @@ impl<D: Copy + PartialEq> Lobby<D> {
         match seat {
             Some(_) if down(Button::Start) => Outcome::Start,
             None if down(Button::Cross) || down(Button::Start) => self.join(press.device),
-            Some(seat) if down(Button::Circle) => self.leave(seat),
-            None if down(Button::Circle) => Outcome::Back,
+            Some(seat) if down(self.back) => self.leave(seat),
+            None if down(self.back) => Outcome::Back,
             _ => Outcome::Nothing,
         }
     }

@@ -8,6 +8,7 @@ use oag_gameplay::input::Input;
 use oag_tables::race_campaign::{Cell, Mode};
 use oag_ui::language::StringTable;
 use oag_ui::pointer::Pointer;
+use oag_ui::roles::Roles;
 use oag_ui::screen::Image;
 
 /// `CellMode_Definition.xml` in miniature: the same container nesting and
@@ -357,7 +358,7 @@ fn triangle_opens_help_and_suspends_movement() {
 }
 
 /// The PS2 pressing opens `Cell Help` on the circle and leaves on the triangle
-/// (`CellSelection::with_buttons`); the PSP's own buttons do neither. Fails if the model reads
+/// (`CellSelection::with_roles`); the PSP's own buttons do neither. Fails if the model reads
 /// the PSP's buttons whatever it was told.
 #[test]
 fn the_ps2_pressing_leaves_on_triangle_and_opens_help_on_circle() {
@@ -369,7 +370,10 @@ fn the_ps2_pressing_leaves_on_triangle_and_opens_help_on_circle() {
     };
     let mut input = Input::new();
 
-    let mut ps2 = CellSelection::new(cells()).with_buttons(Button::Circle, Button::Triangle);
+    let mut ps2 = CellSelection::new(cells()).with_roles(Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
     press(&mut input, Button::Triangle);
     assert_eq!(ps2.update(&mut input), vec![Event::Back]);
     assert!(!ps2.help_open());
@@ -408,7 +412,10 @@ fn the_ps2_pressing_leaves_grid_selection_on_triangle_too() {
         }]
     };
     let mut input = Input::new();
-    let mut ps2 = GridSelection::new(grids()).with_back_button(Button::Triangle);
+    let mut ps2 = GridSelection::new(grids()).with_roles(Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
     press(&mut input, Button::Triangle);
     assert_eq!(ps2.update(&mut input), vec![Event::Back]);
     press(&mut input, Button::Circle);

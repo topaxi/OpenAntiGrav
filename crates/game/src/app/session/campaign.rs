@@ -193,7 +193,6 @@ impl Session {
                         campaign.flyers,
                         campaign.circuit_emblems,
                         custom,
-                        self.settings.controls.menu_back_value(),
                     );
                     stage.resume_selector(phases);
                     stage.set_medal_art(medal_art);
@@ -267,6 +266,13 @@ impl Session {
     /// One tick of an open campaign screen: its pad input, its pointer, and
     /// what came of either.
     pub(crate) fn tick_campaign(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        let Stage::Menu(stage) = &self.stage else {
+            return;
+        };
+        let Some(campaign) = stage.campaign.as_ref() else {
+            return;
+        };
+        let roles = self.roles_with_help(campaign.cell_help_button());
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
@@ -278,9 +284,18 @@ impl Session {
             return;
         }
         let mut events = match &mut campaign.screen {
-            Screen::Selection(model) => model.update(self.controls.buttons_mut()),
-            Screen::Grid(model) => model.update(self.controls.buttons_mut()),
-            Screen::Cell { model, .. } => model.update(self.controls.buttons_mut()),
+            Screen::Selection(model) => {
+                model.set_roles(roles);
+                model.update(self.controls.buttons_mut())
+            }
+            Screen::Grid(model) => {
+                model.set_roles(roles);
+                model.update(self.controls.buttons_mut())
+            }
+            Screen::Cell { model, .. } => {
+                model.set_roles(roles);
+                model.update(self.controls.buttons_mut())
+            }
         };
         events.extend(super::pointer::campaign_pointer(stage, pointer));
         for event in events {

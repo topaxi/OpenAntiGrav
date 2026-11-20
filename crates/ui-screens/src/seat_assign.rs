@@ -116,6 +116,8 @@ pub enum Event {
 /// The screen: who sits in which pane, who has confirmed, and what the pointer holds.
 #[derive(Debug, Clone)]
 pub struct SeatAssign {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     labels: Labels,
     windows: Vec<Pane>,
     /// The flat pane (panes counted across the windows from 0) each person sits in.
@@ -129,6 +131,11 @@ pub struct SeatAssign {
 }
 
 impl SeatAssign {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A screen for the people of `windows`' panes, one pane each, everybody confirmed.
     /// `pane_people` is who sits in each pane (a person per flat pane) as last time: used
     /// when it is a permutation of the people, else the join order (person `i` in pane `i`).
@@ -142,6 +149,7 @@ impl SeatAssign {
             }
         }
         Self {
+            roles: oag_ui::roles::Roles::default(),
             labels,
             windows,
             pane_of,
@@ -282,7 +290,7 @@ impl SeatAssign {
                 out.push(Event::Changed);
             }
         }
-        if has(Button::Circle) {
+        if has(self.roles.back) {
             out.push(Event::Back);
         }
         if has(Button::Cross) || has(Button::Start) {

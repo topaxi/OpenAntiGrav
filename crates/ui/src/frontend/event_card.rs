@@ -527,7 +527,7 @@ impl Frontend {
     /// turn the page.
     pub(super) fn update_event_card(&mut self, input: &mut Input) {
         for (pad, action) in [
-            (Button::Circle, Some(Button3::Back)),
+            (self.touch.roles.back, Some(Button3::Back)),
             (Button::Cross, Some(Button3::Launch)),
             (Button::Start, Some(Button3::Launch)),
             (Button::Square, Some(Button3::ChangeCraft)),

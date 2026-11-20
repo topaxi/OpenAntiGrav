@@ -33,6 +33,35 @@ pub fn button_of(prompt: Prompt) -> Button {
     }
 }
 
+/// The Back and Help buttons the front end reads on `title`'s `platform` pressing under `choice`,
+/// for a screen whose own `Redirect` opens Help on `authored_help` (`Button::Triangle` where it
+/// authors none). Every screen model that takes Back is handed this
+/// (`oag_ui::roles::Roles`); `oag_title::Title::menu_buttons` decides it.
+///
+/// An `authored_help` that is neither face button (a screen whose Help opens on the square) is kept
+/// as it is: Back does not displace it.
+#[must_use]
+pub fn roles(
+    title: &oag_title::Title,
+    platform: oag_disc::Platform,
+    choice: oag_title::prompts::MenuBack,
+    authored_help: Button,
+) -> oag_ui::roles::Roles {
+    let prompt = match authored_help {
+        Button::Circle => Prompt::Circle,
+        _ => Prompt::Triangle,
+    };
+    let buttons = title.menu_buttons(platform, choice, prompt);
+    oag_ui::roles::Roles {
+        back: button_of(buttons.back),
+        help: if matches!(authored_help, Button::Circle | Button::Triangle) {
+            button_of(buttons.help)
+        } else {
+            authored_help
+        },
+    }
+}
+
 /// The PromptFont code-name for a key's name as `oag_input::keys` spells it.
 fn key_glyph(name: &str) -> String {
     match name {

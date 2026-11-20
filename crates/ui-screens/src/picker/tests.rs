@@ -1198,3 +1198,17 @@ fn the_distance_row_prints_the_whole_number_and_dashes_for_zero() {
     assert_eq!(distance_text(5178.0), "5178");
     assert_eq!(distance_text(0.0), "--");
 }
+
+#[test]
+fn a_picker_backs_out_on_the_button_it_is_handed() {
+    let mut picker = Picker::new(Kind::Track, entries(), Some("03_Track"), None);
+    picker.set_roles(oag_ui::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    let mut input = Input::new();
+    press(&mut input, Button::Circle);
+    assert!(picker.update(&mut input).is_empty());
+    press(&mut input, Button::Triangle);
+    assert_eq!(picker.update(&mut input), vec![Event::Back]);
+}

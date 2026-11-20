@@ -900,9 +900,8 @@ impl Session {
                     return;
                 }
             },
-            // Applies now: the next tick's `Controls::set_face_swap` and the next frame's
-            // prompt substitution read it; a screen already open keeps the buttons it was
-            // built with until it is reopened.
+            // Applies now: each screen is handed the resolved buttons every tick
+            // (`Session::roles`) and the next frame's prompt substitution reads it.
             "controls.menu_back" => match oag_title::prompts::MenuBack::from_name(&text) {
                 Some(choice) => self.settings.controls.menu_back = choice.name().to_string(),
                 None => {

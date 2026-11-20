@@ -443,6 +443,7 @@ impl Session {
     /// came of either. A no-op unless `Stage::Race`'s own `endrace` is
     /// built.
     pub(crate) fn tick_endrace(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        let roles = self.roles();
         let mut confirmed_option = None;
         let mut navs = Vec::new();
         let voice: Option<oag_gameplay::cue::Cue>;
@@ -463,6 +464,7 @@ impl Session {
             endrace.tick_tournament_table();
             voice = endrace.voice_tick();
             if endrace.is_menu() {
+                endrace.menu_mut().set_roles(roles);
                 let mut events = endrace.menu_mut().update(self.controls.buttons_mut());
                 // No pointer-target list here: `EndRace Menu`'s own row
                 // rects need the layout `endrace` already owns, which

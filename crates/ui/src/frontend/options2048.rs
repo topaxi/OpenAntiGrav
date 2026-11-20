@@ -310,10 +310,9 @@ impl Frontend {
                 self.touch.audio_slider = 0;
             }
         }
-        if input.is_pressed(Button::Circle) {
-            input.consume_press(Button::Circle);
+        if self.touch.roles.take_back(input) {
             self.notes.push(format!(
-                "{current}: Circle pressed, returning to {} - chosen, no widget names this button",
+                "{current}: Back pressed, returning to {} - chosen, no widget names this button",
                 w2048::OPTIONS
             ));
             self.machine.fire(w2048::OPTIONS);

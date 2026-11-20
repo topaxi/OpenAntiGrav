@@ -651,6 +651,8 @@ pub struct Menu {
     /// Whether this tree is a title's pause screen over a parked race. See
     /// [`Self::set_pause_screen`].
     pause_screen: bool,
+    /// The button that backs out of a page. See [`Self::set_roles`].
+    roles: crate::roles::Roles,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -665,10 +667,15 @@ pub const DEFAULT_VISIBLE_ROWS: usize = 7;
 impl Menu {
     /// Marks this tree as a pause screen over a parked race. On its root page START closes the
     /// menus (the disc's `forward="start"` redirect resumes the race) instead of confirming a
-    /// row, and CIRCLE does nothing (`backward="none"`, a silent press, measured). ESCAPE, which
+    /// row, and Back does nothing (`backward="none"`, a silent press, measured). ESCAPE, which
     /// is not a button of the original, still backs out of it through [`Self::back`].
     pub fn set_pause_screen(&mut self, pause: bool) {
         self.pause_screen = pause;
+    }
+
+    /// The buttons this menu backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: crate::roles::Roles) {
+        self.roles = roles;
     }
 
     /// Opens a definition at its root page.
@@ -702,6 +709,7 @@ impl Menu {
             reset_glyph: None,
             square_actions: Vec::new(),
             pause_screen: false,
+            roles: crate::roles::Roles::default(),
         };
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
@@ -1113,7 +1121,7 @@ impl Menu {
         if input.take(Button::Square) {
             out.extend(self.reset());
         }
-        if input.take(Button::Circle) && !pause_root {
+        if self.roles.take_back(input) && !pause_root {
             out.extend(self.back());
         }
 

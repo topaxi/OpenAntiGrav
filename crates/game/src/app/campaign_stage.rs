@@ -173,8 +173,8 @@ pub(crate) struct CampaignStage {
     /// `docs/ui/campaign-screens.md`'s `Open` entry on why not the
     /// authored `Viewport`/`Animation` scroll timeline.
     cell_help: Option<oag_ui_screens::campaign::Layout>,
-    /// The buttons `Cell Selection` opens `Cell Help` on and leaves on, see [`cell_buttons`].
-    cell_buttons: (Button, Button),
+    /// The button the disc opens `Cell Help` on, see [`authored_cell_help`].
+    cell_help_button: Button,
     /// The front-end root's own `Confirm`/`Back` legend - `None` on a
     /// source whose `Skin.xml` this pass could not read at all (logged when
     /// that happens, see `crate::campaign::read_footer`).
@@ -263,44 +263,25 @@ pub(crate) struct CampaignStage {
     medal_art: oag_ui_screens::campaign::MedalArt,
 }
 
-/// The buttons `Cell Selection` opens `Cell Help` on and leaves on, as `(help, back)`, in the
-/// frame the screens read their input in.
-///
-/// Help is the one the screen's own `Redirect` to `Cell Help` authors: the PSP's
-/// `forward="triangle"`, the PS2's `forward="circle"`. Back is the pressing's own
-/// (`oag_title::FrontEnd::back_button`: the PS2 binds it to the triangle), or the player's
-/// choice (`oag_title::Title::menu_buttons`), which also moves the button it displaces. A
-/// screen that authors no such redirect keeps the PSP's triangle.
-fn cell_buttons(
-    cell_layout: &oag_ui_screens::campaign::Layout,
-    title: &oag_title::Title,
-    platform: oag_disc::Platform,
-    choice: oag_title::prompts::MenuBack,
-) -> (Button, Button) {
-    let authored_help = cell_layout
+/// The button the screen's own `Redirect` to `Cell Help` authors: the PSP's `forward="triangle"`,
+/// the PS2's `forward="circle"`. A screen that authors no such redirect keeps the PSP's triangle.
+/// `Session::roles_with_help` turns it into the screen's Back and Help buttons.
+fn authored_cell_help(cell_layout: &oag_ui_screens::campaign::Layout) -> Button {
+    cell_layout
         .screen
         .redirects
         .iter()
         .find(|redirect| redirect.goto.as_deref() == Some("Cell Help"))
         .and_then(|redirect| redirect.forward)
-        .unwrap_or(Button::Triangle);
-    let prompt = match authored_help {
-        Button::Circle => oag_title::prompts::Prompt::Circle,
-        _ => oag_title::prompts::Prompt::Triangle,
-    };
-    let buttons = title.menu_buttons(platform, choice, prompt);
-    let help = if matches!(authored_help, Button::Circle | Button::Triangle) {
-        crate::prompts::button_of(buttons.logical(buttons.help))
-    } else {
-        authored_help
-    };
-    (
-        help,
-        crate::prompts::button_of(buttons.logical(buttons.back)),
-    )
+        .unwrap_or(Button::Triangle)
 }
 
 impl CampaignStage {
+    /// The button the disc opens `Cell Help` on, for `Session::roles_with_help`.
+    pub(crate) fn cell_help_button(&self) -> Button {
+        self.cell_help_button
+    }
+
     #[allow(
         clippy::too_many_arguments,
         reason = "one call site (`session::campaign::open_campaign`), each a separate fact the \
@@ -324,10 +305,9 @@ impl CampaignStage {
         flyers: Option<crate::flyer::Flyers>,
         circuit_emblems: std::collections::HashMap<String, String>,
         custom: Option<crate::campaign::custom::Custom>,
-        menu_back: oag_title::prompts::MenuBack,
     ) -> Self {
         let title = title_ref.name.to_string();
-        let cell_buttons = cell_buttons(&cell_layout, title_ref, platform, menu_back);
+        let cell_help_button = authored_cell_help(&cell_layout);
         let ticker_tips = crate::records::ticker_tips(
             ticker.as_ref(),
             &strings,
@@ -368,7 +348,6 @@ impl CampaignStage {
                     })
                     .collect(),
             )
-            .with_back_button(cell_buttons.1)
             .with_tiers(tiers.clone());
             // A mod campaign on HD's screens has no `Campaign Selection` ahead
             // of it, and HD's grid pages one tier at a time.
@@ -393,7 +372,7 @@ impl CampaignStage {
             grid_range,
             active_campaign: None,
             cell_help,
-            cell_buttons,
+            cell_help_button,
             nav_legend,
             ticker,
             ticker_tips,
@@ -897,7 +876,6 @@ impl CampaignStage {
                 .collect(),
         )
         .with_per_page(1)
-        .with_back_button(self.cell_buttons.1)
         .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
         let mut model = model;
@@ -986,7 +964,6 @@ impl CampaignStage {
                     .map(to_campaign_difficulty)
             })
             .with_medal_art(self.medal_art.clone())
-            .with_buttons(self.cell_buttons.0, self.cell_buttons.1)
             .with_tiers(self.tiers.clone());
             match &self.custom {
                 Some(custom) => model
@@ -1170,7 +1147,6 @@ impl CampaignStage {
                 })
                 .collect(),
         )
-        .with_back_button(self.cell_buttons.1)
         .with_medal_art(self.medal_art.clone())
         .with_tiers(self.tiers.clone());
         if self.has_selection() {
@@ -1375,7 +1351,6 @@ mod tests {
             None,
             std::collections::HashMap::new(),
             None,
-            oag_title::prompts::MenuBack::Original,
         )
     }
 

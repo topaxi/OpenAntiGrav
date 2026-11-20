@@ -123,12 +123,14 @@ impl Session {
 
     /// One tick of the open screen: pad and pointer, and what came of either.
     pub(crate) fn tick_pure_chain(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        let roles = self.roles();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(open) = stage.pure_chain.as_mut() else {
             return;
         };
+        open.choice_mut().set_roles(roles);
         let mut events = open.choice_mut().update(self.controls.buttons_mut());
         events.extend(open.choice_mut().pointer(pointer, &stage.skin));
         open.choice_mut().follow(&stage.skin);

@@ -117,11 +117,8 @@ impl MenuBack {
 /// What a [`MenuBack`] choice means on one title and pressing: the one place that says which
 /// physical button backs and which opens Help, and how a screen that does not ask follows.
 ///
-/// A screen that takes its buttons as arguments (`Grid Selection`, `Cell Selection`) reads
-/// [`Self::back`] and [`Self::help`] through [`Self::logical`]. Every other screen leaves on the
-/// circle in its own code, so a choice of the triangle exchanges the two face buttons for the whole
-/// front end instead ([`Self::input_swap`]), and a footer glyph follows the choice
-/// ([`Self::glyph_swap`]).
+/// Every front-end screen that takes Back or Help reads [`Self::back`] and [`Self::help`]
+/// (`oag_ui::roles::Roles`); a footer glyph follows the choice ([`Self::glyph_swap`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MenuButtons {
     /// The physical button that leaves.
@@ -129,9 +126,6 @@ pub struct MenuButtons {
     /// The physical button that opens Help: the screen's authored one, or the button `back`
     /// displaced from it.
     pub help: Prompt,
-    /// Whether the front end reads the circle and the triangle exchanged, so a screen that leaves
-    /// on the circle in its own code leaves on the triangle.
-    pub input_swap: bool,
     /// Whether a footer's circle and triangle glyphs are drawn exchanged: the disc authors them
     /// for the original's button, and the choice is the other one.
     pub glyph_swap: bool,
@@ -154,19 +148,7 @@ impl MenuButtons {
             } else {
                 authored_help
             },
-            input_swap: choice == MenuBack::Triangle,
             glyph_swap: back != original,
-        }
-    }
-
-    /// `prompt` as the front end's code reads it: the circle and the triangle exchanged under
-    /// [`Self::input_swap`].
-    #[must_use]
-    pub fn logical(self, prompt: Prompt) -> Prompt {
-        if self.input_swap {
-            exchanged(prompt)
-        } else {
-            prompt
         }
     }
 }
@@ -194,8 +176,7 @@ mod tests {
                 let buttons = MenuButtons::resolve(original, MenuBack::Original, help);
                 assert_eq!(buttons.back, original);
                 assert_eq!(buttons.help, help);
-                assert!(!buttons.input_swap && !buttons.glyph_swap);
-                assert_eq!(buttons.logical(Prompt::Circle), Prompt::Circle);
+                assert!(!buttons.glyph_swap);
             }
         }
     }
@@ -207,7 +188,7 @@ mod tests {
             (circle.back, circle.help),
             (Prompt::Circle, Prompt::Triangle)
         );
-        assert!(!circle.input_swap && !circle.glyph_swap);
+        assert!(!circle.glyph_swap);
 
         let triangle = MenuButtons::resolve(Prompt::Circle, MenuBack::Triangle, Prompt::Triangle);
         assert_eq!(
@@ -215,10 +196,7 @@ mod tests {
             (Prompt::Triangle, Prompt::Circle),
             "the triangle's Help is displaced onto the circle"
         );
-        assert!(triangle.input_swap && triangle.glyph_swap);
-        // A screen reads the exchanged frame: physical triangle is its circle.
-        assert_eq!(triangle.logical(triangle.back), Prompt::Circle);
-        assert_eq!(triangle.logical(triangle.help), Prompt::Triangle);
+        assert!(triangle.glyph_swap);
     }
 
     #[test]
@@ -229,10 +207,6 @@ mod tests {
             (Prompt::Circle, Prompt::Triangle)
         );
         assert!(
-            !circle.input_swap,
-            "its other screens leave on the circle already"
-        );
-        assert!(
             circle.glyph_swap,
             "its footers are authored for the triangle"
         );
@@ -241,10 +215,6 @@ mod tests {
         assert_eq!(
             (triangle.back, triangle.help),
             (Prompt::Triangle, Prompt::Circle)
-        );
-        assert!(
-            triangle.input_swap,
-            "its other screens leave on the circle in code"
         );
         assert!(
             !triangle.glyph_swap,

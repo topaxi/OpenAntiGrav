@@ -306,8 +306,8 @@ pub struct GridSelection {
     medal_art: MedalArt,
     /// The campaign's medal tiers, see [`Self::with_tiers`].
     tiers: MedalTiers,
-    /// The button that leaves, see [`Self::with_back_button`].
-    back_button: Button,
+    /// The button that leaves, see [`Self::with_roles`].
+    roles: oag_ui::roles::Roles,
 }
 
 impl GridSelection {
@@ -322,16 +322,20 @@ impl GridSelection {
             swipe: hd::Swipe::default(),
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
-            back_button: Button::Circle,
+            roles: oag_ui::roles::Roles::default(),
         }
     }
 
-    /// Leaves on `back` in place of the circle: the pressing's own
-    /// (`oag_title::FrontEnd::back_button`).
+    /// Leaves on `roles.back` (`oag_title::Title::menu_buttons`).
     #[must_use]
-    pub fn with_back_button(mut self, back: Button) -> Self {
-        self.back_button = back;
+    pub fn with_roles(mut self, roles: oag_ui::roles::Roles) -> Self {
+        self.roles = roles;
         self
+    }
+
+    /// [`Self::with_roles`] on a screen already open.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
     }
 
     /// Draws the tier hexes' swatches in `tiers`' colours: a campaign mod's own list.
@@ -543,7 +547,7 @@ impl GridSelection {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(self.back_button) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         out
@@ -585,10 +589,9 @@ pub struct CellSelection {
     fixed_locks: Vec<Option<bool>>,
     index: usize,
     help_open: bool,
-    /// The button that opens `Cell Help`, see [`Self::with_buttons`].
-    help_button: Button,
-    /// The button that leaves for `Grid Selection`, see [`Self::with_buttons`].
-    back_button: Button,
+    /// The button that opens `Cell Help` and the one that leaves for `Grid Selection`, see
+    /// [`Self::with_roles`].
+    roles: oag_ui::roles::Roles,
     /// What a cell's medal hex is filled with, see [`Self::with_medal_art`].
     medal_art: MedalArt,
     /// The campaign's medal tiers, see [`Self::with_tiers`].
@@ -697,8 +700,7 @@ impl CellSelection {
             difficulties,
             fixed_locks: Vec::new(),
             help_open: false,
-            help_button: Button::Triangle,
-            back_button: Button::Circle,
+            roles: oag_ui::roles::Roles::default(),
             medal_art: MedalArt::default(),
             tiers: MedalTiers::default(),
             tier_targets: Vec::new(),
@@ -709,16 +711,20 @@ impl CellSelection {
         }
     }
 
-    /// Opens `Cell Help` on `help` and leaves on `back`, in place of the PSP's triangle and circle.
+    /// Opens `Cell Help` on `roles.help` and leaves on `roles.back`.
     ///
     /// The help button is the one the screen's own `Redirect` to `Cell Help` authors (the PSP's
-    /// `forward="triangle"`, the PS2's `forward="circle"`); the back button is the pressing's
-    /// (`oag_title::FrontEnd::back_button`).
+    /// `forward="triangle"`, the PS2's `forward="circle"`) unless Back takes it; the back button
+    /// is the pressing's or the player's (`oag_title::Title::menu_buttons`).
     #[must_use]
-    pub fn with_buttons(mut self, help: Button, back: Button) -> Self {
-        self.help_button = help;
-        self.back_button = back;
+    pub fn with_roles(mut self, roles: oag_ui::roles::Roles) -> Self {
+        self.roles = roles;
         self
+    }
+
+    /// [`Self::with_roles`] on a screen already open.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
     }
 
     /// Names, scores and colours the medals by `tiers`: a campaign mod's own list.
@@ -1150,7 +1156,7 @@ impl CellSelection {
             // `Cell Help` closes on any of cross, triangle and circle: its own three `Redirect`s,
             // the same on both pressings.
             let closed = [
-                self.help_button,
+                self.roles.help,
                 Button::Cross,
                 Button::Triangle,
                 Button::Circle,
@@ -1167,7 +1173,7 @@ impl CellSelection {
             input.take(Button::Right);
             return out;
         }
-        if input.take(self.help_button) {
+        if self.roles.take_help(input) {
             self.help_open = true;
             out.push(Event::Help);
             return out;
@@ -1187,7 +1193,7 @@ impl CellSelection {
         if input.take(Button::Cross) || input.take(Button::Start) {
             out.push(Event::Confirmed);
         }
-        if input.take(self.back_button) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         // `Square` is unbound on this screen in this build - nothing else

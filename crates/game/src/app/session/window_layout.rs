@@ -71,12 +71,14 @@ impl Session {
 
     /// One tick of the open screen: pad and keyboard, then the pointer.
     pub(crate) fn tick_window_layout(&mut self, pointer: &oag_ui::pointer::Pointer) {
+        let roles = self.roles();
         let Stage::Menu(stage) = &mut self.stage else {
             return;
         };
         let Some(open) = stage.layout.as_mut() else {
             return;
         };
+        open.screen_mut().set_roles(roles);
         let mut events = open.screen_mut().update(self.controls.buttons_mut());
         events.extend(open.screen_mut().pointer(pointer, &stage.skin));
         for event in events {

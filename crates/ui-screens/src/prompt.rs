@@ -195,6 +195,8 @@ pub struct Labels {
 /// text it is building will be used for. See this module's doc.
 #[derive(Debug, Clone)]
 pub struct Keyboard {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     labels: Labels,
     text: String,
     /// A live remark about what is currently typed - "this replaces the
@@ -212,6 +214,11 @@ pub struct Keyboard {
 }
 
 impl Keyboard {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A keyboard opened on `initial`, holding at most `limit` characters.
     ///
     /// `initial` is **not** filtered against [`KEYS`]: what a caller seeds it
@@ -229,6 +236,7 @@ impl Keyboard {
     #[must_use]
     pub fn with_keys(labels: Labels, initial: &str, limit: usize, keys: &'static str) -> Self {
         Self {
+            roles: oag_ui::roles::Roles::default(),
             labels,
             text: initial.chars().take(limit).collect(),
             note: None,
@@ -358,7 +366,7 @@ impl Keyboard {
         if input.take(Button::Square) {
             self.edit(Edit::Delete);
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             return self.cancel();
         }
         // Start accepts wherever the cursor is, the same shorthand
@@ -681,6 +689,8 @@ pub struct ConfirmLabels {
 /// buttons would have a `text()` that meant nothing half the time.
 #[derive(Debug, Clone)]
 pub struct Confirm {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     labels: ConfirmLabels,
     /// Which answer the cursor is on.
     yes: bool,
@@ -688,6 +698,11 @@ pub struct Confirm {
 }
 
 impl Confirm {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A question, opened on **no**.
     ///
     /// Ours, and deliberate: everything this is used for so far destroys
@@ -697,6 +712,7 @@ impl Confirm {
     #[must_use]
     pub fn new(labels: ConfirmLabels) -> Self {
         Self {
+            roles: oag_ui::roles::Roles::default(),
             labels,
             yes: false,
             navs: NavLog::default(),
@@ -708,6 +724,7 @@ impl Confirm {
     #[must_use]
     pub fn opened_on_yes(labels: ConfirmLabels) -> Self {
         Self {
+            roles: oag_ui::roles::Roles::default(),
             yes: true,
             ..Self::new(labels)
         }
@@ -750,7 +767,7 @@ impl Confirm {
                 });
             }
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             return self.answer(false);
         }
         if input.take(Button::Cross) || input.take(Button::Start) {

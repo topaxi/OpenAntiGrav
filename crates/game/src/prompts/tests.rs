@@ -182,11 +182,7 @@ fn the_choice_resolves_on_every_title_and_pressing() {
                 MenuButtons::resolve(original, MenuBack::Original, authored)
             );
             assert_eq!((kept.back, kept.help), (original, authored));
-            assert!(
-                !kept.input_swap && !kept.glyph_swap,
-                "{} {platform:?}",
-                title.name
-            );
+            assert!(!kept.glyph_swap, "{} {platform:?}", title.name);
             let circle = title.menu_buttons(platform, MenuBack::Circle, authored);
             assert_eq!(circle.back, Prompt::Circle, "{} {platform:?}", title.name);
             assert_eq!(circle.help, Prompt::Triangle, "{} {platform:?}", title.name);
@@ -198,7 +194,64 @@ fn the_choice_resolves_on_every_title_and_pressing() {
                 title.name
             );
             assert_eq!(triangle.help, Prompt::Circle, "{} {platform:?}", title.name);
-            assert!(triangle.input_swap);
         }
     }
+}
+
+/// The buttons a screen is handed (`crate::prompts::roles`), for every title and pressing under
+/// every choice: Pulse's PS2 backs on the triangle and helps on the circle, every other title and
+/// pressing the other way round; a choice moves Back and puts the button it displaced where Back
+/// was (`docs/ui/back-and-help.md`).
+#[test]
+fn the_roles_a_screen_is_handed_on_every_title_pressing_and_choice() {
+    use oag_disc::Platform;
+    use oag_title::prompts::MenuBack;
+    let (circle, triangle) = (Button::Circle, Button::Triangle);
+    let roles = |title: &oag_title::Title, platform, choice, help| {
+        let roles = super::roles(title, platform, choice, help);
+        (roles.back, roles.help)
+    };
+    for (choice, ps2, other) in [
+        (MenuBack::Original, (triangle, circle), (circle, triangle)),
+        (MenuBack::Circle, (circle, triangle), (circle, triangle)),
+        (MenuBack::Triangle, (triangle, circle), (triangle, circle)),
+    ] {
+        assert_eq!(
+            roles(oag_pulse::TITLE, Platform::Ps2, choice, circle),
+            ps2,
+            "Pulse PS2 {choice:?}"
+        );
+        for title in [
+            oag_pulse::TITLE,
+            oag_pure::TITLE,
+            oag_hd::TITLE,
+            oag_omega::TITLE,
+            oag_2048::TITLE,
+        ] {
+            for platform in [Platform::Psp, Platform::Ps3, Platform::Ps4, Platform::Vita] {
+                assert_eq!(
+                    roles(title, platform, choice, triangle),
+                    other,
+                    "{} {platform:?} {choice:?}",
+                    title.name
+                );
+            }
+        }
+        // Pure's PS2 pressing is not Pulse's: only Pulse binds `backward` to the triangle.
+        assert_eq!(
+            roles(oag_pure::TITLE, Platform::Ps2, choice, triangle),
+            other,
+            "Pure PS2 {choice:?}"
+        );
+    }
+    // A Help the disc authors on the square is not a face button Back displaces.
+    assert_eq!(
+        roles(
+            oag_pulse::TITLE,
+            Platform::Ps2,
+            MenuBack::Circle,
+            Button::Square
+        ),
+        (circle, Button::Square)
+    );
 }

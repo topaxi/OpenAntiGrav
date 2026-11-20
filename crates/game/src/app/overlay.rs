@@ -173,6 +173,15 @@ impl Prompt {
         }
     }
 
+    /// The buttons this prompt cancels on, see [`oag_ui::roles::Roles`].
+    pub(crate) fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        match &mut self.model {
+            Model::Keyboard(keyboard) => keyboard.set_roles(roles),
+            Model::TagEntry(tag_entry) => tag_entry.set_roles(roles),
+            Model::Confirm(confirm) => confirm.set_roles(roles),
+        }
+    }
+
     /// Consumes a tick of input. See [`Keyboard::update`] on why these are
     /// edges.
     pub(crate) fn update(&mut self, input: &mut Input) -> Outcome {

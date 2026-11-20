@@ -323,3 +323,22 @@ fn a_pushed_page_backs_out_to_the_page_under_it_and_a_jumped_one_closes() {
     assert!(menu.open("race"));
     assert_eq!(menu.back(), vec![MenuEvent::Closed]);
 }
+
+/// Back is the button the menu is handed (`Menu::set_roles`): on the PS2 the triangle, with the
+/// circle left over for Help, and a menu that was never handed any keeps the PSP's circle.
+#[test]
+fn a_page_backs_out_on_the_button_it_is_handed() {
+    let mut menu = Menu::new(built_in());
+    let main = menu.page().id.clone();
+    assert!(menu.push("race"));
+    press(&mut menu, &[Button::Triangle]);
+    assert_eq!(menu.page().id, "race", "the PSP's triangle is not Back");
+    menu.set_roles(crate::roles::Roles {
+        back: Button::Triangle,
+        help: Button::Circle,
+    });
+    press(&mut menu, &[Button::Circle]);
+    assert_eq!(menu.page().id, "race", "the circle is Help there");
+    press(&mut menu, &[Button::Triangle]);
+    assert_eq!(menu.page().id, main);
+}

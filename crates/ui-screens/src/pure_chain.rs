@@ -94,6 +94,8 @@ pub enum Event {
 /// The screen, and where its cursor and window are.
 #[derive(Debug, Clone)]
 pub struct Choice {
+    /// The buttons that back out and open help, see [`Self::set_roles`].
+    roles: oag_ui::roles::Roles,
     title: String,
     /// The distance between two rows in the PSP's 272-line grid.
     pitch: f32,
@@ -156,10 +158,16 @@ impl Layout {
 }
 
 impl Choice {
+    /// The buttons this screen backs out on, from `oag_title::Title::menu_buttons`.
+    pub fn set_roles(&mut self, roles: oag_ui::roles::Roles) {
+        self.roles = roles;
+    }
+
     /// A screen on `rows`, with the cursor on the first row.
     #[must_use]
     pub fn new(title: String, context: String, pitch: f32, rows: Vec<Row>) -> Self {
         Self {
+            roles: oag_ui::roles::Roles::default(),
             title,
             pitch,
             context,
@@ -225,7 +233,7 @@ impl Choice {
         if input.take(Button::Up) && self.move_by(-1) {
             out.push(Event::Moved);
         }
-        if input.take(Button::Circle) {
+        if self.roles.take_back(input) {
             out.push(Event::Back);
         }
         if (input.take(Button::Cross) || input.take(Button::Start))
