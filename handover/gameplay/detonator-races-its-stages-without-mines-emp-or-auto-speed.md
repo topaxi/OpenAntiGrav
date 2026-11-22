@@ -31,7 +31,7 @@ evidence), then start at "Next Steps".
 | 9 | Wire the cannon, score, destroyed count and percentage | simulation done; nothing drawn, no HUD, no end screen | `59215fc52` |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
-| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | open | |
+| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | RE done, ready to wire (bindings below; EMP, bomb-ahead and score feedback wait on 10 and a sim event stream) | |
 | 13 | End screen proper (score, percentage, stage rows) | open | |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
@@ -179,10 +179,39 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   Zone's start/increment law keyed on the stage?). Do not borrow Zone's law without the read.
   Wire through a `Title` data axis (`start.rs` ~l.668, `player_step.rs` ~l.228,
   `pilot_assist.rs` is Zone-gated: check). Ground-truth: a coasting craft reaches speed.
-- **12 HUD.** RE the widget bindings for mode 14, then `HudLayouts` gains a Detonator layout
-  (HD/Omega `/data/xml/detonator_hud.xml`, 2048 `Data\XML\Detonator_HUD.xml`), bound to the state
-  from phases 5-10; atlas `detonator_hud2` (`raceplay/src/hud.rs`). Files:
-  `crates/title/src/hud.rs`, `crates/{hd,2048,omega}/src/hud.rs`, `crates/hud`.
+- **12 HUD: bindings read, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
+  HD static, 50-82 per widget; 2048 and Omega checked: same widget names, layout and formats).
+  Wire it as a Detonator `HudLayouts` entry (`oag_title::HudLayouts` has no Detonator field today;
+  `oag_hd::hud::layouts::DETONATOR` and the `detonator_hud2.gtf` atlas row already exist,
+  `crates/hd/src/hud.rs`) and drop the "Detonator draws the time trial's" arm of
+  `oag_raceplay::hud::hud_layout` (`crates/raceplay/src/hud.rs` ~l.111). 2048 reads
+  `Data\XML\Detonator_HUD.xml` (same bytes) and has a second skin
+  `2048_hud/Detonator_HUD_HD.xml` (text only, no `detonator_hud2` frame); Omega's
+  `hud_detonatorweapons.xml` has an `<aImageModel>` typo on `EmpBarEffect`. Per widget, with the
+  state that exists on main (`C` = `oag_weapons::detonator::cannon::Cannon`, reached as
+  `World::detonator.cannon`; `RaceSim` accessors in `crates/raceplay/src/detonator.rs`):
+
+  | Widget | Shows | Format | Source on main | Status |
+  | --- | --- | --- | --- | --- |
+  | `DetonatorScore` | the score | `%07d`, white | `C.score` (`RaceSim::detonator_score`) | ready |
+  | `PulseBullets` | clip count | `%02d` | `C.clip` (0..15) | ready |
+  | `Bullet00`..`14` | `Bullet(14-j)` spent once volley `j` has fired | sprite state | `C.hits[2j] != 0` (the original reads 15 per-volley words next to `hits`; same meaning, 60) | ready |
+  | `Multi00`..`14` | `Multi(14-i)` lit once volley `i` hit; a streak award recolours its last 5/10/15 pips `0xff00eeff` | pip | `C.hits[2i] > 1 \|\| C.hits[2i+1] > 1`; awards from `C.awards` | ready |
+  | `PulseBonus` | the streak line `HUD_CHAIN_n - amount` (1000/3000/5000), held 2.0 s then faded 1.0 s | `%s - %d` | edge-detect `C.awards` (`first_five`, `second_five`, `ten`, `fifteen` go false to true); the timers are view state | ready (needs the language ids `HUD_CHAIN_5/10/15`) |
+  | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`, **hypothesis**: the original's `rm+0x2dee` counts start-line crossings from an unread start value (`detonator-hud.md`, "The stage counter") | wire, verify the first-crossing value |
+  | `DamageBar`, `DamageBarBg`, `ShieldBarText` | energy percent (white in mode 14) | `(int)pct` | the generic shield readout (`oag_hud::shield_bar`, `Readout::shield`) fed with the craft's energy pool | ready once the layout loads |
+  | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
+  | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | ready (phase 14's value) |
+  | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
+  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | **missing**: phase 10 (the charge counter and its pad writer) | blocked on 10 |
+  | `PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore` | **nothing on HD**: the controller never binds the first two, never reads the third and its banked-score text setter has no caller | - | do not draw `x%02d` or the `%04d` counter | skip |
+
+  Also from the page: the reload gauge `(1 - lockout/total) * 15` that `Detonator_UpdateHud`
+  computes feeds `0x0029d578`, a shader constant of the craft's own
+  `detonator_bulletgaugesegments` material (an ammo gauge on the hull, 55), not a HUD widget; the
+  HUD's `PulseBullets` reads `15` through the whole reload lockout. Open for this phase: the
+  `EmpBarEffect` shader constants, the bullet icons' per-state art (`0x0007f0a0`), and the
+  initial `rm+0x2dee`.
 - **13 End screen.** Read the mode-14 results branch (`ER_DETONATOR_SCORE`,
   `PERCENT_MINES_CLEARED`, stage reached); fill the grid in
   `crates/game/src/app/race_stage/endrace.rs` and `crates/ui-screens`; `just check-strings`.
