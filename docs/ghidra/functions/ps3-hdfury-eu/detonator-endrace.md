@@ -28,10 +28,10 @@ string reference and a load at instruction level; Omega's executable has the sam
 | 5 (`Grid0.5`, `Grid1.5`) | `ER_NUM_15_STREAKS` = `NUMBER OF 15 CHAINS` | `%d` | `rec+0x132c` (u16) | `rm+0x2dec` | 78 |
 | header (`Grid0.h`, `Grid1.h`) | `ER_DETONATOR_SCORE` = `TOTAL SCORE` | `%d` | `rec+0x1314` (int) | the score `rm+0x2df0` | 82 |
 | `Line1` | `ER_ZDETONATOR_COM` = `DETONATOR SESSION COMPLETE!` | none | the id, through the localising setter | none | 80 |
-| `RecValue` | `ER_NSR` = `NEW SCORE RECORD` | `%s %d` | `rec+0x1358` | the run's score when it beats the best, else the best | 72 |
+| `RecValue` | `ER_NSR` = `NEW SCORE RECORD` | `%s %d` | `rec+0x1358` | written only on a new record (`rec+0x1357 != 0`), the new score; the flag-clear path (`0x0022c03c`) is unread | 72 |
 
 `rec` is `screen+0xb34` = `RaceManager_GetInstance() + 0x1980`
-(`EndRaceResults_OnEnter`, `0x0022e3d0`: `addi r?, rm, 0x1980` stored at `screen+0xb34`), so
+(`EndRaceResults_OnEnter`, `0x0022e3d0`: the decompile stores `RaceManager_GetInstance() + 0x1980` at `screen+0xb34`; the store is `stw r9, 0xb34(r31)` at `0x0022e414`, found with `ps3-dform-scan.py --disp 0xb34`), so
 `rec+X` is `rm+0x1980+X`. The HUD stage `rm+0x2dee` is copied to `rec+0x1318` (`rm+0x2c98`) and **the
 filler never reads it**.
 
