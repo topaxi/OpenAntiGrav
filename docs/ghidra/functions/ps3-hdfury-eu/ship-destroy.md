@@ -12,7 +12,7 @@ TOC-relative load resolved against the function's own TOC (`0x008ad4d8` for ever
 function on this page, `scripts/ps3-toc.py toc`), the jump tables decoded by hand
 because Ghidra ends `Ship_SetState` at its `bctr` (`0x000e1ee8`) and decompiles
 none of the cases. The function really ends at `0x000e2ec4` (the next OPD function
-starts at `0x000e2ec8`). Live check: the section "Measured on RPCS3".
+starts at `0x000e2ec8`). Live check: not run, see "Measured on RPCS3: not run".
 
 **Question.** HD draws no wreck: `Looks::hull_wreck` is unread. What does a
 destroyed HD craft draw, which effects fire where and when, what the camera, HUD
@@ -151,6 +151,26 @@ Twins named here (rows in each binary's `names.tsv`):
 2048 and Omega also carry a second, 2048-native ship family (2048 `0x812c7e2c`,
 Omega `0x0176fe30`) that names `WO_SHIP_EXPLOSION_PLAYER`; which craft uses it is
 not read here.
+
+## Measured on RPCS3: not run
+
+2026-11-22, not reached. The host's RPCS3 is the packaged `rpcs3-bin 0.0.42-19777`
+(installed 2026-08-17); the 0.0.43-20574 build every HD save state since 2026-11-09
+was made on is no longer installed, so `emu-restore-state.sh` fails in
+`ppu_load_prx` (`Verification failed`), and a cold boot (`emu-hd-race-walk.sh`)
+never brings up the GDB stub (`rpcs3_gdb_proxy` connection refused on the lane's
+port). Everything above is static, cross-checked against the 2048 and Omega twins.
+
+**The read recipe**, for a build that boots: attach to a `serve` in a Racebox race
+with weapons on, write each opponent's shield (`ship+0x5fa0`, `ship+0x628c == 2`,
+crafts at `RaceManager+0xe8`) to `0.05`, hold `cross`, and poll per craft every
+change of `+0x5fa4`, of the live model `+0x6adc` against `+0x6ae0`/`+0x6ae4`, of
+the collider `*(ship+0x6944)+0x4cc` against `+0x6948`/`+0x694c` and of its
+`+0x70` byte, with the physics frame counter `*0x00992ce0 + 4` and the timers
+`+0x6a78`/`+0x6a88`. Rows 1, 6, 9, 11 and 12 predict: state 4 with `wreck` and
+`wreckcol` on one frame, state 5 about 18 frames later (0.3 s), state 6 once the
+time in state passes 6.0 with the wreck still, the pair byte `0` from then on, and
+the live model still `wreck`.
 
 ## Open
 
