@@ -620,6 +620,10 @@ pub struct SimSetup {
     /// and where its head draws while it charges. `None` for a hull that authors
     /// none or a version whose class id is unread.
     pub muzzles: Vec<Option<Vec3>>,
+    /// Slot 0's `cannon_flash_left` and `cannon_flash_right` locators in its hull's model space
+    /// (`load::muzzle::cannon_flash`), `[left, right]`: where Detonator's pulse cannon fires.
+    /// `[None, None]` off Detonator and for a hull that authors none.
+    pub cannon_flash: [Option<Vec3>; 2],
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
     /// [`ViewSetup::class_announcer`] can be triggered off the same edge without reaching into the
@@ -737,6 +741,9 @@ pub struct SimSetup {
     /// `None` off Detonator, and where the files are absent or unreadable, which lays no mines
     /// rather than invented ones.
     pub detonator: Option<oag_weapons::detonator::Layout>,
+    /// What Detonator's pads do on this title ([`oag_title::Detonator::pads`]); `None` keeps
+    /// every pad on its race behaviour.
+    pub detonator_pads: Option<oag_title::DetonatorPads>,
     /// Restricts which weapons a `Weapon Pad` may hand out to exactly this
     /// list, or does not restrict at all when empty - the same "empty is no
     /// override" convention [`Options::grid_teams`] uses.

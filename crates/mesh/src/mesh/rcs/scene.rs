@@ -169,11 +169,16 @@ pub fn build_scene_with(
         model_blob,
         Setup::Decode(textures, store, water),
         View::Main,
+        false,
     )
 }
 
 /// [`build_scene`], plus the behind-the-glass target's two models - see this
 /// module's doc. The report is the main view's.
+///
+/// `hide_pads` leaves out the chunks on a pad material that no pad node names, which the
+/// world-space pass otherwise draws (the speed pads of the four original circuits): for a race
+/// that draws its own pad model in their place.
 ///
 /// # Errors
 ///
@@ -185,14 +190,23 @@ pub fn build_scene_views(
     textures: Textures<'_>,
     store: SceneStore,
     water: Water,
+    hide_pads: bool,
 ) -> Result<(Model, BehindGlass, Report)> {
-    let (main, report) = build_scene_with(label, data, model_blob, textures, store, water)?;
+    let (main, report) = build_view(
+        label,
+        data,
+        model_blob,
+        Setup::Decode(textures, store, water),
+        View::Main,
+        hide_pads,
+    )?;
     if report.behind_glass == 0 {
         return Ok((main, BehindGlass::default(), report));
     }
     let group = |alternate_fog| -> Result<Option<Model>> {
         let view = View::BehindGlass { alternate_fog };
-        let (mut model, _) = build_view(label, data, model_blob, Setup::Copy(&main), view)?;
+        let (mut model, _) =
+            build_view(label, data, model_blob, Setup::Copy(&main), view, hide_pads)?;
         if model.draws.is_empty()
             && model.alpha_tested_draws.is_empty()
             && model.transparent_draws.is_empty()
@@ -229,7 +243,7 @@ pub fn build_reflection(
 ) -> Result<BehindGlass> {
     let group = |alternate_fog| -> Result<Option<Model>> {
         let view = View::Reflection { alternate_fog };
-        let (mut model, _) = build_view(label, data, model_blob, Setup::Copy(main), view)?;
+        let (mut model, _) = build_view(label, data, model_blob, Setup::Copy(main), view, false)?;
         if model.draws.is_empty()
             && model.alpha_tested_draws.is_empty()
             && model.transparent_draws.is_empty()
@@ -301,6 +315,7 @@ fn build_view(
     model_blob: &[u8],
     mut setup: Setup<'_>,
     view: View,
+    hide_pads: bool,
 ) -> Result<(Model, Report)> {
     let (mut out, mut report) = build_with_options(
         label,
@@ -328,6 +343,9 @@ fn build_view(
 
     for (chunk_index, chunk) in model.meshes.iter().enumerate() {
         if placed.contains(&chunk.hash) {
+            continue;
+        }
+        if hide_pads && pads::on_pad_material(&model, chunk) {
             continue;
         }
         if pads::emit_chunk(

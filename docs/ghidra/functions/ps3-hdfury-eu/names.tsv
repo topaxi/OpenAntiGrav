@@ -1135,3 +1135,15 @@
 0x0007e5a8	function	DetonatorHud_ShowBankedScore	62	detonator-hud.md
 0x00083318	function	Hud_RaiseWarning	65	detonator-hud.md
 
+
+# 2026-11-22 det-speed-emp-re: Detonator auto-speed, pads, EMP (detonator-speed.md, detonator-emp.md)
+0x0002bbc8	function	WeaponStats_ParseEmp	85	detonator-emp.md
+0x000d4078	function	Ship_TestWeaponPad	72	detonator-emp.md
+0x0012a3e8	function	WeaponManager_RollPickup	75	detonator-emp.md
+0x00112730	function	EMPManager_Fire	72	detonator-emp.md
+0x0013c430	function	EMP_Launch	68	detonator-emp.md
+0x0013b930	function	EMP_SweepSections	62	detonator-emp.md
+# Detonator end-of-race screen (2026-11-22, det-end-re). Static only.
+0x002234b0	function	EndRaceResults_FillDetonatorRows	80	detonator-endrace.md
+0x0022bdb8	function	EndRaceResults_ShowRecordNotice	72	detonator-endrace.md
+

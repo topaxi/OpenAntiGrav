@@ -39,6 +39,13 @@ pub(crate) struct Detonator {
     /// The pulse cannon's tuning, from the same table and the layout files; `None` where the
     /// table did not load, and then the craft has no cannon.
     pub(crate) cannon: Option<oag_weapons::detonator::cannon::Config>,
+    /// The EMP's tuning, from the table's `EMP` block; `None` where it authors none, and then
+    /// nothing charges or fires.
+    pub(crate) emp: Option<oag_weapons::detonator::emp::Config>,
+    /// A speed pad charges the EMP in place of its boost ([`oag_title::DetonatorPads`]).
+    pub(crate) speed_pads_charge: bool,
+    /// A weapon pad charges the EMP in place of a pickup.
+    pub(crate) weapon_pads_charge: bool,
 }
 
 /// How far above a section the probes start and how far below they reach.
@@ -223,6 +230,23 @@ impl crate::sim::RaceSim {
         Some(self.world.detonator.cannon.destroyed_mines)
     }
 
+    /// Bombs destroyed by the cannon or the EMP (`rm+0x6de40`), a count and not a percentage, or
+    /// `None` off Detonator.
+    #[must_use]
+    pub fn detonator_destroyed_bombs(&self) -> Option<u32> {
+        self.detonator.as_ref()?;
+        Some(self.world.detonator.cannon.destroyed_bombs)
+    }
+
+    /// The streak awards paid over the race: fives, tens, fifteens (`rm+0x2de8`, `+0x2dea`,
+    /// `+0x2dec`), or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_chains(&self) -> Option<[u16; 3]> {
+        self.detonator.as_ref()?;
+        let cannon = &self.world.detonator.cannon;
+        Some([cannon.fives, cannon.tens, cannon.fifteens])
+    }
+
     /// Whether the person in slot 0 may work the cannon this tick: flying it themselves,
     /// racing, and past the countdown. **Chosen, not measured:** the original's gate on the
     /// green light is unread.
@@ -234,10 +258,50 @@ impl crate::sim::RaceSim {
             && !oag_race::RaceState::thrust_gated(self.world.tick)
     }
 
+    /// The sounds this tick's [`Self::detonator_events`] make, queued as per-tick output
+    /// (ADR-0018): `PulseBullet_Init` plays `CANNON` on the firing craft once per round, so a
+    /// volley of two plays it twice; a round that dies on a wall plays `CANNONEXPLWALL` at the
+    /// round (`detonator-cannon.md`, "The round"); a mine that goes off plays `MINEEXPL` and a
+    /// bomb `BOMBEXPL` where it was (`detonator-mine.md`, `detonator-bomb.md`).
+    pub(crate) fn detonator_cues(&mut self) {
+        use oag_gameplay::cue::{Cue, CueEvent};
+        use oag_weapons::detonator::EventKind;
+        for event in &self.detonator_events {
+            match event.kind {
+                EventKind::Volley => {
+                    for _ in 0..2 {
+                        self.cues.push(CueEvent::new(Cue::Cannon, 0));
+                    }
+                }
+                EventKind::RoundWall { .. } => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::CannonHitWall, event.at));
+                }
+                EventKind::MineTouched
+                | EventKind::MineShot { .. }
+                | EventKind::MineChained { .. } => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::MineExplosion, event.at));
+                }
+                EventKind::BombTouched | EventKind::BombShot | EventKind::BombReplaced => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::BombExplosion, event.at));
+                }
+                EventKind::EmpReady => self.cues.push(CueEvent::new(Cue::EmpReady, 0)),
+                EventKind::EmpFull => self.cues.push(CueEvent::new(Cue::EmpFull, 0)),
+                // `EMP_Launch` plays `QUAKELAUNCH` on the firing ship's emitter.
+                EventKind::EmpLaunch => self.cues.push(CueEvent::new(Cue::QuakeLaunch, 0)),
+                // The kill's sound is unread (`detonator-emp.md`, "Open").
+                EventKind::MineEmped { .. } | EventKind::BombEmped => {}
+            }
+        }
+    }
+
     /// Lays the stages the player has reached: the opening one on the first tick, then one per
     /// lap, up to the fourteenth (`Detonator_UpdateRace` places while the new stage is at most
     /// `14`). Nothing happens off Detonator.
     pub(crate) fn advance_detonator(&mut self, inputs: &oag_gameplay::PlayerInputs) {
+        self.detonator_events.clear();
         let Some(detonator) = self.detonator.clone() else {
             return;
         };
@@ -253,7 +317,7 @@ impl crate::sim::RaceSim {
             };
             let count = usize::from(world.ship_count);
             let lane_width = detonator.layout.values.distance_offset_between_mines;
-            self.detonator_went = oag_weapons::detonator::step_contacts(
+            self.detonator_events = oag_weapons::detonator::step_contacts(
                 &mut world.detonator,
                 &detonator.survey,
                 lane_width,
@@ -274,7 +338,7 @@ impl crate::sim::RaceSim {
             let collision = &self.collision;
             let sweep = |from, to| cannon_sweep(collision, from, to);
             let (field, owner) = (&mut self.world.detonator, &self.world.ships[0]);
-            oag_weapons::detonator::cannon::step_cannon(
+            let fired = oag_weapons::detonator::cannon::step_cannon(
                 field,
                 &detonator.survey,
                 config,
@@ -283,21 +347,129 @@ impl crate::sim::RaceSim {
                 self.dt,
                 &sweep,
             );
+            self.detonator_events.extend(fired);
+        }
+        if let Some(config) = &detonator.emp {
+            self.advance_emp(&detonator, config, inputs);
         }
         let world = &mut self.world;
         let laps = world.race[world.primary_slot()].laps_completed();
         let stage = oag_race::Mode::detonator_stage(laps).min(STAGES_LAID);
         while u32::from(world.detonator.stages_laid) < stage {
             let old = u32::from(world.detonator.stages_laid);
-            oag_weapons::detonator::place_stage(
+            let replaced = oag_weapons::detonator::place_stage(
                 &mut world.detonator,
                 &detonator.survey,
                 &detonator.layout,
                 &mut world.rng,
                 old,
             );
+            self.detonator_events.extend(replaced);
+        }
+        self.detonator_cues();
+    }
+}
+
+impl crate::sim::RaceSim {
+    /// The EMP's tick: spend the charge a pad raised, fire on the EMP button, run the wave.
+    ///
+    /// The button is L1 (`Ship_UpdateCannonTrigger` reads the controls' `+0x1c`, live), which
+    /// the pad raises as [`oag_gameplay::input::Button::Flip`]. **Chosen:** a press edge; the
+    /// original's edge-or-level is the controls' and unread (`detonator-emp.md`, "Fire").
+    fn advance_emp(
+        &mut self,
+        detonator: &Detonator,
+        config: &oag_weapons::detonator::emp::Config,
+        inputs: &oag_gameplay::PlayerInputs,
+    ) {
+        use oag_weapons::detonator::emp;
+        let charged = emp::step_charge(&mut self.world.detonator, config);
+        self.detonator_events.extend(charged);
+        let pressed = inputs
+            .get(0)
+            .buttons
+            .is_pressed(oag_gameplay::input::Button::Flip);
+        if pressed && self.cannon_handed() {
+            let at = self.world.ships[0].physics.body.position;
+            let from = nearest_entry(&detonator.survey, at);
+            let fired = emp::fire(&mut self.world.detonator, &detonator.survey, config, from);
+            self.detonator_events.extend(fired);
+        }
+        let swept = emp::step_wave(
+            &mut self.world.detonator,
+            &detonator.survey,
+            config,
+            self.dt,
+        );
+        self.detonator_events.extend(swept);
+    }
+
+    /// Detonator's auto-speed target for `slot` this tick, or `None` off Detonator. Steps the
+    /// ramp once a tick for the player craft, then reads [`Self::detonator_speed_target`]; any
+    /// other slot flies the whole target.
+    pub(crate) fn detonator_auto_speed(&mut self, slot: usize) -> Option<f32> {
+        self.detonator.as_ref()?;
+        self.zone?;
+        if slot != self.world.primary_slot() {
+            return Some(self.unramped_target());
+        }
+        let ramp = oag_weapons::detonator::emp::step_ramp(&mut self.world.detonator.ramp, self.dt);
+        Some(ramp * self.unramped_target())
+    }
+
+    /// The engine target the player craft flies at, or `None` off Detonator or without the
+    /// `<Zone>` numbers: Zone's `start + increment * n` with the Detonator stage as `n` (`0` on
+    /// lap 1, then the HUD stage `2..14`), times the ramp as it stands
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`). The craft adds the shared
+    /// tail (the doubling) on top.
+    #[must_use]
+    pub fn detonator_speed_target(&self) -> Option<f32> {
+        self.detonator.as_ref()?;
+        self.zone?;
+        let r = self.world.detonator.ramp;
+        let ramp = if r >= 1.0 {
+            1.0
+        } else {
+            oag_weapons::detonator::emp::ramp_of(r)
+        };
+        Some(ramp * self.unramped_target())
+    }
+
+    fn unramped_target(&self) -> f32 {
+        let Some(zone) = self.zone else {
+            return 0.0;
+        };
+        let stage = u32::from(self.world.detonator.stages_laid);
+        let n = if stage <= 1 {
+            0
+        } else {
+            stage.min(STAGES_LAID)
+        };
+        oag_race::zone::thrust(zone.start, zone.increment, n as u16)
+    }
+
+    /// A pad entry by `slot` that charges the EMP: raises the charge flag the next EMP tick
+    /// spends. Only the player craft charges (`Detonator_UpdateRace` reads its own ship).
+    pub(crate) fn charge_emp(&mut self, slot: usize) {
+        if slot == self.world.primary_slot() {
+            self.world.detonator.emp.pending = true;
         }
     }
+}
+
+/// The survey entry nearest `at`: where the EMP's wave starts.
+fn nearest_entry(survey: &Survey, at: Vec3) -> u16 {
+    survey
+        .entries
+        .iter()
+        .enumerate()
+        .min_by(|(_, a), (_, b)| {
+            (a.centre - at)
+                .length_squared()
+                .total_cmp(&(b.centre - at).length_squared())
+        })
+        .and_then(|(index, _)| u16::try_from(index).ok())
+        .unwrap_or(0)
 }
 
 /// What a round's segment meets in the track: a floor to ride, a wall to bounce off, or nothing.
@@ -326,3 +498,44 @@ fn cannon_sweep(collision: &CollisionWorld, from: Vec3, to: Vec3) -> Sweep {
 
 /// The last stage that lays objects.
 const STAGES_LAID: u32 = 14;
+
+impl crate::sim::RaceSim {
+    /// The pulse cannon's state, or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_cannon(&self) -> Option<&oag_weapons::detonator::cannon::Cannon> {
+        self.detonator.as_ref()?;
+        Some(&self.world.detonator.cannon)
+    }
+
+    /// The EMP's charge and whether it has reached the threshold the EMP fires at, or `None`
+    /// off Detonator. The HUD's `Emp_0..7` pips and `EmpReady` read them.
+    #[must_use]
+    pub fn detonator_emp(&self) -> Option<(u32, bool)> {
+        let detonator = self.detonator.as_ref()?;
+        let emp = &self.world.detonator.emp;
+        Some((
+            emp.charge,
+            detonator
+                .emp
+                .as_ref()
+                .is_some_and(|config| emp.ready(config)),
+        ))
+    }
+
+    /// The EMP's gauge, `0..=1` (`craft+0x7da0`), or `None` off Detonator: what the HUD's
+    /// `EmpBarEffect` would read, had the layout reader a model for it.
+    #[must_use]
+    pub fn detonator_emp_gauge(&self) -> Option<f32> {
+        self.detonator.as_ref()?;
+        Some(self.world.detonator.emp.gauge)
+    }
+
+    /// The stage the HUD counts: stages laid, which is `1` at the opening stage and one more per
+    /// lap up to the fourteenth (`detonator-hud.md`, "The stage counter"), or `None` off
+    /// Detonator.
+    #[must_use]
+    pub fn detonator_stage(&self) -> Option<u32> {
+        self.detonator.as_ref()?;
+        Some(u32::from(self.world.detonator.stages_laid).clamp(1, STAGES_LAID))
+    }
+}

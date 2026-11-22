@@ -32,6 +32,7 @@ use oag_core::math::Vec3;
 use oag_tables::detonator_layout::{GamePlayValues, PatternFile, Scoring};
 
 pub mod cannon;
+pub mod emp;
 
 /// Mines the pool holds: `MineManager`'s capacity in Detonator.
 pub const MAX_MINES: usize = 200;
@@ -124,6 +125,11 @@ pub struct Field {
     pub bomb_hits: [u8; MAX_BOMBS],
     /// The pulse cannon and its score.
     pub cannon: cannon::Cannon,
+    /// The EMP: the pads' charge, the gauge and the wave.
+    pub emp: emp::Emp,
+    /// The player craft's auto-speed ramp (`craft+0x2d4`), `0` to `1`, zeroed by a rescue
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`, "The ramp and the rescue").
+    pub ramp: f32,
 }
 
 impl Default for Field {
@@ -149,13 +155,19 @@ impl Field {
             live_bombs: 0,
             bomb_hits: [0; MAX_BOMBS],
             cannon: cannon::Cannon::new(),
+            emp: emp::Emp::new(),
+            ramp: 0.0,
         }
     }
 
     /// Whether nothing was ever laid.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.stages_laid == 0 && self.live_mines == 0 && self.live_bombs == 0 && !self.cannon.armed
+        self.stages_laid == 0
+            && self.live_mines == 0
+            && self.live_bombs == 0
+            && !self.cannon.armed
+            && !self.emp.armed
     }
 
     /// Removes mine `index`, filling its place with the last one.
@@ -202,17 +214,27 @@ struct Tally {
 /// Lays stage `old_stage + 1`'s objects (`old_stage` is `0` for the opening stage).
 ///
 /// `Detonator_PlaceStageObjects(rm, oldStage)`: the groups, then single mines up to the stage's
-/// count, then one bomb.
+/// count, then one bomb. Returns the bombs the step set off.
 pub fn place_stage(
     field: &mut Field,
     survey: &Survey,
     layout: &Layout,
     rng: &mut Rng,
     old_stage: u32,
-) {
+) -> Vec<Event> {
     field.stages_laid = u8::try_from(old_stage + 1).unwrap_or(u8::MAX);
     // `BombManager_DetonateAll`: the stage step sets off every live bomb harmlessly before the
     // new one is laid (`detonator-bomb.md`, "One bomb at a time").
+    let lane = layout.values.distance_offset_between_mines;
+    let replaced: Vec<Event> = field
+        .live_bombs()
+        .iter()
+        .filter_map(|bomb| survey.point(bomb, lane))
+        .map(|(at, _)| Event {
+            kind: EventKind::BombReplaced,
+            at,
+        })
+        .collect();
     field.live_bombs = 0;
     field.bomb_hits = [0; MAX_BOMBS];
     for mine in &mut field.mines[..usize::from(field.live_mines)] {
@@ -220,10 +242,10 @@ pub fn place_stage(
     }
     let total = survey.entries.len();
     let Some(count) = layout.values.mine_count(old_stage as usize + 1) else {
-        return;
+        return replaced;
     };
     if total == 0 {
-        return;
+        return replaced;
     }
     let mut tally = Tally {
         placed_this_call: 0,
@@ -353,6 +375,7 @@ pub fn place_stage(
             &[1],
         );
     }
+    replaced
 }
 
 /// The retry's own test: the lane array read at index `lane` as it stands, not at
@@ -503,15 +526,58 @@ impl Contact {
     }
 }
 
-/// What went off this tick, for the effects and sounds.
+/// What happened to a laid object or a round this tick, for the effects and sounds a view plays.
+/// Out of the tick, never state: the simulation reads none of it back.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Went {
-    /// A bomb, else a mine.
-    pub bomb: bool,
-    /// Where.
+pub struct Event {
+    /// What happened.
+    pub kind: EventKind,
+    /// Where, in the world.
     pub at: Vec3,
-    /// The craft slot that touched it.
-    pub slot: usize,
+}
+
+/// The things [`Event`] reports. Each names the original's effect or sound it stands behind in
+/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-{mine,bomb,cannon}.md`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EventKind {
+    /// A craft ran into a mine, which the contact darkens first: always the dark explosion.
+    MineTouched,
+    /// A craft ran into a bomb.
+    BombTouched,
+    /// A cannon round hit a mine; `live` is whether the mine was laid this stage.
+    MineShot {
+        /// Laid this stage, and not yet darkened.
+        live: bool,
+    },
+    /// A destroyed bomb's chain reaction set a mine off; `live` as for [`Self::MineShot`].
+    MineChained {
+        /// Laid this stage, and not yet darkened.
+        live: bool,
+    },
+    /// A cannon destroyed a bomb with its last hit.
+    BombShot,
+    /// The stage step set a bomb off harmlessly before laying the new one.
+    BombReplaced,
+    /// A cannon round died on a wall, the wall's unit normal.
+    RoundWall {
+        /// The wall's unit normal.
+        normal: Vec3,
+    },
+    /// The cannon fired a volley, at the craft that fired it.
+    Volley,
+    /// The charge reached the EMP's threshold: the `EMPREADY` announcer line.
+    EmpReady,
+    /// The gauge filled: the `EMPFULL` announcer line.
+    EmpFull,
+    /// The EMP fired, at the survey entry its wave starts from: `QUAKELAUNCH`.
+    EmpLaunch,
+    /// The EMP's wave cleared a mine; `live` as for [`Self::MineShot`].
+    MineEmped {
+        /// Laid this stage, and not yet darkened.
+        live: bool,
+    },
+    /// The EMP's wave cleared a bomb.
+    BombEmped,
 }
 
 /// Sets off every mine and bomb a craft is touching, and removes them.
@@ -529,7 +595,7 @@ pub fn step_contacts<S: crate::Craft>(
     contact: &Contact,
     ships: &mut [S],
     rules: oag_physics::DamageRules,
-) -> Vec<Went> {
+) -> Vec<Event> {
     let mut went = Vec::new();
 
     let mut i = 0;
@@ -559,10 +625,9 @@ pub fn step_contacts<S: crate::Craft>(
             );
             ship.physics_mut().body.linear_velocity *= mine.velocity_reduction;
         }
-        went.push(Went {
-            bomb: false,
+        went.push(Event {
+            kind: EventKind::MineTouched,
             at,
-            slot,
         });
         field.remove_mine(i);
     }
@@ -597,10 +662,9 @@ pub fn step_contacts<S: crate::Craft>(
                 );
             }
         }
-        went.push(Went {
-            bomb: true,
+        went.push(Event {
+            kind: EventKind::BombTouched,
             at,
-            slot,
         });
         field.remove_bomb(i);
     }

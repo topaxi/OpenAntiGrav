@@ -69,6 +69,24 @@ pub fn named_class_world_transforms<'a>(
         .collect()
 }
 
+/// A left/right pair of one class's locators in model space, `[left, right]`, sorted the way HD's
+/// `FUN_002d8ec0` sorts the `cannon_flash` and `wingtip` nodes: a lowercased name containing
+/// `left` is the left one, any other name the right. A second node on the same side replaces the
+/// first, as the original's store does. A side the file authors none for is `None`; so is both
+/// sides of a blob that is not a `.vex`.
+#[must_use]
+pub fn left_right_world_transforms(data: &[u8], class_id: u32) -> [Option<[f32; 16]>; 2] {
+    let mut out = [None, None];
+    let Ok(nodes) = super::nodes(data) else {
+        return out;
+    };
+    for (name, matrix) in named_class_world_transforms(data, &nodes, class_id) {
+        let left = name.is_some_and(|name| name.to_ascii_lowercase().contains("left"));
+        out[usize::from(!left)] = Some(matrix);
+    }
+    out
+}
+
 /// One step of a node's ancestry, node first.
 #[derive(Debug, Clone, PartialEq)]
 enum Link {

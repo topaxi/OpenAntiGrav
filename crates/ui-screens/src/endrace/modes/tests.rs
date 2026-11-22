@@ -567,3 +567,38 @@ fn the_third_column_counts_boosts_per_lap_and_totals_them() {
     let values: Vec<String> = column(&partial).into_iter().map(|(_, text)| text).collect();
     assert_eq!(values, ["6", "10"], "a lap with no count leaves no total");
 }
+
+#[test]
+fn the_detonator_results_name_the_ids_their_screen_speaks() {
+    let hd = DetonatorResults {
+        stage: 4,
+        mines_percent: 12.4,
+        bombs: 3,
+        chains: [2, 1, 0],
+        score: 41_250,
+    };
+    for (id, _) in hd.rows() {
+        assert!(DetonatorResults::IDS.contains(&id), "{id}");
+    }
+    assert!(DetonatorResults::IDS.contains(&DetonatorResults::SCORE_LABEL));
+}
+
+#[test]
+fn two_thousand_forty_eights_list_is_four_bare_rows_under_its_own_score_label() {
+    let rows = Detonator2048Results {
+        stage: 5,
+        mines_percent: 12.4,
+        bombs: 3,
+        score: 41_250,
+    }
+    .rows();
+    assert_eq!(
+        rows,
+        [
+            ("ER_DETONATOR_STAGE", "5".to_string()),
+            ("PERCENT_MINES_CLEARED", "12.4%".to_string()),
+            ("PERCENT_BOMBS_CLEARED", "3".to_string()),
+            ("IG_HUD_SCORE", "41250".to_string()),
+        ]
+    );
+}

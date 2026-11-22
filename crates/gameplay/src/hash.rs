@@ -138,6 +138,8 @@ fn write_detonator(hasher: &mut StateHasher, field: &oag_weapons::detonator::Fie
         live_bombs,
         bomb_hits,
         cannon,
+        emp,
+        ramp,
     } = field;
     hasher.write_u8(*stages_laid);
     hasher.write_u32(u32::from(*live_mines));
@@ -154,6 +156,41 @@ fn write_detonator(hasher: &mut StateHasher, field: &oag_weapons::detonator::Fie
             hasher.write_u8(*hit);
         }
         write_cannon(hasher, cannon);
+    }
+    // The EMP and the auto-speed ramp only where the race armed an EMP.
+    if emp.armed {
+        hasher.write_f32(*ramp);
+        write_emp(hasher, emp);
+    }
+}
+
+fn write_emp(hasher: &mut StateHasher, emp: &oag_weapons::detonator::emp::Emp) {
+    let oag_weapons::detonator::emp::Emp {
+        armed: _,
+        pending,
+        charge,
+        gauge,
+        ready_armed,
+        full_armed,
+        weapon_pad,
+        wave,
+    } = emp;
+    hasher.write_u8(u8::from(*pending) | u8::from(*ready_armed) << 1 | u8::from(*full_armed) << 2);
+    hasher.write_u32(*charge);
+    hasher.write_f32(*gauge);
+    hasher.write_u32(weapon_pad.map_or(u32::MAX, u32::from));
+    let oag_weapons::detonator::emp::Wave {
+        live,
+        from,
+        reach,
+        swept,
+        age,
+    } = wave;
+    if *live {
+        hasher.write_u32(u32::from(*from));
+        hasher.write_f32(*reach);
+        hasher.write_f32(*swept);
+        hasher.write_f32(*age);
     }
 }
 
@@ -177,6 +214,9 @@ fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::canno
         destroyed_mines,
         destroyed_bombs,
         held_ticks,
+        fives,
+        tens,
+        fifteens,
     } = cannon;
     hasher.write_u8(*clip);
     hasher.write_f32(*trigger);
@@ -231,6 +271,9 @@ fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::canno
     hasher.write_u32(*destroyed_mines);
     hasher.write_u32(*destroyed_bombs);
     hasher.write_u32(*held_ticks);
+    hasher.write_u32(u32::from(*fives));
+    hasher.write_u32(u32::from(*tens));
+    hasher.write_u32(u32::from(*fifteens));
 }
 
 fn write_placed(hasher: &mut StateHasher, placed: &oag_weapons::detonator::Placed) {
@@ -981,6 +1024,43 @@ mod tests {
         assert_ne!(one, hash_world(&world));
     }
 
+    /// The EMP's charge, gauge, ramp and wave are simulation state where the race armed an EMP,
+    /// and move nothing where it did not: a Zone or race world with a charge flag left unspent
+    /// hashes as it always did.
+    #[test]
+    fn the_emp_moves_the_hash_only_where_detonator_armed_it() {
+        use oag_weapons::detonator::emp;
+        let mut world = World::new(1);
+        let empty = hash_world(&world);
+        world.detonator.ramp = 0.5;
+        world.detonator.emp.charge = 3;
+        assert_eq!(
+            empty,
+            hash_world(&world),
+            "an unarmed EMP is not in the hash"
+        );
+        world.detonator.ramp = 0.0;
+        world.detonator.emp.charge = 0;
+        let config = emp::Config {
+            lo: 4,
+            hi: 8,
+            min_distance: 0.25,
+            max_distance: 2.0,
+            wave_time: 1.0,
+            lane_width: 3.5,
+            scoring: oag_tables::detonator_layout::Scoring::default(),
+        };
+        emp::step_charge(&mut world.detonator, &config);
+        let armed = hash_world(&world);
+        assert_ne!(empty, armed, "an armed EMP is a state");
+        world.detonator.emp.pending = true;
+        emp::step_charge(&mut world.detonator, &config);
+        let charged = hash_world(&world);
+        assert_ne!(armed, charged, "a charge moves it");
+        world.detonator.ramp = 1.0;
+        assert_ne!(charged, hash_world(&world), "the ramp moves it");
+    }
+
     /// A round the pulse cannon fired is simulation state, a cannon nobody armed hashes as the
     /// empty field always did, and the same shot twice is the same state.
     #[test]
@@ -997,6 +1077,7 @@ mod tests {
             lockout_empty: 0.75,
             lane_width: 3.5,
             scoring: oag_tables::detonator_layout::Scoring::default(),
+            muzzles: [None, None],
         };
         let fire = |world: &mut World, held: bool| {
             let owner = world.ships[0];

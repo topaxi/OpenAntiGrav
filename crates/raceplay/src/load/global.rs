@@ -146,7 +146,9 @@ pub(super) fn resolve(
         }
     };
 
-    let zone = if options.mode == Mode::Zone {
+    // Every mode on the Zone mask runs the auto-speed branch: Detonator with its stage as the
+    // count (`docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`).
+    let zone = if options.mode.on_zone_mask() {
         match global.as_ref() {
             Some(global) => report.push(format!(
                 "<Zone>: start {}, increment {} per zone, recharge {}",

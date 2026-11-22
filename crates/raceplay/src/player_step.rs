@@ -111,7 +111,12 @@ impl RaceSim {
             self.autopilot_controls(slot)
         } else {
             self.release_autopilot(slot);
-            let snapshot = if self.flip_law.is_some() {
+            // Detonator's L1 is the EMP button, so it reads as that alone, as the flip's does.
+            let emp_on_l1 = self
+                .detonator
+                .as_ref()
+                .is_some_and(|detonator| detonator.emp.is_some());
+            let snapshot = if self.flip_law.is_some() || emp_on_l1 {
                 snapshot.shoulder_flips()
             } else {
                 *snapshot
@@ -225,12 +230,15 @@ impl Race {
         // step, from the zone the last tick left behind, because that is the
         // order the original runs in: `Zone_Update` assigns the counter into the
         // craft and `Ship_UpdateEngine` reads it on the following craft update.
-        let auto_speed = self.core.sim.zone.map(|zone| {
-            oag_race::zone::thrust(
-                zone.start,
-                zone.increment,
-                self.core.sim.world.race[slot].zone,
-            )
+        // Detonator runs the same branch with its stage as the count, and a ramp.
+        let auto_speed = self.core.sim.detonator_auto_speed(slot).or_else(|| {
+            self.core.sim.zone.map(|zone| {
+                oag_race::zone::thrust(
+                    zone.start,
+                    zone.increment,
+                    self.core.sim.world.race[slot].zone,
+                )
+            })
         });
         let before = self.core.sim.world.ships[slot].physics.body.position;
         // Step 15's input, measured before the step because that is when the
@@ -545,6 +553,11 @@ impl Race {
         // release: a craft that has not reached the line holds nothing.
         if outcome.lap_completed || outcome.first_crossing {
             self.core.sim.grant_free_turbo(slot);
+            // Detonator's weapon-pad memory (`ship+0x7960`) is cleared on every forward
+            // crossing (`Craft_UpdateLapProgress`, `detonator-emp.md`, "Weapon pads").
+            if slot == self.core.sim.world.primary_slot() {
+                self.core.sim.world.detonator.emp.weapon_pad = None;
+            }
         }
         #[cfg(feature = "view")]
         self.core.lending_cues(|core, cues| {

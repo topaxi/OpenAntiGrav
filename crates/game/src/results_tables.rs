@@ -11,8 +11,34 @@
 
 use oag_raceplay::scoreboard::Board;
 use oag_ui_screens::endrace::{
-    FieldRow, FieldScore, Headline, LapSplit, PeopleResults, PersonName, PersonRow, Results,
+    DetonatorResults, FieldRow, FieldScore, Headline, LapSplit, PeopleResults, PersonName,
+    PersonRow, Results,
 };
+
+/// A Detonator run's rows off the race's own state, `None` where the race has no Detonator field.
+///
+/// The stage is the **scoreboard row's laps completed**, not the HUD's stage and not the
+/// observation's: a destroyed run keeps `lap - 1` (its row has no finish tick) where a finish pads
+/// to the target, so stage 5 reads `4 / 14` and a finish `14 / 14`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The stage row is laps
+/// completed"). With no board the craft's own lap counter stands in.
+#[must_use]
+pub fn detonator_results(
+    sim: &oag_raceplay::RaceSim,
+    board: Option<&Board>,
+) -> Option<DetonatorResults> {
+    let laps = board.and_then(Board::player).map_or_else(
+        || sim.world.ships[0].standing.lap.saturating_sub(1),
+        |row| row.laps_completed,
+    );
+    Some(DetonatorResults {
+        stage: laps,
+        mines_percent: sim.detonator_percentage()?,
+        bombs: sim.detonator_destroyed_bombs()?,
+        chains: sim.detonator_chains()?,
+        score: sim.detonator_score()?,
+    })
+}
 
 /// Wipeout HD/Fury's whole field, ordered by place - the same feed
 /// `crate::scoreboard::Overlay` draws when no `EndRace_Definition.xml` is read at

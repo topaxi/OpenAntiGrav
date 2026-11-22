@@ -42,6 +42,7 @@ fn config() -> Config {
             bomb_increment: 500,
             ..Scoring::default()
         },
+        muzzles: [None, None],
     }
 }
 
@@ -88,6 +89,15 @@ fn field_with(mines: &[Placed], bombs: &[Placed]) -> Field {
 
 fn tick(field: &mut Field, input: Input, ship: &Ship, sweep: &impl Fn(Vec3, Vec3) -> Sweep) {
     step_cannon(field, &lap(), &config(), input, ship, DT, sweep);
+}
+
+fn tick_events(
+    field: &mut Field,
+    input: Input,
+    ship: &Ship,
+    sweep: &impl Fn(Vec3, Vec3) -> Sweep,
+) -> Vec<Event> {
+    step_cannon(field, &lap(), &config(), input, ship, DT, sweep)
 }
 
 /// One volley, then the rounds left to fly.
@@ -340,6 +350,41 @@ fn ten_in_a_row_pay_three_thousand_and_fifteen_pay_five_thousand() {
 }
 
 #[test]
+fn the_award_counts_run_over_the_race_and_a_second_five_counts_again() {
+    let mut cannon = Cannon::new();
+    volleys_with_hits(&mut cannon, |v| v < 5 || (6..11).contains(&v));
+    award_streaks(&mut cannon);
+    assert_eq!((cannon.fives, cannon.tens, cannon.fifteens), (2, 0, 0));
+    volleys_with_hits(&mut cannon, |_| true);
+    award_streaks(&mut cannon);
+    assert_eq!(
+        (cannon.fives, cannon.tens, cannon.fifteens),
+        (2, 1, 1),
+        "a ten and a fifteen count once each, the five is already paid"
+    );
+    award_streaks(&mut cannon);
+    assert_eq!((cannon.fives, cannon.tens, cannon.fifteens), (2, 1, 1));
+}
+
+#[test]
+fn a_reload_clears_the_clips_awards_and_keeps_the_race_counts() {
+    let (mut field, ship) = (Field::new(), craft());
+    tick(&mut field, IDLE, &ship, &open_air);
+    field.cannon.fives = 2;
+    field.cannon.tens = 1;
+    field.cannon.awards.first_five = true;
+    field.cannon.awards.ten = true;
+    let mut reload = IDLE;
+    reload.reload = true;
+    tick(&mut field, reload, &ship, &open_air);
+    for _ in 0..60 {
+        tick(&mut field, IDLE, &ship, &open_air);
+    }
+    assert_eq!(field.cannon.awards, Awards::default());
+    assert_eq!((field.cannon.fives, field.cannon.tens), (2, 1));
+}
+
+#[test]
 fn a_second_five_pays_when_a_separate_streak_ends_and_a_longer_first_one_does_not() {
     let mut cannon = Cannon::new();
     volleys_with_hits(&mut cannon, |v| v < 5 || (6..11).contains(&v));
@@ -445,4 +490,128 @@ fn a_field_that_never_armed_a_cannon_stays_empty() {
     let mut field = Field::new();
     tick(&mut field, IDLE, &craft(), &open_air);
     assert!(!field.is_empty(), "arming is a change");
+}
+
+#[test]
+fn a_volley_reports_itself_once_at_the_craft() {
+    let (mut field, ship) = (Field::new(), craft());
+    let first = tick_events(&mut field, FIRE, &ship, &open_air);
+    assert_eq!(
+        first,
+        [Event {
+            kind: EventKind::Volley,
+            at: ship.physics.body.position
+        }]
+    );
+    assert!(tick_events(&mut field, FIRE, &ship, &open_air).is_empty());
+}
+
+#[test]
+fn a_shot_mine_reports_whether_it_was_live_and_where_it_was() {
+    for live in [true, false] {
+        let (mut field, ship) = (field_with(&[mine(15, live)], &[]), craft());
+        tick(&mut field, FIRE, &ship, &open_air);
+        let mut shot = Vec::new();
+        for _ in 0..30 {
+            shot.extend(tick_events(&mut field, IDLE, &ship, &open_air));
+        }
+        assert_eq!(
+            shot,
+            [Event {
+                kind: EventKind::MineShot { live },
+                at: Vec3::new(0.0, 0.0, 150.0),
+            }]
+        );
+    }
+}
+
+#[test]
+fn a_destroyed_bomb_and_the_mines_it_chains_report_themselves() {
+    let (mut field, ship) = (
+        field_with(&[mine(16, true), mine(40, false)], &[mine(15, true)]),
+        craft(),
+    );
+    field.bomb_hits[0] = 3;
+    tick(&mut field, FIRE, &ship, &open_air);
+    let mut events = Vec::new();
+    for _ in 0..30 {
+        events.extend(tick_events(&mut field, IDLE, &ship, &open_air));
+    }
+    let kinds: Vec<EventKind> = events.iter().map(|e| e.kind).collect();
+    assert!(kinds.contains(&EventKind::BombShot), "{kinds:?}");
+    assert!(
+        kinds.contains(&EventKind::MineChained { live: true }),
+        "the mine beside the bomb goes with it: {kinds:?}"
+    );
+    assert!(
+        !kinds
+            .iter()
+            .any(|k| matches!(k, EventKind::MineChained { live: false })),
+        "the far mine stays: {kinds:?}"
+    );
+}
+
+#[test]
+fn a_round_dying_on_a_wall_reports_the_wall() {
+    let ship = craft();
+    let mut field = Field::new();
+    tick(&mut field, FIRE, &ship, &wall_at_fifty);
+    let mut walls = Vec::new();
+    for _ in 0..40 {
+        walls.extend(
+            tick_events(&mut field, IDLE, &ship, &wall_at_fifty)
+                .into_iter()
+                .filter(|e| matches!(e.kind, EventKind::RoundWall { .. })),
+        );
+    }
+    assert_eq!(walls.len(), 0, "a round that bounces is not dead yet");
+    for round in &mut field.cannon.rounds {
+        if round.live {
+            round.pos = Vec3::new(0.0, 0.0, 45.0);
+            round.vel = Vec3::new(0.0, 0.0, 500.0);
+            round.rebounds = 0;
+        }
+    }
+    for _ in 0..2 {
+        walls.extend(
+            tick_events(&mut field, IDLE, &ship, &wall_at_fifty)
+                .into_iter()
+                .filter(|e| matches!(e.kind, EventKind::RoundWall { .. })),
+        );
+    }
+    assert!(!walls.is_empty());
+    assert_eq!(walls[0].at.z, 50.0);
+    assert_eq!(
+        walls[0].kind,
+        EventKind::RoundWall {
+            normal: Vec3::NEG_Z
+        }
+    );
+}
+
+#[test]
+fn a_volley_leaves_from_the_hulls_cannon_locators() {
+    let ship = craft();
+    let (left, right) = (Vec3::new(1.5, 0.25, 2.0), Vec3::new(-1.5, 0.25, 2.0));
+    let config = Config {
+        muzzles: [Some(left), Some(right)],
+        ..config()
+    };
+    let mut field = Field::new();
+    step_cannon(&mut field, &lap(), &config, FIRE, &ship, DT, &open_air);
+    let from: Vec<Vec3> = field
+        .cannon
+        .rounds
+        .iter()
+        .filter(|r| r.live)
+        .map(|r| r.prev)
+        .collect();
+    let body = &ship.physics.body;
+    assert_eq!(from.len(), 2);
+    assert_eq!(from[0], crate::projectile::plasma::hull_point(body, left));
+    assert_eq!(from[1], crate::projectile::plasma::hull_point(body, right));
+    assert!(
+        (from[0] - body.position).dot(body.right()) < 0.0,
+        "the left locator is on the craft's left"
+    );
 }

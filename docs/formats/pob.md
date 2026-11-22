@@ -1049,12 +1049,21 @@ only when the object is in some view's potentially-visible set.
 
 `WO_CANNON_SPARKS_DETONATOR` is read since: `PulseBullet_Update` (`0x00122608`) spawns it, fourcc
 `BDOR`, when a pulse-cannon round dies on a wall with no rebound left, in view, in mode 14 (else
-`WO_CANNON_SPARKS`); confidence 72, not wired
+`WO_CANNON_SPARKS`); confidence 72
 ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md)).
+
+**Wired on HD, 2026-11-22**: all four names are `Trigger::DetonatorMineExploDead`,
+`DetonatorMineExplo`, `DetonatorBombExplo` and `DetonatorCannonSparks` in HD's effect table, fired
+off the tick's `oag_weapons::detonator::Event` list (`oag_raceplay::detonator_fx`). They play from
+the engine's procedural profile: none is in HD's `SPRITES`, `EXTENTS` or `TEMPLATES` lists (no
+matched capture of the original to decide it), and the mine's recolour toward white is not
+applied. 2048 and Omega: all four ship and parse (`psys_2048_ground_truth.rs`,
+`psys_omega_ground_truth.rs`), **checked, applies, not wired** - their tables do not answer the
+triggers yet, because the contact and hit laws are not read on either.
 `WO_QUAKE_DETONATOR` and `_TRAILS` (`EMP.cpp`'s span) stay unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
 `data/particles2048/`) and Omega (`data00.psarc`), and both executables name them; 2048's mine
 explode picks between the two mine systems with HD's shape and fourcc (`0x811e6f3a`), Omega's
-with a hashed name (`0x0133ad5f`). **Checked, applies, not wired.**
+with a hashed name (`0x0133ad5f`). **Checked, applies; wired on HD below.**
 
 ### HD names its own texture the same way Pulse does, and 80 of 82 resolve to a shipped `.gtf` - 2026-09-17
 

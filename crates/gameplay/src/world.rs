@@ -655,7 +655,11 @@ mod tests {
         // survey, not the world, holds where an entry is).
         // +2120: `Field::cannon` and `Field::bomb_hits`, Detonator's pulse cannon: thirty rounds,
         // the clip's hit ring, the score and the counters.
-        const LIMIT: usize = 23_328;
+        // +8: `Cannon::{fives, tens, fifteens}`, three u16 of race-long streak award counts the end
+        // screen prints, padded.
+        // +32: `Field::emp` and `Field::ramp`, Detonator's EMP charge, gauge, cue latches and
+        // wave, and the auto-speed ramp.
+        const LIMIT: usize = 23_368;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

@@ -69,11 +69,14 @@ fn phase_on(shield: &ShieldReadout, readout: &Readout) -> bool {
 
 /// The readout's colour this frame, `0xRRGGBB`.
 ///
-/// White in HD's Eliminator: the original's mode test sends modes 8 and 20
-/// (`SPElimination`, `MPElimination`) - and 13, 14 and 21, none of which
-/// this build races - to white, and every other mode to [`ShieldReadout::rgb`].
+/// White in HD's Eliminator and Detonator: the original's mode test sends modes 8 and 20
+/// (`SPElimination`, `MPElimination`) and 14 (Detonator, `detonator-hud.md`), and 13 and 21,
+/// which this build does not race, to white, and every other mode to [`ShieldReadout::rgb`].
 fn rgb(shield: &ShieldReadout, readout: &Readout) -> u32 {
-    if readout.mode == oag_race::Mode::Eliminator {
+    if matches!(
+        readout.mode,
+        oag_race::Mode::Eliminator | oag_race::Mode::Detonator
+    ) {
         0x00FF_FFFF
     } else {
         shield.rgb

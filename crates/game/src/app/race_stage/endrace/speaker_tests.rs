@@ -121,6 +121,7 @@ fn a_title_with_no_voice_speaks_nothing_on_any_screen() {
 
 fn hd_results() -> ResultsModel {
     ResultsModel::Hd(FieldResults {
+        detonator: None,
         headline: Headline::Position(2),
         rows: Vec::new(),
         loyalty: None,

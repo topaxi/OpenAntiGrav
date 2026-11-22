@@ -280,6 +280,21 @@ not read to their definitions).
 | `WO_MINE_EXPLO_DETONATOR_DEAD` | a triggered mine explodes (and is in some view's PVS) after it was darkened: every mine a craft runs into, and every mine laid on an earlier stage (the manual's "dark mines") | 72 |
 | `WO_MINE_EXPLO_DETONATOR` | a live mine (laid this stage) detonated without contact: `MineManager_DestroyAtLane`, the EMP's path, below | 70 |
 
+## Wired: the explosions (2026-11-22)
+
+A mine a craft runs into plays `WO_MINE_EXPLO_DETONATOR_DEAD` (the contact darkens it first);
+a mine a cannon round hits, or a destroyed bomb's chain reaction sets off, plays
+`WO_MINE_EXPLO_DETONATOR` while it was laid this stage and `_DEAD` after
+(`oag_weapons::detonator::EventKind`, `oag_raceplay::detonator_fx::effect_for`). The disc's own
+`.pob`, from the engine's procedural profile: HD's sprite sheets for these two are not listed (no
+matched capture of the original). Chosen: a shot mine explodes the tick it is hit (the original
+the next), the effect plays whether or not the mine is in view, and the recolour toward white
+(`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` plays with it, at volume 1.0 where the mine was (`Cue::MineExplosion`, see
+[detonator-cannon.md](detonator-cannon.md), "Drawn and heard"). Test:
+`tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
+**2048/Omega: checked, applies, not wired** - the effects ship and parse
+(`psys_2048_ground_truth.rs`, `psys_omega_ground_truth.rs`); the contact law is not read there.
+
 ## Live and dark mines
 
 - `DetonatorMine_Place` (`0x00139da0`, vtable `+0x44`, reached through `BaseMine_PlaceAt`

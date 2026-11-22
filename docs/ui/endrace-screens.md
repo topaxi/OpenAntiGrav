@@ -144,14 +144,30 @@ attempted again this pass. Kept under a scratch directory, not kept
 
 ### Detonator's headline
 
-`Headline::Detonator` draws `ER_ZDETONATOR_COM`, the id `EndRaceResults_PopulateGrid`'s mode-`0xe`
-branch names (`docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`; confidence 70: a
-string reference in the executable, the branch body unread). **Where the text lives differs:**
-no HD archive (`DATA00`, `DATA02`, `DATA05`, every `entries.xml` and XML/text entry scanned) carries
-the id, so on HD the headline draws **nothing** (not the raw id); 2048 and Omega ship it
-(`data00.psarc` on Omega; 2048's own tables), so it draws there. Checked, differs. The rows
-under it are the time-trial grid, as before: the score and stage columns wait for the score
-(`docs/gameplay/race-modes.md`, "Detonator").
+`Headline::Detonator` draws `ER_ZDETONATOR_COM` (`DETONATOR SESSION COMPLETE!`), the id the mode-`0xe`
+branch of `EndRaceResults_LayoutGrid` writes into `Line1`
+(`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, 80). HD's `DATA06` `entries.xml` carries it
+and the other eight ids the mode-14 screen reads, in all sixteen languages; `DATA02`, `DATA03`,
+`DATA04` and `DATA05` carry none, and the served table is `DATA02`'s, so the boot fills the eight
+ids of the screen from `DATA06`'s table in the player's language
+(`oag_game::boot`, `crate::campaign::hd_data06_strings`; pinned by
+`hd_boot_ground_truth::the_boot_resolves_detonators_end_screen_ids_from_data06`).
+
+**The rows under it are wired on HD** (`det-end`): six label/value rows (stage cleared `%d / 14` of the
+laps completed, mines cleared `%.1f%%`, bombs cleared `%i / 14`, the number of 5, 10 and 15 chains)
+and the `TOTAL SCORE` line, drawn in place of the field grid at the filler's coordinates (labels at
+`x = 40`, values at `x = 590`, `y = 37 + 40 r`, the score line at `y = 360`, side bars `y = 29` and
+`347` tall, bottom bar `y = 391`; `oag_ui_screens::endrace::hd::detonator`). A destroyed run and a
+finished one print the same rows; the stage row is the scoreboard's laps completed, so stage 5 reads
+`4 / 14` (`hd_endrace_ground_truth::a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_session_rows`).
+The loyalty block beside it draws as on every HD mode and pays on the same laps. **Not drawn:** the
+new-record banner (`RecordNotifyBlock`, `RecValue`): the best-score table it compares against is
+unread and no Detonator best score is kept. **Not checked against a frame of the original**, none
+exists: the grey ink, the left edge of the values and the caption `ER_FINALPOS` (not touched by the
+Detonator branch, drawn as on every HD mode) are read from the executable and the layout file.
+**Omega** carries the same filler and ids but keeps the built-in scoreboard (no `EndRace` screens
+wired); **2048** has a four-row list on a `Results` page this build does not draw
+(`docs/ui/endrace-2048.md`).
 
 ### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
 

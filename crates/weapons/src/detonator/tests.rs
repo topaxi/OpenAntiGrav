@@ -226,7 +226,7 @@ mod contact {
         let mut ships = [craft_at(201.0)];
         let went = step_contacts(&mut field, &survey, 3.5, &contact(), &mut ships, rules());
         assert_eq!(went.len(), 1);
-        assert!(!went[0].bomb);
+        assert_eq!(went[0].kind, EventKind::MineTouched);
         assert_eq!(field.live_mines, 0);
         assert!((ships[0].physics.shield - 90.0).abs() < 1e-4);
         assert_eq!(ships[0].physics.body.linear_velocity.z, 50.0);
@@ -250,7 +250,7 @@ mod contact {
         let mut ships = [craft_at(203.0), craft_at(215.0)];
         let went = step_contacts(&mut field, &survey, 3.5, &contact(), &mut ships, rules());
         assert_eq!(went.len(), 1);
-        assert!(went[0].bomb);
+        assert_eq!(went[0].kind, EventKind::BombTouched);
         assert_eq!(field.live_bombs, 0);
         assert!((ships[0].physics.shield - 80.0).abs() < 1e-4);
         assert_eq!(ships[1].physics.shield, 100.0);
@@ -266,7 +266,21 @@ mod contact {
         let mut field = field_with(false);
         let survey = lap(300, 7);
         let mut rng = Rng::new(1);
-        place_stage(&mut field, &survey, &layout(), &mut rng, 1);
+        let before: Vec<Vec3> = field
+            .live_bombs()
+            .iter()
+            .filter_map(|b| survey.point(b, 3.5))
+            .map(|(at, _)| at)
+            .collect();
+        let went = place_stage(&mut field, &survey, &layout(), &mut rng, 1);
+        assert_eq!(
+            went.iter().map(|e| (e.kind, e.at)).collect::<Vec<_>>(),
+            before
+                .iter()
+                .map(|&at| (EventKind::BombReplaced, at))
+                .collect::<Vec<_>>(),
+            "each bomb the step replaces reports where it was"
+        );
         assert!(field.live_bombs <= 1);
         assert!(
             field.live_bombs == 0

@@ -228,7 +228,9 @@ fn the_widget_names_title_data_inherits_are_authored_by_omegas_layouts() {
         let h = skin.layouts;
         [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone]
     });
-    for root in modes().into_iter().chain(skinned) {
+    // Detonator's root carries the static frames the allow-list names.
+    let detonator = [oag_omega::TITLE.hud.detonator];
+    for root in modes().into_iter().chain(detonator).chain(skinned) {
         let c = composed(&mut archives, root);
         names.extend(c.layout.sprites.iter().map(|s| s.name.clone()));
         names.extend(c.layout.labels.iter().map(|l| l.name.clone()));
@@ -690,7 +692,14 @@ fn omega_2048_mode_hud_names_are_authored_by_its_layouts() {
     let Some(mut archives) = open() else { return };
     let h = oag_omega::hud::LAYOUTS_2048;
     let mut names = BTreeSet::new();
-    for root in [h.arcade, h.elimination, h.time_trial, h.speed_lap, h.zone] {
+    for root in [
+        h.arcade,
+        h.elimination,
+        h.time_trial,
+        h.speed_lap,
+        h.zone,
+        h.detonator,
+    ] {
         let c = composed(&mut archives, root);
         assert!(c.missing.is_empty(), "{root}: missing {:?}", c.missing);
         names.extend(c.layout.sprites.iter().map(|s| s.name.clone()));

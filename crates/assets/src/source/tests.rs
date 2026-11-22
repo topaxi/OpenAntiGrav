@@ -134,6 +134,7 @@ const TITLE: &Title = &Title {
         speed_lap: r"Data\XML\Nothing_HUD.xml",
         zone: r"Data\XML\Nothing_HUD.xml",
         elimination: r"Data\XML\Nothing_HUD.xml",
+        detonator: r"Data\XML\Nothing_HUD.xml",
         split: None,
         split_layout: None,
         player_tags: None,

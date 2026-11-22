@@ -260,3 +260,47 @@ its base package ships. Each title's `Detonator_HUD` entry name is therefore its
 - Message 8's icon on HD and the directional arrows' use (above), and the `.bss` tenth row.
 - What the generic fragments (`HUD_info_text`, `HUD_time_diff`, `HUD_ready_go`) show in Detonator: generic binders (`Hud_BindWidgets` and its siblings, see [hud-sight.md](hud-sight.md), [hud-message-triggers.md](hud-message-triggers.md)); what `Detonator_UpdateHud` writes into the message word at `*(hud+0x40)+0xf4` is unread (recipe: scan `0x67120`-`0x67d00` for a store at disp `0xf4`).
 - The writer of the 15 words at `clip+0x80`.
+
+## Wired
+
+The port draws this layout since the HUD wiring: `oag_title::HudLayouts::detonator` names the root
+per title (HD `/data/xml/detonator_hud.xml`, Omega `Data\XML\Detonator_HUD.xml`, 2048
+`Data\XML\2048_hud\Detonator_HUD_HD.xml`; both PSP titles keep the time trial's), `oag_hud::detonator`
+draws it and `oag_raceplay::detonator_hud` fills it from `World::detonator.cannon` and
+`stages_laid`. Test: `crates/raceplay/tests/detonator_hud_ground_truth.rs` (HD, Omega, 2048),
+which stands a race on a known cannon and compares the drawn texts exactly.
+
+| Widget | Reads | Note |
+| --- | --- | --- |
+| `DetonatorScore` `%07d`, `PulseBullets` `%02d`, `DetonatorStage` `%d/14` | `cannon.score`, `cannon.clip`, `stages_laid` (min 1, max 14) | as the table |
+| `Bullet00`..`14` | drawn while `index < clip`; a spent icon is hidden | **chosen:** the per-state art (`0x0007f0a0`) is unread, 55 |
+| `Multi00`..`14` | `Multi(14-i)` drawn once volley `i` hit; a streak award recolours the last 5/10/15 pips ending at the latest hit volley to `0xff00eeff` | recolour range 60 (read from the `Hud_RaiseChainBonus` description, not the pip loop); an unlit pip is hidden, **chosen** |
+| `PulseBonus` | the award's `HUD_CHAIN_n` text and amount (`STREAK_*` of the cannon law), held 2.0 s, faded over 1.0 s | **HD's language table has no `HUD_CHAIN_n`**: the line draws nothing there and the loader report names the ids; Omega's reads `5 CHAIN` |
+| `ShieldBarText`, `DamageBar`, `DamageBarBg` | the generic shield readout; white in Detonator (the original's mode-14 test, `hud-readouts.md`) | |
+| `DetonatorStageParent`, `BulletBack`, `EMPBack` | static art, always on | `EMPBack` is the plate the EMP pips sit on |
+| `Emp_0`..`Emp_7`, `EmpReady` | the EMP charge (`RaceSim::detonator_emp`) | a pip drawn while the charge is over its index (vertex colour `0` draws nothing), `EmpReady` once the charge reaches `minNumPadsToCollectEMP`; the post-fire flash and the ready pulse (`+0x168`, `+0x174`) are not modelled |
+
+Not drawn, and named in the loader report: the four widgets the original never binds
+(`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`), `EmpBarEffect` (an
+`<ImageModel>`; its gauge is `RaceSim::detonator_emp_gauge`),
+`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread), `ScoreFeedBack0`..`15`, and the three
+medal models (`<ImageModel>` `.vex`; the layout reader records none, and the cell's thresholds do
+not reach the race). The reload gauge is the craft's own `detonator_bulletgaugesegments` material
+constant, not a HUD widget: untouched.
+
+- **Omega: ported.** Same test; the EMP pips draw as HD's; `EmpReady`, which Omega's layout authors but
+  its executable names no string for (so probably never binds, 60, above), is dropped from the
+  layout (`oag_title::Detonator::binds_emp_ready`, the loader report says so); `<aImageModel>` on `EmpBarEffect` composes with nothing skipped
+  and no error (the layout reader models no `<ImageModel>` at all, spelled right or not; the
+  test asserts the report has no `HUD: skipped` line), and the
+  Omega atlas (`detonator_hud2.tga` 1024x1024 beside a 2048x2048 `fury_hud.gtf`) resolves for every
+  sprite checked. Omega's `LAYOUTS_2048` (a 2048-lineage circuit raced as Detonator) names the bare
+  Omega root too, since the executable names no other.
+- **2048: checked, differs, wired to its own layout.** `Detonator_HUD_HD.xml` composes from nine
+  files; the `DetonatorWeapons.xml` the archive order serves is the 960x540 copy with
+  `EmpCharge`/`EmpFull` (the widgets the executable binds), `DetonatorWeaponDisplay` frame and the
+  `Bullet`/`Multi` arcs. The score, clip and stage widgets read the same cannon (same test, 2048
+  package). The `EmpCharge`/`EmpFull` gauge waits on phase 10 like HD's.
+- **No reference frame.** `data/reference/` holds no Detonator capture, so the picture is judged
+  against the layout's own geometry, not a frame of the original: a capture recipe is under "The
+  bomb warning" above.

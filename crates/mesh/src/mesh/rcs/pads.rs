@@ -123,6 +123,16 @@ pub(super) fn placed_hashes(
     placed
 }
 
+/// Whether any surface of `chunk` is on a pad material.
+pub(super) fn on_pad_material(model: &rcsmodel::Model, chunk: &rcsmodel::Mesh) -> bool {
+    chunk.surfaces().any(|s| {
+        model
+            .materials
+            .get(s.material as usize)
+            .is_some_and(|m| is_pad_material(&m.name))
+    })
+}
+
 /// The chunks [`super::build_scene`]'s world-space pass draws on a pad
 /// material, and their triangles: what a pad is on a circuit whose pad nodes
 /// name no chunk. `named` is every hash a pad node of either class names.
@@ -134,12 +144,7 @@ pub(super) fn world_pass_pad_chunks(model: &rcsmodel::Model, named: &[u32]) -> (
     let mut chunks = 0;
     let mut triangles = 0;
     for chunk in model.meshes.iter().filter(|c| !named.contains(&c.hash)) {
-        if !chunk.surfaces().any(|s| {
-            model
-                .materials
-                .get(s.material as usize)
-                .is_some_and(|m| is_pad_material(&m.name))
-        }) {
+        if !on_pad_material(model, chunk) {
             continue;
         }
         chunks += 1;

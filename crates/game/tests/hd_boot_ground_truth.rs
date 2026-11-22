@@ -67,6 +67,35 @@ fn shell(image: &Path) -> (boot::Shell, oag_assets::Archives) {
     (shell, archives)
 }
 
+/// HD's served string table (`DATA02`'s) carries none of Detonator's end-screen ids; `DATA06`'s
+/// carries all of them, and the boot reads them from there: the headline and the six row labels
+/// resolve to the disc's English
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The strings").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_boot_resolves_detonators_end_screen_ids_from_data06() {
+    let Some(image) = image() else { return };
+    let (shell, _) = shell(&image);
+    for (id, english) in [
+        ("ER_ZDETONATOR_COM", "DETONATOR SESSION COMPLETE!"),
+        ("ER_DETONATOR_STAGE", "STAGE CLEARED"),
+        ("PERCENT_MINES_CLEARED", "MINES CLEARED"),
+        ("PERCENT_BOMBS_CLEARED", "BOMBS CLEARED"),
+        ("ER_NUM_5_STREAKS", "NUMBER OF 5 CHAINS"),
+        ("ER_NUM_10_STREAKS", "NUMBER OF 10 CHAINS"),
+        ("ER_NUM_15_STREAKS", "NUMBER OF 15 CHAINS"),
+        ("ER_DETONATOR_SCORE", "TOTAL SCORE"),
+    ] {
+        assert_eq!(shell.strings.get(id), Some(english), "{id}");
+    }
+    for id in oag_ui_screens::endrace::DetonatorResults::IDS {
+        assert!(
+            shell.strings.get(id).is_some(),
+            "{id} is in the shell's table"
+        );
+    }
+}
+
 /// The front end opens at all, which it did not before ADR-0025.
 ///
 /// The whole of what changed is in the first line of this test: `load_shell`

@@ -87,8 +87,8 @@ pub(super) fn hud_roots(
 /// presentation side with what [`Mode::weapons_enabled`] reads out of the code.
 /// See `docs/gameplay/pickups.md`.
 ///
-/// Layouts no mode here reaches - HD's Detonator, Duel and MPTag - stay in
-/// their own title crate waiting for the readouts or the mode that uses them.
+/// Layouts no mode here reaches - HD's Duel and MPTag - stay in their own title crate waiting
+/// for the readouts or the mode that uses them.
 #[must_use]
 pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str {
     match mode {
@@ -106,11 +106,7 @@ pub const fn hud_layout(hud: &oag_title::HudLayouts, mode: Mode) -> &'static str
         // `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
         Mode::SingleRace | Mode::Tournament | Mode::Head2Head => hud.arcade,
         Mode::Eliminator => hud.elimination,
-        // HD's own `detonator_hud.xml` is a stage, score and EMP readout this build
-        // has none of (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`), so a
-        // Detonator race draws the time trial's: its lap counter is the stage.
-        // **Chosen, not measured.**
-        Mode::Detonator => hud.time_trial,
+        Mode::Detonator => hud.detonator,
     }
 }
 
@@ -207,7 +203,7 @@ pub(super) fn load_hud(
     // reaching for `expand` refused the PS2's outright and took the whole HUD
     // with it.
     let composed = oag_hud::compose(entry, |path| archives.read_name(path).ok());
-    let layout = match composed {
+    let mut layout = match composed {
         Some(composed) => {
             let layout = composed.layout;
             report.push(format!(
@@ -234,6 +230,34 @@ pub(super) fn load_hud(
             None
         }
     };
+
+    let binds_emp_ready = title
+        .race
+        .detonator
+        .is_none_or(|detonator| detonator.binds_emp_ready.value);
+    if let Some(layout) = layout
+        .as_mut()
+        .filter(|_| mode == Mode::Detonator && !binds_emp_ready)
+    {
+        let before = layout.sprites.len();
+        layout.sprites.retain(|sprite| sprite.name != "EmpReady");
+        if layout.sprites.len() != before {
+            report.push(
+                "HUD: EmpReady is authored but this title's executable does not bind it; \
+                 not drawn"
+                    .to_string(),
+            );
+        }
+    }
+    if mode == Mode::Detonator && layout.is_some() {
+        report.push(
+            "HUD: Detonator draws no EmpBarEffect (an ImageModel the layout reader does not \
+             model; its gauge is RaceSim::detonator_emp_gauge), no bomb-ahead warning, no ScoreFeedBack0-15 and no medal models; \
+             PulseScore, PulseMultiplier, EmpScore and PulseBankedScore are never bound by the \
+             original; the reload gauge is the craft's own material constant, not a HUD widget"
+                .to_string(),
+        );
+    }
 
     let space = oag_display::space::Space::of(
         lineage
@@ -298,6 +322,20 @@ pub(super) fn load_hud(
     let chosen = oag_ui::language::load::chosen_language(&languages, preferred_language);
     let strings =
         oag_ui::language::load::load_strings(archives, &languages, preferred_language, report);
+
+    if mode == Mode::Detonator {
+        let missing: Vec<String> = [5, 10, 15]
+            .into_iter()
+            .map(oag_hud::detonator_chain_id)
+            .filter(|id| strings.get(id).is_none())
+            .collect();
+        if !missing.is_empty() {
+            report.push(format!(
+                "HUD: {} are not in this title's language table; the streak line draws nothing",
+                missing.join(", ")
+            ));
+        }
+    }
 
     // The role names are this *title's* own, through `oag_title::HudArt` -
     // not the shared `oag_ui::language::roles::HUD`/`HUD_SMALL` literals

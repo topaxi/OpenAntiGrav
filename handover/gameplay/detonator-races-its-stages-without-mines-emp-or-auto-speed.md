@@ -1,8 +1,8 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: mines/bombs bite, own hull/models drawn, cannon+score simulated, campaign launches, HUD read; EMP, auto-speed, HUD wiring, end screen open"
+summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign, EMP, auto-speed and the HD end screen wired; new-record banner, 2048 and Omega end screens open"
 categories: [rendering]
 ---
 
@@ -19,7 +19,7 @@ evidence), then start at "Next Steps".
 | # | Phase | Status | Commit |
 | ---: | --- | --- | --- |
 | 1 | Decode the Detonator-only weapon-table attributes (`WeaponStats::detonator()`, `oag_title::Weapons::detonator`) | done | `8f008cf7b` |
-| 2 | End-screen headline `ER_ZDETONATOR_COM` (`Headline::Detonator`; draws on 2048/Omega, nothing on HD: no HD archive has the id) | done | `d890b438a` |
+| 2 | End-screen headline `ER_ZDETONATOR_COM` (`Headline::Detonator`; the id is in `DATA06`'s table on HD, filled into the served table at boot) | done | `d890b438a`, `det-end` |
 | 3 | RE: stage placement of mines and bombs (`detonator-placement.md`) | done | `543e8953b` |
 | 4 | Read `PatternFile.xml` / `GamePlayValues.xml` (`oag_tables::detonator_layout`, `oag_title::DetonatorLayouts`, `docs/formats/detonator-layouts.md`) | done | `8a6918978` |
 | 5 | Place mines and bombs (`oag_weapons::detonator::place_stage`, `World::detonator`, `oag_raceplay::detonator`, drawn with the ordinary Mine/Bomb models) | done | `dbb59fd37` |
@@ -28,11 +28,11 @@ evidence), then start at "Next Steps".
 | 8 | RE: pulse cannon, hits, score, destroyed count, percentage (`detonator-cannon.md`) | done | `0db7e825c` |
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
 | 8b | Wire the hull, handling, mine, bomb and pad models | done (wreck, death shell, colour binds open) | `4f4b70173` |
-| 9 | Wire the cannon, score, destroyed count and percentage | simulation done; nothing drawn, no HUD, no end screen | `59215fc52` |
-| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
-| 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
-| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | RE done, ready to wire (bindings below; EMP, bomb-ahead and score feedback wait on 10 and a sim event stream) | |
-| 13 | End screen proper (score, percentage, stage rows) | open | |
+| 9 | Wire the cannon, score, destroyed count and percentage | simulation done; rounds, flash, explosion effects and the cannon's cues drawn on HD; the HUD is row 12's, no end screen | `59215fc52`, the `det-fx` commits |
+| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads unread, so its EMP never charges | `det-emp-wire` |
+| 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
+| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; open: `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback and the medal models (below) | |
+| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
 
@@ -48,12 +48,14 @@ the Detonator hull in its team livery on Detonator's own handling file; mines, b
 the Detonator models (the mine football draws plain white: its `MineColour`/`MineBrightness` binds
 and the bomb's `BombColour` are unread). Square fires the pulse cannon and Circle reloads; rounds
 destroy mines and bombs and the race keeps a score, a destroyed count and a percentage, but no
-round, muzzle flash or explosion is drawn and the HUD is the time trial's. No EMP, no auto-speed.
+the rounds and muzzle flashes are drawn and a shot mine, a bomb and a round on a wall play their disc effects (HD); the HUD is row 12's. The craft drives itself (Zone's
+auto-speed on the stage); pads charge the EMP instead of boosting, L1 fires it and its wave
+clears the mines ahead (wave reach chosen).
 
 Open from 8b: no wreck or death shell (HD's PS3 hull branch loads no wreck in any mode; the
-Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad still draws under the
-Detonator pad (unread whether the original hides it; the model's origin at the pad transform is
-chosen); 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
+Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad is hidden under the
+Detonator pad (live frames, 60; `detonator-emp.md`); the model's origin at the pad transform is
+chosen; 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
 
 ## Working rules learned the hard way
 
@@ -138,8 +140,8 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   (`pos, prev, vel, up, normal, age, rebounds, slot, dead`), per-bomb hit counts (swap with the
   bomb array on removal), score (i32), `m_mine`, `m_chain`, bombs-shot `n`, mines-destroyed and
   bombs-destroyed counters, trigger-held ticks. Raise the `World` ratchet (~2 KiB).
-- **Inputs:** fire = `Button::Square` held, reload = `Button::Circle` (pressed; edge-vs-level
-  unread, **chosen**), slot 0 only; pass the snapshot into `advance_detonator`
+- **Inputs:** fire = `Button::Square` held, reload = `Button::Circle` (pressed; the buttons are read, `detonator-cannon.md`
+  "The buttons", 80; edge-vs-level of the reload unread, **chosen**), slot 0 only; pass the snapshot into `advance_detonator`
   (`tick.rs` ~l.557 has `inputs`). Use weapons-on damage rules as `step_contacts` does. A
   Detonator-only fixed-weapon gate: do not flip `Mode::weapons_enabled()` (asserted false).
 - **Rounds:** `step_cannon` generic over `Craft` with a sweep closure
@@ -167,18 +169,22 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
 
 ### Phases 10-15 (from the original plan)
 
-- **10 EMP.** RE first (docs-only): the writer of `craft+0x6a64 & 0x8000000`, the EMP pad source
-  (HD `data/new_mode_pads/detonator_pad`, 2048 `Detonator_Pad`), `table+0x1bc` (an `EmpStats`
-  field), `EMPManager` update (what firing clears and scores: `Emp` score values are read), the
-  gauge `craft+0x7da0` (law read, 70: `(n - (hi - lo)) / (hi - lo)` clamped to 1, `EMPREADY` /
-  `EMPFULL` edge cues). Then wire pad detection (`raceplay/src/pads.rs`), gauge, fire input
-  (`in+0x1c`), cues as per-tick outputs (ADR-0018). `MineManager_DestroyAtLane` /
-  `BombManager_DestroyAtLane` are the kill callers. Gates add `check-weapon-lineage`.
-- **11 Auto-speed.** RE what mode `0xe` does under mask `0x206040` in `Craft_Update` (does it use
-  Zone's start/increment law keyed on the stage?). Do not borrow Zone's law without the read.
-  Wire through a `Title` data axis (`start.rs` ~l.668, `player_step.rs` ~l.228,
-  `pilot_assist.rs` is Zone-gated: check). Ground-truth: a coasting craft reaches speed.
-- **12 HUD: bindings read, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
+- **10 EMP: done** (HD, Omega; 2048's pads unread). What stays open is under "Open" ("EMP:
+  wired"); the law and the wiring table are `detonator-emp.md`, "Wired".
+- **11 Auto-speed: done** (HD, 2048, Omega). Open: under "Open" ("Auto-speed: wired");
+  `detonator-speed.md`, "Wired". **Also found** in the RE: HD's own Zone runs the same branch
+  with the ramp (`psp-pulse-usa/zone-start.md` says otherwise; that page and the weapon-lineage
+  Autopilot row are not edited).
+- **12 HUD: wired** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "Wired").
+  `HudLayouts::detonator` names each title's root; score, clip, stage, bullet icons, volley pips,
+  the streak line and the energy readout (white in Detonator) read the live cannon
+  (`oag_hud::Detonator`, `oag_raceplay::detonator_hud`, test
+  `detonator_hud_ground_truth.rs`). **Still open:** the three medal models (HD `<ImageModel>`
+  `.vex`; no HUD path draws one, and the cell's thresholds are not passed into the race), the EMP
+  widgets (phase 10), the bomb-ahead warning and `ScoreFeedBack0..15` (need an event stream),
+  HD's streak line (its language table has no `HUD_CHAIN_n`), the bullet icons' per-state art and
+  the per-volley fired words. The brief that follows is what was read, kept for those:
+  (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
   HD static, 50-82 per widget; Omega checked: applies; 2048 checked: differs, own skin and EMP widgets).
   Wire it as a Detonator `HudLayouts` entry (`oag_title::HudLayouts` has no Detonator field today;
   `oag_hd::hud::layouts::DETONATOR` and the `detonator_hud2.gtf` atlas row already exist,
@@ -204,7 +210,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | ready (phase 14's value) |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
-  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | **missing**: phase 10 (the charge counter and its pad writer) | blocked on 10 |
+  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | `RaceSim::detonator_emp`, `detonator_emp_gauge` | pips and `EmpReady` wired (HD, Omega); `EmpBarEffect` not drawn (an `<ImageModel>`); 2048's `EmpCharge`/`EmpFull` open |
   | `PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore` | **nothing on HD**: the controller never binds the first two, never reads the third and its banked-score text setter has no caller | - | do not draw `x%02d` or the `%04d` counter | skip |
 
   Also from the page: the reload gauge `(1 - lockout/total) * 15` that `Detonator_UpdateHud`
@@ -213,14 +219,33 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   HUD's `PulseBullets` reads `15` through the whole reload lockout. Open for this phase: the
   `EmpBarEffect` shader constants, the bullet icons' per-state art (`0x0007f0a0`), and what
   `Detonator_UpdateHud` raises into the generic message lines.
-- **13 End screen.** Read the mode-14 results branch (`ER_DETONATOR_SCORE`,
-  `PERCENT_MINES_CLEARED`, stage reached); fill the grid in
-  `crates/game/src/app/race_stage/endrace.rs` and `crates/ui-screens`; `just check-strings`.
+- **13 End screen: HD wired** (`det-end`; law `docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+  "Wired"). `FieldResults::detonator` (`oag_ui_screens::endrace::DetonatorResults`) draws the six
+  rows and the score line in place of the field grid, laid out beside `RaceGrid`
+  (`endrace/hd/detonator.rs`); `oag_game::results_tables::detonator_results` fills it from the sim and
+  the scoreboard (the stage row is the scoreboard's laps completed, so a run destroyed in stage 5 reads
+  `4 / 14` and a finish `14 / 14`); the boot fills HD's served table with the eight ids from `DATA06`'s
+  language table (`strings.fill`). The sim keeps race-long 5/10/15 chain counts and counts an EMP's
+  bomb kills. Loyalty now pays on those laps (a destroyed run used to bank the full 14 stages).
+  **Open:**
+  - **The new-record banner** (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`, `RecValue` =
+    `ER_NSR` + score): needs the best-score table `0x0001ef28` returns (unread, 72) and a Detonator
+    best-score store (none on main); drawn off, `RecBlockGrey` included.
+  - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
+    race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
+    `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved (a
+    separate follow-up: Omega's `EndRace Menu`). Its served table carries all the ids (tested).
+  - **2048**: its four-row list (stage = the HUD stage with no `/ 14`, mines `%.1f%%`, bombs `%d`,
+    `IG_HUD_SCORE`, no chain rows) is modelled and worded (`Detonator2048Results`, tested) but not
+    drawn: it belongs to its `Results` page, a named gap (`docs/ui/endrace-2048.md`); the touch
+    Summary page has no widget for it. No layout is invented.
+  - **No live frame of the original** (the grey ink, the `x = 590` left edge, the `RecLogoD` art,
+    whether `MiniText` `ER_FINALPOS` is hidden: the Detonator branch writes none of it).
 - **14 Campaign: done.** `race_mode_for_cell` maps `Other("Detonator")`; `RaceStage::campaign_tier`
   takes the score through `medal_watch::detonator_value` (finished races only, `>=`). 12 cells per
-  title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). Open: the original's
-  mode-14 record case is unread (the value handed to the compare is a labelled choice); the
-  mid-race medal cues are phase 12's.
+  title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). The value handed to the
+  compare is the score, read (`0x0005c3c0`, 82; `detonator-endrace.md`). A destroyed run records
+  too (both endings call the builder with `force = 1`).
 - **15 Parity.** Omega race-start placement call, stage cap into `craft+0x5e4`, grade drawing;
   2048 per-stage `.gxt` textures.
 
@@ -232,7 +257,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 - **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
   (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (`MineColour`,
-  `BombColour` ...), the pad's original geometry underneath and 2048's object models stay open;
+  `BombColour` ...) and 2048's object models stay open (the circuit's own pads are now hidden);
   `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
@@ -258,8 +283,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   5. Pads: `/data/new_mode_pads/detonator_pad/detonator_pad` on every speed pad and every weapon
      pad (70). Unread: whether the original pad still draws underneath. Omega takes the path from
      a data field.
-  6. Cannon (when wired): `detonator_cannonbolt`, `hd_muzzleflash_detonator`, from the
-     `cannon_flash_left`/`right` locators.
+  6. Cannon: wired (`det-fx`): `detonator_cannonbolt` and `hd_muzzleflash_detonator` from the
+     `cannon_flash_left`/`right` locators, which the simulation fires from too
+     (`load::muzzle::cannon_flash`).
   Open: the substitution table's reader, the race-side write of `ship+0x6298`, the
   `Charge1`/`Charge2` block writer (`Ship_BindDetonatorHullParams`), the mine's music-driven
   binds. `detonator_pickup` and `detonator_mine_explosion_kaleidoscopic` ship, but no loader was
@@ -269,7 +295,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   `oag_weapons::detonator`, `oag_raceplay::detonator`): HD races lay their mines and bombs per
   stage and draw them with the ordinary Mine and Bomb models. Contact is wired
   (`oag_weapons::detonator::step_contacts`: damage, velocity cut, bomb push, removal, destroyed
-  craft ends the race); the explosion effects and sounds, the Detonator-specific models, the survey's collision return codes (probes are
+  craft ends the race); the survey's collision return codes (probes are
   chosen).
 
 - **Contact, blast and destruction: read, wired in sim, not in effects** (2026-11-22,
@@ -284,15 +310,18 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   and score, who spends the pending push, the update order within a tick, the PVS-gated lane
   free. 2048/Omega: data and effect selector checked, applies; contact law not read there.
 
-- **Pulse cannon, score, destroyed count: wired in the simulation, not drawn** (2026-11-22,
-  `oag_weapons::detonator::cannon`, `oag_raceplay::RaceSim::{detonator_score,
-  detonator_destroyed_mines, detonator_percentage}`; Square fires, Circle reloads, slot 0). Open:
-  draw the rounds (`detonator_cannonbolt`) and the muzzle flashes from the hull's
-  `cannon_flash_left/right` locators (the muzzle is **chosen** from the craft's dimensions until
-  then), the shot-mine and bomb explosion effects and sounds (`step_cannon` returns nothing for
-  them), the `CANNON`/`CANNONRELOAD`/`BONUS_*` cues, the HUD (clip, reload gauge, score, `x%02d`),
+- **Pulse cannon, score, destroyed count: wired, rounds and effects drawn on HD** (2026-11-22,
+  `oag_weapons::detonator::cannon`, `oag_raceplay::{detonator_fx, RaceSim::detonator_score,
+  detonator_destroyed_mines, detonator_percentage}`; Square fires, Circle reloads, slot 0). Muzzles
+  are the hull's `cannon_flash` locators; the tick's `oag_weapons::detonator::Event` list drives
+  `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_BOMB_EXPLO_DETONATOR` and `WO_CANNON_SPARKS_DETONATOR`
+  (HD's triggers; 2048 and Omega ship and parse them, **checked, applies, not wired**), plus `CANNON`
+  and `CANNONEXPLWALL`, `MINEEXPL` and `BOMBEXPL` (`Cue::MineExplosion`/`BombExplosion`, HD only; `BOMBEXPL_PC` never). Open: the round's draw (`0x00121e68`) and its flash window are HD's Cannon's
+  (chosen); the effects use the procedural profile (no sprite list, no matched capture); no
+  the Detonator weapon bank (`weapons_det.bnk`?) is unread; the visibility gate on the effects; the `CANNONRELOAD`/`BONUS_*` cues, the HUD (clip, reload gauge, score, `x%02d`),
   the end screen rows, the 0.5 s owner grace, the clean-lap `+1000`, the bomb-ahead warning,
-  `EnergyRechargePerStage`. 2048 and Omega fire it too (tests in `detonator_ground_truth.rs`). The record below is the read:
+  `EnergyRechargePerStage`. 2048 and Omega fire it too and draw its two models (tests in
+  `detonator_ground_truth.rs`). The record below is the read:
 - **Pulse cannon, hits, score, destroyed count: read** (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, HD static, 55-85 per law; 31 names).
   The craft's fixed cannon: clip of 15 two-round volleys (left and right `cannon_flash`), one
@@ -312,9 +341,6 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   2048/Omega: scoring file identical, streak law and round constants read alike; hit test and
   score adds not read there. Open: the fire dispatcher and manager order in a tick, the bomb-ahead
   measure, the `+0x200000` clean-lap `+1000`.
-
-- **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
-  2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.
 
 - **Weapon table decoded, not spent.** `WeaponStats::detonator()` reads the Detonator-only
   attributes (Mine scoring, Cannon reload/rebounds, Bomb shots and points, the `EMP` block,
@@ -338,21 +364,18 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
   triggers need the hit read first.
-- **EMP.** The EMP gauge law is read (page, "What `Detonator_UpdateRace`
-  does that is not wired"); the EMP pads (`data/New_Mode_Pads/Detonator_Pad`, 2048), the
-  charge flag's writer (`craft+0x6a64 & 0x8000000`) and the EMP fire (`Ship_UpdateCannonTrigger`'s
-  input `+0x1c` arm, `EMPManager`) are not. The cannon and its reload are (above). `docs/gameplay/weapon-lineage.md`
-  already lists EMP as unwired.
-- **Auto-speed.** The manual: "Like Zone mode, acceleration is automatic and ever-increasing".
-  No law read; the player throttles. Read what Detonator's engine branch does (HD's hover
-  code gates modes 6, `0xd`, `0xe` together, `hover-target.md`). The handling file is answered:
-  `/data/ships/detonator` (hull bullet above).
-- **Score, end screen, HUD.** Score and percentage simulated (cannon bullet above), not shown;
-  `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED` unread. The HUD's widget
-  bindings are read (`detonator-hud.md`, phase 12 table), not wired: the race still draws the
-  time trial's HUD. Campaign cells (`mode="Detonator"`,
-  12 on the Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score
-  (phase 14); mid-race medal cues and the end screen's score rows are phases 12 and 13.
+- **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). Open: the wave's reach and speed
+  (chosen; recipe on the page), the kill's effect and sound, whether the wave hurts the player,
+  `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
+  the ready pulse and post-fire flash on `EmpReady`, 2048's
+  pad arms (unread: its pads keep boost and pickup, so its EMP never charges) and its
+  `EmpCharge`/`EmpFull` widgets, Omega's EMP announcer lines (Wwise, not located).
+- **Auto-speed: wired** (`det-emp-wire`, `detonator-speed.md` "Wired"). Open: a player-input speed
+  curve on a clean lap against the original; HD's own Zone ramp (this build's Zone has none).
+- **Score, end screen, HUD.** Score and percentage are simulated and shown: the HUD is phase 12's,
+  the end screen's rows phase 13's (HD wired, above). Campaign cells (`mode="Detonator"`, 12 on the
+  Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score (phase 14);
+  the mid-race medal cues are phase 12's.
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
   (`Ship_SetState` state 4, `detonator-mine.md`); Phase 7 wires it with the contact law.
 - **Omega's grade** is not drawn (Omega draws no Zone grade either); Omega's camera scale is
@@ -360,6 +383,79 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   unwired, as Zone's are.
 - **2048 `zone_1`..`zone_4` draw a black floor** in every mode (Time Trial too): not
   Detonator's, seen while capturing.
+
+## Render accuracy
+
+Measured 2026-11-22 (`det-pairs`): the original (HD/Fury EU on RPCS3, Racebox RACE TYPE Detonator, `GetMode()==14`, Talon's
+Junction, Feisar, no stick, no throttle) against ours at the original's own pose, camera, fov, lap clock and world clock. Three
+pairs, `data/reference/compare-page/hd/detonator-talons-{mines-ahead,cannon-volley,pad}` (manifest `detonator.toml`, also in
+`curated/`); method in `docs/tools/compare-page.md`, "Detonator pairs". Each was seen on one boot; the same scene (hull, mines
+ahead, HUD, the pad at the right edge) was seen on four boots between lap clock 2.0 and 2.7 s. Whole-frame RMSE 0.26-0.30, edge
+correlation 0.08-0.12, mean grey 28-41 (all three red on `compare_env.METRIC_BANDS`). Ours' craft is held at rest on the original's pose (`--pose-hold-ticks`): a first version let ours fly 130-190 units past the pose before the frame and was re-made, so rounds, mines and energy in the table are from the held version only. Region numbers below are RMSE (0-1) on the
+three pairs and the region's share of the 1920x1080 frame; "area x error" is the product in percent, the order to fix in. Mine
+positions differ by construction (ours places with its own seeded `Rng`), so a mine-only crop compares looks, not places.
+
+| # | Region | Area | RMSE | Area x error | What differs (confidence 70 unless stated) |
+| ---: | --- | ---: | ---: | ---: | --- |
+| 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue); the original's frame is near black (mean `(18, 10, 11)` over `x 200..900, y 60..300`, ours `(96, 111, 121)`). **Cause read (80):** the original swaps in `ZoneSky.gtf` and draws the gradient dome on `g_ZoneEffectsActive`, which mode 14 sets; Detonator stage 1 authors `Sky horizon colour` and `Sky zenith colour` `0 0 0`, so the dome is black. Ours gates the sky swap and dome on `Mode::Zone` (`load/environment.rs:71`). `docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`. |
+| 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. The gantry violet is likely the stage's `EQ colour tint` `171 9 255` on the billboards, which ours leaves off (the shared stage target is `Mode::Zone` only, `load/gantry_visibility.rs:25`; the original's gate is the byte, 80). |
+| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. Ours already applies Detonator's grade (its file, texture sets, Track recolour `[0.97, 0, 0]`); what is missing is the violet: the floor's dashes read `(132..143, 6..7, 199..211)`, the hue of `EQ colour tint` (60, one frame), and the bloom's Detonator arm (below). 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
+| 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball (`MineColour`/`MineBrightness` binds unread, known); ours also shows no spikes at a distance. |
+| 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
+| 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
+| 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours: pale silver body, white wing edges, no lit strip. Not the mode's sun by the code read (stage 1 authors Sun `0`; ours takes it through the grade, 70). Candidates, unmeasured: the livery (`zoneship_<team>`), the `zoneship01` rim term, the hull program's variant. |
+| 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
+| 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
+
+Cheapest first: row 1 (a third of the frame), then row 2's gantries, then the bloom arm, then rows 7 and 4.
+
+**Zone's look in Detonator (read 2026-11-22, `det-look-re`, `detonator-look.md`).** Mode 14 is in the effect gate's mask
+(`0x00206040`: modes 6, 13, 14, 21), so the Zone pieces that test the byte and not the mode run in Detonator: the
+`ZoneSky.gtf` swap and gradient dome, the stage block's publication, the billboards' shared stage target. The mode-keyed
+pieces have Detonator arms of their own: the settings file (`DetonatorMode[DLC3].effectSettings`), the texture sets, the
+stage source (`RaceManager+0x2e10`) and the bloom block. Stage 1 authors Sky horizon and zenith `0 0 0`, Sun `0`, Fog
+`0`, Scene colours `0`, Track Texture Colour `0.97 0 0`, EQ tint `171 9 255` (full table on the page).
+
+**How ours applies it today.** `zone_grade` (`crates/raceplay/src/load/environment.rs`) already builds Detonator's grade
+from `oag_hd::race::DETONATOR`: its file and DLC3 split, both texture sets, the lap-counter stage; fog, light rig, Track
+and Scene recolour, hull sun and probe tint follow it per frame. So the track and scene colours are the file's.
+
+**Ready to wire (changes, in order of area x error):**
+
+1. Sky: `hd_sky_model` (`load/environment.rs:71`) takes `mode.on_zone_mask()`, not `mode == Mode::Zone`, for the Zone sky
+   and dome. Row 1. Test: Detonator on `talons_junction` loads `ZoneSky.gtf`, draws the dome, and the dome's stage-1
+   horizon and zenith are `(0, 0, 0)` (`zone_sky_ground_truth.rs` shape: same circuit in both modes).
+2. Billboards: `zone_shares_texture` (`load/gantry_visibility.rs:25`) on `on_zone_mask()`; the EQ tint colours the bars
+   (style 0 for stages 0-2, grid only after).
+3. Bloom: `bloom::for_mode` (`load/environment/bloom.rs:170`) gets a Detonator arm: the common head (feedback `-0.4`,
+   sizes `1.0`, frame exponent `0.1`, alpha `1.0`, radial on), radial contribution `0.1`, exponent `0.1`, distance `0.6`,
+   and the circuit's own frame contribution and adaption boost kept (Zone's arm forces `0.5` and `5.0`). A separate
+   change from 1 and 2: not "the Zone arm". Needs the radial value and the keep rule as `oag_title` data.
+4. Re-measure the hull (row 7) and the mine and bomb colours (row 4) after 1 to 3: the colours' binds are the
+   `det-colour-re` lane's reading, the hull's pale body is unexplained by the mode's light.
+
+What stays as it is: palette, textures, stage source, hull model, handling. 2048 and Omega: Omega's `zone_sky` is `None`
+(sky source unread), 2048's Detonator sky is unread and has no frame pair; nothing to wire there yet.
+
+**The cannon button (read 2026-11-22, `detonator-cannon.md`, "The buttons", 80): ours is right.** The cannon reads the
+controls record's `+0x1a` (the ordinary *use* hold), the reload `+0x1b` (the *absorb* button), the EMP `+0x1c` (L1). From
+`Pad_Update`'s index table, use is SQUARE, absorb is CIRCLE and change camera is TRIANGLE. The pairs lane's "TRIANGLE
+fires, SQUARE changes the camera" is the harness: `rpcs3_pad.py` sends `triangle` as `BTN_NORTH` and `square` as
+`BTN_WEST`, which RPCS3's evdev default reads as Square and Triangle, so the two reach the game swapped (swap
+mechanism 70; the live result and the static read agree independently). Ours' Square fires and Circle reloads: no change
+(the reload is a press edge in ours, chosen; the original's level-or-edge is unread). Also measured: the craft does not
+steer itself (auto-speed is speed only);
+with no stick it keeps the line for about 6 s on the first straight, and it flies into the first laid mine near 3 s (original: energy 100 to 90, an
+orange screen flash, grey shards and a blue shield glow, scratch capture, no pair).
+A START RACE tap before the prompt is up is held into the race and sends the craft off the track within 4 s (the capture script
+waits 30 s after a restore).
+
+The pair scripts' `--press`/`--hold` names are the harness's: its `triangle` is the game's SQUARE (fire) and its `square` the game's TRIANGLE (camera). A script that fires the original's cannon uses `triangle`; ours' fires on its own Square.
+
+Not reached: **the EMP and the pad pair's contact.** One steered attempt (stick right 0.5 s from lap clock 1.5 s) moved the craft
+toward the pad but into a mine first; the pad is at the right edge about 2.0-2.3 s into the lap and needs a steered line past the
+first mines. The EMP pips, L1 and the wave were not captured. `rpcs3-hd-detonator-shots.py --steer` and `--emp-clock` exist for a
+next try (tune the stick window; mines near 3 s may need the cannon fired first).
 
 ## Zone Battle (HD mode `0xd`, Omega also `0x15`; 2048) is unread
 

@@ -572,12 +572,24 @@ pub fn load_shell(
         &mut report,
     );
     let race_setup = screens::read_race_setup(&mut archives, title, front_end, &mut report);
-    let strings = load_strings(
+    let mut strings = load_strings(
         &mut archives,
         &languages,
         options.language.as_deref(),
         &mut report,
     );
+    // HD's served table (`DATA02`'s) has none of Detonator's end-screen ids: `DATA06`'s, the
+    // table that names Fury's modes, has all of them in every language
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The strings").
+    if crate::endrace::dialect(title) == Some(oag_title::EndRaceDialect::Field)
+        && let Some(entries) = preferred_language.and_then(|language| language.entries.as_deref())
+    {
+        strings.fill(crate::campaign::hd_data06_strings(
+            &mut archives,
+            entries,
+            &oag_ui_screens::endrace::DetonatorResults::IDS,
+        ));
+    }
     steps.lap("strings");
     let (menu_font, title_font, buttons_font) = fonts::load_role_fonts(
         &mut archives,

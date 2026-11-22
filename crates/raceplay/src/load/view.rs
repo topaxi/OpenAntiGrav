@@ -233,6 +233,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.mode == Mode::Zone,
         store,
         options.water,
+        bomb_blast_models.detonator.pad.is_some(),
         &mut report,
     );
     stages::checkpoint()?;
@@ -474,6 +475,20 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         track_model.radius
     ));
 
+    // A Detonator race draws its own `Detonator_Pad` on every speed and weapon pad, and the
+    // circuit's own pad is not seen beneath it (four live frames,
+    // `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Do the circuit's own pads still
+    // draw?", 60): where the title's pad model loaded, the circuit's two pad models are dropped.
+    let (pad_model, weapon_pad_model) = if bomb_blast_models.detonator.pad.is_some() {
+        report.push(
+            "detonator: the circuit's own speed and weapon pads are not drawn under the \
+             Detonator pad"
+                .to_string(),
+        );
+        (None, None)
+    } else {
+        (pad_model, weapon_pad_model)
+    };
     for model in [
         Some(&liveries[0].hull),
         Some(&track_model),

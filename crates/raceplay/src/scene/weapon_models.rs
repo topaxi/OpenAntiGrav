@@ -254,7 +254,7 @@ impl super::Scene {
             None,
         );
         self.write_detonator_parts(
-            (&mine_matrices, &bomb_matrices),
+            (race, &mine_matrices, &bomb_matrices),
             prev,
             queue,
             (view_projection, prev_vp),
@@ -277,7 +277,7 @@ impl super::Scene {
     /// model at the pad's own transform ([`crate::detonator_models`]).
     fn write_detonator_parts(
         &self,
-        (mines, bombs): (&[Mat4], &[Mat4]),
+        (race, mines, bombs): (&Race, &[Mat4], &[Mat4]),
         prev: &Snapshot,
         queue: &Uploads<'_>,
         (view_projection, prev_vp): (Mat4, Mat4),
@@ -285,10 +285,18 @@ impl super::Scene {
         weapon_scene: &mesh_render::Scene,
     ) {
         let parts = &self.bomb_blast.detonator;
+        let (rounds, flashes) = (
+            race.detonator_round_matrices(),
+            race.detonator_flash_matrices(&self.weapon_quads.draw),
+        );
+        // A round or a flash has no pose to blur against: drawn without a previous one.
+        let none: Vec<Mat4> = Vec::new();
         for (pool, matrices, previous) in [
             (&parts.mine_spikes, mines, &prev.mines),
             (&parts.bomb_equalisers, bombs, &prev.bombs),
             (&parts.bomb_glow_edges, bombs, &prev.bombs),
+            (&parts.cannon_bolt, &rounds[..], &none),
+            (&parts.muzzle_flash, &flashes[..], &none),
             (&parts.pad, &parts.pads[..], &parts.pads),
         ] {
             write_one_kind(
@@ -308,6 +316,7 @@ impl super::Scene {
     /// `bombs` laid bombs, and every pad.
     pub(super) fn draw_detonator_parts<'a>(
         &'a self,
+        race: &Race,
         (mines, bombs): (usize, usize),
         list: &mut super::record::DrawList<'a>,
     ) {
@@ -319,6 +328,14 @@ impl super::Scene {
             for drawable in pool.iter().take(bombs) {
                 list.mesh(drawable);
             }
+        }
+        let rounds = race.detonator_round_matrices().len();
+        for drawable in parts.cannon_bolt.iter().take(rounds) {
+            list.mesh(drawable);
+        }
+        let flashes = race.detonator_flash_matrices(&self.weapon_quads.draw).len();
+        for drawable in parts.muzzle_flash.iter().take(flashes) {
+            list.mesh(drawable);
         }
         for drawable in &parts.pad {
             list.mesh(drawable);

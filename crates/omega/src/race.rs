@@ -166,7 +166,22 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
                 r"Data\Weapons\detonator_bomb_glowedges.vex",
             ],
             pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+            cannon: [
+                r"Data\Weapons\detonator_cannonbolt.vex",
+                r"Data\Weapons\hd_muzzleflash_detonator.vex",
+            ],
         }),
+        // The speed-pad arm is read in `FUN_0133fff0` (`detonator-emp.md`, "2048 and Omega");
+        // the weapon-pad arm is not, so HD's is **inherited**.
+        pads: oag_title::DetonatorPads {
+            speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
+            weapon_pad_charges: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+        },
+        // Omega plays Wwise events in place of named cues; the EMP's are not located.
+        voices: None,
+        // The executable names no `EmpReady` string, so its binder probably never binds the
+        // lamp its layout authors (`detonator-hud.md`, "Omega: checked, applies", 60).
+        binds_emp_ready: oag_title::pre_race::Sourced::measured(false),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),

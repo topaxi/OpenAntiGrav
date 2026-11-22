@@ -85,9 +85,11 @@ pub fn elimination_value(
 /// `DetonatorGoldMedal`/`Silver`/`Bronze` against the score `rm+0x2df0`
 /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The score"). The end-of-race
 /// builder records only for a finished craft unless the mode is 6, 10 or 13, which Detonator (14)
-/// is not (`cell-medal-award.md`, "End of race"), so an unfinished race has no value. **Chosen,
-/// not measured:** that `Profile_RecordCampaignResult`'s mode-14 case hands the compare this
-/// score; that case is unread.
+/// is not (`cell-medal-award.md`, "End of race"), so an unfinished race has no value, and a
+/// craft destroyed in the race counts as finished here: the original's out-of-race ending calls
+/// the builder with `force = 1`. `Profile_RecordCampaignResult`'s mode-14 case hands the compare
+/// this score (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "What the record and
+/// the medal use as their value", 82).
 #[must_use]
 pub fn detonator_value(finished: bool, score: Option<i32>) -> Option<i64> {
     if finished { score.map(i64::from) } else { None }

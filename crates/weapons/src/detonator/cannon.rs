@@ -11,9 +11,11 @@
 //!
 //! # What is ours
 //!
-//! - **Muzzles** are [`crate::projectile::cannon::launch`]'s offsets from the craft's dimensions
-//!   (**chosen, not measured**); the original fires from the hull's `cannon_flash_left/right`
-//!   locators.
+//! - **Muzzles** are the hull's `cannon_flash_left/right` locators
+//!   ([`Config::muzzles`], carried by [`crate::projectile::plasma::hull_point`]), as the
+//!   original fires them. A hull with none falls back to
+//!   [`crate::projectile::cannon::launch`]'s offsets from the craft's dimensions (**chosen, not
+//!   measured**). A round leaves along the craft's forward, whatever the locator's own axes.
 //! - **The order inside a tick** is unread in the original (`detonator-cannon.md`, "Open"). Here:
 //!   the trigger, the manual reload, the empty reload, the lockout, the streak reset, the volley,
 //!   every round (update, then hit test, then retire), the streak scan. **Chosen.**
@@ -28,7 +30,7 @@
 use oag_core::math::Vec3;
 use oag_tables::detonator_layout::{GamePlayValues, Scoring};
 
-use super::{Field, Survey};
+use super::{Event, EventKind, Field, Survey};
 use crate::Craft;
 
 /// Rounds the pool holds: fifteen volleys of two.
@@ -54,9 +56,11 @@ const LIFE: f32 = 1.0;
 const CHAIN_DISTANCE_SQUARED: f32 = 5000.0;
 
 /// What a streak of five, ten and fifteen volleys with a hit pays.
-const STREAK_FIVE: i32 = 1000;
-const STREAK_TEN: i32 = 3000;
-const STREAK_FIFTEEN: i32 = 5000;
+pub const STREAK_FIVE: i32 = 1000;
+/// Ten.
+pub const STREAK_TEN: i32 = 3000;
+/// Fifteen.
+pub const STREAK_FIFTEEN: i32 = 5000;
 
 /// What a round's segment met.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -80,7 +84,7 @@ pub enum Sweep {
 }
 
 /// One round in flight.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Round {
     /// Whether the slot holds a round.
     pub live: bool,
@@ -170,6 +174,13 @@ pub struct Cannon {
     pub destroyed_bombs: u32,
     /// Ticks the trigger was held with a loaded, ready cannon (`rm+0x6de44`).
     pub held_ticks: u32,
+    /// Five-volley streak awards paid over the race (`rm+0x2de8`); a clip's second five counts
+    /// again. [`Awards`] are per clip and reset at a reload, these are not.
+    pub fives: u16,
+    /// Ten-volley streak awards paid over the race (`rm+0x2dea`).
+    pub tens: u16,
+    /// Fifteen-volley streak awards paid over the race (`rm+0x2dec`).
+    pub fifteens: u16,
 }
 
 impl Cannon {
@@ -201,6 +212,9 @@ impl Cannon {
             destroyed_mines: 0,
             destroyed_bombs: 0,
             held_ticks: 0,
+            fives: 0,
+            tens: 0,
+            fifteens: 0,
         }
     }
 
@@ -240,6 +254,10 @@ pub struct Config {
     pub lane_width: f32,
     /// `DetonatorScoring.xml`.
     pub scoring: Scoring,
+    /// The hull's `cannon_flash_left` and `cannon_flash_right` locators in its model space,
+    /// `[left, right]`: where a volley's two rounds leave. A side the hull authors none for
+    /// leaves from [`crate::projectile::cannon::launch`]'s muzzle instead.
+    pub muzzles: [Option<Vec3>; 2],
 }
 
 impl Config {
@@ -250,6 +268,7 @@ impl Config {
         stats: &oag_tables::weapons::WeaponStats,
         values: &GamePlayValues,
         scoring: Scoring,
+        muzzles: [Option<Vec3>; 2],
     ) -> Option<Self> {
         let (cannon, mine, bomb) = (stats.cannon()?, stats.mine()?, stats.bomb()?);
         let detonator = stats.detonator()?;
@@ -265,6 +284,7 @@ impl Config {
             lockout_empty: values.cannon_lockout_time_run_out_bullets,
             lane_width: values.distance_offset_between_mines,
             scoring,
+            muzzles,
         })
     }
 }
@@ -306,7 +326,8 @@ fn refill(cannon: &mut Cannon, config: &Config, lockout: f32) {
 /// One tick of the cannon: the trigger and reloads, the volley, every round, and the streaks.
 ///
 /// `ship` is the craft that owns the cannon. `sweep(from, to)` answers what the segment meets in
-/// the track. `survey` places the laid objects.
+/// the track. `survey` places the laid objects. Returns what the tick did that a view shows or
+/// plays: a volley fired, a mine or bomb shot, a round dying on a wall.
 pub fn step_cannon<S: Craft>(
     field: &mut Field,
     survey: &Survey,
@@ -315,7 +336,8 @@ pub fn step_cannon<S: Craft>(
     ship: &S,
     dt: f32,
     sweep: &impl Fn(Vec3, Vec3) -> Sweep,
-) {
+) -> Vec<Event> {
+    let mut events = Vec::new();
     if !field.cannon.armed {
         field.cannon.armed = true;
         field.cannon.ready = true;
@@ -356,32 +378,43 @@ pub fn step_cannon<S: Craft>(
         cannon.m_mine = 1.0;
     }
 
-    if volley {
-        fire_volley(cannon, config, ship);
+    if volley && fire_volley(cannon, config, ship) {
+        events.push(Event {
+            kind: EventKind::Volley,
+            at: ship.physics().body.position,
+        });
     }
 
     for index in 0..POOL {
         if !field.cannon.rounds[index].live {
             continue;
         }
-        let died = update_round(&mut field.cannon.rounds[index], dt, sweep);
-        let hit = test_hits(field, survey, config, index);
+        let wall = update_round(&mut field.cannon.rounds[index], dt, sweep);
+        if let Some((at, normal)) = wall {
+            events.push(Event {
+                kind: EventKind::RoundWall { normal },
+                at,
+            });
+        }
+        let hit = test_hits(field, survey, config, index, &mut events);
         let round = &mut field.cannon.rounds[index];
-        if died || hit || round.age > LIFE {
+        if wall.is_some() || hit || round.age > LIFE {
             round.live = false;
         }
     }
 
     award_streaks(&mut field.cannon);
+    events
 }
 
-fn fire_volley<S: Craft>(cannon: &mut Cannon, config: &Config, ship: &S) {
+/// Launches a volley's two rounds. Returns whether the pool had room for both.
+fn fire_volley<S: Craft>(cannon: &mut Cannon, config: &Config, ship: &S) -> bool {
     let free: Vec<usize> = (0..POOL)
         .filter(|&i| !cannon.rounds[i].live)
         .take(2)
         .collect();
     let [a, b] = free[..] else {
-        return;
+        return false;
     };
     let physics = ship.physics();
     let dimensions = ship.dimensions();
@@ -392,7 +425,10 @@ fn fire_volley<S: Craft>(cannon: &mut Cannon, config: &Config, ship: &S) {
     let first = usize::from(cannon.ring) % POOL;
     for (index, (slot, left)) in [(a, true), (b, false)].into_iter().enumerate() {
         let entry = (first + index) % POOL;
-        let (muzzle, _) = crate::projectile::cannon::launch(physics, &dimensions, left);
+        let muzzle = match config.muzzles[usize::from(!left)] {
+            Some(local) => crate::projectile::plasma::hull_point(&physics.body, local),
+            None => crate::projectile::cannon::launch(physics, &dimensions, left).0,
+        };
         cannon.hits[entry] = cannon.hits[entry].saturating_add(1);
         cannon.rounds[slot] = Round {
             live: true,
@@ -407,10 +443,15 @@ fn fire_volley<S: Craft>(cannon: &mut Cannon, config: &Config, ship: &S) {
         };
     }
     cannon.ring = ((first + 2) % POOL) as u8;
+    true
 }
 
-/// `PulseBullet_Update`. Returns whether the round died on a wall.
-fn update_round(round: &mut Round, dt: f32, sweep: &impl Fn(Vec3, Vec3) -> Sweep) -> bool {
+/// `PulseBullet_Update`. Returns where and against which normal the round died on a wall.
+fn update_round(
+    round: &mut Round,
+    dt: f32,
+    sweep: &impl Fn(Vec3, Vec3) -> Sweep,
+) -> Option<(Vec3, Vec3)> {
     round.age += dt;
     round.prev = round.pos;
     let mut next = round.prev + round.vel * dt;
@@ -426,13 +467,13 @@ fn update_round(round: &mut Round, dt: f32, sweep: &impl Fn(Vec3, Vec3) -> Sweep
 
     if let Sweep::Wall { point, normal } = sweep(round.prev, round.pos) {
         if round.rebounds == 0 {
-            return true;
+            return Some((point, normal));
         }
         round.rebounds -= 1;
         round.vel -= normal * (2.0 * round.vel.dot(normal));
         round.pos = point + normal * REBOUND_OFFSET;
     }
-    false
+    None
 }
 
 /// Whether the capsule round the segment `prev..pos` holds `target`
@@ -458,7 +499,13 @@ fn capsule_hits(round: &Round, target: Vec3, radius: f32) -> bool {
 
 /// `CannonManager_TestMineBombHits` for one round: every untriggered mine, then every bomb;
 /// neither loop stops at a hit. Returns whether the round hit anything.
-fn test_hits(field: &mut Field, survey: &Survey, config: &Config, index: usize) -> bool {
+fn test_hits(
+    field: &mut Field,
+    survey: &Survey,
+    config: &Config,
+    index: usize,
+    events: &mut Vec<Event>,
+) -> bool {
     let round = field.cannon.rounds[index];
     let mut hit = false;
 
@@ -486,6 +533,10 @@ fn test_hits(field: &mut Field, survey: &Survey, config: &Config, index: usize) 
             config.scoring.old_mine_score
         };
         cannon.score = cannon.score.saturating_add(points);
+        events.push(Event {
+            kind: EventKind::MineShot { live: placed.live },
+            at,
+        });
         field.remove_mine(i);
     }
 
@@ -520,14 +571,24 @@ fn test_hits(field: &mut Field, survey: &Survey, config: &Config, index: usize) 
         cannon.score = cannon.score.saturating_add(points);
         cannon.bombs_shot = cannon.bombs_shot.saturating_add(1);
         cannon.m_chain = 1.0;
+        events.push(Event {
+            kind: EventKind::BombShot,
+            at,
+        });
         field.remove_bomb(i);
-        chain_reaction(field, survey, config, at);
+        chain_reaction(field, survey, config, at, events);
     }
     hit
 }
 
 /// The mines a destroyed bomb sets off: scored, not counted, no hit for the clip.
-fn chain_reaction(field: &mut Field, survey: &Survey, config: &Config, bomb_at: Vec3) {
+fn chain_reaction(
+    field: &mut Field,
+    survey: &Survey,
+    config: &Config,
+    bomb_at: Vec3,
+    events: &mut Vec<Event>,
+) {
     let mut i = 0;
     while i < usize::from(field.live_mines) {
         let placed = field.mines[i];
@@ -548,6 +609,10 @@ fn chain_reaction(field: &mut Field, survey: &Survey, config: &Config, bomb_at: 
             config.scoring.old_mine_score
         };
         cannon.score = cannon.score.saturating_add(points);
+        events.push(Event {
+            kind: EventKind::MineChained { live: placed.live },
+            at,
+        });
         field.remove_mine(i);
     }
 }
@@ -565,17 +630,21 @@ fn award_streaks(cannon: &mut Cannon) {
         let awards = &mut cannon.awards;
         let pay = if streak >= 15 && !awards.fifteen {
             awards.fifteen = true;
+            cannon.fifteens = cannon.fifteens.saturating_add(1);
             STREAK_FIFTEEN
         } else if streak >= 10 && !awards.ten {
             awards.ten = true;
+            cannon.tens = cannon.tens.saturating_add(1);
             STREAK_TEN
         } else if (5..=9).contains(&streak) {
             if !awards.first_five {
                 awards.first_five = true;
                 awards.first_five_at = at;
+                cannon.fives = cannon.fives.saturating_add(1);
                 STREAK_FIVE
             } else if !awards.second_five && i32::from(at) - i32::from(awards.first_five_at) > 5 {
                 awards.second_five = true;
+                cannon.fives = cannon.fives.saturating_add(1);
                 STREAK_FIVE
             } else {
                 0

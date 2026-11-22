@@ -49,6 +49,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: skins::played::SPEED_LAP,
     zone: skins::played::ZONE,
     elimination: skins::played::ELIMINATION,
+    detonator: skins::played::DETONATOR,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
     player_tags: None,
@@ -106,6 +107,7 @@ pub const HD_CAMPAIGN: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: skins::campaign::TIME_TRIAL,
     zone: skins::campaign::ZONE,
     elimination: skins::campaign::ELIMINATION,
+    detonator: skins::played::DETONATOR,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
     player_tags: None,
@@ -406,6 +408,9 @@ pub const ALWAYS_ON: &[&str] = &[
     // as authored (`docs/ghidra/functions/ps4-omega-eu/hud-radar.md`).
     "Radar",
     "PlayerDot",
+    // Detonator's weapon display, a frame of the clip's arc (`2048_hud\DetonatorWeapons.xml`,
+    // authored by the Detonator layout alone).
+    "DetonatorWeaponDisplay",
 ];
 
 /// `PickupIcon`'s per-weapon source rectangle, as [`oag_title::HudArt::pickup_icon_uv`]
@@ -519,6 +524,10 @@ pub mod skins {
         pub const ZOMBIE: &str = r"Data\XML\2048_hud\Zombie_HUD.xml";
         /// Multiplayer tag, on the same terms as [`ZOMBIE`].
         pub const MP_TAG: &str = r"Data\XML\2048_hud\MPTag_HUD.xml";
+        /// Detonator: the only Detonator layout the executable names, a text-only score and
+        /// stage skin on `2048_hud\DetonatorWeapons.xml`
+        /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "2048 and Omega").
+        pub const DETONATOR: &str = r"Data\XML\2048_hud\Detonator_HUD_HD.xml";
     }
 }
 

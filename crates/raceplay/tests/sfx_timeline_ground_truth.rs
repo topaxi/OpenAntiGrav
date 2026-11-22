@@ -416,7 +416,8 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices(banks: &Banks) {
 
     // The census: every one-shot hud, ship and weapons cue plays a timeline,
     // `.COLLISIONS` too now that the contact's severity and surface are handed to it, and so do
-    // the three contact cues only HD has (which are not in `Cue::ALL`).
+    // the three contact cues only HD has and Detonator's two explosion cues (none of them in
+    // `Cue::ALL`).
     let plays_timeline = |c: &Cue| {
         banks
             .report
@@ -427,6 +428,7 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices(banks: &Banks) {
     let flat: Vec<&str> = Cue::ALL
         .into_iter()
         .chain(Cue::HD_CONTACT)
+        .chain(Cue::DETONATOR)
         .filter(|c| c.walks_variables())
         .filter(|c| !plays_timeline(c))
         .map(Cue::name)
@@ -435,6 +437,10 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices(banks: &Banks) {
     assert!(
         !Cue::ALL.iter().any(|c| Cue::HD_CONTACT.contains(c)),
         "the three HD-only contact cues are loaded beside Cue::ALL, not in it"
+    );
+    assert!(
+        !Cue::ALL.iter().any(|c| Cue::DETONATOR.contains(c)),
+        "Detonator's two explosion cues are loaded beside Cue::ALL, not in it"
     );
 }
 
