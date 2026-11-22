@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: mines/bombs bite, own hull/models drawn, cannon+score simulated, campaign launches; EMP, auto-speed, HUD, end screen open"
+summary: "Detonator: mines/bombs bite, own hull/models drawn, cannon+score simulated, campaign launches, HUD read; EMP, auto-speed, HUD wiring, end screen open"
 categories: [rendering]
 ---
 
@@ -347,9 +347,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   No law read; the player throttles. Read what Detonator's engine branch does (HD's hover
   code gates modes 6, `0xd`, `0xe` together, `hover-target.md`). The handling file is answered:
   `/data/ships/detonator` (hull bullet above).
-- **Score, end screen, HUD.** Score and percentage laws read (cannon bullet above), not wired;
-  `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED`;
-  `detonator_hud.xml` (the race draws the time trial's HUD). Campaign cells (`mode="Detonator"`,
+- **Score, end screen, HUD.** Score and percentage simulated (cannon bullet above), not shown;
+  `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED` unread. The HUD's widget
+  bindings are read (`detonator-hud.md`, phase 12 table), not wired: the race still draws the
+  time trial's HUD. Campaign cells (`mode="Detonator"`,
   12 on the Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score
   (phase 14); mid-race medal cues and the end screen's score rows are phases 12 and 13.
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
