@@ -741,9 +741,19 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     } else {
         first = material_sample(MATERIAL_ALBEDO, first_uv);
     }
+    // **A Detonator hull panel's iridescent overlay** (`slots` entry of rate 10,
+    // `mesh::rcs::hull_overlay`): the second binding is a ramp the program reads at the facing
+    // term `dot(N, V)` of the mapped normal, not at the surface's own coordinate
+    // (`detonator_ship_dg_iridescent`, block `0x46d0` `@0x22`; `TC1` is eye minus position). It is
+    // fetched here, in uniform control flow, in place of the ordinary second fetch.
+    let overlay_hull = ((in.slots >> 24u) & 63u) != 0u && row_scale.y > 9.5 && row_scale.y < 10.5;
+    let overlay_facing = clamp(dot(view_dir, normalize(n_hull)), 0.0, 1.0);
     var second = vec4<f32>(0.0);
     if second_read != 0.0 {
-        second = material_sample(MATERIAL_LIGHTMAP, in.texcoord);
+        second = material_sample(
+            MATERIAL_LIGHTMAP,
+            select(in.texcoord, vec2<f32>(overlay_facing), overlay_hull),
+        );
     }
     var picture = select(first, second, (in.slots & 2u) != 0u);
     // **HD's Sebenco ice pool** (`slots::ICE`, `oag_mesh::mesh::rcs::ice`): the
@@ -1639,10 +1649,17 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             vec3<f32>(row_scale.w),
             crowd_lit,
         );
+        // **The Detonator hull's overlay** `2 * Colour * picture * ramp`, added after the light
+        // multiply like `hull_rim` (`mesh::rcs::hull_overlay`); `second` is the ramp fetched above.
+        let hull_overlay = select(
+            vec3<f32>(0.0),
+            2.0 * row_tint.x * texel_linear * decode(second.rgb),
+            overlay_hull,
+        );
         let lit_linear = scene.light.output_scale
             * ((surface_linear * program_light * pane_cover + program_specular) * program_multiplier
                 + zone_glow_term + glow_linear + pad_glow + mag_glow + chevron_glow + probe_reflection
-                + sky_reflection + vec3<f32>(hull_rim));
+                + sky_reflection + vec3<f32>(hull_rim) + hull_overlay);
         let encoded = pow(
             clamp(lit_linear, vec3<f32>(0.0), vec3<f32>(1.0)),
             vec3<f32>(1.0 / 2.2),

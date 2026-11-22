@@ -188,6 +188,7 @@ pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
 mod glow;
+mod hull_overlay;
 mod ice;
 mod probe_lit;
 pub mod psp2;

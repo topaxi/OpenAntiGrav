@@ -209,3 +209,9 @@ pub const REFLECTION_RATE: f32 = 8.0;
 /// (`dc_windows_a`'s block #3), the material's own weight (`0x5e5b1937`) in `tint.x`: read by
 /// `shade.wesl` off the entry the vertex's material index names. See `super::rcs::window_glass`.
 pub const WINDOW_REFLECTION_RATE: f32 = 9.0;
+
+/// The `rate` of an entry that marks a hull material carrying the iridescent overlay
+/// `2 * Colour * picture * ramp(N.V)`, the material's own `Colour` in `tint.x` and the ramp
+/// bound second: read by `shade.wesl` off the entry the vertex's material index names. See
+/// `super::rcs::hull_overlay`.
+pub const HULL_OVERLAY_RATE: f32 = 10.0;

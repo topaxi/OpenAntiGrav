@@ -10,7 +10,8 @@
 use std::sync::Arc;
 
 use oag_mesh::mesh::{
-    Bounds, DrawCall, Emissive, GpuVertex, Model, ModelTexture, REFLECTION_RATE, Texels, slots,
+    Bounds, DrawCall, Emissive, GpuVertex, HULL_OVERLAY_RATE, Model, ModelTexture, REFLECTION_RATE,
+    Texels, slots,
 };
 use oag_mesh::mesh_render::{
     self, Anisotropy, ENV_PROBE_FORMAT, ENV_PROBE_LAYERS, ENV_PROBE_SIZE, Light, SH_PROBE_BYTES,
@@ -673,4 +674,47 @@ fn a_fresnel_base_adds_an_untinted_rim_to_the_hull() {
         (grazing - 2.194).abs() < 0.15,
         "{grazing}: {tilted:?} over {low:?}"
     );
+}
+
+/// A hull panel tagged with the iridescent overlay adds `2 * Colour * picture * ramp` to its lit
+/// colour, untinted, where the ramp is the second binding read at the facing term:
+/// `detonator_ship_dg_iridescent`'s `IBL` block (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`,
+/// "The hull's paint"). The added light is linear in `Colour`, and a black ramp adds nothing.
+/// Dropping the tag's read, the weight or the ramp's fetch turns a case red.
+#[test]
+fn a_tagged_hull_panel_adds_twice_colour_times_picture_times_its_ramp() {
+    let Some((device, queue)) = gpu() else { return };
+    let panel = |colour: f32, ramp: u8| {
+        let table = vec![Emissive {
+            tint: [colour, 0.0, 0.0],
+            rate: HULL_OVERLAY_RATE,
+            ..reflective()[0]
+        }];
+        let mut hull = model(
+            slots::DEFAULT | (1 << slots::MATERIAL_SHIFT),
+            table,
+            [0.0, 0.0, 1.0],
+        );
+        hull.lightmaps = vec![Some(texture("facing ramp", [ramp, ramp, ramp, 255]))];
+        draw(&device, &queue, &hull, rig(), ShadowMaps::NONE, 0.0)
+    };
+    let linear = |px: [u8; 4]| (f32::from(px[0]) / 255.0).powf(2.2);
+
+    let none = panel(0.0, 200);
+    let low = panel(0.05, 200);
+    let high = panel(0.10, 200);
+    assert!(
+        linear(low) > linear(none),
+        "an overlay adds light: {low:?} over {none:?}"
+    );
+    assert!(
+        low[0] == low[1] && low[1] == low[2],
+        "the overlay is untinted: {low:?}"
+    );
+    let doubled = (linear(high) - linear(none)) / (linear(low) - linear(none));
+    assert!(
+        (doubled - 2.0).abs() < 0.15,
+        "twice the Colour adds twice the light, got {doubled}: {high:?} over {low:?} over {none:?}"
+    );
+    assert_eq!(panel(0.10, 0), none, "a black ramp adds nothing");
 }

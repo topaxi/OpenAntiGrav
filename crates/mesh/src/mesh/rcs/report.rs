@@ -216,6 +216,12 @@ pub struct Report {
     /// added to the hull as a glow". Refused rather than drawn, so this
     /// counts an absence the picture would otherwise show as a colour cast.
     pub emissive_surface_map_excluded: usize,
+    /// Accumulating materials refused an additive glow because the second binding is a
+    /// 1-D ramp their program reads at a scalar (`emissive::SHIP_FACING_RAMP_SAMPLERS`) or
+    /// is the picture itself.
+    pub emissive_lookup_excluded: usize,
+    /// Hull materials that carry the iridescent overlay (`super::hull_overlay`).
+    pub hull_overlay_bound: usize,
     /// Materials that structurally accumulate but whose loaded second
     /// texture's own sampler hash this project has no disc-measured role
     /// for - not a known glow, not a known surface map.
@@ -497,6 +503,15 @@ impl Report {
                 ", {n} material(s) refused an additive glow whose second texture is a \
                  known normal/specular map"
             ),
+        } + &match self.emissive_lookup_excluded {
+            0 => String::new(),
+            n => format!(
+                ", {n} material(s) refused an additive glow whose second texture is a \
+                 facing ramp or the picture itself"
+            ),
+        } + &match self.hull_overlay_bound {
+            0 => String::new(),
+            n => format!(", {n} hull material(s) with the iridescent facing-ramp overlay"),
         } + &match self.emissive_role_unresolved {
             0 => String::new(),
             n => format!(
