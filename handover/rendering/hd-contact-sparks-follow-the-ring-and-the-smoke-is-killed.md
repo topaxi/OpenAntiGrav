@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-18
-summary: "HD: frictionless spark (row 5), smoke anchor (row 8) and a frame pair (row 9) open; rows 1-4, 6, 7 landed"
+updated: 2026-11-22
+summary: "HD: frictionless spark (row 5), a frame pair (row 9) and the smoke anchor's Y-row term (row 8) open; rows 1-4, 6, 7 and the row 8 anchor landed"
 size: M (55)
 difficulty: medium (60)
 ---
@@ -32,7 +32,7 @@ Nothing below needs more reverse engineering unless the row says so.
 | 5 | A record with no friction throws `WO_SHIP_COLL_SPARK_NODAMAGE` (kind 2), a one-shot | `0x000e7730`, kind 2 at `0x002d9d18` | `Trigger::CollisionSparkNoDamage` exists and no HD caller reaches it (no anchors) | **RE first**: which HD records carry no friction (the cage, the floor) is not read |
 | 6 (LANDED (`damage_fx.rs`; test `a_state_change_kills_the_previous_smoke_with_its_particles`)) | Damage smoke: a hit that changes the state (MILD, MODERATE, CRITICAL) kills the previous state's effects outright, particles included | `0x002a1994` on, `0x0027f7b0(.., 1)`, `0x00285868` | `damage_fx.rs` lets the old state's smoke finish | keep the `Playing` handles per craft and `psys::Stage::kill` them when the state changes |
 | 7 (LANDED (`Stage::carry`; test `the_damage_smoke_carries_the_crafts_velocity`)) | Damage smoke carries the craft's velocity over 60 | `0x002a1c18`..`0x002a1c4c` | no velocity | `oag_fx::psys::carried` (`carry`, `play_carried`) on the riding instance |
-| 8 | Damage smoke anchor: the engine flare node's origin plus `1.5` of that node's Z row (`2.0` once dead), minus `1.9` of its Y row under a view flag | `0x002a0268`; the object is the `EngineFlare` at `craft + 0x5f70` | the craft's origin | take the flare node's matrix where the engine flare is placed today and offset along its Z; **which way that Z points along the hull is unsettled** (engine-trail.md), so check the result against a frame before keeping it |
+| 8 (LANDED (`damage_fx::anchor`; tests `the_anchor_is_the_flare_nodes_origin_plus_one_and_a_half_of_its_z_row`, `the_smoke_leaves_the_flare_node_and_follows_it`); open: the `1.9` Y-row term) | Damage smoke anchor: the engine flare node's origin plus `1.5` of that node's Z row (`2.0` once dead), minus `1.9` of its Y row under a view flag | `0x002a0268`; the object is the `EngineFlare` at `craft + 0x5f70` | the flare locator plus `1.5` of its Z (toward the nose, into the engine bay); the film's frames cannot separate the sign (particle-triggers.md, "The smoke's anchor against a frame") | the `1.9` term: `0x002a0340..0x002a0378`, gated on `ship + 0x5f43` and a global object's flag bits `6`; what that flag is, is unread. A CRITICAL rival frame (shield poked under 40) would settle the sign to a pixel |
 | 9 | An RPCS3-against-ours pair of a weapon hit on a craft: the original's film is taken (table on particle-triggers.md); ours rendered with `hd-missile-film-pair.py` is not a pair for the craft (the tool matches the camera to the blast, and the struck craft is a few pixels away) | `scripts/rpcs3-hd-missile-film.py`; `scripts/rpcs3-hd-weapon.py` and `scripts/hd-weapon-pair.py` take per-frame craft poses | - | take the film with every craft's pose (the film's `aNNNN.json` already has them), render ours posed on the struck rival with `--pose-hold-ticks` long enough for the smoke to be on screen, then judge rows 1, 6 and 7 |
 
 Leads read in passing, not followed:
@@ -67,7 +67,7 @@ non-HD title are unchanged; the 2048 and Omega callers are still not wired).
    `hd-racebox-talons-venom-weapons-grid-rpcs3-20574`, run the film, render ours **posed**
    from the film's craft poses (not with `hd-missile-film-pair.py`, see the row), and look at
    1.0 s to 2.0 s (the hulls touching) and 0.5 s to 0.75 s (the struck rival alone).
-2. Row 8 against a frame (`damage_fx.rs`).
+2. Row 8: a frame of a CRITICAL rival, and the `1.9` Y-row term's flag.
 3. Row 5 after its read. Slot 5 of rows 3 and 4 is mapped onto the particle system's
    severity (`scale`), **chosen, not measured** (what `0x002846d0` does with slot 5 is still
    unread); the opponents' spark is one riding `Stage` instance per craft.
