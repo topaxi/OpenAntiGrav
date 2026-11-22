@@ -32,6 +32,7 @@ use oag_core::math::Vec3;
 use oag_tables::detonator_layout::{GamePlayValues, PatternFile, Scoring};
 
 pub mod cannon;
+pub mod emp;
 
 /// Mines the pool holds: `MineManager`'s capacity in Detonator.
 pub const MAX_MINES: usize = 200;
@@ -124,6 +125,11 @@ pub struct Field {
     pub bomb_hits: [u8; MAX_BOMBS],
     /// The pulse cannon and its score.
     pub cannon: cannon::Cannon,
+    /// The EMP: the pads' charge, the gauge and the wave.
+    pub emp: emp::Emp,
+    /// The player craft's auto-speed ramp (`craft+0x2d4`), `0` to `1`, zeroed by a rescue
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`, "The ramp and the rescue").
+    pub ramp: f32,
 }
 
 impl Default for Field {
@@ -149,13 +155,19 @@ impl Field {
             live_bombs: 0,
             bomb_hits: [0; MAX_BOMBS],
             cannon: cannon::Cannon::new(),
+            emp: emp::Emp::new(),
+            ramp: 0.0,
         }
     }
 
     /// Whether nothing was ever laid.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.stages_laid == 0 && self.live_mines == 0 && self.live_bombs == 0 && !self.cannon.armed
+        self.stages_laid == 0
+            && self.live_mines == 0
+            && self.live_bombs == 0
+            && !self.cannon.armed
+            && !self.emp.armed
     }
 
     /// Removes mine `index`, filling its place with the last one.
@@ -553,6 +565,19 @@ pub enum EventKind {
     },
     /// The cannon fired a volley, at the craft that fired it.
     Volley,
+    /// The charge reached the EMP's threshold: the `EMPREADY` announcer line.
+    EmpReady,
+    /// The gauge filled: the `EMPFULL` announcer line.
+    EmpFull,
+    /// The EMP fired, at the survey entry its wave starts from: `QUAKELAUNCH`.
+    EmpLaunch,
+    /// The EMP's wave cleared a mine; `live` as for [`Self::MineShot`].
+    MineEmped {
+        /// Laid this stage, and not yet darkened.
+        live: bool,
+    },
+    /// The EMP's wave cleared a bomb.
+    BombEmped,
 }
 
 /// Sets off every mine and bomb a craft is touching, and removes them.

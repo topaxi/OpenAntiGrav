@@ -233,8 +233,8 @@ pub(super) fn load_hud(
 
     if mode == Mode::Detonator && layout.is_some() {
         report.push(
-            "HUD: Detonator draws no EMP gauge (Emp_0-7, EmpReady, EmpBarEffect wait on the EMP \
-             mechanic), no bomb-ahead warning, no ScoreFeedBack0-15 and no medal models; \
+            "HUD: Detonator draws no EmpBarEffect (an ImageModel the layout reader does not \
+             model; its gauge is RaceSim::detonator_emp_gauge), no bomb-ahead warning, no ScoreFeedBack0-15 and no medal models; \
              PulseScore, PulseMultiplier, EmpScore and PulseBankedScore are never bound by the \
              original; the reload gauge is the craft's own material constant, not a HUD widget"
                 .to_string(),

@@ -78,8 +78,15 @@ impl ChainWatch {
 /// A spent bullet icon is one volley fired: the clip refills at the start of a reload lockout,
 /// so the icons read `clip` of the fifteen (`detonator-hud.md`, `0x0007e950`, 55).
 #[must_use]
-pub(super) fn readout(cannon: &Cannon, stage: u32, watch: &ChainWatch) -> oag_hud::Detonator {
+pub(super) fn readout(
+    cannon: &Cannon,
+    stage: u32,
+    emp: (u32, bool),
+    watch: &ChainWatch,
+) -> oag_hud::Detonator {
     oag_hud::Detonator {
+        emp_charge: emp.0,
+        emp_ready: emp.1,
         score: cannon.score,
         clip: cannon.clip,
         stage,
@@ -125,7 +132,8 @@ mod tests {
     fn the_readout_carries_the_cannon_and_the_stage() {
         let mut cannon = after(3, Awards::default());
         cannon.score = 12_345;
-        let shown = readout(&cannon, 3, &ChainWatch::default());
+        let shown = readout(&cannon, 3, (5, true), &ChainWatch::default());
+        assert_eq!((shown.emp_charge, shown.emp_ready), (5, true));
         assert_eq!(
             (
                 shown.score,

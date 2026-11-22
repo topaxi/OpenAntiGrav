@@ -493,6 +493,15 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     craft: Some(DETONATOR_CRAFT),
     handling: Some(DETONATOR_HANDLING),
     objects: Some(DETONATOR_OBJECTS),
+    // 2048's pad arms are unread (`detonator-emp.md`, "2048 and Omega": the gauge is read, the
+    // pads, fire and wave are not), so its pads keep their race behaviour and its EMP never
+    // charges.
+    pads: oag_title::DetonatorPads {
+        speed_pad_charges: oag_title::pre_race::Sourced::chosen(false),
+        weapon_pad_charges: oag_title::pre_race::Sourced::chosen(false),
+    },
+    // 2048's cue names are hashed and its Detonator speech bank is not located.
+    voices: None,
 };
 
 /// 2048's Detonator object models. The archives ship each under both `Data\Weapons` (HD's own

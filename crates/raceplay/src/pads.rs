@@ -110,6 +110,32 @@ impl Race {
         // original's single `craft+0x1d0` slot and its single `DAT_08b3435c` flag,
         // which `Zone_Update` (`0x0882f5cc`) consumes and clears once per tick.
         let entered = hit.map(|(index, _)| index);
+        // Detonator: a speed pad gives no force, no timer and no plume; each entry charges the
+        // EMP and plays `WEAPONPICKUP` instead (`Craft_ApplySpeedPad`'s mode-14 arm,
+        // `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads charge, they do not
+        // boost"). Re-armed by the same edge as the boost: off every pad, then on one.
+        let charges = self
+            .core
+            .sim
+            .detonator
+            .as_ref()
+            .is_some_and(|detonator| detonator.speed_pads_charge);
+        if charges {
+            if entered != self.core.sim.pad_current[slot] {
+                self.core.sim.pad_current[slot] = entered;
+                if let Some(index) = entered {
+                    self.core.sim.extensions.pad_entered(slot, index, false);
+                    if slot == self.core.sim.world.primary_slot() {
+                        self.core.sim.charge_emp(slot);
+                        self.core.sim.cues.push(oag_gameplay::cue::CueEvent::new(
+                            oag_gameplay::cue::Cue::WeaponPickup,
+                            slot,
+                        ));
+                    }
+                }
+            }
+            return None;
+        }
         // A simulation mod's `scale-pad` (`crate::extensions`), the pad's race-wide factor
         // times the slot's: exactly 1.0 without a module. It scales the push alone; at 0
         // the pad gives no push, and the entry below pays no plume, sound, boost count
@@ -289,6 +315,25 @@ impl SimRace {
         };
         // A simulation mod hears every entry, cooling down or not.
         self.sim.extensions.pad_entered(slot, index, true);
+
+        // Detonator: a weapon pad hands out nothing and charges the EMP once per pad, again
+        // only after another weapon pad or the next start-line crossing (`Ship_TestWeaponPad`,
+        // `detonator-emp.md`). Not while the Autopilot flies the craft: the original's test
+        // excludes its running bit, and this project's autopilot stands in for it (chosen).
+        if let Some(detonator) = &self.sim.detonator
+            && detonator.weapon_pads_charge
+        {
+            let pad = u16::try_from(index).ok();
+            let emp = &self.sim.world.detonator.emp;
+            if slot == self.sim.world.primary_slot()
+                && !self.sim.flown_for_the_player(slot)
+                && emp.weapon_pad != pad
+            {
+                self.sim.world.detonator.emp.weapon_pad = pad;
+                self.sim.charge_emp(slot);
+            }
+            return;
+        }
 
         // Point 1 above. Unconditional, and before the grant, so a pad that
         // hands nothing over is still spent.

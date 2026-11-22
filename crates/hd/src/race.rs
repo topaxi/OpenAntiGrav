@@ -465,6 +465,19 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     craft: Some(DETONATOR_CRAFT),
     handling: Some(DETONATOR_HANDLING),
     objects: Some(DETONATOR_OBJECTS),
+    // `Craft_ApplySpeedPad`'s mode-14 arm and `Ship_TestWeaponPad` (`detonator-emp.md`, live on
+    // RPCS3 for the speed pad, one live charge for the weapon pad).
+    pads: oag_title::DetonatorPads {
+        speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
+        weapon_pad_charges: oag_title::pre_race::Sourced::measured(true),
+    },
+    // The two names are in `speech_det.bnk` (`DATA00`) and in no other speech bank on the disc;
+    // which bank the mode opens is not read, the census places them.
+    voices: Some(oag_title::DetonatorVoices {
+        bank: "/data/sound/speech_det.bnk",
+        ready: "EMPREADY",
+        full: "EMPFULL",
+    }),
 };
 
 /// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,

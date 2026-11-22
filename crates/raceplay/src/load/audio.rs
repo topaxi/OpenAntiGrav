@@ -54,6 +54,24 @@ pub(super) fn banks_and_announcers(
             sounds.load_speed_lap_medal(archives, tick, medal);
         }
     }
+    // Detonator's EMP announcer lines, from the bank the title names (HD: `speech_det.bnk`).
+    if mode == Mode::Detonator {
+        match race.detonator.and_then(|detonator| detonator.voices) {
+            Some(voices) => sounds.load_named(
+                archives,
+                voices.bank,
+                tick,
+                &[
+                    (oag_gameplay::cue::Cue::EmpReady, voices.ready),
+                    (oag_gameplay::cue::Cue::EmpFull, voices.full),
+                ],
+            ),
+            None => report.push(
+                "sfx: EMPREADY and EMPFULL not played: this title names no Detonator voices"
+                    .to_string(),
+            ),
+        }
+    }
     // The engine is a per-team crossfade table on HD and 2048, not a cue:
     // loaded only where the ship bank has no `~ENGINE`. 2048 addresses a bank
     // of its own and keeps a second set of tables for Zone. See

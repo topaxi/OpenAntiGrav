@@ -434,6 +434,11 @@ pub enum Cue {
     /// One voice here, not two (the original has one per span, two at a join).
     /// Placed at the wave's road midpoint, where the `WO_QUAKE` visual follows.
     QuakeTravel,
+    /// Detonator's speed pad charging the EMP: `"WEAPONPICKUP"` in the weapons bank, which
+    /// `Craft_ApplySpeedPad`'s mode-14 arm plays on the craft's emitter in place of the boost
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads charge, they do not
+    /// boost"). Raised only by a Detonator pad entry.
+    WeaponPickup,
     /// The LeachBeam firing, locked onto somebody.
     ///
     /// `LeachBeam_InitLocked` (`0x08873d3c`, confidence 82) plays `LEACH` once on
@@ -572,6 +577,12 @@ pub enum Cue {
     /// new-lap-record message line. HD only; Pulse's bank carries it and its
     /// executable never names it. See [`Self::PerfectLap`].
     NewLapRecord,
+    /// Detonator's EMP reaching its threshold: the `"EMPREADY"` announcer line
+    /// (`Detonator_UpdateRace` through `Sound_QueueAnnouncerCue`, `detonator-emp.md`). Named
+    /// by the title (`oag_title::DetonatorVoices`); not in [`Self::ALL`].
+    EmpReady,
+    /// The EMP's gauge full: `"EMPFULL"`. See [`Self::EmpReady`].
+    EmpFull,
     /// HD's in-race Speed Lap gold jingle: `"gold_med_shrt"` in
     /// `speech_results.bnk`, played by `Craft_UpdateLapProgress` (`0x000e553c`)
     /// with the medal line on every new race-best lap inside the tier. A
@@ -739,7 +750,7 @@ impl Cue {
 
     /// Detonator's two explosion cues, loaded beside [`Self::HD_CONTACT`] and on no other title:
     /// only HD's Detonator events raise them.
-    pub const DETONATOR: [Self; 2] = [Self::MineExplosion, Self::BombExplosion];
+    pub const DETONATOR: [Self; 3] = [Self::MineExplosion, Self::BombExplosion, Self::WeaponPickup];
 
     pub const ALL: [Self; 43] = [
         Self::SpeedupPad,

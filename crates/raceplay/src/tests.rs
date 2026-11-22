@@ -380,6 +380,7 @@ fn setup(handling: Handling) -> SimSetup {
         // comment.
         weapon_ai: None,
         detonator: None,
+        detonator_pads: None,
         allowed_weapons: Vec::new(),
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary

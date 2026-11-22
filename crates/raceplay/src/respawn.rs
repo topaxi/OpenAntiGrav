@@ -439,6 +439,12 @@ impl Race {
         ship.place_at(pose);
         ship.physics.body.linear_velocity = velocity;
         self.reseat(slot, pose.position);
+        // Detonator's engine comes back over 1.3 s after a rescue: the re-placement zeroes the
+        // auto-speed ramp (`docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`, "The ramp
+        // and the rescue").
+        if self.core.sim.detonator.is_some() && slot == self.core.sim.world.primary_slot() {
+            self.core.sim.world.detonator.ramp = 0.0;
+        }
 
         #[cfg(feature = "view")]
         self.view.flash_player_reset(&self.core, slot);
