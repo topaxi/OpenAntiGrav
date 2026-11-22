@@ -116,6 +116,27 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
             "{kind:?} puts {trigger:?} on the stage"
         );
     }
+    race.core.sim.detonator_events = vec![
+        Event {
+            kind: EventKind::MineShot { live: false },
+            at,
+        },
+        Event {
+            kind: EventKind::BombTouched,
+            at,
+        },
+    ];
+    race.core.sim.drain_cues();
+    race.core.sim.detonator_cues();
+    let heard: Vec<_> = race.core.sim.drain_cues().iter().map(|e| e.cue).collect();
+    assert_eq!(
+        heard,
+        [
+            oag_gameplay::cue::Cue::MineExplosion,
+            oag_gameplay::cue::Cue::BombExplosion
+        ],
+        "a mine and a bomb going off are heard where they were"
+    );
     let playing = race.view.stage.playing_count();
     race.core.sim.detonator_events = vec![Event {
         kind: EventKind::Volley,

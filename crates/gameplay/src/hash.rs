@@ -997,6 +997,7 @@ mod tests {
             lockout_empty: 0.75,
             lane_width: 3.5,
             scoring: oag_tables::detonator_layout::Scoring::default(),
+            muzzles: [None, None],
         };
         let fire = |world: &mut World, held: bool| {
             let owner = world.ships[0];

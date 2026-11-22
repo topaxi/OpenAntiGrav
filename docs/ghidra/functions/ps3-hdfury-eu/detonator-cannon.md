@@ -538,9 +538,11 @@ Tests: `crates/weapons/src/detonator/cannon/tests.rs`, the hash test in `oag-gam
 - **Sounds.** `CANNON` once per round (two a volley) on the firing craft, `CANNONEXPLWALL` at the
   wall death, both as per-tick cue outputs (ADR-0018). Which weapon bank a Detonator race plays
   (`weapons.bnk` or `weapons_det.bnk`) is unread ([cue-variables.md](cue-variables.md), "Not
-  determined"); this engine reads `weapons.bnk`. A hit mine's `MINEEXPL` and a bomb's
-  `BOMBEXPL(_PC)` are **not wired**: no title has a cue for them, and adding one would load it on
-  every title's bank.
+  determined"); this engine reads `weapons.bnk`. A mine that goes off plays `MINEEXPL` and a bomb
+  `BOMBEXPL` where it was (`Cue::MineExplosion`, `Cue::BombExplosion`, loaded beside `HD_CONTACT`
+  on HD only; both resolve to timelines in HD's `weapons.bnk`,
+  `sfx_timeline_ground_truth::hd_s_race_cues_play_the_lists_the_bank_authors`). **Chosen:** the
+  bomb plays `BOMBEXPL`, never `BOMBEXPL_PC` (the choice hangs on `b+0x58 == b+0x5c`, unread).
 
 ## Cross-check: 2048 and Omega
 

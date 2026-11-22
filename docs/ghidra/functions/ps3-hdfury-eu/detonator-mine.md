@@ -289,7 +289,7 @@ a mine a cannon round hits, or a destroyed bomb's chain reaction sets off, plays
 `.pob`, from the engine's procedural profile: HD's sprite sheets for these two are not listed (no
 matched capture of the original). Chosen: a shot mine explodes the tick it is hit (the original
 the next), the effect plays whether or not the mine is in view, and the recolour toward white
-(`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` is not wired (see
+(`lerp(c, 255, 0.8)`, 55) is not applied. `MINEEXPL` plays with it, at volume 1.0 where the mine was (`Cue::MineExplosion`, see
 [detonator-cannon.md](detonator-cannon.md), "Drawn and heard"). Test:
 `tests::detonator_fx::an_hd_detonator_race_plays_the_discs_effects_for_each_event`.
 **2048/Omega: checked, applies, not wired** - the effects ship and parse

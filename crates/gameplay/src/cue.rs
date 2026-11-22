@@ -70,6 +70,21 @@ pub enum Cue {
     /// `.GRINDSHIELD`: the player's [`Self::Grind`] while its slot's Shield runs. Wipeout
     /// HD/Fury only; see [`Self::CollisionShield`].
     GrindShield,
+    /// A Detonator mine going off, at the mine.
+    ///
+    /// `DetonatorMine_Explode` (`0x00138e58`) plays `MINEEXPL` at volume `1.0` positioned at the
+    /// mine, whether the mine was live, dark, shot or touched (confidence 82,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`). Wipeout HD/Fury only, and not in
+    /// [`Self::ALL`]: see [`Self::DETONATOR`]. Which weapon bank a Detonator race plays is unread
+    /// (`weapons.bnk` or `weapons_det.bnk`, `cue-variables.md`, "Not determined"); `weapons.bnk`.
+    MineExplosion,
+    /// A Detonator bomb going off, at the bomb.
+    ///
+    /// `DetonatorBomb_Detonate` (`0x00134540`, `detonator-bomb.md`, 78) plays `BOMBEXPL_PC` when the
+    /// bomb's `+0x58` equals its `+0x5c` and the mode is at most `14`, else `BOMBEXPL`. Those two
+    /// fields are unread, so **chosen, not measured:** `BOMBEXPL` always. Wipeout HD/Fury only; see
+    /// [`Self::MineExplosion`].
+    BombExplosion,
     /// A pickup absorbed into the pool, or Eliminator's lap refill.
     ///
     /// `Ship_PlayAbsorbFeedback` (`0x08840640`) plays an `ABSORB` sound once
@@ -721,6 +736,10 @@ impl Cue {
     /// [`Self::ALL`] on a title whose sequence tick walks cue variables, and on no other, so a
     /// title without them reports no `.GRIND` it never had.
     pub const HD_CONTACT: [Self; 3] = [Self::Grind, Self::CollisionShield, Self::GrindShield];
+
+    /// Detonator's two explosion cues, loaded beside [`Self::HD_CONTACT`] and on no other title:
+    /// only HD's Detonator events raise them.
+    pub const DETONATOR: [Self; 2] = [Self::MineExplosion, Self::BombExplosion];
 
     pub const ALL: [Self; 43] = [
         Self::SpeedupPad,

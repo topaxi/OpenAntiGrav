@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: stages, mines, bombs, hull, cannon rounds and explosions on HD; EMP, auto-speed, HUD, end screen, mine sounds, campaign open"
+summary: "Detonator: stages, mines, bombs, hull, cannon rounds, explosions and their sounds on HD; EMP, auto-speed, HUD, end screen, campaign open"
 categories: [rendering]
 ---
 
@@ -48,7 +48,7 @@ the Detonator hull in its team livery on Detonator's own handling file; mines, b
 the Detonator models (the mine football draws plain white: its `MineColour`/`MineBrightness` binds
 and the bomb's `BombColour` are unread). Square fires the pulse cannon and Circle reloads; rounds
 destroy mines and bombs and the race keeps a score, a destroyed count and a percentage, but no
-the rounds and muzzle flashes are drawn and a shot mine, a bomb and a round on a wall play their disc effects (HD); the HUD is the time trial's and no mine or bomb sound plays. No EMP, no auto-speed.
+the rounds and muzzle flashes are drawn and a shot mine, a bomb and a round on a wall play their disc effects (HD); the HUD is the time trial's. No EMP, no auto-speed.
 
 Open from 8b: no wreck or death shell (HD's PS3 hull branch loads no wreck in any mode; the
 Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad still draws under the
@@ -239,7 +239,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   `oag_weapons::detonator`, `oag_raceplay::detonator`): HD races lay their mines and bombs per
   stage and draw them with the ordinary Mine and Bomb models. Contact is wired
   (`oag_weapons::detonator::step_contacts`: damage, velocity cut, bomb push, removal, destroyed
-  craft ends the race); the explosion sounds (`MINEEXPL`, `BOMBEXPL`), the survey's collision return codes (probes are
+  craft ends the race); the survey's collision return codes (probes are
   chosen).
 
 - **Contact, blast and destruction: read, wired in sim, not in effects** (2026-11-22,
@@ -260,10 +260,9 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   are the hull's `cannon_flash` locators; the tick's `oag_weapons::detonator::Event` list drives
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_BOMB_EXPLO_DETONATOR` and `WO_CANNON_SPARKS_DETONATOR`
   (HD's triggers; 2048 and Omega ship and parse them, **checked, applies, not wired**), plus `CANNON`
-  and `CANNONEXPLWALL`. Open: the round's draw (`0x00121e68`) and its flash window are HD's Cannon's
+  and `CANNONEXPLWALL`, `MINEEXPL` and `BOMBEXPL` (`Cue::MineExplosion`/`BombExplosion`, HD only; `BOMBEXPL_PC` never). Open: the round's draw (`0x00121e68`) and its flash window are HD's Cannon's
   (chosen); the effects use the procedural profile (no sprite list, no matched capture); no
-  `MINEEXPL`/`BOMBEXPL` cue (no title has one, the Detonator weapon bank is unread); the visibility
-  gate on the effects; the `CANNONRELOAD`/`BONUS_*` cues, the HUD (clip, reload gauge, score, `x%02d`),
+  the Detonator weapon bank (`weapons_det.bnk`?) is unread; the visibility gate on the effects; the `CANNONRELOAD`/`BONUS_*` cues, the HUD (clip, reload gauge, score, `x%02d`),
   the end screen rows, the 0.5 s owner grace, the clean-lap `+1000`, the bomb-ahead warning,
   `EnergyRechargePerStage`. 2048 and Omega fire it too and draw its two models (tests in
   `detonator_ground_truth.rs`). The record below is the read:

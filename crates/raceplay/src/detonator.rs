@@ -237,8 +237,9 @@ impl crate::sim::RaceSim {
     /// The sounds this tick's [`Self::detonator_events`] make, queued as per-tick output
     /// (ADR-0018): `PulseBullet_Init` plays `CANNON` on the firing craft once per round, so a
     /// volley of two plays it twice; a round that dies on a wall plays `CANNONEXPLWALL` at the
-    /// round (`detonator-cannon.md`, "The round").
-    fn detonator_cues(&mut self) {
+    /// round (`detonator-cannon.md`, "The round"); a mine that goes off plays `MINEEXPL` and a
+    /// bomb `BOMBEXPL` where it was (`detonator-mine.md`, `detonator-bomb.md`).
+    pub(crate) fn detonator_cues(&mut self) {
         use oag_gameplay::cue::{Cue, CueEvent};
         use oag_weapons::detonator::EventKind;
         for event in &self.detonator_events {
@@ -252,7 +253,16 @@ impl crate::sim::RaceSim {
                     self.cues
                         .push(CueEvent::at_point(Cue::CannonHitWall, event.at));
                 }
-                _ => {}
+                EventKind::MineTouched
+                | EventKind::MineShot { .. }
+                | EventKind::MineChained { .. } => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::MineExplosion, event.at));
+                }
+                EventKind::BombTouched | EventKind::BombShot | EventKind::BombReplaced => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::BombExplosion, event.at));
+                }
             }
         }
     }
