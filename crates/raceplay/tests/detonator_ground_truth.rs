@@ -601,7 +601,7 @@ fn an_hd_detonator_pad_charges_the_emp_and_gives_no_boost_or_pickup() {
     // nothing until another pad or a crossing, a second pad charges again.
     race.core.sim.set_autopilot(false);
     assert!(weapon_pads.len() >= 2, "the circuit has weapon pads");
-    let mut visit = |race: &mut race::Race, at: Option<[f32; 3]>| {
+    let visit = |race: &mut race::Race, at: Option<[f32; 3]>| {
         let ship = &mut race.core.sim.world.ships[0].physics;
         if let Some(at) = at {
             ship.body.position = oag_core::math::Vec3::from_array(at);
