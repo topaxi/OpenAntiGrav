@@ -134,6 +134,10 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | `effects.disruptor_head` | `none` - absent | `set` - measured | `none` - absent | `none` - absent | `none` - absent |
 | `effects.disruptor_explo` | `none` - absent | `set` - measured | `none` - absent | `none` - absent | `none` - absent |
 | `effects.disruptor_launch` | `none` - absent | `set` - measured | `none` - absent | `none` - absent | `none` - absent |
+| `effects.detonator_mine_explo_dead` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `effects.detonator_mine_explo` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `effects.detonator_bomb_explo` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
+| `effects.detonator_cannon_sparks` | `none` - absent | `none` - absent | `set` - measured | `none` - unread | `none` - unread |
 
 Notes on the cells the code does not explain by itself:
 

@@ -124,6 +124,14 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
 /// A title's own Detonator table reaches the cannon: holding Square past the green light spends a
 /// volley from the clip. A table that lacks an attribute the cannon needs leaves the clip full.
 fn assert_the_cannon_fires(loaded: &race::Loaded) {
+    assert!(
+        !loaded
+            .report
+            .iter()
+            .any(|line| line.contains("no cannon_flash locators")),
+        "the hull authors both cannon_flash locators, so the rounds leave from them: {:#?}",
+        loaded.report
+    );
     let mut race = race::Race::start(
         loaded.setup.clone(),
         loaded.view.clone(),

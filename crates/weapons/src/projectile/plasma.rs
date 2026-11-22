@@ -78,7 +78,7 @@ pub fn muzzle<C: Craft>(craft: &C) -> (Vec3, Vec3) {
 #[must_use]
 pub fn hull_point(body: &oag_physics::Body, local: Vec3) -> Vec3 {
     let scaled = local * LAUNCH_SPEED_SCALE;
-    body.position + body.forward() * scaled.z + body.up() * scaled.y - body.right() * scaled.x
+    body.position + (body.forward() * scaled.z + body.up() * scaled.y - body.right() * scaled.x)
 }
 
 /// How long a plasma bolt winds up on the nose before it flies, in seconds.
