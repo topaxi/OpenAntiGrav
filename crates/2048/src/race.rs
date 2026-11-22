@@ -491,6 +491,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     craft: Some(DETONATOR_CRAFT),
     handling: Some(DETONATOR_HANDLING),
+    // Its archives ship the models (`Weapons2048/`, `Weapons/`, `New_Mode_Pads/`) but the
+    // directory prefix the object loaders join is unread, and 2048 draws no weapon bodies yet.
+    objects: None,
 };
 
 /// 2048's Detonator craft: `hdships\Detonator\Ship.vex` for every team, under the same

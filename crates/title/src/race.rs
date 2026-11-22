@@ -590,6 +590,26 @@ pub struct Detonator {
     /// The handling file a Detonator race flies in place of the team's, or `None` where a
     /// title's is not located.
     pub handling: Option<crate::zone_handling::ZoneHandling>,
+    /// The models a Detonator race lays and draws in place of the ordinary Mine, Bomb and pads,
+    /// or `None` where a title's are not located.
+    pub objects: Option<DetonatorObjects>,
+}
+
+/// The archive entries of Detonator's own object models
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The Detonator objects' models").
+///
+/// `DetonatorMine_Construct` loads `mine_rita_football`, `mine_rita_spikes` and
+/// `Electric_Visualiser`; the visualiser's electricity is music-driven, so it is named by neither
+/// field and is not drawn. `DetonatorBomb_Construct` loads three bomb parts, and
+/// `WorldManager_Construct` a `Detonator_Pad` for every speed pad and weapon pad.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetonatorObjects {
+    /// A laid mine's two parts, `[mine_rita_football, mine_rita_spikes]`: the shell and its spikes.
+    pub mine: [&'static str; 2],
+    /// A laid bomb's three parts, `[detonator_bomb_final, _final_equalisers, _glowedges]`.
+    pub bomb: [&'static str; 3],
+    /// The model carried by every speed pad and every weapon pad.
+    pub pad: &'static str,
 }
 
 /// The craft a Detonator race flies: one hull of its own, whatever team the player picked, with

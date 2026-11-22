@@ -463,6 +463,24 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     craft: Some(DETONATOR_CRAFT),
     handling: Some(DETONATOR_HANDLING),
+    objects: Some(DETONATOR_OBJECTS),
+};
+
+/// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,
+/// `DetonatorBomb_Construct` `0x00135328`, `WorldManager_Construct` `0x000b8590`;
+/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, 82; the pad 70). The mine's
+/// `Electric_Visualiser` is music-driven and is not drawn.
+pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorObjects {
+    mine: [
+        r"Data\Weapons\mine_rita_football.vex",
+        r"Data\Weapons\mine_rita_spikes.vex",
+    ],
+    bomb: [
+        r"Data\Weapons\detonator_bomb_final.vex",
+        r"Data\Weapons\detonator_bomb_final_equalisers.vex",
+        r"Data\Weapons\detonator_bomb_glowedges.vex",
+    ],
+    pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
 };
 
 /// HD's Detonator craft: one hull at `/data/ships/detonator/ship.vex` for every team, wearing the

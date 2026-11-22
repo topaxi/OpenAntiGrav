@@ -102,3 +102,46 @@ fn an_hd_detonator_race_flies_its_own_handling_file_and_zone_keeps_its_own() {
     );
     assert_eq!(width(zone), 5.0);
 }
+
+/// A Detonator mine is the football and its spikes, a bomb its body, equalisers and glow edges,
+/// and every speed pad and weapon pad carries the Detonator pad. `electric_visualiser` is named
+/// as not drawn.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
+    let Some(loaded) = load(oag_race::Mode::Detonator, "Qirex") else {
+        return;
+    };
+    let label = |model: &Option<oag_mesh::mesh::Model>| {
+        model
+            .as_ref()
+            .map(|model| model.label.to_ascii_lowercase())
+            .unwrap_or_default()
+    };
+    assert!(label(&loaded.mine_model).contains("mine_rita_football"));
+    assert!(label(&loaded.bomb_model).contains("detonator_bomb_final.vex"));
+    let parts = &loaded.bomb_blast_models.detonator;
+    assert!(label(&parts.mine_spikes).contains("mine_rita_spikes"));
+    assert!(label(&parts.bomb_equalisers).contains("final_equalisers"));
+    assert!(label(&parts.bomb_glow_edges).contains("glowedges"));
+    assert!(label(&parts.pad).contains("detonator_pad"));
+    assert_eq!(
+        parts.pads.len(),
+        loaded.setup.speedup_pads.len() + loaded.setup.weapon_pads.len(),
+        "a pad model on every speed pad and every weapon pad"
+    );
+    assert!(!parts.pads.is_empty(), "the circuit has pads");
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("electric_visualiser is music-driven")),
+        "the visualiser is named as not drawn"
+    );
+    // The control: a Zone race on the same circuit keeps the ordinary bodies.
+    let Some(zone) = load(oag_race::Mode::Zone, "Qirex") else {
+        return;
+    };
+    assert!(label(&zone.mine_model).contains("hd_mine"));
+    assert!(zone.bomb_blast_models.detonator.pads.is_empty());
+}

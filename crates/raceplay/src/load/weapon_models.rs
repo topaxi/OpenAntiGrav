@@ -389,6 +389,7 @@ pub(super) fn load_bodies(
                     repulser_field: None,
                     mag_floor: [None, None],
                     hd: [None, None, None, None, None, None],
+                    detonator: crate::detonator_models::DetonatorModels::default(),
                 }
             });
     // HD's blast set rides the same container - `BombBlastModels::hd`.
@@ -457,6 +458,59 @@ pub(super) fn load_bodies(
         bomb_blast,
         leach_ball,
     )
+}
+
+/// A Detonator race's own object models: what `objects` names beyond the first part of a mine
+/// and a bomb (those ride the ordinary pools, see [`detonator_weapon_models`]), and the pad model
+/// with the matrices of every speed pad and weapon pad it is drawn at.
+///
+/// The mine's `Electric_Visualiser` is music-driven, so it is named in the report and not loaded.
+pub(super) fn load_detonator_objects(
+    archives: &mut oag_assets::Archives,
+    objects: &oag_title::DetonatorObjects,
+    pads: Vec<Mat4>,
+    store: oag_gpu::formats::SceneStore,
+    report: &mut Vec<String>,
+) -> crate::detonator_models::DetonatorModels {
+    let mut part = |entry: &str, what| load(archives, entry, what, true, store, report);
+    let mine_spikes = part(objects.mine[1], "a laid Detonator mine's spikes");
+    let bomb_equalisers = part(objects.bomb[1], "a laid Detonator bomb's equalisers");
+    let bomb_glow_edges = part(objects.bomb[2], "a laid Detonator bomb's glow edges");
+    let pad = if pads.is_empty() {
+        None
+    } else {
+        part(objects.pad, "a Detonator pad")
+    };
+    report.push(
+        "Detonator mine: electric_visualiser is music-driven (MasterVolume, BassHit, Tempo) and \
+         is not drawn"
+            .to_string(),
+    );
+    report.push(format!(
+        "Detonator pads: {} pad(s) carry the Detonator pad model",
+        if pad.is_some() { pads.len() } else { 0 }
+    ));
+    crate::detonator_models::DetonatorModels {
+        mine_spikes,
+        bomb_equalisers,
+        bomb_glow_edges,
+        pad,
+        pads,
+    }
+}
+
+/// `models` with a Detonator race's mine and bomb in place of the ordinary ones: the first part
+/// of each (`oag_title::DetonatorObjects`), which rides the Mine's and the Bomb's own pools.
+#[must_use]
+pub(super) fn detonator_weapon_models(
+    models: &oag_title::weapons::WeaponModels,
+    objects: &oag_title::DetonatorObjects,
+) -> oag_title::weapons::WeaponModels {
+    oag_title::weapons::WeaponModels {
+        mine: Some(objects.mine[0]),
+        bomb: Some(objects.bomb[0]),
+        ..*models
+    }
 }
 
 /// The ghost ship's static texture, `WeaponModels::ghost_static`.

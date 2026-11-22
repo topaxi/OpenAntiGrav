@@ -152,6 +152,20 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         }),
         craft: Some(DETONATOR_CRAFT),
         handling: Some(DETONATOR_HANDLING),
+        // HD's names, as every other Omega weapon body (`crate::weapons`); the pad path is a data
+        // field there, so HD's is **inherited**.
+        objects: Some(oag_title::DetonatorObjects {
+            mine: [
+                r"Data\Weapons\mine_rita_football.vex",
+                r"Data\Weapons\mine_rita_spikes.vex",
+            ],
+            bomb: [
+                r"Data\Weapons\detonator_bomb_final.vex",
+                r"Data\Weapons\detonator_bomb_final_equalisers.vex",
+                r"Data\Weapons\detonator_bomb_glowedges.vex",
+            ],
+            pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+        }),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),
