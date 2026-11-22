@@ -227,8 +227,9 @@ pub struct Options {
     /// the headless way to take the pass out of a frame and so measure what it
     /// adds.
     pub hull_shine: bool,
-    /// Whether each Pulse craft's `shipwreck.vex` is loaded and swapped in once
-    /// the craft is out of the race. `false` is `--no-hull-wreck`.
+    /// Whether each craft's `shipwreck.vex` is loaded and swapped in once the title's
+    /// destroyed sequence reaches it (`oag_title::destroyed::WreckFrom`). `false` is
+    /// `--no-hull-wreck`.
     pub hull_wreck: bool,
     /// Whether a Pulse circuit's own extra pass is drawn: its `*_shinemap`
     /// batches under their chrome map. `false` is `--no-track-shine`.

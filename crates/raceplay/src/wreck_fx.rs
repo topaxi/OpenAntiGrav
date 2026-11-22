@@ -50,8 +50,11 @@
 //! `Ship_SetState` is unread. Its big blast is its own and read
 //! (`docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`): `WO_SHIP_FXNODE_BIGEXPLO` on up to
 //! eight locators, `WO_SHIP_EXPLOSION_DEBRIS` and `WO_SHIP_EXPLO_SMOKE` at the model matrix, no
-//! `WO_SHIP_EXPLOSION` and no shockwave. HD, 2048 and Omega draw no wreck effect: HD's executable
-//! names neither node effect (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`).
+//! `WO_SHIP_EXPLOSION` and no shockwave. HD names neither node effect
+//! (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`): it throws `WO_SHIP_EXPLOSION` on
+//! entering state 4, at the same offset, with no shockwave, and its death plume on entering
+//! state 5 (`ship-destroy.md`, rows 2 and 10; `race::damage_fx`). 2048 and Omega draw no wreck
+//! effect yet.
 
 use super::*;
 use oag_livery::SparkAnchor;

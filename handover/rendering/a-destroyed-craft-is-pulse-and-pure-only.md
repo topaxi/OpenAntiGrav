@@ -26,7 +26,14 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   Pure's own read (`docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`). Pure's own
   `Ship_SetState` and death set (`WO_SHIP_EXPLO_SMOKE`, `WO_SHIP_EXPLOSION_DEBRIS`, ...)
   are not read.
-- **HD/Fury: read, ready to wire; nothing drawn yet.** `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`
+- **HD/Fury: wired (rows 1, 2, 9, 10, 11 partly, 12), 2026-11-22.** `Title::destroyed` carries
+  the timers and the two edges (`oag_title::destroyed`), `Looks::hull_wreck` loads
+  `shipwreck.vex` for every team, `WO_SHIP_EXPLOSION` is thrown on state 4 and the death plume
+  on state 5, a settled wreck leaves the pair test at 6 s and the world with it. Not wired: row 3
+  (sound), row 6 (collider, kick), row 5 (HD's own camera), rows 4, 7 and 14, the `body+0x210`
+  half of row 11, a live RPCS3 pair. Table: `ship-destroy.md`, "Wired on HD". The text below is
+  what was read.
+- **HD/Fury, as read before wiring.** `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`
   has the table (16 rows, static, 2026-11-22): `shipwreck.vex` replaces the hull **at state 4**
   (`Ship_SelectWreckModel` `0x000db400`), not at Pulse's state 5; one `WO_SHIP_EXPLOSION` at the
   live model's node, 4.0 back along its Y row; `EXPLBIG_PC`/`~SHIP_DESTROYED`, `~SHIP_ONFIRE`;
@@ -66,11 +73,12 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 
 ## Next Steps
 
-1. **Ready to wire**: an `oag-wire` lane on `ship-destroy.md`'s table for HD: `Looks::hull_wreck`
-   swapped in at the state-4 edge, `WO_SHIP_EXPLOSION` and `WO_SHIP_DEATH_DAMAGE_PLUME`, the
-   0.3 s / settle / 20 s chain, the pair byte cleared at state 6; a frame pair against RPCS3 once a
-   build that boots the HD states is back.
-2. Then 2048/Omega (item 2), wired together per the backport rule.
+1. ~~HD wire lane~~ landed (above). Left on HD: rows 3 and 6 (needs the death kick formula and
+   collider read), row 5, a frame pair against RPCS3 once a build boots the HD states.
+2. **2048/Omega next** (item 2): set `Title::destroyed` to `DestroyedCraft::HD` (camera mode 9, no
+   rumble on 2048), flip `Looks::hull_wreck`, name `WO_SHIP_DEATH_DAMAGE_PLUME` in their tables;
+   the livery's external-geometry branch is shared with HD, the `.rcsmodel` psp2 branch is
+   `shield::shield_model`'s (check its shield-only alpha tweak first).
 3. Then a Zone lane (item 4): an `oag-re` measure lane on HD's Zone end first (it reuses
    step 1's `Ship_SetState` reading), checked against 2048 and Omega, then wire it with a
    frame pair of a Zone end against RPCS3.
