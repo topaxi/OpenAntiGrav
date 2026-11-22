@@ -190,12 +190,14 @@ Pure's copy onto the hull (its twin of `Craft_ApplyHullLightScale`) was not loca
 **Wired (`pure-light-scale`).** The premise "ours takes the nearest point's `255`" was wrong at the course level: the
 ring points already carried the double truncation (`251` at a segment's start, `250` at its other three samples), and
 the four grids read `250, 250, 251, 251` in ours before this lane. `oag_race::Course::light_scale_at` now runs the
-integer blend (`oag_vex::track::blend_light_bytes`) over the segment's four control points at the craft's own
-parameter, the chord projection between two ring samples, instead of a lerp of two already-blended samples. A run of
-`255` points reads `249..=251` by `t` (`251` at `t` 0 and 1, `249` from about 0.3 to 0.7, `250` between). Grids:
-Vineta `250`, Chenghou `250`, Modesto `250` (was `251`), Blue Ridge `251` (its pose is 21 units off the ring, so the
-projection is the loosest of the four; the original reads `250`). Hull box (190,175,100,97) grey MAD, before ->
-after: Modesto 5.751 -> 5.738, the other three unchanged: a one-byte scale is below what a frame shows. Pure and Pulse
-only: HD, 2048 and Omega light their hulls by another path (`ship-sun-occlusion.md`). Test:
+integer blend (`oag_vex::track::blend_light_bytes`) over the segment's four control points at the craft's parameter,
+taken as the spline's nearest point to the craft (found on the spline, not a chord), instead of a lerp of two
+already-blended samples. A run of `255` points reads `249..=251` by `t` (`251` at `t` 0 and 1, `249` from about 0.3 to
+0.7, `250` between). Grids: Vineta `250`, Chenghou `249`, Blue Ridge `250` (was `251`), Modesto `250` (was `251`); the
+original reads `250` on all four, so three are exact and one is a byte off: the original tracks its own parameter, which
+is not the nearest point to a pose (De Konstruct, `scene-light.md`, "Blend at the craft"). Hull box (190,175,100,97)
+grey MAD, before -> after: Vineta 12.200 unchanged, Chenghou 10.512 -> 10.487, Blue Ridge 12.524 -> 12.523, Modesto
+5.751 -> 5.738: a one-byte scale is below what a frame shows. Pure and Pulse only: HD, 2048 and Omega light their hulls
+by another path (`ship-sun-occlusion.md`). Test:
 `oag-raceplay::it_h_l hull_light_scale_ground_truth::a_pure_grid_craft_reads_the_original_s_250_not_a_full_255`.
 Modesto's second directional is not wired.

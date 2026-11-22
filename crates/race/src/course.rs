@@ -316,43 +316,46 @@ impl Course {
     /// The original blends the scale at the craft's own spline parameter
     /// (`Spline_SampleSegment`, `docs/ghidra/functions/psp-pulse-usa/scene-light.md`,
     /// "The scales"), in integer arithmetic over the segment's four control
-    /// points. This takes the craft's projection onto the chord to the
-    /// neighbouring ring point it lies towards, turns that into a parameter
-    /// between the two samples, and runs the same integer blend there, so a
-    /// run of `255` points reads `249` to `251` by `t` where the ring point
-    /// itself holds the value at its own `t`. At a point itself, or off the
-    /// ring's end, it is [`Self::light_scale`].
+    /// points. The parameter taken here is the spline's nearest point to
+    /// `at` within the two ring intervals either side of `index`, found on
+    /// the spline itself (a chord is not the curve, and `t` is not arc
+    /// length), and the same integer blend runs there. A run of `255` points
+    /// reads `249` to `251` by `t`.
     #[must_use]
     pub fn light_scale_at(&self, index: usize, at: Vec3) -> Option<[u8; 4]> {
-        let here = self.light_scales.get(index).copied()?;
-        let from = self.positions.get(index).copied()?;
         let count = self.positions.len();
         let steps = Self::STEPS_PER_SEGMENT as f32;
-        let mut best: Option<(f32, usize, bool)> = None;
-        for (next, forward) in [
-            ((index + 1) % count, true),
-            ((index + count - 1) % count, false),
-        ] {
-            let Some(to) = self.positions.get(next) else {
-                continue;
+        let mut best: Option<(f32, &branch::LightBlend, f32)> = None;
+        for earlier in [index, (index + count - 1) % count] {
+            let blend = self.light_blends.get(earlier)?;
+            let distance = |t: f32| {
+                let w = oag_vex::track::basis(t);
+                let mut p = Vec3::ZERO;
+                for (weight, c) in w.iter().zip(blend.positions) {
+                    p += Vec3::from_array(c) * *weight;
+                }
+                p.distance_squared(at)
             };
-            let chord = *to - from;
-            let length_squared = chord.dot(chord);
-            if length_squared <= f32::EPSILON {
-                continue;
+            let span = 1.0 / steps;
+            let top = 1.0 - f32::EPSILON;
+            let mut low = blend.t;
+            let mut high = (blend.t + span).min(top);
+            for _ in 0..24 {
+                let third = (high - low) / 3.0;
+                let (m1, m2) = (low + third, high - third);
+                if distance(m1) < distance(m2) {
+                    high = m2;
+                } else {
+                    low = m1;
+                }
             }
-            let t = (at - from).dot(chord) / length_squared;
-            if t > 0.0 && best.is_none_or(|(b, ..)| t > b) {
-                best = Some((t.min(1.0), next, forward));
+            let t = (low + high) * 0.5;
+            let d = distance(t);
+            if best.is_none_or(|(b, ..)| d < b) {
+                best = Some((d, blend, t));
             }
         }
-        let Some((u, next, forward)) = best else {
-            return Some(here);
-        };
-        let (earlier, along) = if forward { (index, u) } else { (next, 1.0 - u) };
-        let blend = self.light_blends.get(earlier)?;
-        // Never reach 1.0: the original's parameter stays inside its segment.
-        let t = (blend.t + along / steps).min(1.0 - f32::EPSILON);
+        let (_, blend, t) = best?;
         Some(oag_vex::track::blend_light_bytes(
             &oag_vex::track::basis(t),
             blend.controls,

@@ -142,12 +142,18 @@ scale bytes ([`psp-pure-usa/scene-light.md`](../psp-pure-usa/scene-light.md)).
 An earlier "Pure authors no rig" was the reader matching Pulse's class ids.
 
 **Blend at the craft (`pure-light-scale`).** `Course::light_scale_at` runs `Spline_AccumulateLightScale`'s integer
-blend (`(byte * trunc(weight * 255)) >> 8` per control point, wrapping `u8`) at the craft's parameter, taken as the
-chord projection between two ring samples; before, it lerped two already-blended samples. The live De Konstruct list
-`(179, 179, 250, 250)` now reads `(176, 176, 248, 248)` from the recorded two-decimal pose (a ramp of about 35 per unit
-of road, so 3 bytes is a tenth of a unit; the test's tolerance is 3). Hull box (190,175,100,97) grey MAD, before ->
-after: De Konstruct White 6.426 -> 6.098, Tech de Ra White 3.040 -> 2.990, Fort Gale White 9.778 unchanged. Lineage:
-Pure and Pulse only; HD, 2048 and Omega light hulls by another path.
+blend (`(byte * trunc(weight * 255)) >> 8` per control point, wrapping `u8`) at the spline's nearest point to the craft;
+before, it lerped two already-blended ring samples. **The law is exact where the parameter is known**: De Konstruct's
+live list `(179, 179, 250, 250)` is reproduced to the byte by the blend of segment 36's four control points at `t`
+0.5774 to 0.5799 (`the_integer_blend_at_the_crafts_parameter_is_the_live_list_exactly`). **The pose-to-`t` step is
+not**: the spline's nearest point to the recorded pose is `t` 0.587, which blends to `(176, 176, 248, 248)`, 0.024
+units of road away from the live `t` (the pose is read to two decimals, so that is not rounding). The original
+tracks its own parameter; the nearest point, the chord projection (also tried) and the xz-nearest point (0.600) do
+not reproduce it. Other live grids under the same estimate: Tech de Ra `249` (exact; the old lerp read `250`), Fort
+Gale `251` (reads `250`; the old read `251`). So the old lerp matched De Konstruct and Fort Gale and the new law Tech de
+Ra, each by the luck of where the estimated `t` falls; the law is right and the parameter is open. Hull box
+(190,175,100,97) grey MAD, before -> after: De Konstruct White 6.426 -> 6.098, Tech de Ra White 3.040 -> 2.990, Fort
+Gale White 9.778 -> 9.782. Lineage: Pure and Pulse only; HD, 2048 and Omega light hulls by another path.
 
 Confidence **85** for the copy and the accumulate (bodies read, writers
 named live), **75** for `Spline_SampleSegment`'s role (the basis constants

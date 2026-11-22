@@ -36,9 +36,10 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
 1. ~~**Hull canopy.**~~ Closed: the extra pass was never off in the data, the roster's `applies_everywhere()`
    gate was. The weight is `header_flags & 0x02` (`BLENDMODE 0x2a` in the recorded lists).
 2. **Hull, the rest.** ~~The grid's light scale `250`~~ closed (`pure-light-scale`): ours already read `250/250/251/251`,
-   and `Course::light_scale_at` now runs the original's integer blend at the craft's parameter (Modesto `250`; Blue Ridge
-   still `251`, its pose 21 units off the ring; hull box MAD moves by 0.01 to 0.33 grey, below what a frame shows;
-   `psp-pure-usa/hull-shine.md`, "Light scale"). Open: Modesto's list also carries a second directional
+   and `Course::light_scale_at` now runs the original's integer blend at the craft's parameter (Pure grids now `250, 249, 250, 250`
+   against the original's `250` on all four; hull box MAD moves by 0.00 to 0.03 grey on Pure, below what a frame shows;
+   `psp-pure-usa/hull-shine.md`, "Light scale"). Open: the craft's own spline parameter (the original's is not the nearest
+   point to its pose; De Konstruct's live list fixes it at `t` 0.578, `psp-pulse-usa/scene-light.md`); and Modesto's list also carries a second directional
    `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised; ours draws no second light there. Which wopoint
    it is, and why it is a directional, is unread (Pure's builder `0x08841648`).
 3. **Effects Pure ships that ours never loads.** Pure's executable names 24 `WO_*` effects (25 strings,

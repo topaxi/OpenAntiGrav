@@ -45,6 +45,8 @@ impl Branch {
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(super) struct LightBlend {
     pub(super) controls: [[u8; 4]; 4],
+    /// The same four control points' positions, to find the spline's nearest point to a craft.
+    pub(super) positions: [[f32; 3]; 4],
     pub(super) t: f32,
 }
 
@@ -80,6 +82,7 @@ pub(super) fn sample_path(path: &oag_vex::track::Path) -> Vec<Sample> {
                     light_scale: sample.light_scale,
                     light_blend: LightBlend {
                         controls: path.light_controls(segment).unwrap_or_default(),
+                        positions: path.control_positions(segment).unwrap_or_default(),
                         t,
                     },
                 });

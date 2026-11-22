@@ -402,6 +402,19 @@ impl Path {
         })
     }
 
+    /// The positions of the four control points [`Self::sample`] blends inside
+    /// `segment`, clamped at the path ends. `None` for a segment past the end.
+    #[must_use]
+    pub fn control_positions(&self, segment: usize) -> Option<[[f32; 3]; 4]> {
+        let n = self.points.len();
+        if segment >= n {
+            return None;
+        }
+        let at = |i: isize| self.points[i.clamp(0, n as isize - 1) as usize].pos;
+        let i = segment as isize;
+        Some([at(i - 1), at(i), at(i + 1), at(i + 2)])
+    }
+
     /// The light-scale bytes of the four control points [`Self::sample`] blends
     /// inside `segment`, clamped at the path ends. `None` for a segment past
     /// the end.
