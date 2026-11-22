@@ -69,6 +69,8 @@ enum SamplerRole {
     /// real additive combine - see `docs/rendering/hd-ship-materials.md`,
     /// Finding 1.
     SurfaceMap,
+    /// A ramp read at a scalar ([`SHIP_FACING_RAMP_SAMPLERS`]): never a glow either.
+    FacingRamp,
     /// A named glow/reflection role - the "Light" preimage group minus
     /// `lightmap`/`shadowMapTex`, which this function already refuses on an
     /// earlier, separate check.
@@ -97,6 +99,23 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0x0617f872` | `nitro_body_new` | 13 |
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 |
 const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, NITRO_NORMAL, 0xc78c_9866];
+
+/// Sampler hashes a ship's program reads **at one scalar**, never at the surface's own
+/// coordinate: a 1-D ramp, not a picture and not a glow.
+///
+/// `0x215b724c` is `detonator_ship_dg_iridescent`'s `detonator_stripe.gtf`. Every lit
+/// block of the material samples it as `TEX H6.xyz, R1.wwww` at `dot(N, V)` (block
+/// `0x46d0`, `@0x22`) and folds it into the iridescent overlay `2 * Colour * picture *
+/// ramp(N.V)`, so adding it to the paint as a tinted glow, which is what the structural
+/// accumulate test sees, painted the whole panel with the ramp's pale end
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "The hull's paint").
+const SHIP_FACING_RAMP_SAMPLERS: &[u32] = &[0x215b_724c];
+
+/// Ship families whose program reads exactly one picture and no second texture of its own:
+/// `detonator_ship_rich_iridescent` samples `detonator_ao.gtf` once (`TEX H0.xyz, f[TC3]
+/// unit1`, block `0x3550`) and its other units are the normal map and the iridescence ramp.
+/// `carbonfibre`, whose second texture is a plain diffuse, is deliberately not listed.
+const SINGLE_PICTURE_FAMILIES: &[&str] = &["detonator_ship_rich_iridescent"];
 
 /// The sampler a `nitro_body_new` / `nitro_perspex_new` program declares at
 /// unit 1 and unpacks as a tangent-space normal. Its model lists the ship's
@@ -210,6 +229,8 @@ fn sampler_role(material: &rcsmodel::Material, hash: u32) -> Option<SamplerRole>
         || CIRCUIT_SURFACE_MAP_SAMPLERS.contains(&(family(material), hash))
     {
         Some(SamplerRole::SurfaceMap)
+    } else if SHIP_FACING_RAMP_SAMPLERS.contains(&hash) {
+        Some(SamplerRole::FacingRamp)
     } else if NAMED_GLOW.contains(&hash) {
         Some(SamplerRole::Glow)
     } else {
@@ -302,6 +323,18 @@ pub(super) fn emissive(
         // about "unit 1" there would have refused a real, working glow this
         // project already regressed once (`docs/rendering/hd-ship-materials.md`,
         // "two fixes tried and both failed").
+        // **A second binding that is the picture itself is not a second texture**: where the
+        // program samples one unit once (`SINGLE_PICTURE_FAMILIES`), `Pick::aux`'s ordinal
+        // fallback landing on the entry `Pick::albedo` took would add the paint onto its own
+        // paint.
+        if SINGLE_PICTURE_FAMILIES.contains(&family(material))
+            && picks
+                .get(slot)
+                .is_some_and(|pick| pick.aux.is_some() && pick.aux == pick.albedo)
+        {
+            report.emissive_lookup_excluded += 1;
+            continue;
+        }
         let aux_hash = picks
             .get(slot)
             .and_then(|pick| pick.aux)
@@ -310,6 +343,10 @@ pub(super) fn emissive(
         match aux_hash.map(|hash| sampler_role(material, hash)) {
             Some(Some(SamplerRole::SurfaceMap)) => {
                 report.emissive_surface_map_excluded += 1;
+                continue;
+            }
+            Some(Some(SamplerRole::FacingRamp)) => {
+                report.emissive_lookup_excluded += 1;
                 continue;
             }
             Some(Some(SamplerRole::Glow)) => {}

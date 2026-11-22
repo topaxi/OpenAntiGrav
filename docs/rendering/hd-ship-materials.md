@@ -1228,6 +1228,12 @@ within a grey tolerance" is **open**. **Still open on the hull**: the iridescent
 `ramp(-dot(V, N)) * 0.5637`, a hue that moves with the view) is not drawn, and the white wing rims on the `_n1` skins are a
 separate term (the `nitro_emissive_outlines` shell).
 
+**Detonator's hull is the same overlay, and the same glow bug (2026-11-23, `det-hull-look`).** `detonator_ship_dg_iridescent` reads
+`detonator_stripe.gtf` as a ramp at a scalar (`TEX H6.xyz, R1.wwww unit3`, block `0x46d0`) and overlays `2 * Colour * AO * ramp`; ours
+added the stripe as a tinted glow, and the fuselage (`detonator_ship_rich_iridescent`) its own picture. Both are refused now
+(`emissive::SHIP_FACING_RAMP_SAMPLERS`, `SINGLE_PICTURE_FAMILIES`); the overlay itself is still not drawn, the open item above.
+`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "The hull's paint".
+
 **Other titles.** Fury: same disc, **ported**. **2048: ported** (2026-11-13, `w2048-fury-nitro`; the earlier "not applicable, no
 `_n1` directory" was wrong, the extraction had been read without looking at `hdships`). 2048 ships all twelve
 `hdships\<team>_n1` hulls in the **base package** (`data.psarc`; the 1.04 patch's `data2.psarc` re-ships them with 4x livery

@@ -160,6 +160,40 @@ fn a_ship_hulls_own_normal_map_no_longer_glows_but_an_unsettled_role_still_does(
     );
 }
 
+/// Detonator's hull paints its panels and body from the picture and the light, never from a
+/// glow: `detonator_ship_dg_iridescent`'s second texture is `detonator_stripe.gtf`, a ramp its
+/// program reads at one scalar, and `detonator_ship_rich_iridescent` has no second texture (the
+/// ordinal fallback lands on its one picture). Both used to carry `ADD_SECOND`, which laid the
+/// pale texture over the dark gunmetal paint (`detonator-talons-mines-ahead`, hull panels
+/// `(109, 97, 98)` against the original's `(60, 44, 44)`).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn detonators_hull_paints_no_glow_from_its_ramp_or_its_own_picture() {
+    let Some(image) = image() else { return };
+    let path = "/data/ships/detonator/ship.vex";
+    let Some((model, report)) = build_ship(&image, "DATA00.PSARC", path) else {
+        panic!("Detonator's hull should build");
+    };
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA00.PSARC", image.display());
+    let data = archive_cache::read(&spec, path).expect("the .vex reads");
+    let geometry = mesh::rcs::sibling_geometry(&spec, path, &data).expect("a sibling .rcsmodel");
+    let geometry_model = oag_rcs::rcsmodel::Model::parse(&geometry).expect("the .rcsmodel parses");
+
+    let families = add_second_families(&model, &geometry_model);
+    println!("Detonator ADD_SECOND families: {families:?}");
+    for family in ["detonator_ship_dg_iridescent", "detonator_ship_rich_iridescent"] {
+        assert!(
+            !families.contains(family),
+            "{family} still glows its second binding over its paint: {families:?}"
+        );
+    }
+    assert!(
+        report.emissive_lookup_excluded >= 2,
+        "both materials should be refused as a ramp or as the picture itself, got {}",
+        report.emissive_lookup_excluded
+    );
+}
+
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn talons_junctions_real_glows_still_glow_after_the_role_fix() {

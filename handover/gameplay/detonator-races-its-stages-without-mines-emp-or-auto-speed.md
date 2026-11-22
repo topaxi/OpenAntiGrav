@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-22
-summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen and Zone scene wired; radial bloom, floor violet, hull and mine colours open"
+updated: 2026-11-23
+summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen and Zone scene wired; radial bloom, floor violet, hull iridescent overlay and mine colours open"
 categories: [rendering]
 ---
 
@@ -422,7 +422,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball (`MineColour`/`MineBrightness` binds unread, known); ours also shows no spikes at a distance. |
 | 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
 | 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
-| 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours: pale silver body, white wing edges, no lit strip. Not the mode's sun by the code read (stage 1 authors Sun `0`; ours takes it through the grade, 70). Candidates, unmeasured: the livery (`zoneship_<team>`), the `zoneship01` rim term, the hull program's variant. |
+| 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours was a pale silver body with white wing edges. **Cause read and fixed (90, `det-hull-look`, `detonator-look.md`, "The hull's paint"): `emissive` added the hull's second texture as a glow** (`detonator_stripe.gtf`, a facing ramp, on the panels; `detonator_ao.gtf`, the picture itself, on the body). Side-panel box mean RGB ours `(109.4, 97.4, 98.1)` to `(42.5, 25.5, 26.6)`, original `(60.5, 44.2, 44.5)` (grey gap +51.9 to -18.2); the other 23 HD pairs unchanged. **Still open (-18 grey, 80):** the program's iridescent overlay `2 * Colour * AO * stripe(N.V)`, whose ramp coordinate (the hull vertex program's `TC1`) is unread; and the lit blue strip and cyan wing edges (the `Charge1`/`Charge2` block's writer, `detonator-hull.md`). |
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 

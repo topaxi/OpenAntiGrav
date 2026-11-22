@@ -116,6 +116,7 @@ fn the_report_names_both_kinds_of_absence() {
         variant_chunks_missed: 4,
         specular_exponent_unresolved: 12,
         emissive_surface_map_excluded: 0,
+        emissive_lookup_excluded: 0,
         emissive_role_unresolved: 0,
         pad_ne_bound: 0,
         pad_ne_unread: 0,

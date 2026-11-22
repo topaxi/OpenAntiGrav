@@ -99,13 +99,10 @@ craft model and handling, all already Detonator-specific.
 
 What is **not** read and stays a measurement for the wiring lane:
 
-- **The hull.** Ours draws a pale silver hull; the original's is dark gunmetal with a lit blue strip and cyan wing
+- **The hull.** Ours drew a pale silver hull; the original's is dark gunmetal with a lit blue strip and cyan wing
   edges. Stage 1 authors a black sun and `iblScalePower (0.314, 0, 0, 1)`, and ours already takes both through the
-  grade (`lit_by_stage_alone`, `hull_probe_tint_scale`, `scene/frame.rs:476`), so the pale hull is not the mode's
-  light by the code read. Candidates, none measured: the Detonator livery (`zoneship_<team>`,
-  [detonator-hull.md](detonator-hull.md), 65 for which entry), the `zoneship01` Schlick rim
-  ([zone-hull-light.md](zone-hull-light.md)), or the hull program picking its non-Zone variant. Confidence that it is
-  not the sun: 70.
+  grade (`lit_by_stage_alone`, `hull_probe_tint_scale`, `scene/frame.rs:476`), so the pale hull was not the mode's
+  light (70, now confirmed: "The hull's paint" below). Closed to 18 grey; what is left is the iridescent overlay.
 - **The mine and bomb colours.** The four `Detonator Mine/Bomb` colour keys exist per stage (table above) and are
   parsed; where the mine and bomb materials bind them is the `det-colour-re` lane's function set and is not
   read here.
@@ -142,7 +139,62 @@ The billboards draw the stage target in Detonator (the pad pair with `--zone-spe
 original's are); the pairs themselves show none because their re-render is silent, a zero spectrum being a black grid on black.
 The slot 8 gate (`Mode::Zone`, the card's Zone-grade exemption) was also tried on the mask: a Detonator start frame came out
 pixel-identical (whether the exemption fires there was not separated), so it stays. What the frame still lacks: the floor's violet dashes and the lit scenery at upper right (the
-original draws it dark), the pale hull and the mine and bomb colours (`det-colour-re`).
+original draws it dark), the hull's iridescent overlay (the pale hull itself is fixed, below) and the mine and bomb colours (`det-colour-re`).
+
+## The hull's paint: the second texture was added as a glow (read and fixed 2026-11-23, `det-hull-look`)
+
+**The cause.** The pale hull was not the light, the livery, the `zoneship01` rim or the program variant. It was
+`mesh::rcs::emissive`'s structural accumulate: a material whose program reads unit 1 gets its second texture added to the
+paint as a tinted glow, unless the second texture's role is measured to be a normal or specular map. Two Detonator hull
+materials slipped through it:
+
+| Material | Share of the hull | Second texture `Pick::aux` landed on | What the program does with it |
+| --- | --- | --- | --- |
+| `detonator_ship_dg_iridescent` (the two side panels and wings, 814 triangles) | the big panels | `detonator_stripe.gtf` (`0x215b724c`, 32x32 DXT1) | a ramp: `TEX H6.xyz, R1.wwww unit3`, coordinate a scalar `dot(N, R3)` (the `IBL` block `0x46d0`, `@0x22`), folded into the overlay below |
+| `detonator_ship_rich_iridescent` (the fuselage, 8,341 triangles) | the body | `detonator_ao.gtf`, the picture itself (the ordinal fallback on entry 1, where the program's only picture sits: block `0x3550`, `@0x00` `TEX H0.xyz, f[TC3] unit1`) | nothing: no second texture |
+
+Adding either at full weight is the pale wash. **Fix:** `emissive.rs` refuses the accumulate for a facing-ramp sampler
+(`SHIP_FACING_RAMP_SAMPLERS`, the stripe) and for a family that reads one picture (`SINGLE_PICTURE_FAMILIES`, the body); the
+load report counts both (`emissive_lookup_excluded`). `carbonfibre`, whose second texture is a plain diffuse, stays on its old path
+(the existing test pins it). Confidence 90 on the cause (a switch that moves the panels from `(109, 97, 98)` to
+`(42, 25, 27)`, three other switches that did not: below), 85 on the two program reads (static).
+
+**Discriminating tests, in order** (one scratch copy of `detonator-talons-mines-ahead`, ours re-rendered per switch, panel box
+mean RGB; the box is the two side panels, `x 885..940` and `972..1025` at `y 685..780` of ours, `x 887..935` and `975..1020`
+at `y 755..870` of the original, 10,260 and 10,695 pixels; ours' hull sits 70 px higher, so the boxes differ and cover the same
+panels):
+
+| Switch | Panel box ours |
+| --- | --- |
+| none (before) | `(109.4, 97.4, 98.1)` |
+| second binding dropped on the body alone | `(109.3, 97.2, 98.0)` |
+| picture baked times `Colour` (`0x02ab9f07`, `0.0315`) on the body, and its second binding dropped | `(109.5, 97.4, 98.1)` (no move) |
+| `OAG_SKIP_MATERIAL=rich_iridescent` | `(96.5, 89.7, 90.3)` |
+| `OAG_ONLY_MATERIAL=dg_iridescent` / `rich_iridescent` | `(103.2, 99.1, 99.0)` / `(121.0, 121.0, 121.0)` (the box holds both materials; the body's wash lies under and between the panels) |
+| hull ambient forced to 0 | `(92.3, 89.5, 90.3)` |
+| lit sum forced to 0 | `(92.3, 89.6, 90.3)` (so the grey is not light: a glow) |
+| **second binding refused on both materials (the fix)** | **`(42.5, 25.5, 26.6)`** |
+| original (`theirs.png`) | `(60.5, 44.2, 44.5)` |
+
+Mean grey on the box: ours 101.6 to **31.5**, original 49.7 (gap +51.9 to **-18.2**). The three Detonator pairs (RMSE, mean grey, ours
+before to after): `mines-ahead` 0.223 to 0.221, 20.85 to 20.33; `cannon-volley` 0.205 to 0.204, 20.64 to 20.37; `pad` 0.159 to 0.155,
+12.63 to 12.18. The other 23 HD pairs re-render pixel-identical (0 differing pixels each).
+
+**What is left, and why it is not wired.** The residual `(-18, -19, -18)` is uniform, an untinted additive term, and the program
+has one: the iridescent overlay. In the `IBL` block the colour is `light * AO + H8`, with `H8 = 2 * Colour * (AO * stripe(R1.w))`
+while `Colour < 0.5` (`@0x3a`, `Colour` `0x02ab9f07` is `0.10948` on `dg_iridescent`, `0.03152` on `rich_iridescent`) and the
+overlay blend `1 - 2 (1 - AO*ramp)(1 - Colour)` above it (`@0x2a`..`@0x2c`). Its coordinate, `R1.w = dot(R1, R3)`, takes
+`R3 = normalise(f[TC1])`, and what the hull's vertex program writes to `TC1` (a view vector or a light direction) is not read, so
+the ramp's address and sign are open; `hd-ship-materials.md` records the same open overlay for the nitro hulls. Left unwired, not
+guessed (confidence 80 on the term's shape, 40 on its coordinate). Raising it takes the hull vertex program's `TC1`
+(`scripts/ps3-microcode.py vp-file` over `detonator_ship_dg_iridescent`'s vertex blocks) and a hull overlay role in `shade.wesl`.
+
+**Cross-title.** 2048 and Omega: checked, differs in the reader. Their hulls draw through `mesh::rcs::psp2`, which does not call
+`emissive::emissive`; its `glow` plan sets `ADD_SECOND` only for a measured glow program. Whether their Detonator hull shows the same
+wash is not checkable: no Detonator frame of either title exists. The stripe and picture reads above are HD's programs.
+
+Test: `oag-mesh` `hd_hull_glow_role_ground_truth::detonators_hull_paints_no_glow_from_its_ramp_or_its_own_picture` (red with the fix
+removed: both families carry `ADD_SECOND`).
 
 ## Cross-title
 
@@ -164,7 +216,8 @@ original draws it dark), the pale hull and the mine and bomb colours (`det-colou
 | Detonator's settings file, textures and stage source are its own | `0x003f51b4`, `0x003d71ec`, `0x003dd5dc` | 85 |
 | Stage 1 authors a black sky, no sun, no fog, black scene colours | the file, read from the disc | 95 (file), 80 (as the frame) |
 | Bloom has a Detonator arm that keeps the circuit's frame contribution and adaption boost | `0x003ad940`-`0x003aebb0`, static only | 70 |
-| The pale hull is not the mode's sun | code read of ours against the file | 70 |
+| The pale hull was not the mode's sun; it was the second texture added as a glow | five switches on one pair, "The hull's paint" | 90 |
+| What remains on the hull (-18 grey) is the iridescent overlay, coordinate unread | microcode `@0x3a`, `@0x2a`; `TC1` unread | 80 / 40 |
 | The floor's violet dashes are the EQ tint | one pixel sample of one frame | 60 |
 
 ## Reproduce
