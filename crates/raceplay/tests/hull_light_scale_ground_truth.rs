@@ -51,13 +51,13 @@ fn the_grid_craft_reads_the_blend_the_original_holds_not_the_nearest_ring_point(
         "the nearest ring point holds {near:?}, which is what ours drew"
     );
     assert!(
-        blended[0].abs_diff(179) <= 2 && blended[1].abs_diff(179) <= 2,
+        blended[0].abs_diff(179) <= 3 && blended[1].abs_diff(179) <= 3,
         "the live list holds (179, 179, 250, 250); the blend reads {blended:?}"
     );
-    assert_eq!(
-        blended[2..],
-        [250, 250],
-        "the point and spot bytes of the live list"
+    // The pose is read to two decimals and the ramp climbs about 35 per unit of road, so three bytes is a tenth of a unit.
+    assert!(
+        blended[2].abs_diff(250) <= 2 && blended[3].abs_diff(250) <= 2,
+        "the point and spot bytes of the live list are 250; the blend reads {blended:?}"
     );
 }
 
@@ -96,4 +96,47 @@ fn a_craft_no_tick_has_located_is_lit_by_the_tunnel_it_stands_in() {
         (118..=130).contains(&directional),
         "the original's list holds a directional scale near 123, the pack reads {directional}"
     );
+}
+
+/// Where the four Pure compare pairs put the player, with the grid scale the original's GE list holds there: `250`
+/// (`249/255` on every light byte, `docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "Light scale").
+const PURE_GRIDS: [(&str, [f32; 3]); 4] = [
+    ("01_Vineta_K", [38.59997, 37.47333, -96.69416]),
+    ("04_Chenghou_Project", [-301.54987, 28.148235, 454.7532]),
+    ("07_Blue_Ridge", [-203.15292, 23.825203, -84.73067]),
+    ("03_Modesto_Heights", [-309.90353, 197.99696, -429.9906]),
+];
+
+/// The grid's scale is the spline's double-truncated blend of `255` points, `249..=251` by where in a segment the
+/// craft stands, and `250` where the original read it. Blue Ridge's pose is 21 units off the ring, so its chord
+/// projection is the loosest estimate of the four: it may read one byte off.
+#[test]
+#[ignore = "needs the Pure PSP disc in data/images/"]
+fn a_pure_grid_craft_reads_the_original_s_250_not_a_full_255() {
+    assert_eq!(
+        (255 * 250u32) >> 8,
+        249,
+        "scale 250 is the GE lists' 249 on a 255 light byte"
+    );
+    let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
+        return;
+    };
+    let mut archives = oag_pure::open(&image.display().to_string()).expect("mounting the disc");
+    for (circuit, pose) in PURE_GRIDS {
+        let file = archives
+            .read_name(&format!(r"Data\Environments\{circuit}\track.vex"))
+            .expect("the circuit's track file");
+        let nodes = vex::nodes(&file).expect("nodes");
+        let node = track::find_node(&file, &nodes).expect("the track node");
+        let ai = track::parse(&file[node.payload()]).expect("the track");
+        let course = Course::from_track(&ai, None).expect("a ring");
+        let at = Vec3::new(pose[0], pose[1], pose[2]);
+        let index = course.locate(at, None).expect("a ring point").index;
+        let scale = course.light_scale_at(index, at).expect("a blend");
+        let slack = u8::from(circuit == "07_Blue_Ridge");
+        assert!(
+            scale.iter().all(|&byte| byte.abs_diff(250) <= slack),
+            "{circuit}: the original's grid scale is 250, the blend reads {scale:?}"
+        );
+    }
 }

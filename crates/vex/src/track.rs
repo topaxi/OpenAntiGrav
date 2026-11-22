@@ -401,6 +401,20 @@ impl Path {
             light_scale: blend_light_scale(&w, &p),
         })
     }
+
+    /// The light-scale bytes of the four control points [`Self::sample`] blends
+    /// inside `segment`, clamped at the path ends. `None` for a segment past
+    /// the end.
+    #[must_use]
+    pub fn light_controls(&self, segment: usize) -> Option<[[u8; 4]; 4]> {
+        let n = self.points.len();
+        if segment >= n {
+            return None;
+        }
+        let at = |i: isize| self.points[i.clamp(0, n as isize - 1) as usize].light_scale;
+        let i = segment as isize;
+        Some([at(i - 1), at(i), at(i + 1), at(i + 2)])
+    }
 }
 
 /// [`SplinePoint::light_scale`] blended over a segment's four control points in
@@ -411,10 +425,17 @@ impl Path {
 /// `0xff` points reads back a little under `0xff`. Weights are [`basis`]'s.
 #[must_use]
 pub fn blend_light_scale(weights: &[f32; 4], points: &[&SplinePoint; 4]) -> [u8; 4] {
+    blend_light_bytes(weights, points.map(|point| point.light_scale))
+}
+
+/// [`blend_light_scale`] over four control points' bytes, for a caller that
+/// holds the bytes and not the points (a course's ring).
+#[must_use]
+pub fn blend_light_bytes(weights: &[f32; 4], controls: [[u8; 4]; 4]) -> [u8; 4] {
     let mut out = [0u8; 4];
-    for (weight, point) in weights.iter().zip(points) {
+    for (weight, scale) in weights.iter().zip(controls) {
         let scaled = (weight * 255.0) as u32;
-        for (acc, byte) in out.iter_mut().zip(point.light_scale) {
+        for (acc, byte) in out.iter_mut().zip(scale) {
             *acc = acc.wrapping_add(((u32::from(byte) * scaled) >> 8) as u8);
         }
     }

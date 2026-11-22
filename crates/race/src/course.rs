@@ -85,6 +85,8 @@ pub struct Course {
     /// The spline points' light scales blended at each ring point, parallel to
     /// [`Self::positions`] - what a craft's hull lights are scaled by there.
     light_scales: Vec<[u8; 4]>,
+    /// What each ring point's light scale blends from, parallel to [`Self::positions`].
+    light_blends: Vec<branch::LightBlend>,
     /// The alternate paths off the ring - see [`branch`].
     branches: Vec<Branch>,
     /// Every way round every fork - see [`route`].
@@ -178,6 +180,7 @@ impl Course {
         let mut centres = Vec::new();
         let mut corridor_widths = Vec::new();
         let mut light_scales = Vec::new();
+        let mut light_blends = Vec::new();
         let mut max_half_width = 0.0f32;
         let mut first = vec![None; ai.paths.len()];
         for &path_index in &ring {
@@ -188,6 +191,7 @@ impl Course {
                 centres.push(sample.centre);
                 corridor_widths.push(sample.corridor_width);
                 light_scales.push(sample.light_scale);
+                light_blends.push(sample.light_blend);
                 paths.push(u16::try_from(path_index).unwrap_or(u16::MAX));
                 max_half_width = max_half_width
                     .max(sample.half_widths.0)
@@ -228,6 +232,7 @@ impl Course {
             centres,
             corridor_widths,
             light_scales,
+            light_blends,
             branches,
             routes,
         };
@@ -308,23 +313,27 @@ impl Course {
     /// The four light-scale bytes at a craft's own place on the ring, `at`
     /// being its position and `index` the ring point nearest it.
     ///
-    /// The original blends the scale at the craft's own spline parameter, so a
-    /// craft between a bright and a dark stretch reads a value between the two
-    /// (live on De Konstruct, `05_Track` reversed: the craft 0.59 of the way
-    /// from a `255` point to a `127` one read `179`, where the nearest ring
-    /// point holds `187`). This takes the craft's projection onto the chord
-    /// to the neighbouring ring point it lies towards and blends the two
-    /// points' bytes by that fraction. At a point itself, or off the ring's
-    /// end, it is [`Self::light_scale`].
+    /// The original blends the scale at the craft's own spline parameter
+    /// (`Spline_SampleSegment`, `docs/ghidra/functions/psp-pulse-usa/scene-light.md`,
+    /// "The scales"), in integer arithmetic over the segment's four control
+    /// points. This takes the craft's projection onto the chord to the
+    /// neighbouring ring point it lies towards, turns that into a parameter
+    /// between the two samples, and runs the same integer blend there, so a
+    /// run of `255` points reads `249` to `251` by `t` where the ring point
+    /// itself holds the value at its own `t`. At a point itself, or off the
+    /// ring's end, it is [`Self::light_scale`].
     #[must_use]
     pub fn light_scale_at(&self, index: usize, at: Vec3) -> Option<[u8; 4]> {
         let here = self.light_scales.get(index).copied()?;
         let from = self.positions.get(index).copied()?;
         let count = self.positions.len();
-        let mut best: Option<(f32, [u8; 4])> = None;
-        for next in [(index + 1) % count, (index + count - 1) % count] {
-            let (Some(to), Some(scale)) = (self.positions.get(next), self.light_scales.get(next))
-            else {
+        let steps = Self::STEPS_PER_SEGMENT as f32;
+        let mut best: Option<(f32, usize, bool)> = None;
+        for (next, forward) in [
+            ((index + 1) % count, true),
+            ((index + count - 1) % count, false),
+        ] {
+            let Some(to) = self.positions.get(next) else {
                 continue;
             };
             let chord = *to - from;
@@ -333,19 +342,21 @@ impl Course {
                 continue;
             }
             let t = (at - from).dot(chord) / length_squared;
-            if t > 0.0 && best.is_none_or(|(b, _)| t > b) {
-                best = Some((t.min(1.0), *scale));
+            if t > 0.0 && best.is_none_or(|(b, ..)| t > b) {
+                best = Some((t.min(1.0), next, forward));
             }
         }
-        let Some((t, there)) = best else {
+        let Some((u, next, forward)) = best else {
             return Some(here);
         };
-        let mut out = here;
-        for k in 0..4 {
-            let blended = f32::from(here[k]) + (f32::from(there[k]) - f32::from(here[k])) * t;
-            out[k] = blended.round() as u8;
-        }
-        Some(out)
+        let (earlier, along) = if forward { (index, u) } else { (next, 1.0 - u) };
+        let blend = self.light_blends.get(earlier)?;
+        // Never reach 1.0: the original's parameter stays inside its segment.
+        let t = (blend.t + along / steps).min(1.0 - f32::EPSILON);
+        Some(oag_vex::track::blend_light_bytes(
+            &oag_vex::track::basis(t),
+            blend.controls,
+        ))
     }
 
     /// The alternate paths off the ring, in junction order - see [`Branch`].

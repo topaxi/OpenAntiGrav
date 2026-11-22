@@ -391,3 +391,22 @@ fn a_craft_between_two_ring_points_reads_a_blend_of_their_light_scales() {
         "halfway between {a} and {b} reads {halfway}"
     );
 }
+
+#[test]
+fn a_run_of_full_light_points_reads_249_to_251_by_where_the_craft_stands() {
+    let course = Course::from_track(&square_track(2), None).expect("a ring");
+    // The ring's own samples sit at t = 0, 1/4, 1/2, 3/4 of a segment: `Spline_AccumulateLightScale`'s
+    // double truncation of three 255 points is 251 at a segment's start and 250 in the other three.
+    let reads: Vec<u8> = (0..4)
+        .map(|k| course.light_scale(8 + k).expect("a ring point")[0])
+        .collect();
+    assert_eq!(reads, [251, 250, 250, 250]);
+    // A craft 0.35 of a segment along (a third of the way from the second sample to the third) is
+    // on the stretch that reads 249, and a 255 light byte under 249 is `(255 * 249) >> 8`.
+    let from = course.position(9).expect("a ring point");
+    let to = course.position(10).expect("a ring point");
+    let at = from + (to - from) * 0.4;
+    let scale = course.light_scale_at(9, at).expect("a blend");
+    assert_eq!(scale, [249; 4]);
+    assert_eq!((255 * u32::from(scale[0])) >> 8, 248);
+}
