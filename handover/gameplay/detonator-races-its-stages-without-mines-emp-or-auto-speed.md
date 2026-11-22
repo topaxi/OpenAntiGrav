@@ -1,5 +1,5 @@
 ---
-status: re-first
+status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-22
 summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign wired; EMP and auto-speed read, ready to wire; end screen open"
@@ -242,7 +242,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | ready (phase 14's value) |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
-  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | **missing**: phase 10 (the charge counter and its pad writer) | blocked on 10 |
+  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | **missing**: phase 10 (the charge counter and its pad writer) | ready: phase 10 read (`detonator-emp.md`) |
   | `PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore` | **nothing on HD**: the controller never binds the first two, never reads the third and its banked-score text setter has no caller | - | do not draw `x%02d` or the `%04d` counter | skip |
 
   Also from the page: the reload gauge `(1 - lockout/total) * 15` that `Detonator_UpdateHud`
