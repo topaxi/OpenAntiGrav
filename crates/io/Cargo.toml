@@ -1,0 +1,16 @@
+[package]
+name = "oag-io"
+description = "File I/O helpers shared by every crate that writes the player's files: the atomic write"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+# Lets a test of a crate above this one cut the next write short (`cut_the_next_write_after`).
+crash-hook = []
+
+[lints]
+workspace = true
