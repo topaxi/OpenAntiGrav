@@ -22,6 +22,7 @@ pub(super) fn shield_model(
     archives: &mut oag_assets::Archives,
     name: &str,
     store: oag_gpu::formats::SceneStore,
+    textures: &mut zone_livery::Reads,
 ) -> Result<(Model, String, Option<[f32; 4]>), String> {
     let blob = archives
         .read_name(name)
@@ -55,7 +56,7 @@ pub(super) fn shield_model(
         })?;
     let (mut model, built, colour) = if mesh::rcs::psp2::is_psp2(&geometry) {
         let (model, built) = mesh::rcs::psp2::build(name, &geometry, None, &mut |path| {
-            archives.read_name(path).ok()
+            textures.read(archives, path)
         })
         .map_err(|error| format!("{name}: its .rcsmodel does not build ({error:#})"))?;
         let half = archives.layout.platform == oag_assets::Platform::Vita;
@@ -65,7 +66,7 @@ pub(super) fn shield_model(
             name,
             &blob,
             &geometry,
-            &mut |path| archives.read_name(path).ok(),
+            &mut |path| textures.read(archives, path),
             store,
             |c| c.mesh,
         )
@@ -209,7 +210,7 @@ pub(super) fn shell(
         } else {
             "shared - this source carries no per-team shell"
         };
-        match shield_model(archives, name, store) {
+        match shield_model(archives, name, store, &mut zone_livery::Reads::new(None)) {
             Ok((model, note, colour)) => {
                 report.push(format!("{name}: {note} - the shield shell, {provenance}"));
                 return Some((model, colour));
@@ -245,7 +246,7 @@ pub fn cockpit_shield(
     report: &mut Vec<String>,
 ) -> (Option<Model>, f32) {
     let name = oag_pulse::race::COCKPIT_SHIELD;
-    match shield_model(archives, name, store) {
+    match shield_model(archives, name, store, &mut zone_livery::Reads::new(None)) {
         Ok((model, note, colour)) => {
             report.push(format!(
                 "{name}: {note} - the shield seen from inside the cockpit"
