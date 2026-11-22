@@ -87,6 +87,9 @@ pub(super) fn with_batch_cull(
 /// `zone` is whether the race is in Zone mode: 2048's and Omega's Zone passes
 /// keep the `wohdmeshrefract` meshes in the main view and draw no refraction target
 /// (`psp2::refraction_only`).
+///
+/// `hide_pads` leaves the circuit's own speed-pad chunks out of the world-space pass, for a race
+/// that draws its own pad model in their place (`mesh::rcs::build_scene_views`).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn track_model(
     archives: &mut oag_assets::Archives,
@@ -98,6 +101,7 @@ pub(super) fn track_model(
     zone: bool,
     store: oag_gpu::formats::SceneStore,
     water: oag_display::display::Water,
+    hide_pads: bool,
     report: &mut Vec<String>,
 ) -> (Option<Model>, crate::BehindGlassModels) {
     let none = crate::BehindGlassModels::default;
@@ -193,6 +197,7 @@ pub(super) fn track_model(
                 &mut crate::stages::reader(archives),
                 store,
                 water,
+                hide_pads,
             );
             match built {
                 Ok((model, mut groups, built)) => {

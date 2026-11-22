@@ -593,6 +593,38 @@ pub struct Detonator {
     /// The models a Detonator race lays and draws in place of the ordinary Mine, Bomb and pads,
     /// or `None` where a title's are not located.
     pub objects: Option<DetonatorObjects>,
+    /// What a speed pad and a weapon pad do in Detonator.
+    pub pads: DetonatorPads,
+    /// The EMP's two announcer lines and the bank that holds them, or `None` where a title's
+    /// are not located.
+    pub voices: Option<DetonatorVoices>,
+    /// Whether the HUD's `EmpReady` lamp is bound by the executable: where it is not, the
+    /// layout's widget is dropped (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`).
+    pub binds_emp_ready: crate::pre_race::Sourced<bool>,
+}
+
+/// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads
+/// charge, they do not boost"). Where a field is `false` the pad keeps its ordinary race
+/// behaviour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetonatorPads {
+    /// A speed pad gives no boost and charges the EMP once per entry.
+    pub speed_pad_charges: crate::pre_race::Sourced<bool>,
+    /// A weapon pad hands out nothing and charges the EMP once per pad, again only after another
+    /// pad or the next start-line crossing.
+    pub weapon_pad_charges: crate::pre_race::Sourced<bool>,
+}
+
+/// The EMP's announcer lines: `Detonator_UpdateRace` raises `EMPREADY` and `EMPFULL` through
+/// `Sound_QueueAnnouncerCue` (`detonator-emp.md`, "The charge and the gauge").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetonatorVoices {
+    /// The speech bank that holds them.
+    pub bank: &'static str,
+    /// The ready line's name.
+    pub ready: &'static str,
+    /// The full line's name.
+    pub full: &'static str,
 }
 
 /// The archive entries of Detonator's own object models

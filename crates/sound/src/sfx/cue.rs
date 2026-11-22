@@ -185,6 +185,7 @@ impl CueTables for Cue {
             | Self::RepulsorHit
             | Self::MineExplosion
             | Self::BombExplosion
+            | Self::WeaponPickup
             | Self::Turbo => BankName::Weapons,
             Self::ShieldActive
             | Self::Engaging
@@ -194,6 +195,8 @@ impl CueTables for Cue {
             | Self::StartBeat
             | Self::ContElim
             | Self::PerfectLap
+            | Self::EmpReady
+            | Self::EmpFull
             | Self::NewLapRecord => BankName::Speech,
             Self::MenuUp
             | Self::MenuDown
@@ -267,6 +270,9 @@ impl CueTables for Cue {
             Self::CannonHitWall => "CANNONEXPLWALL",
             Self::CannonHitShip => "CANNONEXPLSHIP",
             Self::QuakeLaunch => "QUAKELAUNCH",
+            Self::WeaponPickup => "WEAPONPICKUP",
+            Self::EmpReady => "EMPREADY",
+            Self::EmpFull => "EMPFULL",
             Self::QuakeHit => "QUAKEHIT",
             Self::QuakeTravel => "~QUAKETRAVEL",
             Self::Leach => "LEACH",
@@ -399,6 +405,10 @@ impl CueTables for Cue {
             // `FUN_08829778` plays `PERFECT_LAP` through `Sound_PlayNamedInSlot` at
             // `0x400` with no emitter, as the start voice does.
             Self::PerfectLap | Self::NewLapRecord => Placement::Unplaced,
+            // `Sound_QueueAnnouncerCue`, the announcer's queue, as the lap voices.
+            Self::EmpReady | Self::EmpFull => Placement::Unplaced,
+            // `SoundEmitter_PlayCue` on the ship's emitter `ship+0x5ee0`.
+            Self::WeaponPickup => Placement::Craft,
             // Read: case 4 hands it to the path with no emitter at `0x400`.
             Self::Blowup | Self::Message => Placement::Unplaced,
             // Both halves of `Ship_FireHeldWeapon`'s case 6 use `FUN_0883e9b0`, the

@@ -736,6 +736,9 @@ pub struct SimSetup {
     /// `None` off Detonator, and where the files are absent or unreadable, which lays no mines
     /// rather than invented ones.
     pub detonator: Option<oag_weapons::detonator::Layout>,
+    /// What Detonator's pads do on this title ([`oag_title::Detonator::pads`]); `None` keeps
+    /// every pad on its race behaviour.
+    pub detonator_pads: Option<oag_title::DetonatorPads>,
     /// Restricts which weapons a `Weapon Pad` may hand out to exactly this
     /// list, or does not restrict at all when empty - the same "empty is no
     /// override" convention [`Options::grid_teams`] uses.

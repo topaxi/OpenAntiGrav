@@ -479,24 +479,36 @@ impl Banks {
         tick: oag_title::SequenceTick,
         medal: oag_title::lap_hud::SpeedLapMedal,
     ) {
-        let blob = match archives.read_name(medal.bank) {
-            Ok(blob) => blob,
-            Err(e) => {
-                self.report
-                    .push(format!("sfx: {} not read: {e}", medal.bank));
-                return;
-            }
-        };
         let named = [
             (Cue::SpeedLapGold, medal.gold),
             (Cue::SpeedLapSilver, medal.silver),
             (Cue::SpeedLapBronze, medal.bronze),
         ];
+        self.load_named(archives, medal.bank, tick, &named);
+    }
+
+    /// Loads each cue of `named` from the bank `entry` under the name the title gives it.
+    /// Never fails, on [`Self::load`]'s terms: an unreadable bank or a missing name is a report
+    /// line and silence.
+    pub fn load_named(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        tick: oag_title::SequenceTick,
+        named: &[(Cue, &str)],
+    ) {
+        let blob = match archives.read_name(entry) {
+            Ok(blob) => blob,
+            Err(e) => {
+                self.report.push(format!("sfx: {entry} not read: {e}"));
+                return;
+            }
+        };
         let mut report = Vec::new();
-        for pair in named {
+        for &pair in named {
             load_one(
                 &blob,
-                medal.bank,
+                entry,
                 pair,
                 Reading::plain(tick),
                 &mut self.sounds,

@@ -86,6 +86,7 @@ impl Race {
             weapons,
             weapon_ai,
             detonator,
+            detonator_pads,
             allowed_weapons,
             weapon_pad_refresh,
             class,
@@ -209,7 +210,15 @@ impl Race {
                 oag_physics::passive::ClassGravityTerm::Grounded
             };
         let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
-        let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
+        // Detonator runs with weapons off, yet its weapon pads still charge the EMP
+        // (`Ship_TestWeaponPad`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`).
+        let pads_charge = mode == Mode::Detonator
+            && detonator_pads.is_some_and(|pads| pads.weapon_pad_charges.value);
+        let weapon_pads = if weapons_on || pads_charge {
+            weapon_pads
+        } else {
+            Vec::new()
+        };
 
         let mut world = World::new(seed);
         // The lap count is per speed class, not per mode - the campaign's 236
@@ -638,8 +647,21 @@ impl Race {
                     cannon_flash,
                 )
             });
+            let emp = weapons.as_ref().and_then(|stats| {
+                oag_weapons::detonator::emp::Config::from_tables(
+                    stats,
+                    layout.values.distance_offset_between_mines,
+                    layout.scoring,
+                )
+            });
+            let pads = detonator_pads.map_or([false; 2], |pads| {
+                [pads.speed_pad_charges.value, pads.weapon_pad_charges.value]
+            });
             crate::detonator::Detonator {
                 cannon,
+                emp,
+                speed_pads_charge: pads[0],
+                weapon_pads_charge: pads[1],
                 survey: Arc::new(crate::detonator::survey(
                     &spline,
                     &order,
@@ -689,9 +711,9 @@ impl Race {
                     collision: Arc::new(collision),
                     spline: Arc::new(spline),
                     course: course.map(Arc::new),
-                    // Only Zone reads these, so the other two modes carry `None` and the
-                    // engine keeps its ordinary throttle path.
-                    zone: zone.filter(|_| mode == Mode::Zone),
+                    // Only the Zone-mask modes read these (Zone and Detonator), so the rest
+                    // carry `None` and the engine keeps its ordinary throttle path.
+                    zone: zone.filter(|_| mode.on_zone_mask()),
                     // ADR-0007: 60 Hz, from the clock rather than from a literal, so there
                     // is one place the rate is decided.
                     dt: TickClock::new(TickRate::DEFAULT).rate().dt(),

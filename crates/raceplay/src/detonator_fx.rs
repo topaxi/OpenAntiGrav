@@ -111,7 +111,14 @@ pub(crate) fn effect_for(kind: EventKind) -> Option<Trigger> {
             Some(Trigger::DetonatorBombExplo)
         }
         EventKind::RoundWall { .. } => Some(Trigger::DetonatorCannonSparks),
-        EventKind::Volley => None,
+        // The EMP's kill goes through `MineManager_DestroyAtLane`/`BombManager_DestroyAtLane`,
+        // whose effect is unread (`detonator-emp.md`, "Open"): nothing is played for it.
+        EventKind::Volley
+        | EventKind::EmpReady
+        | EventKind::EmpFull
+        | EventKind::EmpLaunch
+        | EventKind::MineEmped { .. }
+        | EventKind::BombEmped => None,
     }
 }
 

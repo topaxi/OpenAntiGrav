@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign wired; EMP and auto-speed read, ready to wire; end screen open"
+summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign, EMP and auto-speed wired; end screen open"
 categories: [rendering]
 ---
 
@@ -29,9 +29,9 @@ evidence), then start at "Next Steps".
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
 | 8b | Wire the hull, handling, mine, bomb and pad models | done (wreck, death shell, colour binds open) | `4f4b70173` |
 | 9 | Wire the cannon, score, destroyed count and percentage | simulation done; rounds, flash, explosion effects and the cannon's cues drawn on HD; the HUD is row 12's, no end screen | `59215fc52`, the `det-fx` commits |
-| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | RE done, ready to wire (`detonator-emp.md`; the wave's reach per section unread) | |
-| 11 | Auto-speed: RE Detonator's engine branch, then wire | RE done, ready to wire (`detonator-speed.md`) | |
-| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048 except EMP, bomb-ahead, score feedback and the medal models (below) | |
+| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads unread, so its EMP never charges | `det-emp-wire` |
+| 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
+| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; open: `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback and the medal models (below) | |
 | 13 | End screen proper (score, percentage, stage rows) | open | |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
@@ -48,12 +48,14 @@ the Detonator hull in its team livery on Detonator's own handling file; mines, b
 the Detonator models (the mine football draws plain white: its `MineColour`/`MineBrightness` binds
 and the bomb's `BombColour` are unread). Square fires the pulse cannon and Circle reloads; rounds
 destroy mines and bombs and the race keeps a score, a destroyed count and a percentage, but no
-the rounds and muzzle flashes are drawn and a shot mine, a bomb and a round on a wall play their disc effects (HD); the HUD is row 12's. No EMP, no auto-speed.
+the rounds and muzzle flashes are drawn and a shot mine, a bomb and a round on a wall play their disc effects (HD); the HUD is row 12's. The craft drives itself (Zone's
+auto-speed on the stage); pads charge the EMP instead of boosting, L1 fires it and its wave
+clears the mines ahead (wave reach chosen).
 
 Open from 8b: no wreck or death shell (HD's PS3 hull branch loads no wreck in any mode; the
-Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad still draws under the
-Detonator pad (unread whether the original hides it; the model's origin at the pad transform is
-chosen); 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
+Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad is hidden under the
+Detonator pad (live frames, 60; `detonator-emp.md`); the model's origin at the pad transform is
+chosen; 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
 
 ## Working rules learned the hard way
 
@@ -167,46 +169,12 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
 
 ### Phases 10-15 (from the original plan)
 
-- **10 EMP: read, ready to wire** (2026-11-22, `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`,
-  HD static plus two RPCS3 runs, 60-92 per piece; Omega and 2048 checked, applies). What the wire
-  lane builds, in `oag_raceplay::pads` and `oag_weapons::detonator` (Detonator only):
-  1. **Pads charge, they do not boost or hand out.** A speed pad in Detonator applies no force
-     and no timer (live: boost timer `0` over 37 observed entries) and raises one charge per entry
-     (re-armed once the craft is off every pad), cue `WEAPONPICKUP`. A weapon pad awards nothing
-     and raises one charge per pad, its memory cleared on each start-line crossing. The Detonator
-     pad model draws with no circuit pad visible beneath it (60, four frames): hide the
-     circuit's own speed/weapon pad models in Detonator.
-  2. **Charge and gauge**: `n += 1` per charge (race state); gauge `0` while `n < lo`, else
-     `min((n - (hi - lo)) / (hi - lo), 1)` in f32 from the `EMP` block's two ints (`lo = 4`,
-     `hi = 8`, already in `DetonatorStats::emp`; keep it literal, it is not `(n - lo)/(hi - lo)`
-     for other tables). Cues `EMPREADY` on the first charge at `lo`, `EMPFULL` at gauge `1`, both
-     latches re-armed below `lo`. HUD `Emp_0..7` and `EmpReady` read `n`.
-  3. **Fire**: L1 (the original's controls `+0x1c`, live), mode 14, `n >= lo`: launch a wave
-     with `extent = minDistance + (maxDistance - minDistance) * gauge` (0.25..2.0), then `n = 0`,
-     gauge `0`, cue `QUAKELAUNCH`; the cannon's clip is untouched (live).
-  4. **Kill**: every mine and bomb in each track section the wave sweeps, scored with
-     `DetonatorScoring` `<Emp>` (live: `+25` per dark mine), mines counted into the destroyed
-     count. **Unread**: how many sections `extent` reaches and how fast (live: 12 kills over
-     1.8 s ahead of the craft); recipe on the page (`EMP_SweepSections`' caller). Until read,
-     the reach is a labelled choice.
-  `check-weapon-lineage` and `docs/gameplay/weapon-lineage.md`'s EMP row move with the wiring.
-- **11 Auto-speed: read, ready to wire** (2026-11-22,
-  `docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`, HD static 80 plus RPCS3 live, 85-90;
-  Omega and 2048 the same branch). It is **Zone's law with Detonator's stage as `n`**:
-  `T = ramp * (start + increment * n)`, `start 34`, `increment 4.4` from the global
-  `handlingstats.xml` `<Zone>` (already parsed, `oag_tables::handling`), `n = 0` on lap 1 and the
-  HUD stage `2..14` from each later crossing (live `0, 2, 3, ..., 11`), gated grounded and off the
-  grid, into the shared tail (speed-up, turbo, launch multiplier, doubling); the throttle does
-  not reach it and there are no brakes. The ramp `craft+0x2d4` (`+= dt/1.3`, `max(r - 0.1, 0)/0.9`)
-  is `1.0` by GO and is zeroed by a rescue, so after a rescue the engine returns over 1.3 s.
-  Wire: let `Mode::Detonator` take the `zone` auto-speed path with
-  `n = if stage == 1 { 0 } else { stage.min(14) }`, `stage` the HUD stage that
-  `World::detonator.stages_laid` already feeds (`start.rs`,
-  `player_step.rs` ~l.228 reads `race[slot].zone` today), plus the rescue ramp if Zone lacks it.
-  Ground truth: a coasting Detonator craft reaches speed with no throttle, and `n` steps on the
-  crossing. **Also found**: HD's own Zone runs this same branch with the ramp
-  (`psp-pulse-usa/zone-start.md` says HD's arm only ramps; corrected on the new page, that page
-  and the weapon-lineage Autopilot row not edited).
+- **10 EMP: done** (HD, Omega; 2048's pads unread). What stays open is under "Open" ("EMP:
+  wired"); the law and the wiring table are `detonator-emp.md`, "Wired".
+- **11 Auto-speed: done** (HD, 2048, Omega). Open: under "Open" ("Auto-speed: wired");
+  `detonator-speed.md`, "Wired". **Also found** in the RE: HD's own Zone runs the same branch
+  with the ramp (`psp-pulse-usa/zone-start.md` says otherwise; that page and the weapon-lineage
+  Autopilot row are not edited).
 - **12 HUD: wired** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "Wired").
   `HudLayouts::detonator` names each title's root; score, clip, stage, bullet icons, volley pips,
   the streak line and the energy readout (white in Detonator) read the live cannon
@@ -242,7 +210,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | ready (phase 14's value) |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
-  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | **missing**: phase 10 (the charge counter and its pad writer) | ready: phase 10 read (`detonator-emp.md`) |
+  | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | `RaceSim::detonator_emp`, `detonator_emp_gauge` | pips and `EmpReady` wired (HD, Omega); `EmpBarEffect` not drawn (an `<ImageModel>`); 2048's `EmpCharge`/`EmpFull` open |
   | `PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore` | **nothing on HD**: the controller never binds the first two, never reads the third and its banked-score text setter has no caller | - | do not draw `x%02d` or the `%04d` counter | skip |
 
   Also from the page: the reload gauge `(1 - lockout/total) * 15` that `Detonator_UpdateHud`
@@ -270,7 +238,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 - **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
   (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (`MineColour`,
-  `BombColour` ...), the pad's original geometry underneath and 2048's object models stay open;
+  `BombColour` ...) and 2048's object models stay open (the circuit's own pads are now hidden);
   `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
@@ -380,13 +348,14 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
   triggers need the hit read first.
-- **EMP: read, not wired** (2026-11-22, `detonator-emp.md`): pads charge (no boost, no weapon),
-  the gauge, L1 fires a wave that clears every mine and bomb in the sections it sweeps; the
-  wave's reach is unread. Wiring brief: Next Steps, phase 10. `docs/gameplay/weapon-lineage.md`
-  lists EMP as read, not wired.
-- **Auto-speed: read, not wired** (2026-11-22, `detonator-speed.md`): Zone's
-  `start + increment * n` with the Detonator stage as `n`; the player still throttles here.
-  Wiring brief: Next Steps, phase 11.
+- **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). Open: the wave's reach and speed
+  (chosen; recipe on the page), the kill's effect and sound, whether the wave hurts the player,
+  `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
+  the ready pulse and post-fire flash on `EmpReady`, 2048's
+  pad arms (unread: its pads keep boost and pickup, so its EMP never charges) and its
+  `EmpCharge`/`EmpFull` widgets, Omega's EMP announcer lines (Wwise, not located).
+- **Auto-speed: wired** (`det-emp-wire`, `detonator-speed.md` "Wired"). Open: a player-input speed
+  curve on a clean lap against the original; HD's own Zone ramp (this build's Zone has none).
 - **Score, end screen, HUD.** Score and percentage simulated (cannon bullet above), not shown;
   `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED` unread. The HUD's widget
   bindings are read (`detonator-hud.md`, phase 12 table), not wired: the race still draws the

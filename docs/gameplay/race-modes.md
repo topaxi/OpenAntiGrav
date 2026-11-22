@@ -1553,10 +1553,36 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md);
   `oag_raceplay::RaceSim::{detonator_score, detonator_destroyed_mines, detonator_percentage}`).
   Nothing draws a round or a muzzle flash and there is no HUD or end-screen row for it yet.
-- **Not here, each named on the evidence page**: the mine and bomb explosion effects and sounds,
-  the EMP and its pads, the out-of-race ending, the "automatic and ever-increasing" acceleration the
-  manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
-  draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).
+- **Auto-speed (wired, HD, 2048, Omega).** The manual's "automatic and ever-increasing"
+  acceleration is Zone's engine branch with the Detonator stage as the count:
+  `T = ramp * (34 + 4.4 n)` from the global `handlingstats.xml` `<Zone>`, `n = 0` on lap 1, then
+  the HUD stage `2..14`; the throttle never reaches it and there are no brakes. The ramp climbs
+  `dt / 1.3` from rest, `max(r - 0.1, 0) / 0.9`, and is full by GO; a rescue zeroes it, so the
+  engine returns over 1.3 s (HD static 80, live 85-90, Omega and 2048 the same branch:
+  [detonator-speed.md](../ghidra/functions/ps3-hdfury-eu/detonator-speed.md)). Wired as every
+  `on_zone_mask` mode loading `<Zone>` and `RaceSim::detonator_speed_target`; the ramp lives in
+  `World::detonator` (HD Zone also has the ramp on its own branch; this build's Zone does not,
+  it is left as it was). `detonator_ground_truth.rs`: an unthrottled HD craft tops 110 units/s
+  within 4 s (live `107.6`), and the target steps with the stage.
+- **The EMP (wired on HD and Omega).** A speed pad gives no boost: each entry charges the EMP
+  once and plays `WEAPONPICKUP`; a weapon pad hands out nothing and charges once per pad, again
+  only after another pad or a start-line crossing (not while the autopilot flies, chosen). The
+  gauge is `0` below `minNumPadsToCollectEMP` (4), then `min((n - (hi - lo)) / (hi - lo), 1)`,
+  with `EMPREADY` and `EMPFULL` on their edges (HD's `speech_det.bnk`). L1 at a charge of four or
+  more fires a wave of extent `0.25 + 1.75 * gauge` and resets the charge; every mine and bomb in
+  the survey sections the wave sweeps goes, scored `<Emp>` (`+50` a mine laid this stage, `+25`
+  a dark one, `+1000` a bomb) and the mines counted toward the percentage. **Chosen, not
+  measured**: the wave's reach (`emp::SECTIONS_PER_EXTENT` sections per unit of extent, forward
+  from the craft) and its run over `wave_time`, L1 as a press edge, no effect or sound on the
+  kill. HUD: `Emp_0..7` light while the charge is over their index, `EmpReady` at the threshold (not on
+  Omega, whose executable does not bind it, 60);
+  `EmpBarEffect` is an `<ImageModel>` the layout reader does not model. 2048's pads keep their race
+  behaviour (its pad arms are unread), so its EMP never charges. Evidence:
+  [detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md).
+- **The circuit's own pads are not drawn** under the Detonator pad (four live frames show none,
+  60): the separate pad models and, on the four original circuits, the pad-material chunks of the
+  track's world-space pass are left out where the title's Detonator pad loads.
+- **Not here, each named on the evidence page**: the EMP wave's own effect and sound.
 
 ## What happens when a race ends
 

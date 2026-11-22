@@ -277,16 +277,20 @@ which stands a race on a known cannon and compares the drawn texts exactly.
 | `Multi00`..`14` | `Multi(14-i)` drawn once volley `i` hit; a streak award recolours the last 5/10/15 pips ending at the latest hit volley to `0xff00eeff` | recolour range 60 (read from the `Hud_RaiseChainBonus` description, not the pip loop); an unlit pip is hidden, **chosen** |
 | `PulseBonus` | the award's `HUD_CHAIN_n` text and amount (`STREAK_*` of the cannon law), held 2.0 s, faded over 1.0 s | **HD's language table has no `HUD_CHAIN_n`**: the line draws nothing there and the loader report names the ids; Omega's reads `5 CHAIN` |
 | `ShieldBarText`, `DamageBar`, `DamageBarBg` | the generic shield readout; white in Detonator (the original's mode-14 test, `hud-readouts.md`) | |
-| `DetonatorStageParent`, `BulletBack`, `EMPBack` | static art, always on | `EMPBack` is the empty plate: `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` draw nothing (phase 10) |
+| `DetonatorStageParent`, `BulletBack`, `EMPBack` | static art, always on | `EMPBack` is the plate the EMP pips sit on |
+| `Emp_0`..`Emp_7`, `EmpReady` | the EMP charge (`RaceSim::detonator_emp`) | a pip drawn while the charge is over its index (vertex colour `0` draws nothing), `EmpReady` once the charge reaches `minNumPadsToCollectEMP`; the post-fire flash and the ready pulse (`+0x168`, `+0x174`) are not modelled |
 
 Not drawn, and named in the loader report: the four widgets the original never binds
-(`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`), the EMP widgets,
+(`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`), `EmpBarEffect` (an
+`<ImageModel>`; its gauge is `RaceSim::detonator_emp_gauge`),
 `ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread), `ScoreFeedBack0`..`15`, and the three
 medal models (`<ImageModel>` `.vex`; the layout reader records none, and the cell's thresholds do
 not reach the race). The reload gauge is the craft's own `detonator_bulletgaugesegments` material
 constant, not a HUD widget: untouched.
 
-- **Omega: ported.** Same test; `<aImageModel>` on `EmpBarEffect` composes with nothing skipped
+- **Omega: ported.** Same test; the EMP pips draw as HD's; `EmpReady`, which Omega's layout authors but
+  its executable names no string for (so probably never binds, 60, above), is dropped from the
+  layout (`oag_title::Detonator::binds_emp_ready`, the loader report says so); `<aImageModel>` on `EmpBarEffect` composes with nothing skipped
   and no error (the layout reader models no `<ImageModel>` at all, spelled right or not; the
   test asserts the report has no `HUD: skipped` line), and the
   Omega atlas (`detonator_hud2.tga` 1024x1024 beside a 2048x2048 `fury_hud.gtf`) resolves for every

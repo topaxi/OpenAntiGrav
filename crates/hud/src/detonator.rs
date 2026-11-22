@@ -6,8 +6,9 @@
 //!
 //! Four widgets the layout authors are never drawn, because the original's controller binds
 //! nothing to them (`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`, confidence
-//! 65-75). The EMP widgets, the bomb-ahead warning and the floating score feedback wait on
-//! mechanics this build does not run, so they draw nothing either.
+//! 65-75). The EMP's pips and ready lamp read the charge; its `EmpBarEffect` is an
+//! `<ImageModel>` the layout reader does not model, and the bomb-ahead warning and the floating
+//! score feedback wait on mechanics this build does not run, so they draw nothing.
 
 use super::draw::{Context, lit_draw, sprite_draw};
 use super::{Draw, Readout};
@@ -45,6 +46,22 @@ pub struct Detonator {
     pub tinted: u16,
     /// The streak line, while it is up.
     pub bonus: Option<Bonus>,
+    /// The EMP's charge (`rm+0x2dd8`): `Emp_i` is lit while it is over `i`.
+    pub emp_charge: u32,
+    /// The charge has reached the EMP's threshold: `EmpReady` is shown.
+    pub emp_ready: bool,
+}
+
+/// The EMP pips, `Emp_0`-`Emp_7`.
+pub const EMP_PIPS: usize = 8;
+
+/// `Emp_0`-`Emp_7`: which pip `name` is.
+fn emp_pip(name: &str) -> Option<usize> {
+    let digit = name.strip_prefix("Emp_")?;
+    (digit.len() == 1)
+        .then(|| digit.parse::<usize>().ok())
+        .flatten()
+        .filter(|&index| index < EMP_PIPS)
 }
 
 /// A pip's colour after a streak award recoloured it, `0xff00eeff`.
@@ -119,6 +136,17 @@ pub(super) fn sprites(cx: &Context<'_>, readout: &Readout) -> Vec<Draw> {
             if index < usize::from(shown.clip) {
                 out.extend(sprite_draw(sprite, cx.sheet));
             }
+        } else if let Some(index) = emp_pip(&sprite.name) {
+            // `DetonatorHud_UpdateEmp`: vertex colour white while the charge is over `i`, else
+            // `0`, which draws nothing (`detonator-hud.md`, "`0x00080830` (EMP half)").
+            if shown.emp_charge > index as u32 {
+                out.extend(sprite_draw(sprite, cx.sheet));
+            }
+        } else if sprite.name == "EmpReady" {
+            // Shown at the threshold; the post-fire flash that hides it is not modelled.
+            if shown.emp_ready {
+                out.extend(sprite_draw(sprite, cx.sheet));
+            }
         } else if let Some(index) = numbered(&sprite.name, "Multi") {
             let volley = VOLLEYS - 1 - index;
             if shown.hit & (1 << volley) != 0 {
@@ -145,6 +173,10 @@ mod tests {
         assert_eq!(numbered("BulletBack", "Bullet"), None);
         assert_eq!(numbered("Multi07", "Multi"), Some(7));
         assert_eq!(numbered("Multi7", "Multi"), None);
+        assert_eq!(emp_pip("Emp_0"), Some(0));
+        assert_eq!(emp_pip("Emp_7"), Some(7));
+        assert_eq!(emp_pip("Emp_8"), None);
+        assert_eq!(emp_pip("EmpReady"), None);
     }
 
     #[test]

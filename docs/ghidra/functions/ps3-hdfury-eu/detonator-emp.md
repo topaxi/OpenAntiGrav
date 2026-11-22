@@ -92,7 +92,11 @@ Detonator.** Confidence **75**.
 
 ### Do the circuit's own pads still draw?
 
-Not read. [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct` adds a
+Not read in the executable. **Wired as not drawn** (2026-11-22): where a title's Detonator pad
+model loads, a Detonator race drops the circuit's separate pad models and, on the four original
+circuits whose speed pads are pad-material chunks in the world-space pass, those chunks
+(`mesh::rcs::build_scene_views`' `hide_pads`; on `zone_1` exactly the 2093 pad triangles,
+`detonator_hull_ground_truth.rs`). [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct` adds a
 `Detonator_Pad` model on every speed and weapon pad. Live, four frames taken on the tick a speed
 pad was entered (Vineta K, stages 1 and 2) show the white `Detonator_Pad` blocks on plain track:
 no chevron or glow of Vineta K's own speed pad is visible round or between them. Confidence 60
@@ -220,10 +224,36 @@ per tick.
    `param_7`; or live: an RPCS3 breakpoint on `MineManager_DestroyAtLane` (`0x0011a590`) after an
    EMP fire, logging the section index against the craft's `ship+0x6284`.
 
+## Wired (2026-11-22)
+
+`oag_weapons::detonator::emp` holds the law; `oag_raceplay::detonator::advance_emp` runs it once a
+tick after the cannon; the pad arms are in `oag_raceplay::pads`.
+
+| Piece | Where | Note |
+| --- | --- | --- |
+| Speed pad | `Race::test_speedup_pads` | no force, no `pad_timer`, no plume or `SPEEDUPPAD`; the entry edge raises `Emp::pending` and plays `WEAPONPICKUP` (`Cue::WeaponPickup`) |
+| Weapon pad | `SimRace::test_weapon_pads` | the race keeps its weapon pads with weapons off where the title's pads charge (`start.rs`); no grant; one charge per pad held in `Emp::weapon_pad`, cleared on every forward crossing (`player_step`); not while this project's autopilot flies the craft (it stands in for the original's Autopilot bit, **chosen**) |
+| Charge, gauge, cues | `emp::step_charge`, `emp::gauge` | the literal law in `f32` (exact on every integer charge the HUD reaches); `Cue::EmpReady`/`EmpFull` loaded from `oag_title::DetonatorVoices` (HD `speech_det.bnk`, the one speech bank that names them) |
+| Fire | `emp::fire` | `Button::Flip` (the pad's L1) as a press edge, **chosen**; gated as the cannon is (a person flying, past the countdown); the charge resets even while a wave runs |
+| Wave | `emp::step_wave` | forward from the craft's nearest survey entry, `extent * SECTIONS_PER_EXTENT` (40, **chosen**) entries over `wave_time`; `<Emp>` scores; mines counted into the destroyed count; a bomb chains nothing; no effect or sound on the kill (both unread) |
+| HUD | `oag_hud::detonator` | `Emp_0..7` while the charge is over `i`, `EmpReady` at `lo`; `EmpBarEffect` not drawn (an `<ImageModel>`) |
+| Titles | `oag_title::Detonator::pads` | HD measured; Omega the speed pad measured, the weapon pad inherited from HD; 2048 `false` (its pads keep boost and pickup, so its EMP never charges) |
+
+Tests: `crates/weapons/src/detonator/emp/tests.rs` (the live gauge table for `n = 0..39`, the
+literal law, the cue edges, fire, the wave's `+25`/`+50`/`+1000`),
+`crates/gameplay/src/hash.rs` (`the_emp_moves_the_hash_only_where_detonator_armed_it`), and
+`crates/raceplay/tests/detonator_ground_truth.rs`: a lap's speed-pad entries each add one charge
+and leave `pad_timer` at `0` (five on the default circuit); a weapon pad charges once, hands out
+nothing and charges again only on another pad; a full EMP fired from a stand clears 11 mines for
+`275` dark and `550` live; the three cues decode on HD. Omega: a lap charges six and never
+boosts; 2048: a speed pad charges nothing and keeps its boost. The HUD pips are in
+`detonator_hud_ground_truth.rs`.
+
 ## Open
 
 - The wave's reach and speed (above), and whether it hurts the player.
-- Whether the circuit's own pad geometry is drawn at all (four live frames show none, below).
+- Whether the circuit's own pad geometry is drawn at all: four live frames show none (above);
+  wired as not drawn at 60.
 - Weapon pads under player input over several laps (one live charge only).
 
 ## 2048 and Omega

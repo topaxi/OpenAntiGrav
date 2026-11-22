@@ -31,6 +31,22 @@ fn load(mode: oag_race::Mode, team: &str) -> Option<race::Loaded> {
 }
 
 /// The hull's width (`Misc.width`), which differs between Zone's file (5.0) and Detonator's (4.0).
+/// [`load`] on a named circuit.
+fn load_on(mode: oag_race::Mode, track: &str) -> Option<race::Loaded> {
+    let path = oag_testdata::image(HD)?;
+    Some(
+        race::load(&race::Options {
+            source: path.display().to_string(),
+            class: "VENOM".to_string(),
+            team: Some("Qirex".to_string()),
+            mode,
+            track: Some(track.to_string()),
+            ..race::Options::default()
+        })
+        .expect("loading an HD race"),
+    )
+}
+
 fn width(loaded: race::Loaded) -> f32 {
     let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.world.ships[0].handling.dimensions.width
@@ -91,10 +107,30 @@ fn an_hd_detonator_race_flies_its_own_handling_file_and_zone_keeps_its_own() {
         )),
         "no Detonator handling line in the report"
     );
+    let detonator_triangles = loaded.track_model.indices.len() / 3;
+    assert!(
+        loaded.pad_model.is_none() && loaded.weapon_pad_model.is_none(),
+        "no separate circuit pad model under the Detonator pad"
+    );
+    // Zone's default circuit draws its own speed pads in the world-space pass (its pad nodes
+    // name no chunk, 2093 triangles); a Detonator race there leaves them out under its own pad
+    // (`detonator-emp.md`, "Do the circuit's own pads still draw?", 60).
+    let zone = load(oag_race::Mode::Zone, "Qirex").expect("the same disc");
+    let on_zone_circuit = load_on(oag_race::Mode::Detonator, &zone.circuit).expect("loads");
+    let (zone_triangles, without) = (
+        zone.track_model.indices.len() / 3,
+        on_zone_circuit.track_model.indices.len() / 3,
+    );
+    println!(
+        "track triangles on {}: Zone {zone_triangles}, Detonator {without}; Detonator's own circuit {detonator_triangles}",
+        zone.circuit
+    );
+    assert_eq!(
+        zone_triangles - without,
+        2093,
+        "Detonator leaves exactly the circuit's pad chunks out of the track"
+    );
     assert_eq!(width(loaded), 4.0);
-    let Some(zone) = load(oag_race::Mode::Zone, "Qirex") else {
-        return;
-    };
     assert!(
         zone.report
             .iter()
@@ -134,6 +170,11 @@ fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
         "a pad model on every speed pad and every weapon pad"
     );
     assert!(!parts.pads.is_empty(), "the circuit has pads");
+    assert!(
+        loaded.pad_model.is_none() && loaded.weapon_pad_model.is_none(),
+        "the circuit's own pads are not drawn under the Detonator pad"
+    );
+
     assert!(
         loaded
             .report

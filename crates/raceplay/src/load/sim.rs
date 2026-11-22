@@ -552,6 +552,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         weapons,
         weapon_ai,
         detonator,
+        detonator_pads: title.race.detonator.map(|d| d.pads),
         // No caller of the general `load` sets this - only `race::load::campaign::load_event`
         // does, on the `Loaded` this returns, after this whole function has already run.
         // See `SimSetup::allowed_weapons`'s own doc comment.
