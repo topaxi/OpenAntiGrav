@@ -558,6 +558,20 @@ pub struct Detonator {
     /// mode uses: HD's craft constructors write `0.7` on mode `14`
     /// (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`).
     pub camera_scale: f32,
+    /// The two files that say what Detonator lays on a circuit, or `None` where a title's are
+    /// not located.
+    pub layouts: Option<DetonatorLayouts>,
+}
+
+/// The entries of Detonator's layout files, global to every circuit
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`, "Where the data comes from"),
+/// read by `oag_tables::detonator_layout`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DetonatorLayouts {
+    /// `PatternFile.xml`: the groups of clusters.
+    pub pattern_file: &'static str,
+    /// `GamePlayValues.xml`: the per-stage mine counts and the placement's constants.
+    pub gameplay_values: &'static str,
 }
 
 /// What a title's Zone race takes on a circuit that ships no Zone table of its own.

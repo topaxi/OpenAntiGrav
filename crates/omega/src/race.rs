@@ -146,6 +146,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         fallback_palette: None,
         stage_textures: None,
         camera_scale: 0.7,
+        layouts: Some(oag_title::DetonatorLayouts {
+            pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
+            gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
+        }),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),

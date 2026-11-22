@@ -346,3 +346,87 @@ fn the_2048_detonator_table_decodes() {
     assert!(stats.skipped.is_empty(), "{:?}", stats.skipped);
     assert_full_detonator_table("2048", &stats);
 }
+
+// Detonator's layout files (`oag_tables::detonator_layout`), read here beside the weapon tables
+// because the same three archives are opened for both.
+
+/// What the disc's `PatternFile.xml` and `GamePlayValues.xml` hold, as a reader sees them.
+fn assert_detonator_layouts(label: &str, patterns: &[u8], values: &[u8]) {
+    use oag_tables::detonator_layout::{parse_patterns, parse_values};
+    let file = parse_patterns(&String::from_utf8_lossy(patterns));
+    assert_eq!(file.patterns.len(), 18, "{label}: groups");
+    let clusters: usize = file.patterns.iter().map(|p| p.clusters.len()).sum();
+    assert_eq!(clusters, 79, "{label}: clusters");
+    assert!(
+        file.patterns
+            .iter()
+            .flat_map(|p| &p.clusters)
+            .all(|c| c.kind == 0 && c.object_types == [0; 10]),
+        "{label}: every cluster lays mines"
+    );
+    assert!(
+        file.patterns.iter().any(|p| p.stage_to_appear_from == 14),
+        "{label}: a pattern appears from the last stage"
+    );
+    let v = parse_values(&String::from_utf8_lossy(values));
+    let counts: Vec<i32> = (1..=14).map(|s| v.mine_count(s).unwrap()).collect();
+    assert_eq!(
+        counts,
+        [
+            80, 90, 95, 100, 105, 110, 120, 130, 140, 150, 170, 180, 190, 200
+        ],
+        "{label}: the file overwrites the static counts"
+    );
+    assert!(v.mine_counts_represent_max_total_to_appear, "{label}");
+    assert_eq!(v.energy_recharge_per_stage, 10, "{label}");
+    assert_eq!(v.num_steps_to_ignore_after_jump, 20, "{label}");
+    assert_eq!(v.distance_offset_between_mines, 3.5, "{label}");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hds_detonator_layouts_decode_through_the_title_axis() {
+    let Some(image) = hd_image() else { return };
+    let layouts = oag_hd::race::DETONATOR.layouts.expect("HD names them");
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let patterns = archives
+        .read_name(layouts.pattern_file)
+        .expect("PatternFile");
+    let values = archives
+        .read_name(layouts.gameplay_values)
+        .expect("GamePlayValues");
+    assert_detonator_layouts("HD", &patterns, &values);
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu/uroot/data00.psarc"]
+fn omegas_detonator_layouts_are_hds_up_to_line_endings() {
+    let (Some(omega), Some(image)) = (omega_data00(), hd_image()) else {
+        return;
+    };
+    let path = |name: &str| format!("/data/xml/detonatorlayouts/{name}.xml");
+    let patterns = omega_entry(&omega, &path("patternfile")).expect("Omega ships it");
+    let values = omega_entry(&omega, &path("gameplayvalues")).expect("Omega ships it");
+    assert_detonator_layouts("omega", &patterns, &values);
+    let hd = hd_entry(&image, "DATA00", &path("patternfile")).expect("DATA00");
+    let a = oag_tables::detonator_layout::parse_patterns(&String::from_utf8_lossy(&patterns));
+    let b = oag_tables::detonator_layout::parse_patterns(&String::from_utf8_lossy(&hd));
+    assert_eq!(a, b, "the same groups once line endings are dropped");
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007/base/PSP2/data.psarc"]
+fn the_2048_detonator_layouts_decode() {
+    let path = root().join("data/extracted/vita/PCSF00007/base/PSP2/data.psarc");
+    let Some(path) = require(path) else { return };
+    let mut psarc = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+    let mut read = |name: &str| {
+        psarc
+            .read_path(&format!("/data/xml/detonatorlayouts/{name}.xml"))
+            .or_else(|_| psarc.read_path(&format!("/Data/XML/DetonatorLayouts/{name}.xml")))
+            .expect("2048 ships it")
+    };
+    let patterns = read("PatternFile");
+    let values = read("GamePlayValues");
+    assert_detonator_layouts("2048", &patterns, &values);
+}

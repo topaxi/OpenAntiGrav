@@ -15,6 +15,9 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 ## Open
 
+- **Layout files decoded** (`oag_tables::detonator_layout`, `docs/formats/detonator-layouts.md`):
+  the patterns and the stage mine counts are readable; placing them in a race is next.
+
 - **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
   2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.
 
