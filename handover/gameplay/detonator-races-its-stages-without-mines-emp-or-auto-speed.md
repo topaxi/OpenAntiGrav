@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator Mode races 14 stages with mines and bombs that bite and can end the race; effects, EMP, cannon, score, auto-speed open"
+summary: "Detonator Mode races 14 stages with mines and bombs that bite and can end the race; cannon and score read, not wired; effects, EMP, auto-speed open"
 categories: [rendering]
 ---
 
@@ -34,6 +34,26 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
   and score, who spends the pending push, the update order within a tick, the PVS-gated lane
   free. 2048/Omega: data and effect selector checked, applies; contact law not read there.
 
+- **Pulse cannon, hits, score, destroyed count: read, not wired** (2026-11-22,
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, HD static, 55-85 per law; 31 names).
+  The craft's fixed cannon: clip of 15 two-round volleys (left and right `cannon_flash`), one
+  volley per 0.1 s while fire is held (`t -= dt; if !(t > 0) fire, t += 0.1`; released: `t = 0`).
+  Round: speed 500 (launch tick `500 + 3.6 v`), life 1.0 s, probe 9.0 down the surface normal and
+  ride 3.5 above a floor hit, one wall reflection `v - 2(v.n)n` then dies on the next wall
+  (`WO_CANNON_SPARKS_DETONATOR`, `CANNONEXPLWALL`). Hit test: capsule of the tick's segment vs
+  radius = the object's `trigger_radius` (mine 3, bomb 6), loops do not stop at a hit. Mine: one
+  hit, harmless. Bomb: 4 hits, the 4th destroys it harmlessly and sets off mines within
+  `sqrt(5000)`. Reload: empty + trigger released, or the absorb button: refill 15, locked 0.75 s.
+  Score into `rm+0x2df0` from `/data/xml/DetonatorScoring.xml` (not the weapon table's points,
+  which nothing reads): live mine `trunc(100 * m)`, `m += 1.0` per live mine in the clip (reset at
+  reload); dark 50; bomb `2000 + 500 n`; chain live `100 * m2` (reset per bomb), dark 50; streaks
+  of hitting volleys in a clip 5/10/15 pay 1000/3000/5000. Count `rm+0x6de3c`: direct cannon mine
+  hits + EMP kills (not chain mines, not bombs). End: `pct = count / 1860 * 100` (f32). Top block
+  corrected: HUD message 8 is a bomb-ahead warning, `FUN_00067120` is the HUD/medals/trophies.
+  2048/Omega: scoring file identical, streak law and round constants read alike; hit test and
+  score adds not read there. Open: the fire dispatcher and manager order in a tick, the bomb-ahead
+  measure, the `+0x200000` clean-lap `+1000`.
+
 - **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
   2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.
 
@@ -60,17 +80,17 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
   `0x0013a7d8`) and `DetonatorBomb` objects; effects `WO_BOMB_EXPLO_DETONATOR`,
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
   triggers need the hit read first.
-- **Pulse cannon and EMP.** The EMP gauge law is read (page, "What `Detonator_UpdateRace`
+- **EMP.** The EMP gauge law is read (page, "What `Detonator_UpdateRace`
   does that is not wired"); the EMP pads (`data/New_Mode_Pads/Detonator_Pad`, 2048), the
-  charge flag's writer (`craft+0x6a64 & 0x8000000`), the cannon, its reload (circle) and
-  `weaponstats_Detonator.xml` (2048 `data1.psarc`) are not. `docs/gameplay/weapon-lineage.md`
+  charge flag's writer (`craft+0x6a64 & 0x8000000`) and the EMP fire (`Ship_UpdateCannonTrigger`'s
+  input `+0x1c` arm, `EMPManager`) are not. The cannon and its reload are (above). `docs/gameplay/weapon-lineage.md`
   already lists EMP as unwired.
 - **Auto-speed.** The manual: "Like Zone mode, acceleration is automatic and ever-increasing".
   No law read; the player throttles. Read what Detonator's engine branch does (HD's hover
   code gates modes 6, `0xd`, `0xe` together, `hover-target.md`), and whether `class="Zone"`
   cells fly `/data/ships/zone` or `/data/ships/detonator`.
-- **Score, end screen, HUD.** `rm+0x6de3c` (objects destroyed) and the score add in the top
-  block (`FUN_000642a0`); `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED`;
+- **Score, end screen, HUD.** Score and percentage laws read (cannon bullet above), not wired;
+  `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED`;
   `detonator_hud.xml` (the race draws the time trial's HUD). Campaign cells (`mode="Detonator"`,
   14 on `DATA00`'s Fury grids) are kept raw and do not launch.
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
@@ -113,6 +133,13 @@ not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on
 1. Phase 4: read `PatternFile.xml` and `GamePlayValues.xml` (census on HD `DATA00`, 2048
    `data.psarc`, Omega `data00.psarc`), name them on `oag_title::Detonator`.
 2. Phase 7: wire the contact law from `detonator-mine.md`/`detonator-bomb.md` (damage, velocity
-   cut, push, removal, the stage-step bomb detonation, the out-of-race end). Then read the cannon.
-3. Read Detonator's engine branch for the auto-speed law.
-4. Zone Battle: the read recipe above.
+   cut, push, removal, the stage-step bomb detonation, the out-of-race end).
+3. Phase 9: wire the pulse cannon from `detonator-cannon.md` ("What the simulation needs"): a
+   Detonator-only fixed-weapon flag (pickups stay off), a 30-round pool, the trigger/clip/lockout,
+   the round's track-skimming motion and one rebound, the capsule hit test, bomb hit counts and
+   the chain reaction, the score into a Detonator score, the destroyed counters and the end
+   percentage. Needs a reader for `/data/xml/DetonatorScoring.xml` in `oag-tables` and its entry
+   name on `oag_title::Detonator` (HD `DATA00` `data/xml/detonatorscoring.xml`, 2048 `data.psarc`,
+   Omega `data00.psarc`).
+4. Read Detonator's engine branch for the auto-speed law.
+5. Zone Battle: the read recipe above.

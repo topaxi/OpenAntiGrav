@@ -330,9 +330,10 @@ Dark mines hit exactly as live ones: the contact test reads no `+0x160`. Confide
 
 ## Open
 
-- **Points**: `points_per_metre`, `max_distance` (no reader found), the score record behind
-  `0x00082b48`, `PointsForChainReactionMines`, and how the cannon kills a mine (it is not
-  `MineManager_DestroyAtLane`'s caller).
+- **Points**: read since on [detonator-cannon.md](detonator-cannon.md): the score record is
+  `g_DetonatorScoring` (`DetonatorScoring.xml`), `0x00082b48` is `DetonatorScoring_AddEmpMine`,
+  and the cannon kills a mine in one hit through `CannonManager_TestMineBombHits` (`0x0010ffd0`).
+  `points_per_metre`, `max_distance` and `PointsForChainReactionMines` still have no reader.
 - **Which point of the craft** `s+0x90` (contact) and `s+0x50` (push direction) are.
 - **The order** of the weapon managers' update against `Ship_UpdateEntity` and
   `Ship_ApplyPendingDamage` within a tick: the damage and the velocity cut land on the craft's

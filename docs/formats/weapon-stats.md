@@ -415,8 +415,9 @@ Pure.
 | `Bomb` | `number_of_shots_to_destroy`, `energy_recharge_per_shot`, `points_for_cannon_bullet_hit`, `points_for_destroying` |
 | `EMP` | `wave_time`, `speed`, `minNumPadsToCollectEMP`, `maxNumPadsToCollectEMP`, `minDistance`, `maxDistance` |
 
-`points_for_cannon_bullet_hit` and `points_for_destroying` are the first authored score values
-for the mode (names only; the score law is unread).
+`points_for_cannon_bullet_hit` and `points_for_destroying` look like the mode's score values but
+are not: HD parses them and nothing reads them; the score the executable spends is a separate file,
+`/data/xml/DetonatorScoring.xml` (below).
 
 **What HD's executable does with the Mine and Bomb blocks (2026-11-22, static)**: the parsers
 `WeaponStats_ParseMine`/`_ParseBomb` (`0x0002b5e8`/`0x0002c690`) store every attribute at a
@@ -430,10 +431,29 @@ sphere of `trigger_radius` (3), deals `damage` (10), pushes `blastforce * (1 - d
 `blastforce` (30) falling linearly to the edge; `number_of_shots_to_destroy` (4) decides whether
 the full blast visual plays. `points_per_metre`, `max_distance`, `damageradius` and the Bomb's
 `timetodie` have no reader found (confidence 55); the Mine's `timetodie` is ignored in
-Detonator (mines never time out there). Confidence 78-88 per field on those pages. Measured on the shipped files
+Detonator (mines never time out there). Confidence 78-88 per field on those pages.
+Measured on the shipped files
 (`hd_weapons_ground_truth.rs`): `DATA00`'s copy authors all seventeen and `EMP`; `DATA05`'s
 copy authors none. **Omega: checked, applies, not wired** (all seventeen decode). **2048:
 checked, applies, not wired** (all seventeen decode from its patch).
+
+**The Cannon block and the score (2026-11-22, static,
+[detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md))**: in Detonator the
+Cannon block arms the craft's fixed pulse cannon. `rounds` (15) is the clip in two-round volleys;
+`rate` (10) is stored as its reciprocal, `0.1` s between volleys; `num_rebounds` (1) is how many
+walls a round bounces off before the next one kills it. `round_recharge_time`, `recharge_pause`,
+the Bomb's `energy_recharge_per_shot`, `points_for_cannon_bullet_hit`, `points_for_destroying`,
+the Mine's `points_per_metre`, `max_distance` and `Global`'s `energy_recharge_per_stage` are
+parsed and have no reader (confidence 60; the energy a stage restores is `GamePlayValues.xml`'s
+`EnergyRechargePerStage`). `number_of_shots_to_destroy` (4) is the cannon hits a bomb takes; the
+Mine's and Bomb's `trigger_radius` (3, 6) are also the cannon's hit radii. The points come from
+`DetonatorScoring.xml` (`<Bullet multiplier new_mine_score old_mine_score bomb_hit_score
+bomb_score bomb_increment>`, `<Emp new_mine_score old_mine_score bomb_score>`: `1.0, 100, 50, 0,
+2000, 500` and `50, 25, 1000` on HD `DATA00`, 2048 `data.psarc` and Omega `data00.psarc` alike):
+a live mine `new_mine_score` times a multiplier that grows by `multiplier` per live mine in the
+clip, a dark mine `old_mine_score`, a bomb `bomb_score + n * bomb_increment`. No reader for this
+file exists in `oag-tables` yet. **2048 and Omega: checked, applies, not wired** (same file, same
+values; the streak and round laws read alike, the hit test and score adds not read there).
 
 ### Omega checks against HD: checked, applies, not wired
 

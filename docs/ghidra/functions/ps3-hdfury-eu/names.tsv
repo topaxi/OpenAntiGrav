@@ -950,7 +950,7 @@
 # 2026-11-12 hd-rocket-init-normal: the projectile launch normal and the track locate chain (projectile-launch-normal.md)
 0x00124d90	function	Rocket_Init	85	projectile-launch-normal.md
 0x00159a30	function	Shuriken_Init	80	projectile-launch-normal.md
-0x00123378	function	PulseBullet_Init	55	projectile-launch-normal.md
+0x00123378	function	PulseBullet_Fire	75	detonator-cannon.md
 0x000a97f0	function	Track_UpdateCursor	78	projectile-launch-normal.md
 0x000a8198	function	Track_SampleNearestPoint	78	projectile-launch-normal.md
 0x000a7cc8	function	Track_EvaluateSpline	80	projectile-launch-normal.md
@@ -1075,3 +1075,35 @@
 0x00137150	function	DetonatorBombBlast_Start	78	detonator-bomb.md
 0x00136420	function	DetonatorBombBlast_Update	65	detonator-bomb.md
 0x00135b90	function	DetonatorBombBlast_Reset	65	detonator-bomb.md
+# 2026-11-22 detonator-cannon: the pulse cannon, its round, the mine/bomb hit test, DetonatorScoring and the streak bonus (detonator-cannon.md)
+0x00138700	function	PulseCannonManager_Construct	65	detonator-cannon.md
+0x00138850	function	PulseCannonManager_Update	72	detonator-cannon.md
+0x00138978	function	PulseCannonManager_FireVolley	75	detonator-cannon.md
+0x00138820	function	PulseCannonManager_RequestReload	60	detonator-cannon.md
+0x00147720	function	PulseCannon_AwardStreakBonuses	80	detonator-cannon.md
+0x001479b8	function	PulseCannon_ResetStreak	70	detonator-cannon.md
+0x001115e8	function	CannonManager_Update	78	detonator-cannon.md
+0x0010ffd0	function	CannonManager_TestMineBombHits	80	detonator-cannon.md
+0x0010f2e8	function	CannonManager_ArmSlot	65	detonator-cannon.md
+0x001235a8	function	PulseBullet_Construct	85	detonator-cannon.md
+0x00121d68	function	PulseBullet_FireFromMuzzles	65	detonator-cannon.md
+0x00122608	function	PulseBullet_Update	75	detonator-cannon.md
+0x00121988	function	PulseBullet_GetSegment	78	detonator-cannon.md
+0x0002d170	function	WeaponStats_ParseCannon	85	detonator-cannon.md
+0x000e9cd0	function	Ship_UpdateCannonTrigger	68	detonator-cannon.md
+0x000d5750	function	Ship_UpdateCannonReload	70	detonator-cannon.md
+0x00083030	function	DetonatorScoring_Load	85	detonator-cannon.md
+0x00082e28	function	DetonatorScoring_ParseBullet	85	detonator-cannon.md
+0x00082d18	function	DetonatorScoring_ParseEmp	85	detonator-cannon.md
+0x00083238	function	DetonatorScoring_Construct	75	detonator-cannon.md
+0x00082a60	function	DetonatorScoring_AddBulletMine	82	detonator-cannon.md
+0x000828a8	function	DetonatorScoring_AddBulletBomb	80	detonator-cannon.md
+0x00082c30	function	DetonatorScoring_AddChainMine	78	detonator-cannon.md
+0x00082b48	function	DetonatorScoring_AddEmpMine	75	detonator-cannon.md
+0x00082808	function	DetonatorScoring_AddEmpBomb	75	detonator-cannon.md
+0x00082798	function	DetonatorScoring_AddFlat	70	detonator-cannon.md
+0x00082978	function	DetonatorScoring_AddBulletBombHit	55	detonator-cannon.md
+0x0007e6d0	function	Hud_RaiseChainBonus	72	detonator-cannon.md
+0x00067120	function	Detonator_UpdateHud	65	detonator-cannon.md
+0x000642a0	function	Detonator_IsBombAhead	55	detonator-cannon.md
+0x00987620	data	g_DetonatorScoring	80	detonator-cannon.md

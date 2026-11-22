@@ -1047,8 +1047,11 @@ only when the object is in some view's potentially-visible set.
 | `wo_mine_explo_detonator.pob` | the same function, the other arm | a mine laid this stage is destroyed without contact (the EMP's `MineManager_DestroyAtLane`); its colour table is recoloured toward white from the stage colour | 70 |
 | `wo_bomb_explo_detonator.pob` | `DetonatorBombBlast_Start` `0x00137150`, fourcc `BMOB` | any bomb detonation (contact, destruction, or the stage step that replaces it), unless the player is out of the race | 72 |
 
-`WO_CANNON_SPARKS_DETONATOR`, `WO_QUAKE_DETONATOR` and `_TRAILS` (`EMP.cpp`'s span) stay
-unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
+`WO_CANNON_SPARKS_DETONATOR` is read since: `PulseBullet_Update` (`0x00122608`) spawns it, fourcc
+`BDOR`, when a pulse-cannon round dies on a wall with no rebound left, in view, in mode 14 (else
+`WO_CANNON_SPARKS`); confidence 72, not wired
+([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md)).
+`WO_QUAKE_DETONATOR` and `_TRAILS` (`EMP.cpp`'s span) stay unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
 `data/particles2048/`) and Omega (`data00.psarc`), and both executables name them; 2048's mine
 explode picks between the two mine systems with HD's shape and fourcc (`0x811e6f3a`), Omega's
 with a hashed name (`0x0133ad5f`). **Checked, applies, not wired.**

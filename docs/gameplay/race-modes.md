@@ -1526,8 +1526,8 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   crossing; `detonator_ground_truth.rs`); 2048 and Omega name the same files and the entries
   resolve on their archives (applies, not raced).
 - **Not here, each named on the evidence page**: the mine and bomb explosion effects and sounds,
-  the pulse cannon, the EMP and its pads, the score and the end-of-run
-  percentage, the out-of-race ending, the "automatic and ever-increasing" acceleration the
+  the pulse cannon, the score and the end-of-run percentage (all three read:
+  [detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md)), the EMP and its pads, the out-of-race ending, the "automatic and ever-increasing" acceleration the
   manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
   draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).
 

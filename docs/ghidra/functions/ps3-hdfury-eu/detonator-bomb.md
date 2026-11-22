@@ -289,10 +289,13 @@ models) are presentation; nothing in the hit depends on them.
 
 ### Open
 
-- `damageradius` and `timetodie` have no reader found; how the cannon counts
-  hits into `b+0x60` and what it scores (`points_for_cannon_bullet_hit`,
-  `points_for_destroying`, `energy_recharge_per_shot`); `BombChainReactionDistance`
-  is parsed and dropped ([detonator-placement.md](detonator-placement.md)).
+- `damageradius` and `timetodie` have no reader found. How the cannon counts
+  hits into `b+0x60` (four hits, the fourth destroys the bomb harmlessly) and
+  what it scores is read on [detonator-cannon.md](detonator-cannon.md):
+  `points_for_cannon_bullet_hit`, `points_for_destroying` and
+  `energy_recharge_per_shot` are not read; `DetonatorScoring.xml` is.
+  `BombChainReactionDistance` is parsed and dropped, and the chain radius is the
+  ELF's own `5000` (squared) ([detonator-placement.md](detonator-placement.md)).
 - `DetonatorBombBlast_Update`'s timing and the `0x002d64d0(-1, ..)` visibility
   branch.
 - Who spends `s+0x110`.
