@@ -138,8 +138,10 @@ Result on the three Detonator pairs (Talon's Junction, Feisar; the upper band is
 | `detonator-talons-cannon-volley` | 0.289 to 0.205 | 35.9 to 20.6 | `(84, 91, 98)` to `(16, 8, 8)` |
 | `detonator-talons-pad` | 0.264 to 0.159 | 28.3 to 12.6 | `(65, 68, 74)` to `(22, 13, 14)` |
 
+The billboards draw the stage target in Detonator (the pad pair with `--zone-spectrum-test` shows violet bars where the
+original's are); the pairs themselves show none because their re-render is silent, a zero spectrum being a black grid on black.
 The slot 8 gate (`Mode::Zone`, the card's Zone-grade exemption) was also tried on the mask: a Detonator start frame came out
-pixel-identical, so it stays. What the frame still lacks: the floor's violet dashes and the lit scenery at upper right (the
+pixel-identical (whether the exemption fires there was not separated), so it stays. What the frame still lacks: the floor's violet dashes and the lit scenery at upper right (the
 original draws it dark), the pale hull and the mine and bomb colours (`det-colour-re`).
 
 ## Cross-title

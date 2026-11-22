@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign, EMP, auto-speed and the HD end screen wired; new-record banner, 2048 and Omega end screens open"
+summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen and Zone scene wired; radial bloom, floor violet, hull and mine colours open"
 categories: [rendering]
 ---
 
@@ -432,7 +432,10 @@ against the original `(17, 10, 10)` on mines-ahead: `(96, 111, 121)` to `(16, 8,
 **Still open from this list.** The bloom arm's radial values (contribution `0.1`, exponent `0.1`, distance scale `0.6`, enabled)
 are not applied: `oag-post` has no radial bloom pass, in Zone either (`zone-frame.md`, "Open"). The slot 8 gate in
 `gantry_visibility.rs` (`mode == Mode::Zone`, the card's Zone-grade exemption) was tried on `on_zone_mask()` and drew a
-pixel-identical Detonator start frame, so it is left. Row 3's floor violet, row 2's gantry violet and row 8 are not fixed by
+pixel-identical Detonator start frame (whether the exemption fires there was not separated), so it is left. **The pairs' violet
+billboards need a spectrum:** the re-render runs `--no-audio`, whose held bands are zero, so the equaliser target is a black grid
+on black and the pairs show no violet panel; with `--zone-spectrum-test` the same pad frame draws violet bars on the billboards
+where the original's are (checked by eye, upper right). Row 3's floor violet, row 2's gantry violet and row 8 are not fixed by
 these three: the frames still show a dark floor with no violet dashes and a lit grey scenery band at upper right where the
 original is dark (Scene colours authored black), so the grade's Scene recolour or the visualiser glow is the next suspect. Re-measure
 the hull (row 7) and the mine and bomb colours (row 4): the colours' binds are `det-colour-re`'s reading.
