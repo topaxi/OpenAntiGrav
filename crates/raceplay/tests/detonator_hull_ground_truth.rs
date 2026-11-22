@@ -181,7 +181,16 @@ fn an_hd_detonator_volley_leaves_from_the_hulls_cannon_flash_locators() {
     while oag_race::RaceState::thrust_gated(race.core.sim.world.tick) {
         race.tick(&oag_gameplay::PlayerInputs::none());
     }
+    race.core.sim.drain_cues();
     race.tick(&square());
+    let fired = race
+        .core
+        .sim
+        .drain_cues()
+        .iter()
+        .filter(|event| event.cue == oag_gameplay::cue::Cue::Cannon)
+        .count();
+    assert_eq!(fired, 2, "each round of the volley plays CANNON");
     let cannon = &race.core.sim.world.detonator.cannon;
     let mut rounds = cannon.rounds.iter().filter(|r| r.live);
     let (first, second) = (rounds.next().expect("a round"), rounds.next().expect("two"));

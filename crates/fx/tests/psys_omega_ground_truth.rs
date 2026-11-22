@@ -263,3 +263,37 @@ fn the_distortion_strength_is_the_emitters_own_float() {
         }
     }
 }
+
+/// Detonator's four effects (`WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_BOMB_EXPLO_DETONATOR`,
+/// `WO_CANNON_SPARKS_DETONATOR`) ship in both archives and parse: "checked, applies" for the
+/// names HD's table plays (`docs/formats/pob.md`, "Detonator's explosions").
+#[test]
+#[ignore = "needs the PS4 extraction in data/extracted/ps4/"]
+fn omegas_detonator_effects_ship_in_both_archives_and_parse() {
+    for rel in ARCHIVES {
+        let Some(mut archive) = open(rel) else {
+            return;
+        };
+        for name in oag_fx_names() {
+            let stem = format!("/{}.pob", name.to_ascii_lowercase());
+            let path = archive
+                .paths()
+                .iter()
+                .find(|p| p.to_ascii_lowercase().ends_with(&stem))
+                .cloned()
+                .unwrap_or_else(|| panic!("{rel}: {name} ships"));
+            let blob = archive.read_path(&path).expect("the entry reads");
+            Effect::parse(&blob, ColourScale::Full)
+                .unwrap_or_else(|e| panic!("{rel}: {path}: {e:?}"));
+        }
+    }
+}
+
+fn oag_fx_names() -> [&'static str; 4] {
+    [
+        "WO_MINE_EXPLO_DETONATOR",
+        "WO_MINE_EXPLO_DETONATOR_DEAD",
+        "WO_BOMB_EXPLO_DETONATOR",
+        "WO_CANNON_SPARKS_DETONATOR",
+    ]
+}

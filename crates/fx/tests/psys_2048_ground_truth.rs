@@ -170,3 +170,31 @@ fn every_emitter_names_a_sprite_that_ships_and_decodes() {
         assert!(Sprite::from_gxt(&blob).is_some(), "{name}: does not decode");
     }
 }
+
+/// Detonator's four effects ship in the base archive and parse: "checked, applies" for the names
+/// HD's table plays (`docs/formats/pob.md`, "Detonator's explosions").
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_2048_detonator_effects_ship_and_parse() {
+    let Some(root) = root() else {
+        return;
+    };
+    let mut archive =
+        Archive::open_file(&root.join("base/PSP2/data.psarc")).expect("the archive opens");
+    for name in [
+        "WO_MINE_EXPLO_DETONATOR",
+        "WO_MINE_EXPLO_DETONATOR_DEAD",
+        "WO_BOMB_EXPLO_DETONATOR",
+        "WO_CANNON_SPARKS_DETONATOR",
+    ] {
+        let stem = format!("/{}.pob", name.to_ascii_lowercase());
+        let path = archive
+            .paths()
+            .iter()
+            .find(|p| p.to_ascii_lowercase().ends_with(&stem))
+            .cloned()
+            .unwrap_or_else(|| panic!("{name} ships"));
+        let blob = archive.read_path(&path).expect("the entry reads");
+        Effect::parse(&blob, ColourScale::Full).unwrap_or_else(|e| panic!("{path}: {e:?}"));
+    }
+}

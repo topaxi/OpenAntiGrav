@@ -147,6 +147,7 @@ fn the_detonator_hull_handling_and_livery_entries_resolve() {
         .iter()
         .chain(&objects.bomb)
         .chain([&objects.pad])
+        .chain(&objects.cannon)
     {
         assert!(archives.read_name(entry).is_ok(), "{entry}");
     }

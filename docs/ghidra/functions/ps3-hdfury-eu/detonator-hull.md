@@ -322,7 +322,7 @@ The mine's death is the `.pob` pair `WO_MINE_EXPLO_DETONATOR[_DEAD]`
 
 ## Wired
 
-All six rows below except the cannon are wired (`oag_title::Detonator::{craft, handling,
+All six rows below are wired (`oag_title::Detonator::{craft, handling,
 objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJECTS`;
 `oag_livery::entry::own_craft`; `oag_raceplay::detonator_models`; tests
 `crates/raceplay/tests/detonator_hull_ground_truth.rs`). What the wiring does not do, and why:
@@ -349,8 +349,11 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
   transform origin is **chosen**, not measured.
 - **The bomb's HD halo** (`bomb_blast_hd.halo`) still draws on a laid Detonator bomb, as before:
   unread.
-- **The cannon** is not wired; `Loaded::cannon_muzzles(slot)` hands the hull's
-  `cannon_flash_left`/`right` locators (hull space) to the cannon lane.
+- **The cannon** (2026-11-22): `detonator_cannonbolt` on every round and
+  `hd_muzzleflash_detonator` at the hull's `cannon_flash_left`/`right` locators (`DetonatorObjects::cannon`,
+  `oag_raceplay::detonator_fx`); the simulation reads the same locators (`load::muzzle::cannon_flash`), and
+  `Loaded::cannon_muzzles(slot)` is the livery's reading of them, which a test holds equal. Details
+  and what is chosen: [detonator-cannon.md](detonator-cannon.md), "Drawn and heard".
 - **2048 and Omega**: all wired with HD's names. 2048's archives ship the objects under both
   `Data\Weapons` and `Data\Weapons2048`; the directory its loaders join is unread, so HD's is
   chosen. Omega's pad path is inherited from HD (it reads it from a data field). A 2048 native
@@ -375,7 +378,7 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
    `detonator_bomb_glowedges`, in place of the race Bomb's.
 5. **Pads**: a `/data/new_mode_pads/detonator_pad/detonator_pad` model on every speed pad and every
    weapon pad.
-6. **Cannon** (when it is wired): `/data/weapons/detonator_cannonbolt` and
+6. **Cannon** (wired): `/data/weapons/detonator_cannonbolt` and
    `/data/weapons/hd_muzzleflash_detonator`, from the hull's `cannon_flash_left`/`right` locators.
 
 ## Lineage (2048 and Omega)
@@ -385,13 +388,15 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
   `Data\art\published\hdships\Detonator\Ship.vex` (`Ship_LoadModelSet`, mode `0xe`) with the key
   `zoneship_zone`, and the same eleven per-team textures. The handling loader `0x810bfd54` tests
   `0xe` first, and its `handlingstats.xml` is byte-identical to HD's. The mine, bomb, bolt, flash and
-  pad entry names are the same strings in its executable.
+  pad entry names are the same strings in its executable. The cannon's two models resolve in its
+  archives under HD's names (`patch_ground_truth.rs`).
 - **Omega: checked, applies, not wired; the livery key differs.**
   [`ps4-omega-eu/detonator-hull.md`](../ps4-omega-eu/detonator-hull.md). The hull is
   `hdships\Detonator\Ship.vex` with the key `zoneship_team` (its Zone key too), and per-team folders
   carry only `Team.gnf`. The handling test is the same, and the file is byte-identical. The mine,
   bomb, bolt and flash names are the same. Omega's executable has no `Detonator_Pad` string: its
-  mode-`0xe` pad path comes from a data field.
+  mode-`0xe` pad path comes from a data field. The cannon's two models resolve in its archives
+  under HD's names (`omega_title_ground_truth.rs`).
 
 ## Open
 

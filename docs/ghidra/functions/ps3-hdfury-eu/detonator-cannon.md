@@ -507,12 +507,40 @@ adds to the volley's slot. Read, not observed; confidence 65.
 streak reset, the volley, each round (update, hit test, retire) and the streak scan, on HD, with
 `DetonatorScoring.xml` read through `DetonatorLayouts::scoring`. Chosen where the page says unread:
 the order inside a tick (above), a full ready clip at the start, a press edge for the reload,
-muzzles from the craft's dimensions (`projectile::cannon::launch`), the squared chain distance
+the squared chain distance
 `5000` from the executable's static (the file's `BombChainReactionDistance` is parsed and dropped),
 no firing before the green light. Not wired: the `0.5 s` owner grace, the `+0x200000` clean-lap
 `+1000`, the bomb-ahead warning, `EnergyRechargePerStage`, the `rm+0x2de8` award counts.
 Tests: `crates/weapons/src/detonator/cannon/tests.rs`, the hash test in `oag-gameplay`, and
 `detonator_ground_truth.rs` (a craft standing before a laid mine, Square held).
+
+### Drawn and heard (2026-11-22)
+
+- **Muzzles: the hull's own.** A volley's first round leaves `cannon_flash_left` and its second
+  `cannon_flash_right` of `/data/ships/detonator/locators.vex`, read in the simulation half
+  (`load::muzzle::cannon_flash`, the file the livery reads the same pair from) and carried by the
+  craft's rows through the one hull-to-world conversion the Plasma's weapon node uses
+  (`projectile::plasma::hull_point`: model `+Z` forward, `+X` left, rows `0.75` long). Both
+  locators carry no rotation (`z` axis `(0, 0, 1)`), so the round leaves along the craft's own
+  forward, which is also the original's muzzle-matrix forward row (`+0x160`). A hull with none
+  falls back to `projectile::cannon::launch`'s chosen offsets. Test:
+  `detonator_hull_ground_truth::an_hd_detonator_volley_leaves_from_the_hulls_cannon_flash_locators`
+  (the round's `prev` is the locator carried by the craft, within `1e-3`, and within `0.5` of the
+  drawn hull's own matrix times the locator; fails with the locators dropped).
+- **The round and its flash.** `detonator_cannonbolt` is drawn on each live round, nose along its
+  velocity, up along its launch up (`oag_raceplay::detonator_fx`); `hd_muzzleflash_detonator` is
+  re-placed at the firing craft's locator, carried by the live pose, for the round's first `0.1 s`.
+  **Chosen, not measured:** the round's draw `0x00121e68` is unread; the placement and the `0.1 s`
+  window are HD's ordinary Cannon's (`cannon.md`). The flash model is unscaled and un-rolled.
+- **The wall death.** `WO_CANNON_SPARKS_DETONATOR` at the hit point on a round's second wall hit
+  (72). The original spawns it only when the round is in some view's potentially-visible set; here
+  every one plays (**chosen**).
+- **Sounds.** `CANNON` once per round (two a volley) on the firing craft, `CANNONEXPLWALL` at the
+  wall death, both as per-tick cue outputs (ADR-0018). Which weapon bank a Detonator race plays
+  (`weapons.bnk` or `weapons_det.bnk`) is unread ([cue-variables.md](cue-variables.md), "Not
+  determined"); this engine reads `weapons.bnk`. A hit mine's `MINEEXPL` and a bomb's
+  `BOMBEXPL(_PC)` are **not wired**: no title has a cue for them, and adding one would load it on
+  every title's bank.
 
 ## Cross-check: 2048 and Omega
 
