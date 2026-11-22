@@ -166,6 +166,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
                 r"Data\Weapons\detonator_bomb_glowedges.vex",
             ],
             pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+            cannon: [
+                r"Data\Weapons\detonator_cannonbolt.vex",
+                r"Data\Weapons\hd_muzzleflash_detonator.vex",
+            ],
         }),
     }),
     team_variants: Some(&TEAM_VARIANTS),

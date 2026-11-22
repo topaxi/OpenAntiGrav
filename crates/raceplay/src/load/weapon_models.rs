@@ -476,6 +476,8 @@ pub(super) fn load_detonator_objects(
     let mine_spikes = part(objects.mine[1], "a laid Detonator mine's spikes");
     let bomb_equalisers = part(objects.bomb[1], "a laid Detonator bomb's equalisers");
     let bomb_glow_edges = part(objects.bomb[2], "a laid Detonator bomb's glow edges");
+    let cannon_bolt = part(objects.cannon[0], "a Detonator pulse cannon round");
+    let muzzle_flash = part(objects.cannon[1], "a Detonator pulse cannon's muzzle flash");
     let pad = if pads.is_empty() {
         None
     } else {
@@ -494,6 +496,8 @@ pub(super) fn load_detonator_objects(
         mine_spikes,
         bomb_equalisers,
         bomb_glow_edges,
+        cannon_bolt,
+        muzzle_flash,
         pad,
         pads,
     }

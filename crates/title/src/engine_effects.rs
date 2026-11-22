@@ -334,6 +334,25 @@ pub const LEACHBEAM_ENERGY_EFFECT: &str = "WO_LEACHBEAM_ENERGY";
 /// **A burst**, played through `RaceView::ignite_blast` like every detonation burst.
 pub const CANNON_SPARKS_EFFECT: &str = "WO_CANNON_SPARKS";
 
+/// Detonator's laid mine exploding after it was darkened: every mine a craft runs into, and every
+/// mine laid on an earlier stage a cannon round hits (`DetonatorMine_Explode` `0x00138e58`, fourcc
+/// `MIED`; `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, confidence 72). HD, 2048 and
+/// Omega name it; HD's is the one wired.
+pub const DETONATOR_MINE_EXPLO_DEAD_EFFECT: &str = "WO_MINE_EXPLO_DETONATOR_DEAD";
+
+/// Detonator's laid mine exploding while it is still live (laid this stage): the cannon hitting
+/// it, or the EMP's `MineManager_DestroyAtLane` (same function, other arm; 70).
+pub const DETONATOR_MINE_EXPLO_EFFECT: &str = "WO_MINE_EXPLO_DETONATOR";
+
+/// Detonator's bomb detonating, by contact, by the cannon's fourth hit or by the stage step that
+/// replaces it (`DetonatorBombBlast_Start` `0x00137150`, fourcc `BMOB`;
+/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md`, 72).
+pub const DETONATOR_BOMB_EXPLO_EFFECT: &str = "WO_BOMB_EXPLO_DETONATOR";
+
+/// Detonator's pulse cannon round dying on a wall with no rebound left (`PulseBullet_Update`
+/// `0x00122608`, fourcc `BDOR`; `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, 72).
+pub const DETONATOR_CANNON_SPARKS_EFFECT: &str = "WO_CANNON_SPARKS_DETONATOR";
+
 /// What a craft *holding* a LeachBeam draws, before it fires anything.
 ///
 /// **The disc's own, with a fully recovered trigger**: `FUN_0883f540`

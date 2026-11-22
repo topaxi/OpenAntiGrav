@@ -601,7 +601,8 @@ pub struct Detonator {
 /// `DetonatorMine_Construct` loads `mine_rita_football`, `mine_rita_spikes` and
 /// `Electric_Visualiser`; the visualiser's electricity is music-driven, so it is named by neither
 /// field and is not drawn. `DetonatorBomb_Construct` loads three bomb parts, and
-/// `WorldManager_Construct` a `Detonator_Pad` for every speed pad and weapon pad.
+/// `WorldManager_Construct` a `Detonator_Pad` for every speed pad and weapon pad;
+/// `PulseBullet_Construct` the pulse cannon's round and muzzle flash.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DetonatorObjects {
     /// A laid mine's two parts, `[mine_rita_football, mine_rita_spikes]`: the shell and its spikes.
@@ -610,6 +611,9 @@ pub struct DetonatorObjects {
     pub bomb: [&'static str; 3],
     /// The model carried by every speed pad and every weapon pad.
     pub pad: &'static str,
+    /// The pulse cannon's `[round, muzzle flash]` (`detonator_cannonbolt`,
+    /// `hd_muzzleflash_detonator`): `PulseBullet_Construct`'s two models.
+    pub cannon: [&'static str; 2],
 }
 
 /// The craft a Detonator race flies: one hull of its own, whatever team the player picked, with

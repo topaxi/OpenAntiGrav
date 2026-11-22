@@ -39,6 +39,8 @@ mod destroy_camera;
 mod destroyed_fire;
 mod detonator;
 mod detonator_craft;
+#[cfg(feature = "view")]
+mod detonator_fx;
 mod disruptor_craft_fx;
 mod disruptor_launch;
 mod distance_reset;

@@ -1261,7 +1261,7 @@ impl Scene {
         for drawable in self.bombs.iter().take(bomb_matrices.len()) {
             draws.mesh(drawable);
         }
-        self.draw_detonator_parts((mine_matrices.len(), bomb_matrices.len()), &mut draws);
+        self.draw_detonator_parts(race, (mine_matrices.len(), bomb_matrices.len()), &mut draws);
         for drawable in self.cannon_rounds.iter().take(cannon_matrices.len()) {
             draws.mesh(drawable);
         }

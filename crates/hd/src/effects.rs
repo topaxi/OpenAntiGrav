@@ -81,6 +81,36 @@ pub const EFFECTS: &Effects = &{
             Trigger::PlasmaLaunch,
             EffectSpec::new(engine_effects::PLASMA_LAUNCH_EFFECT, Origin::Measured),
         )
+        // Detonator's four, off `DetonatorMine_Explode`, `DetonatorBombBlast_Start` and
+        // `PulseBullet_Update`; `docs/formats/pob.md`, "Detonator's explosions".
+        .with(
+            Trigger::DetonatorMineExploDead,
+            EffectSpec::new(
+                engine_effects::DETONATOR_MINE_EXPLO_DEAD_EFFECT,
+                Origin::Measured,
+            ),
+        )
+        .with(
+            Trigger::DetonatorMineExplo,
+            EffectSpec::new(
+                engine_effects::DETONATOR_MINE_EXPLO_EFFECT,
+                Origin::Measured,
+            ),
+        )
+        .with(
+            Trigger::DetonatorBombExplo,
+            EffectSpec::new(
+                engine_effects::DETONATOR_BOMB_EXPLO_EFFECT,
+                Origin::Measured,
+            ),
+        )
+        .with(
+            Trigger::DetonatorCannonSparks,
+            EffectSpec::new(
+                engine_effects::DETONATOR_CANNON_SPARKS_EFFECT,
+                Origin::Measured,
+            ),
+        )
         // The disc ships `wo_plasma_flash.pob` and the executable never names it: the
         // detonation is `WO_PLASMA_LIGHTNING_EXPAND` (same section).
         .without(Trigger::PlasmaBlast)

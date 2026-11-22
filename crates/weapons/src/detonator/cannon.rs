@@ -82,7 +82,7 @@ pub enum Sweep {
 }
 
 /// One round in flight.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Round {
     /// Whether the slot holds a round.
     pub live: bool,

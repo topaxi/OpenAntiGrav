@@ -126,6 +126,8 @@ fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
     assert!(label(&parts.bomb_equalisers).contains("final_equalisers"));
     assert!(label(&parts.bomb_glow_edges).contains("glowedges"));
     assert!(label(&parts.pad).contains("detonator_pad"));
+    assert!(label(&parts.cannon_bolt).contains("detonator_cannonbolt"));
+    assert!(label(&parts.muzzle_flash).contains("hd_muzzleflash_detonator"));
     assert_eq!(
         parts.pads.len(),
         loaded.setup.speedup_pads.len() + loaded.setup.weapon_pads.len(),
@@ -168,6 +170,13 @@ fn an_hd_detonator_volley_leaves_from_the_hulls_cannon_flash_locators() {
         return;
     };
     let locators = loaded.cannon_muzzles(0).map(|m| m.expect("both locators"));
+    for locator in &locators {
+        assert_eq!(
+            locator.z_axis.truncate(),
+            oag_core::math::Vec3::Z,
+            "the locators carry no rotation, so a round leaves along the craft's own forward"
+        );
+    }
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     while oag_race::RaceState::thrust_gated(race.core.sim.world.tick) {
         race.tick(&oag_gameplay::PlayerInputs::none());

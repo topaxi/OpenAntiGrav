@@ -557,6 +557,10 @@ impl Race {
         self.core.sim.advance_detonator(inputs);
         #[cfg(feature = "view")]
         if self.draws() {
+            self.view.play_detonator_events(&self.core);
+        }
+        #[cfg(feature = "view")]
+        if self.draws() {
             self.view.tick_split_gap(&self.core);
         }
 
