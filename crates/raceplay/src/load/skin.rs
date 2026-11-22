@@ -41,9 +41,9 @@ pub(super) fn resolve(
     // The same carve-out `ship_entry_name` makes for the hull variant.
     if oag_livery::entry::own_craft(title.race.ships(), mode).is_some() {
         report.push(format!(
-            "--skin {asked}: ignored on a {} race - its hull is a different model \
+            "--skin {asked}: ignored on a {label} race - the {label} hull is a different model \
              and no PI_ModelSkin names a file for it",
-            mode.name()
+            label = oag_livery::entry::craft_label(mode)
         ));
         return None;
     }

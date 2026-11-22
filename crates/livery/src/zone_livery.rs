@@ -37,10 +37,10 @@ pub fn swap<'a>(
         .then(|| ships.detonator.and_then(|craft| craft.livery_fallback))
         .flatten();
     let Some(livery) = own.or(fallback) else {
+        let label = crate::entry::craft_label(mode);
         report.push(format!(
-            "{team}: the definition authors no {} livery for this craft - the hull keeps \
-             its default {key} skin",
-            mode.name()
+            "{team}: the definition authors no {label} livery for this craft - the {label} hull \
+             keeps its default {key} skin"
         ));
         return None;
     };

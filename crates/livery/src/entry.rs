@@ -19,6 +19,16 @@ pub fn own_craft(
     paths.own_craft(mode == Mode::Zone, mode == Mode::Detonator)
 }
 
+/// What a report calls the own craft of `mode`'s race: `"Detonator"`, else `"Zone"`.
+#[must_use]
+pub fn craft_label(mode: Mode) -> &'static str {
+    if mode == Mode::Detonator {
+        "Detonator"
+    } else {
+        "Zone"
+    }
+}
+
 /// The craft whose directory holds the engine light: Zone's for every mode on HD's Zone mask,
 /// Detonator included (`Ship_LoadEngineLightData` reads `Data\Ships\Zone\EngineLightData.xml`
 /// for modes 6, 13, 14 and 21; `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "Engine

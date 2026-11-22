@@ -32,7 +32,7 @@ pub(super) fn resolve(
         Err(error) => {
             report.push(format!(
                 "{definition} is unreadable ({error}) - no {} livery for any craft",
-                mode.name()
+                oag_livery::entry::craft_label(mode)
             ));
             return Vec::new();
         }

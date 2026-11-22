@@ -516,11 +516,7 @@ fn one(
                 let zone = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
                 let worn = livery.filter(|_| entry::own_craft(ships, ctx.mode).is_none());
                 let mut textures =
-                    zone_livery::Reads::new(zone.or(worn)).named(if ctx.mode == Mode::Detonator {
-                        "Detonator"
-                    } else {
-                        "Zone"
-                    });
+                    zone_livery::Reads::new(zone.or(worn)).named(entry::craft_label(ctx.mode));
                 let built = if mesh::rcs::psp2::is_psp2(&geometry) {
                     mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                         textures.read(archives, path)
