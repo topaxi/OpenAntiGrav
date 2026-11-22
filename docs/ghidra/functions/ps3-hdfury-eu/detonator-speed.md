@@ -139,7 +139,7 @@ topped up so the mines did not end the run.
 
 Under the Autopilot the lap's top speed climbed stage by stage (`~110` on lap 1 to `~190` on lap
 11), the direction the law predicts; not used as a measurement (Autopilot, mines, x1.2).
-Reproduce: the lane's scratch poller, a `drive.Session` walk with
+Reproduce: `scripts/rpcs3-hd-zone-probe.py`'s shape (a `drive.Session` walk) with
 `{"Main Menu": ["right"], "Single Player": ["right"] * 7 + ["cross"]}`, then the fields above;
 the start needs `cross` pressed until `craft+0x264 & 2` clears (the walk returns on the
 team-launch transition, before the race takes a press). Confidence of the target law with this:
