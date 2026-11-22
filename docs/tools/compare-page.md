@@ -2237,19 +2237,21 @@ manifests are developer material, not a publishing set.
    first restore after a run failed with a refused GDB proxy 3 of 5 times, one retry after a 10 s wait worked every time).
 3. `scripts/rpcs3-hd-detonator-shots.py --shot T [--fire-clock F --fire-hold H]` waits 30 s (a START RACE tap before the prompt is
    held into the race and the craft leaves the track within 4 s), taps START RACE, then pauses at each lap-clock `T`, grabs through
-   `grab_with_clock`, reads the pose and camera, and can hold the cannon button over a window. **The cannon is TRIANGLE**; SQUARE
-   changes the camera view and hides the hull. The craft does not steer itself: with no stick it holds the first straight for about
+   `grab_with_clock`, reads the pose and camera, and can hold the cannon button over a window. **The cannon appears to be TRIANGLE**
+   (seen on one boot; SQUARE changed the camera view on four others and never fired). The craft does not steer itself: with no stick it holds the first straight for about
    6 s of lap clock.
 4. `rpcs3-hd-pair.py --detonator --json NN.json --autopilot off --state <state> --team feisar --track 'Data\Environments\Talons_Junction\track.vex'`:
    ours runs its own countdown and clock in `--mode detonator` with an `--input-script` that holds Square (ours' cannon button) over
-   the same lap-clock window, then `--pose-hold` puts the craft on the original's pose; camera, fov, gantry and world clock are the
-   original's. **Ours' mine layout is its own** (the original's `Libc_Rand` is not carried), recorded as a pair caveat.
+   the same lap-clock window, and `--pose-hold` plus `--pose-hold-ticks` keep ours' craft at rest on the original's pose after every
+   tick (without the second flag ours flew 130-190 units past the pose before the frame: measured, and the first renders were redone);
+   camera, fov, gantry and world clock are the original's. A held craft never meets a mine, its exhaust is cold and its rounds leave at
+   500 units/s. **Ours' mine layout is its own** (the original's `Libc_Rand` is not carried), recorded as a pair caveat.
 
 | Pair | Lap clock | RMSE | Edge corr. | Mean grey |
 | --- | ---: | ---: | ---: | ---: |
-| `mines-ahead` | 2.66 s | 0.304 | 0.07 | 42.7 |
-| `cannon-volley` | 2.21 s | 0.303 | 0.10 | 37.0 |
-| `pad` | 2.0 s | 0.291 | 0.09 | 33.1 |
+| `mines-ahead` | 2.66 s | 0.297 | 0.08 | 41.5 |
+| `cannon-volley` | 2.21 s | 0.289 | 0.12 | 35.9 |
+| `pad` | 2.0 s | 0.264 | 0.10 | 28.3 |
 
 What differs, by region and size: the Detonator thread's "Render accuracy" section.
 

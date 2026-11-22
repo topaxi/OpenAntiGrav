@@ -12,7 +12,7 @@ RACE TYPE DETONATOR, `GetMode()==14`), this taps START RACE until the lap clock 
 for every `--shot T` it pauses at the first stop whose lap clock (`ship+0x7014`) is at or past T and keeps the
 frame (`rpcs3-drive.py grab_with_clock`, the world clock beside it), the camera read from the RSX pushbuffer
 and the player's pose, to `OUT/NN.png` and `OUT/NN.json` in the shape `rpcs3-drive.py capture` writes (so
-`rpcs3-hd-pair.py --json OUT/NN.json` takes it). `--fire-clock F --fire-hold H` holds a button (`--fire-button`, default TRIANGLE; SQUARE changes the camera view) to fire the pulse cannon
+`rpcs3-hd-pair.py --json OUT/NN.json` takes it). `--fire-clock F --fire-hold H` holds a button (`--fire-button`, default TRIANGLE, which fired once; SQUARE changed the camera view on four boots) to fire the pulse cannon
 for H wall seconds from the first stop at or past lap clock F; the record carries the clocks before and after
 the hold, so ours runs the same ticks with the same button held. The Detonator craft drives itself (auto-speed):
 no throttle is pressed.
@@ -97,7 +97,7 @@ def main():
     ap.add_argument("--fire-clock", type=float, help="hold SQUARE from the first stop at or past this lap clock")
     ap.add_argument("--fire-button", default="triangle",
                     help="the pad button held for --fire-clock (the button that fires the cannon in the original is measured here, "
-                         "not assumed: SQUARE changed the camera view, hiding the hull)")
+                         "not assumed: SQUARE changed the camera view)")
     ap.add_argument("--fire-hold", type=float, default=0.5, help="wall seconds SQUARE is held (a loaded host drops a short press)")
     ap.add_argument("--reload-clock", type=float, help="tap CIRCLE (reload) at this lap clock")
     ap.add_argument("--steer", metavar="LAP_CLOCK,WALL_HOLD,X", action="append", default=[],

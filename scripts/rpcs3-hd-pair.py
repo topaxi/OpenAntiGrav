@@ -141,9 +141,12 @@ def detonator_inputs(pair, out, ship, clock):
                                          "button": "square (ours; the original's cannon fired on %s)" % fire.get("button")}
     path = out / "ours.inputs"
     path.write_text("\n".join(lines) + "\n")
-    pair.caveat("Detonator: ours runs its own sim from the grid (auto-speed, the countdown, its own seeded mine layout, its own cannon "
-                "rounds from the held button) and the craft is then put back on the original's pose and camera; the mine positions are "
+    pair.caveat("Detonator: ours runs its own countdown, clock and stage laying (its own seeded mine layout, its own cannon "
+                "rounds from the held button) with the craft held on the original's pose and camera; the mine positions are "
                 "ours, not the original's (the placement RNG is not carried), so a mine in one frame is not the same mine in the other")
+    pair.caveat("Detonator: ours' craft is held at rest on the original's pose after every tick (`--pose-hold-ticks`): it never flies into a "
+                "mine, its exhaust is cold, and a round leaves at 500 units/s, "
+                "not 500 + 3.6 x the craft's speed")
     return ["--input-script", path]
 
 
@@ -396,7 +399,7 @@ def main():
     # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,
     # the GO board, the record panel and the exhaust still run their ticks. A race shot runs no ticks and needs none.
     ours_csv = out / "ours-trace.csv"
-    cmd = base if args.field or args.zone else base + ["--pose-hold"]
+    cmd = base if args.field or args.zone else base + ["--pose-hold"] + (["--pose-hold-ticks"] if args.detonator else [])
     pair.rec["ours"]["pose_hold"] = not (args.field or args.zone)
     pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field else pose
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]

@@ -376,34 +376,35 @@ Measured 2026-11-22 (`det-pairs`): the original (HD/Fury EU on RPCS3, Racebox RA
 Junction, Feisar, no stick, no throttle) against ours at the original's own pose, camera, fov, lap clock and world clock. Three
 pairs, `data/reference/compare-page/hd/detonator-talons-{mines-ahead,cannon-volley,pad}` (manifest `detonator.toml`, also in
 `curated/`); method in `docs/tools/compare-page.md`, "Detonator pairs". Each was seen on one boot; the same scene (hull, mines
-ahead, HUD, the pad at the right edge) was seen on four boots between lap clock 2.0 and 2.7 s. Whole-frame RMSE 0.29-0.30, edge
-correlation 0.07-0.10, mean grey 33-43 (all three red on `compare_env.METRIC_BANDS`). Region numbers below are RMSE (0-1) on the
+ahead, HUD, the pad at the right edge) was seen on four boots between lap clock 2.0 and 2.7 s. Whole-frame RMSE 0.26-0.30, edge
+correlation 0.08-0.12, mean grey 28-41 (all three red on `compare_env.METRIC_BANDS`). Ours' craft is held at rest on the original's pose (`--pose-hold-ticks`): a first version let ours fly 130-190 units past the pose before the frame and was re-made, so rounds, mines and energy in the table are from the held version only. Region numbers below are RMSE (0-1) on the
 three pairs and the region's share of the 1920x1080 frame; "area x error" is the product in percent, the order to fix in. Mine
 positions differ by construction (ours places with its own seeded `Rng`), so a mine-only crop compares looks, not places.
 
 | # | Region | Area | RMSE | Area x error | What differs (confidence 70 unless stated) |
 | ---: | --- | ---: | ---: | ---: | --- |
-| 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.44 | 12-14 | Ours draws the circuit's day sky (clouds, blue) and a bright upper scene; the original's Detonator frame is near black with blue-violet gantries and a dark grade. Mean grey is 55-70 higher in ours. Probably the mode's own grade/sky state (the Zone analogue is `zone-grade-sky`); which parameter is not measured (confidence 50). |
-| 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.22-0.37 | 6-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. |
-| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.15-0.23 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. 0.23 on the volley pair is the muzzle flash and rounds (row 6). |
+| 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue) and a bright upper scene; the original's Detonator frame is near black with blue-violet gantries and a dark grade. Mean grey is 55-70 higher in ours. Probably the mode's own grade/sky state (the Zone analogue is `zone-grade-sky`); which parameter is not measured (confidence 50). |
+| 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. |
+| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
 | 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball (`MineColour`/`MineBrightness` binds unread, known); ours also shows no spikes at a distance. |
 | 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
-| 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail. Ours: no flash, green rounds. Measured on the volley pair. |
-| 7 | Hull | 6.6 % | 0.25-0.28 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours: pale silver body, white wing edges, no lit strip. A livery/material gap (`zoneship_feisar` texture and the Detonator material binds; not measured which). |
-| 8 | HUD score panel | 5.7 % | 0.45-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
-| 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100`, `15`/`12` and the energy bar match, including the clip falling to 12 after three volleys. |
+| 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
+| 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours: pale silver body, white wing edges, no lit strip. A livery/material gap (`zoneship_feisar` texture and the Detonator material binds; not measured which). |
+| 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
+| 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 
 Cheapest first: row 1 (a third of the frame, one grade/sky decision for the mode), then row 3's track tint (the same grade), then
 rows 7 and 4. Rows 1 and 3 are likely one cause, the Detonator stage's colour grade and sky, which the `zone-grade-sky` lane
 solved for Zone (hypothesis, 50: not read for Detonator).
 
-Found on the way (not renderer, for the owner of the sim): **the original's pulse cannon fires on TRIANGLE**, not SQUARE.
-SQUARE changes the camera view (hides the hull); three volleys (clip 15 to 12, flashes, rounds) came from a 0.2 s TRIANGLE hold at
-lap clock 1.8 s. `detonator-cannon.md` has the button unread ("the dispatcher was not read") and ours maps Square (chosen); the
-brief's "Square fires" came from there. Confidence 85 for the button (3 of 3 holds, clip and HUD moved), the pair scripts hold
-SQUARE in ours only because that is ours' mapping. Also measured: the craft does not steer itself (auto-speed is speed only);
-with no stick it keeps the line for about 6 s on the first straight, and it flies into the first laid mine near 3 s (original: energy 100 to 90, a
-orange screen flash, grey shards and a blue shield glow, `det-pairs` scratch capture, no pair; ours' own run read 98 at 2.7 s).
+Found on the way (not renderer, for the owner of the sim): **the original's pulse cannon appears to fire on TRIANGLE**, not
+SQUARE. Seen once (one boot): a 0.2 s TRIANGLE hold at lap clock 1.8 s took the clip from 15 to 12 with flashes and rounds. SQUARE
+was held on four other boots (0.4-0.5 s at lap 3.0-5.6 s, 0.2 s at 1.2 s): it never fired and each time the camera view changed
+and the hull vanished (the craft had also left the track or hit a mine in some of those, which alone could stop a fire). Confidence
+60, to be repeated before ours' mapping moves. `detonator-cannon.md` has the button unread ("the dispatcher was not read") and ours
+maps Square (chosen); the pair scripts hold SQUARE in ours only because that is ours' mapping. Also measured: the craft does not steer itself (auto-speed is speed only);
+with no stick it keeps the line for about 6 s on the first straight, and it flies into the first laid mine near 3 s (original: energy 100 to 90, an
+orange screen flash, grey shards and a blue shield glow, scratch capture, no pair).
 A START RACE tap before the prompt is up is held into the race and sends the craft off the track within 4 s (the capture script
 waits 30 s after a restore).
 
