@@ -157,6 +157,63 @@ fn assert_the_cannon_fires(loaded: &race::Loaded) {
     assert!(cannon.rounds_in_flight() > 0);
 }
 
+/// A title's Detonator craft flies the auto-speed (the ramp full by GO, the stage-1 target `34`),
+/// and over a lap on the autopilot its speed pads either charge the EMP and never boost
+/// (`charges`) or keep their race boost and charge nothing (2048, whose pad arms are unread).
+fn assert_auto_speed_and_pads(loaded: &race::Loaded, charges: bool) {
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    start_racing(&mut race);
+    assert_eq!(
+        race.core.sim.world.detonator.ramp, 1.0,
+        "the ramp is full by GO"
+    );
+    assert_eq!(race.core.sim.detonator_speed_target(), Some(34.0));
+    race.core.sim.set_autopilot(true);
+    let mut boosted = false;
+    for _ in 0..60 * 120 {
+        race.tick(&PlayerInputs::none());
+        dodge(&mut race);
+        boosted |= race.core.sim.world.ships[0].physics.pad_timer > 0.0;
+        if race.core.sim.world.race[0].laps_completed() >= 1 {
+            break;
+        }
+    }
+    let charge = race.core.sim.world.detonator.emp.charge;
+    println!("charge after a lap {charge}, a pad boosted: {boosted}");
+    if charges {
+        assert!(charge > 0, "a lap's speed pads charge the EMP");
+        assert!(!boosted, "and never boost");
+    } else {
+        assert_eq!(charge, 0, "the pads charge nothing");
+    }
+    // Stood on a speed pad by hand: the one tick of entry either charges or boosts.
+    race.core.sim.set_autopilot(false);
+    let pad = loaded
+        .setup
+        .speedup_pads
+        .first()
+        .expect("the circuit has speed pads");
+    let ship = &mut race.core.sim.world.ships[0].physics;
+    ship.body.position = oag_core::math::Vec3::from_array(pad.centre());
+    race.tick(&PlayerInputs::none());
+    let ship = &race.core.sim.world.ships[0].physics;
+    let after = race.core.sim.world.detonator.emp.charge;
+    if charges {
+        assert_eq!(
+            (after, ship.pad_timer),
+            (charge + 1, 0.0),
+            "a charge, no boost"
+        );
+    } else {
+        assert_eq!(after, 0, "2048's pad charges nothing");
+        assert!(ship.pad_timer > 0.0, "and keeps its race boost");
+    }
+}
+
 /// 2048 on one of HD's ported Zone circuits: its own circuit table is absent, so the HD/Fury
 /// DLC3 Detonator table out of the v1.04 patch grades it (`oag_2048::race::DETONATOR`).
 #[test]
@@ -203,6 +260,7 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
     );
     assert_eq!(grade.last_stage(), 14);
     assert_the_cannon_fires(&loaded);
+    assert_auto_speed_and_pads(&loaded, false);
 }
 
 /// Omega runs the mode's rules and draws no grade, which it does not draw for Zone either.
@@ -240,6 +298,7 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
             .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
     );
     assert_the_cannon_fires(&loaded);
+    assert_auto_speed_and_pads(&loaded, true);
 }
 
 /// **Mines and bombs.** The opening stage lays up to the first stage's count (the disc's
@@ -450,7 +509,8 @@ fn speed(race: &race::Race) -> f32 {
 
 /// **Auto-speed.** A craft nobody throttles reaches speed after the green light on Zone's law
 /// with the Detonator stage as the count (`detonator-speed.md`: live, `107.6` within 4 s of GO
-/// with cross never pressed). The ramp is full by GO and the target on lap 1 is `start`, `34`.
+/// with cross never pressed). The ramp is full by GO, the target on lap 1 is `start`, `34`, and
+/// it steps with the stage.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_hd_detonator_craft_with_no_throttle_reaches_speed() {
@@ -478,18 +538,9 @@ fn an_hd_detonator_craft_with_no_throttle_reaches_speed() {
     }
     println!("speed at GO {at_go}, top within 4 s {top}");
     assert!(top > 90.0, "the engine drives with no throttle: {top}");
-}
 
-/// The engine's target steps with the stage: `34 + 4.4 n`, `n = 0` on lap 1 and the HUD stage
-/// from each later crossing (`detonator-speed.md`, "`n`: the Detonator stage").
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn an_hd_detonator_speed_target_steps_with_the_stage() {
-    let Some(loaded) = load() else {
-        return;
-    };
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
-    start_racing(&mut race);
+    // The target steps with the stage: `34 + 4.4 n`, `n = 0` on lap 1 and the HUD stage from
+    // each later crossing (`detonator-speed.md`, "`n`: the Detonator stage").
     for laid in [1u8, 2, 3, 9, 14] {
         race.core.sim.world.detonator.stages_laid = laid;
         let n = if laid == 1 { 0.0 } else { f32::from(laid) };
@@ -505,11 +556,12 @@ fn an_hd_detonator_speed_target_steps_with_the_stage() {
 /// `WEAPONPICKUP`, and leaves no boost timer (`craft+0x2e8` read `0.0` over 37 live entries).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn an_hd_detonator_speed_pad_charges_the_emp_and_gives_no_boost() {
+fn an_hd_detonator_pad_charges_the_emp_and_gives_no_boost_or_pickup() {
     use oag_gameplay::cue::Cue;
     let Some(loaded) = load() else {
         return;
     };
+    let weapon_pads = loaded.setup.weapon_pads.clone();
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     start_racing(&mut race);
     race.core.sim.set_autopilot(true);
@@ -544,6 +596,44 @@ fn an_hd_detonator_speed_pad_charges_the_emp_and_gives_no_boost() {
     let (n, ready) = race.core.sim.detonator_emp().expect("a Detonator race");
     assert_eq!(n, last);
     assert_eq!(ready, n >= 4);
+
+    // A weapon pad, flown by the player: one charge and no pickup; the same pad again charges
+    // nothing until another pad or a crossing, a second pad charges again.
+    race.core.sim.set_autopilot(false);
+    assert!(weapon_pads.len() >= 2, "the circuit has weapon pads");
+    let mut visit = |race: &mut race::Race, at: Option<[f32; 3]>| {
+        let ship = &mut race.core.sim.world.ships[0].physics;
+        if let Some(at) = at {
+            ship.body.position = oag_core::math::Vec3::from_array(at);
+        } else {
+            ship.body.position += ship.body.orientation * oag_core::math::Vec3::new(0.0, 40.0, 0.0);
+        }
+        ship.body.linear_velocity = oag_core::math::Vec3::ZERO;
+        race.tick(&PlayerInputs::none());
+        dodge(race);
+        race.core.sim.world.detonator.emp.charge
+    };
+    let before = race.core.sim.world.detonator.emp.charge;
+    let first = weapon_pads[0].centre();
+    let got = visit(&mut race, Some(first));
+    assert_eq!(got, before + 1, "a weapon pad charges");
+    assert!(
+        race.core.sim.world.ships[0].pickup.is_empty(),
+        "and hands nothing out"
+    );
+    assert_eq!(visit(&mut race, None), before + 1);
+    assert_eq!(
+        visit(&mut race, Some(first)),
+        before + 1,
+        "the same pad again: nothing"
+    );
+    let second = weapon_pads[1].centre();
+    assert_eq!(
+        visit(&mut race, Some(second)),
+        before + 2,
+        "another pad charges"
+    );
+    assert!(race.core.sim.world.ships[0].pickup.is_empty());
 }
 
 /// Slot 0's pad with L1 (the EMP button) pressed this tick.
@@ -557,9 +647,12 @@ fn l1() -> PlayerInputs {
 
 /// A full EMP fired from a stand before a mine, every mine marked live or dark: returns the
 /// mines it cleared and what they paid, after checking the charge and the clip.
-fn emp_from_a_stand(live: bool) -> Option<(u32, i32)> {
-    let loaded = load()?;
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+fn emp_from_a_stand(loaded: &race::Loaded, live: bool) -> Option<(u32, i32)> {
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
     start_racing(&mut race);
     let (stand, forward, up) = race.core.sim.detonator_mine_stand(0, 30.0)?;
     let right = forward.cross(up).normalize();
@@ -617,10 +710,11 @@ fn emp_from_a_stand(live: bool) -> Option<(u32, i32)> {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_hd_detonator_emp_clears_the_mines_ahead_and_scores_the_emp_values() {
-    let Some((dark, dark_paid)) = emp_from_a_stand(false) else {
+    let Some(loaded) = load() else {
         return;
     };
-    let (live, live_paid) = emp_from_a_stand(true).expect("loaded once");
+    let (dark, dark_paid) = emp_from_a_stand(&loaded, false).expect("a mine to stand before");
+    let (live, live_paid) = emp_from_a_stand(&loaded, true).expect("the same field");
     println!("dark: {dark} cleared for {dark_paid}; live: {live} cleared for {live_paid}");
     assert!(dark > 0, "the wave clears a mine");
     assert_eq!(dark_paid, 25 * dark as i32);

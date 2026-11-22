@@ -210,7 +210,15 @@ impl Race {
                 oag_physics::passive::ClassGravityTerm::Grounded
             };
         let weapons_on = weapons_override.unwrap_or_else(|| mode.weapons_enabled());
-        let weapon_pads = if weapons_on { weapon_pads } else { Vec::new() };
+        // Detonator runs with weapons off, yet its weapon pads still charge the EMP
+        // (`Ship_TestWeaponPad`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`).
+        let pads_charge = mode == Mode::Detonator
+            && detonator_pads.is_some_and(|pads| pads.weapon_pad_charges.value);
+        let weapon_pads = if weapons_on || pads_charge {
+            weapon_pads
+        } else {
+            Vec::new()
+        };
 
         let mut world = World::new(seed);
         // The lap count is per speed class, not per mode - the campaign's 236
