@@ -61,8 +61,7 @@ chosen); 2048 reads the object models from HD's `Data\Weapons` prefix (its loade
   self-contained brief; check `just check-docs check-names check-handover check-status` (run
   `just gen-status` after new `names.tsv` rows), then commit docs separately from code.
 - Each code phase: `cargo fmt --all`, `just lint`, `just gate-affected`, then
-  `just test-data-affected`. **Three `portuguese_br_ground_truth` tests in `oag-raceplay` fail on
-  a clean checkout; ignore them.** Run ignored ground-truth tests with
+  `just test-data-affected`. Run ignored ground-truth tests with
   `cargo test -p oag-raceplay --profile quick --test it_a_g -- --ignored detonator_ground_truth`.
 - `oag-tables` integration tests live under `tests/it.rs` (add modules, not files).
 - **`World` size ratchet** (`crates/gameplay/src/world.rs`, `the_world_snapshot_does_not_grow`):
