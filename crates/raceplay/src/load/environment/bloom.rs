@@ -284,13 +284,19 @@ mod tests {
         };
         let detonator = for_mode(circuit, oag_hd::TITLE.race, oag_race::Mode::Detonator);
         assert_eq!(detonator.feedback, -0.4);
-        assert_eq!((detonator.vertical_size, detonator.horizontal_size), (1.0, 1.0));
+        assert_eq!(
+            (detonator.vertical_size, detonator.horizontal_size),
+            (1.0, 1.0)
+        );
         assert_eq!(detonator.frame_exponent, 0.1);
         assert_eq!(detonator.alpha_contribution, 1.0);
         assert_eq!(detonator.frame_contribution, 0.9);
         assert_eq!(detonator.adaption_boost, 2.5);
         for title in [oag_2048::TITLE, oag_omega::TITLE, oag_pulse::TITLE] {
-            assert_eq!(for_mode(circuit, title.race, oag_race::Mode::Detonator), circuit);
+            assert_eq!(
+                for_mode(circuit, title.race, oag_race::Mode::Detonator),
+                circuit
+            );
         }
     }
 }

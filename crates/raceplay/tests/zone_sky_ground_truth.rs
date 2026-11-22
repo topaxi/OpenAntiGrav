@@ -231,7 +231,10 @@ fn a_detonator_race_draws_the_zone_dome_in_its_own_stage_colours() {
     ) else {
         return;
     };
-    let sky = detonator.sky_model.as_ref().expect("the Detonator sky loads");
+    let sky = detonator
+        .sky_model
+        .as_ref()
+        .expect("the Detonator sky loads");
     assert_eq!(sky.label, oag_mesh::mesh::sky_cube::ZONE_DOME_LABEL);
     assert!(sky.textures.iter().all(Option::is_none));
     let reflection = sky
@@ -239,7 +242,10 @@ fn a_detonator_race_draws_the_zone_dome_in_its_own_stage_colours() {
         .as_ref()
         .expect("ZoneSky.gtf is the dome's reflection map");
     let circuit = oag_mesh::mesh::sky_paraboloid::from_sky(
-        single_race.sky_model.as_ref().expect("the circuit's sky loads"),
+        single_race
+            .sky_model
+            .as_ref()
+            .expect("the circuit's sky loads"),
     )
     .expect("the circuit's cubemap makes a reflection map");
     assert_ne!(reflection.as_slice(), circuit.as_slice());

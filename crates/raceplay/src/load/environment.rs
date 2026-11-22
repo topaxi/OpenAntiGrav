@@ -68,10 +68,7 @@ pub(super) fn hd_sky_model(
     store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
-    let zone_sky = mode
-        .on_zone_mask()
-        .then_some(race.zone_sky)
-        .flatten();
+    let zone_sky = mode.on_zone_mask().then_some(race.zone_sky).flatten();
     let name = match zone_sky {
         Some(zone) => zone.to_string(),
         None => sky_gtf_name(track)?,
