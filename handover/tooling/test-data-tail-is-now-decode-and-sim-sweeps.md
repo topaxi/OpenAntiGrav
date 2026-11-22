@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [all]
 updated: 2026-11-22
-summary: "oag-bytes at opt-level 2 and a per-build gcn scan memo took the slowest test 243 to 48 CPU-s. Open: Omega PSARC re-reads, sim-only load, Pulse-safe ribbon, oag-server rebuild in net tests"
+summary: "Slowest test 243 to 48 CPU-s (oag-bytes opt-level, gcn scan memo). Open: Omega PSARC re-reads, sim-only load, Pulse ribbon, net-test server build"
 difficulty: medium (35)
 ---
 
