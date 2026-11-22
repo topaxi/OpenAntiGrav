@@ -44,6 +44,7 @@ pub(super) fn load(
     team: &str,
     dir: &str,
     mode: Mode,
+    store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<Wreck> {
     let name = entry_name(dir, team, mode);
@@ -56,7 +57,14 @@ pub(super) fn load(
             return None;
         }
     };
-    let mut wreck = match mesh::build_with_textures(&name, &blob, None) {
+    // A PS3 wreck is a `.vex` header over a `.rcsmodel`, as the hull and the shield shell are,
+    // so it takes the layout branch they share ([`shield::shield_model`]).
+    let built = if oag_vex::vex::geometry_is_external(&blob) {
+        shield::shield_model(archives, &name, store).map(|(model, _, _)| model)
+    } else {
+        mesh::build_with_textures(&name, &blob, None).map_err(|error| error.to_string())
+    };
+    let mut wreck = match built {
         Ok(wreck) => wreck,
         Err(error) => {
             report.push(format!(

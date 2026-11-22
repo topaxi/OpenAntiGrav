@@ -202,6 +202,7 @@ pub const TITLE: &Title = &Title {
     photo_shot: Some(oag_title::photo::Accumulation::HD),
     // HD's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
+    destroyed: oag_title::pre_race::Sourced::measured(oag_title::destroyed::DestroyedCraft::HD),
     contact_cues: oag_title::contact_cue::ContactCues::Impulse(
         oag_title::pre_race::Sourced::measured(HD_IMPULSE_LAW),
     ),

@@ -35,6 +35,7 @@ pub mod campaign;
 pub mod contact_cue;
 pub mod craft_laws;
 pub mod demo;
+pub mod destroyed;
 pub mod effects;
 pub mod eliminator;
 pub mod endrace;
@@ -171,6 +172,8 @@ pub struct Title {
     pub weapon_pad_glow: &'static weapon_pad::WeaponPadGlow,
     /// Which of the ways a craft is put back this title has. See [`recovery::ResetEnables`].
     pub reset_enables: recovery::ResetEnables,
+    /// How a destroyed craft's sequence runs. See [`destroyed::DestroyedCraft`].
+    pub destroyed: pre_race::Sourced<destroyed::DestroyedCraft>,
     /// How a craft's contact with the track or another craft is heard. See
     /// [`contact_cue::ContactCues`].
     pub contact_cues: contact_cue::ContactCues,

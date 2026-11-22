@@ -462,6 +462,10 @@ pub const DEATH_SPARKS_EFFECT: &str = "WO_SHIP_DEATH_SPARKS";
 /// The big blast, 1.5 s after the state 5 edge.
 pub const EXPLOSION_EFFECT: &str = "WO_SHIP_EXPLOSION";
 
+/// HD's death plume at the flare anchor, state 5's entry
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 10).
+pub const DEATH_PLUME_EFFECT: &str = "WO_SHIP_DEATH_DAMAGE_PLUME";
+
 /// Pure's big blast at each wreck node.
 pub const BIG_EXPLO_EFFECT: &str = "WO_SHIP_FXNODE_BIGEXPLO";
 

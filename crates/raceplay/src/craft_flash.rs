@@ -87,13 +87,18 @@ impl RaceView {
             let was = std::mem::replace(&mut self.craft_flashes.previous[slot], state);
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
-            if was != CraftState::Destroyed
-                && state == CraftState::Destroyed
-                && let Some(fx) = self.seat_contact_mut(core, slot)
-            {
-                // `Ship_SetState` case 4, the local player's half: it zeroes
-                // the camera's shake duration, cancelling a running one.
-                fx.shake.cancel();
+            let blast_at = core.sim.destroyed.blast_at;
+            if was != CraftState::Destroyed && state == CraftState::Destroyed {
+                if let Some(fx) = self.seat_contact_mut(core, slot) {
+                    // `Ship_SetState` case 4, the local player's half: it zeroes
+                    // the camera's shake duration, cancelling a running one.
+                    fx.shake.cancel();
+                }
+                if blast_at == oag_title::destroyed::BlastAt::Explosion {
+                    // `Ship_PlayDestroyExplosion`, on the entry to state 4.
+                    let model = self.drawn_model(core, slot);
+                    self.throw_wreck_explosion(core, slot, model);
+                }
             }
             if out_of_the_race_now {
                 // Kind 0 falls off with distance from the *active* camera,
@@ -102,8 +107,11 @@ impl RaceView {
                 // this port's own active camera in the same way.
                 self.start_flash(oag_fx::flash::BLAST, position);
                 let model = self.drawn_model(core, slot);
-                self.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
+                if blast_at == oag_title::destroyed::BlastAt::DwellEnd {
+                    self.craft_flashes.blowup[slot] = Some((BLOWUP_DELAY, position, model));
+                }
                 self.throw_wreck_fx(core, slot);
+                self.throw_death_plume(core, slot);
                 // Every mode, the edge that ends a Single Race or a Zone run
                 // included: the finished race steps its cosmetics
                 // ([`Race::tick_cosmetics`]), so the shake decays under the

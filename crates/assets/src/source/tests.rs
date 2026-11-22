@@ -265,6 +265,7 @@ const TITLE: &Title = &Title {
     photo: oag_title::photo::Strings::NONE,
     photo_shot: None,
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
+    destroyed: oag_title::pre_race::Sourced::measured(oag_title::destroyed::DestroyedCraft::PULSE),
     contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
     effects_volume_law: oag_title::pre_race::Sourced::chosen(
         oag_title::group_volume::GroupVolumeLaw::Linear,

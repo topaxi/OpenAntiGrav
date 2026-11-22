@@ -656,7 +656,13 @@ fn one(
             absorb_overlay: None,
             leach_overlay: None,
             shine: None,
-            wreck: None,
+            // The wreck is the hull's own team's, not the Zone craft's: a Zone craft's wreck
+            // is a later row of `ship-destroy.md` (modes 6 and 14).
+            wreck: if ctx.hull_wreck && ctx.mode != Mode::Zone {
+                wreck::load(archives, team, ships.dir, ctx.mode, ctx.store, report)
+            } else {
+                None
+            },
             absorb_shell: {
                 let (absorb_dir, absorb_team) = entry::model_directory_with(
                     archives,
@@ -748,7 +754,7 @@ fn one(
     // which decoder its hull happened to take.
     let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
     let wreck = if ctx.hull_wreck {
-        wreck::load(archives, team, ships.dir, ctx.mode, report)
+        wreck::load(archives, team, ships.dir, ctx.mode, ctx.store, report)
     } else {
         None
     };

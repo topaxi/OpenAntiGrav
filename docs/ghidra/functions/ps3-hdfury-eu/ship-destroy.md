@@ -109,6 +109,33 @@ says "live".
 | 15 | 8, on entry | Timer `0.8` (others) or `1.0` (local); stops `~SHIP_ONFIRE` and `~SHIP_DESTROYED`, frees the emitter | `0x000e254c` | 82 | `0.8`/`1.0` | `0.8`/`1.0` |
 | 16 | 8 -> 1 | `Ship_UpdateResetting`, at `<= 0`: `body+0x4c8 &= ~2`; local plays bank cue `RESET`; **`Ship_SyncActiveModelPointer` puts the hull back**; local HUD node `+0x34 \|= 2`, camera bit `2` cleared; placed at a respawn pose (`+0x62f0 + 0x60 * slot`); `Ship_SetState(ship, 1)`; shield refilled by mode; `+0x6a64 &= ~0x1000` | `0x000e2f48` | 78 | `RESET` in case 3, same timers | `RESET` in case 3 |
 
+### Wired on HD (2026-11-22, `hd-wreck-wire`)
+
+Not run against RPCS3 (see "Measured on RPCS3: not run"): every row below is the static
+reading wired and tested on ours. The data is `oag_title::destroyed::DestroyedCraft::HD`
+(`Title::destroyed`), the effects are HD's `Trigger::WreckExplosion` and `Trigger::WreckPlume`,
+the wreck rule is `Looks::hull_wreck`. 2048 and Omega keep Pulse's sequence until their lane.
+
+| Row | Status on HD | Where |
+| ---: | --- | --- |
+| 1 | wired: `shipwreck.vex` (+ `.rcsmodel`) of the craft's own directory, drawn from state 4; not in Zone (modes 6 and 14, row 12's Zone half) | `oag_livery::wreck`, `scene::wreck::live_model_for` |
+| 2 | wired: `WO_SHIP_EXPLOSION` on entering state 4, `4.0` rows behind the model, no Pulse shockwave | `craft_flash`, `wreck_fx::throw_wreck_explosion` |
+| 3 | **not wired**: the bank cues and `~SHIP_ONFIRE` need HD's authored-mix cue path | open |
+| 4 | not wired (65) | open |
+| 5 | not wired: HD keeps the existing destroy camera until mode 8's view is read (open item 3) | open |
+| 6 | **not wired**: the compound collider and death kick (open items 1 and 2) | open |
+| 7 | not wired | open |
+| 8, 13, 15, 16 | the Eliminator route is the existing Pulse mechanism, unchanged and with Pulse's timers (`raceplay::eliminator`) | open for HD's own timers |
+| 9 | wired: `0.3` s | `DestroyedCraft::explosion_secs` |
+| 10 | wired: `WO_SHIP_DEATH_DAMAGE_PLUME` at the flare anchor (`2.0` along Z once dead) on entering state 5, not in the Eliminator | `damage_fx::throw_death_plume` |
+| 11 | wired: `6.0` s then speed squared under `0.5`, or `20.0` s; the `body+0x210 == 2` half is **not read** and is not tested | `oag_physics::damage::advance_state` |
+| 12 | wired: state 6 is solid to no craft, the body is no longer integrated (opponents; the player's wreck ends the race) and the wreck stays drawn | `solid_to_craft`, `RaceSim::wreck_left_world` |
+| 14 | not wired (65) | open |
+
+Ours' frames (`--race --force-wreck 60:7`, Talon's Junction grid, 1280x720): the hull is charred
+the tick state 4 begins, a white flash covers it for about 0.1 s, a black smoke ball with sparks
+follows, then the scorched wreck lies with a bright plume at its tail.
+
 **Against Pulse.** Pulse swaps to the wreck at state 5, 0.5 s after the blast, throws
 `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` at every wreck locator then, and
 `WO_SHIP_EXPLOSION` 1.5 s later at state 6 ([ship-wreck-model.md](../psp-pulse-usa/ship-wreck-model.md)).

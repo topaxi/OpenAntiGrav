@@ -164,6 +164,9 @@ pub const TITLE: &Title = &Title {
     photo_shot: Some(oag_title::photo::Accumulation::WIPEOUT_2048),
     // 2048's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
+    // HD's `Ship_SetState` twin is read but not wired here (`ship-destroy.md`): Pulse's
+    // sequence runs until this title is wired.
+    destroyed: oag_title::pre_race::Sourced::chosen(oag_title::destroyed::DestroyedCraft::PULSE),
     // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
     // "Lineage"); not switched on, because its race cues are a flat pick.
     contact_cues: oag_title::contact_cue::ContactCues::Rearmed,

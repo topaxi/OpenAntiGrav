@@ -227,8 +227,9 @@ pub struct Options {
     /// the headless way to take the pass out of a frame and so measure what it
     /// adds.
     pub hull_shine: bool,
-    /// Whether each Pulse craft's `shipwreck.vex` is loaded and swapped in once
-    /// the craft is out of the race. `false` is `--no-hull-wreck`.
+    /// Whether each craft's `shipwreck.vex` is loaded and swapped in once the title's
+    /// destroyed sequence reaches it (`oag_title::destroyed::WreckFrom`). `false` is
+    /// `--no-hull-wreck`.
     pub hull_wreck: bool,
     /// Whether a Pulse circuit's own extra pass is drawn: its `*_shinemap`
     /// batches under their chrome map. `false` is `--no-track-shine`.
@@ -647,6 +648,10 @@ pub struct SimSetup {
     /// `oag_title::RaceDefaults::opponent_autopilot` at the race's class
     /// (`RaceSim::set_opponent_autopilot` overrides it).
     pub opponent_autopilot: bool,
+    /// How a destroyed craft's sequence runs, `oag_title::Title::destroyed`. The explosion,
+    /// dwell and settle timers reach every craft's physics; whether a wreck leaves the world
+    /// reads here.
+    pub destroyed: oag_title::destroyed::DestroyedCraft,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// When a locked LeachBeam moves energy,

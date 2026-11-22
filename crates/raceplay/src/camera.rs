@@ -365,7 +365,7 @@ impl Race {
 #[cfg(feature = "view")]
 impl RaceSim {
     /// Puts the craft in `slot` into the destroyed sequence, for
-    /// `--force-wreck`: state 4 with its half second, which is what
+    /// `--force-wreck`: state 4 with its explosion timer, which is what
     /// `Ship_Damage`'s depletion does (`oag_physics::damage`), so the
     /// `Destroyed` to `Eliminated` edge and everything keyed on it run as they
     /// do in a race. A verification aid and nothing else; a slot that is not
