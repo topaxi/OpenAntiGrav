@@ -220,6 +220,29 @@ per tick.
    `param_7`; or live: an RPCS3 breakpoint on `MineManager_DestroyAtLane` (`0x0011a590`) after an
    EMP fire, logging the section index against the craft's `ship+0x6284`.
 
+## Wired (2026-11-22)
+
+`oag_weapons::detonator::emp` holds the law; `oag_raceplay::detonator::advance_emp` runs it once a
+tick after the cannon; the pad arms are in `oag_raceplay::pads`.
+
+| Piece | Where | Note |
+| --- | --- | --- |
+| Speed pad | `Race::test_speedup_pads` | no force, no `pad_timer`, no plume or `SPEEDUPPAD`; the entry edge raises `Emp::pending` and plays `WEAPONPICKUP` (`Cue::WeaponPickup`) |
+| Weapon pad | `SimRace::test_weapon_pads` | no grant; one charge per pad held in `Emp::weapon_pad`, cleared on every forward crossing (`player_step`); not while this project's autopilot flies the craft (it stands in for the original's Autopilot bit, **chosen**) |
+| Charge, gauge, cues | `emp::step_charge`, `emp::gauge` | the literal law in `f32` (exact on every integer charge the HUD reaches); `Cue::EmpReady`/`EmpFull` loaded from `oag_title::DetonatorVoices` (HD `speech_det.bnk`, the one speech bank that names them) |
+| Fire | `emp::fire` | `Button::Flip` (the pad's L1) as a press edge, **chosen**; gated as the cannon is (a person flying, past the countdown); the charge resets even while a wave runs |
+| Wave | `emp::step_wave` | forward from the craft's nearest survey entry, `extent * SECTIONS_PER_EXTENT` (40, **chosen**) entries over `wave_time`; `<Emp>` scores; mines counted into the destroyed count; a bomb chains nothing; no effect or sound on the kill (both unread) |
+| HUD | `oag_hud::detonator` | `Emp_0..7` while the charge is over `i`, `EmpReady` at `lo`; `EmpBarEffect` not drawn (an `<ImageModel>`) |
+| Titles | `oag_title::Detonator::pads` | HD measured; Omega the speed pad measured, the weapon pad inherited from HD; 2048 `false` (its pads keep boost and pickup, so its EMP never charges) |
+
+Tests: `crates/weapons/src/detonator/emp/tests.rs` (the live gauge table for `n = 0..39`, the
+literal law, the cue edges, fire, the wave's `+25`/`+50`/`+1000`),
+`crates/gameplay/src/hash.rs` (`the_emp_moves_the_hash_only_where_detonator_armed_it`), and
+`crates/raceplay/tests/detonator_ground_truth.rs`: a lap's speed-pad entries each add one charge
+and leave `pad_timer` at `0` (five on the default circuit), a full EMP fired from a stand clears
+11 mines for `275` dark and `550` live, and the three cues decode on HD. The HUD pips are in
+`detonator_hud_ground_truth.rs`.
+
 ## Open
 
 - The wave's reach and speed (above), and whether it hurts the player.

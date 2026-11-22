@@ -145,6 +145,20 @@ the start needs `cross` pressed until `craft+0x264 & 2` clears (the walk returns
 team-launch transition, before the race takes a press). Confidence of the target law with this:
 **85**.
 
+## Wired (2026-11-22)
+
+Every `Mode::on_zone_mask` mode loads `<Zone>` (`load/global.rs`); in Detonator
+`RaceSim::detonator_auto_speed` replaces Zone's count with `n = 0` on stage 1, else the stage
+(capped 14), and multiplies by the ramp (`emp::step_ramp`, stored in `World::detonator.ramp`,
+stepped once a tick for the player craft, zeroed in `Race::put_back`). The engine's existing
+auto-speed branch (`oag_physics::engine`) supplies the gate and the tail. The ramp's
+`r + dt * k` is a multiply then an add here, where the original fuses it.
+
+Checked on HD (`detonator_ground_truth.rs`): with no input the craft is at `8.8` units/s at GO
+and tops `112` within 4 s before an unsteered craft meets a wall, the same curve as this build's
+Zone; the target reads `34` on stage 1 and `34 + 4.4 n` on stages 2, 3, 9 and 14. This build's Zone
+runs without the ramp on every title, HD's included (see "Open").
+
 ## Open
 
 - A player-input speed curve on a clean lap, to compare against our engine once wired (the run above coasted into a wall 4 s after GO).
