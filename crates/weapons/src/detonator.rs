@@ -7,7 +7,8 @@
 //! circuit; [`place_stage`] picks groups from the layout's patterns and lays objects into a
 //! [`Field`], which lives in the world.
 //!
-//! **Inert.** Nothing here moves, goes off or hurts: this lays objects and counts them.
+//! [`step_contacts`] is what a craft meeting one costs it
+//! (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, `detonator-bomb.md`).
 //!
 //! # What is ours
 //!
@@ -15,8 +16,12 @@
 //!   not reproduced), in the original's order: one per group attempt, two per top-up or bomb
 //!   attempt.
 //! - **A lane's occupancy is derived from the live objects** instead of kept as a second array:
-//!   the original writes the lane marker on a spawn and the objects never leave in this build,
-//!   so the two agree.
+//!   the original writes the lane marker on a spawn and clears it when the object goes, so the
+//!   two agree. The original frees a mine's lane only if the mine is in some view's PVS when it
+//!   goes off; here it is always freed.
+//! - **A mine leaves on the tick of contact**, the original's next tick; and the 0.5 s grace
+//!   a fresh object gives its owner is not modelled: nothing is laid within 150 entries of the
+//!   player (the start zone), so no craft can be on a mine that young.
 //! - **The bomb pool holds two**, the capacity `BombManager` reserves in Detonator
 //!   (`detonator-placement.md`, "Pools"); the original's spawn checks no capacity, so a third
 //!   live bomb is refused here rather than written past the pool.
@@ -173,6 +178,9 @@ pub fn place_stage(
     old_stage: u32,
 ) {
     field.stages_laid = u8::try_from(old_stage + 1).unwrap_or(u8::MAX);
+    // `BombManager_DetonateAll`: the stage step sets off every live bomb harmlessly before the
+    // new one is laid (`detonator-bomb.md`, "One bomb at a time").
+    field.live_bombs = 0;
     let total = survey.entries.len();
     let Some(count) = layout.values.mine_count(old_stage as usize + 1) else {
         return;
@@ -387,3 +395,176 @@ fn spawn(
 
 #[cfg(test)]
 mod tests;
+
+/// What a mine costs a craft that touches it, from the Detonator weapon table's Mine block.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct MineContact {
+    /// `trigger_radius`: the sphere about the mine that sets it off.
+    pub trigger_radius: f32,
+    /// `blastradius`: the craft must be inside it for the blast to land.
+    pub blast_radius: f32,
+    /// `damage`: energy lost.
+    pub damage: f32,
+    /// `slowdown_time`: seconds of slowdown credited.
+    pub slowdown_time: f32,
+    /// `blastforce`: the push at the centre.
+    pub blast_force: f32,
+    /// `velocity_reduction`: the factor the craft's velocity is multiplied by, once.
+    pub velocity_reduction: f32,
+}
+
+/// What a bomb costs, from the Bomb block.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct BombContact {
+    /// `trigger_radius`.
+    pub trigger_radius: f32,
+    /// `blastradius`: every craft inside it is pushed.
+    pub blast_radius: f32,
+    /// `damage`: energy lost by the craft that touched it, and by no other.
+    pub damage: f32,
+    /// `blastforce`: the push at the centre.
+    pub blast_force: f32,
+}
+
+/// Both halves, or `None` where the table authors no Mine or no Bomb.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Contact {
+    /// The mine's.
+    pub mine: MineContact,
+    /// The bomb's.
+    pub bomb: BombContact,
+}
+
+impl Contact {
+    /// Reads both blocks of a Detonator weapon table.
+    #[must_use]
+    pub fn from_stats(stats: &oag_tables::weapons::WeaponStats) -> Option<Self> {
+        let mine = stats.mine()?;
+        let bomb = stats.bomb()?;
+        let reduction = stats.detonator().and_then(|d| d.mine.velocity_reduction);
+        Some(Self {
+            mine: MineContact {
+                trigger_radius: mine.trigger_radius,
+                blast_radius: mine.blastradius,
+                damage: mine.damage,
+                slowdown_time: mine.slowdown_time,
+                blast_force: mine.blastforce,
+                velocity_reduction: reduction.unwrap_or(1.0),
+            },
+            bomb: BombContact {
+                trigger_radius: bomb.trigger_radius,
+                blast_radius: bomb.blastradius,
+                damage: bomb.damage,
+                blast_force: bomb.blastforce,
+            },
+        })
+    }
+}
+
+/// What went off this tick, for the effects and sounds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Went {
+    /// A bomb, else a mine.
+    pub bomb: bool,
+    /// Where.
+    pub at: Vec3,
+    /// The craft slot that touched it.
+    pub slot: usize,
+}
+
+/// Sets off every mine and bomb a craft is touching, and removes them.
+///
+/// `MineManager_TestCraftContacts` and `BombManager_TestCraftContacts`: a sphere test on the
+/// craft's position; a mine costs the toucher its `damage`, `slowdown_time` and one
+/// `velocity_reduction` of its velocity, a bomb its `damage` and a push on every craft inside
+/// its blast radius (the push law is the weapons' own, [`oag_physics::wall::post_blast_impulse`]).
+/// Damage goes through [`oag_physics::damage::apply_weapon`], the same gate every weapon hit
+/// takes. `lane_width` is `DistanceOffsetBetweenMines`.
+pub fn step_contacts<S: crate::Craft>(
+    field: &mut Field,
+    survey: &Survey,
+    lane_width: f32,
+    contact: &Contact,
+    ships: &mut [S],
+    rules: oag_physics::DamageRules,
+) -> Vec<Went> {
+    let mut went = Vec::new();
+
+    let mut i = 0;
+    while i < usize::from(field.live_mines) {
+        let Some((at, _)) = survey.point(&field.mines[i], lane_width) else {
+            i += 1;
+            continue;
+        };
+        let toucher = ships.iter().position(|s| {
+            s.active() && (s.physics().body.position - at).length() < contact.mine.trigger_radius
+        });
+        let Some(slot) = toucher else {
+            i += 1;
+            continue;
+        };
+        let mine = contact.mine;
+        let ship = &mut ships[slot];
+        if (ship.physics().body.position - at).length() < mine.blast_radius {
+            *ship.pending_slowdown_mut() += mine.slowdown_time;
+            let dimensions = ship.dimensions();
+            oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, mine.damage, rules);
+            oag_physics::wall::post_blast_impulse(
+                ship.physics_mut(),
+                at,
+                mine.blast_radius,
+                mine.blast_force,
+            );
+            ship.physics_mut().body.linear_velocity *= mine.velocity_reduction;
+        }
+        went.push(Went {
+            bomb: false,
+            at,
+            slot,
+        });
+        let last = usize::from(field.live_mines) - 1;
+        field.mines[i] = field.mines[last];
+        field.live_mines -= 1;
+    }
+
+    let mut i = 0;
+    while i < usize::from(field.live_bombs) {
+        let Some((at, _)) = survey.point(&field.bombs[i], lane_width) else {
+            i += 1;
+            continue;
+        };
+        let bomb = contact.bomb;
+        let toucher = ships.iter().position(|s| {
+            s.active() && (s.physics().body.position - at).length() < bomb.trigger_radius
+        });
+        let Some(slot) = toucher else {
+            i += 1;
+            continue;
+        };
+        {
+            let ship = &mut ships[slot];
+            let dimensions = ship.dimensions();
+            oag_physics::damage::apply_weapon(ship.physics_mut(), &dimensions, bomb.damage, rules);
+        }
+        for ship in ships.iter_mut().filter(|s| s.active()) {
+            let reach = (ship.physics().body.position - at).length();
+            if reach < bomb.blast_radius {
+                oag_physics::wall::post_blast_impulse(
+                    ship.physics_mut(),
+                    at,
+                    bomb.blast_radius,
+                    bomb.blast_force,
+                );
+            }
+        }
+        went.push(Went {
+            bomb: true,
+            at,
+            slot,
+        });
+        let last = usize::from(field.live_bombs) - 1;
+        field.bombs[i] = field.bombs[last];
+        field.live_bombs -= 1;
+    }
+    went
+}

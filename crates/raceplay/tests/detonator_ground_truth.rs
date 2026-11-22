@@ -29,6 +29,20 @@ fn load() -> Option<race::Loaded> {
     )
 }
 
+/// The autopilot flies the racing line through the mines and does not dodge; a test about the
+/// stage counter keeps it alive so it reaches the lines.
+fn keep_alive(race: &mut race::Race) {
+    let ship = &mut race.core.sim.world.ships[0];
+    ship.physics.shield = ship.handling.dimensions.shield;
+}
+
+/// [`keep_alive`], and the field swept clear so the craft is not slowed by every mine on the
+/// line (each costs half its speed): a player dodges, the autopilot does not.
+fn dodge(race: &mut race::Race) {
+    keep_alive(race);
+    race.core.sim.world.detonator.live_mines = 0;
+}
+
 /// The load takes Detonator's own grade table, opens on stage `1`, and fields nobody else.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
@@ -82,6 +96,7 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
     // Fourteen laps of an HD circuit at Venom are well under ten minutes of race.
     for _ in 0..60 * 60 * 10 {
         race.tick(&PlayerInputs::none());
+        dodge(&mut race);
         let now = stage(&race);
         if now != *seen.last().expect("one stage at least") {
             shield_per_lap.push(race.core.sim.world.ships[LONE].physics.shield);
@@ -234,6 +249,7 @@ fn an_hd_detonator_race_lays_its_mines_and_steps_the_total_a_stage() {
         first.live_mines
     );
     assert!(first.live_bombs <= 1);
+    let laid = first.live_mines;
     let mut seen = std::collections::BTreeSet::new();
     assert!(
         first
@@ -249,20 +265,62 @@ fn an_hd_detonator_race_lays_its_mines_and_steps_the_total_a_stage() {
 
     for _ in 0..60 * 60 * 3 {
         race.tick(&PlayerInputs::none());
+        keep_alive(&mut race);
         if race.core.sim.world.detonator.stages_laid >= 2 {
             break;
         }
     }
     let second = race.core.sim.world.detonator;
     assert_eq!(second.stages_laid, 2, "the first crossing lays stage 2");
-    assert!(
-        second.live_mines >= first.live_mines,
-        "mines stay until something removes them"
-    );
     assert!(second.live_mines <= 90);
-    assert_eq!(
-        second.live_mines()[..usize::from(first.live_mines)],
-        first.live_mines()[..],
-        "the first stage's mines did not move"
+    assert!(
+        second.live_mines >= laid.min(first.live_mines) / 2,
+        "the top-up refills toward the stage's count"
+    );
+}
+
+/// **A mine bites.** A craft set on a laid mine loses the Mine's `damage` (10, the Detonator
+/// table's) and half its speed, and the mine is gone; mines keep costing until the craft is
+/// destroyed, and the race is then over.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_mine_costs_energy_and_destruction_ends_the_race() {
+    const LONE: usize = 0;
+    let Some(loaded) = load() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&PlayerInputs::none());
+    let before = race.core.sim.world.detonator.live_mines;
+    assert!(before > 0, "stage 1 laid mines");
+
+    let at = race.core.sim.detonator_mine_position(0).expect("a mine");
+    let ship = &mut race.core.sim.world.ships[LONE].physics;
+    let energy = ship.shield;
+    ship.body.position = at;
+    ship.body.linear_velocity = oag_core::math::Vec3::new(0.0, 0.0, 100.0);
+    race.tick(&PlayerInputs::none());
+
+    let after = &race.core.sim.world.ships[LONE].physics;
+    assert_eq!(race.core.sim.world.detonator.live_mines, before - 1);
+    assert!(
+        (energy - after.shield - 10.0).abs() < 1e-3,
+        "{energy} -> {}",
+        after.shield
+    );
+
+    for _ in 0..200 {
+        let Some(at) = race.core.sim.detonator_mine_position(0) else {
+            break;
+        };
+        race.core.sim.world.ships[LONE].physics.body.position = at;
+        race.tick(&PlayerInputs::none());
+        if race.core.sim.world.race[LONE].finished {
+            break;
+        }
+    }
+    assert!(
+        race.core.sim.world.race[LONE].finished,
+        "a destroyed craft ends the race"
     );
 }

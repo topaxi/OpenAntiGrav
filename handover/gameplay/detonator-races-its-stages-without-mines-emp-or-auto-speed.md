@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator Mode races 14 stages; placement inert; mine/bomb contact and out-of-race read, not wired; EMP, cannon, score, auto-speed unread"
+summary: "Detonator Mode races 14 stages with mines and bombs that bite and can end the race; effects, EMP, cannon, score, auto-speed open"
 categories: [rendering]
 ---
 
@@ -15,13 +15,14 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 ## Open
 
-- **Layout files decoded and placement wired, inert** (`oag_tables::detonator_layout`,
+- **Layout files decoded, placement and contact wired** (`oag_tables::detonator_layout`,
   `oag_weapons::detonator`, `oag_raceplay::detonator`): HD races lay their mines and bombs per
-  stage and draw them with the ordinary Mine and Bomb models. Open: wiring the contact law
-  (next bullet), the Detonator-specific models, the survey's collision return codes (probes are
+  stage and draw them with the ordinary Mine and Bomb models. Contact is wired
+  (`oag_weapons::detonator::step_contacts`: damage, velocity cut, bomb push, removal, destroyed
+  craft ends the race); the explosion effects and sounds, the Detonator-specific models, the survey's collision return codes (probes are
   chosen).
 
-- **Contact, blast and destruction: read, not wired** (2026-11-22,
+- **Contact, blast and destruction: read, wired in sim, not in effects** (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md` and `detonator-bomb.md`, HD static,
   confidence 72-82 per law). Mine: sphere `trigger_radius` 3, player immune for 0.5 s after
   laying, damage 10 (halved when the weapons flag is off, 60), velocity x0.5 once, no push, never

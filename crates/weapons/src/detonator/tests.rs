@@ -156,3 +156,115 @@ fn an_empty_field_says_so() {
     assert!(Field::new().is_empty());
     assert!(!laid(1, 1).is_empty());
 }
+
+mod contact {
+    use super::*;
+    use crate::test_craft::Ship;
+
+    fn contact() -> Contact {
+        Contact {
+            mine: MineContact {
+                trigger_radius: 3.0,
+                blast_radius: 30.0,
+                damage: 10.0,
+                slowdown_time: 0.0,
+                blast_force: 0.0,
+                velocity_reduction: 0.5,
+            },
+            bomb: BombContact {
+                trigger_radius: 6.0,
+                blast_radius: 40.0,
+                damage: 20.0,
+                blast_force: 30.0,
+            },
+        }
+    }
+
+    fn field_with(mine: bool) -> Field {
+        let mut field = Field::new();
+        let at = Placed { entry: 20, lane: 0 };
+        if mine {
+            field.mines[0] = at;
+            field.live_mines = 1;
+        } else {
+            field.bombs[0] = at;
+            field.live_bombs = 1;
+        }
+        field
+    }
+
+    fn craft_at(z: f32) -> Ship {
+        let mut ship = Ship {
+            active: true,
+            ..Ship::default()
+        };
+        ship.physics.body.position = Vec3::new(0.0, 0.0, z);
+        ship.physics.body.linear_velocity = Vec3::new(0.0, 0.0, 100.0);
+        ship.physics.shield = 100.0;
+        ship.handling.dimensions.shield = 100.0;
+        ship.physics.craft_state = oag_physics::CraftState::Racing;
+        ship
+    }
+
+    fn rules() -> oag_physics::DamageRules {
+        oag_physics::DamageRules {
+            weapons: true,
+            ..oag_physics::DamageRules::default()
+        }
+    }
+
+    #[test]
+    fn a_mine_costs_ten_energy_halves_the_velocity_and_is_gone() {
+        let survey = lap(300, 7);
+        let mut field = field_with(true);
+        let mut ships = [craft_at(201.0)];
+        let went = step_contacts(&mut field, &survey, 3.5, &contact(), &mut ships, rules());
+        assert_eq!(went.len(), 1);
+        assert!(!went[0].bomb);
+        assert_eq!(field.live_mines, 0);
+        assert!((ships[0].physics.shield - 90.0).abs() < 1e-4);
+        assert_eq!(ships[0].physics.body.linear_velocity.z, 50.0);
+    }
+
+    #[test]
+    fn a_craft_outside_the_trigger_sphere_touches_nothing() {
+        let survey = lap(300, 7);
+        let mut field = field_with(true);
+        let mut ships = [craft_at(204.0)];
+        let went = step_contacts(&mut field, &survey, 3.5, &contact(), &mut ships, rules());
+        assert!(went.is_empty());
+        assert_eq!(field.live_mines, 1);
+        assert_eq!(ships[0].physics.shield, 100.0);
+    }
+
+    #[test]
+    fn a_bomb_hurts_the_toucher_alone_and_pushes_the_craft_in_reach() {
+        let survey = lap(300, 7);
+        let mut field = field_with(false);
+        let mut ships = [craft_at(203.0), craft_at(215.0)];
+        let went = step_contacts(&mut field, &survey, 3.5, &contact(), &mut ships, rules());
+        assert_eq!(went.len(), 1);
+        assert!(went[0].bomb);
+        assert_eq!(field.live_bombs, 0);
+        assert!((ships[0].physics.shield - 80.0).abs() < 1e-4);
+        assert_eq!(ships[1].physics.shield, 100.0);
+        assert_eq!(
+            ships[0].physics.body.linear_velocity.z, 100.0,
+            "a bomb cuts no velocity"
+        );
+        assert!(ships[1].physics.pending_impulse.length() > 0.0);
+    }
+
+    #[test]
+    fn a_stage_step_sets_off_the_old_bomb_without_a_hit() {
+        let mut field = field_with(false);
+        let survey = lap(300, 7);
+        let mut rng = Rng::new(1);
+        place_stage(&mut field, &survey, &layout(), &mut rng, 1);
+        assert!(field.live_bombs <= 1);
+        assert!(
+            field.live_bombs == 0 || field.bombs[0] != (Placed { entry: 20, lane: 0 }),
+            "the stage-1 bomb is gone"
+        );
+    }
+}

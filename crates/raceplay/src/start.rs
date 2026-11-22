@@ -637,6 +637,9 @@ impl Race {
                     &layout.values,
                 )),
                 layout: Arc::new(layout),
+                contact: weapons
+                    .as_ref()
+                    .and_then(oag_weapons::detonator::Contact::from_stats),
             }
         });
         let race = Self {
@@ -787,6 +790,7 @@ impl Race {
                     },
                     weapon_ai: weapon_ai.map(Arc::new),
                     detonator,
+                    detonator_went: Vec::new(),
                     weapons: weapons.map(Arc::new),
                     allowed_weapons: allowed_weapons.into(),
                     class: class.into(),

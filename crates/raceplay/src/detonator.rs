@@ -32,6 +32,9 @@ use crate::spline::Spline;
 pub(crate) struct Detonator {
     pub(crate) layout: Arc<Layout>,
     pub(crate) survey: Arc<Survey>,
+    /// What a mine or a bomb costs a craft, from the Detonator weapon table; `None` where the
+    /// table did not load, and then they are laid and harmless.
+    pub(crate) contact: Option<oag_weapons::detonator::Contact>,
 }
 
 /// How far above a section the probes start and how far below they reach.
@@ -163,6 +166,15 @@ fn blank_jumps(entries: &mut [Measured], steps: i32) {
 }
 
 impl crate::sim::RaceSim {
+    /// Where laid mine `index` sits, for tests that stand a craft on it.
+    #[must_use]
+    pub fn detonator_mine_position(&self, index: usize) -> Option<Vec3> {
+        let detonator = self.detonator.as_ref()?;
+        let mine = self.world.detonator.live_mines().get(index)?;
+        let lane = detonator.layout.values.distance_offset_between_mines;
+        detonator.survey.point(mine, lane).map(|(at, _)| at)
+    }
+
     /// Lays the stages the player has reached: the opening one on the first tick, then one per
     /// lap, up to the fourteenth (`Detonator_UpdateRace` places while the new stage is at most
     /// `14`). Nothing happens off Detonator.
@@ -171,6 +183,26 @@ impl crate::sim::RaceSim {
             return;
         };
         let world = &mut self.world;
+        if let Some(contact) = &detonator.contact {
+            // **Chosen, not measured:** weapons-on damage rules. The original halves every hit
+            // while `g_GameState+0x18` is clear, a byte read here as the weapons switch at
+            // confidence 60, and Detonator's campaign cells author `Weapons="on"`
+            // (`detonator-mine.md`, "Damage").
+            let rules = oag_physics::DamageRules {
+                weapons: true,
+                ..oag_gameplay::damage_rules(world.mode())
+            };
+            let count = usize::from(world.ship_count);
+            let lane_width = detonator.layout.values.distance_offset_between_mines;
+            self.detonator_went = oag_weapons::detonator::step_contacts(
+                &mut world.detonator,
+                &detonator.survey,
+                lane_width,
+                contact,
+                &mut world.ships[..count],
+                rules,
+            );
+        }
         let laps = world.race[world.primary_slot()].laps_completed();
         let stage = oag_race::Mode::detonator_stage(laps).min(STAGES_LAID);
         while u32::from(world.detonator.stages_laid) < stage {

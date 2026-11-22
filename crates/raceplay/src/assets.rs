@@ -834,7 +834,13 @@ pub(super) fn load_weapons(
     mode: Mode,
     report: &mut Vec<String>,
 ) -> Option<oag_tables::weapons::WeaponStats> {
-    let entry = if mode == Mode::Eliminator {
+    let entry = if mode == Mode::Detonator
+        && let Some(entry) = title.weapons.detonator
+    {
+        // Detonator reads its own table: the Mine and Bomb there carry its trigger radii and
+        // damage, and the Cannon block its recharge.
+        entry
+    } else if mode == Mode::Eliminator {
         match title.weapons.elimination {
             Some(entry) => entry,
             None => {

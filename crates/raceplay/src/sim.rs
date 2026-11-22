@@ -559,6 +559,9 @@ pub struct RaceSim {
     /// Detonator's layout files and the lap's survey, `None` off Detonator - see
     /// [`SimSetup::detonator`] and [`crate::detonator`].
     pub(super) detonator: Option<crate::detonator::Detonator>,
+    /// What went off in Detonator's last tick, for the effects and sounds. Output, never read
+    /// back by the simulation.
+    pub(super) detonator_went: Vec<oag_weapons::detonator::Went>,
     /// This race's weapon table - see [`SimSetup::weapons`].
     pub(super) weapons: Option<Arc<oag_tables::weapons::WeaponStats>>,
     /// Restricts what a `Weapon Pad` hands out - see
