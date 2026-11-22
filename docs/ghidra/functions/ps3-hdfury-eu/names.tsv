@@ -1034,3 +1034,10 @@
 0x006cf358	function	TrackReflect_RenderJob	85	track-reflect.md
 0x006ce6e0	function	TrackRefract_RenderJob	75	track-reflect.md
 0x00403a30	function	TrackReflect_DrawList	72	track-reflect.md
+# 2026-11-22 detonator-placement: the stage placer, its spawn and the two DetonatorLayouts loaders (detonator-placement.md)
+0x000654e0	function	Detonator_PlaceStageObjects	80	detonator-placement.md
+0x00064f70	function	Detonator_SpawnObject	78	detonator-placement.md
+0x00063510	function	Detonator_LoadPatternFile	85	detonator-placement.md
+0x00063dc0	function	Detonator_LoadGamePlayValues	85	detonator-placement.md
+0x00066c60	function	Detonator_PlaceOpeningStage	72	detonator-placement.md
+0x008c1478	data	g_DetonatorGamePlayValues	80	detonator-placement.md

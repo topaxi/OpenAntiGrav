@@ -1,8 +1,8 @@
 ---
 status: re-first
 titles: [hd, 2048, omega]
-updated: 2026-11-13
-summary: "Detonator is a Mode (stage = lap, grade, 0.7 camera, board); mines, EMP, cannon, score, auto-speed unread; Zone Battle and 2048 Combat rules unread"
+updated: 2026-11-22
+summary: "Detonator is a Mode (stage = lap, grade, camera, board); mine placement read, not wired; EMP, cannon, score, auto-speed, Zone Battle unread"
 categories: [rendering]
 ---
 
@@ -24,16 +24,23 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
   "Detonator's attributes"). Nothing in a race reads it; each field's meaning waits for the
   law that spends it.
 
-- **Mines and bombs.** `FUN_000654e0(rm, oldStage)` (HD) places a stage's objects; Ghidra
-  truncates it on bad instruction data. Read from the disassembly (`scripts/ps3-dform-scan.py`
-  helps where the body is cut short): the pattern records at `rm+0x2e30` (stride `0xd60`,
-  minimum stage at `+0x3b80`), where they are loaded from (a per-track file? `detonator.points2`
-  is a front-end file), the per-stage count table (`+0x14 + stage*4` off a global), and
-  `FUN_00064f70` (spawn). 2048: `FUN_8117cf22`; Omega: `FUN_012a2300`, which Omega also calls
-  once at race start. Models: `data/Weapons/detonator_bomb_final_equalisers.rcsmodel` (2048),
-  `DetonatorBomb.cpp` / `NormalBomb.cpp` items under `BombManager`; effects
-  `WO_BOMB_EXPLO_DETONATOR`, `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR`
-  (2048 `data2.psarc`). Their triggers need the placement and the hit read first.
+- **Mines and bombs: the placement law is read, nothing is wired.**
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md` (HD, confidence 70-88 per piece;
+  Omega read line by line, 2048 structurally: both "checked, applies, not wired"). The data is
+  two global files, not per-track: `/data/xml/DetonatorLayouts/PatternFile.xml` (18 `Pattern`
+  groups of `ClusterN` rows) and `GamePlayValues.xml` (`MineCountStage1..14` = 80..200, lane
+  width 3.5, the 20-section jump blackout); same content on all three titles. The per-track
+  `%s.xml` path is formatted and never read. Phase 4 needs a reader for both (`oag-tables`,
+  generic XML) and `oag_title::Detonator` entry names; Phase 5 the `DetonatorField` (200-mine
+  pool) and the placer on the seeded `Rng`. Still unread: the collision return codes the lap
+  survey tests (`0/2/4/5/127`; a stand-in "lane free when the downward probe hits track" is
+  needed and must say so), the route-fork walk, what the mine/bomb inits do with the matrix and
+  `sec+0x40`/`+0x60`, how a mine or bomb leaves its pool (the bomb pool is 2 and the spawn does
+  not check it), `0x0012ae38`/`0x0012ae10`/mine vslot `+0x3c`. Models:
+  `data/Weapons/detonator_bomb_final_equalisers.rcsmodel` (2048), `DetonatorMine` (368 bytes,
+  `0x0013a7d8`) and `DetonatorBomb` objects; effects `WO_BOMB_EXPLO_DETONATOR`,
+  `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
+  triggers need the hit read first.
 - **Pulse cannon and EMP.** The EMP gauge law is read (page, "What `Detonator_UpdateRace`
   does that is not wired"); the EMP pads (`data/New_Mode_Pads/Detonator_Pad`, 2048), the
   charge flag's writer (`craft+0x6a64 & 0x8000000`), the cannon, its reload (circle) and
@@ -84,9 +91,9 @@ not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on
 
 ## Next Steps
 
-1. Read `FUN_000654e0` and `FUN_00064f70` from the disassembly; write the placement law on
-   `detonator-mode.md`.
-2. Read the DetonatorBomb update and the cannon hit, then wire mines as world objects
-   (seeded `Rng` for the pattern draw) with their disc models and effects.
+1. Phase 4: read `PatternFile.xml` and `GamePlayValues.xml` (census on HD `DATA00`, 2048
+   `data.psarc`, Omega `data00.psarc`), name them on `oag_title::Detonator`.
+2. Phase 5: the lap survey, `DetonatorField` and the placer from `detonator-placement.md`, drawn
+   inert. Before the hit: read the mine/bomb update, how either leaves its pool, and the cannon.
 3. Read Detonator's engine branch for the auto-speed law.
 4. Zone Battle: the read recipe above.

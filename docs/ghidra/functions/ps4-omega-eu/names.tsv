@@ -250,3 +250,6 @@
 
 # 2026-11-19 zone-hud-gate: Zone's HUD gate at the start (hud-start-gate.md)
 0x012b3400	function	SPZoneRaceManager_Update	80	hud-start-gate.md
+# 2026-11-22 detonator-placement: HD's placer, read line by line (detonator-placement.md)
+0x012a2300	function	Detonator_PlaceStageObjects	75	detonator-placement.md
+0x012a3aa0	function	Detonator_SpawnObject	70	detonator-placement.md

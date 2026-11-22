@@ -1504,8 +1504,9 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
   inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
-- **Not here, each named on the evidence page**: the mines and bombs (placed per stage by
-  `FUN_000654e0`), the pulse cannon, the EMP and its pads, the score and the end-of-run
+- **Not here, each named on the evidence page**: the mines and bombs (the placement law is
+  read, [detonator-placement.md](../ghidra/functions/ps3-hdfury-eu/detonator-placement.md),
+  not wired), the pulse cannon, the EMP and its pads, the score and the end-of-run
   percentage, the out-of-race ending, the "automatic and ever-increasing" acceleration the
   manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
   draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).
