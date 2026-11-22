@@ -39,7 +39,10 @@ pub(super) fn per_slot(
             let ships = title.race.ships_for(team);
             let name = ships.hull_entry_name(
                 team,
-                oag_livery::entry::own_craft(ships, options.mode),
+                ships.own_craft(
+                    options.mode == oag_race::Mode::Zone,
+                    options.mode == oag_race::Mode::Detonator,
+                ),
                 circuit_hull.or(variant),
             );
             match archives.read_name(&name) {
