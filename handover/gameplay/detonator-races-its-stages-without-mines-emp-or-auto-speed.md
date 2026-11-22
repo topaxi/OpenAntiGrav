@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign, EMP and auto-speed wired; end screen open"
+summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign, EMP, auto-speed and the HD end screen wired; new-record banner, 2048 and Omega end screens open"
 categories: [rendering]
 ---
 
@@ -19,7 +19,7 @@ evidence), then start at "Next Steps".
 | # | Phase | Status | Commit |
 | ---: | --- | --- | --- |
 | 1 | Decode the Detonator-only weapon-table attributes (`WeaponStats::detonator()`, `oag_title::Weapons::detonator`) | done | `8f008cf7b` |
-| 2 | End-screen headline `ER_ZDETONATOR_COM` (`Headline::Detonator`; draws on 2048/Omega, nothing on HD: no HD archive has the id) | done | `d890b438a` |
+| 2 | End-screen headline `ER_ZDETONATOR_COM` (`Headline::Detonator`; the id is in `DATA06`'s table on HD, filled into the served table at boot) | done | `d890b438a`, `det-end` |
 | 3 | RE: stage placement of mines and bombs (`detonator-placement.md`) | done | `543e8953b` |
 | 4 | Read `PatternFile.xml` / `GamePlayValues.xml` (`oag_tables::detonator_layout`, `oag_title::DetonatorLayouts`, `docs/formats/detonator-layouts.md`) | done | `8a6918978` |
 | 5 | Place mines and bombs (`oag_weapons::detonator::place_stage`, `World::detonator`, `oag_raceplay::detonator`, drawn with the ordinary Mine/Bomb models) | done | `dbb59fd37` |
@@ -32,7 +32,7 @@ evidence), then start at "Next Steps".
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads unread, so its EMP never charges | `det-emp-wire` |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; open: `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback and the medal models (below) | |
-| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | RE done (`detonator-endrace.md`), ready to wire: the bullet under "Phases 10-15" maps each row onto main | |
+| 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
 
@@ -219,51 +219,31 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   HUD's `PulseBullets` reads `15` through the whole reload lockout. Open for this phase: the
   `EmpBarEffect` shader constants, the bullet icons' per-state art (`0x0007f0a0`), and what
   `Detonator_UpdateHud` raises into the generic message lines.
-- **13 End screen: read, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
-  HD static, 72-92; Omega checked: ported, the same filler `FUN_0155bc90` with the same `rec`
-  offsets; 2048 checked: differs, a four-row list, its own dialect). The screen has **no
-  finished/destroyed branch**: a destroyed run and a finished one print the same rows from the same
-  record, and both record a score and a medal (the builder is called with `force = 1` on both
-  endings). Corrections to what this thread assumed: the **stage row is laps completed, not the HUD
-  stage `rm+0x2dee`** (`craft+0x7810 - 1`, so a run destroyed in stage 5 reads `4 / 14`, a finished
-  one `14 / 14`); **HD does author every id** (`DATA06`'s `entries.xml`, all sixteen languages; the
-  served `DATA02` table has none of the eight Detonator ids), so `Headline::Detonator` and these rows
-  draw on HD once the ids are read from `DATA06` (as `oag_game::language::CircuitNames` reads the
-  circuit names); the medal and record value is the **score** (read at `0x0005c3c0` into
-  `Profile_RecordCampaignResult`'s mode-14 case `0x0001f770`; closes `race-campaign.md`'s "chosen").
-  The layout, on HD and Omega (`Grid0.r` label at `x = 40`, `Grid1.r` value at `x = 590`,
-  `y = 37 + 40 r`; frame as Time Trial's: side bars `y = 29`, `347` tall, bottom bar `y = 391`,
-  `GridTopBar`/`GridBottomBlock`/`RecordNotifyBlock` shown, `RecLogoD` shown, `GridHead1..4`
-  hidden, ink `0xff646464`), with what exists on main (`Race` = `RaceSim`, accessors in
-  `crates/raceplay/src/detonator.rs`; the rows go in a new `DetonatorResults` beside `ZoneResults`
-  in `crates/ui-screens/src/endrace/modes.rs`, drawn by `endrace/hd.rs` next to `RaceGrid`, built by
-  a `detonator_results` beside `zone_results` in `crates/game/src/app/race_stage/endrace.rs`, whose
-  `headline` already returns `Headline::Detonator`):
-
-  | Row (`Grid0.r` label id, HD English) | Format | Value | On main |
-  | --- | --- | --- | --- |
-  | 0 `ER_DETONATOR_STAGE`, `STAGE CLEARED` | `{laps} / 14` | laps completed `0..=99` | **gap in the accessor, not in the data:** `detonator_stage()` is the HUD stage (stages laid, clamped `1..=14`) and reads `14` in stage 14 both mid-lap and finished. Use the scoreboard row's `laps_completed` (`crates/raceplay/src/scoreboard.rs` l.183, `build`): a destroyed run keeps `lap - 1` because its `standing.finish_tick` stays `None` (the wreck ends the race through `outcome.wreck_ended_tick`), so stage 5 reads `4`; a normal finish pads to the target (`14`). `14` in `/ 14` is a literal |
-  | 1 `PERCENT_MINES_CLEARED`, `MINES CLEARED` | `{:.1}%` | percentage | `detonator_percentage()` (f32, `destroyed / sum(MineCountStage) * 100`) |
-  | 2 `PERCENT_BOMBS_CLEARED`, `BOMBS CLEARED` | `{bombs} / 14` | bombs destroyed (u16, a count) | no accessor: add `detonator_destroyed_bombs()` over `world.detonator.cannon.destroyed_bombs`. **EMP kills do not count bombs on main** (`weapons/src/detonator/emp.rs` ~l.301 scores a bomb and removes it without `destroyed_bombs += 1`; the original counts through `BombManager_DestroyAtLane`, `0x0012e334`, shared by the cannon and the EMP; mines are counted, `emp.rs` l.293), so the row under-reads after an EMP |
-  | 3-5 `ER_NUM_5/10/15_STREAKS`, `NUMBER OF 5/10/15 CHAINS` | `{n}` | award counts for the whole race (`rm+0x2de8`/`+0x2dea`/`+0x2dec`, u16; a second five counts again) | **new state:** `cannon::Awards` are per-clip latches that reset at a reload. Add three race-long counters to `Cannon` (incremented where `award_streaks` pays 1000/3000/5000), hash them when non-zero, raise the `World` ratchet |
-  | header `ER_DETONATOR_SCORE`, `TOTAL SCORE` | `{score}` | score | `detonator_score()` (i32) |
-  | `Line1` `ER_ZDETONATOR_COM`, `DETONATOR SESSION COMPLETE!` | text | none | `Headline::Detonator` (wired; HD needs the `DATA06` table) |
-
-  Row values print in the grey the grid resets to (`0xff646464`); rows `6..8` are placed and never
-  written. Strings: no `menu.toml` row, so `just check-strings` does not apply. Left for after the
-  rows: the **new-record banner** (`RecBlockBlue`/`RecBlockGrey`, `RecValue` = `ER_NSR` + score when
-  the score beats the best of a five-entry table; main keeps no Detonator best-score store and the
-  table's owner, `0x0001ef28`, is unread: ask or choose a per-cell best, **chosen**), and the live
-  frame that would pin the grey ink and the `x = 590` alignment. Tests: a formatter unit test per
-  row (finished `14 / 14`, destroyed in stage 5 `4 / 14`, bombs `/ 14`, `%.1f%`), an HD ground truth
-  that a race with fired rounds shows non-zero mines and score rows, a hash test for the new
-  counters. Omega rides the same code path (its tables carry all nine ids); 2048 needs its own
-  four-row list (stage = the HUD stage there, no `/ 14`, no chain rows, label `IG_HUD_SCORE`).
+- **13 End screen: HD wired** (`det-end`; law `docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+  "Wired"). `FieldResults::detonator` (`oag_ui_screens::endrace::DetonatorResults`) draws the six
+  rows and the score line in place of the field grid, laid out beside `RaceGrid`
+  (`endrace/hd/detonator.rs`); `oag_game::results_tables::detonator_results` fills it from the sim and
+  the scoreboard (the stage row is the scoreboard's laps completed, so a run destroyed in stage 5 reads
+  `4 / 14` and a finish `14 / 14`); the boot fills HD's served table with the eight ids from `DATA06`'s
+  language table (`strings.fill`). The sim keeps race-long 5/10/15 chain counts and counts an EMP's
+  bomb kills. Loyalty now pays on those laps (a destroyed run used to bank the full 14 stages).
+  **Open:**
+  - **The new-record banner** (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`, `RecValue` =
+    `ER_NSR` + score): needs the best-score table `0x0001ef28` returns (unread, 72) and a Detonator
+    best-score store (none on main); drawn off, `RecBlockGrey` included.
+  - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
+    race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
+    `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved.
+  - **2048**: its four-row list (stage = the HUD stage with no `/ 14`, mines `%.1f%%`, bombs `%d`,
+    `IG_HUD_SCORE`, no chain rows) belongs to its `Results` page, which is a named gap
+    (`docs/ui/endrace-2048.md`); the touch Summary page has no widget for it.
+  - **No live frame of the original** (the grey ink, the `x = 590` left edge, the `RecLogoD` art,
+    whether `MiniText` `ER_FINALPOS` is hidden: the Detonator branch writes none of it).
 - **14 Campaign: done.** `race_mode_for_cell` maps `Other("Detonator")`; `RaceStage::campaign_tier`
   takes the score through `medal_watch::detonator_value` (finished races only, `>=`). 12 cells per
-  title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). Open: the original's
-  mode-14 record case is unread (the value handed to the compare is a labelled choice); the
-  mid-race medal cues are phase 12's.
+  title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). The value handed to the
+  compare is the score, read (`0x0005c3c0`, 82; `detonator-endrace.md`). A destroyed run records
+  too (both endings call the builder with `force = 1`).
 - **15 Parity.** Omega race-start placement call, stage cap into `craft+0x5e4`, grade drawing;
   2048 per-stage `.gxt` textures.
 
@@ -360,9 +340,6 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   score adds not read there. Open: the fire dispatcher and manager order in a tick, the bomb-ahead
   measure, the `+0x200000` clean-lap `+1000`.
 
-- **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
-  2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.
-
 - **Weapon table decoded, not spent.** `WeaponStats::detonator()` reads the Detonator-only
   attributes (Mine scoring, Cannon reload/rebounds, Bomb shots and points, the `EMP` block,
   `energy_recharge_per_stage`) on HD, Omega and 2048 (`docs/formats/weapon-stats.md`,
@@ -393,12 +370,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   `EmpCharge`/`EmpFull` widgets, Omega's EMP announcer lines (Wwise, not located).
 - **Auto-speed: wired** (`det-emp-wire`, `detonator-speed.md` "Wired"). Open: a player-input speed
   curve on a clean lap against the original; HD's own Zone ramp (this build's Zone has none).
-- **Score, end screen, HUD.** Score and percentage simulated (cannon bullet above), not shown;
-  `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED` unread. The HUD's widget
-  bindings are read (`detonator-hud.md`, phase 12 table), not wired: the race still draws the
-  time trial's HUD. Campaign cells (`mode="Detonator"`,
-  12 on the Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score
-  (phase 14); mid-race medal cues and the end screen's score rows are phases 12 and 13.
+- **Score, end screen, HUD.** Score and percentage are simulated and shown: the HUD is phase 12's,
+  the end screen's rows phase 13's (HD wired, above). Campaign cells (`mode="Detonator"`, 12 on the
+  Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score (phase 14);
+  the mid-race medal cues are phase 12's.
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
   (`Ship_SetState` state 4, `detonator-mine.md`); Phase 7 wires it with the contact law.
 - **Omega's grade** is not drawn (Omega draws no Zone grade either); Omega's camera scale is

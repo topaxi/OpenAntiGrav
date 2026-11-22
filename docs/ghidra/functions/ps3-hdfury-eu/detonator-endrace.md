@@ -212,6 +212,40 @@ holds in it are unread; the `0x0005c5a4`-`0x0005c5c8` arithmetic is `flag = (ind
   end screen). 2048's results are a different screen dialect (a list, `crates/ui-screens`'s 2048
   front end), so the six-row HD grid is **not** its layout.
 
+## Wired (2026-11-22, `det-end`)
+
+HD draws the screen from live race state; the walk was a Fury campaign cell (`grid8_4_3`) through
+`--drive`, the cannon held, the craft destroyed in stage 1: `DETONATOR SESSION COMPLETE!`, `STAGE
+CLEARED 0 / 14`, `MINES CLEARED 1.5%`, `BOMBS CLEARED 0 / 14`, the three chain counts `0`, `TOTAL SCORE
+6900`, the loyalty block beside it at `0 POINTS`.
+
+| Piece | Where | Pinned by |
+| --- | --- | --- |
+| The six rows and the score line, the frame, the headline | `oag_ui_screens::endrace::hd::detonator` (`DetonatorGrid`, beside `RaceGrid`), `DetonatorResults` (`modes.rs`) | `endrace/hd/detonator/tests.rs`: `4 / 14` for a run destroyed in stage 5, `14 / 14` for a finish, the bombs count truncated to a `u16`, positions at `40`/`590`/`y = 37 + 40 r`/`360`, the frame, no banner, the loyalty block still drawn |
+| The values | `oag_game::results_tables::detonator_results` over `RaceSim::{detonator_percentage, detonator_destroyed_bombs, detonator_chains, detonator_score}` and the scoreboard row's `laps_completed` | `hd_endrace_ground_truth::a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_session_rows` (real race, real board, real definition; the HUD stage reads 5 where the row reads 4), `detonator_ground_truth` (a finish: the board says `14`) |
+| The ids | the boot fills HD's served table with `DetonatorResults::IDS` from `DATA06`'s language table (`strings.fill`, `crate::campaign::hd_data06_strings`) | `hd_boot_ground_truth::the_boot_resolves_detonators_end_screen_ids_from_data06` (fails with the fill dropped) |
+| The sim | `Cannon::{fives, tens, fifteens}` (a clip's second five counts again; they survive a reload, `Awards` do not), `destroyed_bombs` on an EMP's bomb kill | `oag_weapons::detonator::{cannon,emp}` tests |
+
+Two things this fixed that the page's first reading did not have: the observation's laps (padded to the
+target on any `finished` run) would have printed `14 / 14` for a destroyed run and banked the full 14
+stages of loyalty; both now read the scoreboard row. `Headline::Detonator` and the rows draw only when
+the model carries a Detonator result, so every other HD mode is unchanged.
+
+**Chosen, not measured:** the ink and left alignment of the value column (the file authors no `align`
+on `Grid1.r`; the original sets none in the filler, the widget's flag word is unread), and that
+`MiniText` `ER_FINALPOS` stays as on every HD mode (the Detonator branch does not touch it). **Not
+drawn:** the new-record banner (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGrey`, `RecLogoD`,
+`RecValue`): its table `0x0001ef28` is unread (72) and main keeps no Detonator best score; drawing
+`RecBlockGrey` would claim "not a record".
+
+**Omega: checked, applies, not wired.** The filler, ids and `rec` offsets are HD's; the ids are in
+its served table; `DetonatorResults` is title-agnostic. Omega keeps the built-in scoreboard
+(`endrace_entry` is `None`: wiring HD's reader there leaves `EndRace Menu` with no options,
+`docs/formats/omega-status.md`), so nothing draws until that is solved.
+**2048: checked, differs, not wired.** Its four-row list (stage = HUD stage with no `/ 14`, mines,
+bombs `%d`, `IG_HUD_SCORE`) is the `Results` page's, which `docs/ui/endrace-2048.md` lists as a named gap
+(`<RaceResults>`, native code undecompiled); its Touch Summary page has no widget for a list.
+
 ## Names
 
 | Address | Name | Conf |
@@ -226,7 +260,7 @@ builder's other modes were not traced ([endrace-loyalty.md](endrace-loyalty.md))
 
 - **Which table `0x0001ef28` returns** (the record table the banner compares): decompile
   `0x0001ef28` and check whether the table is keyed by the launched cell or the circuit. Until read, a
-  banner needs a chosen best-score store.
+  banner needs a chosen best-score store; the banner is left off ("Wired").
 - **The value widgets' alignment** for `Grid1.r` at `x = 590`: the labels' flag word is written in
   Omega's decompile (`+0xc4`, `& 0xfff9ffff | 0x20000`) and not for the values; the `Grid1.0` widget
   in `EndRace_Definition.xml` ([hd-endrace-screens.md](../../../formats/hd-endrace-screens.md)) carries
