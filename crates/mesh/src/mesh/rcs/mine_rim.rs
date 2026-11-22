@@ -2,7 +2,7 @@
 //! fragment program is an unlit Fresnel rim over two named constants.
 //!
 //! Read off the material's own microcode (`ps3-microcode.py fp-file`, the unfogged variant's
-//! block; `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The fragment program"):
+//! block; `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The mine's fragment program"):
 //!
 //! ```text
 //! rim = sat(1 - N.V)

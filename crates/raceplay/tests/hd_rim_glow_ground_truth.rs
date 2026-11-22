@@ -395,7 +395,7 @@ fn program_row(model: &mesh::Model, program: f32) -> Option<(usize, bool)> {
 }
 
 /// The Detonator mine's two models run `detonator_mine_normal_alpha`, an unlit rim over
-/// `MineColour` and `MineBrightness` (`detonator-mine-material.md`, "The fragment program"):
+/// `MineColour` and `MineBrightness` (`detonator-mine-material.md`, "The mine's fragment program"):
 /// each earns a `PROGRAM_MINE_RIM` entry its slot names, holding the authored colour and
 /// brightness, with the normal map bound third, the tangent frame carried and the draw naming
 /// its slot (a draw with no picture reads the shared row, which holds no normal map).
@@ -424,16 +424,19 @@ fn the_mine_models_earn_their_rim_program_with_a_bound_normal_map() {
             model.material_tangent.iter().any(|frame| frame.carried()),
             "{path}: the chunk carries its tangent"
         );
-        let drawn: Vec<_> = model
-            .draws
-            .iter()
-            .chain(&model.alpha_tested_draws)
-            .chain(&model.transparent_draws)
-            .collect();
+        // The state word makes both models cutouts (`alpha_tested_draws`), which the map's
+        // alpha, the program's output alpha, is tested in.
         assert!(
-            !drawn.is_empty() && drawn.iter().all(|draw| draw.texture.is_some()),
-            "{path}: every draw names its slot: {:?}",
-            drawn.iter().map(|d| d.texture).collect::<Vec<_>>()
+            model.draws.is_empty() && model.transparent_draws.is_empty(),
+            "{path}: the draws are a cutout's"
+        );
+        assert!(
+            !model.alpha_tested_draws.is_empty()
+                && model
+                    .alpha_tested_draws
+                    .iter()
+                    .all(|draw| draw.texture.is_some()),
+            "{path}: every draw names its slot"
         );
     }
 }

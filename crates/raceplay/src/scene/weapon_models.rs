@@ -175,7 +175,6 @@ impl super::Scene {
         prev_vp: Mat4,
         seconds: f32,
         weapon_scene: &mesh_render::Scene,
-        levels: &[f32],
     ) -> WeaponMatrices {
         let rocket_matrices = race.rocket_model_matrices();
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
@@ -254,7 +253,7 @@ impl super::Scene {
             prev_vp,
             None,
         );
-        self.write_detonator_looks(race, queue, levels, seconds, bomb_matrices.len());
+        self.write_detonator_looks(race, queue, seconds, bomb_matrices.len());
         self.write_detonator_parts(
             (race, &mine_matrices, &bomb_matrices),
             prev,

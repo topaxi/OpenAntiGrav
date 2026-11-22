@@ -824,6 +824,7 @@ pub fn capture(
         && !finished_early
     {
         let spectrum = spectrum::zone_spectrum(options, audio);
+        scene.set_band_levels(spectrum);
         if race.windowed() {
             // Each window of a multi-window race keeps a camera history of its own, so each is
             // primed with its own view at the tick-before-last pose.
@@ -943,6 +944,7 @@ pub fn capture(
         scene.rebind_zone_art(&device, &queue);
     }
     let spectrum = spectrum::zone_spectrum(options, audio);
+    scene.set_band_levels(spectrum);
     // The captured frame alone at `--draw-alpha`, default 1.0.
     race.set_draw_alpha(options.draw_alpha);
     oag_gpu::perfprobe::reset();

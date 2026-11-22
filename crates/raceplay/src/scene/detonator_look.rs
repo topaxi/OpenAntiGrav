@@ -8,14 +8,13 @@ impl super::Scene {
     /// Gives every laid mine's football and spikes this frame's constants: the stage's colour
     /// and the music's envelope for a live mine, the dark literals for a dark one.
     ///
-    /// `levels` are the sixteen band levels of the frame (`oag_audio::spectrum`), `seconds` the
+    /// The band levels are the frame's raw sixteen ([`Scene::set_band_levels`]), `seconds` the
     /// race clock. A race with no stage colours (no table, or a stage that authors none) leaves
     /// the entries at the material's authored defaults.
     pub(super) fn write_detonator_looks(
         &self,
         race: &Race,
         queue: &Uploads<'_>,
-        levels: &[f32],
         seconds: f32,
         bombs: usize,
     ) {
@@ -50,7 +49,11 @@ impl super::Scene {
         if laid.is_empty() {
             return;
         }
-        let envelopes = crate::drawable::lock(&parts.envelopes).advance(&laid, levels, seconds);
+        let envelopes = crate::drawable::lock(&parts.envelopes).advance(
+            &laid,
+            &self.band_levels.get(),
+            seconds,
+        );
         for (index, (mine, envelope)) in laid.iter().zip(&envelopes).enumerate() {
             for (pool, part) in [
                 (&self.mines, MinePart::Football),

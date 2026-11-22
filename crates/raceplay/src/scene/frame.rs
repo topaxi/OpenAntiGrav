@@ -847,7 +847,6 @@ impl Scene {
                 prev_vp,
                 seconds,
                 &weapon_scene,
-                zone_spectrum,
             );
         let plasma_blast_active =
             self.write_plasma_blasts(race, queue, view_projection, &weapon_scene);

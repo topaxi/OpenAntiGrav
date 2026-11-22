@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega]
-updated: 2026-11-22
+updated: 2026-11-23
 summary: "Detonator: mines, bombs, hull, cannon, HUD, campaign, EMP, auto-speed and the HD end screen wired; new-record banner, 2048 and Omega end screens open"
 categories: [rendering]
 ---
