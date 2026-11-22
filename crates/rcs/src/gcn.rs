@@ -48,6 +48,7 @@ mod factor;
 mod frame;
 pub mod isa;
 mod lightning;
+mod memo;
 mod opcodes;
 mod sample;
 mod sea;
@@ -56,6 +57,7 @@ mod texcoord;
 pub use factor::{Factor, input_is_factor};
 pub use frame::{EyeFrame, third_axis_is_eye};
 pub use lightning::{LightningRates, lightning_rates};
+pub use memo::{Scanned, memoised};
 pub use sample::{SignedSamplers, SignedTextures, signed_samplers};
 pub use sea::{ScrolledEdge, Sea, SeaTaps, scrolled_edge, sea};
 pub use texcoord::{TexcoordFlip, flips_v};
@@ -186,12 +188,11 @@ pub struct VertexInput {
 
 /// One program, decoded.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Program<'a> {
+pub struct Program {
     /// Byte offset of the `Shdr` tag in the file.
     pub at: usize,
     /// Byte offset of the code in the file.
     pub code_at: usize,
-    pub code: &'a [u8],
     pub stage: Stage,
     /// The footer's 32-bit info word (stage and length).
     pub info: u32,
@@ -306,11 +307,13 @@ pub fn tags(file: &[u8]) -> Vec<usize> {
 
 /// Every `Shdr` tag in `file`, parsed.
 #[must_use]
-pub fn scan(file: &[u8]) -> Vec<(usize, Result<Program<'_>>)> {
-    tags(file)
-        .into_iter()
-        .map(|at| (at, Program::parse(file, at)))
-        .collect()
+pub fn scan(file: &[u8]) -> Scanned {
+    memo::get_or(file, || {
+        tags(file)
+            .into_iter()
+            .map(|at| (at, Program::parse(file, at)))
+            .collect()
+    })
 }
 
 /// The header's usage records: from `+0x4c`, four bytes each, up to the first record of kind
@@ -331,13 +334,13 @@ fn usage(file: &[u8], at: usize, code_at: usize) -> Vec<Usage> {
         .collect()
 }
 
-impl<'a> Program<'a> {
+impl Program {
     /// Parses the program whose `Shdr` tag is at byte `at` of `file`.
     ///
     /// # Errors
     ///
     /// See [`Error`]: every closure the module docs list is enforced.
-    pub fn parse(file: &'a [u8], at: usize) -> Result<Self> {
+    pub fn parse(file: &[u8], at: usize) -> Result<Self> {
         let word = |o: usize| u32_at(file, at + o).ok_or(Error::TruncatedHeader);
         let code_at = at + 0x10 + word(0x18)? as usize;
         let span = (word(0x10)? & 0x00ff_ffff) as usize;
@@ -389,7 +392,6 @@ impl<'a> Program<'a> {
         Ok(Self {
             at,
             code_at,
-            code,
             stage,
             info,
             instructions,
@@ -555,7 +557,7 @@ fn reflection(file: &[u8], at: usize) -> Result<Reflection> {
     Ok(out)
 }
 
-impl fmt::Display for Program<'_> {
+impl fmt::Display for Program {
     /// One instruction a line, each `s_buffer_load` annotated with the constant it reads.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let reflection = self.reflection.as_ref().ok();

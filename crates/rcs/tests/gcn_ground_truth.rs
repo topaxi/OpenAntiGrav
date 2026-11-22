@@ -95,20 +95,20 @@ fn is_variant(path: &str) -> bool {
 impl Survey {
     fn add(&mut self, file: &[u8], plain: bool) {
         self.plain_files += usize::from(plain);
-        for (_, parsed) in gcn::scan(file) {
+        for (_, parsed) in gcn::scan(file).iter() {
             self.tags += 1;
             match parsed {
                 Ok(p) => {
-                    let marked = self.program(&p);
+                    let marked = self.program(p);
                     self.plain_pro_or_unknown += usize::from(plain && marked);
                 }
-                Err(e) => *self.refused.entry(kind(&e)).or_default() += 1,
+                Err(e) => *self.refused.entry(kind(e)).or_default() += 1,
             }
         }
     }
 
     /// Counts one program; whether it has a PS4 Pro word or an unlisted opcode.
-    fn program(&mut self, p: &Program<'_>) -> bool {
+    fn program(&mut self, p: &Program) -> bool {
         match p.stage {
             Stage::Pixel => self.pixel += 1,
             Stage::Vertex => self.vertex += 1,
@@ -152,7 +152,7 @@ impl Survey {
 }
 
 /// The first instruction reading a fetched tangent's `w`, named with whether it is `2w - 1`.
-fn tangent_w_reader(p: &Program<'_>) -> Option<String> {
+fn tangent_w_reader(p: &Program) -> Option<String> {
     let (input, _) = p.input_named("tangent")?;
     if input.size < 4 {
         return Some("w not fetched".to_string());
@@ -322,8 +322,8 @@ fn eboot(rel: &str, expected: &str) {
 /// identically): `x = max(min(E * c, t1), t0)`, then `a + x (b + x (c + d x))`, per channel.
 fn tone_curve_lines(eboot: &[u8]) {
     let resolve = gcn::scan(eboot)
-        .into_iter()
-        .filter_map(|(_, p)| p.ok())
+        .iter()
+        .filter_map(|(_, p)| p.clone().ok())
         .find(|p| {
             p.reflection
                 .as_ref()
@@ -370,8 +370,8 @@ fn program_text(rel: &str, entry: &str, offset: usize) -> Option<String> {
     let mut archive = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
     let bytes = archive.read_path(entry).expect("the entry reads");
     let program = gcn::scan(&bytes)
-        .into_iter()
-        .filter_map(|(_, p)| p.ok())
+        .iter()
+        .filter_map(|(_, p)| p.clone().ok())
         .find(|p| p.at == offset || p.code_at == offset)
         .unwrap_or_else(|| panic!("no program at {offset:#x} in {entry}"));
     Some(program.to_string())
@@ -457,8 +457,8 @@ fn the_shipshield_programs_carry_the_lightning_rates_in_every_variant() {
     };
     assert_eq!(gcn::lightning_rates(&bytes), Some(expected));
     let variants: Vec<_> = gcn::scan(&bytes)
-        .into_iter()
-        .filter_map(|(_, p)| p.ok())
+        .iter()
+        .filter_map(|(_, p)| p.clone().ok())
         .filter(|p| p.lightning_rates().is_some())
         .collect();
     assert_eq!(variants.len(), 7, "the seven Lightning pixel variants");

@@ -277,6 +277,20 @@ fn build_planned(
     textures: Textures<'_>,
     water: Water,
 ) -> Result<(Model, Report)> {
+    // The planners below each read a PS4 material file's programs; decode each file once.
+    oag_rcs::gcn::memoised(|| {
+        build_scanned(label, model_blob, planner, billboard_vex, textures, water)
+    })
+}
+
+fn build_scanned(
+    label: &str,
+    model_blob: &[u8],
+    planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
+    billboard_vex: Option<&[u8]>,
+    textures: Textures<'_>,
+    water: Water,
+) -> Result<(Model, Report)> {
     let mut decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
     let plan = planner(&decoded.scene);

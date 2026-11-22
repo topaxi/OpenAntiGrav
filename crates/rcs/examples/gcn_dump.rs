@@ -37,19 +37,19 @@ fn main() {
             .unwrap_or_else(|e| panic!("{path}: {entry}: {e}")),
         None => std::fs::read(path.as_str()).unwrap_or_else(|e| panic!("{path}: {e}")),
     };
-    for (tag, parsed) in gcn::scan(&bytes) {
+    for &(tag, ref parsed) in gcn::scan(&bytes).iter() {
         if at.is_some_and(|a| a != tag) {
             continue;
         }
         match parsed {
-            Ok(p) if summary => println!("{}", line(&p)),
-            Ok(p) => print_program(&p),
+            Ok(p) if summary => println!("{}", line(p)),
+            Ok(p) => print_program(p),
             Err(e) => println!("Shdr @{tag:#x}: refused: {e}"),
         }
     }
 }
 
-fn line(p: &Program<'_>) -> String {
+fn line(p: &Program) -> String {
     let names = |v: Vec<&str>| v.join(",");
     let refl = match &p.reflection {
         Ok(r) => format!(
@@ -68,7 +68,7 @@ fn line(p: &Program<'_>) -> String {
     )
 }
 
-fn print_program(p: &Program<'_>) {
+fn print_program(p: &Program) {
     println!("{}", line(p));
     if let Ok(r) = &p.reflection {
         for res in &r.resources {

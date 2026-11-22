@@ -57,7 +57,7 @@ const WEIGHTS: [&str; 4] = [
     "ReflectivityStrength",
 ];
 
-impl Program<'_> {
+impl Program {
     /// The last instruction before `k` that writes vector register `register`.
     pub(super) fn writer_of(&self, k: usize, register: u8) -> Option<(usize, &Instruction)> {
         self.instructions[..k]
@@ -273,7 +273,7 @@ impl Program<'_> {
 pub fn sea(file: &[u8]) -> Option<Sea> {
     let mut found: Option<Sea> = None;
     let mut opacity = false;
-    for (_, program) in super::scan(file) {
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else { continue };
         let Ok(reflection) = &program.reflection else {
             continue;
@@ -327,7 +327,7 @@ pub struct ScrolledEdge {
     pub pixel_programs: usize,
 }
 
-impl Program<'_> {
+impl Program {
     /// Whether this vertex program adds `time * Speed` to the second lane of `uv1`: either
     /// in place (`v_mac_f32 uv1.y, time, Speed`) or into another register while the lane still
     /// holds what was fetched (`v_mad_f32 d, time, Speed, uv1.y`). The constants are found by
@@ -370,7 +370,7 @@ pub fn scrolled_edge(file: &[u8]) -> Option<ScrolledEdge> {
         vertex_programs: 0,
         pixel_programs: 0,
     };
-    for (_, program) in super::scan(file) {
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else { continue };
         let Ok(reflection) = &program.reflection else {
             continue;
