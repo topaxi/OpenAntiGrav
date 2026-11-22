@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator is a Mode (stage = lap, grade, camera, board); mine placement read, not wired; EMP, cannon, score, auto-speed, Zone Battle unread"
+summary: "Detonator Mode races 14 stages; placement inert; mine/bomb contact and out-of-race read, not wired; EMP, cannon, score, auto-speed unread"
 categories: [rendering]
 ---
 
@@ -17,9 +17,21 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 - **Layout files decoded and placement wired, inert** (`oag_tables::detonator_layout`,
   `oag_weapons::detonator`, `oag_raceplay::detonator`): HD races lay their mines and bombs per
-  stage and draw them with the ordinary Mine and Bomb models. Open: contact, blast and
-  destruction (the unread part of `detonator-placement.md`), the Detonator-specific models, the
-  survey's collision return codes (probes are chosen), how objects leave their pool.
+  stage and draw them with the ordinary Mine and Bomb models. Open: wiring the contact law
+  (next bullet), the Detonator-specific models, the survey's collision return codes (probes are
+  chosen).
+
+- **Contact, blast and destruction: read, not wired** (2026-11-22,
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md` and `detonator-bomb.md`, HD static,
+  confidence 72-82 per law). Mine: sphere `trigger_radius` 3, player immune for 0.5 s after
+  laying, damage 10 (halved when the weapons flag is off, 60), velocity x0.5 once, no push, never
+  times out, explodes and leaves the tick after contact as `WO_MINE_EXPLO_DETONATOR_DEAD`. Bomb:
+  sphere 6, same grace, damage 20 to the toucher, push `30 * (1 - d/40)` to every craft within
+  40, detonates the tick of contact, `WO_BOMB_EXPLO_DETONATOR`; the stage step detonates the old
+  bomb harmlessly (the one-bomb rule). Energy at 0 -> `Ship_SetState(4)` -> `+0x6a64 |= 0x1000`
+  -> the race ends. Open: `points_per_metre`/`max_distance` (no reader found), the cannon's hit
+  and score, who spends the pending push, the update order within a tick, the PVS-gated lane
+  free. 2048/Omega: data and effect selector checked, applies; contact law not read there.
 
 - **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
   2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.
@@ -60,8 +72,8 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
   block (`FUN_000642a0`); `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED`;
   `detonator_hud.xml` (the race draws the time trial's HUD). Campaign cells (`mode="Detonator"`,
   14 on `DATA00`'s Fury grids) are kept raw and do not launch.
-- **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled: nothing in a lone Detonator
-  race can destroy the craft until the mines exist.
+- **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
+  (`Ship_SetState` state 4, `detonator-mine.md`); Phase 7 wires it with the contact law.
 - **Omega's grade** is not drawn (Omega draws no Zone grade either); Omega's camera scale is
   inherited from HD, its craft constructor unread. **2048's per-stage `.gxt` textures** are
   unwired, as Zone's are.
@@ -99,7 +111,7 @@ not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on
 
 1. Phase 4: read `PatternFile.xml` and `GamePlayValues.xml` (census on HD `DATA00`, 2048
    `data.psarc`, Omega `data00.psarc`), name them on `oag_title::Detonator`.
-2. Phase 5: the lap survey, `DetonatorField` and the placer from `detonator-placement.md`, drawn
-   inert. Before the hit: read the mine/bomb update, how either leaves its pool, and the cannon.
+2. Phase 7: wire the contact law from `detonator-mine.md`/`detonator-bomb.md` (damage, velocity
+   cut, push, removal, the stage-step bomb detonation, the out-of-race end). Then read the cannon.
 3. Read Detonator's engine branch for the auto-speed law.
 4. Zone Battle: the read recipe above.

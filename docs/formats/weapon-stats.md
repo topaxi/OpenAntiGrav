@@ -416,7 +416,21 @@ Pure.
 | `EMP` | `wave_time`, `speed`, `minNumPadsToCollectEMP`, `maxNumPadsToCollectEMP`, `minDistance`, `maxDistance` |
 
 `points_for_cannon_bullet_hit` and `points_for_destroying` are the first authored score values
-for the mode (names only; the score law is unread). Measured on the shipped files
+for the mode (names only; the score law is unread).
+
+**What HD's executable does with the Mine and Bomb blocks (2026-11-22, static)**: the parsers
+`WeaponStats_ParseMine`/`_ParseBomb` (`0x0002b5e8`/`0x0002c690`) store every attribute at a
+read offset, and the contact code spends them
+([detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md),
+[detonator-bomb.md](../ghidra/functions/ps3-hdfury-eu/detonator-bomb.md)). A mine fires on a
+sphere of `trigger_radius` (3), deals `damage` (10), pushes `blastforce * (1 - d/blastradius)`
+(0 on the disc) and, in Detonator only, multiplies the craft's velocity by
+`velocity_reduction` (0.5) once. A bomb fires on a sphere of `trigger_radius` (6), deals
+`damage` (20) to the craft that touched it and pushes every craft within `blastradius` (40) by
+`blastforce` (30) falling linearly to the edge; `number_of_shots_to_destroy` (4) decides whether
+the full blast visual plays. `points_per_metre`, `max_distance`, `damageradius` and the Bomb's
+`timetodie` have no reader found (confidence 55); the Mine's `timetodie` is ignored in
+Detonator (mines never time out there). Confidence 78-88 per field on those pages. Measured on the shipped files
 (`hd_weapons_ground_truth.rs`): `DATA00`'s copy authors all seventeen and `EMP`; `DATA05`'s
 copy authors none. **Omega: checked, applies, not wired** (all seventeen decode). **2048:
 checked, applies, not wired** (all seventeen decode from its patch).

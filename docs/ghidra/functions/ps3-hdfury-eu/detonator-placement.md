@@ -140,6 +140,11 @@ finding, unread past that, confidence 60.
   (`0x0011a370`-`0x0011a3c8`). Disc: `0`, so it runs on every call. What slot `+0x3c` does is
   unread.
 
+Read 2026-11-22 ([detonator-mine.md](detonator-mine.md), [detonator-bomb.md](detonator-bomb.md)):
+`0x0012ae10` is `BombManager_DetonateAll` (every live bomb triggered, its lane freed: the one-bomb
+rule), `0x0012ae38` adds `MineManager_RemoveAll`, and slot `+0x3c` darkens a `DetonatorMine`
+(`+0x160 = 0`): last stage's mines turn dark.
+
 `*g_RaceWorld` is `*(TOC -0x6874)` = `*0x00994198`; its `+0x60` is the mine manager and `+0x5c`
 the bomb manager (below).
 
@@ -305,8 +310,9 @@ Confidence **78** for the whole function.
   `+0x98`. Confidence 75.
 - `SpawnObject` checks neither capacity. Mines are bounded by the stage counts (max `200`, the
   pool size) through the cap; **bombs are not bounded**: a third live bomb would index past the
-  two-slot pool, so the original presumably relies on bombs going off within a stage. That
-  lifecycle is unread.
+  two-slot pool, so the original presumably relies on bombs going off within a stage. It does:
+  step 0's `BombManager_DetonateAll` triggers the old bomb before step 5 lays the new one
+  ([detonator-bomb.md](detonator-bomb.md#placement-and-the-stage-step)).
 
 ## What Phase 4/5 can and cannot take from this
 
@@ -322,8 +328,8 @@ order (one draw per group attempt, two per top-up or bomb attempt).
 walk; `sec+0x40` and `sec+0x60`; what the mine init and bomb vcall do with the matrix's fixed
 rows, `v10*100` and those two values; `angleUp`/`angleRight` (parsed, never passed to
 `SpawnObject`; another reader of the group array was not searched for, confidence 70 that they
-are unused); `0x0012ae38`, `0x0012ae10`, mine slot `+0x3c`; how a mine or bomb leaves its pool
-and frees its lane; and whether anything bounds a third bomb.
+are unused). `0x0012ae38`, `0x0012ae10`, mine slot `+0x3c`, how a mine or bomb leaves its pool
+and frees its lane, and the third bomb were read later: see the note under step 0.
 
 ## Cross-check: 2048 and Omega
 

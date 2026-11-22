@@ -1033,6 +1033,26 @@ Pulse list. `oag_hd::effects::EFFECTS` now takes them back.
   those two are theirs; neither ships `WO_RAIN`/`WO_SNOW` (the 2048 census
   above). **Checked, differs**: HD has neither.
 
+### Detonator's explosions: three triggers recovered - 2026-11-22
+
+Three of HD's Detonator-only systems now have a read trigger (static, `EBOOT.elf`; evidence on
+[detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md) and
+[detonator-bomb.md](../ghidra/functions/ps3-hdfury-eu/detonator-bomb.md)). Each is spawned once,
+at the object's position or matrix, through `0x002c9108` with the race manager as parent, and
+only when the object is in some view's potentially-visible set.
+
+| System (`DATA00` `/data/psys/`) | Spawned by | Fires when | Confidence |
+| --- | --- | --- | ---: |
+| `wo_mine_explo_detonator_dead.pob` | `DetonatorMine_Explode` `0x00138e58`, fourcc `MIED` | a mine that was darkened explodes: every mine a craft runs into (the contact darkens it first) and every mine laid on an earlier stage | 72 |
+| `wo_mine_explo_detonator.pob` | the same function, the other arm | a mine laid this stage is destroyed without contact (the EMP's `MineManager_DestroyAtLane`); its colour table is recoloured toward white from the stage colour | 70 |
+| `wo_bomb_explo_detonator.pob` | `DetonatorBombBlast_Start` `0x00137150`, fourcc `BMOB` | any bomb detonation (contact, destruction, or the stage step that replaces it), unless the player is out of the race | 72 |
+
+`WO_CANNON_SPARKS_DETONATOR`, `WO_QUAKE_DETONATOR` and `_TRAILS` (`EMP.cpp`'s span) stay
+unread. All three systems above ship on 2048 (`data.psarc`, `data/particles/` and
+`data/particles2048/`) and Omega (`data00.psarc`), and both executables name them; 2048's mine
+explode picks between the two mine systems with HD's shape and fourcc (`0x811e6f3a`), Omega's
+with a hashed name (`0x0133ad5f`). **Checked, applies, not wired.**
+
 ### HD names its own texture the same way Pulse does, and 80 of 82 resolve to a shipped `.gtf` - 2026-09-17
 
 HD does not embed pixels (see "The sprite pixels are on the disc after
