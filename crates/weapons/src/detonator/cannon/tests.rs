@@ -359,10 +359,12 @@ fn a_second_five_pays_when_a_separate_streak_ends_and_a_longer_first_one_does_no
 
 #[test]
 fn the_percentage_is_the_destroyed_mines_over_the_whole_race() {
-    let mut values = GamePlayValues::default();
-    values.mine_count_stage = [
-        80, 90, 95, 100, 105, 110, 120, 130, 140, 150, 170, 180, 190, 200,
-    ];
+    let mut values = GamePlayValues {
+        mine_count_stage: [
+            80, 90, 95, 100, 105, 110, 120, 130, 140, 150, 170, 180, 190, 200,
+        ],
+        ..GamePlayValues::default()
+    };
     assert_eq!(mines_in_the_race(&values), 1860.0);
     assert_eq!(percentage(186, &values), 10.0);
     assert_eq!(percentage(0, &values), 0.0);
