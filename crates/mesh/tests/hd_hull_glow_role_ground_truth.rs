@@ -195,6 +195,20 @@ fn detonators_hull_paints_no_glow_from_its_ramp_or_its_own_picture() {
         "both materials should be refused as a ramp or as the picture itself, got {}",
         report.emissive_lookup_excluded
     );
+
+    // The ramp is not dropped: `dg_iridescent` carries its overlay, `Colour` `0.10948`, and the
+    // body (no ramp) carries none.
+    let overlays: Vec<_> = model
+        .emissive
+        .iter()
+        .filter(|entry| (entry.rate - mesh::HULL_OVERLAY_RATE).abs() < f32::EPSILON)
+        .collect();
+    assert_eq!(overlays.len(), 1, "one overlay entry: {overlays:?}");
+    assert!(
+        (overlays[0].tint[0] - 0.10948).abs() < 1.0e-5,
+        "the panel's own Colour: {overlays:?}"
+    );
+    assert_eq!(report.hull_overlay_bound, 1);
 }
 
 #[test]

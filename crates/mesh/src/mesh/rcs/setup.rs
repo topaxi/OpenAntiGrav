@@ -316,6 +316,15 @@ pub(super) fn material_setup(
         &mut emissive,
         report,
     );
+    // The Detonator hull's iridescent overlay claims a slot the families above left alone.
+    super::hull_overlay::hull_overlay(
+        model,
+        &picks,
+        &seconds,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // Scenery glass that reads the sky reflection claims its slot after the same families.
     // Its glow masks ride the third binding, read at the second coordinate set.
     let window_masks = super::window_glass::window_glass(

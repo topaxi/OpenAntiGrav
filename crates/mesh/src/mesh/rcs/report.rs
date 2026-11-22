@@ -220,6 +220,8 @@ pub struct Report {
     /// 1-D ramp their program reads at a scalar (`emissive::SHIP_FACING_RAMP_SAMPLERS`) or
     /// is the picture itself.
     pub emissive_lookup_excluded: usize,
+    /// Hull materials that carry the iridescent overlay (`super::hull_overlay`).
+    pub hull_overlay_bound: usize,
     /// Materials that structurally accumulate but whose loaded second
     /// texture's own sampler hash this project has no disc-measured role
     /// for - not a known glow, not a known surface map.
@@ -507,6 +509,9 @@ impl Report {
                 ", {n} material(s) refused an additive glow whose second texture is a \
                  facing ramp or the picture itself"
             ),
+        } + &match self.hull_overlay_bound {
+            0 => String::new(),
+            n => format!(", {n} hull material(s) with the iridescent facing-ramp overlay"),
         } + &match self.emissive_role_unresolved {
             0 => String::new(),
             n => format!(

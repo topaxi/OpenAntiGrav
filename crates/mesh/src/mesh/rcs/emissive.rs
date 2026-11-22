@@ -100,16 +100,17 @@ const NAMED_SURFACE_MAP: &[u32] = &[
 /// | `0xc78c9866` | `detonator_ship_dg_iridescent` | 4 |
 const SHIP_SURFACE_MAP_SAMPLERS: &[u32] = &[0x436d_3929, 0xc8f1_8561, NITRO_NORMAL, 0xc78c_9866];
 
-/// Sampler hashes a ship's program reads **at one scalar**, never at the surface's own
-/// coordinate: a 1-D ramp, not a picture and not a glow.
+/// Sampler hashes a ship's program reads **at the facing term**, never at the surface's own
+/// coordinate: a ramp, not a picture and not a glow.
 ///
-/// `0x215b724c` is `detonator_ship_dg_iridescent`'s `detonator_stripe.gtf`. Every lit
-/// block of the material samples it as `TEX H6.xyz, R1.wwww` at `dot(N, V)` (block
-/// `0x46d0`, `@0x22`) and folds it into the iridescent overlay `2 * Colour * picture *
-/// ramp(N.V)`, so adding it to the paint as a tinted glow, which is what the structural
-/// accumulate test sees, painted the whole panel with the ramp's pale end
-/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "The hull's paint").
-const SHIP_FACING_RAMP_SAMPLERS: &[u32] = &[0x215b_724c];
+/// `0x215b724c` is `detonator_ship_dg_iridescent`'s `detonator_stripe.gtf`, the only (family,
+/// path) the hash binds in all 643 HD models (seven archives). The `IBL` block `0x46d0` samples it as
+/// `TEX H6.xyz, R1.wwww` (`@0x22`) with `R1.w = dot(N, normalise(TC1))`, and the hull's vertex
+/// block writes `TC1 = eye - position`, so the coordinate is `N.V`; the overlay it feeds is
+/// `mesh::rcs::hull_overlay`. The structural accumulate test saw an accumulated second texture
+/// and added it to the paint as a tinted glow instead, which painted the whole panel with the
+/// ramp's pale end (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "The hull's paint").
+pub(super) const SHIP_FACING_RAMP_SAMPLERS: &[u32] = &[0x215b_724c];
 
 /// Ship families whose program reads exactly one picture and no second texture of its own:
 /// `detonator_ship_rich_iridescent` samples `detonator_ao.gtf` once (`TEX H0.xyz, f[TC3]

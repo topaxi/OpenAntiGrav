@@ -1229,9 +1229,10 @@ within a grey tolerance" is **open**. **Still open on the hull**: the iridescent
 separate term (the `nitro_emissive_outlines` shell).
 
 **Detonator's hull is the same overlay, and the same glow bug (2026-11-23, `det-hull-look`).** `detonator_ship_dg_iridescent` reads
-`detonator_stripe.gtf` as a ramp at a scalar (`TEX H6.xyz, R1.wwww unit3`, block `0x46d0`) and overlays `2 * Colour * AO * ramp`; ours
-added the stripe as a tinted glow, and the fuselage (`detonator_ship_rich_iridescent`) its own picture. Both are refused now
-(`emissive::SHIP_FACING_RAMP_SAMPLERS`, `SINGLE_PICTURE_FAMILIES`); the overlay itself is still not drawn, the open item above.
+`detonator_stripe.gtf` as a ramp at the facing term (`TEX H6.xyz, R1.wwww unit3`, block `0x46d0`; `TC1` is eye minus position) and
+overlays `2 * Colour * AO * ramp`; ours added the stripe as a tinted glow, and the fuselage (`detonator_ship_rich_iridescent`) its own
+picture. Both are refused now (`emissive::SHIP_FACING_RAMP_SAMPLERS`, `SINGLE_PICTURE_FAMILIES`) and the panels' overlay is drawn
+(`mesh::rcs::hull_overlay`). The nitro hulls' overlay (`ramp(-dot(V, N)) * 0.5637`) is the same shape on another program and stays open.
 `docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "The hull's paint".
 
 **Other titles.** Fury: same disc, **ported**. **2048: ported** (2026-11-13, `w2048-fury-nitro`; the earlier "not applicable, no
