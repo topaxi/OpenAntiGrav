@@ -119,3 +119,47 @@ fn the_flash_falls_two_hundredths_an_update_and_stops_at_zero() {
     assert_eq!(flash_after(0.01), 0.0);
     assert_eq!(flash_after(0.0), 0.0);
 }
+
+fn laid(entry: u16, lane: i8, live: bool) -> LaidMine {
+    LaidMine { entry, lane, live }
+}
+
+#[test]
+fn an_envelope_steps_once_per_clock_value_and_a_repeated_clock_changes_nothing() {
+    let mut envelopes = MineEnvelopes::default();
+    let mine = [laid(5, 0, true)];
+    let band = mine_band(5, 0);
+    let mut levels = [0.0_f32; 16];
+    levels[band] = 1.0;
+    let first = envelopes.advance(&mine, &levels, 1.0)[0];
+    assert_eq!(first.football, 1.0);
+    // The same tick again (a second view, a frame between ticks) with the band gone quiet.
+    let again = envelopes.advance(&mine, &[0.0; 16], 1.0)[0];
+    assert_eq!(again, first);
+    // The next tick lets it fall five percent.
+    let next = envelopes.advance(&mine, &[0.0; 16], 1.0 + 1.0 / 60.0)[0];
+    assert_eq!(next.football, DECAY);
+}
+
+#[test]
+fn an_envelope_belongs_to_its_mine_not_to_a_pool_slot() {
+    let mut envelopes = MineEnvelopes::default();
+    let (a, b) = (laid(3, 0, true), laid(9, 1, true));
+    let mut levels = [0.0_f32; 16];
+    levels[mine_band(3, 0)] = 0.9;
+    let before = envelopes.advance(&[a, b], &levels, 1.0);
+    // `a` is shot and `b` slides into slot 0: it keeps its own envelope.
+    let after = envelopes.advance(&[b], &[0.0; 16], 2.0);
+    assert_eq!(after[0].football, before[1].football * DECAY);
+    // `a` is gone for good: laid again later it starts from nothing.
+    let again = envelopes.advance(&[a], &[0.0; 16], 3.0);
+    assert_eq!(again[0], MineEnvelope::default());
+}
+
+#[test]
+fn a_dark_mine_never_steps() {
+    let mut envelopes = MineEnvelopes::default();
+    let dark = [laid(4, 0, false)];
+    let envelope = envelopes.advance(&dark, &[1.0; 16], 1.0)[0];
+    assert_eq!(envelope, MineEnvelope::default());
+}

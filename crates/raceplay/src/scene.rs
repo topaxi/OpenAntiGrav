@@ -16,6 +16,7 @@ mod bloom;
 mod boost_flare;
 mod clouds;
 mod craft_cull;
+mod detonator_look;
 mod frame;
 mod ghost;
 mod hd_chain;

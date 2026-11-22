@@ -56,6 +56,51 @@ pub(crate) fn mine_band(entry: u16, lane: i8) -> usize {
     (usize::from(entry) + 3 * (lane.unsigned_abs() as usize) + usize::from(lane < 0)) % BAND_CHOICES
 }
 
+/// One laid mine as the draw sees it: its identity and whether it is live this stage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LaidMine {
+    pub(crate) entry: u16,
+    pub(crate) lane: i8,
+    pub(crate) live: bool,
+}
+
+/// Every laid mine's envelopes, and the race clock they were last stepped at.
+///
+/// **Once per tick, not once per frame**: a frame between two ticks (or a second view of the
+/// same one) leaves them as they are, so the envelope's rate is the update rate whatever the
+/// frame rate is - the original steps it once per mine update, a call rate not measured
+/// (`detonator-mine-material.md`, "What the port needs").
+#[derive(Debug, Default)]
+pub(crate) struct MineEnvelopes {
+    stepped_at: Option<u32>,
+    mines: std::collections::BTreeMap<(u16, i8), MineEnvelope>,
+}
+
+impl MineEnvelopes {
+    /// Steps every mine of `laid` against `levels` if `seconds` is a clock not stepped yet, and
+    /// drops the mines no longer laid. Returns each mine's envelope, in `laid`'s order.
+    pub(crate) fn advance(
+        &mut self,
+        laid: &[LaidMine],
+        levels: &[f32],
+        seconds: f32,
+    ) -> Vec<MineEnvelope> {
+        let step = self.stepped_at != Some(seconds.to_bits());
+        self.stepped_at = Some(seconds.to_bits());
+        self.mines
+            .retain(|key, _| laid.iter().any(|mine| (mine.entry, mine.lane) == *key));
+        laid.iter()
+            .map(|mine| {
+                let envelope = self.mines.entry((mine.entry, mine.lane)).or_default();
+                if step && mine.live {
+                    envelope.step(levels, mine_band(mine.entry, mine.lane));
+                }
+                *envelope
+            })
+            .collect()
+    }
+}
+
 /// A mine's two envelopes: the football's `s` (`m+0xf4`) and the spikes' `t` (`m+0xf8`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct MineEnvelope {

@@ -52,6 +52,8 @@ pub(crate) struct DetonatorDrawables {
     pub(crate) muzzle_flash: Vec<Drawable>,
     pub(crate) pad: Vec<Drawable>,
     pub(crate) pads: Vec<Mat4>,
+    /// Every laid mine's music envelopes: view state, stepped as the frames are drawn.
+    pub(crate) envelopes: std::sync::Mutex<crate::detonator_look::MineEnvelopes>,
 }
 
 impl DetonatorDrawables {
@@ -79,6 +81,7 @@ impl DetonatorDrawables {
                 build(models.pad, pad_slots)?
             },
             pads: models.pads,
+            envelopes: Default::default(),
         })
     }
 
