@@ -254,8 +254,7 @@ impl super::Scene {
             None,
         );
         self.write_detonator_parts(
-            race,
-            (&mine_matrices, &bomb_matrices),
+            (race, &mine_matrices, &bomb_matrices),
             prev,
             queue,
             (view_projection, prev_vp),
@@ -278,8 +277,7 @@ impl super::Scene {
     /// model at the pad's own transform ([`crate::detonator_models`]).
     fn write_detonator_parts(
         &self,
-        race: &Race,
-        (mines, bombs): (&[Mat4], &[Mat4]),
+        (race, mines, bombs): (&Race, &[Mat4], &[Mat4]),
         prev: &Snapshot,
         queue: &Uploads<'_>,
         (view_projection, prev_vp): (Mat4, Mat4),
