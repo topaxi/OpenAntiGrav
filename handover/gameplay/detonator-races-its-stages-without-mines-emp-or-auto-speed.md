@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: 14 stages, mines/bombs laid and biting; cannon, score, own hull/handling/models read, not wired; EMP, auto-speed, HUD, campaign open"
+summary: "Detonator: 14 stages, mines/bombs bite, own hull/models drawn, cannon+score simulated; EMP, auto-speed, HUD, end screen, campaign open"
 categories: [rendering]
 ---
 
@@ -27,8 +27,8 @@ evidence), then start at "Next Steps".
 | 7 | Hazards bite: `step_contacts` (damage, velocity cut, bomb push, removal), destroyed craft ends the race; the race loads the Detonator weapon table | done | `6a4c6be71` |
 | 8 | RE: pulse cannon, hits, score, destroyed count, percentage (`detonator-cannon.md`) | done | `0db7e825c` |
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
-| 8b | Wire the hull, handling, mine, bomb and pad models | done (`det-hull` lane; wreck, death shell, colour binds open) | |
-| 9 | Wire the cannon, score, destroyed count and percentage | simulation done; nothing drawn, no HUD, no end screen | see `git log` (`Detonator: the pulse cannon`) |
+| 8b | Wire the hull, handling, mine, bomb and pad models | done (wreck, death shell, colour binds open) | `4f4b70173` |
+| 9 | Wire the cannon, score, destroyed count and percentage | simulation done; nothing drawn, no HUD, no end screen | `59215fc52` |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | open | |
@@ -42,11 +42,18 @@ A race can already be launched from the command line:
 
 ## What a player gets today (HD)
 
-14 stages; each stage lays up to its `MineCountStage` mines and at most one bomb; a craft within
-a mine's trigger sphere loses 10 energy and half its speed, a bomb costs 20 and pushes; energy
-at zero ends the race. Drawn with the **ordinary** Mine and Bomb models, no effects or sounds on
-explosions, the team's race hull flying **Zone's** handling, the time trial's HUD, no cannon,
-no score, no percentage, no EMP, no auto-speed.
+14 stages; each stage lays up to its `MineCountStage` mines and at most one bomb; a mine costs 10
+energy and half the speed, a bomb 20 and a push; energy at zero ends the race. Every craft flies
+the Detonator hull in its team livery on Detonator's own handling file; mines, bombs and pads draw
+the Detonator models (the mine football draws plain white: its `MineColour`/`MineBrightness` binds
+and the bomb's `BombColour` are unread). Square fires the pulse cannon and Circle reloads; rounds
+destroy mines and bombs and the race keeps a score, a destroyed count and a percentage, but no
+round, muzzle flash or explosion is drawn and the HUD is the time trial's. No EMP, no auto-speed.
+
+Open from 8b: no wreck or death shell (HD's PS3 hull branch loads no wreck in any mode; the
+Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad still draws under the
+Detonator pad (unread whether the original hides it; the model's origin at the pad transform is
+chosen); 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
 
 ## Working rules learned the hard way
 
