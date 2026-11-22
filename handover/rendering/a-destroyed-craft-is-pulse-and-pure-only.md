@@ -53,6 +53,11 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 
 ## Open
 
+- **The HD blast frame reads as a soft black ball with sparks and no fire** (ours, `--force-wreck 60:7` on
+  Talon's Junction, 2026-11-22, `hd-wreck-wire`). Pulse's `WO_SHIP_EXPLOSION` draws an orange textured
+  fireball. Check HD's `WO_SHIP_EXPLOSION` against an original frame (or its `.pob` templates' blend and
+  sprites) before trusting the picture: a black fireball is the shape a wrong blend mode or missing sprite takes.
+
 1. ~~HD/Fury: read `Ship_SetState`'s destroy states~~ Read 2026-11-22
    (`ship-destroy.md`). Still open there: the death kick's formula, the wreck collider's child
    shapes, camera mode 8's view against Pulse's mode 5, the `+0x7e40` call on the 4 -> 5 edge,
