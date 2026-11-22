@@ -581,6 +581,12 @@ impl super::Scene {
             .set(resolution == oag_display::display::BlurResolution::Half);
     }
 
+    /// The audio output's band levels for the next frame (`oag_audio::spectrum::Spectrum::levels`),
+    /// raw. A view-side input like the blur resolution: nothing in the simulation reads it.
+    pub fn set_band_levels(&self, levels: [f32; 16]) {
+        self.band_levels.set(levels);
+    }
+
     /// Encodes the motion blur over the finished frame, `false` when the
     /// pass is absent or off. `views` are the frame, the velocity attachment
     /// and the depth attachment; `blur` is the tier, its shutter and its tap

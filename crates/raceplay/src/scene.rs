@@ -16,6 +16,7 @@ mod bloom;
 mod boost_flare;
 mod clouds;
 mod craft_cull;
+mod detonator_look;
 mod frame;
 mod ghost;
 mod hd_chain;
@@ -458,6 +459,10 @@ pub struct Scene {
     /// `motion_blur_resolution`, handed in before each frame by
     /// [`Scene::set_blur_resolution`].
     blur_half: std::cell::Cell<bool>,
+    /// The audio output's sixteen band levels, raw, as `SoundSystem_GetBandLevel` returns them,
+    /// handed in before each frame by [`Scene::set_band_levels`]. Silent until then. Read by the
+    /// Detonator mine's envelope ([`crate::detonator_look`]).
+    band_levels: std::cell::Cell<[f32; 16]>,
     /// The scene's velocity attachment: every draw's screen-space motion
     /// since the previous tick, in uv units -
     /// `oag_gpu::formats::VELOCITY_FORMAT`, at the scene's own sample
@@ -1219,6 +1224,7 @@ impl Scene {
             wo,
             motion_blur,
             blur_half: std::cell::Cell::new(false),
+            band_levels: std::cell::Cell::new([0.0; 16]),
             velocity,
             histories: (0..motion::HISTORY_COUNT)
                 .map(|_| motion::History::default())

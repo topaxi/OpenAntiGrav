@@ -176,6 +176,21 @@ pub const PROGRAM_PICTURE_ALPHA_EMISSIVE: f32 = 12.0;
 /// material binds a specular map third. See `super::rcs::psp2::alpha_emissive`.
 pub const ALPHA_EMISSIVE_SPECULAR_MAP: f32 = 1.0;
 
+/// [`Emissive::program`]'s mode for HD's Detonator mine (`detonator_mine_normal_alpha`, both the
+/// football and the spikes): an unlit Fresnel rim, `rim^(4 sat(1 - B) + 1) / (1 - 0.9 C)` per
+/// channel, `rim = sat(1 - N.V)`. The entry's tint is `MineColour` `C` and its offset
+/// `MineBrightness` `B`: the authored defaults at load, rewritten per instance each frame. See
+/// `super::rcs::mine_rim`.
+pub const PROGRAM_MINE_RIM: f32 = 23.0;
+
+/// [`Emissive::program`]'s mode for HD's Detonator bomb parts that carry a named colour and a
+/// brightness (`detonator_bomb_normal`: `BombColour` and `BombBrightness`;
+/// `detonator_bomb_normal_equalisers`: `BombEQColour` and `BombEQBrightness`): unlit, the entry's
+/// tint times its offset. **Chosen, not measured**: how the programs combine the colour with the
+/// normal map and the environment picture is unread; the brightness is their last multiply. The
+/// tint and offset are rewritten per instance each frame. See `super::rcs::bomb_tint`.
+pub const PROGRAM_BOMB_TINT: f32 = 24.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

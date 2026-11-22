@@ -27,7 +27,7 @@ evidence), then start at "Next Steps".
 | 7 | Hazards bite: `step_contacts` (damage, velocity cut, bomb push, removal), destroyed craft ends the race; the race loads the Detonator weapon table | done | `6a4c6be71` |
 | 8 | RE: pulse cannon, hits, score, destroyed count, percentage (`detonator-cannon.md`) | done | `0db7e825c` |
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
-| 8b | Wire the hull, handling, mine, bomb and pad models | done (wreck, death shell, colour binds open) | `4f4b70173` |
+| 8b | Wire the hull, handling, mine, bomb and pad models | done (wreck and death shell open); mine and bomb colour binds wired (`det-colour`) | `4f4b70173` |
 | 9 | Wire the cannon, score, destroyed count and percentage | simulation done; rounds, flash, explosion effects and the cannon's cues drawn on HD; the HUD is row 12's, no end screen | `59215fc52`, the `det-fx` commits |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads unread, so its EMP never charges | `det-emp-wire` |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
@@ -45,8 +45,8 @@ A race can already be launched from the command line:
 14 stages; each stage lays up to its `MineCountStage` mines and at most one bomb; a mine costs 10
 energy and half the speed, a bomb 20 and a push; energy at zero ends the race. Every craft flies
 the Detonator hull in its team livery on Detonator's own handling file; mines, bombs and pads draw
-the Detonator models (the mine football draws plain white: its `MineColour`/`MineBrightness` binds
-and the bomb's `BombColour` are unread). Square fires the pulse cannon and Circle reloads; rounds
+the Detonator models (a mine draws as its material's rim glow in the stage's colour and the music's
+envelope, a bomb in the stage's inner and outer colours; see "Mine and bomb colour binds"). Square fires the pulse cannon and Circle reloads; rounds
 destroy mines and bombs and the race keeps a score, a destroyed count and a percentage, but no
 the rounds and muzzle flashes are drawn and a shot mine, a bomb and a round on a wall play their disc effects (HD); the HUD is row 12's. The craft drives itself (Zone's
 auto-speed on the stage); pads charge the EMP instead of boosting, L1 fires it and its wave
@@ -255,28 +255,25 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
 
-- **Mine and bomb colour binds: RE done, ready to wire except the shader combine** (2026-11-22,
-  `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, 66-78, static; colour channel order inferred). Laws: the
-  mine's `MineColour` is the committed stage's `Detonator Mine Colour` bytes / 255 on football and
-  spikes (a dark mine: `(2,2,2)` / `(10,10,10)`, `MineBrightness` 0), `MineBrightness` is `2 * s`
-  with `s` an attack-over-0.3 / decay-x0.95 envelope of one band (football: random band 0..3 per
-  mine, spikes: that band + 11); the bomb's `BombColour` is `Detonator Bomb Inner Colour`,
-  `BombEQColour`/`Colour`/`RainbowColour` the `Outer Colour`, brightness `0.2 + 2f` / `0.8 + 2f`
-  from a decaying flash. The table is `detonatormode`/`detonatormodedlc3.effectsettings`, 15 stages,
-  through `EffectSettings::stage_rgba8` (four `key::` constants to add); the stage is
-  `ZoneGrade`'s lap-stage counter and the colour snaps on a step. The audio input is
-  `oag_audio::spectrum::Spectrum::levels()` (16 bands, as `SoundSystem_GetBandLevel`); render side
-  only. **No per-draw named-constant path exists** (`crates/mesh/src/mesh/rcs/*` read authored
-  parameters once at load): the wiring is a per-instance override of two or three `float4` slots on
-  the mine, spikes, bomb, equalisers and glow-edge pools in
-  `crates/raceplay/src/detonator_models.rs` and `scene/weapon_models.rs` (several hours). **Read
-  first:** the `detonator_mine_normal_alpha` fragment program's use of `MineColour` and
-  `MineBrightness` (`oag_rcs::rcsmaterial::fragment::Program`), unread, so the dark mine's look is
-  not yet a picture. 2048: checked, applies (byte-identical effect-settings file, same bind
-  strings), not wired. Omega: checked, applies (same file; binds by hash constants), not wired.
+- **Mine and bomb colour binds: mine wired, bomb partly** (`det-colour`, 2026-11-23;
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The mine's fragment program",
+  80, and "Wired"). A mine draws as its material's own unlit rim (`rim^(4 sat(1 - B) + 1) / (1 - 0.9 C)`,
+  `PROGRAM_MINE_RIM`) in the committed stage's `Detonator Mine Colour` with the music-driven
+  `MineBrightness` (`oag_raceplay::detonator_look`, per mine, keyed by survey entry and lane); a
+  dark mine takes the literals and brightness 0; a bomb body and its equalisers draw as colour times
+  brightness in the stage's inner and outer colours (`PROGRAM_BOMB_TINT`, chosen). Open:
+  the bomb programs' real combine (overlay, environment picture), the flash `b+0x154` writer
+  (unread, no trigger invented, lead's decision 2026-11-23: brightness stays `0.2`/`0.8`), the equalisers' rays and the glow edges' own colour binds
+  (generic names `Colour`/`Brightness`/`RainbowColour`), the mine's size breathing (`scale`,
+  `spikeScale`), the `Electric_Visualiser`, a dark mine's negative output on the original's target
+  (drawn black here, unseen), the band source (the visualiser's held levels, not the raw array) and
+  the call rate of the envelope (per tick here). Re-render the pairs before judging the mines
+  (the pair flags pass `--no-audio`, so brightness is `0` there: a thin rim). 2048: checked, applies
+  (byte-identical effect-settings file, same bind strings), not wired. Omega: checked, applies
+  (same file; binds by hash constants), not wired.
 - **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
-  (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (read, see the
-  "Mine and bomb colour binds" bullet below) and 2048's object models stay open (the circuit's own pads are now hidden);
+  (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (wired, see the
+  "Mine and bomb colour binds" bullet above) and 2048's object models stay open (the circuit's own pads are now hidden);
   `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
@@ -419,7 +416,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue); the original's frame is near black (mean `(18, 10, 11)` over `x 200..900, y 60..300`, ours `(96, 111, 121)`). **Cause read (80):** the original swaps in `ZoneSky.gtf` and draws the gradient dome on `g_ZoneEffectsActive`, which mode 14 sets; Detonator stage 1 authors `Sky horizon colour` and `Sky zenith colour` `0 0 0`, so the dome is black. Ours gates the sky swap and dome on `Mode::Zone` (`load/environment.rs:71`). `docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`. |
 | 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. The gantry violet is likely the stage's `EQ colour tint` `171 9 255` on the billboards, which ours leaves off (the shared stage target is `Mode::Zone` only, `load/gantry_visibility.rs:25`; the original's gate is the byte, 80). |
 | 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. Ours already applies Detonator's grade (its file, texture sets, Track recolour `[0.97, 0, 0]`); what is missing is the violet: the floor's dashes read `(132..143, 6..7, 199..211)`, the hue of `EQ colour tint` (60, one frame), and the bloom's Detonator arm (below). 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
-| 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball (`MineColour`/`MineBrightness` binds unread, known); ours also shows no spikes at a distance. |
+| 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball before `det-colour`; since then a stage-coloured rim sphere (the colour and brightness binds are wired; the spikes still barely show at a distance, and the mine's size breathing is open). |
 | 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
 | 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
 | 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours was a pale silver body with white wing edges. **Cause read and fixed (90, `det-hull-look`, `detonator-look.md`, "The hull's paint"): `emissive` added the hull's second texture as a glow** (`detonator_stripe.gtf`, a facing ramp, on the panels; `detonator_ao.gtf`, the picture itself, on the body), and the panels' iridescent overlay `2 * Colour * AO * stripe(N.V)` is now drawn (`mesh::rcs::hull_overlay`, 85). Side-panel box mean RGB ours `(109.4, 97.4, 98.1)` to `(67.7, 50.1, 50.6)` (`(54.1, 30.9, 32.0)` with the glow refusal alone), original `(60.5, 44.2, 44.5)`; ours is now 6 grey above it, cause open; the other HD pairs unchanged. **Still open:** the fuselage's own overlay (`rich_iridescent`, the iridescence ramp at another coordinate), and the lit blue strip and cyan wing edges (the `Charge1`/`Charge2` block's writer, `detonator-hull.md`). |

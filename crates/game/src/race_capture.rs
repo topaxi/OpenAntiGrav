@@ -942,7 +942,7 @@ pub fn capture(
     if scene.sync_zone_grade(&race) {
         scene.rebind_zone_art(&device, &queue);
     }
-    let spectrum = spectrum::zone_spectrum(options, audio);
+    let spectrum = spectrum::feed(options, audio, &scene);
     // The captured frame alone at `--draw-alpha`, default 1.0.
     race.set_draw_alpha(options.draw_alpha);
     oag_gpu::perfprobe::reset();

@@ -9,6 +9,7 @@ mod instance;
 mod moving;
 mod pad_glow;
 mod pad_tint;
+mod program_glow;
 mod scene_block;
 #[cfg(test)]
 pub(crate) use scene_block::Matrices;

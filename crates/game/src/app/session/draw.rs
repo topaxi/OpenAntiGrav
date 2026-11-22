@@ -403,6 +403,7 @@ impl Session {
                             .set_ghost_visible(self.settings.display.ghost_ship_shown(shell.title));
                     }
                     parked.scene.set_blur_resolution(blur_resolution);
+                    parked.scene.set_band_levels(spectrum);
                     parked.render(
                         &self.gpu,
                         &mut encoder,
@@ -496,6 +497,7 @@ impl Session {
                     hud.set_safe_area(self.settings.graphics.hud_safe_area);
                 }
                 stage.scene.set_blur_resolution(blur_resolution);
+                stage.scene.set_band_levels(spectrum);
                 let stats = stage.render(
                     &self.gpu,
                     &mut encoder,

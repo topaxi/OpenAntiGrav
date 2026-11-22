@@ -282,6 +282,36 @@ impl Race {
         matrices
     }
 
+    /// The laid Detonator mines [`Self::mine_model_matrices`] draws after the ordinary ones, in
+    /// its order: how many ordinary mines come first, then each laid mine's survey entry and lane
+    /// (its identity for as long as it exists) and whether it is live this stage. A mine the
+    /// survey cannot place is left out, as its matrix is.
+    #[must_use]
+    pub(crate) fn detonator_mine_looks(&self) -> (usize, Vec<crate::detonator_look::LaidMine>) {
+        let ordinary = self
+            .projectile_model_matrices(oag_tables::weapons::Weapon::Mine)
+            .len();
+        let Some(detonator) = &self.core.sim.detonator else {
+            return (ordinary, Vec::new());
+        };
+        let lane_width = detonator.layout.values.distance_offset_between_mines;
+        let laid = self
+            .core
+            .sim
+            .world
+            .detonator
+            .live_mines()
+            .iter()
+            .filter(|placed| detonator.survey.point(placed, lane_width).is_some())
+            .map(|placed| crate::detonator_look::LaidMine {
+                entry: placed.entry,
+                lane: placed.lane,
+                live: placed.live,
+            })
+            .collect();
+        (ordinary, laid)
+    }
+
     /// The model matrices of laid Detonator objects, off the lap's survey. Empty when the race has
     /// none.
     fn detonator_matrices(&self, laid: &[oag_weapons::detonator::Placed]) -> Vec<Mat4> {

@@ -252,6 +252,12 @@ pub struct Report {
     /// Of [`Self::alpha_emissive_bound`], the materials whose `SpecularTexture` is bound third and
     /// weights the specular.
     pub alpha_emissive_specular_maps: usize,
+    /// Detonator mine materials drawn as their program's own rim glow, `MineColour` and
+    /// `MineBrightness` riding the glow-table entry - see `super::mine_rim`.
+    pub mine_rim_bound: usize,
+    /// Detonator bomb materials drawn as their colour times their brightness - see
+    /// `super::bomb_tint`.
+    pub bomb_tint_bound: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
     /// `super::mag_wave`.
     pub mag_wave_bound: usize,
@@ -540,6 +546,14 @@ impl Report {
             0 => String::new(),
             n => format!(
                 ", {n} material(s) whose picture-alpha emissive could not be bound (drawn without)"
+            ),
+        } + &match self.mine_rim_bound {
+            0 => String::new(),
+            n => format!(", {n} Detonator mine material(s) drawn as their rim glow"),
+        } + &match self.bomb_tint_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} Detonator bomb material(s) drawn as their colour times their brightness (the flash `b+0x154` has no recovered writer: brightness stays at its resting value)"
             ),
         } + &match self.mag_wave_bound {
             0 => String::new(),
