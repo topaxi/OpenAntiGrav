@@ -2249,9 +2249,12 @@ manifests are developer material, not a publishing set.
 
 | Pair | Lap clock | RMSE | Edge corr. | Mean grey |
 | --- | ---: | ---: | ---: | ---: |
-| `mines-ahead` | 2.66 s | 0.297 | 0.08 | 41.5 |
-| `cannon-volley` | 2.21 s | 0.289 | 0.12 | 35.9 |
-| `pad` | 2.0 s | 0.264 | 0.10 | 28.3 |
+| `mines-ahead` | 2.66 s | 0.297, then 0.223 | 0.08, then 0.11 | 41.5, then 20.9 |
+| `cannon-volley` | 2.21 s | 0.289, then 0.205 | 0.12 | 35.9, then 20.6 |
+| `pad` | 2.0 s | 0.264, then 0.159 | 0.10 | 28.3, then 12.6 |
+
+"Then" is after `det-look` (2026-11-22) gave a Detonator race Zone's sky and dome, the shared billboard target and its own bloom arm
+(`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "Wired").
 
 What differs, by region and size: the Detonator thread's "Render accuracy" section.
 
