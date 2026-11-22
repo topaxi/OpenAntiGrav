@@ -479,6 +479,12 @@ pub struct World {
     /// `oag_weapons::projectile::repulser`. Covered by [`crate::hash::hash_world`].
     pub repulsers: [Option<oag_weapons::projectile::repulser::Repulser>;
         oag_weapons::projectile::repulser::POOL_SIZE],
+    /// Detonator's mines and bombs, empty in every other mode.
+    ///
+    /// Fixed arrays like [`Self::projectiles`]. Simulation state, so [`crate::hash::hash_world`]
+    /// covers it, **only when something was laid**: a race that never lays one keeps its hash.
+    /// See `oag_weapons::detonator`.
+    pub detonator: oag_weapons::detonator::Field,
 }
 
 impl World {
@@ -509,6 +515,7 @@ impl World {
             quake: None,
             leach_beams: [None; oag_weapons::projectile::leach_beam::POOL_SIZE],
             repulsers: [None; oag_weapons::projectile::repulser::POOL_SIZE],
+            detonator: oag_weapons::detonator::Field::new(),
         }
     }
 
@@ -644,7 +651,9 @@ mod tests {
         // +128: `Ship::transit`, a mod's jump along the circuit, 16 bytes per ship;
         // +192: `ShipState::flip`, the Eliminator flip, 24 bytes per craft;
         // +128: `Ship::track_up`, the located track's up a weapon is born carrying, 16 bytes per ship.
-        const LIMIT: usize = 20_392;
+        // +816: `World::detonator`, Detonator's 200 mines and 2 bombs as a 4-byte address each (the
+        // survey, not the world, holds where an entry is).
+        const LIMIT: usize = 21_208;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

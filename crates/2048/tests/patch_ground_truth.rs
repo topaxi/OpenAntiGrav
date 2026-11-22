@@ -82,3 +82,25 @@ fn a_source_naming_only_the_base_package_mounts_no_patch() {
         "data.psarc"
     );
 }
+
+/// Detonator's two layout files resolve through the title axis on the mounted archives.
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn the_detonator_layout_entries_resolve() {
+    let Some(mut archives) = open("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let layouts = oag_2048::TITLE
+        .race
+        .detonator
+        .and_then(|d| d.layouts)
+        .expect("2048 names the layout files");
+    let patterns = archives
+        .read_name(layouts.pattern_file)
+        .expect("PatternFile");
+    assert!(String::from_utf8_lossy(&patterns).contains("<Pattern"));
+    let values = archives
+        .read_name(layouts.gameplay_values)
+        .expect("GamePlayValues");
+    assert!(String::from_utf8_lossy(&values).contains("MineCountStage14"));
+}

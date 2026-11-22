@@ -71,6 +71,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         quake,
         leach_beams,
         repulsers,
+        detonator,
     } = world;
 
     hasher.write_u64(*tick);
@@ -122,6 +123,35 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
     for repulser in repulsers {
         write_repulser(hasher, repulser);
     }
+    // Only a race that laid something: every other mode keeps the hash it always had.
+    if !detonator.is_empty() {
+        write_detonator(hasher, detonator);
+    }
+}
+
+fn write_detonator(hasher: &mut StateHasher, field: &oag_weapons::detonator::Field) {
+    let oag_weapons::detonator::Field {
+        stages_laid,
+        mines,
+        live_mines,
+        bombs,
+        live_bombs,
+    } = field;
+    hasher.write_u8(*stages_laid);
+    hasher.write_u32(u32::from(*live_mines));
+    for mine in &mines[..usize::from(*live_mines)] {
+        write_placed(hasher, mine);
+    }
+    hasher.write_u8(*live_bombs);
+    for bomb in &bombs[..usize::from(*live_bombs)] {
+        write_placed(hasher, bomb);
+    }
+}
+
+fn write_placed(hasher: &mut StateHasher, placed: &oag_weapons::detonator::Placed) {
+    let oag_weapons::detonator::Placed { entry, lane } = placed;
+    hasher.write_u32(u32::from(*entry));
+    hasher.write_i32(i32::from(*lane));
 }
 
 fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
@@ -846,6 +876,23 @@ mod tests {
         // `is_some` byte would miss.
         world.ships[0].pickup.weapon = Some(Weapon::Shield);
         assert_ne!(with_rocket, hash_world(&world));
+    }
+
+    /// A laid Detonator object is simulation state, and a world that never laid one hashes as it
+    /// always did (the committed references do not move).
+    #[test]
+    fn a_laid_detonator_mine_moves_the_hash_and_an_empty_field_does_not() {
+        let mut world = World::new(1);
+        let empty = hash_world(&world);
+        world.detonator.stages_laid = 1;
+        let opened = hash_world(&world);
+        assert_ne!(empty, opened, "a stage laid with no mine is still a state");
+        world.detonator.live_mines = 1;
+        world.detonator.mines[0].entry = 3;
+        let one = hash_world(&world);
+        assert_ne!(opened, one);
+        world.detonator.mines[0].lane = -2;
+        assert_ne!(one, hash_world(&world));
     }
 
     /// A projectile a metre further along is a different world. This is the one

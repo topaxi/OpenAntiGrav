@@ -109,6 +109,7 @@ impl SimSetup {
             weapon_pads: Vec::new(),
             weapons: None,
             weapon_ai: None,
+            detonator: None,
             allowed_weapons: Vec::new(),
             weapon_pad_refresh: 0.0,
             pose_override: None,

@@ -15,8 +15,11 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 ## Open
 
-- **Layout files decoded** (`oag_tables::detonator_layout`, `docs/formats/detonator-layouts.md`):
-  the patterns and the stage mine counts are readable; placing them in a race is next.
+- **Layout files decoded and placement wired, inert** (`oag_tables::detonator_layout`,
+  `oag_weapons::detonator`, `oag_raceplay::detonator`): HD races lay their mines and bombs per
+  stage and draw them with the ordinary Mine and Bomb models. Open: contact, blast and
+  destruction (the unread part of `detonator-placement.md`), the Detonator-specific models, the
+  survey's collision return codes (probes are chosen), how objects leave their pool.
 
 - **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
   2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.

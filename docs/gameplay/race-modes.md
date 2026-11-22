@@ -1504,9 +1504,22 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
   inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
-- **Not here, each named on the evidence page**: the mines and bombs (the placement law is
-  read, [detonator-placement.md](../ghidra/functions/ps3-hdfury-eu/detonator-placement.md),
-  not wired), the pulse cannon, the EMP and its pads, the score and the end-of-run
+- **Mines and bombs are laid and inert.** The opening stage and each stage step lay objects
+  by the recovered law ([detonator-placement.md](../ghidra/functions/ps3-hdfury-eu/detonator-placement.md);
+  `oag_weapons::detonator`, state in `World::detonator`, hashed only once something is laid):
+  groups of clusters from the disc's `PatternFile.xml` up to the stage's `MineCountStage`
+  (`GamePlayValues.xml`, [detonator-layouts.md](../formats/detonator-layouts.md)), single mines
+  topping the total up, and one bomb attempt per stage. They are drawn with the ordinary Mine
+  and Bomb models (no Detonator-specific one is located; **chosen, not measured**), do nothing
+  when a craft meets them, and never leave. **Chosen, not measured:** the lap survey's probes
+  (the original's collision return codes are unread: any wall clamps a width, no ground or a
+  `Reset` surface blocks a lane), the seeded `Rng` for `Libc_Rand`, a two-slot bomb pool
+  refusing a third, and clusters stopping at the lap's end instead of reading past it. Checked
+  on HD (a lone autopilot race lays up to 80 mines on stage 1 and tops up on the first
+  crossing; `detonator_ground_truth.rs`); 2048 and Omega name the same files and the entries
+  resolve on their archives (applies, not raced).
+- **Not here, each named on the evidence page**: what a mine or bomb does (contact, blast, the
+  out-of-race ending), the pulse cannon, the EMP and its pads, the score and the end-of-run
   percentage, the out-of-race ending, the "automatic and ever-increasing" acceleration the
   manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
   draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).

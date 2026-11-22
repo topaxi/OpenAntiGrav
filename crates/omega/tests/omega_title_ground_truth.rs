@@ -251,3 +251,24 @@ fn xp_tables_match_2048s_awards_and_halve_its_ranks() {
     assert_eq!(ranks.thresholds[0], 15_000);
     assert_eq!(ranks.threshold_xp(50, 0), 1_790_000);
 }
+
+/// Detonator's two layout files resolve through the title axis on Omega's mounted archives.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn the_detonator_layout_entries_resolve() {
+    let Some(source) = source() else { return };
+    let mut archives = oag_omega::open(&source).expect("open the omega source");
+    let layouts = oag_omega::TITLE
+        .race
+        .detonator
+        .and_then(|d| d.layouts)
+        .expect("Omega names the layout files");
+    let patterns = archives
+        .read_name(layouts.pattern_file)
+        .expect("PatternFile");
+    assert!(String::from_utf8_lossy(&patterns).contains("<Pattern"));
+    let values = archives
+        .read_name(layouts.gameplay_values)
+        .expect("GamePlayValues");
+    assert!(String::from_utf8_lossy(&values).contains("MineCountStage14"));
+}

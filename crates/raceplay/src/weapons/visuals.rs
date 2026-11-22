@@ -277,7 +277,22 @@ impl Race {
     /// chosen rather than measured.
     #[must_use]
     pub fn mine_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_tables::weapons::Weapon::Mine)
+        let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Mine);
+        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_mines()));
+        matrices
+    }
+
+    /// The model matrices of laid Detonator objects, off the lap's survey. Empty when the race has
+    /// none.
+    fn detonator_matrices(&self, laid: &[oag_weapons::detonator::Placed]) -> Vec<Mat4> {
+        let Some(detonator) = &self.core.sim.detonator else {
+            return Vec::new();
+        };
+        let lane_width = detonator.layout.values.distance_offset_between_mines;
+        laid.iter()
+            .filter_map(|placed| detonator.survey.point(placed, lane_width))
+            .map(|(position, up)| detonator_matrix(position, up))
+            .collect()
     }
 
     /// Where each live bomb is, for the model draw - the Mine's, one size up.
@@ -289,7 +304,9 @@ impl Race {
     /// happens there, and nothing rules it out either.
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
-        self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb)
+        let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb);
+        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_bombs()));
+        matrices
     }
 
     /// Where each live Shuriken blade is: `Shuriken_Update`'s (`0x08877bdc`)
@@ -419,6 +436,31 @@ impl Race {
             })
             .collect()
     }
+}
+
+/// Where a laid Detonator object sits: upright on the section's up axis, at its position.
+///
+/// `Detonator_SpawnObject` hands the mine's init a basis of the world X axis, the section's up
+/// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
+/// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
+/// banked section does not shear the model. The drawn model is the ordinary Mine's and Bomb's;
+/// no Detonator-specific one is located.
+fn detonator_matrix(position: Vec3, up: Vec3) -> Mat4 {
+    let up = up.normalize_or_zero();
+    let up = if up == Vec3::ZERO { Vec3::Y } else { up };
+    let reference = if up.dot(Vec3::Z).abs() > 0.99 {
+        Vec3::X
+    } else {
+        Vec3::Z
+    };
+    let forward = (reference - up * reference.dot(up)).normalize();
+    let right = up.cross(forward);
+    Mat4::from_cols(
+        right.extend(0.0),
+        up.extend(0.0),
+        forward.extend(0.0),
+        position.extend(1.0),
+    )
 }
 
 /// How far along its trip the HD LeachBall is, `0..=1`, `elapsed` seconds in

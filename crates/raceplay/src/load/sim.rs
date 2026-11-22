@@ -252,6 +252,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
     let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
+    let detonator = assets::load_detonator_layout(&mut archives, title, options.mode, &mut report);
     let rule = crate::score_law::of(options, title, &weapon_ai, &mut archives, &mut report);
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
@@ -530,6 +531,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         weapon_pads,
         weapons,
         weapon_ai,
+        detonator,
         // No caller of the general `load` sets this - only `race::load::campaign::load_event`
         // does, on the `Loaded` this returns, after this whole function has already run.
         // See `SimSetup::allowed_weapons`'s own doc comment.

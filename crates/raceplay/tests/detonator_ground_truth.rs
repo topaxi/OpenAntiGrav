@@ -204,3 +204,65 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
             .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
     );
 }
+
+/// **Mines and bombs.** The opening stage lays up to the first stage's count (the disc's
+/// `MineCountStage1`, `80`) and at most one bomb; the first lap's crossing lays the second
+/// stage's top-up on a total of at most `90`. Nothing is laid off a usable lane, and nothing
+/// moves: the field only grows.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_race_lays_its_mines_and_steps_the_total_a_stage() {
+    let Some(loaded) = load() else {
+        return;
+    };
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("PatternFile.xml") && line.contains("18 pattern group")),
+        "the layout load is reported: {:?}",
+        loaded.report
+    );
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
+    race.tick(&PlayerInputs::none());
+    let first = race.core.sim.world.detonator;
+    assert_eq!(first.stages_laid, 1);
+    assert!(
+        (40..=80).contains(&first.live_mines),
+        "stage 1 aims for 80 and a lane the spawn refuses costs one: {}",
+        first.live_mines
+    );
+    assert!(first.live_bombs <= 1);
+    let mut seen = std::collections::BTreeSet::new();
+    assert!(
+        first
+            .live_mines()
+            .iter()
+            .all(|m| seen.insert((m.entry, m.lane))),
+        "no two mines share a lane"
+    );
+    assert!(
+        first.live_mines().iter().all(|m| m.lane.abs() <= 10),
+        "a lane is at most ten either side of the centre"
+    );
+
+    for _ in 0..60 * 60 * 3 {
+        race.tick(&PlayerInputs::none());
+        if race.core.sim.world.detonator.stages_laid >= 2 {
+            break;
+        }
+    }
+    let second = race.core.sim.world.detonator;
+    assert_eq!(second.stages_laid, 2, "the first crossing lays stage 2");
+    assert!(
+        second.live_mines >= first.live_mines,
+        "mines stay until something removes them"
+    );
+    assert!(second.live_mines <= 90);
+    assert_eq!(
+        second.live_mines()[..usize::from(first.live_mines)],
+        first.live_mines()[..],
+        "the first stage's mines did not move"
+    );
+}

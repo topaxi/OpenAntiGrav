@@ -14,6 +14,7 @@
 
 pub mod counts;
 pub mod craft;
+pub mod detonator;
 pub mod disruption;
 pub mod pickup;
 pub mod projectile;

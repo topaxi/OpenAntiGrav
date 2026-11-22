@@ -883,3 +883,39 @@ pub(super) fn load_weapons(
     }
     Some(stats)
 }
+
+/// Detonator's two layout files, or `None` off Detonator, on a title that names none, or when
+/// either is unreadable (the race then lays no mines, with a report line saying why).
+pub(super) fn load_detonator_layout(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    mode: Mode,
+    report: &mut Vec<String>,
+) -> Option<oag_weapons::detonator::Layout> {
+    if mode != Mode::Detonator {
+        return None;
+    }
+    let Some(layouts) = title.race.detonator.and_then(|d| d.layouts) else {
+        report
+            .push("no Detonator layout files named for this title; no mines are laid".to_string());
+        return None;
+    };
+    let mut read = |entry: &str| match archives.read_name(entry) {
+        Ok(blob) => Some(String::from_utf8_lossy(&blob).into_owned()),
+        Err(e) => {
+            report.push(format!("{entry}: {e}; no mines are laid"));
+            None
+        }
+    };
+    let patterns = oag_tables::detonator_layout::parse_patterns(&read(layouts.pattern_file)?);
+    let values = oag_tables::detonator_layout::parse_values(&read(layouts.gameplay_values)?);
+    report.push(format!(
+        "{}: {} pattern group(s); {}: {} mines at stage 1, {} at stage 14",
+        layouts.pattern_file,
+        patterns.patterns.len(),
+        layouts.gameplay_values,
+        values.mine_count(1).unwrap_or(0),
+        values.mine_count(14).unwrap_or(0),
+    ));
+    Some(oag_weapons::detonator::Layout { patterns, values })
+}

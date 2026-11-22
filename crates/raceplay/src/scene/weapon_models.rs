@@ -36,6 +36,7 @@ pub(super) fn build(
     scene_depth: mesh_render::Depth,
     zone_art: &mesh_render::zone::StageArt,
     shadow_maps: mesh_render::ShadowMaps<'_>,
+    slots: usize,
 ) -> Result<Vec<Drawable>> {
     let mut drawables: Vec<Drawable> = Vec::new();
     if let Some(model) = model.filter(|model| !model.indices.is_empty()) {
@@ -57,12 +58,20 @@ pub(super) fn build(
         )?;
         // Every slot but the first is another name for the first's GPU resources - see
         // `Drawable::instances` for what it shares.
-        let rest = first.instances(device, oag_weapons::projectile::MAX_PROJECTILES - 1);
+        let rest = first.instances(device, slots - 1);
         drawables.push(first);
         drawables.extend(rest);
     }
     Ok(drawables)
 }
+
+/// How many mine bodies the pool holds: the larger of the projectile pool and Detonator's field.
+pub(super) const MINE_POOL: usize =
+    if oag_weapons::projectile::MAX_PROJECTILES > oag_weapons::detonator::MAX_MINES {
+        oag_weapons::projectile::MAX_PROJECTILES
+    } else {
+        oag_weapons::detonator::MAX_MINES
+    };
 
 /// Builds every weapon's own drawable pool in one call - the Rocket's, the
 /// Mine's, the Bomb's, the Cannon round's, the Plasma blast's three and the
@@ -106,7 +115,7 @@ pub(super) fn build_all(
     zone_art: &mesh_render::zone::StageArt,
     shadow_maps: mesh_render::ShadowMaps<'_>,
 ) -> Result<WeaponBodies> {
-    let one = |model| {
+    let sized = |model, slots| {
         build(
             device,
             queue,
@@ -118,11 +127,14 @@ pub(super) fn build_all(
             scene_depth,
             zone_art,
             shadow_maps,
+            slots,
         )
     };
+    let one = |model| sized(model, oag_weapons::projectile::MAX_PROJECTILES);
     Ok((
         one(rocket_model)?,
-        one(mine_model)?,
+        // A Detonator field lays more mines than a race can have in the air.
+        sized(mine_model, MINE_POOL)?,
         one(bomb_model)?,
         one(cannon_model)?,
         blast_models::PlasmaBlastDrawables::build(plasma_blast_models, one)?,
