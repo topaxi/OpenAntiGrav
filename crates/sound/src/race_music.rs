@@ -3,6 +3,34 @@
 //! race-boundary prefetch and the `MUSIC SOURCE` row.
 
 use super::*;
+use crate::song::{Song, name_song};
+
+/// A music track that has been read and decoded, before a voice is started on it.
+///
+/// [`Loaded::from`] records whether the track is one of the sixteen, which decides whether
+/// MUSIC SOURCE may move it. See [`MusicSource`]. Public, not its fields, so
+/// [`MusicFetchWorker::join`] can hand one back across the lib/bin boundary.
+pub struct Loaded {
+    /// Which release it came off, or `None` for music with no counterpart.
+    /// Becomes `Audio::music_from`.
+    pub(crate) from: Option<Platform>,
+    pub(crate) sound: Arc<Sound>,
+    pub(crate) what: String,
+    /// What the song is called; `None` for music with no marquee (the menu's).
+    pub(crate) song: Option<Song>,
+}
+
+// Written out so a `{:?}` says how long the track is, not print three minutes of it.
+impl std::fmt::Debug for Loaded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Loaded")
+            .field("from", &self.from)
+            .field("seconds", &self.sound.seconds())
+            .field("what", &self.what)
+            .field("song", &self.song)
+            .finish()
+    }
+}
 
 /// The index one before `index` in a soundtrack of `len` tracks, wrapping; the inverse of
 /// [`next_race_index`].
@@ -40,6 +68,9 @@ pub(crate) fn random_first_index(seed: u64, len: usize, menu_plays_a_track: bool
 /// notices; `Audio::race_index` is read in the booted disc's order for exactly
 /// this reason, and a future circuit-to-track map must be built the same way.
 ///
+/// The track's position in `platform`'s own listing comes back with it: that position, not
+/// `index`, is what names the song.
+///
 /// Free, not an `Audio` method, so [`fetch_track`] can call it from a thread
 /// that does not own `Audio`.
 fn locate(
@@ -47,22 +78,23 @@ fn locate(
     platform: Platform,
     source: &str,
     index: usize,
-) -> Result<Option<Track>> {
+) -> Result<Option<(usize, Track)>> {
     let Some(soundtrack) = discs.listings.read(discs.library, source, platform)? else {
         return Ok(None);
     };
+    let at_index = || soundtrack.tracks.get(index).map(|track| (index, *track));
     if discs.booted() == Some(platform) {
-        return Ok(soundtrack.tracks.get(index).copied());
+        return Ok(at_index());
     }
 
     let Some((booted_source, booted_platform)) = discs.pick(MusicSource::Auto) else {
-        return Ok(soundtrack.tracks.get(index).copied());
+        return Ok(at_index());
     };
     let Some(booted) = discs
         .listings
         .read(discs.library, booted_source, booted_platform)?
     else {
-        return Ok(soundtrack.tracks.get(index).copied());
+        return Ok(at_index());
     };
     let Some(wanted) = booted.tracks.get(index) else {
         return Ok(None);
@@ -377,7 +409,7 @@ pub(super) fn fetch_track(
     let Some((source, platform)) = discs.pick(choice) else {
         return Ok(None);
     };
-    let Some(track) = locate(discs, platform, source, index)? else {
+    let Some((position, track)) = locate(discs, platform, source, index)? else {
         return Ok(None);
     };
     let sound = Arc::new(load_track(
@@ -388,6 +420,7 @@ pub(super) fn fetch_track(
         cache_dir,
         &discs.listings,
     )?);
+    let song = booted_song(discs, source, platform, position);
     Ok(Some(Loaded {
         from: Some(platform),
         sound,
@@ -395,7 +428,37 @@ pub(super) fn fetch_track(
             "{platform} soundtrack track {index}, {:.1} s as its own disc lists it",
             track.seconds
         ),
+        song,
     }))
+}
+
+/// The name of track `position` of the booted title's `platform` pressing.
+///
+/// A pressing that names nothing (the PS2's) is named by its other pressing, whose listing is
+/// read here when it has not been: this runs on a fetch worker, never the frame thread.
+fn booted_song(
+    discs: &MusicDiscs,
+    source: &str,
+    platform: Platform,
+    position: usize,
+) -> Option<Song> {
+    let counterpart = discs.counterpart(platform);
+    let names_nothing = discs
+        .listings
+        .known(source, platform)
+        .is_some_and(|listing| listing.names.is_empty());
+    if names_nothing && let Some((other, other_platform)) = counterpart {
+        // A listing that will not read is the same as no counterpart.
+        let _ = discs.listings.read(discs.library, other, other_platform);
+    }
+    name_song(
+        &discs.listings,
+        source,
+        platform,
+        position,
+        discs.pool.booted_title(),
+        counterpart,
+    )
 }
 
 /// Decodes song `at` of the pool beyond the booted soundtrack.
@@ -421,6 +484,8 @@ fn fetch_extra(
                 platform,
                 track,
                 label,
+                position,
+                title,
             } => load_track(
                 discs.library,
                 source,
@@ -429,16 +494,27 @@ fn fetch_extra(
                 cache_dir,
                 &discs.listings,
             )
-            .map(|sound| (sound, format!("{label} track at {}", track.at))),
+            .map(|sound| {
+                let song = name_song(
+                    &discs.listings,
+                    source,
+                    *platform,
+                    *position,
+                    Some(title),
+                    None,
+                );
+                (sound, format!("{label} track at {}", track.at), song)
+            }),
             pool::Extra::File(path) => folders::load(&*discs.pool.reader(), path)
-                .map(|sound| (sound, path.display().to_string())),
+                .map(|(sound, song)| (sound, path.display().to_string(), song)),
         };
         match loaded {
-            Ok((sound, what)) => {
+            Ok((sound, what, song)) => {
                 return Ok(Some(Loaded {
                     from: None,
                     sound: Arc::new(sound),
                     what: format!("pool song {what}"),
+                    song,
                 }));
             }
             Err(error) => {
@@ -588,7 +664,7 @@ impl Audio {
     ) -> Option<(usize, Loaded)> {
         let index = pick.known(discs)?;
         let (_, platform) = discs.pick(choice)?;
-        let (cached_platform, cached_index, sound) = self.race_cache.as_ref()?;
+        let (cached_platform, cached_index, sound, song) = self.race_cache.as_ref()?;
         (*cached_platform == platform && *cached_index == index).then(|| {
             (
                 index,
@@ -596,6 +672,7 @@ impl Audio {
                     from: Some(platform),
                     sound: Arc::clone(sound),
                     what: format!("{platform} soundtrack track {index}, already read"),
+                    song: song.clone(),
                 },
             )
         })
@@ -647,7 +724,7 @@ impl Audio {
             if let Ok(Some(loaded)) = fetched
                 && let Some(platform) = loaded.from
             {
-                self.race_cache = Some((platform, index, loaded.sound));
+                self.race_cache = Some((platform, index, loaded.sound, loaded.song));
             }
             self.race_position = resolved.seek.unwrap_or(0.0);
             return;
@@ -709,9 +786,14 @@ impl Audio {
     ) {
         match fetched {
             Ok(Some(loaded)) if self.song_hold.holding() => {
-                self.race_cache = loaded
-                    .from
-                    .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
+                self.race_cache = loaded.from.map(|platform| {
+                    (
+                        platform,
+                        index,
+                        Arc::clone(&loaded.sound),
+                        loaded.song.clone(),
+                    )
+                });
                 debug!(
                     "audio: race music {} waits for the green light",
                     loaded.what
@@ -728,9 +810,14 @@ impl Audio {
     /// new song for the now-playing display.
     pub(super) fn start_race_voice(&mut self, index: usize, loaded: Loaded, seek: Option<f64>) {
         let seconds = loaded.sound.seconds();
-        self.race_cache = loaded
-            .from
-            .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
+        self.race_cache = loaded.from.map(|platform| {
+            (
+                platform,
+                index,
+                Arc::clone(&loaded.sound),
+                loaded.song.clone(),
+            )
+        });
         self.race_voice = self.output.with_mixer(|mixer| {
             let id = mixer.play(Play::once(loaded.sound, Bus::Music))?;
             if let Some(seek) = seek {
@@ -739,8 +826,12 @@ impl Audio {
             Some(id)
         });
         self.race_from = self.race_voice.and(loaded.from);
-        if self.race_voice.is_some() && seek.is_none() {
-            self.song_serial = self.song_serial.wrapping_add(1);
+        if self.race_voice.is_some() {
+            self.song = loaded.song;
+            if seek.is_none() {
+                self.song_serial = self.song_serial.wrapping_add(1);
+                self.song_starts = self.song_starts.wrapping_add(1);
+            }
         }
         match seek {
             Some(seek) => debug!(
@@ -851,6 +942,7 @@ impl Audio {
                     from: Some(wanted),
                     sound,
                     what: format!("{wanted} soundtrack track {MUSIC_TRACK}, already read"),
+                    song: None,
                 })),
             );
             return;
@@ -903,11 +995,12 @@ impl Audio {
             return;
         }
 
-        if let Some((cached_platform, cached_index, sound)) = &self.race_cache
+        if let Some((cached_platform, cached_index, sound, song)) = &self.race_cache
             && *cached_platform == wanted
             && *cached_index == index
         {
             let sound = Arc::clone(sound);
+            let song = song.clone();
             self.apply_race_source_result(
                 wanted,
                 index,
@@ -917,6 +1010,7 @@ impl Audio {
                     from: Some(wanted),
                     sound,
                     what: format!("{wanted} soundtrack track {index}, already read"),
+                    song,
                 })),
             );
             return;
@@ -1020,7 +1114,12 @@ impl Audio {
                     self.race_voice = started;
                 });
                 self.race_from = self.race_voice.and(loaded.from);
-                self.race_cache = loaded.from.map(|platform| (platform, index, loaded.sound));
+                if self.race_voice.is_some() {
+                    self.rename_song(loaded.song.clone());
+                }
+                self.race_cache = loaded
+                    .from
+                    .map(|platform| (platform, index, loaded.sound, loaded.song));
                 if let Some((cached_discs, cached_choice, ..)) = &mut self.race_context {
                     *cached_discs = discs;
                     *cached_choice = choice;
@@ -1037,6 +1136,15 @@ impl Audio {
         }
     }
 
+    /// Stores `song` as the one playing after a source switch. A different name restarts the
+    /// marquee through [`Self::song_serial`]; the same one leaves it be.
+    fn rename_song(&mut self, song: Option<Song>) {
+        if self.song != song {
+            self.song_serial = self.song_serial.wrapping_add(1);
+        }
+        self.song = song;
+    }
+
     /// [`Self::apply_race_source_result`]'s case of a song still waiting for the release: the
     /// parked track becomes the same track on the new release, and the playlist continues from
     /// that release as it does after a switch under a sounding voice.
@@ -1047,9 +1155,14 @@ impl Audio {
         discs: MusicDiscs,
         choice: MusicSource,
     ) {
-        let cache = loaded
-            .from
-            .map(|platform| (platform, index, Arc::clone(&loaded.sound)));
+        let cache = loaded.from.map(|platform| {
+            (
+                platform,
+                index,
+                Arc::clone(&loaded.sound),
+                loaded.song.clone(),
+            )
+        });
         let what = loaded.what.clone();
         if !self.song_hold.replace_parked(index, loaded) {
             return;

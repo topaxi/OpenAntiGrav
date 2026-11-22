@@ -451,6 +451,8 @@ ids = [
     "OAG_DISPLAY_FRONT_END_STYLE",
     "OAG_DISPLAY_HUD_STYLE",
     "OAG_DISPLAY_VSYNC",
+    # The song-name marquee's "Track N" for a disc track nothing names.
+    "OAG_HUD_TRACK_N",
     "OAG_DISPLAY_PAUSE_ON_FOCUS_LOSS",
     "OAG_CONTROLS_TOUCH_GO_ZONES",
     "OAG_CONTROLS_TOUCH_SCHEME",

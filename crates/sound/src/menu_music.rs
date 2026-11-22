@@ -120,6 +120,7 @@ impl Audio {
                 from: Some(platform),
                 sound: Arc::clone(sound),
                 what: format!("{platform} soundtrack track {MUSIC_TRACK}, already read"),
+                song: None,
             };
             self.apply_menu_landed(MenuLanded {
                 maps: None,

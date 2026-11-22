@@ -409,14 +409,18 @@ impl FolderScan {
     }
 }
 
-/// Reads and decodes one song of a folder. Runs on a music worker.
+/// Reads and decodes one song of a folder, and names it from its tags (its file's stem for a
+/// title the tags lack). Runs on a music worker.
 ///
 /// # Errors
 ///
 /// A file that is gone or will not decode; the caller logs the reason and the
 /// song stays out of the run, so a mount that vanished mid-race costs the next
 /// song, never the one already playing.
-pub fn load(reader: &dyn Reader, path: &Path) -> anyhow::Result<oag_audio::Sound> {
+pub(crate) fn load(
+    reader: &dyn Reader,
+    path: &Path,
+) -> anyhow::Result<(oag_audio::Sound, Option<crate::song::Song>)> {
     use anyhow::Context;
     let _work = crate::probe::work("a music folder song's read and decode");
     let bytes = reader
@@ -427,8 +431,9 @@ pub fn load(reader: &dyn Reader, path: &Path) -> anyhow::Result<oag_audio::Sound
         .and_then(|extension| extension.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
-    let pcm = oag_music::file::decode(&bytes, &extension)
+    let (pcm, tags) = oag_music::file::decode_tagged(&bytes, &extension)
         .with_context(|| format!("decoding {}", path.display()))?;
-    oag_audio::Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
-        .with_context(|| path.display().to_string())
+    let sound = oag_audio::Sound::new(pcm.samples, pcm.channels, pcm.sample_rate)
+        .with_context(|| path.display().to_string())?;
+    Ok((sound, crate::song::tagged_song(path, tags)))
 }

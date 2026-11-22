@@ -511,7 +511,7 @@ pub(crate) struct Session {
     /// this exists at all, and `Session::frame`/`Session::escape` for the two
     /// places that ever call [`records::Store::record`].
     pub(crate) records: records::Store,
-    /// The serial of the race song last counted ([`Self::count_heard_song`]).
+    /// The `started` count of the race song last counted ([`Self::count_heard_song`]).
     pub(crate) heard_song: u32,
     /// The footer ticker's messages and what they were drawn from (the title and the lifetime
     /// counters' events), so the draw runs again only when a counted event changes it.

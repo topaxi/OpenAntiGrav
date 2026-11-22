@@ -170,7 +170,7 @@ fn a_source_switch_made_while_the_song_waits_changes_what_the_release_starts() {
         .expect("the parked track's place in the playlist");
 
     // The PS2 recording of the same track, as if an earlier read had it.
-    audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000)));
+    audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000), None));
     audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
     assert!(
         audio.race_voice.is_none(),
@@ -225,7 +225,7 @@ fn a_source_switch_landing_after_the_release_moves_the_sounding_song() {
     step(&mut audio, false);
     assert_eq!(audio.race_from, Some(Platform::Psp));
 
-    audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000)));
+    audio.race_cache = Some((Platform::Ps2, index, silence(180.0, 2, 48_000), None));
     audio.set_music_source(&discs(), MusicSource::Ps2, Path::new("unused"));
     assert_eq!(audio.race_from, Some(Platform::Ps2));
 }

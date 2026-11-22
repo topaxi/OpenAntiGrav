@@ -6,6 +6,15 @@
 use super::Session;
 use crate::app::stage::Stage;
 
+/// The song title to count under `played`, when a song has started since `last` and `played`
+/// authored its name (see [`Session::count_heard_song`]).
+fn song_to_count(last: u32, song: &oag_sound::NowPlaying, played: &str) -> Option<String> {
+    if last == song.started || song.author != Some(played) {
+        return None;
+    }
+    song.name.as_ref().map(|name| name.title.clone())
+}
+
 impl Session {
     /// The title the place is keyed on: the shell's on every front-end route,
     /// the one `--race` opened on the command-line route.
@@ -33,18 +42,21 @@ impl Session {
         }
     }
 
-    /// Counts the race song that started since the last call, as the disc names it, in the
-    /// title's lifetime statistics (`TKR_SONGS`, `TKR_FAVMUS`). A song the disc does not name
-    /// is not counted: the ticker would have no name to quote.
+    /// Counts the race song that started since the last call in the title's lifetime statistics
+    /// (`TKR_SONGS`, `TKR_FAVMUS`), once per song started: a `MUSIC SOURCE` switch renames the
+    /// song on the marquee and does not count again. Only a name the title being played authored
+    /// from its own listing is counted; a pool song another title names, a file of the player's
+    /// own or a disc track nothing names is shown and left out, as the ticker has no row of this
+    /// title's to quote it under.
     pub(super) fn count_heard_song(&mut self) {
         let Some(song) = self.audio.now_playing() else {
             return;
         };
-        if std::mem::replace(&mut self.heard_song, song.serial) == song.serial {
-            return;
-        }
-        if let (Some(title), Some(name)) = (self.music_title(), song.name) {
-            self.records.count_song(title, &name.title);
+        let last = std::mem::replace(&mut self.heard_song, song.started);
+        if let Some(title) = self.music_title()
+            && let Some(counted) = song_to_count(last, &song, title)
+        {
+            self.records.count_song(title, &counted);
         }
     }
 
@@ -72,5 +84,49 @@ impl Session {
         if let Some(title) = self.music_title() {
             self.music_place.racing_tick(&self.audio, title);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::song_to_count;
+
+    fn song(started: u32, serial: u32, author: Option<&'static str>) -> oag_sound::NowPlaying {
+        oag_sound::NowPlaying {
+            serial,
+            started,
+            name: Some(oag_music::song_names::SongName {
+                artist: None,
+                title: "Song".to_string(),
+            }),
+            author,
+            track: None,
+        }
+    }
+
+    #[test]
+    fn a_song_the_played_title_authored_is_counted_once() {
+        let heard = song(1, 1, Some("Wipeout Pulse"));
+        assert_eq!(
+            song_to_count(0, &heard, "Wipeout Pulse").as_deref(),
+            Some("Song")
+        );
+        assert_eq!(song_to_count(1, &heard, "Wipeout Pulse"), None);
+    }
+
+    #[test]
+    fn a_foreign_or_unauthored_name_is_shown_and_not_counted() {
+        assert_eq!(
+            song_to_count(0, &song(1, 1, Some("Wipeout HD")), "Wipeout Pulse"),
+            None
+        );
+        assert_eq!(song_to_count(0, &song(1, 1, None), "Wipeout Pulse"), None);
+    }
+
+    #[test]
+    fn a_source_switch_rename_is_not_counted_again() {
+        // The switch moved the serial on (the marquee restarts) and not the started count.
+        let renamed = song(1, 2, Some("Wipeout Pulse"));
+        assert_eq!(song_to_count(1, &renamed, "Wipeout Pulse"), None);
     }
 }

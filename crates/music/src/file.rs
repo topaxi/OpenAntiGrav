@@ -14,7 +14,7 @@ use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
 use symphonia::core::formats::probe::Hint;
 use symphonia::core::formats::{FormatOptions, FormatReader, Track, TrackType};
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
+use symphonia::core::meta::{MetadataOptions, StandardTag};
 
 use crate::at3::Pcm;
 
@@ -66,7 +66,60 @@ enum Backend {
 /// decodes (Opus with more than two channels), or a stream that decodes to
 /// nothing at all.
 pub fn decode(blob: &[u8], extension: &str) -> Result<Pcm> {
+    decode_tagged(blob, extension).map(|(pcm, _)| pcm)
+}
+
+/// What a file's own tags call it: ID3v2 `TIT2`/`TPE1`, a Vorbis comment (FLAC, Ogg Vorbis) or
+/// OpusTags `TITLE`/`ARTIST`. Whatever the file does not carry is `None`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Tags {
+    /// The song's title.
+    pub title: Option<String>,
+    /// Who made it.
+    pub artist: Option<String>,
+}
+
+/// The title and artist `format`'s metadata reports, newest revision first.
+fn read_tags(format: &mut dyn FormatReader) -> Tags {
+    let mut revisions = Vec::new();
+    let mut log = format.metadata();
+    while let Some(revision) = log.pop() {
+        revisions.push(revision);
+    }
+    if let Some(last) = log.current() {
+        revisions.push(last.clone());
+    }
+    let mut tags = Tags::default();
+    for revision in revisions.iter().rev() {
+        let per_track = revision.per_track.iter().map(|track| &track.metadata);
+        for container in std::iter::once(&revision.media).chain(per_track) {
+            for tag in &container.tags {
+                let (slot, text) = match &tag.std {
+                    Some(StandardTag::TrackTitle(text)) => (&mut tags.title, text),
+                    Some(StandardTag::Artist(text)) => (&mut tags.artist, text),
+                    _ => continue,
+                };
+                let text = text.trim();
+                if slot.is_none() && !text.is_empty() {
+                    *slot = Some(text.to_string());
+                }
+            }
+        }
+    }
+    tags
+}
+
+/// [`decode`], and the tags the file carries.
+///
+/// The tags are read before the audio, from whatever the probe and the container reader
+/// reported; a file with none, or with a tag block that will not parse, has an empty [`Tags`].
+///
+/// # Errors
+///
+/// As [`decode`].
+pub fn decode_tagged(blob: &[u8], extension: &str) -> Result<(Pcm, Tags)> {
     let (mut format, track) = probe(blob, extension)?;
+    let tags = read_tags(&mut *format);
     let track_id = track.id;
     let params = track
         .codec_params
@@ -156,11 +209,14 @@ pub fn decode(blob: &[u8], extension: &str) -> Result<Pcm> {
     if samples.is_empty() {
         bail!("the stream decoded to no samples");
     }
-    Ok(Pcm {
-        samples,
-        channels,
-        sample_rate,
-    })
+    Ok((
+        Pcm {
+            samples,
+            channels,
+            sample_rate,
+        },
+        tags,
+    ))
 }
 
 #[cfg(test)]

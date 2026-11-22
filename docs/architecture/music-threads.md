@@ -155,6 +155,13 @@ and USA) is one row, from the first image found; a title on two platforms is two
 (`WIPEOUT X (PSP)`, `WIPEOUT X (PS2)`) and contributes its songs once, from the first enabled
 row in id order, so no song plays from two encodes.
 
+**The song's name.** It is decided on the fetch worker and arrives on `Loaded`, so the frame thread
+never reads a listing for it: `fetch_track` names the song at the position `locate` matched in the
+played pressing's own listing, `fetch_extra` at the position its `Extra::Disc` carries (or from a
+folder file's tags), and the caches (`race_cache`, the parked track) carry it beside the sound.
+`Audio::now_playing` returns what was stored when the voice started or swapped
+(`docs/formats/now-playing.md`, "Names", for the fallback ladder and the record rule).
+
 **Music order.** `[audio] music_order` is `sequential` (default, as the disc's `Music Order` list
 defaults) or `random`, one row, `MUSIC ORDER`, on the AUDIO page for every title. It is not on the MUSIC
 page, which is left out of the tree with a single source. Sequential is the numbered list above. Random

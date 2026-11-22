@@ -69,6 +69,15 @@ impl Listings {
             .map(|(_, _, soundtrack)| soundtrack.clone())
     }
 
+    /// Keeps `soundtrack` as what `source` carries, for a test that cannot run a disc read.
+    #[cfg(test)]
+    pub(crate) fn seed(&self, source: &str, platform: Platform, soundtrack: Soundtrack) {
+        if let Ok(mut kept) = oag_thread::lock(&self.read) {
+            kept.retain(|(s, p, _)| !(s == source && *p == platform));
+            kept.push((source.to_string(), platform, soundtrack));
+        }
+    }
+
     /// The bank-driven playlist for `source`, built by `build` the first time
     /// and kept; `Ok(None)` (a title with no bank) is asked again.
     ///

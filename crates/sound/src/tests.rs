@@ -17,6 +17,7 @@ mod race_pick;
 mod race_song;
 mod race_switch;
 mod resume;
+mod song_name;
 mod source_switch;
 mod volumes;
 
@@ -131,6 +132,7 @@ fn the_two_discs_soundtracks_pair_one_for_one_by_length() {
             listing
                 .nearest(*seconds)
                 .unwrap_or_else(|| panic!("{seconds} s has no partner"))
+                .1
                 .at
         })
         .collect();
@@ -143,8 +145,8 @@ fn the_two_discs_soundtracks_pair_one_for_one_by_length() {
 
     // The pairing is not the identity (PS2 track 1 is the PSP's fourth in
     // `Data.wad` order), so indexing one archive by the other's order is wrong.
-    assert_eq!(listing.nearest(ps2[1]).expect("a partner").at, 3);
-    assert_eq!(listing.nearest(ps2[12]).expect("a partner").at, 1);
+    assert_eq!(listing.nearest(ps2[1]).expect("a partner").1.at, 3);
+    assert_eq!(listing.nearest(ps2[12]).expect("a partner").1.at, 1);
 }
 
 /// A different game's soundtrack must not be taken for the counterpart:
@@ -236,7 +238,7 @@ fn a_length_nothing_matches_pairs_with_nothing() {
         ],
     };
     assert!(listing.nearest(28.0).is_none(), "the front end's own music");
-    assert_eq!(listing.nearest(187.511).expect("within tolerance").at, 0);
+    assert_eq!(listing.nearest(187.511).expect("within tolerance").1.at, 0);
     assert!(
         listing.nearest(186.4).is_none(),
         "1.1 s out is a hundred times the observed error"
@@ -294,6 +296,8 @@ fn changing_the_music_source_seeks_rather_than_restarting() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -401,6 +405,8 @@ fn asking_for_the_music_again_never_restarts_it() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -470,6 +476,8 @@ fn a_source_with_no_music_is_not_retried_every_tick() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -558,6 +566,8 @@ fn music_with_no_counterpart_is_left_alone_whatever_the_row_says() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -629,6 +639,8 @@ fn a_dump_is_exactly_as_long_as_the_ticks_it_was_given() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -691,6 +703,8 @@ fn the_picture_stays_within_a_frame_of_the_sound_for_a_whole_reel() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -756,6 +770,8 @@ fn a_mixer_that_is_never_advanced_offers_no_clock() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -806,6 +822,8 @@ fn a_movie_with_no_voice_has_no_playhead() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -853,6 +871,8 @@ fn a_run_with_no_dump_accumulates_nothing() {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
         race_cache: None,
@@ -919,9 +939,11 @@ pub(super) fn psp_boot_fixture() -> (Audio, Arc<Sound>, Arc<Sound>) {
         race_index: None,
         race_order: race_order::RaceOrder::new(MusicOrder::default()),
         song_serial: 0,
+        song_starts: 0,
+        song: None,
         race_position: 0.0,
         race_tracks: 0,
-        race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound))),
+        race_cache: Some((Platform::Psp, MUSIC_TRACK, Arc::clone(&race_sound), None)),
         menu_sound: Some(Arc::clone(&menu_sound)),
         menu_spectrum: None,
         race_context: None,

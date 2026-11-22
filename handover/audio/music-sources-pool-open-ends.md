@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-15
+updated: 2026-11-22
 summary: "Music pool phase 1 landed (MUSIC page, folders, discs); open: add folders from the menu, other formats, menu music from the pool, playlist editing"
 ---
 
@@ -21,15 +21,17 @@ Phase 1 is in `docs/architecture/music-threads.md` ("The music pool"). The code 
    switches the booted disc off hears the authored menu loop and pool songs in races.
 4. **Playlist editing.** The pool order is fixed (booted soundtrack, discs, folders); a
    folder's files play in path order. ~~Shuffle~~ (MUSIC ORDER random) and ~~skip~~ landed; no editing.
-5. **Now-playing names.** The HUD names a song only for the booted soundtrack. A pool song shows
-   no name; folder files carry ID3 tags that could name them.
-6. **The saved race place.** `music.toml` stores an index and a track count of the booted
+5. **The saved race place.** `music.toml` stores an index and a track count of the booted
    soundtrack; a place inside the pool's extra songs is not restored (the saved place fails its
    check and the playlist starts at its normal place).
-7. **A pool song is not kept in `race_cache`** (`from` is `None`), so a resume from the menus
+6. **A pool song is not kept in `race_cache`** (`from` is `None`), so a resume from the menus
    decodes it again on a worker rather than starting at once.
 
 ## Next Steps
 
 - A text-input widget lets item 1 land; then a folder row could carry a REMOVE action.
 - Item 2: WAV, if wanted (`symphonia`'s `wav` + `pcm` features).
+- Split `crates/sound/src/lib.rs` (1,497 lines, at the 1,500 ceiling) by moving `Soundtrack` and its
+  reading into `soundtrack.rs`.
+- WAV and Ogg tag fixtures for `oag_music::file::decode_tagged`, if wanted (Ogg needs page CRCs; the
+  spike read both off `ffmpeg`-tagged copies).

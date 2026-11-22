@@ -24,6 +24,8 @@ pub struct View {
     /// The language's strings, for a title whose nodes name a key ([`oag_title::now_playing::NowPlaying::title_key`]).
     strings: oag_ui::language::StringTable,
     title_key: Option<&'static str>,
+    /// The title being played: the only author whose names the string table can hold a key for.
+    played: &'static str,
     serial: u32,
     /// Whether the title's options can switch the HUD off ([`oag_title::HudArt::dynamic_hud`]).
     gated: bool,
@@ -81,6 +83,7 @@ impl View {
             separator: authored.separator,
             strings: hud.strings.clone(),
             title_key: authored.title_key,
+            played: title.name,
             serial: 0,
             gated: title.hud_art.dynamic_hud.is_some(),
             hud_shown: true,
@@ -89,29 +92,56 @@ impl View {
 }
 
 impl View {
-    /// Starts the marquee on `song`'s name; nothing for a song the disc does not name.
+    /// The text of `song`'s name, or `None` when it has none; see [`song_text`].
+    fn text(&self, song: &oag_sound::NowPlaying) -> Option<String> {
+        song_text(
+            &self.strings,
+            self.title_key,
+            self.played,
+            self.separator,
+            song,
+        )
+    }
+
+    /// Starts the marquee on `song`'s name; nothing for a song nothing names.
     fn show(&mut self, song: &oag_sound::NowPlaying) {
-        if let Some(name) = &song.name {
-            let title = match self.title_key {
-                None => Some(name.title.clone()),
-                // The key's text is "Artist\nTitle"; a key the table lacks shows nothing.
-                Some(key) => self
-                    .strings
-                    .get(&key.replace("{}", &name.title))
-                    .and_then(|text| text.lines().last())
-                    .map(str::to_string),
-            };
-            let Some(title) = title else {
-                return;
-            };
-            let text = match &name.artist {
-                Some(artist) => format!("{artist}{}{title}", self.separator),
-                None => title,
-            };
+        if let Some(text) = self.text(song) {
             let width = oag_ui::font::measure(&self.font, &text) * self.display.scale();
             self.display.show(text, width);
         }
     }
+}
+
+/// The marquee's text for `song`.
+///
+/// A disc track nothing names reads through the string table (`OAG_HUD_TRACK_N`). The title's
+/// `title_key` applies only to a name the title being played authored, the one name the table
+/// can hold a key for; a key it lacks shows the name's own title. Any other name is shown as it
+/// is. **Chosen, not measured.**
+fn song_text(
+    strings: &oag_ui::language::StringTable,
+    title_key: Option<&str>,
+    played: &str,
+    separator: &str,
+    song: &oag_sound::NowPlaying,
+) -> Option<String> {
+    let name = song.name.as_ref()?;
+    let own = song.author == Some(played);
+    let title = match (song.track, title_key) {
+        (Some(number), _) => strings.get("OAG_HUD_TRACK_N").map_or_else(
+            || name.title.clone(),
+            |text| text.replace("{}", &number.to_string()),
+        ),
+        (None, Some(key)) if own => strings
+            .get(&key.replace("{}", &name.title))
+            .and_then(|text| text.lines().last())
+            .map_or_else(|| name.title.clone(), str::to_string),
+        (None, _) => name.title.clone(),
+    };
+    Some(match &name.artist {
+        Some(artist) => format!("{artist}{separator}{title}"),
+        None => title,
+    })
 }
 
 impl Race {
@@ -190,5 +220,87 @@ impl RaceView {
         if let Some(view) = self.now_playing.as_mut() {
             view.display.step();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use oag_ui::language::StringTable;
+
+    use super::song_text;
+
+    fn song(
+        title: &str,
+        author: Option<&'static str>,
+        track: Option<usize>,
+    ) -> oag_sound::NowPlaying {
+        oag_sound::NowPlaying {
+            serial: 1,
+            started: 1,
+            name: Some(oag_sound::SongName {
+                artist: Some("Artist".to_string()),
+                title: title.to_string(),
+            }),
+            author,
+            track,
+        }
+    }
+
+    fn table() -> StringTable {
+        StringTable::from_xml(
+            r#"<Entry ID="MT_01" String="Artist
+Keyed Title"></Entry>
+               <Entry ID="OAG_HUD_TRACK_N" String="Track {}"></Entry>"#,
+        )
+    }
+
+    #[test]
+    fn the_key_applies_to_the_played_titles_own_name_only() {
+        let text = |song| song_text(&table(), Some("MT_{}"), "Wipeout 2048", " - ", &song);
+        assert_eq!(
+            text(song("01", Some("Wipeout 2048"), None)).as_deref(),
+            Some("Artist - Keyed Title")
+        );
+        assert_eq!(
+            text(song("01", Some("Wipeout HD"), None)).as_deref(),
+            Some("Artist - 01"),
+            "another title's name is shown as it is"
+        );
+        assert_eq!(text(song("01", None, None)).as_deref(), Some("Artist - 01"));
+    }
+
+    #[test]
+    fn a_key_the_table_lacks_falls_back_to_the_raw_title() {
+        let text = song_text(
+            &table(),
+            Some("MT_{}"),
+            "Wipeout 2048",
+            " - ",
+            &song("09", Some("Wipeout 2048"), None),
+        );
+        assert_eq!(text.as_deref(), Some("Artist - 09"));
+    }
+
+    #[test]
+    fn a_disc_track_nothing_names_is_worded_by_the_table() {
+        let named = song("Track 3", None, Some(3));
+        assert_eq!(
+            song_text(
+                &StringTable::from_xml(""),
+                None,
+                "Wipeout Pulse",
+                " - ",
+                &named
+            )
+            .as_deref(),
+            Some("Artist - Track 3"),
+            "no row: the English wording it carries"
+        );
+        let mut german = StringTable::from_xml("");
+        german.merge([("OAG_HUD_TRACK_N".to_string(), "Titel {}".to_string())].into());
+        assert_eq!(
+            song_text(&german, None, "Wipeout Pulse", " - ", &named).as_deref(),
+            Some("Artist - Titel 3")
+        );
     }
 }

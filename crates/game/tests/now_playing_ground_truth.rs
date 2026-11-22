@@ -91,7 +91,10 @@ fn pulse_shows_the_song_from_the_green_light_and_takes_it_down_again() {
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     let song = oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     };
 
     let mut shown = Vec::new();
@@ -414,7 +417,10 @@ fn pure_borrows_pulses_display_and_names_its_own_songs() {
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     }));
     let mut shown = None;
     for _ in 0..400 {
@@ -469,7 +475,10 @@ fn pulse_with_the_dynamic_hud_off_shows_no_song_and_the_next_one_shows_again() {
     };
     let song = |serial| oag_sound::NowPlaying {
         serial,
+        started: serial,
         name: Some(name.clone()),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     };
 
     race.set_dynamic_hud(DynamicHud::Off);
@@ -519,7 +528,10 @@ fn a_split_screen_shows_no_song_display() {
     };
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     }));
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
@@ -546,7 +558,10 @@ fn a_title_without_the_option_ignores_the_dynamic_hud_choice() {
     race.set_dynamic_hud(DynamicHud::Off);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     }));
     for _ in 0..60 {
         race.tick(&PlayerInputs::none());
@@ -600,7 +615,10 @@ fn hd_shows_its_own_item_with_the_bar_art_from_its_sheet() {
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     }));
     let mut shown = None;
     for _ in 0..400 {
@@ -661,7 +679,10 @@ fn omega_shows_hds_item_and_names_its_seventeen_songs() {
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_pulse::TITLE.name),
+        track: None,
     }));
     let mut shown = None;
     for _ in 0..400 {
@@ -715,7 +736,10 @@ fn the_2048_borrows_hds_display_and_names_its_own_songs() {
     let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.note_song(Some(&oag_sound::NowPlaying {
         serial: 1,
+        started: 1,
         name: Some(name),
+        author: Some(oag_2048::TITLE.name),
+        track: None,
     }));
     let mut shown = None;
     for _ in 0..400 {

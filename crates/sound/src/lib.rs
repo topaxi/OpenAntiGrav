@@ -36,7 +36,7 @@ use oag_audio::mixer::MUSIC_MASTER_TRIM;
 use oag_audio::{Bus, Output, Play, Sound, VoiceId};
 use oag_disc::{DiscImage, Platform};
 use oag_formats::ps2_music;
-use oag_music::song_names::SongName;
+pub use oag_music::song_names::SongName;
 use serde::{Deserialize, Serialize};
 
 use oag_display::percentage;
@@ -63,11 +63,12 @@ mod race_order;
 mod race_song;
 mod resume;
 pub mod shuffle;
+mod song;
 mod survey;
 use library::{Library, NoLibrary, load_entry_kept, load_front_end};
 use listings::Listings;
 use race_music::PendingSwitch;
-pub use race_music::{MusicFetchWorker, RacePick};
+pub use race_music::{Loaded, MusicFetchWorker, RacePick};
 pub use resume::{RaceMusicState, Restored, Unusable};
 pub use shuffle::MusicOrder;
 
@@ -417,6 +418,16 @@ impl MusicDiscs {
         self.listings.bank_reads()
     }
 
+    /// The other pressing of the booted title's soundtrack, when both were found: the PSP's for
+    /// the PS2's and the reverse. Never any other release (they have one).
+    fn counterpart(&self, platform: Platform) -> Option<(&str, Platform)> {
+        match platform {
+            Platform::Psp => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
+            Platform::Ps2 => self.psp.as_deref().map(|at| (at, Platform::Psp)),
+            _ => None,
+        }
+    }
+
     /// [`Self::pick`] on this value's own fields.
     fn pick_here(&self, choice: MusicSource) -> Option<(&str, Platform)> {
         let chosen = choice.platform().and_then(|platform| match platform {
@@ -551,9 +562,13 @@ pub struct Audio {
     race_index: Option<usize>,
     /// `MUSIC ORDER` and the deck a random order plays by.
     race_order: race_order::RaceOrder,
-    /// How many race songs have started this run: what the now-playing display re-triggers on
-    /// ([`Audio::now_playing`]). A resume or a source swap of the same song does not count.
+    /// What the now-playing display re-triggers on ([`Audio::now_playing`]): one more for every race
+    /// song that starts, and for a source switch that lands another name. A resume, or a switch
+    /// to the same name, does not count.
     song_serial: u32,
+    /// How many of those were a song starting, as against a source switch giving the song a new
+    /// name: what the lifetime record counts ([`NowPlaying::started`]).
+    song_starts: u32,
     /// Where the current race track was cut off, in the track's seconds
     /// ([`oag_audio::Mixer::seek`]'s unit), so the next race resumes.
     race_position: f64,
@@ -564,7 +579,10 @@ pub struct Audio {
     /// advances or [`MusicSource`] moves it. Unlike [`Self::held`] (fixed
     /// index), this makes one pause/resume on the same track free, bounded at
     /// one track of PCM (33-36 MiB).
-    race_cache: Option<(Platform, usize, Arc<Sound>)>,
+    race_cache: Option<(Platform, usize, Arc<Sound>, Option<song::Song>)>,
+    /// The race song that started last, with its name: what [`Audio::now_playing`] reports. Set
+    /// wherever a race voice starts or is replaced, and never read from a listing.
+    song: Option<song::Song>,
     /// The menu voice's decoded sound, so leaving a race resumes it without
     /// re-reading the disc or re-running `ffmpeg`. `None` with no decodable menu music.
     menu_sound: Option<Arc<Sound>>,
@@ -608,32 +626,6 @@ pub struct Audio {
     source_switch: Option<PendingSwitch>,
 }
 
-/// A music track that has been read and decoded, before a voice is started on
-/// it.
-///
-/// [`Loaded::from`] is why this is a struct: it records whether the track is
-/// one of the sixteen, which decides whether MUSIC SOURCE may move it. See
-/// [`MusicSource`]. Public, not its fields, so [`MusicFetchWorker::join`] can
-/// hand one back across the lib/bin boundary.
-pub struct Loaded {
-    /// Which release it came off, or `None` for music with no counterpart.
-    /// Becomes [`Audio::music_from`].
-    from: Option<Platform>,
-    sound: Arc<Sound>,
-    what: String,
-}
-
-// Written out so a `{:?}` says how long the track is, not print three minutes of it.
-impl std::fmt::Debug for Loaded {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Loaded")
-            .field("from", &self.from)
-            .field("seconds", &self.sound.seconds())
-            .field("what", &self.what)
-            .finish()
-    }
-}
-
 struct Dump {
     path: PathBuf,
     samples: Vec<f32>,
@@ -662,6 +654,8 @@ impl std::fmt::Debug for Audio {
             .field("race_from", &self.race_from)
             .field("race_index", &self.race_index)
             .field("song_serial", &self.song_serial)
+            .field("song_starts", &self.song_starts)
+            .field("song", &self.song)
             .field("race_position", &self.race_position)
             .field("race_tracks", &self.race_tracks)
             .field("race_cache", &self.race_cache.is_some())
@@ -736,6 +730,8 @@ impl Audio {
             race_index: None,
             race_order: race_order::RaceOrder::new(settings.music_order),
             song_serial: 0,
+            song_starts: 0,
+            song: None,
             race_position: 0.0,
             race_tracks: 0,
             race_cache: None,
@@ -1293,16 +1289,17 @@ impl Soundtrack {
         true
     }
 
-    /// The track nearest `seconds` long, if one is within [`PAIR_TOLERANCE`].
+    /// The track nearest `seconds` long, if one is within [`PAIR_TOLERANCE`], and its position.
     ///
     /// `None` rather than the least-bad answer: a source that does not pair is
     /// misidentified, and the wrong three minutes is worse than none.
-    fn nearest(&self, seconds: f64) -> Option<Track> {
+    fn nearest(&self, seconds: f64) -> Option<(usize, Track)> {
         self.tracks
             .iter()
             .copied()
-            .filter(|track| (track.seconds - seconds).abs() <= PAIR_TOLERANCE)
-            .min_by(|a, b| {
+            .enumerate()
+            .filter(|(_, track)| (track.seconds - seconds).abs() <= PAIR_TOLERANCE)
+            .min_by(|(_, a), (_, b)| {
                 (a.seconds - seconds)
                     .abs()
                     .total_cmp(&(b.seconds - seconds).abs())
@@ -1393,6 +1390,7 @@ fn front_end_music(discs: &MusicDiscs, cache_dir: &Path) -> Result<Option<Loaded
             from: None,
             sound: Arc::new(sound),
             what,
+            song: None,
         }),
     )
 }

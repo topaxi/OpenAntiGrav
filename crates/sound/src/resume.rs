@@ -153,10 +153,10 @@ impl Audio {
         if self.race_tracks == 0 {
             return None;
         }
-        let (_, _, sound) = self
+        let (_, _, sound, _) = self
             .race_cache
             .as_ref()
-            .filter(|(_, held, _)| *held == index)?;
+            .filter(|(_, held, _, _)| *held == index)?;
         let seconds = self
             .race_voice
             .and_then(|id| self.output.with_mixer(|mixer| mixer.position(id)))

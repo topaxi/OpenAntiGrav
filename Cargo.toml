@@ -226,7 +226,7 @@ resvg = { version = "0.50", default-features = false }
 # depending on it. `default-features = false` takes only the codecs and
 # demuxers named, leaving the rest and the SIMD paths out: AAC in MP4 is 2048's
 # `intro.mp4` sound track (`oag_music::aac`).
-symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg", "aac", "isomp4"] }
+symphonia = { version = "0.6", default-features = false, features = ["mp3", "flac", "vorbis", "ogg", "aac", "isomp4", "id3v2"] }
 opus-rs = "0.1"
 
 # The ATRAC9 decoder, for 2048's `.at9` and the Omega Collection's Wwise media.

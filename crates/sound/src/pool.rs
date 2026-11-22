@@ -87,6 +87,10 @@ pub(crate) enum Extra {
         platform: Platform,
         track: Track,
         label: String,
+        /// The track's index in that source's own listing, which is what names it.
+        position: usize,
+        /// The title that owns the disc (`Title::name`).
+        title: &'static str,
     },
     /// A file in a folder.
     File(PathBuf),
@@ -246,6 +250,36 @@ impl Pool {
         })
     }
 
+    /// Adds another title's disc row with `tracks`, switched on, for a test that cannot run the
+    /// scan.
+    #[cfg(test)]
+    pub(crate) fn seed_disc(
+        &self,
+        title: &'static str,
+        platform: Platform,
+        source: &str,
+        tracks: Vec<Track>,
+    ) {
+        let id = disc_id(title, platform);
+        self.with(|inner| {
+            inner.discs.push(Disc {
+                id: id.clone(),
+                title,
+                source: source.to_string(),
+                platform,
+                tracks,
+            });
+            inner.switches.insert(id, true);
+        });
+        self.bump();
+    }
+
+    /// The booted title's name, once [`Self::set_booted`] has said.
+    pub(crate) fn booted_title(&self) -> Option<&'static str> {
+        self.with(|inner| inner.booted.as_ref().map(|booted| booted.title))
+            .flatten()
+    }
+
     /// Whether the booted disc's soundtrack is in the pool.
     #[must_use]
     pub fn booted_enabled(&self) -> bool {
@@ -335,12 +369,19 @@ impl Pool {
                     continue;
                 }
                 taken.push(disc.title);
-                out.extend(disc.tracks.iter().map(|track| Extra::Disc {
-                    source: disc.source.clone(),
-                    platform: disc.platform,
-                    track: *track,
-                    label: disc.title.to_string(),
-                }));
+                out.extend(
+                    disc.tracks
+                        .iter()
+                        .enumerate()
+                        .map(|(position, track)| Extra::Disc {
+                            source: disc.source.clone(),
+                            platform: disc.platform,
+                            track: *track,
+                            label: disc.title.to_string(),
+                            position,
+                            title: disc.title,
+                        }),
+                );
             }
             for folder in &inner.folders {
                 if Self::enabled_in(inner, &folder.id) {

@@ -37,7 +37,37 @@ A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left thr
 5. **Names**: `oag_music::song_names` matches each soundtrack entry to its `PI_Music` node:
    by position for a title that declares its tracks, by the name hash of the node's
    `music.at3` for Pulse (whose playlist is still found by what the entries are, so its order
-   is untouched), by `location` for Omega.
+   is untouched), by `location` for Omega. The name of the song that started travels with the
+   decoded sound (`oag_sound::Loaded`, a `Song` of name and author), decided on the fetch worker by
+   `oag_sound::song::name_song`, stored when the voice starts or a `MUSIC SOURCE` switch swaps it,
+   and cached beside the sound in `race_cache`. `Audio::now_playing` only reads it: no listing, no
+   disc, no lock, so it is cheap every tick, and the name is the one of the song that sounds, at
+   the position actually fetched (never the booted listing at the pool-absolute index).
+   - **The ladder**, first that applies: (1) the played source's own listing at the matched
+     position (`author` = that title); (2) the booted title's other pressing, at the track of the
+     same length (PS2 names nothing; `Soundtrack::pairs_with`, within 11.4 ms on all sixteen tracks,
+     the closest wrong match 130 ms away, `docs/formats/ps2-audio.md`), `author` = the title; (3) a
+     folder file's tags (`oag_music::file::decode_tagged`, ID3v2 `TIT2`/`TPE1`, Vorbis comments of
+     FLAC and Ogg, OpusTags), `author` none; (4) the file's stem as the title, with the tags' artist
+     when there is one; (5) the title's name as the artist and `Track N` as the title, N 1-based in
+     that source's own listing order, through the string row `OAG_HUD_TRACK_N`, `author` none.
+     Nothing is invented: each level is data the source carries or a plain locator for it.
+     **Chosen, not measured.**
+   - **The record rule**: the marquee shows any accurate name, and `TKR_SONGS`/`TKR_FAVMUS` count a
+     song only when `NowPlaying::author` is the title being played
+     (`oag_game::app::session::music`). A source switch lands another name on the marquee (the
+     serial moves, so it restarts) and does not count again: the count follows `NowPlaying::started`,
+     which a rename leaves alone.
+   - **2048's `title_key`** applies only to a name its own title authored, the one name the table
+     can hold a key for; a key the table lacks shows the raw title, and any other name is shown as
+     it is (`oag_raceplay::now_playing::song_text`).
+   - **Tags, spiked on symphonia 0.6**: the probe reads ID3v2 before the container and queues it
+     on the format reader's metadata log, but only with symphonia's `id3v2` feature, which the
+     workspace now enables (without it an MP3's tag block is skipped and nothing is reported);
+     FLAC's and Ogg Vorbis's Vorbis comments and Opus's `OpusTags` arrive as standard
+     `TrackTitle`/`Artist` tags from the container reader (Opus decodes through `opus_rs`, only
+     its demux is symphonia's). Tests generate an ID3v2.4 MP3 and a FLAC `VORBIS_COMMENT` block in
+     the test; Ogg and Opus were read off `ffmpeg`-tagged copies by hand, with no fixture committed.
 
 ## What differs from the originals
 
@@ -66,7 +96,9 @@ A translucent bar with `Artist - song` in the `HUDSmall` face scrolling left thr
 - The per-update step is 60 Hz: **watched** on Pulse (PPSSPP, 150 updates one frame apart,
   [Pulse page](../ghidra/functions/psp-pulse-usa/now-playing.md#watched-on-ppsspp-2026-10-26-lane-now-playing-leftovers));
   HD's, Omega's and 2048's are the same law read from code, not watched.
-- A PS2 boot of Pulse shows nothing: its soundtrack archive carries no names.
+- A PS2 boot of Pulse names its songs from the PSP pressing's listing when that disc is found (the
+  same recordings, paired by length); with only the PS2 disc it shows `Wipeout Pulse - Track N`.
+  The original shows nothing there.
 - HD's bar vertex colour is `alpha << 24` (black); read from the code, not seen on a frame.
 
 ## When the song starts
