@@ -230,6 +230,23 @@ impl crate::sim::RaceSim {
         Some(self.world.detonator.cannon.destroyed_mines)
     }
 
+    /// Bombs destroyed by the cannon or the EMP (`rm+0x6de40`), a count and not a percentage, or
+    /// `None` off Detonator.
+    #[must_use]
+    pub fn detonator_destroyed_bombs(&self) -> Option<u32> {
+        self.detonator.as_ref()?;
+        Some(self.world.detonator.cannon.destroyed_bombs)
+    }
+
+    /// The streak awards paid over the race: fives, tens, fifteens (`rm+0x2de8`, `+0x2dea`,
+    /// `+0x2dec`), or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_chains(&self) -> Option<[u16; 3]> {
+        self.detonator.as_ref()?;
+        let cannon = &self.world.detonator.cannon;
+        Some([cannon.fives, cannon.tens, cannon.fifteens])
+    }
+
     /// Whether the person in slot 0 may work the cannon this tick: flying it themselves,
     /// racing, and past the countdown. **Chosen, not measured:** the original's gate on the
     /// green light is unread.

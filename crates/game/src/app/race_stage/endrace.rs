@@ -644,8 +644,8 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
         // not read - see `oag_ui_screens::endrace::Headline::Unresolved`'s own doc.
         oag_race::Mode::Zone | oag_race::Mode::Eliminator => Headline::Unresolved,
         // HD's results grid writes `ER_ZDETONATOR_COM` into `Line1` for mode `0xe`
-        // (`docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`); the score
-        // beneath it is not kept yet.
+        // (`docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`); the rows beneath
+        // it are `FieldResults::detonator` (`crate::results_tables::detonator_results`).
         oag_race::Mode::Detonator => Headline::Detonator,
     }
 }

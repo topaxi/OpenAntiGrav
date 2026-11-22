@@ -174,6 +174,13 @@ pub struct Cannon {
     pub destroyed_bombs: u32,
     /// Ticks the trigger was held with a loaded, ready cannon (`rm+0x6de44`).
     pub held_ticks: u32,
+    /// Five-volley streak awards paid over the race (`rm+0x2de8`); a clip's second five counts
+    /// again. [`Awards`] are per clip and reset at a reload, these are not.
+    pub fives: u16,
+    /// Ten-volley streak awards paid over the race (`rm+0x2dea`).
+    pub tens: u16,
+    /// Fifteen-volley streak awards paid over the race (`rm+0x2dec`).
+    pub fifteens: u16,
 }
 
 impl Cannon {
@@ -205,6 +212,9 @@ impl Cannon {
             destroyed_mines: 0,
             destroyed_bombs: 0,
             held_ticks: 0,
+            fives: 0,
+            tens: 0,
+            fifteens: 0,
         }
     }
 
@@ -620,17 +630,21 @@ fn award_streaks(cannon: &mut Cannon) {
         let awards = &mut cannon.awards;
         let pay = if streak >= 15 && !awards.fifteen {
             awards.fifteen = true;
+            cannon.fifteens = cannon.fifteens.saturating_add(1);
             STREAK_FIFTEEN
         } else if streak >= 10 && !awards.ten {
             awards.ten = true;
+            cannon.tens = cannon.tens.saturating_add(1);
             STREAK_TEN
         } else if (5..=9).contains(&streak) {
             if !awards.first_five {
                 awards.first_five = true;
                 awards.first_five_at = at;
+                cannon.fives = cannon.fives.saturating_add(1);
                 STREAK_FIVE
             } else if !awards.second_five && i32::from(at) - i32::from(awards.first_five_at) > 5 {
                 awards.second_five = true;
+                cannon.fives = cannon.fives.saturating_add(1);
                 STREAK_FIVE
             } else {
                 0

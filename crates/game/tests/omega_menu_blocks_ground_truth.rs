@@ -211,3 +211,20 @@ fn omegas_strip_blocks_ease_when_the_focus_moves() {
     let mid = body(&menu, &skin, &shell.frame);
     assert_ne!(at_rest, mid, "the strip did not move with the focus");
 }
+
+/// Omega's own served string table carries every id of Detonator's end screen, so nothing needs
+/// the `DATA06` fill HD's boot does (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+/// "Omega: checked, applies, not wired"). The screen itself is not drawn on Omega: it keeps the
+/// built-in scoreboard.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_served_table_carries_detonators_end_screen_ids() {
+    let Some(source) = omega() else { return };
+    let shell = shell(&source);
+    for id in oag_ui_screens::endrace::DetonatorResults::IDS {
+        assert!(
+            shell.strings.get(id).is_some_and(|text| !text.is_empty()),
+            "{id}"
+        );
+    }
+}

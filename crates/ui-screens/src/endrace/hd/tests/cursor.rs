@@ -190,6 +190,7 @@ fn a_menu_target_is_the_blocks_own_resting_box() {
 #[test]
 fn a_race_lays_its_grid_out_as_the_executable_does() {
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Position(2),
         rows: vec![
@@ -294,6 +295,7 @@ fn a_single_race_names_each_craft_by_its_team_and_a_racing_craft_says_so() {
         team: Some(team.to_string()),
     };
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Position(1),
         rows: vec![row(1, "Feisar", Some(6000)), row(2, "Auricom", None)],
