@@ -478,6 +478,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         ready: "EMPREADY",
         full: "EMPFULL",
     }),
+    // `DetonatorHud_BindEmpWidgets` (`0x00082138`) binds it (`detonator-hud.md`, 65).
+    binds_emp_ready: oag_title::pre_race::Sourced::measured(true),
 };
 
 /// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,

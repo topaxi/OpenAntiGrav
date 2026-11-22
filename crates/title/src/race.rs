@@ -598,6 +598,9 @@ pub struct Detonator {
     /// The EMP's two announcer lines and the bank that holds them, or `None` where a title's
     /// are not located.
     pub voices: Option<DetonatorVoices>,
+    /// Whether the HUD's `EmpReady` lamp is bound by the executable: where it is not, the
+    /// layout's widget is dropped (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`).
+    pub binds_emp_ready: crate::pre_race::Sourced<bool>,
 }
 
 /// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads

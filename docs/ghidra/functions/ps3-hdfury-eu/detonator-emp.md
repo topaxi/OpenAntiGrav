@@ -92,7 +92,11 @@ Detonator.** Confidence **75**.
 
 ### Do the circuit's own pads still draw?
 
-Not read. [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct` adds a
+Not read in the executable. **Wired as not drawn** (2026-11-22): where a title's Detonator pad
+model loads, a Detonator race drops the circuit's separate pad models and, on the four original
+circuits whose speed pads are pad-material chunks in the world-space pass, those chunks
+(`mesh::rcs::build_scene_views`' `hide_pads`; on `zone_1` exactly the 2093 pad triangles,
+`detonator_hull_ground_truth.rs`). [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct` adds a
 `Detonator_Pad` model on every speed and weapon pad. Live, four frames taken on the tick a speed
 pad was entered (Vineta K, stages 1 and 2) show the white `Detonator_Pad` blocks on plain track:
 no chevron or glow of Vineta K's own speed pad is visible round or between them. Confidence 60
@@ -248,7 +252,8 @@ boosts; 2048: a speed pad charges nothing and keeps its boost. The HUD pips are 
 ## Open
 
 - The wave's reach and speed (above), and whether it hurts the player.
-- Whether the circuit's own pad geometry is drawn at all (four live frames show none, below).
+- Whether the circuit's own pad geometry is drawn at all: four live frames show none (above);
+  wired as not drawn at 60.
 - Weapon pads under player input over several laps (one live charge only).
 
 ## 2048 and Omega

@@ -502,6 +502,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     },
     // 2048's cue names are hashed and its Detonator speech bank is not located.
     voices: None,
+    // Its skin binds `EmpCharge`/`EmpFull`; the executable has no `EmpReady` string
+    // (`detonator-hud.md`, "2048: checked, differs").
+    binds_emp_ready: oag_title::pre_race::Sourced::measured(false),
 };
 
 /// 2048's Detonator object models. The archives ship each under both `Data\Weapons` (HD's own

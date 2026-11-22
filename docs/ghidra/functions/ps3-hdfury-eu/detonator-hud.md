@@ -288,9 +288,9 @@ medal models (`<ImageModel>` `.vex`; the layout reader records none, and the cel
 not reach the race). The reload gauge is the craft's own `detonator_bulletgaugesegments` material
 constant, not a HUD widget: untouched.
 
-- **Omega: ported.** Same test; the EMP pips draw as HD's, and so does `EmpReady` because Omega's layout
-  authors it, although its executable names no `EmpReady` string and so probably never binds it
-  (60, above): a known difference, open; `<aImageModel>` on `EmpBarEffect` composes with nothing skipped
+- **Omega: ported.** Same test; the EMP pips draw as HD's; `EmpReady`, which Omega's layout authors but
+  its executable names no string for (so probably never binds, 60, above), is dropped from the
+  layout (`oag_title::Detonator::binds_emp_ready`, the loader report says so); `<aImageModel>` on `EmpBarEffect` composes with nothing skipped
   and no error (the layout reader models no `<ImageModel>` at all, spelled right or not; the
   test asserts the report has no `HUD: skipped` line), and the
   Omega atlas (`detonator_hud2.tga` 1024x1024 beside a 2048x2048 `fury_hud.gtf`) resolves for every

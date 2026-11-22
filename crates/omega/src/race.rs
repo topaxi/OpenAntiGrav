@@ -179,6 +179,9 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         },
         // Omega plays Wwise events in place of named cues; the EMP's are not located.
         voices: None,
+        // The executable names no `EmpReady` string, so its binder probably never binds the
+        // lamp its layout authors (`detonator-hud.md`, "Omega: checked, applies", 60).
+        binds_emp_ready: oag_title::pre_race::Sourced::measured(false),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),

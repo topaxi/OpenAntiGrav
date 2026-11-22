@@ -1574,12 +1574,15 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   a dark one, `+1000` a bomb) and the mines counted toward the percentage. **Chosen, not
   measured**: the wave's reach (`emp::SECTIONS_PER_EXTENT` sections per unit of extent, forward
   from the craft) and its run over `wave_time`, L1 as a press edge, no effect or sound on the
-  kill. HUD: `Emp_0..7` light while the charge is over their index, `EmpReady` at the threshold;
+  kill. HUD: `Emp_0..7` light while the charge is over their index, `EmpReady` at the threshold (not on
+  Omega, whose executable does not bind it, 60);
   `EmpBarEffect` is an `<ImageModel>` the layout reader does not model. 2048's pads keep their race
   behaviour (its pad arms are unread), so its EMP never charges. Evidence:
   [detonator-emp.md](../ghidra/functions/ps3-hdfury-eu/detonator-emp.md).
-- **Not here, each named on the evidence page**: the EMP wave's own effect and sound, and the
-  circuit's own pad models, still drawn under the Detonator pad.
+- **The circuit's own pads are not drawn** under the Detonator pad (four live frames show none,
+  60): the separate pad models and, on the four original circuits, the pad-material chunks of the
+  track's world-space pass are left out where the title's Detonator pad loads.
+- **Not here, each named on the evidence page**: the EMP wave's own effect and sound.
 
 ## What happens when a race ends
 

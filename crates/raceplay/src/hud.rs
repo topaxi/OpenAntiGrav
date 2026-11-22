@@ -203,7 +203,7 @@ pub(super) fn load_hud(
     // reaching for `expand` refused the PS2's outright and took the whole HUD
     // with it.
     let composed = oag_hud::compose(entry, |path| archives.read_name(path).ok());
-    let layout = match composed {
+    let mut layout = match composed {
         Some(composed) => {
             let layout = composed.layout;
             report.push(format!(
@@ -231,6 +231,24 @@ pub(super) fn load_hud(
         }
     };
 
+    let binds_emp_ready = title
+        .race
+        .detonator
+        .is_none_or(|detonator| detonator.binds_emp_ready.value);
+    if let Some(layout) = layout
+        .as_mut()
+        .filter(|_| mode == Mode::Detonator && !binds_emp_ready)
+    {
+        let before = layout.sprites.len();
+        layout.sprites.retain(|sprite| sprite.name != "EmpReady");
+        if layout.sprites.len() != before {
+            report.push(
+                "HUD: EmpReady is authored but this title's executable does not bind it; \
+                 not drawn"
+                    .to_string(),
+            );
+        }
+    }
     if mode == Mode::Detonator && layout.is_some() {
         report.push(
             "HUD: Detonator draws no EmpBarEffect (an ImageModel the layout reader does not \

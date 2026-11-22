@@ -137,7 +137,7 @@ fn texts(frame: &oag_hud::Frame) -> Vec<String> {
 
 /// Everything the Detonator HUD says about a loaded title, on a cannon with ten volleys left,
 /// five that hit, the score above and three stages laid.
-fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool) {
+fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool, emp_ready: bool) {
     let Some(loaded) = load(image) else {
         return;
     };
@@ -245,7 +245,7 @@ fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool) {
         (5, true),
         "the readout carries the charge"
     );
-    for name in ["Emp_0", "Emp_7", "EmpReady"] {
+    for name in ["Emp_0", "Emp_7"] {
         let sprite = context
             .layout
             .sprite(name)
@@ -264,7 +264,23 @@ fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool) {
     };
     assert_eq!(emp(3, false), emp(0, false) + 3, "a pip per charge");
     assert_eq!(emp(12, false), emp(0, false) + 8, "eight pips at most");
-    assert_eq!(emp(5, true), emp(5, false) + 1, "the ready lamp");
+    // `EmpReady` where the executable binds it (HD); Omega's layout authors it and its
+    // executable names no such string, so it is dropped (`oag_title::Detonator::binds_emp_ready`).
+    if emp_ready {
+        let sprite = context
+            .layout
+            .sprite("EmpReady")
+            .expect("EmpReady is authored");
+        assert!(oag_hud::sprite_draw(sprite, context.sheet).is_some());
+        assert_eq!(emp(5, true), emp(5, false) + 1, "the ready lamp");
+    } else {
+        assert!(
+            context.layout.sprite("EmpReady").is_none(),
+            "EmpReady is dropped"
+        );
+        assert!(report.contains("HUD: EmpReady is authored but this title's executable"));
+        assert_eq!(emp(5, true), emp(5, false), "no ready lamp");
+    }
 
     // Off Detonator's own state nothing of it draws.
     let plain = oag_hud::Readout {
@@ -281,14 +297,14 @@ fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool) {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_hd_detonator_hud_reads_the_cannon() {
-    the_detonator_hud_reads_the_cannon(HD_IMAGE, false);
+    the_detonator_hud_reads_the_cannon(HD_IMAGE, false, true);
 }
 
 /// Omega's weapons file spells `EmpBarEffect`'s element `<aImageModel>`; the layout still loads.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_omega_detonator_hud_reads_the_cannon() {
-    the_detonator_hud_reads_the_cannon(OMEGA_IMAGE, true);
+    the_detonator_hud_reads_the_cannon(OMEGA_IMAGE, true, false);
 }
 
 /// 2048 loads its own layout, a text-only score and stage over `2048_hud\DetonatorWeapons.xml`;

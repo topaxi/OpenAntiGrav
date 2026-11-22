@@ -72,6 +72,7 @@ fn vineta_k_leaves_its_behind_the_glass_chunks_out_of_the_main_view() {
         &mut |name| read(&image, name).map(|(_, d)| d),
         oag_gpu::formats::SceneStore::default(),
         Default::default(),
+        false,
     )
     .expect("the circuit builds");
     let drawn = chunks_of(&built);

@@ -53,9 +53,9 @@ auto-speed on the stage); pads charge the EMP instead of boosting, L1 fires it a
 clears the mines ahead (wave reach chosen).
 
 Open from 8b: no wreck or death shell (HD's PS3 hull branch loads no wreck in any mode; the
-Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad still draws under the
-Detonator pad (unread whether the original hides it; the model's origin at the pad transform is
-chosen); 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
+Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad is hidden under the
+Detonator pad (live frames, 60; `detonator-emp.md`); the model's origin at the pad transform is
+chosen; 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
 
 ## Working rules learned the hard way
 
@@ -238,7 +238,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 - **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
   (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (`MineColour`,
-  `BombColour` ...), the pad's original geometry underneath and 2048's object models stay open;
+  `BombColour` ...) and 2048's object models stay open (the circuit's own pads are now hidden);
   `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
@@ -351,8 +351,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **EMP: wired** (`det-emp-wire`, `detonator-emp.md` "Wired"). Open: the wave's reach and speed
   (chosen; recipe on the page), the kill's effect and sound, whether the wave hurts the player,
   `EmpBarEffect` (an `<ImageModel>` the HUD layout reader does not model; the gauge is exposed),
-  the ready pulse and post-fire flash on `EmpReady`, Omega drawing `EmpReady` its executable
-  probably never binds, the circuit's own pad models still drawn under the Detonator pad, 2048's
+  the ready pulse and post-fire flash on `EmpReady`, 2048's
   pad arms (unread: its pads keep boost and pickup, so its EMP never charges) and its
   `EmpCharge`/`EmpFull` widgets, Omega's EMP announcer lines (Wwise, not located).
 - **Auto-speed: wired** (`det-emp-wire`, `detonator-speed.md` "Wired"). Open: a player-input speed
