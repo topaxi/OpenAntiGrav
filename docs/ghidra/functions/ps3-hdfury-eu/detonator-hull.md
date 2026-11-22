@@ -265,8 +265,9 @@ electricity). **`detonator_mine_normal_alpha.rcsmaterial` is the material of bot
 uses `electricity.rcsmaterial` and three `electricity_*` textures. All of them ship in `DATA00`.
 The colour sources are the circuit's effect-settings keys `%s.Detonator Mine Colour` and
 `%s.Detonator Mine Electricity Colour`, registered by `Environment_RegisterStageSchema`
-([zone-effectsettings-loader.md](zone-effectsettings-loader.md)). **82** on the models; the draw
-order and the binds' values are unread.
+([zone-effectsettings-loader.md](zone-effectsettings-loader.md)). **82** on the models. The binds'
+values, their writer and the per-stage table are read on
+[detonator-mine-material.md](detonator-mine-material.md) (76-80; the shader's combine is unread).
 
 ### Bomb: `DetonatorBomb_Construct` (`0x00135328`)
 
@@ -341,8 +342,9 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
   `rebound_jump_time`) are Zone's live read on HD and inherited from HD elsewhere.
 - **`electric_visualiser` is not drawn**: it is music-driven (`MasterVolume`, `BassHit`, `Tempo`),
   the loader report says so. The mine's and bomb's colour binds (`MineColour`,
-  `MineBrightness`, `BombColour` ...) are unread, so the models draw unbound and the football
-  reads bright white.
+  `MineBrightness`, `BombColour` ...) are unwired; their law is read
+  ([detonator-mine-material.md](detonator-mine-material.md)), so the models draw unbound and the
+  football reads bright white until a per-instance constant path exists.
 - **Pads**: the Detonator pad draws at every speed pad's and weapon pad's own `to_world`
   (`PadVolume::to_world`) **in addition to** the circuit's own pad geometry (whether the
   original still draws that underneath is unread). Whether the model's origin is the pad's
@@ -405,4 +407,6 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
 - The race-side write of `ship+0x6298` (which `PI_TeamModel` a Detonator craft carries).
 - `Charge1`/`Charge2`: who writes the block at `0x00992f40`.
 - The `Detonator_Pad` loop's transform binding, and whether the original pad still draws.
-- The draw path of the mine's three models (spin, music binds), and the bomb's.
+- The mine's and bomb's colour and brightness binds: read, see
+  [detonator-mine-material.md](detonator-mine-material.md); what stays open there is the shader's
+  combine and the bomb blast's own binds.
