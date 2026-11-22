@@ -108,6 +108,7 @@ impl Race {
             chase_close,
             internal,
             nozzles,
+            nozzle_axes,
             engine_lights,
             spu_vertex_lights,
             hull_points,
@@ -876,6 +877,7 @@ impl Race {
                     })
                 }),
                 nozzles,
+                nozzle_axes,
                 engine_lights,
                 spu_vertex_lights,
                 hull_points,

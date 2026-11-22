@@ -26,11 +26,13 @@
 //! - **The hold counts down by the tick.** Its decrement site was not read; the
 //!   `3.3` s equals the effects' own 200 ticks, which is what a hold exists to
 //!   cover.
-//! - **The anchor is the craft's origin, not the original's.** The original
-//!   builds a matrix from a node's transform, offset `1.5` (`2.0` for the death
-//!   flag) along one of that node's axes, whose sign and meaning were not
-//!   settled; the orientation is the identity, so the smoke is world-aligned
-//!   and this follows the craft's origin.
+//! - **The anchor's sign along the node's Z is read off a frame**, not off the code: the
+//!   original adds `1.5` of the flare node's third row (`0x002a0268`), and which way that row
+//!   points along the hull is settled on `docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`
+//!   ("The smoke's anchor against a frame").
+//! - **The death flag is a spent shield.** `object + 0x2b4`, which selects the `2.0` offset,
+//!   is not read to its writer; a craft with no shield left stands for it.
+//! - **A craft with no `Engine Flare` locator** anchors at its origin.
 //! - **Every craft smokes.** The original's per-viewport mask test
 //!   (`craft + 0x7a3c`) was not read, as for [`super::hit_sparks`].
 //! - **The Zone's `WO_DAMAGE_ELECTRIC`** is not played: it needs the mode map.
@@ -50,6 +52,26 @@ pub const MODERATE_ABOVE: f32 = 40.0;
 
 /// The hold a state change writes, seconds (`DAT_008b2fb0`).
 pub const HOLD: f32 = 3.3;
+
+/// How far along the flare node's Z row the smoke leaves its origin (`0xbfc00000` at
+/// `0x002a0308`, subtracted).
+pub const ANCHOR_ALONG_Z: f32 = 1.5;
+
+/// The same once the death flag is set.
+pub const ANCHOR_ALONG_Z_DEAD: f32 = 2.0;
+
+/// The smoke's anchor in the craft's model space: the flare node's origin plus
+/// [`ANCHOR_ALONG_Z`] ([`ANCHOR_ALONG_Z_DEAD`] when `dead`) of its Z row. `axis` carries the
+/// hull's `0.75` scale as the original's row does.
+#[must_use]
+pub fn anchor(nozzle: Vec3, axis: Vec3, dead: bool) -> Vec3 {
+    let along = if dead {
+        ANCHOR_ALONG_Z_DEAD
+    } else {
+        ANCHOR_ALONG_Z
+    };
+    nozzle + axis * along
+}
 
 /// A craft's smoke state, `craft + 0xe0`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,6 +176,21 @@ impl Race {
 
 #[cfg(feature = "view")]
 impl RaceView {
+    /// Where `slot`'s smoke leaves it now, world space: [`anchor`] through the pose the hull is
+    /// drawn at, or the craft's origin when its hull has no `Engine Flare` locator.
+    fn smoke_anchor(&self, core: &SimRace, slot: usize) -> Vec3 {
+        let ship = &core.sim.world.ships[slot];
+        match (
+            self.nozzles.get(slot).copied().flatten(),
+            self.nozzle_axes.get(slot).copied().flatten(),
+        ) {
+            (Some(nozzle), Some(axis)) => self
+                .drawn_model(core, slot)
+                .transform_point3(anchor(nozzle, axis, ship.physics.shield <= 0.0)),
+            _ => self.drawn_position(core, slot),
+        }
+    }
+
     /// A weapon hit landed on `slot`: plays the smoke its remaining shield
     /// calls for. Nothing on a title that answers no [`Trigger::DamageMild`],
     /// on a craft with no shield left, or while the hold rules it out.
@@ -168,7 +205,7 @@ impl RaceView {
         if !plays(state, fx.last[slot], fx.hold[slot]) {
             return;
         }
-        let at = self.drawn_position(core, slot);
+        let at = self.smoke_anchor(core, slot);
         let velocity = ship.physics.body.linear_velocity;
         let changed = state != self.damage_fx.last[slot];
         let mut any = false;
@@ -209,7 +246,7 @@ impl RaceView {
         if !ship.in_world() {
             return;
         }
-        let at = self.drawn_position(core, slot);
+        let at = self.smoke_anchor(core, slot);
         let Some(effect) = self.handles.get(Trigger::LeachHitSpark).cloned() else {
             return;
         };
@@ -252,7 +289,7 @@ impl RaceView {
                 return false;
             }
             self.stage
-                .follow(smoke.playing, self.drawn_position(core, smoke.slot));
+                .follow(smoke.playing, self.smoke_anchor(core, smoke.slot));
             true
         });
         self.damage_fx.riding = riding;

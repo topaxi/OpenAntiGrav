@@ -60,6 +60,7 @@ pub(super) fn livery() -> Livery {
         team: "Test".to_string(),
         hull: triangle(),
         nozzle: None,
+        nozzle_axis: None,
         muzzle: None,
         boost: None,
         flare: None,
