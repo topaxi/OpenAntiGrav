@@ -181,7 +181,10 @@ fn detonators_hull_paints_no_glow_from_its_ramp_or_its_own_picture() {
 
     let families = add_second_families(&model, &geometry_model);
     println!("Detonator ADD_SECOND families: {families:?}");
-    for family in ["detonator_ship_dg_iridescent", "detonator_ship_rich_iridescent"] {
+    for family in [
+        "detonator_ship_dg_iridescent",
+        "detonator_ship_rich_iridescent",
+    ] {
         assert!(
             !families.contains(family),
             "{family} still glows its second binding over its paint: {families:?}"
