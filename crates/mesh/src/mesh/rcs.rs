@@ -176,6 +176,7 @@ mod hull_normal;
 mod isolate;
 mod light_cone;
 mod mag_wave;
+mod mine_rim;
 mod pad_ne;
 mod pads;
 mod picture_tint;

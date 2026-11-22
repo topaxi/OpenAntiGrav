@@ -2226,6 +2226,38 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         1.0,
         ramp_sheen || ((in.slots & 262144u) != 0u && zone_program == 0.0),
     );
+    // **HD's Detonator mine** (`Emissive::program` mode 23, `oag_mesh::mesh::rcs::mine_rim`): an
+    // unlit rim, `rim^(4 sat(1 - B) + 1) / (1 - 0.9 C)` per channel, `B` the entry's offset
+    // (`MineBrightness`) and `C` its tint (`MineColour`), read off the program's own microcode.
+    // A divisor at or below zero (a dark mine's literal `2`) is a negative output the RSX
+    // clamps: **chosen, not measured**, drawn black.
+    //
+    // The map is the third binding, put through the chunk's tangent frame as a hull's is; the
+    // program dots a tangent-space eye vector with it, which is the same angle in the world frame.
+    // **Chosen, not measured: the output alpha (the map's) cuts the surface** where it is below
+    // one half, drawn opaque otherwise: the blend state of the draw is unread.
+    let mine_rim_on = glow_program > 22.5 && glow_program < 23.5;
+    var mine_normal = n;
+    var mine_cut = false;
+    if mine_rim_on {
+        let mine_map = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.xy);
+        mine_normal = hull_normal(mine_map, n, in.tangent);
+        mine_cut = mine_map.a < 0.5;
+    }
+    let mine_angle = max(clamp(1.0 - dot(to_eye, mine_normal), 0.0, 1.0), 1.0e-6);
+    let mine_power = 4.0 * clamp(1.0 - glow_tint_offset.w, 0.0, 1.0) + 1.0;
+    let mine_divisor = vec3<f32>(1.0) - 0.9 * glow_tint_offset.rgb;
+    let mine_rim = select(
+        vec3<f32>(0.0),
+        vec3<f32>(pow(mine_angle, mine_power)) / max(mine_divisor, vec3<f32>(1.0e-6)),
+        mine_divisor > vec3<f32>(0.0),
+    );
+    if mine_rim_on {
+        if mine_cut {
+            discard;
+        }
+        return vec4<f32>(min(mine_rim, vec3<f32>(HALF_MAX)), 1.0);
+    }
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
