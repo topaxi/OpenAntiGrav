@@ -407,7 +407,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 
-Cheapest first: row 1 (a third of the frame), then row 2's gantries, then the bloom arm, then rows 7 and 4.
+Cheapest first was row 1, then row 2's gantries, then the bloom arm (all three wired, below), then rows 7 and 4.
 
 **Zone's look in Detonator (read 2026-11-22, `det-look-re`, `detonator-look.md`).** Mode 14 is in the effect gate's mask
 (`0x00206040`: modes 6, 13, 14, 21), so the Zone pieces that test the byte and not the mode run in Detonator: the
@@ -420,19 +420,22 @@ stage source (`RaceManager+0x2e10`) and the bloom block. Stage 1 authors Sky hor
 from `oag_hd::race::DETONATOR`: its file and DLC3 split, both texture sets, the lap-counter stage; fog, light rig, Track
 and Scene recolour, hull sun and probe tint follow it per frame. So the track and scene colours are the file's.
 
-**Ready to wire (changes, in order of area x error):**
+**Wired 2026-11-22 (`det-look`).** 1. Sky: `hd_sky_model` takes `mode.on_zone_mask()`; Detonator on Talon's Junction loads
+`ZoneSky.gtf`, draws the dome, and stage 1's horizon and zenith are `(0, 0, 0)` (`zone_sky_ground_truth::a_detonator_race_draws_the_zone_dome_in_its_own_stage_colours`).
+2. Billboards: `zone_shares_texture` reads the new `Adverts::detonator_shares_one_texture` (HD `true`; Omega and 2048 `false`,
+their Detonator frames are unread), so slots 1 to 7 show the stage's equaliser target in Detonator on HD only. 3. Bloom:
+`bloom::for_mode` takes the table's feedback, sizes, frame exponent and alpha for Detonator and keeps the circuit's frame
+contribution and adaption boost (`ZoneFrame::detonator_arm`, HD only). Upper band `x 200..900, y 60..300`, ours before then after
+against the original `(17, 10, 10)` on mines-ahead: `(96, 111, 121)` to `(16, 8, 8)`; pair RMSE 0.289 / 0.297 / 0.264 to
+0.205 / 0.223 / 0.159 (cannon-volley / mines-ahead / pad), mean grey 35.9 / 41.5 / 28.3 to 20.6 / 20.9 / 12.6.
 
-1. Sky: `hd_sky_model` (`load/environment.rs:71`) takes `mode.on_zone_mask()`, not `mode == Mode::Zone`, for the Zone sky
-   and dome. Row 1. Test: Detonator on `talons_junction` loads `ZoneSky.gtf`, draws the dome, and the dome's stage-1
-   horizon and zenith are `(0, 0, 0)` (`zone_sky_ground_truth.rs` shape: same circuit in both modes).
-2. Billboards: `zone_shares_texture` (`load/gantry_visibility.rs:25`) on `on_zone_mask()`; the EQ tint colours the bars
-   (style 0 for stages 0-2, grid only after).
-3. Bloom: `bloom::for_mode` (`load/environment/bloom.rs:170`) gets a Detonator arm: the common head (feedback `-0.4`,
-   sizes `1.0`, frame exponent `0.1`, alpha `1.0`, radial on), radial contribution `0.1`, exponent `0.1`, distance `0.6`,
-   and the circuit's own frame contribution and adaption boost kept (Zone's arm forces `0.5` and `5.0`). A separate
-   change from 1 and 2: not "the Zone arm". Needs the radial value and the keep rule as `oag_title` data.
-4. Re-measure the hull (row 7) and the mine and bomb colours (row 4) after 1 to 3: the colours' binds are the
-   `det-colour-re` lane's reading, the hull's pale body is unexplained by the mode's light.
+**Still open from this list.** The bloom arm's radial values (contribution `0.1`, exponent `0.1`, distance scale `0.6`, enabled)
+are not applied: `oag-post` has no radial bloom pass, in Zone either (`zone-frame.md`, "Open"). The slot 8 gate in
+`gantry_visibility.rs` (`mode == Mode::Zone`, the card's Zone-grade exemption) was tried on `on_zone_mask()` and drew a
+pixel-identical Detonator start frame, so it is left. Row 3's floor violet, row 2's gantry violet and row 8 are not fixed by
+these three: the frames still show a dark floor with no violet dashes and a lit grey scenery band at upper right where the
+original is dark (Scene colours authored black), so the grade's Scene recolour or the visualiser glow is the next suspect. Re-measure
+the hull (row 7) and the mine and bomb colours (row 4): the colours' binds are `det-colour-re`'s reading.
 
 What stays as it is: palette, textures, stage source, hull model, handling. 2048 and Omega: Omega's `zone_sky` is `None`
 (sky source unread), 2048's Detonator sky is unread and has no frame pair; nothing to wire there yet.

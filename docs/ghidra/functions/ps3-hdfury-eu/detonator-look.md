@@ -113,23 +113,38 @@ What is **not** read and stays a measurement for the wiring lane:
   `zoneTexVis` visualiser glow tinted by `EQ colour tint` ([zone-visualiser.md](zone-visualiser.md)) is one frame
   away from settled: both share the tint and the byte gate; which one draws these dashes was not separated.
 
-## Ready to wire
+## Wired
 
-1. Sky: `hd_sky_model` takes `mode.on_zone_mask()` for the `zone_sky` choice. The mode-14 check is the byte's, so
-   Zone Battle and 2048/Omega titles whose `zone_sky` is `None` do not change. Expected: row 1 (31 % of the frame,
-   RMSE 0.38-0.41) falls to the dome's black plus bloom; the HUD panel's red translucent layer (row 8) stops
-   bleeding a bright sky through.
-2. Billboards: `zone_shares_texture` on `on_zone_mask()`. Row 2's violet ambient on the gantries.
-3. Bloom: a `Detonator` arm in `bloom::for_mode` as above, with its two unlike rules as data on `oag_title`.
-4. Then re-measure the hull (row 7) and the mine and bomb colours (row 4) separately.
+Wired 2026-11-22 (`det-look`); the three steps below are code, each with a test that fails when it is dropped.
 
-Tests that must fail when the law is dropped: Detonator on `talons_junction` loads `ZoneSky.gtf` and draws the dome
-(`zone_sky_ground_truth.rs`, same circuit in both modes so the mode is the only variable), and the dome's horizon
-and zenith at stage 1 are `(0, 0, 0)`.
+1. **Sky and dome.** `hd_sky_model` takes `Mode::on_zone_mask()` for the `zone_sky` choice, so Detonator loads `ZoneSky.gtf` and
+   draws the gradient dome in the stage's colours; stage 1's are `(0, 0, 0)`. Titles whose `zone_sky` is `None` (Pulse,
+   Pure, 2048, Omega) do not change. Test: `zone_sky_ground_truth::a_detonator_race_draws_the_zone_dome_in_its_own_stage_colours`
+   (Talon's Junction, the same circuit as the Single Race load).
+2. **Billboards.** `zone_shares_texture` reads `Adverts::detonator_shares_one_texture`, `true` on HD alone. Omega and 2048
+   carry `zone_shares_one_texture` for Zone but their Detonator frames are unread, so they keep the per-slot adverts. Test:
+   `gantry_visibility::tests::a_detonator_race_shares_the_stage_target_on_hd_alone`.
+3. **Bloom arm.** `bloom::for_mode` runs `ZoneFrame` for Detonator when `ZoneFrame::detonator_arm` (HD): feedback, both sizes,
+   frame exponent and alpha contribution taken, the circuit's frame contribution and adaption boost kept. Test:
+   `bloom::tests::a_detonator_race_takes_the_table_but_keeps_the_circuits_gain` (a circuit whose every value differs from the
+   table's). **Not wired: the radial bloom** (`0.1` / `0.1` / `0.6`, enabled): `oag-post` has no radial pass, so Zone's `0.04`
+   is equally absent.
+
+Result on the three Detonator pairs (Talon's Junction, Feisar; the upper band is `x 200..900, y 60..300`; original `(17..18, 10..13, 10..24)`):
+
+| Pair | RMSE before to after | Mean grey before to after | Upper band ours before to after |
+| --- | --- | --- | --- |
+| `detonator-talons-mines-ahead` | 0.297 to 0.223 | 41.5 to 20.9 | `(96, 111, 121)` to `(16, 8, 8)` |
+| `detonator-talons-cannon-volley` | 0.289 to 0.205 | 35.9 to 20.6 | `(84, 91, 98)` to `(16, 8, 8)` |
+| `detonator-talons-pad` | 0.264 to 0.159 | 28.3 to 12.6 | `(65, 68, 74)` to `(22, 13, 14)` |
+
+The slot 8 gate (`Mode::Zone`, the card's Zone-grade exemption) was also tried on the mask: a Detonator start frame came out
+pixel-identical, so it stays. What the frame still lacks: the floor's violet dashes and the lit scenery at upper right (the
+original draws it dark), the pale hull and the mine and bomb colours (`det-colour-re`).
 
 ## Cross-title
 
-- **Omega: checked, differs.** `oag_omega` carries `zone_sky: None` and Omega's Zone sky source is unread in its
+- **Omega: checked, differs** (and the Detonator billboard share stays off: `detonator_shares_one_texture: false`). `oag_omega` carries `zone_sky: None` and Omega's Zone sky source is unread in its
   `eboot.bin` ([zone-sky.md](zone-sky.md), "2048 and Omega"); its Detonator grade table is HD's (the four paths are
   in its `eboot.bin` and `data00.psarc`, [zone-palette-select.md](zone-palette-select.md)). Nothing to wire until
   the sky draw is read.
