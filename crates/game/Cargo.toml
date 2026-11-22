@@ -145,6 +145,7 @@ gstreamer-video = { version = "0.25", optional = true }
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+oag-io.workspace = true
 oag-video = { workspace = true, features = ["av1"] }
 
 # The browser: wasm-bindgen glue, the WebGPU adapter request (async on the
@@ -210,6 +211,7 @@ oag-weapons.workspace = true
 # `toml-schema` (`url::Url::from_file_path`) does not compile, so it is left out
 # there; no test runs on wasm32.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+oag-io = { workspace = true, features = ["crash-hook"] }
 oag-schema = { workspace = true, features = ["validate"] }
 
 # The tests' own build of the game hosts with a cheat when `OAG_TEST_CHEAT` asks

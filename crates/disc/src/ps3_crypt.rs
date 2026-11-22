@@ -418,7 +418,7 @@ pub fn store_key(key: &DiscKey, name: &str) -> std::io::Result<PathBuf> {
         })
         .collect();
     let path = dir.join(format!("{safe}.dkey"));
-    std::fs::write(&path, format!("{}\n", key.to_hex()))?;
+    oag_io::write(&path, format!("{}\n", key.to_hex()))?;
     Ok(path)
 }
 

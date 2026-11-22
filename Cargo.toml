@@ -22,6 +22,7 @@ members = [
   "crates/hd",
   "crates/hud",
   "crates/input",
+  "crates/io",
   "crates/livery",
   "crates/log",
   "crates/mobile",
@@ -94,6 +95,7 @@ oag-mod = { path = "crates/mod" }
 oag-modhost = { path = "crates/modhost" }
 oag-ext-abi = { path = "crates/ext-abi" }
 oag-input = { path = "crates/input" }
+oag-io = { path = "crates/io" }
 oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }
 oag-music = { path = "crates/music" }

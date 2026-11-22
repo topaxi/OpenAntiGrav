@@ -3172,6 +3172,7 @@ dependencies = [
  "dirs",
  "flate2",
  "num-bigint 0.5.1",
+ "oag-io",
  "oag-testdata",
  "oag-thread",
  "thiserror 2.0.21",
@@ -3274,6 +3275,7 @@ dependencies = [
  "oag-hd",
  "oag-hud",
  "oag-input",
+ "oag-io",
  "oag-livery",
  "oag-log",
  "oag-mesh",
@@ -3414,6 +3416,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "oag-io"
+version = "0.1.0"
+
+[[package]]
 name = "oag-livery"
 version = "0.1.0"
 dependencies = [
@@ -3485,6 +3491,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "oag-ext-abi",
+ "oag-io",
  "oag-schema",
  "oag-tables",
  "oag-texture",

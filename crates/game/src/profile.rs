@@ -23,21 +23,18 @@ pub use dirs::config_dir;
 pub use std::fs::{create_dir_all, read_to_string, rename};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{write, write_bytes, write_private};
+pub use oag_io::{write, write_bytes, write_private};
 
 #[cfg(target_arch = "wasm32")]
 pub use web::{
     config_dir, create_dir_all, read_to_string, rename, write, write_bytes, write_private,
 };
 
-#[cfg(not(target_arch = "wasm32"))]
-mod native;
-
 /// Makes the next [`write`] on this thread die after `bytes` bytes of the new content, leaving its
 /// temp file as a crashed process would.
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn cut_the_next_write_after(bytes: usize) {
-    native::CUT_AFTER.with(|cut| cut.set(Some(bytes)));
+    oag_io::cut_the_next_write_after(bytes);
 }
 
 #[cfg(target_arch = "wasm32")]
