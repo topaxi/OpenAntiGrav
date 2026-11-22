@@ -174,6 +174,13 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   `EMPFULL` edge cues). Then wire pad detection (`raceplay/src/pads.rs`), gauge, fire input
   (`in+0x1c`), cues as per-tick outputs (ADR-0018). `MineManager_DestroyAtLane` /
   `BombManager_DestroyAtLane` are the kill callers. Gates add `check-weapon-lineage`.
+  **Pads (maintainer, from play):** Detonator's speed and weapon pads look different and charge
+  a weapon (the EMP), rather than boosting or handing out a weapon. Today the Detonator pad model
+  draws over the circuit's own pad and the pad still acts as an ordinary speed pad. Questions the
+  lane must answer, statically and then with an RPCS3 capture: does a Detonator pad boost speed at
+  all; does it charge the EMP, by how much; does the circuit's own pad model still draw beneath it.
+  A capture showing a pad pass with no speed change and a gauge rise confirms the report; a speed
+  change falsifies "rather than boosting".
 - **11 Auto-speed.** RE what mode `0xe` does under mask `0x206040` in `Craft_Update` (does it use
   Zone's start/increment law keyed on the stage?). Do not borrow Zone's law without the read.
   Wire through a `Title` data axis (`start.rs` ~l.668, `player_step.rs` ~l.228,
