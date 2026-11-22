@@ -267,7 +267,7 @@ The colour sources are the circuit's effect-settings keys `%s.Detonator Mine Col
 `%s.Detonator Mine Electricity Colour`, registered by `Environment_RegisterStageSchema`
 ([zone-effectsettings-loader.md](zone-effectsettings-loader.md)). **82** on the models. The binds'
 values, their writer and the per-stage table are read on
-[detonator-mine-material.md](detonator-mine-material.md) (76-80; the shader's combine is unread).
+[detonator-mine-material.md](detonator-mine-material.md) (66-78; the shader's combine is unread).
 
 ### Bomb: `DetonatorBomb_Construct` (`0x00135328`)
 

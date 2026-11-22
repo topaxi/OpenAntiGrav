@@ -16,11 +16,11 @@ colour keys come from is [zone-effectsettings-loader.md](zone-effectsettings-loa
 
 | Constant | Material | Writer | Law | Confidence |
 | --- | --- | --- | --- | ---: |
-| `MineColour` | football and spikes (`detonator_mine_normal_alpha`) | `DetonatorMine_AnimateToMusic` `0x001395f0` | live mine: the stage's `Detonator Mine Colour` bytes / 255; dark mine: `(2,2,2)` football, `(10,10,10)` spikes | 78 |
+| `MineColour` | football and spikes (`detonator_mine_normal_alpha`) | `DetonatorMine_AnimateToMusic` `0x001395f0` | live mine: the stage's `Detonator Mine Colour` bytes / 255 (order inferred); dark mine: `(2,2,2)` football, `(10,10,10)` spikes | 74 |
 | `MineBrightness` | both | same | live: `2.0 * s`, `s` a band-level envelope; dark: `0` | 76 |
-| `ElectricityColour` | `Electric_Visualiser` | same | live: the stage's `Detonator Mine Electricity Colour` bytes / 255 * 1.5; dark: `(2,2,2)` | 76 |
-| `BombColour` | `detonator_bomb_final` | `DetonatorBomb_AnimateToMusic` `0x001340d8` | the stage's `Detonator Bomb Inner Colour` bytes / 255 | 80 |
-| `BombEQColour`, `Colour`, `RainbowColour` (glow edges) | equalisers, equalisers, glow edges | same | the stage's `Detonator Bomb Outer Colour` bytes / 255 | 80 (`Colour`: 74) |
+| `ElectricityColour` | `Electric_Visualiser` | same | live: the stage's `Detonator Mine Electricity Colour` bytes / 255 * 1.5; dark: `(2,2,2)` | 74 |
+| `BombColour` | `detonator_bomb_final` | `DetonatorBomb_AnimateToMusic` `0x001340d8` | the stage's `Detonator Bomb Inner Colour` bytes / 255 (order inferred) | 74 |
+| `BombEQColour`, `Colour`, `RainbowColour` (glow edges) | equalisers, equalisers, glow edges | same | the stage's `Detonator Bomb Outer Colour` bytes / 255 | 74 (`Colour`: 72) |
 | `BombBrightness`, `BombEQBrightness` | final, equalisers | same | `0.2 + 2.0 f`, `0.8 + 2.0 f`, `f` a flash value that decays | 72 |
 | equalisers `Brightness` | equalisers | same | `clamp(scale / 4 - g + f, 0, 1)`, `scale` from a band-4 envelope | 66 |
 
@@ -47,8 +47,16 @@ keys: **the colour snaps when the stage commits** (confidence 75: the read of th
 that nothing else blends the word is the absence of a writer found). The caller unpacks the word as
 red `w >> 24`, green `(w >> 16) & 255`, blue `(w >> 8) & 255` (the `rldicl` extracts at
 `0x001397d4`-`0x001397e4`), then `* 1/255` (TOC `-0x2b74` = `0x3b808081`). The low byte is never
-read, so an authored alpha of `0` (stage 11, "Super Zen") is harmless. The file's order
-`R G B A` is that same order.
+read, so an authored alpha of `0` (stage 11, "Super Zen") is harmless.
+
+**Channel order is inferred, not read.** The key's parser (`0x005d40b8` registers it as type
+`(1, 4, 3)` and hands the text to `0x005d13c0`) was not read, so that the file's first integer
+lands in the word's top byte is not shown by a store. It is corroborated by hue: the same stage
+authors `Airbrake Colour` as floats in plain `R G B`, and the mine colour matches it in file order
+on every stage checked (stage 2 airbrake `(0.004, 0.541, 1.0)` against mine `0 142 224`; stage 3
+`(0.682, 0.004, 1.0)` against `164 0 232`; stage 4 `(0.004, 0.918, 1.0)` against `0 213 232`;
+stage 5 `(0.518, 1.0, 0.004)` against `146 248 0`). Any other order would put the authored alpha
+`255` in a colour lane. Confidence 74 for the order, which caps the colour rows below.
 
 ## The authored values: `detonatormode.effectsettings`
 
@@ -120,7 +128,7 @@ Confidence 80 for the table: the name strings are `TOC -0x2b40` (`MineBrightness
 `+0x158 = a + 11.0` (`TOC -0x2b0c` = `0x41300000`). So **each mine picks one of four low bands
 (0..3) for its football and the matching high band (11..14) for its spikes, at random, once.** The
 band source is `SoundSystem_GetBandLevel` (`0x00304530`, 85, [zone-visualiser.md](zone-visualiser.md)):
-`g_sound + 0x24 + 4 * band`, `band < 16`, otherwise `1.0`-like default. Ours has the same sixteen
+`g_sound + 0x24 + 4 * band`, `band < 16`, otherwise `0.0` ([zone-visualiser.md](zone-visualiser.md)). Ours has the same sixteen
 levels in `0..1` as `oag_audio::spectrum` (`BANDS = 16`; `Spectrum::levels`).
 
 ### Live mine (`m+0x160 != 0`)
@@ -212,7 +220,7 @@ hit or a detonation sets (the writer is unread) and `*(0x00994420 + 0xc)`, a `.b
 `RainbowColour` (`b+0xfc`) and `Envmap` (`b+0xdc`, a product of the matrix rows, `0x0013444c`) are
 not set to a stage colour by this function.
 
-Confidence 80 for the three colours (getter, byte order and field all read), 72 for the two
+Confidence 74 for the three colours (getter and field read, channel order inferred), 72 for the two
 brightness words (constants resolved, flash writer unread), 66 for equaliser `Brightness`
 (a global of unknown value is in the formula).
 
@@ -222,8 +230,8 @@ brightness words (constants resolved, flash writer unread), 66 for equaliser `Br
    these four keys (they are authored as integers, `crates/tables/src/effectsettings.rs`;
    `Mine Electricity`, `Bomb Inner` and `Bomb Outer` likewise). Four `key::` constants are missing.
    The table is `detonatormode` / `detonatormodedlc3` (`crates/hd/src/race.rs` already names both).
-   The stage is `ZoneGrade`'s lap-stage counter (`zone_grade.rs`, `show_stage`): the same number the
-   original's getter reads, and the colour **snaps** on a stage step.
+   The stage is `ZoneGrade`'s committed lap-stage counter (`zone_grade.rs`, `show_stage`, `blend.current`,
+   not the requested one): the same number the original's getter reads, and the colour **snaps** on a stage step.
 2. **Live and dark.** `oag_weapons::detonator::Placed::live` is the sim's reading of
    `DetonatorMine_SetDark`: a dark mine uses the literals `(2,2,2)` / `(10,10,10)` / brightness
    `0`, not the stage colour.

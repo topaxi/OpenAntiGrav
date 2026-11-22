@@ -256,7 +256,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 ## Open
 
 - **Mine and bomb colour binds: RE done, ready to wire except the shader combine** (2026-11-22,
-  `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, 72-80, static). Laws: the
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, 66-78, static; colour channel order inferred). Laws: the
   mine's `MineColour` is the committed stage's `Detonator Mine Colour` bytes / 255 on football and
   spikes (a dark mine: `(2,2,2)` / `(10,10,10)`, `MineBrightness` 0), `MineBrightness` is `2 * s`
   with `s` an attack-over-0.3 / decay-x0.95 envelope of one band (football: random band 0..3 per
@@ -276,7 +276,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   strings), not wired. Omega: checked, applies (same file; binds by hash constants), not wired.
 - **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
   (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (read, see the
-  next bullet) and 2048's object models stay open (the circuit's own pads are now hidden);
+  "Mine and bomb colour binds" bullet below) and 2048's object models stay open (the circuit's own pads are now hidden);
   `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
