@@ -1107,3 +1107,7 @@
 0x00067120	function	Detonator_UpdateHud	65	detonator-cannon.md
 0x000642a0	function	Detonator_IsBombAhead	55	detonator-cannon.md
 0x00987620	data	g_DetonatorScoring	80	detonator-cannon.md
+0x00107b58	function	Ship_BindDetonatorHullParams	72	detonator-hull.md
+0x0013a7d8	function	DetonatorMine_Construct	80	detonator-hull.md
+0x002524e8	function	TeamSelection_CollectModelsForMode	62	detonator-hull.md
+0x000b6d68	function	WorldManager_CountPads	60	detonator-hull.md

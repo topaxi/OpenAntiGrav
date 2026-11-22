@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator Mode races 14 stages with mines and bombs that bite and can end the race; cannon and score read, not wired; effects, EMP, auto-speed open"
+summary: "Detonator races 14 stages; mines and bombs bite; cannon, score, own hull, handling and models read, not wired; EMP, auto-speed open"
 categories: [rendering]
 ---
 
@@ -14,6 +14,38 @@ evidence `docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`). A player sees
 grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 ## Open
+
+- **Own hull, handling file and object models: read, not wired** (2026-11-22,
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
+  `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
+  applies). What the port must change:
+  1. Hull: every craft flies `/data/ships/detonator/ship.vex` (82), with the livery swap
+     `zoneship_zone` -> the team's `PI_TeamModel name="detonator"` `texturelocation`
+     (`zoneship_<team>`, fallback `zoneship_faisar`; 78/65), under `data/ships/detonator/`. Only
+     `detonator_ao.gtf` differs per team. Also from that folder: `shipwreck.vex` (an outline
+     placeholder), `ship_deathshell.vex`, `locators.vex` and `engineflare.vex`. No LOD, leach or
+     shield; the absorb shell is `absorbeffect.vex`. Today `ZoneCraft` applies only in
+     `Mode::Zone` (`load/zone_livery.rs`, `load/skin.rs`, `load/roster/model_livery.rs`), so
+     Detonator draws the team's race hull. Omega's key is `zoneship_team` (its Zone key).
+  2. Handling: `/data/ships/detonator/handlingstats.xml` (82), not Zone's. It has the same
+     engine, `Turning` 2.2/1200, `Airbrake` 6/1100/sideshift 650, `Tilt` 0.3, `Misc.width` 4.0
+     and its own cameras. Today `load/sim.rs` applies `ZONE_HANDLING` to every `on_zone_mask`
+     mode. It needs a Detonator entry on the title (HD `/data/ships/detonator/handlingstats.xml`;
+     2048 and Omega `.../hdships/Detonator/handlingstats.xml`, the same bytes). Engine lights stay
+     Zone's.
+  3. Mine model: `/data/weapons/mine_rita_football` + `mine_rita_spikes` (both
+     `detonator_mine_normal_alpha`) + `electric_visualiser` (82), in place of `hd_mine`
+     (`weapons/visuals.rs` `mine_model_matrices` feeds Detonator mines to the race Mine).
+  4. Bomb model: `/data/weapons/detonator_bomb_final` + `_final_equalisers` + `_glowedges` (82).
+  5. Pads: `/data/new_mode_pads/detonator_pad/detonator_pad` on every speed pad and every weapon
+     pad (70). Unread: whether the original pad still draws underneath. Omega takes the path from
+     a data field.
+  6. Cannon (when wired): `detonator_cannonbolt`, `hd_muzzleflash_detonator`, from the
+     `cannon_flash_left`/`right` locators.
+  Open: the substitution table's reader, the race-side write of `ship+0x6298`, the
+  `Charge1`/`Charge2` block writer (`Ship_BindDetonatorHullParams`), the mine's music-driven
+  binds. `detonator_pickup` and `detonator_mine_explosion_kaleidoscopic` ship, but no loader was
+  found (70, negative).
 
 - **Layout files decoded, placement and contact wired** (`oag_tables::detonator_layout`,
   `oag_weapons::detonator`, `oag_raceplay::detonator`): HD races lay their mines and bombs per
@@ -75,9 +107,8 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
   survey tests (`0/2/4/5/127`; a stand-in "lane free when the downward probe hits track" is
   needed and must say so), the route-fork walk, what the mine/bomb inits do with the matrix and
   `sec+0x40`/`+0x60`, how a mine or bomb leaves its pool (the bomb pool is 2 and the spawn does
-  not check it), `0x0012ae38`/`0x0012ae10`/mine vslot `+0x3c`. Models:
-  `data/Weapons/detonator_bomb_final_equalisers.rcsmodel` (2048), `DetonatorMine` (368 bytes,
-  `0x0013a7d8`) and `DetonatorBomb` objects; effects `WO_BOMB_EXPLO_DETONATOR`,
+  not check it), `0x0012ae38`/`0x0012ae10`/mine vslot `+0x3c`. Models: see the hull bullet
+  above (`DetonatorMine_Construct` `0x0013a7d8`, `DetonatorBomb_Construct`); effects `WO_BOMB_EXPLO_DETONATOR`,
   `WO_MINE_EXPLO_DETONATOR[_DEAD]`, `WO_CANNON_SPARKS_DETONATOR` (2048 `data2.psarc`), whose
   triggers need the hit read first.
 - **EMP.** The EMP gauge law is read (page, "What `Detonator_UpdateRace`
@@ -87,8 +118,8 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
   already lists EMP as unwired.
 - **Auto-speed.** The manual: "Like Zone mode, acceleration is automatic and ever-increasing".
   No law read; the player throttles. Read what Detonator's engine branch does (HD's hover
-  code gates modes 6, `0xd`, `0xe` together, `hover-target.md`), and whether `class="Zone"`
-  cells fly `/data/ships/zone` or `/data/ships/detonator`.
+  code gates modes 6, `0xd`, `0xe` together, `hover-target.md`). The handling file is answered:
+  `/data/ships/detonator` (hull bullet above).
 - **Score, end screen, HUD.** Score and percentage laws read (cannon bullet above), not wired;
   `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED`;
   `detonator_hud.xml` (the race draws the time trial's HUD). Campaign cells (`mode="Detonator"`,

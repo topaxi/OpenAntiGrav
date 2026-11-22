@@ -1500,8 +1500,18 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   HD/Fury's (shipped in the v1.04 patch) on the ported circuits; Omega's grade is not drawn,
   as its Zone grade is not.
 - **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
-  HD flies the Zone handling file, the Zone hover rig with no brakes, and the Zone grid hover
-  (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
+  HD flies the Zone hover rig with no brakes and the Zone grid hover (`Mode::on_zone_mask`). The
+  same mask skips split recording; this build still shows lap times.
+- **Its own hull and handling (read, not wired).** Every craft flies
+  `Data\Ships\Detonator\Ship.vex`, swapping `zoneship_zone` for the team's `detonator` livery
+  (`zoneship_<team>`). Its wreck, death shell, locators and flare come from the same folder, and it
+  loads no LODs and no shield. It flies `Data\Ships\Detonator\handlingstats.xml`, not Zone's:
+  same engine, harder turning, less airbrake, narrower. The mine is `mine_rita_football` +
+  `mine_rita_spikes` + `Electric_Visualiser`, the bomb `detonator_bomb_final` + `_equalisers` +
+  `_glowedges`, and every speed and weapon pad carries a `Detonator_Pad`. Confidence 70-82; 2048
+  and Omega check out the same, Omega with its own livery key `zoneship_team`. Evidence:
+  [detonator-hull.md](../ghidra/functions/ps3-hdfury-eu/detonator-hull.md). This build still
+  draws the team's race hull and flies Zone's handling file.
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
   inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
 - **Mines and bombs are laid, and bite.** The opening stage and each stage step lay objects
@@ -1510,7 +1520,8 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   groups of clusters from the disc's `PatternFile.xml` up to the stage's `MineCountStage`
   (`GamePlayValues.xml`, [detonator-layouts.md](../formats/detonator-layouts.md)), single mines
   topping the total up, and one bomb attempt per stage. They are drawn with the ordinary Mine
-  and Bomb models (no Detonator-specific one is located; **chosen, not measured**). A craft within
+  and Bomb models (**chosen, not measured**; the original's own models are now located on
+  [detonator-hull.md](../ghidra/functions/ps3-hdfury-eu/detonator-hull.md) and not yet wired). A craft within
   a mine's `trigger_radius` (3) loses its `damage` (10), has its velocity multiplied by
   `velocity_reduction` (0.5) and the mine goes; a bomb (radius 6) costs the toucher 20 and
   pushes every craft within 40; energy at zero destroys the craft and the race ends (laws:

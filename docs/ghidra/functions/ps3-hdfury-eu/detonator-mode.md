@@ -63,13 +63,22 @@ shot-chain bonus and the score values are read on [detonator-cannon.md](detonato
 
 ## The Zone-modes mask carries Detonator
 
-HD tests one mask, `0x206040` (game modes 6, 13, 14 and 21), in `Craft_Update`,
-`Craft_UpdateHover` and `Team_LoadHandlingStats`, and mode 14 is Detonator. So a Detonator craft,
-like a Zone craft, flies `/data/ships/zone/handlingstats.xml`'s classless block, the Zone hover rig
-with its trailing ray, no brakes, and waits on the grid at the ray's height
-([hover-four-point.md](hover-four-point.md), "Zone, read live"; the mask static, the laws live for
-mode 6 only). Wired as `oag_race::Mode::on_zone_mask`; on 2048 and Omega those title fields are
-`None`, so nothing changes there. **Departure, named**: the same mask skips `Craft_RecordSplit`
+HD tests one mask, `0x206040` (game modes 6, 13, 14 and 21), in `Craft_Update` and
+`Craft_UpdateHover`, and mode 14 is Detonator. So a Detonator craft, like a Zone craft, flies the
+Zone hover rig with its trailing ray, has no brakes, and waits on the grid at the ray's height
+([hover-four-point.md](hover-four-point.md), "Zone, read live"; the mask is read statically, and
+the laws were observed live for mode 6 only). Wired as `oag_race::Mode::on_zone_mask`; on 2048 and
+Omega those title fields are `None`, so nothing changes there.
+
+**The handling file is not Zone's.** `Team_LoadHandlingStats` tests mode `0xe` before the mask
+(`0x001e7050`) and reads `Data\Ships\Detonator\handlingstats.xml`. That file has the same engine as
+Zone's, but turns harder (`Turning` 2.2/1200 against 1.8/1000), has less airbrake and tilt, is
+narrower (`Misc.width` 4.0 against 5.0), and carries its own cameras. Confidence 82, and the same
+test is on 2048 and Omega ([detonator-hull.md](detonator-hull.md), "The handling file"). This page
+once said a Detonator craft flies Zone's file, and the wiring followed it:
+`oag_hd::race::ZONE_HANDLING` applies to every `on_zone_mask` mode. Engine lights are Zone's
+(`Data\Ships\Zone\EngineLightData.xml`, under the mask). The hull is Detonator's own,
+`Data\Ships\Detonator\Ship.vex`, also on [detonator-hull.md](detonator-hull.md). **Departure, named**: the same mask skips `Craft_RecordSplit`
 inside `Craft_UpdateLapProgress` (`0x000e50c4`-`0x000e50dc`), so the original keeps no split gaps in
 Detonator; this build's HUD still shows its lap times.
 
