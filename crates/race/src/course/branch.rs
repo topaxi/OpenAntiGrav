@@ -40,6 +40,16 @@ impl Branch {
     }
 }
 
+/// What the spline blends a light scale from at one ring sample: the four
+/// control points' bytes and the parameter inside their segment.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub(super) struct LightBlend {
+    pub(super) controls: [[u8; 4]; 4],
+    /// The same four control points' positions, to find the spline's nearest point to a craft.
+    pub(super) positions: [[f32; 3]; 4],
+    pub(super) t: f32,
+}
+
 /// One sampled point: position, edge midpoint, corridor width, half-widths.
 pub(super) struct Sample {
     pub(super) pos: Vec3,
@@ -47,6 +57,8 @@ pub(super) struct Sample {
     pub(super) corridor_width: f32,
     pub(super) half_widths: (f32, f32),
     pub(super) light_scale: [u8; 4],
+    /// The segment's four control points' light bytes and this sample's `t` in it.
+    pub(super) light_blend: LightBlend,
 }
 
 /// Every sample of `path`, [`super::Course::STEPS_PER_SEGMENT`] to a
@@ -68,6 +80,11 @@ pub(super) fn sample_path(path: &oag_vex::track::Path) -> Vec<Sample> {
                     corridor_width: sample.ai_bound_right - sample.ai_bound_left,
                     half_widths: (sample.half_width_left, sample.half_width_right),
                     light_scale: sample.light_scale,
+                    light_blend: LightBlend {
+                        controls: path.light_controls(segment).unwrap_or_default(),
+                        positions: path.control_positions(segment).unwrap_or_default(),
+                        t,
+                    },
                 });
             }
         }
