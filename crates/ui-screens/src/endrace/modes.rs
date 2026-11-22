@@ -201,6 +201,40 @@ impl DetonatorResults {
     }
 }
 
+/// 2048's Detonator results: four label/value rows (`FUN_81172882`'s result list), where HD's grid
+/// has six. **Not drawn by any screen yet**: they belong to the `Results` page
+/// (`docs/ui/endrace-2048.md`, "What does not draw"), whose table is native code this build has not
+/// read, and the touch Summary page has no widget for a list. The model and the wording are
+/// recovered (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "Omega and 2048").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Detonator2048Results {
+    /// The HUD's stage (record `+0x12`), printed bare: no `/ 14` and not the laps completed.
+    pub stage: u32,
+    /// Mines cleared, `0..=100`.
+    pub mines_percent: f32,
+    /// Bombs destroyed, printed bare (`%d`).
+    pub bombs: u32,
+    /// The score, under `IG_HUD_SCORE` and not HD's `ER_DETONATOR_SCORE`.
+    pub score: i32,
+}
+
+impl Detonator2048Results {
+    /// The four rows in list order: the label's idstring and the value (`%d`, `%.1f%%`, `%d`,
+    /// `%d`). The three chain counts are copied into the stats block and not listed.
+    #[must_use]
+    pub fn rows(&self) -> [(&'static str, String); 4] {
+        [
+            ("ER_DETONATOR_STAGE", self.stage.to_string()),
+            (
+                "PERCENT_MINES_CLEARED",
+                format!("{:.1}%", self.mines_percent),
+            ),
+            ("PERCENT_BOMBS_CLEARED", self.bombs.to_string()),
+            ("IG_HUD_SCORE", self.score.to_string()),
+        ]
+    }
+}
+
 /// The Eliminator table's `Line1`: `"%s %s"` of `ER_ELIM_COM` and the place's
 /// ordinal. `ER_ELIM_COM` ends in a space, so the two spaces on screen are the
 /// original's. Blank outside places 1-8, as the original's switch leaves it.

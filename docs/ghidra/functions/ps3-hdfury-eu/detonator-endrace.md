@@ -239,11 +239,13 @@ drawn:** the new-record banner (`RecordNotifyBlock`, `RecBlockBlue`/`RecBlockGre
 `RecBlockGrey` would claim "not a record".
 
 **Omega: checked, applies, not wired.** The filler, ids and `rec` offsets are HD's; the ids are in
-its served table; `DetonatorResults` is title-agnostic. Omega keeps the built-in scoreboard
+its served table (`omega_menu_blocks_ground_truth::omegas_served_table_carries_detonators_end_screen_ids`);
+`DetonatorResults` is title-agnostic. Omega keeps the built-in scoreboard
 (`endrace_entry` is `None`: wiring HD's reader there leaves `EndRace Menu` with no options,
 `docs/formats/omega-status.md`), so nothing draws until that is solved.
 **2048: checked, differs, not wired.** Its four-row list (stage = HUD stage with no `/ 14`, mines,
-bombs `%d`, `IG_HUD_SCORE`) is the `Results` page's, which `docs/ui/endrace-2048.md` lists as a named gap
+bombs `%d`, `IG_HUD_SCORE`) is modelled and worded (`oag_ui_screens::endrace::Detonator2048Results`,
+tested; no screen draws it) and is the `Results` page's, which `docs/ui/endrace-2048.md` lists as a named gap
 (`<RaceResults>`, native code undecompiled); its Touch Summary page has no widget for a list.
 
 ## Names

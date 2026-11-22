@@ -582,7 +582,7 @@ fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_sessio
     assert!(texts.contains(&results.score.to_string()), "{texts:?}");
     // None of the field grid's cells: no place, no time, no team.
     assert!(
-        !texts.iter().any(|t| t == &strings.get_or_id("ER_RACING")),
+        !texts.iter().any(|t| t == strings.get_or_id("ER_RACING")),
         "{texts:?}"
     );
 }

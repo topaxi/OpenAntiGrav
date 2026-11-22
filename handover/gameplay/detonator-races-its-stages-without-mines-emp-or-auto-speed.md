@@ -233,10 +233,12 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
     best-score store (none on main); drawn off, `RecBlockGrey` included.
   - **Omega**: same filler (`FUN_0155bc90`) and ids; but Omega's `endrace_entry` is `None` (a finished
     race keeps the built-in scoreboard; wiring HD's reader leaves `EndRace Menu` with no options,
-    `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved.
+    `docs/formats/omega-status.md`), so no Omega Detonator screen draws until that is solved (a
+    separate follow-up: Omega's `EndRace Menu`). Its served table carries all the ids (tested).
   - **2048**: its four-row list (stage = the HUD stage with no `/ 14`, mines `%.1f%%`, bombs `%d`,
-    `IG_HUD_SCORE`, no chain rows) belongs to its `Results` page, which is a named gap
-    (`docs/ui/endrace-2048.md`); the touch Summary page has no widget for it.
+    `IG_HUD_SCORE`, no chain rows) is modelled and worded (`Detonator2048Results`, tested) but not
+    drawn: it belongs to its `Results` page, a named gap (`docs/ui/endrace-2048.md`); the touch
+    Summary page has no widget for it. No layout is invented.
   - **No live frame of the original** (the grey ink, the `x = 590` left edge, the `RecLogoD` art,
     whether `MiniText` `ER_FINALPOS` is hidden: the Detonator branch writes none of it).
 - **14 Campaign: done.** `race_mode_for_cell` maps `Other("Detonator")`; `RaceStage::campaign_tier`

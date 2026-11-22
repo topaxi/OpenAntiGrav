@@ -75,7 +75,7 @@ pub use draw::{
     tournament_results_draw_list,
 };
 pub use modes::{
-    DetonatorResults, EliminationResults, EliminationRow, ZoneResults,
+    Detonator2048Results, DetonatorResults, EliminationResults, EliminationRow, ZoneResults,
     elimination_results_draw_list, zone_results_draw_list,
 };
 pub use people::{PeopleResults, PersonName, PersonRow, people_results_draw_list};
