@@ -350,6 +350,41 @@ fn ten_in_a_row_pay_three_thousand_and_fifteen_pay_five_thousand() {
 }
 
 #[test]
+fn the_award_counts_run_over_the_race_and_a_second_five_counts_again() {
+    let mut cannon = Cannon::new();
+    volleys_with_hits(&mut cannon, |v| v < 5 || (6..11).contains(&v));
+    award_streaks(&mut cannon);
+    assert_eq!((cannon.fives, cannon.tens, cannon.fifteens), (2, 0, 0));
+    volleys_with_hits(&mut cannon, |_| true);
+    award_streaks(&mut cannon);
+    assert_eq!(
+        (cannon.fives, cannon.tens, cannon.fifteens),
+        (2, 1, 1),
+        "a ten and a fifteen count once each, the five is already paid"
+    );
+    award_streaks(&mut cannon);
+    assert_eq!((cannon.fives, cannon.tens, cannon.fifteens), (2, 1, 1));
+}
+
+#[test]
+fn a_reload_clears_the_clips_awards_and_keeps_the_race_counts() {
+    let (mut field, ship) = (Field::new(), craft());
+    tick(&mut field, IDLE, &ship, &open_air);
+    field.cannon.fives = 2;
+    field.cannon.tens = 1;
+    field.cannon.awards.first_five = true;
+    field.cannon.awards.ten = true;
+    let mut reload = IDLE;
+    reload.reload = true;
+    tick(&mut field, reload, &ship, &open_air);
+    for _ in 0..60 {
+        tick(&mut field, IDLE, &ship, &open_air);
+    }
+    assert_eq!(field.cannon.awards, Awards::default());
+    assert_eq!((field.cannon.fives, field.cannon.tens), (2, 1));
+}
+
+#[test]
 fn a_second_five_pays_when_a_separate_streak_ends_and_a_longer_first_one_does_not() {
     let mut cannon = Cannon::new();
     volleys_with_hits(&mut cannon, |v| v < 5 || (6..11).contains(&v));

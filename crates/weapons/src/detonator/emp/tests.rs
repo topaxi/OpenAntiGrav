@@ -178,6 +178,10 @@ fn the_wave_clears_what_lies_ahead_and_scores_the_emp_values() {
     assert!(left.contains(&5) && left.contains(&150), "{left:?}");
     assert_eq!(field.live_bombs, 0);
     assert_eq!(
+        field.cannon.destroyed_bombs, 1,
+        "the wave's bomb kill counts through the shared destroy path, as the cannon's does"
+    );
+    assert_eq!(
         kinds.iter().filter(|k| **k == EventKind::BombEmped).count(),
         1
     );

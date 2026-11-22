@@ -214,6 +214,9 @@ fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::canno
         destroyed_mines,
         destroyed_bombs,
         held_ticks,
+        fives,
+        tens,
+        fifteens,
     } = cannon;
     hasher.write_u8(*clip);
     hasher.write_f32(*trigger);
@@ -268,6 +271,9 @@ fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::canno
     hasher.write_u32(*destroyed_mines);
     hasher.write_u32(*destroyed_bombs);
     hasher.write_u32(*held_ticks);
+    hasher.write_u32(u32::from(*fives));
+    hasher.write_u32(u32::from(*tens));
+    hasher.write_u32(u32::from(*fifteens));
 }
 
 fn write_placed(hasher: &mut StateHasher, placed: &oag_weapons::detonator::Placed) {

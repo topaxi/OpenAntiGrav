@@ -307,10 +307,9 @@ fn clear_entry(
         let at = survey
             .point(&placed, config.lane_width)
             .map_or(oag_core::math::Vec3::ZERO, |(at, _)| at);
-        field.cannon.score = field
-            .cannon
-            .score
-            .saturating_add(config.scoring.emp_bomb_score);
+        let cannon = &mut field.cannon;
+        cannon.score = cannon.score.saturating_add(config.scoring.emp_bomb_score);
+        cannon.destroyed_bombs = cannon.destroyed_bombs.saturating_add(1);
         events.push(Event {
             kind: EventKind::BombEmped,
             at,
