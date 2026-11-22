@@ -140,8 +140,8 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   (`pos, prev, vel, up, normal, age, rebounds, slot, dead`), per-bomb hit counts (swap with the
   bomb array on removal), score (i32), `m_mine`, `m_chain`, bombs-shot `n`, mines-destroyed and
   bombs-destroyed counters, trigger-held ticks. Raise the `World` ratchet (~2 KiB).
-- **Inputs:** fire = `Button::Square` held, reload = `Button::Circle` (pressed; edge-vs-level
-  unread, **chosen**), slot 0 only; pass the snapshot into `advance_detonator`
+- **Inputs:** fire = `Button::Square` held, reload = `Button::Circle` (pressed; the buttons are read, `detonator-cannon.md`
+  "The buttons", 80; edge-vs-level of the reload unread, **chosen**), slot 0 only; pass the snapshot into `advance_detonator`
   (`tick.rs` ~l.557 has `inputs`). Use weapons-on damage rules as `step_contacts` does. A
   Detonator-only fixed-weapon gate: do not flip `Mode::weapons_enabled()` (asserted false).
 - **Rounds:** `step_cannon` generic over `Craft` with a sweep closure
@@ -397,30 +397,60 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 
 | # | Region | Area | RMSE | Area x error | What differs (confidence 70 unless stated) |
 | ---: | --- | ---: | ---: | ---: | --- |
-| 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue) and a bright upper scene; the original's Detonator frame is near black with blue-violet gantries and a dark grade. Mean grey is 55-70 higher in ours. Probably the mode's own grade/sky state (the Zone analogue is `zone-grade-sky`); which parameter is not measured (confidence 50). |
-| 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. |
-| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
+| 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue); the original's frame is near black (mean `(18, 10, 11)` over `x 200..900, y 60..300`, ours `(96, 111, 121)`). **Cause read (80):** the original swaps in `ZoneSky.gtf` and draws the gradient dome on `g_ZoneEffectsActive`, which mode 14 sets; Detonator stage 1 authors `Sky horizon colour` and `Sky zenith colour` `0 0 0`, so the dome is black. Ours gates the sky swap and dome on `Mode::Zone` (`load/environment.rs:71`). `docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`. |
+| 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. The gantry violet is likely the stage's `EQ colour tint` `171 9 255` on the billboards, which ours leaves off (the shared stage target is `Mode::Zone` only, `load/gantry_visibility.rs:25`; the original's gate is the byte, 80). |
+| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. Ours already applies Detonator's grade (its file, texture sets, Track recolour `[0.97, 0, 0]`); what is missing is the violet: the floor's dashes read `(132..143, 6..7, 199..211)`, the hue of `EQ colour tint` (60, one frame), and the bloom's Detonator arm (below). 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
 | 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball (`MineColour`/`MineBrightness` binds unread, known); ours also shows no spikes at a distance. |
 | 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
 | 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
-| 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours: pale silver body, white wing edges, no lit strip. A livery/material gap (`zoneship_feisar` texture and the Detonator material binds; not measured which). |
+| 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours: pale silver body, white wing edges, no lit strip. Not the mode's sun by the code read (stage 1 authors Sun `0`; ours takes it through the grade, 70). Candidates, unmeasured: the livery (`zoneship_<team>`), the `zoneship01` rim term, the hull program's variant. |
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 
-Cheapest first: row 1 (a third of the frame, one grade/sky decision for the mode), then row 3's track tint (the same grade), then
-rows 7 and 4. Rows 1 and 3 are likely one cause, the Detonator stage's colour grade and sky, which the `zone-grade-sky` lane
-solved for Zone (hypothesis, 50: not read for Detonator).
+Cheapest first: row 1 (a third of the frame), then row 2's gantries, then the bloom arm, then rows 7 and 4.
 
-Found on the way (not renderer, for the owner of the sim): **the original's pulse cannon appears to fire on TRIANGLE**, not
-SQUARE. Seen once (one boot): a 0.2 s TRIANGLE hold at lap clock 1.8 s took the clip from 15 to 12 with flashes and rounds. SQUARE
-was held on four other boots (0.4-0.5 s at lap 3.0-5.6 s, 0.2 s at 1.2 s): it never fired and each time the camera view changed
-and the hull vanished (the craft had also left the track or hit a mine in some of those, which alone could stop a fire). Confidence
-60, to be repeated before ours' mapping moves. `detonator-cannon.md` has the button unread ("the dispatcher was not read") and ours
-maps Square (chosen); the pair scripts hold SQUARE in ours only because that is ours' mapping. Also measured: the craft does not steer itself (auto-speed is speed only);
+**Zone's look in Detonator (read 2026-11-22, `det-look-re`, `detonator-look.md`).** Mode 14 is in the effect gate's mask
+(`0x00206040`: modes 6, 13, 14, 21), so the Zone pieces that test the byte and not the mode run in Detonator: the
+`ZoneSky.gtf` swap and gradient dome, the stage block's publication, the billboards' shared stage target. The mode-keyed
+pieces have Detonator arms of their own: the settings file (`DetonatorMode[DLC3].effectSettings`), the texture sets, the
+stage source (`RaceManager+0x2e10`) and the bloom block. Stage 1 authors Sky horizon and zenith `0 0 0`, Sun `0`, Fog
+`0`, Scene colours `0`, Track Texture Colour `0.97 0 0`, EQ tint `171 9 255` (full table on the page).
+
+**How ours applies it today.** `zone_grade` (`crates/raceplay/src/load/environment.rs`) already builds Detonator's grade
+from `oag_hd::race::DETONATOR`: its file and DLC3 split, both texture sets, the lap-counter stage; fog, light rig, Track
+and Scene recolour, hull sun and probe tint follow it per frame. So the track and scene colours are the file's.
+
+**Ready to wire (changes, in order of area x error):**
+
+1. Sky: `hd_sky_model` (`load/environment.rs:71`) takes `mode.on_zone_mask()`, not `mode == Mode::Zone`, for the Zone sky
+   and dome. Row 1. Test: Detonator on `talons_junction` loads `ZoneSky.gtf`, draws the dome, and the dome's stage-1
+   horizon and zenith are `(0, 0, 0)` (`zone_sky_ground_truth.rs` shape: same circuit in both modes).
+2. Billboards: `zone_shares_texture` (`load/gantry_visibility.rs:25`) on `on_zone_mask()`; the EQ tint colours the bars
+   (style 0 for stages 0-2, grid only after).
+3. Bloom: `bloom::for_mode` (`load/environment/bloom.rs:170`) gets a Detonator arm: the common head (feedback `-0.4`,
+   sizes `1.0`, frame exponent `0.1`, alpha `1.0`, radial on), radial contribution `0.1`, exponent `0.1`, distance `0.6`,
+   and the circuit's own frame contribution and adaption boost kept (Zone's arm forces `0.5` and `5.0`). A separate
+   change from 1 and 2: not "the Zone arm". Needs the radial value and the keep rule as `oag_title` data.
+4. Re-measure the hull (row 7) and the mine and bomb colours (row 4) after 1 to 3: the colours' binds are the
+   `det-colour-re` lane's reading, the hull's pale body is unexplained by the mode's light.
+
+What stays as it is: palette, textures, stage source, hull model, handling. 2048 and Omega: Omega's `zone_sky` is `None`
+(sky source unread), 2048's Detonator sky is unread and has no frame pair; nothing to wire there yet.
+
+**The cannon button (read 2026-11-22, `detonator-cannon.md`, "The buttons", 80): ours is right.** The cannon reads the
+controls record's `+0x1a` (the ordinary *use* hold), the reload `+0x1b` (the *absorb* button), the EMP `+0x1c` (L1). From
+`Pad_Update`'s index table, use is SQUARE, absorb is CIRCLE and change camera is TRIANGLE. The pairs lane's "TRIANGLE
+fires, SQUARE changes the camera" is the harness: `rpcs3_pad.py` sends `triangle` as `BTN_NORTH` and `square` as
+`BTN_WEST`, which RPCS3's evdev default reads as Square and Triangle, so the two reach the game swapped (swap
+mechanism 70; the live result and the static read agree independently). Ours' Square fires and Circle reloads: no change
+(the reload is a press edge in ours, chosen; the original's level-or-edge is unread). Also measured: the craft does not
+steer itself (auto-speed is speed only);
 with no stick it keeps the line for about 6 s on the first straight, and it flies into the first laid mine near 3 s (original: energy 100 to 90, an
 orange screen flash, grey shards and a blue shield glow, scratch capture, no pair).
 A START RACE tap before the prompt is up is held into the race and sends the craft off the track within 4 s (the capture script
 waits 30 s after a restore).
+
+The pair scripts' `--press`/`--hold` names are the harness's: its `triangle` is the game's SQUARE (fire) and its `square` the game's TRIANGLE (camera). A script that fires the original's cannon uses `triangle`; ours' fires on its own Square.
 
 Not reached: **the EMP and the pad pair's contact.** One steered attempt (stick right 0.5 s from lap clock 1.5 s) moved the craft
 toward the pad but into a mine first; the pad is at the right edge about 2.0-2.3 s into the lap and needs a steered line past the

@@ -503,6 +503,60 @@ adds to the volley's slot. Read, not observed; confidence 65.
 - The EMP itself (`Ship_UpdateCannonTrigger`'s `in+0x1c` arm, `EMPManager`): read on
   [detonator-emp.md](detonator-emp.md).
 
+## The buttons: fire is SQUARE, reload is CIRCLE, the EMP is L1 (2026-11-22, `det-look-re`)
+
+`Ship_UpdateCannonTrigger` reads three bytes of the controls record `*(*(ship+0x5fac)+0x84)`: `+0x1a`
+fire (hold), `+0x1b` the absorb byte (the manual reload, `Ship_UpdatePickup`), `+0x1c` the EMP. The record is
+`PlayerInput+0x4c`, so `+0x1a` is the *use* hold `PlayerInput+0x66`, `+0x1b` absorb `+0x67`, `+0x1c` action 8
+([eliminator-flip.md](eliminator-flip.md), "The AI's flip"): the cannon is the ordinary pickup **use** button
+and the reload the ordinary **absorb** button, the same two as every other weapon. The question is which
+physical buttons the bindings `Options_GetButtonBinding(pad, action)` return for use (`7`) and absorb (`4`) are.
+
+`Pad_Update` (`0x0033e460`, `Pad_Update` in the bridge) turns a DualShock 3 record (`*record == 5`) into the
+per-index booleans at `pad+0x674+index`. Reading the decompile, each index takes one float of the record
+(`P = record + 4`):
+
+| Index | Source | Button | Evidence |
+| ---: | --- | --- | --- |
+| 10, 11 | `P+0x2c`, `P+0x30` | L2, R2 | airbrake bindings (`eliminator-flip.md`) |
+| 8, 9 | `P+0x34`, `P+0x38` | L1, R1 | L1 = Flip, live; R1 = reverse camera |
+| 5 | `P+0x3c` | TRIANGLE | next in the run |
+| 4 | `P+0x40` | CIRCLE | next in the run |
+| 6 | `P+0x44` | CROSS | thrust, live |
+| 7 | `P+0x48` | SQUARE | last in the run |
+
+The run `P+0x2c..P+0x48` is the DualShock digital-2 order (L2, R2, L1, R1, TRIANGLE, CIRCLE, CROSS, SQUARE), and
+the four indices live-confirmed by other pages (L2/R2 airbrakes, L1 flip, CROSS thrust) sit on it in that
+order; the remaining three are read by position. **So use (`7`) is SQUARE, absorb (`4`) is CIRCLE, change camera
+(`5`) is TRIANGLE.** The disc's `controls_definition_ps3.xml` rows (`O`, `SQ`, `TR`) are not those buttons for
+use and absorb: [eliminator-flip.md](eliminator-flip.md) already calls its airbrake row's `L1` a placeholder, and
+the labels there are rotated by one. Confidence **80**: the decompile and the live bindings, with the
+`P+0x3c`/`+0x40`/`+0x48` sources unread (the function that fills `P` from `cellPadGetData`'s bytes was not
+located, `FUN_005b9570` only calls `cellPadGetData`).
+
+**The pairs lane's "TRIANGLE fires, SQUARE changes the camera" is the harness, not the game.** The pad driver
+sends `triangle` as `BTN_NORTH` and `square` as `BTN_WEST` (`scripts/rpcs3_pad.py`), and RPCS3's evdev default
+binds Square to `BTN_X` (`BTN_NORTH`, 0x133) and Triangle to `BTN_Y` (`BTN_WEST`, 0x134); the two face buttons
+reach the game swapped. A harness `triangle` is a game SQUARE (use, fires the cannon, 0.2 s hold took the clip
+15 -> 12), a harness `square` is a game TRIANGLE (change camera, the view changed and the hull vanished).
+The same swap is behind every HD page that fires a weapon "with TRIANGLE" (`hd-pickup-table.md`, `shield.md`,
+`craft-flags.md`, `leach-beam-strips.md`): it is the use button. The RPCS3 default is from RPCS3's source as
+remembered, not read in this tree (confidence 70 for the swap as the mechanism; the live result and the static
+reading agree independently, which is what puts the mapping at 80).
+
+**Ours is right.** `oag_raceplay::detonator` fires on `Button::Square` held and reloads on `Button::Circle`
+pressed, which are the ordinary HD use and absorb of `weapons.rs` (`Button::Square`, `Button::Circle`), and the EMP
+on `Button::Flip` (L1), which the original's controls `+0x1c` reads (live, [detonator-emp.md](detonator-emp.md)).
+No change; only the label "chosen" on the cannon's mapping becomes "read, 80". The reload is a **press edge** in
+ours (chosen): the level-or-edge question of `+0x1b` stays open. A pair script that drives ours' cannon
+with SQUARE and the original's with the harness's `triangle` is correct as it is.
+
+**Checked against 2048 and Omega.** Omega's `PlayerInput_Update` (`FUN_012e8fb0`) is the same class with the same
+record layout ([player-input.md](../ps4-omega-eu/player-input.md)); its pad layer maps its own indices, so the
+physical buttons are **not checked**: the index-to-button run above is HD's `Pad_Update`. 2048's
+`PlayerInput_Update` (`0x811b3072`) is the same shape ([eliminator-flip.md](eliminator-flip.md)); its pad
+mapping is **not checked**, and ours uses one mapping for every title.
+
 ## Wired (2026-11-22)
 
 `oag_weapons::detonator::cannon::step_cannon` runs the trigger, both reloads, the lockout, the
