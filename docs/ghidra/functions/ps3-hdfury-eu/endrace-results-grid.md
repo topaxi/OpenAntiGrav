@@ -46,8 +46,10 @@ numbers the file authors, which is why the file's frame reads as the
 Time-Trial layout rather than a default.
 
 Modes `6` (Zone, `ER_ZONE_COM`), `0xe` (Detonator, `ER_ZDETONATOR_COM`) and
-`0xd` have their own branches; not read further here. The headline id for `0xe` is wired
-(`docs/ui/endrace-screens.md`, "Detonator's headline"; HD's disc authors no text for it).
+`0xd` have their own branches. Mode `0xe`'s branch and filler are read on
+[detonator-endrace.md](detonator-endrace.md) (`0x002234b0`, six label/value rows and a score line;
+HD's `DATA06` does author `ER_ZDETONATOR_COM`); `6` and `0xd` are not read further here.
+The headline id for `0xe` is wired (`docs/ui/endrace-screens.md`, "Detonator's headline").
 
 **Which mode is a single race is inferred, confidence 75**: mode `3`'s filler
 writes `ER_%dPLACE` into `Line1` for a placed player, the headline a live

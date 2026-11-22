@@ -146,12 +146,16 @@ attempted again this pass. Kept under a scratch directory, not kept
 
 `Headline::Detonator` draws `ER_ZDETONATOR_COM`, the id `EndRaceResults_PopulateGrid`'s mode-`0xe`
 branch names (`docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`; confidence 70: a
-string reference in the executable, the branch body unread). **Where the text lives differs:**
-no HD archive (`DATA00`, `DATA02`, `DATA05`, every `entries.xml` and XML/text entry scanned) carries
-the id, so on HD the headline draws **nothing** (not the raw id); 2048 and Omega ship it
-(`data00.psarc` on Omega; 2048's own tables), so it draws there. Checked, differs. The rows
-under it are the time-trial grid, as before: the score and stage columns wait for the score
-(`docs/gameplay/race-modes.md`, "Detonator").
+string reference in the executable, the branch body unread). **Where the text lives differs, and
+this paragraph's first reading was wrong (corrected 2026-11-22,
+`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`, "The strings"):** HD's `DATA06`
+`entries.xml` carries `ER_ZDETONATOR_COM` (`DETONATOR SESSION COMPLETE!`) and the other eight ids the
+mode-14 screen reads, in all sixteen languages; `DATA02`, `DATA03`, `DATA04` and `DATA05` carry none,
+and the served table is `DATA02`'s, so the headline draws nothing on HD only until the ids are read
+from `DATA06` (the arrangement the circuit names already have). 2048 and Omega ship it
+(`data00.psarc` on Omega; 2048's own tables). The rows under it are the time-trial grid, as before:
+the six-row layout and its values are read on the ghidra page and wait to be wired (phase 13 of the
+Detonator thread).
 
 ### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
 
