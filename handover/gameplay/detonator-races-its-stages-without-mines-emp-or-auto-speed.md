@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: 14 stages, mines/bombs laid and biting; cannon, score, own hull/handling/models read, not wired; EMP, auto-speed, HUD, campaign open"
+summary: "Detonator: stages, mines/bombs, cannon and score in the simulation; cannon drawing, EMP, auto-speed, HUD, end screen, campaign open"
 categories: [rendering]
 ---
 
@@ -28,7 +28,7 @@ evidence), then start at "Next Steps".
 | 8 | RE: pulse cannon, hits, score, destroyed count, percentage (`detonator-cannon.md`) | done | `0db7e825c` |
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
 | **8b** | **Wire the hull, handling, mine, bomb and pad models** | **next (recommended before 9)** | |
-| 9 | Wire the cannon, score, destroyed count and percentage | next | |
+| 9 | Wire the cannon, score, destroyed count and percentage | simulation done; nothing drawn, no HUD, no end screen | see `git log` (`Detonator: the pulse cannon`) |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | open | |
@@ -243,7 +243,16 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   and score, who spends the pending push, the update order within a tick, the PVS-gated lane
   free. 2048/Omega: data and effect selector checked, applies; contact law not read there.
 
-- **Pulse cannon, hits, score, destroyed count: read, not wired** (2026-11-22,
+- **Pulse cannon, score, destroyed count: wired in the simulation, not drawn** (2026-11-22,
+  `oag_weapons::detonator::cannon`, `oag_raceplay::RaceSim::{detonator_score,
+  detonator_destroyed_mines, detonator_percentage}`; Square fires, Circle reloads, slot 0). Open:
+  draw the rounds (`detonator_cannonbolt`) and the muzzle flashes from the hull's
+  `cannon_flash_left/right` locators (the muzzle is **chosen** from the craft's dimensions until
+  then), the shot-mine and bomb explosion effects and sounds (`step_cannon` returns nothing for
+  them), the `CANNON`/`CANNONRELOAD`/`BONUS_*` cues, the HUD (clip, reload gauge, score, `x%02d`),
+  the end screen rows, the 0.5 s owner grace, the clean-lap `+1000`, the bomb-ahead warning,
+  `EnergyRechargePerStage`. 2048 and Omega were loaded, not fired. The record below is the read:
+- **Pulse cannon, hits, score, destroyed count: read** (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, HD static, 55-85 per law; 31 names).
   The craft's fixed cannon: clip of 15 two-round volleys (left and right `cannon_flash`), one
   volley per 0.1 s while fire is held (`t -= dt; if !(t > 0) fire, t += 0.1`; released: `t = 0`).
