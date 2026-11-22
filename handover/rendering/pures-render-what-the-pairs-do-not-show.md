@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-11-17
-summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; 250 light scale, Modesto light, HUD open"
+summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass and bloom closed; Modesto light, HUD open"
 difficulty: medium (30)
 ---
 
@@ -35,10 +35,10 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
 
 1. ~~**Hull canopy.**~~ Closed: the extra pass was never off in the data, the roster's `applies_everywhere()`
    gate was. The weight is `header_flags & 0x02` (`BLENDMODE 0x2a` in the recorded lists).
-2. **Hull, the rest.** Measured in the GE lists: the grid's light scale is `250` on all four pairs (`249/255`
-   on every light byte). That is Pulse's live grid value, the double truncation of a blended `255` that ours
-   reads as the nearest point. Wiring the blend in `oag_race::Course::light_scale_at` moves Pulse by the same 2 %,
-   so it wants its own lane with Pulse pairs re-rendered. Modesto's list also carries a second directional
+2. **Hull, the rest.** ~~The grid's light scale `250`~~ closed (`pure-light-scale`): ours already read `250/250/251/251`,
+   and `Course::light_scale_at` now runs the original's integer blend at the craft's parameter (Modesto `250`; Blue Ridge
+   still `251`, its pose 21 units off the ring; hull box MAD moves by 0.01 to 0.33 grey, below what a frame shows;
+   `psp-pure-usa/hull-shine.md`, "Light scale"). Open: Modesto's list also carries a second directional
    `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised; ours draws no second light there. Which wopoint
    it is, and why it is a directional, is unread (Pure's builder `0x08841648`).
 3. **Effects Pure ships that ours never loads.** Pure's executable names 24 `WO_*` effects (25 strings,

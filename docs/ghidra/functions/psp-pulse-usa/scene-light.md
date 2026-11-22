@@ -141,6 +141,14 @@ its builder and spline sampler are these, and its hull now takes the rig and the
 scale bytes ([`psp-pure-usa/scene-light.md`](../psp-pure-usa/scene-light.md)).
 An earlier "Pure authors no rig" was the reader matching Pulse's class ids.
 
+**Blend at the craft (`pure-light-scale`).** `Course::light_scale_at` runs `Spline_AccumulateLightScale`'s integer
+blend (`(byte * trunc(weight * 255)) >> 8` per control point, wrapping `u8`) at the craft's parameter, taken as the
+chord projection between two ring samples; before, it lerped two already-blended samples. The live De Konstruct list
+`(179, 179, 250, 250)` now reads `(176, 176, 248, 248)` from the recorded two-decimal pose (a ramp of about 35 per unit
+of road, so 3 bytes is a tenth of a unit; the test's tolerance is 3). Hull box (190,175,100,97) grey MAD, before ->
+after: De Konstruct White 6.426 -> 6.098, Tech de Ra White 3.040 -> 2.990, Fort Gale White 9.778 unchanged. Lineage:
+Pure and Pulse only; HD, 2048 and Omega light hulls by another path.
+
 Confidence **85** for the copy and the accumulate (bodies read, writers
 named live), **75** for `Spline_SampleSegment`'s role (the basis constants
 and the call order are read; the caller that selects the segment is not).
