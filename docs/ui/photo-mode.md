@@ -168,7 +168,7 @@ there is a file system, and a phone writes into the app's own files directory
 [Android](../tools/android.md)). Android 11 and later hide that directory from an on-device file
 manager, so on Android 10 and later a saved shot is also added to the gallery
 (`Pictures/OpenAntiGrav`, `oag_mobile::export`; [Android](../tools/android.md), "Photos and replays"):
-the message says PHOTO SAVED TO GALLERY. Earlier Androids keep it in the files directory only.
+the message says PHOTO SAVED TO GALLERY, and the gallery holds the only copy (the files-directory file is removed once the gallery has it, `photo::settle`). Earlier Androids, and a shot the gallery refused, keep it in the files directory.
 `photo::REACHABLE` is the desktop-only half. 2048 has no pause screen of its own, so on a phone its row is reached by the
 Back key.
 

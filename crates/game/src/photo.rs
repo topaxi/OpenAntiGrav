@@ -51,17 +51,30 @@ pub fn ticks(open: bool) -> bool {
     !open
 }
 
-/// The word to say once the shot at `path` is written. On a phone the file is also handed to the
-/// gallery (`oag_mobile::export`), and the word says so; where that is not possible (an Android
-/// older than 10, or a build that has no shared storage) the shot stays in the files directory
-/// and the plain word is used.
+/// The word to say once the shot at `path` is written. On a phone the file is handed to the
+/// gallery (`oag_mobile::export`) and, once the gallery has it, **the copy in the files
+/// directory is removed**: that directory is hidden from the phone's file manager, so a second
+/// copy there is one the player could never delete. Where the export is not possible (an
+/// Android older than 10, or a failure) the shot stays where it was written and the plain word
+/// is used.
 pub fn saved_word(path: &Path) -> &'static str {
     if !oag_mobile::export::available() {
         return strings::SAVED;
     }
-    match oag_mobile::export::export(path, oag_mobile::export::Kind::Picture) {
+    settle(
+        path,
+        oag_mobile::export::export(path, oag_mobile::export::Kind::Picture),
+    )
+}
+
+/// What becomes of the file at `path` after its export came to `outcome`, and the word for it.
+fn settle(path: &Path, outcome: Result<String, oag_mobile::export::Error>) -> &'static str {
+    match outcome {
         Ok(uri) => {
             log::debug!("photo mode: {} is in the gallery as {uri}", path.display());
+            if let Err(e) = std::fs::remove_file(path) {
+                log::warn!("photo mode: cannot remove {}: {e}", path.display());
+            }
             strings::GALLERY
         }
         Err(oag_mobile::export::Error::Unsupported(why)) => {

@@ -325,3 +325,35 @@ fn only_a_page_cannot_write_a_shot() {
     assert!(writes_on(false));
     assert!(!writes_on(true));
 }
+
+#[test]
+fn a_shot_the_gallery_took_leaves_no_copy_and_one_it_refused_stays() {
+    use oag_mobile::export::Error;
+    let dir = std::env::temp_dir().join(format!("oag-settle-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let kept = dir.join("kept.png");
+    let moved = dir.join("moved.png");
+    std::fs::write(&kept, b"x").unwrap();
+    std::fs::write(&moved, b"x").unwrap();
+    assert_eq!(
+        settle(&moved, Ok("content://media/1".into())),
+        strings::GALLERY
+    );
+    assert!(
+        !moved.exists(),
+        "the files-directory copy is removed once the gallery has it"
+    );
+    assert_eq!(
+        settle(&kept, Err(Error::System("no".into()))),
+        strings::SAVED
+    );
+    assert_eq!(
+        settle(&kept, Err(Error::Unsupported("old"))),
+        strings::SAVED
+    );
+    assert!(
+        kept.exists(),
+        "a refused export keeps the shot where it was written"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

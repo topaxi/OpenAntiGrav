@@ -229,7 +229,9 @@ images are copied into. On a recent Android that directory is hidden from the ph
 so a copy is also handed to the phone's shared storage (`oag_mobile::export`):
 
 - **A shot** is added to the gallery as `Pictures/OpenAntiGrav/<name>.png` the moment it is saved, and
-  the screen says PHOTO SAVED TO GALLERY. The original stays in the files directory.
+  the screen says PHOTO SAVED TO GALLERY. **The gallery then holds the only copy**: the files directory
+  is hidden from the phone's file manager, so a second copy there could never be deleted. A shot the
+  gallery refused stays in the files directory.
 - **A replay** is exported by the REPLAYS page's EXPORT row to `Download/OpenAntiGrav/<name>.oagr`, where
   the file manager and the share sheet of any app reach it. The row is on the page on a phone only.
 
