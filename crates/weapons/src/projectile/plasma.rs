@@ -63,14 +63,22 @@ pub fn launch<C: Craft>(craft: &C, stats: &PlasmaStats, class: &str) -> Option<(
 pub fn muzzle<C: Craft>(craft: &C) -> (Vec3, Vec3) {
     let body = &craft.physics().body;
     let forward = body.forward();
-    let offset = match craft.muzzle() {
-        Some(local) => {
-            let scaled = local * LAUNCH_SPEED_SCALE;
-            forward * scaled.z + body.up() * scaled.y - body.right() * scaled.x
-        }
-        None => forward * MUZZLE_FORWARD,
+    let at = match craft.muzzle() {
+        Some(local) => hull_point(body, local),
+        None => body.position + forward * MUZZLE_FORWARD,
     };
-    (body.position + offset, forward)
+    (at, forward)
+}
+
+/// Where a point of the hull's own model space sits in the world: the body's position, plus the
+/// point carried by the craft's rows, which are [`LAUNCH_SPEED_SCALE`] long. A `.vex` hull is
+/// authored nose along model `+Z` and drawn half a turn about its up axis, so model `+Z` is the
+/// body's forward and model `+X` its left. The Plasma's weapon node and Detonator's cannon
+/// locators are read through this.
+#[must_use]
+pub fn hull_point(body: &oag_physics::Body, local: Vec3) -> Vec3 {
+    let scaled = local * LAUNCH_SPEED_SCALE;
+    body.position + (body.forward() * scaled.z + body.up() * scaled.y - body.right() * scaled.x)
 }
 
 /// How long a plasma bolt winds up on the nose before it flies, in seconds.

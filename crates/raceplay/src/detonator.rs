@@ -234,10 +234,44 @@ impl crate::sim::RaceSim {
             && !oag_race::RaceState::thrust_gated(self.world.tick)
     }
 
+    /// The sounds this tick's [`Self::detonator_events`] make, queued as per-tick output
+    /// (ADR-0018): `PulseBullet_Init` plays `CANNON` on the firing craft once per round, so a
+    /// volley of two plays it twice; a round that dies on a wall plays `CANNONEXPLWALL` at the
+    /// round (`detonator-cannon.md`, "The round"); a mine that goes off plays `MINEEXPL` and a
+    /// bomb `BOMBEXPL` where it was (`detonator-mine.md`, `detonator-bomb.md`).
+    pub(crate) fn detonator_cues(&mut self) {
+        use oag_gameplay::cue::{Cue, CueEvent};
+        use oag_weapons::detonator::EventKind;
+        for event in &self.detonator_events {
+            match event.kind {
+                EventKind::Volley => {
+                    for _ in 0..2 {
+                        self.cues.push(CueEvent::new(Cue::Cannon, 0));
+                    }
+                }
+                EventKind::RoundWall { .. } => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::CannonHitWall, event.at));
+                }
+                EventKind::MineTouched
+                | EventKind::MineShot { .. }
+                | EventKind::MineChained { .. } => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::MineExplosion, event.at));
+                }
+                EventKind::BombTouched | EventKind::BombShot | EventKind::BombReplaced => {
+                    self.cues
+                        .push(CueEvent::at_point(Cue::BombExplosion, event.at));
+                }
+            }
+        }
+    }
+
     /// Lays the stages the player has reached: the opening one on the first tick, then one per
     /// lap, up to the fourteenth (`Detonator_UpdateRace` places while the new stage is at most
     /// `14`). Nothing happens off Detonator.
     pub(crate) fn advance_detonator(&mut self, inputs: &oag_gameplay::PlayerInputs) {
+        self.detonator_events.clear();
         let Some(detonator) = self.detonator.clone() else {
             return;
         };
@@ -253,7 +287,7 @@ impl crate::sim::RaceSim {
             };
             let count = usize::from(world.ship_count);
             let lane_width = detonator.layout.values.distance_offset_between_mines;
-            self.detonator_went = oag_weapons::detonator::step_contacts(
+            self.detonator_events = oag_weapons::detonator::step_contacts(
                 &mut world.detonator,
                 &detonator.survey,
                 lane_width,
@@ -274,7 +308,7 @@ impl crate::sim::RaceSim {
             let collision = &self.collision;
             let sweep = |from, to| cannon_sweep(collision, from, to);
             let (field, owner) = (&mut self.world.detonator, &self.world.ships[0]);
-            oag_weapons::detonator::cannon::step_cannon(
+            let fired = oag_weapons::detonator::cannon::step_cannon(
                 field,
                 &detonator.survey,
                 config,
@@ -283,20 +317,23 @@ impl crate::sim::RaceSim {
                 self.dt,
                 &sweep,
             );
+            self.detonator_events.extend(fired);
         }
         let world = &mut self.world;
         let laps = world.race[world.primary_slot()].laps_completed();
         let stage = oag_race::Mode::detonator_stage(laps).min(STAGES_LAID);
         while u32::from(world.detonator.stages_laid) < stage {
             let old = u32::from(world.detonator.stages_laid);
-            oag_weapons::detonator::place_stage(
+            let replaced = oag_weapons::detonator::place_stage(
                 &mut world.detonator,
                 &detonator.survey,
                 &detonator.layout,
                 &mut world.rng,
                 old,
             );
+            self.detonator_events.extend(replaced);
         }
+        self.detonator_cues();
     }
 }
 

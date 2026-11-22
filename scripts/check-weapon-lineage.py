@@ -53,6 +53,10 @@ EFFECT_ROWS = {
     "effects.disruptor_head": "DisruptorHead",
     "effects.disruptor_explo": "DisruptorExplo",
     "effects.disruptor_launch": "DisruptorLaunch",
+    "effects.detonator_mine_explo_dead": "DetonatorMineExploDead",
+    "effects.detonator_mine_explo": "DetonatorMineExplo",
+    "effects.detonator_bomb_explo": "DetonatorBombExplo",
+    "effects.detonator_cannon_sparks": "DetonatorCannonSparks",
 }
 
 # Where each title's `Effects` are built. 2048 and Omega build them in lib.rs.

@@ -116,6 +116,7 @@ impl Banks {
         let mut cues = Cue::ALL.to_vec();
         if tick.walks_cue_variables() {
             cues.extend(Cue::HD_CONTACT);
+            cues.extend(Cue::DETONATOR);
         }
         Self::load_cues(archives, banks, zone, tick, &cues, &|cue| cue.name())
     }

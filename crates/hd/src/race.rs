@@ -482,6 +482,10 @@ pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorO
         r"Data\Weapons\detonator_bomb_glowedges.vex",
     ],
     pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+    cannon: [
+        r"Data\Weapons\detonator_cannonbolt.vex",
+        r"Data\Weapons\hd_muzzleflash_detonator.vex",
+    ],
 };
 
 /// HD's Detonator craft: one hull at `/data/ships/detonator/ship.vex` for every team, wearing the

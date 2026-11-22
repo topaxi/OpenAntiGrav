@@ -13,7 +13,7 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 19] = [
+const OWN: [Trigger; 23] = [
     Trigger::PlasmaCharging,
     Trigger::PlasmaLaunch,
     Trigger::BombGlow,
@@ -33,6 +33,10 @@ const OWN: [Trigger; 19] = [
     Trigger::DamageMild,
     Trigger::DamageModerate,
     Trigger::DamageCritical,
+    Trigger::DetonatorMineExploDead,
+    Trigger::DetonatorMineExplo,
+    Trigger::DetonatorBombExplo,
+    Trigger::DetonatorCannonSparks,
 ];
 
 /// The engine triggers whose effect neither 2048 nor Omega authors
@@ -145,6 +149,21 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
             has(plasma),
             [false, false, true, false, false],
             "{plasma:?}"
+        );
+    }
+    // Detonator's mine, bomb and cannon-wall effects: `DetonatorMine_Explode`,
+    // `DetonatorBombBlast_Start` and `PulseBullet_Update` name them on HD; 2048 and Omega ship
+    // the files and are "checked, applies, not wired".
+    for detonator in [
+        Trigger::DetonatorMineExploDead,
+        Trigger::DetonatorMineExplo,
+        Trigger::DetonatorBombExplo,
+        Trigger::DetonatorCannonSparks,
+    ] {
+        assert_eq!(
+            has(detonator),
+            [false, false, true, false, false],
+            "{detonator:?}"
         );
     }
     // Pure's laid Bomb glow and Disruptor bolt are read on its executable alone.
@@ -382,8 +401,9 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
     // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
     // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion; 51 with its
-    // Disruptor launch; 53 with HD's Plasma wind-up and release.
-    assert_eq!(crate::RACE_EFFECTS.len(), 53);
+    // Disruptor launch; 53 with HD's Plasma wind-up and release; 57 with HD's four Detonator
+    // names.
+    assert_eq!(crate::RACE_EFFECTS.len(), 57);
 }
 
 #[test]

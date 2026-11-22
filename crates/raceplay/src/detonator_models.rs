@@ -32,6 +32,10 @@ pub struct DetonatorModels {
     pub bomb_equalisers: Option<Model>,
     /// `detonator_bomb_glowedges`, on every laid bomb.
     pub bomb_glow_edges: Option<Model>,
+    /// `detonator_cannonbolt`, on every pulse cannon round in flight.
+    pub cannon_bolt: Option<Model>,
+    /// `hd_muzzleflash_detonator`, at a cannon locator while a round is young.
+    pub muzzle_flash: Option<Model>,
     /// `Detonator_Pad`, once per pad in [`Self::pads`].
     pub pad: Option<Model>,
     /// Each speed pad's and weapon pad's pad-local to world matrix: where [`Self::pad`] is drawn.
@@ -44,6 +48,8 @@ pub(crate) struct DetonatorDrawables {
     pub(crate) mine_spikes: Vec<Drawable>,
     pub(crate) bomb_equalisers: Vec<Drawable>,
     pub(crate) bomb_glow_edges: Vec<Drawable>,
+    pub(crate) cannon_bolt: Vec<Drawable>,
+    pub(crate) muzzle_flash: Vec<Drawable>,
     pub(crate) pad: Vec<Drawable>,
     pub(crate) pads: Vec<Mat4>,
 }
@@ -65,6 +71,8 @@ impl DetonatorDrawables {
                 models.bomb_glow_edges,
                 oag_weapons::projectile::MAX_PROJECTILES,
             )?,
+            cannon_bolt: build(models.cannon_bolt, oag_weapons::detonator::cannon::POOL)?,
+            muzzle_flash: build(models.muzzle_flash, oag_weapons::detonator::cannon::POOL)?,
             pad: if pad_slots == 0 {
                 Vec::new()
             } else {
@@ -75,11 +83,13 @@ impl DetonatorDrawables {
     }
 
     /// Every pool, for the passes that treat the weapon pools alike.
-    pub(crate) fn pools_mut(&mut self) -> [&mut Vec<Drawable>; 4] {
+    pub(crate) fn pools_mut(&mut self) -> [&mut Vec<Drawable>; 6] {
         [
             &mut self.mine_spikes,
             &mut self.bomb_equalisers,
             &mut self.bomb_glow_edges,
+            &mut self.cannon_bolt,
+            &mut self.muzzle_flash,
             &mut self.pad,
         ]
     }

@@ -56,6 +56,7 @@ impl Race {
             opponent_weapon_counts,
             chase,
             muzzles,
+            cannon_flash,
             zone_stages,
             countdown_voice,
             countdown_beat,
@@ -634,6 +635,7 @@ impl Race {
                     stats,
                     &layout.values,
                     layout.scoring,
+                    cannon_flash,
                 )
             });
             crate::detonator::Detonator {
@@ -798,7 +800,7 @@ impl Race {
                     },
                     weapon_ai: weapon_ai.map(Arc::new),
                     detonator,
-                    detonator_went: Vec::new(),
+                    detonator_events: Vec::new(),
                     weapons: weapons.map(Arc::new),
                     allowed_weapons: allowed_weapons.into(),
                     class: class.into(),

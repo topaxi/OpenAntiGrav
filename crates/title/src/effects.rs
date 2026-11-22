@@ -123,6 +123,14 @@ pub enum Trigger {
     BombRays,
     /// A Cannon bolt's impact.
     CannonSparks,
+    /// Detonator's mine going off after it was darkened (every mine a craft touches).
+    DetonatorMineExploDead,
+    /// Detonator's mine going off while still live (laid this stage).
+    DetonatorMineExplo,
+    /// Detonator's bomb detonating.
+    DetonatorBombExplo,
+    /// Detonator's pulse cannon round dying on a wall.
+    DetonatorCannonSparks,
     /// A craft's engine flare.
     EngineFlare,
     /// A craft flying through an engine trail (HD).
@@ -176,7 +184,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 50] = [
+    pub const ALL: [Self; 54] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -204,6 +212,10 @@ impl Trigger {
         Self::DisruptorLaunch,
         Self::BombRays,
         Self::CannonSparks,
+        Self::DetonatorMineExploDead,
+        Self::DetonatorMineExplo,
+        Self::DetonatorBombExplo,
+        Self::DetonatorCannonSparks,
         Self::EngineFlare,
         Self::TrailHitship,
         Self::TrailHitshipRed,

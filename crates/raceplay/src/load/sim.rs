@@ -490,6 +490,14 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         weapon_counts: oag_weapons::counts::WeaponCounts::from_stats(&stats),
         opponent_weapon_counts,
         chase,
+        cannon_flash: muzzle::cannon_flash(
+            craft_of(&mut craft, &mut archives),
+            craft_title,
+            slot_teams.first().map_or("", String::as_str),
+            options,
+            (hull_variant, circuit_hull),
+            &mut report,
+        ),
         muzzles: muzzle::per_slot(
             craft_of(&mut craft, &mut archives),
             craft_title,
