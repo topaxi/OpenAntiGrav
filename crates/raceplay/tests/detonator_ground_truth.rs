@@ -67,6 +67,16 @@ fn an_hd_detonator_race_loads_its_own_stage_table() {
         (15, 15),
         "detonatormodetrack0..14 decode"
     );
+    // The EMP's cues decode: the pad's `WEAPONPICKUP` from the weapons bank and the two
+    // announcer lines from `speech_det.bnk`, the one speech bank that names them.
+    let report = loaded.report.join("\n");
+    for line in [
+        "sfx: WEAPONPICKUP -> ",
+        "sfx: EMPREADY -> ",
+        "sfx: EMPFULL -> ",
+    ] {
+        assert!(report.contains(line), "{line}...:\n{report}");
+    }
 }
 
 /// **The stage counter.** Stage `1` until the first lap is completed, then one step per lap,
