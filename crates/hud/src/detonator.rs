@@ -65,7 +65,7 @@ pub fn chain_id(streak: u8) -> String {
 }
 
 /// `Bullet00`-`Bullet14` and `Multi00`-`Multi14`: which of the numbered family `name` is.
-fn numbered<'a>(name: &'a str, prefix: &str) -> Option<usize> {
+fn numbered(name: &str, prefix: &str) -> Option<usize> {
     let digits = name.strip_prefix(prefix)?;
     (digits.len() == 2)
         .then(|| digits.parse::<usize>().ok())

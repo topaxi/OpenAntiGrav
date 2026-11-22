@@ -241,6 +241,15 @@ fn a_hud_style_picks_the_skins_roots_by_mode() {
     ] {
         let (hud, _) = hud_roots(oag_omega::TITLE, Some(style), None, None, &mut report);
         for mode in Mode::ALL {
+            if mode == Mode::Detonator {
+                // The executable names one Detonator layout, and no skinned one.
+                assert_eq!(
+                    hud_layout(hud, mode),
+                    hud_layout(oag_omega::TITLE.hud, mode),
+                    "Omega {style} Detonator"
+                );
+                continue;
+            }
             assert!(
                 hud_layout(hud, mode).starts_with(dir),
                 "Omega {style} {mode:?}"
