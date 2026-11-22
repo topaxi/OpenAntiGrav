@@ -35,8 +35,8 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   `WO_SHIP_DEATH_DAMAGE_PLUME` at the flare anchor; state 6 once the wreck has lain still for
   6 s (or after 20 s), which takes it out of the physics world and clears the `+0x70` pair
   byte, the wreck still drawn. Every ship directory ships `shipwreck.vex`. Not measured live:
-  the host's RPCS3 cannot load the HD states or bring up its GDB stub (the page's "Measured on
-  RPCS3: not run" has the recipe).
+  the host's packaged RPCS3 0.0.42 refuses the HD save states and a cold boot stalled at `boot`
+  (the page's "Measured on RPCS3: not run" has the exact failures and the read recipe).
 - **2048 and Omega: read as twins, not wired.** `Ship_SetState` is `0x811c711e` (2048) and
   `0x012ff700` (Omega) with HD's ten cases, timers and masks; both ship `shipwreck` per team
   (HD set plus their own `<team>2048/<n>`). Differences: the destroy camera is mode 9 on both,
