@@ -188,7 +188,7 @@ def code_cells() -> dict[str, dict[str, tuple[str, str | None]]]:
     model_fields = struct_fields(strip_comments(TITLE_SRC.read_text(encoding="utf-8")), "WeaponModels")
     for title in TITLES.values():
         weapons = weapons_block(title)
-        for field in ("race", "elimination", "ai"):
+        for field in ("race", "elimination", "detonator", "ai"):
             cells.setdefault(f"weapons.{field}", {})[title] = (path_of(weapons[field]), None)
         drain = weapons["leach_drain"].rsplit("::", 1)[-1]
         cells.setdefault("weapons.leach_drain", {})[title] = (drain, None)

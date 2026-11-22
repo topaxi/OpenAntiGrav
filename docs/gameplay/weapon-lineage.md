@@ -86,6 +86,7 @@ Values: a path is the exact string in the source; `set` is `Some(..)` (or
 | --- | --- | --- | --- | --- | --- |
 | `weapons.race` | `Data\XML\WeaponStats_Race.xml` - measured | `Data\XML\weaponstats.xml` - measured | `Data\XML\WeaponStats_Race.xml` - measured | `Data\XML\weaponstats_Race_2048.xml` - chosen | `Data\XML\WeaponStats_Race.xml` - chosen |
 | `weapons.elimination` | `Data\XML\WeaponStats_Elimination.xml` - measured | `none` - measured | `Data\XML\WeaponStats_Elimination.xml` - measured | `Data\XML\weaponstats_Elimination_2048.xml` - chosen | `Data\XML\WeaponStats_Elimination.xml` - chosen |
+| `weapons.detonator` | `none` - measured | `none` - measured | `Data\XML\WeaponStats_Detonator.xml` - measured | `Data\XML\weaponstats_Detonator.xml` - chosen | `Data\XML\WeaponStats_Detonator.xml` - chosen |
 | `weapons.ai` | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIstats.xml` - measured | `Data\XML\WeaponAIStats2048.xml` - chosen | `Data\XML\WeaponAIstats.xml` - chosen |
 | `weapons.leach_drain` | `PerTick` - measured | `PerTick` - absent | `PerTrip` - measured | `PerTrip` - inherited | `PerTrip` - inherited |
 | `weapons.blast_push` | `Posted` - measured | `Posted` - inherited | `Immediate` - chosen | `Immediate` - chosen | `Immediate` - chosen |

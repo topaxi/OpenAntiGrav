@@ -15,6 +15,12 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 ## Open
 
+- **Weapon table decoded, not spent.** `WeaponStats::detonator()` reads the Detonator-only
+  attributes (Mine scoring, Cannon reload/rebounds, Bomb shots and points, the `EMP` block,
+  `energy_recharge_per_stage`) on HD, Omega and 2048 (`docs/formats/weapon-stats.md`,
+  "Detonator's attributes"). Nothing in a race reads it; each field's meaning waits for the
+  law that spends it.
+
 - **Mines and bombs.** `FUN_000654e0(rm, oldStage)` (HD) places a stage's objects; Ghidra
   truncates it on bad instruction data. Read from the disassembly (`scripts/ps3-dform-scan.py`
   helps where the body is cut short): the pattern records at `rm+0x2e30` (stride `0xd60`,

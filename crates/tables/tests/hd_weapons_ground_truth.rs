@@ -251,3 +251,98 @@ fn omega_ships_hds_weapon_tables_and_the_reader_holds() {
         );
     }
 }
+
+/// Every Detonator-only attribute a title's `weaponstats_detonator.xml` authors is decoded,
+/// present and finite; `DATA05`'s copy authors none and reports none.
+fn assert_full_detonator_table(label: &str, stats: &WeaponStats) {
+    let d = stats
+        .detonator()
+        .unwrap_or_else(|| panic!("{label}: no Detonator attributes decoded"));
+    let emp = d.emp.unwrap_or_else(|| panic!("{label}: no EMP block"));
+    let fields = [
+        d.energy_recharge_per_stage,
+        d.mine.points_per_metre,
+        d.mine.max_distance,
+        d.mine.velocity_reduction,
+        d.cannon.num_rebounds,
+        d.cannon.round_recharge_time,
+        d.cannon.recharge_pause,
+        d.bomb.number_of_shots_to_destroy,
+        d.bomb.energy_recharge_per_shot,
+        d.bomb.points_for_cannon_bullet_hit,
+        d.bomb.points_for_destroying,
+        emp.wave_time,
+        emp.speed,
+        emp.min_num_pads_to_collect,
+        emp.max_num_pads_to_collect,
+        emp.min_distance,
+        emp.max_distance,
+    ];
+    for (i, f) in fields.iter().enumerate() {
+        assert!(
+            f.is_some_and(f32::is_finite),
+            "{label}: Detonator field {i} is {f:?}"
+        );
+    }
+    // The EMP block carries no `absorb`: it stays out of the weapon roster.
+    assert_eq!(stats.absorb.len(), 3, "{label}: Mine, Cannon, Bomb");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hds_detonator_attributes_decode_from_fury_and_not_from_the_older_copy() {
+    let Some(image) = hd_image() else { return };
+    let entry = "/data/xml/weaponstats_detonator.xml";
+    let fury = parse(
+        "DATA00",
+        &hd_entry(&image, "DATA00", entry).expect("DATA00"),
+    );
+    assert_full_detonator_table("DATA00", &fury);
+    let older = parse(
+        "DATA05",
+        &hd_entry(&image, "DATA05", entry).expect("DATA05"),
+    );
+    assert_eq!(older.detonator(), None, "DATA05 authors none of them");
+    // The race table authors the Bomb's shot count and no more of them.
+    let race = parse(
+        "DATA00 race",
+        &hd_entry(&image, "DATA00", "/data/xml/weaponstats_race.xml").expect("race"),
+    );
+    let race = race
+        .detonator()
+        .expect("the race Bomb authors a shot count");
+    assert_eq!(race.bomb.number_of_shots_to_destroy, Some(1.0));
+    assert_eq!(race.emp, None);
+    assert_eq!(race.mine, Default::default());
+    // The title axis names the entry and serves DATA00's bytes.
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let named = oag_hd::TITLE.weapons.detonator.expect("HD names it");
+    assert_eq!(
+        archives.read_name(named).expect("the name resolves"),
+        hd_entry(&image, "DATA00", entry).unwrap()
+    );
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4/omega-eu/uroot/data00.psarc"]
+fn omegas_detonator_attributes_decode() {
+    let Some(omega) = omega_data00() else { return };
+    let blob = omega_entry(&omega, "/data/xml/weaponstats_detonator.xml").expect("Omega ships it");
+    assert_full_detonator_table("omega", &parse("omega", &blob));
+}
+
+/// 2048's Detonator table is in its v1.04 patch, under its own spelling.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007/patch-v104/PSP2/data1.psarc"]
+fn the_2048_detonator_table_decodes() {
+    let path = root().join("data/extracted/vita/PCSF00007/patch-v104/PSP2/data1.psarc");
+    let Some(path) = require(path) else { return };
+    let mut psarc = oag_assets::psarc::Archive::open_file(&path).expect("the archive opens");
+    let blob = psarc
+        .read_path("/Data/XML/weaponstats_Detonator.xml")
+        .or_else(|_| psarc.read_path("/data/xml/weaponstats_detonator.xml"))
+        .expect("2048's patch ships it");
+    let stats = parse("2048", &blob);
+    assert!(stats.skipped.is_empty(), "{:?}", stats.skipped);
+    assert_full_detonator_table("2048", &stats);
+}

@@ -214,6 +214,7 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\weaponstats_Race_2048.xml",
         elimination: Some(r"Data\XML\weaponstats_Elimination_2048.xml"),
+        detonator: Some(r"Data\XML\weaponstats_Detonator.xml"),
         // `WeaponAIStats.xml` and `WeaponAIStats2048.xml` both ship and are
         // byte-identical (searched 2026-10-03); the suffixed one follows the
         // two tables above. Opponents run Pulse's fire law on it: **inherited

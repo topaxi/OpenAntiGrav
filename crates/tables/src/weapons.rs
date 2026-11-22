@@ -243,10 +243,12 @@ impl Weapon {
 }
 
 pub mod ai;
+mod detonator;
 mod disruptor;
 mod error;
 mod stats;
 
+pub use detonator::{DetonatorBomb, DetonatorCannon, DetonatorMine, DetonatorStats, EmpStats};
 pub use disruptor::{
     DisruptorStats, Effect as DisruptorEffect, EffectKind as DisruptorEffectKind,
     PER_CLASS_KMH as DISRUPTOR_PER_CLASS_KMH,
@@ -337,6 +339,9 @@ pub struct WeaponStats {
     leach_beam: Option<LeachBeamStats>,
     /// The Disruptor's block, or `None`; read through [`Self::disruptor`].
     disruptor: Option<DisruptorStats>,
+    /// The attributes only a Detonator table authors, or `None` when the file authors none;
+    /// read through [`Self::detonator`].
+    detonator: Option<DetonatorStats>,
     /// `absorb` for every weapon the file authors, in document order.
     pub absorb: Vec<(Weapon, f32)>,
     /// One entry per `<Pickupodds>` block, in document order.
@@ -406,6 +411,15 @@ impl WeaponStats {
     #[must_use]
     pub fn cannon(&self) -> Option<CannonStats> {
         self.cannon
+    }
+
+    /// The Detonator-only attributes (Global stage recharge, Mine scoring, Cannon reload, Bomb
+    /// points, the `EMP` block), or `None` when the file authors none.
+    ///
+    /// Decoded, no law read: `docs/formats/weapon-stats.md`, "Detonator's attributes".
+    #[must_use]
+    pub fn detonator(&self) -> Option<DetonatorStats> {
+        self.detonator
     }
 
     /// The Quake's `<Stats>`, or `None` when the file authors no Quake.
@@ -773,6 +787,7 @@ pub fn parse(xml: &str) -> Result<WeaponStats> {
         repulser,
         leach_beam,
         disruptor,
+        detonator: detonator::parse(stats)?,
         absorb,
         pickups,
         skipped,

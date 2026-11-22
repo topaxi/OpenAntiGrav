@@ -144,6 +144,7 @@ const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: None,
+        detonator: None,
         ai: None,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
         blast_push: oag_title::pre_race::Sourced::chosen(oag_title::weapons::BlastPush::Posted),
