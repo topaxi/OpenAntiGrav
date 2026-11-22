@@ -263,7 +263,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   dark mine takes the literals and brightness 0; a bomb body and its equalisers draw as colour times
   brightness in the stage's inner and outer colours (`PROGRAM_BOMB_TINT`, chosen). Open:
   the bomb programs' real combine (overlay, environment picture), the flash `b+0x154` writer
-  (so brightness stays `0.2`/`0.8`), the equalisers' rays and the glow edges' own colour binds
+  (unread, no trigger invented, lead's decision 2026-11-23: brightness stays `0.2`/`0.8`), the equalisers' rays and the glow edges' own colour binds
   (generic names `Colour`/`Brightness`/`RainbowColour`), the mine's size breathing (`scale`,
   `spikeScale`), the `Electric_Visualiser`, a dark mine's negative output on the original's target
   (drawn black here, unseen), the band source (the visualiser's held levels, not the raw array) and

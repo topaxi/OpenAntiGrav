@@ -538,7 +538,7 @@ impl Report {
         } + &match self.bomb_tint_bound {
             0 => String::new(),
             n => format!(
-                ", {n} Detonator bomb material(s) drawn as their colour times their brightness"
+                ", {n} Detonator bomb material(s) drawn as their colour times their brightness (the flash `b+0x154` has no recovered writer: brightness stays at its resting value)"
             ),
         } + &match self.mag_wave_bound {
             0 => String::new(),
