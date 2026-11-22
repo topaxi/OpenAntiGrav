@@ -124,14 +124,13 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     for wreck in [Trigger::WreckNode, Trigger::WreckSparks] {
         assert_eq!(has(wreck), [true, true, false, false, false], "{wreck:?}");
     }
-    // HD names `WO_SHIP_EXPLOSION` too (`Ship_PlayDestroyExplosion`, thrown at state 4) and
-    // its own death plume (`WO_SHIP_DEATH_DAMAGE_PLUME`, state 5); 2048 and Omega are
-    // "checked, applies, not wired".
+    // HD, 2048 and Omega name `WO_SHIP_EXPLOSION` too (`Ship_PlayDestroyExplosion`, thrown at
+    // state 4) and the death plume (`WO_SHIP_DEATH_DAMAGE_PLUME`, state 5).
     assert_eq!(
         has(Trigger::WreckExplosion),
-        [true, false, true, false, false]
+        [true, false, true, true, true]
     );
-    assert_eq!(has(Trigger::WreckPlume), [false, false, true, false, false]);
+    assert_eq!(has(Trigger::WreckPlume), [false, false, true, true, true]);
     // Pure's own big blast is built from three names Pulse's executable does not carry.
     for big in [
         Trigger::WreckBigNode,
@@ -534,11 +533,9 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     ] {
         assert!(!psp(other) && !ps2(other), "{}", other.name);
     }
-    // HD swaps in its `shipwreck.vex` at state 4 (`Ship_SelectWreckModel`); 2048 and Omega are
-    // "checked, applies, not wired".
-    assert!(wreck(oag_hd::TITLE, Platform::Psp));
-    for other in [oag_2048::TITLE, oag_omega::TITLE] {
-        assert!(!wreck(other, Platform::Psp), "{}", other.name);
+    // HD, 2048 and Omega swap in their `shipwreck.vex` at state 4 (`Ship_SelectWreckModel`).
+    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        assert!(wreck(title, Platform::Psp), "{}", title.name);
     }
 }
 
