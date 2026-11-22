@@ -170,6 +170,10 @@ fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool) {
         "every include resolves:\n{report}"
     );
     assert!(
+        !report.contains("HUD: skipped"),
+        "every widget is read, Omega's `<aImageModel>` typo on `EmpBarEffect` included:\n{report}"
+    );
+    assert!(
         report.contains("HUD: Detonator draws no EMP gauge"),
         "the undrawn widgets are named in the loader report:\n{report}"
     );

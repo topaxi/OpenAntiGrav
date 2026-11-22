@@ -31,7 +31,7 @@ evidence), then start at "Next Steps".
 | 9 | Wire the cannon, score, destroyed count and percentage | simulation done; nothing drawn, no HUD, no end screen | `59215fc52` |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
-| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | RE done, ready to wire (bindings below; EMP, bomb-ahead and score feedback wait on 10 and a sim event stream) | |
+| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048 except EMP, bomb-ahead, score feedback and the medal models (below) | |
 | 13 | End screen proper (score, percentage, stage rows) | open | |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
@@ -178,7 +178,16 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   Zone's start/increment law keyed on the stage?). Do not borrow Zone's law without the read.
   Wire through a `Title` data axis (`start.rs` ~l.668, `player_step.rs` ~l.228,
   `pilot_assist.rs` is Zone-gated: check). Ground-truth: a coasting craft reaches speed.
-- **12 HUD: bindings read, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
+- **12 HUD: wired** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "Wired").
+  `HudLayouts::detonator` names each title's root; score, clip, stage, bullet icons, volley pips,
+  the streak line and the energy readout (white in Detonator) read the live cannon
+  (`oag_hud::Detonator`, `oag_raceplay::detonator_hud`, test
+  `detonator_hud_ground_truth.rs`). **Still open:** the three medal models (HD `<ImageModel>`
+  `.vex`; no HUD path draws one, and the cell's thresholds are not passed into the race), the EMP
+  widgets (phase 10), the bomb-ahead warning and `ScoreFeedBack0..15` (need an event stream),
+  HD's streak line (its language table has no `HUD_CHAIN_n`), the bullet icons' per-state art and
+  the per-volley fired words. The brief that follows is what was read, kept for those:
+  (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
   HD static, 50-82 per widget; Omega checked: applies; 2048 checked: differs, own skin and EMP widgets).
   Wire it as a Detonator `HudLayouts` entry (`oag_title::HudLayouts` has no Detonator field today;
   `oag_hd::hud::layouts::DETONATOR` and the `detonator_hud2.gtf` atlas row already exist,
