@@ -34,15 +34,16 @@ pub(super) fn resolve(
     report: &mut Vec<String>,
 ) -> Option<String> {
     let asked = asked?;
-    // **Nothing pairs a `ship_*.dat` with `Zone.vex`.** A Zone run flies a
-    // different hull whose own selection is a title fact
+    // **Nothing pairs a `ship_*.dat` with `Zone.vex`.** A Zone run (a Detonator run likewise)
+    // flies a different hull whose own selection is a title fact
     // (`oag_title::ZoneCraft`), and no `PI_ModelSkin` names a file for it, so
     // offering one here would be painting a surface the disc does not specify.
     // The same carve-out `ship_entry_name` makes for the hull variant.
-    if mode == Mode::Zone {
+    if oag_livery::entry::own_craft(title.race.ships(), mode).is_some() {
         report.push(format!(
-            "--skin {asked}: ignored on a Zone race - the Zone hull is a different model \
-             and no PI_ModelSkin names a file for it"
+            "--skin {asked}: ignored on a {} race - its hull is a different model \
+             and no PI_ModelSkin names a file for it",
+            mode.name()
         ));
         return None;
     }

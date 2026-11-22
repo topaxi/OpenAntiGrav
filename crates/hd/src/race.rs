@@ -461,7 +461,33 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
         gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
     }),
+    craft: Some(DETONATOR_CRAFT),
+    handling: Some(DETONATOR_HANDLING),
 };
+
+/// HD's Detonator craft: one hull at `/data/ships/detonator/ship.vex` for every team, wearing the
+/// team's `zoneship_<team>` livery, `zoneship_faisar` where the team authors none
+/// (`Ship_ReloadModelForSkin`, mode `0xe`;
+/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The hull", 82; the livery 78).
+pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft {
+    hull: oag_title::ZoneCraft::OwnShipAt {
+        root: r"Data\Ships",
+        ship: "detonator",
+        livery_key: "zoneship_zone",
+    },
+    livery_fallback: Some("zoneship_faisar"),
+};
+
+/// HD's Detonator handling: `Team_LoadHandlingStats` (`0x001e6ff8`) tests mode `0xe` before the
+/// Zone mask, so a Detonator craft reads its own classless file, never Zone's
+/// (`detonator-hull.md`, "The handling file", 82). The unauthored values are Zone's own, read
+/// live, since both files author the same blocks ([`ZONE_HANDLING`]).
+pub const DETONATOR_HANDLING: oag_title::zone_handling::ZoneHandling =
+    oag_title::zone_handling::ZoneHandling {
+        entry: oag_title::pre_race::Sourced::measured("/data/ships/detonator/handlingstats.xml"),
+        landing_rebound: ZONE_HANDLING.landing_rebound,
+        rebound_jump_time: ZONE_HANDLING.rebound_jump_time,
+    };
 
 /// Wipeout HD/Fury's Zone milestone announcer.
 ///

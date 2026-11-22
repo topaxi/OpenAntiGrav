@@ -28,17 +28,19 @@ pub fn swap<'a>(
     team: &str,
     report: &mut Vec<String>,
 ) -> Option<LiveryFolder<'a>> {
-    if mode != oag_race::Mode::Zone {
-        return None;
-    }
-    let key = ships.zone.livery_key()?;
-    let Some((_, livery)) = liveries
+    let key = crate::entry::own_craft(ships, mode)?.livery_key()?;
+    let own = liveries
         .iter()
         .find(|(id, _)| id.eq_ignore_ascii_case(team))
-    else {
+        .map(|(_, livery)| livery.as_str());
+    let fallback = (mode == oag_race::Mode::Detonator)
+        .then(|| ships.detonator.and_then(|craft| craft.livery_fallback))
+        .flatten();
+    let Some(livery) = own.or(fallback) else {
         report.push(format!(
-            "{team}: the definition authors no Zone livery for this craft - the Zone hull keeps \
-             its default {key} skin"
+            "{team}: the definition authors no {} livery for this craft - the hull keeps \
+             its default {key} skin",
+            mode.name()
         ));
         return None;
     };
@@ -54,6 +56,7 @@ pub fn swap<'a>(
 #[derive(Debug)]
 pub struct Reads<'a> {
     folder: Option<LiveryFolder<'a>>,
+    label: &'static str,
     swapped: usize,
     missing: Vec<String>,
 }
@@ -63,9 +66,18 @@ impl<'a> Reads<'a> {
     pub fn new(folder: Option<LiveryFolder<'a>>) -> Self {
         Self {
             folder,
+            label: "Zone",
             swapped: 0,
             missing: Vec::new(),
         }
+    }
+
+    /// Names the mode whose hull the folder paints in [`Self::describe`]'s line: `"Zone"` unless
+    /// told otherwise.
+    #[must_use]
+    pub fn named(mut self, label: &'static str) -> Self {
+        self.label = label;
+        self
     }
 
     /// The texture at `path`, read through the folder: from the worn folder where `path` is
@@ -101,13 +113,14 @@ impl<'a> Reads<'a> {
         Some(if folder.fall_back {
             if self.missing.is_empty() {
                 format!(
-                    "{team}: Zone livery {worn} replaces {own} on {} texture request(s)",
-                    self.swapped
+                    "{team}: {} livery {worn} replaces {own} on {} texture request(s)",
+                    self.label, self.swapped
                 )
             } else {
                 format!(
-                    "{team}: Zone livery {worn} named {}, which the archive does not hold - the \
+                    "{team}: {} livery {worn} named {}, which the archive does not hold - the \
                      default {own} skin stays ({} swapped)",
+                    self.label,
                     self.missing.join(", "),
                     self.swapped
                 )
@@ -141,6 +154,7 @@ mod tests {
                 ship: "zone",
                 livery_key: "zoneship_zone",
             },
+            detonator: None,
             boost: None,
         };
         let liveries = vec![("Qirex".to_string(), "zoneship_quirex".to_string())];

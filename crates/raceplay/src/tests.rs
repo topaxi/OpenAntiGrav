@@ -38,6 +38,7 @@ mod damage_fx;
 mod destroy_camera;
 mod destroyed_fire;
 mod detonator;
+mod detonator_craft;
 mod disruptor_craft_fx;
 mod disruptor_launch;
 mod distance_reset;

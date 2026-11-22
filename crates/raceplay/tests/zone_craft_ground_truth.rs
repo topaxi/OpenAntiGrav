@@ -25,8 +25,8 @@ fn check(
 ) {
     for team in teams {
         let paths = defaults.ships_for(team);
-        let racing = paths.hull_entry_name(team, false, None);
-        let zoning = paths.hull_entry_name(team, true, None);
+        let racing = paths.hull_entry_name(team, None, None);
+        let zoning = paths.hull_entry_name(team, Some(paths.zone), None);
         assert_ne!(
             racing, zoning,
             "{title}/{team}: Zone must not fly the race hull"

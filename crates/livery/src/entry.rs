@@ -8,20 +8,52 @@ use oag_mesh::mesh;
 use oag_pulse::race::ships;
 use oag_race::Mode;
 
+/// The craft of its own a race in `mode` flies: Zone's, or Detonator's where the title ships
+/// one ([`oag_title::race::ShipPaths::own_craft`]). `None` for a mode that flies the team's
+/// ordinary hull.
+#[must_use]
+pub fn own_craft(
+    paths: oag_title::race::ShipPaths,
+    mode: Mode,
+) -> Option<oag_title::race::ZoneCraft> {
+    paths.own_craft(mode == Mode::Zone, mode == Mode::Detonator)
+}
+
+/// The craft whose directory holds the engine light: Zone's for every mode on HD's Zone mask,
+/// Detonator included (`Ship_LoadEngineLightData` reads `Data\Ships\Zone\EngineLightData.xml`
+/// for modes 6, 13, 14 and 21; `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "Engine
+/// lights: Zone's", 80). `None` for every other mode.
+#[must_use]
+pub fn light_craft(
+    paths: oag_title::race::ShipPaths,
+    mode: Mode,
+) -> Option<oag_title::race::ZoneCraft> {
+    mode.on_zone_mask().then_some(paths.zone)
+}
+
 /// The ship tree and directory a craft's *other* model files (the engine
 /// flare) are read from: the same place `oag_title::race::ShipPaths::hull_entry_name` puts the hull.
 ///
 /// A Zone race on a title whose Zone craft has a directory of its own (HD:
 /// `/data/ships/zone`) flies that hull, so its flare's `EF_Main` origin and
 /// shapes are that directory's `engineflare.vex`, authored about the Zone hull,
-/// not the player's team file authored about the team's. Any other mode, and
+/// not the player's team file authored about the team's. A Detonator race does
+/// the same with its own directory ([`own_craft`]). Any other mode, and
 /// a title whose Zone keeps the player's team, answers `(paths.dir, team)`.
 #[must_use]
 pub fn model_directory(paths: oag_title::race::ShipPaths, team: &str, mode: Mode) -> (&str, &str) {
-    if mode != Mode::Zone {
-        return (paths.dir, team);
+    directory_of(paths, team, own_craft(paths, mode))
+}
+
+fn directory_of(
+    paths: oag_title::race::ShipPaths,
+    team: &str,
+    craft: Option<oag_title::race::ZoneCraft>,
+) -> (&str, &str) {
+    match craft {
+        Some(craft) => (craft.root(paths.dir), craft.directory(team)),
+        None => (paths.dir, team),
     }
-    (paths.zone.root(paths.dir), paths.zone.directory(team))
 }
 
 /// The per-team shield shell's stem, which the Zone directory probe asks for.
@@ -33,27 +65,27 @@ pub fn stem_entry_name(dir: &str, team: &str, stem: &str) -> String {
     oag_title::race::entry_name_in(dir, team, stem)
 }
 
-/// [`model_directory`], unless the Zone directory lacks `file`: then the team's
-/// own, and a line in `report` says so. `file` maps a `(directory, team)` pair
+/// The directory of `craft` ([`own_craft`] or [`light_craft`]), unless it lacks `file`: then
+/// the team's own, and a line in `report` says so. `file` maps a `(directory, team)` pair
 /// to the entry name the caller is about to read.
 ///
 /// A Zone craft's engine light, shield shell and absorb shell are authored about
 /// its hull like the flare is, so they come from the same place; a title whose
-/// Zone directory ships none of one keeps the team's, never nothing.
+/// craft directory ships none of one keeps the team's, never nothing.
 pub fn model_directory_with<'a>(
     archives: &mut oag_assets::Archives,
     paths: oag_title::race::ShipPaths,
     team: &'a str,
-    mode: Mode,
+    craft: Option<oag_title::race::ZoneCraft>,
     file: impl Fn(&str, &str) -> String,
     report: &mut Vec<String>,
 ) -> (&'a str, &'a str) {
-    let (dir, owner) = model_directory(paths, team, mode);
-    if mode == Mode::Zone && (dir, owner) != (paths.dir, team) {
-        let zone = file(dir, owner);
-        if archives.read_name(&zone).is_err() {
+    let (dir, owner) = directory_of(paths, team, craft);
+    if craft.is_some() && (dir, owner) != (paths.dir, team) {
+        let own = file(dir, owner);
+        if archives.read_name(&own).is_err() {
             report.push(format!(
-                "{zone}: the Zone directory ships none - the team's own file is read instead"
+                "{own}: the craft's directory ships none - the team's own file is read instead"
             ));
             return (paths.dir, team);
         }
@@ -99,17 +131,17 @@ pub fn boost_entry_name(
     team: &str,
     mode: Mode,
 ) -> Option<String> {
-    if mode != Mode::Zone {
+    let Some(craft) = own_craft(paths, mode) else {
         return Some(oag_title::race::entry_name_in(
             paths.dir,
             team,
             paths.boost?,
         ));
-    }
-    let stem = paths.zone.boost().or(paths.boost)?;
+    };
+    let stem = craft.boost().or(paths.boost)?;
     Some(oag_title::race::entry_name_in(
-        paths.zone.root(paths.dir),
-        paths.zone.directory(team),
+        craft.root(paths.dir),
+        craft.directory(team),
         stem,
     ))
 }

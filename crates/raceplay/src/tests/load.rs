@@ -17,7 +17,8 @@ use oag_livery::entry::{boost_entry_name, shield_entry_names};
 fn the_boost_plume_follows_the_hull_its_mode_selects() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     for mode in [Mode::TimeTrial, Mode::SpeedLap, Mode::Zone] {
-        let hull = craft.hull_entry_name("Feisar", mode == Mode::Zone, None);
+        let hull =
+            craft.hull_entry_name("Feisar", (mode == Mode::Zone).then_some(craft.zone), None);
         let plume = boost_entry_name(craft, "Feisar", mode).expect("Pulse ships one");
         let stem = if mode == Mode::Zone { "Zone" } else { "ship" };
         assert!(
@@ -53,11 +54,11 @@ fn a_title_with_no_ordinary_boost_model_has_none_in_zone_mode_either() {
 fn a_hull_variant_override_replaces_only_the_file_stem() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     assert_eq!(
-        craft.hull_entry_name("Assegai", false, Some("extra")),
+        craft.hull_entry_name("Assegai", None, Some("extra")),
         r"Data\Ships\Assegai\extra.vex"
     );
     assert_eq!(
-        craft.hull_entry_name("Assegai", false, None),
+        craft.hull_entry_name("Assegai", None, None),
         r"Data\Ships\Assegai\Ship.vex",
         "no override is exactly today's baseline"
     );
@@ -70,8 +71,8 @@ fn a_hull_variant_override_replaces_only_the_file_stem() {
 fn a_hull_variant_override_does_not_reach_zone_mode() {
     let craft = oag_pulse::race::DEFAULTS.ships();
     assert_eq!(
-        craft.hull_entry_name("Assegai", true, Some("extra")),
-        craft.hull_entry_name("Assegai", true, None),
+        craft.hull_entry_name("Assegai", Some(craft.zone), Some("extra")),
+        craft.hull_entry_name("Assegai", Some(craft.zone), None),
         "Zone's own hull selection does not consult the override at all"
     );
 }

@@ -489,7 +489,33 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
         gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
     }),
+    craft: Some(DETONATOR_CRAFT),
+    handling: Some(DETONATOR_HANDLING),
 };
+
+/// 2048's Detonator craft: `hdships\Detonator\Ship.vex` for every team, under the same
+/// `zoneship_zone` key as HD's (`Ship_LoadModelSet`, mode `0xe`;
+/// `docs/ghidra/functions/vita-2048-eu-v104/detonator-hull.md`, 80). No livery literal is known
+/// for a team that authors none.
+pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft {
+    hull: oag_title::ZoneCraft::OwnShipAt {
+        root: HD_SHIP_DIR,
+        ship: "Detonator",
+        livery_key: "zoneship_zone",
+    },
+    livery_fallback: None,
+};
+
+/// 2048's Detonator handling: the loader (`0x810bfd54`) tests mode `0xe` first and the file is
+/// byte-identical to HD's, so its unauthored values are **inherited from HD**.
+pub const DETONATOR_HANDLING: oag_title::zone_handling::ZoneHandling =
+    oag_title::zone_handling::ZoneHandling {
+        entry: oag_title::pre_race::Sourced::measured(
+            r"Data\art\published\hdships\Detonator\handlingstats.xml",
+        ),
+        landing_rebound: oag_title::pre_race::Sourced::inherited(0.0, "Wipeout HD"),
+        rebound_jump_time: oag_title::pre_race::Sourced::inherited(2.0, "Wipeout HD"),
+    };
 
 /// HD's four Zone circuits as the DLC packs ship them, the ones `Environment_Load` matches by
 /// the `Zone_1`..`Zone_4` substring and gives the `DLC3` table

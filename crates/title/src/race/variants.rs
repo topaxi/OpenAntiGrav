@@ -478,6 +478,7 @@ impl RaceDefaults {
                 .map_or(self.ship_dir, |guest| guest.dir),
             hull: self.ship_hull,
             zone: self.zone_craft,
+            detonator: self.detonator.and_then(|detonator| detonator.craft),
             boost: self.boost,
         }
     }

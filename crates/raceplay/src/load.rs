@@ -48,7 +48,7 @@ mod pulse_psp;
 pub(super) mod ripple;
 mod roster;
 mod seams;
-mod sim;
+pub(crate) mod sim;
 pub use sim::{SimLoad, load_sim};
 #[cfg(feature = "view")]
 mod skin;

@@ -100,9 +100,9 @@ pub use race::sound::{
     FrontEndSounds, MedalScreen, MenuCues, ResultsLaw, ResultsVoices, StyledCue, TournamentPlace,
 };
 pub use race::{
-    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, DetonatorLayouts,
-    GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses, StartCue, TeamVariant,
-    TeamVariants, TrackBanks, VariantJoin, WwiseBank, WwiseCue, WwiseCues, WwiseState,
+    CircuitBanks, CountdownEvent, CountdownVoice, Crossfade, Detonator, DetonatorCraft,
+    DetonatorLayouts, GuestRoster, RaceDefaults, SequenceTick, SoundBanks, SpeedClasses, StartCue,
+    TeamVariant, TeamVariants, TrackBanks, VariantJoin, WwiseBank, WwiseCue, WwiseCues, WwiseState,
     WwiseTeamSwitch, ZoneAnnouncer, ZoneCircuit, ZoneClassAnnouncer, ZoneClassTone, ZoneCraft,
     ZoneFallback, ZoneFrame, ZonePalette, ZoneStageTextures, ZoneStages, ZoneTeamStep,
     ZoneTransition,
