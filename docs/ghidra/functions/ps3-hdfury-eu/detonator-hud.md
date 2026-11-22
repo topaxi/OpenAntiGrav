@@ -27,7 +27,7 @@ Its two per-tick updaters are vtable entries (`0x00862e3c` -> `0x00080830`, `0x0
 | `Multi00`..`Multi14` (Image) | `+0x88`..`+0xc0` | `0x00081958` (`Multi%02d`) | a pip per volley: `Multi(14-i)` lights (latch byte `this+0xc4+i`, entry flag `+0x10`) once volley `i` has hit (`hits[2i] > 1 or hits[2i+1] > 1`); a streak award recolours its last 5/10/15 pips `0xff00eeff` | pip fade `+0xf0..+0xfc` timers | `0x0007e950`, `0x0007e6d0`, fade in `0x000803d8` | 65 |
 | `PulseBullets` (Text) | `+0xd4` | `0x00081958` | the player's clip count `ship+0x164` (0..15) | `%02d` | `0x000803d8` | 80 |
 | `PulseBonus` (Text) | `+0xec` | `0x00081958` | a streak award line, set by `Hud_RaiseChainBonus` (`0x0007e6d0`): the localised `HUD_CHAIN_5/10/15` text and the amount (1000/3000/5000), shown 2.0 s then faded over 1.0 s (`+0xf8 = 2.0`, `+0xfc = 1.0`) | `%s - %d` | `0x0007e6d0`, fade `0x000803d8` | 80 |
-| `DetonatorStage` (Text) | `+0xe4` | `0x00081958` | HUD stage `rm+0x2dee` (u16) over the constant `14` | `%d/%d` | `0x000803d8` | 70 |
+| `DetonatorStage` (Text) | `+0xe4` | `0x00081958` | HUD stage `rm+0x2dee` (u16, starts at 1, +1 per start-line crossing, capped 14) over the constant `14` | `%d/%d` | `0x000803d8` | 72 |
 | `DetonatorStageParent`, `BulletBack`, `EMPBack`, `DamageBarBg` frames (Image) | none | - | static art | - | - | 85 |
 | `Emp_0`..`Emp_7` (Image) | `+0x120`..`+0x13c` | `0x00082138` (`Emp_%d`) | pip `i` white when the EMP charge `rm+0x2dd8` is `> i`, else vertex colour 0 | `Image_SetVertexColours` | `0x00080830` | 75 |
 | `EmpReady` (Image) | `+0x140` | `0x00082138` | shown (`+0x34` bit 4) when the charge reaches `table+0x1bc` (the craft's `EmpStats` threshold) and not during the post-fire flash `+0x174` | visibility | `0x00080830` | 65 |
@@ -36,6 +36,7 @@ Its two per-tick updaters are vtable entries (`0x00862e3c` -> `0x00080830`, `0x0
 | `ForwardWarningBackground`, `ForwardWarningBombIcon`, `WarningFront*`/`WarningBack*` (Image) | warning slots | `0x0023bb98` | the bomb-ahead warning, HUD message `8` (see below) | visibility + 2.0 s timers | `0x00083318`, table walk `0x0008f9f0`-`0x0008fb04` | 55 |
 | `ScoreFeedBack0`..`15` (Text) | `hud+0x3d0 + 0xc*k` | `0x0009bb30` | a floating `+N` for every score add: `DetonatorScoring_Add*` -> `Hud_RaiseScoreFeedback` (`0x00083ba0`) | `+%3.0f` (`+%3.2f` under 1.0) | `0x00083ba0` | 75 |
 | `DetonatorGoldMedal`/`Silver`/`Bronze` (ImageModel, `hd_gold/silver/bronze.vex`, `StartEnabled=false`) | not bound by this controller | - | shown when the score passes the cell's `DetonatorGoldMedal`/`Silver`/`Bronze` thresholds, in `Detonator_UpdateHud` ([detonator-cannon.md](detonator-cannon.md)) | model | `0x00067120` | 65 |
+| `HUD_info_text`, `HUD_time_diff`, `HUD_ready_go`, `HUD_colours` fragments | generic | generic binders | the shared message lines, lap-line gap and start gate; what Detonator raises into them is unread | - | `Hud_Update` | 60 |
 | `PulseScore`, `PulseMultiplier` (Text) | `+0xd8`, `+0xdc` | **none** | nothing: see below | - | - | 75 |
 | `EmpScore` (Text) | `+0xe0` | `0x00081958` | nothing: bound, never read or written again | - | - | 70 |
 | `PulseBankedScore` (Text) | `+0xe8` | `0x00081958` | nothing visible: its text setter `0x0007e5a8` has no caller | `%d` | fade only | 65 |
@@ -68,7 +69,7 @@ branch or vtable entry reaches (`ps3-dform-scan.py --target 0x7e5a8` is empty, a
 
 | Address | Name | Confidence |
 | --- | --- | ---: |
-| `0x00081068` | `DetonatorHud_Construct` | 75 |
+| `0x00081068` | `DetonatorHud_LoadAndBindScore` | 75 |
 | `0x00081958` | `DetonatorHud_BindWeaponWidgets` | 75 |
 | `0x00082138` | `DetonatorHud_BindEmpWidgets` | 75 |
 | `0x000803d8` | `DetonatorHud_UpdateWeaponTexts` | 68 |
@@ -148,8 +149,11 @@ bonus"): `hits[30]` words at `+0x08`, followed by 15 words at `+0x80`.
 
 1. For `j` in `0..14`: if the word at `clip+0x80+4j` is non-zero and `Bullet(14-j)`'s state is `2`,
    set it to `3` (`0x0007e950`-`0x0007ea1c`). Volley `j` is spent; the rightmost icon (`Bullet14`,
-   `x = 435`) goes first. 60: the 15 words are the per-volley fired mark, inferred from this
-   consumer (no writer was read).
+   `x = 435`) goes first. 55: the 15 words are the per-volley fired mark, inferred from this
+   consumer. `PulseCannonManager_FireVolley` (`0x00138978`) indexes `clip + 0x50 + 4k` and
+   `clip + 8 + 4*ring`, but no store to `clip+0x80..+0xb8` was found in `0x138000`-`0x14a000`
+   or `0x121000`-`0x123000`, so the writer is unread. In the normal case (no manual reload
+   mid-clip) the number of spent icons is the number of volleys fired, `15 - clip`.
 2. For `i` in `0..14`: if `hits[2i] > 1` or `hits[2i+1] > 1` and the latch byte `this+0xc4+i` is
    clear, set it and set the `Multi(14-i)` entry's flag `+0x10` (`0x0007ea20`-`0x0007ed80`). A hitting
    volley lights its pip; `0x0007e498` (called from `PulseCannonManager_Update` at the post-reload
@@ -166,11 +170,13 @@ text from `HUD_CHAIN_15/10/5` and `"%s - %d"`, recolours the last `kind`-many pi
 crossing it does `rm+0x2dee += 1` capped at `14` (`0x000671e4`-`0x000671fc`, `0x000674e8`-`0x000674f4`),
 then the "Hold Your Fire" trophy test at stage `>= 10`. It is a different counter from the stage
 step `rm+0x2e10` that `Detonator_UpdateRace` places by ([detonator-placement.md](detonator-placement.md)).
-The initial value is not stored by anything in `0x60000`-`0x6e000`, so it is read as the constructor's
-zeroing (50): the HUD would read `0/14` until the first crossing. Confidence 65 on "counts
-crossings, capped 14", 50 on the start value. **Open: how it relates to the port's
-`World::detonator.stages_laid`** (which is `1` at the opening stage): a 15-second capture of the
-original's first lap line (`DetonatorStage` text before and after the first crossing) settles it.
+The initial value is **1**: `SPDetonator`'s constructors (`0x00064470`, `0x000649f0`) store the
+halfword `1` at `rm+0x2ddc+0x12` (`sth r9,18(r8)` at `0x00064520`, `r9 = 1`, `r8 = rm+0x2ddc`
+after the `stwu` at `0x00064500`), next to the zeroing of the neighbouring counters
+(`+0x2de0`..`+0x2dec`). So the HUD reads `1/14` from the first tick and counts line crossings from
+there, capped at 14: it matches the port's `World::detonator.stages_laid` (1 at the opening stage,
+one more per lap, `place_stage` caps at 14). Confidence 72 on the mapping; what raises the
+displayed count past the line crossing (the `Detonator_UpdateHud` speed gate) is read.
 
 ## The bomb warning is HUD message 8, and it is not the bomb icon (55)
 
@@ -188,43 +194,62 @@ elif id in {8, 9}:                         ; 0x300: the forward slot
 direction: 4 sets all three, 1/2/3 set one
 ```
 
-The id-to-icon table is at TOC `-0x5cc0` (`0x00920848`, 12-byte `{widget, id, name}` rows, walked at
-`0x0008f9f0`-`0x0008fb04`): **id 8 is `ForwardWarningMineIcon`**, 9 `RearWarningCannonIcon`, 13
-`ForwardWarningBombIcon`, 5 Rocket, 0 Quake, 2 Plasma, 7 Missile, 1 Repulser, 11 Shuriken, 12
-LeachBeam. `Detonator_warnings.xml` authors `ForwardWarningBackground` and
-**`ForwardWarningBombIcon` only**, and no `ForwardWarningMineIcon` (the generic `hud_warnings.xml`
-authors both). So a bomb ahead raises id 8, whose widget does not exist in Detonator's layout: on
-HD the icon cannot show, and at most the background plate and the directional `WarningFront*` /
-`WarningBack*` arrows would (hypothesis 50; whether the plate follows the slot's timer is unread).
-Recipe: one RPCS3 capture flying toward a bomb (a bomb 500 ahead) with `grab_with_clock`, and a
-look at the strip above the DamageBar.
+The id-to-icon table is at TOC `-0x5cc0` (`0x00920854`), 12-byte `{widget, id, name}` rows. Three
+loops (`0x0008f9f0`-`0x0008fa40`, `0x0008fa44`-`0x0008fa98`, `0x0008fab0`-`0x0008faf4`) each walk
+**ten** rows from that base (`li r0,10`; `ps3-toc.py resolve 0x8fa48 -0x5cc0` is the base all three
+load) and show the row's widget when its id equals `hud+0x17c` or `hud+0x180`. The rows:
+**id 8 `ForwardWarningMineIcon`**, 9 `RearWarningCannonIcon`, 5 Rocket, 0 Quake, 2 Plasma,
+7 Missile, 1 Repulser, `0xb` Shuriken, `0xc` LeachBeam, and a tenth, id `0xa`, whose name word
+`0x00993020` points into `.bss` (not a string; unread). The two rows just **before** the base,
+`ForwardWarningBombIcon` (`0x00920848`, id `0xd`) and `RearWarningBackground` (`0x0092083c`,
+id `0xd`), are outside what the walk reads, and `0x00083318` refuses `id > 12`, so nothing
+raises id 13 through this path. HD's ids are its own numbering, not Pulse's announce indices
+([hud-incoming-warnings.md](../psp-pulse-usa/hud-incoming-warnings.md): Mine 9, Bomb 8).
+`Detonator_warnings.xml` authors `ForwardWarningBackground` and **`ForwardWarningBombIcon`
+only**, and no `ForwardWarningMineIcon` (the generic `hud_warnings.xml` authors both). So a bomb
+ahead raises id 8, whose widget does not exist in Detonator's layout: on HD the bomb icon
+cannot show through this path, and at most the background plate and the directional
+`WarningFront*` / `WarningBack*` arrows would (hypothesis 50; whether the plate follows the slot's
+timer is unread). `oag_hud::incoming` already carries the Pulse law (`Icon::Bomb`/`Mine`, the
+`500` reach); Detonator's raise is not in it. Recipe: one RPCS3 capture flying toward a bomb (a
+bomb within 500 ahead) with `grab_with_clock`, and a look at the strip above the DamageBar.
 
 ## 2048 and Omega (checked)
 
-All twelve widget-name strings (`Bullet%02d`, `DetonatorScore`, `PulseBullets`, `EmpScore`,
-`DetonatorStage`, `PulseBankedScore`, `Multi%02d`, `Emp_%d`, `x%02d`, `%d/%d`, `ForwardWarning*`)
-are in both executables. 2048's binder and update pair are `FUN_8114ac5c` (`Bullet%02d`) and
-`FUN_8114b3a0` (`x%02d`); Omega's `FUN_01269b40` and `FUN_01268d10`. Bodies not diffed against HD's.
-Per the 2048-checked-against-Omega rule:
+Per-title layout path (`search_strings` on each program): **HD** `Data\XML\Detonator_HUD.xml`;
+**Omega** `Data\XML\Detonator_HUD.xml` (its only Detonator HUD string); **2048**
+`Data\XML\2048_hud\Detonator_HUD_HD.xml` only, so 2048 never loads the base `Detonator_HUD.xml`
+its base package ships. Each title's `Detonator_HUD` entry name is therefore its own:
+`oag_2048::hud` must name the `2048_hud` file (today it lists `Data\XML\Detonator_HUD.xml`,
+`crates/2048/src/hud.rs:560`), where Omega and HD take the plain path.
 
-- **Layout: same files.** 2048's `data/xml/Detonator_HUD.xml` (3541 bytes), `HUD_DetonatorWeapons.xml`
-  (11448) and `Detonator_warnings.xml` (2000) are the HD files byte for byte modulo CR (DATA00's are
-  3472/11448/2000 with LF). Omega's `data00` `detonator_hud.xml` (3541) is the same; its
-  `hud_detonatorweapons.xml` differs in **one tag: `<aImageModel name="EmpBarEffect"` ... `</aImageModel>`**
-  (a typo in the shipped file; the loader's treatment of an unknown tag is unread, so Omega probably
-  never creates `EmpBarEffect`, 60), and its `detonator_warnings.xml` doubles the `fury_hud.gtf`
-  rectangles (`U=770 V=554 TxtrWidth=516`, a 2x atlas).
-- **2048 patch v1.04 adds a second skin**, `data/xml/2048_hud/Detonator_HUD_HD.xml` (+ its own
-  `Detonator_warnings.xml`): `ScoreTxt` (`IG_HUD_SCORE`) with the `DetonatorScore` child, a
-  `DetonatorStageParent` (`FE_STAGE`) with `DetonatorStage`, `HUD_damage_indicator.xml`, and the same
-  three medals at `ImageX 720`. It includes `DetonatorWeapons.xml` (a different path from HD's
-  `HUD_DetonatorWeapons.xml`, unread whether it is the same fragment). So on 2048 the score and stage
-  widgets are text-only, with no `detonator_hud2` frame.
-- Omega's VR patch (`data08`) ships `Detonator_hud_VR.xml`, `Detonator_hud_VR_Ext.xml`,
-  `hud_detonatorweapons_VR[_Ext].xml`: not read.
-- Outcome: **checked, applies** (widget names, formats and layout), with **checked, differs** for the
-  Omega `EmpBarEffect` tag, Omega's 2x warning atlas and 2048's v1.04 text skin. The 2048 and Omega
-  update bodies are not diffed (hypothesis that they match HD's, 60).
+- **Omega: checked, applies.** Strings `Bullet%02d`, `DetonatorScore`, `PulseBullets`, `EmpScore`,
+  `DetonatorStage`, `PulseBankedScore`, `Multi%02d`, `x%02d`, `Emp_%d` and `ForwardWarning*` are in
+  the executable (binder `FUN_01269b40`, update `FUN_01268d10`); `data00`'s `detonator_hud.xml` and
+  `hud_detonatorweapons.xml` match HD's except that the weapons file spells `EmpBarEffect`'s
+  element **`<aImageModel>`** (a shipped typo), and the executable has **no** `EmpBarEffect` or
+  `EmpReady` string, so Omega binds the pips (`Emp_%d`) but, as far as strings show, neither
+  (60). Its `detonator_warnings.xml` doubles the `fury_hud.gtf` rectangles (`U=770 V=554
+  TxtrWidth=516`, the 2x atlas). Omega's VR patch (`data08`) ships `Detonator_hud_VR*.xml`,
+  `hud_detonatorweapons_VR[_Ext].xml`, `detonator_warnings_VR.xml`: not read.
+- **2048: checked, differs.** Same score/clip/stage/bonus widget names and the same `%d/%d`,
+  `x%02d` strings (binder `FUN_8114ac5c`, update `FUN_8114b3a0`), but a different layout:
+  `Detonator_HUD_HD.xml` carries text-only `ScoreTxt`/`DetonatorScore` (`IG_HUD_SCORE`) and
+  `DetonatorStageParent`/`DetonatorStage` (`FE_STAGE`) with `HUD_damage_indicator.xml` and the
+  three medals at `ImageX 720`, and includes `DetonatorWeapons.xml` (`2048_hud/`, 11424 bytes in
+  `data1`, a re-laid 960x540 copy of HD's: `EMPBack` at `offset 60,430`, weapon display at `634,430`; `data2`'s
+  8934-byte copy is a third layout with `EmpCharge`/`EmpFull` instead of `Emp_%d`/`EmpReady`). The
+  2048 executable binds `EmpBarEffect`, `EmpCharge`, `EmpFull` and has no `Emp_%d`/`EmpReady`
+  string: **its EMP readout is a different widget set** (`EmpCharge` = the gauge, `EmpFull` = the
+  full cue, hypothesis 60). `Detonator_warnings.xml` is HD's with 480x270 offsets and no `fury_hud` rows
+  changed. `PulseMultiplier` is again only a generic `Values` attribute name (`0x81454428`).
+- 2048's base-package `Detonator_HUD.xml`, `HUD_DetonatorWeapons.xml` and `Detonator_warnings.xml`
+  are byte-identical to HD's (modulo CR) and unreferenced by the executable (no string names them).
+- **Outcome:** Omega **checked, applies** (with the `aImageModel` and 2x-atlas differences);
+  2048 **checked, differs** (own skin, own EMP widgets). The update bodies of both are not diffed
+  against HD's (60 that the shared widgets read the same sources: the strings and formats are the
+  same). Wiring: HD and Omega share the `detonator_hud.xml` bindings; 2048 needs its own layout
+  entry and an EMP binding for `EmpCharge`/`EmpFull`, or skips EMP until phase 10.
 
 ## What stays open
 
@@ -232,5 +257,6 @@ Per the 2048-checked-against-Omega rule:
   colour table at `0x00765b38`: the writes after `0x00082600`.
 - The bullet icons' per-state art (`0x0007f0a0`) and what `clip+0x80..0xb8` are.
 - The constant block `0x0029d578` writes (the ship's bullet gauge) and whether it is drawn.
-- Message 8's icon on HD and the directional arrows' use (above).
-- The initial value of `rm+0x2dee`.
+- Message 8's icon on HD and the directional arrows' use (above), and the `.bss` tenth row.
+- What the generic fragments (`HUD_info_text`, `HUD_time_diff`, `HUD_ready_go`) show in Detonator: generic binders (`Hud_BindWidgets` and its siblings, see [hud-sight.md](hud-sight.md), [hud-message-triggers.md](hud-message-triggers.md)); what `Detonator_UpdateHud` writes into the message word at `*(hud+0x40)+0xf4` is unread (recipe: scan `0x67120`-`0x67d00` for a store at disp `0xf4`).
+- The writer of the 15 words at `clip+0x80`.

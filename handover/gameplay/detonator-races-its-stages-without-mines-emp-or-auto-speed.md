@@ -180,14 +180,16 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   Wire through a `Title` data axis (`start.rs` ~l.668, `player_step.rs` ~l.228,
   `pilot_assist.rs` is Zone-gated: check). Ground-truth: a coasting craft reaches speed.
 - **12 HUD: bindings read, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`,
-  HD static, 50-82 per widget; 2048 and Omega checked: same widget names, layout and formats).
+  HD static, 50-82 per widget; Omega checked: applies; 2048 checked: differs, own skin and EMP widgets).
   Wire it as a Detonator `HudLayouts` entry (`oag_title::HudLayouts` has no Detonator field today;
   `oag_hd::hud::layouts::DETONATOR` and the `detonator_hud2.gtf` atlas row already exist,
   `crates/hd/src/hud.rs`) and drop the "Detonator draws the time trial's" arm of
   `oag_raceplay::hud::hud_layout` (`crates/raceplay/src/hud.rs` ~l.111). 2048 reads
-  `Data\XML\Detonator_HUD.xml` (same bytes) and has a second skin
-  `2048_hud/Detonator_HUD_HD.xml` (text only, no `detonator_hud2` frame); Omega's
-  `hud_detonatorweapons.xml` has an `<aImageModel>` typo on `EmpBarEffect`. Per widget, with the
+  `Data\XML\2048_hud\Detonator_HUD_HD.xml` only (the base `Detonator_HUD.xml` it ships is never
+  named by its executable): a text-only score/stage skin on `2048_hud/DetonatorWeapons.xml`, whose
+  EMP widgets are `EmpCharge`/`EmpFull`, not HD's `Emp_%d`/`EmpReady` (`crates/2048/src/hud.rs`
+  ~l.560 lists the base path today); Omega names `Data\XML\Detonator_HUD.xml` like HD, and
+  its `hud_detonatorweapons.xml` has an `<aImageModel>` typo on `EmpBarEffect`. Per widget, with the
   state that exists on main (`C` = `oag_weapons::detonator::cannon::Cannon`, reached as
   `World::detonator.cannon`; `RaceSim` accessors in `crates/raceplay/src/detonator.rs`):
 
@@ -195,10 +197,10 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | --- | --- | --- | --- | --- |
   | `DetonatorScore` | the score | `%07d`, white | `C.score` (`RaceSim::detonator_score`) | ready |
   | `PulseBullets` | clip count | `%02d` | `C.clip` (0..15) | ready |
-  | `Bullet00`..`14` | `Bullet(14-j)` spent once volley `j` has fired | sprite state | `C.hits[2j] != 0` (the original reads 15 per-volley words next to `hits`; same meaning, 60) | ready |
+  | `Bullet00`..`14` | `Bullet(14-j)` spent once volley `j` has fired | sprite state | `15 - C.clip` spent icons from the right (the original reads 15 per-volley words next to `hits`, writer unread, 55); `C.hits[2j] != 0` is ring-indexed and diverges after a mid-clip manual reload | ready |
   | `Multi00`..`14` | `Multi(14-i)` lit once volley `i` hit; a streak award recolours its last 5/10/15 pips `0xff00eeff` | pip | `C.hits[2i] > 1 \|\| C.hits[2i+1] > 1`; awards from `C.awards` | ready |
   | `PulseBonus` | the streak line `HUD_CHAIN_n - amount` (1000/3000/5000), held 2.0 s then faded 1.0 s | `%s - %d` | edge-detect `C.awards` (`first_five`, `second_five`, `ten`, `fifteen` go false to true); the timers are view state | ready (needs the language ids `HUD_CHAIN_5/10/15`) |
-  | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`, **hypothesis**: the original's `rm+0x2dee` counts start-line crossings from an unread start value (`detonator-hud.md`, "The stage counter") | wire, verify the first-crossing value |
+  | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`: the original's `rm+0x2dee` starts at 1 (the constructors store it) and counts start-line crossings, capped 14 (72) | ready |
   | `DamageBar`, `DamageBarBg`, `ShieldBarText` | energy percent (white in mode 14) | `(int)pct` | the generic shield readout (`oag_hud::shield_bar`, `Readout::shield`) fed with the craft's energy pool | ready once the layout loads |
   | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
   | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | ready (phase 14's value) |
@@ -210,8 +212,8 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   computes feeds `0x0029d578`, a shader constant of the craft's own
   `detonator_bulletgaugesegments` material (an ammo gauge on the hull, 55), not a HUD widget; the
   HUD's `PulseBullets` reads `15` through the whole reload lockout. Open for this phase: the
-  `EmpBarEffect` shader constants, the bullet icons' per-state art (`0x0007f0a0`), and the
-  initial `rm+0x2dee`.
+  `EmpBarEffect` shader constants, the bullet icons' per-state art (`0x0007f0a0`), and what
+  `Detonator_UpdateHud` raises into the generic message lines.
 - **13 End screen.** Read the mode-14 results branch (`ER_DETONATOR_SCORE`,
   `PERCENT_MINES_CLEARED`, stage reached); fill the grid in
   `crates/game/src/app/race_stage/endrace.rs` and `crates/ui-screens`; `just check-strings`.
