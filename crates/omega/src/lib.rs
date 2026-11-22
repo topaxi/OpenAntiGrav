@@ -164,9 +164,13 @@ pub const TITLE: &Title = &Title {
     photo_shot: None,
     // Omega's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
-    // HD's `Ship_SetState` twin is read but not wired here (`ship-destroy.md`): Pulse's
-    // sequence runs until this title is wired.
-    destroyed: oag_title::pre_race::Sourced::chosen(oag_title::destroyed::DestroyedCraft::PULSE),
+    // The `Ship_SetState` twin runs HD's cases 4 to 6 with the same timers
+    // (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, the 2048 and Omega columns).
+    // The destroy camera's mode 9 is unread, so `DestroyedCraft::camera` stays labelled.
+    destroyed: oag_title::pre_race::Sourced::inherited(
+        oag_title::destroyed::DestroyedCraft::HD,
+        "Wipeout HD",
+    ),
     // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
     // "Lineage"); not switched on, because its race cues are a flat pick.
     contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
@@ -295,6 +299,12 @@ pub const TITLE: &Title = &Title {
         sky_brightness: oag_title::Rule {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::Measured,
+        },
+        // `Ship_SelectWreckModel` twin, called in `Ship_SetState` case 4
+        // (`ship-destroy.md`, row 1); every ship directory ships its own `shipwreck.vex`.
+        hull_wreck: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
         // HD's shield law with the cockpit-floored target alpha; the colour is each team's own
         // `ShieldColour` (`docs/ghidra/functions/ps4-omega-eu/shield.md`).
@@ -439,6 +449,24 @@ const EFFECTS: oag_title::Effects = {
             Trigger::WeaponSpark,
             EffectSpec::new(
                 engine_effects::WEAPON_SPARK_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            ),
+        )
+        // `Ship_PlayDestroyExplosion` names `WO_SHIP_EXPLOSION` on entering state 4, and
+        // `ShipDamageFx_Update`'s death branch the plume on state 5; the twins name both
+        // (`ship-destroy.md`, rows 2 and 10). Pulse's two per-locator wreck effects are not
+        // named, so they stay unset.
+        .with(
+            Trigger::WreckExplosion,
+            EffectSpec::new(
+                engine_effects::EXPLOSION_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            ),
+        )
+        .with(
+            Trigger::WreckPlume,
+            EffectSpec::new(
+                engine_effects::DEATH_PLUME_EFFECT,
                 Origin::InheritedFrom("Wipeout HD"),
             ),
         );

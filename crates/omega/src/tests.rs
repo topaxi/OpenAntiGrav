@@ -203,3 +203,18 @@ fn the_sp_event_campaign_resolves_circuits_under_environments_2048() {
         Some(r"Data\Environments2048")
     );
 }
+
+/// The destroyed-craft sequence is HD's `Ship_SetState` twin (`ship-destroy.md`, the 2048 and
+/// Omega columns): `shipwreck.vex` at the blast, `WO_SHIP_EXPLOSION` and the death plume, and
+/// none of Pulse's two per-locator wreck effects.
+#[test]
+fn omega_destroyed_craft_runs_hds_sequence() {
+    use oag_title::Trigger;
+    use oag_title::destroyed::DestroyedCraft;
+    assert_eq!(TITLE.destroyed.value, DestroyedCraft::HD);
+    assert!(TITLE.looks.hull_wreck.applies_everywhere());
+    assert!(TITLE.effect_on(Trigger::WreckExplosion).is_some());
+    assert!(TITLE.effect_on(Trigger::WreckPlume).is_some());
+    assert!(TITLE.effect_on(Trigger::WreckNode).is_none());
+    assert!(TITLE.effect_on(Trigger::WreckSparks).is_none());
+}
