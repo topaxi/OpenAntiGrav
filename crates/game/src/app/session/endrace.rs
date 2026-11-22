@@ -133,6 +133,13 @@ impl Session {
             .and_then(|board| board.player())
             .map(|row| row.place);
         let standing = &stage.race.core.sim.world.ships[0].standing;
+        // Laps flown, for what is paid per lap. A Detonator run destroyed in stage 5 reads
+        // `finished`, which pads the observation's laps to the target (14), where the original
+        // pays on the laps completed (4): the scoreboard's row keeps that count.
+        let laps_flown = match (mode, board.as_ref().and_then(|board| board.player())) {
+            (oag_race::Mode::Detonator, Some(row)) => row.laps_completed,
+            _ => observation.laps_completed,
+        };
         let boosts = stage.race.core.run_stats().boosts_by_lap;
         let laps: Vec<oag_ui_screens::endrace::LapSplit> = (0..oag_race::MAX_RECORDED_LAPS)
             .filter_map(|index| {
@@ -157,7 +164,7 @@ impl Session {
         // always `0`/`false` and `difficulty` always `None` in this build.
         let award = loyalty_award(LoyaltyInputs {
             mode,
-            laps: observation.laps_completed,
+            laps: laps_flown,
             perfect_laps: 0,
             kills: standing.kills,
             zones: u32::from(stage.race.core.sim.world.primary_race().zone),
@@ -188,7 +195,7 @@ impl Session {
             team.clone().map(|team| {
                 let award = hd_award(HdRace {
                     mode,
-                    laps: observation.laps_completed,
+                    laps: laps_flown,
                     kills: standing.kills,
                     zones: u32::from(stage.race.core.sim.world.primary_race().zone),
                     difficulty: stage.campaign_difficulty,

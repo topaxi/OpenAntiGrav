@@ -5,7 +5,7 @@ use oag_ui::language::StringTable;
 use oag_ui::menu::Frame;
 use oag_ui::screen::Screens;
 
-use super::*;
+use crate::endrace::Layout;
 
 /// The real `EndRace Results` in miniature: the grid's `Item` at `(375, 368)`, six rows and the
 /// score line of `Grid0`/`Grid1`, a column no Detonator row uses, and the frame.
@@ -28,6 +28,9 @@ const XML: &str = r#"
 <Text name="RecValue"><Values string="NEW" x="0" y="0"></Values></Text>
 </Item>
 <Text name="Line1"><Values string="race complete!" x="586" y="50"></Values></Text>
+<Item OffsetX="1180" OffsetY="368">
+<Text name="loyalty1.1"><Values string="834 POINTS" x="39" y="72"></Values></Text>
+</Item>
 </Screen>
 "#;
 
@@ -202,6 +205,34 @@ fn the_side_bars_and_the_bottom_bar_take_the_detonator_frame() {
         fills.iter().all(|r| r[3] != 38.0),
         "no highlight row: {fills:?}"
     );
+}
+
+#[test]
+fn the_loyalty_block_draws_beside_the_rows_as_it_does_on_every_other_mode() {
+    let mut with = model(Some(destroyed_in_stage_five()));
+    with.loyalty = Some(crate::endrace::HdLoyalty {
+        award: 150,
+        total: 4_020,
+    });
+    let draws = hd_results_draw_list(
+        &with,
+        &layout(),
+        &skin(),
+        &Frame::default(),
+        &strings(true),
+        None,
+        false,
+        &|_| None,
+    )
+    .body;
+    let texts: Vec<&str> = draws
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, .. } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert!(texts.iter().any(|t| t.starts_with("150")), "{texts:?}");
 }
 
 #[test]

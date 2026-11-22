@@ -13,13 +13,13 @@
 //! (72), and this build keeps no Detonator best score; `RecBlockGrey` would assert "not a
 //! record", so the whole group stays off.
 
-use oag_ui::frontend::Placed;
+use oag_ui::frontend::Draw;
 use oag_ui::language::StringTable;
-use oag_ui::menu::{Frame, Layers, Picture, Skin};
+use oag_ui::screen::{Fill, Screen};
 
 use super::{GRID_HEAD_Y, find_block};
-use crate::endrace::draw::{fill_draw, image_draw, text_draw};
-use crate::endrace::{DetonatorResults, Layout};
+use crate::endrace::DetonatorResults;
+use crate::endrace::draw::fill_draw;
 
 /// `Grid0.r` (label) and `Grid1.r` (value): `x = 40` (`0x42200000`) and `590` (`0x44138000`).
 const LABEL_X: f32 = 40.0;
@@ -35,111 +35,71 @@ const SIDE_BAR_Y: f32 = 29.0;
 const SIDE_BAR_HEIGHT: f32 = 347.0;
 const BOTTOM_BAR_Y: f32 = 391.0;
 
-/// Widgets this layout never writes: the record banner, the loyalty, target and online blocks,
-/// and every grid cell that is not one of the six rows or the score line.
-fn hidden(name: &str) -> bool {
-    name.starts_with("Grid")
-        || name.starts_with("Rec")
-        || name.starts_with("loyalty")
-        || name.starts_with("Target")
-        || matches!(
-            name,
-            "DelayPostMsg" | "ControlTextConfirmButton" | "MedalBlock"
-        )
+/// The Detonator layout of the results grid, beside [`super::RaceGrid`]: what the mode-`0xe`
+/// branch of `0x0022c068` and the filler do to the screen the file authors.
+pub(super) struct DetonatorGrid<'a> {
+    results: &'a DetonatorResults,
+    /// The grid's `Item`: `GridHead1`'s position less its `y = 24`.
+    origin: (f32, f32),
 }
 
-/// The Detonator `EndRace Results`' draw list.
-#[must_use]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "the same eight facts hd_results_draw_list takes"
-)]
-pub(super) fn draw_list(
-    model: &DetonatorResults,
-    layout: &Layout,
-    skin: &Skin,
-    frame: &Frame,
-    strings: &StringTable,
-    backdrop: Option<Picture>,
-    race_behind: bool,
-    sprites: &dyn Fn(&str) -> Option<Placed>,
-) -> Layers {
-    let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
-    let screen = &layout.screen;
-    let Some(head) = find_block(screen, "GridHead1") else {
-        return layers;
-    };
-    let origin = (head.x, head.y - GRID_HEAD_Y);
-    let mut out = Vec::new();
-    for fill in &screen.fills {
+impl<'a> DetonatorGrid<'a> {
+    /// `None` on a screen with no `GridHead1` to anchor the grid on.
+    pub(super) fn of(results: &'a DetonatorResults, screen: &Screen) -> Option<Self> {
+        let head = find_block(screen, "GridHead1")?;
+        Some(Self {
+            results,
+            origin: (head.x, head.y - GRID_HEAD_Y),
+        })
+    }
+
+    /// A frame fill as the Detonator layout draws it: the side bars and the bottom bar moved, the
+    /// row highlight hidden, every other fill as authored.
+    pub(super) fn fill(&self, fill: &Fill) -> Vec<Draw> {
         let moved = |y: f32, height: Option<f32>| {
             let mut moved = fill.clone();
-            moved.y = origin.1 + y;
+            moved.y = self.origin.1 + y;
             if height.is_some() {
                 moved.height = height;
             }
-            fill_draw(&moved)
+            vec![fill_draw(&moved)]
         };
-        out.push(match fill.name.as_deref() {
-            Some("GridStrikeThrough" | "GridHighlight") => continue,
+        match fill.name.as_deref() {
+            Some("GridHighlight") => Vec::new(),
             Some("GridSideBarL" | "GridSideBarR") => moved(SIDE_BAR_Y, Some(SIDE_BAR_HEIGHT)),
             Some("GridBottomBar") => moved(BOTTOM_BAR_Y, None),
-            _ => fill_draw(fill),
-        });
-    }
-    for image in &screen.images {
-        let name = image.name.as_deref().unwrap_or("");
-        if hidden(name) {
-            continue;
-        }
-        if let Some(placed) = sprites(&image.src) {
-            out.push(image_draw(image, placed));
+            _ => vec![fill_draw(fill)],
         }
     }
-    let rows = model.rows();
-    for text in &screen.texts {
-        let name = text.name.as_deref().unwrap_or("");
-        let cell = match name {
-            "Grid0.h" => Some((
-                strings.get_or_id(DetonatorResults::SCORE_LABEL).to_string(),
-                LABEL_X,
-                SCORE_Y,
-            )),
-            "Grid1.h" => Some((model.score_text(), VALUE_X, SCORE_Y)),
-            _ => name
-                .strip_prefix("Grid")
-                .and_then(|rest| rest.split_once('.'))
-                .and_then(|(col, row)| {
-                    Some((col.parse::<usize>().ok()?, row.parse::<usize>().ok()?))
-                })
-                .and_then(|(col, row)| {
-                    let (label, value) = rows.get(row)?;
-                    let y = ROW_TOP + ROW_PITCH * row as f32;
-                    match col {
-                        0 => Some((strings.get_or_id(label).to_string(), LABEL_X, y)),
-                        1 => Some((value.clone(), VALUE_X, y)),
-                        _ => None,
-                    }
-                }),
-        };
-        if let Some((content, x, y)) = cell {
-            let mut positioned = text.clone();
-            positioned.x = origin.0 + x;
-            positioned.y = origin.1 + y;
-            out.push(text_draw(&positioned, &content, layout));
-            continue;
+
+    /// Whether the layout owns `name`: every grid cell and caption, and the record banner, which
+    /// is not drawn at all.
+    pub(super) fn owns(name: &str) -> bool {
+        name.starts_with("Grid") || name.starts_with("Rec")
+    }
+
+    /// A widget's content and position (absolute): the six rows' labels and values and the score
+    /// line. `None` for a widget [`Self::owns`] that this layout never writes (rows six to eight,
+    /// the other columns, the captions, the banner).
+    pub(super) fn cell(&self, name: &str, strings: &StringTable) -> Option<(String, f32, f32)> {
+        let at = |content: String, x: f32, y: f32| (content, self.origin.0 + x, self.origin.1 + y);
+        match name {
+            "Grid0.h" => {
+                let label = strings.get_or_id(DetonatorResults::SCORE_LABEL).to_string();
+                return Some(at(label, LABEL_X, SCORE_Y));
+            }
+            "Grid1.h" => return Some(at(self.results.score_text(), VALUE_X, SCORE_Y)),
+            _ => {}
         }
-        let content = match name {
-            "Line1" => strings.get(DetonatorResults::HEADLINE).map(str::to_owned),
-            _ if hidden(name) => None,
-            _ => text.string.clone(),
-        };
-        if let Some(content) = content {
-            out.push(text_draw(text, &content, layout));
+        let (column, row) = super::grid_slot(name)?;
+        let (label, value) = self.results.rows().into_iter().nth(row)?;
+        let y = ROW_TOP + ROW_PITCH * row as f32;
+        match column {
+            0 => Some(at(strings.get_or_id(label).to_string(), LABEL_X, y)),
+            1 => Some(at(value, VALUE_X, y)),
+            _ => None,
         }
     }
-    layers.body = out;
-    layers
 }
 
 #[cfg(test)]

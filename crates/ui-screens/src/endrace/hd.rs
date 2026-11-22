@@ -94,6 +94,7 @@ use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout};
 
 mod detonator;
 mod podium;
+use detonator::DetonatorGrid;
 pub use podium::{HdPodium, PodiumSlot, hd_podium_draw_list};
 
 #[cfg(test)]
@@ -196,18 +197,6 @@ pub fn hd_results_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
-    if let Some(detonator) = &model.detonator {
-        return detonator::draw_list(
-            detonator,
-            layout,
-            skin,
-            frame,
-            strings,
-            backdrop,
-            race_behind,
-            sprites,
-        );
-    }
     let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();
@@ -220,11 +209,19 @@ pub fn hd_results_draw_list(
         .map(|(index, _)| index)
         .collect();
     let race = RaceGrid::of(model, screen);
+    let detonator = model
+        .detonator
+        .as_ref()
+        .and_then(|results| DetonatorGrid::of(results, screen));
     for fill in &screen.fills {
         // `0x00223f50`, the grid reset every mode's layout runs first,
         // hides `GridStrikeThrough` and nothing this build drives shows it
         // again - a struck-out row this build does not model.
         if fill.name.as_deref() == Some("GridStrikeThrough") {
+            continue;
+        }
+        if let Some(grid) = &detonator {
+            out.extend(grid.fill(fill));
             continue;
         }
         if let Some(race) = &race {
@@ -265,6 +262,16 @@ pub fn hd_results_draw_list(
     }
     for text in &screen.texts {
         let name = text.name.as_deref().unwrap_or("");
+        if let Some(grid) = &detonator
+            && DetonatorGrid::owns(name)
+        {
+            if let Some((content, x, y)) = grid.cell(name, strings) {
+                let mut positioned = text.clone();
+                (positioned.x, positioned.y) = (x, y);
+                out.push(text_draw(&positioned, &content, layout));
+            }
+            continue;
+        }
         if let Some((col, row)) = grid_slot(name)
             && let Some(race) = &race
         {
