@@ -437,7 +437,12 @@ fn a_save_cut_short_leaves_no_half_written_manifest() {
     let _ = std::fs::remove_dir_all(&root);
     oag_io::cut_the_next_write_after(4);
     assert!(write_mod(&root, &built(), &["wipeout-pulse"]).is_err());
-    let folder = std::fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    let folder = std::fs::read_dir(&root)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
     assert!(
         !folder.join(crate::MANIFEST).exists(),
         "the manifest is whole or absent, never a stub"
