@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-22
-summary: "A destroyed craft is wired on Pulse and Pure; HD/Fury's states 4 to 8 are read and ready to wire (ship-destroy.md), 2048/Omega twins read; Zone end unread"
+summary: "Destroyed craft wired on Pulse and Pure; HD/Fury states 4 to 8 read and ready to wire (ship-destroy.md), 2048/Omega twins read; Zone end unread"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
