@@ -2,16 +2,193 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator races 14 stages; mines and bombs bite; cannon, score, own hull, handling and models read, not wired; EMP, auto-speed open"
+summary: "Detonator: 14 stages, mines/bombs laid and biting; cannon, score, own hull/handling/models read, not wired; EMP, auto-speed, HUD, campaign open"
 categories: [rendering]
 ---
 
-# Detonator races its stages without mines, EMP or auto-speed
+# Detonator: the plan, what is landed, and what to do next
 
-2026-11-13, lane `modes-zone-battle-detonator`. `oag_race::Mode::Detonator` races fourteen
-stages, one per lap, on HD, 2048 and Omega (`docs/gameplay/race-modes.md`, "Detonator";
-evidence `docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`). A player sees the stage
-grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
+Written for the next agent. `oag_race::Mode::Detonator` races fourteen stages (one per lap) on
+HD, 2048 and Omega (`docs/gameplay/race-modes.md`, "Detonator"). The work is a 15-phase plan;
+phases 1-7 plus the RE of phases 8 and "8b" (hull) are committed on `main`, nothing is
+uncommitted. Read this file, then `docs/ghidra/functions/ps3-hdfury-eu/detonator-*.md` (the
+evidence), then start at "Next Steps".
+
+## The plan and its status
+
+| # | Phase | Status | Commit |
+| ---: | --- | --- | --- |
+| 1 | Decode the Detonator-only weapon-table attributes (`WeaponStats::detonator()`, `oag_title::Weapons::detonator`) | done | `8f008cf7b` |
+| 2 | End-screen headline `ER_ZDETONATOR_COM` (`Headline::Detonator`; draws on 2048/Omega, nothing on HD: no HD archive has the id) | done | `d890b438a` |
+| 3 | RE: stage placement of mines and bombs (`detonator-placement.md`) | done | `543e8953b` |
+| 4 | Read `PatternFile.xml` / `GamePlayValues.xml` (`oag_tables::detonator_layout`, `oag_title::DetonatorLayouts`, `docs/formats/detonator-layouts.md`) | done | `8a6918978` |
+| 5 | Place mines and bombs (`oag_weapons::detonator::place_stage`, `World::detonator`, `oag_raceplay::detonator`, drawn with the ordinary Mine/Bomb models) | done | `dbb59fd37` |
+| 6 | RE: mine/bomb contact, blast, destruction (`detonator-mine.md`, `detonator-bomb.md`) | done | `57d0847fb` |
+| 7 | Hazards bite: `step_contacts` (damage, velocity cut, bomb push, removal), destroyed craft ends the race; the race loads the Detonator weapon table | done | `6a4c6be71` |
+| 8 | RE: pulse cannon, hits, score, destroyed count, percentage (`detonator-cannon.md`) | done | `0db7e825c` |
+| 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
+| **8b** | **Wire the hull, handling, mine, bomb and pad models** | **next (recommended before 9)** | |
+| 9 | Wire the cannon, score, destroyed count and percentage | next | |
+| 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
+| 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
+| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | open | |
+| 13 | End screen proper (score, percentage, stage rows) | open | |
+| 14 | Campaign launch (`race_mode_for_cell` refuses `Other("Detonator")`) | open; do not ship before 9 | |
+| 15 | Omega and 2048 parity leftovers | open | |
+
+A race can already be launched from the command line:
+`oag-game --race --mode detonator [--autopilot --ticks N] data/images/hdfury-ps3-eu-dec.iso`
+(HD EU disc in `data/images/`). Menu launch is phase 14.
+
+## What a player gets today (HD)
+
+14 stages; each stage lays up to its `MineCountStage` mines and at most one bomb; a craft within
+a mine's trigger sphere loses 10 energy and half its speed, a bomb costs 20 and pushes; energy
+at zero ends the race. Drawn with the **ordinary** Mine and Bomb models, no effects or sounds on
+explosions, the team's race hull flying **Zone's** handling, the time trial's HUD, no cannon,
+no score, no percentage, no EMP, no auto-speed.
+
+## Working rules learned the hard way
+
+- Docs-only RE phases go to a `worker` subagent (`model anthropic/claude-opus-5-5`, sync) with a
+  self-contained brief; check `just check-docs check-names check-handover check-status` (run
+  `just gen-status` after new `names.tsv` rows), then commit docs separately from code.
+- Each code phase: `cargo fmt --all`, `just lint`, `just gate-affected`, then
+  `just test-data-affected`. **Three `portuguese_br_ground_truth` tests in `oag-raceplay` fail on
+  a clean checkout; ignore them.** Run ignored ground-truth tests with
+  `cargo test -p oag-raceplay --profile quick --test it_a_g -- --ignored detonator_ground_truth`.
+- `oag-tables` integration tests live under `tests/it.rs` (add modules, not files).
+- **`World` size ratchet** (`crates/gameplay/src/world.rs`, `the_world_snapshot_does_not_grow`):
+  raise `LIMIT` with a comment line naming the field. `World::detonator` hashes only when
+  non-empty (`hash.rs::write_detonator`), so determinism references do not move: keep any new
+  Detonator state empty/zero outside the mode, and never edit the reference constants.
+- Mark a stand-in "chosen, not measured"; every RE claim needs a confidence (CLAUDE.md).
+- The autopilot flies through mines and dies or crawls: ground-truth tests about stages use
+  `dodge`/`keep_alive` in `crates/raceplay/tests/detonator_ground_truth.rs`.
+- Scratch `#[ignore]` tests must be removed before committing.
+
+## Where the code is
+
+- `crates/tables/src/weapons/detonator.rs`, `detonator_layout.rs`: tables.
+- `crates/title/src/{weapons,race}.rs`: `Weapons::detonator`, `Detonator`, `DetonatorLayouts`
+  (entries wired in `crates/{hd,2048,omega}/src/race.rs`).
+- `crates/weapons/src/detonator.rs` (+ `detonator/tests.rs`): `Field`, `Placed` (an entry index
+  and a lane; position comes from `Survey::point`), `place_stage`, `Contact`, `step_contacts`.
+- `crates/raceplay/src/detonator.rs`: the lap survey (collision probes, **chosen**),
+  `advance_detonator` (contact, then stage laying; called after `update_standings` in `tick.rs`),
+  `detonator_mine_position` (tests); `assets.rs::{load_weapons, load_detonator_layout}`;
+  `weapons/visuals.rs` (`detonator_matrices`, `detonator_matrix`); `scene/weapon_models.rs`.
+- `crates/gameplay/src/{world,hash}.rs`: `World::detonator`.
+
+## Next Steps
+
+### Phase 8b: hull, handling, models (small, all data read)
+
+Source of truth: `detonator-hull.md` (and the "Own hull..." bullet under Open). Do in this order:
+
+1. **Handling.** `/data/ships/detonator/handlingstats.xml` (2048/Omega
+   `.../hdships/Detonator/handlingstats.xml`, same bytes) instead of Zone's for `Mode::Detonator`.
+   Today `load/sim.rs` applies `ZONE_HANDLING` to every `Mode::on_zone_mask` mode (~l.159,
+   ~l.502); add a Detonator entry on the title data (a `Title` axis, ADR-0058: no
+   `title.name ==` branching, `just check-title-branching`). The hover rig and no brakes stay the
+   mask's; engine lights stay Zone's.
+2. **Hull and livery.** `ZoneCraft` (`oag_title::race::zone_circuit`/`race.rs`,
+   `ShipPaths::hull_entry_name(team, zone: bool, ..)`) is Zone-only and `zone: bool` is threaded
+   through `raceplay/src/load/{zone_livery,skin,muzzle,roster/model_livery,view}.rs`,
+   `oag_livery` (`zone_livery::swap`, `entry.rs`, `lib.rs` mode field) and `oag_game::preview`.
+   Generalise it to a per-mode craft (`Zone` | `Detonator`): hull
+   `/data/ships/detonator/ship.vex`, livery swap `zoneship_zone` -> the team's
+   `PI_TeamModel name="detonator"` `texturelocation`, fallback `zoneship_faisar`; wreck, death
+   shell, locators, engine flare, `absorbeffect` from that folder; no LOD/leach/shield. Omega's
+   key is `zoneship_team`. Start by reading how `Mode::Zone` reaches each of those callers
+   (`rg 'Mode::Zone' crates/raceplay/src/load crates/livery crates/game/src/preview*`).
+3. **Models.** Mine = `/data/weapons/mine_rita_football` + `mine_rita_spikes` +
+   `electric_visualiser` (the visualiser is music-driven: draw the first two, say so);
+   Bomb = `detonator_bomb_final` + `_final_equalisers` + `_glowedges`;
+   pads = `/data/new_mode_pads/detonator_pad/detonator_pad` on every speed and weapon pad.
+   `weapons/visuals.rs::{mine,bomb}_model_matrices` feed the race Mine/Bomb pools today; give
+   Detonator objects their own model pools in `scene/weapon_models.rs`.
+4. Ground truth on HD (hull entry resolves, handling parses, models load); 2048/Omega entry
+   resolve checks like `the_detonator_layout_entries_resolve` in `crates/2048/tests/patch_ground_truth.rs`
+   and `crates/omega/tests/omega_title_ground_truth.rs`.
+
+### Phase 9: the cannon, score, percentage (design worked out, nothing written)
+
+Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made:
+
+- **Tables:** add `Scoring` + `parse_scoring` to `oag_tables::detonator_layout` for
+  `Data\XML\DetonatorScoring.xml` (`<Bullet multiplier new_mine_score old_mine_score
+  bomb_hit_score bomb_score bomb_increment>`, `<Emp new_mine_score old_mine_score bomb_score>`;
+  disc: 1.0,100,50,0,2000,500 / 50,25,1000), entry name `DetonatorLayouts::scoring` on HD, 2048,
+  Omega (same file on all three; resolve-check like the layout files), loaded in
+  `assets::load_detonator_layout` into `oag_weapons::detonator::Layout`. Note
+  `GamePlayValues::default()` has `cannon_lockout_*` and `bomb_chain_reaction_distance` at 0.0;
+  the disc authors 0.75 / 0.75 / 5000 (the chain radius is `sqrt(5000)`, a squared distance).
+- **Placed gains `live: bool`** (laid this stage; fits the 4 bytes) and `place_stage` darkens
+  every surviving mine first (`MineManager_DarkenAll`): a shot live mine scores `100 * m`, dark 50.
+- **State** in `Field` (stay `Copy`, `const fn new`, hash when non-empty, add an `armed` flag
+  so a non-Detonator `Field` stays empty): clip (15), trigger timer, ready, lockout and its
+  total, reload-pending streak reset, ring index and `hits[30]`, streak award latches, 30 rounds
+  (`pos, prev, vel, up, normal, age, rebounds, slot, dead`), per-bomb hit counts (swap with the
+  bomb array on removal), score (i32), `m_mine`, `m_chain`, bombs-shot `n`, mines-destroyed and
+  bombs-destroyed counters, trigger-held ticks. Raise the `World` ratchet (~2 KiB).
+- **Inputs:** fire = `Button::Square` held, reload = `Button::Circle` (pressed; edge-vs-level
+  unread, **chosen**), slot 0 only; pass the snapshot into `advance_detonator`
+  (`tick.rs` ~l.557 has `inputs`). Use weapons-on damage rules as `step_contacts` does. A
+  Detonator-only fixed-weapon gate: do not flip `Mode::weapons_enabled()` (asserted false).
+- **Rounds:** `step_cannon` generic over `Craft` with a sweep closure
+  `Fn(Vec3, Vec3) -> Sweep {None, Floor{point,normal}, Wall{point,normal}}`; raceplay builds it
+  from `CollisionWorld::raycast` (`Surface::Wall` = wall, `Floor`/`MagFloor` = floor, `Reset`
+  ignored). Probe 9.0 down the surface normal and ride 3.5; velocity rebuilt to
+  `unit(forward perp up) * 500`; one wall reflection (`-2.0`, `+3.0` out); life 1.0 s; capsule
+  hit radius = the object's `trigger_radius`; mine/bomb loops do not stop at a hit; a bomb takes
+  `number_of_shots_to_destroy` (4) hits, the 4th removes it harmlessly and chains mines within
+  `sqrt(5000)` (scored, **not** counted). Count `destroyed_mines` for direct mine hits only.
+- **Muzzles:** from `locators.vex`'s `cannon_flash_left/right` in the Detonator hull folder
+  once phase 8b lands (do 8b first); until then offset from the craft by its dimensions
+  (**chosen**).
+- **Percentage:** `destroyed_mines / sum(MineCountStage1..14) * 100` in f32 (`1860` on the disc),
+  exposed from raceplay for the end screen; streaks 5/10/15 pay 1000/3000/5000 per
+  `detonator-cannon.md`.
+- Unread, keep as noted: `EnergyRechargePerStage` (10 on the disc; spent each stage step,
+  `detonator-placement.md`, 60: not wired), the 0.5 s owner grace, the `+0x200000` clean-lap
+  `+1000`, the bomb-ahead warning (HUD message 8).
+- Tests: unit (shots to destroy, score adds, streaks, percentage, rebound, reload) in
+  `crates/weapons/src/detonator/tests.rs` (extract a `cannon` submodule; the file is ~600 lines,
+  the limit is 1,500, inline test mods 500); an HD ground-truth test (fire while standing in a
+  field: score monotonic, destroyed count > 0); a hash test that a fired round moves the hash.
+  Draw the rounds with `detonator_cannonbolt` once 8b has the models.
+
+### Phases 10-15 (from the original plan)
+
+- **10 EMP.** RE first (docs-only): the writer of `craft+0x6a64 & 0x8000000`, the EMP pad source
+  (HD `data/new_mode_pads/detonator_pad`, 2048 `Detonator_Pad`), `table+0x1bc` (an `EmpStats`
+  field), `EMPManager` update (what firing clears and scores: `Emp` score values are read), the
+  gauge `craft+0x7da0` (law read, 70: `(n - (hi - lo)) / (hi - lo)` clamped to 1, `EMPREADY` /
+  `EMPFULL` edge cues). Then wire pad detection (`raceplay/src/pads.rs`), gauge, fire input
+  (`in+0x1c`), cues as per-tick outputs (ADR-0018). `MineManager_DestroyAtLane` /
+  `BombManager_DestroyAtLane` are the kill callers. Gates add `check-weapon-lineage`.
+- **11 Auto-speed.** RE what mode `0xe` does under mask `0x206040` in `Craft_Update` (does it use
+  Zone's start/increment law keyed on the stage?). Do not borrow Zone's law without the read.
+  Wire through a `Title` data axis (`start.rs` ~l.668, `player_step.rs` ~l.228,
+  `pilot_assist.rs` is Zone-gated: check). Ground-truth: a coasting craft reaches speed.
+- **12 HUD.** RE the widget bindings for mode 14, then `HudLayouts` gains a Detonator layout
+  (HD/Omega `/data/xml/detonator_hud.xml`, 2048 `Data\XML\Detonator_HUD.xml`), bound to the state
+  from phases 5-10; atlas `detonator_hud2` (`raceplay/src/hud.rs`). Files:
+  `crates/title/src/hud.rs`, `crates/{hd,2048,omega}/src/hud.rs`, `crates/hud`.
+- **13 End screen.** Read the mode-14 results branch (`ER_DETONATOR_SCORE`,
+  `PERCENT_MINES_CLEARED`, stage reached); fill the grid in
+  `crates/game/src/app/race_stage/endrace.rs` and `crates/ui-screens`; `just check-strings`.
+- **14 Campaign.** `crates/game/src/campaign.rs::race_mode_for_cell` maps `Other("Detonator")` to
+  `Mode::Detonator` (HD Fury grids `grid_08`..`grid_15`, 14 cells; Omega; 2048 DLC), the medal
+  value arm in `RaceStage::campaign_tier` is the Detonator score (counting mode, `>=`); update the
+  campaign ground-truth tests and `docs/formats/race-campaign.md`.
+- **15 Parity.** Omega race-start placement call, stage cap into `craft+0x5e4`, grade drawing;
+  2048 per-stage `.gxt` textures.
+
+Overall risks: most of EMP, auto-speed and the HUD is unread (RE-first, may need Ghidra
+AltiVec workarounds: `llvm-objdump -d --mattr=+altivec,+vsx` and `scripts/ps3-toc.py`); the
+placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
 
@@ -158,19 +335,3 @@ value (the original passes `param_1[0xb22]` there, a `u16` off the race record, 
 label is its Elimination; but `TrackStartup_Read`'s Combat board test `FUN_812b0880(mode, 1)`
 (`track-startup-sound-bank.md`) is unread, so which mode id picks `321Go_2048_Combat.vex` is
 not known. Read `FUN_812b0880` before mapping the board to `Mode::Eliminator` on 2048.
-
-## Next Steps
-
-1. Phase 4: read `PatternFile.xml` and `GamePlayValues.xml` (census on HD `DATA00`, 2048
-   `data.psarc`, Omega `data00.psarc`), name them on `oag_title::Detonator`.
-2. Phase 7: wire the contact law from `detonator-mine.md`/`detonator-bomb.md` (damage, velocity
-   cut, push, removal, the stage-step bomb detonation, the out-of-race end).
-3. Phase 9: wire the pulse cannon from `detonator-cannon.md` ("What the simulation needs"): a
-   Detonator-only fixed-weapon flag (pickups stay off), a 30-round pool, the trigger/clip/lockout,
-   the round's track-skimming motion and one rebound, the capsule hit test, bomb hit counts and
-   the chain reaction, the score into a Detonator score, the destroyed counters and the end
-   percentage. Needs a reader for `/data/xml/DetonatorScoring.xml` in `oag-tables` and its entry
-   name on `oag_title::Detonator` (HD `DATA00` `data/xml/detonatorscoring.xml`, 2048 `data.psarc`,
-   Omega `data00.psarc`).
-4. Read Detonator's engine branch for the auto-speed law.
-5. Zone Battle: the read recipe above.
