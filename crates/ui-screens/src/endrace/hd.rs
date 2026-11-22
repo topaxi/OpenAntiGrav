@@ -92,6 +92,7 @@ use super::draw::{
 use super::pointer::Target;
 use super::{EndRaceMenu, FieldResults, HdRewards, Headline, Layout};
 
+mod detonator;
 mod podium;
 pub use podium::{HdPodium, PodiumSlot, hd_podium_draw_list};
 
@@ -195,6 +196,18 @@ pub fn hd_results_draw_list(
     race_behind: bool,
     sprites: &dyn Fn(&str) -> Option<Placed>,
 ) -> Layers {
+    if let Some(detonator) = &model.detonator {
+        return detonator::draw_list(
+            detonator,
+            layout,
+            skin,
+            frame,
+            strings,
+            backdrop,
+            race_behind,
+            sprites,
+        );
+    }
     let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     let screen = &layout.screen;
     let mut out = Vec::new();

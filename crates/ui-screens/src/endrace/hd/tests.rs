@@ -117,6 +117,7 @@ fn grid_slot_matches_only_the_numeric_column_dot_row_names() {
 #[test]
 fn grid_cell_text_reads_place_and_time_and_nothing_past_column_one() {
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![
@@ -164,6 +165,7 @@ fn row_y_steps_down_from_the_grid_s_own_measured_top() {
 #[test]
 fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![FieldRow {
@@ -216,6 +218,7 @@ fn results_draws_only_the_two_captioned_columns_and_the_resolved_headline() {
 #[test]
 fn results_repositions_the_highlight_onto_the_player_s_row() {
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::TimeTrial,
         rows: vec![
@@ -296,6 +299,7 @@ fn menu_draws_only_the_options_the_model_actually_lists() {
 #[test]
 fn results_uses_hds_own_place_idstring_and_never_leaks_the_target_or_loyalty_placeholders() {
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Position(1),
         rows: vec![FieldRow {
@@ -490,6 +494,7 @@ fn results_draws_the_loyalty_block_off_the_award_and_the_total() {
     );
     let draw = |loyalty| {
         let model = FieldResults {
+            detonator: None,
             loyalty,
             headline: Headline::Position(1),
             rows: Vec::new(),
@@ -550,6 +555,7 @@ fn unnamed_loyalty_blocks_draw_as_blocks_with_their_label_inset() {
     )
     .unwrap();
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Position(1),
         rows: Vec::new(),
@@ -593,6 +599,7 @@ fn a_two_person_race_names_and_highlights_each_person() {
         team: None,
     };
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Several,
         rows: vec![row(1, Some(1)), row(2, Some(2))],
@@ -643,6 +650,7 @@ fn a_named_person_is_drawn_by_name() {
         team: None,
     };
     let model = FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Several,
         rows: vec![row(1, 1, Some("Ada")), row(2, 2, None)],

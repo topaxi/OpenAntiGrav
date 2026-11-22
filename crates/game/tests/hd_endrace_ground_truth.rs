@@ -109,6 +109,7 @@ fn a_finished_hd_race_reaches_endrace_results_with_the_field_populated() {
         &oag_game::results_tables::team_keys(oag_hd::TITLE, race.core.slot_teams()),
     );
     let model = oag_ui_screens::endrace::FieldResults {
+        detonator: None,
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(
             rows.iter()
@@ -218,6 +219,7 @@ fn results_texts(
         &oag_game::results_tables::team_keys(oag_hd::TITLE, race.core.slot_teams()),
     );
     let model = oag_ui_screens::endrace::FieldResults {
+        detonator: None,
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(
             board.player().map_or(1, |row| row.place),
@@ -394,6 +396,7 @@ fn hd_endrace_results_draws_its_confirm_prompt_despite_the_malformed_tag() {
         22.0,
     );
     let model = oag_ui_screens::endrace::FieldResults {
+        detonator: None,
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(1),
         rows: vec![oag_ui_screens::endrace::FieldRow {
@@ -440,6 +443,148 @@ fn english(archives: &mut oag_assets::Archives) -> oag_ui::language::StringTable
     oag_ui::language::StringTable::from_xml(
         &oag_tables::fexml::text(&blob).expect("entries.xml is text"),
     )
+}
+
+/// **A Detonator run destroyed in stage 5** reaches `EndRace Results` as the original's six rows
+/// and score line: `4 / 14` laps completed (not the HUD stage, which reads 5), the mines cleared
+/// as a percentage of the disc's `1860`, the bombs as a count over `14`, the three chain counts
+/// and the score, under `DETONATOR SESSION COMPLETE!` - a headline and labels that HD's served
+/// table lacks and `DATA06`'s carries. A real race, the real scoreboard, the real definition.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn a_detonator_run_destroyed_in_stage_five_draws_four_of_fourteen_and_its_session_rows() {
+    const LONE: usize = 0;
+    let Some(image) = image() else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        ..race::Options::default()
+    })
+    .expect("loading an HD Detonator race");
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.set_autopilot(true);
+    // Flown alive and through a swept field up to stage 5 (four laps completed), then onto the
+    // mines until the craft is destroyed.
+    for _ in 0..CAP * 3 {
+        race.tick(&PlayerInputs::none());
+        if race.core.sim.detonator_stage() == Some(5) || race.core.sim.finished() {
+            break;
+        }
+        let ship = &mut race.core.sim.world.ships[LONE];
+        ship.physics.shield = ship.handling.dimensions.shield;
+        race.core.sim.world.detonator.live_mines = 0;
+    }
+    assert_eq!(race.core.sim.detonator_stage(), Some(5), "reached stage 5");
+    for _ in 0..400 {
+        if race.core.sim.finished() {
+            break;
+        }
+        if let Some(at) = race.core.sim.detonator_mine_position(0) {
+            let body = &mut race.core.sim.world.ships[LONE].physics.body;
+            body.position = at;
+            body.linear_velocity = oag_core::math::Vec3::ZERO;
+        }
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(race.core.sim.finished(), "the wreck ended the race");
+
+    let board = race.core.results().expect("a finished race has results");
+    let results = oag_game::results_tables::detonator_results(&race.core.sim, Some(board))
+        .expect("a Detonator race has its rows");
+    assert_eq!(results.stage, 4, "laps completed, not the HUD stage");
+    assert_eq!(
+        race.core.sim.detonator_stage(),
+        Some(5),
+        "the HUD still reads stage 5 where the row reads 4"
+    );
+    assert_eq!(
+        Some(results.mines_percent),
+        race.core.sim.detonator_percentage()
+    );
+
+    let source = image.display().to_string();
+    let mut archives = open_hd_archives(&source);
+    let mut strings = english(&mut archives);
+    assert!(
+        strings
+            .get(oag_ui_screens::endrace::DetonatorResults::HEADLINE)
+            .is_none(),
+        "the served table has no Detonator ids"
+    );
+    strings.fill(oag_game::campaign::hd_data06_strings(
+        &mut archives,
+        r"Data\Plugins\Languages\English\entries.xml",
+        &oag_ui_screens::endrace::DetonatorResults::IDS,
+    ));
+    let screens = oag_game::endrace::load(
+        &mut archives,
+        &strings,
+        oag_ui_screens::picker::FaceScales::default(),
+        oag_hd::endrace::AUTHORED_GRID,
+        &oag_hud::sprite::Sheet::default(),
+        &[],
+        oag_hd::TITLE,
+    )
+    .expect("HD's own EndRace Results read off the real disc");
+    let model = oag_ui_screens::endrace::FieldResults {
+        detonator: Some(results),
+        loyalty: None,
+        headline: oag_ui_screens::endrace::Headline::Detonator,
+        rows: oag_game::results_tables::field_rows(
+            Some(board),
+            &oag_game::results_tables::team_keys(oag_hd::TITLE, race.core.slot_teams()),
+        ),
+    };
+    let skin = oag_ui::menu::Skin::new(
+        oag_hd::frontend::FRONT_END
+            .menu
+            .expect("HD authors a MenuSkin"),
+        oag_display::space::Space::PSP,
+        22.0,
+    );
+    let texts: Vec<String> = oag_ui_screens::endrace::hd::hd_results_draw_list(
+        &model,
+        &screens.results,
+        &skin,
+        &oag_ui::menu::Frame::default(),
+        &strings,
+        None,
+        false,
+        &|_| None,
+    )
+    .body
+    .iter()
+    .filter_map(|draw| match draw {
+        oag_ui::frontend::Draw::Text { text, .. } => Some(text.clone()),
+        _ => None,
+    })
+    .collect();
+    for wanted in [
+        "DETONATOR SESSION COMPLETE!",
+        "STAGE CLEARED",
+        "4 / 14",
+        "MINES CLEARED",
+        "BOMBS CLEARED",
+        "NUMBER OF 5 CHAINS",
+        "NUMBER OF 10 CHAINS",
+        "NUMBER OF 15 CHAINS",
+        "TOTAL SCORE",
+    ] {
+        assert!(texts.iter().any(|t| t == wanted), "{wanted:?} in {texts:?}");
+    }
+    assert!(
+        texts.contains(&format!("{:.1}%", results.mines_percent)),
+        "{texts:?}"
+    );
+    assert!(texts.contains(&results.score.to_string()), "{texts:?}");
+    // None of the field grid's cells: no place, no time, no team.
+    assert!(
+        !texts.iter().any(|t| t == &strings.get_or_id("ER_RACING")),
+        "{texts:?}"
+    );
 }
 
 /// `EndRace Rewards` off the real disc's own definition and string table:
@@ -722,6 +867,7 @@ fn an_eight_craft_hd_results_grid_clears_its_own_bottom_bar() {
         })
         .collect();
     let model = oag_ui_screens::endrace::FieldResults {
+        detonator: None,
         loyalty: None,
         headline: oag_ui_screens::endrace::Headline::Position(5),
         rows,

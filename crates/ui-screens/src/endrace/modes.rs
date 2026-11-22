@@ -132,6 +132,75 @@ impl ZoneResults {
     }
 }
 
+/// HD/Fury's and Omega's Detonator results: six label/value rows and a score line, filled from the
+/// race manager's stats block (`docs/ghidra/functions/ps3-hdfury-eu/detonator-endrace.md`,
+/// `EndRaceResults_FillDetonatorRows`, 80). A destroyed run and a finished one print the same rows.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DetonatorResults {
+    /// Laps completed (`craft+0x7810 - 1`, `0..=99`): the stage row, **not** the HUD's stage.
+    pub stage: u32,
+    /// Mines cleared, `0..=100` (`destroyed / sum(MineCountStage1..14) * 100`, an `f32`).
+    pub mines_percent: f32,
+    /// Bombs destroyed: a count, truncated to a `u16` as the original stores it.
+    pub bombs: u32,
+    /// The five, ten and fifteen chain awards paid over the race.
+    pub chains: [u16; 3],
+    /// The score.
+    pub score: i32,
+}
+
+impl DetonatorResults {
+    /// The stage row's denominator: a literal in the original (`li r6,0xe`), not the table's
+    /// stage count.
+    pub const STAGES: u32 = 14;
+    /// The score line's label.
+    pub const SCORE_LABEL: &'static str = "ER_DETONATOR_SCORE";
+    /// `Line1`'s idstring, through the localising setter.
+    pub const HEADLINE: &'static str = "ER_ZDETONATOR_COM";
+    /// Every id the screen speaks: `Line1`, the six row labels and the score label. HD's served
+    /// table lacks them; `DATA06`'s carries them ([`Self::rows`] names the labels).
+    pub const IDS: [&'static str; 8] = [
+        Self::HEADLINE,
+        "ER_DETONATOR_STAGE",
+        "PERCENT_MINES_CLEARED",
+        "PERCENT_BOMBS_CLEARED",
+        "ER_NUM_5_STREAKS",
+        "ER_NUM_10_STREAKS",
+        "ER_NUM_15_STREAKS",
+        Self::SCORE_LABEL,
+    ];
+
+    /// The six rows in screen order: the label's idstring and the value as the original's
+    /// `sprintf` prints it (`%d / %d`, `%.1f%%`, `%i / %i`, `%d` three times).
+    #[must_use]
+    pub fn rows(&self) -> [(&'static str, String); 6] {
+        let [fives, tens, fifteens] = self.chains;
+        [
+            (
+                "ER_DETONATOR_STAGE",
+                format!("{} / {}", self.stage.min(99), Self::STAGES),
+            ),
+            (
+                "PERCENT_MINES_CLEARED",
+                format!("{:.1}%", self.mines_percent),
+            ),
+            (
+                "PERCENT_BOMBS_CLEARED",
+                format!("{} / {}", self.bombs as u16, Self::STAGES),
+            ),
+            ("ER_NUM_5_STREAKS", fives.to_string()),
+            ("ER_NUM_10_STREAKS", tens.to_string()),
+            ("ER_NUM_15_STREAKS", fifteens.to_string()),
+        ]
+    }
+
+    /// The score line's value (`%d`).
+    #[must_use]
+    pub fn score_text(&self) -> String {
+        self.score.to_string()
+    }
+}
+
 /// The Eliminator table's `Line1`: `"%s %s"` of `ER_ELIM_COM` and the place's
 /// ordinal. `ER_ELIM_COM` ends in a space, so the two spaces on screen are the
 /// original's. Blank outside places 1-8, as the original's switch leaves it.

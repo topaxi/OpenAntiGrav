@@ -700,6 +700,7 @@ fn hd_endrace_page(
         EndRaceKind::Touch(_) => anyhow::bail!("a touch page is drawn before this point"),
         EndRaceKind::Results => {
             let model = oag_ui_screens::endrace::FieldResults {
+                detonator: None,
                 // **Chosen, not measured**: a capture has no race behind it, so
                 // these are `oag_hd::loyalty`'s own three-lap single race on
                 // the medium rung (`3 * 15 * 3`) banked onto a team that
@@ -744,6 +745,7 @@ fn hd_endrace_page(
         EndRaceKind::PeopleResults | EndRaceKind::OnlineResults => {
             let rows = crate::results_tables::field_rows(Some(&two_person_board(online)), &[]);
             let model = oag_ui_screens::endrace::FieldResults {
+                detonator: None,
                 loyalty: None,
                 headline: oag_ui_screens::endrace::Headline::Several,
                 rows,
@@ -840,6 +842,7 @@ fn hd_endrace_page(
                 ("Piranha", 42, 1, false),
             ];
             let model = oag_ui_screens::endrace::FieldResults {
+                detonator: None,
                 loyalty: None,
                 headline: oag_ui_screens::endrace::Headline::Position(2),
                 rows: field

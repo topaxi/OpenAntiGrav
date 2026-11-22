@@ -352,7 +352,13 @@ impl Session {
                 board.as_ref(),
                 &crate::results_tables::team_keys(title_ref, stage.race.core.slot_teams()),
             );
+            let detonator = (mode == oag_race::Mode::Detonator && !split)
+                .then(|| {
+                    crate::results_tables::detonator_results(&stage.race.core.sim, board.as_ref())
+                })
+                .flatten();
             ResultsModel::Hd(oag_ui_screens::endrace::FieldResults {
+                detonator,
                 headline: if split {
                     oag_ui_screens::endrace::Headline::Several
                 } else if let Some(place) = scored_place {

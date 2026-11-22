@@ -66,6 +66,7 @@ fn row(index: u8, team: &str, points: u32, kills: u32, player: bool) -> FieldRow
 
 fn model(scores: [u32; 3]) -> FieldResults {
     FieldResults {
+        detonator: None,
         loyalty: None,
         headline: Headline::Position(2),
         rows: vec![

@@ -75,8 +75,8 @@ pub use draw::{
     tournament_results_draw_list,
 };
 pub use modes::{
-    EliminationResults, EliminationRow, ZoneResults, elimination_results_draw_list,
-    zone_results_draw_list,
+    DetonatorResults, EliminationResults, EliminationRow, ZoneResults,
+    elimination_results_draw_list, zone_results_draw_list,
 };
 pub use people::{PeopleResults, PersonName, PersonRow, people_results_draw_list};
 pub use split::{RESULTS_SPLIT, REWARDS_SPLIT, split_results_draw_list};
@@ -338,7 +338,7 @@ pub struct FieldScore {
 /// [`Headline`] Pulse's screen resolves, reused onto HD's own placeholder
 /// `Line1` - see [`hd`]'s module doc for why that is a chosen substitution
 /// rather than a measured one) and the whole field, ordered by place.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FieldResults {
     pub headline: Headline,
     pub rows: Vec<FieldRow>,
@@ -346,6 +346,9 @@ pub struct FieldResults {
     /// `loyalty2`). `None` draws neither - a race with no team behind it has
     /// no total to show, and the disc's own placeholder text never draws.
     pub loyalty: Option<HdLoyalty>,
+    /// A Detonator run: its six rows and score line replace the field grid
+    /// ([`hd::hd_results_draw_list`]). `rows` still carries the field, for the board's retake.
+    pub detonator: Option<DetonatorResults>,
 }
 
 impl FieldResults {

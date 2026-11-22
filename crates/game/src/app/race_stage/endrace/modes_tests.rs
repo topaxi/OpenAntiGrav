@@ -159,3 +159,15 @@ fn a_two_leg_tournament_scores_every_slot_and_carries_the_totals() {
     );
     assert!(page.standings[0].player);
 }
+
+/// The HD results model carries a Detonator run's rows: the session builds them off the race
+/// and the scoreboard (`crate::results_tables::detonator_results`), and the screen draws them in
+/// place of the field grid. Dropping the call leaves the headline over the time-trial grid.
+#[test]
+fn the_session_fills_the_detonator_rows_for_an_hd_detonator_race() {
+    let source = include_str!("../../session/endrace.rs");
+    assert!(
+        source.contains("results_tables::detonator_results("),
+        "build_endrace must build FieldResults::detonator"
+    );
+}

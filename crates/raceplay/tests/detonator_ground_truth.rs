@@ -129,6 +129,12 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
         "one stage per lap, 1 to 15"
     );
     assert_eq!(race.core.sim.world.race[LONE].laps_completed(), 14);
+    // The end screen's stage row reads the scoreboard: a finish pads to the target.
+    let board = race.core.results().expect("a finished race has a board");
+    assert_eq!(board.player().map(|row| row.laps_completed), Some(14));
+    // And the counters it prints exist on a Detonator race and nowhere else.
+    assert_eq!(race.core.sim.detonator_destroyed_bombs(), Some(0));
+    assert_eq!(race.core.sim.detonator_chains(), Some([0, 0, 0]));
 }
 
 /// A title's own Detonator table reaches the cannon: holding Square past the green light spends a
