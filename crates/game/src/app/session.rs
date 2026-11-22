@@ -116,6 +116,8 @@ pub(crate) struct Session {
     /// The on-screen racing controls and the Android pad's stick. See
     /// `crate::app::touch`.
     pub(crate) touch_overlay: crate::app::touch::Overlay,
+    /// Fingers as camera gestures, read by photo mode and the replay viewer.
+    pub(crate) gestures: oag_input::gesture::Gestures,
     /// The mixer, and the device behind it when this run has one.
     ///
     /// Beside `controls` because it is the same kind of thing: a device that

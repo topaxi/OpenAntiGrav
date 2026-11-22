@@ -6,6 +6,8 @@
 //! Everything is in the overlay grid, over the surface, as photo mode's screen is
 //! (`crate::photo`). **Chosen, not measured:** the layout and the words.
 
+pub mod touch_layout;
+
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::hints::Entry;
 
@@ -27,6 +29,7 @@ pub mod strings {
     pub const HUD: &str = "OAG_REPLAY_HUD";
     pub const SCRUB: &str = "OAG_REPLAY_SCRUB";
     pub const JOG: &str = "OAG_REPLAY_JOG";
+    pub const CAMERA: &str = "OAG_REPLAY_CAMERA";
 }
 
 /// A line of text over whatever is on screen, in a band across the middle of `grid`: what a
@@ -74,6 +77,14 @@ pub enum Control {
     Exit,
     /// The bar: a click seeks to where it lands.
     Bar,
+    /// The race's HUD, on or off (touch layout only).
+    Hud,
+    /// The next camera view (touch layout only).
+    Camera,
+    /// The previous craft (touch layout only).
+    Previous,
+    /// The next craft (touch layout only).
+    Next,
 }
 
 /// The chips, in order.
@@ -325,7 +336,9 @@ pub fn draw_list(
             Control::Speed => speed_label(view.speed),
             Control::Photo => say(strings::PHOTO),
             Control::Exit => say(strings::EXIT),
-            Control::Bar => String::new(),
+            Control::Bar | Control::Hud | Control::Camera | Control::Previous | Control::Next => {
+                String::new()
+            }
         };
         list.push(Draw::Fill { rect, color: BAND });
         list.push(text(
@@ -335,6 +348,28 @@ pub fn draw_list(
             Align::Centre,
         ));
     }
+    list.extend(banners(view, grid, say, y + h));
+    list
+}
+
+/// The opening line, the mismatch banner and the end line, under `bar_bottom`.
+fn banners(
+    view: &View,
+    grid: (f32, f32),
+    say: &dyn Fn(&str) -> String,
+    bar_bottom: f32,
+) -> Vec<Draw> {
+    let text = |x: f32, y: f32, text: String, align: Align| Draw::Text {
+        x,
+        y,
+        scale: SCALE,
+        color: TEXT,
+        border: None,
+        align,
+        text,
+        wrap_width: None,
+    };
+    let mut list = Vec::new();
     if view.built.is_none() {
         list.push(Draw::Fill {
             rect: [0.0, grid.1 * 0.5 - 10.0, grid.0, 20.0],
@@ -348,7 +383,7 @@ pub fn draw_list(
         ));
     }
     if let Some(stops) = view.mismatch {
-        let top = y + h + 6.0;
+        let top = bar_bottom + 6.0;
         list.push(Draw::Fill {
             rect: [0.0, top, grid.0, 2.0 * LINE + 6.0],
             color: WARNING,

@@ -167,6 +167,21 @@ lighter part is the built prefix and playback waits at its edge until the pass h
 second (a frame of a 6,142-tick Pulse Time Trial opened from the end-of-race row showed the built
 part at about 77 percent three seconds in).
 
+### Touch
+
+While a finger spoke last the viewer draws `replay_view::touch_layout` instead of the key legend: EXIT top
+left; PHOTO, CAMERA (the next camera view, as SELECT does in a race) and HUD top right, with the craft
+arrows under them; along the bottom a full-width bar (a tap seeks, a held finger scrubs, one seek every
+four ticks because a seek rebuilds the race, and a last one on lift) and above the time, -5 s, PLAY, +5 s
+and SPEED, all at least 0.13 of the height inside `oag_input::touch::SAFE_X`/`SAFE_Y`. **Chosen, not
+measured.** A playing viewer hides the controls after three seconds without a touch (a thin progress line
+stays along the edge), and a tap on the picture shows or hides them. A double tap on the left third of the
+picture skips back, on the right third forward, in the middle plays or pauses. A one-finger drag, pinch or
+twist on the picture (not on the bar) opens photo mode over the viewer with PLAY on when the viewer was
+playing: that is the replay's free camera ([photo mode](photo-mode.md), "Touch"). A recording that is
+only poses (POSE VIEW) has no race to fly, so the gestures do nothing there. The racing overlay does not
+read fingers while the viewer is open.
+
 ## What stops it: a build mismatch
 
 The `Timeline`'s pass ends at the first stored hash that disagrees (`Pass::Desynced`; a recorded
@@ -286,5 +301,7 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 - **Split screen**: one view per window.
 - **The Steam Deck** (ADR-0087 decision 3) is still unmeasured; the opening pass's wall time on this desktop is in the timeline page.
 - **A modded race and a network race record nothing** (decision 7).
-- **The web build and a phone** have no directory a player can reach: the page is empty there (`replays::SAVES`).
+- **The web build** has no file system to keep a replay in: the page is empty there (`replays::WRITES`). **A phone
+  records and lists replays** into the app's files directory (`<external files>/data/oag/replays`), reached over USB
+  ([Android](../tools/android.md)); sharing a replay from a phone is still open (`replays::REACHABLE`).
 - **Take-over, SAVE REPLAY**: stage 7.

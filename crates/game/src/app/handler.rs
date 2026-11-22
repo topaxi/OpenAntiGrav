@@ -481,6 +481,7 @@ impl App {
             pad_dir: None,
             pointer: crate::app::pointer::Window::default(),
             touch_overlay: crate::app::touch::Overlay::default(),
+            gestures: oag_input::gesture::Gestures::new((1.0, 1.0)),
             audio,
             music_discs: self.music_discs.clone(),
             music_pool_seen: String::new(),
@@ -776,6 +777,7 @@ impl ApplicationHandler for App {
         if let Some(session) = self.state.as_mut() {
             session.controls.release_all();
             session.pointer.release();
+            session.gestures.release_all();
             // Home, app switch or screen off: the race parks in its pause
             // menu and does not come back by itself, and the device stops.
             session.window_away(Away::Suspended);
@@ -827,6 +829,7 @@ impl ApplicationHandler for App {
                         }
                         if !is_seat {
                             session.pointer.release();
+                            session.gestures.release_all();
                         }
                     }
                     return;
@@ -900,6 +903,7 @@ impl ApplicationHandler for App {
             WindowEvent::Focused(false) => {
                 session.controls.release_all();
                 session.pointer.release();
+                session.gestures.release_all();
                 session.window_away(Away::FocusLost);
             }
 

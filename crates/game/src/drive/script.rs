@@ -94,6 +94,35 @@ impl std::fmt::Display for Cond {
     }
 }
 
+/// A gesture a drive plays through the touch path, one frame a step. Positions are window
+/// pixels, angles degrees clockwise on screen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Touch {
+    /// A finger down and up at a point.
+    Tap { x: f32, y: f32 },
+    /// One finger from a point to another over `ticks`.
+    Drag {
+        from: (f32, f32),
+        to: (f32, f32),
+        ticks: u32,
+    },
+    /// Two fingers about a centre, their half-distance going from `r0` to `r1`.
+    Pinch {
+        at: (f32, f32),
+        r0: f32,
+        r1: f32,
+        ticks: u32,
+    },
+    /// Two fingers about a centre, half-distance `r`, turning from `a0` to `a1`.
+    Twist {
+        at: (f32, f32),
+        r: f32,
+        a0: f32,
+        a1: f32,
+        ticks: u32,
+    },
+}
+
 /// What a run is told to do, one entry of a [`Script`].
 #[derive(Debug, Clone, PartialEq)]
 pub enum Step {
@@ -132,6 +161,8 @@ pub enum Step {
     Click,
     /// The same click, on the middle of the hint on screen that depicts this button.
     ClickHint(oag_ui::hints::Press),
+    /// Fingers on the screen: a tap, a drag, a pinch or a twist (`touch ...`).
+    Touch(Touch),
     /// Draw the next frame.
     Draw,
     /// Let this many ticks pass.
@@ -170,6 +201,26 @@ impl std::fmt::Display for Step {
             Self::Key => f.write_str("key"),
             Self::Mouse { x, y } => write!(f, "mouse {x} {y}"),
             Self::Click => f.write_str("click"),
+            Self::Touch(t) => match t {
+                Touch::Tap { x, y } => write!(f, "touch tap {x} {y}"),
+                Touch::Drag { from, to, ticks } => write!(
+                    f,
+                    "touch drag {} {} {} {} {ticks}",
+                    from.0, from.1, to.0, to.1
+                ),
+                Touch::Pinch { at, r0, r1, ticks } => {
+                    write!(f, "touch pinch {} {} {r0} {r1} {ticks}", at.0, at.1)
+                }
+                Touch::Twist {
+                    at,
+                    r,
+                    a0,
+                    a1,
+                    ticks,
+                } => {
+                    write!(f, "touch twist {} {} {r} {a0} {a1} {ticks}", at.0, at.1)
+                }
+            },
             Self::ClickHint(press) => write!(f, "click hint {press:?}"),
             Self::Draw => f.write_str("draw"),
             Self::Ticks(n) => write!(f, "ticks {n}"),
@@ -422,8 +473,47 @@ impl Script {
                 },
                 _ => return Err("mouse takes an x and a y".into()),
             },
+            "touch" => Step::Touch(parse_touch(&words)?),
             "quit" => Step::Quit,
             other => return Err(format!("unknown step {other:?}")),
         })
     }
+}
+
+/// `touch tap x y`, `touch drag x0 y0 x1 y1 ticks`, `touch pinch cx cy r0 r1 ticks`,
+/// `touch twist cx cy r a0 a1 ticks`.
+fn parse_touch(words: &[String]) -> Result<Touch, String> {
+    let (kind, rest) = words
+        .split_first()
+        .ok_or("touch takes tap, drag, pinch or twist")?;
+    let num = |s: &String| {
+        s.parse::<f32>()
+            .map_err(|_| format!("{s:?} is not a number"))
+    };
+    let count = |s: &String| {
+        s.parse::<u32>()
+            .map_err(|_| format!("{s:?} is not a tick count"))
+    };
+    Ok(match (kind.as_str(), rest) {
+        ("tap", [x, y]) => Touch::Tap { x: num(x)?, y: num(y)? },
+        ("drag", [x0, y0, x1, y1, t]) => Touch::Drag {
+            from: (num(x0)?, num(y0)?),
+            to: (num(x1)?, num(y1)?),
+            ticks: count(t)?,
+        },
+        ("pinch", [x, y, r0, r1, t]) => Touch::Pinch {
+            at: (num(x)?, num(y)?),
+            r0: num(r0)?,
+            r1: num(r1)?,
+            ticks: count(t)?,
+        },
+        ("twist", [x, y, r, a0, a1, t]) => Touch::Twist {
+            at: (num(x)?, num(y)?),
+            r: num(r)?,
+            a0: num(a0)?,
+            a1: num(a1)?,
+            ticks: count(t)?,
+        },
+        _ => return Err("touch: tap x y | drag x0 y0 x1 y1 ticks | pinch cx cy r0 r1 ticks | twist cx cy r a0 a1 ticks".into()),
+    })
 }

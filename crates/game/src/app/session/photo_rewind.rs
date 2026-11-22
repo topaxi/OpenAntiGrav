@@ -225,6 +225,7 @@ impl super::Session {
             || pad.reset
             || pad.previous
             || pad.next
+            || pad.touch != oag_raceplay::photo::touch::Touch::default()
             || pointer.clicked
             || pointer.back
             || pointer.drag != (0.0, 0.0)

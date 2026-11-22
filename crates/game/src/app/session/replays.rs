@@ -174,6 +174,12 @@ pub(crate) struct Active {
     /// Whether the viewer was opened from a screenshot, which leaving it returns to the main
     /// menu from rather than to the REPLAYS page.
     pub(crate) from_shot: bool,
+    /// The touch controls were hidden by a tap on the picture.
+    chrome_hidden: bool,
+    /// Ticks since a finger last touched the screen.
+    idle: u32,
+    /// A finger is scrubbing the bar: where it is in the grid, and the ticks it has held.
+    bar_drag: Option<(f32, u32)>,
     own: StringTable,
     english: StringTable,
 }
@@ -199,6 +205,15 @@ impl Active {
             pose_view: matches!(state, State::PoseView | State::PoseEnded),
             track_short: viewer.pose_track_is_short(),
         }
+    }
+
+    /// Whether the touch controls are showing.
+    fn chrome_shown(&self) -> bool {
+        replay_view::touch_layout::chrome_shown(
+            self.chrome_hidden,
+            self.viewer.playing(),
+            self.idle,
+        )
     }
 
     /// The project's text for `id`, its English where the language leaves it untranslated.
@@ -258,6 +273,9 @@ pub(crate) fn open_viewer(
         scrubbing: false,
         shot,
         from_shot: shot.is_some() || dropped,
+        chrome_hidden: false,
+        idle: 0,
+        bar_drag: None,
         own: oag_ui::strings::project_table(language),
         english: oag_ui::strings::project_table(None),
     })
@@ -492,13 +510,22 @@ impl Session {
             return Vec::new();
         };
         let view = active.view();
+        if self.pointer.touch_spoke_last() {
+            let chrome = active.chrome_shown();
+            let say = |id: &str| active.word(id);
+            return replay_view::touch_layout::draw_list(&view, grid, &say, chrome);
+        }
         let say = |id: &str| active.word(id);
         replay_view::draw_list(&view, grid, &say, &keys)
     }
 
     /// The hints of the viewer's key lines on the overlay grid `grid`; none when it is not up.
     pub(crate) fn viewer_hints(&mut self, grid: (f32, f32)) -> Vec<oag_ui::hints::Hint> {
-        let Some(active) = self.viewer.as_ref().filter(|_| self.photo.is_none()) else {
+        let Some(active) = self
+            .viewer
+            .as_ref()
+            .filter(|_| self.photo.is_none() && !self.pointer.touch_spoke_last())
+        else {
             return Vec::new();
         };
         let keys = self.viewer_keys(active);
@@ -516,6 +543,20 @@ impl Session {
         let rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
         let roles = self.roles();
+        // Fingers as gestures; while one spoke last the pointer's click and drag are the same
+        // touch twice, so the gestures decide (`Self::tick_photo` does the same).
+        let size = self.window_size();
+        let frame = self.gestures.take(size);
+        let finger = self.pointer.touch_spoke_last();
+        let touched = frame.fingers > 0 || frame.tap.is_some() || frame.double_tap.is_some();
+        let shown = self.viewer.as_mut().is_none_or(|active| {
+            active.idle = if touched {
+                0
+            } else {
+                active.idle.saturating_add(1)
+            };
+            active.chrome_shown()
+        });
         let controls = &mut self.controls;
         let view = controls.view();
         // The playhead's speed: a trigger scrubs (R2 on, L2 back) and the right stick's
@@ -535,10 +576,75 @@ impl Session {
             scrub,
             seek: None,
             bar: None,
+            camera: false,
+            bar_touch: None,
+            free_camera: false,
         };
-        if pointer.clicked
+        let clicked = pointer.clicked && (!finger || frame.tap.is_some());
+        if finger {
+            use replay_view::touch_layout as touch;
+            if let Some(active) = self.viewer.as_mut() {
+                if let Some(at) = grid.press_at
+                    && shown
+                    && touch::control_at(space.size, at) == Some(Control::Bar)
+                {
+                    active.bar_drag = Some((at.0, 0));
+                }
+                if let Some((x, held)) = active.bar_drag.as_mut() {
+                    *x += grid.drag.0;
+                    *held += 1;
+                    if *held % BAR_SEEK_EVERY == 0 || pointer.released {
+                        asked.bar_touch = Some(*x);
+                    }
+                    if pointer.released {
+                        active.bar_drag = None;
+                    }
+                } else if frame.fingers > 0
+                    && !active.pose_view
+                    && (frame.drag != (0.0, 0.0)
+                        || frame.pan != (0.0, 0.0)
+                        || frame.pinch != 1.0
+                        || frame.twist != 0.0)
+                {
+                    asked.free_camera = true;
+                }
+                if let Some(at) = frame.double_tap {
+                    let x = at.0 * space.size.0 / size.0.max(1.0);
+                    match touch::zone_at(space.size, x) {
+                        touch::Zone::Back => asked.back = true,
+                        touch::Zone::Toggle => asked.toggle = true,
+                        touch::Zone::Forward => asked.forward = true,
+                    }
+                }
+            }
+        }
+        if clicked
+            && finger
             && let Some(at) = grid.at
         {
+            let hit = shown
+                .then(|| replay_view::touch_layout::control_at(space.size, at))
+                .flatten();
+            match hit {
+                Some(Control::Play) => asked.toggle = true,
+                Some(Control::Back) => asked.back = true,
+                Some(Control::Forward) => asked.forward = true,
+                Some(Control::Speed) => asked.faster = true,
+                Some(Control::Photo) => asked.photo = true,
+                Some(Control::Exit) => asked.leave = true,
+                Some(Control::Bar) => asked.bar_touch = Some(at.0),
+                Some(Control::Hud) => asked.hud = true,
+                Some(Control::Camera) => asked.camera = true,
+                Some(Control::Previous) => asked.previous = true,
+                Some(Control::Next) => asked.next = true,
+                None => {
+                    if let Some(active) = self.viewer.as_mut() {
+                        active.chrome_hidden = shown;
+                        active.idle = 0;
+                    }
+                }
+            }
+        } else if clicked && let Some(at) = grid.at {
             match replay_view::control_at(space.size, at) {
                 Some(Control::Play) => asked.toggle = true,
                 Some(Control::Back) => asked.back = true,
@@ -547,16 +653,19 @@ impl Session {
                 Some(Control::Photo) => asked.photo = true,
                 Some(Control::Exit) => asked.leave = true,
                 Some(Control::Bar) => asked.bar = Some(at.0),
-                None => {}
+                _ => {}
             }
         }
         if asked.leave {
             self.leave_viewer();
             return;
         }
-        if asked.photo {
-            self.open_photo_from_viewer();
+        if asked.photo || asked.free_camera {
+            self.open_photo_from_viewer_with(asked.free_camera);
             return;
+        }
+        if asked.camera {
+            self.cycle_camera_view();
         }
         let (Some(active), Stage::Race(stage)) = (self.viewer.as_mut(), &mut self.stage) else {
             return;
@@ -575,6 +684,13 @@ impl Session {
         if let Some(x) = asked.bar {
             let tick = replay_view::tick_at(space.size, x, viewer.ticks());
             asked.seek = Some(tick);
+        }
+        if let Some(x) = asked.bar_touch {
+            asked.seek = Some(replay_view::touch_layout::tick_at(
+                space.size,
+                x,
+                viewer.ticks(),
+            ));
         }
         let mut moved = Moved::Still;
         if asked.toggle {
@@ -672,6 +788,8 @@ impl Session {
 /// right-stick deflection (a sixth of a second).
 const SCRUB_MOST: u32 = super::photo_rewind::SCRUB_MOST;
 const JOG_MOST: u32 = 10;
+/// Ticks between seeks while a finger holds the bar: a seek rebuilds the race.
+const BAR_SEEK_EVERY: u32 = 4;
 
 /// Signed ticks for a signed pull.
 fn scrub_ticks(pull: f32, most: u32) -> i64 {
@@ -694,6 +812,13 @@ struct Asked {
     scrub: i64,
     seek: Option<u64>,
     bar: Option<f32>,
+    /// The next camera view (touch).
+    camera: bool,
+    /// Where a finger holds the bar, in grid units (touch).
+    bar_touch: Option<f32>,
+    /// A finger asked for the camera on the picture: photo mode opens over the viewer, with
+    /// playback going on.
+    free_camera: bool,
 }
 
 impl Session {

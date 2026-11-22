@@ -162,7 +162,13 @@ one view is held, as a choice with nothing to offer is (`Menu::offer`). The buil
 Omega's strip it is the tab right of OPTIONS). On Pulse's `Race End Photo`, SELECT opens it once
 the screen takes input (61 ticks after the finish), and leaving returns to the screen. Left out:
 split screen (no single picture, no single pad: a follow-up), a LAN or online race (the server's),
-and a build that cannot write a file (a page, a phone).
+and a build that cannot write a file (a page). **A phone offers it**: `photo::WRITES` is true wherever
+there is a file system, and a phone writes into the app's own files directory
+(`<external files>/data/oag/photos`, the tree a player copies disc images into over USB,
+[Android](../tools/android.md)). Android 11 and later hide that directory from an on-device file
+manager, so a shot is reached over USB until an export to the gallery exists (`photo::REACHABLE` is
+the desktop-only half). 2048 has no pause screen of its own, so on a phone its row is reached by the
+Back key.
 
 **While it is open** the race does not tick in the frame loop (`oag_game::photo::ticks`), whatever
 state it is in, so its state hash does not move and the race resumes where it stood (a rewind moves
@@ -228,8 +234,42 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 
 A click on the five chips along the top (and, on `free`, the DRAG chip under the camera chip) (camera, HUD, EFFECTS, TAKE PHOTO, BACK) does the same, and a
 click with the help hidden shows it. A chip says its row and its value, and the value alone where the
-row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 scrub the rewind row here), the touch gestures
-of 2048 (a follow-up).
+row's word is too long for it (Pulse's own `PHOTO CAMERA MODE`). Not ported: HD's separate tilt triggers (L2, R2 scrub the rewind row here), the touch screen
+of 2048 (its own `InGame VitaPhoto`; ours is below).
+
+### Touch
+
+**Chosen, not measured**: no title's original has more than 2048's three effect toggles, so the
+gestures are the conventions of a 3D viewer or a map: the picture follows the fingers. They are read
+by `oag_input::gesture::Gestures` (pure, tick-driven, unit-tested with synthetic touches), handed to
+`oag_raceplay::photo::touch` as a `Touch`, and applied to the lens that is up:
+
+| Gesture | `close` | `track` | `free` | `internal` |
+| --- | --- | --- | --- | --- |
+| one-finger drag | orbits (as the stick does), pi rad a screen height | takes the free lens | looks, by the field of view a screen height | takes the free lens |
+| pinch | field of view (spread narrows) | field of view | dollies, 40 units an e-fold | nothing |
+| two-finger drag | pans the eye, 8 units a screen height | nothing | slides and lifts, 30 units a screen height | nothing |
+| twist | tilts | tilts | rolls | tilts |
+| double tap | resets the camera | same | same | same |
+| tap on the empty picture | hides or shows the help and the panel | same | same | same |
+
+The free lens opened from `track` or `internal` is seeded from the picture on screen, so the first
+tick of the drag that opened it is spent seeding. A flick coasts (0.9 of its speed a tick); pinch and
+twist never coast. A second finger landing or lifting re-anchors the pair, so neither jumps the
+camera; a touch that ever had two fingers never taps; a third finger is ignored. Any gesture abandons a
+shot of several frames, as any input does. Touch is ignored while the effects panel is up. None of it
+reaches the simulation: `photo_mode_ground_truth::fingers_move_the_view_and_never_the_race` plays
+`touch drag|pinch|twist|tap` steps (`--drive`) through `Session::touch` and compares every live tick's
+hash with a race that never visited.
+
+While a finger spoke last the screen is `photo::touch_layout`: thumb-sized chips (0.13 of the
+height at least), a shutter under the right thumb with CAMERA above it and EFFECTS below, BACK, HUD and
+the DRAG chip down the left, RESET and the craft arrows along the bottom, and a one-line gesture hint
+(`OAG_PHOTO_TOUCH_HINT`, English only for now) in place of the key legend. The effects panel's rows
+are 25 grid units tall (ten fit under the 272-unit grid) with 30-unit steppers. Everything keeps inside
+`oag_input::touch::SAFE_X`/`SAFE_Y`; the SCREEN SIZE row's inset is not applied yet. While photo mode
+is open the racing overlay no longer reads fingers (`overlay_reads_fingers`), so its GO, FIRE and
+PAUSE taps do not reach the mode.
 
 ## The free lens
 
@@ -259,9 +299,9 @@ forward, right and up). **Chosen, not measured**, all of it:
   0.005 rad a grid unit dragged. Dolly: 2 units a wheel detent. Drag-to-move: 0.1 units a grid unit. Zoom and
   roll as the `close` lens (0.6 degrees, 0.05 rad a tick).
 - **Pointer and touch.** While `free` is up a held mouse button reports its travel as a drag, the way a
-  finger does (`Pointer::drag`, `set_mouse_pans`), so mouse and touch look around by dragging and a tap or a
-  click is still a click. The DRAG chip switches a drag to moving (the only way a touch player without the
-  on-screen stick moves; whether the on-screen stick is live under photo mode was not checked on a phone).
+  finger does (`Pointer::drag`, `set_mouse_pans`), so a mouse looks around by dragging and a click is
+  still a click. A finger goes through the gestures above instead (its own drag is not counted twice).
+  The DRAG chip switches a one-finger drag to moving.
   A drag or the wheel abandons a shot of several frames, as any input does.
 - **Words.** `OAG_PHOTO_FREE` and its help lines are ours; no title's disc words a free camera, so
   `oag_title::photo::Strings` is unchanged. German and Brazilian Portuguese are machine translations
@@ -494,7 +534,7 @@ contour bands; the single plain frame shows them in the same places (a rewound s
 tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
 screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve
 is used) stand as before. Also left open, as before: split screen, the photo
-counter stat, touch gestures, saving on a page or a phone, HD's real `close` rest offset, and a shot at
+counter stat, saving on a page, sharing a shot from a phone, HD's real `close` rest offset, and a shot at
 the scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
 configured render size: the dynamic resolution is held there while the mode is open).
 

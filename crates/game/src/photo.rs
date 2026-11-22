@@ -16,18 +16,31 @@ use oag_raceplay::photo::{Lens, Photo};
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::hints::Entry;
 
+pub mod touch_layout;
+
 /// The directory under the user's data directory shots are written to.
 pub const DIRECTORY: &str = "photos";
 
-/// Whether this build can write a shot: a desktop can; a page and a phone have no directory the
-/// player can reach (the row is left out there rather than offered and failing).
-pub const SAVES: bool = !cfg!(target_arch = "wasm32") && !oag_mobile::MOBILE;
+/// Whether this build can write a shot: a desktop and a phone can (a phone writes into the
+/// app's own files directory, the tree a player already copies disc images into); a page has no
+/// file system to write to.
+pub const WRITES: bool = writes_on(cfg!(target_arch = "wasm32"));
+
+/// Whether the player can browse to where a shot lands: a desktop can; a phone's app directory
+/// is hidden from its file manager on recent Android, until an export puts shots in the gallery.
+pub const REACHABLE: bool = WRITES && !oag_mobile::MOBILE;
+
+/// [`WRITES`] for a platform: only a page cannot write.
+#[must_use]
+pub const fn writes_on(wasm: bool) -> bool {
+    !wasm
+}
 
 /// Whether photo mode is on offer for a race drawn as `views` views. A split screen has no
 /// single picture to frame and no single pad to drive it.
 #[must_use]
 pub fn offered(views: usize) -> bool {
-    SAVES && views <= 1
+    WRITES && views <= 1
 }
 
 /// Whether the race ticks in the frame loop: not while photo mode is open. The rule the frame
@@ -103,6 +116,8 @@ pub mod strings {
     pub const HELP: &str = "OAG_PHOTO_HELP";
     pub const SAVED: &str = "OAG_PHOTO_SAVED";
     pub const FAILED: &str = "OAG_PHOTO_FAILED";
+    pub const TOUCH_HINT: &str = "OAG_PHOTO_TOUCH_HINT";
+    pub const TOUCH_HINT_FREE: &str = "OAG_PHOTO_TOUCH_HINT_FREE";
     pub const ROW: &str = "OAG_MENU_PHOTO_MODE";
 }
 
@@ -153,6 +168,12 @@ pub enum Chip {
     Back,
     /// What a drag does on the free lens: look, or move. Drawn only on that lens.
     Drag,
+    /// Put the camera back (touch layout only).
+    Reset,
+    /// The previous craft (touch layout only).
+    Previous,
+    /// The next craft (touch layout only).
+    Next,
 }
 
 /// The chips, in order.
@@ -199,6 +220,15 @@ pub fn drag_rect(grid: (f32, f32)) -> [f32; 4] {
 /// the only lens with a drag chip.
 #[must_use]
 pub fn chip_at(grid: (f32, f32), at: (f32, f32), free: bool) -> Option<Chip> {
+    chip_at_with(grid, at, free, false)
+}
+
+/// [`chip_at`] under the touch layout when `touch`.
+#[must_use]
+pub fn chip_at_with(grid: (f32, f32), at: (f32, f32), free: bool, touch: bool) -> Option<Chip> {
+    if touch {
+        return touch_layout::chip_at(grid, at, free);
+    }
     let inside = |[x, y, w, h]: [f32; 4]| at.0 >= x && at.0 < x + w && at.1 >= y && at.1 < y + h;
     CHIPS
         .into_iter()
@@ -212,16 +242,46 @@ const ARROW: f32 = 14.0;
 const VALUE: f32 = 48.0;
 const SELECTED: [f32; 4] = [1.0, 1.0, 1.0, 0.22];
 
+/// Where the effects panel sits and how big its parts are: the desktop's, or the touch layout's.
+#[derive(Debug, Clone, Copy)]
+struct Geom {
+    top: f32,
+    right: f32,
+    width: f32,
+    row: f32,
+    arrow: f32,
+}
+
+impl Geom {
+    fn of(touch: bool, grid: (f32, f32)) -> Self {
+        if touch {
+            touch_layout::panel(grid)
+        } else {
+            Self {
+                top: MARGIN + CHIP_HEIGHT + GAP,
+                right: MARGIN,
+                width: PANEL_WIDTH,
+                row: ROW_HEIGHT,
+                arrow: ARROW,
+            }
+        }
+    }
+
+    fn rect(self, index: usize, grid: (f32, f32)) -> [f32; 4] {
+        [
+            grid.0 - self.right - self.width,
+            self.top + self.row * index as f32,
+            self.width,
+            self.row,
+        ]
+    }
+}
+
 /// Where the effects panel's row `index` sits on the overlay grid: `[x, y, w, h]`. The panel
 /// hangs under the chips at the right edge.
 #[must_use]
 pub fn row_rect(index: usize, grid: (f32, f32)) -> [f32; 4] {
-    [
-        grid.0 - MARGIN - PANEL_WIDTH,
-        MARGIN + CHIP_HEIGHT + GAP + ROW_HEIGHT * index as f32,
-        PANEL_WIDTH,
-        ROW_HEIGHT,
-    ]
+    Geom::of(false, grid).rect(index, grid)
 }
 
 /// What a click on the panel asks for: the row, and `0` to put the cursor on it, `-1` or `1`
@@ -235,6 +295,13 @@ pub struct RowHit {
 /// The panel's row (and arrow) under a point on the grid, if the panel is up.
 #[must_use]
 pub fn row_at(photo: &Photo, grid: (f32, f32), at: (f32, f32)) -> Option<RowHit> {
+    row_at_with(photo, grid, at, false)
+}
+
+/// [`row_at`] under the touch layout when `touch`.
+#[must_use]
+pub fn row_at_with(photo: &Photo, grid: (f32, f32), at: (f32, f32), touch: bool) -> Option<RowHit> {
+    let geom = Geom::of(touch, grid);
     if !photo.panel() || !photo.help() {
         return None;
     }
@@ -244,14 +311,14 @@ pub fn row_at(photo: &Photo, grid: (f32, f32), at: (f32, f32)) -> Option<RowHit>
         .iter()
         .enumerate()
         .find_map(|(index, &row)| {
-            let [x, y, w, h] = row_rect(index, grid);
+            let [x, y, w, h] = geom.rect(index, grid);
             if at.0 < x || at.0 >= x + w || at.1 < y || at.1 >= y + h {
                 return None;
             }
             let from_right = x + w - at.0;
-            let step = if from_right <= ARROW {
+            let step = if from_right <= geom.arrow {
                 1
-            } else if (ARROW + VALUE..2.0 * ARROW + VALUE).contains(&from_right) {
+            } else if (geom.arrow + VALUE..2.0 * geom.arrow + VALUE).contains(&from_right) {
                 -1
             } else {
                 0
@@ -283,16 +350,23 @@ pub fn clock(tick: u64) -> String {
 }
 
 /// The effects panel: one line a row, the cursor's row lit, an arrow either side of the value.
-fn panel_list(photo: &Photo, grid: (f32, f32), say: &dyn Fn(&str) -> String) -> Vec<Draw> {
+fn panel_list(
+    photo: &Photo,
+    grid: (f32, f32),
+    say: &dyn Fn(&str) -> String,
+    touch: bool,
+) -> Vec<Draw> {
+    let geom = Geom::of(touch, grid);
+    let (arrow, panel_width, row_height) = (geom.arrow, geom.width, geom.row);
     let effects = photo.effects();
     let rows = effects.rows();
-    let first = row_rect(0, grid);
+    let first = geom.rect(0, grid);
     let mut list = vec![Draw::Fill {
         rect: [
             first[0] - 2.0,
             first[1] - 2.0,
-            PANEL_WIDTH + 4.0,
-            ROW_HEIGHT * rows.len() as f32 + 4.0,
+            panel_width + 4.0,
+            row_height * rows.len() as f32 + 4.0,
         ],
         color: BAND,
     }];
@@ -307,7 +381,8 @@ fn panel_list(photo: &Photo, grid: (f32, f32), say: &dyn Fn(&str) -> String) -> 
         wrap_width: None,
     };
     for (index, &row) in rows.iter().enumerate() {
-        let [x, y, w, h] = row_rect(index, grid);
+        let [x, y, w, h] = geom.rect(index, grid);
+        let dy = (h - 14.0) / 2.0;
         if row == effects.selected() {
             list.push(Draw::Fill {
                 rect: [x, y, w, h],
@@ -328,20 +403,25 @@ fn panel_list(photo: &Photo, grid: (f32, f32), say: &dyn Fn(&str) -> String) -> 
             Effect::Rewind => clock(effects.target_tick()),
             _ => format!("{}%", effects.value(row)),
         };
-        list.push(text(x + 4.0, y + 2.0, say(label_of(row)), Align::Left));
+        list.push(text(x + 4.0, y + 2.0 + dy, say(label_of(row)), Align::Left));
         list.push(text(
-            x + w - ARROW - VALUE / 2.0 - ARROW / 2.0 + 2.0,
-            y + 2.0,
+            x + w - arrow - VALUE / 2.0 - arrow / 2.0 + 2.0,
+            y + 2.0 + dy,
             value,
             Align::Centre,
         ));
         list.push(text(
-            x + w - 2.0 * ARROW - VALUE + 3.0,
-            y + 2.0,
+            x + w - 2.0 * arrow - VALUE + arrow / 2.0 - 4.0,
+            y + 2.0 + dy,
             "<".into(),
             Align::Left,
         ));
-        list.push(text(x + w - ARROW + 3.0, y + 2.0, ">".into(), Align::Left));
+        list.push(text(
+            x + w - arrow / 2.0 - 2.0,
+            y + 2.0 + dy,
+            ">".into(),
+            Align::Left,
+        ));
     }
     list
 }
@@ -356,6 +436,8 @@ pub struct Words<'a> {
     /// The buttons that leave the mode and, on the face button Back displaced, reset the camera
     /// (`docs/ui/back-and-help.md`).
     pub roles: oag_ui::roles::Roles,
+    /// Whether a finger spoke last: the thumb-sized layout is drawn and tapped.
+    pub touch: bool,
 }
 
 /// The screen over the picture: the chips along the top, a message from the last shot, and the
@@ -432,6 +514,10 @@ pub fn draw_list(
     if !photo.help() {
         return list;
     }
+    if words.touch {
+        list.extend(touch_layout::chrome(photo, grid, words));
+        return list;
+    }
     let lens = match photo.lens() {
         Lens::Internal => strings::INTERNAL,
         Lens::Close => strings::CLOSE,
@@ -463,6 +549,8 @@ pub fn draw_list(
         Chip::Effects => say(strings::EFFECTS),
         Chip::Take => say(strings::TAKE),
         Chip::Back => say(strings::BACK),
+        Chip::Reset => say(strings::RESET),
+        Chip::Previous | Chip::Next => say(strings::SHIP),
         Chip::Drag => fitted(
             say(strings::DRAG),
             say(if photo.drag_moves() {
@@ -494,7 +582,7 @@ pub fn draw_list(
         ));
     }
     if photo.panel() {
-        list.extend(panel_list(photo, grid, say));
+        list.extend(panel_list(photo, grid, say, false));
     }
     let lines = legend_lines(photo, words);
     let top = grid.1 - MARGIN - LINE * lines.len() as f32;
@@ -568,7 +656,7 @@ pub fn legend_hints(
     words: &Words,
     shot_under_way: bool,
 ) -> Vec<oag_ui::hints::Hint> {
-    if shot_under_way || !photo.help() {
+    if shot_under_way || !photo.help() || words.touch {
         return Vec::new();
     }
     let lines = legend_lines(photo, words);

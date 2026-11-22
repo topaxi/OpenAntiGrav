@@ -299,6 +299,7 @@ impl Driver {
                     .button(left, winit::event::ElementState::Released);
                 self.frame(None)?;
             }
+            Step::Touch(gesture) => self.touch_gesture(*gesture)?,
             Step::Draw => {
                 self.session.gpu.output.draw_next = true;
                 self.frame(None)?;
@@ -360,6 +361,81 @@ impl Driver {
     }
 
     /// Draws the next frame into the offscreen target and writes it as a PNG.
+    /// One finger event, then a frame.
+    fn finger(&mut self, id: u64, phase: winit::event::TouchPhase, at: (f32, f32)) -> Result<()> {
+        #[allow(deprecated)]
+        let device_id = winit::event::DeviceId::dummy();
+        self.session.touch(winit::event::Touch {
+            device_id,
+            phase,
+            location: winit::dpi::PhysicalPosition::new(f64::from(at.0), f64::from(at.1)),
+            force: None,
+            id,
+        });
+        self.frame(None)
+    }
+
+    /// Plays a gesture through the touch path, a frame a step, as a hand would.
+    fn touch_gesture(&mut self, gesture: crate::drive::script::Touch) -> Result<()> {
+        use crate::drive::script::Touch;
+        use winit::event::TouchPhase::{Ended, Moved, Started};
+        let lerp = |a: f32, b: f32, t: f32| a + (b - a) * t;
+        match gesture {
+            Touch::Tap { x, y } => {
+                self.finger(1, Started, (x, y))?;
+                self.finger(1, Ended, (x, y))?;
+            }
+            Touch::Drag { from, to, ticks } => {
+                self.finger(1, Started, from)?;
+                let mut at = from;
+                for step in 1..=ticks.max(1) {
+                    let t = step as f32 / ticks.max(1) as f32;
+                    at = (lerp(from.0, to.0, t), lerp(from.1, to.1, t));
+                    self.finger(1, Moved, at)?;
+                }
+                self.finger(1, Ended, at)?;
+            }
+            Touch::Pinch { at, r0, r1, ticks } => {
+                let pair = |r: f32| ((at.0 - r, at.1), (at.0 + r, at.1));
+                self.two_fingers(|t| pair(lerp(r0, r1, t)), ticks)?;
+            }
+            Touch::Twist {
+                at,
+                r,
+                a0,
+                a1,
+                ticks,
+            } => {
+                let pair = |a: f32| {
+                    let (s, c) = a.to_radians().sin_cos();
+                    ((at.0 - r * c, at.1 - r * s), (at.0 + r * c, at.1 + r * s))
+                };
+                self.two_fingers(|t| pair(lerp(a0, a1, t)), ticks)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Two fingers down at `pose(0)`, moved through `pose(t)` for `t` up to 1, and lifted.
+    fn two_fingers(
+        &mut self,
+        pose: impl Fn(f32) -> ((f32, f32), (f32, f32)),
+        ticks: u32,
+    ) -> Result<()> {
+        use winit::event::TouchPhase::{Ended, Moved, Started};
+        let (a, b) = pose(0.0);
+        self.finger(1, Started, a)?;
+        self.finger(2, Started, b)?;
+        let mut last = (a, b);
+        for step in 1..=ticks.max(1) {
+            last = pose(step as f32 / ticks.max(1) as f32);
+            self.finger(1, Moved, last.0)?;
+            self.finger(2, Moved, last.1)?;
+        }
+        self.finger(1, Ended, last.0)?;
+        self.finger(2, Ended, last.1)
+    }
+
     fn screenshot(&mut self, path: &Path) -> Result<()> {
         self.session.gpu.output.draw_next = true;
         self.frame(None)?;

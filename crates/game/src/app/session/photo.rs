@@ -116,8 +116,9 @@ impl super::Session {
 
     /// The viewer's PHOTO chip: photo mode over the viewer's race at the tick on screen. The
     /// viewer stands still while it is open and carries on from where the mode's rewind row
-    /// leaves it ([`Self::leave_photo`]).
-    pub(crate) fn open_photo_from_viewer(&mut self) {
+    /// leaves it ([`Self::leave_photo`]). Playback goes on in the mode when `keep_playing` and the viewer was playing: what a finger
+    /// on the picture asks for.
+    pub(crate) fn open_photo_from_viewer_with(&mut self, keep_playing: bool) {
         let Some(active) = self.viewer.as_mut() else {
             return;
         };
@@ -132,7 +133,17 @@ impl super::Session {
         active.stepping = false;
         self.begin_photo(Origin::Viewer);
         match self.photo.as_mut() {
-            Some(open) => open.resume_viewer = playing,
+            Some(open) => {
+                open.resume_viewer = playing;
+                if keep_playing
+                    && playing
+                    && let Stage::Race(stage) = &mut self.stage
+                {
+                    stage
+                        .race
+                        .photo_effects(|effects| effects.set_playing(true));
+                }
+            }
             None => {
                 if let Some(active) = self.viewer.as_mut() {
                     active.viewer.set_playing(playing);
@@ -190,6 +201,9 @@ impl super::Session {
             asked = at;
         }
         self.controls.silence_motors();
+        if origin != Origin::Viewer {
+            self.gestures.release_all();
+        }
         let language = self.settings.language.as_deref();
         self.photo = Some(Open {
             origin,
@@ -233,6 +247,11 @@ impl super::Session {
         let rect = (0.0, 0.0, surface.0 as f32, surface.1 as f32);
         let grid = super::pointer::in_grid(*pointer, space, rect, 1.0);
         let roles = self.roles();
+        // Fingers as gestures. A finger is also the pointer, so while one spoke last the
+        // pointer's own drag and click are the same touch twice: the gestures decide.
+        let size = self.window_size();
+        let frame = self.gestures.take(size);
+        let finger = self.pointer.touch_spoke_last();
         let controls = &mut self.controls;
         let view = controls.view();
         let mut pad = Pad {
@@ -246,9 +265,19 @@ impl super::Session {
             help: controls.view_take(Button::Start),
             shot: controls.view_take(Button::Cross),
             leave: controls.view_take(roles.back),
-            drag: pointer.drag,
+            drag: if finger { (0.0, 0.0) } else { pointer.drag },
             scroll: pointer.scroll as f32,
+            touch: oag_raceplay::photo::touch::Touch {
+                drag: frame.drag,
+                pan: frame.pan,
+                pinch: frame.pinch,
+                twist: frame.twist,
+            },
         };
+        if frame.double_tap.is_some() {
+            pad.reset = true;
+        }
+        let clicked = pointer.clicked && (!finger || frame.tap.is_some());
         // A shot of several frames under way owns the mode: any input abandons it, and the
         // controls stand still while it runs.
         if self.photo_job_running() {
@@ -263,19 +292,19 @@ impl super::Session {
         if pointer.back {
             pad.leave = true;
         }
-        if pointer.clicked {
+        if clicked {
             let grid_size = space.size;
             let hit = grid.at.and_then(|at| {
                 stage.race.photo().filter(|p| p.help()).and_then(|p| {
                     let free = p.lens() == oag_raceplay::photo::Lens::Free;
-                    photo::chip_at(grid_size, at, free)
+                    photo::chip_at_with(grid_size, at, free, finger)
                 })
             });
             let row = grid.at.and_then(|at| {
                 stage
                     .race
                     .photo()
-                    .and_then(|p| photo::row_at(p, grid_size, at))
+                    .and_then(|p| photo::row_at_with(p, grid_size, at, finger))
             });
             if let Some(row) = row {
                 stage.race.photo_effects(|effects| {
@@ -292,6 +321,10 @@ impl super::Session {
                 Some(Chip::Drag) => stage.race.photo_toggle_drag(),
                 Some(Chip::Take) => pad.shot = true,
                 Some(Chip::Back) => pad.leave = true,
+                Some(Chip::Reset) => pad.reset = true,
+                Some(Chip::Previous) => pad.previous = true,
+                Some(Chip::Next) => pad.next = true,
+                None if row.is_none() && finger => stage.race.photo_toggle_chrome(),
                 None if row.is_none() && !stage.race.photo().is_some_and(|p| p.help()) => {
                     pad.help = true;
                 }
@@ -409,6 +442,7 @@ impl super::Session {
     /// read spent so none reaches the race or the end screens as a press.
     pub(crate) fn leave_photo(&mut self) {
         self.pointer.set_mouse_pans(false);
+        self.gestures.release_all();
         self.photo_job_cancel();
         let Some(mut open) = self.photo.take() else {
             return;
@@ -478,6 +512,7 @@ impl super::Session {
             say: &say_id,
             button: &button,
             roles: self.roles(),
+            touch: self.pointer.touch_spoke_last(),
         };
         Some(f(photo, &words, open))
     }

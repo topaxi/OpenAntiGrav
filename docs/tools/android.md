@@ -221,6 +221,16 @@ What a first launch does, as opposed to a desktop run (2026-10-07):
   wants a foreground layer drawn into the 66% safe zone and a background colour,
   and the legacy icon is what Android 8+ shows in a plain mask.
 
+## Photos and replays
+
+A phone offers photo mode and records replays: both write into the app's files directory,
+`/sdcard/Android/data/org.openantigrav.game/files/data/oag/photos` and `.../replays`, the tree the disc
+images are copied into. On a recent Android that directory is hidden from the phone's own file manager,
+so a shot or a replay comes off over USB (`adb pull`, or a computer's file transfer) until a share or
+gallery export exists. The camera of both modes is a multi-touch camera ([photo mode](../ui/photo-mode.md),
+"Touch"; [replays](../ui/replays.md), "Touch"), and the on-screen racing controls are not drawn over
+either.
+
 ## Back, touch controls and a gamepad
 
 Landed 2026-10-07 (android-controls lane). Everything here is **chosen, not

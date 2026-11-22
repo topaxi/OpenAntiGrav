@@ -27,6 +27,11 @@ written ahead of them - see `oag_ui_screens::campaign::pointer` and
 
 ## Open
 
+- **Camera gestures live elsewhere now.** Photo mode and the replay viewer read
+  `oag_input::gesture::Gestures` (two fingers, pinch, twist, double tap); `Pointer`
+  still follows one finger. The phone pass for them is
+  `touch-photo-and-replay-need-a-phone-pass.md`.
+
 - **Footer hint clicks are drawn-list based, so a hint the draw list does not
   carry is not a target.** Every glyph-and-word footer and our own legends
   are (`docs/ui/back-and-help.md`, "Footer hints are clicks"). Open: Pure's

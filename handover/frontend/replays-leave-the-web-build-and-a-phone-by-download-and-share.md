@@ -1,8 +1,8 @@
 ---
 status: parked
 titles: [all]
-updated: 2026-11-17
-summary: "Web and phone builds keep no reachable replay directory; offer DOWNLOAD and SHARE on a replay row (both, where the platform has them)"
+updated: 2026-11-22
+summary: "Web keeps no replays and a phone keeps them out of its file manager; offer DOWNLOAD and SHARE on a replay row"
 ---
 
 # Replays leave the web build and a phone by download and share
@@ -13,10 +13,11 @@ not planned into a lane.
 
 ## What exists
 
-- The REPLAYS page lists files from a directory; on the web build and a phone there is
-  none a player can reach, so the page is empty there
-  ([replays.md](../../docs/ui/replays.md), the open list, "The web build and a phone";
-  `replays::SAVES`).
+- The REPLAYS page lists files from a directory. **A phone now records into the app's own files
+  directory** (`replays::WRITES`; reached over USB, hidden from the phone's file manager on
+  Android 11 and later, `replays::REACHABLE` is false there), so its page lists what it
+  recorded. The web build has no file system, so its page is empty
+  ([replays.md](../../docs/ui/replays.md), the open list).
 - A replay is one `.oagr` file ([replay-file.md](../../docs/formats/replay-file.md)), a few
   hundred KB for a five-minute race of eight craft, so handing it to the platform is cheap.
 

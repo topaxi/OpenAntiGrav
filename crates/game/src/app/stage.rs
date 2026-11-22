@@ -641,7 +641,7 @@ impl Stage {
         let (mode, seed) = (setup.mode, setup.seed);
         // Photo mode's rewind starts a second race from this when it is first used.
         let keeper_setup =
-            crate::photo::SAVES.then(|| (setup.clone(), view.clone(), modules.clone()));
+            crate::photo::WRITES.then(|| (setup.clone(), view.clone(), modules.clone()));
         // Started on the web's load worker already, from a copy of the same
         // setup (`race::Loaded::started`).
         let mut race = match started {

@@ -810,7 +810,7 @@ impl Session {
                     let title = self.shell.as_ref().map_or("", |shell| shell.title.name);
                     if let Err(e) = net.begin_join(&mut race_stage.race, title) {
                         join_error = Some(e);
-                    } else if self.settings.replay.record && crate::replays::SAVES {
+                    } else if self.settings.replay.record && crate::replays::WRITES {
                         // The confirmed run, rebuilt as the room's race (the room is in the
                         // header). Armed after `begin_join`: the tick-zero hash is the
                         // prepared state both ends proved.
@@ -977,7 +977,7 @@ impl Session {
                     race_stage.race.core.begin_speed_plans();
                     // After everything above that writes to the race, so the recording's
                     // tick-zero hash is the one a rebuild from its header must reproduce.
-                    if self.settings.replay.record && crate::replays::SAVES {
+                    if self.settings.replay.record && crate::replays::WRITES {
                         race_stage.arm_auto_replay();
                     }
                 }

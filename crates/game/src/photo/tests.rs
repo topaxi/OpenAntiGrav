@@ -8,6 +8,7 @@ fn words<'a>(say: &'a dyn Fn(&str) -> String, button: &'a dyn Fn(Button) -> Stri
         say,
         button,
         roles: oag_ui::roles::Roles::DEFAULT,
+        touch: false,
     }
 }
 
@@ -238,6 +239,7 @@ fn the_legend_names_the_buttons_the_roles_hand_it() {
             say: &say,
             button: &button,
             roles,
+            touch: false,
         };
         texts(&draw_list(&photo, (483.0, 272.0), &words, None, None))
     };
@@ -259,6 +261,7 @@ fn legend(photo: &Photo, roles: oag_ui::roles::Roles) -> Vec<oag_ui::hints::Hint
         say: &say,
         button: &button,
         roles,
+        touch: false,
     };
     legend_hints(photo, (483.0, 272.0), &words, false)
 }
@@ -315,4 +318,10 @@ fn a_legend_hint_sits_over_its_words_on_the_line_drawn() {
     let width = oag_ui::font::measure(atlas, &format!("CROSS {}", strings::TAKE)) * SCALE;
     assert!((cross.rect[2] - width).abs() < 0.01);
     assert!(legend_hints(&photo, grid, &words, true).is_empty());
+}
+
+#[test]
+fn only_a_page_cannot_write_a_shot() {
+    assert!(writes_on(false));
+    assert!(!writes_on(true));
 }

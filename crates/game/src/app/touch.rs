@@ -108,6 +108,13 @@ impl Session {
                 self.pointer.touch(touch);
                 let size = self.window_size();
                 let at = (touch.location.x as f32, touch.location.y as f32);
+                self.gestures.set_window(size);
+                match touch.phase {
+                    TouchPhase::Started => self.gestures.down(touch.id, at),
+                    TouchPhase::Moved => self.gestures.moved(touch.id, at),
+                    TouchPhase::Ended => self.gestures.up(touch.id, at),
+                    TouchPhase::Cancelled => self.gestures.cancel(touch.id),
+                }
                 let racing = self.racing();
                 let overlay = &mut self.touch_overlay;
                 if touch.phase == TouchPhase::Started && overlay.enabled {
@@ -191,14 +198,30 @@ impl Session {
         matches!(&self.stage, Stage::Race(stage) if stage.race.hud_shown())
     }
 
+    /// Whether the race is running and the overlay should read fingers: photo mode and the
+    /// replay viewer own the screen, and their taps are theirs.
     fn racing(&self) -> bool {
-        matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished())
+        overlay_reads_fingers(
+            matches!(&self.stage, Stage::Race(stage) if !stage.race.core.sim.finished()),
+            self.photo.is_some(),
+            self.viewer.is_some(),
+        )
     }
 
-    fn window_size(&self) -> (f32, f32) {
+    pub(crate) fn window_size(&self) -> (f32, f32) {
         let (w, h) = self.gpu.output.size();
         (w as f32, h as f32)
     }
+}
+
+/// Whether the racing overlay is on duty: a race that has not finished, with neither photo
+/// mode nor the replay viewer over it.
+pub(crate) const fn overlay_reads_fingers(
+    racing: bool,
+    photo_open: bool,
+    viewer_open: bool,
+) -> bool {
+    racing && !photo_open && !viewer_open
 }
 
 #[cfg(test)]
@@ -248,5 +271,14 @@ mod tests {
             overlay.route(&touch(pad, TouchPhase::Ended, 0.0, 0.0)),
             Routed::Ignored
         );
+    }
+
+    #[test]
+    fn the_overlay_reads_fingers_only_over_a_bare_race() {
+        assert!(super::overlay_reads_fingers(true, false, false));
+        assert!(!super::overlay_reads_fingers(false, false, false));
+        assert!(!super::overlay_reads_fingers(true, true, false));
+        assert!(!super::overlay_reads_fingers(true, false, true));
+        assert!(!super::overlay_reads_fingers(true, true, true));
     }
 }

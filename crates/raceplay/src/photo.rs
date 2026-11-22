@@ -32,6 +32,7 @@ use super::*;
 pub mod effects;
 pub mod rewind;
 pub mod shot;
+pub mod touch;
 
 use effects::Effects;
 use finish_camera::Subject;
@@ -144,6 +145,8 @@ pub struct Pad {
     pub drag: (f32, f32),
     /// Wheel detents this tick, positive toward the player: dollies the free lens.
     pub scroll: f32,
+    /// What the fingers did this tick (`touch`).
+    pub touch: touch::Touch,
 }
 
 /// What a tick of the mode asks of whoever runs it.
@@ -650,6 +653,7 @@ impl Photo {
             }
             Lens::Free => self.fly(pad, walk, lift, look, zoom, tilt),
         }
+        self.apply_touch(pad.touch);
     }
 
     /// One tick of the free lens: the sticks in `roles`, then the pointer's drag and wheel.
@@ -1013,6 +1017,13 @@ impl Race {
     pub fn photo_toggle_hud(&mut self) {
         if let Some(photo) = self.view.photo.as_mut() {
             photo.toggle_hud();
+        }
+    }
+
+    /// Hides or shows the help and the panel, as a tap on the empty picture does.
+    pub fn photo_toggle_chrome(&mut self) {
+        if let Some(photo) = self.view.photo.as_mut() {
+            photo.toggle_chrome();
         }
     }
 

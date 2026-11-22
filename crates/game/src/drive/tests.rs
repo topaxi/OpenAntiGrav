@@ -212,3 +212,38 @@ fn a_state_line_is_json_and_a_condition_reads_it() {
         ..state.clone()
     }));
 }
+
+#[test]
+fn touch_steps_parse_and_name_what_is_wrong() {
+    use script::Touch;
+    let script = Script::parse(
+        "touch tap 10 20\ntouch drag 0 0 100 50 8\ntouch pinch 600 300 80 160 12\ntouch twist 600 300 90 0 45 10",
+    )
+    .unwrap();
+    let steps: Vec<&Step> = script.steps.iter().map(|(_, s)| s).collect();
+    assert_eq!(steps[0], &Step::Touch(Touch::Tap { x: 10.0, y: 20.0 }));
+    assert_eq!(
+        steps[1],
+        &Step::Touch(Touch::Drag {
+            from: (0.0, 0.0),
+            to: (100.0, 50.0),
+            ticks: 8
+        })
+    );
+    assert!(matches!(steps[2], Step::Touch(Touch::Pinch { r1, .. }) if *r1 == 160.0));
+    assert!(matches!(steps[3], Step::Touch(Touch::Twist { a1, .. }) if *a1 == 45.0));
+    for text in [
+        "touch",
+        "touch wave",
+        "touch tap 1",
+        "touch drag a b c d 1",
+        "touch pinch 1 2 3 4 x",
+    ] {
+        assert!(Script::parse(text).is_err(), "{text:?}");
+    }
+    // Printed back, a step parses to itself.
+    for (_, step) in &script.steps {
+        let again = Script::parse(&step.to_string()).unwrap();
+        assert_eq!(&again.steps[0].1, step);
+    }
+}

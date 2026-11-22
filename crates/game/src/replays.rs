@@ -36,9 +36,12 @@ pub const MAX_FILES: usize = 20;
 /// The most bytes `auto/` holds.
 pub const MAX_BYTES: u64 = 32 * 1024 * 1024;
 
-/// Whether this build has a directory the player can reach to keep a replay in: a desktop does;
-/// a page and a phone do not, and the row is left out there rather than offered and failing.
-pub const SAVES: bool = !cfg!(target_arch = "wasm32") && !oag_mobile::MOBILE;
+/// Whether this build can keep a replay: a desktop and a phone can (a phone writes into the
+/// app's own files directory); a page has no file system to write to.
+pub const WRITES: bool = crate::photo::writes_on(cfg!(target_arch = "wasm32"));
+
+/// Whether the player can browse to where a replay is kept: see [`crate::photo::REACHABLE`].
+pub const REACHABLE: bool = crate::photo::REACHABLE;
 
 /// The directory every replay lives under: `<data dir>/oag/replays`.
 #[must_use]

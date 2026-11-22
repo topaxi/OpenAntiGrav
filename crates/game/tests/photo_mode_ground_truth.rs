@@ -1267,6 +1267,79 @@ fn the_right_stick_and_the_triggers_move_the_view_and_never_the_race() {
     );
 }
 
+/// Fingers on the picture (`touch` steps through `Session::touch`): a drag looks around on the
+/// free lens, a pinch dollies it, a twist rolls it, a double tap puts it back. None of it reaches
+/// the simulation: every live tick hashes as the same tick of a race that never visited.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn fingers_move_the_view_and_never_the_race() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-touch-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    std::fs::create_dir_all(&shots).expect("a directory");
+    let to_the_throttle = TO_THE_TIME_TRIAL.replace("ticks 400; ", "hold cross 700; ");
+    let control = drive_unmodded(
+        &image,
+        "touch-control",
+        &format!("{to_the_throttle} ticks 1500"),
+        &shots,
+        &[],
+    );
+    assert!(control.status.success(), "{}", control.stderr);
+    let visited = drive_unmodded(
+        &image,
+        "touch",
+        &format!(
+            "{to_the_throttle} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; ticks 5; \
+             touch drag 300 300 420 340 6; ticks 5; \
+             touch pinch 400 300 40 120 8; ticks 5; \
+             touch twist 400 300 100 0 40 8; ticks 5; \
+             touch tap 400 300; touch tap 400 300; ticks 40; \
+             escape; until photo=none within 50; ticks 500"
+        ),
+        &shots,
+        &[],
+    );
+    assert!(visited.status.success(), "{}", visited.stderr);
+
+    let free = fx_values(&visited, "free");
+    let pose = |text: &str| -> Vec<f32> {
+        text.split(['/', ','])
+            .filter_map(|n| n.parse().ok())
+            .collect()
+    };
+    let poses: Vec<Vec<f32>> = free
+        .iter()
+        .map(|f| pose(f))
+        .filter(|p| p.len() == 6)
+        .collect();
+    assert!(poses.len() > 5, "the free lens never reported: {free:?}");
+    let first = &poses[0];
+    let moved = |index: usize| poses.iter().any(|p| (p[index] - first[index]).abs() > 1e-3);
+    assert!(moved(3), "a drag never turned the lens: {free:?}");
+    assert!(
+        (0..3).any(moved),
+        "a pinch never dollied the lens: {free:?}"
+    );
+    assert!(moved(5), "a twist never rolled the lens: {free:?}");
+
+    let held: BTreeMap<u64, String> = ticks(&control)
+        .into_iter()
+        .map(|(tick, hash, _)| (tick, hash))
+        .collect();
+    let mut compared = 0;
+    for (tick, hash, _) in &ticks(&visited) {
+        if let Some(control) = held.get(tick) {
+            assert_eq!(hash, control, "tick {tick} hashes differently");
+            compared += 1;
+        }
+    }
+    assert!(compared > 500, "only {compared} ticks compared");
+}
+
 /// A photo saved in photo mode carries the race it was taken of (`oag_game::shot_meta`): the text
 /// chunk names the title, the race and the camera, and the `oaGs` chunk holds the throttle the
 /// person held, so a race rebuilt from the file alone and driven to the photo's tick arrives at

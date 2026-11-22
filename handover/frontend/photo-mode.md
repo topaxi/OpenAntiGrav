@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pulse, pure, hd, 2048, omega]
-updated: 2026-11-15
-summary: "Photo mode with picture controls, rewind, motion blur and accumulated depth of field runs; split screen, touch and follow-ups are open"
+updated: 2026-11-22
+summary: "Photo mode with picture controls, rewind, motion blur, accumulated depth of field and touch gestures runs; split screen and follow-ups are open"
 ---
 
 # Photo mode
@@ -40,18 +40,18 @@ in that page's lineage and `git log`; what is left from it is here.
 
 - **Free lens landed (2026-11-15, `photo-cam`).** The mode opens on `free` at the camera the pause left; see
   `docs/ui/photo-mode.md`, "The free lens". Open: the HUD row still opens OFF while the pause frame
-  had the HUD, so the first frame differs by the HUD (the camera is identical); a touch player moves only by
-  the DRAG chip's MOVE (`Pointer` has no held level for a hold-to-move pad, and whether the on-screen stick
-  is live under photo mode was not checked on a phone); roll is on SELECT + stick and has no mouse binding.
+  had the HUD, so the first frame differs by the HUD (the camera is identical); a touch player moves by the DRAG chip's MOVE, or a two-finger drag on the free lens; roll is on SELECT + stick and has no mouse binding.
 
 - **Entry moved (2026-11-07):** on Pulse the PHOTO MODE row is the pause screen's (`handover/frontend/pause-menu.md`); the other titles keep the main page's.
 - **Split screen.** Left out on purpose (the mode frames one picture and one pad drives it); HD and
   Omega offer it from either pad. A cut from the best version, not a neutral default.
 - **The photo counter stat** (`PRO_STATS_PHOTO` where a stats row exists).
-- **Touch.** 2048's gestures (drag, two-finger roll and zoom) and a one-finger layout for a phone:
-  the chips and a click work, the stick-and-modifier bindings do not reach a touchscreen.
-- **Saving on a page or a phone.** The row is left out there: neither has a directory the player
-  reaches. A download on the web, the photo library on a phone.
+- **Touch landed (2026-11-22):** gestures (`oag_input::gesture`, `oag_raceplay::photo::touch`) and the
+  thumb-sized screen (`oag_game::photo::touch_layout`); `docs/ui/photo-mode.md`, "Touch". What the phone pass
+  decides is in `touch-photo-and-replay-need-a-phone-pass.md`.
+- **Saving on a page or sharing from a phone.** A phone writes into the app's files directory and offers the
+  mode; the row is still left out of the web build. A download on the web, the photo library and a share
+  sheet on a phone (`replays-leave-the-web-build-and-a-phone-by-download-and-share.md`).
 - **HD's `close` rest offset** was never read; Pulse's measured 12 behind, 3 above is used on every
   title (chosen). HD's separate tilt triggers and right-stick zoom are folded onto the one stick.
 - **The shot at a render scale below 1.0** is the presentation target, upscaled from the scene at its configured render size (dynamic resolution is held at that size while the mode is open); a shot at the scene's own pixels, before the upscaler, would be a second target.

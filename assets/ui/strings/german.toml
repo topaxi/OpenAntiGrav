@@ -417,6 +417,11 @@ OAG_FFMPEG_UNPACKING = { text = "FFMPEG WIRD ENTPACKT...", human = false }
 
 [untranslated]
 ids = [
+    # The replay viewer's touch CAMERA control; no translation pass yet.
+    "OAG_REPLAY_CAMERA",
+    # The photo mode touch hint; no translation pass yet.
+    "OAG_PHOTO_TOUCH_HINT",
+    "OAG_PHOTO_TOUCH_HINT_FREE",
     # The RECONNECTING overlay; no translation pass yet.
     "OAG_NET_RECONNECTING",
     "OAG_NET_RECONNECT_HINT",

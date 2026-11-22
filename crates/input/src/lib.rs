@@ -13,6 +13,7 @@
 
 pub mod android;
 pub mod bindings;
+pub mod gesture;
 pub mod keys;
 pub mod lobby;
 pub mod music;

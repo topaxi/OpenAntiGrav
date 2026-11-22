@@ -20,7 +20,7 @@ pub(crate) struct RaceStage {
     pub(crate) scene: Box<race::Scene>,
     pub(crate) race: Box<race::Race>,
     /// The race's keyframes since its first tick, for photo mode's rewind; `None` where photo
-    /// mode is not offered (`crate::photo::SAVES`).
+    /// mode is not offered (`crate::photo::WRITES`).
     pub(crate) keeper: Option<Box<race::timeline::Keeper>>,
     /// The HUD, or `None` when the disc's layout could not be read.
     pub(crate) hud: Option<Box<crate::hud_overlay::Overlay>>,

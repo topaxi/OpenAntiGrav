@@ -1334,7 +1334,12 @@ nothing stays highlighted under a finger nobody is holding there. Past the
 threshold the finger is a drag for good, even if it comes back: its travel is
 `Pointer::drag` (grid units, the content follows the finger) and it reports
 no position, no hover and no click, so a scroll never selects. One finger is
-followed; a second is ignored until the first lifts. Touch-down and lift
+followed; a second is ignored until the first lifts. **Camera gestures are not this
+pointer's job**: `oag_input::gesture::Gestures` follows up to two fingers from the same
+`Touch` events and gives photo mode and the replay viewer drag, two-finger pan, pinch,
+twist, taps and double taps ([photo mode](../ui/photo-mode.md), "Touch"); while a finger
+spoke last those two read their clicks and drags from it, and the pointer's own are the
+same touch twice, so they are ignored. Touch-down and lift
 are reported as their own edges, `Pointer::pressed` and `Pointer::released`
 (a cancelled touch and a focus loss with a finger down lift it too), with
 no position: they are what the shared touch-scroll model needs to catch a
