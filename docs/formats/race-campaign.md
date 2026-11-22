@@ -280,7 +280,9 @@ ladders, the nitro triple a dummy `1`/`1`/`1`). `NitroBattle` (13 cells) stays r
 - **Read:** the original's HUD compares the cell's thresholds against that same score
   (`detonator-cannon.md`, "The score", confidence 82), and the end-of-race builder `0x0005ac00`
   records only a finished craft unless the mode is 6, 10 or 13 (`cell-medal-award.md`, "End of
-  race"): Detonator is not in that set, so a quit race records nothing.
+  race"): Detonator is not in that set, so a quit race records nothing. A destroyed craft ends
+  ours as finished (`world.race[slot].finished`), so its score records; whether the original's
+  out-of-race ending (`+0x6a64 & 0x1000`) sets `+0x7002` is unread (**chosen**).
 - **Not read, chosen:** `Profile_RecordCampaignResult`'s mode-14 case, so that the value it hands
   the compare is the score (not the percentage or a rank) is a labelled choice, supported by the
   HUD comparing the same thresholds against the score. Also chosen: the mid-race medal cues
