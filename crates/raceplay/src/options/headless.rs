@@ -79,6 +79,7 @@ impl SimSetup {
             // names - zero is the honest absence.
             chase: ZERO_CHASE,
             muzzles: Vec::new(),
+            cannon_flash: [None, None],
             zone_stages: None,
             countdown_voice: false,
             countdown_beat: false,

@@ -619,6 +619,10 @@ pub struct SimSetup {
     /// and where its head draws while it charges. `None` for a hull that authors
     /// none or a version whose class id is unread.
     pub muzzles: Vec<Option<Vec3>>,
+    /// Slot 0's `cannon_flash_left` and `cannon_flash_right` locators in its hull's model space
+    /// (`load::muzzle::cannon_flash`), `[left, right]`: where Detonator's pulse cannon fires.
+    /// `[None, None]` off Detonator and for a hull that authors none.
+    pub cannon_flash: [Option<Vec3>; 2],
     /// This title's own zone-number-to-speed-class ladder, when it is recovered - the same
     /// [`oag_title::ZoneStages`] [`crate::zone_grade::ZoneGrade`] carries, copied here so
     /// [`ViewSetup::class_announcer`] can be triggered off the same edge without reaching into the

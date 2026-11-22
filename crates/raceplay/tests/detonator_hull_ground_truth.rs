@@ -146,3 +146,58 @@ fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
     assert!(label(&zone.mine_model).contains("hd_mine"));
     assert!(zone.bomb_blast_models.detonator.pads.is_empty());
 }
+
+/// Slot 0's pad with Square held.
+fn square() -> oag_gameplay::PlayerInputs {
+    let mut snapshot = oag_gameplay::InputSnapshot::new();
+    snapshot
+        .buttons
+        .begin_frame(oag_gameplay::input::Button::Square.bit());
+    oag_gameplay::PlayerInputs::single(snapshot)
+}
+
+/// **The cannon's muzzles are the hull's `cannon_flash` locators.** The simulation reads the
+/// pair itself (`load::muzzle::cannon_flash`), the livery reads the same pair for the drawn
+/// flash: the first volley's two rounds leave from the livery's locators carried by the craft,
+/// the left one on the craft's left, and where the drawn hull puts those locators is the same
+/// place.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_volley_leaves_from_the_hulls_cannon_flash_locators() {
+    let Some(loaded) = load(oag_race::Mode::Detonator, "Qirex") else {
+        return;
+    };
+    let locators = loaded.cannon_muzzles(0).map(|m| m.expect("both locators"));
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    while oag_race::RaceState::thrust_gated(race.core.sim.world.tick) {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    race.tick(&square());
+    let cannon = &race.core.sim.world.detonator.cannon;
+    let mut rounds = cannon.rounds.iter().filter(|r| r.live);
+    let (first, second) = (rounds.next().expect("a round"), rounds.next().expect("two"));
+    assert!(rounds.next().is_none(), "one volley is two rounds");
+
+    let body = race.core.sim.world.ships[0].physics.body;
+    let drawn = race.ship_model_matrix();
+    for (round, local, side) in [(first, locators[0], -1.0), (second, locators[1], 1.0)] {
+        let sim = oag_weapons::projectile::plasma::hull_point(&body, local.w_axis.truncate());
+        assert!(
+            (round.prev - sim).length() < 1e-3,
+            "a round leaves from its locator: {:?} against {sim:?}",
+            round.prev
+        );
+        let at = drawn * local.w_axis.truncate().extend(1.0);
+        assert!(
+            (round.prev - at.truncate()).length() < 0.5,
+            "the drawn hull puts the locator within half a unit of where the round left: {:?} \
+             against {:?}",
+            round.prev,
+            at.truncate()
+        );
+        assert!(
+            (round.prev - body.position).dot(body.right()) * side > 0.0,
+            "the left locator is on the craft's left"
+        );
+    }
+}

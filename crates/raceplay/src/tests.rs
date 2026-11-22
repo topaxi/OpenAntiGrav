@@ -334,6 +334,7 @@ fn setup(handling: Handling) -> SimSetup {
             view_sheared: false,
         },
         muzzles: vec![None; MAX_SHIPS],
+        cannon_flash: [None, None],
         // No title data here either, so no zone-to-stage ladder to fire the
         // class announcer against - the same "not this title" reason `zone`
         // above is `None`.

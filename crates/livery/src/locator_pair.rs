@@ -78,18 +78,9 @@ pub(super) fn locators(
     found
 }
 
-/// Sorts one file's nodes of `class` the way `FUN_002d8ec0` does: a
-/// lowercased name containing `left` is the left one, any other name the
-/// right. A second node on the same side replaces the first, as the
-/// original's store does.
+/// Sorts one file's nodes of `class` into `[left, right]` as `glam` matrices
+/// ([`vex::matrix::left_right_world_transforms`]).
 fn sort(class: u32, blob: &[u8]) -> [Option<Mat4>; 2] {
-    let mut out = [None, None];
-    let Ok(nodes) = vex::nodes(blob) else {
-        return out;
-    };
-    for (name, matrix) in vex::matrix::named_class_world_transforms(blob, &nodes, class) {
-        let left = name.is_some_and(|name| name.to_ascii_lowercase().contains("left"));
-        out[usize::from(!left)] = Some(Mat4::from_cols_array(&matrix));
-    }
-    out
+    vex::matrix::left_right_world_transforms(blob, class)
+        .map(|m| m.map(|m| Mat4::from_cols_array(&m)))
 }
