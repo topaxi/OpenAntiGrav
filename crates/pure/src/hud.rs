@@ -93,6 +93,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     // one other title fact this crate already reuses this way (`speed_lap`
     // above). See `oag_title::HudLayouts::elimination`.
     elimination: layouts::ARCADE,
+    detonator: layouts::TIME_TRIAL,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pure.toml"),
     player_tags: None,

@@ -326,3 +326,21 @@ fn cannon_sweep(collision: &CollisionWorld, from: Vec3, to: Vec3) -> Sweep {
 
 /// The last stage that lays objects.
 const STAGES_LAID: u32 = 14;
+
+impl crate::sim::RaceSim {
+    /// The pulse cannon's state, or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_cannon(&self) -> Option<&oag_weapons::detonator::cannon::Cannon> {
+        self.detonator.as_ref()?;
+        Some(&self.world.detonator.cannon)
+    }
+
+    /// The stage the HUD counts: stages laid, which is `1` at the opening stage and one more per
+    /// lap up to the fourteenth (`detonator-hud.md`, "The stage counter"), or `None` off
+    /// Detonator.
+    #[must_use]
+    pub fn detonator_stage(&self) -> Option<u32> {
+        self.detonator.as_ref()?;
+        Some(u32::from(self.world.detonator.stages_laid).clamp(1, STAGES_LAID))
+    }
+}

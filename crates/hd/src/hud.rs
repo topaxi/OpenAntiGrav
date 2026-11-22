@@ -134,6 +134,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     speed_lap: layouts::SPEED_LAP,
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
+    detonator: layouts::DETONATOR,
     split: Some(SPLIT),
     split_layout: Some(r"Data\XML\SplitHud_HD.toml"),
     player_tags: None,
@@ -604,6 +605,13 @@ pub const ALWAYS_ON: &[&str] = &[
     "ZonePlusLight8",
     "ZonePlusLight9",
     "ZonePlusLight10",
+    // Detonator's static frames: the stage plate, the weapon display's back plate and the EMP
+    // gauge's back plate. Authored by the Detonator roots alone
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "The answer in one table", 85);
+    // `Emp_0`-`Emp_7`, `EmpReady` and `EmpBarEffect` wait on the EMP mechanic and are not here.
+    "DetonatorStageParent",
+    "BulletBack",
+    "EMPBack",
 ];
 
 /// The fifteen rungs of Wipeout HD's Zone escalation ladder, by name.

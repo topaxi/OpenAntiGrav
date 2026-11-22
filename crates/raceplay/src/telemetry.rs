@@ -230,6 +230,13 @@ impl Race {
                 ..self.core.sim.extensions.hud(slot, self.core.sim.world.tick)
             },
             sub_weapon: self.core.sim.sub_weapon(slot),
+            detonator: self
+                .core
+                .sim
+                .detonator_cannon()
+                .filter(|_| primary)
+                .zip(self.core.sim.detonator_stage())
+                .map(|(cannon, stage)| super::detonator_hud::readout(cannon, stage, &hud.chain)),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what
             // decides whether anything reaches the screen, so this is passed
