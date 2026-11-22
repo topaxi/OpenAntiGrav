@@ -15,6 +15,9 @@ grade escalate lap by lap and the race end after lap 14, and nothing to shoot.
 
 ## Open
 
+- **End screen headline is wired** (`Headline::Detonator`, `ER_ZDETONATOR_COM`): it draws on
+  2048 and Omega, nothing on HD (no HD archive authors the text). Score and stage rows open.
+
 - **Weapon table decoded, not spent.** `WeaponStats::detonator()` reads the Detonator-only
   attributes (Mine scoring, Cannon reload/rebounds, Bomb shots and points, the `EMP` block,
   `energy_recharge_per_stage`) on HD, Omega and 2048 (`docs/formats/weapon-stats.md`,
