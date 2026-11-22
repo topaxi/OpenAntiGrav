@@ -127,10 +127,8 @@ pub fn race_hull_entry(
     mode: oag_race::Mode,
 ) -> Option<String> {
     (!draws_hull(title, oag_ui_screens::picker::Kind::Ship)).then(|| {
-        title
-            .race
-            .ships_for(team)
-            .hull_entry_name(team, mode == oag_race::Mode::Zone, None)
+        let ships = title.race.ships_for(team);
+        ships.hull_entry_name(team, oag_livery::entry::own_craft(ships, mode), None)
     })
 }
 
@@ -199,10 +197,8 @@ pub fn zone_race_hull_entry(
         && outside_the_team
         && draws_hull(title, oag_ui_screens::picker::Kind::Ship))
     .then(|| {
-        title
-            .race
-            .ships_for(team)
-            .hull_entry_name(team, mode == oag_race::Mode::Zone, None)
+        let ships = title.race.ships_for(team);
+        ships.hull_entry_name(team, Some(ships.zone), None)
     })
 }
 

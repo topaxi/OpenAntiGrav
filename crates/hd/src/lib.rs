@@ -247,6 +247,7 @@ pub const TITLE: &Title = &Title {
     weapons: &oag_title::weapons::Weapons {
         race: r"Data\XML\WeaponStats_Race.xml",
         elimination: Some(r"Data\XML\WeaponStats_Elimination.xml"),
+        detonator: Some(r"Data\XML\WeaponStats_Detonator.xml"),
         // `Data\XML\WeaponAIstats.xml` is in `DATA00.PSARC` (searched
         // 2026-10-03) and carries Pulse's thirteen element names (with its
         // own values) plus an `AllWeapons` row and an `EliminatorAIStats` row,

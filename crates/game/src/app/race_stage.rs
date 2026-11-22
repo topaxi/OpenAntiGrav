@@ -550,7 +550,10 @@ impl RaceStage {
     ///   finishing position (always `>= 1`) can never satisfy a `0` target
     ///   by accident. See `docs/ghidra/functions/psp-pulse-usa/head2head.md`.
     ///
-    /// Everything else - `Custom Grid`, `AI Race` - is `None`:
+    /// `Detonator` - the cannon's score (`detonator_score`), once the race is finished, compared
+    /// `>=` against the cell's targets (a counting mode; the title's `counting_modes`).
+    ///
+    /// Everything else - `Custom Grid`, `AI Race`, `NitroBattle` - is `None`:
     /// `Self::campaign_cell` never carries one of those, since
     /// `crate::campaign::race_mode_for_cell` refuses to map them onto a
     /// launch in the first place.
@@ -619,6 +622,11 @@ impl RaceStage {
                 self.race.core.eliminator_place(),
             ),
             CampaignMode::Tournament => self.tournament_final_rank.map(i64::from),
+            // A Detonator cell's medal is the cannon's score
+            // (`crate::medal_watch::detonator_value`).
+            CampaignMode::Other(ref name) if name == crate::campaign::DETONATOR_CELL_MODE => {
+                crate::medal_watch::detonator_value(finished, self.race.core.sim.detonator_score())
+            }
             CampaignMode::CustomGrid | CampaignMode::AiRace | CampaignMode::Other(_) => None,
         }?;
         // Evaluated against whichever rung the cell was actually launched

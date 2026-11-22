@@ -84,6 +84,7 @@ impl Race {
             weapon_pads,
             weapons,
             weapon_ai,
+            detonator,
             allowed_weapons,
             weapon_pad_refresh,
             class,
@@ -627,6 +628,29 @@ impl Race {
         let breadcrumbs = std::array::from_fn(|slot| {
             crate::breadcrumbs::Breadcrumbs::seeded(world.ships[slot].physics.body.position)
         });
+        // Built before the track tables move into the race: the survey reads them.
+        let detonator = detonator.filter(|_| mode == Mode::Detonator).map(|layout| {
+            let cannon = weapons.as_ref().and_then(|stats| {
+                oag_weapons::detonator::cannon::Config::from_tables(
+                    stats,
+                    &layout.values,
+                    layout.scoring,
+                )
+            });
+            crate::detonator::Detonator {
+                cannon,
+                survey: Arc::new(crate::detonator::survey(
+                    &spline,
+                    &order,
+                    &collision,
+                    &layout.values,
+                )),
+                layout: Arc::new(layout),
+                contact: weapons
+                    .as_ref()
+                    .and_then(oag_weapons::detonator::Contact::from_stats),
+            }
+        });
         let race = Self {
             core: SimRace {
                 sim: RaceSim {
@@ -774,6 +798,8 @@ impl Race {
                         super::FireLaw::Ours
                     },
                     weapon_ai: weapon_ai.map(Arc::new),
+                    detonator,
+                    detonator_went: Vec::new(),
                     weapons: weapons.map(Arc::new),
                     allowed_weapons: allowed_weapons.into(),
                     class: class.into(),

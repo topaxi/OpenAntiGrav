@@ -645,3 +645,69 @@ fn a_leachbeam_without_a_lock_window_is_skipped_rather_than_fatal() {
         stats.skipped
     );
 }
+
+/// A Detonator table with invented numbers (1, 2, 3 ... in document order).
+const DETONATOR_FIXTURE: &str = r#"<WeaponStats>
+<Weapon type="Global"><Stats slowdown_limit="1" energy_recharge_per_stage="2"/></Weapon>
+<Weapon type="Mine"><Stats absorb="3" blastforce="4" blastradius="5" damage="6" slowdown_time="7" timetodie="8" trigger_radius="9" points_per_metre="10" max_distance="11" velocity_reduction="12"/></Weapon>
+<Weapon type="Cannon"><Stats absorb="13" rounds="14" num_rebounds="15" rate="16" damage_per_bullet="17" slowdown_time="18" round_recharge_time="19" recharge_pause="20"/></Weapon>
+<Weapon type="EMP"><Stats wave_time="21" speed="22" minNumPadsToCollectEMP="23" maxNumPadsToCollectEMP="24" minDistance="25" maxDistance="26"/></Weapon>
+<Weapon type="Bomb"><Stats absorb="27" blastforce="28" blastradius="29" damage="30" damageradius="31" slowdown_time="32" trigger_radius="33" timetodie="34" number_of_shots_to_destroy="35" energy_recharge_per_shot="36" points_for_cannon_bullet_hit="37" points_for_destroying="38"/></Weapon>
+</WeaponStats>"#;
+
+#[test]
+fn a_detonator_table_decodes_its_own_attributes() {
+    let stats = parse(DETONATOR_FIXTURE).expect("the fixture parses");
+    let d = stats
+        .detonator()
+        .expect("Detonator attributes are authored");
+    assert_eq!(d.energy_recharge_per_stage, Some(2.0));
+    assert_eq!(d.mine.points_per_metre, Some(10.0));
+    assert_eq!(d.mine.max_distance, Some(11.0));
+    assert_eq!(d.mine.velocity_reduction, Some(12.0));
+    assert_eq!(d.cannon.num_rebounds, Some(15.0));
+    assert_eq!(d.cannon.round_recharge_time, Some(19.0));
+    assert_eq!(d.cannon.recharge_pause, Some(20.0));
+    assert_eq!(d.bomb.number_of_shots_to_destroy, Some(35.0));
+    assert_eq!(d.bomb.energy_recharge_per_shot, Some(36.0));
+    assert_eq!(d.bomb.points_for_cannon_bullet_hit, Some(37.0));
+    assert_eq!(d.bomb.points_for_destroying, Some(38.0));
+    let emp = d.emp.expect("the EMP block");
+    assert_eq!(emp.wave_time, Some(21.0));
+    assert_eq!(emp.speed, Some(22.0));
+    assert_eq!(emp.min_num_pads_to_collect, Some(23.0));
+    assert_eq!(emp.max_num_pads_to_collect, Some(24.0));
+    assert_eq!(emp.min_distance, Some(25.0));
+    assert_eq!(emp.max_distance, Some(26.0));
+}
+
+#[test]
+fn the_ordinary_blocks_and_roster_are_unchanged_by_the_detonator_pass() {
+    let stats = parse(DETONATOR_FIXTURE).expect("the fixture parses");
+    assert_eq!(stats.absorb.len(), 3, "the EMP block carries no absorb");
+    assert!(stats.skipped.is_empty(), "{:?}", stats.skipped);
+    assert_eq!(stats.mine().expect("Mine").trigger_radius, 9.0);
+    assert_eq!(stats.cannon().expect("Cannon").rounds, 14.0);
+    assert_eq!(stats.bomb().expect("Bomb").timetodie, Some(34.0));
+}
+
+#[test]
+fn a_table_without_detonator_attributes_reports_none() {
+    let stats = parse(FIXTURE).expect("the fixture parses");
+    assert_eq!(stats.detonator(), None);
+}
+
+#[test]
+fn a_detonator_attribute_that_is_not_a_number_is_an_error() {
+    let broken = DETONATOR_FIXTURE.replace(
+        "points_for_destroying=\"38\"",
+        "points_for_destroying=\"x\"",
+    );
+    assert!(matches!(
+        parse(&broken),
+        Err(Error::NotANumber {
+            attribute: "points_for_destroying",
+            ..
+        })
+    ));
+}

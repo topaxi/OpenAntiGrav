@@ -146,6 +146,27 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         fallback_palette: None,
         stage_textures: None,
         camera_scale: 0.7,
+        layouts: Some(oag_title::DetonatorLayouts {
+            pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
+            gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
+            scoring: r"Data\XML\DetonatorScoring.xml",
+        }),
+        craft: Some(DETONATOR_CRAFT),
+        handling: Some(DETONATOR_HANDLING),
+        // HD's names, as every other Omega weapon body (`crate::weapons`); the pad path is a data
+        // field there, so HD's is **inherited**.
+        objects: Some(oag_title::DetonatorObjects {
+            mine: [
+                r"Data\Weapons\mine_rita_football.vex",
+                r"Data\Weapons\mine_rita_spikes.vex",
+            ],
+            bomb: [
+                r"Data\Weapons\detonator_bomb_final.vex",
+                r"Data\Weapons\detonator_bomb_final_equalisers.vex",
+                r"Data\Weapons\detonator_bomb_glowedges.vex",
+            ],
+            pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+        }),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),
@@ -153,6 +174,29 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     fresh_variant: None,
     speed_classes: None,
 };
+
+/// Omega's Detonator craft: `hdships\Detonator\Ship.vex` for every team, its livery key
+/// `zoneship_team` (its Zone key too; `docs/ghidra/functions/ps4-omega-eu/detonator-hull.md`).
+/// No livery literal is known for a team that authors none.
+pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft {
+    hull: oag_title::ZoneCraft::OwnShipAt {
+        root: SHIP_DIR,
+        ship: "Detonator",
+        livery_key: "zoneship_team",
+    },
+    livery_fallback: None,
+};
+
+/// Omega's Detonator handling: v1.07 `0x014af2a0` tests mode `0xe` first and the file is
+/// byte-identical to HD's, so its unauthored values are **inherited from HD**.
+pub const DETONATOR_HANDLING: oag_title::zone_handling::ZoneHandling =
+    oag_title::zone_handling::ZoneHandling {
+        entry: oag_title::pre_race::Sourced::measured(
+            r"Data\art\published\hdships\Detonator\handlingstats.xml",
+        ),
+        landing_rebound: oag_title::pre_race::Sourced::inherited(0.0, "Wipeout HD"),
+        rebound_jump_time: oag_title::pre_race::Sourced::inherited(2.0, "Wipeout HD"),
+    };
 
 /// The 2048-era circuits (`Data\Environments2048\`) are raced under 2048's rules: its HUD set,
 /// its layout grid and its Race Box lap counts.

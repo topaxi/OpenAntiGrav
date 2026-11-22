@@ -423,3 +423,9 @@
 0x811c711e	function	Ship_SetState	82	../ps3-hdfury-eu/ship-destroy.md
 0x811c6f72	function	Ship_SelectWreckModel	78	../ps3-hdfury-eu/ship-destroy.md
 0x811bc2bc	function	Ship_PlayDestroyExplosion	78	../ps3-hdfury-eu/ship-destroy.md
+
+# 2026-11-22 detonator-placement: HD's placer, checked structurally (detonator-placement.md)
+0x8117cf22	function	Detonator_PlaceStageObjects	70	detonator-placement.md
+0x8117cb9c	function	Detonator_SpawnObject	60	detonator-placement.md
+0x810bfd54	function	Team_LoadHandlingStats	75	detonator-hull.md
+

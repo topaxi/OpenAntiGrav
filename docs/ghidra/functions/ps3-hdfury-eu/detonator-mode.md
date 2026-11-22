@@ -49,26 +49,36 @@ Read off the decompile of `0x00067b40`; none of it is in this engine yet.
 
 | Piece | Reading | Confidence |
 | --- | --- | ---: |
-| Second race end | the same end path runs when the player craft's `+0x6a64 & 0x1000` is set (the out-of-race bit [eliminator-flip.md](eliminator-flip.md) cites): a destroyed craft ends the run. | 70 |
-| Mines and bombs per stage | `FUN_000654e0(rm, oldStage)` runs on every step while the new stage is under `15`. It walks the track sections, sums authored pattern records at `rm+0x2e30` (stride `0xd60`, a minimum-stage word at `+0x3b80`), takes a per-stage count from a table at `+0x14 + stage*4`, draws patterns with `Libc_Rand` and calls `FUN_00064f70` per object (`docs/ghidra/functions/ps3-hdfury-eu/detonator-bomb.md` has the `DetonatorBomb` class). Ghidra truncates it on bad instruction data; it needs reading from the disassembly. | 60 (shape only) |
+| Second race end | the same end path runs when the player craft's `+0x6a64 & 0x1000` is set (the out-of-race bit [eliminator-flip.md](eliminator-flip.md) cites): a destroyed craft ends the run. What sets the bit: mine and bomb damage drains the energy pool, `Ship_ApplyDamage` at zero calls `Ship_SetState(4)`, which sets it ([detonator-mine.md](detonator-mine.md#what-the-craft-does-with-it), 72). | 70 |
+| Mines and bombs per stage | `Detonator_PlaceStageObjects` (`0x000654e0`, `(rm, oldStage)`) runs once at race start with `oldStage = 0` and on every step while the new stage is under `15`. Read from the disassembly on [detonator-placement.md](detonator-placement.md): pattern groups from the global `/data/xml/DetonatorLayouts/PatternFile.xml`, stage counts `MineCountStage1..14` from `GamePlayValues.xml` as a target total including surviving mines, chunked placement round a surveyed lap, single-mine top-up, one bomb, through `Detonator_SpawnObject` (`0x00064f70`) into a 200-mine pool. | 80 |
 | EMP charge | a craft flag `+0x6a64 & 0x8000000` (cleared on read) bumps `rm+0x2dd8`; below `table+0x1bc` the gauge `craft+0x7da0` is `0`, above it `(n - (hi - lo)) / (hi - lo)` clamped to `1`, with the `EMPREADY` and `EMPFULL` announcer cues on the two edges. The manual's "fly over the special EMP pads to charge up your EMP weapon" is this. | 70 |
-| End-of-run percentage | `rm+0x2ddc = rm+0x6de3c / (sum of fourteen per-stage counts) * k`: the share of objects destroyed. `PERCENT_MINES_CLEARED` is the result screen's label. | 65 |
-| Top block | `FUN_00067120`, then `FUN_000642a0(k, rm, craft)` once per stage while the craft's speed `+0x6944 -> +0x4c4` is over a constant; a hit raises HUD message `8`. Unread. | - |
+| End-of-run percentage | `rm+0x2ddc = float(rm+0x6de3c) / float(MineCountStage1 + .. + MineCountStage14) * 100.0` (f32, `k = 100.0` at TOC `-0x6830`; the disc's sum is 1860); `rm+0x6de3c` counts mines destroyed by a cannon round or the EMP, not chain-reaction mines or bombs; `rm+0x2de0 = rm+0x6de40` (bombs). `PERCENT_MINES_CLEARED` is the result screen's label ([detonator-cannon.md](detonator-cannon.md#the-destroyed-count-and-the-end-of-the-run)). | 82 |
+| Top block | while the craft's speed `+0x6944 -> +0x4c4` is over `10.0`: `Detonator_UpdateHud` (`0x00067120`: reload gauge, HUD stage, medals, two trophies, `+1000` on a craft flag; not a score add), then `Detonator_IsBombAhead(500.0, rm, craft)` (`0x000642a0`) once per stage: a live bomb up to 500 ahead raises HUD message `8` and the `"bomb"` cue, a warning, not a hit ([detonator-cannon.md](detonator-cannon.md#the-top-block-a-bomb-warning-the-hud-and-three-trophies)). | 55-80 |
+| Pulse cannon and score | the craft's fixed cannon: a clip of 15 two-round volleys at 0.1 s, rounds at 500 units/s that skim the track and rebound once, a mine in one hit, a bomb in four, a chain reaction round a shot-down bomb; the score from `DetonatorScoring.xml` into `rm+0x2df0`, streak bonuses 1000/3000/5000 per clip ([detonator-cannon.md](detonator-cannon.md)). | 72-82 |
 
 **What the manual says and no code here was read for**: "Like Zone mode, acceleration is automatic
-and ever-increasing", the pulse cannon and its reload, the shot-chain bonus, and the score values. So
-this engine flies a Detonator race on the player's own throttle: the auto-speed law is not read, and
-Zone's is not borrowed for it.
+and ever-increasing". So this engine flies a Detonator race on the player's own throttle: the
+auto-speed law is not read, and Zone's is not borrowed for it. The pulse cannon, its reload, the
+shot-chain bonus and the score values are read on [detonator-cannon.md](detonator-cannon.md).
 
 ## The Zone-modes mask carries Detonator
 
-HD tests one mask, `0x206040` (game modes 6, 13, 14 and 21), in `Craft_Update`,
-`Craft_UpdateHover` and `Team_LoadHandlingStats`, and mode 14 is Detonator. So a Detonator craft,
-like a Zone craft, flies `/data/ships/zone/handlingstats.xml`'s classless block, the Zone hover rig
-with its trailing ray, no brakes, and waits on the grid at the ray's height
-([hover-four-point.md](hover-four-point.md), "Zone, read live"; the mask static, the laws live for
-mode 6 only). Wired as `oag_race::Mode::on_zone_mask`; on 2048 and Omega those title fields are
-`None`, so nothing changes there. **Departure, named**: the same mask skips `Craft_RecordSplit`
+HD tests one mask, `0x206040` (game modes 6, 13, 14 and 21), in `Craft_Update` and
+`Craft_UpdateHover`, and mode 14 is Detonator. So a Detonator craft, like a Zone craft, flies the
+Zone hover rig with its trailing ray, has no brakes, and waits on the grid at the ray's height
+([hover-four-point.md](hover-four-point.md), "Zone, read live"; the mask is read statically, and
+the laws were observed live for mode 6 only). Wired as `oag_race::Mode::on_zone_mask`; on 2048 and
+Omega those title fields are `None`, so nothing changes there.
+
+**The handling file is not Zone's.** `Team_LoadHandlingStats` tests mode `0xe` before the mask
+(`0x001e7050`) and reads `Data\Ships\Detonator\handlingstats.xml`. That file has the same engine as
+Zone's, but turns harder (`Turning` 2.2/1200 against 1.8/1000), has less airbrake and tilt, is
+narrower (`Misc.width` 4.0 against 5.0), and carries its own cameras. Confidence 82, and the same
+test is on 2048 and Omega ([detonator-hull.md](detonator-hull.md), "The handling file"). This page
+once said a Detonator craft flies Zone's file, and the wiring followed it:
+`oag_hd::race::ZONE_HANDLING` applies to every `on_zone_mask` mode. Engine lights are Zone's
+(`Data\Ships\Zone\EngineLightData.xml`, under the mask). The hull is Detonator's own,
+`Data\Ships\Detonator\Ship.vex`, also on [detonator-hull.md](detonator-hull.md). **Departure, named**: the same mask skips `Craft_RecordSplit`
 inside `Craft_UpdateLapProgress` (`0x000e50c4`-`0x000e50dc`), so the original keeps no split gaps in
 Detonator; this build's HUD still shows its lap times.
 

@@ -145,6 +145,9 @@ pub enum Headline {
     /// Several people flew the race (a split screen): no one place is the race's,
     /// so the headline says nothing and the table names every person.
     Several,
+    /// `ER_ZDETONATOR_COM`: what HD's results grid writes into `Line1` for Detonator (mode `0xe`,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`).
+    Detonator,
     /// `Zone`/`Eliminator` on Wipeout HD/Fury, whose own populate for them is
     /// unread - drawing nothing rather than guessing a headline. Pulse's two
     /// have tables of their own ([`EliminationResults`], [`ZoneResults`]) with

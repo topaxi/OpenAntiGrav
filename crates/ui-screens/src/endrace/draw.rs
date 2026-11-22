@@ -439,6 +439,10 @@ pub(super) fn headline_text(headline: Headline, strings: &StringTable) -> Option
         Headline::TimeTrial => "ER_TT_COM",
         Headline::SpeedLap => "ER_SL_COM",
         Headline::NoPosition => "ER_SHIP_DES",
+        // HD's own string tables carry no such id (the executable names it; no archive of the
+        // disc authors it), so a table without it draws nothing rather than the raw id
+        // (`docs/ui/endrace-screens.md`, "Detonator's headline").
+        Headline::Detonator => return strings.get("ER_ZDETONATOR_COM").map(str::to_owned),
         Headline::Position(place) => ordinal_idstring(place)?,
         Headline::Several | Headline::Unresolved => return None,
     };

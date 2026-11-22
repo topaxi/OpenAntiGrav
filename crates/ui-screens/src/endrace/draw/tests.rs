@@ -596,3 +596,23 @@ fn a_campaign_tier_the_title_has_no_phrase_for_names_itself_in_the_award_line() 
     assert!(award(Some(platinum)).contains(&"PLATINUM MEDAL AWARDED".to_string()));
     assert!(award(None).contains(&"Gold medal awarded".to_string()));
 }
+
+/// Detonator's headline resolves to the disc's `ER_ZDETONATOR_COM` text, and to nothing where
+/// the table has none.
+#[test]
+fn a_detonator_headline_resolves_to_its_idstring() {
+    let table = StringTable::from_xml(
+        r#"<Strings><Entry ID="ER_ZDETONATOR_COM" String="DETONATOR SESSION COMPLETE!"></Entry></Strings>"#,
+    );
+    assert_eq!(
+        headline_text(Headline::Detonator, &table).as_deref(),
+        Some("DETONATOR SESSION COMPLETE!")
+    );
+    assert_eq!(
+        headline_text(
+            Headline::Detonator,
+            &StringTable::from_xml("<Strings></Strings>")
+        ),
+        None
+    );
+}

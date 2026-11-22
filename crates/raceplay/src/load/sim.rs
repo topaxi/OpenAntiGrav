@@ -9,6 +9,22 @@
 use super::seams::{Seam, Seams};
 use super::*;
 
+/// The handling file a race flies in place of the team's, or `None` for the team's own.
+///
+/// Detonator reads its own file, tested before the Zone mask (`Team_LoadHandlingStats`,
+/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The handling file"); every other
+/// mode on the mask flies a title's Zone file where it reads one (`oag_title::zone_handling`).
+#[must_use]
+pub fn mode_handling(
+    race: &oag_title::RaceDefaults,
+    mode: Mode,
+) -> Option<oag_title::zone_handling::ZoneHandling> {
+    if mode == Mode::Detonator {
+        return race.detonator.and_then(|detonator| detonator.handling);
+    }
+    race.zone_handling.copied().filter(|_| mode.on_zone_mask())
+}
+
 /// What [`load_sim`] read: the [`SimSetup`] and the simulation modules, what names the
 /// race, and what the view phase builds the picture from.
 #[derive(Debug)]
@@ -151,12 +167,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     let circuit_hull =
         variant::circuit_hull(&mut archives, title, craft_title, &track, &mut report);
 
-    // A Zone race on a title that reads a Zone file of its own flies that file's one class
-    // (`oag_title::zone_handling`); every other race flies the team's own.
-    let zone_handling = craft_title
-        .race
-        .zone_handling
-        .filter(|_| options.mode.on_zone_mask());
+    let zone_handling = mode_handling(craft_title.race, options.mode);
     let stats_name = match zone_handling {
         Some(zone) => zone.entry.value.to_string(),
         None => handling::entry_name_in(craft_title.race.handling_dir_for(&team), &team),
@@ -169,7 +180,8 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
                 rebound_jump_time: zone.rebound_jump_time.value,
             };
             report.push(format!(
-                "zone: flying {stats_name}'s classless block as {}, in place of {team}'s file",
+                "{}: flying {stats_name}'s classless block as {}, in place of {team}'s file",
+                options.mode.name(),
                 options.class
             ));
             handling::from_blob_classless(&stats_blob, &options.class, unauthored)
@@ -252,6 +264,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
     // Two failures, two lines, for the reason `<Global>` above gives at length.
     let weapons = assets::load_weapons(&mut archives, title, options.mode, &mut report);
     let weapon_ai = assets::load_weapon_ai(&mut archives, title, &mut report);
+    let detonator = assets::load_detonator_layout(&mut archives, title, options.mode, &mut report);
     let rule = crate::score_law::of(options, title, &weapon_ai, &mut archives, &mut report);
     if options.weapons_on() && weapons.is_none() {
         // Only worth saying on a mode that would otherwise hand something out.
@@ -530,6 +543,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
         weapon_pads,
         weapons,
         weapon_ai,
+        detonator,
         // No caller of the general `load` sets this - only `race::load::campaign::load_event`
         // does, on the `Loaded` this returns, after this whole function has already run.
         // See `SimSetup::allowed_weapons`'s own doc comment.

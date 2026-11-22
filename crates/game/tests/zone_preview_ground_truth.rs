@@ -106,10 +106,8 @@ fn check(
             continue;
         }
         let label = format!("{name}/{}", team.id);
-        let entry = title
-            .race
-            .ships_for(&team.id)
-            .hull_entry_name(&team.id, true, None);
+        let ships = title.race.ships_for(&team.id);
+        let entry = ships.hull_entry_name(&team.id, Some(ships.zone), None);
         if has_selector {
             assert_eq!(
                 oag_game::preview::zone_race_hull_entry(title, &team.id, Mode::Zone),

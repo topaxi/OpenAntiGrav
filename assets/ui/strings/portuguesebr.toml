@@ -517,10 +517,13 @@ OAG_FFMPEG_YES = { text = "BAIXAR", human = false }
 OAG_FFMPEG_NO = { text = "NÃO, OBRIGADO", human = false }
 OAG_FFMPEG_DOWNLOADING = { text = "BAIXANDO FFMPEG %s - VOLTAR CANCELA", human = false }
 OAG_FFMPEG_UNPACKING = { text = "DESCOMPACTANDO FFMPEG...", human = false }
-OAG_PHOTO_GALLERY = { text = "FOTO SALVA NA GALERIA", human = false }
-OAG_REPLAY_CAMERA = { text = "CÂMERA", human = false }
-OAG_PHOTO_TOUCH_HINT = { text = "ARRASTE: ORBITAR   PINÇA: ZOOM   2 DEDOS: MOVER   GIRAR: INCLINAR   TOQUE DUPLO: REDEFINIR", human = false }
-OAG_PHOTO_TOUCH_HINT_FREE = { text = "ARRASTE: OLHAR   PINÇA: APROXIMAR   2 DEDOS: DESLIZAR   GIRAR: ROLAR   TOQUE DUPLO: REDEFINIR", human = false }
+
+# Phones: the REPLAYS page's export, photo mode's gallery save, the replay
+# viewer's touch camera and photo mode's touch hints.
 OAG_REPLAYS_EXPORT = { text = "EXPORTAR", human = false }
 OAG_REPLAYS_EXPORTED = { text = "REPLAY EXPORTADO PARA DOWNLOADS", human = false }
 OAG_REPLAYS_EXPORT_FAILED = { text = "NÃO FOI POSSÍVEL EXPORTAR O REPLAY", human = false }
+OAG_PHOTO_GALLERY = { text = "FOTO SALVA NA GALERIA", human = false }
+OAG_REPLAY_CAMERA = { text = "CÂMERA", human = false }
+OAG_PHOTO_TOUCH_HINT = { text = "ARRASTAR ÓRBITA   PINÇAR ZOOM   2 DEDOS PANORÂMICA   GIRAR INCLINAR   TOQUE DUPLO REDEFINIR", human = false }
+OAG_PHOTO_TOUCH_HINT_FREE = { text = "ARRASTAR OLHAR   PINÇAR APROXIMAR   2 DEDOS DESLIZAR   GIRAR ROLAR   TOQUE DUPLO REDEFINIR", human = false }

@@ -36,6 +36,7 @@ pub(super) fn build(
     scene_depth: mesh_render::Depth,
     zone_art: &mesh_render::zone::StageArt,
     shadow_maps: mesh_render::ShadowMaps<'_>,
+    slots: usize,
 ) -> Result<Vec<Drawable>> {
     let mut drawables: Vec<Drawable> = Vec::new();
     if let Some(model) = model.filter(|model| !model.indices.is_empty()) {
@@ -57,7 +58,7 @@ pub(super) fn build(
         )?;
         // Every slot but the first is another name for the first's GPU resources - see
         // `Drawable::instances` for what it shares.
-        let rest = first.instances(device, oag_weapons::projectile::MAX_PROJECTILES - 1);
+        let rest = first.instances(device, slots - 1);
         drawables.push(first);
         drawables.extend(rest);
     }
@@ -106,7 +107,7 @@ pub(super) fn build_all(
     zone_art: &mesh_render::zone::StageArt,
     shadow_maps: mesh_render::ShadowMaps<'_>,
 ) -> Result<WeaponBodies> {
-    let one = |model| {
+    let sized = |model, slots| {
         build(
             device,
             queue,
@@ -118,15 +119,18 @@ pub(super) fn build_all(
             scene_depth,
             zone_art,
             shadow_maps,
+            slots,
         )
     };
+    let one = |model| sized(model, oag_weapons::projectile::MAX_PROJECTILES);
     Ok((
         one(rocket_model)?,
-        one(mine_model)?,
+        // A Detonator field lays more mines than a race can have in the air.
+        sized(mine_model, crate::detonator_models::MINE_POOL)?,
         one(bomb_model)?,
         one(cannon_model)?,
         blast_models::PlasmaBlastDrawables::build(plasma_blast_models, one)?,
-        bomb_blast::BombBlastDrawables::build(bomb_blast_models, one)?,
+        bomb_blast::BombBlastDrawables::build(bomb_blast_models, one, sized)?,
     ))
 }
 
@@ -249,6 +253,14 @@ impl super::Scene {
             prev_vp,
             None,
         );
+        self.write_detonator_parts(
+            (&mine_matrices, &bomb_matrices),
+            prev,
+            queue,
+            (view_projection, prev_vp),
+            seconds,
+            weapon_scene,
+        );
         (
             rocket_matrices,
             plasma_ball_matrices,
@@ -260,6 +272,59 @@ impl super::Scene {
 }
 
 impl super::Scene {
+    /// Writes Detonator's own object parts: each laid mine's and bomb's other parts take the
+    /// matrix the part in the Mine's and the Bomb's own pool took, and every pad carries its
+    /// model at the pad's own transform ([`crate::detonator_models`]).
+    fn write_detonator_parts(
+        &self,
+        (mines, bombs): (&[Mat4], &[Mat4]),
+        prev: &Snapshot,
+        queue: &Uploads<'_>,
+        (view_projection, prev_vp): (Mat4, Mat4),
+        seconds: f32,
+        weapon_scene: &mesh_render::Scene,
+    ) {
+        let parts = &self.bomb_blast.detonator;
+        for (pool, matrices, previous) in [
+            (&parts.mine_spikes, mines, &prev.mines),
+            (&parts.bomb_equalisers, bombs, &prev.bombs),
+            (&parts.bomb_glow_edges, bombs, &prev.bombs),
+            (&parts.pad, &parts.pads[..], &parts.pads),
+        ] {
+            write_one_kind(
+                pool,
+                weapon_scene,
+                matrices,
+                previous,
+                queue,
+                view_projection,
+                prev_vp,
+                Some(seconds),
+            );
+        }
+    }
+
+    /// Draws what [`Self::write_detonator_parts`] wrote: the parts of `mines` laid mines and
+    /// `bombs` laid bombs, and every pad.
+    pub(super) fn draw_detonator_parts<'a>(
+        &'a self,
+        (mines, bombs): (usize, usize),
+        list: &mut super::record::DrawList<'a>,
+    ) {
+        let parts = &self.bomb_blast.detonator;
+        for drawable in parts.mine_spikes.iter().take(mines) {
+            list.mesh(drawable);
+        }
+        for pool in [&parts.bomb_equalisers, &parts.bomb_glow_edges] {
+            for drawable in pool.iter().take(bombs) {
+                list.mesh(drawable);
+            }
+        }
+        for drawable in &parts.pad {
+            list.mesh(drawable);
+        }
+    }
+
     /// Draws the `live` Shuriken blades [`Self::write_weapon_models`] wrote.
     pub(super) fn draw_shurikens<'a>(
         &'a self,

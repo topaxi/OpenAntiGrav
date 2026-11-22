@@ -553,6 +553,8 @@ impl Race {
         // counted a second time - see `Ship::standing`. Outside the borrow above
         // rather than inside it because this walks the whole ship array.
         self.core.sim.update_standings();
+        // After the lap counter, so a stage steps on the tick its crossing counts.
+        self.core.sim.advance_detonator(inputs);
         #[cfg(feature = "view")]
         if self.draws() {
             self.view.tick_split_gap(&self.core);

@@ -1079,7 +1079,7 @@ pub fn read_grids(
 }
 
 /// Which [`oag_race::Mode`] a campaign cell's own [`race_campaign::Mode`]
-/// launches as - `None` for the two this engine cannot run at all.
+/// launches as - `None` for the ones this engine cannot run at all.
 ///
 /// **Not a spelling mismatch to resolve, a scope one.** `oag_race::Mode` has
 /// seven variants because that is what `crates/race` implements; a campaign
@@ -1113,14 +1113,24 @@ pub fn race_mode_for_cell(mode: race_campaign::Mode) -> Option<oag_race::Mode> {
         race_campaign::Mode::SpeedLap => Some(oag_race::Mode::SpeedLap),
         race_campaign::Mode::Tournament => Some(oag_race::Mode::Tournament),
         race_campaign::Mode::Head2Head => Some(oag_race::Mode::Head2Head),
-        // `Other` is a mode name with no Pulse ordinal at all (HD's
-        // `NitroBattle`/`Detonator`) - nothing to map onto, so it refuses
-        // the same way the two unimplemented Pulse modes do.
+        // HD's own spelling of mode 14 (`PI_Cell_ModeNameTable`,
+        // `docs/ghidra/functions/ps3-hdfury-eu/cell-medal-award.md`): a name with no Pulse ordinal,
+        // so the campaign parser keeps it as `Other`.
+        race_campaign::Mode::Other(name) if name == DETONATOR_CELL_MODE => {
+            Some(oag_race::Mode::Detonator)
+        }
+        // `NitroBattle` is the other `Other` spelling and has no rules here, so it refuses the
+        // same way the two unimplemented Pulse modes do.
         race_campaign::Mode::CustomGrid
         | race_campaign::Mode::AiRace
         | race_campaign::Mode::Other(_) => None,
     }
 }
+
+/// The `mode=` spelling a Detonator campaign cell carries on HD/Fury, Omega and 2048's Fury pack
+/// (`docs/formats/race-campaign.md`, "Two new mode spellings, kept raw"); the same text a title's
+/// [`oag_title::Campaign::counting_modes`] names.
+pub const DETONATOR_CELL_MODE: &str = "Detonator";
 
 /// The rung a `Cell Selection` opens on: the rung the player last browsed to
 /// on this title's campaign if there is one, else the title's fresh-profile
@@ -1223,6 +1233,30 @@ mod tests {
             race_mode_for_cell(CampaignMode::Head2Head),
             Some(oag_race::Mode::Head2Head)
         );
+    }
+
+    /// A Detonator cell launches Detonator, and its spelling is the one the title's flip set
+    /// names, so the medal compare is `>=`; `NitroBattle` still refuses.
+    #[test]
+    fn a_detonator_cell_maps_to_detonator_and_a_nitro_battle_cell_does_not() {
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::Other("Detonator".to_string())),
+            Some(oag_race::Mode::Detonator)
+        );
+        assert_eq!(
+            race_mode_for_cell(CampaignMode::Other("NitroBattle".to_string())),
+            None
+        );
+        for title in [&oag_hd::TITLE, &oag_omega::TITLE, &oag_2048::TITLE] {
+            assert!(
+                title
+                    .campaign
+                    .counting_modes
+                    .contains(&super::DETONATOR_CELL_MODE),
+                "{}",
+                title.name
+            );
+        }
     }
 
     #[test]

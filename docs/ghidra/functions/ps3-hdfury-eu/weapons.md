@@ -241,6 +241,10 @@ but neither claim is established, only the tag and the gate are.
 
 ### The `0x334` member: inherits from `CannonManager`, not named
 
+**Named since** `PulseCannonManager_Construct` (65), the Detonator pulse cannon's manager: its
+pool is thirty `PulseBullet`s ([detonator-cannon.md](detonator-cannon.md)). The reading below
+stands.
+
 `_opd_FUN_00138700` (and its complete-object pair `_opd_FUN_00138778`,
 identical body, same `[DATA]`-only extra reference) does **not** chain to
 the shared base constructor `0x003271d8` directly - it chains to

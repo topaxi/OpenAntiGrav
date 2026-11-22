@@ -726,6 +726,12 @@ pub struct SimSetup {
     /// `None` runs the race on [`super::FireLaw::Ours`]: the original's law
     /// needs these numbers and nothing invents them.
     pub weapon_ai: Option<oag_tables::weapons::ai::WeaponAiStats>,
+    /// Detonator's layout files, out of the title's `DetonatorLayouts` entries
+    /// ([`oag_title::Detonator::layouts`]): the groups of clusters and the stage mine counts.
+    ///
+    /// `None` off Detonator, and where the files are absent or unreadable, which lays no mines
+    /// rather than invented ones.
+    pub detonator: Option<oag_weapons::detonator::Layout>,
     /// Restricts which weapons a `Weapon Pad` may hand out to exactly this
     /// list, or does not restrict at all when empty - the same "empty is no
     /// override" convention [`Options::grid_teams`] uses.

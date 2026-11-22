@@ -255,3 +255,8 @@
 0x012ff700	function	Ship_SetState	82	../ps3-hdfury-eu/ship-destroy.md
 0x01301260	function	Ship_SelectWreckModel	78	../ps3-hdfury-eu/ship-destroy.md
 0x012f7a60	function	Ship_PlayDestroyExplosion	78	../ps3-hdfury-eu/ship-destroy.md
+
+# 2026-11-22 detonator-placement: HD's placer, read line by line (detonator-placement.md)
+0x012a2300	function	Detonator_PlaceStageObjects	75	detonator-placement.md
+0x012a3aa0	function	Detonator_SpawnObject	70	detonator-placement.md
+

@@ -37,6 +37,8 @@ mod cues;
 mod damage_fx;
 mod destroy_camera;
 mod destroyed_fire;
+mod detonator;
+mod detonator_craft;
 mod disruptor_craft_fx;
 mod disruptor_launch;
 mod distance_reset;
@@ -374,6 +376,7 @@ fn setup(handling: Handling) -> SimSetup {
         // non-2048 race is in. See `SimSetup::allowed_weapons`'s own doc
         // comment.
         weapon_ai: None,
+        detonator: None,
         allowed_weapons: Vec::new(),
         weapon_pad_refresh: 0.0,
         // These tests run on a synthetic straight and want the ordinary

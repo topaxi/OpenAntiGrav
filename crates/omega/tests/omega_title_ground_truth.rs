@@ -251,3 +251,70 @@ fn xp_tables_match_2048s_awards_and_halve_its_ranks() {
     assert_eq!(ranks.thresholds[0], 15_000);
     assert_eq!(ranks.threshold_xp(50, 0), 1_790_000);
 }
+
+/// Detonator's three layout files resolve through the title axis on Omega's mounted archives.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn the_detonator_layout_entries_resolve() {
+    let Some(source) = source() else { return };
+    let mut archives = oag_omega::open(&source).expect("open the omega source");
+    let layouts = oag_omega::TITLE
+        .race
+        .detonator
+        .and_then(|d| d.layouts)
+        .expect("Omega names the layout files");
+    let patterns = archives
+        .read_name(layouts.pattern_file)
+        .expect("PatternFile");
+    assert!(String::from_utf8_lossy(&patterns).contains("<Pattern"));
+    let values = archives
+        .read_name(layouts.gameplay_values)
+        .expect("GamePlayValues");
+    assert!(String::from_utf8_lossy(&values).contains("MineCountStage14"));
+    let scoring = archives
+        .read_name(layouts.scoring)
+        .expect("DetonatorScoring");
+    let scoring = oag_tables::detonator_layout::parse_scoring(&String::from_utf8_lossy(&scoring));
+    assert_eq!(
+        (
+            scoring.new_mine_score,
+            scoring.old_mine_score,
+            scoring.bomb_score,
+            scoring.bomb_increment
+        ),
+        (100, 50, 2000, 500)
+    );
+}
+
+/// Detonator's hull, handling file and object models resolve through Omega's title data
+/// (`oag_omega::race::DEFAULTS`), and its livery key is the Zone one, `zoneship_team`.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn the_detonator_hull_handling_and_object_entries_resolve() {
+    let Some(source) = source() else { return };
+    let mut archives = oag_omega::open(&source).expect("open the omega source");
+    let race = oag_omega::TITLE.race;
+    let detonator = race.detonator.expect("Omega races Detonator");
+    let craft = detonator.craft.expect("Omega names the Detonator craft");
+    let ships = race.ships_for("Qirex");
+    let hull = ships.hull_entry_name("Qirex", Some(craft.hull), None);
+    assert!(hull.ends_with(r"hdships\Detonator\Ship.vex"), "{hull}");
+    assert!(archives.read_name(&hull).is_ok(), "{hull}");
+    assert_eq!(craft.hull.livery_key(), Some("zoneship_team"));
+    let handling = detonator.handling.expect("Omega names the handling file");
+    let text = archives
+        .read_name(handling.entry.value)
+        .expect("Detonator's handlingstats.xml");
+    let text = String::from_utf8_lossy(&text);
+    assert!(text.contains(r#"width="4.0""#), "Detonator's Misc.width");
+    assert!(!text.contains("<Class"), "a classless file, as HD's");
+    let objects = detonator.objects.expect("Omega names the object models");
+    for entry in objects
+        .mine
+        .iter()
+        .chain(&objects.bomb)
+        .chain([&objects.pad])
+    {
+        assert!(archives.read_name(entry).is_ok(), "{entry}");
+    }
+}

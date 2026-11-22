@@ -254,10 +254,45 @@ What ours does (`Cell::evaluate_medal_for_difficulty(value, difficulty, counting
   maintainer kept it (2026-11-13).
 - `Cell::ends_on_nitro_score` is what is left of `medal_law_is_unmeasured`: it only stops the
   cell's dummy `gold = 1` becoming a one-kill target (`plan_cell`).
-- `NitroBattle` cells are still refused by `race_mode_for_cell`, so no one launches one; the
+- `NitroBattle` cells are still refused by `race_mode_for_cell` (`Detonator`'s launch is below), so no one launches one; the
   evaluator already reads their `1`/`2`/`3` as places the day they race.
 
 Omega: ported (same evaluator and flip set, `omega_campaign_launch_ground_truth.rs`: 31 cells).
+
+### Detonator cells launch and award a medal from the score (2026-11-22, `det-campaign`)
+
+A `mode="Detonator"` cell (mode 14, `PI_Cell_ModeNameTable`) launches `oag_race::Mode::Detonator`
+(`oag_game::campaign::race_mode_for_cell`, the exact disc spelling
+`campaign::DETONATOR_CELL_MODE`). The disc authors **12** of them (HD/Fury's `grid8`..`grid15`,
+Omega's re-shipped copies and 2048's Fury pack: the same 12 on each), every one resolving to an
+ordinary circuit and carrying real per-rung `Gold`/`Silver`/`Bronze` score targets (descending
+ladders, the nitro triple a dummy `1`/`1`/`1`). `NitroBattle` (13 cells) stays refused: 154 of
+167 cells launch on each of HD, Omega and 2048's two Fury/HD packs.
+
+- **The value is the Detonator score** (`SimRace::detonator_score`, `World::detonator.cannon.score`,
+  the int `rm+0x2df0`), read by `RaceStage::campaign_tier` through `medal_watch::detonator_value`,
+  and only once the race is finished. Detonator is in every title's `counting_modes`
+  (`PI_Cell_EvaluateMedalForValue` flips for mode `0xe`), so the compare is `score >= target`:
+  gold at its target or above, silver from its target, bronze from its target, nothing below.
+  Held to the disc at all three rungs of all 12 cells, inside the launch-census pass of
+  `hd_campaign_ground_truth.rs`, `omega_campaign_launch_ground_truth.rs` and
+  `vita_2048_dlc_menus_ground_truth.rs` (`check_detonator_medal`). A mod campaign cannot author the
+  mode (`campaign::custom::MODES` has no Detonator word).
+- **Read:** the original's HUD compares the cell's thresholds against that same score
+  (`detonator-cannon.md`, "The score", confidence 82), and the end-of-race builder `0x0005ac00`
+  records only a finished craft unless the mode is 6, 10 or 13 (`cell-medal-award.md`, "End of
+  race"): Detonator is not in that set, so a quit race records nothing. A destroyed craft ends
+  ours as finished (`world.race[slot].finished`), so its score records; whether the original's
+  out-of-race ending (`+0x6a64 & 0x1000`) sets `+0x7002` is unread (**chosen**).
+- **Not read, chosen:** `Profile_RecordCampaignResult`'s mode-14 case, so that the value it hands
+  the compare is the score (not the percentage or a rank) is a labelled choice, supported by the
+  HUD comparing the same thresholds against the score. Also chosen: the mid-race medal cues
+  (`DetonatorGoldMedal`..) are the HUD's (phase 12) and `medal_watch::live_value` does not read
+  Detonator; 2048 draws a Detonator card with Elimination's crosshair icon (it has four glyphs).
+- Ours adds no clean-lap bonus (`+1000` per `0x200000` crossing, hypothesis 50 in
+  `detonator-cannon.md`): the score is the cannon's awards alone, so it can sit under the
+  original's on the same line.
+- Omega and 2048: ported (same cells, same evaluator and flip set, each held to its own disc).
 
 `Cell::nitro_elimination_target_for_difficulty` reads the one measured number
 per rung instead - deliberately not a synthesized `MedalTargets` triple, since

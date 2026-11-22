@@ -1500,13 +1500,61 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   HD/Fury's (shipped in the v1.04 patch) on the ported circuits; Omega's grade is not drawn,
   as its Zone grade is not.
 - **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
-  HD flies the Zone handling file, the Zone hover rig with no brakes, and the Zone grid hover
-  (`Mode::on_zone_mask`). The same mask skips split recording; this build still shows lap times.
+  HD flies the Zone hover rig with no brakes and the Zone grid hover (`Mode::on_zone_mask`). The
+  same mask skips split recording; this build still shows lap times.
+- **Its own hull, handling and object models (wired on HD and Omega; 2048 hull and handling).** Every craft flies
+  `Data\Ships\Detonator\Ship.vex`, swapping `zoneship_zone` for the team's `detonator` livery
+  (`zoneship_<team>`). Its locators, flare and absorb shell come from the same folder, and it
+  loads no LODs and no shield; the wreck and death shell are not loaded (HD's hull build loads no
+  wreck in any mode). It flies `Data\Ships\Detonator\handlingstats.xml`, not Zone's:
+  same engine, harder turning, less airbrake, narrower. The mine is `mine_rita_football` +
+  `mine_rita_spikes` + `Electric_Visualiser`, the bomb `detonator_bomb_final` + `_equalisers` +
+  `_glowedges`, and every speed and weapon pad carries a `Detonator_Pad`. Confidence 70-82; 2048
+  and Omega check out the same, Omega with its own livery key `zoneship_team`. Evidence:
+  [detonator-hull.md](../ghidra/functions/ps3-hdfury-eu/detonator-hull.md). **Wired:**
+  `oag_title::Detonator::{craft, handling, objects}` carry the entries (`oag_hd::race::DETONATOR_*`,
+  `oag_2048::race`, `oag_omega::race`); `oag_livery::entry::own_craft` picks Zone's or
+  Detonator's craft for the hull, flare, absorb shell, muzzle and shadow, and the engine light
+  stays Zone's. The mine draws the football and its spikes (`electric_visualiser` is
+  music-driven and not drawn), the bomb its three parts, and a `Detonator_Pad` sits on every
+  speed pad and weapon pad at the pad's own transform. `MineColour`, `MineBrightness` and the
+  bomb's colour binds are unread, so the mine draws unbound (bright white); 2048 and Omega take
+  HD's names (2048's directory is chosen: it ships both `Data\Weapons` and `Data\Weapons2048`). Tests:
+  `detonator_hull_ground_truth.rs`, `the_detonator_hull_handling_and_livery_entries_resolve`
+  (2048), `the_detonator_hull_handling_and_object_entries_resolve` (Omega).
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
   inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
-- **Not here, each named on the evidence page**: the mines and bombs (placed per stage by
-  `FUN_000654e0`), the pulse cannon, the EMP and its pads, the score and the end-of-run
-  percentage, the out-of-race ending, the "automatic and ever-increasing" acceleration the
+- **Mines and bombs are laid, and bite.** The opening stage and each stage step lay objects
+  by the recovered law ([detonator-placement.md](../ghidra/functions/ps3-hdfury-eu/detonator-placement.md);
+  `oag_weapons::detonator`, state in `World::detonator`, hashed only once something is laid):
+  groups of clusters from the disc's `PatternFile.xml` up to the stage's `MineCountStage`
+  (`GamePlayValues.xml`, [detonator-layouts.md](../formats/detonator-layouts.md)), single mines
+  topping the total up, and one bomb attempt per stage. They are drawn with the ordinary Mine
+  and Bomb models (**chosen, not measured**; the original's own models are now located on
+  [detonator-hull.md](../ghidra/functions/ps3-hdfury-eu/detonator-hull.md) and not yet wired). A craft within
+  a mine's `trigger_radius` (3) loses its `damage` (10), has its velocity multiplied by
+  `velocity_reduction` (0.5) and the mine goes; a bomb (radius 6) costs the toucher 20 and
+  pushes every craft within 40; energy at zero destroys the craft and the race ends (laws:
+  [detonator-mine.md](../ghidra/functions/ps3-hdfury-eu/detonator-mine.md),
+  [detonator-bomb.md](../ghidra/functions/ps3-hdfury-eu/detonator-bomb.md); `oag_weapons::detonator::step_contacts`,
+  weapons-on damage rules **chosen**; the 0.5 s owner grace and the next-tick removal are not
+  modelled). Each stage step sets off the old bomb harmlessly. The explosion effects and sounds
+  are not wired. **Chosen, not measured:** the lap survey's probes
+  (the original's collision return codes are unread: any wall clamps a width, no ground or a
+  `Reset` surface blocks a lane), the seeded `Rng` for `Libc_Rand`, a two-slot bomb pool
+  refusing a third, and clusters stopping at the lap's end instead of reading past it. Checked
+  on HD (a lone autopilot race lays up to 80 mines on stage 1 and tops up on the first
+  crossing; `detonator_ground_truth.rs`); 2048 and Omega name the same files and the entries
+  resolve on their archives (applies, not raced).
+- **The pulse cannon is wired in the simulation** (HD, 2048 and Omega name the same scoring file):
+  Square held fires two-round volleys from a clip of 15, Circle reloads, a round destroys a mine
+  (any, harmless) or a bomb (four hits, then the chain reaction), and the race carries the score,
+  the destroyed-mine count and the percentage
+  ([detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md);
+  `oag_raceplay::RaceSim::{detonator_score, detonator_destroyed_mines, detonator_percentage}`).
+  Nothing draws a round or a muzzle flash and there is no HUD or end-screen row for it yet.
+- **Not here, each named on the evidence page**: the mine and bomb explosion effects and sounds,
+  the EMP and its pads, the out-of-race ending, the "automatic and ever-increasing" acceleration the
   manual promises (no law read; the player throttles), and `detonator_hud.xml` (the race
   draws the time trial's HUD, whose lap counter is the stage: chosen, not measured).
 

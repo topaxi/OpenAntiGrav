@@ -142,6 +142,17 @@ autopilot cost `tournament.md`'s own "Live verification" section names, not
 attempted again this pass. Kept under a scratch directory, not kept
 (gitignored - game content).
 
+### Detonator's headline
+
+`Headline::Detonator` draws `ER_ZDETONATOR_COM`, the id `EndRaceResults_PopulateGrid`'s mode-`0xe`
+branch names (`docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`; confidence 70: a
+string reference in the executable, the branch body unread). **Where the text lives differs:**
+no HD archive (`DATA00`, `DATA02`, `DATA05`, every `entries.xml` and XML/text entry scanned) carries
+the id, so on HD the headline draws **nothing** (not the raw id); 2048 and Omega ship it
+(`data00.psarc` on Omega; 2048's own tables), so it draws there. Checked, differs. The rows
+under it are the time-trial grid, as before: the score and stage columns wait for the score
+(`docs/gameplay/race-modes.md`, "Detonator").
+
 ### `EndRace Results`, on an Eliminator race and a Zone run: their own tables
 
 **Status: draws, 2026-09-30.** `EndRaceResults_OnEnter` gives Eliminator (mode 8) and

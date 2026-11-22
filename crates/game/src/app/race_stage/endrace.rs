@@ -642,11 +642,11 @@ pub(crate) fn headline(mode: oag_race::Mode, place: Option<u8>) -> Headline {
         // own with its own `Line1` (`ZoneResults`, `EliminationResults`). What
         // reaches here is HD's field grid, whose own populate for those modes is
         // not read - see `oag_ui_screens::endrace::Headline::Unresolved`'s own doc.
-        // HD's Detonator closes on `ER_ZDETONATOR_COM` over a score this build does
-        // not keep (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mode.md`).
-        oag_race::Mode::Zone | oag_race::Mode::Eliminator | oag_race::Mode::Detonator => {
-            Headline::Unresolved
-        }
+        oag_race::Mode::Zone | oag_race::Mode::Eliminator => Headline::Unresolved,
+        // HD's results grid writes `ER_ZDETONATOR_COM` into `Line1` for mode `0xe`
+        // (`docs/ghidra/functions/ps3-hdfury-eu/endrace-results-grid.md`); the score
+        // beneath it is not kept yet.
+        oag_race::Mode::Detonator => Headline::Detonator,
     }
 }
 
@@ -894,8 +894,19 @@ pub(crate) fn results_table_takes_confirm(finished: bool, endrace_built: bool) -
 
 #[cfg(test)]
 mod tests {
-    use super::{LoyaltyInputs, loyalty_award, trophy_index};
+    use super::{LoyaltyInputs, headline, loyalty_award, trophy_index};
     use oag_tables::race_campaign::Medal;
+    use oag_ui_screens::endrace::Headline;
+
+    /// Detonator closes on its own headline; Zone and Eliminator stay unresolved.
+    #[test]
+    fn detonator_has_its_own_headline() {
+        assert_eq!(
+            headline(oag_race::Mode::Detonator, None),
+            Headline::Detonator
+        );
+        assert_eq!(headline(oag_race::Mode::Zone, None), Headline::Unresolved);
+    }
 
     /// A campaign medal picks its own trophy; no cell, or no medal, picks
     /// none - `EndRaceRewards_OnEnter`'s two branches.

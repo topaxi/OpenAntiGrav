@@ -20,7 +20,7 @@ evidence below.
 | --- | --- | --- | --- |
 | `0x00124d90` | `Rocket_Init` | 85 | `(rocket, launch_matrix)`; copies the craft's track cursor, stores the carried normal at `rocket+0x100` |
 | `0x00159a30` | `Shuriken_Init` | 80 | the same for the Shuriken, normal at `+0x150` |
-| `0x00123378` | `PulseBullet_Init` | 55 | a third bullet class's init, by-catch, normal at `+0x180` |
+| `0x00123378` | `PulseBullet_Fire` | 75 | the Detonator pulse cannon round's fire (vtable `+0x3c`), renamed from `PulseBullet_Init` (55); [detonator-cannon.md](detonator-cannon.md) |
 | `0x000a97f0` | `Track_UpdateCursor` | 78 | `(track, out_record, ..., cursor, ...)`, `v2` = the point: locate, then fill the record |
 | `0x000a8198` | `Track_SampleNearestPoint` | 78 | walks the cursor's sample index, Newton-refines the spline parameter, tail-calls the evaluate |
 | `0x000a7cc8` | `Track_EvaluateSpline` | 80 | `(track, out, cursor, ..., t)`: a four-sample cubic blend of the sample records into `out` |
@@ -70,7 +70,8 @@ rocket's cursor `rocket+0x128` (`r9`); on a hit it writes the hit normal back to
 `Rocket_SubmitLight` (`0x00123de8`). `0x00863d98` is loaded by `PulseBullet.cpp`'s constructors
 (`0x001235a8` at `0x00123614`, `0x001238d0` at `0x0012393c`) and by the destructor
 `0x00121b20`, hence `PulseBullet_Init` at 55. It stores the same `0 - craft+0x7850` at `+0x180`.
-Which player-facing weapon fires a `PulseBullet` is not read.
+Read since: the `PulseBullet` is the Detonator pulse cannon's round and `0x00123378` its fire,
+now `PulseBullet_Fire` ([detonator-cannon.md](detonator-cannon.md)).
 
 ## What `craft + 0x7850` is
 

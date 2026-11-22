@@ -74,7 +74,8 @@ today after this change.
 | `WO_DAMAGE_ELECTRIC`, `WO_SHIP_DEATH_DAMAGE_PLUME` | none | the Zone-mask and `param_4 != 0` branches of the same function, unwired | no |
 | `WO_DEBRIS_FIRE` | none | one load, `0x0010c958`, unread | no |
 | `WO_DEBRIS_SPARKS`, `WO_NITRO_DEBRIS_SPARKS` | none | table slot, unread | no |
-| `WO_BOMB_EXPLO_DETONATOR` `0x00137150`, `WO_MINE_EXPLO_DETONATOR(_DEAD)` `0x00138e58`, `WO_QUAKE_DETONATOR` `0x0013afe8/0x0013b5e8/0x0013b930`, `WO_CANNON_SPARKS_DETONATOR`, `WO_LIGHTBARRIER_EXPLO`, `WO_NITRO_SHIP_DEATH` | none | functions found, bodies unread | no: the Detonator weapon set is not built in `oag-weapons` (and `WO_NITRO_SHIP_DEATH` is refused at blend class 4) |
+| `WO_BOMB_EXPLO_DETONATOR`, `WO_MINE_EXPLO_DETONATOR(_DEAD)` | none | **read 2026-11-22**: `DetonatorBombBlast_Start` `0x00137150` on any bomb detonation; `DetonatorMine_Explode` `0x00138e58`, `_DEAD` for a darkened mine (every craft contact, every earlier-stage mine), the plain one for a live mine destroyed otherwise, conf 72 ([detonator-mine.md](detonator-mine.md), [detonator-bomb.md](detonator-bomb.md)) | no: the Detonator hit is not built in `oag-weapons` |
+| `WO_QUAKE_DETONATOR` `0x0013afe8/0x0013b5e8/0x0013b930`, `WO_CANNON_SPARKS_DETONATOR`, `WO_LIGHTBARRIER_EXPLO`, `WO_NITRO_SHIP_DEATH` | none | functions found, bodies unread, except `WO_CANNON_SPARKS_DETONATOR`: a pulse round's death on a wall, `PulseBullet_Update` `0x00122608` ([detonator-cannon.md](detonator-cannon.md)) | no: the Detonator weapon set is not built in `oag-weapons` (and `WO_NITRO_SHIP_DEATH` is refused at blend class 4) |
 | `WO_SHIP_EXPLOSION` | a wreck (`wreck_fx`, Pulse-gated) | table slot `0x008a8e84` | no on HD: `FXNODE_EXPLO` and `DEATH_SPARKS` are not strings in the executable |
 
 ## What was recovered

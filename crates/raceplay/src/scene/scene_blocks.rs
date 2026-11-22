@@ -156,6 +156,9 @@ impl Scene {
         ] {
             share_all(device, blocks, pool);
         }
+        for pool in self.bomb_blast.detonator.pools_mut() {
+            share_all(device, blocks, pool.iter_mut());
+        }
         share_all(device, blocks, self.leach_ball.iter_mut());
     }
 

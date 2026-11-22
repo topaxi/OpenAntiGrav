@@ -71,6 +71,7 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
         quake,
         leach_beams,
         repulsers,
+        detonator,
     } = world;
 
     hasher.write_u64(*tick);
@@ -122,6 +123,121 @@ pub fn write_world(hasher: &mut StateHasher, world: &World) {
     for repulser in repulsers {
         write_repulser(hasher, repulser);
     }
+    // Only a race that laid something: every other mode keeps the hash it always had.
+    if !detonator.is_empty() {
+        write_detonator(hasher, detonator);
+    }
+}
+
+fn write_detonator(hasher: &mut StateHasher, field: &oag_weapons::detonator::Field) {
+    let oag_weapons::detonator::Field {
+        stages_laid,
+        mines,
+        live_mines,
+        bombs,
+        live_bombs,
+        bomb_hits,
+        cannon,
+    } = field;
+    hasher.write_u8(*stages_laid);
+    hasher.write_u32(u32::from(*live_mines));
+    for mine in &mines[..usize::from(*live_mines)] {
+        write_placed(hasher, mine);
+    }
+    hasher.write_u8(*live_bombs);
+    for bomb in &bombs[..usize::from(*live_bombs)] {
+        write_placed(hasher, bomb);
+    }
+    // The cannon is in the hash only where the race armed one.
+    if cannon.armed {
+        for hit in &bomb_hits[..usize::from(*live_bombs)] {
+            hasher.write_u8(*hit);
+        }
+        write_cannon(hasher, cannon);
+    }
+}
+
+fn write_cannon(hasher: &mut StateHasher, cannon: &oag_weapons::detonator::cannon::Cannon) {
+    let oag_weapons::detonator::cannon::Cannon {
+        armed: _,
+        clip,
+        trigger,
+        ready,
+        lockout,
+        lockout_total,
+        reset_pending,
+        ring,
+        hits,
+        awards,
+        rounds,
+        score,
+        m_mine,
+        m_chain,
+        bombs_shot,
+        destroyed_mines,
+        destroyed_bombs,
+        held_ticks,
+    } = cannon;
+    hasher.write_u8(*clip);
+    hasher.write_f32(*trigger);
+    hasher.write_u8(u8::from(*ready));
+    hasher.write_f32(*lockout);
+    hasher.write_f32(*lockout_total);
+    hasher.write_u8(u8::from(*reset_pending));
+    hasher.write_u8(*ring);
+    for hit in hits {
+        hasher.write_u8(*hit);
+    }
+    let oag_weapons::detonator::cannon::Awards {
+        first_five,
+        second_five,
+        ten,
+        fifteen,
+        first_five_at,
+    } = awards;
+    hasher.write_u8(
+        u8::from(*first_five)
+            | u8::from(*second_five) << 1
+            | u8::from(*ten) << 2
+            | u8::from(*fifteen) << 3,
+    );
+    hasher.write_u8(*first_five_at);
+    for (index, round) in rounds.iter().enumerate().filter(|(_, r)| r.live) {
+        hasher.write_u8(index as u8);
+        let oag_weapons::detonator::cannon::Round {
+            live: _,
+            pos,
+            prev,
+            vel,
+            up,
+            normal,
+            age,
+            rebounds,
+            slot,
+        } = round;
+        hasher.write_vec3(*pos);
+        hasher.write_vec3(*prev);
+        hasher.write_vec3(*vel);
+        hasher.write_vec3(*up);
+        hasher.write_vec3(*normal);
+        hasher.write_f32(*age);
+        hasher.write_u8(*rebounds);
+        hasher.write_u8(*slot);
+    }
+    hasher.write_i32(*score);
+    hasher.write_f32(*m_mine);
+    hasher.write_f32(*m_chain);
+    hasher.write_i32(*bombs_shot);
+    hasher.write_u32(*destroyed_mines);
+    hasher.write_u32(*destroyed_bombs);
+    hasher.write_u32(*held_ticks);
+}
+
+fn write_placed(hasher: &mut StateHasher, placed: &oag_weapons::detonator::Placed) {
+    let oag_weapons::detonator::Placed { entry, lane, live } = placed;
+    hasher.write_u32(u32::from(*entry));
+    hasher.write_i32(i32::from(*lane));
+    hasher.write_u8(u8::from(*live));
 }
 
 fn write_ship(hasher: &mut StateHasher, ship: &Ship) {
@@ -846,6 +962,77 @@ mod tests {
         // `is_some` byte would miss.
         world.ships[0].pickup.weapon = Some(Weapon::Shield);
         assert_ne!(with_rocket, hash_world(&world));
+    }
+
+    /// A laid Detonator object is simulation state, and a world that never laid one hashes as it
+    /// always did (the committed references do not move).
+    #[test]
+    fn a_laid_detonator_mine_moves_the_hash_and_an_empty_field_does_not() {
+        let mut world = World::new(1);
+        let empty = hash_world(&world);
+        world.detonator.stages_laid = 1;
+        let opened = hash_world(&world);
+        assert_ne!(empty, opened, "a stage laid with no mine is still a state");
+        world.detonator.live_mines = 1;
+        world.detonator.mines[0].entry = 3;
+        let one = hash_world(&world);
+        assert_ne!(opened, one);
+        world.detonator.mines[0].lane = -2;
+        assert_ne!(one, hash_world(&world));
+    }
+
+    /// A round the pulse cannon fired is simulation state, a cannon nobody armed hashes as the
+    /// empty field always did, and the same shot twice is the same state.
+    #[test]
+    fn a_fired_pulse_cannon_round_moves_the_hash_and_an_unarmed_field_does_not() {
+        use oag_weapons::detonator::cannon::{Config, Input, Sweep, step_cannon};
+        let config = Config {
+            rounds: 15,
+            interval: 0.1,
+            rebounds: 1,
+            shots_to_destroy: 4,
+            mine_radius: 3.0,
+            bomb_radius: 6.0,
+            lockout_manual: 0.75,
+            lockout_empty: 0.75,
+            lane_width: 3.5,
+            scoring: oag_tables::detonator_layout::Scoring::default(),
+        };
+        let fire = |world: &mut World, held: bool| {
+            let owner = world.ships[0];
+            step_cannon(
+                &mut world.detonator,
+                &oag_weapons::detonator::Survey::default(),
+                &config,
+                Input {
+                    fire: held,
+                    reload: false,
+                },
+                &owner,
+                1.0 / 60.0,
+                &|_, _| Sweep::None,
+            );
+        };
+        let mut world = World::new(1);
+        let empty = hash_world(&world);
+        assert!(world.detonator.is_empty());
+        fire(&mut world, false);
+        let armed = hash_world(&world);
+        assert_ne!(empty, armed, "an armed cannon is a state");
+        fire(&mut world, true);
+        assert_eq!(world.detonator.cannon.rounds_in_flight(), 2);
+        let fired = hash_world(&world);
+        assert_ne!(armed, fired, "a round in flight is a state");
+        let mut twin = World::new(1);
+        fire(&mut twin, false);
+        fire(&mut twin, true);
+        assert_eq!(fired, hash_world(&twin), "the same shot, the same hash");
+        world.detonator.cannon.rounds[0].pos += Vec3::Z;
+        assert_ne!(
+            fired,
+            hash_world(&world),
+            "a round a metre on is another world"
+        );
     }
 
     /// A projectile a metre further along is a different world. This is the one
