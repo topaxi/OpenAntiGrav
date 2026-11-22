@@ -134,6 +134,7 @@ pub const LAYOUTS_2048: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: r"Data\XML\2048_hud\SpeedLap_HUD.xml",
     zone: r"Data\XML\2048_hud\Zone_HUD.xml",
     elimination: r"Data\XML\2048_hud\Elimination_HUD.xml",
+    detonator: r"Data\XML\Detonator_HUD.xml",
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_2048.toml"),
     player_tags: None,
@@ -181,6 +182,11 @@ const ALWAYS_ON_2048: &[&str] = &[
     // `docs/ghidra/functions/ps4-omega-eu/hud-radar.md`.
     "Radar",
     "PlayerDot",
+    // Detonator's static frames under the bare Omega root a 2048-lineage circuit raced
+    // as Detonator draws (`oag_hd::hud::ALWAYS_ON`).
+    "DetonatorStageParent",
+    "BulletBack",
+    "EMPBack",
 ];
 
 /// The default skin's roots with no skin list, what every other skin overrides.
@@ -190,6 +196,7 @@ const BASE: oag_title::HudLayouts = oag_title::HudLayouts {
     speed_lap: r"Data\XML\SpeedLap_HUD.xml",
     zone: r"Data\XML\Zone_HUD.xml",
     elimination: r"Data\XML\Elimination_HUD.xml",
+    detonator: r"Data\XML\Detonator_HUD.xml",
     split: Some(SPLIT),
     split_layout: None,
     player_tags: None,

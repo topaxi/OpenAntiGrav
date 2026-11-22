@@ -92,6 +92,8 @@ pub(super) struct SlotHud {
     /// Whether this title raises them ([`oag_title::HudArt::incoming_warnings`]). Set by
     /// `Race::watch_laps`, which is where a loaded race meets the title's art.
     pub(super) incoming_enabled: bool,
+    /// Detonator's streak line and recoloured pips, off this slot's cannon.
+    pub(super) chain: super::detonator_hud::ChainWatch,
 }
 
 /// 2048's `EnergyBarDelay` factor, `Hud_UpdateEnergyBar`'s own `0.1`, applied
@@ -338,6 +340,11 @@ impl RaceView {
                 }
             }
             hud.incoming.advance(dt);
+            if slot == primary
+                && let Some(cannon) = core.sim.detonator_cannon()
+            {
+                hud.chain.advance(cannon, dt);
+            }
         }
     }
 }
