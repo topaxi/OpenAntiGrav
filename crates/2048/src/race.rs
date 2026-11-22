@@ -490,7 +490,52 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
         scoring: r"Data\XML\DetonatorScoring.xml",
     }),
+    craft: Some(DETONATOR_CRAFT),
+    handling: Some(DETONATOR_HANDLING),
+    objects: Some(DETONATOR_OBJECTS),
 };
+
+/// 2048's Detonator object models. The archives ship each under both `Data\Weapons` (HD's own
+/// names) and `Data\Weapons2048`, and the pad under `Data\New_Mode_Pads`; the executable names
+/// the files and the directory prefix its object loaders join is unread
+/// (`docs/ghidra/functions/vita-2048-eu-v104/detonator-hull.md`). HD's directory is **chosen**,
+/// with HD's names, as Omega's are.
+pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorObjects {
+    mine: [
+        r"Data\Weapons\mine_rita_football.vex",
+        r"Data\Weapons\mine_rita_spikes.vex",
+    ],
+    bomb: [
+        r"Data\Weapons\detonator_bomb_final.vex",
+        r"Data\Weapons\detonator_bomb_final_equalisers.vex",
+        r"Data\Weapons\detonator_bomb_glowedges.vex",
+    ],
+    pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
+};
+
+/// 2048's Detonator craft: `hdships\Detonator\Ship.vex` for every team, under the same
+/// `zoneship_zone` key as HD's (`Ship_LoadModelSet`, mode `0xe`;
+/// `docs/ghidra/functions/vita-2048-eu-v104/detonator-hull.md`, 80). No livery literal is known
+/// for a team that authors none.
+pub const DETONATOR_CRAFT: oag_title::DetonatorCraft = oag_title::DetonatorCraft {
+    hull: oag_title::ZoneCraft::OwnShipAt {
+        root: HD_SHIP_DIR,
+        ship: "Detonator",
+        livery_key: "zoneship_zone",
+    },
+    livery_fallback: None,
+};
+
+/// 2048's Detonator handling: the loader (`0x810bfd54`) tests mode `0xe` first and the file is
+/// byte-identical to HD's, so its unauthored values are **inherited from HD**.
+pub const DETONATOR_HANDLING: oag_title::zone_handling::ZoneHandling =
+    oag_title::zone_handling::ZoneHandling {
+        entry: oag_title::pre_race::Sourced::measured(
+            r"Data\art\published\hdships\Detonator\handlingstats.xml",
+        ),
+        landing_rebound: oag_title::pre_race::Sourced::inherited(0.0, "Wipeout HD"),
+        rebound_jump_time: oag_title::pre_race::Sourced::inherited(2.0, "Wipeout HD"),
+    };
 
 /// HD's four Zone circuits as the DLC packs ship them, the ones `Environment_Load` matches by
 /// the `Zone_1`..`Zone_4` substring and gives the `DLC3` table

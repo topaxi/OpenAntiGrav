@@ -145,16 +145,41 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         options.shadow_resolution,
         &mut report,
     );
-    let wm = craft_title.weapon_models; // every weapon's own body, per title
+    // Every weapon's own body, per title; a Detonator race's mine and bomb are its own
+    // (`oag_title::DetonatorObjects`).
+    let detonator_objects = craft_title
+        .race
+        .detonator
+        .and_then(|detonator| detonator.objects)
+        .filter(|_| options.mode == Mode::Detonator);
+    let detonator_weapons;
+    let wm = match &detonator_objects {
+        Some(objects) => {
+            detonator_weapons =
+                weapon_models::detonator_weapon_models(craft_title.weapon_models, objects);
+            &detonator_weapons
+        }
+        None => craft_title.weapon_models,
+    };
     let (
         rocket_model,
         mine_model,
         bomb_model,
         cannon_model,
         plasma_blast_models,
-        bomb_blast_models,
+        mut bomb_blast_models,
         leach_ball_model,
     ) = weapon_models::load_bodies(&mut archives, wm, store, &mut report);
+    if let Some(objects) = &detonator_objects {
+        let pads = setup
+            .speedup_pads
+            .iter()
+            .chain(&setup.weapon_pads)
+            .map(|pad| Mat4::from_cols_array(&pad.to_world))
+            .collect();
+        bomb_blast_models.detonator =
+            weapon_models::load_detonator_objects(&mut archives, objects, pads, store, &mut report);
+    }
     // The cockpit half of the shield, on the same terms and for the same
     // reason: not per team, not per track, one entry for every craft in the
     // game. The shell beside it *is* per team and loads with the livery above.

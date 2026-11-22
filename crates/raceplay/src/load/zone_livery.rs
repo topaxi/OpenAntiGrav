@@ -1,4 +1,4 @@
-//! Each craft's Zone livery, out of the source's own plugin definition.
+//! Each craft's Zone or Detonator livery, out of the source's own plugin definition.
 //!
 //! The half of the Zone livery swap that needs the catalogue; substituting the
 //! texture on the hull is `oag_livery`'s, whose `zone_livery` module carries
@@ -6,17 +6,20 @@
 
 use oag_race::Mode;
 
-/// `(team id, livery name)` for every team the definition gives a Zone livery,
-/// each variant of it included (a Fury `_c1` craft wears its base team's).
-/// Empty outside Zone, for a title whose Zone hull has no livery key, and when
-/// the definition will not read - the last says so in `report`.
+/// `(team id, livery name)` for every team the definition gives a Zone livery (a Detonator
+/// race: its `detonator` model's), each variant of it included (a Fury `_c1` craft wears its
+/// base team's). Empty in any other mode, for a title whose own hull has no livery key, and
+/// when the definition will not read - the last says so in `report`.
 pub(super) fn resolve(
     archives: &mut oag_assets::Archives,
     title: &'static oag_title::Title,
     mode: Mode,
     report: &mut Vec<String>,
 ) -> Vec<(String, String)> {
-    if mode != Mode::Zone || title.race.zone_craft.livery_key().is_none() {
+    if oag_livery::entry::own_craft(title.race.ships(), mode)
+        .and_then(|craft| craft.livery_key())
+        .is_none()
+    {
         return Vec::new();
     }
     let definition = title.plugin_definition;
@@ -28,12 +31,18 @@ pub(super) fn resolve(
         Ok(xml) => xml,
         Err(error) => {
             report.push(format!(
-                "{definition} is unreadable ({error}) - no Zone livery for any craft"
+                "{definition} is unreadable ({error}) - no {} livery for any craft",
+                oag_livery::entry::craft_label(mode)
             ));
             return Vec::new();
         }
     };
-    crate::catalogue::zone_liveries(&crate::catalogue::teams(&xml), title.race)
+    let teams = crate::catalogue::teams(&xml);
+    if mode == Mode::Detonator {
+        crate::catalogue::detonator_liveries(&teams, title.race)
+    } else {
+        crate::catalogue::zone_liveries(&teams, title.race)
+    }
 }
 
 #[cfg(test)]

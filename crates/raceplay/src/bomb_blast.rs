@@ -207,6 +207,9 @@ pub struct BombBlastModels {
     /// then the Missile's explosion (`missile_blast`, which has no container of
     /// its own for the same reason). Played by [`hd`] and `missile_blast`.
     pub hd: [Option<Model>; 6],
+    /// Detonator's own object parts, riding this container for the same reason. Drawn by
+    /// [`super::detonator_models`].
+    pub detonator: super::detonator_models::DetonatorModels,
 }
 
 /// The drawable pools [`Scene`] builds from a [`BombBlastModels`].
@@ -222,6 +225,8 @@ pub(crate) struct BombBlastDrawables {
     /// models, and [`hd::RIPPLES`] + 1 of the ring's per slot (the first ring
     /// and the seven ripples), in slot order. See [`hd`].
     pub(crate) hd: HdDrawables,
+    /// Detonator's object parts, see [`BombBlastModels::detonator`].
+    pub(crate) detonator: super::detonator_models::DetonatorDrawables,
 }
 
 /// [`BombBlastDrawables::hd`]'s pools.
@@ -247,8 +252,13 @@ impl BombBlastDrawables {
     pub(crate) fn build(
         models: BombBlastModels,
         mut build_one: impl FnMut(Option<Model>) -> Result<Vec<Drawable>>,
+        build_sized: impl FnMut(Option<Model>, usize) -> Result<Vec<Drawable>>,
     ) -> Result<Self> {
         Ok(Self {
+            detonator: super::detonator_models::DetonatorDrawables::build(
+                models.detonator,
+                build_sized,
+            )?,
             hemisphere: build_one(models.hemisphere)?,
             shockwave: build_one(models.shockwave)?,
             repulser_field: build_one(models.repulser_field)?,

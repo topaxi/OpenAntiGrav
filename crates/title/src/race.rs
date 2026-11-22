@@ -96,6 +96,8 @@ pub struct ShipPaths {
     pub hull: &'static str,
     /// See [`RaceDefaults::zone_craft`].
     pub zone: ZoneCraft,
+    /// See [`Detonator::craft`]; `None` on a title that does not race Detonator.
+    pub detonator: Option<DetonatorCraft>,
     /// See [`RaceDefaults::boost`].
     pub boost: Option<&'static str>,
 }
@@ -109,11 +111,11 @@ pub fn entry_name_in(dir: &str, team: &str, model: &str) -> String {
 }
 
 impl ShipPaths {
-    /// The archive entry name of a team's hull, the `.vex` every mode but Zone
-    /// draws ([`Self::hull`]) or the Zone craft's ([`ZoneCraft`]).
+    /// The archive entry name of a team's hull, the `.vex` every mode without a craft of its
+    /// own draws ([`Self::hull`]) or that mode's ([`Self::own_craft`]).
     ///
-    /// `zone` is whether the race runs in Zone mode (`oag_race::Mode::Zone`, which
-    /// this crate does not name).
+    /// `craft` is the race's own craft: [`Self::own_craft`] for the mode being raced, `None`
+    /// for a mode that flies the team's ordinary hull.
     ///
     /// **A Zone run flies a different hull, and where that hull lives is a title
     /// fact** - [`ZoneCraft`], measured on all three titles. Pulse keeps it inside
@@ -133,20 +135,42 @@ impl ShipPaths {
     ///
     /// **`hull_variant` is Pulse's Normal/Concept axis, and only applies here.**
     /// [`HullVariant::stem`] names a file inside the *same* directory the hull
-    /// already resolves in, so a Zone run ignores it: Zone's own hull selection is a
+    /// already resolves in, so a craft of its own ignores it: that selection is a
     /// title fact of its own ([`ZoneCraft`]), unaffected by which model variant the
     /// RACE page has picked, and every Pulse team's `Zone.vex` is one shared hull
     /// regardless. `None` keeps the title's own hull, [`Self::hull`].
     #[must_use]
-    pub fn hull_entry_name(self, team: &str, zone: bool, hull_variant: Option<&str>) -> String {
-        if !zone {
+    pub fn hull_entry_name(
+        self,
+        team: &str,
+        craft: Option<ZoneCraft>,
+        hull_variant: Option<&str>,
+    ) -> String {
+        let Some(craft) = craft else {
             return entry_name_in(self.dir, team, hull_variant.unwrap_or(self.hull));
-        }
+        };
         entry_name_in(
-            self.zone.root(self.dir),
-            self.zone.directory(team),
-            self.zone.hull().unwrap_or(self.hull),
+            craft.root(self.dir),
+            craft.directory(team),
+            craft.hull().unwrap_or(self.hull),
         )
+    }
+
+    /// The craft a race flies when it is the mode's own, or `None` for the team's ordinary
+    /// hull: Zone's ([`Self::zone`]) when `zone`, Detonator's ([`DetonatorCraft::hull`]) when
+    /// `detonator` and this title ships one.
+    ///
+    /// The two flags are `oag_race::Mode`'s, which this crate does not name;
+    /// `oag_livery::entry::own_craft` is the call that takes the mode.
+    #[must_use]
+    pub fn own_craft(self, zone: bool, detonator: bool) -> Option<ZoneCraft> {
+        if zone {
+            Some(self.zone)
+        } else if detonator {
+            self.detonator.map(|craft| craft.hull)
+        } else {
+            None
+        }
     }
 }
 
@@ -561,6 +585,46 @@ pub struct Detonator {
     /// The two files that say what Detonator lays on a circuit, or `None` where a title's are
     /// not located.
     pub layouts: Option<DetonatorLayouts>,
+    /// The hull and livery a Detonator race flies, or `None` where a title's are not located.
+    pub craft: Option<DetonatorCraft>,
+    /// The handling file a Detonator race flies in place of the team's, or `None` where a
+    /// title's is not located.
+    pub handling: Option<crate::zone_handling::ZoneHandling>,
+    /// The models a Detonator race lays and draws in place of the ordinary Mine, Bomb and pads,
+    /// or `None` where a title's are not located.
+    pub objects: Option<DetonatorObjects>,
+}
+
+/// The archive entries of Detonator's own object models
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The Detonator objects' models").
+///
+/// `DetonatorMine_Construct` loads `mine_rita_football`, `mine_rita_spikes` and
+/// `Electric_Visualiser`; the visualiser's electricity is music-driven, so it is named by neither
+/// field and is not drawn. `DetonatorBomb_Construct` loads three bomb parts, and
+/// `WorldManager_Construct` a `Detonator_Pad` for every speed pad and weapon pad.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetonatorObjects {
+    /// A laid mine's two parts, `[mine_rita_football, mine_rita_spikes]`: the shell and its spikes.
+    pub mine: [&'static str; 2],
+    /// A laid bomb's three parts, `[detonator_bomb_final, _final_equalisers, _glowedges]`.
+    pub bomb: [&'static str; 3],
+    /// The model carried by every speed pad and every weapon pad.
+    pub pad: &'static str,
+}
+
+/// The craft a Detonator race flies: one hull of its own, whatever team the player picked, with
+/// the pick choosing the livery on it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The hull").
+///
+/// The same shape as Zone's ([`ZoneCraft::OwnShipAt`]): HD's `Ship_ReloadModelForSkin` takes the
+/// same `zoneship_zone` key to the team's `PI_TeamModel name="detonator"` `texturelocation`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DetonatorCraft {
+    /// Where the hull sits and which path component its livery replaces.
+    pub hull: ZoneCraft,
+    /// The livery a craft whose team authors no `PI_TeamModel name="detonator"` wears, where the
+    /// original has a literal for it; `None` keeps the hull's default skin.
+    pub livery_fallback: Option<&'static str>,
 }
 
 /// The entries of Detonator's layout files, global to every circuit
@@ -716,6 +780,7 @@ impl RaceDefaults {
             dir: self.ship_dir,
             hull: self.ship_hull,
             zone: self.zone_craft,
+            detonator: self.detonator.and_then(|detonator| detonator.craft),
             boost: self.boost,
         }
     }

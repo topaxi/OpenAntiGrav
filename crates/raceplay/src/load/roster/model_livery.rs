@@ -17,7 +17,7 @@ pub(super) fn resolve(
     mode: Mode,
     report: &mut Vec<String>,
 ) -> Option<(String, String)> {
-    let worn = worn.filter(|_| mode != Mode::Zone)?;
+    let worn = worn.filter(|_| oag_livery::entry::own_craft(title.race.ships(), mode).is_none())?;
     let definition = title.plugin_definition;
     let xml = match archives
         .read_name(definition)

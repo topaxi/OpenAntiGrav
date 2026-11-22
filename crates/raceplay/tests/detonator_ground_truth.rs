@@ -121,22 +121,6 @@ fn an_hd_detonator_race_steps_a_stage_per_lap_and_ends_at_fifteen() {
     assert_eq!(race.core.sim.world.race[LONE].laps_completed(), 14);
 }
 
-/// HD's Zone-modes mask covers Detonator: the race flies `/data/ships/zone`'s handling.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn an_hd_detonator_race_flies_the_zone_handling_file() {
-    let Some(loaded) = load() else {
-        return;
-    };
-    assert!(
-        loaded
-            .report
-            .iter()
-            .any(|line| line.starts_with("zone: flying /data/ships/zone/handlingstats.xml")),
-        "no Zone handling line in the report"
-    );
-}
-
 /// A title's own Detonator table reaches the cannon: holding Square past the green light spends a
 /// volley from the clip. A table that lacks an attribute the cannon needs leaves the clip full.
 fn assert_the_cannon_fires(loaded: &race::Loaded) {

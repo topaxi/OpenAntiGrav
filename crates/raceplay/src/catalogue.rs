@@ -459,6 +459,9 @@ pub struct Team {
     /// `texturelocation` of its `PI_TeamModel name="zone"` (`zoneship_faisar`).
     /// `None` for a team that authors no such model - 2048's own five.
     pub zone_livery: Option<String>,
+    /// The `texturelocation` of the team's `PI_TeamModel name="detonator"`: the livery folder its
+    /// craft wears on Detonator's hull.
+    pub detonator_livery: Option<String>,
 }
 
 /// One `<Unlock Team=".." loyalty=".." Exclusive="..">` row of a craft
@@ -652,18 +655,19 @@ fn read_team(node: &Node) -> Option<Team> {
         rating: read_rating(node),
         models: read_models(node),
         hull_unlocks: read_hull_unlocks(node),
-        zone_livery: read_zone_livery(node),
+        zone_livery: read_livery(node, "zone"),
+        detonator_livery: read_livery(node, "detonator"),
     })
 }
 
-/// [`Team::zone_livery`]: the `texturelocation` of the team's `PI_TeamModel
-/// name="zone"`, matched case-insensitively.
-fn read_zone_livery(team: &Node) -> Option<String> {
+/// [`Team::zone_livery`] and [`Team::detonator_livery`]: the `texturelocation` of the team's
+/// `PI_TeamModel` called `model`, matched case-insensitively.
+fn read_livery(team: &Node, model: &str) -> Option<String> {
     team.children_named("PI_TeamModel")
-        .find(|model| {
-            model
+        .find(|entry| {
+            entry
                 .attr("name")
-                .is_some_and(|name| name.eq_ignore_ascii_case("zone"))
+                .is_some_and(|name| name.eq_ignore_ascii_case(model))
         })?
         .value("texturelocation")
         .map(str::to_string)
@@ -675,13 +679,31 @@ impl Team {
     /// Empty for a team with no [`Self::zone_livery`].
     #[must_use]
     pub fn zone_liveries(&self, race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
-        let Some(livery) = &self.zone_livery else {
+        self.liveries_of(self.zone_livery.as_deref(), race)
+    }
+
+    /// [`Self::zone_liveries`] for the team's `PI_TeamModel name="detonator"`: what a Detonator
+    /// race's hull build is given.
+    #[must_use]
+    pub fn detonator_liveries(&self, race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
+        self.liveries_of(self.detonator_livery.as_deref(), race)
+    }
+
+    fn liveries_of(
+        &self,
+        livery: Option<&str>,
+        race: &oag_title::RaceDefaults,
+    ) -> Vec<(String, String)> {
+        let Some(livery) = livery else {
             return Vec::new();
         };
-        let mut out = vec![(self.id.clone(), livery.clone())];
+        let mut out = vec![(self.id.clone(), livery.to_string())];
         if let Some(table) = race.team_variants_for(&self.id) {
             for variant in table.variants {
-                out.push((table.join.combine(&self.id, variant.suffix), livery.clone()));
+                out.push((
+                    table.join.combine(&self.id, variant.suffix),
+                    livery.to_string(),
+                ));
             }
         }
         out
@@ -694,6 +716,15 @@ pub fn zone_liveries(teams: &[Team], race: &oag_title::RaceDefaults) -> Vec<(Str
     teams
         .iter()
         .flat_map(|team| team.zone_liveries(race))
+        .collect()
+}
+
+/// [`Team::detonator_liveries`] of every team: what a Detonator race's hull build is given.
+#[must_use]
+pub fn detonator_liveries(teams: &[Team], race: &oag_title::RaceDefaults) -> Vec<(String, String)> {
+    teams
+        .iter()
+        .flat_map(|team| team.detonator_liveries(race))
         .collect()
 }
 

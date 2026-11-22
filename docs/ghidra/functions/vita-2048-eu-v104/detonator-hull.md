@@ -58,9 +58,14 @@ craft flies Detonator's file, not Zone's.
 
 ## Verdicts (CLAUDE.md lineage rule)
 
-- **Hull and livery: checked, applies, not wired.** `Ship_LoadModelSet` (`0x811b6dae`,
+- **Hull and livery: ported** (`oag_2048::race::DETONATOR_CRAFT`,
+  `the_detonator_hull_handling_and_livery_entries_resolve`). `Ship_LoadModelSet` (`0x811b6dae`,
   [zone-craft.md](zone-craft.md), 75) loads the literal `hdships\Detonator\Ship.vex` in mode `0xe`
   and swaps `zoneship_zone` -> the entry's livery name, the same as HD.
-- **Handling: checked, applies, not wired.** The file and the mode test are the same as HD's.
-- **Mine, bomb, bolt, flash and pad models: checked, applies, not wired** (same entry names in the
+- **Handling: ported** (`DETONATOR_HANDLING`, the same test; unauthored values inherited from HD). The file and the mode test are the same as HD's.
+- **Mine, bomb and pad models: ported** with a **chosen** directory (`oag_2048::race::DETONATOR_OBJECTS`:
+  `Data\Weapons\`, HD's names; `Data\Weapons2048\` ships the same names and the loaders' prefix is
+  unread; no `Data\art\published\Weapons` spelling resolves; the pad is `Data\New_Mode_Pads`,
+  census in `the_detonator_hull_handling_and_livery_entries_resolve`). Bolt and flash: checked,
+  applies, not wired (same entry names in the
   executable and on the disc). The loaders' bodies were not read here.

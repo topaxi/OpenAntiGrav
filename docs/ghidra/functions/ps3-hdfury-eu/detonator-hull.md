@@ -320,6 +320,42 @@ negative: a model could still reach them through another model's node or a table
 The mine's death is the `.pob` pair `WO_MINE_EXPLO_DETONATOR[_DEAD]`
 ([detonator-mine.md](detonator-mine.md)), not this model, as far as read.
 
+## Wired
+
+All six rows below except the cannon are wired (`oag_title::Detonator::{craft, handling,
+objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJECTS`;
+`oag_livery::entry::own_craft`; `oag_raceplay::detonator_models`; tests
+`crates/raceplay/tests/detonator_hull_ground_truth.rs`). What the wiring does not do, and why:
+
+- **No wreck and no death shell.** HD's PS3 hull build (`oag_livery::one`) loads no wreck in any
+  mode and no loader for `ship_deathshell` exists, so Detonator's `shipwreck.vex` (the outline
+  placeholder) and `ship_deathshell.vex` are not read. The loader report names the hull's folder.
+- **No shield.** A Detonator craft skips the shield shell, as `ShipShield_Construct` is skipped
+  in mode `0xe` (the folder's `shipshield` is the placeholder). Zone, which the original also
+  skips for mode 6, is untouched.
+- **The engine light is Zone's** (`oag_livery::entry::light_craft`: every mode on the mask).
+- **Livery fallback `zoneship_faisar`** is data on HD (`DetonatorCraft::livery_fallback`); 2048
+  and Omega name none.
+- **Handling: HD, 2048 and Omega** read their own file before the Zone mask
+  (`oag_raceplay::load::sim::mode_handling`); the two unauthored values (`landing_rebound`,
+  `rebound_jump_time`) are Zone's live read on HD and inherited from HD elsewhere.
+- **`electric_visualiser` is not drawn**: it is music-driven (`MasterVolume`, `BassHit`, `Tempo`),
+  the loader report says so. The mine's and bomb's colour binds (`MineColour`,
+  `MineBrightness`, `BombColour` ...) are unread, so the models draw unbound and the football
+  reads bright white.
+- **Pads**: the Detonator pad draws at every speed pad's and weapon pad's own `to_world`
+  (`PadVolume::to_world`) **in addition to** the circuit's own pad geometry (whether the
+  original still draws that underneath is unread). Whether the model's origin is the pad's
+  transform origin is **chosen**, not measured.
+- **The bomb's HD halo** (`bomb_blast_hd.halo`) still draws on a laid Detonator bomb, as before:
+  unread.
+- **The cannon** is not wired; `Loaded::cannon_muzzles(slot)` hands the hull's
+  `cannon_flash_left`/`right` locators (hull space) to the cannon lane.
+- **2048 and Omega**: all wired with HD's names. 2048's archives ship the objects under both
+  `Data\Weapons` and `Data\Weapons2048`; the directory its loaders join is unread, so HD's is
+  chosen. Omega's pad path is inherited from HD (it reads it from a data field). A 2048 native
+  team authors no `PI_TeamModel name="detonator"`, so its hull keeps the default `zoneship_zone` skin.
+
 ## What the port must change
 
 1. **Hull**: in Detonator every craft flies `/data/ships/detonator/ship.vex`, not the team's race

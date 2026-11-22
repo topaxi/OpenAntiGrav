@@ -1502,16 +1502,26 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
 - **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
   HD flies the Zone hover rig with no brakes and the Zone grid hover (`Mode::on_zone_mask`). The
   same mask skips split recording; this build still shows lap times.
-- **Its own hull and handling (read, not wired).** Every craft flies
+- **Its own hull, handling and object models (wired on HD and Omega; 2048 hull and handling).** Every craft flies
   `Data\Ships\Detonator\Ship.vex`, swapping `zoneship_zone` for the team's `detonator` livery
-  (`zoneship_<team>`). Its wreck, death shell, locators and flare come from the same folder, and it
-  loads no LODs and no shield. It flies `Data\Ships\Detonator\handlingstats.xml`, not Zone's:
+  (`zoneship_<team>`). Its locators, flare and absorb shell come from the same folder, and it
+  loads no LODs and no shield; the wreck and death shell are not loaded (HD's hull build loads no
+  wreck in any mode). It flies `Data\Ships\Detonator\handlingstats.xml`, not Zone's:
   same engine, harder turning, less airbrake, narrower. The mine is `mine_rita_football` +
   `mine_rita_spikes` + `Electric_Visualiser`, the bomb `detonator_bomb_final` + `_equalisers` +
   `_glowedges`, and every speed and weapon pad carries a `Detonator_Pad`. Confidence 70-82; 2048
   and Omega check out the same, Omega with its own livery key `zoneship_team`. Evidence:
-  [detonator-hull.md](../ghidra/functions/ps3-hdfury-eu/detonator-hull.md). This build still
-  draws the team's race hull and flies Zone's handling file.
+  [detonator-hull.md](../ghidra/functions/ps3-hdfury-eu/detonator-hull.md). **Wired:**
+  `oag_title::Detonator::{craft, handling, objects}` carry the entries (`oag_hd::race::DETONATOR_*`,
+  `oag_2048::race`, `oag_omega::race`); `oag_livery::entry::own_craft` picks Zone's or
+  Detonator's craft for the hull, flare, absorb shell, muzzle and shadow, and the engine light
+  stays Zone's. The mine draws the football and its spikes (`electric_visualiser` is
+  music-driven and not drawn), the bomb its three parts, and a `Detonator_Pad` sits on every
+  speed pad and weapon pad at the pad's own transform. `MineColour`, `MineBrightness` and the
+  bomb's colour binds are unread, so the mine draws unbound (bright white); 2048 and Omega take
+  HD's names (2048's directory is chosen: it ships both `Data\Weapons` and `Data\Weapons2048`). Tests:
+  `detonator_hull_ground_truth.rs`, `the_detonator_hull_handling_and_livery_entries_resolve`
+  (2048), `the_detonator_hull_handling_and_object_entries_resolve` (Omega).
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega
   inherited from HD). **The start board** is `321go_hd_detonator.vex` on all three.
 - **Mines and bombs are laid, and bite.** The opening stage and each stage step lay objects

@@ -34,7 +34,8 @@ At `0x014af60f`-`0x014af627` the function tests `DAT_0201280c == 0xd` -> `...\Zo
 the `0x8181` mask -> `...\hdships\Zone\handlingstats.xml` (`0x014af64f`-`0x014af697`). **75.**
 `hdships/detonator/handlingstats.xml` (`data03`) and `Detonator_VR/handlingstats.xml` (`data08`)
 are byte-identical to HD's Detonator file, and `hdships/zone/handlingstats.xml` (`data01`) to HD's
-Zone file. **Checked, applies, not wired.**
+Zone file. **Ported** (`oag_omega::race::DETONATOR_HANDLING`,
+`the_detonator_hull_handling_and_object_entries_resolve`; unauthored values inherited from HD).
 
 Engine lights: v1.07 `0x01335030` reads `Data\art\published\hdships\Zone\EngineLightData.xml` under
 the same `0x8181` mask, as HD does.
@@ -45,7 +46,7 @@ The v1.07 strings `mine_rita_football.vex`/`mine_rita_spikes.vex`/`Electric_Visu
 (referenced from `0x01364870`), `detonator_bomb_final.vex` and `_final_equalisers`/`_glowedges`
 (from `0x0135f380`), and `detonator_cannonbolt.vex`/`hd_muzzleflash_detonator.vex` (from
 `0x0135a740`) are HD's names. The models ship in `data00.psarc` under `weapons/` and `weapons2048/`.
-**Checked, applies, not wired.**
+**Ported**: `oag_omega::race::DETONATOR.objects` names HD's entries and the test resolves each.
 
 **Pad: checked, differs.** v1.07 has no `Detonator_Pad` string. In mode `0xe`, the world loader
 (`0x013c47f0`) formats `"%s.vex"`/`"%s.rcsmodel"` over a path held at `DAT_020128f8 + 0x288`, a data

@@ -61,6 +61,7 @@ mod craft_sticking_ground_truth;
 mod damage_fx_ground_truth;
 mod destroy_camera_ground_truth;
 mod detonator_ground_truth;
+mod detonator_hull_ground_truth;
 mod difficulty_ground_truth;
 mod eliminator_finish_ground_truth;
 mod eliminator_pad_stamp_ground_truth;

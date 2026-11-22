@@ -485,7 +485,7 @@ fn one(
 ) -> Result<Livery> {
     let hull_name = ships.hull_entry_name(
         team,
-        ctx.mode == Mode::Zone,
+        entry::own_craft(ships, ctx.mode),
         ctx.circuit_hull.or(hull_variant),
     );
     let blob = archives
@@ -514,8 +514,9 @@ fn one(
             // and needs no `.vex` at all - see `oag_mesh::mesh::rcs::psp2`.
             Some(geometry) => {
                 let zone = zone_livery::swap(ships, ctx.mode, ctx.zone_liveries, team, report);
-                let worn = livery.filter(|_| ctx.mode != Mode::Zone);
-                let mut textures = zone_livery::Reads::new(zone.or(worn));
+                let worn = livery.filter(|_| entry::own_craft(ships, ctx.mode).is_none());
+                let mut textures =
+                    zone_livery::Reads::new(zone.or(worn)).named(entry::craft_label(ctx.mode));
                 let built = if mesh::rcs::psp2::is_psp2(&geometry) {
                     mesh::rcs::psp2::build(&hull_name, &geometry, None, &mut |path| {
                         textures.read(archives, path)
@@ -598,7 +599,7 @@ fn one(
             archives,
             ships,
             team,
-            ctx.mode,
+            entry::light_craft(ships, ctx.mode),
             oag_tables::enginelight::entry_name_in,
             report,
         );
@@ -616,14 +617,22 @@ fn one(
         // pad reveals, so both halves come out of one load. See
         // `flare::per_team`.
         let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
-        let shield = {
+        // A Detonator craft raises no shield: `Ship_ReloadModelForSkin` skips
+        // `ShipShield_Construct` in mode `0xe`, and the folder's `shipshield` is the outline
+        // placeholder (`detonator-hull.md`, "The hull", 82).
+        let shield = if ctx.mode == Mode::Detonator && ships.detonator.is_some() {
+            report.push(format!(
+                "{team}: a Detonator craft raises no shield - the folder's shipshield is not loaded"
+            ));
+            None
+        } else {
             // Authored about its hull like the flare: the Zone directory's
             // own shell where it ships one.
             let (shell_dir, shell_team) = entry::model_directory_with(
                 archives,
                 ships,
                 team,
-                ctx.mode,
+                entry::own_craft(ships, ctx.mode),
                 |dir, team| entry::stem_entry_name(dir, team, entry::SHIELD_STEM),
                 report,
             );
@@ -646,7 +655,7 @@ fn one(
                     archives,
                     ships,
                     team,
-                    ctx.mode,
+                    entry::own_craft(ships, ctx.mode),
                     |dir, team| entry::stem_entry_name(dir, team, absorb::SHELL_STEM),
                     report,
                 );

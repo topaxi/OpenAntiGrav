@@ -623,7 +623,7 @@ fn a_track_type_forces_its_hull_stem_into_the_entry_name() {
     assert_eq!(
         defaults
             .ships_for("Feisar")
-            .hull_entry_name("Feisar", false, stem),
+            .hull_entry_name("Feisar", None, stem),
         format!(r"{}\Feisar\VR\Ship.vex", defaults.ship_dir)
     );
 }
