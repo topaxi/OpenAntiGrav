@@ -43,6 +43,15 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 2. 2048 and Omega: the same, checked against HD (lineage rule); 2048 first, Omega's
    `eboot.bin` second.
 3. Pure's own `Ship_SetState` against the inherited Pulse rule; Pulse PS2's port.
+4. **The Zone destruction sequence on every title** (maintainer, 2026-11-22). Pulse's is
+   wired (`zonewreck.vex`, case 4's `~BLOWUP` for the local player, the death camera mode 5,
+   the HUD hide on `DAT_08ab0838`; `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`,
+   `zone-rest.md`); its open reads (`0x08ab10e8`, `0x08ab2120`) are in
+   `handover/gameplay/zone-ends-now-what-is-missing-is-the.md`. HD/Fury, 2048 and Omega:
+   which model a Zone craft becomes (2048 maps a Zone death shell,
+   `docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`, confidence 80), the effects,
+   camera, HUD and sound at the Zone's end, are unread. Pure's Zone wreck rides Pulse's rule.
+   The Zone wreck's livery is `zone-livery-wreck-lods.md`'s item.
 
 ## Next Steps
 
@@ -52,3 +61,6 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 2. Then an `oag-wire` lane: `Looks::hull_wreck` and the wreck effect triggers for HD,
    with a frame pair of a destroyed craft against RPCS3.
 3. Then 2048/Omega (item 2), wired together per the backport rule.
+4. Then a Zone lane (item 4): an `oag-re` measure lane on HD's Zone end first (it reuses
+   step 1's `Ship_SetState` reading), checked against 2048 and Omega, then wire it with a
+   frame pair of a Zone end against RPCS3.
