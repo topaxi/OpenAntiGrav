@@ -51,6 +51,9 @@ pub struct DestroyedCraft {
     /// Whether state 6 takes the body out of the physics world (it stops being
     /// integrated) rather than leaving it to land and roll.
     pub leaves_world: bool,
+    /// Where the destroy camera comes from. HD's own mode 8 is unread, so it keeps the
+    /// existing destroy camera, which is Pulse's.
+    pub camera: crate::effects::Origin,
 }
 
 impl DestroyedCraft {
@@ -63,6 +66,7 @@ impl DestroyedCraft {
         wreck_from: WreckFrom::OutOfRace,
         blast_at: BlastAt::DwellEnd,
         leaves_world: false,
+        camera: crate::effects::Origin::Measured,
     };
 
     /// HD/Fury's `Ship_SetState` states 4 to 6 (`ship-destroy.md`, rows 1, 2, 9,
@@ -79,5 +83,6 @@ impl DestroyedCraft {
         wreck_from: WreckFrom::Explosion,
         blast_at: BlastAt::Explosion,
         leaves_world: true,
+        camera: crate::effects::Origin::InheritedFrom("Wipeout Pulse"),
     };
 }
