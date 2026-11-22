@@ -122,7 +122,7 @@ the wreck rule is `Looks::hull_wreck`. 2048 and Omega keep Pulse's sequence unti
 | 2 | wired: `WO_SHIP_EXPLOSION` on entering state 4, `4.0` rows behind the model, no Pulse shockwave | `craft_flash`, `wreck_fx::throw_wreck_explosion` |
 | 3 | **not wired**: the bank cues and `~SHIP_ONFIRE` need HD's authored-mix cue path | open |
 | 4 | not wired (65) | open |
-| 5 | not wired: HD keeps the existing destroy camera until mode 8's view is read (open item 3) | open |
+| 5 | not wired: HD keeps the existing destroy camera, **inherited from Pulse** (`DestroyedCraft::camera`), until mode 8's view is read (open item 3) | open |
 | 6 | **not wired**: the compound collider and death kick (open items 1 and 2) | open |
 | 7 | not wired | open |
 | 8, 13, 15, 16 | the Eliminator route is the existing Pulse mechanism, unchanged and with Pulse's timers (`raceplay::eliminator`) | open for HD's own timers |
@@ -131,6 +131,8 @@ the wreck rule is `Looks::hull_wreck`. 2048 and Omega keep Pulse's sequence unti
 | 11 | wired: `6.0` s then speed squared under `0.5`, or `20.0` s; the `body+0x210 == 2` half is **not read** and is not tested | `oag_physics::damage::advance_state` |
 | 12 | wired: state 6 is solid to no craft, the body is no longer integrated (opponents; the player's wreck ends the race) and the wreck stays drawn | `solid_to_craft`, `RaceSim::wreck_left_world` |
 | 14 | not wired (65) | open |
+
+**Unconfirmed by play or a frame of the original:** rows 1 and 12 (the wreck appears at the blast and stays to the race's end) are the code reading only; the maintainer does not remember it either.
 
 Ours' frames (`--race --force-wreck 60:7`, Talon's Junction grid, 1280x720): the hull is charred
 the tick state 4 begins, a white flash covers it for about 0.1 s, a black smoke ball with sparks
