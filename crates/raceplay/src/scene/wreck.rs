@@ -37,6 +37,16 @@ pub(super) fn live_model(state: CraftState) -> Live {
     }
 }
 
+/// [`live_model`] on a title whose wreck is selected at `from`: HD's `Ship_SetState` case 4
+/// calls `Ship_SelectWreckModel` (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 1),
+/// so its wreck is live through the explosion.
+pub(super) fn live_model_for(state: CraftState, from: oag_title::destroyed::WreckFrom) -> Live {
+    match (state, from) {
+        (CraftState::Destroyed, oag_title::destroyed::WreckFrom::Explosion) => Live::Wreck,
+        _ => live_model(state),
+    }
+}
+
 /// Every slot's wreck, `None` for a slot whose source ships none.
 #[derive(Debug)]
 pub(super) struct Wrecks {
@@ -109,7 +119,10 @@ impl Scene {
     pub(super) fn is_wrecked(&self, race: &Race, slot: usize) -> bool {
         self.wrecks.hull.get(slot).is_some_and(Option::is_some)
             && race.core.sim.ship_active(slot)
-            && live_model(race.core.sim.world.ships[slot].physics.craft_state) == Live::Wreck
+            && live_model_for(
+                race.core.sim.world.ships[slot].physics.craft_state,
+                race.core.sim.destroyed.wreck_from,
+            ) == Live::Wreck
     }
 
     /// Whether the hull is left undrawn for `slot`: the player's own in the
@@ -194,5 +207,19 @@ mod tests {
         assert_eq!(live_model(CraftState::Racing), Live::Hull);
         assert_eq!(live_model(CraftState::Destroyed), Live::Hull);
         assert_eq!(live_model(CraftState::Eliminated), Live::Wreck);
+    }
+
+    /// HD's wreck is live from state 4; Pulse's is not.
+    #[test]
+    fn hds_wreck_is_live_from_state_4_and_pulses_is_not() {
+        use oag_title::destroyed::WreckFrom;
+        for (from, destroyed) in [
+            (WreckFrom::Explosion, Live::Wreck),
+            (WreckFrom::OutOfRace, Live::Hull),
+        ] {
+            assert_eq!(live_model_for(CraftState::Racing, from), Live::Hull);
+            assert_eq!(live_model_for(CraftState::Destroyed, from), destroyed);
+            assert_eq!(live_model_for(CraftState::Eliminated, from), Live::Wreck);
+        }
     }
 }

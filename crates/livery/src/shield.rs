@@ -18,7 +18,7 @@ use super::*;
 ///
 /// `Ok` carries a description of what was built, for the loader report; `Err`
 /// carries the line to report instead.
-fn shield_model(
+pub(super) fn shield_model(
     archives: &mut oag_assets::Archives,
     name: &str,
     store: oag_gpu::formats::SceneStore,

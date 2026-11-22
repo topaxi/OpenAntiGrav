@@ -235,6 +235,29 @@ impl RaceView {
         }
     }
 
+    /// A craft going out of the race (state 5's entry) on a title that names
+    /// [`Trigger::WreckPlume`]: `ShipDamageFx_Update_q`'s death branch spawns it once, attached
+    /// at the flare anchor, which the dead craft's anchor moves from `1.5` to `2.0`
+    /// ([`anchor`]). Not in the Eliminator, whose state 5 takes the other timer branch
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 10).
+    pub(super) fn throw_death_plume(&mut self, core: &SimRace, slot: usize) {
+        if core.sim.world.mode() == oag_race::Mode::Eliminator {
+            return;
+        }
+        let Some(effect) = self.handles.get(Trigger::WreckPlume).cloned() else {
+            return;
+        };
+        let at = self.smoke_anchor(core, slot);
+        if let Some(playing) = self.stage.play_riding(&effect, at, 1.0) {
+            self.damage_fx.riding.push(Riding {
+                slot,
+                playing,
+                state_smoke: false,
+            });
+            self.damage_fx.started += 1;
+        }
+    }
+
     /// A landed LeachBeam hit on `slot`, on a title whose hit spark is not
     /// thrown from the hull's locators (HD): one burst of
     /// [`Trigger::LeachHitSpark`] attached at the craft's damage-effect point.

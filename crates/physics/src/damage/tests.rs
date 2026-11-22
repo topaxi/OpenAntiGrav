@@ -461,3 +461,79 @@ fn a_pair_contact_costs_the_wall_law_and_a_shield_refuses_it() {
     assert!(report.absorbed);
     assert_eq!(shielded.shield, 100.0);
 }
+
+/// HD's sequence (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, rows 9, 11, 12): state
+/// 4 is `0.3` s, state 5 ends once the wreck has lain still for `6.0` s (squared speed under
+/// `0.5`) or after `20.0` s, and only then is the wreck out of the craft-against-craft pass.
+fn hd_wreck(speed: f32) -> ShipState {
+    let mut s = state(1.0);
+    s.destroy_sequence = DestroySequence {
+        explosion_secs: 0.3,
+        dwell_secs: 20.0,
+        settle: Some((6.0, 0.5)),
+    };
+    s.body.linear_velocity = oag_core::math::Vec3::new(speed, 0.0, 0.0);
+    apply_contact(
+        &mut s,
+        &dimensions(300.0),
+        &wall(1000.0),
+        DamageRules::default(),
+    );
+    s
+}
+
+fn ticks_until_state_6(mut s: ShipState) -> Option<u32> {
+    let dt = 1.0 / 60.0;
+    for tick in 1..=(25 * 60) {
+        advance_state(&mut s, dt);
+        if in_state_6(&s, false) {
+            return Some(tick);
+        }
+    }
+    None
+}
+
+#[test]
+fn hds_explosion_is_0_3_s() {
+    let mut s = hd_wreck(0.0);
+    assert_eq!(s.state_timer, 0.3);
+    let dt = 1.0 / 60.0;
+    for _ in 0..17 {
+        advance_state(&mut s, dt);
+        assert_eq!(s.craft_state, CraftState::Destroyed);
+    }
+    advance_state(&mut s, dt);
+    assert_eq!(s.craft_state, CraftState::Eliminated);
+    assert_eq!(s.state_timer, 20.0);
+}
+
+#[test]
+fn a_still_hd_wreck_leaves_the_pair_pass_after_six_seconds() {
+    let ticks = ticks_until_state_6(hd_wreck(0.0)).expect("a still wreck settles");
+    // 0.3 s of explosion, then more than 6.0 s of state 5.
+    let seconds = ticks as f32 / 60.0;
+    assert!((6.3..6.45).contains(&seconds), "{seconds} s");
+}
+
+#[test]
+fn a_moving_hd_wreck_stays_solid_to_the_twenty_second_timeout() {
+    let ticks = ticks_until_state_6(hd_wreck(5.0)).expect("the timeout ends state 5");
+    let seconds = ticks as f32 / 60.0;
+    assert!((20.2..20.45).contains(&seconds), "{seconds} s");
+}
+
+/// Pulse's has no early exit: a still wreck is solid for the same `1.5` s as a moving one.
+#[test]
+fn pulses_wreck_does_not_settle_early() {
+    let mut s = state(1.0);
+    apply_contact(
+        &mut s,
+        &dimensions(300.0),
+        &wall(1000.0),
+        DamageRules::default(),
+    );
+    assert_eq!(s.destroy_sequence, DestroySequence::default());
+    let ticks = ticks_until_state_6(s).expect("state 5's timer ends");
+    let seconds = ticks as f32 / 60.0;
+    assert!((1.95..2.1).contains(&seconds), "{seconds} s");
+}

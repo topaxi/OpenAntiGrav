@@ -87,6 +87,7 @@ impl SimSetup {
             craft_laws: None,
             autopilot_engine: oag_title::autopilot_engine::MEASURED,
             opponent_autopilot: false,
+            destroyed: oag_title::destroyed::DestroyedCraft::PULSE,
             weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
             leach_drain: oag_title::weapons::LeachDrain::PerTick,
             blast_push: oag_title::weapons::BlastPush::Posted,

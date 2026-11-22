@@ -767,7 +767,9 @@ impl Race {
             // not here. With one person in slot 0 this skips slot 0, which the
             // loop used to start past.
             // A craft in a transit is out of the world and not stepped (`crate::transit`).
-            if !self.core.sim.world.ships[slot].in_world() || self.core.sim.world.person_flown(slot)
+            if !self.core.sim.world.ships[slot].in_world()
+                || self.core.sim.world.person_flown(slot)
+                || self.core.sim.wreck_left_world(slot)
             {
                 continue;
             }

@@ -74,7 +74,13 @@ pub(super) fn anchors(
     title: &oag_title::Title,
     liveries: &[oag_livery::Livery],
 ) -> Vec<Vec<SparkAnchor>> {
-    if title.effect_on(oag_title::Trigger::WreckNode).is_none() {
+    // The slot's wreck is what the blast is placed by, and the locators are what the node
+    // effects ride, so either effect gives the title a wreck to track.
+    if title.effect_on(oag_title::Trigger::WreckNode).is_none()
+        && title
+            .effect_on(oag_title::Trigger::WreckExplosion)
+            .is_none()
+    {
         return Vec::new();
     }
     liveries

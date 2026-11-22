@@ -108,6 +108,36 @@ pub enum CraftState {
 /// no runtime leg.
 pub const DESTROYED_DURATION: f32 = 0.5;
 
+/// How a title's destroyed sequence times itself: the explosion, the dwell in state 5 and
+/// the early exit from it.
+///
+/// [`Default`] is Pulse's (`DESTROYED_DURATION`, `ELIMINATED_SOLID_DURATION`, no early exit).
+/// The race writes a title's own onto every craft, not hashed: it is configuration, like
+/// [`ShipState::turbo_running_laws`]. HD's is `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`,
+/// rows 9, 11 and 12.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DestroySequence {
+    /// State 4's length in seconds.
+    pub explosion_secs: f32,
+    /// State 5's length in seconds, [`ShipState::state_timer`]'s start there. A craft in
+    /// state 6 is the one whose timer has run out ([`in_state_6`]).
+    pub dwell_secs: f32,
+    /// The early exit from state 5: `(seconds in state, squared speed)`. Once the craft has
+    /// been in state 5 for at least the first and moves slower than the second, state 6
+    /// begins (the timer is cleared). `None` where only the timer ends it.
+    pub settle: Option<(f32, f32)>,
+}
+
+impl Default for DestroySequence {
+    fn default() -> Self {
+        Self {
+            explosion_secs: DESTROYED_DURATION,
+            dwell_secs: ELIMINATED_SOLID_DURATION,
+            settle: None,
+        }
+    }
+}
+
 /// The race options that reach the pool.
 ///
 /// Two of the three globals `Race_ReadSetupOptions` (`0x08896b84`) lowers; `g_skill_level`
@@ -194,11 +224,20 @@ pub fn advance_state(state: &mut ShipState, dt: f32) {
         CraftState::Destroyed => {
             state.state_timer -= dt;
             if state.state_timer <= 0.0 {
-                state.state_timer = ELIMINATED_SOLID_DURATION;
+                state.state_timer = state.destroy_sequence.dwell_secs;
                 state.craft_state = CraftState::Eliminated;
             }
         }
-        CraftState::Eliminated => state.state_timer = (state.state_timer - dt).max(0.0),
+        CraftState::Eliminated => {
+            let sequence = state.destroy_sequence;
+            state.state_timer = (state.state_timer - dt).max(0.0);
+            if let Some((after, speed_squared)) = sequence.settle {
+                let in_state = sequence.dwell_secs - state.state_timer;
+                if in_state > after && state.body.linear_velocity.length_squared() < speed_squared {
+                    state.state_timer = 0.0;
+                }
+            }
+        }
         CraftState::Racing => {}
     }
 }
@@ -395,7 +434,7 @@ fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield
     if depleted {
         // `Ship_Damage`'s `if (new <= 0.0) Ship_SetState(entity, 4)`.
         state.craft_state = CraftState::Destroyed;
-        state.state_timer = DESTROYED_DURATION;
+        state.state_timer = state.destroy_sequence.explosion_secs;
     }
     let crossed_critical =
         percent(before, max) > CRITICAL_PERCENT && percent(state.shield, max) <= CRITICAL_PERCENT;

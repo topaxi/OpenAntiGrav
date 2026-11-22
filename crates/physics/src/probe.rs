@@ -376,6 +376,7 @@ pub fn hash_state(hasher: &mut StateHasher, state: &ShipState) {
         pitch_gate: _,
         sideshift_grid_gate: _,
         turbo_running_laws: _,
+        destroy_sequence: _,
         // Not hashed: the race writes it from the title every tick.
         inertia_frame: _,
         launch,

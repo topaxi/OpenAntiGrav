@@ -433,6 +433,8 @@ pub struct RaceSim {
     pub(super) physics_laws: oag_physics::laws::Laws,
     /// What the Autopilot does to the player's engine - see [`SimSetup::autopilot_engine`].
     pub(super) autopilot_engine: oag_title::autopilot_engine::AutopilotEngine,
+    /// How a destroyed craft's sequence runs - see [`SimSetup::destroyed`].
+    pub(super) destroyed: oag_title::destroyed::DestroyedCraft,
     /// What colours a weapon pad's light bars - see [`SimSetup::weapon_pad_glow`].
     #[cfg_attr(not(feature = "view"), allow(dead_code))]
     pub(super) weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
@@ -643,6 +645,17 @@ const _: () = {
 };
 
 impl RaceSim {
+    /// Whether `slot`'s wreck has been taken out of the physics world: its title's state 6
+    /// removes the body (`PhysicsWorld_RemoveBody`,
+    /// `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 12), so it is no longer
+    /// integrated. Pulse's wreck keeps landing and rolling, and the Eliminator's goes on to
+    /// state 8 instead of 6.
+    pub(super) fn wreck_left_world(&self, slot: usize) -> bool {
+        self.destroyed.leaves_world
+            && self.world.mode() != oag_race::Mode::Eliminator
+            && oag_physics::damage::in_state_6(&self.world.ships[slot].physics, false)
+    }
+
     /// [`SimRace::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
     /// module's commands): only a racing craft uses a pickup.
     pub(super) fn may_use_pickup(&self, slot: usize) -> bool {

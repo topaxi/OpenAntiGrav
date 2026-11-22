@@ -64,6 +64,7 @@ impl Race {
             craft_laws,
             autopilot_engine,
             opponent_autopilot,
+            destroyed,
             weapon_pad_glow,
             leach_drain,
             blast_push,
@@ -182,6 +183,7 @@ impl Race {
         let pitch_gate = craft_laws.is_none_or(|laws| laws.pitch_gate.value);
         let sideshift_grid_gate = craft_laws.is_none_or(|laws| laws.sideshift_grid_gate.value);
         let turbo_running_laws = craft_laws.is_none_or(|laws| laws.turbo_running_laws.value);
+        let destroy_sequence = crate::launch_hover::destroy_sequence(&destroyed);
         let eliminator_wrong_way_kill =
             craft_laws.is_none_or(|laws| laws.eliminator_wrong_way_kill.value);
         let inertia_frame = crate::launch_hover::inertia_frame(craft_laws);
@@ -265,6 +267,7 @@ impl Race {
         ship.physics.pitch_gate = pitch_gate;
         ship.physics.sideshift_grid_gate = sideshift_grid_gate;
         ship.physics.turbo_running_laws = turbo_running_laws;
+        ship.physics.destroy_sequence = destroy_sequence;
         ship.physics.inertia_frame = inertia_frame;
         // The pool starts full, which is `Ship_ResetShield` (`0x0883dd24`) - the
         // only thing on the disc that sets it outright. Wall contact spends it
@@ -482,6 +485,7 @@ impl Race {
                 opponent.physics.pitch_gate = pitch_gate;
                 opponent.physics.sideshift_grid_gate = sideshift_grid_gate;
                 opponent.physics.turbo_running_laws = turbo_running_laws;
+                opponent.physics.destroy_sequence = destroy_sequence;
                 opponent.physics.inertia_frame = inertia_frame;
                 oag_physics::damage::reset(&mut opponent.physics, &handling.dimensions);
                 // **Eight drivers, not one driver eight times.** The seed is
@@ -717,6 +721,7 @@ impl Race {
                     inertia_frame,
                     physics_laws,
                     autopilot_engine,
+                    destroyed,
                     weapon_pad_glow,
                     leach_beams: leach_beams
                         .min(oag_weapons::projectile::leach_beam::POOL_SIZE as u8),

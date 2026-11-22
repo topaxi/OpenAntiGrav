@@ -98,6 +98,20 @@ pub(crate) fn inertia_frame(laws: Option<&CraftLaws>) -> oag_physics::InertiaFra
         oag_physics::InertiaFrame::World
     }
 }
+
+/// The destroyed sequence's timers a title's [`DestroyedCraft`] gives every craft's physics.
+pub(crate) fn destroy_sequence(
+    destroyed: &oag_title::destroyed::DestroyedCraft,
+) -> oag_physics::damage::DestroySequence {
+    oag_physics::damage::DestroySequence {
+        explosion_secs: destroyed.explosion_secs,
+        dwell_secs: destroyed.dwell_secs,
+        settle: destroyed
+            .settle
+            .map(|settle| (settle.after_secs, settle.speed_squared)),
+    }
+}
+
 /// The craft's force-law constants for a title's [`CraftLaws`], Pulse's for `None`.
 pub(crate) fn physics_laws(laws: Option<&CraftLaws>) -> oag_physics::laws::Laws {
     let pulse = oag_physics::laws::Laws::PULSE;
@@ -139,6 +153,7 @@ impl RaceSim {
             ship.physics.pitch_gate = self.pitch_gate;
             ship.physics.sideshift_grid_gate = self.sideshift_grid_gate;
             ship.physics.turbo_running_laws = self.turbo_running_laws;
+            ship.physics.destroy_sequence = destroy_sequence(&self.destroyed);
             ship.physics.inertia_frame = self.inertia_frame;
         }
     }

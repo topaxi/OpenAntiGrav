@@ -468,6 +468,9 @@ pub(super) fn grid(
     if craft_title
         .effect_on(oag_title::Trigger::WreckNode)
         .is_none()
+        && craft_title
+            .effect_on(oag_title::Trigger::WreckExplosion)
+            .is_none()
     {
         report.push(format!(
             "{}: no wreck effect is read for this title (no node blast, death sparks or big blast) \

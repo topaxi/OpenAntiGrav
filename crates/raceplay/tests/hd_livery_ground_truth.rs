@@ -149,6 +149,19 @@ fn every_grid_slot_gets_its_own_teams_hull() {
          should fly its own: {teams:?}"
     );
 
+    // HD swaps in a `shipwreck.vex` per team at state 4: every slot loads one that draws.
+    for livery in &loaded.liveries {
+        let wreck = livery
+            .wreck
+            .as_ref()
+            .unwrap_or_else(|| panic!("{}: no wreck\n{}", livery.team, loaded.report.join("\n")));
+        assert!(
+            !wreck.model.indices.is_empty(),
+            "{}: an empty wreck",
+            livery.team
+        );
+    }
+
     // The feature, not the plumbing: eight *different models*. On this title
     // that also means eight `.rcsmodel` reads that each found their sibling -
     // a hull whose geometry file is missing draws nothing and reports it, and
@@ -347,7 +360,8 @@ fn paint_every_livery(
                 .and_then(|model| model.texture_location.clone())
                 .expect("the directory's own livery");
             let mut report = Vec::new();
-            oag_livery::load(
+            let wreck_read = title.looks.hull_wreck.applies(archives.layout.platform);
+            let liveries = oag_livery::load(
                 archives,
                 std::slice::from_ref(&craft),
                 &oag_livery::LoadContext {
@@ -358,7 +372,7 @@ fn paint_every_livery(
                     hull_overlay: false,
                     leach_overlay: false,
                     hull_shine: false,
-                    hull_wreck: false,
+                    hull_wreck: wreck_read,
                     absorb_shell: false,
                     own_shield: false,
                     zone_liveries: &[],
@@ -376,6 +390,14 @@ fn paint_every_livery(
                 &mut report,
             )
             .unwrap_or_else(|error| panic!("{craft} {worn}: {error:#}"));
+            // The wreck rides the same pass: one per livery directory, where the title reads it.
+            let wreck = liveries.first().and_then(|livery| livery.wreck.as_ref());
+            assert_eq!(
+                wreck.is_some_and(|wreck| !wreck.model.indices.is_empty()),
+                wreck_read,
+                "{craft} {worn}: the wreck\n{}",
+                report.join("\n")
+            );
             let line = report
                 .iter()
                 .find(|line| line.starts_with(&format!("{craft}: livery {worn}")))

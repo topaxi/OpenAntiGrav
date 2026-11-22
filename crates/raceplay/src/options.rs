@@ -647,6 +647,10 @@ pub struct SimSetup {
     /// `oag_title::RaceDefaults::opponent_autopilot` at the race's class
     /// (`RaceSim::set_opponent_autopilot` overrides it).
     pub opponent_autopilot: bool,
+    /// How a destroyed craft's sequence runs, `oag_title::Title::destroyed`. The explosion,
+    /// dwell and settle timers reach every craft's physics; whether a wreck leaves the world
+    /// reads here.
+    pub destroyed: oag_title::destroyed::DestroyedCraft,
     /// What colours a weapon pad's light bars, `oag_title::Title::weapon_pad_glow`.
     pub weapon_pad_glow: &'static oag_title::weapon_pad::WeaponPadGlow,
     /// When a locked LeachBeam moves energy,

@@ -83,6 +83,7 @@ pub const TITLE: &Title = &Title {
     photo_shot: None,
     // The reset state `FUN_088418e0` enters (`docs/gameplay/leaving-the-track.md`).
     reset_enables: oag_title::recovery::ResetEnables::PULSE,
+    destroyed: oag_title::pre_race::Sourced::measured(oag_title::destroyed::DestroyedCraft::PULSE),
     contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
     // `FUN_089957c0` multiplies a voice by its group volume squared; the flyby's fade reads `fade ** 2`
     // (`docs/gameplay/race-intro.md`, "What the original plays under the flyby").
