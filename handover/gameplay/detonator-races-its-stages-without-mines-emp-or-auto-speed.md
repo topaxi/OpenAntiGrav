@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: 14 stages, mines/bombs laid and biting; cannon, score, own hull/handling/models read, not wired; EMP, auto-speed, HUD, campaign open"
+summary: "Detonator: stages, mines, bombs, cannon, score, campaign launch work; own hull/models read; EMP, auto-speed, HUD, end screen open"
 categories: [rendering]
 ---
 
@@ -33,12 +33,12 @@ evidence), then start at "Next Steps".
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | open | |
 | 13 | End screen proper (score, percentage, stage rows) | open | |
-| 14 | Campaign launch (`race_mode_for_cell` refuses `Other("Detonator")`) | open; do not ship before 9 | |
+| 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
 
 A race can already be launched from the command line:
 `oag-game --race --mode detonator [--autopilot --ticks N] data/images/hdfury-ps3-eu-dec.iso`
-(HD EU disc in `data/images/`). Menu launch is phase 14.
+(HD EU disc in `data/images/`). The menu launches it from a campaign cell (phase 14, done).
 
 ## What a player gets today (HD)
 
@@ -179,10 +179,11 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
 - **13 End screen.** Read the mode-14 results branch (`ER_DETONATOR_SCORE`,
   `PERCENT_MINES_CLEARED`, stage reached); fill the grid in
   `crates/game/src/app/race_stage/endrace.rs` and `crates/ui-screens`; `just check-strings`.
-- **14 Campaign.** `crates/game/src/campaign.rs::race_mode_for_cell` maps `Other("Detonator")` to
-  `Mode::Detonator` (HD Fury grids `grid_08`..`grid_15`, 14 cells; Omega; 2048 DLC), the medal
-  value arm in `RaceStage::campaign_tier` is the Detonator score (counting mode, `>=`); update the
-  campaign ground-truth tests and `docs/formats/race-campaign.md`.
+- **14 Campaign: done.** `race_mode_for_cell` maps `Other("Detonator")`; `RaceStage::campaign_tier`
+  takes the score through `medal_watch::detonator_value` (finished races only, `>=`). 12 cells per
+  title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). Open: the original's
+  mode-14 record case is unread (the value handed to the compare is a labelled choice); the
+  mid-race medal cues are phase 12's.
 - **15 Parity.** Omega race-start placement call, stage cap into `craft+0x5e4`, grade drawing;
   2048 per-stage `.gxt` textures.
 
@@ -309,7 +310,8 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **Score, end screen, HUD.** Score and percentage laws read (cannon bullet above), not wired;
   `ER_ZDETONATOR_COM` / `ER_DETONATOR_STAGE` / `PERCENT_MINES_CLEARED`;
   `detonator_hud.xml` (the race draws the time trial's HUD). Campaign cells (`mode="Detonator"`,
-  14 on `DATA00`'s Fury grids) are kept raw and do not launch.
+  12 on the Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score
+  (phase 14); mid-race medal cues and the end screen's score rows are phases 12 and 13.
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
   (`Ship_SetState` state 4, `detonator-mine.md`); Phase 7 wires it with the contact law.
 - **Omega's grade** is not drawn (Omega draws no Zone grade either); Omega's camera scale is

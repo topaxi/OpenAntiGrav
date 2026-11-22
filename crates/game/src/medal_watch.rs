@@ -78,6 +78,21 @@ pub fn elimination_value(
     }
 }
 
+/// The value a `Detonator` campaign cell's medal is evaluated on: the Detonator score, once the
+/// race is finished.
+///
+/// A counting mode (`>=` against the cell's targets): the original's HUD compares the cell's
+/// `DetonatorGoldMedal`/`Silver`/`Bronze` against the score `rm+0x2df0`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The score"). The end-of-race
+/// builder records only for a finished craft unless the mode is 6, 10 or 13, which Detonator (14)
+/// is not (`cell-medal-award.md`, "End of race"), so an unfinished race has no value. **Chosen,
+/// not measured:** that `Profile_RecordCampaignResult`'s mode-14 case hands the compare this
+/// score; that case is unread.
+#[must_use]
+pub fn detonator_value(finished: bool, score: Option<i32>) -> Option<i64> {
+    if finished { score.map(i64::from) } else { None }
+}
+
 /// The language-table id of a tier's end-of-race phrase.
 #[must_use]
 pub fn phrase(medal: Medal) -> &'static str {
@@ -191,6 +206,16 @@ mod tests {
 
     const PULSE: &[&str] = &["Zone", "Elimination"];
     const HD: &[&str] = &["Zone", "Detonator"];
+
+    /// A Detonator cell reads the cannon's score, and only on a finished race; no score (a race
+    /// that is not Detonator) is no value.
+    #[test]
+    fn a_detonator_cell_is_read_by_score_once_the_race_is_finished() {
+        assert_eq!(detonator_value(true, Some(48_250)), Some(48_250));
+        assert_eq!(detonator_value(false, Some(48_250)), None);
+        assert_eq!(detonator_value(true, None), None);
+        assert_eq!(detonator_value(true, Some(0)), Some(0));
+    }
 
     /// HD reads the place, and only on a finished race; Pulse and a mod campaign read kills.
     #[test]

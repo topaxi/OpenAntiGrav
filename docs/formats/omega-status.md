@@ -742,7 +742,7 @@ sprite's opaque pixels (`Sheet::opaque_extent`, `oag_game::campaign::hit`), held
 on the old targets). **HD had the same bug.** Two more things a mouse-only player met:
 `Grid Selection` has no flyer card on Omega, so its click target was the invisible
 `Flyer Pad Lock` rect - with no card drawn a click on the page's content band now confirms
-the tier (chosen, not measured); and a refused cell (25 of 167: `NitroBattle`, `Detonator`)
+the tier (chosen, not measured); and a refused cell (then 25 of 167: `NitroBattle`, `Detonator`; now 13, `NitroBattle`)
 only logged, it now shows `OAG_CAMPAIGN_MODE_UNSUPPORTED` above the footer. The walk below
 otherwise stands.
 
@@ -757,9 +757,10 @@ resolves through the teams/track plugin catalogue (`Data\Plugins\teams\Definitio
 mode, class and laps mapping is HD's. What was added is a test: the mapping is
 now `oag_game::campaign::launch::plan_cell`, a pure function the session applies,
 and `crates/game/tests/omega_campaign_launch_ground_truth.rs` holds it to the
-disc: of the 167 cells in the 16 grids that parse, **142 launch onto a circuit
-the catalogue resolves and 25 (`NitroBattle`, `Detonator`) are refused for
-their mode** - never a circuit id that resolves to nothing. Grids 16-18 lack
+disc: of the 167 cells in the 16 grids that parse, **154 launch onto a circuit
+the catalogue resolves (12 of them `Detonator` cells, launched as `Mode::Detonator` and
+medalled on the cannon's score) and 13 (`NitroBattle`) are refused for their mode** - never a
+circuit id that resolves to nothing. Grids 16-18 lack
 `RequiredPoints` and are skipped by the grid reader (logged).
 
 - **The cell's class reaches Omega's handling.** `--race --class venom` and
