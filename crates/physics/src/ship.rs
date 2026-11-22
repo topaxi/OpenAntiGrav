@@ -535,10 +535,6 @@ pub struct ShipState {
     /// and its heirs inherit them. Written by the race from the title every tick, not hashed,
     /// for [`Self::on_grid`]'s reason.
     pub turbo_running_laws: bool,
-    /// How the destroyed sequence times itself ([`crate::damage::DestroySequence`]): Pulse's
-    /// unless the title measured its own. Written by the race from the title, not hashed, for
-    /// [`Self::on_grid`]'s reason.
-    pub destroy_sequence: crate::damage::DestroySequence,
     /// The frame the inertia diagonal is applied in ([`InertiaFrame`]): Pulse's world axes
     /// unless the title measured its own. Written by the race from the title every tick, not
     /// hashed, for [`Self::on_grid`]'s reason.
@@ -736,7 +732,6 @@ impl Default for ShipState {
             pitch_gate: true,
             sideshift_grid_gate: true,
             turbo_running_laws: true,
-            destroy_sequence: crate::damage::DestroySequence::default(),
             inertia_frame: InertiaFrame::World,
             released: true,
             wrong_way_kill: false,

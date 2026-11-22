@@ -152,10 +152,10 @@ fn emptying_the_pool_blows_the_craft_up_and_then_eliminates_it() {
     // The explosion runs for half a second and not a tick less.
     let dt = 1.0 / 60.0;
     for _ in 0..29 {
-        advance_state(&mut s, dt);
+        advance_state(&mut s, dt, &DestroySequence::default());
         assert_eq!(s.craft_state, CraftState::Destroyed);
     }
-    advance_state(&mut s, dt);
+    advance_state(&mut s, dt, &DestroySequence::default());
     assert_eq!(s.craft_state, CraftState::Eliminated);
     assert_eq!(s.state_timer, ELIMINATED_SOLID_DURATION);
 }
@@ -171,19 +171,19 @@ fn a_wreck_is_solid_to_craft_for_state_fives_dwell_and_not_after() {
     let dt = 1.0 / 60.0;
     assert!(solid_to_craft(&s, false), "state 4 is solid");
     for _ in 0..30 {
-        advance_state(&mut s, dt);
+        advance_state(&mut s, dt, &DestroySequence::default());
     }
     assert_eq!(s.craft_state, CraftState::Eliminated);
     assert!(solid_to_craft(&s, false), "state 5 begins solid");
     for _ in 0..80 {
-        advance_state(&mut s, dt);
+        advance_state(&mut s, dt, &DestroySequence::default());
     }
     assert!(
         solid_to_craft(&s, false),
         "state 5 is solid until its 1.5 s run out"
     );
     for _ in 0..12 {
-        advance_state(&mut s, dt);
+        advance_state(&mut s, dt, &DestroySequence::default());
     }
     assert_eq!(s.state_timer, 0.0);
     assert!(!solid_to_craft(&s, false), "state 6 is not solid");
@@ -227,12 +227,12 @@ fn a_destroyed_craft_takes_no_further_damage() {
 fn only_the_explosion_runs_the_state_timer_down() {
     let mut racing = state(100.0);
     racing.state_timer = 5.0;
-    advance_state(&mut racing, 1.0);
+    advance_state(&mut racing, 1.0, &DestroySequence::default());
     assert_eq!(racing.state_timer, 5.0);
 
     let mut done = state(0.0);
     done.craft_state = CraftState::Eliminated;
-    advance_state(&mut done, 1.0);
+    advance_state(&mut done, 1.0, &DestroySequence::default());
     assert_eq!(done.craft_state, CraftState::Eliminated);
     assert_eq!(done.state_timer, 0.0, "the dwell floors at zero");
 }
@@ -465,13 +465,14 @@ fn a_pair_contact_costs_the_wall_law_and_a_shield_refuses_it() {
 /// HD's sequence (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, rows 9, 11, 12): state
 /// 4 is `0.3` s, state 5 ends once the wreck has lain still for `6.0` s (squared speed under
 /// `0.5`) or after `20.0` s, and only then is the wreck out of the craft-against-craft pass.
+const HD: DestroySequence = DestroySequence {
+    explosion_secs: 0.3,
+    dwell_secs: 20.0,
+    settle: Some((6.0, 0.5)),
+};
+
 fn hd_wreck(speed: f32) -> ShipState {
     let mut s = state(1.0);
-    s.destroy_sequence = DestroySequence {
-        explosion_secs: 0.3,
-        dwell_secs: 20.0,
-        settle: Some((6.0, 0.5)),
-    };
     s.body.linear_velocity = oag_core::math::Vec3::new(speed, 0.0, 0.0);
     apply_contact(
         &mut s,
@@ -482,10 +483,10 @@ fn hd_wreck(speed: f32) -> ShipState {
     s
 }
 
-fn ticks_until_state_6(mut s: ShipState) -> Option<u32> {
+fn ticks_until_state_6(mut s: ShipState, sequence: &DestroySequence) -> Option<u32> {
     let dt = 1.0 / 60.0;
     for tick in 1..=(25 * 60) {
-        advance_state(&mut s, dt);
+        advance_state(&mut s, dt, sequence);
         if in_state_6(&s, false) {
             return Some(tick);
         }
@@ -496,20 +497,21 @@ fn ticks_until_state_6(mut s: ShipState) -> Option<u32> {
 #[test]
 fn hds_explosion_is_0_3_s() {
     let mut s = hd_wreck(0.0);
-    assert_eq!(s.state_timer, 0.3);
+    // The timer starts at Pulse's half second whatever the title; HD's ends it at 0.3 s.
+    assert_eq!(s.state_timer, DESTROYED_DURATION);
     let dt = 1.0 / 60.0;
     for _ in 0..17 {
-        advance_state(&mut s, dt);
+        advance_state(&mut s, dt, &HD);
         assert_eq!(s.craft_state, CraftState::Destroyed);
     }
-    advance_state(&mut s, dt);
+    advance_state(&mut s, dt, &HD);
     assert_eq!(s.craft_state, CraftState::Eliminated);
     assert_eq!(s.state_timer, 20.0);
 }
 
 #[test]
 fn a_still_hd_wreck_leaves_the_pair_pass_after_six_seconds() {
-    let ticks = ticks_until_state_6(hd_wreck(0.0)).expect("a still wreck settles");
+    let ticks = ticks_until_state_6(hd_wreck(0.0), &HD).expect("a still wreck settles");
     // 0.3 s of explosion, then more than 6.0 s of state 5.
     let seconds = ticks as f32 / 60.0;
     assert!((6.3..6.45).contains(&seconds), "{seconds} s");
@@ -517,7 +519,7 @@ fn a_still_hd_wreck_leaves_the_pair_pass_after_six_seconds() {
 
 #[test]
 fn a_moving_hd_wreck_stays_solid_to_the_twenty_second_timeout() {
-    let ticks = ticks_until_state_6(hd_wreck(5.0)).expect("the timeout ends state 5");
+    let ticks = ticks_until_state_6(hd_wreck(5.0), &HD).expect("the timeout ends state 5");
     let seconds = ticks as f32 / 60.0;
     assert!((20.2..20.45).contains(&seconds), "{seconds} s");
 }
@@ -532,8 +534,7 @@ fn pulses_wreck_does_not_settle_early() {
         &wall(1000.0),
         DamageRules::default(),
     );
-    assert_eq!(s.destroy_sequence, DestroySequence::default());
-    let ticks = ticks_until_state_6(s).expect("state 5's timer ends");
+    let ticks = ticks_until_state_6(s, &DestroySequence::default()).expect("state 5's timer ends");
     let seconds = ticks as f32 / 60.0;
     assert!((1.95..2.1).contains(&seconds), "{seconds} s");
 }

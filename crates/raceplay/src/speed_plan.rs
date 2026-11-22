@@ -645,6 +645,7 @@ impl RaceSim {
                 class_gravity_term: sim.class_gravity_term,
                 laws: sim.physics_laws,
                 damage_rules: sim.damage_rules(),
+                destroy_sequence: sim.destroy_sequence(),
                 barrel_rolls: sim.barrel_rolls,
                 ..Environment::default()
             },

@@ -645,6 +645,11 @@ const _: () = {
 };
 
 impl RaceSim {
+    /// The title's destroyed-sequence timers, for every craft's physics step.
+    pub(super) fn destroy_sequence(&self) -> oag_physics::damage::DestroySequence {
+        crate::launch_hover::destroy_sequence(&self.destroyed)
+    }
+
     /// Whether `slot`'s wreck has been taken out of the physics world: its title's state 6
     /// removes the body (`PhysicsWorld_RemoveBody`,
     /// `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 12), so it is no longer

@@ -153,7 +153,6 @@ impl RaceSim {
             ship.physics.pitch_gate = self.pitch_gate;
             ship.physics.sideshift_grid_gate = self.sideshift_grid_gate;
             ship.physics.turbo_running_laws = self.turbo_running_laws;
-            ship.physics.destroy_sequence = destroy_sequence(&self.destroyed);
             ship.physics.inertia_frame = self.inertia_frame;
         }
     }

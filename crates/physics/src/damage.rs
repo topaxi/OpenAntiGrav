@@ -112,8 +112,8 @@ pub const DESTROYED_DURATION: f32 = 0.5;
 /// the early exit from it.
 ///
 /// [`Default`] is Pulse's (`DESTROYED_DURATION`, `ELIMINATED_SOLID_DURATION`, no early exit).
-/// The race writes a title's own onto every craft, not hashed: it is configuration, like
-/// [`ShipState::turbo_running_laws`]. HD's is `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`,
+/// The race hands a title's own in through [`crate::Environment::destroy_sequence`], per tick and
+/// outside [`ShipState`]: it is configuration, so it takes no room in the snapshot. HD's is `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`,
 /// rows 9, 11 and 12.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DestroySequence {
@@ -219,17 +219,18 @@ impl Shield {
 ///
 /// Separate from [`apply_contact`] because it runs every tick, not only with contacts, and a
 /// caller driving the force law directly still wants the craft to finish blowing up.
-pub fn advance_state(state: &mut ShipState, dt: f32) {
+pub fn advance_state(state: &mut ShipState, dt: f32, sequence: &DestroySequence) {
     match state.craft_state {
         CraftState::Destroyed => {
+            // The timer starts at [`DESTROYED_DURATION`] whatever the title, so a shorter
+            // explosion ends where its own length has run.
             state.state_timer -= dt;
-            if state.state_timer <= 0.0 {
-                state.state_timer = state.destroy_sequence.dwell_secs;
+            if state.state_timer <= DESTROYED_DURATION - sequence.explosion_secs {
+                state.state_timer = sequence.dwell_secs;
                 state.craft_state = CraftState::Eliminated;
             }
         }
         CraftState::Eliminated => {
-            let sequence = state.destroy_sequence;
             state.state_timer = (state.state_timer - dt).max(0.0);
             if let Some((after, speed_squared)) = sequence.settle {
                 let in_state = sequence.dwell_secs - state.state_timer;
@@ -434,7 +435,7 @@ fn subtract(state: &mut ShipState, dimensions: &Dimensions, lost: f32) -> Shield
     if depleted {
         // `Ship_Damage`'s `if (new <= 0.0) Ship_SetState(entity, 4)`.
         state.craft_state = CraftState::Destroyed;
-        state.state_timer = state.destroy_sequence.explosion_secs;
+        state.state_timer = DESTROYED_DURATION;
     }
     let crossed_critical =
         percent(before, max) > CRITICAL_PERCENT && percent(state.shield, max) <= CRITICAL_PERCENT;

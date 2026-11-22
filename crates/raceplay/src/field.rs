@@ -960,6 +960,7 @@ impl Race {
                 laws: self.core.sim.physics_laws,
                 start_boost: self.core.sim.field_start_boost,
                 damage_rules,
+                destroy_sequence: self.core.sim.destroy_sequence(),
                 barrel_rolls: self.core.sim.barrel_rolls,
                 ..Environment::default()
             };

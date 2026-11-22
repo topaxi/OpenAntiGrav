@@ -250,7 +250,6 @@ impl Ship {
         let air_pitch_bias = self.physics.air_pitch_bias;
         let pitch_gate = self.physics.pitch_gate;
         let inertia_frame = self.physics.inertia_frame;
-        let destroy_sequence = self.physics.destroy_sequence;
         let shield = self.physics.shield;
         // **The launch boost is carried across**, like the shield. A respawn does
         // not replay the window in the original (its timer holds through state 3 and
@@ -269,7 +268,6 @@ impl Ship {
         self.physics.air_pitch_bias = air_pitch_bias;
         self.physics.pitch_gate = pitch_gate;
         self.physics.inertia_frame = inertia_frame;
-        self.physics.destroy_sequence = destroy_sequence;
         self.physics.shield = shield;
         // **And the weapon slowdown a hit still owes this craft**, which is the
         // one piece of the force law that does not live on `physics` and so is
