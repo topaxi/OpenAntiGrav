@@ -401,12 +401,14 @@ fn a_run_of_full_light_points_reads_249_to_251_by_where_the_craft_stands() {
         .map(|k| course.light_scale(8 + k).expect("a ring point")[0])
         .collect();
     assert_eq!(reads, [251, 250, 250, 250]);
-    // A craft 0.35 of a segment along (a third of the way from the second sample to the third) is
-    // on the stretch that reads 249, and a 255 light byte under 249 is `(255 * 249) >> 8`.
-    let from = course.position(9).expect("a ring point");
-    let to = course.position(10).expect("a ring point");
-    let at = from + (to - from) * 0.4;
-    let scale = course.light_scale_at(9, at).expect("a blend");
+    // A craft on the spline at t = 0.4 of an interior segment is on the stretch that reads 249, and a 255
+    // light byte under 249 is `(255 * 249) >> 8`.
+    let ai = square_track(2);
+    let path = &ai.paths[0];
+    let segment = path.points.len() / 2;
+    let at = Vec3::from_array(path.sample(segment, 0.4).expect("a sample").pos);
+    let index = course.locate(at, None).expect("a ring point").index;
+    let scale = course.light_scale_at(index, at).expect("a blend");
     assert_eq!(scale, [249; 4]);
     assert_eq!((255 * u32::from(scale[0])) >> 8, 248);
 }
