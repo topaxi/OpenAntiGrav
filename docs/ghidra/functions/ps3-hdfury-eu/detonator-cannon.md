@@ -500,7 +500,8 @@ adds to the volley's slot. Read, not observed; confidence 65.
   `points_for_destroying`, `points_per_metre`, `max_distance`, the weapon table's
   `energy_recharge_per_stage`, `PointsForChainReactionMines`: parsed, no reader found (60).
 - The round's up row and the draw (`0x00121e68`).
-- The EMP itself (`Ship_UpdateCannonTrigger`'s `in+0x1c` arm, `EMPManager`): the next phase.
+- The EMP itself (`Ship_UpdateCannonTrigger`'s `in+0x1c` arm, `EMPManager`): read on
+  [detonator-emp.md](detonator-emp.md).
 
 ## Wired (2026-11-22)
 

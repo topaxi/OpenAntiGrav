@@ -11,7 +11,7 @@ Ghidra truncates. Static reading 2026-11-22, then checked live on RPCS3 the same
 
 | Quantity | Value | Confidence |
 | --- | --- | ---: |
-| Engine target in Detonator | `T = ramp * (start + increment * n)`, the Zone-modes branch of `Craft_UpdateThrottle`; the player's throttle never reaches it | 80 |
+| Engine target in Detonator | `T = ramp * (start + increment * n)`, the Zone-modes branch of `Craft_UpdateThrottle`; the player's throttle never reaches it | 85 (static 80, live checks below) |
 | `start`, `increment` | `34.0`, `4.4`: `<Handling><Global><Zone start increment>` in `/data/xml/handlingstats.xml` (`DATA02`), the same attributes and values Pulse reads | 85 |
 | `n` | `craft+0x2d0`, written by `Detonator_UpdateHud` with the HUD stage on every start-line crossing after the first: `2, 3, ..., 14` | 90 (live: `2..11` read on each crossing) |
 | `n` on lap 1 | `0` (the craft reset, `li r10,0` at `0x000ef104`, stored at `0x000ef2c8`): live `0` from the grid to the first completed lap | 90 |
@@ -19,7 +19,7 @@ Ghidra truncates. Static reading 2026-11-22, then checked live on RPCS3 the same
 | Ramp | `craft+0x2d4 += dt / 1.3` while under `1.0`; `ramp = max(r - 0.1, 0) / 0.9`, `1.0` once `r >= 1`; zeroed by a rescue under the mask | 75 (live: `1.0` through the whole grid state) |
 | Tail | the shared tail: Autopilot speed-up (`flags & 4`), turbo add, launch multiplier `craft+0x2dc`, `+100` while `craft+0x2e0 > 0`, the doubling | 85 |
 | Brakes | none (the mask's, [hover-four-point.md](hover-four-point.md)) | 85 |
-| Speed pads | **no boost** in Detonator: the pad charges the EMP instead ([detonator-emp.md](detonator-emp.md#pads-charge-they-do-not-boost)) | 88 (live) |
+| Speed pads | **no boost** in Detonator: the pad charges the EMP instead ([detonator-emp.md](detonator-emp.md#pads-charge-they-do-not-boost)) | 90 (live) |
 
 So **Detonator's auto-speed is Zone's law, not its own**: the same branch, the same two
 numbers, but `n` is the Detonator stage (fourteen steps over the whole run) where Zone's `n` is the
@@ -135,7 +135,7 @@ topped up so the mines did not end the run.
 | `craft+0x2d0` with `rm+0x2dee`/`rm+0x2e10` | `0` with `1/1` from the grid through lap 1, then `2/2`, `3/3` ... `11/11`, each on the sample the stage stepped | `n` is the HUD stage, `0` on lap 1 |
 | speed `*(ship+0x6944)+0x4c4` | `3.3` on the grid, `107.6` within 4 s of GO with **cross never pressed** (`craft+0x30c = 0.0`) | the engine runs with no throttle |
 | `craft+0x30c` | `100.0` while cross is held, `0.0` otherwise | the throttle is written and does not reach `T` (the held segment scraped a wall and cannot compare speeds) |
-| `craft+0x2e8` | `0.0` on every sample, across 38 speed-pad entries | no pad boost ([detonator-emp.md](detonator-emp.md)) |
+| `craft+0x2e8` | `0.0` on every sample, across 37 observed speed-pad entries | no pad boost ([detonator-emp.md](detonator-emp.md)) |
 
 Under the Autopilot the lap's top speed climbed stage by stage (`~110` on lap 1 to `~190` on lap
 11), the direction the law predicts; not used as a measurement (Autopilot, mines, x1.2).
@@ -165,8 +165,9 @@ team-launch transition, before the race takes a press). Confidence of the target
   (`mode - 6 < 0x10 && (0x8181 >> (mode - 6)) & 1`, modes 6, 13, 14, 21): `craft+0x5f8 += dt *
   0.7692308` while under `1.0`, `ramp = max(r - 0.1, 0) * 1.1111112`, and `T = (float(craft+0x5f4)
   * increment + start) * ramp` when `flags & 1 && !(flags & 2)`. Which field Omega's Detonator
-  update writes the stage into is on [detonator-mode.md](detonator-mode.md) (`craft+0x5e4`, read
-  structurally); that it is the `+0x5f4` this engine reads was not traced.
+  update writes the stage into is traced: the update holding `EMPREADY` (`FUN_012b6c70`) stores the
+  HUD stage `rm+0x300d6` (u16) into `*(ship+0x6a18)+0x5f4` after the stage step, the field this
+  engine reads ([detonator-mode.md](detonator-mode.md)'s `craft+0x5e4` is another write).
 - **2048: checked, applies, not wired.** `/2048/eboot-vita-2048-eu-v104.elf`:
   `Handling_ReadGlobalSettings` stores `increment` at `0x818a6390` (`start` beside it at
   `0x818a638c`); the reader `FUN_811cf532` has the same ramp (`craft+0x540`, `0.7692308`, `- 0.1`,

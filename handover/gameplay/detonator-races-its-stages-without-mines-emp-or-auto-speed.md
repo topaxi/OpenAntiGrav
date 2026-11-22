@@ -171,7 +171,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   HD static plus two RPCS3 runs, 60-92 per piece; Omega and 2048 checked, applies). What the wire
   lane builds, in `oag_raceplay::pads` and `oag_weapons::detonator` (Detonator only):
   1. **Pads charge, they do not boost or hand out.** A speed pad in Detonator applies no force
-     and no timer (live: boost timer `0` over 38 entries) and raises one charge per entry
+     and no timer (live: boost timer `0` over 37 observed entries) and raises one charge per entry
      (re-armed once the craft is off every pad), cue `WEAPONPICKUP`. A weapon pad awards nothing
      and raises one charge per pad, its memory cleared on each start-line crossing. The Detonator
      pad model draws with no circuit pad visible beneath it (60, four frames): hide the
@@ -199,8 +199,9 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   grid, into the shared tail (speed-up, turbo, launch multiplier, doubling); the throttle does
   not reach it and there are no brakes. The ramp `craft+0x2d4` (`+= dt/1.3`, `max(r - 0.1, 0)/0.9`)
   is `1.0` by GO and is zeroed by a rescue, so after a rescue the engine returns over 1.3 s.
-  Wire: let `Mode::Detonator` take the `zone` auto-speed path with `n` from
-  `World::detonator.stages_laid` mapped to `0` on stage 1 and the stage after (`start.rs`,
+  Wire: let `Mode::Detonator` take the `zone` auto-speed path with
+  `n = if stage == 1 { 0 } else { stage.min(14) }`, `stage` the HUD stage that
+  `World::detonator.stages_laid` already feeds (`start.rs`,
   `player_step.rs` ~l.228 reads `race[slot].zone` today), plus the rescue ramp if Zone lacks it.
   Ground truth: a coasting Detonator craft reaches speed with no throttle, and `n` steps on the
   crossing. **Also found**: HD's own Zone runs this same branch with the ramp

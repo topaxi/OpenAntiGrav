@@ -106,7 +106,7 @@ of `rm+0x2dd8` was attributed to the pad that caused it, from `craft+0x274` (spe
 
 | Read | Value |
 | --- | --- |
-| speed pads | four per lap on Vineta K (`0x30624060`, `0x306a5960`, `0x306237c0`, `0x30625ee0`), each entry `+1`, 38 entries, 38 charges; `craft+0x274` back to `0` after each |
+| speed pads | four per lap on Vineta K (`0x30624060`, `0x306a5960`, `0x306237c0`, `0x30625ee0`), 37 observed entries, each followed by one charge, plus one charge whose entry fell between two 30 ms polls; `craft+0x274` back to `0` after each |
 | weapon pad | one charge under player input (`ship+0x7960` `0 -> pad`), cleared to `0` on the next crossing; none under the Autopilot (its running bit `slot+0x200 & 0x800` is the test's own exclusion) |
 | `craft+0x2e8` | `0.0` throughout: no boost timer on any pad |
 | slot `+0x204` | `3` (the Cannon) for the whole race |
@@ -117,7 +117,8 @@ Run 2, L1 pressed for 0.5 s with `n = 12` (gauge `1.0`), the Autopilot bit clear
 and the gauge `0.0` on the next sample; `rm+0x6de3c` went `3 -> 15` and the score `150 -> 450`
 (`+25` per mine, `<Emp> old_mine_score`, the dark-mine value; no live-mine `+50` was seen)
 over the next 1.8 s; the frame after the press shows a blue wave ahead of the craft; the clip
-read `09` before and after. Triangle, R1, R2 and L2 changed nothing.
+read `09` before and after. Triangle and R1, pressed first with `n = 12`, changed nothing; R2 and
+L2 came after the fire with `n` at 0 and 1, below `lo`, so they test nothing.
 
 ## The charge and the gauge: `Detonator_UpdateRace` (`0x00067b40`)
 
