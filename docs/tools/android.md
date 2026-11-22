@@ -16,7 +16,7 @@ rustup target add aarch64-linux-android
 cargo install cargo-ndk
 
 # One-time: an NDK next to the SDK you already have (ANDROID_HOME).
-sdkmanager "ndk;27.3.13750724"
+sdkmanager "ndk;27.3.13750724" "build-tools;35.0.0"   # zipalign -P 16 needs 35 or newer
 
 just apk                      # or: scripts/build-apk.sh [--version V] [--debug]
 ```
