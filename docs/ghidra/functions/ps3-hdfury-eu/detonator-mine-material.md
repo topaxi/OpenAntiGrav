@@ -24,8 +24,9 @@ colour keys come from is [zone-effectsettings-loader.md](zone-effectsettings-loa
 | `BombBrightness`, `BombEQBrightness` | final, equalisers | same | `0.2 + 2.0 f`, `0.8 + 2.0 f`, `f` a flash value that decays | 72 |
 | equalisers `Brightness` | equalisers | same | `clamp(scale / 4 - g + f, 0, 1)`, `scale` from a band-4 envelope | 66 |
 
-Not read, and so not scored: **how a shader combines these constants** (whether `MineColour` is an
-albedo, a rim or an emissive term, what `MineBrightness == 0` looks like). See "What stays open".
+How the **mine's** shader combines `MineColour` and `MineBrightness` is read now, from the material's
+own microcode ("The mine's fragment program", 80). How the **bomb's** programs combine theirs is not
+(only that the brightness is the last multiply); see "What stays open".
 
 Both functions take the player's colour from the same place: `RaceManager_GetInstance()+0x13e8`
 is the player craft, and its word `+0x6284` is the index passed to the getter. The getters are
@@ -223,6 +224,67 @@ not set to a stage colour by this function.
 Confidence 74 for the three colours (getter and field read, channel order inferred), 72 for the two
 brightness words (constants resolved, flash writer unread), 66 for equaliser `Brightness`
 (a global of unknown value is in the formula).
+
+## The mine's fragment program
+
+`detonator_mine_normal_alpha.rcsmaterial` (`/data/weapons/materials/`, `DATA00.PSARC`, 31,872 bytes),
+read with `scripts/ps3-microcode.py fp-file`. The race's lit pass resolves the fogged variant at
+`@0x1a30` (static class, feature `0xfb61d927`); its unfogged twin (`@0x15d0`) is the same program
+without the closing fog lerp. One sampler, unit 0, `0xc78c9866`: the model's `_n` map, read as a
+tangent-space normal (`TEX R0, f[TC3]`, then `* 2 - 1`), `TC3` the second coordinate set. Writing
+`C` for `MineColour`, `B` for `MineBrightness`, `V` for the normalised tangent-space eye vector
+(`f[TC1]`) and `N` for the map's normal:
+
+```text
+rim = sat(1 - dot(V, N))                      ; DP3_SAT, then ADD 1 - x
+p   = 4 sat(1 - B) + 1                        ; ADD_SAT 1 - B, MOV x4, ADD 1
+rgb = rim^p / (1 - 0.9 C)   per channel       ; LG2, MUL, EX2; RCP of MAD(-C, 0.9, 1)
+out = lerp(fogColour, rgb, fogFactor) / 2     ; the fogged variant; the unfogged one has neither
+a   = the map's alpha, through globalAlphaScaler (identity)
+```
+
+So the mine is an **unlit** Fresnel rim glow, no light, no albedo: with `B = 0` (silence) it is a thin
+`rim^5` edge, with `B >= 1` a wide `rim^1` shell; `C` dodges per channel, so a saturated colour
+(`122 25 255`: `1.75, 1.1, 10` times the rim) goes blue-white at the edge. **A dark mine's literal
+`C = (2, 2, 2)` makes the divisor `-0.8`**, a negative output; `(10, 10, 10)` on the spikes `-8`. What
+the target does with a negative is unread. Confidence 80 for the formula (every instruction and
+literal is read; the order of the two `x4`/`/2` scales is the encoding's), 60 for "the render
+state is opaque" (the engine's reading of the chunk's state word lists no cutout and no
+see-through chunk for either model, unlike `HD_bomb_sphere`; the original's blend is not observed).
+
+The bomb body (`detonator_bomb_normal`, `@0x1750`) is a longer program: a normal-mapped facing
+term `0.92 N.V` and `0.2 BombColour` through an overlay-shaped `x / (1 - ...)`, a power by
+`4 sat(1 - |TC2|^2) + 1`, an environment picture read at `4 dot(TC2, TC0)` on unit 1 (the
+`Envmap` weight patches the first constant), a second overlay, and **a last multiply by
+`BombBrightness`** (`@0x3f`, confidence 80). Only that last step is used (below).
+
+## Wired
+
+HD Detonator races draw the mine from the program above (`oag_mesh::mesh::rcs::mine_rim`,
+`Emissive::program` mode 23, `shade.wesl`): the football and the spikes each earn a glow-table
+entry holding the authored `MineColour` and `MineBrightness`, the `_n` map is bound third and the
+chunk carries its tangent. The values per instance are `oag_raceplay::detonator_look`'s: a live mine
+takes the committed stage's `Detonator Mine Colour` (`EffectSettings::detonator_colours`) and
+`2 s`, a dark one `(2, 2, 2)` / `(10, 10, 10)` and `0`, written into the mine pool slot's own
+glow-table row each frame (`Drawable::write_program_glow`). The envelope `s` steps once per race
+tick for a live mine only, keyed by the mine's survey entry and lane (not its pool slot), against
+the frame's sixteen band levels: the football band is **chosen** from the same key (the original's
+`Libc_Rand() % 4`), the spikes' `+ 11`. Bombs: a material that patches `BombColour` +
+`BombBrightness` or `BombEQColour` + `BombEQBrightness` draws as colour times brightness, unlit
+(`PROGRAM_BOMB_TINT`, mode 24, **chosen, not measured**: the rest of the bomb programs is unread),
+with the stage's inner colour on the body and the outer on the equalisers, brightness `0.2` and
+`0.8` for a flash of `0`.
+
+**Chosen, not measured:** the normal is the map through the chunk's tangent frame in the world frame
+(the program dots a tangent-space `V`; the angle is the same); the draw is opaque and the output
+alpha unused; a divisor at or below zero draws black; the band levels are the visualiser's held
+levels (`zone_hold`, a fall of `0.1` a frame), not the raw array `SoundSystem_GetBandLevel` returns;
+the envelope steps once per tick, not per rendered frame; the bomb flash is `0` (no writer read).
+
+**Not wired:** the equalisers' rays (`Colour`, `Brightness`) and the glow edges (`RainbowColour`,
+`Brightness`) keep their authored values (their names are shared with other families and their
+programs are unread); the mine's size (`scale`, `spikeScale`, `m+0xd8`) stays at `1`; the visualiser
+(`Electric_Visualiser`) is still not loaded.
 
 ## What the port needs
 
