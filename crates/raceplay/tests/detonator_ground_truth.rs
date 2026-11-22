@@ -137,6 +137,24 @@ fn an_hd_detonator_race_flies_the_zone_handling_file() {
     );
 }
 
+/// A title's own Detonator table reaches the cannon: holding Square past the green light spends a
+/// volley from the clip. A table that lacks an attribute the cannon needs leaves the clip full.
+fn assert_the_cannon_fires(loaded: &race::Loaded) {
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    start_racing(&mut race);
+    for _ in 0..3 {
+        race.tick(&square());
+        keep_alive(&mut race);
+    }
+    let cannon = &race.core.sim.world.detonator.cannon;
+    assert!(cannon.clip < 15, "no volley left the clip: {}", cannon.clip);
+    assert!(cannon.rounds_in_flight() > 0);
+}
+
 /// 2048 on one of HD's ported Zone circuits: its own circuit table is absent, so the HD/Fury
 /// DLC3 Detonator table out of the v1.04 patch grades it (`oag_2048::race::DETONATOR`).
 #[test]
@@ -182,6 +200,7 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         grade.describe()
     );
     assert_eq!(grade.last_stage(), 14);
+    assert_the_cannon_fires(&loaded);
 }
 
 /// Omega runs the mode's rules and draws no grade, which it does not draw for Zone either.
@@ -218,6 +237,7 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
             .iter()
             .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
     );
+    assert_the_cannon_fires(&loaded);
 }
 
 /// **Mines and bombs.** The opening stage lays up to the first stage's count (the disc's

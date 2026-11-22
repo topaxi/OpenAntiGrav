@@ -536,7 +536,7 @@ Tests: `crates/weapons/src/detonator/cannon/tests.rs`, the hash test in `oag-gam
   with HD's fourcc `0x42444f52`; its speed and probe constants were not traced to their block.
 - **Wired as HD's, applies**: the scoring file resolves on both through the title axis
   (`the_detonator_layout_entries_resolve` on each) and the same code reads either title's own
-  Detonator table; a 2048 or Omega race was loaded, not fired. The hit test, the score adds, the reload and the percentage below are HD's, not
+  Detonator table; a 2048 and an Omega race fire it (`assert_the_cannon_fires` in `detonator_ground_truth.rs`). The hit test, the score adds, the reload and the percentage below are HD's, not
   re-read there.
 - **Not read on 2048 or Omega**: the hit test, the score adds, the reload and the percentage. The
   strings are all there (`CannonLockoutTime*`, `CANNONRELOAD`, `~CANNON_DRYFIRE`, `PulseBullets`,

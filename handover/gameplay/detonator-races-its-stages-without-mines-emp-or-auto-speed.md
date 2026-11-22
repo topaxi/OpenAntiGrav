@@ -2,7 +2,7 @@
 status: re-first
 titles: [hd, 2048, omega]
 updated: 2026-11-22
-summary: "Detonator: stages, mines/bombs, cannon and score in the simulation; cannon drawing, EMP, auto-speed, HUD, end screen, campaign open"
+summary: "Detonator: 14 stages, mines/bombs laid and biting; cannon, score, own hull/handling/models read, not wired; EMP, auto-speed, HUD, campaign open"
 categories: [rendering]
 ---
 
@@ -251,7 +251,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   then), the shot-mine and bomb explosion effects and sounds (`step_cannon` returns nothing for
   them), the `CANNON`/`CANNONRELOAD`/`BONUS_*` cues, the HUD (clip, reload gauge, score, `x%02d`),
   the end screen rows, the 0.5 s owner grace, the clean-lap `+1000`, the bomb-ahead warning,
-  `EnergyRechargePerStage`. 2048 and Omega were loaded, not fired. The record below is the read:
+  `EnergyRechargePerStage`. 2048 and Omega fire it too (tests in `detonator_ground_truth.rs`). The record below is the read:
 - **Pulse cannon, hits, score, destroyed count: read** (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, HD static, 55-85 per law; 31 names).
   The craft's fixed cannon: clip of 15 two-round volleys (left and right `cannon_flash`), one
