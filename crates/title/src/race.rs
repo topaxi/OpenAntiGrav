@@ -572,6 +572,8 @@ pub struct DetonatorLayouts {
     pub pattern_file: &'static str,
     /// `GamePlayValues.xml`: the per-stage mine counts and the placement's constants.
     pub gameplay_values: &'static str,
+    /// `DetonatorScoring.xml`: what a shot pays (`detonator-cannon.md`, "The score").
+    pub scoring: &'static str,
 }
 
 /// What a title's Zone race takes on a circuit that ships no Zone table of its own.

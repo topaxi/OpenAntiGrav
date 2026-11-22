@@ -396,6 +396,32 @@ fn hds_detonator_layouts_decode_through_the_title_axis() {
         .read_name(layouts.gameplay_values)
         .expect("GamePlayValues");
     assert_detonator_layouts("HD", &patterns, &values);
+    let scoring = archives
+        .read_name(layouts.scoring)
+        .expect("DetonatorScoring");
+    let scoring = oag_tables::detonator_layout::parse_scoring(&String::from_utf8_lossy(&scoring));
+    assert_eq!(scoring.multiplier, 1.0);
+    assert_eq!(
+        (
+            scoring.new_mine_score,
+            scoring.old_mine_score,
+            scoring.bomb_hit_score
+        ),
+        (100, 50, 0)
+    );
+    assert_eq!((scoring.bomb_score, scoring.bomb_increment), (2000, 500));
+    assert_eq!(
+        (
+            scoring.emp_new_mine_score,
+            scoring.emp_old_mine_score,
+            scoring.emp_bomb_score
+        ),
+        (50, 25, 1000)
+    );
+    let values = oag_tables::detonator_layout::parse_values(&String::from_utf8_lossy(&values));
+    assert_eq!(values.cannon_lockout_time_from_manual_reload, 0.75);
+    assert_eq!(values.cannon_lockout_time_run_out_bullets, 0.75);
+    assert_eq!(values.bomb_chain_reaction_distance, 5000.0);
 }
 
 #[test]

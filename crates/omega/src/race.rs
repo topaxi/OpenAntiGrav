@@ -149,6 +149,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         layouts: Some(oag_title::DetonatorLayouts {
             pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
             gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
+            scoring: r"Data\XML\DetonatorScoring.xml",
         }),
     }),
     team_variants: Some(&TEAM_VARIANTS),

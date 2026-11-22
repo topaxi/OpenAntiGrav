@@ -79,3 +79,25 @@ fn the_static_block_counts_run_seventy_to_two_hundred() {
     assert_eq!(d.mine_count(15), None);
     assert_eq!(parse_values("<Other/>"), d);
 }
+
+const SCORING: &str = r#"<?xml version="1.0"?>
+<DetonatorScoring>
+	<Bullet multiplier="2.5" new_mine_score="10" old_mine_score="4" bomb_hit_score="1" bomb_score="70" bomb_increment="9"/>
+	<Emp new_mine_score="3" old_mine_score="2" bomb_score="8"/>
+</DetonatorScoring>"#;
+
+#[test]
+fn the_scoring_file_reads_the_bullet_and_emp_rows() {
+    let s = parse_scoring(SCORING);
+    assert_eq!(s.multiplier, 2.5);
+    assert_eq!(
+        (s.new_mine_score, s.old_mine_score, s.bomb_hit_score),
+        (10, 4, 1)
+    );
+    assert_eq!((s.bomb_score, s.bomb_increment), (70, 9));
+    assert_eq!(
+        (s.emp_new_mine_score, s.emp_old_mine_score, s.emp_bomb_score),
+        (3, 2, 8)
+    );
+    assert_eq!(parse_scoring("<Nothing/>"), Scoring::default());
+}

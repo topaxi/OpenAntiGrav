@@ -83,7 +83,7 @@ fn a_source_naming_only_the_base_package_mounts_no_patch() {
     );
 }
 
-/// Detonator's two layout files resolve through the title axis on the mounted archives.
+/// Detonator's three layout files resolve through the title axis on the mounted archives.
 #[test]
 #[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
 fn the_detonator_layout_entries_resolve() {
@@ -103,4 +103,17 @@ fn the_detonator_layout_entries_resolve() {
         .read_name(layouts.gameplay_values)
         .expect("GamePlayValues");
     assert!(String::from_utf8_lossy(&values).contains("MineCountStage14"));
+    let scoring = archives
+        .read_name(layouts.scoring)
+        .expect("DetonatorScoring");
+    let scoring = oag_tables::detonator_layout::parse_scoring(&String::from_utf8_lossy(&scoring));
+    assert_eq!(
+        (
+            scoring.new_mine_score,
+            scoring.old_mine_score,
+            scoring.bomb_score,
+            scoring.bomb_increment
+        ),
+        (100, 50, 2000, 500)
+    );
 }

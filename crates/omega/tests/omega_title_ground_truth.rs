@@ -252,7 +252,7 @@ fn xp_tables_match_2048s_awards_and_halve_its_ranks() {
     assert_eq!(ranks.threshold_xp(50, 0), 1_790_000);
 }
 
-/// Detonator's two layout files resolve through the title axis on Omega's mounted archives.
+/// Detonator's three layout files resolve through the title axis on Omega's mounted archives.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn the_detonator_layout_entries_resolve() {
@@ -271,4 +271,17 @@ fn the_detonator_layout_entries_resolve() {
         .read_name(layouts.gameplay_values)
         .expect("GamePlayValues");
     assert!(String::from_utf8_lossy(&values).contains("MineCountStage14"));
+    let scoring = archives
+        .read_name(layouts.scoring)
+        .expect("DetonatorScoring");
+    let scoring = oag_tables::detonator_layout::parse_scoring(&String::from_utf8_lossy(&scoring));
+    assert_eq!(
+        (
+            scoring.new_mine_score,
+            scoring.old_mine_score,
+            scoring.bomb_score,
+            scoring.bomb_increment
+        ),
+        (100, 50, 2000, 500)
+    );
 }
