@@ -407,7 +407,7 @@ impl super::Session {
         match result {
             Ok(()) => {
                 debug!("photo mode: saved {}", path.display());
-                self.photo_message(strings::SAVED);
+                self.photo_message(photo::saved_word(&path));
             }
             Err(why) => {
                 warn!("photo mode: cannot save {}: {why:#}", path.display());

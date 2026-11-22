@@ -214,7 +214,7 @@ impl Session {
     }
 
     /// The project's text for `id` in the language, its English where that is untranslated.
-    fn project_word(&self, id: &str) -> String {
+    pub(crate) fn project_word(&self, id: &str) -> String {
         let own = oag_ui::strings::project_table(self.settings.language.as_deref());
         let english = oag_ui::strings::project_table(None);
         own.get(id)

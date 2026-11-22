@@ -166,8 +166,10 @@ and a build that cannot write a file (a page). **A phone offers it**: `photo::WR
 there is a file system, and a phone writes into the app's own files directory
 (`<external files>/data/oag/photos`, the tree a player copies disc images into over USB,
 [Android](../tools/android.md)). Android 11 and later hide that directory from an on-device file
-manager, so a shot is reached over USB until an export to the gallery exists (`photo::REACHABLE` is
-the desktop-only half). 2048 has no pause screen of its own, so on a phone its row is reached by the
+manager, so on Android 10 and later a saved shot is also added to the gallery
+(`Pictures/OpenAntiGrav`, `oag_mobile::export`; [Android](../tools/android.md), "Photos and replays"):
+the message says PHOTO SAVED TO GALLERY. Earlier Androids keep it in the files directory only.
+`photo::REACHABLE` is the desktop-only half. 2048 has no pause screen of its own, so on a phone its row is reached by the
 Back key.
 
 **While it is open** the race does not tick in the frame loop (`oag_game::photo::ticks`), whatever
@@ -534,7 +536,7 @@ contour bands; the single plain frame shows them in the same places (a rewound s
 tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
 screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve
 is used) stand as before. Also left open, as before: split screen, the photo
-counter stat, saving on a page, sharing a shot from a phone, HD's real `close` rest offset, and a shot at
+counter stat, saving on a page, a share sheet for a shot, HD's real `close` rest offset, and a shot at
 the scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
 configured render size: the dynamic resolution is held there while the mode is open).
 

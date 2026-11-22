@@ -102,6 +102,10 @@ pub enum Action {
     /// The REPLAYS page's KEEP row: copies an automatic replay into the player's own folder,
     /// where the ring never reaches it.
     KeepReplay,
+    /// The REPLAYS page's EXPORT row: hands the replay the REPLAY row is on to the phone's
+    /// Downloads folder, where its file manager and share sheet reach it. On the page only
+    /// where the platform has such a folder.
+    ExportReplay,
     /// The REPLAYS page's DELETE row: removes the replay the REPLAY row is on.
     DeleteReplay,
     /// The MODS page's SETTINGS row: opens the settings page of the mod the MOD row is on
@@ -142,6 +146,7 @@ impl Action {
             Self::QuitRace => "quit_race",
             Self::WatchReplay => "watch_replay",
             Self::KeepReplay => "keep_replay",
+            Self::ExportReplay => "export_replay",
             Self::DeleteReplay => "delete_replay",
             Self::OpenModSettings => "open_mod_settings",
             Self::FetchFfmpeg => "fetch_ffmpeg",
@@ -186,6 +191,7 @@ impl Action {
             "quit_race" => Some(Self::QuitRace),
             "watch_replay" => Some(Self::WatchReplay),
             "keep_replay" => Some(Self::KeepReplay),
+            "export_replay" => Some(Self::ExportReplay),
             "delete_replay" => Some(Self::DeleteReplay),
             "open_mod_settings" => Some(Self::OpenModSettings),
             "fetch_ffmpeg" => Some(Self::FetchFfmpeg),
@@ -195,7 +201,7 @@ impl Action {
 
     /// Every action, for error messages and for the integrity check.
     #[must_use]
-    pub fn all() -> [Self; 26] {
+    pub fn all() -> [Self; 27] {
         [
             Self::LaunchRace,
             Self::Quit,
@@ -220,6 +226,7 @@ impl Action {
             Self::QuitRace,
             Self::WatchReplay,
             Self::KeepReplay,
+            Self::ExportReplay,
             Self::DeleteReplay,
             Self::OpenModSettings,
             Self::FetchFfmpeg,

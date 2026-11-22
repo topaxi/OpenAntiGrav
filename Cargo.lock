@@ -3473,6 +3473,7 @@ dependencies = [
 name = "oag-mobile"
 version = "0.1.0"
 dependencies = [
+ "jni",
  "log",
  "oag-mod",
  "winit",

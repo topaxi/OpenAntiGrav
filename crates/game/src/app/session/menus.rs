@@ -569,6 +569,7 @@ impl Session {
             // The REPLAYS page's three rows (`session::replays`).
             menu::MenuEvent::Fired(menu::Action::WatchReplay) => self.watch_selected_replay(),
             menu::MenuEvent::Fired(menu::Action::KeepReplay) => self.keep_selected_replay(),
+            menu::MenuEvent::Fired(menu::Action::ExportReplay) => self.export_selected_replay(),
             menu::MenuEvent::Fired(menu::Action::DeleteReplay) => self.delete_selected_replay(),
             // The MODS page's SETTINGS row (`session::mods_page`).
             // The AUDIO page's DOWNLOAD FFMPEG row (`session::ffmpeg`).
@@ -1022,6 +1023,8 @@ impl Session {
         // PHOTO MODE is a row of the pause menu: there while a race with one view is held
         // behind the menus, and on no other page of the front end.
         model.offer(menu::Action::PhotoMode, self.photo_available());
+        // EXPORT is a row of the REPLAYS page on a phone, which has a Downloads folder to give.
+        model.offer(menu::Action::ExportReplay, oag_mobile::export::available());
         // Just the first frame's own value - `MenuStage::render` refreshes
         // this every frame off whichever page is actually current, since a
         // player can navigate to a page with a different reservation need

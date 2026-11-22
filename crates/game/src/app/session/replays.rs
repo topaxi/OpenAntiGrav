@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use crate::replay_view::{self, View};
 use crate::replays::{self, page};
 use anyhow::Context;
-use log::{error, info};
+use log::{debug, error, info, warn};
 use oag_gameplay::input::Button;
 use oag_raceplay::timeline::OpenError;
 use oag_raceplay::viewer::{Moved, SKIP, State, Viewer};
@@ -94,6 +94,30 @@ impl Session {
             }
             Err(e) => error!("replays: could not keep {}: {e:#}", entry.path.display()),
         }
+    }
+
+    /// The EXPORT row: gives the file the REPLAY row is on to the phone's Downloads folder, and
+    /// says whether it went.
+    pub(crate) fn export_selected_replay(&mut self) {
+        use oag_mobile::export::{Error, Kind, export};
+        let Some(entry) = self.selected_replay() else {
+            return;
+        };
+        let word = match export(&entry.path, Kind::Replay) {
+            Ok(uri) => {
+                info!("replays: exported {} as {uri}", entry.path.display());
+                "OAG_REPLAYS_EXPORTED"
+            }
+            Err(Error::Unsupported(why)) => {
+                debug!("replays: not exported: {why}");
+                "OAG_REPLAYS_EXPORT_FAILED"
+            }
+            Err(e) => {
+                warn!("replays: could not export {}: {e}", entry.path.display());
+                "OAG_REPLAYS_EXPORT_FAILED"
+            }
+        };
+        self.notice = Some(super::shot_open::Notice::new(self.project_word(word)));
     }
 
     /// The DELETE row: removes the file the REPLAY row is on.

@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-11-22
-summary: "Web keeps no replays and a phone keeps them out of its file manager; offer DOWNLOAD and SHARE on a replay row"
+summary: "Android export landed untested; the web build, iOS, a share sheet and IMPORT are open"
 ---
 
 # Replays leave the web build and a phone by download and share
@@ -21,7 +21,19 @@ not planned into a lane.
 - A replay is one `.oagr` file ([replay-file.md](../../docs/formats/replay-file.md)), a few
   hundred KB for a five-minute race of eight craft, so handing it to the platform is cheap.
 
+## Landed (2026-11-22)
+
+- **Android export:** `oag_mobile::export` hands a shot to the gallery (automatically on save) and a
+  replay to `Download/OpenAntiGrav` (the REPLAYS page's EXPORT row), over JNI into `MediaStore`, on
+  Android 10 and later. The decisions are unit-tested and the JNI type-checks for
+  `aarch64-linux-android`; **it has never run on a device**
+  ([Android](../../docs/tools/android.md), "Photos and replays").
+
 ## Open
+
+0. **Run the Android export on a phone** and see the file in the gallery and in Files. Not shown:
+   Android 8 and 9 (the export is refused there; a storage permission would be needed), the share
+   sheet (`ACTION_SEND` on the inserted URI is a few more JNI calls), an IMPORT, iOS and the web.
 
 1. **Where a web build keeps its replays first.** A browser has no directory: the origin's
    private file system (OPFS) or IndexedDB would hold them so the page lists something.

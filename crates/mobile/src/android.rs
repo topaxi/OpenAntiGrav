@@ -135,3 +135,212 @@ pub fn take_launch_args() -> Vec<String> {
     }
     args
 }
+
+/// Inserts `bytes` into `MediaStore` as `plan` describes and returns the new item's URI.
+///
+/// Runs on whichever thread calls it: the JVM the activity started is attached for the call.
+/// Needs Android 10 (API 29), where `RELATIVE_PATH` and `IS_PENDING` exist and an app may add
+/// its own media with no permission.
+pub(crate) fn export(
+    plan: &crate::export::Plan,
+    bytes: &[u8],
+) -> Result<String, crate::export::Error> {
+    use crate::export::Error;
+    let app = APP
+        .get()
+        .ok_or(Error::Unsupported("the activity is not up"))?;
+    let vm = jni::JavaVM::singleton().map_err(|e| Error::System(e.to_string()))?;
+    let activity = app.activity_as_ptr();
+    vm.attach_current_thread(|env| {
+        let outcome = media_store_insert(env, activity, plan, bytes);
+        if env.exception_check() {
+            env.exception_describe();
+            env.exception_clear();
+        }
+        outcome
+    })
+}
+
+fn put_string(
+    env: &mut jni::Env,
+    values: &jni::objects::JObject,
+    key: &str,
+    value: &str,
+) -> Result<(), crate::export::Error> {
+    use jni::objects::JValue;
+    use jni::{jni_sig, jni_str};
+    let key = env.new_string(key)?;
+    let value = env.new_string(value)?;
+    env.call_method(
+        values,
+        jni_str!("put"),
+        jni_sig!("(Ljava/lang/String;Ljava/lang/String;)V"),
+        &[JValue::from(&key), JValue::from(&value)],
+    )?;
+    Ok(())
+}
+
+fn put_int(
+    env: &mut jni::Env,
+    values: &jni::objects::JObject,
+    key: &str,
+    value: i32,
+) -> Result<(), crate::export::Error> {
+    use jni::objects::JValue;
+    use jni::{jni_sig, jni_str};
+    let key = env.new_string(key)?;
+    let boxed = env
+        .call_static_method(
+            jni_str!("java/lang/Integer"),
+            jni_str!("valueOf"),
+            jni_sig!("(I)Ljava/lang/Integer;"),
+            &[JValue::Int(value)],
+        )?
+        .l()?;
+    env.call_method(
+        values,
+        jni_str!("put"),
+        jni_sig!("(Ljava/lang/String;Ljava/lang/Integer;)V"),
+        &[JValue::from(&key), JValue::from(&boxed)],
+    )?;
+    Ok(())
+}
+
+#[allow(unsafe_code)] // wrapping the activity's raw reference, see below
+fn media_store_insert(
+    env: &mut jni::Env,
+    activity: *mut std::ffi::c_void,
+    plan: &crate::export::Plan,
+    bytes: &[u8],
+) -> Result<String, crate::export::Error> {
+    use crate::export::{Collection, Error};
+    use jni::objects::{JObject, JString, JValue};
+    use jni::{jni_sig, jni_str};
+    use std::mem::ManuallyDrop;
+
+    let sys = |e: jni::errors::Error| Error::System(e.to_string());
+    let sdk = env
+        .get_static_field(
+            jni_str!("android/os/Build$VERSION"),
+            jni_str!("SDK_INT"),
+            jni_sig!("I"),
+        )
+        .and_then(|v| v.i())
+        .map_err(sys)?;
+    if sdk < 29 {
+        return Err(Error::Unsupported("shared storage needs Android 10"));
+    }
+    // SAFETY: the activity's JNI global reference, owned by `android-activity` for as long as
+    // the app runs; `ManuallyDrop` keeps this wrapper from deleting a reference it does not own.
+    let activity = ManuallyDrop::new(unsafe { JObject::from_raw(env, activity.cast()) });
+    let resolver = env
+        .call_method(
+            &*activity,
+            jni_str!("getContentResolver"),
+            jni_sig!("()Landroid/content/ContentResolver;"),
+            &[],
+        )
+        .and_then(|v| v.l())
+        .map_err(sys)?;
+
+    let values = env
+        .new_object(
+            jni_str!("android/content/ContentValues"),
+            jni_sig!("()V"),
+            &[],
+        )
+        .map_err(sys)?;
+    put_string(env, &values, "_display_name", &plan.display_name)?;
+    put_string(env, &values, "mime_type", plan.mime)?;
+    put_string(env, &values, "relative_path", &plan.relative_dir)?;
+    put_int(env, &values, "is_pending", 1)?;
+
+    let collection = match plan.collection {
+        Collection::Images => env.get_static_field(
+            jni_str!("android/provider/MediaStore$Images$Media"),
+            jni_str!("EXTERNAL_CONTENT_URI"),
+            jni_sig!("Landroid/net/Uri;"),
+        ),
+        Collection::Downloads => env.get_static_field(
+            jni_str!("android/provider/MediaStore$Downloads"),
+            jni_str!("EXTERNAL_CONTENT_URI"),
+            jni_sig!("Landroid/net/Uri;"),
+        ),
+    }
+    .and_then(|v| v.l())
+    .map_err(sys)?;
+
+    let uri = env
+        .call_method(
+            &resolver,
+            jni_str!("insert"),
+            jni_sig!("(Landroid/net/Uri;Landroid/content/ContentValues;)Landroid/net/Uri;"),
+            &[JValue::from(&collection), JValue::from(&values)],
+        )
+        .and_then(|v| v.l())
+        .map_err(sys)?;
+    if uri.is_null() {
+        return Err(Error::System("MediaStore gave no location".into()));
+    }
+
+    let stream = env
+        .call_method(
+            &resolver,
+            jni_str!("openOutputStream"),
+            jni_sig!("(Landroid/net/Uri;)Ljava/io/OutputStream;"),
+            &[JValue::from(&uri)],
+        )
+        .and_then(|v| v.l())
+        .map_err(sys)?;
+    if stream.is_null() {
+        return Err(Error::System("no stream to write to".into()));
+    }
+    let array = env.byte_array_from_slice(bytes).map_err(sys)?;
+    let written = env
+        .call_method(
+            &stream,
+            jni_str!("write"),
+            jni_sig!("([B)V"),
+            &[JValue::from(&array)],
+        )
+        .map_err(sys);
+    let closed = env
+        .call_method(&stream, jni_str!("close"), jni_sig!("()V"), &[])
+        .map_err(sys);
+    written?;
+    closed?;
+
+    // Visible to the gallery and the file manager only once it is no longer pending.
+    let done = env
+        .new_object(
+            jni_str!("android/content/ContentValues"),
+            jni_sig!("()V"),
+            &[],
+        )
+        .map_err(sys)?;
+    put_int(env, &done, "is_pending", 0)?;
+    env.call_method(
+        &resolver,
+        jni_str!("update"),
+        jni_sig!("(Landroid/net/Uri;Landroid/content/ContentValues;Ljava/lang/String;[Ljava/lang/String;)I"),
+        &[
+            JValue::from(&uri),
+            JValue::from(&done),
+            JValue::from(&JObject::null()),
+            JValue::from(&JObject::null()),
+        ],
+    )
+    .map_err(sys)?;
+
+    let text = env
+        .call_method(
+            &uri,
+            jni_str!("toString"),
+            jni_sig!("()Ljava/lang/String;"),
+            &[],
+        )
+        .and_then(|v| v.l())
+        .map_err(sys)?;
+    let text = env.cast_local::<JString>(text).map_err(sys)?;
+    Ok(text.to_string())
+}

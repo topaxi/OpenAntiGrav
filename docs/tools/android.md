@@ -226,8 +226,19 @@ What a first launch does, as opposed to a desktop run (2026-10-07):
 A phone offers photo mode and records replays: both write into the app's files directory,
 `/sdcard/Android/data/org.openantigrav.game/files/data/oag/photos` and `.../replays`, the tree the disc
 images are copied into. On a recent Android that directory is hidden from the phone's own file manager,
-so a shot or a replay comes off over USB (`adb pull`, or a computer's file transfer) until a share or
-gallery export exists. The camera of both modes is a multi-touch camera ([photo mode](../ui/photo-mode.md),
+so a copy is also handed to the phone's shared storage (`oag_mobile::export`):
+
+- **A shot** is added to the gallery as `Pictures/OpenAntiGrav/<name>.png` the moment it is saved, and
+  the screen says PHOTO SAVED TO GALLERY. The original stays in the files directory.
+- **A replay** is exported by the REPLAYS page's EXPORT row to `Download/OpenAntiGrav/<name>.oagr`, where
+  the file manager and the share sheet of any app reach it. The row is on the page on a phone only.
+
+Both go through `MediaStore` with `IS_PENDING` set while the bytes are written, so the gallery never
+shows a half-written file. The calls are made over JNI on the JVM the activity started (the APK still
+has no Java: `android:hasCode="false"`), need no permission on Android 10 (API 29) and later, and are
+refused with a log line on 8 and 9, where the shot or replay stays in the files directory. **Never run on
+a device**: the JNI path type-checks for `aarch64-linux-android` and the decisions (folder, MIME type,
+name) are unit tests, but the calls themselves have not been made on a phone. The camera of both modes is a multi-touch camera ([photo mode](../ui/photo-mode.md),
 "Touch"; [replays](../ui/replays.md), "Touch"), and the on-screen racing controls are not drawn over
 either.
 

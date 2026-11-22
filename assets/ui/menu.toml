@@ -529,6 +529,13 @@ string_id = "OAG_REPLAYS_KEEP"
 action = "keep_replay"
 
 [[page.entry]]
+id = "export_replay"
+kind = "action"
+label = "EXPORT"
+string_id = "OAG_REPLAYS_EXPORT"
+action = "export_replay"
+
+[[page.entry]]
 id = "delete_replay"
 kind = "action"
 label = "DELETE"

@@ -612,6 +612,7 @@ OAG_PHOTO_RESET = { text = "RESET", human = false }
 OAG_PHOTO_SHIP = { text = "SHIP", human = false }
 OAG_PHOTO_HELP = { text = "HIDE HELP", human = false }
 OAG_PHOTO_SAVED = { text = "PHOTO SAVED", human = false }
+OAG_PHOTO_GALLERY = { text = "PHOTO SAVED TO GALLERY", human = false }
 OAG_PHOTO_FAILED = { text = "PHOTO NOT SAVED", human = false }
 OAG_PHOTO_EFFECTS = { text = "EFFECTS", human = false }
 OAG_PHOTO_EXPOSURE = { text = "EXPOSURE", human = false }
@@ -664,6 +665,9 @@ OAG_REPLAYS_ROW = { text = "REPLAY", human = false }
 OAG_REPLAYS_WATCH = { text = "WATCH", human = false }
 OAG_REPLAYS_KEEP = { text = "KEEP", human = false }
 OAG_REPLAYS_DELETE = { text = "DELETE", human = false }
+OAG_REPLAYS_EXPORT = { text = "EXPORT", human = false }
+OAG_REPLAYS_EXPORTED = { text = "REPLAY EXPORTED TO DOWNLOADS", human = false }
+OAG_REPLAYS_EXPORT_FAILED = { text = "COULD NOT EXPORT THE REPLAY", human = false }
 OAG_REPLAYS_NONE = { text = "NONE YET", human = false }
 OAG_REPLAYS_NONE_WHY = { text = "EVERY RACE YOU DRIVE IS RECORDED HERE", human = false }
 OAG_REPLAYS_NONE_OFF = { text = "RECORDING IS OFF: [REPLAY] RECORD IN THE SETTINGS FILE", human = false }

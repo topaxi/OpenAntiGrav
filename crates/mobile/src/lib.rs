@@ -19,6 +19,7 @@
 
 #[cfg(target_os = "android")]
 pub mod android;
+pub mod export;
 #[cfg(target_os = "ios")]
 pub mod ios;
 pub mod packaged;

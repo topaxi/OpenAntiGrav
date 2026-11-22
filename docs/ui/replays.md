@@ -303,5 +303,5 @@ Omega's light backdrop needed the band behind the detail lines; 2048's value col
 - **A modded race and a network race record nothing** (decision 7).
 - **The web build** has no file system to keep a replay in: the page is empty there (`replays::WRITES`). **A phone
   records and lists replays** into the app's files directory (`<external files>/data/oag/replays`), reached over USB
-  ([Android](../tools/android.md)); sharing a replay from a phone is still open (`replays::REACHABLE`).
+  ([Android](../tools/android.md)); on Android 10 and later the page's EXPORT row copies the replay to `Download/OpenAntiGrav` (`oag_mobile::export`), where the file manager and the share sheet reach it, and a notice says whether it went. A share sheet of our own and an import are still open (`replays::REACHABLE` is the desktop-only half).
 - **Take-over, SAVE REPLAY**: stage 7.

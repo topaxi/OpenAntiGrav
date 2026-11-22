@@ -51,6 +51,30 @@ pub fn ticks(open: bool) -> bool {
     !open
 }
 
+/// The word to say once the shot at `path` is written. On a phone the file is also handed to the
+/// gallery (`oag_mobile::export`), and the word says so; where that is not possible (an Android
+/// older than 10, or a build that has no shared storage) the shot stays in the files directory
+/// and the plain word is used.
+pub fn saved_word(path: &Path) -> &'static str {
+    if !oag_mobile::export::available() {
+        return strings::SAVED;
+    }
+    match oag_mobile::export::export(path, oag_mobile::export::Kind::Picture) {
+        Ok(uri) => {
+            log::debug!("photo mode: {} is in the gallery as {uri}", path.display());
+            strings::GALLERY
+        }
+        Err(oag_mobile::export::Error::Unsupported(why)) => {
+            log::debug!("photo mode: not exported: {why}");
+            strings::SAVED
+        }
+        Err(e) => {
+            log::warn!("photo mode: cannot export {}: {e}", path.display());
+            strings::SAVED
+        }
+    }
+}
+
 /// Where the next shot of `title` goes in `dir`: a name no earlier shot has, so a second picture
 /// in the same second does not replace the first.
 #[must_use]
@@ -115,6 +139,7 @@ pub mod strings {
     pub const ANY_INPUT: &str = "OAG_PHOTO_ANY_INPUT";
     pub const HELP: &str = "OAG_PHOTO_HELP";
     pub const SAVED: &str = "OAG_PHOTO_SAVED";
+    pub const GALLERY: &str = "OAG_PHOTO_GALLERY";
     pub const FAILED: &str = "OAG_PHOTO_FAILED";
     pub const TOUCH_HINT: &str = "OAG_PHOTO_TOUCH_HINT";
     pub const TOUCH_HINT_FREE: &str = "OAG_PHOTO_TOUCH_HINT_FREE";

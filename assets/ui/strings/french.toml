@@ -335,6 +335,12 @@ OAG_PLAYER_TAG_TITLE = { text = "ENTREZ VOTRE TAG", human = false }
 
 [untranslated]
 ids = [
+    # The REPLAYS page's EXPORT row on a phone; no translation pass yet.
+    "OAG_REPLAYS_EXPORT",
+    "OAG_REPLAYS_EXPORTED",
+    "OAG_REPLAYS_EXPORT_FAILED",
+    # Photo mode on a phone: saved to the gallery; no translation pass yet.
+    "OAG_PHOTO_GALLERY",
     # The replay viewer's touch CAMERA control; no translation pass yet.
     "OAG_REPLAY_CAMERA",
     # The photo mode touch hint; no translation pass yet.

@@ -399,7 +399,7 @@ impl super::Session {
                     path.display(),
                     started.elapsed()
                 );
-                self.photo_message(crate::photo::strings::SAVED);
+                self.photo_message(crate::photo::saved_word(&path));
             }
             Err(why) => {
                 warn!("photo mode: cannot save {}: {why:#}", path.display());
