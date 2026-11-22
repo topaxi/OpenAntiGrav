@@ -160,13 +160,26 @@ pub(in crate::load) fn for_title(
 
 /// `params` as a Zone race of a title with a [`oag_title::ZoneFrame`] runs them: the
 /// engine's own values over the circuit's, the adaption rate and the `Tone` family kept.
-/// Any other mode, and a title without the table, keeps the circuit's.
+/// A Detonator race takes the same table but keeps the circuit's frame contribution and
+/// adaption boost, where the title has that arm
+/// ([`oag_title::ZoneFrame::detonator_arm`]). Any other mode, and a title without the
+/// table, keeps the circuit's.
 pub(in crate::load) fn for_mode(
     params: oag_post::hd_bloom::Params,
     race: &oag_title::RaceDefaults,
     mode: oag_race::Mode,
 ) -> oag_post::hd_bloom::Params {
     match race.zone_frame {
+        Some(zone) if mode == oag_race::Mode::Detonator && zone.detonator_arm => {
+            oag_post::hd_bloom::Params {
+                frame_exponent: zone.frame_exponent,
+                alpha_contribution: zone.alpha_contribution,
+                vertical_size: zone.vertical_size,
+                horizontal_size: zone.horizontal_size,
+                feedback: zone.feedback,
+                ..params
+            }
+        }
         Some(zone) if mode == oag_race::Mode::Zone => oag_post::hd_bloom::Params {
             frame_contribution: zone.frame_contribution,
             frame_exponent: zone.frame_exponent,
@@ -251,5 +264,33 @@ mod tests {
             for_mode(authored(), oag_pulse::TITLE.race, oag_race::Mode::Zone),
             authored()
         );
+    }
+
+    /// A Detonator race takes the table's feedback, sizes, frame exponent and alpha
+    /// contribution but keeps the circuit's frame contribution and adaption boost; every
+    /// value here differs from the table's, so a taken one and a kept one cannot be
+    /// confused. A title without the arm, and every other mode, keeps the circuit's.
+    #[test]
+    fn a_detonator_race_takes_the_table_but_keeps_the_circuits_gain() {
+        let circuit = oag_post::hd_bloom::Params {
+            alpha_contribution: 0.7,
+            frame_contribution: 0.9,
+            frame_exponent: 0.8,
+            horizontal_size: 2.0,
+            vertical_size: 3.0,
+            adaption_boost: 2.5,
+            feedback: 0.3,
+            ..authored()
+        };
+        let detonator = for_mode(circuit, oag_hd::TITLE.race, oag_race::Mode::Detonator);
+        assert_eq!(detonator.feedback, -0.4);
+        assert_eq!((detonator.vertical_size, detonator.horizontal_size), (1.0, 1.0));
+        assert_eq!(detonator.frame_exponent, 0.1);
+        assert_eq!(detonator.alpha_contribution, 1.0);
+        assert_eq!(detonator.frame_contribution, 0.9);
+        assert_eq!(detonator.adaption_boost, 2.5);
+        for title in [oag_2048::TITLE, oag_omega::TITLE, oag_pulse::TITLE] {
+            assert_eq!(for_mode(circuit, title.race, oag_race::Mode::Detonator), circuit);
+        }
     }
 }

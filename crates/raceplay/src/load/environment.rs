@@ -54,7 +54,7 @@ pub(super) fn ps3_sky_model(
 /// the title has one located. That is a replacement rather than a tint, and it
 /// is what the original does: its per-race loader picks between the circuit's
 /// sibling `sky.gtf` and `Data/Tex/ZoneSky.gtf` on one byte - set for four mode
-/// ids, `Mode::Zone` being this port's stand-in for it - and the two branches
+/// ids ([`oag_race::Mode::on_zone_mask`]: Zone and Detonator here) - and the two branches
 /// converge on the same loader call, the same handle and the same sampler
 /// state, so the picture is the only thing that changes. The rotation is still
 /// the circuit's. **What a Zone race draws is the gradient dome over it**
@@ -68,7 +68,8 @@ pub(super) fn hd_sky_model(
     store: oag_gpu::formats::SceneStore,
     report: &mut Vec<String>,
 ) -> Option<mesh::Model> {
-    let zone_sky = (mode == oag_race::Mode::Zone)
+    let zone_sky = mode
+        .on_zone_mask()
         .then_some(race.zone_sky)
         .flatten();
     let name = match zone_sky {

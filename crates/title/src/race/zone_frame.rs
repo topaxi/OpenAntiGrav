@@ -39,4 +39,10 @@ pub struct ZoneFrame {
     /// probe gain every craft hull takes, its probe desaturated to the luma; `None` where
     /// the hull keeps its own tint.
     pub hull_probe_tint_scale: Option<f32>,
+    /// Whether a Detonator race runs this table too, **except** `frame_contribution` and
+    /// `adaption_boost`, which stay the circuit's there. HD's frame preparation has a mode
+    /// arm for Detonator that writes the feedback, sizes, frame exponent and alpha
+    /// contribution and skips those two
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`).
+    pub detonator_arm: bool,
 }

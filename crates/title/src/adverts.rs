@@ -50,6 +50,11 @@ pub struct Adverts {
     /// target per slot: the Environment stage's 512 x 512 target, an equaliser grid
     /// (`oag_raceplay::zone_equaliser`). Read on HD; 2048 and Omega are not read.
     pub zone_shares_one_texture: bool,
+    /// Whether a Detonator race does the same. The original's branch tests the zone-effects
+    /// byte, which mode 14 sets with Zone's, so HD binds the shared target there too
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`). Omega's and 2048's
+    /// Detonator frames are not read, so they keep the per-slot adverts.
+    pub detonator_shares_one_texture: bool,
     /// Whether that shared target draws the stage pass's equaliser bars from the music's
     /// held bands (`oag_raceplay::zone_equaliser`), rather than the bare grid. Read on HD
     /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`). Omega's frame reads the
