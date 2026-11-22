@@ -1034,3 +1034,15 @@
 0x006cf358	function	TrackReflect_RenderJob	85	track-reflect.md
 0x006ce6e0	function	TrackRefract_RenderJob	75	track-reflect.md
 0x00403a30	function	TrackReflect_DrawList	72	track-reflect.md
+
+# 2026-11-22 hd-wreck-re: a destroyed craft, Ship_SetState states 4 to 8 (ship-destroy.md)
+0x000db400	function	Ship_SelectWreckModel	88	ship-destroy.md
+0x000d96c8	function	Ship_PlayDestroyExplosion	82	ship-destroy.md
+0x000d44d0	function	Ship_ApplyDeathKick	60	ship-destroy.md
+0x000e3d18	function	Ship_UpdateExploding	82	ship-destroy.md
+0x000e3768	function	Ship_UpdateWrecked	78	ship-destroy.md
+0x000e2f48	function	Ship_UpdateResetting	78	ship-destroy.md
+0x000abc20	function	Camera_SetMode	80	ship-destroy.md
+0x000acab0	function	Camera_SetSubject	72	ship-destroy.md
+0x00033578	function	CollisionWorld_ReplaceObject	80	ship-destroy.md
+0x000f76e8	function	PhysicsWorld_RemoveBody	75	ship-destroy.md
