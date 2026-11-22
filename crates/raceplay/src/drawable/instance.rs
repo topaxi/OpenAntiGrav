@@ -64,7 +64,7 @@ impl Drawable {
         };
         let uniforms = pool("race uniforms", mesh_render::UNIFORMS_SIZE, &[]);
         let animates = !(self.model.anim_tracks.is_empty() && self.model.anim_nodes.is_empty())
-            || Self::carries_program(&self.model, oag_mesh::mesh::PROGRAM_MINE_RIM);
+            || Self::carries_per_instance_program(&self.model);
         let animation = animates.then(|| {
             (
                 pool(

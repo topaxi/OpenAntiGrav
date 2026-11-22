@@ -108,16 +108,12 @@ fn a_bomb_takes_inner_and_outer_and_its_flash_lifts_both_brightnesses() {
     let rest = bomb_constants(&stage(), 0.0);
     assert_eq!(rest.inner, stage().bomb_inner);
     assert_eq!(rest.outer, stage().bomb_outer);
-    assert_eq!((rest.body_brightness, rest.equaliser_brightness), (0.2, 0.8));
+    assert_eq!(
+        (rest.body_brightness, rest.equaliser_brightness),
+        (0.2, 0.8)
+    );
     let lit = bomb_constants(&stage(), 0.5);
     assert_eq!((lit.body_brightness, lit.equaliser_brightness), (1.2, 1.8));
-}
-
-#[test]
-fn the_flash_falls_two_hundredths_an_update_and_stops_at_zero() {
-    assert!((flash_after(1.0) - 0.98).abs() < 1e-6);
-    assert_eq!(flash_after(0.01), 0.0);
-    assert_eq!(flash_after(0.0), 0.0);
 }
 
 fn laid(entry: u16, lane: i8, live: bool) -> LaidMine {

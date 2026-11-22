@@ -168,6 +168,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod alpha_emissive;
 mod billboard_glass;
+mod bomb_tint;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;

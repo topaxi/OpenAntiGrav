@@ -2,7 +2,7 @@
 //! glow tables. The values and the rules are [`crate::detonator_look`]'s.
 
 use super::*;
-use crate::detonator_look::{MinePart, mine_constants};
+use crate::detonator_look::{MinePart, bomb_constants, mine_constants};
 
 impl super::Scene {
     /// Gives every laid mine's football and spikes this frame's constants: the stage's colour
@@ -17,6 +17,7 @@ impl super::Scene {
         queue: &Uploads<'_>,
         levels: &[f32],
         seconds: f32,
+        bombs: usize,
     ) {
         let Some(stage) = self
             .zone_grade
@@ -25,11 +26,30 @@ impl super::Scene {
         else {
             return;
         };
+        let parts = &self.bomb_blast.detonator;
+        // The flash's writer is unread: a bomb at rest (`detonator_look::bomb_constants`).
+        let bomb = bomb_constants(&stage, 0.0);
+        for (pool, tint, brightness) in [
+            (&self.bombs, bomb.inner, bomb.body_brightness),
+            (
+                &parts.bomb_equalisers,
+                bomb.outer,
+                bomb.equaliser_brightness,
+            ),
+        ] {
+            for drawable in pool.iter().take(bombs) {
+                drawable.write_program_glow(
+                    queue,
+                    oag_mesh::mesh::PROGRAM_BOMB_TINT,
+                    tint,
+                    brightness,
+                );
+            }
+        }
         let (ordinary, laid) = race.detonator_mine_looks();
         if laid.is_empty() {
             return;
         }
-        let parts = &self.bomb_blast.detonator;
         let envelopes = crate::drawable::lock(&parts.envelopes).advance(&laid, levels, seconds);
         for (index, (mine, envelope)) in laid.iter().zip(&envelopes).enumerate() {
             for (pool, part) in [

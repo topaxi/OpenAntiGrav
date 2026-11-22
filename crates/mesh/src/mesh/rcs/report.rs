@@ -249,6 +249,9 @@ pub struct Report {
     /// Detonator mine materials drawn as their program's own rim glow, `MineColour` and
     /// `MineBrightness` riding the glow-table entry - see `super::mine_rim`.
     pub mine_rim_bound: usize,
+    /// Detonator bomb materials drawn as their colour times their brightness - see
+    /// `super::bomb_tint`.
+    pub bomb_tint_bound: usize,
     /// Magstrip materials whose emissive picture and wave were bound - see
     /// `super::mag_wave`.
     pub mag_wave_bound: usize,
@@ -532,6 +535,11 @@ impl Report {
         } + &match self.mine_rim_bound {
             0 => String::new(),
             n => format!(", {n} Detonator mine material(s) drawn as their rim glow"),
+        } + &match self.bomb_tint_bound {
+            0 => String::new(),
+            n => format!(
+                ", {n} Detonator bomb material(s) drawn as their colour times their brightness"
+            ),
         } + &match self.mag_wave_bound {
             0 => String::new(),
             n => format!(", {n} magstrip material(s) with their scrolling wave bound"),

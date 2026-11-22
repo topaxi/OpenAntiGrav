@@ -31,9 +31,9 @@ use std::sync::Arc;
 
 use crate::mesh::{Emissive, ModelTexture, PROGRAM_MINE_RIM, TangentFrame, TextureSlots, slots};
 
+use super::Report;
 use super::emissive::EMISSIVE_LIMIT;
 use super::skin::decode_texture;
-use super::Report;
 
 /// `~crc32("MineBrightness")`.
 pub(super) const BRIGHTNESS: u32 = 0xc420_e90d;
@@ -54,10 +54,8 @@ pub(super) fn mine_rim(
     model: &rcsmodel::Model,
     variants: &[Option<rcsmaterial::Variant>],
     textures: super::Textures<'_>,
-    packed: &mut [u32],
-    table: &mut Vec<Emissive>,
-    tangent: &mut [TangentFrame],
-    skins: &mut TextureSlots,
+    (packed, skins): (&mut [u32], &mut TextureSlots),
+    (table, tangent): (&mut Vec<Emissive>, &mut [TangentFrame]),
     report: &mut Report,
 ) -> TextureSlots {
     let mut maps: TextureSlots = vec![None; model.materials.len()];

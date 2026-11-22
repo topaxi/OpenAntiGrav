@@ -24,8 +24,6 @@ pub(crate) const MINE_BRIGHTNESS_GAIN: f32 = 2.0;
 pub(crate) const DARK_FOOTBALL: [f32; 3] = [2.0; 3];
 /// A dark mine's `MineColour` on the spikes, `(10, 10, 10)`.
 pub(crate) const DARK_SPIKES: [f32; 3] = [10.0; 3];
-/// The bomb's flash decays by this each update.
-pub(crate) const FLASH_DECAY: f32 = 0.02;
 
 /// One step of the original's envelope: `s = (s + 0.3 < band) ? band : s * 0.95`, with `band`
 /// clamped to `0..=1` first.
@@ -176,7 +174,8 @@ pub(crate) struct BombConstants {
     pub(crate) equaliser_brightness: f32,
 }
 
-/// The bomb's constants for `flash`.
+/// The bomb's constants for `flash`, the value `b+0x154` holds. Its writer is unread, so the draw
+/// passes `0`: a bomb at rest, brightness `0.2` and `0.8`.
 #[must_use]
 pub(crate) fn bomb_constants(stage: &DetonatorColours, flash: f32) -> BombConstants {
     BombConstants {
@@ -185,12 +184,6 @@ pub(crate) fn bomb_constants(stage: &DetonatorColours, flash: f32) -> BombConsta
         body_brightness: 0.2 + 2.0 * flash,
         equaliser_brightness: 0.8 + 2.0 * flash,
     }
-}
-
-/// The flash after one update: it falls by `0.02` while positive, held to `0..=1`.
-#[must_use]
-pub(crate) fn flash_after(flash: f32) -> f32 {
-    (if flash > 0.0 { flash - FLASH_DECAY } else { flash }).clamp(0.0, 1.0)
 }
 
 #[cfg(test)]

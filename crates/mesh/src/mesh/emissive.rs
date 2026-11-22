@@ -183,6 +183,14 @@ pub const ALPHA_EMISSIVE_SPECULAR_MAP: f32 = 1.0;
 /// `super::rcs::mine_rim`.
 pub const PROGRAM_MINE_RIM: f32 = 23.0;
 
+/// [`Emissive::program`]'s mode for HD's Detonator bomb parts that carry a named colour and a
+/// brightness (`detonator_bomb_normal`: `BombColour` and `BombBrightness`;
+/// `detonator_bomb_normal_equalisers`: `BombEQColour` and `BombEQBrightness`): unlit, the entry's
+/// tint times its offset. **Chosen, not measured**: how the programs combine the colour with the
+/// normal map and the environment picture is unread; the brightness is their last multiply. The
+/// tint and offset are rewritten per instance each frame. See `super::rcs::bomb_tint`.
+pub const PROGRAM_BOMB_TINT: f32 = 24.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

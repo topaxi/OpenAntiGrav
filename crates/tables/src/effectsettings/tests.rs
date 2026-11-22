@@ -330,7 +330,10 @@ fn a_detonator_stage_reads_its_four_colours_as_bytes_over_255_in_file_order() {
 #[test]
 fn a_zero_authored_alpha_is_harmless_and_a_missing_key_is_none() {
     let e = EffectSettings::parse(DETONATOR_EXCERPT).expect("it parses");
-    assert_eq!(e.detonator_colours(14).expect("authored").bomb_inner, [1.0; 3]);
+    assert_eq!(
+        e.detonator_colours(14).expect("authored").bomb_inner,
+        [1.0; 3]
+    );
     // Stage 0 names only the mine colour; a stage with a key missing answers nothing rather
     // than a half-filled set.
     assert_eq!(e.detonator_colours(0), None);
