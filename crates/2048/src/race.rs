@@ -491,9 +491,25 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     craft: Some(DETONATOR_CRAFT),
     handling: Some(DETONATOR_HANDLING),
-    // Its archives ship the models (`Weapons2048/`, `Weapons/`, `New_Mode_Pads/`) but the
-    // directory prefix the object loaders join is unread, and 2048 draws no weapon bodies yet.
-    objects: None,
+    objects: Some(DETONATOR_OBJECTS),
+};
+
+/// 2048's Detonator object models. The archives ship each under both `Data\Weapons` (HD's own
+/// names) and `Data\Weapons2048`, and the pad under `Data\New_Mode_Pads`; the executable names
+/// the files and the directory prefix its object loaders join is unread
+/// (`docs/ghidra/functions/vita-2048-eu-v104/detonator-hull.md`). HD's directory is **chosen**,
+/// with HD's names, as Omega's are.
+pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorObjects {
+    mine: [
+        r"Data\Weapons\mine_rita_football.vex",
+        r"Data\Weapons\mine_rita_spikes.vex",
+    ],
+    bomb: [
+        r"Data\Weapons\detonator_bomb_final.vex",
+        r"Data\Weapons\detonator_bomb_final_equalisers.vex",
+        r"Data\Weapons\detonator_bomb_glowedges.vex",
+    ],
+    pad: r"Data\New_Mode_Pads\Detonator_Pad\Detonator_Pad.vex",
 };
 
 /// 2048's Detonator craft: `hdships\Detonator\Ship.vex` for every team, under the same

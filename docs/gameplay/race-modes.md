@@ -1518,8 +1518,8 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
   stays Zone's. The mine draws the football and its spikes (`electric_visualiser` is
   music-driven and not drawn), the bomb its three parts, and a `Detonator_Pad` sits on every
   speed pad and weapon pad at the pad's own transform. `MineColour`, `MineBrightness` and the
-  bomb's colour binds are unread, so the mine draws unbound (bright white); 2048 draws no
-  object models (its directory prefix is unread) and Omega takes HD's names. Tests:
+  bomb's colour binds are unread, so the mine draws unbound (bright white); 2048 and Omega take
+  HD's names (2048's directory is chosen: it ships both `Data\Weapons` and `Data\Weapons2048`). Tests:
   `detonator_hull_ground_truth.rs`, `the_detonator_hull_handling_and_livery_entries_resolve`
   (2048), `the_detonator_hull_handling_and_object_entries_resolve` (Omega).
 - **The chase camera** scales the craft by `0.7` instead of `0.75` (HD and 2048 read; Omega

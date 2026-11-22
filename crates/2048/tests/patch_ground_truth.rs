@@ -105,7 +105,7 @@ fn the_detonator_layout_entries_resolve() {
     assert!(String::from_utf8_lossy(&values).contains("MineCountStage14"));
 }
 
-/// Detonator flies its own hull, livery folder and handling file out of the mounted archives
+/// Detonator flies its own hull, livery folder, handling file and object models out of the mounted archives
 /// (`oag_2048::race::DETONATOR`): the entries its title data names resolve, the handling file
 /// is the classless one HD's is, and the hull sits where Zone's does, under `hdships`.
 #[test]
@@ -128,6 +128,26 @@ fn the_detonator_hull_handling_and_livery_entries_resolve() {
     let text = String::from_utf8_lossy(&text);
     assert!(text.contains(r#"width="4.0""#), "Detonator's Misc.width");
     assert!(!text.contains("<Class"), "a classless file, as HD's");
+    let objects = detonator.objects.expect("2048 names the object models");
+    for entry in objects
+        .mine
+        .iter()
+        .chain(&objects.bomb)
+        .chain([&objects.pad])
+    {
+        assert!(archives.read_name(entry).is_ok(), "{entry}");
+    }
+    // Census: each ships under `Data\Weapons2048` too, and under no `Data\art\published` spelling.
+    assert!(
+        archives
+            .read_name(r"Data\Weapons2048\mine_rita_football.vex")
+            .is_ok()
+    );
+    assert!(
+        archives
+            .read_name(r"Data\art\published\Weapons\mine_rita_football.vex")
+            .is_err()
+    );
     let key = craft.hull.livery_key().expect("the livery key");
     assert_eq!(key, "zoneship_zone");
     let texture = hull.replace(r"Ship.vex", &format!(r"{key}\Detonator_AO.gxt"));

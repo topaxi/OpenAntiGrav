@@ -63,6 +63,9 @@ craft flies Detonator's file, not Zone's.
   [zone-craft.md](zone-craft.md), 75) loads the literal `hdships\Detonator\Ship.vex` in mode `0xe`
   and swaps `zoneship_zone` -> the entry's livery name, the same as HD.
 - **Handling: ported** (`DETONATOR_HANDLING`, the same test; unauthored values inherited from HD). The file and the mode test are the same as HD's.
-- **Mine, bomb, bolt, flash and pad models: checked, applies, not wired** (2048 draws no weapon
-  bodies and the directory prefix is unread: `oag_2048::race::DETONATOR.objects` is `None`) (same entry names in the
+- **Mine, bomb and pad models: ported** with a **chosen** directory (`oag_2048::race::DETONATOR_OBJECTS`:
+  `Data\Weapons\`, HD's names; `Data\Weapons2048\` ships the same names and the loaders' prefix is
+  unread; no `Data\art\published\Weapons` spelling resolves; the pad is `Data\New_Mode_Pads`,
+  census in `the_detonator_hull_handling_and_livery_entries_resolve`). Bolt and flash: checked,
+  applies, not wired (same entry names in the
   executable and on the disc). The loaders' bodies were not read here.

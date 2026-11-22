@@ -351,9 +351,10 @@ objects}`, `oag_hd::race::DETONATOR_CRAFT`, `DETONATOR_HANDLING`, `DETONATOR_OBJ
   unread.
 - **The cannon** is not wired; `Loaded::cannon_muzzles(slot)` hands the hull's
   `cannon_flash_left`/`right` locators (hull space) to the cannon lane.
-- **2048**: hull, livery key and handling are wired; the object models are not (the directory the
-  object loaders join is unread, and 2048 draws no weapon bodies). **Omega**: all wired with
-  HD's names; the pad path is inherited from HD (Omega reads it from a data field).
+- **2048 and Omega**: all wired with HD's names. 2048's archives ship the objects under both
+  `Data\Weapons` and `Data\Weapons2048`; the directory its loaders join is unread, so HD's is
+  chosen. Omega's pad path is inherited from HD (it reads it from a data field). A 2048 native
+  team authors no `PI_TeamModel name="detonator"`, so its hull keeps the default `zoneship_zone` skin.
 
 ## What the port must change
 
