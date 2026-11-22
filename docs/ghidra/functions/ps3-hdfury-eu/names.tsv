@@ -1059,7 +1059,7 @@
 0x00138e58	function	DetonatorMine_Explode	82	detonator-mine.md
 0x00688280	function	DetonatorMine_SetDark	72	detonator-mine.md
 0x00688290	function	DetonatorMine_IsLive	72	detonator-mine.md
-0x001395f0	function	DetonatorMine_AnimateToMusic	62	detonator-mine.md
+0x001395f0	function	DetonatorMine_AnimateToMusic	78	detonator-mine.md
 0x0012ebf8	function	BombManager_Update	80	detonator-bomb.md
 0x0012e798	function	BombManager_TestCraftContacts	78	detonator-bomb.md
 0x0012e598	function	BombManager_ApplyHit	78	detonator-bomb.md
@@ -1070,7 +1070,7 @@
 0x00133660	function	DetonatorBomb_IsInOwnerGrace	75	detonator-bomb.md
 0x00134960	function	DetonatorBomb_Update	80	detonator-bomb.md
 0x00134540	function	DetonatorBomb_Detonate	78	detonator-bomb.md
-0x001340d8	function	DetonatorBomb_AnimateToMusic	60	detonator-bomb.md
+0x001340d8	function	DetonatorBomb_AnimateToMusic	76	detonator-bomb.md
 0x00137690	function	DetonatorBombBlast_Construct	78	detonator-bomb.md
 0x00137150	function	DetonatorBombBlast_Start	78	detonator-bomb.md
 0x00136420	function	DetonatorBombBlast_Update	65	detonator-bomb.md

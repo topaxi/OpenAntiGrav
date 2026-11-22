@@ -255,9 +255,28 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
 
+- **Mine and bomb colour binds: RE done, ready to wire except the shader combine** (2026-11-22,
+  `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, 66-78, static; colour channel order inferred). Laws: the
+  mine's `MineColour` is the committed stage's `Detonator Mine Colour` bytes / 255 on football and
+  spikes (a dark mine: `(2,2,2)` / `(10,10,10)`, `MineBrightness` 0), `MineBrightness` is `2 * s`
+  with `s` an attack-over-0.3 / decay-x0.95 envelope of one band (football: random band 0..3 per
+  mine, spikes: that band + 11); the bomb's `BombColour` is `Detonator Bomb Inner Colour`,
+  `BombEQColour`/`Colour`/`RainbowColour` the `Outer Colour`, brightness `0.2 + 2f` / `0.8 + 2f`
+  from a decaying flash. The table is `detonatormode`/`detonatormodedlc3.effectsettings`, 15 stages,
+  through `EffectSettings::stage_rgba8` (four `key::` constants to add); the stage is
+  `ZoneGrade`'s lap-stage counter and the colour snaps on a step. The audio input is
+  `oag_audio::spectrum::Spectrum::levels()` (16 bands, as `SoundSystem_GetBandLevel`); render side
+  only. **No per-draw named-constant path exists** (`crates/mesh/src/mesh/rcs/*` read authored
+  parameters once at load): the wiring is a per-instance override of two or three `float4` slots on
+  the mine, spikes, bomb, equalisers and glow-edge pools in
+  `crates/raceplay/src/detonator_models.rs` and `scene/weapon_models.rs` (several hours). **Read
+  first:** the `detonator_mine_normal_alpha` fragment program's use of `MineColour` and
+  `MineBrightness` (`oag_rcs::rcsmaterial::fragment::Program`), unread, so the dark mine's look is
+  not yet a picture. 2048: checked, applies (byte-identical effect-settings file, same bind
+  strings), not wired. Omega: checked, applies (same file; binds by hash constants), not wired.
 - **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
-  (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (`MineColour`,
-  `BombColour` ...) and 2048's object models stay open (the circuit's own pads are now hidden);
+  (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (read, see the
+  "Mine and bomb colour binds" bullet below) and 2048's object models stay open (the circuit's own pads are now hidden);
   `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
