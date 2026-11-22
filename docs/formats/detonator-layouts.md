@@ -38,3 +38,14 @@ still alive.
 `GamePlayValues.xml` is byte-identical on HD (`DATA00`), 2048 (`data.psarc`) and Omega
 (`data00.psarc`); `PatternFile.xml` decodes to the same 18 groups on all three
 (`hd_weapons_ground_truth.rs`). **Checked, applies**, wired on all three through the same axis.
+
+## `DetonatorScoring.xml`
+
+A third global file, read by `oag_tables::detonator_layout::parse_scoring` and named by
+`oag_title::DetonatorLayouts::scoring` (`Data\XML\DetonatorScoring.xml` on HD, 2048 and Omega).
+Its rows sit inside a `<DetonatorScoring>` element: `Bullet` (`multiplier` 1.0, `new_mine_score` 100,
+`old_mine_score` 50, `bomb_hit_score` 0, `bomb_score` 2000, `bomb_increment` 500) and `Emp`
+(50, 25, 1000). What each pays and when:
+[detonator-cannon.md](../ghidra/functions/ps3-hdfury-eu/detonator-cannon.md), "The score". The same
+values on all three titles, checked by the resolve tests (HD `hd_weapons_ground_truth.rs`, 2048
+`patch_ground_truth.rs`, Omega `omega_title_ground_truth.rs`).

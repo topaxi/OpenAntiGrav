@@ -501,6 +501,19 @@ adds to the volley's slot. Read, not observed; confidence 65.
 - The round's up row and the draw (`0x00121e68`).
 - The EMP itself (`Ship_UpdateCannonTrigger`'s `in+0x1c` arm, `EMPManager`): the next phase.
 
+## Wired (2026-11-22)
+
+`oag_weapons::detonator::cannon::step_cannon` runs the trigger, both reloads, the lockout, the
+streak reset, the volley, each round (update, hit test, retire) and the streak scan, on HD, with
+`DetonatorScoring.xml` read through `DetonatorLayouts::scoring`. Chosen where the page says unread:
+the order inside a tick (above), a full ready clip at the start, a press edge for the reload,
+muzzles from the craft's dimensions (`projectile::cannon::launch`), the squared chain distance
+`5000` from the executable's static (the file's `BombChainReactionDistance` is parsed and dropped),
+no firing before the green light. Not wired: the `0.5 s` owner grace, the `+0x200000` clean-lap
+`+1000`, the bomb-ahead warning, `EnergyRechargePerStage`, the `rm+0x2de8` award counts.
+Tests: `crates/weapons/src/detonator/cannon/tests.rs`, the hash test in `oag-gameplay`, and
+`detonator_ground_truth.rs` (a craft standing before a laid mine, Square held).
+
 ## Cross-check: 2048 and Omega
 
 - **Data: checked, applies, not wired.** `DetonatorScoring.xml` is byte-for-byte HD's values on
@@ -521,6 +534,10 @@ adds to the volley's slot. Read, not observed; confidence 65.
   `WO_CANNON_SPARKS_DETONATOR`. 2048's update (`FUN_8120058c`, the `WO_CANNON_SPARKS_DETONATOR`
   reference) reflects with `-2.0`, sets `flags |= 0x14` on the last wall and spawns either sparks
   with HD's fourcc `0x42444f52`; its speed and probe constants were not traced to their block.
+- **Wired as HD's, applies**: the scoring file resolves on both through the title axis
+  (`the_detonator_layout_entries_resolve` on each) and the same code reads either title's own
+  Detonator table; a 2048 and an Omega race fire it (`assert_the_cannon_fires` in `detonator_ground_truth.rs`). The hit test, the score adds, the reload and the percentage below are HD's, not
+  re-read there.
 - **Not read on 2048 or Omega**: the hit test, the score adds, the reload and the percentage. The
   strings are all there (`CannonLockoutTime*`, `CANNONRELOAD`, `~CANNON_DRYFIRE`, `PulseBullets`,
   `new_mine_score`, `bomb_increment`); the work is a line-by-line read of each title's cannon

@@ -488,6 +488,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     layouts: Some(oag_title::DetonatorLayouts {
         pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
         gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",
+        scoring: r"Data\XML\DetonatorScoring.xml",
     }),
 };
 

@@ -137,6 +137,24 @@ fn an_hd_detonator_race_flies_the_zone_handling_file() {
     );
 }
 
+/// A title's own Detonator table reaches the cannon: holding Square past the green light spends a
+/// volley from the clip. A table that lacks an attribute the cannon needs leaves the clip full.
+fn assert_the_cannon_fires(loaded: &race::Loaded) {
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    start_racing(&mut race);
+    for _ in 0..3 {
+        race.tick(&square());
+        keep_alive(&mut race);
+    }
+    let cannon = &race.core.sim.world.detonator.cannon;
+    assert!(cannon.clip < 15, "no volley left the clip: {}", cannon.clip);
+    assert!(cannon.rounds_in_flight() > 0);
+}
+
 /// 2048 on one of HD's ported Zone circuits: its own circuit table is absent, so the HD/Fury
 /// DLC3 Detonator table out of the v1.04 patch grades it (`oag_2048::race::DETONATOR`).
 #[test]
@@ -182,6 +200,7 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         grade.describe()
     );
     assert_eq!(grade.last_stage(), 14);
+    assert_the_cannon_fires(&loaded);
 }
 
 /// Omega runs the mode's rules and draws no grade, which it does not draw for Zone either.
@@ -218,6 +237,7 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
             .iter()
             .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
     );
+    assert_the_cannon_fires(&loaded);
 }
 
 /// **Mines and bombs.** The opening stage lays up to the first stage's count (the disc's
@@ -322,5 +342,97 @@ fn an_hd_detonator_mine_costs_energy_and_destruction_ends_the_race() {
     assert!(
         race.core.sim.world.race[LONE].finished,
         "a destroyed craft ends the race"
+    );
+}
+
+/// Slot 0's pad with Square held.
+fn square() -> PlayerInputs {
+    let mut snapshot = oag_gameplay::InputSnapshot::new();
+    snapshot
+        .buttons
+        .begin_frame(oag_gameplay::input::Button::Square.bit());
+    PlayerInputs::single(snapshot)
+}
+
+/// Ticks past the countdown, the craft kept alive and the autopilot off.
+fn start_racing(race: &mut race::Race) {
+    while oag_race::RaceState::thrust_gated(race.core.sim.world.tick) {
+        race.tick(&PlayerInputs::none());
+        keep_alive(race);
+    }
+}
+
+/// **The cannon.** A craft standing in the field with Square held shoots the mines in front of
+/// it: the score never goes down and ends above zero, the destroyed count rises with the
+/// mines the clip hits directly, the shot mines are gone from the field, and the percentage is
+/// that count over the disc's `1860` mines. A craft the autopilot flies fires nothing.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_cannon_shoots_mines_and_scores_them() {
+    const LONE: usize = 0;
+    let Some(loaded) = load() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    start_racing(&mut race);
+
+    race.core.sim.set_autopilot(true);
+    for _ in 0..30 {
+        race.tick(&square());
+        keep_alive(&mut race);
+    }
+    race.core.sim.set_autopilot(false);
+    let sim = &race.core.sim;
+    assert_eq!(
+        sim.world.detonator.cannon.clip, 15,
+        "a flown craft's pad fires nothing"
+    );
+    assert_eq!(sim.world.detonator.cannon.rounds_in_flight(), 0);
+    assert_eq!(sim.detonator_score(), Some(0));
+
+    let laid = race.core.sim.world.detonator.live_mines;
+    let mut last = 0;
+    let mut destroyed = 0;
+    'stand: for index in 0..usize::from(laid) {
+        let Some((stand, forward, up)) = race.core.sim.detonator_mine_stand(index, 60.0) else {
+            break;
+        };
+        let right = forward.cross(up).normalize();
+        let orientation = oag_core::math::Quat::from_mat3(&oag_core::math::Mat3::from_cols(
+            right,
+            right.cross(forward).normalize(),
+            -forward,
+        ));
+        let ship = &mut race.core.sim.world.ships[LONE].physics;
+        ship.body.position = stand;
+        ship.body.orientation = orientation;
+        ship.body.linear_velocity = oag_core::math::Vec3::ZERO;
+        ship.body.angular_velocity = oag_core::math::Vec3::ZERO;
+        for _ in 0..40 {
+            race.tick(&square());
+            keep_alive(&mut race);
+            let score = race.core.sim.detonator_score().expect("a Detonator race");
+            assert!(
+                score >= last,
+                "the score never goes down: {last} -> {score}"
+            );
+            last = score;
+            destroyed = race
+                .core
+                .sim
+                .detonator_destroyed_mines()
+                .expect("a Detonator race");
+            if destroyed > 0 {
+                break 'stand;
+            }
+        }
+    }
+    println!("destroyed {destroyed}, score {last}");
+    assert!(destroyed > 0, "a clip down the lane destroys a mine");
+    assert!(last >= 50, "and scores it: {last}");
+    assert!(race.core.sim.world.detonator.live_mines < laid + 1);
+    assert_eq!(
+        race.core.sim.detonator_percentage(),
+        Some(destroyed as f32 / 1860.0 * 100.0)
     );
 }

@@ -629,7 +629,15 @@ impl Race {
         });
         // Built before the track tables move into the race: the survey reads them.
         let detonator = detonator.filter(|_| mode == Mode::Detonator).map(|layout| {
+            let cannon = weapons.as_ref().and_then(|stats| {
+                oag_weapons::detonator::cannon::Config::from_tables(
+                    stats,
+                    &layout.values,
+                    layout.scoring,
+                )
+            });
             crate::detonator::Detonator {
+                cannon,
                 survey: Arc::new(crate::detonator::survey(
                     &spline,
                     &order,

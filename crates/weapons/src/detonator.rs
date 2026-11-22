@@ -29,7 +29,9 @@
 
 use oag_core::Rng;
 use oag_core::math::Vec3;
-use oag_tables::detonator_layout::{GamePlayValues, PatternFile};
+use oag_tables::detonator_layout::{GamePlayValues, PatternFile, Scoring};
+
+pub mod cannon;
 
 /// Mines the pool holds: `MineManager`'s capacity in Detonator.
 pub const MAX_MINES: usize = 200;
@@ -74,6 +76,8 @@ pub struct Layout {
     pub patterns: PatternFile,
     /// `GamePlayValues.xml`.
     pub values: GamePlayValues,
+    /// `DetonatorScoring.xml`.
+    pub scoring: Scoring,
 }
 
 /// One laid object: which entry and lane it sits on. Its position is the survey's, see
@@ -85,6 +89,9 @@ pub struct Placed {
     pub entry: u16,
     /// Its lane offset from the centre lane (at most [`MAX_LANES`] / 2 either way).
     pub lane: i8,
+    /// Laid this stage: a shot mine scores its multiplied value, a dark one the flat
+    /// `old_mine_score` (`MineManager_DarkenAll` darkens every survivor at the stage step).
+    pub live: bool,
 }
 
 impl Survey {
@@ -113,6 +120,10 @@ pub struct Field {
     pub bombs: [Placed; MAX_BOMBS],
     /// How many of [`Self::bombs`] are live.
     pub live_bombs: u8,
+    /// How many cannon hits each of [`Self::bombs`] has taken.
+    pub bomb_hits: [u8; MAX_BOMBS],
+    /// The pulse cannon and its score.
+    pub cannon: cannon::Cannon,
 }
 
 impl Default for Field {
@@ -125,20 +136,42 @@ impl Field {
     /// A field with nothing laid.
     #[must_use]
     pub const fn new() -> Self {
-        const NONE: Placed = Placed { entry: 0, lane: 0 };
+        const NONE: Placed = Placed {
+            entry: 0,
+            lane: 0,
+            live: false,
+        };
         Self {
             stages_laid: 0,
             mines: [NONE; MAX_MINES],
             live_mines: 0,
             bombs: [NONE; MAX_BOMBS],
             live_bombs: 0,
+            bomb_hits: [0; MAX_BOMBS],
+            cannon: cannon::Cannon::new(),
         }
     }
 
     /// Whether nothing was ever laid.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.stages_laid == 0 && self.live_mines == 0 && self.live_bombs == 0
+        self.stages_laid == 0 && self.live_mines == 0 && self.live_bombs == 0 && !self.cannon.armed
+    }
+
+    /// Removes mine `index`, filling its place with the last one.
+    pub fn remove_mine(&mut self, index: usize) {
+        let last = usize::from(self.live_mines) - 1;
+        self.mines[index] = self.mines[last];
+        self.live_mines -= 1;
+    }
+
+    /// Removes bomb `index`, filling its place, and its hit count, with the last one's.
+    pub fn remove_bomb(&mut self, index: usize) {
+        let last = usize::from(self.live_bombs) - 1;
+        self.bombs[index] = self.bombs[last];
+        self.bomb_hits[index] = self.bomb_hits[last];
+        self.bomb_hits[last] = 0;
+        self.live_bombs -= 1;
     }
 
     /// The live mines.
@@ -181,6 +214,10 @@ pub fn place_stage(
     // `BombManager_DetonateAll`: the stage step sets off every live bomb harmlessly before the
     // new one is laid (`detonator-bomb.md`, "One bomb at a time").
     field.live_bombs = 0;
+    field.bomb_hits = [0; MAX_BOMBS];
+    for mine in &mut field.mines[..usize::from(field.live_mines)] {
+        mine.live = false;
+    }
     let total = survey.entries.len();
     let Some(count) = layout.values.mine_count(old_stage as usize + 1) else {
         return;
@@ -373,7 +410,11 @@ fn spawn(
             let (Ok(entry), Ok(lane)) = (u16::try_from(position), i8::try_from(lane)) else {
                 return;
             };
-            let placed = Placed { entry, lane };
+            let placed = Placed {
+                entry,
+                lane,
+                live: true,
+            };
             match kind {
                 0 if usize::from(field.live_mines) < MAX_MINES => {
                     field.mines[usize::from(field.live_mines)] = placed;
@@ -382,6 +423,7 @@ fn spawn(
                 }
                 1 if usize::from(field.live_bombs) < MAX_BOMBS => {
                     field.bombs[usize::from(field.live_bombs)] = placed;
+                    field.bomb_hits[usize::from(field.live_bombs)] = 0;
                     field.live_bombs += 1;
                 }
                 _ => {}
@@ -522,9 +564,7 @@ pub fn step_contacts<S: crate::Craft>(
             at,
             slot,
         });
-        let last = usize::from(field.live_mines) - 1;
-        field.mines[i] = field.mines[last];
-        field.live_mines -= 1;
+        field.remove_mine(i);
     }
 
     let mut i = 0;
@@ -562,9 +602,7 @@ pub fn step_contacts<S: crate::Craft>(
             at,
             slot,
         });
-        let last = usize::from(field.live_bombs) - 1;
-        field.bombs[i] = field.bombs[last];
-        field.live_bombs -= 1;
+        field.remove_bomb(i);
     }
     went
 }

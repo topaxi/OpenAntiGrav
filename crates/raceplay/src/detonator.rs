@@ -23,6 +23,7 @@ use std::sync::Arc;
 use oag_core::math::Vec3;
 use oag_physics::{CollisionWorld, Ray, Raycaster, Surface};
 use oag_tables::detonator_layout::GamePlayValues;
+use oag_weapons::detonator::cannon::Sweep;
 use oag_weapons::detonator::{Entry, Layout, MAX_LANES, Survey};
 
 use crate::spline::Spline;
@@ -35,6 +36,9 @@ pub(crate) struct Detonator {
     /// What a mine or a bomb costs a craft, from the Detonator weapon table; `None` where the
     /// table did not load, and then they are laid and harmless.
     pub(crate) contact: Option<oag_weapons::detonator::Contact>,
+    /// The pulse cannon's tuning, from the same table and the layout files; `None` where the
+    /// table did not load, and then the craft has no cannon.
+    pub(crate) cannon: Option<oag_weapons::detonator::cannon::Config>,
 }
 
 /// How far above a section the probes start and how far below they reach.
@@ -175,10 +179,65 @@ impl crate::sim::RaceSim {
         detonator.survey.point(mine, lane).map(|(at, _)| at)
     }
 
+    /// Where a craft stands to shoot laid mine `index`: `distance` before it along the lap, with
+    /// the lap's direction there and the section's up. For tests.
+    #[must_use]
+    pub fn detonator_mine_stand(&self, index: usize, distance: f32) -> Option<(Vec3, Vec3, Vec3)> {
+        let detonator = self.detonator.as_ref()?;
+        let mine = self.world.detonator.live_mines().get(index)?;
+        let lane = detonator.layout.values.distance_offset_between_mines;
+        let (at, up) = detonator.survey.point(mine, lane)?;
+        let entries = &detonator.survey.entries;
+        let here = usize::from(mine.entry);
+        let (from, to) = if here + 1 < entries.len() {
+            (entries[here].centre, entries[here + 1].centre)
+        } else {
+            (entries[here - 1].centre, entries[here].centre)
+        };
+        let forward = (to - from).normalize_or_zero();
+        Some((at - forward * distance, forward, up))
+    }
+
+    /// How much of Detonator's mines the cannon has cleared, as the end screen reports it
+    /// (`destroyed / sum(MineCountStage1..14) * 100`), or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_percentage(&self) -> Option<f32> {
+        let detonator = self.detonator.as_ref()?;
+        Some(oag_weapons::detonator::cannon::percentage(
+            self.world.detonator.cannon.destroyed_mines,
+            &detonator.layout.values,
+        ))
+    }
+
+    /// The Detonator score the cannon has earned, or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_score(&self) -> Option<i32> {
+        self.detonator.as_ref()?;
+        Some(self.world.detonator.cannon.score)
+    }
+
+    /// Mines the cannon has destroyed directly (`rm+0x6de3c`), or `None` off Detonator.
+    #[must_use]
+    pub fn detonator_destroyed_mines(&self) -> Option<u32> {
+        self.detonator.as_ref()?;
+        Some(self.world.detonator.cannon.destroyed_mines)
+    }
+
+    /// Whether the person in slot 0 may work the cannon this tick: flying it themselves,
+    /// racing, and past the countdown. **Chosen, not measured:** the original's gate on the
+    /// green light is unread.
+    fn cannon_handed(&self) -> bool {
+        const SLOT: usize = 0;
+        self.world.controllers[SLOT].is_human()
+            && self.may_use_pickup(SLOT)
+            && !self.flown_for_the_player(SLOT)
+            && !oag_race::RaceState::thrust_gated(self.world.tick)
+    }
+
     /// Lays the stages the player has reached: the opening one on the first tick, then one per
     /// lap, up to the fourteenth (`Detonator_UpdateRace` places while the new stage is at most
     /// `14`). Nothing happens off Detonator.
-    pub(crate) fn advance_detonator(&mut self) {
+    pub(crate) fn advance_detonator(&mut self, inputs: &oag_gameplay::PlayerInputs) {
         let Some(detonator) = self.detonator.clone() else {
             return;
         };
@@ -203,6 +262,29 @@ impl crate::sim::RaceSim {
                 rules,
             );
         }
+        if let Some(config) = &detonator.cannon {
+            // Square fires and Circle reloads, slot 0 only. **Chosen:** the reload is a press
+            // edge; the original's edge-or-level is unread (`detonator-cannon.md`, "The reload").
+            let handed = self.cannon_handed();
+            let pad = inputs.get(0).buttons;
+            let input = oag_weapons::detonator::cannon::Input {
+                fire: handed && pad.is_held(oag_gameplay::input::Button::Square),
+                reload: handed && pad.is_pressed(oag_gameplay::input::Button::Circle),
+            };
+            let collision = &self.collision;
+            let sweep = |from, to| cannon_sweep(collision, from, to);
+            let (field, owner) = (&mut self.world.detonator, &self.world.ships[0]);
+            oag_weapons::detonator::cannon::step_cannon(
+                field,
+                &detonator.survey,
+                config,
+                input,
+                owner,
+                self.dt,
+                &sweep,
+            );
+        }
+        let world = &mut self.world;
         let laps = world.race[world.primary_slot()].laps_completed();
         let stage = oag_race::Mode::detonator_stage(laps).min(STAGES_LAID);
         while u32::from(world.detonator.stages_laid) < stage {
@@ -215,6 +297,30 @@ impl crate::sim::RaceSim {
                 old,
             );
         }
+    }
+}
+
+/// What a round's segment meets in the track: a floor to ride, a wall to bounce off, or nothing.
+/// A `Reset` surface is ignored, as every ordinary segment query ignores it.
+fn cannon_sweep(collision: &CollisionWorld, from: Vec3, to: Vec3) -> Sweep {
+    let along = to - from;
+    let length = along.length();
+    if length <= 0.0 {
+        return Sweep::None;
+    }
+    let Some(hit) = collision.raycast(Ray::new(from, along / length, length), None, false) else {
+        return Sweep::None;
+    };
+    match hit.surface {
+        Surface::Wall => Sweep::Wall {
+            point: hit.point,
+            normal: hit.normal,
+        },
+        Surface::Floor | Surface::MagFloor => Sweep::Floor {
+            point: hit.point,
+            normal: hit.normal,
+        },
+        Surface::Reset => Sweep::None,
     }
 }
 

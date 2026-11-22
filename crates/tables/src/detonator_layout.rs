@@ -194,6 +194,64 @@ impl GamePlayValues {
     }
 }
 
+/// `DetonatorScoring.xml`: what a shot pays
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The score").
+///
+/// ```text
+/// <DetonatorScoring>
+///   <Bullet multiplier new_mine_score old_mine_score bomb_hit_score bomb_score bomb_increment/>
+///   <Emp new_mine_score old_mine_score bomb_score/>
+/// </DetonatorScoring>
+/// ```
+///
+/// A missing attribute is the original's zero, as in the layout files.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Scoring {
+    /// `Bullet multiplier`: what a live mine's multiplier grows by per live mine shot.
+    pub multiplier: f32,
+    /// `Bullet new_mine_score`: a live mine, before the multiplier.
+    pub new_mine_score: i32,
+    /// `Bullet old_mine_score`: a dark mine.
+    pub old_mine_score: i32,
+    /// `Bullet bomb_hit_score`: a bomb hit that does not destroy it. Nothing calls its adder.
+    pub bomb_hit_score: i32,
+    /// `Bullet bomb_score`: the first bomb the cannon destroys.
+    pub bomb_score: i32,
+    /// `Bullet bomb_increment`: added per bomb already destroyed.
+    pub bomb_increment: i32,
+    /// `Emp new_mine_score`.
+    pub emp_new_mine_score: i32,
+    /// `Emp old_mine_score`.
+    pub emp_old_mine_score: i32,
+    /// `Emp bomb_score`.
+    pub emp_bomb_score: i32,
+}
+
+/// Reads `DetonatorScoring.xml`.
+#[must_use]
+pub fn parse_scoring(xml: &str) -> Scoring {
+    let document = fexml::parse(xml);
+    let root = document
+        .children_named("DetonatorScoring")
+        .next()
+        .unwrap_or(&document);
+    let mut scoring = Scoring::default();
+    if let Some(bullet) = root.children_named("Bullet").next() {
+        scoring.multiplier = float(bullet, "multiplier");
+        scoring.new_mine_score = int(bullet, "new_mine_score");
+        scoring.old_mine_score = int(bullet, "old_mine_score");
+        scoring.bomb_hit_score = int(bullet, "bomb_hit_score");
+        scoring.bomb_score = int(bullet, "bomb_score");
+        scoring.bomb_increment = int(bullet, "bomb_increment");
+    }
+    if let Some(emp) = root.children_named("Emp").next() {
+        scoring.emp_new_mine_score = int(emp, "new_mine_score");
+        scoring.emp_old_mine_score = int(emp, "old_mine_score");
+        scoring.emp_bomb_score = int(emp, "bomb_score");
+    }
+    scoring
+}
+
 fn flag(node: &fexml::Node, name: &str, otherwise: bool) -> bool {
     node.attr(name).map_or(otherwise, |text| atoi(text) != 0)
 }
