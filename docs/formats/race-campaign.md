@@ -282,11 +282,15 @@ ladders, the nitro triple a dummy `1`/`1`/`1`). `NitroBattle` (13 cells) stays r
   (`detonator-cannon.md`, "The score", confidence 82), and the end-of-race builder `0x0005ac00`
   records only a finished craft unless the mode is 6, 10 or 13 (`cell-medal-award.md`, "End of
   race"): Detonator is not in that set, so a quit race records nothing. A destroyed craft ends
-  ours as finished (`world.race[slot].finished`), so its score records; whether the original's
-  out-of-race ending (`+0x6a64 & 0x1000`) sets `+0x7002` is unread (**chosen**).
-- **Not read, chosen:** `Profile_RecordCampaignResult`'s mode-14 case, so that the value it hands
-  the compare is the score (not the percentage or a rank) is a labelled choice, supported by the
-  HUD comparing the same thresholds against the score. Also chosen: the mid-race medal cues
+  ours as finished (`world.race[slot].finished`), so its score records; the original's out-of-race ending records too
+  (`force = 1`, `detonator-endrace.md`, "A destroyed craft and a finished race"), whatever
+  `+0x7002` holds.
+- **Read since (2026-11-22, `detonator-endrace.md`, "What the record and the medal use as their
+  value", confidence 82):** the builder `0x0005ac00` passes the score (`rm+0x2c94`, the copy of
+  `rm+0x2df0`) to `Profile_RecordCampaignResult`'s mode-14 case (`0x0001f770`), which calls
+  `PI_Cell_EvaluateMedalForValue(cell, score)`; 2048 passes the same record field. Both endings of a
+  run (finished or destroyed) call the builder with `force = 1`, so a destroyed run records too.
+  Still chosen: the mid-race medal cues
   (`DetonatorGoldMedal`..) are the HUD's (phase 12) and `medal_watch::live_value` does not read
   Detonator; 2048 draws a Detonator card with Elimination's crosshair icon (it has four glyphs).
 - Ours adds no clean-lap bonus (`+1000` per `0x200000` crossing, hypothesis 50 in
