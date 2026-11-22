@@ -84,3 +84,18 @@ impl DetonatorDrawables {
         ]
     }
 }
+
+#[cfg(feature = "view")]
+impl crate::Loaded {
+    /// The craft in `slot`'s `cannon_flash_left` and `cannon_flash_right` locators, `[left, right]`
+    /// in hull space: where Detonator's cannon leaves it. Authored by the hull's own
+    /// `locators.vex` (`/data/ships/detonator/`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`,
+    /// "The disc's Detonator folder"), so the hull and the muzzles come from one folder. Both
+    /// `None` for a source that authors none, and for a slot past the grid.
+    #[must_use]
+    pub fn cannon_muzzles(&self, slot: usize) -> [Option<Mat4>; 2] {
+        self.liveries
+            .get(slot)
+            .map_or([None, None], |livery| livery.cannon_flash)
+    }
+}

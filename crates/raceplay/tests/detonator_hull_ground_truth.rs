@@ -56,9 +56,10 @@ fn an_hd_detonator_craft_flies_the_detonator_hull_in_its_teams_livery() {
     );
     assert!(!livery.hull.indices.is_empty(), "the hull draws");
     assert!(
-        livery.cannon_flash.iter().all(Option::is_some),
+        loaded.cannon_muzzles(0).iter().all(Option::is_some),
         "the Detonator folder's locators.vex authors both cannon_flash nodes"
     );
+    assert_eq!(loaded.cannon_muzzles(0), livery.cannon_flash);
     assert!(
         loaded
             .report

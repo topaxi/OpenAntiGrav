@@ -27,7 +27,7 @@ evidence), then start at "Next Steps".
 | 7 | Hazards bite: `step_contacts` (damage, velocity cut, bomb push, removal), destroyed craft ends the race; the race loads the Detonator weapon table | done | `6a4c6be71` |
 | 8 | RE: pulse cannon, hits, score, destroyed count, percentage (`detonator-cannon.md`) | done | `0db7e825c` |
 | 8b-RE | RE: own hull, own handling file, own mine/bomb/pad models (`detonator-hull.md`) | done | `bed94feed` |
-| **8b** | **Wire the hull, handling, mine, bomb and pad models** | **next (recommended before 9)** | |
+| 8b | Wire the hull, handling, mine, bomb and pad models | done (`det-hull` lane; wreck, death shell, colour binds open) | |
 | 9 | Wire the cannon, score, destroyed count and percentage | next | |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | open | |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | open | |
@@ -192,7 +192,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
 
-- **Own hull, handling file and object models: read, not wired** (2026-11-22,
+- **Own hull, handling file and object models: wired** (2026-11-22; the wreck and death shell
+  (HD's hull build loads no wreck in any mode), the mine/bomb colour binds (`MineColour`,
+  `BombColour` ...), the pad's original geometry underneath and 2048's object models stay open;
+  `detonator-hull.md`, "Wired"). Read as follows (2026-11-22,
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, HD static, 60-85 per piece; 2048
   `vita-2048-eu-v104/detonator-hull.md`, Omega `ps4-omega-eu/detonator-hull.md`: checked,
   applies). What the port must change:

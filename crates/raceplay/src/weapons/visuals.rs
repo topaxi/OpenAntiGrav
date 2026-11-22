@@ -443,8 +443,7 @@ impl Race {
 /// `Detonator_SpawnObject` hands the mine's init a basis of the world X axis, the section's up
 /// and the world Z axis (`docs/ghidra/functions/ps3-hdfury-eu/detonator-placement.md`); the init
 /// is unread. **Chosen, not measured**: the same axes, orthonormalised about the up axis so a
-/// banked section does not shear the model. The drawn model is the ordinary Mine's and Bomb's;
-/// no Detonator-specific one is located.
+/// banked section does not shear the model. The model is `DetonatorObjects`' (`detonator_models`).
 fn detonator_matrix(position: Vec3, up: Vec3) -> Mat4 {
     let up = up.normalize_or_zero();
     let up = if up == Vec3::ZERO { Vec3::Y } else { up };
