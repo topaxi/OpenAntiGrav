@@ -179,6 +179,25 @@ impl crate::sim::RaceSim {
         detonator.survey.point(mine, lane).map(|(at, _)| at)
     }
 
+    /// Where a craft stands to shoot laid mine `index`: `distance` before it along the lap, with
+    /// the lap's direction there and the section's up. For tests.
+    #[must_use]
+    pub fn detonator_mine_stand(&self, index: usize, distance: f32) -> Option<(Vec3, Vec3, Vec3)> {
+        let detonator = self.detonator.as_ref()?;
+        let mine = self.world.detonator.live_mines().get(index)?;
+        let lane = detonator.layout.values.distance_offset_between_mines;
+        let (at, up) = detonator.survey.point(mine, lane)?;
+        let entries = &detonator.survey.entries;
+        let here = usize::from(mine.entry);
+        let (from, to) = if here + 1 < entries.len() {
+            (entries[here].centre, entries[here + 1].centre)
+        } else {
+            (entries[here - 1].centre, entries[here].centre)
+        };
+        let forward = (to - from).normalize_or_zero();
+        Some((at - forward * distance, forward, up))
+    }
+
     /// How much of Detonator's mines the cannon has cleared, as the end screen reports it
     /// (`destroyed / sum(MineCountStage1..14) * 100`), or `None` off Detonator.
     #[must_use]

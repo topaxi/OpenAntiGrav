@@ -198,8 +198,10 @@ impl GamePlayValues {
 /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-cannon.md`, "The score").
 ///
 /// ```text
-/// <Bullet multiplier new_mine_score old_mine_score bomb_hit_score bomb_score bomb_increment/>
-/// <Emp new_mine_score old_mine_score bomb_score/>
+/// <DetonatorScoring>
+///   <Bullet multiplier new_mine_score old_mine_score bomb_hit_score bomb_score bomb_increment/>
+///   <Emp new_mine_score old_mine_score bomb_score/>
+/// </DetonatorScoring>
 /// ```
 ///
 /// A missing attribute is the original's zero, as in the layout files.
@@ -228,7 +230,11 @@ pub struct Scoring {
 /// Reads `DetonatorScoring.xml`.
 #[must_use]
 pub fn parse_scoring(xml: &str) -> Scoring {
-    let root = fexml::parse(xml);
+    let document = fexml::parse(xml);
+    let root = document
+        .children_named("DetonatorScoring")
+        .next()
+        .unwrap_or(&document);
     let mut scoring = Scoring::default();
     if let Some(bullet) = root.children_named("Bullet").next() {
         scoring.multiplier = float(bullet, "multiplier");
