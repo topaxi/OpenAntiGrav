@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-23
-summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen and Zone scene wired; radial bloom, floor violet, hull iridescent overlay and mine colours open"
+summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen, Zone scene wired; radial bloom, floor violet, hull overlay, mine colours open"
 categories: [rendering]
 ---
 
