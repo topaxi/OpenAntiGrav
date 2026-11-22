@@ -3,7 +3,7 @@
 **Binary:** `EBOOT.elf` (`/hdfury/EBOOT-ps3-hdfury-eu.elf`). Every function below is under
 `0x32d5e0`, so its TOC is `r2 = 0x008ad4d8` ([memory.md](memory.md)); constants resolved with
 `scripts/ps3-toc.py resolve`, bodies read off `llvm-objdump -d --mattr=+altivec,+vsx` where
-Ghidra truncates. Static reading 2026-11-22; the live check is in "Live" below. Read first:
+Ghidra truncates. Static reading 2026-11-22, then checked live on RPCS3 the same day ("Live" below). Read first:
 [craft-flags.md](craft-flags.md) ("`Craft_UpdateThrottle`, read whole"), [detonator-mode.md](detonator-mode.md)
 (the stage counter), [hover-four-point.md](hover-four-point.md) (the Zone-modes mask).
 
@@ -13,17 +13,17 @@ Ghidra truncates. Static reading 2026-11-22; the live check is in "Live" below. 
 | --- | --- | ---: |
 | Engine target in Detonator | `T = ramp * (start + increment * n)`, the Zone-modes branch of `Craft_UpdateThrottle`; the player's throttle never reaches it | 80 |
 | `start`, `increment` | `34.0`, `4.4`: `<Handling><Global><Zone start increment>` in `/data/xml/handlingstats.xml` (`DATA02`), the same attributes and values Pulse reads | 85 |
-| `n` | `craft+0x2d0`, written by `Detonator_UpdateHud` with the HUD stage on every start-line crossing after the first: `2, 3, ..., 14` | 75 |
-| `n` on lap 1 | `0` from the craft reset (`li r10,0` at `0x000ef104`, stored at `0x000ef2c8`): **not proven live**, see "Open" | 55 |
+| `n` | `craft+0x2d0`, written by `Detonator_UpdateHud` with the HUD stage on every start-line crossing after the first: `2, 3, ..., 14` | 90 (live: `2..11` read on each crossing) |
+| `n` on lap 1 | `0` (the craft reset, `li r10,0` at `0x000ef104`, stored at `0x000ef2c8`): live `0` from the grid to the first completed lap | 90 |
 | Gate | `T = 0` unless `craft+0x264 & 1` (grounded) and not `& 2` (grid state) | 85 |
-| Ramp | `craft+0x2d4 += dt / 1.3` while under `1.0`; `ramp = max(r - 0.1, 0) / 0.9`, `1.0` once `r >= 1`; zeroed by a rescue under the mask | 75 |
+| Ramp | `craft+0x2d4 += dt / 1.3` while under `1.0`; `ramp = max(r - 0.1, 0) / 0.9`, `1.0` once `r >= 1`; zeroed by a rescue under the mask | 75 (live: `1.0` through the whole grid state) |
 | Tail | the shared tail: Autopilot speed-up (`flags & 4`), turbo add, launch multiplier `craft+0x2dc`, `+100` while `craft+0x2e0 > 0`, the doubling | 85 |
 | Brakes | none (the mask's, [hover-four-point.md](hover-four-point.md)) | 85 |
-| Speed pads | **no boost** in Detonator: the pad charges the EMP instead ([detonator-emp.md](detonator-emp.md#pads-charge-they-do-not-boost)) | 80 |
+| Speed pads | **no boost** in Detonator: the pad charges the EMP instead ([detonator-emp.md](detonator-emp.md#pads-charge-they-do-not-boost)) | 88 (live) |
 
 So **Detonator's auto-speed is Zone's law, not its own**: the same branch, the same two
 numbers, but `n` is the Detonator stage (fourteen steps over the whole run) where Zone's `n` is the
-zone count the Zone manager writes. At the doubled force that is `2 * 34 = 68` on lap 1 (if `n = 0`)
+zone count the Zone manager writes. At the doubled force that is `2 * 34 = 68` on lap 1 (`n = 0`)
 and `2 * (34 + 4.4 * 14) = 191.2` on stage 14, before the launch multiplier and the tail.
 
 ## `Craft_UpdateThrottle`'s Zone-modes branch (`0x000efeb8`-`0x000eff74`)
@@ -118,22 +118,36 @@ Detonator craft starts from rest and its engine comes back over 1.3 s**, the fir
 nothing. Confidence 75 (writers by displacement census, `0x000ef33c`/`0x000f051c` are the craft
 constructors).
 
-## Live
+## Live (RPCS3, 2026-11-22)
 
-**Not captured in this lane.** The read recipe for the RPCS3 check, all addresses static above
-(Detonator race, player input, cross released from GO; the craft is `*(*(rm+0x13e8)+0x5fac)`):
+Racebox, race type DETONATOR (seven `right` presses on the race-type row from the boot default),
+Vineta K (`01_Vineta_K`), weapons on, the default team; game mode `*(0x00936fe8+0xe0) = 14`.
+Memory polled about every 30 ms through `/proc/<pid>/mem` (the race manager `**0x008a6814`,
+the ship `rm+0x13e8`, the craft `*(ship+0x5fac)`). Phases: grid and countdown, 10 s after GO
+with nothing held (player input), 8 s with cross held, then the Autopilot's running bit for
+about 300 s (to get round the laps only; no speed below is read as a law off it), energy
+topped up so the mines did not end the run.
 
-- per frame: speed `*(ship+0x6944)+0x4c4`, `craft+0x2d0`, `craft+0x2d4`, `craft+0x264`,
-  `rm+0x2dee`, `rm+0x2e10`, the energy;
-- expect `+0x2d4 = 1.0` by GO; `+0x2d0` `0` (or `1`) through lap 1, then `2..14` stepping on each
-  crossing; speed climbing with nothing held and the same with cross held for a segment;
-- exclude the ticks after a mine (velocity x0.5) and after a pad.
+| Read | Value | What it settles |
+| --- | --- | --- |
+| `craft+0x2d4` | `1.0` from the first grid sample on | the ramp is complete by GO |
+| `craft+0x264` | `0x3` through the grid, `0x1` from GO | the gate |
+| `craft+0x2d0` with `rm+0x2dee`/`rm+0x2e10` | `0` with `1/1` from the grid through lap 1, then `2/2`, `3/3` ... `11/11`, each on the sample the stage stepped | `n` is the HUD stage, `0` on lap 1 |
+| speed `*(ship+0x6944)+0x4c4` | `3.3` on the grid, `107.6` within 4 s of GO with **cross never pressed** (`craft+0x30c = 0.0`) | the engine runs with no throttle |
+| `craft+0x30c` | `100.0` while cross is held, `0.0` otherwise | the throttle is written and does not reach `T` (the held segment scraped a wall and cannot compare speeds) |
+| `craft+0x2e8` | `0.0` on every sample, across 38 speed-pad entries | no pad boost ([detonator-emp.md](detonator-emp.md)) |
 
-`scripts/rpcs3-hd-zone-probe.py` and `rpcs3-mem-poll.py` are the nearest pollers.
+Under the Autopilot the lap's top speed climbed stage by stage (`~110` on lap 1 to `~190` on lap
+11), the direction the law predicts; not used as a measurement (Autopilot, mines, x1.2).
+Reproduce: the lane's scratch poller, a `drive.Session` walk with
+`{"Main Menu": ["right"], "Single Player": ["right"] * 7 + ["cross"]}`, then the fields above;
+the start needs `cross` pressed until `craft+0x264 & 2` clears (the walk returns on the
+team-launch transition, before the race takes a press). Confidence of the target law with this:
+**85**.
 
 ## Open
 
-- `n` on lap 1 (the static read says `0`; a `1` would mean another writer at race start).
+- A player-input speed curve on a clean lap, to compare against our engine once wired (the run above coasted into a wall 4 s after GO).
 - `0x00076138`'s mode (which manager owns `FUN_00075a70`).
 - **HD's own Zone**: this branch is HD's Zone engine too, and it is not what
   [zone-start.md](../psp-pulse-usa/zone-start.md) says of it ("its Zone mask only ramps
@@ -145,8 +159,19 @@ constructors).
 
 ## 2048 and Omega
 
-- **Omega: checked, applies, not wired.** See "Cross-title" below.
-- **2048: checked, applies, not wired.** See "Cross-title" below.
+- **Omega: checked, applies, not wired.** `/omega/eboot-ps4-omega-eu-v107.bin`: the `<Zone>`
+  loader `FUN_012f1c50` stores `start` at `0x01a84960` and `increment` at `0x01a8495c`; their one
+  engine reader, in `FUN_0133fff0` (the craft update), is the same branch under the same modes
+  (`mode - 6 < 0x10 && (0x8181 >> (mode - 6)) & 1`, modes 6, 13, 14, 21): `craft+0x5f8 += dt *
+  0.7692308` while under `1.0`, `ramp = max(r - 0.1, 0) * 1.1111112`, and `T = (float(craft+0x5f4)
+  * increment + start) * ramp` when `flags & 1 && !(flags & 2)`. Which field Omega's Detonator
+  update writes the stage into is on [detonator-mode.md](detonator-mode.md) (`craft+0x5e4`, read
+  structurally); that it is the `+0x5f4` this engine reads was not traced.
+- **2048: checked, applies, not wired.** `/2048/eboot-vita-2048-eu-v104.elf`:
+  `Handling_ReadGlobalSettings` stores `increment` at `0x818a6390` (`start` beside it at
+  `0x818a638c`); the reader `FUN_811cf532` has the same ramp (`craft+0x540`, `0.7692308`, `- 0.1`,
+  `* 1.1111112`) and `T = (start + increment * float(craft+0x53c)) * ramp` behind the same gate.
+  Its mode predicate and the stage write into `+0x53c` were not traced.
 
 ## Names
 

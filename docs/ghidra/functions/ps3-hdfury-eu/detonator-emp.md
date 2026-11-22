@@ -12,15 +12,15 @@ the score record), [detonator-mine.md](detonator-mine.md) (`MineManager_DestroyA
 
 | Quantity | Value | Confidence |
 | --- | --- | ---: |
-| Speed pad, Detonator | **no boost**: no force, no timer; charges the EMP once per pad entered, plays `WEAPONPICKUP` | 80 |
-| Weapon pad, Detonator | **no weapon**: the award roll is skipped; charges the EMP once per pad, again only after a different pad or the next start-line crossing | 75 |
+| Speed pad, Detonator | **no boost**: no force, no timer; charges the EMP once per pad entered, plays `WEAPONPICKUP` | 90 (live) |
+| Weapon pad, Detonator | **no weapon**: the award roll is skipped; charges the EMP once per pad, again only after a different pad or the next start-line crossing | 80 (one live charge) |
 | Charge | `rm+0x2dd8 += 1` per charge, any number of pads | 82 |
 | Ready | `rm+0x2dd8 >= minNumPadsToCollectEMP` (`table+0x1bc`, disc `4`) | 85 |
-| Gauge | `craft+0x7da0 = min((n - (hi - lo)) / (hi - lo), 1)` with `lo = 4`, `hi = maxNumPadsToCollectEMP = 8`; `0` below `lo` | 82 |
+| Gauge | `craft+0x7da0 = min((n - (hi - lo)) / (hi - lo), 1)` with `lo = 4`, `hi = maxNumPadsToCollectEMP = 8`; `0` below `lo` | 92 (live, every `n` from 0 to 39) |
 | Cues | `EMPREADY` on the first charge at or over `lo`, `EMPFULL` on the first at gauge `1`; both re-arm while under `lo` | 80 |
-| Fire | `controls+0x1c` (the EMP button) while ready, mode 14 only: launch, then `n = 0`, gauge `0`, and the cannon is refilled | 78 |
+| Fire | `controls+0x1c` (the EMP button, **L1** on the default pad) while ready, mode 14 only: launch, then `n = 0`, gauge `0`; the cannon's clip is not refilled | 85 (live) |
 | Wave extent | `minDistance + (maxDistance - minDistance) * gauge` = `0.25 .. 2.0` at gauge `0 .. 1`; unit unread | 70 |
-| Wave kill | every mine and bomb in each track section the wave sweeps, through `MineManager_DestroyAtLane` / `BombManager_DestroyAtLane` (score `DetonatorScoring` `<Emp>`, counted in `rm+0x6de3c`) | 70 |
+| Wave kill | every mine and bomb in each track section the wave sweeps, through `MineManager_DestroyAtLane` / `BombManager_DestroyAtLane` (score `DetonatorScoring` `<Emp>`, counted in `rm+0x6de3c`) | 80 (live: 12 mines, `+25` each, over 1.8 s) |
 
 ## The table: `WeaponStats_ParseEmp` (`0x0002bbc8`)
 
@@ -92,9 +92,32 @@ Detonator.** Confidence **75**.
 
 ### Do the circuit's own pads still draw?
 
-Not read and not captured. [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct`
-adds a `Detonator_Pad` model on every speed and weapon pad; whether the circuit's pad geometry is
-hidden is a draw-side question (one `grab_with_clock` frame over a pad answers it).
+Not read. [detonator-hull.md](detonator-hull.md) reads that `WorldManager_Construct` adds a
+`Detonator_Pad` model on every speed and weapon pad. Live, four frames taken on the tick a speed
+pad was entered (Vineta K, stages 1 and 2) show the white `Detonator_Pad` blocks on plain track:
+no chevron or glow of Vineta K's own speed pad is visible round or between them. Confidence 60
+that the circuit's pad is not drawn (a flat decal under the blocks' footprint would not show).
+
+## Live
+
+Run 1 (the setup on [detonator-speed.md](detonator-speed.md#live-rpcs3-2026-11-22)): every rise
+of `rm+0x2dd8` was attributed to the pad that caused it, from `craft+0x274` (speed pad) and
+`ship+0x7960` (weapon pad) in the samples before it.
+
+| Read | Value |
+| --- | --- |
+| speed pads | four per lap on Vineta K (`0x30624060`, `0x306a5960`, `0x306237c0`, `0x30625ee0`), each entry `+1`, 38 entries, 38 charges; `craft+0x274` back to `0` after each |
+| weapon pad | one charge under player input (`ship+0x7960` `0 -> pad`), cleared to `0` on the next crossing; none under the Autopilot (its running bit `slot+0x200 & 0x800` is the test's own exclusion) |
+| `craft+0x2e8` | `0.0` throughout: no boost timer on any pad |
+| slot `+0x204` | `3` (the Cannon) for the whole race |
+| gauge `ship+0x7da0` against `n` | `0..4` -> `0.0`, `5` -> `0.25`, `6` -> `0.5`, `7` -> `0.75`, `8..39` -> `1.0` |
+| the flag | `ship+0x6a64 & 0x8000000` never seen set (set and cleared inside one frame) |
+
+Run 2, L1 pressed for 0.5 s with `n = 12` (gauge `1.0`), the Autopilot bit cleared: `n` read `0`
+and the gauge `0.0` on the next sample; `rm+0x6de3c` went `3 -> 15` and the score `150 -> 450`
+(`+25` per mine, `<Emp> old_mine_score`, the dark-mine value; no live-mine `+50` was seen)
+over the next 1.8 s; the frame after the press shows a blue wave ahead of the craft; the clip
+read `09` before and after. Triangle, R1, R2 and L2 changed nothing.
 
 ## The charge and the gauge: `Detonator_UpdateRace` (`0x00067b40`)
 
@@ -133,15 +156,17 @@ When the controls' byte `*(craft+0x84)+0x1c` is set, the net byte is clear and t
 ```text
 if rm+0x2dd8 >= table+0x1bc:
     EMPManager_Fire(craft+0x7da0, wm+0x84, wm+0x90 /* slot 0 */, 0)
-    CannonManager_ArmSlot(wm+0x70, wm+0x90)    ; slot+0x1f4 kept; slot+0x20c = table+0xa0
+    CannonManager_ArmSlot(wm+0x70, wm+0x90)    ; re-arms the slot as the Cannon (+0x204 = 3) that
+                                               ; EMPManager_Fire set to -1; slot+0x1f4 kept
     craft+0x7da0 = 0
     rm+0x2dd8 = 0
-    lockout+0x16c = 0; lockout+0x174 = 1        ; the cannon's reload record (TOC -0x11dd)
+    lockout+0x16c = 0; lockout+0x174 = 1        ; the object at TOC -0x11dd, unread
 ```
 
 `wm` is the weapon manager (`*TOC[-0x110b]`, slots of `0x230` from `+0x90`,
 `WeaponManager_DispatchFire`). Under `0x1c`, a held button fires again as soon as `n` is back at
-`lo`; whether `+0x1c` is a level or an edge is the controls' (unread). Confidence **78**.
+`lo`; whether `+0x1c` is a level or an edge is the controls' (unread). The HUD clip read `09` both
+before and after a live fire, so the re-arm is the slot's weapon id, not a reload. Confidence **85**.
 
 `EMPManager_Fire` (`0x00112730`; `EMPManager.cpp` spans `0x00112bf8`-`0x00113288` by its
 `__FILE__`, this sits just before its constructor's span):
@@ -184,10 +209,9 @@ per tick.
 2. **Gauge**: `n` (race state, reset by fire), `gauge = 0` while `n < lo`, else
    `min((n - (hi - lo)) / (hi - lo), 1)` in f32 from the table's two ints; `EMPREADY`/`EMPFULL`
    edge cues with the two latches re-armed below `lo`. HUD: `Emp_0..7` from `n`, `EmpReady`.
-3. **Fire**: a Detonator-only EMP button (the original's controls `+0x1c`; which pad button that
-   is was not read, so the binding is a labelled choice), `n >= lo`: launch with
-   `extent = 0.25 + 1.75 * gauge`, refill the cannon (as a reload, without the lockout reading
-   being settled), `n = 0`, gauge `0`, `QUAKELAUNCH`.
+3. **Fire**: a Detonator-only EMP button (the original's controls `+0x1c`, L1 on the default pad,
+   live), `n >= lo`: launch with `extent = 0.25 + 1.75 * gauge`, `n = 0`, gauge `0`,
+   `QUAKELAUNCH`; the cannon's clip is untouched.
 4. **Kill**: every mine and bomb in the swept track sections, scored `<Emp>`, mines counted.
    **Unread**: the wave's reach in sections per unit of `extent`, its speed (`speed = 1`,
    `wave_time = 1.0`) and whether it sweeps forward only. Recipe: `EMP_SweepSections`'s caller
@@ -197,15 +221,25 @@ per tick.
 
 ## Open
 
-- The EMP button's pad mapping (`controls+0x1c` is set by the input layer, unread).
 - The wave's reach and speed (above), and whether it hurts the player.
-- Whether the circuit's own pad draws under `Detonator_Pad`.
-- No live capture of a pad pass (the brief's acceptance capture is owed).
+- Whether the circuit's own pad geometry is drawn at all (four live frames show none, below).
+- Weapon pads under player input over several laps (one live charge only).
 
 ## 2048 and Omega
 
-- **Omega: checked, applies, not wired.** See "Cross-title" below.
-- **2048: checked, applies, not wired.** See "Cross-title" below.
+- **Omega: checked, applies, not wired.** `/omega/eboot-ps4-omega-eu-v107.bin`: the Detonator
+  update holding `EMPREADY` (`FUN_012b6c70` in this import) tests `ship+0x76f4 & 0x8000000`,
+  counts into `rm+0x300c0`, reads min/max at table `+0x234`/`+0x238`, computes
+  `min((n - (hi - lo)) / (hi - lo), 1)` into `ship+0x8c0c` and raises `EMPREADY`/`EMPFULL` on the
+  same two latches. The speed-pad arm is in the craft update `FUN_0133fff0`: on a pad hit with the
+  mode `0xe`, a pad other than `craft+0x2f0` sets `ship+0x76f4 |= 0x8000000` and plays
+  `WEAPONPICKUP`. Omega's weapon-pad arm, fire and wave were not read.
+- **2048: checked, applies, not wired.** `/2048/eboot-vita-2048-eu-v104.elf`: `FUN_8117e9c2`
+  tests `ship+0x60a4 & 0x8000000`, counts into `rm+0x2b1f0`, reads table `+0x234`/`+0x238`, and
+  computes the same gauge into `ship+0x7458`, with the divide done as a NEON reciprocal estimate
+  and three Newton steps (so not bit-identical to an f32 divide), clamped to `1`, then
+  `EMPREADY`/`EMPFULL`. Its pads, fire and wave were not read; its HUD widgets differ
+  (`EmpCharge`/`EmpFull`, [detonator-hud.md](detonator-hud.md)).
 
 ## Names
 
