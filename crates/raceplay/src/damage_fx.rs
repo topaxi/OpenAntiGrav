@@ -184,9 +184,11 @@ impl RaceView {
             self.nozzles.get(slot).copied().flatten(),
             self.nozzle_axes.get(slot).copied().flatten(),
         ) {
-            (Some(nozzle), Some(axis)) => self
-                .drawn_model(core, slot)
-                .transform_point3(anchor(nozzle, axis, ship.physics.shield <= 0.0)),
+            (Some(nozzle), Some(axis)) => self.drawn_model(core, slot).transform_point3(anchor(
+                nozzle,
+                axis,
+                ship.physics.shield <= 0.0,
+            )),
             _ => self.drawn_position(core, slot),
         }
     }
