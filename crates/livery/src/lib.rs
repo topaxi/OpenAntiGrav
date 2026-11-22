@@ -62,7 +62,7 @@ pub mod own_shield;
 pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
-mod wreck;
+pub mod wreck;
 pub mod zone_livery;
 
 pub use shield::cockpit_shield;
@@ -656,10 +656,11 @@ fn one(
             absorb_overlay: None,
             leach_overlay: None,
             shine: None,
-            // The wreck is the hull's own team's, not the Zone craft's: a Zone craft's wreck
-            // is a later row of `ship-destroy.md` (modes 6 and 14).
+            // Not drawn in a Zone race: modes 6 and 14 hide the model and play their own
+            // sequence, which is a later row of `ship-destroy.md`. `wreck::load` builds the Zone
+            // craft's wreck through the hull's livery swap for when that row lands.
             wreck: if ctx.hull_wreck && ctx.mode != Mode::Zone {
-                wreck::load(archives, team, ships.dir, ctx.mode, ctx.store, report)
+                wreck::load(archives, team, ships, ctx.mode, ctx.store, None, report)
             } else {
                 None
             },
@@ -754,7 +755,7 @@ fn one(
     // which decoder its hull happened to take.
     let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
     let wreck = if ctx.hull_wreck {
-        wreck::load(archives, team, ships.dir, ctx.mode, ctx.store, report)
+        wreck::load(archives, team, ships, ctx.mode, ctx.store, None, report)
     } else {
         None
     };

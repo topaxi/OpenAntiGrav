@@ -303,3 +303,105 @@ fn vita_2048_zone_hull_wears_the_livery_its_definition_names() {
     let kept = load(r"feisar2048\1");
     assert!(kept.contains("authors no Zone livery"), "{kept}");
 }
+
+/// Builds `team`'s Zone wreck through the swap the Zone hull wears and returns the loader report.
+fn zone_wreck_report(
+    archives: &mut oag_assets::Archives,
+    defaults: &oag_title::RaceDefaults,
+    liveries: &[(String, String)],
+    team: &str,
+) -> String {
+    let ships = defaults.ships_for(team);
+    let mut report = Vec::new();
+    let folder = oag_livery::zone_livery::swap(ships, Mode::Zone, liveries, team, &mut report);
+    let wreck = oag_livery::wreck::load(
+        archives,
+        team,
+        ships,
+        Mode::Zone,
+        Default::default(),
+        folder,
+        &mut report,
+    );
+    assert!(wreck.is_some(), "{team}: the Zone wreck builds: {report:?}");
+    report.join("\n")
+}
+
+fn zone_liveries(archives: &mut oag_assets::Archives, definition: &str) -> Vec<(String, String)> {
+    let blob = archives.read_name(definition).expect("teams definition");
+    let xml = oag_tables::fexml::text(&blob).expect("the definition reads");
+    oag_raceplay::catalogue::teams(&xml)
+        .iter()
+        .filter_map(|team| Some((team.id.clone(), team.zone_livery.clone()?)))
+        .collect()
+}
+
+/// The wreck's own line, not the hull's: it names the wreck entry and counts a swap.
+fn assert_wreck_swapped(report: &str, entry: &str, team: &str, livery: &str, key: &str) {
+    let line = report
+        .lines()
+        .find(|line| line.starts_with(&format!("{entry}: ")))
+        .unwrap_or_else(|| panic!("no wreck line for {entry}:\n{report}"));
+    let want = format!("{entry}: {team}: Zone livery {livery} replaces {key} on ");
+    assert!(line.starts_with(&want), "{report}");
+    assert!(!line.contains("on 0 texture"), "{report}");
+    assert!(!report.contains("does not hold"), "{report}");
+}
+
+/// A Zone wreck reads its textures through the same swap as the Zone hull: the original's
+/// substitution table is global (`docs/ghidra/functions/ps3-hdfury-eu/zone-craft.md`, "Open").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn hd_zone_wreck_wears_the_picked_teams_livery() {
+    let Some(path) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("opening HD/Fury")
+            .archives;
+    let liveries = zone_liveries(&mut archives, oag_hd::TITLE.plugin_definition);
+    let report = zone_wreck_report(&mut archives, oag_hd::race::DEFAULTS, &liveries, "Qirex");
+    assert_wreck_swapped(
+        &report,
+        r"Data\Ships\zone\shipwreck.vex",
+        "Qirex",
+        "zoneship_quirex",
+        "zoneship_zone",
+    );
+}
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn vita_2048_zone_wreck_wears_the_picked_teams_livery() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
+    let liveries = zone_liveries(&mut archives, oag_2048::TITLE.plugin_definition);
+    let report = zone_wreck_report(&mut archives, oag_2048::race::DEFAULTS, &liveries, "Qirex");
+    assert_wreck_swapped(
+        &report,
+        r"Data\art\published\hdships\Zone\shipwreck.vex",
+        "Qirex",
+        "zoneship_quirex",
+        "zoneship_zone",
+    );
+}
+
+/// Omega: checked, differs. Its Zone wreck asks for `zoneship_zone\zone_tp_wrecked.gnf` and
+/// `zone_glass.gnf`, not for the `zoneship_team` component its hull asks for and the loader's
+/// pair replaces, so the hull's key rewrites no wreck request and the wreck keeps the default
+/// skin. The swap is still wired, so a wreck whose paths did carry the key would be repainted.
+#[test]
+#[ignore = "needs the corrected Omega extraction"]
+fn omega_zone_wreck_asks_for_a_folder_the_hulls_key_does_not_name() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("opening Omega");
+    let liveries = zone_liveries(&mut archives, oag_omega::TITLE.plugin_definition);
+    let report = zone_wreck_report(&mut archives, oag_omega::race::DEFAULTS, &liveries, "Qirex");
+    let want = r"Data\art\published\hdships\Zone\shipwreck.vex: Qirex: Zone livery zoneship_quirex replaces zoneship_team on 0 texture request(s)";
+    assert!(report.contains(want), "{report}");
+}
