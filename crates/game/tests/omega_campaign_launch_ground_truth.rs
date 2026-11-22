@@ -136,6 +136,8 @@ fn every_parsed_cell_resolves_its_circuits_or_is_refused_for_its_mode() {
     let mut unresolved = Vec::new();
     let mut planned = 0;
     let mut detonator = 0;
+    let mut rungs = 0;
+    let counting = oag_omega::TITLE.campaign.counting_modes;
     let mut refused = Vec::new();
     for (grid, cell) in &omega.cells {
         match plan(&omega, cell) {
@@ -144,6 +146,7 @@ fn every_parsed_cell_resolves_its_circuits_or_is_refused_for_its_mode() {
                 if cell.mode.as_str() == oag_game::campaign::DETONATOR_CELL_MODE {
                     detonator += 1;
                     assert_eq!(plan.mode, oag_race::Mode::Detonator, "{}", cell.name);
+                    rungs += check_detonator_medal(cell, counting);
                 }
             }
             Err(Refusal::Mode(mode)) => refused.push(mode),
@@ -152,6 +155,7 @@ fn every_parsed_cell_resolves_its_circuits_or_is_refused_for_its_mode() {
     }
     assert!(unresolved.is_empty(), "{unresolved:#?}");
     assert_eq!((planned, detonator), (142 + 12, 12));
+    assert_eq!(rungs, 12 * 3);
     assert_eq!(refused.len(), 13);
     assert!(
         refused.iter().all(|mode| mode == "NitroBattle"),
@@ -161,45 +165,30 @@ fn every_parsed_cell_resolves_its_circuits_or_is_refused_for_its_mode() {
 
 /// A Detonator cell's medal is the score reached, compared `>=` against the rung's own targets
 /// (`FUN_014a6280` flips for mode `0xe`): at, above and below each target gives the right tier.
-#[test]
-#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
-fn a_detonator_cell_awards_its_medal_from_the_score_at_every_rung() {
-    let Some(omega) = open() else { return };
-    let counting = oag_omega::TITLE.campaign.counting_modes;
+/// Returns the rungs checked.
+fn check_detonator_medal(cell: &Cell, counting: &[&str]) -> usize {
+    use race_campaign::{Difficulty, Medal};
     let mut checked = 0;
-    for (grid, cell) in &omega.cells {
-        if cell.mode.as_str() != oag_game::campaign::DETONATOR_CELL_MODE {
-            continue;
-        }
-        for rung in [
-            race_campaign::Difficulty::Easy,
-            race_campaign::Difficulty::Medium,
-            race_campaign::Difficulty::Hard,
-        ] {
-            let targets = cell.targets_for_difficulty(rung);
-            let (gold, silver, bronze) = (targets.gold, targets.silver, targets.bronze);
-            assert!(
-                gold > silver && silver > bronze && bronze > 1,
-                "{}",
-                cell.name
-            );
-            let medal = |score: i64| cell.evaluate_medal_for_difficulty(score, rung, counting);
-            let at = format!("grid {grid} {} {rung:?}", cell.name);
-            assert_eq!(medal(gold), Some(race_campaign::Medal::Gold), "{at}");
-            assert_eq!(medal(gold + 5000), Some(race_campaign::Medal::Gold), "{at}");
-            assert_eq!(medal(gold - 1), Some(race_campaign::Medal::Silver), "{at}");
-            assert_eq!(medal(silver), Some(race_campaign::Medal::Silver), "{at}");
-            assert_eq!(
-                medal(silver - 1),
-                Some(race_campaign::Medal::Bronze),
-                "{at}"
-            );
-            assert_eq!(medal(bronze), Some(race_campaign::Medal::Bronze), "{at}");
-            assert_eq!(medal(bronze - 1), None, "{at}");
-            checked += 1;
-        }
+    for rung in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        let targets = cell.targets_for_difficulty(rung);
+        let (gold, silver, bronze) = (targets.gold, targets.silver, targets.bronze);
+        assert!(
+            gold > silver && silver > bronze && bronze > 1,
+            "{}",
+            cell.name
+        );
+        let medal = |score: i64| cell.evaluate_medal_for_difficulty(score, rung, counting);
+        let at = format!("{} {rung:?}", cell.name);
+        assert_eq!(medal(gold), Some(Medal::Gold), "{at}");
+        assert_eq!(medal(gold + 5000), Some(Medal::Gold), "{at}");
+        assert_eq!(medal(gold - 1), Some(Medal::Silver), "{at}");
+        assert_eq!(medal(silver), Some(Medal::Silver), "{at}");
+        assert_eq!(medal(silver - 1), Some(Medal::Bronze), "{at}");
+        assert_eq!(medal(bronze), Some(Medal::Bronze), "{at}");
+        assert_eq!(medal(bronze - 1), None, "{at}");
+        checked += 1;
     }
-    assert_eq!(checked, 12 * 3);
+    checked
 }
 
 /// The opponents a cell authors are the opponents its mode races with, so

@@ -274,9 +274,10 @@ ladders, the nitro triple a dummy `1`/`1`/`1`). `NitroBattle` (13 cells) stays r
   and only once the race is finished. Detonator is in every title's `counting_modes`
   (`PI_Cell_EvaluateMedalForValue` flips for mode `0xe`), so the compare is `score >= target`:
   gold at its target or above, silver from its target, bronze from its target, nothing below.
-  Held to the disc at all three rungs of all 12 cells in
+  Held to the disc at all three rungs of all 12 cells, inside the launch-census pass of
   `hd_campaign_ground_truth.rs`, `omega_campaign_launch_ground_truth.rs` and
-  `vita_2048_dlc_menus_ground_truth.rs` (`a_detonator_cell_awards_its_medal_from_the_score_at_every_rung`).
+  `vita_2048_dlc_menus_ground_truth.rs` (`check_detonator_medal`). A mod campaign cannot author the
+  mode (`campaign::custom::MODES` has no Detonator word).
 - **Read:** the original's HUD compares the cell's thresholds against that same score
   (`detonator-cannon.md`, "The score", confidence 82), and the end-of-race builder `0x0005ac00`
   records only a finished craft unless the mode is 6, 10 or 13 (`cell-medal-award.md`, "End of

@@ -219,7 +219,8 @@ fn entry(hd: &Hd, mode: oag_race::Mode, id: &str) -> Option<String> {
 }
 
 /// Every cell launches, or is refused for `NitroBattle`, the one mode with no rules here; none
-/// names a circuit the disc does not resolve. Every `Detonator` cell plans as Detonator.
+/// names a circuit the disc does not resolve. Every `Detonator` cell plans as Detonator and awards
+/// its medal from a score (`check_detonator_medal`).
 #[test]
 #[ignore = "needs a decrypted PS3 disc image in data/images"]
 fn every_cell_launches_or_is_refused_for_a_mode_with_no_rules() {
@@ -227,6 +228,8 @@ fn every_cell_launches_or_is_refused_for_a_mode_with_no_rules() {
     let mut planned = 0;
     let mut refused = 0;
     let mut detonator = 0;
+    let mut rungs = 0;
+    let counting = oag_hd::TITLE.campaign.counting_modes;
     for cell in hd.grids.iter().flat_map(|grid| &grid.cells) {
         match launch::plan_cell(cell, "venom", |mode, id| entry(&hd, mode, id)) {
             Ok(plan) => {
@@ -235,6 +238,7 @@ fn every_cell_launches_or_is_refused_for_a_mode_with_no_rules() {
                     detonator += 1;
                     assert_eq!(plan.mode, oag_race::Mode::Detonator, "{}", cell.name);
                     assert_eq!(plan.ai_count.unwrap_or(0), 0, "{}", cell.name);
+                    rungs += check_detonator_medal(cell, counting);
                 }
             }
             Err(Refusal::Mode(mode)) => {
@@ -245,69 +249,34 @@ fn every_cell_launches_or_is_refused_for_a_mode_with_no_rules() {
         }
     }
     assert_eq!((planned, refused, detonator), (142 + 12, 13, 12));
+    assert_eq!(rungs, 12 * 3);
 }
 
 /// A Detonator cell's medal is the score reached, compared `>=` against the rung's own targets:
-/// at, above and below each target gives the right tier, at every rung of every cell the disc
-/// authors.
-#[test]
-#[ignore = "needs a decrypted PS3 disc image in data/images"]
-fn a_detonator_cell_awards_its_medal_from_the_score_at_every_rung() {
-    let Some(hd) = open() else { return };
-    let counting = oag_hd::TITLE.campaign.counting_modes;
+/// at, above and below each target gives the right tier, at every rung. Returns the rungs checked.
+fn check_detonator_medal(cell: &Cell, counting: &[&str]) -> usize {
     let mut checked = 0;
-    for cell in hd
-        .grids
-        .iter()
-        .flat_map(|grid| &grid.cells)
-        .filter(|cell| cell.mode.as_str() == oag_game::campaign::DETONATOR_CELL_MODE)
-    {
-        for rung in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
-            let targets = cell.targets_for_difficulty(rung);
-            let (gold, silver, bronze) = (targets.gold, targets.silver, targets.bronze);
-            assert!(
-                gold > silver && silver > bronze && bronze > 1,
-                "{}: {gold}/{silver}/{bronze} is a score ladder",
-                cell.name
-            );
-            let medal = |score: i64| cell.evaluate_medal_for_difficulty(score, rung, counting);
-            assert_eq!(medal(gold), Some(Medal::Gold), "{} at gold", cell.name);
-            assert_eq!(
-                medal(gold + 5000),
-                Some(Medal::Gold),
-                "{} above gold",
-                cell.name
-            );
-            assert_eq!(
-                medal(gold - 1),
-                Some(Medal::Silver),
-                "{} below gold",
-                cell.name
-            );
-            assert_eq!(
-                medal(silver),
-                Some(Medal::Silver),
-                "{} at silver",
-                cell.name
-            );
-            assert_eq!(
-                medal(silver - 1),
-                Some(Medal::Bronze),
-                "{} below silver",
-                cell.name
-            );
-            assert_eq!(
-                medal(bronze),
-                Some(Medal::Bronze),
-                "{} at bronze",
-                cell.name
-            );
-            assert_eq!(medal(bronze - 1), None, "{} below bronze", cell.name);
-            assert_eq!(medal(0), None, "{} with no score", cell.name);
-            checked += 1;
-        }
+    for rung in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        let targets = cell.targets_for_difficulty(rung);
+        let (gold, silver, bronze) = (targets.gold, targets.silver, targets.bronze);
+        assert!(
+            gold > silver && silver > bronze && bronze > 1,
+            "{}: {gold}/{silver}/{bronze} is a score ladder",
+            cell.name
+        );
+        let medal = |score: i64| cell.evaluate_medal_for_difficulty(score, rung, counting);
+        let at = format!("{} {rung:?}", cell.name);
+        assert_eq!(medal(gold), Some(Medal::Gold), "{at} at gold");
+        assert_eq!(medal(gold + 5000), Some(Medal::Gold), "{at} above gold");
+        assert_eq!(medal(gold - 1), Some(Medal::Silver), "{at} below gold");
+        assert_eq!(medal(silver), Some(Medal::Silver), "{at} at silver");
+        assert_eq!(medal(silver - 1), Some(Medal::Bronze), "{at} below silver");
+        assert_eq!(medal(bronze), Some(Medal::Bronze), "{at} at bronze");
+        assert_eq!(medal(bronze - 1), None, "{at} below bronze");
+        assert_eq!(medal(0), None, "{at} with no score");
+        checked += 1;
     }
-    assert_eq!(checked, 12 * 3);
+    checked
 }
 
 /// Medal, record, unlock: a Time Trial flown at novice scores gold, the row

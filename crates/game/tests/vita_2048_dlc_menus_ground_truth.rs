@@ -371,6 +371,8 @@ fn every_cell_plans_onto_a_held_circuit_or_is_refused_for_its_mode() {
     };
     let campaigns = Campaigns::open(&eu);
     let (mut planned, mut detonator, mut refused, mut stranded) = (0, 0, Vec::new(), Vec::new());
+    let mut rungs = 0;
+    let counting = oag_2048::TITLE.campaign.counting_modes;
     let cells = campaigns.cells();
     assert_eq!(cells.len(), 87 + 80);
     for (campaign, _, cell) in &cells {
@@ -380,6 +382,7 @@ fn every_cell_plans_onto_a_held_circuit_or_is_refused_for_its_mode() {
                 if cell.mode.as_str() == oag_game::campaign::DETONATOR_CELL_MODE {
                     detonator += 1;
                     assert_eq!(plan.mode, oag_race::Mode::Detonator, "{}", cell.name);
+                    rungs += check_detonator_medal(cell, counting);
                 }
                 for entry in &plan.leg_entries {
                     if campaigns.archives.locate(entry).is_none() {
@@ -393,6 +396,7 @@ fn every_cell_plans_onto_a_held_circuit_or_is_refused_for_its_mode() {
     }
     assert!(stranded.is_empty(), "{stranded:#?}");
     assert_eq!((planned, detonator), (142 + 12, 12));
+    assert_eq!(rungs, 12 * 3);
     assert_eq!(refused.len(), 13);
     assert!(
         refused
@@ -403,41 +407,30 @@ fn every_cell_plans_onto_a_held_circuit_or_is_refused_for_its_mode() {
 }
 
 /// A Detonator cell's medal is the score reached, compared `>=` against the rung's own targets
-/// (the title's `counting_modes`): at, above and below each target gives the right tier.
-#[test]
-#[ignore = "needs data/extracted/vita/PCSF00007"]
-fn a_detonator_cell_awards_its_medal_from_the_score_at_every_rung() {
-    let Some(eu) = package("PCSF00007") else {
-        return;
-    };
-    let campaigns = Campaigns::open(&eu);
-    let counting = oag_2048::TITLE.campaign.counting_modes;
+/// (the title's `counting_modes`): at, above and below each target gives the right tier. Returns
+/// the rungs checked.
+fn check_detonator_medal(cell: &Cell, counting: &[&str]) -> usize {
     let mut checked = 0;
-    for (campaign, _, cell) in campaigns.cells() {
-        if cell.mode.as_str() != oag_game::campaign::DETONATOR_CELL_MODE {
-            continue;
-        }
-        for rung in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
-            let targets = cell.targets_for_difficulty(rung);
-            let (gold, silver, bronze) = (targets.gold, targets.silver, targets.bronze);
-            assert!(
-                gold > silver && silver > bronze && bronze > 1,
-                "{}",
-                cell.name
-            );
-            let medal = |score: i64| cell.evaluate_medal_for_difficulty(score, rung, counting);
-            let at = format!("{campaign} {} {rung:?}", cell.name);
-            assert_eq!(medal(gold), Some(Medal::Gold), "{at}");
-            assert_eq!(medal(gold + 5000), Some(Medal::Gold), "{at}");
-            assert_eq!(medal(gold - 1), Some(Medal::Silver), "{at}");
-            assert_eq!(medal(silver), Some(Medal::Silver), "{at}");
-            assert_eq!(medal(silver - 1), Some(Medal::Bronze), "{at}");
-            assert_eq!(medal(bronze), Some(Medal::Bronze), "{at}");
-            assert_eq!(medal(bronze - 1), None, "{at}");
-            checked += 1;
-        }
+    for rung in [Difficulty::Easy, Difficulty::Medium, Difficulty::Hard] {
+        let targets = cell.targets_for_difficulty(rung);
+        let (gold, silver, bronze) = (targets.gold, targets.silver, targets.bronze);
+        assert!(
+            gold > silver && silver > bronze && bronze > 1,
+            "{}",
+            cell.name
+        );
+        let medal = |score: i64| cell.evaluate_medal_for_difficulty(score, rung, counting);
+        let at = format!("{} {rung:?}", cell.name);
+        assert_eq!(medal(gold), Some(Medal::Gold), "{at}");
+        assert_eq!(medal(gold + 5000), Some(Medal::Gold), "{at}");
+        assert_eq!(medal(gold - 1), Some(Medal::Silver), "{at}");
+        assert_eq!(medal(silver), Some(Medal::Silver), "{at}");
+        assert_eq!(medal(silver - 1), Some(Medal::Bronze), "{at}");
+        assert_eq!(medal(bronze), Some(Medal::Bronze), "{at}");
+        assert_eq!(medal(bronze - 1), None, "{at}");
+        checked += 1;
     }
-    assert_eq!(checked, 12 * 3);
+    checked
 }
 
 /// A cell on a reversed circuit races the pack's own reversed geometry, not
