@@ -653,7 +653,9 @@ mod tests {
         // +128: `Ship::track_up`, the located track's up a weapon is born carrying, 16 bytes per ship.
         // +816: `World::detonator`, Detonator's 200 mines and 2 bombs as a 4-byte address each (the
         // survey, not the world, holds where an entry is).
-        const LIMIT: usize = 21_208;
+        // +2120: `Field::cannon` and `Field::bomb_hits`, Detonator's pulse cannon: thirty rounds,
+        // the clip's hit ring, the score and the counters.
+        const LIMIT: usize = 23_328;
         let size = std::mem::size_of::<World>();
         assert!(
             size <= LIMIT,

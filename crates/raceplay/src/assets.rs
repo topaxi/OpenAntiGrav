@@ -909,12 +909,16 @@ pub(super) fn load_detonator_layout(
     let mut read = |entry: &str| match archives.read_name(entry) {
         Ok(blob) => Some(String::from_utf8_lossy(&blob).into_owned()),
         Err(e) => {
-            report.push(format!("{entry}: {e}; no mines are laid"));
+            report.push(format!("{entry}: {e}; not loaded"));
             None
         }
     };
     let patterns = oag_tables::detonator_layout::parse_patterns(&read(layouts.pattern_file)?);
     let values = oag_tables::detonator_layout::parse_values(&read(layouts.gameplay_values)?);
+    // Without the scoring file the mines are still laid, and a shot pays nothing.
+    let scoring = read(layouts.scoring)
+        .map(|xml| oag_tables::detonator_layout::parse_scoring(&xml))
+        .unwrap_or_default();
     report.push(format!(
         "{}: {} pattern group(s); {}: {} mines at stage 1, {} at stage 14",
         layouts.pattern_file,
@@ -923,5 +927,9 @@ pub(super) fn load_detonator_layout(
         values.mine_count(1).unwrap_or(0),
         values.mine_count(14).unwrap_or(0),
     ));
-    Some(oag_weapons::detonator::Layout { patterns, values })
+    Some(oag_weapons::detonator::Layout {
+        patterns,
+        values,
+        scoring,
+    })
 }

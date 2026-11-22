@@ -43,6 +43,7 @@ fn layout() -> Layout {
             ],
         },
         values,
+        scoring: Scoring::default(),
     }
 }
 
@@ -124,7 +125,8 @@ fn a_mine_sits_on_its_lane_across_the_entry() {
         survey.point(
             &Placed {
                 entry: 999,
-                lane: 0
+                lane: 0,
+                live: true,
             },
             3.5
         ),
@@ -182,7 +184,11 @@ mod contact {
 
     fn field_with(mine: bool) -> Field {
         let mut field = Field::new();
-        let at = Placed { entry: 20, lane: 0 };
+        let at = Placed {
+            entry: 20,
+            lane: 0,
+            live: true,
+        };
         if mine {
             field.mines[0] = at;
             field.live_mines = 1;
@@ -263,7 +269,13 @@ mod contact {
         place_stage(&mut field, &survey, &layout(), &mut rng, 1);
         assert!(field.live_bombs <= 1);
         assert!(
-            field.live_bombs == 0 || field.bombs[0] != (Placed { entry: 20, lane: 0 }),
+            field.live_bombs == 0
+                || field.bombs[0]
+                    != (Placed {
+                        entry: 20,
+                        lane: 0,
+                        live: true,
+                    }),
             "the stage-1 bomb is gone"
         );
     }
