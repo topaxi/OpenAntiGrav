@@ -36,6 +36,7 @@ pub const LAYOUTS: &oag_title::HudLayouts = &oag_title::HudLayouts {
     speed_lap: layouts::TIME_TRIAL,
     zone: layouts::ZONE,
     elimination: layouts::ELIMINATION,
+    detonator: layouts::TIME_TRIAL,
     split: None,
     split_layout: Some(r"Data\XML\SplitHud_Pulse.toml"),
     player_tags: Some(layouts::MP_TAG),

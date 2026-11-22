@@ -52,6 +52,7 @@ mod bar_tip;
 pub mod boost_smear;
 mod compose;
 pub mod concave;
+mod detonator;
 mod dialect_2048;
 mod draw;
 pub mod ext_draws;
@@ -84,6 +85,7 @@ mod widget;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
+pub use detonator::{Bonus as DetonatorBonus, Detonator, chain_id as detonator_chain_id};
 pub use draw::{Context, Frame, Span, draw_list, draw_list_without_sight, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
@@ -651,6 +653,8 @@ pub struct Readout {
     /// The `SubWeapon` line under the pickup's icon: the Cannon's rounds left, or the
     /// Autopilot's seconds left, or nothing. See [`SubWeapon`].
     pub sub_weapon: Option<SubWeapon>,
+    /// What a Detonator race's HUD shows; `None` in every other mode ([`detonator`]).
+    pub detonator: Option<Detonator>,
     /// Whether the race is an event of the title's own single-player campaign (2048's
     /// `SP.xml`) - the object its HUD binds at `hud+4`. Without one the HUD draws no `RaceXPTxt`
     /// and no `ObjectiveTxt`: the 2048 DLC's HD and Fury Campaign events carry none. See

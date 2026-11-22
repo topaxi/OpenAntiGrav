@@ -56,9 +56,11 @@ const LIFE: f32 = 1.0;
 const CHAIN_DISTANCE_SQUARED: f32 = 5000.0;
 
 /// What a streak of five, ten and fifteen volleys with a hit pays.
-const STREAK_FIVE: i32 = 1000;
-const STREAK_TEN: i32 = 3000;
-const STREAK_FIFTEEN: i32 = 5000;
+pub const STREAK_FIVE: i32 = 1000;
+/// Ten.
+pub const STREAK_TEN: i32 = 3000;
+/// Fifteen.
+pub const STREAK_FIFTEEN: i32 = 5000;
 
 /// What a round's segment met.
 #[derive(Debug, Clone, Copy, PartialEq)]

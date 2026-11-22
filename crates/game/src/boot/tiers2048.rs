@@ -14,7 +14,7 @@
 //! circuits, modes, classes, laps, weapons flags, and where each node sits
 //! relative to the others (`oag_2048::campaign::tier`). Chosen, not measured, and
 //! each said where it is made: the icon a mode draws, that a cell this build
-//! cannot race (HD's Detonator and Nitro Battle) is drawn closed, and that the
+//! cannot race (HD's Nitro Battle) is drawn closed, and that the
 //! campaign flies the HD roster's own default craft until the player picks
 //! another HD one.
 
@@ -235,7 +235,7 @@ pub fn card_title(
 
 /// The icon a cell's mode draws. **Chosen, not measured**: the four icons are
 /// 2048's own mode glyphs (`EventIcon`), and HD's Detonator and Nitro Battle
-/// have none - a crosshair and a radar are the nearest.
+/// have none - a crosshair (Elimination's) and a radar (Zone's) are the nearest.
 fn icon(mode: &Mode) -> EventIcon {
     match mode {
         Mode::Race | Mode::Tournament | Mode::Head2Head | Mode::CustomGrid | Mode::AiRace => {

@@ -1111,3 +1111,13 @@
 0x0013a7d8	function	DetonatorMine_Construct	80	detonator-hull.md
 0x002524e8	function	TeamSelection_CollectModelsForMode	62	detonator-hull.md
 0x000b6d68	function	WorldManager_CountPads	60	detonator-hull.md
+0x00081068	function	DetonatorHud_LoadAndBindScore	75	detonator-hud.md
+0x00081958	function	DetonatorHud_BindWeaponWidgets	75	detonator-hud.md
+0x00082138	function	DetonatorHud_BindEmpWidgets	75	detonator-hud.md
+0x000803d8	function	DetonatorHud_UpdateWeaponTexts	68	detonator-hud.md
+0x00080830	function	DetonatorHud_UpdateEmp	68	detonator-hud.md
+0x0007f4b0	function	DetonatorHud_UpdateScoreText	65	detonator-hud.md
+0x0007e950	function	DetonatorHud_UpdateVolleyIcons	62	detonator-hud.md
+0x0007e498	function	DetonatorHud_ResetVolleyIcons	70	detonator-hud.md
+0x0007e5a8	function	DetonatorHud_ShowBankedScore	62	detonator-hud.md
+0x00083318	function	Hud_RaiseWarning	65	detonator-hud.md

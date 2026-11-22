@@ -518,17 +518,12 @@ OAG_FFMPEG_NO = { text = "NÃO, OBRIGADO", human = false }
 OAG_FFMPEG_DOWNLOADING = { text = "BAIXANDO FFMPEG %s - VOLTAR CANCELA", human = false }
 OAG_FFMPEG_UNPACKING = { text = "DESCOMPACTANDO FFMPEG...", human = false }
 
-[untranslated]
-ids = [
-    # The REPLAYS page's EXPORT row on a phone; no translation pass yet.
-    "OAG_REPLAYS_EXPORT",
-    "OAG_REPLAYS_EXPORTED",
-    "OAG_REPLAYS_EXPORT_FAILED",
-    # Photo mode on a phone: saved to the gallery; no translation pass yet.
-    "OAG_PHOTO_GALLERY",
-    # The replay viewer's touch CAMERA control; no translation pass yet.
-    "OAG_REPLAY_CAMERA",
-    # The photo mode touch hint; no translation pass yet.
-    "OAG_PHOTO_TOUCH_HINT",
-    "OAG_PHOTO_TOUCH_HINT_FREE",
-]
+# Phones: the REPLAYS page's export, photo mode's gallery save, the replay
+# viewer's touch camera and photo mode's touch hints.
+OAG_REPLAYS_EXPORT = { text = "EXPORTAR", human = false }
+OAG_REPLAYS_EXPORTED = { text = "REPLAY EXPORTADO PARA DOWNLOADS", human = false }
+OAG_REPLAYS_EXPORT_FAILED = { text = "NÃO FOI POSSÍVEL EXPORTAR O REPLAY", human = false }
+OAG_PHOTO_GALLERY = { text = "FOTO SALVA NA GALERIA", human = false }
+OAG_REPLAY_CAMERA = { text = "CÂMERA", human = false }
+OAG_PHOTO_TOUCH_HINT = { text = "ARRASTAR ÓRBITA   PINÇAR ZOOM   2 DEDOS PANORÂMICA   GIRAR INCLINAR   TOQUE DUPLO REDEFINIR", human = false }
+OAG_PHOTO_TOUCH_HINT_FREE = { text = "ARRASTAR OLHAR   PINÇAR APROXIMAR   2 DEDOS DESLIZAR   GIRAR ROLAR   TOQUE DUPLO REDEFINIR", human = false }

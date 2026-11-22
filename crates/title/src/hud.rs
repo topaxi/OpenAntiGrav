@@ -53,6 +53,10 @@ pub struct HudLayouts {
     /// `Elimination_HUD.xml`/`elimination_hud.xml`; Pure's own has not been
     /// checked for, so it reuses [`Self::arcade`].
     pub elimination: &'static str,
+    /// Detonator, the mode HD, 2048 and Omega race. A title that does not race it
+    /// (both PSP titles, the PS2 pressing) names its time trial's, which is the
+    /// layout a Detonator race there would draw.
+    pub detonator: &'static str,
     /// The title's own two-player split-screen layouts, `None` where it ships
     /// none (both PSP titles and the PS2 pressing).
     pub split: Option<SplitLayouts>,

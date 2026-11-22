@@ -174,6 +174,9 @@ pub(super) fn text_for(
     // computed.
     let literal =
         |fallback: &str| -> String { label.string.clone().unwrap_or_else(|| fallback.to_string()) };
+    if let Some(text) = super::detonator::text(&label.name, readout, strings) {
+        return text;
+    }
 
     match label.name.as_str() {
         // Values.
@@ -1135,6 +1138,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
     }
 
     frame.sprites.extend(lap_split_sprites(cx, readout));
+    frame.sprites.extend(super::detonator::sprites(cx, readout));
 
     // The time gap's icon, tinted as its text is. Up only with a line.
     if let Some(line) = &readout.time_gap
@@ -1240,6 +1244,7 @@ fn list(cx: &Context<'_>, readout: &Readout, sight: Sight) -> Frame {
             y: placed.map_or_else(|| top_edge(label, line_height), |(_, text)| text[1]),
             scale: label.scale,
             color: super::messages::colour(readout, &label.name)
+                .or_else(|| super::detonator::colour(readout, &label.name))
                 .or_else(|| super::time_gap::colour(readout, &label.name))
                 .or_else(|| super::time_trial_pace::time_trial_colour(readout, &label.name))
                 .or_else(|| super::runtime::colour(cx, readout, &label.name))

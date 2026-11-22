@@ -320,8 +320,9 @@ the flat one also raises `Hud_RaiseScoreFeedback` (`0x00083ba0`) with the amount
 
 So with the disc's `multiplier = 1.0`, **the live mines of one clip score 100, 200, 300, ...**:
 `m_mine` counts live mines shot since the last reload, and resets to `1.0` at the reload (below),
-not on a miss. `n` and `m_emp` reset only with the race. The HUD (`0x000803d8`) shows `m_mine` as
-`x%02d` (`fctiwz`) and `+0x24` as `%04d`. All arithmetic is f32 then truncation
+not on a miss. `n` and `m_emp` reset only with the race. The HUD function (`0x000803d8`) formats `m_mine` as
+`x%02d` (`fctiwz`) and `+0x24` as `%04d`, but never has a widget to put them in (corrected on
+[detonator-hud.md](detonator-hud.md): `PulseScore` and `PulseMultiplier` are unbound on HD). All arithmetic is f32 then truncation
 toward zero (`fctidz`), integers exact at these sizes.
 
 `MineManager_DestroyAtLane` (`0x0011a590`) and `BombManager_DestroyAtLane` (`0x0012e260`) are the
@@ -437,7 +438,7 @@ countdown (hypothesis, 50).
 - `Detonator_IsBombAhead` (`0x000642a0`, `f1 = 500.0`): for each live bomb, a track measure from
   the craft (`0x000d2a30`, unread) in `[0, 500]` and a straight-line distance not above it return
   `0x000588f0(rm)` (unread). When it returns non-zero, once per stage (latch `rm+0x6de63`, cleared
-  at the stage step) the HUD raises **message 8** (`0x00083318(hud, 8, craft)`, which files it in
+  at the stage step) the HUD raises **message 8** (`0x00083318(hud, 8, r)`, `r` the return of the call before it, not the craft (corrected on [detonator-hud.md](detonator-hud.md)), which files it in
   a warning slot with `2.0` in the slot's timer) and the announcer says `"bomb"` (TOC `-0x67c0`). So message 8 is a **bomb-ahead warning,
   not a hit**. Confidence 55.
 - **Trophies**, through `0x00676f08` (the trophy unlock: its ids match `TROPHY.TRP`, `NPWR00187_00`):
