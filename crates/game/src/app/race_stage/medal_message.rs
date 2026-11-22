@@ -72,4 +72,20 @@ mod tests {
             "the place is the end-of-race board's, SimRace::eliminator_place"
         );
     }
+
+    /// A Detonator cell's medal is the cannon's score: the race stage can not be built under a
+    /// unit test, so this fails when `campaign_tier` stops asking `medal_watch` for it or stops
+    /// reading the score off the race.
+    #[test]
+    fn the_campaign_tier_asks_for_the_detonator_score() {
+        let stage = include_str!("../race_stage.rs");
+        assert!(
+            stage.contains("crate::medal_watch::detonator_value("),
+            "campaign_tier must take a Detonator cell's value from medal_watch"
+        );
+        assert!(
+            stage.contains("self.race.core.sim.detonator_score()"),
+            "the score is the cannon's, read through the race's accessor"
+        );
+    }
 }
