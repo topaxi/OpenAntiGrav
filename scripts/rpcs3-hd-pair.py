@@ -127,6 +127,29 @@ def solve_yaw(oag_game, image, track, pos, theirs_forward, scratch):
     return best
 
 
+def detonator_inputs(pair, out, ship, clock):
+    """Ours' `--input-script` for a Detonator frame: idle through the countdown and up to the original's press, SQUARE (our cannon
+    button) over the lap-clock window the original's button was held, idle after. Records the window and what is not carried."""
+    fire = ship.get("fire")
+    lines = ["# written by rpcs3-hd-pair.py --detonator from the capture's ship.fire window", "%d none" % (GO_TICK + 1)]
+    pair.rec["original"]["detonator"] = {"fire": fire, "lap_clock_s": clock}
+    if fire:
+        before = round(fire["press_clock_before_s"] * 60)
+        held = max(1, round((fire["press_clock_after_s"] - fire["press_clock_before_s"]) * 60))
+        lines = ["%d none" % (GO_TICK + before), "%d square" % held, "1 none"]
+        pair.rec["ours"]["detonator"] = {"fire_tick_from": GO_TICK + before, "fire_ticks_held": held,
+                                         "button": "square (ours; the original's cannon fired on %s)" % fire.get("button")}
+    path = out / "ours.inputs"
+    path.write_text("\n".join(lines) + "\n")
+    pair.caveat("Detonator: ours runs its own countdown, clock and stage laying (its own seeded mine layout, its own cannon "
+                "rounds from the held button) with the craft held on the original's pose and camera; the mine positions are "
+                "ours, not the original's (the placement RNG is not carried), so a mine in one frame is not the same mine in the other")
+    pair.caveat("Detonator: ours' craft is held at rest on the original's pose after every tick (`--pose-hold-ticks`): it never flies into a "
+                "mine, its exhaust is cold, and a round leaves at 500 units/s, "
+                "not 500 + 3.6 x the craft's speed")
+    return ["--input-script", path]
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", type=Path, required=True)
@@ -174,6 +197,11 @@ def main():
                          "(HD's Zone counters are not located in RAM, so the caller reads them off the original's own HUD in the "
                          "paused frame; recorded as read off the frame) and, with STAGE, the colour-grade stage pinned "
                          "(`--zone-stage`)")
+    ap.add_argument("--detonator", action="store_true",
+                    help="a Detonator race shot (`rpcs3-hd-detonator-shots.py` record, passed with --json): ours runs its own countdown and "
+                         "clock from the grid in `--mode detonator` (its auto-speed, its own mines laid at ITS placement, the original's "
+                         "Libc_Rand layout not carried), holds the cannon over the same lap-clock window the original's button was held "
+                         "(`ship.fire`), and the craft is put back on the original's pose for the frame (`--pose-hold`)")
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
@@ -248,7 +276,7 @@ def main():
                         "redraws it: the frame, pose, field and HUD record are from that moment" %
                         (note["before_s"], note["authored_s"], note["run_s"]))
     capture_kind = os.environ.get("OAG_HD_CAPTURE_KIND", "unknown")  # cold_boot | savestate_restore, set by compare-rerender-all
-    cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", capture_kind, args.state,
+    cp.build(pair, args, "zone" if args.zone else "race" if args.field or args.detonator else "scenery", capture_kind, args.state,
              {"value": HUD_LAG_TICKS, "unit": "ticks", "basis": "measured",
               "what": "HUD clock text vs RAM; the picture is not corrected; on a moving craft it was measured 0 to 3 ticks older than the RAM read (hd-pair-lag-scan.py)"})
     gantry = ship.get("gantry_seconds")
@@ -298,7 +326,7 @@ def main():
     pose = "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw)
     flags = ce.ours_flags(plat)
     flags[flags.index("--size") + 1] = size
-    mode = pair.rec["original"].get("state", {}).get("mode", "single_race" if args.field else "time_trial")
+    mode = "detonator" if args.detonator else pair.rec["original"].get("state", {}).get("mode", "single_race" if args.field else "time_trial")
     flags += ["--mode", mode]
     # The GO board's phase, off the gantry node's own time in the same pause: the race clock alone
     # does not give it, less the presented lag like ours' ticks (`compare_env.gantry_pin`). A board past its windows (the
@@ -351,8 +379,11 @@ def main():
                     "the path and the heading chosen, not measured; the HUD's place, lap, "
                     "clock, speed and shield are imposed from the original's RAM (%d/8, lap %d, %.1f s), the best-lap "
                     "line, the pickup row and the sight are ours" % (hud["place"], hud["lap"], player_row["clock"]))
+    detonator_flags = []
+    if args.detonator:
+        detonator_flags = detonator_inputs(pair, out, ship, clock)
     base = [args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(),
-            "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags + field_flags
+            "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags + field_flags + detonator_flags
     if args.field:
         base.remove("--pose=" + pose)
     if args.variant:
@@ -368,7 +399,7 @@ def main():
     # twice, so `--pose-hold` puts the craft back on the fed pose for the frame and the last trace row; the clock,
     # the GO board, the record panel and the exhaust still run their ticks. A race shot runs no ticks and needs none.
     ours_csv = out / "ours-trace.csv"
-    cmd = base if args.field or args.zone else base + ["--pose-hold"]
+    cmd = base if args.field or args.zone else base + ["--pose-hold"] + (["--pose-hold-ticks"] if args.detonator else [])
     pair.rec["ours"]["pose_hold"] = not (args.field or args.zone)
     pair.rec["ours"]["pose_arg"] = "exact, slot 0 of field.csv" if args.field else pose
     pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]

@@ -2224,3 +2224,34 @@ ADR-0074 Accepted it reads `unlocked`. The maintainer runs the command.
 
 A curated page should carry only frames the policy covers; the seed and live
 manifests are developer material, not a publishing set.
+
+## Detonator pairs (HD/Fury, 2026-11-22, `det-pairs`)
+
+`hd/detonator-talons-{mines-ahead,cannon-volley,pad}` (manifest `compare-page/detonator.toml`, also `curated/`). Recipe:
+
+1. Cold boot, Racebox, `RACE TYPE` six `right`s from Single Race (Arcade, Time Trial, Speed Lap, Eliminator, Zone, Zone Battle,
+   **Detonator**: the Fury `DATA00` list, `head2head.md`), Talon's Junction (eight `right`s), Feisar, START RACE prompt; take the
+   state with `emu-save-state.sh` (`data/saves/hd-fury/hd-detonator-talons-feisar-grid`, sidecar `mode: detonator`). The load log
+   prints `GetMode()==14`.
+2. Restore (`emu-restore-state.sh`, with `OAG_COMPARE_PLATFORM=hd-fury` exported so the profile turns RPCS3's pause toast off; the
+   first restore after a run failed with a refused GDB proxy 3 of 5 times, one retry after a 10 s wait worked every time).
+3. `scripts/rpcs3-hd-detonator-shots.py --shot T [--fire-clock F --fire-hold H]` waits 30 s (a START RACE tap before the prompt is
+   held into the race and the craft leaves the track within 4 s), taps START RACE, then pauses at each lap-clock `T`, grabs through
+   `grab_with_clock`, reads the pose and camera, and can hold the cannon button over a window. **The cannon appears to be TRIANGLE**
+   (seen on one boot; SQUARE changed the camera view on four others and never fired). The craft does not steer itself: with no stick it holds the first straight for about
+   6 s of lap clock.
+4. `rpcs3-hd-pair.py --detonator --json NN.json --autopilot off --state <state> --team feisar --track 'Data\Environments\Talons_Junction\track.vex'`:
+   ours runs its own countdown and clock in `--mode detonator` with an `--input-script` that holds Square (ours' cannon button) over
+   the same lap-clock window, and `--pose-hold` plus `--pose-hold-ticks` keep ours' craft at rest on the original's pose after every
+   tick (without the second flag ours flew 130-190 units past the pose before the frame: measured, and the first renders were redone);
+   camera, fov, gantry and world clock are the original's. A held craft never meets a mine, its exhaust is cold and its rounds leave at
+   500 units/s. **Ours' mine layout is its own** (the original's `Libc_Rand` is not carried), recorded as a pair caveat.
+
+| Pair | Lap clock | RMSE | Edge corr. | Mean grey |
+| --- | ---: | ---: | ---: | ---: |
+| `mines-ahead` | 2.66 s | 0.297 | 0.08 | 41.5 |
+| `cannon-volley` | 2.21 s | 0.289 | 0.12 | 35.9 |
+| `pad` | 2.0 s | 0.264 | 0.10 | 28.3 |
+
+What differs, by region and size: the Detonator thread's "Render accuracy" section.
+
