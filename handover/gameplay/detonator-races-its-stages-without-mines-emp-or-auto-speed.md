@@ -460,8 +460,31 @@ the same new `theirs.png`: `mines-ahead` 19.81 to 19.81 / 0.174 to 0.175, `canno
 16.90 / 0.149 to 0.150: **the whole-frame score does not move with the hull** (6 percent of the frame), so the earlier 18.58 / 18.28 / 12.74
 stand as the floor-and-sky scores of the old grabs and are not comparable with these (new boots, new music phase). **Open:** 2048 and
 Omega draw the hull at the model's 0.75 (`hull_scale: None`) until a live frame reads their hull matrix; the physics and camera-rig use
-of the `0.7` scale is wired for the rig only; the new pairs carry no world clock (the grab's read found no node) and the heading check
-reads 1.4 to 1.9 degrees (tolerance 1.0), so they are not published; `--field` still feeds the RAM body.
+of the `0.7` scale is wired for the rig only; `--field` still feeds the RAM body (the Detonator pairs do not use it).
+
+**The three pairs re-grabbed and published (2026-11-23, `det-regrab`).** The new grabs of `det-camera` had no world clock and read 1.4 to
+1.9 degrees of heading. Both are explained (`docs/tools/compare-page.md`, "Detonator pairs re-grabbed"): the clock read refuses a world clock
+under 13.3 s (`GANTRY_WINDOW_END`, a guard that keeps a gantry node from passing for scenery) and a state saved at the grid prompt a few
+seconds in restores to a world clock of about 7 at the lap clock's start; a state saved 60 s into the prompt
+(`hd-detonator-talons-feisar-grid-late`, world clock 54 to 59 s at the pair) reads 24 nodes. The heading is pitch: `--pose` carries a yaw,
+ours' craft pitches 1.6 to 2.0 degrees where the original's pitches 1.9 to 3.2, and the 1.0 degree tolerance stays. Result, on `main` `3f8f627`
+(whole-frame mean grey / RMSE of the page's own scorer, two boots each, heading degrees, clock offset s):
+
+| Pair | Mean grey (boot 1, boot 2) | RMSE | Heading | Clock offset | Hull rim box original / ours |
+| --- | --- | --- | --- | --- | --- |
+| `pad` (lap 2.0) | 10.48, 11.80 | 0.137, 0.147 | 0.35, 0.15 | 54.12, 52.90 | 826,705-1093,943 / 827,706-1094,939 |
+| `mines-ahead` (lap 2.67) | 18.53, 19.39 | 0.195, 0.212 | 0.17, 0.79 | 54.12, 52.90 | 826,703-1091,932 / 826,703-1091,935 |
+| `cannon-volley` (lap 2.63, 0.75 s after the volley) | 17.42, 20.10 | 0.187, 0.207 | 0.70, 0.85 | 54.72, 54.93 | 823,707-1087,945 / 824,708-1088,943 |
+
+The hull is within 1 to 4 px on every edge but the bottom (3 to 14 px, the exhaust flare). **No pair is under 10 mean grey: `pad` is closest
+(10.48, 11.80), the campaign goal is not reached.** Biggest remaining difference, 3 x 3 grid mean absolute grey difference of the frame (grey 0-255, signed ours minus original): the
+**upper-middle third on all three** (31 to 34, ours 12 to 14 brighter: ours draws the lit billboard wall and gantry above the track where the
+original is near black), then on `mines-ahead` and `cannon-volley` the **middle right third** (25 to 37, ours 19 to 22 darker: the original's
+lit mines and, on the volley, debris, where ours' mines are elsewhere and its rims dark). `pad` has no mine in the right third and its next
+region is the upper left (11, ours 9 brighter). **`cannon-volley` was re-framed:** at lap 2.21 (0.23 s after the release) the heading
+check refused on 3 of 3 boots (1.06, 1.54, 1.10 degrees); the refusal is pitch (`--pose` carries yaw only) and the cause of the extra pitch at 2.2 s is undetermined: unfired frames at lap 2.6 sit inside the
+fired range, and no unfired frame exists at 2.21 (open: one no-fire boot at `--shot 2.21`); the fired frames at 2.6 and 3.0 s passed on every boot
+(0.70 to 0.89 degrees), and one more boot's volley never fired (the press landed with no tick running), so the pair is the 2.6 s frame. Hull crops read: the fuselage's lit blue strip is missing in ours and its rear is lit pale blue where the original's is dark with a magenta flare.
 
 **The original's bands in the pairs (2026-11-23, `det-pair-bands`).** `--zone-bands` / `--zone-bands-raw` feed the original's held
 (`+0x32f8`) and raw (`+0x32b8`) bands, read in the frame's own pause, to the floor visualiser and the mine envelope

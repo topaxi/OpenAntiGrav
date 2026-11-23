@@ -53,6 +53,7 @@ fn every_omega_effect_parses_or_is_refused_by_name() {
             return;
         };
         let mut tally: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+        let mut words = BTreeMap::<u32, usize>::new();
         let entries: Vec<String> = archive
             .paths()
             .iter()
@@ -69,7 +70,12 @@ fn every_omega_effect_parses_or_is_refused_by_name() {
             let row = tally.entry(dir).or_default();
             row.0 += 1;
             match Effect::parse(&blob, ColourScale::Full) {
-                Ok(_) => row.1 += 1,
+                Ok(effect) => {
+                    row.1 += 1;
+                    for spec in &effect.emitters {
+                        *words.entry(spec.authored_colour_mode).or_default() += 1;
+                    }
+                }
                 Err(error) => {
                     let why = error.to_string();
                     assert!(
@@ -89,6 +95,17 @@ fn every_omega_effect_parses_or_is_refused_by_name() {
             want.extend(GET.iter().map(|dir| (dir.to_string(), (2, 2))));
         }
         assert_eq!(tally, want, "{rel}");
+        // Modes 0, 2 and 3 only, as in 2048: no mode-1 emitter in either archive.
+        let want_words = if rel == ARCHIVES[0] {
+            [(0, 467), (2, 108), (3, 29)]
+        } else {
+            [(0, 449), (2, 105), (3, 27)]
+        };
+        assert_eq!(
+            words,
+            want_words.into(),
+            "{rel}: authored colour-mode words"
+        );
     }
 }
 

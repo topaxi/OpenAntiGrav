@@ -358,6 +358,19 @@ impl EffectSpec {
 /// there: it either does not do it or it is unread, which is visible here and
 /// not Pulse's value by the fall through of an `else`.
 ///
+/// How a title's particle update reads an emitter's colour-mode word (`+0xbc`) when it walks the
+/// 256-entry colour table over a particle's life.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColourWalk {
+    /// Pulse and Pure: forward, `table[age]`, unless the word is 2 (a random entry).
+    Forward,
+    /// 2048 and Omega: any word but 0 and 2 walks the table from its end.
+    Reversed,
+    /// HD: word 3 reads the table's red byte as a weight blending entry 0 toward the scene
+    /// light; every other word walks forward.
+    LightBlend,
+}
+
 /// A title builds its own from [`Self::engine`] or [`Self::NONE`] with
 /// [`Self::with`], which stands in for the struct-update syntax ADR-0058 item 4
 /// names: an array cannot be updated field by field.
@@ -409,6 +422,14 @@ pub struct Effects {
     /// (`docs/ghidra/functions/psp-pure-usa/particle-bars.md`, "The template draw"), but its absorb burst
     /// drew far too bright at 0.75 s with them on, and why is unread.
     pub templates: &'static [&'static str],
+    /// How this title's executable reads a `.pob` emitter's colour-mode word (`+0xbc`) over a
+    /// particle's life, for every effect it plays (`docs/formats/pob.md`, "The colour table is
+    /// RGB-only").
+    pub colour_walk: ColourWalk,
+    /// Effect directories whose files are read another way than [`Self::colour_walk`]: Omega's
+    /// `Data\particles2048` is the 2048-layout set its 2048 reader plays, while its `Data\particles`
+    /// keeps the HD-layout reader's plain walk.
+    pub colour_walk_in: &'static [(&'static str, ColourWalk)],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
@@ -476,6 +497,8 @@ impl Effects {
         far_bars: &[],
         pool_bars: &[],
         templates: &[],
+        colour_walk: ColourWalk::Forward,
+        colour_walk_in: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
     };
@@ -490,6 +513,29 @@ impl Effects {
     #[must_use]
     pub const fn with(mut self, trigger: Trigger, spec: EffectSpec) -> Self {
         self.table[trigger.index()] = Some(spec);
+        self
+    }
+
+    /// How the effects under `dir` walk their colour table: the directory's own entry, else
+    /// [`Self::colour_walk`].
+    #[must_use]
+    pub fn colour_walk_for(&self, dir: &str) -> ColourWalk {
+        let norm = |s: &str| {
+            s.replace('/', "\\")
+                .trim_end_matches('\\')
+                .to_ascii_lowercase()
+        };
+        let dir = norm(dir);
+        self.colour_walk_in
+            .iter()
+            .find(|(listed, _)| norm(listed) == dir)
+            .map_or(self.colour_walk, |&(_, walk)| walk)
+    }
+
+    /// This table with its particle colour walk read as `walk` ([`Self::colour_walk`]).
+    #[must_use]
+    pub const fn with_colour_walk(mut self, walk: ColourWalk) -> Self {
+        self.colour_walk = walk;
         self
     }
 

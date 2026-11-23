@@ -178,13 +178,11 @@ def detonator_inputs(pair, out, ship, clock):
     """Ours' `--input-script` for a Detonator frame: idle through the countdown and up to the original's press, SQUARE (our cannon
     button) over the lap-clock window the original's button was held, idle after. Records the window and what is not carried."""
     fire = ship.get("fire")
-    lines = ["# written by rpcs3-hd-pair.py --detonator from the capture's ship.fire window", "%d none" % (GO_TICK + 1)]
+    lines = ce.detonator_input_lines(fire, GO_TICK)
     pair.rec["original"]["detonator"] = {"fire": fire, "lap_clock_s": clock}
     if fire:
-        before = round(fire["press_clock_before_s"] * 60)
-        held = max(1, round((fire["press_clock_after_s"] - fire["press_clock_before_s"]) * 60))
-        lines = ["%d none" % (GO_TICK + before), "%d square" % held, "1 none"]
-        pair.rec["ours"]["detonator"] = {"fire_tick_from": GO_TICK + before, "fire_ticks_held": held,
+        held = int(lines[1].split()[0])
+        pair.rec["ours"]["detonator"] = {"fire_tick_from": int(lines[0].split()[0]), "fire_ticks_held": held,
                                          "button": "square (ours; the original's cannon fired on %s)" % fire.get("button")}
     path = out / "ours.inputs"
     path.write_text("\n".join(lines) + "\n")
