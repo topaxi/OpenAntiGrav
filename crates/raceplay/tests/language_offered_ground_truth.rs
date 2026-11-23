@@ -181,7 +181,8 @@ fn pure_psp_usa_offers_three_not_the_five_on_the_disc() {
     check("pure-psp-usa.chd", "UCUS-98612", PURE_US);
 }
 
-/// The string a boot reads for `id` in `language`, on the release a Pure image is.
+/// The string a boot reads for `id` in `language`, on the release a Pure image is. `None` only
+/// when the image is absent (the skip contract); a string the table lacks fails the test.
 fn pure_string(image: &str, language: &str, id: &str) -> Option<String> {
     let path = oag_testdata::image(image)?;
     let opened =
@@ -206,7 +207,10 @@ fn pure_string(image: &str, language: &str, id: &str) -> Option<String> {
         Some(language),
         &mut report,
     );
-    Some(strings.get(id)?.to_string())
+    let text = strings
+        .get(id)
+        .unwrap_or_else(|| panic!("{image} {language}: no string {id:?}; {report:?}"));
+    Some(text.to_string())
 }
 
 /// `PI012` is on both Pure discs, byte for byte, and only the USA executable's manifest loads

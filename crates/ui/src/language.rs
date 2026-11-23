@@ -578,13 +578,13 @@ fn section_entries<'a>(
     current: &mut Option<&'a str>,
     out: &mut HashMap<String, String>,
 ) {
-    if node.name.eq_ignore_ascii_case("Entry")
-        && let Some(id) = node.attr("ID")
-    {
+    if node.name.eq_ignore_ascii_case("Entry") {
         if let Some(marker) = node.attr("Language") {
             *current = Some(marker);
         }
-        if current.is_some_and(|marker| marker.eq_ignore_ascii_case(language)) {
+        if let Some(id) = node.attr("ID")
+            && current.is_some_and(|marker| marker.eq_ignore_ascii_case(language))
+        {
             out.insert(
                 id.to_string(),
                 node.attr("String").unwrap_or_default().to_string(),
@@ -693,6 +693,19 @@ mod tests {
         assert_eq!(french["Memory"], "REQUIS");
         assert_eq!(StringTable::section(xml, "Spanish").len(), 1);
         assert!(StringTable::section(xml, "German").is_empty());
+    }
+
+    #[test]
+    fn a_marker_with_no_id_still_closes_the_section_before_it() {
+        let xml = r#"<StringTable>
+            <Entry Language="English" ID="a" String="1"></Entry>
+            <Entry Language="German"></Entry>
+            <Entry ID="b" String="2"></Entry>
+          </StringTable>"#;
+        let english = StringTable::section(xml, "English");
+        assert_eq!(english.len(), 1);
+        assert!(english.contains_key("a"));
+        assert_eq!(StringTable::section(xml, "German")["b"], "2");
     }
 
     #[test]
