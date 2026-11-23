@@ -220,6 +220,27 @@ mod tests {
     use super::*;
     use oag_race::Mode;
 
+    /// A Pure profile that has never picked a team opens Team Selection on Feisar,
+    /// the definition's first row, where the original's fresh memory stick rests
+    /// (`docs/ui/selection-screens.md`, "The row a fresh profile opens on"); Pulse
+    /// keeps its stored default, Assegai, its own first row. A pick, or a stored
+    /// team from before the flag existed, wins.
+    #[test]
+    fn pure_opens_team_selection_on_feisar_until_a_team_is_picked() {
+        let mut race = Race::default();
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Feisar");
+        assert_eq!(race.opening_team(oag_pulse::TITLE), "Assegai");
+
+        race.team_chosen = true;
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Assegai");
+
+        let stored = Race {
+            team: "Qirex".to_string(),
+            ..Race::default()
+        };
+        assert_eq!(stored.opening_team(oag_pure::TITLE), "Qirex");
+    }
+
     /// The TARGET row reaches a launch only in an Eliminator, and only once touched.
     #[test]
     fn the_target_pick_is_an_eliminator_launch_option_only() {
