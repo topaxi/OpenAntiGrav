@@ -262,3 +262,6 @@
 
 # 2026-11-23 zone-destroy-re: the Zone end twin (../ps3-hdfury-eu/zone-destroy.md)
 0x013080f0	function	Ship_UpdateWrecked	78	../ps3-hdfury-eu/zone-destroy.md
+# 2026-11-23 hd-legend-re: the footer legend (HD's law in ../ps3-hdfury-eu/navigation-legend.md)
+0x01475290	function	NavigationController_Init	85	navigation-legend.md
+0x01475f50	function	NavigationController_Layout	85	navigation-legend.md

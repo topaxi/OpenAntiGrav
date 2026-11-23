@@ -173,6 +173,8 @@ unnamed rather than forced.
   scrolling to the focused event, a 1.26 s brightness pulse and a 2.5 s lattice
   ripple as the focus look; Triangle opens records; Cross's launch path is open.
 
+- [navigation-legend.md](navigation-legend.md) - Omega's footer legend layout: HD's seed, but the word follows
+  the glyph's measured width plus 14, and a right-to-left branch.
 - [collision.md](collision.md) - a tag-located candidate for
   `ps3-hdfury-eu/collision.md`'s own `Collision_Construct`, not named: the
   structural evidence that first looked like a match turned out to be
