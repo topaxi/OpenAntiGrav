@@ -326,6 +326,36 @@ never the table's black. How dark it gets later depends on `L`, which is unread.
 `r28 + 0xb04` (the context).
 It runs on both update paths.
 
+**Wired (`pob-colour-mode-wire`, 2026-11-23).** `oag_title::Effects::colour_walk` names each title's reading
+(`oag_hd`: `LightBlend`; `oag_2048`, `oag_omega`: `Reversed`; Pulse and Pure keep `Forward`), and
+`oag_fx::psys::Effect::with_colour_law` applies it to the emitters that walk their table, at load. The player's
+three walks index with `255.99997` as the original does; Pulse's and Pure's forward walk is untouched. Pinned by
+`colour::tests` (the root's life 0, 1/8 and 1/2, with a non-white `L`),
+`psys_ground_truth.rs::hd_ship_explosion_root_draws_entry_zero_through_its_black_run_under_the_light_blend`,
+and `hd_effect_sprites.rs::the_loader_gives_hds_ship_explosion_the_light_blend`.
+
+**`L` is chosen, not measured.** Our lit ribbons use no lighting volume either: `rocket_smoke::UNLIT_RGB` (white,
+the bright end of the live `0xbaffff` to `0x2b5d7b` span) stands in, and `oag_fx::psys::LIGHT` is that
+constant. With a white `L` the blend returns white at every weight, so HD's root is white for its whole life
+until the read recipe above gives a real `L`. Never fit it to a frame.
+
+Frames (ours, `--race --opponents --force-wreck 40:7`, Talon's Junction, 960x540): `WO_SHIP_EXPLOSION` is
+now in `oag_hd::effects::SPRITES` (pinned in `hd_effect_sprites.rs`), so the root draws its `smoke_new4_8x4`
+flipbook. Tick 45 a white-hot flash, 54 and 60 an orange fireball with a white core, 75 the fireball
+spreading with the sparks; no white blowout (the earlier one was the table read as colours). Unlisted, the
+procedural soft ball drew white where it was black.
+2048 (Altima, same command): at tick 54 the dark smoke ball becomes white fire (reversed walk: indices 255
+down), the last eighth of the life is black by the table (not framed: tick 205 shows only the plume, the same before and after). Census, in `psys_2048_ground_truth.rs` and
+`psys_omega_ground_truth.rs`: 2048 authors modes 0, 2 and 3 only (31 mode-3 emitters in 12 effects: the
+ship explosion and its player twin, `WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK`, `WO_ROCKET_FLARE`, `WO_MINE_EXPLO`,
+`WO_CANNON_SPARKS`, `WO_DAMAGE_MODERATE`, `WO_DEBRIS_SPARKS`, `WO_GLOBE`, `WO_GLOBE_STATIC`,
+`WO_SHIP_DEATH_DAMAGE_PLUME`) and no mode 1; Omega's two archives author 29 and 27 mode-3 emitters and no mode 1.
+**Omega: ported by reader.** `Data\particles2048` (the 2048-layout set its 2048 reader `FUN_016e06b0` plays)
+walks reversed: `oag_title::Effects::colour_walk_in`. `Data\particles` keeps the plain forward walk the HD-layout
+reader `FUN_016ddf70` reads (no lerp; confidence 55, and which reader plays which directory is inferred from
+the directories' names and the race's `effect_dir_by_circuit`, not read). Omega's HD-era mode-3 effects
+therefore stay forward, with no light blend either.
+
 **The frame advance, partly read (confidence 60).** In the same update
 (`0x0028d0f0`-`0x0028d1bc`, context `ctx+0x6b0..+0x6c1`): with `ctx+0x6b2` set, emitter
 flag `0x40` (`ctx+0x6b4` is the emitter's `+0x20`) makes `frame = age * (count - 0.01)`.

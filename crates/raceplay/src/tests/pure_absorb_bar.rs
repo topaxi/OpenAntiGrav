@@ -56,9 +56,14 @@ fn absorb_burst(title: &Title, load: Load) -> Option<oag_fx::psys::Effect> {
         )
     };
     let (effect, _) = match load {
-        Load::Table => {
-            listed_particle_effect(&mut archives, dir, title.effects, ABSORB_EFFECT, false)
-        }
+        Load::Table => listed_particle_effect(
+            &mut archives,
+            dir,
+            title.effects,
+            ABSORB_EFFECT,
+            false,
+            title.effects.colour_walk,
+        ),
         Load::Plain => kept(Kept::NONE),
         Load::WithTemplates => kept(Kept {
             bar: KeptBar::Mean,

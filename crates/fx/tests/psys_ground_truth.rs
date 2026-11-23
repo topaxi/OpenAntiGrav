@@ -843,3 +843,61 @@ fn hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp() {
     }
     assert!(root.palette[64][..3].iter().all(|&c| c == 1.0));
 }
+
+/// HD's mode 3 is a blend of entry 0 toward the scene light weighted by the table's red, so the
+/// root's black run draws entry 0, white (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the
+/// scene light"). Without the law the over-life walk reads the black at an eighth of the life.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_ship_explosion_root_draws_entry_zero_through_its_black_run_under_the_light_blend() {
+    use oag_fx::psys::{ColourLaw, ColourMode};
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", path.display());
+    let blob = oag_assets::psarc::Archive::open(&spec)
+        .expect("DATA02 opens")
+        .read_path("/data/psys/wo_ship_explosion.pob")
+        .expect("DATA02 carries wo_ship_explosion.pob");
+    let mut effect = Effect::parse(&blob, ColourScale::Full).expect("parses");
+    let word = effect.emitters[0].authored_colour_mode;
+    assert_eq!(word, 3, "the root authors mode 3");
+    let before = &effect.emitters[0];
+    assert_eq!(before.colour_mode, ColourMode::OverLife);
+    let black = before.colour_mode.colour(&before.palette, 0.125, 0);
+    assert_eq!(
+        black[..3],
+        [0.0, 0.0, 0.0],
+        "the plain walk reads the black run"
+    );
+
+    effect.with_colour_law(ColourLaw::LightBlend);
+    let root = &effect.emitters[0];
+    assert_eq!(root.colour_mode, ColourMode::LightBlend);
+    let at = |age| root.colour_mode.colour(&root.palette, age, 0);
+    let light = oag_fx::psys::LIGHT;
+    assert_eq!(at(0.125)[..3], [1.0, 1.0, 1.0], "an eighth: entry 0, white");
+    assert_eq!(at(0.0)[..3], light, "life 0: the light");
+    assert_eq!(at(0.5)[..3], light, "half: the light");
+    // The law itself, on the file's own table, with a light that is not entry 0: the weight
+    // 0 run draws entry 0, the weight 1 run the light, and the ramp between them neither.
+    let tint = [0.2, 0.4, 0.6];
+    let blend = |age| oag_fx::psys::light_blend(&root.palette, age, tint)[..3].to_vec();
+    assert_eq!(blend(0.125), [1.0, 1.0, 1.0]);
+    let bytes = |c: [f32; 3]| c.map(|v| (v * 255.0).round());
+    assert_eq!(blend(0.5), bytes(tint).map(|v| v / 255.0).to_vec());
+    let ramp = blend(36.0 / 255.99997 + 1e-4);
+    assert!(
+        ramp.iter().zip(tint).all(|(r, t)| *r > t && *r < 1.0),
+        "{ramp:?}"
+    );
+}

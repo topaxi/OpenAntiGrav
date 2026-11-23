@@ -43,6 +43,7 @@ pub(super) fn effect(name: &str, looping: bool, duration_ticks: f32) -> std::syn
             colour_divisor: ColourScale::Full.divisor(),
             palette: Box::new([[1.0; 4]; 256]),
             colour_mode: ColourMode::RandomEntry,
+            authored_colour_mode: 2,
             render: Render::Billboard,
             streak: StreakDraw::Procedural,
             blend: Blend::Additive,

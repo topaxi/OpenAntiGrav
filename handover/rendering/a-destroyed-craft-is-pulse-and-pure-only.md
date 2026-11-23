@@ -66,8 +66,11 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   2026-11-23 (`hd-colour-mode3-re`, `ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light",
   84): not a multiply. Each byte becomes `trunc(E0 + (L - E0) * table[idx].R / 255)`, where `L` is
   `RibbonEffects_SampleLighting` at the instance. The root is white (entry 0) from life 1/256 to 1/8,
-  then `L` from 0.16. **Ready to wire on HD:** an `oag_fx` colour mode carrying the weight law, with `L`
-  a stand-in until the lighting volume or a live `ctx+0xb04` read (recipe on the page) gives it.
+  then `L` from 0.16. **Wired (`pob-colour-mode-wire`):** `oag_title::Effects::colour_walk`
+  (`LightBlend` on HD, `Reversed` on 2048 and Omega's 2048 set), applied at load by
+  `oag_fx::psys::Effect::with_colour_law`. `L` is `oag_fx::psys::LIGHT` = the ribbon's white, **chosen, not
+  measured**, until a live `ctx+0xb04` read (recipe on the page) gives it, so the blast tint is white for now.
+  `WO_SHIP_EXPLOSION` is listed in `oag_hd::effects::SPRITES` and draws the orange fireball (frames on the page). Omega applies the reversed walk to `Data\particles2048` only.
   2048 plays modes 1 and 3 as the reversed walk (white, then black for the last eighth), and
   Omega's 2048 reader matches. Ours walks forward on every title, so on 2048 and Omega every
   mode 1 or 3 emitter is affected, not only the blast. HD's mode 1 is the plain forward walk. Still open: HD's frame-advance sources (count, rate, `[lo, hi]`; partly read on the
