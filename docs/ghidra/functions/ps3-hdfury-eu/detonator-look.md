@@ -172,8 +172,7 @@ copy, `--zone-spectrum-test`, the existing ramp `band / 15`):
 | ours, ramp, before | `(33.7, 5.0, 41.3)` | `(65.7, 10.8, 80.1)` |
 | ours, ramp, **after** | **`(9.5, 0.0, 21.7)`** | **`(19.8, 0.0, 42.9)`** |
 
-The ramp puts band 3 at `0.2`; the original's frame reads like band 3 near `0.6` (blue `31.5 / 55`, red `9 / 14`; hypothesis,
-confidence 55: one frame, the resolve not separated, the other bands unread). The pad and cannon-volley pairs under the ramp move
+The ramp puts band 3 at `0.2`, a texel blue of `55 x 0.2 = 11`; box A renders `21.7` and box B `42.9` in ours, so ours' texel-to-pixel gain is about 2 in A and 3.9 in B (a flat `0.6` after the fix: texel `33`, A `37.9`, B `70.2`: 1.1 and 2.1), not constant across the floor and not shared with the original. **The original's band 3 level is therefore not determined** by these frames (one frame, a position-dependent gain, the other bands unread); the held bands in the capture's RAM are the measurement. The pad and cannon-volley pairs under the ramp move
 the same way (their box A `(42.9, 7.1, 52.5)` to `(12.5, 0.0, 27.3)` and `(41.8, 6.9, 51.1)` to `(15.7, 1.2, 29.2)`). Mean grey of the
 three Detonator pairs under the ramp: `mines-ahead` 23.89 to 19.61, `pad` 17.41 to 11.79, `cannon-volley` 22.42 to 19.13 (silent: 20.34,
 12.18, 20.33, unchanged by the fix). The 18 other HD race and loading pairs re-render **pixel-identical** to the tree before (silent
