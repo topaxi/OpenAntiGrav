@@ -60,6 +60,19 @@ fn vita_2048_zone_hull_is_shared_by_native_and_guest_craft() {
             "Assegai",
         ],
     );
+    let end = oag_2048::TITLE
+        .destroyed
+        .value
+        .zone_end
+        .expect("2048 inherits HD's Zone end");
+    check_zone_end(
+        "2048",
+        oag_2048::race::DEFAULTS,
+        end,
+        &mut archives,
+        oag_2048::race::DEFAULT_TEAM,
+    );
+    check_zone_end_cue("2048", end, &mut archives);
 }
 
 #[test]
@@ -74,6 +87,17 @@ fn omega_zone_hull_is_shared_by_hd_and_2048_era_craft() {
         oag_omega::race::DEFAULTS,
         &mut archives,
         &[oag_omega::race::DEFAULTS.team, "assegai"],
+    );
+    check_zone_end(
+        "Omega",
+        oag_omega::race::DEFAULTS,
+        oag_omega::TITLE
+            .destroyed
+            .value
+            .zone_end
+            .expect("Omega inherits HD's Zone end"),
+        &mut archives,
+        oag_omega::race::DEFAULTS.team,
     );
 }
 
@@ -450,6 +474,34 @@ fn check_zone_end(
     );
 }
 
+/// The title's `shipdestroy` resolves in the bank it names (row Z5): a timeline of voices.
+fn check_zone_end_cue(
+    title: &str,
+    end: oag_title::destroyed::ZoneEnd,
+    archives: &mut oag_assets::Archives,
+) {
+    let cue = end.cue.expect("the title names the cue");
+    let mut banks = oag_sound::sfx::Banks::default();
+    banks.load_named_as(
+        archives,
+        cue.bank,
+        cue.tick,
+        cue.hashed,
+        &[(oag_gameplay::cue::Cue::ShipDestroy, "shipdestroy")],
+    );
+    let voices = banks.voices_for(
+        oag_gameplay::cue::Cue::ShipDestroy,
+        true,
+        &mut oag_core::Rng::new(1),
+    );
+    assert!(
+        voices.is_some_and(|voices| !voices.is_empty()),
+        "{title}: shipdestroy resolves in {}: {:?}",
+        cue.bank,
+        banks.report
+    );
+}
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn hd_zone_end_models_load_and_split_into_their_pieces() {
@@ -457,55 +509,17 @@ fn hd_zone_end_models_load_and_split_into_their_pieces() {
         return;
     };
     let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let end = oag_hd::TITLE
+        .destroyed
+        .value
+        .zone_end
+        .expect("HD ends Zone its own way");
     check_zone_end(
         "HD",
         oag_hd::TITLE.race,
-        oag_hd::TITLE
-            .destroyed
-            .value
-            .zone_end
-            .expect("HD ends Zone its own way"),
+        end,
         &mut archives,
         oag_hd::TITLE.race.team,
     );
-}
-
-#[test]
-#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
-fn vita_2048_zone_end_models_load_and_split_into_their_pieces() {
-    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
-        return;
-    };
-    let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
-    check_zone_end(
-        "2048",
-        oag_2048::race::DEFAULTS,
-        oag_2048::TITLE
-            .destroyed
-            .value
-            .zone_end
-            .expect("2048 inherits HD's Zone end"),
-        &mut archives,
-        oag_2048::race::DEFAULT_TEAM,
-    );
-}
-
-#[test]
-#[ignore = "needs the corrected Omega extraction"]
-fn omega_zone_end_models_load_and_split_into_their_pieces() {
-    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
-        return;
-    };
-    let mut archives = oag_omega::open(&path.display().to_string()).expect("opening Omega");
-    check_zone_end(
-        "Omega",
-        oag_omega::race::DEFAULTS,
-        oag_omega::TITLE
-            .destroyed
-            .value
-            .zone_end
-            .expect("Omega inherits HD's Zone end"),
-        &mut archives,
-        oag_omega::race::DEFAULTS.team,
-    );
+    check_zone_end_cue("HD", end, &mut archives);
 }

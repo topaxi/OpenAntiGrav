@@ -166,8 +166,10 @@ fn a_zone_craft_ends_in_its_shell_then_its_debris_and_the_results_open_at_5_5_s(
 fn the_shipdestroy_cue_plays_once_on_the_blast_where_the_title_names_it() {
     let seen = run(&mut zone_race(DestroyedCraft::HD), 420);
     assert_eq!(seen.cues, [Cue::ShipDestroy]);
+    let vita = run(&mut zone_race(DestroyedCraft::HD_VITA), 420);
+    assert_eq!(vita.cues, [Cue::ShipDestroy], "2048's own bank resolves it");
     let silent = run(&mut zone_race(DestroyedCraft::HD_BLOWUP), 420);
-    assert_eq!(silent.cues, [], "2048 and Omega: the event is not resolved");
+    assert_eq!(silent.cues, [], "Omega: the Wwise event is not resolved");
     assert_eq!(
         silent.finished_first, seen.finished_first,
         "the timeline is the same"

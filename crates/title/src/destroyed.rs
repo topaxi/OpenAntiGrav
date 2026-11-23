@@ -62,10 +62,20 @@ pub struct ZoneEnd {
     pub shell: &'static str,
     /// The Zone ship directory's debris model, relative to the hull's own directory.
     pub debris: &'static str,
-    /// The bank the title's `shipdestroy` is played from at the blast (row Z5), its environment
-    /// bank in a Zone race, after every other cue is stopped. `None` where the event is not
-    /// resolved.
-    pub cue: Option<&'static str>,
+    /// The title's `shipdestroy`, played at the blast (row Z5) after every other cue is stopped.
+    /// `None` where the event is not resolved: the Zone end is then silent.
+    pub cue: Option<ZoneEndCue>,
+}
+
+/// Where a title's `shipdestroy` lives and how its bank is read.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ZoneEndCue {
+    /// The race's environment bank in a Zone race (`env0_zone.bnk`).
+    pub bank: &'static str,
+    /// What the bank's delays count in.
+    pub tick: crate::SequenceTick,
+    /// Whether the bank's cue names are hashed (2048).
+    pub hashed: bool,
 }
 
 impl ZoneEnd {
@@ -75,11 +85,26 @@ impl ZoneEnd {
         results_secs: 5.5,
         shell: r"Zoneship_dead\zoneship_dead_whiteshell",
         debris: r"Zoneship_dead\zoneship_dead",
-        cue: Some(r"Data\Sound\env0_zone.bnk"),
+        cue: Some(ZoneEndCue {
+            bank: r"Data\Sound\env0_zone.bnk",
+            tick: crate::SequenceTick::Ps3,
+            hashed: false,
+        }),
     };
 
-    /// HD's Zone end on a title whose `shipdestroy` event is not resolved: 2048's bank
-    /// resolution and Omega's Wwise container are unread, so the cue stays off there.
+    /// 2048's Zone end: HD's, with `shipdestroy` out of its own hashed `env0_zone.bnk`
+    /// (`zone-destroy.md`, row Z5: six waveforms in one timeline on the Vita tick).
+    pub const VITA: Self = Self {
+        cue: Some(ZoneEndCue {
+            bank: r"Data\audio\sound\env0_zone.bnk",
+            tick: crate::SequenceTick::Vita,
+            hashed: true,
+        }),
+        ..Self::HD
+    };
+
+    /// HD's Zone end on a title whose `shipdestroy` event is not resolved: Omega's Wwise
+    /// container is unread, so the cue stays off there.
     pub const HD_SILENT: Self = Self {
         cue: None,
         ..Self::HD
@@ -152,5 +177,11 @@ impl DestroyedCraft {
         zone_end: Some(ZoneEnd::HD_SILENT),
         sound: DestroyedSound::Blowup,
         ..Self::HD
+    };
+
+    /// [`Self::HD_BLOWUP`] with 2048's Zone end, whose `shipdestroy` resolves in its own bank.
+    pub const HD_VITA: Self = Self {
+        zone_end: Some(ZoneEnd::VITA),
+        ..Self::HD_BLOWUP
     };
 }

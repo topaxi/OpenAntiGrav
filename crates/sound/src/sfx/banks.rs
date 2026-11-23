@@ -498,6 +498,19 @@ impl Banks {
         tick: oag_title::SequenceTick,
         named: &[(Cue, &str)],
     ) {
+        self.load_named_as(archives, entry, tick, false, named);
+    }
+
+    /// [`Self::load_named`] for a bank whose cue names are `hashed` (2048's `SBlk` version 5)
+    /// rather than spelled.
+    pub fn load_named_as(
+        &mut self,
+        archives: &mut Archives,
+        entry: &str,
+        tick: oag_title::SequenceTick,
+        hashed: bool,
+        named: &[(Cue, &str)],
+    ) {
         let blob = match archives.read_name(entry) {
             Ok(blob) => blob,
             Err(e) => {
@@ -511,7 +524,7 @@ impl Banks {
                 &blob,
                 entry,
                 pair,
-                Reading::plain(tick),
+                Reading { tick, hashed },
                 &mut self.sounds,
                 Tables {
                     timelines: &mut self.timelines,

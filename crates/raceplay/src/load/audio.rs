@@ -13,7 +13,7 @@ pub(super) fn banks_and_announcers(
     race: &'static oag_title::RaceDefaults,
     lap_hud: Option<oag_title::lap_hud::LapHud>,
     mode: Mode,
-    zone_end_cue: Option<&'static str>,
+    zone_end_cue: Option<oag_title::destroyed::ZoneEndCue>,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
@@ -30,11 +30,12 @@ pub(super) fn banks_and_announcers(
     let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
     // A Zone craft's end plays `shipdestroy` out of the environment bank
     // (`oag_title::destroyed::ZoneEnd::cue`).
-    if let (Mode::Zone, Some(bank)) = (mode, zone_end_cue) {
-        sounds.load_named(
+    if let (Mode::Zone, Some(cue)) = (mode, zone_end_cue) {
+        sounds.load_named_as(
             archives,
-            bank,
-            tick,
+            cue.bank,
+            cue.tick,
+            cue.hashed,
             &[(oag_gameplay::cue::Cue::ShipDestroy, "shipdestroy")],
         );
     }
