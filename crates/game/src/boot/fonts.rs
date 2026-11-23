@@ -55,6 +55,19 @@ pub fn legend_ink<'a>(
     }
 }
 
+/// A description line's measured width at a scale, for the wrap in
+/// [`oag_ui_screens::campaign::footer::description_draws`]: the `Stats` face's atlas where the title
+/// has one ([`oag_title::MenuSkin::stats_font`], held in the third glyph slot), the body face's
+/// otherwise, laid out on the same pen the renderer draws it with (`snapped`,
+/// [`oag_title::MenuSkin::snapped_pens`]).
+pub fn description_ink<'a>(
+    font: &'a oag_ui::font::Atlas,
+    stats_font: Option<&'a oag_ui::font::Atlas>,
+    snapped: bool,
+) -> impl Fn(&str, f32) -> f32 + 'a {
+    move |text, scale| oag_ui::font::ink_width(stats_font.unwrap_or(font), text, scale, snapped)
+}
+
 /// Makes the texture pack that is on and names this disc the active one for the faces, unless
 /// this title's faces take a runtime palette ([`oag_title::FrontEnd::runtime_palette_faces`]):
 /// a pack is then not asked, and the report says why.

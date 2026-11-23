@@ -919,13 +919,14 @@ impl TickerLayout {
 /// How many messages [`TickerLayout::tips`] lays out before the rotation repeats.
 const TIPS_PLAYED: usize = 24;
 
-/// The scale of a `TextInfo` whose `scale` does not resolve. **Chosen, not
-/// measured off a number on the disc**: Pure's `TextInfo` names
-/// `FEGlobals->TextInfoScale`, which its `FEGlobals` never declares, so the
-/// original's value lives in its code. 0.7 is the `Confirm` prompt's authored
-/// scale in the same `scroll` face, and its capital height matches the
-/// description's in the `menu-sr-track` PPSSPP pair.
-pub const DESCRIPTION_SCALE: f32 = 0.7;
+/// The scale of a `TextInfo` whose `scale` does not resolve. Pure's `TextInfo` names
+/// `FEGlobals->TextInfoScale`, which its `FEGlobals` never declares, so the original's value
+/// lives in its code. **0.8** is what the pen of the description line in the `menu-sr-track`
+/// PPSSPP pair says: its 46 glyphs fall on the snapped pen at 0.78 to 0.80 with 0.04 px mean
+/// residual, where 0.7 puts the line 20 % short (`docs/ui/menus-original.md`, "Pure's text pens
+/// step up to whole pixels"). Confidence 75: the pen fixes the advance, and the glyph height at
+/// 0.8 is compared in the same section.
+pub const DESCRIPTION_SCALE: f32 = 0.8;
 
 /// `text` wrapped into the viewport of `layout`, one [`Draw`] a line, in the
 /// `TextInfo`'s own colour and scale ([`DESCRIPTION_SCALE`] where it names
@@ -935,14 +936,15 @@ pub const DESCRIPTION_SCALE: f32 = 0.7;
 ///
 /// `since` is the seconds since the screen appeared: the line is wrapped whole and then
 /// shown as far as [`typein::typed`] says, with its cursor. `None` draws it settled, no
-/// cursor. Empty for an empty `text` or a viewport with no width. `measure` is a face's
-/// text width at scale `1.0`.
+/// cursor. Empty for an empty `text` or a viewport with no width. `measure` is the width of a
+/// text in the face it draws in at a scale (not linear in the scale: Pure's pens step to whole
+/// pixels, `oag_ui::font::pen_step`).
 #[must_use]
 pub fn description_draws(
     layout: &TickerLayout,
     text: &str,
     since: Option<f32>,
-    measure: &dyn Fn(&str) -> f32,
+    measure: &dyn Fn(&str, f32) -> f32,
 ) -> Vec<Draw> {
     let [x, y, width, height] = layout.viewport;
     if text.trim().is_empty() || width <= 0.0 {
@@ -957,7 +959,7 @@ pub fn description_draws(
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && measure(&candidate) * scale > width {
+        if !line.is_empty() && measure(&candidate, scale) > width {
             lines.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {

@@ -15,31 +15,41 @@
 //! 329): the pen is stepped up to a whole pixel before each glyph, so the label spans 79 px where
 //! the unsnapped pen spans 73 (`docs/ui/menus-original.md`, "Pure's text pens step up to whole
 //! pixels"). Dropping `MenuSkin::snapped_pens` from the front end's renderer draws the 73.
+//!
+//! The same frame's description line (46 glyphs and the cursor, typed at the 5.873 s the grab
+//! was taken) ends its last glyph at x 425 on one line; at the scale the line drew with before
+//! (0.7) it ended 20 % short, and measured against the wrong face it wrapped its last word onto a
+//! second line.
 
 use std::path::Path;
 
 /// The ink-left column of each glyph of the label in the original's frame (the pair's
 /// `theirs.png`, read as `docs/ui/menus-original.md` says).
+/// The ink-left column of the description line's last glyph, the cursor, in the same frame.
+const DESCRIPTION_LAST_ORIGINAL: u32 = 425;
+
 const RACE_RECORD_ORIGINAL: [u32; 10] = [250, 258, 266, 274, 289, 297, 305, 313, 321, 329];
 
-/// The first column of each run of inked columns in rows 171 to 179, between x 244 and 340.
-fn glyph_starts(png: &[u8]) -> Vec<u32> {
-    let image = oag_texture::replacer::decode_png(png).expect("the screenshot decodes");
-    assert_eq!((image.width, image.height), (480, 272));
+/// The first column of each run of inked columns in `rows`, between `columns`.
+fn glyph_starts(
+    image: &oag_texture::replacer::Image,
+    rows: std::ops::Range<u32>,
+    columns: std::ops::Range<u32>,
+) -> Vec<u32> {
     let inked = |x: u32| {
-        (171..180).any(|y| {
+        rows.clone().any(|y| {
             let at = ((y * image.width + x) * 4) as usize;
             let rgb = &image.rgba[at..at + 3];
             (255 * 3 - rgb.iter().map(|&c| i32::from(c)).sum::<i32>()) / 3 > 60
         })
     };
-    let mut starts = Vec::new();
-    for x in 244..340 {
-        if inked(x) && !inked(x - 1) {
-            starts.push(x);
-        }
-    }
-    starts
+    columns.filter(|&x| inked(x) && !inked(x - 1)).collect()
+}
+
+fn decode(png: &[u8]) -> oag_texture::replacer::Image {
+    let image = oag_texture::replacer::decode_png(png).expect("the screenshot decodes");
+    assert_eq!((image.width, image.height), (480, 272));
+    image
 }
 
 fn still(image: &Path, scratch: &Path) -> Vec<u8> {
@@ -80,7 +90,8 @@ fn the_circuit_panels_label_steps_eight_pixels_a_glyph_as_the_originals_does() {
             continue;
         };
         let scratch = std::env::temp_dir().join(format!("oag-pure-pens-{name}"));
-        let starts = glyph_starts(&still(&image, &scratch));
+        let frame = decode(&still(&image, &scratch));
+        let starts = glyph_starts(&frame, 171..180, 244..340);
         assert_eq!(
             starts.len(),
             10,
@@ -96,6 +107,17 @@ fn the_circuit_panels_label_steps_eight_pixels_a_glyph_as_the_originals_does() {
             (starts[9] - starts[0]).abs_diff(79) <= 1,
             "{name}: the label spans {} px, the original's 79: {starts:?}",
             starts[9] - starts[0]
+        );
+        // The description line: one line, its last glyph (the cursor) where the original's is.
+        let line = glyph_starts(&frame, 219..231, 20..480);
+        let last = *line.last().expect("the description line is drawn");
+        assert!(
+            last.abs_diff(DESCRIPTION_LAST_ORIGINAL) <= 3,
+            "{name}: the description ends at {last}, the original's at {DESCRIPTION_LAST_ORIGINAL}"
+        );
+        assert!(
+            glyph_starts(&frame, 231..245, 20..300).is_empty(),
+            "{name}: the description wrapped a word onto a second line"
         );
     }
 }

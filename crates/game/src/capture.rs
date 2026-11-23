@@ -860,7 +860,13 @@ pub fn run(
                             ticker,
                             text,
                             options.menu_picker_seconds,
-                            &|text: &str| oag_ui::font::measure(&font, text),
+                            &crate::boot::fonts::description_ink(
+                                &font,
+                                buttons_font
+                                    .as_ref()
+                                    .filter(|_| menu_skin.stats_font.is_some()),
+                                menu_skin.snapped_pens,
+                            ),
                         ));
                     }
                 }
@@ -1018,7 +1024,15 @@ pub fn run(
             } else if let Some(answers) = pure_chain_page::answers(page) {
                 // Wipeout Pure's SINGLE PLAYER screens - see
                 // `crate::app::session::pure_chain` for the live flow.
-                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let footer = (
+                    nav_legend.as_ref(),
+                    ticker.as_ref(),
+                    &font,
+                    buttons_font
+                        .as_ref()
+                        .filter(|_| menu_skin.stats_font.is_some()),
+                    menu_skin.snapped_pens,
+                );
                 let globals: Vec<(&str, &str)> = frontend
                     .screens()
                     .globals

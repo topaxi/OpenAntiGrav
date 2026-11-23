@@ -59,6 +59,11 @@ pub(crate) struct MenuStage {
     /// built-in 5x7 set, never nothing), so this is always something to
     /// measure against, even on a title with no campaign screens at all.
     pub(crate) default_atlas: font::Atlas,
+    /// The face a `font="Stats"`/`"scroll"` widget draws in, on a title that has one of its own
+    /// ([`oag_title::MenuSkin::stats_font`]); what a description line's wrap measures against.
+    pub(crate) stats_atlas: Option<font::Atlas>,
+    /// [`oag_title::MenuSkin::snapped_pens`] of the title this stage draws.
+    pub(crate) snapped_pens: bool,
     /// The disc's own frame around every page: what the screen clears to and
     /// the rules it draws. Read once, off the front-end XML this source shipped
     /// - see `menu::read_frame` - and empty for a title whose frame is unread.

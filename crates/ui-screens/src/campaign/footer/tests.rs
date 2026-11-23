@@ -707,12 +707,14 @@ fn a_description_wraps_into_the_text_infos_lines_and_no_more() {
     );
     assert_eq!(layout.text_scale, DESCRIPTION_SCALE);
     let words = vec!["word"; 40].join(" ");
-    let draws = description_draws(&layout, &words, None, &|text| text.len() as f32 * 10.0);
+    let draws = description_draws(&layout, &words, None, &|text, scale| {
+        text.len() as f32 * 10.0 * scale
+    });
     assert_eq!(draws.len(), 3, "cut at the authored line count");
     let ys: Vec<f32> = draws.iter().map(|draw| text_and_y(draw).1).collect();
     assert_eq!(ys[0], 217.0);
     assert!(ys[1] > ys[0] && ys[2] > ys[1], "{ys:?}");
-    assert!(description_draws(&layout, "  ", None, &|_| 1.0).is_empty());
+    assert!(description_draws(&layout, "  ", None, &|_, _| 1.0).is_empty());
 }
 
 /// The description wraps whole and is then revealed across the lines: at 0.5 s only the first
@@ -726,7 +728,7 @@ fn a_description_types_across_its_wrapped_lines_and_loops() {
 <Text Name="Text0"></Text><Text Name="Text1"></Text><Text Name="Text2"></Text></TextInfo></Viewport></Screen>"#,
     );
     let layout = TickerLayout::read(&root, &HashMap::new()).expect("the viewport");
-    let measure = |text: &str| text.len() as f32 * 10.0;
+    let measure = |text: &str, scale: f32| text.len() as f32 * 10.0 * scale;
     let text = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj";
     let texts = |since: Option<f32>| -> Vec<String> {
         description_draws(&layout, text, since, &measure)

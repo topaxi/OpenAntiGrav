@@ -167,6 +167,11 @@ impl Session {
             stage.ticker = shell.ticker.clone();
             stage.frame = shell.frame.clone();
             stage.default_atlas = shell.font.clone();
+            stage.stats_atlas = shell
+                .buttons_font
+                .clone()
+                .filter(|_| shell.menu_skin.stats_font.is_some());
+            stage.snapped_pens = shell.menu_skin.snapped_pens;
             let rows_face = shell
                 .menu_font
                 .clone()
