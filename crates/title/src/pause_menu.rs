@@ -108,6 +108,9 @@ pub struct PauseMenu {
     /// Whether the race's HUD stays on screen under the tint: the original's does, dimmed with
     /// the rest of the picture.
     pub hud_under_scrim: bool,
+    /// Whether the race's song-name line stays on screen under the tint. Pure's pause screens are
+    /// siblings of `InGame`, whose widgets carry the line, and its original frames show none.
+    pub song_line_under_scrim: bool,
     /// Whether a screen with no photo row of its own gets this project's PHOTO MODE row
     /// after OPTIONS. Photo mode is one implementation on every title.
     pub offers_photo: bool,

@@ -669,9 +669,7 @@ pub fn present_main(
     title: &oag_title::Title,
     records: &crate::records::Store,
 ) -> View {
-    present_with(strings, title, records, |_, names| {
-        chain.main_view(names)
-    })
+    present_with(strings, title, records, |_, names| chain.main_view(names))
 }
 
 fn present_with(

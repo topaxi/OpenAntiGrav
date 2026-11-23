@@ -951,8 +951,14 @@ pub fn run(
                 )?;
                 // Pulse's footer ticker, as the picker pages draw it: HD's campaign footer has none.
                 if !crate::campaign::draws_hd_campaign(title) {
-                    ticker_clip =
-                        menu_page::picker_footer(&mut list, None, true, ticker.as_ref(), &strings, &font);
+                    ticker_clip = menu_page::picker_footer(
+                        &mut list,
+                        None,
+                        true,
+                        ticker.as_ref(),
+                        &strings,
+                        &font,
+                    );
                 }
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)

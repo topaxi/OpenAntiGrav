@@ -97,6 +97,12 @@ TICKERED = ("grid", "cell", "team")
 #: the one frame the presented picture lags the stop. The `PURE_WALK` ids whose description types in (`oag_ui_screens::campaign::footer::typein`).
 PURE_CLOCKED = ("main", "mode", "sr-class", "sr-league", "sr-track", "team", "t-class", "t-sel")
 PSP_CPU_HZ = 222e6
+#: The disc id and version a Pure save state's file name carries (`psp-state.py --serial`).
+PURE_STATE_SERIAL = "UCUS98612_2.00"
+#: A Time Trial on Vineta K, Feisar, Vector, just restarted: the pause menu's own frame is grabbed from it.
+PURE_PAUSE_STATE = "data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst"
+#: The pause screen's walk, run apart from `PURE_PLAN` (a state load leaves the front end): `--plan "$PURE_PAUSE_PLAN" --ids pause`.
+PURE_PAUSE_PLAN = ",".join(["state:" + PURE_PAUSE_STATE, "wait:4", "key:start", "wait:2", "shot:pause"])
 #: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
 SHIP_NODE_LOOP = 5.9833336
 
@@ -114,6 +120,7 @@ PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
 class Rig:
     def __init__(self, port, shots, title):
+        self.port = port
         self.dbg = Debugger(port)
         self.shots = shots
         self.title = title
@@ -335,8 +342,18 @@ class Rig:
                 return
         sys.exit("STALLED: never reached Main Menu, last state %r" % self.state())
 
+    def load_state(self, path):
+        """Load a save state (`psp-state.py`, by the emulator's own pause menu: a 960x544 window) and let the game run on from it."""
+        set_window(960, 544)
+        if self.dbg.is_stepping():
+            self.dbg.call("cpu.resume")
+        subprocess.run([sys.executable, str(HERE / "psp-state.py"), "--port", str(self.port), "--home", os.environ["PP_HOME"], "load", "2",
+                        "--file", str(path), "--serial", PURE_STATE_SERIAL], check=True)
+        self.dbg = Debugger(self.port)
+
     def run(self, plan):
-        """Plan steps: boot, wait:S, key:BUTTON[*N], pu:BUTTON:PREDICATE, st:STATE, back:STATE (Pulse state wait), shot:NAME."""
+        """Plan steps: boot, wait:S, key:BUTTON[*N], pu:BUTTON:PREDICATE, st:STATE, back:STATE (Pulse state wait), state:PATH (a save
+        state), shot:NAME."""
         steps = list(filter(None, plan.split(",")))
         for at, item in enumerate(steps):
             kind, _, rest = item.partition(":")
@@ -360,6 +377,8 @@ class Rig:
                 self.back_to(rest)
             elif kind == "st":
                 self.expect(rest)
+            elif kind == "state":
+                self.load_state(rest)
             elif kind == "tick":
                 self.wait_ticker(float(rest or 480))
             elif kind == "shot":
@@ -438,6 +457,9 @@ PURE_WALK = [
     {"id": "t-sel", "title": "Tournament: Tournament Selection (the campaign)", "screen": "Tournament Selection", "page": "pure-chain:tournament:0",
      "xml": "Selection_Definition.xml Tournament Selection",
      "selection": {"original": "ALPHA (the only tournament open), class VECTOR", "ours": "ALPHA (the only tournament open), class VECTOR"}},
+    {"id": "pause", "title": "Pause menu (Time Trial)", "screen": "InGame Main Menu", "page": "pause", "xml": "InGame_Definition.xml InGame Main Menu",
+     "route": ["--drive-file", str(HERE / "pure-pause.drive"), "--original-menu", "--state-log", "/dev/null"],
+     "selection": {"original": "CONTINUE (first row)", "ours": "CONTINUE (first row)"}},
     {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "pure-main", "xml": "Skin.xml Main Menu",
      "selection": {"original": "SINGLE PLAYER (first row)", "ours": "SINGLE PLAYER (first row)"}},
 ]
