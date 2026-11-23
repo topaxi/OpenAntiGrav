@@ -625,14 +625,12 @@ pub fn hd_cell_draw_list(
                     .as_deref()
                     .map(|s| s.replacen("%d", &remaining.to_string(), 1))
             }),
-            // Omega's own `Cell Selection` authors a `RecordsButton` (`FE_RECORDS`,
-            // glyph `RecordsButtonIcon`) at exactly `DifficultyButton`'s `x=944
-            // y=994`, so the two cannot both be visible. This build models the
-            // difficulty toggle and has no leaderboard behind the other, the same
-            // reason `endrace::hd` drops HD's `RecordsCycle` - **chosen, not
-            // measured**: which of the two the original shows on this screen
-            // was not watched (no PS4 emulator). HD authors no such widget.
-            "RecordsButton" | "RecordsButtonIcon" => None,
+            // Omega's own `Cell Selection` authors a `RecordsButton` (`FE_RECORDS`, glyph
+            // `RecordsButtonIcon`) at exactly `DifficultyButton`'s `x=944 y=994`, and the original
+            // draws both: the footer flows them one after the other
+            // (`oag_game::campaign::Campaign::flow_footer`,
+            // `docs/ghidra/functions/ps4-omega-eu/navigation-legend.md`). A caller that has not
+            // flowed the footer draws the two over each other. There is no leaderboard behind it.
             "RC Laps" => Some(laps_line(cell, strings)),
             // `Cell_SavedRecord` - no saved record kept by this build, the
             // same absence `crate::campaign::draw::cell_draw_list` leaves

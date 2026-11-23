@@ -326,3 +326,13 @@ fn the_race_load_of_event_one_draws_its_card_a_real_tip_and_the_modes_paragraph(
     );
     assert!(!second.contains(&tip.title), "the tip is dropped");
 }
+
+/// 2048's front-end root authors no `NavigationController`, so there is no footer legend to flow
+/// (`docs/ghidra/functions/ps4-omega-eu/navigation-legend.md`, "Wired").
+#[test]
+#[ignore = "needs the extracted package under data/extracted/vita/"]
+fn the_2048_root_authors_no_footer_legend() {
+    let Some(source) = source() else { return };
+    let (shell, _archives, _title) = boot::load_shell(&options(&source)).expect("the shell");
+    assert!(shell.nav_legend.is_none());
+}

@@ -922,6 +922,7 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
                     (options.menu_entry_seconds, options.menu_picker_step_seconds),
+                    &crate::boot::fonts::legend_ink(&font, buttons_font.as_ref()),
                 )?;
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)

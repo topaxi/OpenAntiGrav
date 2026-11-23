@@ -867,7 +867,15 @@ pub fn load_shell(
         &mut report,
     );
     // See [`screens::read_nav_legend`]'s own doc.
-    let nav_legend = read_nav_legend(skin_xml.as_deref(), &screens.globals, &strings);
+    let nav_legend =
+        read_nav_legend(skin_xml.as_deref(), &screens.globals, &strings).map(|legend| {
+            match front_end.legend_flow {
+                Some(law) => {
+                    legend.with_flow(law, &fonts::legend_ink(&font, buttons_font.as_ref()))
+                }
+                None => legend,
+            }
+        });
     if let Some(legend) = &nav_legend {
         report.push(format!("nav legend: {}", legend.describe()));
     }

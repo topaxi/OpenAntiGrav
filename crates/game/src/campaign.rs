@@ -184,6 +184,64 @@ pub fn read_news(
     }
 }
 
+impl Campaign {
+    /// The prompts `Cell Selection` registers with the controller after `Confirm` and `Back`, in
+    /// its order: each a glyph widget and the word widget beside it.
+    const CELL_EXTRAS: [[&'static str; 2]; 2] = [
+        ["RecordsButtonIcon", "RecordsButton"],
+        ["DifficultyButtonIcon", "DifficultyButton"],
+    ];
+
+    /// This campaign's footer laid out by `law`, a title's legend flow: the front-end legend's
+    /// prompts flow from `NAVIGATION`, and `Cell Selection`'s own extra prompts (Difficulty, and
+    /// Omega's Records before it) follow them, each taking the legend's next cursor in place of the
+    /// x the screen file authors.
+    pub fn flow_footer(
+        &mut self,
+        law: oag_title::legend::LegendFlow,
+        ink: oag_ui_screens::campaign::footer::flow::Ink,
+    ) {
+        let Some(legend) = self.nav_legend.take() else {
+            return;
+        };
+        let legend = legend.with_flow(law, ink);
+        let texts = &mut self.cell_layout.screen.texts;
+        let measure = |texts: &[oag_ui::screen::Text], name: &str| {
+            texts
+                .iter()
+                .find(|text| text.name.as_deref() == Some(name))
+                .map(|text| {
+                    ink(
+                        &text.font,
+                        text.string.as_deref().unwrap_or_default(),
+                        text.scale,
+                        law.snap_pen,
+                    )
+                })
+        };
+        let present: Vec<[&str; 2]> = Self::CELL_EXTRAS
+            .into_iter()
+            .filter(|names| names.iter().all(|name| measure(texts, name).is_some()))
+            .collect();
+        let widths: Vec<[f32; 2]> = present
+            .iter()
+            .map(|names| names.map(|name| measure(texts, name).unwrap_or(0.0)))
+            .collect();
+        if let Some(placed) = legend.extra_prompts_x(true, &widths) {
+            for (names, [glyph_x, word_x]) in present.iter().zip(placed) {
+                for text in texts.iter_mut() {
+                    match text.name.as_deref() {
+                        Some(name) if name == names[0] => text.x = glyph_x,
+                        Some(name) if name == names[1] => text.x = word_x,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        self.nav_legend = Some(legend);
+    }
+}
+
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]'s own draw list for a
 /// caller with no [`crate::records::Store`] to rotate the ticker's tips off
 /// of - `crate::capture::menu_page`'s `--menu-page grid-select`/

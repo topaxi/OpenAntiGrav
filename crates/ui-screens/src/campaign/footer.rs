@@ -72,6 +72,8 @@ use crate::picker::FaceScales;
 use oag_ui::frontend::{Align, Draw};
 use oag_ui::screen::{argb_to_rgba, parse_argb};
 
+use flow::Flow;
+
 fn resolve<'a>(globals: &'a HashMap<String, String>, value: &'a str) -> Option<&'a str> {
     if value.is_empty() {
         return None;
@@ -242,6 +244,8 @@ struct Prompt {
     scale: f32,
     /// Whether this is the button glyph half of a `Confirm`/`Back` pair, not its word.
     glyph: bool,
+    /// The prompt's measured width, set by [`NavigationLegend::with_flow`]; `0.0` before.
+    ink: f32,
 }
 
 /// `Confirm`/`Back`, off a `<NavigationController name="NavigationController">`
@@ -278,6 +282,9 @@ struct Prompt {
 #[derive(Debug, Clone, Default)]
 pub struct NavigationLegend {
     prompts: Vec<Prompt>,
+    /// How the prompts are laid out, when the title flows them ([`Self::with_flow`]); `None`
+    /// draws every prompt at the x the skin authors.
+    flow: Option<Flow>,
     /// The root's own `FE_SCREEN_TITLE` caption over the page title, where the
     /// file authors one - HD's. Drawn the way `Team Selection`'s headings are.
     caption: Option<crate::picker::hd::MiniText>,
@@ -443,6 +450,7 @@ impl NavigationLegend {
                     glyph: text
                         .attr("name")
                         .is_some_and(|name| name.ends_with("Button")),
+                    ink: 0.0,
                 },
             ));
         }
@@ -475,6 +483,7 @@ impl NavigationLegend {
                         kind: PromptKind::Navigation,
                         scale: number(globals, text, "scale").unwrap_or(1.0),
                         glyph: key.ends_with("_BUTTON"),
+                        ink: 0.0,
                     },
                 ));
             }
@@ -499,6 +508,7 @@ impl NavigationLegend {
             });
         Some(Self {
             prompts: prompts.into_iter().map(|(_, prompt)| prompt).collect(),
+            flow: None,
             caption,
             tag_glow: read_tag_glow(root, globals),
             tag_text: read_tag_text(root, globals),
@@ -539,15 +549,7 @@ impl NavigationLegend {
     /// is, so this module never has to know what a font atlas is either.
     #[must_use]
     pub fn draw(&self, faces: &FaceScales) -> Vec<Draw> {
-        let mut out: Vec<Draw> = self
-            .prompts
-            .iter()
-            .map(|prompt| Self::draw_prompt(prompt, faces))
-            .collect();
-        self.draw_caption(&mut out);
-        out.extend(self.tag_draw());
-        out.extend(self.tag_stamp());
-        out
+        self.draw_gated(faces, true)
     }
 
     fn tag_stamp(&self) -> Option<Draw> {
@@ -576,7 +578,8 @@ impl NavigationLegend {
     #[must_use]
     pub fn draw_gated(&self, faces: &FaceScales, show_back: bool) -> Vec<Draw> {
         let mut out: Vec<Draw> = self
-            .prompts
+            .laid_out(show_back)
+            .0
             .iter()
             .filter(|prompt| show_back || prompt.kind != PromptKind::Back)
             .map(|prompt| Self::draw_prompt(prompt, faces))
@@ -616,12 +619,12 @@ impl NavigationLegend {
     /// as the distance to its word, which is all this has to go on: `measure` reads the word
     /// face, not the button face.
     fn prompt_spans(
-        &self,
+        prompts: &[Prompt],
         faces: &FaceScales,
         measure: &dyn Fn(&str) -> f32,
         glyph_width: f32,
     ) -> Vec<(f32, f32)> {
-        self.prompts
+        prompts
             .iter()
             .map(|prompt| {
                 if prompt.glyph {
@@ -656,14 +659,14 @@ impl NavigationLegend {
         width: f32,
         blocked: &[[f32; 4]],
     ) -> Option<(Vec<Draw>, [f32; 4])> {
+        let laid = self.laid_out(true).0;
         let find = |glyph: bool| {
-            self.prompts
-                .iter()
+            laid.iter()
                 .find(|prompt| prompt.kind == PromptKind::Confirm && prompt.glyph == glyph)
         };
         let (button, label) = (find(true)?, find(false)?);
         let gap = (label.x - button.x).max(0.0);
-        let spans = self.prompt_spans(faces, measure, gap);
+        let spans = Self::prompt_spans(&laid, faces, measure, gap);
         let first = spans.iter().map(|span| span.0).fold(f32::MAX, f32::min);
         let last = spans.iter().map(|span| span.1).fold(f32::MIN, f32::max);
         let margin = first.min(width - last).max(0.0);
@@ -756,11 +759,11 @@ impl NavigationLegend {
     /// no line for this.
     #[must_use]
     pub fn notice(&self, text: &str, faces: &FaceScales) -> Option<Draw> {
-        let base = self.prompts.iter().find(|prompt| {
+        let laid = self.laid_out(true).0;
+        let base = laid.iter().find(|prompt| {
             prompt.kind == PromptKind::Confirm && prompt.font.eq_ignore_ascii_case("default")
         })?;
-        let left = self
-            .prompts
+        let left = laid
             .iter()
             .filter(|prompt| prompt.kind != PromptKind::Navigation)
             .map(|prompt| prompt.x)
@@ -1089,6 +1092,7 @@ pub fn ticker_draw(
     ))
 }
 
+pub mod flow;
 pub mod typein;
 
 #[cfg(test)]

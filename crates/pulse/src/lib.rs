@@ -311,6 +311,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu_frame: Some(frontend::states::FE_SCREEN),
     bottom_up_gnf: &[],
     runtime_palette_faces: false,
+    legend_flow: None,
     race_box: Some(names::RACE_BOX_DEFINITION),
     team_select: None,
     track_select: None,

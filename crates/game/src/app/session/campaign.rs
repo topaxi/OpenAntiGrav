@@ -123,6 +123,15 @@ impl Session {
             &tracks,
         ) {
             Ok(mut campaign) => {
+                if let Some(law) = title_ref
+                    .front_end
+                    .and_then(|front_end| front_end.legend_flow)
+                {
+                    campaign.flow_footer(
+                        law,
+                        &crate::boot::fonts::legend_ink(&shell.font, shell.buttons_font.as_ref()),
+                    );
+                }
                 if let Some(flyers) = campaign.flyers.as_mut() {
                     flyers.anisotropy = self.anisotropy;
                 }

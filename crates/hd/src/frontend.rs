@@ -444,6 +444,11 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     menu_frame: Some(states::FE_SCREEN),
     bottom_up_gnf: &[],
     runtime_palette_faces: false,
+    legend_flow: Some(oag_title::legend::LegendFlow {
+        gap: 20.0,
+        word_after: oag_title::legend::WordAfter::Fixed(44.0),
+        snap_pen: true,
+    }),
     // HD authors its track and ship screens in two files of their own, in
     // its own dialect - see `track_select` and `team_select`.
     race_box: None,

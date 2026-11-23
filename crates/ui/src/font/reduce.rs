@@ -83,6 +83,8 @@ impl Atlas {
                     width: (cell.x + cell.width).div_ceil(d).saturating_sub(x).max(1),
                     height: row_end(cell.y + cell.height).saturating_sub(y).max(1),
                     advance: cell.advance / d as f32,
+                    bearing: cell.bearing / d as f32,
+                    ink: cell.ink / d as f32,
                     extend: cell.extend.div_ceil(d),
                 };
                 (*ch, cell)

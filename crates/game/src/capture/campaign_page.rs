@@ -216,8 +216,10 @@ pub(super) fn campaign_page(
     // finished. `--menu-picker-step-seconds`: seconds since the cell or the rung changed on
     // `Cell Selection`, `None` for no change.
     (entry_seconds, step_seconds): (Option<f32>, Option<f32>),
+    // Measures the footer legend's words for a title that flows it, as the live session does.
+    legend_ink: oag_ui_screens::campaign::footer::flow::Ink,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
-    let campaign = crate::campaign::load(
+    let mut campaign = crate::campaign::load(
         archives,
         strings,
         faces,
@@ -228,6 +230,9 @@ pub(super) fn campaign_page(
         tracks,
     )
     .context("this source has no Race Campaign to show")?;
+    if let Some(law) = title.front_end.and_then(|front_end| front_end.legend_flow) {
+        campaign.flow_footer(law, legend_ink);
+    }
     let kind = page.kind;
     // A mod campaign: the disc's screens, its grids replaced, as
     // `Session::open_campaign` does live.

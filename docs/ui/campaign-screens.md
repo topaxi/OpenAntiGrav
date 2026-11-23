@@ -5379,3 +5379,44 @@ Claim: Pulse PSP's front end draws the glow its widgets author, read from the di
 - **2048/Omega**: not applicable, HD's front end draws through its own pipeline (`frontend_glow` is `None`; HD pickers
   use `picker::hd`, which emits no glow).
 
+
+## The footer legend flows (HD and Omega), 2026-11-23
+
+HD's and Omega's `NavigationController` ignores the x each prompt authors and lays the row out from the `NAVIGATION` word
+([HD law](../ghidra/functions/ps3-hdfury-eu/navigation-legend.md), [Omega's](../ghidra/functions/ps4-omega-eu/navigation-legend.md)).
+Ours now does the same: `oag_title::legend::LegendFlow` (`FrontEnd::legend_flow`: HD `gap 20`, word `44` on, pen snapped; Omega
+`gap 20`, word at the glyph's width plus `14`, no snap; `None` for Pulse, Pure and 2048, which draw as authored),
+`NavigationLegend::with_flow` (`oag_ui_screens::campaign::footer::flow`) and `oag_ui::font::ink_width`, the original's
+`Font_MeasureString` (ink extent from first left edge to last right edge, each pen rounded up when `snap`; the draw stays
+unsnapped). A word's width is read off the face's glyph records (bearing and ink width kept in `oag_ui::font::Cell`); the
+positions are worked out at draw time, so a page that hides `Back` leaves no gap. `Campaign::flow_footer` puts Cell
+Selection's extra prompts (Difficulty, and Omega's Records, which the original draws before it and ours used to drop) on the
+same cursor.
+
+**Scores**, `hd/menu-*` pairs re-rendered from the committed flags on `main` and on this branch; the region is
+`(150,955,1100,70)` of the 1920x1080 frame, mean absolute RGB difference; whole frame is the page's own mean grey:
+
+| Pair | legend region before -> after | whole-pair mean grey before -> after |
+| --- | ---: | ---: |
+| `hd/menu-cell-select` | 16.71 -> 4.02 | 2.81 -> 2.34 |
+| `hd/menu-grid-select` | 10.76 -> 3.57 | 2.90 -> 2.63 |
+| `hd/menu-campaign-select` | 9.78 -> 2.95 | 3.32 -> 3.06 |
+| `hd/menu-ship-select` | 9.28 -> 1.99 | 3.04 -> 2.77 |
+| `hd/menu-track-select` | 9.22 -> 1.93 | 4.59 -> 4.32 |
+| `omega/menu-cell-select` | 45.06 -> 29.29 | 12.61 -> 11.94 |
+| `omega/menu-grid-select` | 39.58 -> 32.75 | 15.95 -> 15.67 |
+| `omega/menu-campaign-select` | 38.76 -> 31.66 | 43.10 -> 42.81 |
+| `omega/menu-ship-select` | 35.49 -> 24.74 | 20.16 -> 19.73 |
+| `omega/menu-track-select` | 33.43 -> 22.68 | 19.07 -> 18.64 |
+
+On `hd/menu-cell-select` the first ink column of every prompt is at the original's: 288, 460, 502, 639, 682, 771, 814 (ours
+and theirs, threshold luminance 90 over rows 975 to 1010); the other four pairs agree on 288, 460, 502, 639 and 682. The
+Omega regions stay high because the original's backdrop and the shadPS4 frame differ over the whole row; the pair's prompts sit
+within 3 px (`omegas_footer_prompts_flow_to_where_the_original_draws_them`). HD: `hd_legend_flow_ground_truth`, and
+`ink_width_ground_truth` pins `helv.fnt`'s widths at scale 0.8 (156.0, 120.0, 72.8 unsnapped; 159.8, 123.4, 73.6 snapped).
+Omega's Records and Difficulty draw black against the other prompts' grey (Difficulty's colour is as before; Records is newly
+drawn in it) and the colour was not looked at here. Omega's `omega/menu-cell-select` baseline is `main` with its old Records
+arm, so Records is not drawn over Difficulty in it. The root page (`--menu-page main`, no pair beside the frame `hd/gap-main`)
+puts Confirm after `NAVIGATION` at the original's spacing (20 against 22 px) with no room kept for the hidden `Back`; the
+page's own scale and offset still differ from the frame (the `gap-main` note). 2048's front-end root authors no
+`NavigationController` (`the_2048_root_authors_no_footer_legend`): **checked, differs** (nothing to flow).

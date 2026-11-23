@@ -201,6 +201,9 @@ pub struct Glyph {
     pub v1: u16,
     /// How far the pen moves after drawing this.
     pub advance: u8,
+    /// The signed left bearing at `+0x0d`: how far the ink's left edge sits from the pen
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`, "What measures a word").
+    pub bearing: i8,
 }
 
 /// A decoded font.
@@ -312,6 +315,7 @@ impl Metrics {
                 v0: order.u16(record, 8),
                 v1: order.u16(record, 10),
                 advance: record[12],
+                bearing: i8::from_le_bytes([record[13]]),
             };
             // Box and size are stored separately; they must agree.
             if u16::from(glyph.width) != glyph.u1.wrapping_sub(glyph.u0)

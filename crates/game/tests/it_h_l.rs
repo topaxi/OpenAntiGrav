@@ -28,6 +28,7 @@ mod hd_fury_backdrop_ground_truth;
 mod hd_fury_ship_select_ground_truth;
 mod hd_leach_ball_ground_truth;
 mod hd_leach_strip_ground_truth;
+mod hd_legend_flow_ground_truth;
 mod hd_menu_ground_truth;
 mod hd_missile_blast_ground_truth;
 mod hd_movie_ground_truth;
