@@ -2010,6 +2010,36 @@ and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)` (`docs/ui/
 backdrop movie's streaks and the hull's turntable phase, not this change; the footer box's remainder is the silver bar's gradient and the glyph antialiasing, which a one-pixel
 shift costs 25 to 70 grey on.)
 
+**`menu-grid` and `menu-cell` re-made on PCSX2 2.9.168, with the footer and with translucent fills drawn once (2026-11-23, `ps2-grid-cell`).**
+
+- **States.** `grid-selection.p2s` and `cell-selection.p2s` were walked again from `main-menu-pcsx2-2.9.168.p2s` (cross, then cross again: Grid Selection, then Cell Selection on Single Race, Moa Therma White, AI difficulty Medium, read off the footer) and are to be kept under their old names, the 2.9.138 files renamed `*-pcsx2-2.9.138.p2s` (they do not load).
+  The two states carry two more strings of the profile record's shape (`...nceBetween\0DOF\0`, `3838383838\0836\0`), so `ps2_ticker.profile_name_tag` refused them as "not one record"; the name field now has to start after a non-identifier byte.
+  The record the state holds is still the one at `0x00d9463c`.
+- **Ours drew no footer on these two pages.** `--menu-ticker` and the stored tag were applied to the picker pages' legend and ticker (`capture.rs`), and the campaign pages build their own from the screen file (`Campaign::nav_legend`, `Campaign::ticker`) and drew
+  an empty bar and a blank tag box whatever was passed (the head fit's table read 28.618 at every head). `campaign_page` now sets the tag on its legend, pins its ticker, measures through the `Default` face and returns the ticker's clip; with no pin the bar stays empty,
+  as before. This also changes the PSP grid and cell pairs that pass `--menu-ticker` (`psp-menu-pair.py`): their next re-render shows the pinned message.
+- **No `--menu-picker-seconds` on the PS2 pairs.** The PSP pairs draw the selector at the clock they read out of RAM; the PS2 front end's clock is not recovered, so ours is drawn at clock 0 and the PS2 states keep their own phase (see the sweep below).
+
+| `pulse-ps2` pair, one `theirs.png` per row group | RMSE | >40 grey, whole frame | >40 grey, footer box (30, 626, 1220 x 44) |
+| --- | ---: | ---: | ---: |
+| grid, no pin, no tag (final renderer) | 0.0740 | 3.29 % | 17.31 % |
+| **grid, `TKR_ZTIM@117`, tag `AAA`** | **0.0616** | **2.80 %** | **8.96 %** |
+| cell, no pin, no tag (final renderer) | 0.0797 | 3.46 % | 17.21 % |
+| **cell, `TKR_SRTIM@116`, tag `AAA`** | **0.0682** | **2.96 %** | **8.60 %** |
+| grid, earlier grab, before the fill fix: no pin / pinned | 0.0783 / 0.0666 | 4.61 % / 4.12 % | 17.24 % / 8.87 % |
+| cell, earlier grab, before the fill fix: no pin / pinned | 0.0870 / 0.0765 | 5.24 % / 4.73 % | 17.28 % / 8.64 % |
+
+(The stale pairs read RMSE 0.077 and 0.095. The head fits have a clear minimum now: 14.5 and 14.2 mean grey at the fitted head against 19.0 one unit away. The message is the original's `rand()` draw, so each grab catches a different tip.)
+
+- **The largest region was ours' translucent fills, drawn twice.** On the cell pair the stat-row bars and the panel behind them were 31 % of the pixels over 40 grey, on the grid pair the rows and panel were about half of them. Ours' bar read 110 at its peak where the original's reads 62 (`0x3f` is alpha 0.247, so 63 is one draw), and
+  the ratio over the whole bar is `2a - a^2`: 0.43 for 0.247. The cause is not the data: `ui.wesl` draws an *outlined* atlas's text in two passes (border alpha, then body alpha), `Pulse PS2`'s menu atlas is outlined, and a fill samples the same atlas's solid patch with a border colour equal to its own, so
+  the second pass drew it on itself. Fills (`Draw::Fill`, `GradientFill`, `ChamferedFill`, solid triangles) now carry a border alpha of zero. This is the renderer's, not PS2's: any fill under an outlined main atlas changed (a PSP pair at 480x272 never went through it; its menu atlas is not outlined). Whole-frame
+  >40 grey on the one `theirs.png`: grid 4.12 % to 2.54 %, cell 4.73 % to 3.13 % (`render::tests::a_translucent_fill_under_an_outlined_font_is_drawn_once` reads 112 where 64 is one draw).
+- **What is left, cell (2.96 % over 40 grey), ranked by pixels over 40 grey** (regions found by labelling the dilated mask, `theirs.png` against `ours.png`): the footer box 34 % (silver bar gradient and glyph antialiasing, as on Ship Select); the `SINGLE RACE` title 28 %
+  (ours has a white halo, the original none); the `RACE CAMPAIGN` header 17 % (the original's is a bold dark face, ours a thinner, wider one: ours' PS2 menu `Text` draws through the outlined atlas, not measured further); the `Points`/`Best` area 8 % (the backdrop movie's streak crossing the original's frame); the selector hex 5 %.
+  **Phase sweep (measured on this pair, not wired):** ours rendered at `--menu-picker-seconds` 0 to 1 in 0.05 steps against the one `theirs.png`: the whole-frame >40 grey is 2.93 % at 0, **2.57 % at 0.2 and 0.8**, 2.94 % at 0.5 (the pulse is a triangle of period 1 s, symmetric about 0.5), but the title's box mean grey falls from 23.2 at 0 to 13.1 at 0.5 and the
+  selector's box rises from 3.6 to 9.8 over the same range: the two widgets want different phases, so one fitted phase buys about 0.35 points and not the title's halo. The PS2 pulse clock is the open lead (the PSP's is `*(0x08b317b0)+0x40`), and whether the PS2 title text glows at all (`pulse="true"` on the title, stamped as the PSP's `GlowText`, uncompared on the PS2).
+
 ## Pulse PSP pairs over 5 mean grey: where the grey sits (2026-11-19, `pulse-psp-pairs`)
 
 Three pairs re-rendered at main `e51ae21d2` reproduce their recorded numbers exactly (`basilico-black` 5.08, `menu-team` 5.89, `pulse-psp-zone-talons-white-z8` 8.19).
