@@ -187,7 +187,7 @@ impl crate::sim::RaceSim {
         let detonator = self.detonator.as_ref()?;
         let mine = self.world.detonator.live_mines().get(index)?;
         let lane = detonator.layout.values.distance_offset_between_mines;
-        detonator.survey.point(mine, lane).map(|(at, _)| at)
+        detonator.survey.mine_point(mine, lane).map(|(at, _)| at)
     }
 
     /// Where a craft stands to shoot laid mine `index`: `distance` before it along the lap, with
@@ -197,7 +197,7 @@ impl crate::sim::RaceSim {
         let detonator = self.detonator.as_ref()?;
         let mine = self.world.detonator.live_mines().get(index)?;
         let lane = detonator.layout.values.distance_offset_between_mines;
-        let (at, up) = detonator.survey.point(mine, lane)?;
+        let (at, up) = detonator.survey.mine_point(mine, lane)?;
         let entries = &detonator.survey.entries;
         let here = usize::from(mine.entry);
         let (from, to) = if here + 1 < entries.len() {

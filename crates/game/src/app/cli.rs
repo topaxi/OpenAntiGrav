@@ -695,7 +695,7 @@ pub(crate) struct Cli {
         value_name = "X,Y,Z;...",
         value_parser = parse_detonator_mines
     )]
-    pub(crate) detonator_mines: Option<Vec<oag_core::math::Vec3>>,
+    pub(crate) detonator_mines: Option<MinePositions>,
 
     /// Comparison input: draw the Zone and Detonator music-driven look from these
     /// sixteen held band levels, read off the original at the frame being compared
@@ -1377,7 +1377,11 @@ impl Cli {
 }
 
 /// `--detonator-mines`: `X,Y,Z` triples, semicolon separated.
-fn parse_detonator_mines(text: &str) -> Result<Vec<oag_core::math::Vec3>, String> {
+/// The positions of `--detonator-mines`, one value to clap (a bare `Vec` would read as repeated values).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MinePositions(pub(crate) Vec<oag_core::math::Vec3>);
+
+fn parse_detonator_mines(text: &str) -> Result<MinePositions, String> {
     text.split(';')
         .map(|triple| {
             let parts = triple
@@ -1393,5 +1397,6 @@ fn parse_detonator_mines(text: &str) -> Result<Vec<oag_core::math::Vec3>, String
                 _ => Err(format!("`{triple}` is not X,Y,Z")),
             }
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()
+        .map(MinePositions)
 }

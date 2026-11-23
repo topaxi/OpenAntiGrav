@@ -204,7 +204,8 @@ mod contact {
             active: true,
             ..Ship::default()
         };
-        ship.physics.body.position = Vec3::new(0.0, 0.0, z);
+        // A mine stands `MINE_LIFT` above its lane point: the craft flies at that height.
+        ship.physics.body.position = Vec3::new(0.0, MINE_LIFT, z);
         ship.physics.body.linear_velocity = Vec3::new(0.0, 0.0, 100.0);
         ship.physics.shield = 100.0;
         ship.handling.dimensions.shield = 100.0;
@@ -293,4 +294,18 @@ mod contact {
             "the stage-1 bomb is gone"
         );
     }
+}
+
+#[test]
+fn a_mine_stands_its_lift_above_its_lane_point_and_a_bomb_on_it() {
+    let (survey, layout) = (lap(300, 7), layout());
+    let lane = layout.values.distance_offset_between_mines;
+    let mine = Placed {
+        entry: 5,
+        lane: 1,
+        live: true,
+    };
+    let (on_lane, up) = survey.point(&mine, lane).expect("in the survey");
+    let (stands, _) = survey.mine_point(&mine, lane).expect("in the survey");
+    assert_eq!(stands, on_lane + up * MINE_LIFT);
 }

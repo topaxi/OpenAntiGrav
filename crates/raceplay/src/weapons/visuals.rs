@@ -278,7 +278,7 @@ impl Race {
     #[must_use]
     pub fn mine_model_matrices(&self) -> Vec<Mat4> {
         let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Mine);
-        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_mines()));
+        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_mines(), true));
         matrices
     }
 
@@ -312,15 +312,25 @@ impl Race {
         (ordinary, laid)
     }
 
-    /// The model matrices of laid Detonator objects, off the lap's survey. Empty when the race has
-    /// none.
-    fn detonator_matrices(&self, laid: &[oag_weapons::detonator::Placed]) -> Vec<Mat4> {
+    /// The model matrices of laid Detonator objects (`mines`: they, else bombs), off the lap's survey.
+    /// Empty when the race has none.
+    fn detonator_matrices(
+        &self,
+        laid: &[oag_weapons::detonator::Placed],
+        mines: bool,
+    ) -> Vec<Mat4> {
         let Some(detonator) = &self.core.sim.detonator else {
             return Vec::new();
         };
         let lane_width = detonator.layout.values.distance_offset_between_mines;
         laid.iter()
-            .filter_map(|placed| detonator.survey.point(placed, lane_width))
+            .filter_map(|placed| {
+                if mines {
+                    detonator.survey.mine_point(placed, lane_width)
+                } else {
+                    detonator.survey.point(placed, lane_width)
+                }
+            })
             .map(|(position, up)| detonator_matrix(position, up))
             .collect()
     }
@@ -335,7 +345,7 @@ impl Race {
     #[must_use]
     pub fn bomb_model_matrices(&self) -> Vec<Mat4> {
         let mut matrices = self.projectile_model_matrices(oag_tables::weapons::Weapon::Bomb);
-        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_bombs()));
+        matrices.extend(self.detonator_matrices(self.core.sim.world.detonator.live_bombs(), false));
         matrices
     }
 

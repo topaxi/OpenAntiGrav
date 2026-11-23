@@ -106,7 +106,23 @@ impl Survey {
             entry.up,
         ))
     }
+
+    /// Where the mine `placed` stands: its lane point lifted [`MINE_LIFT`] along the section's up axis, and
+    /// that axis. A bomb stands on [`Self::point`] (its own height is unmeasured).
+    #[must_use]
+    pub fn mine_point(&self, placed: &Placed, lane_width: f32) -> Option<(Vec3, Vec3)> {
+        let (at, up) = self.point(placed, lane_width)?;
+        Some((at + up * MINE_LIFT, up))
+    }
 }
+
+/// How far above its lane point, along the section's up axis, a laid mine's object stands.
+///
+/// 80 mine objects read out of the original's heap on Talon's Junction (`MineManager`'s pool, the
+/// position at `+0x80`) sat 3.00 above the point [`Survey::point`] gives for their entry and lane on 70
+/// of 80, 2.5 to 2.9 on the rest, with the same point to 0.5 across the section on all 80
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "Where a mine stands"). Confidence 75.
+pub const MINE_LIFT: f32 = 3.0;
 
 /// Every mine and bomb laid, in fixed arrays.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -601,7 +617,7 @@ pub fn step_contacts<S: crate::Craft>(
 
     let mut i = 0;
     while i < usize::from(field.live_mines) {
-        let Some((at, _)) = survey.point(&field.mines[i], lane_width) else {
+        let Some((at, _)) = survey.mine_point(&field.mines[i], lane_width) else {
             i += 1;
             continue;
         };
