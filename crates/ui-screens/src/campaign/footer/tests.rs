@@ -946,3 +946,18 @@ fn an_unflowed_legend_draws_where_the_skin_authors() {
     assert_eq!(x_of(&placed, "BACK"), 764.0);
     assert_eq!(legend.extra_prompts_x(true, &[[20.7, 50.0]]), None);
 }
+
+/// A layout with no lines (only `Default` builds one: `TickerLayout::read` clamps to one) draws
+/// nothing rather than underflowing the typed length or dividing the viewport by zero.
+#[test]
+fn a_layout_with_no_lines_draws_nothing() {
+    let layout = TickerLayout {
+        viewport: [0.0, 0.0, 100.0, 20.0],
+        ..TickerLayout::default()
+    };
+    assert_eq!(layout.text_lines, 0);
+    assert!(description_draws(&layout, "some words", None, &|text| text.len() as f32).is_empty());
+    assert!(
+        description_draws(&layout, "some words", Some(1.0), &|text| text.len() as f32).is_empty()
+    );
+}
