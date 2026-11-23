@@ -17,6 +17,9 @@
 //   `talons_junction`'s, and on 209 to 213 of 216 on `12_sol_2`'s `Speedup
 //   Pad` chunks, so `B` is the zero vector and `ny` never reaches `N`. The
 //   disc's own normal is `nx*T + nz*N0`, and that is what this builds.
+//
+// Its derivative-uniformity diagnostic is off for `lit_colour`'s reason (`shade.wesl`): the only
+// call is under the flat `pad_ne` bit.
 @diagnostic(off, derivative_uniformity)
 fn pad_normal(ne: vec4<f32>, n: vec3<f32>, world: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     let q1 = dpdx(world);

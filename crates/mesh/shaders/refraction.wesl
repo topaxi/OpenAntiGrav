@@ -7,7 +7,7 @@ import oag_shaders::target::{target_in};
 import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, scene, shadow_sampler};
 import package::fog::{fogged};
 import package::shadow::{shadowed};
-import package::types::{VertexOutput};
+import package::types::{Lit, VertexOutput};
 import package::wet::{is_wet_road, wet_road};
 
 // `slots::REFRACTION`.
@@ -18,14 +18,15 @@ const MATERIAL_SHIFT: u32 = 24u;
 
 // An opaque surface's fogged colour from its lit texel: the glass's equation
 // where the material is one, the ordinary `fog(shadow(C))` everywhere else.
-fn opaque_colour(in: VertexOutput, shaded: vec4<f32>) -> vec3<f32> {
+fn opaque_colour(in: VertexOutput, lit_pixel: Lit) -> vec3<f32> {
+    let shaded = lit_pixel.colour;
     if (in.slots & SLOT_REFRACTION) == 0u {
         if is_wet_road(in) {
-            return fogged(wet_road(shadowed(shaded.rgb, in.world), in), in.world, in.view_depth);
+            return fogged(wet_road(shadowed(shaded.rgb, lit_pixel.sun, in.world), in), in.world, in.view_depth);
         }
-        return fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth);
+        return fogged(shadowed(shaded.rgb, lit_pixel.sun, in.world), in.world, in.view_depth);
     }
-    let lit = shadowed(shaded.rgb, in.world);
+    let lit = shadowed(shaded.rgb, lit_pixel.sun, in.world);
     let slot = in.slots >> MATERIAL_SHIFT;
     let tint = emissive_tint(slot);
     let weight = emissive_scale(slot);

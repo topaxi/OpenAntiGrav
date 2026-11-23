@@ -88,6 +88,8 @@ FE_CLOCK_PTR = 0x08B317B0
 FE_CLOCK_FIELD = 0x40
 #: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
 STOPPED = ("grid", "cell", "team", "track")
+#: The shots whose footer ticker is pinned (`tick:N` before the `shot`): every Pulse screen with the footer's ticker, so the message ours draws is the one grabbed.
+TICKERED = ("grid", "cell", "team")
 
 #: Pure has no recovered front-end clock or state name, so its clock is the emulator's own tick counter (`cpu.status.ticks`, the PSP's
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
@@ -103,6 +105,9 @@ SHIP_NODE_LOOP = 5.9833336
 #: end's bloom, wired for the cursor"), which gives the pulse phase exactly where the wall clock does not.
 SELECTOR_CENTRE = {"grid": (81, 159), "cell": (141, 111)}
 EDRAM = 0x04000000
+#: The card title's glyph box on `grid` and `cell` (x0, y0, x1, y1): `Text_Draw` stamps `220 - s` over its glyph quads, `s` a ladder 0, 15 .. 150 and back
+#: that steps every 1/20 s of a counter of its own (`docs/ui/campaign-screens.md`, "The front end's bloom, wired from the widgets' own attributes").
+TITLE_BOX = {"grid": (262, 88, 340, 116), "cell": (262, 30, 420, 60)}
 
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
@@ -198,6 +203,28 @@ class Rig:
                 at = raw.find(key, at + 1)
         return best
 
+    def title_stamp(self, name):
+        """The seconds that put ours' card-title glow ladder where the original's is: the displayed buffer's most common glow-mask byte over the
+        title's glyph box (`220 - 15 k`, `k` 0 to 10) read as step `k` of the rising half, at the middle of its 1/20 s. `None` when no byte of the ladder
+        is there. The CPU must be stopped."""
+        x0, y0, x1, y1 = TITLE_BOX[name]
+        for offset in (0, 0x88000):
+            raw = self.dbg.read(EDRAM + offset, 512 * 272 * 4)
+            if raw[(5 * 512 + 5) * 4 + 3] != 4:
+                continue
+            counts = {}
+            for y in range(y0, y1):
+                row = raw[(y * 512 + x0) * 4 + 3:(y * 512 + x1) * 4 + 3:4]
+                for a in row:
+                    if a != 4:
+                        counts[a] = counts.get(a, 0) + 1
+            if not counts:
+                continue
+            value = max(counts, key=counts.get)
+            if value in range(70, 221, 15):
+                return {"value": value, "seconds": ((220 - value) // 15 + 0.5) / 20, "pixels": counts[value]}
+        return None
+
     def selector_stamp(self, name):
         """The pulse level `t` (0 cyan, 1 white) read off the displayed buffer's `Selector` stamp, or `None`. The CPU must be stopped."""
         cx, cy = SELECTOR_CENTRE[name]
@@ -248,11 +275,18 @@ class Rig:
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
         after = time.monotonic()
         level = None
+        title = tag = None
         since_ticks = None
         clock = ship_t = None
         if stopped:
             if name in SELECTOR_CENTRE:
                 level = self.selector_stamp(name)
+            if name in TITLE_BOX:
+                title = self.title_stamp(name)
+                if title is None:
+                    print("title glow: no ladder byte over the title box of %s; ours keeps the Selector's phase for it" % name, flush=True)
+            if self.title == "pulse":
+                tag = pt.profile_tag(self.dbg)
             if self.title == "pure":
                 ticks = self.dbg.call("cpu.status")["ticks"]
                 if self.press_ticks is not None:
@@ -270,8 +304,8 @@ class Rig:
         if since_ticks is not None:
             since = since_ticks
         self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
-                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None,
-                           "ticker": self.ticker_frozen if stopped and name.split("@")[0] == "team" else None}
+                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None, "title": title, "tag": tag,
+                           "ticker": self.ticker_frozen if stopped and name.split("@")[0] in TICKERED else None}
         if self.seen[name]["ticker"] is not None:
             self.ticker_frozen = None
         print("shot", name, "since_entry", self.seen[name]["since_entry"], "ship_node_time", ship_t, "clock", clock, flush=True)
@@ -338,8 +372,8 @@ class Rig:
 #: One walk per title, from `Main Menu` (Pulse; Pure is walked from its own main page): `shot:ID` photographs the screen `WALK` names.
 PULSE_PLAN = ",".join([
     "back:Main Menu", "wait:2", "shot:main",
-    "key:cross", "st:Grid Selection", "wait:3", "shot:grid",
-    "key:cross", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
+    "key:cross", "st:Grid Selection", "wait:3", "tick:480", "shot:grid",
+    "key:cross", "st:Cell Selection", "wait:3", "tick:480", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
     "key:cross", "st:Track Creation", "wait:3", "shot:track",
@@ -398,7 +432,7 @@ PURE_WALK = [
     {"id": "sr-track", "title": "Single Race: Track Selection", "screen": "Track Selection", "page": "pure-chain:arcade:0:0", "xml": "Selection_Definition.xml Track Selection",
      "selection": {"original": "VINETA K (first row)", "ours": "VINETA K (first row)"}},
     {"id": "team", "title": "Team Selection", "screen": "Team Selection", "page": "ship-select", "xml": "Selection_Definition.xml Team Selection",
-     "race": {"team": "Feisar"}, "selection": {"original": "FEISAR (first row)", "ours": "FEISAR (first row)"}},
+     "selection": {"original": "FEISAR (first row)", "ours": "FEISAR (first row)"}},
     {"id": "t-class", "title": "Tournament: Class Selection", "screen": "Class Selection", "page": "pure-chain:tournament", "xml": "Selection_Definition.xml Class Selection",
      "selection": {"original": "VECTOR (first row)", "ours": "VECTOR (first row)"}},
     {"id": "t-sel", "title": "Tournament: Tournament Selection (the campaign)", "screen": "Tournament Selection", "page": "pure-chain:tournament:0",
@@ -409,12 +443,12 @@ PURE_WALK = [
 ]
 
 
-def prepare_profile(plat, profile, title_name, difficulty, race=None):
+def prepare_profile(plat, profile, title_name, difficulty, race=None, player=None):
     """Ours' private profile: the compare settings, `[dev] unlock_everything = false` (a debug build unlocks everything, the original's
     fresh profile does not), `race` (the pickers' cursor: the team the original's fresh list rests on, where it is not ours' default) and
     the campaign difficulty row of `records.toml` (none for a title with no such control), written and read back by the run."""
     ce.write_ours_settings(plat, profile)
-    cm.extra_settings(profile, race=race, locked=True)
+    cm.extra_settings(profile, race=race, locked=True, player=player)
     if difficulty:
         (ce.settings_path(profile).parent / "records.toml").write_text('[[campaign_difficulty]]\ntitle = "%s"\ndifficulty = "%s"\n' % (title_name.lower(), difficulty))
 
@@ -472,8 +506,14 @@ def build_pairs(args, seen, out, plat, walk):
         elif shot.get("since_entry") is not None:
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
-        prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"))
+        prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"), {"tag": shot["tag"]} if shot.get("tag") else None)
+        if shot.get("tag"):
+            pair.rec["original"]["player"] = {"tag": shot["tag"], "basis": "the profile record's footer tag (profile + 0x457, three characters) read from RAM with the CPU stopped (scripts/psp_ticker.py `profile_tag`); ours stores it as `player.tag`, which the footer's tag box draws"}
         clocked = (("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in (CLOCKED if args.title == "pulse" else PURE_CLOCKED) and shot.get("since_entry") is not None else ()
+        if shot.get("title"):
+            clocked += ("--menu-title-seconds", "%.3f" % shot["title"]["seconds"])
+            pair.rec["original"]["title_glow"] = {"value": shot["title"]["value"], "pixels": shot["title"]["pixels"], "seconds": round(shot["title"]["seconds"], 3),
+                                                  "basis": "the displayed buffer's glow-mask byte over the card title's glyph box (CPU stopped for the grab), a step of the title's own ladder (220 - 15 k): ours pins its title ladder to that step (--menu-title-seconds), apart from the Selector's phase"}
         pin = shot.get("ticker")
         lag = 0
         if pin:
@@ -496,7 +536,7 @@ def build_pairs(args, seen, out, plat, walk):
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                         selection=item["selection"], route=item.get("route"),
+                         selection=item["selection"], route=item.get("route"), race=item.get("race"), player={"tag": shot["tag"]} if shot.get("tag") else None,
                          extra_args=clocked + (("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)) if pin else ()), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:

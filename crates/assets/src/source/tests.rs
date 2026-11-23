@@ -122,6 +122,7 @@ const TITLE: &Title = &Title {
         guest_roster: None,
         hull_variants: None,
         // A fixture: this test needs a `Title` to exist, not a real ladder.
+        fresh_team: None,
         fresh_variant: None,
         speed_classes: None,
     },

@@ -1406,3 +1406,24 @@ fn team_help_shows_the_selected_teams_own_description_in_team_ship_help() {
     ]);
     assert_eq!(picker.help_text(), Some("second"));
 }
+
+/// A listing screen's entry is described by `Text->SCREEN->MENU->ID` (Pure's
+/// `Text->Team Selection->Team->Feisar`), the picker hands back the selected entry's, and a
+/// screen with no `<Menu>` (Pulse's) has no key.
+#[test]
+fn a_listed_entry_is_described_by_its_screen_menu_and_id() {
+    assert_eq!(
+        description_key(&listing_layout(), "Feisar").as_deref(),
+        Some("Text->Team Selection->Team->Feisar")
+    );
+    assert_eq!(description_key(&track_layout(), "03_Track"), None);
+    let picker = Picker::new(Kind::Track, entries(), Some("03_Track"), None)
+        .with_descriptions(vec![String::new(), "second".into(), String::new()]);
+    assert_eq!(picker.description(), Some("second"));
+    let blank = Picker::new(Kind::Track, entries(), None, None).with_descriptions(vec![
+        " ".into(),
+        "second".into(),
+        String::new(),
+    ]);
+    assert_eq!(blank.description(), None);
+}

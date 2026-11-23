@@ -16,7 +16,8 @@
 //!
 //! # What is drawn, and what is left out
 //!
-//! The screen's `<ScreenClear>` and its `<Image>` widgets. **Not its
+//! The screen's `<ScreenClear>`, its colour-only `<Image>` widgets (fills) and its textured
+//! `<Image>` widgets. **Not its
 //! `<Text>`s**: on HD those are the trial build's (`FE_TRIAL_MODE`,
 //! `FE_PURCHASE_NOW`) or belong to a `<NavigationController>`, which decides
 //! per screen which button prompts to show and which this build does not have.
@@ -32,6 +33,36 @@ use crate::frontend::{Draw, Placed};
 
 use crate::screen::{Screens, argb_to_rgba, parse_argb};
 use oag_display::space::Space;
+
+/// A sub-rect `[u, v, w, h]` that runs past its `width` x `height` texture along `u`, as the
+/// texture's repeats: each as `([start, length], texels)`, the start and length a fraction of the
+/// widget's width. The PSP's GE wraps texture coordinates, and Pure's dotted rule is an 8x1
+/// `dotline.mip` sampled `U 0..432, V 32` across 438 pixels. `None` for a sub-rect inside its
+/// texture, or one that also runs past it along `v` (no frame authors that).
+fn wrapped(sub: [f32; 4], width: f32, height: f32) -> Option<Vec<([f32; 2], [f32; 4])>> {
+    let [u, v, w, h] = sub;
+    let v = v.rem_euclid(height);
+    if width <= 0.0 || w <= 0.0 || u + w <= width || v + h > height {
+        return None;
+    }
+    let mut repeats = Vec::new();
+    let mut at = u;
+    while at < u + w {
+        let texel = at.rem_euclid(width);
+        let length = (width - texel).min(u + w - at);
+        repeats.push(([(at - u) / w, length / w], [texel, v, length, h]));
+        at += length;
+    }
+    Some(repeats)
+}
+
+/// Where [`Frame::select_arrow_at`] puts the arrow against its row's text origin.
+const SELECT_ARROW_OFFSET: [f32; 2] = [-11.0, 4.0];
+
+/// The frame screen's widgets a list places itself rather than the frame: the cursor beside the
+/// selected row, and the two scroll arrows, which a list draws only while it scrolls (none of
+/// seven PPSSPP frames of Pure's chain and team screens, none of which scrolls, draws them).
+const PLACED_BY_THE_LIST: [&str; 3] = ["ArrowSelect", "ArrowScrollUp", "ArrowScrollDown"];
 
 /// One title's menu frame, split by what may come between the two halves.
 ///
@@ -84,6 +115,12 @@ pub struct Frame {
     /// The original's settings-screen look for the pages that stand where one
     /// does - see [`settings::Layout`]. `None` for a title that names none.
     pub settings: Option<settings::Layout>,
+    /// The screen's `ArrowSelect`, at the origin: the cursor a list puts beside its selected
+    /// row ([`Self::select_arrow_at`]). `None` where the frame authors none.
+    pub select_arrow: Option<Draw>,
+    /// The screen's `ArrowScrollUp` and `ArrowScrollDown`, where authored: drawn by a list
+    /// that scrolls ([`Self::scroll_arrows_for`]), never as fixed marks.
+    pub scroll_arrows: [Option<Draw>; 2],
 }
 
 impl Frame {
@@ -97,6 +134,44 @@ impl Frame {
                 Draw::Sprite { rect, .. } | Draw::Fill { rect, .. } => Some(*rect),
                 _ => None,
             })
+            .collect()
+    }
+
+    /// [`Self::select_arrow`] beside a selected row whose text starts at `(x, y)` and is drawn at
+    /// `scale`: the arrow takes the row's scale, its left edge 11 grid units left of the row's
+    /// and its top 4 below the row's. Measured off PPSSPP frames of Pure's Team Selection and six
+    /// chain screens, the cursor on rows 1 to 3 (`docs/ui/selection-screens.md`, "Pure's
+    /// cursor arrow and footer frame"); the executable's placement is not read.
+    #[must_use]
+    pub fn select_arrow_at(&self, x: f32, y: f32, scale: f32) -> Option<Draw> {
+        match self.select_arrow.clone()? {
+            Draw::Sprite { rect, uv, color } => Some(Draw::Sprite {
+                rect: [
+                    x + SELECT_ARROW_OFFSET[0],
+                    y + SELECT_ARROW_OFFSET[1],
+                    rect[2] * scale,
+                    rect[3] * scale,
+                ],
+                uv,
+                color,
+            }),
+            _ => None,
+        }
+    }
+
+    /// The scroll arrows a list of `total` rows showing `visible` of them from `first` draws:
+    /// up while rows sit above the window, down while rows sit below it. Pure's seven measured
+    /// screens never scroll and draw neither; that they show on a list that does is read off
+    /// the widgets' names, not measured (`docs/ui/selection-screens.md`, "Pure's cursor arrow
+    /// and footer frame").
+    #[must_use]
+    pub fn scroll_arrows_for(&self, first: usize, visible: usize, total: usize) -> Vec<Draw> {
+        let [up, down] = &self.scroll_arrows;
+        let above = first > 0;
+        let below = first + visible < total;
+        [(above, up), (below, down)]
+            .into_iter()
+            .filter_map(|(shown, arrow)| shown.then(|| arrow.clone()).flatten())
             .collect()
     }
 
@@ -333,8 +408,33 @@ pub fn read(
         color: argb_to_rgba(argb),
     });
 
-    let mut marks = Vec::new();
+    // The screen's colour-only widgets first, as `crate::frontend`'s own screen drawing puts a
+    // screen's fills under its images: Pure's footer rule at y 251, its five ticks and the dot
+    // beside the dotted rule are `<Image>`s with a colour and no `src`. A fill over the whole
+    // screen is its ground, not a mark: Pulse's `FE Screen` authors an opaque black one that its
+    // backdrop movie covers, and as a mark it would be drawn over the movie.
+    let mut marks: Vec<Draw> = screen
+        .fills
+        .iter()
+        .filter(|fill| {
+            let width = fill.width.unwrap_or(space.size.0);
+            let height = fill.height.unwrap_or(space.size.1);
+            !(fill.x <= 0.0 && fill.y <= 0.0 && width >= space.size.0 && height >= space.size.1)
+        })
+        .map(|fill| {
+            let mut fill = fill.clone();
+            fill.width = fill.width.or(Some(space.size.0));
+            fill.height = fill.height.or(Some(space.size.1));
+            fill.draw()
+        })
+        .collect();
+    let mut select_arrow = None;
+    let mut scroll_arrows = [None, None];
     for image in &screen.images {
+        let placed_by_the_list = image
+            .name
+            .as_deref()
+            .is_some_and(|name| PLACED_BY_THE_LIST.contains(&name));
         let Some(placed) = sprites
             .iter()
             .find(|(src, _)| *src == image.src)
@@ -363,19 +463,43 @@ pub fn read(
         // patches of one shared `pulse_assets.mip`. Without it every mark
         // would draw that sheet's own top-left corner instead of its own
         // patch, same failure `frontend::draw` had before it read these.
-        let uv = placed.sheet_rect([
+        let sub = [
             image.u.unwrap_or(0.0),
             image.v.unwrap_or(0.0),
             image.texture_width.unwrap_or(placed.width as f32),
             image.texture_height.unwrap_or(placed.height as f32),
-        ]);
+        ];
+        // The widget's tint, which on HD is `FEGlobals->HD_Grey` for all
+        // three: the textures themselves are white and the colour is what
+        // makes a rule grey.
+        let color = argb_to_rgba(image.color);
+        if placed_by_the_list {
+            let sprite = |rect: [f32; 4]| Draw::Sprite {
+                rect,
+                uv: placed.sheet_rect(sub),
+                color,
+            };
+            match image.name.as_deref() {
+                Some("ArrowSelect") => select_arrow = Some(sprite([0.0, 0.0, width, height])),
+                Some("ArrowScrollUp") => {
+                    scroll_arrows[0] = Some(sprite([x, image.y, width, height]))
+                }
+                _ => scroll_arrows[1] = Some(sprite([x, image.y, width, height])),
+            }
+            continue;
+        }
+        if let Some(repeats) = wrapped(sub, placed.width as f32, placed.height as f32) {
+            marks.extend(repeats.into_iter().map(|(dest, texels)| Draw::Sprite {
+                rect: [x + dest[0] * width, image.y, dest[1] * width, height],
+                uv: placed.sheet_rect(texels),
+                color,
+            }));
+            continue;
+        }
         marks.push(Draw::Sprite {
             rect: [x, image.y, width, height],
-            uv,
-            // The widget's tint, which on HD is `FEGlobals->HD_Grey` for all
-            // three: the textures themselves are white and the colour is what
-            // makes a rule grey.
-            color: argb_to_rgba(image.color),
+            uv: placed.sheet_rect(sub),
+            color,
         });
     }
 
@@ -397,5 +521,7 @@ pub fn read(
         tab_selected,
         blocks,
         settings: None,
+        select_arrow,
+        scroll_arrows,
     }
 }

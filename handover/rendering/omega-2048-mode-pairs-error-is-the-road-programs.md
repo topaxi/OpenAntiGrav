@@ -103,7 +103,7 @@ a correct detail fix can raise it).
    tier turns on and which darken Omega's hull 22 grey where the original's is lit. Next: (a) scope `render_sun_occlusion` off for
    Omega by title data (an hour, plus the HD and 2048 identity renders), (b) read the second caster list (`*0x020e4268`) and
    which models set `+0x110` bit 1, (c) flip `Title::original_shadows` to `Built` (the player default only: the compare page already renders Omega with
-   `shadows = "original"` from `scripts/compare-environment.toml`, so (a) is what moves the pairs; check `sun_known` on Metro Park's
+   `shadows = "original"` from `scripts/compare-environment.toml`, so (a) is what moves the pairs; check `SunTerms::known` on Metro Park's
    brick, grass and the tarmac first), score Metro Park and Altima, then the tarmac sun lobe.
 4. The panel-map road's shadow-light factor (above): apply `shadow_light_factor` to that family (an hour) and measure
    Sol, Queens Mall, Altima and Unity Square.

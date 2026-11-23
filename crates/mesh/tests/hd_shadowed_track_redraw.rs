@@ -532,7 +532,7 @@ fn draw_with_sky(
 /// the original's frame shows none where ours darkened the floor to 0.75 with the chosen
 /// multiply). A shadow coverage of 0.25 must leave the sheen chunk's colour exactly as drawn. A
 /// `MAG_LOOP` or `LIGHT_CONE` chunk draws nothing in this harness, so the sheen stands for the
-/// family; the flag is the same private `shadow_exempt` that `shade.wesl` sets for both.
+/// family; the flag is the same `SunTerms::exempt` that `shade.wesl` sets for both.
 #[test]
 fn a_glass_sheen_chunk_is_not_shadowed() {
     let instance = wgpu::Instance::default();

@@ -49,16 +49,19 @@ def profile_is_locked(profile_dir):
     return path.exists() and LOCKED_DEV in path.read_text()
 
 
-def extra_settings(profile_dir, front_end_style=None, race=None, locked=False):
+def extra_settings(profile_dir, front_end_style=None, race=None, locked=False, player=None):
     """Append the keys a menu still needs to ours' private `settings.toml`: the front-end styling (HD or FURY), the
-    `[dev]` locks (`locked`) and the race selection a picker highlights (`race.team`, `race.track`, `race.mode`, `race.variant_chosen`: strings or booleans). `ce.write_ours_settings` wrote the
-    render profile; the game rewrites the file on its first run and keeps these values."""
+    `[dev]` locks (`locked`), the race selection a picker highlights (`race.team`, `race.track`, `race.mode`, `race.variant_chosen`: strings or booleans) and the
+    stored player (`player.name`, `player.tag`), which the footer's tag box draws. `ce.write_ours_settings` wrote the render profile; the game rewrites the file on its
+    first run and keeps these values."""
     path = ce.settings_path(profile_dir)
     text = path.read_text()
     if front_end_style:
         text = text.replace("[display]\n", '[display]\nfront_end_style = "%s"\n' % front_end_style, 1)
     if race:
         text += "\n[race]\n" + "".join("%s = %s\n" % (k, json.dumps(v)) for k, v in race.items())
+    if player:
+        text += "\n[player]\n" + "".join("%s = %s\n" % (k, json.dumps(v)) for k, v in player.items())
     if locked:
         text += "\n" + LOCKED_DEV
     path.write_text(text)
@@ -100,7 +103,7 @@ def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_a
 
 def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, screen_seen, screen_wanted,
               profile_dir, size, front_end_style, language, original_language, selection, extra_args=(), notes=(), route=None,
-              screen_source="TTY.log, Switching Screen", race=None, safe_area=None):
+              screen_source="TTY.log, Switching Screen", race=None, safe_area=None, player=None):
     """Fill `pair` for one front-end screen and check it. `drawn_from` is how ours draws `page` (`DRAWN_FROM`); the
     pair is refused (exit 3 from `Pair.finish`) when it is `menu.toml`, when the screen names differ, when a size is
     off, or when the language or styling differ. `selection` records the highlighted row on both sides; `{"matched": False, "why": ...}` ships the pair with the difference
@@ -117,6 +120,8 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     # What `extra_settings` put in ours' profile, kept so a re-render (`compare-rerender-ours.py`) can put it back.
     if race:
         pair.rec["ours"]["race"] = dict(race)
+    if player:
+        pair.rec["ours"]["player"] = dict(player)
     # Likewise the locks: a re-render without them draws every circuit and team open (Pure's pickers listed four leagues).
     if profile_is_locked(profile_dir):
         pair.rec["ours"]["unlock_everything"] = False

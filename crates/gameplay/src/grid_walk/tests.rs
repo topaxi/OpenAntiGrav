@@ -167,3 +167,30 @@ fn an_empty_track_has_no_grid() {
     assert!(locate(&empty, Vec3::ZERO).is_none());
     assert!(walk(&empty, Vec3::ZERO).is_none());
 }
+
+#[test]
+fn a_query_just_behind_the_last_control_point_is_fitted_on_the_segment_before_the_end() {
+    // The last control point is x = 354. 352 is nearest to it, but the end-clamped final
+    // segment only spans the last sixth of a spacing (about 353 to 354), so the foot of
+    // 352 is on the segment before it.
+    let at = locate(&level(60), Vec3::new(352.0, 0.0, 2.0)).expect("a track");
+    assert!(
+        (at.position.x - 352.0 * RECORD_SCALE).abs() < 2e-3,
+        "{}",
+        at.position.x
+    );
+}
+
+#[test]
+fn a_query_at_or_past_a_paths_end_still_reaches_the_last_control_point() {
+    let track = level(60);
+    for x in [353.5, 354.0, 360.0] {
+        let at = locate(&track, Vec3::new(x, 0.0, 2.0)).expect("a track");
+        let want = x.min(354.0) * RECORD_SCALE;
+        assert!(
+            (at.position.x - want).abs() < 2e-2,
+            "x {x}: {} against {want}",
+            at.position.x
+        );
+    }
+}

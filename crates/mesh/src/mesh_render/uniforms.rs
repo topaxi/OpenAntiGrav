@@ -18,24 +18,22 @@ pub(super) struct Uniforms {
     model: [[f32; 4]; 4],
     /// Which layer of the per-craft sun-occlusion array this model samples,
     /// plus one - `0.0` for none. See `shaders/shadow.wesl`'s `sun_occlusion` and
-    /// [`crate::shadow::occlusion`]. Was a global texture-animation phase
-    /// before [`TexAnims`] replaced it and padding after; reused so the
-    /// layout `mesh.wesl`, four other pipelines and the asset viewer mirror
-    /// stays the same size.
+    /// [`crate::shadow::occlusion`]. The layout `mesh.wesl`, four other
+    /// pipelines and the asset viewer mirror is this size.
     sun_occlusion_layer: f32,
     /// The model's own animation clock in seconds - what an HD material's
     /// `UV_offset` is bound to (`node + 0xc0`, see
     /// [`crate::mesh::slots::CLOCK_SCROLL_RING`]). `0.0` for every draw that
-    /// is not a clock-scrolled material. Padding until 2026-10-05.
+    /// is not a clock-scrolled material.
     model_clock: f32,
     /// A second per-draw scalar, for the one HD material that reads a value
     /// the blast owns rather than the model's clock: `ColourAnim` on the
     /// Bomb's fireball ([`crate::mesh::slots::BOMB_FIRE`]). `0.0` for every
-    /// other draw. Padding until 2026-10-07.
+    /// other draw.
     model_colour: f32,
     /// Pulse's hull light scales, packed by [`crate::mesh_render::pack_hull_scale`];
     /// `0.0` for every draw but a craft's hull, which the shader reads as the
-    /// default `255`. Padding until 2026-10-17.
+    /// default `255`.
     hull_scale: f32,
     /// Which layer of the per-craft environment-probe array this hull is lit
     /// from, plus one; `0.0` for none. See `shaders/types.wesl`.
@@ -44,7 +42,7 @@ pub(super) struct Uniforms {
     /// desaturation lerp. `[0.0; 2]` where `env_layer` is `0.0`. See `shaders/types.wesl`.
     env_tint: [f32; 2],
     /// `grade-sky`: the sky's mix toward a grey, rainy colour, `0.0` (the identity) for
-    /// every other draw. See `shaders/types.wesl`. Padding until 2026-10-30.
+    /// every other draw. See `shaders/types.wesl`.
     sky_grey: f32,
     /// Pulse's point and spot lights for a hull, [`crate::mesh_render::HullPointLights::at`]:
     /// per slot the unit vector towards the light and, in `w`, its colour bytes packed

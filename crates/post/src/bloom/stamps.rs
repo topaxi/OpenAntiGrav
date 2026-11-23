@@ -74,24 +74,17 @@ impl Bloom {
             queue.write_buffer(&lane.constants_bright, 0, bytemuck::bytes_of(&wanted));
             lane.written.set(Some(wanted));
         }
-        // The bright pass reads the target; the composite that writes it is a later pass.
-        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bloom stamp"),
-            layout: &self.layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(target),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: lane.constants_bright.as_entire_binding(),
-                },
-            ],
+        // The bright pass reads the target; the composite that writes it is a later pass. The
+        // group is kept for the target view it was built over, so a steady frame builds none.
+        let group = lane.bright_group.get(target, || {
+            scene_group(
+                device,
+                &self.layout,
+                &self.sampler,
+                "bloom stamp",
+                target,
+                &lane.constants_bright,
+            )
         });
         let pass = |encoder: &mut wgpu::CommandEncoder,
                     label: &'static str,

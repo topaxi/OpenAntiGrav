@@ -291,10 +291,10 @@ impl Session {
         // A later seat's pick is its own and the settings are the first
         // player's, so it leaves them alone.
         if seat == 0 {
-            if let Some(entry) = model.selected()
-                && entry.id != self.settings.race.team
+            let title = self.shell.as_ref().map(|shell| shell.title);
+            if let (Some(entry), Some(title)) = (model.selected(), title)
+                && self.settings.race.open_team(title, &entry.id)
             {
-                self.settings.race.team = entry.id.clone();
                 self.resupply_race_variant();
             }
             // What the screen opened on is what a bare Confirm races.
@@ -443,6 +443,17 @@ impl Session {
         // team that authors none (every PS2 team) writes an empty string and the paragraph is
         // blank (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "`Team Ship Help` is
         // set per team", and the PS2's `0x001bd368`).
+        // Each team's footer description (Pure's `Text->Team Selection->Team->Feisar`), typed
+        // while it is selected.
+        let descriptions = entries
+            .iter()
+            .map(|entry| {
+                picker::description_key(&layout, &entry.id)
+                    .and_then(|key| shell.strings.get(&key))
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect();
         let help_texts = entries
             .iter()
             .map(|entry| {
@@ -465,6 +476,7 @@ impl Session {
             Some(livery.as_str()),
         )
         .with_help_texts(help_texts)
+        .with_descriptions(descriptions)
         .with_fixed_livery(crate::livery_row::fixed_row(title, mode));
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.
@@ -719,7 +731,7 @@ impl Session {
                     let axis = picker.livery_axis;
                     let fixed = picker.model.fixed_livery();
                     picker.refresh_preview(&self.gpu);
-                    self.settings.race.team = team;
+                    self.settings.race.pick_team(&team);
                     let kept = picker.model.variant().map(|(id, _)| id.clone());
                     livery::stepped(&mut self.settings.race, axis, kept, layout_is_hd, fixed);
                     self.resupply_race_variant();
@@ -757,6 +769,9 @@ impl Session {
                 let fixed = picker.model.fixed_livery();
                 stage.picker = None;
                 if let Some(id) = chosen {
+                    // A confirmed team is a pick, the fresh-profile row included
+                    // (`Race::open_team` only showed it).
+                    self.settings.race.pick_team(&id);
                     self.speak_name(Kind::Ship, &id);
                 }
                 livery::confirmed(&mut self.settings.race, fixed);

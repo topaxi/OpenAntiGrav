@@ -502,8 +502,9 @@ A menu pair also records what its page was drawn with beyond the profile: `ours.
 (`race.team`, `race.track`, `race.variant_chosen`). `compare-rerender-ours.py` writes both back into the private settings
 (`compare_menu.extra_settings`); before 2026-10-27 it did not, so a re-rendered picker drew the title's first team, Assegai,
 on concept1, where the original shows Feisar. HD's Ship Select also needs `variant_chosen = true`: a profile that never picked
-a model opens on concept1 (stats 080/085), where the original's classic Feisar reads 070/100/080/080. The Omega menu script records `ours.race` from now on; the 2048-menu and Pulse/Pure
-menu scripts do not yet, so their re-renders still drop their `race` selection (older Omega pairs have none either).
+a model opens on concept1 (stats 080/085), where the original's classic Feisar reads 070/100/080/080. The Omega menu script records `ours.race` from now on, and since 2026-11-23 the Pulse/Pure menu script does too
+(`psp-menu-pair.py`; Pure's team item no longer needs one, a fresh profile opens on Feisar as the original's does); the 2048-menu script
+does not yet, so its re-renders still drop their `race` selection (older Omega pairs have none either).
 
 Open, measured the same day: with the pairs at 96 and the right team, the title rules, footer rule, footer prompts and stat bars of
 Ship Select and Track Select sit at 0 +/- 1 px, but ours' header text sits 1 to 2 px **left** of the original's (best shift of ours
@@ -1621,7 +1622,7 @@ reading that stands (one frame each, confidence 40). The racer-row offsets are O
 **Claim: the page carries one Pulse PS2 Zone pair, Talon's Junction White at zone 5, against PCSX2 v2.9.168. True, with a gap.** Pair `pulse-ps2-zone-talons-white-z5`
 (`pulse-ps2/zone-talons-white-z5/`), 12 parity checks passed, rmse 0.297 / edge correlation 0.069 / mean grey 27.4. Start to pair took about 25 minutes, 12 of them walking from a cold boot.
 
-- **Old PS2 states do not load.** Every state in `data/saves/pulse-ps2/` was made by PCSX2 v2.9.138; v2.9.168 refuses each ("This save state was created with PCSX2 version v2.9.138. It is no longer compatible"), so none of the grid pairs of "Pulse PS2: a race pair for every circuit" can be re-captured from its state until it is walked again. `data/saves/pulse-ps2/menu/main-menu-pcsx2-2.9.168.p2s` is a v2.9.168 state on the Main Menu (fresh card, name `AAA`, formatted) to start walks from. The v2.9.168 GS screenshot in a race is 1592x896 (the earlier notes say 1820x1024, the boot screens' size); it is 16:9 either way, so the one Lanczos resize to 1280x720 stands.
+- **Old PS2 states do not load.** Every state in `data/saves/pulse-ps2/` was made by PCSX2 v2.9.138; v2.9.168 refuses each ("This save state was created with PCSX2 version v2.9.138. It is no longer compatible"), so none of the grid pairs of "Pulse PS2: a race pair for every circuit" can be re-captured from its state until it is walked again. `data/saves/pulse-ps2/menu/main-menu-pcsx2-2.9.168.p2s` is a v2.9.168 state on the Main Menu (fresh card, name `AAAA` and tag `AAA` as the profile record in EE RAM reads, formatted) to start walks from. The v2.9.168 GS screenshot in a race is 1592x896 (the earlier notes say 1820x1024, the boot screens' size); it is 16:9 either way, so the one Lanczos resize to 1280x720 stands.
 - **The state.** Main Menu, `down` x3, `cross` (Racebox), `right` x5 on RACE TYPE (reads `ZONE`; Speed Class, Weapons and AI Difficulty grey out), `cross`, Track Select (Talon's Junction White, 1/2 on a fresh card), `cross` (Assegai, Zone, all four stats 10), `cross`, `cross` through the description page. **A Zone race on the PS2 flies itself with no input**: zone 0 at about 12 s after the HUD, zone 5 about 36 s (real time under Xvfb), class names `sub-venom`, `venom`, `sub-flash`, `flash` as the zone climbs. The state is `data/saves/pulse-ps2/zone-talons-white-assegai-z5.p2s`, made by running the race in 3 s slices (pause, `savestate` per slice; a slice's picture is read by loading it); zone 5 begins between slices 3 and 4 of the second set.
 - **The grab.** `pcsx2-pulse-pair.py --zone-capture` loads the state, writes the game's `Aspect Ratio` option (`DAT_00284fe8 = 1`, a fresh card has 4:3: the first build read projection aspect 1.4286 and the pair refused), advances four frames, holds F8 (a paused VM keeps the screenshot request until a frame is presented: no file appeared), taps F7 once (the file appears; the frame counter moved by exactly 1) and saves a state with the VM still paused. `--zone ZONE,SCORE[,KMH[,SHIELD]] [--zone-class flash] [--zone-from DIR]` then reads the craft, body, camera eye/axes/field and the world clock out of that state and renders ours at tick 0 (`--mode zone --team Assegai --hud-state 1,1,0,0,KMH,SHIELD,0,ZONE,SCORE,ZONE_S`). The race pair's running-VM grab cannot be used: a craft at Flash speed moves many units in the few tenths of a second it lags the state. A flying craft's cached basis trails its body by 0.0135 at this frame (a resting one by under 5e-3), so `pcsx2_state.player_craft` takes a `cache_tolerance` and the Zone path passes 0.05; it picks the craft 11.64 units from the camera eye, the chase rig's distance.
 - **HUD values read by eye**, since Pulse PS2's Zone counters are not located in RAM (no PS2 Zone page exists; the PSP's are `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`): zone 5, score 4211, 94 km/h (the grab before the aspect fix read 100 km/h and 4209), shield 19 (the bar blinks, so the grab shows the number only), class FLASH. The grab is deterministic: a second capture of the same state gave an identical `theirs.png` (rmse 0) and the same HUD. The seconds into the zone are not readable off the frame; ours uses 0 and 6 s changes 15 pixels.
@@ -1822,7 +1823,7 @@ with `New`). The frame is the emulator window at 480x272 (`xdotool windowsize`),
 origin: no scaling at any step. Ours is `oag-game --menu-page PAGE` (or `--screen`) at 480x272 in a private profile
 (`prepare_profile`): the compare render settings and **`[dev] unlock_everything = false`** (a debug build unlocks everything, the original's
 fresh profile does not; read back in the settings file the run rewrote). Pulse also gets `records.toml`'s `campaign_difficulty = medium`
-row, which the still **ignores** (see the campaign paragraph).
+row, which the still **ignores** (see the campaign paragraph). **Pure's plan Loads a profile** (`PURE_PLAN`: START, Profile, Load): on a new stick it stops on the system's "There is no data" dialog, so make one first on that instance (2026-11-23: Profile, NEW, cross through the name `NAME` until the SAVE PROFILE prompt, YES, then the system Save dialog's cross), then cold-boot it and run the pairs.
 
 **What is read and what is declared.** Pulse's screen name is read from the game's own state machine (`0x08b31784 + 0x18c`, the same
 `Debugger.state_name` the race pairs use); every Pulse pair's `original.screen_basis` says so. Pure has no recovered state name: its
@@ -1859,8 +1860,8 @@ read side by side):
 | Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
 | Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % (7.0 % re-made) | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` on both sides since 2026-10-29 (it was `1/12`: four DLC teams) |
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
-| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
-| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
+| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % (0.57 % on a 2026-11-23 grab, 1.32 % before the ticker and tag reached the campaign still) | the footer's prompt glyph rings and one bar row (the cursor halo is the bloom, drawn since 2026-10-29) |
+| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % (0.65 % re-made 2026-11-23 on one fresh `theirs.png`, 2.14 % with main's binary on the same frame; see "Pulse Cell Selection: the footer, the tag and the title's glow phase" below) | what is left: the glyph rings of the four footer prompts (ours' rings are a half-texel softer) and one row of the silver bar (y 249) |
 | Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.5 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original; 3.2 % on 2026-11-01 with the list in the menu face at the chain's 18-line pitch, the stat labels in the `Stats` face and the hull at the original's slideshow seconds (7.57 % the same fresh capture before)) | closed 2026-10-29: 17 teams listed (DLC and gated). Closed 2026-11-01: the list type (the `<Menu>` names no `font`, so it draws in the menu face at the chain's 18-line pitch, where it was the `default` role's 13/22 scale), the hull's angle (the three stills `Info`/`Side`/`Top` change every 2 s, the pair now at the original's seconds since entry), the stat labels (`font="Stats"` is Pure's `LTe50325.fnt`). Left: the description line the original types along the bottom, the two frame rules, the cursor arrow |
 | Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % (5.6 % re-made 2026-10-29 with the type-in; 4.2 % on 2026-11-01 with no context line in the still and the `Stats` face for the labels, cells and the description (5.63 % the same fresh capture before)) | what is left: the record separators (the original's are small mid-height dots with wide gaps, no `'` or `"` at 8x, and no Latin-1 character as the separator matches), the frame's dashed rule at y 217 and solid rule at y 251, the picker's scroll arrows against the original's pink cursor arrow. Closed 2026-11-01: the context line (the original draws none; the live screen keeps ours), the `m` case and the label type (the `Stats` face) |
 | Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
@@ -1910,6 +1911,30 @@ scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --diff
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
+
+Claim: the Cell Selection pair has a lower share of pixels differing by more than 40 grey, whole frame and in the region of each item fixed, on one fresh
+`theirs.png` (480 x 272, ticker `TKR_TOURTIM`, head 87, the title glow byte 205, movie frame 42). Whole frame **2.14 % to 0.65 %** (main's binary against
+this branch, same `theirs.png`, same movie frame; the committed pair on `main` reads 2.97 %, its frame being another grab):
+
+| Region (x, y, w, h) | before | after | what fixed it |
+| --- | ---: | ---: | --- |
+| footer ticker box (76, 236, 392, 18) | 1127 px | 370 px | the campaign still drew its ticker with no tips, so `--menu-ticker` reached no pixel on Cell or Grid Selection: it now takes the picker footer (`menu_page::picker_footer`, the tips from the records and the pin) |
+| footer tag box (12, 236, 64, 18) | 142 px | 5 px | the pair script reads the profile's tag (`profile + 0x457`, `psp_ticker.profile_tag`, `AAA`) and stores it as ours' `player.tag`; the campaign still tags its legend (`footer_tag`) |
+| card title glow (260, 34, 150, 50) | 1065 px | 18 px | the title's `pulse="true"` ladder and the `Selector`'s are two counters in the original: the pair script reads the title's glow-mask byte over its glyph box (`220 - 15 k`, EDRAM, CPU stopped) and passes `--menu-title-seconds`, apart from `--menu-picker-seconds` (the Selector's phase) |
+| everything above y 230 | 1100 px | 53 px | the title row above and the rest: the backdrop movie is drawn at frame 42 on both sides (`compare-menu-movie-phase.py`; at frame zero its bright streak at (440, 136) alone cost 693 px) |
+| cursor hex (100, 70, 100, 100) | 0 px, mean abs 0.14 | same | the halo is the front end's bloom, drawn since `pulse-frontend-bloom`: nothing left to draw |
+| footer prompt glyph rings (four boxes) | 419 px | 419 px | open: ours' rings are a half-texel softer than the original's |
+| silver bar, row y 249 (the lower strip's first row) | 341 px | 341 px | open: theirs shows the background there, ours a 55 % blend of a grey; rows 250 and on match to 1 grey |
+
+`scripts/psp-menu-pair.py`: `tick:480` runs before `shot:grid` and `shot:cell` (`TICKERED`), the same pin `team` had. The ticker's lag fit (0 or 1 frame) now means
+something on these pages (it settled on 1 and on 0 on two grabs). `--menu-title-seconds` is read back from the byte at the grab: 0.275 on a grid grab (byte 145), 0.075 on the cell
+grab (205). One cell grab found no ladder byte over the title box (the line `title glow: no ladder byte` is printed and ours keeps the Selector's phase for it); run again.
+The title box is `TITLE_BOX`: Cell (262, 30, 420, 60), Grid (262, 88, 340, 116).
+
+**Checked, not wired: Grid Selection's title** is pinned the same way and measured on one grab (title box 0 px over 40 grey); HD and Omega draw no pulse text (`frontend_glow` is `None`), so
+`--menu-title-seconds` is Pulse's alone (`campaign_page` sets it only in the Pulse branch).
 
 ### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
 
@@ -1971,6 +1996,44 @@ frame. `scripts/gs_fb_decode.py` decodes PSMCT32 from it, VRAM at byte 425 of th
 registers of a dump for the replay above.) The selected ring: before the selector fix `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px, 12 px
 and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)` (`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
 
+**PS2 menu pairs: the footer ticker and the tag are read from PCSX2 RAM (2026-11-23, `ps2-ship-select`).** `scripts/pcsx2-menu-pair.py` now does for the PS2 what
+`psp-menu-pair.py`'s `tick:` step does for the PSP (`scripts/ps2_ticker.py`), and the Ship Select pair carries the original's footer.
+
+- **The text record, found by signature** (confidence 80: the same two addresses after the walk and after two loads of the saved state; a heap object, so the script scans EE RAM rather than trusting an address).
+  The PS2 ticker widget's own fields were **not recovered**: the row count 121 lies 0x34 before the first record where the PSP's `+0xc8` lies 0x40 before it, so the PSP's offsets do not carry over. The record layout is the
+  PSP's: `+0` active, `+4` head x (float; a message enters at the viewport width and moves left 1 a frame), `+8` the viewport width **493.0** (`0x43f68000`, the PS2 footer
+  ticker's width, `Selection_Definition.xml`), `+0xc` minus the text width, `+0x10` the NUL-terminated message. Two records, `0x114` apart (`0x00395db0` and `0x00395ec4` in the
+  v2.9.168 Ship Select state); one of them holds the message on screen, the other waits inactive at head 492 with the next message until the first is mostly gone, so a frame shows one
+  message or two. The signature is the `0x43f68000` word at `+8` with a negative width at `+0xc`, printable text at `+0x10` and a second such
+  record `0x114` away; about 70 other 493.0 floats elsewhere in RAM fail it.
+- **The item comes from the text.** The message is a tip (`TKR_NOSR`, `NOSL`, `NOTT`, `NOTOURN`, `NOELIM`, `NOZONE`: what a time item says with nothing counted), looked up in
+  the disc's English `entries.xml` (`oag-wad cat --expand <image>:54748/WADS2.WAD Data\Plugins\PI000\entries.xml`) and named by the item that says it
+  (`oag_ui_screens::news::untried_tip`'s pairs). Any other text names no item and the frame is not grabbed (the PSP reader refuses an item ours does not count the same way).
+  Ours is drawn with `--menu-ticker ITEM@X`, the head in the record's own units.
+- **A paused VM cannot be grabbed**: PCSX2's GS screenshot fails while the VM is paused, even after a frame advance, so the screenshot runs against the running VM and is bracketed by
+  two reads of the record (about a millisecond each): the grab waits for a frame with exactly one message on screen at least 40 units inside the viewport, reads, presses F8, reads
+  again when the file appears, and refuses the pair when the same message is not alone at both reads. The bracket was 6 to 10 frames wide (124 to 118, 124 to 114). Ours is then
+  rendered at every third head in the bracket and at the neighbours of the best, scoring the ticker box (210, 628, 1030 x 40 at 1280x720, text rows only) against the original's;
+  the head is **fitted within the bracket** (117; the box grey is 14.4 there and 19.0 / 22.7 one unit either side). `original.footer_ticker` carries the item, text, both
+  addresses, both reads and the fit table. The text sits at the record's head plus the PSP's 2 px origin (inherited from PSP, not measured on the PS2; the fit absorbs it).
+  The state carries `rand()`'s state, so a reload draws the same message: two grabs of the Ship Select state both caught `TKR_ZTIM`.
+- **The tag is the profile's, read from RAM.** The profile record keeps the name as an 10-byte space-padded field and its NUL with the 3-character tag straight after it (`AAAA      \0AAA\0`
+  at `0x00d9463c`, the tag at `0x00d94647`; the one such record in 32 MiB). The state the walk started from, `main-menu-pcsx2-2.9.168.p2s`, reads name `AAAA` and tag `AAA` there. The pair script writes `[player] name` and `tag` into ours'
+  profile (`compare_menu.extra_settings(player=)`, recorded in `ours.player` so `compare-rerender-ours.py` puts them back) and the footer's tag box, already drawn
+  (`NavigationLegend::set_tag`), shows `AAA`. A re-render of the new pair on a copy is byte-identical to the pair script's own.
+- **The old Ship Select state does not load.** `data/saves/pulse-ps2/menu/team-selection.p2s` was made by PCSX2 v2.9.138, which v2.9.168 refuses; the grid and cell states are the
+  same. The Ship Select state was walked again from `main-menu-pcsx2-2.9.168.p2s` (cross, cross, cross: Grid Selection, Cell Selection, Ship Select) and is to be kept as `data/saves/pulse-ps2/menu/team-selection.p2s`, the old file renamed `team-selection-pcsx2-2.9.138.p2s` (it is unloadable).
+  `menu-grid` and `menu-cell` need the same walk before they can be re-made.
+
+| `pulse-ps2/menu-team`, same original frame | RMSE | edge | mean grey (magick) | >40 grey, whole frame | >40 grey, footer box (30, 626, 1220 x 44) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| before: ours with an empty ticker and no tag (this pair's `ours.png` re-rendered with the pin and the player removed) | 0.1358 | 0.279 | 5.92 | 9.19 % | 17.15 % |
+| after: `TKR_ZTIM@117`, tag `AAA` | 0.1294 | 0.301 | 5.61 | 8.70 % | **8.80 %** |
+
+(Both rows are scored against the one `theirs.png`, the `TKR_ZTIM` grab; an earlier grab of the same state, which caught the Single Race tip, scored 0.1374 / 18.01 % for the empty footer. `>40 grey` is the share of pixels whose grey differs by more than 40 of 255; the box is the tag box and the ticker bar, measured on `theirs.png`. The whole-frame remainder is the
+backdrop movie's streaks and the hull's turntable phase, not this change; the footer box's remainder is the silver bar's gradient and the glyph antialiasing, which a one-pixel
+shift costs 25 to 70 grey on.)
+
 ## Pulse PSP pairs over 5 mean grey: where the grey sits (2026-11-19, `pulse-psp-pairs`)
 
 Three pairs re-rendered at main `e51ae21d2` reproduce their recorded numbers exactly (`basilico-black` 5.08, `menu-team` 5.89, `pulse-psp-zone-talons-white-z8` 8.19).
@@ -2018,7 +2081,7 @@ head and at the head plus 1 and keeping the better ticker box (`original.footer_
 Grab C's whole-frame grey is high on both sides because the menu backdrop movie's phase differs (a bright streak in the original that ours' frame zero does not draw): that
 is not the footer. The ticker box keeps 5.4 to 6.3 after the message and the position match: the silver bar's gradient and glyph antialiasing (a shift of one pixel in any
 direction costs 25 to 70). **The left tag box is the profile's footer tag** (`profile + 0x457`, `AAA` on a fresh profile, read by `Ticker_Update`'s tag branch) and is blank in
-ours: with theirs' tag box pasted on grab C the footer goes 6.95 to 4.90. The player tag is a planned feature (one shared name, a 3-character tag on Pulse and Pure); open, not built.
+ours: with theirs' tag box pasted on grab C the footer goes 6.95 to 4.90. The player tag is a planned feature (one shared name, a 3-character tag on Pulse and Pure); open, not built. (The compare route stores the original's tag as `player.tag` in ours' profile, which `menu-grid` and `menu-cell` read from RAM, see below; `menu-team` still shows a blank tag box.)
 **PS2** ships the same code (`NewsItemBarText1`, `PI_News` and `NewsFrequency` are in `SCES_547.48`) and the same list less three rows (121; `pulses_news_items_are_the_discs_list`),
 and ours draws it on the PS2 ship select at the PS2 viewport (113, 392, 493 x 53), inherited from PSP. **Pure** ships no ticker: its `BOOT.BIN` on both pressings has no
 `TKR_`, `NewsItemBarText` or `PI_News` string and its `Data.wad` no `news` plugin; its `TextInfoIsAlwaysLast` is the description box.

@@ -968,7 +968,7 @@ impl Session {
             // VARIANT's own list depends on which team this names - the
             // same reason `race.mode` above resupplies CIRCUIT.
             "race.team" => {
-                self.settings.race.team = text;
+                self.settings.race.pick_team(&text);
                 self.resupply_race_variant();
             }
             "race.track" => self.settings.race.track = text,

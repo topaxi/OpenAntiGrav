@@ -12,6 +12,9 @@
 import oag_shaders::bytes::bytes;
 import oag_shaders::fullscreen::{VertexOutput, fullscreen_triangle};
 
+// The length of the `stamps` and `stamp_values` arrays: the host's `stamps::MAX`.
+const STAMP_LIMIT = 20u;
+
 struct Constants {
     // One texel of the texture being sampled.
     texel: vec2<f32>,
@@ -40,9 +43,9 @@ struct Constants {
     // `Bloom::stamp_glow`: rectangles as fractions of the drawn rectangle, the drawn rectangle
     // in target pixels `(x, y, width, height)`, each rectangle's mask byte `(value, pad, pad,
     // pad)` and `(count, pad, pad, pad)`. Zero for every other pass.
-    stamps: array<vec4<f32>, 20>,
+    stamps: array<vec4<f32>, STAMP_LIMIT>,
     stamp_view: vec4<f32>,
-    stamp_values: array<vec4<f32>, 20>,
+    stamp_values: array<vec4<f32>, STAMP_LIMIT>,
     stamp_meta: vec4<f32>,
 }
 
@@ -110,7 +113,7 @@ fn fs_bright(in: VertexOutput) -> @location(0) vec4<f32> {
 // Outside every rectangle the mask is the scene's baseline, which the chain truncates to nothing.
 @fragment
 fn fs_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
-    let count = u32(constants.stamp_meta.x);
+    let count = min(u32(constants.stamp_meta.x), STAMP_LIMIT);
     var value = 0u;
     for (var i = 0u; i < count; i = i + 1u) {
         let r = constants.stamps[i];

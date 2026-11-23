@@ -102,6 +102,7 @@ mod psp2_twin_blend_ground_truth;
 mod psp2_vertex_blend_lit_path;
 mod psp_slope_lod;
 mod rcs_siblings_ground_truth;
+mod tangent_guarded_fetches;
 mod velocity_target;
 mod vertex_buffer_census_ground_truth;
 mod vita_fc17_edge_lit_path;

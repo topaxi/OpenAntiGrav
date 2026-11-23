@@ -390,6 +390,10 @@ optional = true
 type = "boolean"
 optional = true
 
+[types.race.team_chosen]
+type = "boolean"
+optional = true
+
 [types.race.skin]
 type = "string"
 optional = true

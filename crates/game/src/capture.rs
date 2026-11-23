@@ -172,6 +172,9 @@ pub struct Options {
     /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
     /// own docs.
     pub menu_ticker: Option<String>,
+    /// With `--menu-page grid-select`/`cell-select`, the seconds the card title's glow ladder has run -
+    /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
+    pub menu_title_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -663,6 +666,11 @@ pub fn run(
             // menu tree - they are the disc's own screens, opened over it -
             // so they are drawn by their own builder, off the same boot.
             if let Some(kind) = picker_kind(page) {
+                // The team the live screen opens on and writes into `race.team`
+                // (`Session::open_ship_picker_for`): a fresh profile's row on a title
+                // that authors one.
+                let mut settings = options.settings.clone();
+                settings.race.team = settings.race.opening_team(title).to_string();
                 let layout = match kind {
                     oag_ui_screens::picker::Kind::Track => track_select.as_ref(),
                     oag_ui_screens::picker::Kind::Ship => ship_select.as_ref(),
@@ -690,9 +698,7 @@ pub fn run(
                     &crate::records::load(),
                     &teams,
                 );
-                let selected = tracks
-                    .iter()
-                    .find(|track| track.id == options.settings.race.track);
+                let selected = tracks.iter().find(|track| track.id == settings.race.track);
                 let distance = match (kind, archives.as_mut(), selected) {
                     (oag_ui_screens::picker::Kind::Track, Some(archives), Some(track)) => {
                         let entry = track.entry_name();
@@ -723,7 +729,7 @@ pub fn run(
                     });
                 let (stills, mode3d_model) = picker_stills(
                     kind,
-                    &options.settings,
+                    &settings,
                     selected,
                     &tracks,
                     &teams,
@@ -739,7 +745,7 @@ pub fn run(
                     kind,
                     &circuit_names,
                     layout,
-                    &options.settings,
+                    &settings,
                     title,
                     &tracks,
                     &teams,
@@ -761,7 +767,7 @@ pub fn run(
                 if is_split_ship(page)
                     && let Some(halves) = ship_select_split.as_ref()
                 {
-                    let mut second = options.settings.clone();
+                    let mut second = settings.clone();
                     if let Some(at) = teams.iter().position(|team| team.id == second.race.team)
                         && let Some(next) = teams.get((at + 1) % teams.len())
                     {
@@ -771,7 +777,7 @@ pub fn run(
                         kind,
                         &circuit_names,
                         &halves[0],
-                        &options.settings,
+                        &settings,
                         title,
                         &tracks,
                         &teams,
@@ -844,6 +850,22 @@ pub fn run(
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
                     ticker_clip =
                         menu_page::picker_footer(&mut list, legend, ticker, &strings, &font);
+                    // The selected entry's description, typed along the footer as the live
+                    // screen types it (`MenuStage`'s picker pass).
+                    let selected = match kind {
+                        oag_ui_screens::picker::Kind::Ship => settings.race.team.as_str(),
+                        oag_ui_screens::picker::Kind::Track => settings.race.track.as_str(),
+                    };
+                    let description = oag_ui_screens::picker::description_key(layout, selected)
+                        .and_then(|key| strings.get(&key));
+                    if let (Some(ticker), Some(text)) = (ticker, description) {
+                        list.extend(oag_ui_screens::campaign::footer::description_draws(
+                            ticker,
+                            text,
+                            options.menu_picker_seconds,
+                            &|text: &str| oag_ui::font::measure(&font, text),
+                        ));
+                    }
                 }
                 // Same disc read `picker_stills` already made for the
                 // hexagonal window's cards - reused here rather than read
@@ -903,7 +925,7 @@ pub fn run(
                 // `records` `--menu-page` arm above already makes - see
                 // `campaign_page`'s own `records` parameter doc.
                 let records = crate::records::load();
-                let (list, shot) = campaign_page(
+                let (mut list, shot) = campaign_page(
                     kind,
                     &mut archives,
                     &strings,
@@ -923,8 +945,15 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
                     (options.menu_entry_seconds, options.menu_picker_step_seconds),
+                    options.menu_title_seconds,
                     &crate::boot::fonts::legend_ink(&font, buttons_font.as_ref()),
+                    options.settings.player.footer_tag(&loaded.title.profile),
                 )?;
+                // Pulse's footer ticker, as the picker pages draw it: HD's campaign footer has none.
+                if !crate::campaign::draws_hd_campaign(title) {
+                    ticker_clip =
+                        menu_page::picker_footer(&mut list, None, ticker.as_ref(), &strings, &font);
+                }
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
             } else if let Some(seated) = join_page::seats(page) {

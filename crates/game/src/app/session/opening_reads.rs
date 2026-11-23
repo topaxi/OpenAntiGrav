@@ -111,6 +111,7 @@ impl Session {
                 Kind::Track => vec![race.track.clone()],
                 Kind::Ship => vec![
                     race.team.clone(),
+                    race.team_chosen.to_string(),
                     race.skin.clone(),
                     race.variant.clone(),
                     race.variant_chosen.to_string(),

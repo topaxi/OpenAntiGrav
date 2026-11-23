@@ -128,6 +128,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // exactly. See `docs/formats/handling-stats.md`.
     // Chosen, not measured: the definition of "fresh" is this project's. See
     // `FRESH_PROFILE_VARIANT`.
+    fresh_team: None,
     fresh_variant: Some(oag_title::race::FreshVariant {
         variant: FRESH_PROFILE_VARIANT,
         origin: oag_title::Origin::Chosen,

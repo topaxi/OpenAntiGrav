@@ -25,7 +25,7 @@
 
 import package::bindings::{emissive_scale, emissive_tint, scene};
 import package::omega_snow::snow_wrap;
-import package::texture_lod::{MATERIAL_PAD_MASK, MATERIAL_WAVE_MAP, material_sample};
+import package::texture_lod::{MATERIAL_PAD_MASK, MATERIAL_WAVE_MAP, material_sample_grad};
 import package::types::{VertexOutput};
 
 struct OmegaRock {
@@ -38,12 +38,13 @@ struct OmegaRock {
     specular: vec3<f32>,
 }
 
-fn omega_rock(entry: u32, in: VertexOutput, n: vec3<f32>) -> OmegaRock {
+// `grad` is `uv_gradients(in.texcoord)`, for the reason `omega_snow_normal` gives.
+fn omega_rock(entry: u32, in: VertexOutput, n: vec3<f32>, grad: mat2x2<f32>) -> OmegaRock {
     let c = emissive_tint(entry);
     let row = emissive_scale(entry);
     let uv = in.texcoord;
-    let n1 = material_sample(MATERIAL_PAD_MASK, uv).rgb;
-    let n2 = material_sample(MATERIAL_WAVE_MAP, uv * c.y).rgb;
+    let n1 = material_sample_grad(MATERIAL_PAD_MASK, uv, grad[0], grad[1]).rgb;
+    let n2 = material_sample_grad(MATERIAL_WAVE_MAP, uv * c.y, grad[0] * c.y, grad[1] * c.y).rgb;
     let z = 2.0 * n1.z - 1.0;
     let h = 1.0 + c.x * (2.0 * n2.z - 2.0);
     let local = vec3<f32>(
