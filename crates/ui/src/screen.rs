@@ -720,8 +720,8 @@ impl Screens {
     /// strips' own slide-in `Key` animation moves the image inside the viewport, so the edge that
     /// matters at rest is the one the image is cut at.
     fn clip_images_to_viewport(&self, images: &mut [Image], viewport: &Node) {
-        let [Some(_), Some(top), Some(_), Some(height)] = ["x", "y", "width", "height"]
-            .map(|name| self.number(viewport.value(name)))
+        let [Some(_), Some(top), Some(_), Some(height)] =
+            ["x", "y", "width", "height"].map(|name| self.number(viewport.value(name)))
         else {
             return;
         };
