@@ -54,6 +54,9 @@ const EDGE_WIDTH: f32 = 0.035;
 //
 // The interpolated normal is the shell's smooth one (`oag_livery::own_shield`);
 // the facets come from the flat normal of the triangle under the fragment.
+//
+// The derivatives below need no suppression: the only call is under the `own_shield_shading`
+// override, which is the same on every lane.
 fn own_shield(in: VertexOutput) -> vec4<f32> {
     let n = normalize(in.normal);
     let to_eye = normalize(scene.fog.camera - in.world);

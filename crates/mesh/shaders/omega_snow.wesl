@@ -27,7 +27,7 @@
 // `panel-displacement.md`): the specular exponent is the plain `SpecPower` and its scale 1.
 
 import package::bindings::{emissive_scale, emissive_tint, scene};
-import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_PAD_MASK, MATERIAL_WAVE_MAP, material_sample};
+import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_PAD_MASK, MATERIAL_WAVE_MAP, material_sample_grad};
 import package::types::{VertexOutput};
 
 // What the draw's mode needs from the three normal maps and the program's constants: the lit
@@ -44,12 +44,17 @@ fn snow_wrap(x: f32, wrap: f32) -> f32 {
 }
 
 // The bumped normal, in the world frame the interpolated tangent and normal give.
-fn omega_snow_normal(entry: u32, in: VertexOutput, n: vec3<f32>) -> vec3<f32> {
+//
+// `grad` is `uv_gradients(in.texcoord)`: the draw is chosen by the interpolated tangent
+// (`lit_texel`'s `omega_snow_on`), which is not constant across a primitive, so the three
+// taps carry their own gradients (the coordinate's, times the tap's scale) rather than
+// taking the sampler's implicit ones from inside that branch.
+fn omega_snow_normal(entry: u32, in: VertexOutput, n: vec3<f32>, grad: mat2x2<f32>) -> vec3<f32> {
     let uv = in.texcoord;
     let blend = emissive_tint(entry + 2u);
-    let drift = material_sample(MATERIAL_PAD_MASK, uv).rgb;
-    let small = material_sample(MATERIAL_WAVE_MAP, uv * blend.y).rgb;
-    let large = material_sample(MATERIAL_FIFTH_MAP, uv * blend.z).rgb;
+    let drift = material_sample_grad(MATERIAL_PAD_MASK, uv, grad[0], grad[1]).rgb;
+    let small = material_sample_grad(MATERIAL_WAVE_MAP, uv * blend.y, grad[0] * blend.y, grad[1] * blend.y).rgb;
+    let large = material_sample_grad(MATERIAL_FIFTH_MAP, uv * blend.z, grad[0] * blend.z, grad[1] * blend.z).rgb;
     let mask = in.lightmap_texcoord.w;
     // The drift normal fades to `(0.21952, 0.21952, 1)` where the mask is 0 (`@0x174`-`@0x1b4`).
     let dx = mask * (2.0 * drift.x - 1.0) + 0.21952 * (1.0 - mask);
@@ -72,7 +77,7 @@ fn omega_snow_normal(entry: u32, in: VertexOutput, n: vec3<f32>) -> vec3<f32> {
     return normalize(mapped);
 }
 
-fn omega_snow(entry: u32, in: VertexOutput, lit_normal: vec3<f32>) -> OmegaSnow {
+fn omega_snow(entry: u32, in: VertexOutput, lit_normal: vec3<f32>, grad: mat2x2<f32>) -> OmegaSnow {
     let program = emissive_scale(entry);
     let fresnel = emissive_tint(entry);
     let spec_entry = emissive_tint(entry + 1u);
@@ -101,7 +106,7 @@ fn omega_snow(entry: u32, in: VertexOutput, lit_normal: vec3<f32>) -> OmegaSnow 
     out.normal = lit_normal;
     out.sun = f * fresnel.rgb * in.lightmap_texcoord.xyz * sun;
     out.diffuse = f * fresnel.rgb * in.lightmap_texcoord.xyz * (sun + nova * shadow_factor);
-    let gloss = material_sample(MATERIAL_ALBEDO, in.texcoord * spec_row.x).a;
+    let gloss = material_sample_grad(MATERIAL_ALBEDO, in.texcoord * spec_row.x, grad[0] * spec_row.x, grad[1] * spec_row.x).a;
     out.specular = scene.light.sun_specular.rgb * spec_entry.rgb * (gloss * sun_mask
         * pow(snow_wrap(dot(reflected, light), wrap), spec_entry.w));
     return out;

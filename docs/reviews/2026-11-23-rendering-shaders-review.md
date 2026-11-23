@@ -82,6 +82,81 @@ actually execute in non-uniform flow per pipeline override, and convert those to
 `material_sample_grad`/`textureSampleGrad` with `uv_gradients`, the same pattern
 already proven for the panel march.
 
+#### R1 resolution
+
+**Method.** Chromium's Tint (`just check-web-shaders`' compiler) is the oracle, because naga's
+uniformity check accepts even a `textureSample` behind a branch on a smooth varying (a probe through
+`oag_shader_check::validate` returned `Ok` for four such shaders). The `mesh.wgsl` artifact was
+compiled with every `@diagnostic(off, derivative_uniformity)` stripped; each error Tint gave was
+replaced by a zero of its type and the module compiled again, which lists every flagged site where
+Tint alone stops at the first. A flagged site's blamed guard was then classified by what it reads, and
+a guard classified constant across a primitive was rewritten to a uniform condition so the next guard
+of the same sites showed. Tint treats every fragment input, flat ones included, as possibly different
+between the lanes of a quad, so a flag is not the answer to "can it run non-uniform"; the guard's
+inputs are. A quad never spans two primitives, so these are constant across a quad:
+
+| Guard class | Reads | Verdict |
+| --- | --- | --- |
+| `override` or uniform | `own_shield_shading`, `texlod_slope`, `second_read`, `material_lod_bias`, `scene.*` | uniform |
+| flat varying | `slots` bits and the entry `(slots >> 24) & 63`, `specular_exponent`, `glow` | constant per primitive |
+| emissive table row | `row_scale`, `row_tint` indexed by the flat entry: `glow_program`, `water_kind`, `tarmac`, `chevron`, `is_cell`, `panel_entry`, the weapon programs | constant per primitive |
+| Zone stage tag | `raw.colour.a > 1.5`: the loader writes `ZONE_COLOUR_ALPHA + k` on every vertex of a submesh from that submesh's material (`mesh::rcs::psp2`), and a triangle belongs to one submesh, so it never mixes it | constant per primitive |
+| interpolated tangent length | `dot(in.tangent.xyz, in.tangent.xyz) > 0.25`, in `panel`, `omega_snow_on`, `omega_rock_on` and the hull normal map's test | **not constant** where a primitive's tangents diverge |
+
+Name-pooled taint over `lit_colour` (any guard reading `in.tangent`, `in.texcoord`, `in.world`,
+`in.colour`, `in.normal`, a sampled texel or a variable derived from one, other than the stage tag) found
+the tangent test alone; its three false hits were shadowed names (`water`, `gate`, `w`), read by hand.
+
+**Counts.** 122 source-level sites in `crates/mesh/shaders` (a `textureSample*`, `dpdx`, `dpdy` or
+`fwidth`, or a call of a helper that holds one, outside comments and function headers): `shade.wesl` 83,
+`texture_lod.wesl` 16, `zone.wesl` 5, `omega_snow.wesl` 4, `holo.wesl` 4, `pad.wesl` 4, `own_shield.wesl` 3,
+`omega_rock.wesl` 2, `water.wesl` 1. With the suppressions stripped Tint gave 86 errors before the module
+compiled, each patched out in turn (a callee's fetch is reported once per non-uniform call site, so this counts
+fetches and call sites together); all are in or behind `lit_colour`, and `own_shield.wesl`'s derivatives, under
+the `own_shield_shading` override, passed. **Six call sites sit behind the tangent test**, holding nine fetches:
+
+| Call site | Fetches | Change |
+| --- | --- | --- |
+| `else { first = material_sample(ALBEDO, first_uv) }` after `else if panel` | 1 | hoisted ahead of the `panel` test; `panel` overwrites it with its explicit fetch, so a non-panel pixel runs the one fetch it always ran |
+| `weight = material_sample(SIXTH_MAP, in.texcoord)` inside `panel` | 1 | `material_sample_grad`, `uv_gradients` taken before the test |
+| hull normal map, `material_sample(PAD_MASK, in.texcoord)` | 1 | `material_sample_grad` |
+| `omega_snow_normal` | 3 | `material_sample_grad`, gradients times the tap's scale |
+| `omega_snow` (gloss) | 1 | `material_sample_grad`, gradients times `spec_row.x` |
+| `omega_rock` | 2 | `material_sample_grad`, gradients times the tap's scale |
+
+`material_sample_grad` applies `material_lod_bias` as a level shift (both gradients times `2^bias`, exactly
+`1.0` where the override is `0`), so a fetch converted from `material_sample` keeps HD's bias. The other 116
+sites keep their guard, and the suppression Tint needs, now with a reason written beside it (`lit_colour`'s comment,
+and short ones on `pad_normal`, `holo_billboard`, `material_sample`; `zone.wesl` and `sample_at_slope_level` had
+theirs; `own_shield` needs none). After the change the same
+Tint walk on the committed artifact gives 80 errors with nothing neutralised and none with every
+constant-per-primitive guard neutralised and the tangent guards left alone; `tangent_guarded_fetches`
+(`crates/mesh/tests`) fails if a conversion is dropped.
+
+**Not covered.** The `mesh_bindless` variant is native-only and is not run through Tint (it differs from
+`mesh` by the `@if(bindless)` resource locals; both validate under naga). Tint's analysis does not depend on
+an `override`'s value, so no override set was varied. Tint stops at the first error per module; the walk above
+is what lists the rest. The stage-tag argument holds for 2048's loader (`ZONE_COLOUR_ALPHA` is written per
+submesh); a mod that authors `colour.a` per vertex would break it.
+
+**Pixels** (the pair scripts' recorded `ours.flags` through `compare-rerender-ours`'s `rerender`, one race
+frame per pair, the `oag-game` built from `main` against the one built from this change; two renders of one
+binary are byte-identical). Byte-identical: Pulse PSP `pulse-psp-race/talons-boost`, 2048
+`2048-vita/anulpha-pass`, Omega `omega/anulpha-pass`, `altima-2048`, `queens-mall-2048`, `sol-2048`,
+`square-2048`, `metro-park-2048`. Different, each by at most one 8-bit step of one channel: HD `hd/talons`
+66 and `hd/anulpha-pass` 1,696 of 2,073,600 pixels, Omega `omega/sebenco-climb` 204. Reverting only the hull
+normal map's conversion makes both HD frames identical, so that fetch's explicit gradient choosing a different
+mip than the sampler's implicit one at a few texels is the HD difference; on Sebenco it is the snow's
+(`omega_snow_normal` and its gloss fetch). **What those frames reach**, found by putting a garish constant in
+each converted path and re-rendering: the hull normal map is reached on `omega/anulpha-pass` and `altima-2048`
+(35,806 and 25,591 pixels moved) and converts byte-identically there; `omega_snow_normal` is reached on
+Sebenco Climb only (16,814 pixels moved). **No pair frame reaches `omega_rock` or the panel road's specular
+weight** (`omega-status.md` records that `DC_Rocks` is not drawn on another Omega pair's frame), so those two conversions are
+checked by the Tint walk and the source test, not by a pixel; they apply the same gradient to the same
+coordinate (times the tap's scale), as the snow's do. The panel hoist changes no fetch a panel pixel did not
+already make, and a non-panel pixel runs the one fetch it always ran. The frames do not reach the holo,
+Zone, shield-lightning or weapon paths either; those carry no conversion.
+
 ### R2. Emissive-table reads can index past the 64-row table by construction
 
 **Impact**: Medium - silent black/wrong output if a model ever places a program
@@ -240,6 +315,13 @@ it fails silently. Returning the delta alongside the colour (or funnelling both
 through one struct) would make the coupling structural instead of conventional.
 Cheap insurance for a subtle correctness path.
 
+**Resolution.** `shade::lit_texel` returns `Lit { colour, sun: SunTerms }` and `shadow::shadowed` takes the
+`SunTerms`; `lit_colour` fills them through a function-space pointer, and `var<private> sun_delta`, `sun_known`
+and `shadow_exempt` are gone from `bindings.wesl`. A caller can no longer reach `shadowed` without the lit pass
+that produced its inputs (`types.wesl`: `SunTerms`, `Lit`). All six frames above are byte-identical across this
+change. `glow.wesl`'s `glow_texel`, `glow_stamp` and `glow_program` are the same kind of private state and are not
+part of R9.
+
 ### R10. `depth_layer_shadow` assumes a square, full-map depth texture; rim taps can read clamped border
 
 **Impact**: Low - edge texels inside the `CASCADE_RIM` blend zone can compare
@@ -258,6 +340,20 @@ comment says must never happen ("Outside reads as uncovered, never as the
 border"). The weight gate covers `coords.w <= 0` but not a sample that starts
 inside and taps outside. A `textureLoad`-based tap or an explicit inside-check
 per tap would close it; today it is a small, probably-invisible edge artifact.
+
+**Resolution: fixed.** The depth map is `DEPTH_SIZE` 2,048, square, two full-map layers
+(`crates/render/src/shadow/map.rs`), so the first half of the finding holds today and stays a convention. The
+taps: a tap at half a texel (`1/4096` in `uv`) crosses the layer's edge exactly when `inside < 1/4096`, and there
+`near_weight = inside / CASCADE_RIM < (1/4096) / 0.1 = 0.00244` (the far layer's `far_weight` likewise). So a tap
+can cross while the weight is above zero. What it reads is not a border: `shadow_depth_sampler` is `ClampToEdge`
+with nearest filtering (`crates/mesh/src/mesh_render/shadow_map.rs`), so the crossing tap returns the layer's
+own edge texel, a real depth. The most one wrong tap can move a pixel is a quarter of the shadow (four taps)
+times the weight: `0.25 * 0.00244 = 6.1e-4` of the shadow, a sixth of one 8-bit step (`1/255 = 3.9e-3`). It
+can cross, so `depth_layer_shadow` now tests each tap against `[0, 1]` and counts one outside the layer as lit,
+as `depth_layer_coords` already does for a whole point; the change is below the output's quantisation by the
+arithmetic above. **No pair frame covers it**: the pairs run the coverage tier, not the `mapped` depth tier, so
+the check is a source assertion (`a_depth_tap_outside_its_layer_reads_uncovered`) and the arithmetic. A depth map
+that stops being square or full-layer still needs its own check; the finding's first half is then real.
 
 ### R11. `fs_stamp`'s loop bound is unclamped shader-side
 
@@ -346,15 +442,15 @@ Each finding was checked against the code on `main` at `0e8a38c80` before any fi
 
 | ID | Verdict | Evidence |
 | --- | --- | --- |
-| R1 | Confirmed as a risk, needs an audit | The `derivative_uniformity` suppressions and the implicit-LOD `material_sample` are as described. Whether any call site actually runs in non-uniform flow on a shipped pipeline variant is not yet shown. |
+| R1 | Confirmed as a risk, needs an audit | The `derivative_uniformity` suppressions and the implicit-LOD `material_sample` are as described. Whether any call site actually runs in non-uniform flow on a shipped pipeline variant is not yet shown. **Audited (lane `mesh-shader-uniformity`):** six call sites sit behind the interpolated tangent's length and are converted or hoisted; every other site's guard is constant across a primitive and its suppression now says so (see "R1 resolution"). |
 | R2 | Not confirmed | Every allocator that hands out an entry read with lookahead reserves the rows it reads. Water's `lay` reserves the whole block (`table.len() + block.len() < EMISSIVE_LIMIT`, `crates/mesh/src/mesh/rcs/water.rs`). `holo_billboard.rs` and `window_glass.rs` reserve `+ 2`, and `psp2/snow.rs` reserves `count`. `MaterialTables::of` writes table index `i` to row `i + 1`. A shader-side clamp would be insurance only. |
 | R3 | Confirmed | `crates/post/src/bloom/stamps.rs` calls `create_bind_group` on every `stamp_glow`. The group depends only on `target`, the layout, the sampler and the lane's buffer. **Fixed in `ca2fa7cee`: `stamp_glow` keeps its bright-pass group per target view (`the_stamp_group_is_kept_until_the_target_view_changes`).** |
 | R4 | Confirmed | Four `Padding until <date>` doc comments in `crates/mesh/src/mesh_render/uniforms.rs` describe live fields. **Fixed in `2127bff55`: each slot's comment says what it is; the `check-comment-history` ceiling for `mesh` lowered by four.** |
 | R5, R6 | Design hardening, not defects | No mismatched view or override combination was found. Assertions would pin conventions that currently hold. |
 | R7 | Confirmed | `engine_uv` in `crates/fx/shaders/mod_shader.wesl` divides by `clip.w` with no guard. **Fixed in `d649203b7`: `engine_uv` gives a point at or behind the camera's plane a coordinate far outside the picture and `engine_texture` reads it as transparent black (`a_point_behind_the_engine_camera_reads_transparent_black`).** |
 | R8 | Confirmed as documented cost | The three entries call `mod_fragment`. The fix is a note in `docs/architecture/wasm-extensions/mod-shaders.md`. **Fixed in `d565c81a1`: documented in `mod-shaders.md` and the mod author skill. A backdrop fill runs `mod_fragment` twice per pixel (`fs_backdrop`, then `fs_fringe`), an ordinary draw once; the three entries are alternatives, so "up to three" was too many.** |
-| R9 | Confirmed as coupling, not a current bug | All current `shadowed` callers run after `lit_texel`. |
-| R10 | Plausible, unverified | The four `textureSampleLevel` taps at half a texel are as described. Whether a tap crosses the layer edge while the rim weight is non-zero needs a numeric check. |
+| R9 | Confirmed as coupling, not a current bug | All current `shadowed` callers run after `lit_texel`. **Done:** the terms travel with the colour (`Lit`, `SunTerms`). |
+| R10 | Plausible, unverified | The four `textureSampleLevel` taps at half a texel are as described. Whether a tap crosses the layer edge while the rim weight is non-zero needs a numeric check. **Fixed:** a tap can cross with weight below `0.00244`, reading the clamped edge texel (error under one 8-bit step); each tap is now tested against its layer. |
 | R11 | Confirmed | `bloom.wesl` loops to `u32(constants.stamp_meta.x)` unclamped. The host clamps today. **Fixed in `44d8c9e9e`: `count` is `min(.., STAMP_LIMIT)`, the shader's name for the host's `stamps::MAX`.** |
 | R12 | Confirmed, low value | A `panic!` in `crates/gpu/src/texture.rs` on a format with no copy size. Every current caller passes a colour format. **Fixed in `8396b26d5`: a documented precondition and `debug_assert!` in place of the `panic!`; the callers are many and all pass colour formats, so a `Result` at each would be the larger change.** |
 | R13 | Not a finding | A suggestion for a future host-side review pass. |

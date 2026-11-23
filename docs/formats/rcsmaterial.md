@@ -3400,7 +3400,7 @@ equal `dc_iridescent_gradient.gtf`'s, so the binding is the disc's file (confide
    `TC0` for this variant stays the vertex-colour term the other variant reads: its vertex program was not read (chosen, not measured).
 3. **The craft's shadow is not drawn on these floors (confidence 85).** The fallback `colour * (1 - coverage * strength)` darkened the glass and the magstrip floor under the
    craft; the glass programs have no shadow lookup, and the magstrip floor's `ShadowToAlpha` redraw (`0x78d0c0`, Talon's race frame, three draws with `TXP unit5`) lights with
-   `TC1 + TC2`, no sun, so it draws the very colour the lit pass does and the original's frame shows no shadow there. `shade.wesl` sets a private `shadow_exempt` for the sheen
+   `TC1 + TC2`, no sun, so it draws the very colour the lit pass does and the original's frame shows no shadow there. `shade.wesl` sets `SunTerms::exempt` (returned with the colour) for the sheen
    and the (non-Zone) magstrip floor and `shadowed` returns their colour untouched. Test: `hd_shadowed_track_redraw::a_glass_sheen_chunk_is_not_shadowed`.
 4. **The magstrip floor carries the `/2` too (confidence 90)**, `MAD /2 H0.xyz, fog, H1, fogColour` at its end. On the Talon's race frame the mean grey error over ours' cyan
    panels fell **87 to 47**. The floor *outside* the panels reads 42 to 52 against the original, which is brighter: its frame shows purple lightning arcs and a lilac wash on the floor around the craft. **The

@@ -44,6 +44,8 @@ fn overlay(base: vec3<f32>, layer: vec3<f32>) -> vec3<f32> {
     return select(high, low, base < vec3<f32>(0.5));
 }
 
+// Its derivative-uniformity diagnostic is off for `lit_colour`'s reason (`shade.wesl`): the only
+// call is under the flat `slots` bit that marks a billboard, and the fetches below sit in no branch.
 @diagnostic(off, derivative_uniformity)
 fn holo_billboard(in: VertexOutput) -> vec4<f32> {
     // The `bindless` variant's slot - see `bindings.wesl`.

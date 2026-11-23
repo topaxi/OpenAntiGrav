@@ -394,7 +394,32 @@ struct VertexOutput {
     // The hull's tangent in world space in `xyz` (zero where the material has
     // none) and the binormal's factor in `w` - see `shade.wesl`'s `hull_normal`.
     @location(14) tangent: vec4<f32>,
-};
+}
+
+// What the sun added to the colour `lit_texel` returned, in that colour's own space: the amount
+// the track's shadowed redraw takes back out (`shadow::shadowed`). `delta` is zero wherever the
+// authored rig did not shade the fragment, which makes `shadowed` fall back to its multiply.
+struct SunTerms {
+    delta: vec3<f32>,
+    // Whether `delta` was written for the colour returned: set only where that colour is the
+    // generic combine's, so a special combine (the glass floor's facing ramp, the magstrip
+    // floor, a light cone) is never charged a sun term it did not contain.
+    known: f32,
+    // Whether the fragment's own program lights with no sun, so `shadowed` leaves its colour
+    // alone: the glass floor's facing-ramp combine (read live on Tech de Ra: neither variant,
+    // `0x76fac0` nor `0x7704c0`, samples a shadow map) and the magstrip floor (its shadowed redraw
+    // `0x78d0c0` draws the colour the lit pass does). The craft's shadow is absent from the
+    // original's frame there.
+    exempt: f32,
+}
+
+// A lit fragment: its colour and the sun terms `shadowed` needs to match. Returned together so
+// the shadowed redraw cannot be reached without the lit pass that produced its inputs.
+struct Lit {
+    colour: vec4<f32>,
+    sun: SunTerms,
+}
+;
 
 // Colour and screen-space velocity together, for the pipelines built against
 // the race's two attachments - see `mesh_render::Velocity`.
