@@ -192,6 +192,9 @@ pub struct Picker {
     index: usize,
     variant: usize,
     seconds: f32,
+    /// Where the glow ladder of the panel's `pulse="true"` texts stands when it is not
+    /// [`Self::seconds`] ([`Self::set_text_seconds`]).
+    text_seconds: Option<f32>,
     /// Seconds since the selection last moved - the slideshow's clock,
     /// which the original restarts on every selection (`TrackSelection_ApplySelection`
     /// transitions the new circuit's own state machine to `Info` afresh).
@@ -309,6 +312,7 @@ impl Picker {
             index,
             variant: 0,
             seconds: 0.0,
+            text_seconds: None,
             since_selection: 0.0,
             entry: EntryClock::default(),
             across: false,
@@ -441,6 +445,20 @@ impl Picker {
     #[must_use]
     pub fn seconds(&self) -> f32 {
         self.seconds
+    }
+
+    /// Seconds the panel's glow ladder has run: [`Self::seconds`] unless a still pins it
+    /// ([`Self::set_text_seconds`]).
+    #[must_use]
+    pub fn text_seconds(&self) -> f32 {
+        self.text_seconds.unwrap_or(self.seconds)
+    }
+
+    /// Pins the glow ladder of the panel's `pulse="true"` texts apart from [`Self::seconds`]: the
+    /// original's text counter and the screen's own clock are separate counters (`None` follows
+    /// the screen's).
+    pub fn set_text_seconds(&mut self, seconds: Option<f32>) {
+        self.text_seconds = seconds.map(|seconds| seconds.max(0.0));
     }
 
     /// Seconds since the selection last moved, or since the screen opened.

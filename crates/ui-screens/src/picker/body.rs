@@ -226,7 +226,7 @@ pub(super) fn body(
             text_draw(text, &content, layout),
             fade_in(text.transition, picker.seconds()),
         ));
-        let value = text.glow_stamp(picker.seconds());
+        let value = text.glow_stamp(picker.text_seconds());
         if value > 0 {
             out.push(Draw::GlowText { value });
         }

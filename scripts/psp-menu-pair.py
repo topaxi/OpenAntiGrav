@@ -113,9 +113,9 @@ SHIP_NODE_LOOP = 5.9833336
 #: end's bloom, wired for the cursor"), which gives the pulse phase exactly where the wall clock does not.
 SELECTOR_CENTRE = {"grid": (81, 159), "cell": (141, 111)}
 EDRAM = 0x04000000
-#: The card title's glyph box on `grid` and `cell` (x0, y0, x1, y1): `Text_Draw` stamps `220 - s` over its glyph quads, `s` a ladder 0, 15 .. 150 and back
+#: The card title's glyph box on `grid` and `cell`, and the circuit name panel's on `track` (x0, y0, x1, y1): `Text_Draw` stamps `220 - s` over its glyph quads, `s` a ladder 0, 15 .. 150 and back
 #: that steps every 1/20 s of a counter of its own (`docs/ui/campaign-screens.md`, "The front end's bloom, wired from the widgets' own attributes").
-TITLE_BOX = {"grid": (262, 88, 340, 116), "cell": (262, 30, 420, 60)}
+TITLE_BOX = {"grid": (262, 88, 340, 116), "cell": (262, 30, 420, 60), "track": (300, 30, 440, 80)}
 
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 

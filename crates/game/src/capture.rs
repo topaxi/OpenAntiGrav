@@ -172,7 +172,7 @@ pub struct Options {
     /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
     /// own docs.
     pub menu_ticker: Option<String>,
-    /// With `--menu-page grid-select`/`cell-select`, the seconds the card title's glow ladder has run -
+    /// With `--menu-page grid-select`/`cell-select`/`track-select`, the seconds the card title or the name panel's glow ladder has run -
     /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
     pub menu_title_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
@@ -763,6 +763,7 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_picker_step_seconds,
                     options.menu_entry_seconds,
+                    options.menu_title_seconds,
                     false,
                 );
                 // The shared two-person page: the second half on the next team, the first
@@ -795,6 +796,7 @@ pub fn run(
                         options.menu_picker_seconds,
                         options.menu_picker_step_seconds,
                         options.menu_entry_seconds,
+                        options.menu_title_seconds,
                         true,
                     );
                     let (mut second_list, _) = picker_page(
@@ -816,6 +818,7 @@ pub fn run(
                         options.menu_picker_seconds,
                         options.menu_picker_step_seconds,
                         options.menu_entry_seconds,
+                        options.menu_title_seconds,
                         false,
                     );
                     // The second half is the base (it brings the screen's own backdrop and

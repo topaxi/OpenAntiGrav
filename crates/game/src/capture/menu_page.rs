@@ -925,6 +925,8 @@ pub(super) fn picker_page(
     // `--menu-entry-seconds` - seconds since the page became current, for its `vwipe` images;
     // `None` draws them finished.
     entry_seconds: Option<f32>,
+    // `--menu-title-seconds` - where the panel's glow ladder stands; `None` follows `seconds`.
+    text_seconds: Option<f32>,
     // Draw over what is already on screen rather than over the screen's own backdrop: the
     // second half of the shared two-person page.
     over: bool,
@@ -1026,6 +1028,7 @@ pub(super) fn picker_page(
             oag_ui::screen::EntryClock::at(s)
         }),
     );
+    picker.set_text_seconds(text_seconds);
     if let Some(since) = step_seconds {
         picker.set_since_selection(since);
     }

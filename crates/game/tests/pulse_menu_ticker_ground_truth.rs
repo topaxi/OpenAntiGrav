@@ -531,6 +531,17 @@ fn cell_select_still(
     tag: Option<&str>,
     label: &str,
 ) -> Vec<u8> {
+    menu_still(image, "cell-select", args, tag, label)
+}
+
+/// [`cell_select_still`] for any `--menu-page`.
+fn menu_still(
+    image: &std::path::Path,
+    page: &str,
+    args: &[&str],
+    tag: Option<&str>,
+    label: &str,
+) -> Vec<u8> {
     let dir = std::env::temp_dir().join(format!(
         "oag-pulse-cell-footer-{}-{label}",
         std::process::id()
@@ -549,13 +560,7 @@ fn cell_select_still(
     let out = dir.join("still.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args([
-            "--no-audio",
-            "--size",
-            "480x272",
-            "--menu-page",
-            "cell-select",
-        ])
+        .args(["--no-audio", "--size", "480x272", "--menu-page", page])
         .args(args)
         .arg("--screenshot")
         .arg(&out)
@@ -568,7 +573,7 @@ fn cell_select_still(
         .env_remove("DISPLAY")
         .status()
         .expect("running oag-game");
-    assert!(status.success(), "oag-game --menu-page cell-select");
+    assert!(status.success(), "oag-game --menu-page {page}");
     let rgba = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
         .expect("a PNG")
         .rgba;
@@ -668,5 +673,51 @@ fn cell_selects_footer_takes_the_ticker_pin_and_the_tag_and_its_title_the_glow_p
         differing_in(&high, &low, selector),
         0,
         "{label}: the title's glow phase moved the Selector's box"
+    );
+}
+
+/// **Track Select's circuit name takes its own glow phase.** The name panel's `pulse="true"` texts stamp
+/// the same `220 - 15 k` ladder as a card title, on a counter of its own, so a pair script pins it
+/// (`--menu-title-seconds`) from the byte the original stamps over the name. The two phases differ in the
+/// name's box `(300, 30, 140, 50)` and nowhere else.
+#[test]
+#[ignore = "needs a Pulse PSP disc image in data/images and a GPU adapter"]
+fn track_selects_circuit_name_takes_its_own_glow_phase() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let Some((label, image)) = images.into_iter().next() else {
+        return;
+    };
+    let name = (300, 30, 140, 50);
+    let rest = [(0, 0, 480, 30), (0, 80, 480, 192), (0, 30, 300, 50)];
+    let still = |seconds: &str, tag: &str| {
+        menu_still(
+            &image,
+            "track-select",
+            &[
+                "--menu-picker-seconds",
+                "0.2",
+                "--menu-title-seconds",
+                seconds,
+            ],
+            None,
+            tag,
+        )
+    };
+    let high = still("0.0", "name-high");
+    let low = still("0.5", "name-low");
+    assert!(
+        differing_in(&high, &low, name) > 300,
+        "{label}: --menu-title-seconds does not move the circuit name's glow"
+    );
+    assert_eq!(
+        rest.iter()
+            .map(|&r| differing_in(&high, &low, r))
+            .sum::<usize>(),
+        0,
+        "{label}: the name's glow phase moved something outside the name panel"
     );
 }
