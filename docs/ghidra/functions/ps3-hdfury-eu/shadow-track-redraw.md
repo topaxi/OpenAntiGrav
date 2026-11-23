@@ -229,14 +229,14 @@ made the 1024 map **2.2 texels per world unit**. Wiring: see below.
 
 - **Darkness.** `mesh`'s `shadowed` (`crates/mesh/shaders/shadow.wesl`) takes the
   sun back out of the lit colour in proportion to coverage (`colour - coverage *
-  sun_delta`), where `shade.wesl` records the sun's share of what it returned
+  sun.delta`), where `shade.wesl` records the sun's share of what it returned
   (`surface * sun_diffuse + specular`, in the output's own space, linear or
   encoded). No darkness constant remains for an HD race. `MAP_STRENGTH` (0.5)
   survives only for a scene with no authored light rig and for the `mapped`
   tier, which is this project's own, and says so.
 - **Where the law does not reach, and what happens there.** `shade.wesl` records
   the sun's share only where the colour it returns is still the generic combine's
-  (`sun_known`). The glass floor's facing-ramp sheen, the magstrip floor, the
+  (`SunTerms::known`). The glass floor's facing-ramp sheen, the magstrip floor, the
   light cone, the flame and the absorb shell each return their own program's
   colour, and subtracting the generic sun term from one of them would take out
   light it never contained, so on those track chunks `shadowed` keeps the old
