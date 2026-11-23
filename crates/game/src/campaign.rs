@@ -243,12 +243,10 @@ impl Campaign {
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]'s own draw list for a
-/// caller with no [`crate::records::Store`] session to rotate the ticker's tips
-/// off of - `crate::capture::menu_page`'s `--menu-page grid-select`/
-/// `cell-select`, the same "no live session to fold through" gap this
-/// module's own `load_hd` leaves `circuit_names` with. The ticker draws at a
-/// frozen `elapsed` through `tips`: one pinned message (`--menu-ticker`), or
-/// none, honestly, rather than a guessed rotation. `measure` is the `Default`
+/// caller with no live session to rotate the ticker's tips - `crate::capture`'s
+/// `--menu-page grid-select`/`cell-select`, the same "no live session to fold
+/// through" gap this module's own `load_hd` leaves `circuit_names` with. The
+/// ticker draws at a frozen `elapsed` through `tips`. `measure` is the `Default`
 /// role's text width, as the live stage measures the ticker. The legend needs
 /// neither and draws in full, with whatever tag it was given.
 #[must_use]

@@ -285,24 +285,21 @@ pub(super) fn campaign_page(
         campaign.chooser = None;
     }
     // The player's tag and the pinned ticker message (`--menu-ticker`), as `capture` gives
-    // the picker pages' footer; no per-session tip rotation, the same gap `circuit_names`
-    // below has - see `crate::campaign::static_footer_overlay`. Read before
-    // `campaign.sprites` moves out below.
+    // the picker pages' footer. Read before `campaign.sprites` moves out below.
     if let Some(legend) = campaign.nav_legend.as_mut() {
         legend.set_tag(footer.tag);
     }
-    let tips = match (campaign.ticker.as_mut(), footer.pin) {
-        (Some(layout), Some(pin)) => {
-            layout.pin = Some(pin);
-            crate::records::ticker_tips(
-                Some(layout),
-                strings,
-                records,
-                crate::records::TICKER_CAPTURE_SEED,
-            )
-        }
-        _ => Vec::new(),
-    };
+    if let (Some(layout), Some(pin)) = (campaign.ticker.as_mut(), footer.pin) {
+        layout.pin = Some(pin);
+    }
+    // The picker pages' rule (`menu_page::picker_footer`): the pinned message, else the capture
+    // seed's rotation frozen at its start.
+    let tips = crate::records::ticker_tips(
+        campaign.ticker.as_ref(),
+        strings,
+        records,
+        crate::records::TICKER_CAPTURE_SEED,
+    );
     let measure = |text: &str| oag_ui::font::measure(footer.font, text);
     let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, &tips, &measure);
     let ticker_draw = campaign.ticker.as_ref().and_then(|layout| {
