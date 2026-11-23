@@ -175,14 +175,14 @@ impl Set {
     /// Acts on `cue` when it starts or stops one of the pairs; `false` for any other cue.
     pub(super) fn handle(
         &mut self,
-        cue: Cue,
-        slot: usize,
+        event: CueEvent,
         mixer: &mut Mixer,
         banks: &Banks,
         rng: &mut Rng,
         listener: &oag_audio::Listener,
         craft: &[Option<(Vec3, f32)>],
     ) -> bool {
+        let (cue, slot) = (event.cue, usize::from(event.slot));
         for (voices, (start, stop)) in self.voices.iter_mut().zip(PAIRS) {
             if cue == start {
                 voices.start(slot, mixer, banks, rng, listener, craft);

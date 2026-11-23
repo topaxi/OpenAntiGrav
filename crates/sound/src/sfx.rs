@@ -312,8 +312,7 @@ impl Audio {
             for event in cues {
                 let slot = usize::from(event.slot);
                 if voices.slot_held.handle(
-                    event.cue,
-                    slot,
+                    event,
                     mixer,
                     banks,
                     &mut voices.rng,
