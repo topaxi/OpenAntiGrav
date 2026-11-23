@@ -683,4 +683,28 @@ fn the_discs_list_screens_draw_their_own_rows_and_header() {
         0,
         "{label}: --menu-focus-level moved a row that is not focused"
     );
+
+    // Single Player's focused value blooms (the haze over the strip just above `SINGLE RACE`), the next row's does not.
+    let single = menu_page_still(
+        &image,
+        "pulse-single",
+        &["--menu-focus-level", "1"],
+        None,
+        "single",
+    );
+    let strip_mean = |top: usize| -> f32 {
+        let at = |x: usize, y: usize| {
+            let px = (y * 480 + x) * 4;
+            (single[px] as f32 + single[px + 1] as f32 + single[px + 2] as f32) / 3.0
+        };
+        let cells: Vec<f32> = (top..top + 4)
+            .flat_map(|y| (252..330).map(move |x| (x, y)))
+            .map(|(x, y)| at(x, y))
+            .collect();
+        cells.iter().sum::<f32>() / cells.len() as f32
+    };
+    assert!(
+        strip_mean(36) > strip_mean(59) + 30.0,
+        "{label}: the focused value of Single Player has no glow haze"
+    );
 }

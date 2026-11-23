@@ -1957,7 +1957,7 @@ columns are two measurements, not one frame twice):
 | --- | --- | --- | --- |
 | Main Menu | gap; `menu.toml`'s `main` 11.40 % (mean grey 15.10) | 0.97 % (3.01, 0.41) | `--menu-page pulse-main` |
 | Racebox | gap (no page: RACEBOX opens `race`) | 0.44 % (1.66, 0.31) | `--menu-page pulse-racebox` |
-| Single Player | gap; `menu.toml`'s `race` 1.91 % (3.90) | 1.71 % (3.06, 0.41) | `--menu-page pulse-single` |
+| Single Player | gap; `menu.toml`'s `race` 1.91 % (3.90) | 1.04 % (2.69, 0.41); 1.71 % before the focused value's bloom | `--menu-page pulse-single` |
 | Options+ (`Additional`) | gap; `menu.toml`'s `options` 5.88 % (9.15) | 0.44 % (2.01, 0.32) | `--menu-page pulse-options` |
 | Pause menu (Time Trial, Moa Therma White, Venom) | gap | 1.56 % (4.51, 0.94); 4.10 % on the first grab (2 s after START, header mid-slide) | `--drive-file scripts/pulse-pause.drive --original-menu` |
 
@@ -1974,9 +1974,10 @@ clock a still does not have: the pair script reads its level off the frame (`foc
 fitted per pair (`compare-menu-movie-phase.py`: Main Menu needs frame 42, 4.75 to 0.45 grey over the bare pixels).
 
 **Largest regions left** (px over 40 grey): Main Menu 1,265: the typed help line and the focused row's glow 814, the footer ticker 324 and prompt rings 110. Racebox 571 and Options 580: the
-footer ticker 322 to 345 (glyph edges of the scrolling tip) and the prompt rings 225 (`Confirm`/`Back`, the half-texel softness `pulse-psp-cell` already measured). **Single Player, the worst of the four
-list screens, 2,238: row 1 878 (the focused value's halo and the step arrows), rows 2 to 4 341 (the arrows), KILLS 128, the `Help` prompt (a triangle and `Help` at (20, 252): the screen's own `Text`s, not drawn) 191.**
-The original's step arrows are dimmed where the list is at its first entry (every row is at entry 0 here, so every left arrow is dark and only the right one lit); ours lights both, because
+footer ticker 322 to 345 (glyph edges of the scrolling tip) and the prompt rings 225 (`Confirm`/`Back`, the half-texel softness `pulse-psp-cell` already measured). **Single Player was the worst of the four
+list screens at 1.71 % (2,238 px): the focused value `SINGLE RACE` 910 (the original blooms it: a haze round the glyphs; ours stamped no glow on a settings page, the code's "unmeasured"), the step arrows 66 on row 1 and 277 on rows 2 to 4, KILLS 128, the `Help` prompt (a triangle and `Help` at (20, 252): the screen's own `Text`s, not drawn) 191.
+Fixed: the focused value of a settings page stamps the glow (`rows.rs`, `skin.selected_stamp()`, the pulse's own ladder; the label and the other rows' values do not), 910 px to 35, whole frame 1.71 % to 1.04 %; it is also a live change to the RACE page's focused value on Pulse.**
+Left: the original's step arrows are dimmed where the list is at its first entry (every row is at entry 0 here, so every left arrow is dark and only the right one lit); ours lights both, because
 ours' lists wrap (the `race` page's design). KILLS is greyed on the original (ink peak 36 against ours' dimmed (114, 127, 142)) and holds `5` where the list's authored default is `10` (the
 native screen's rule for a disabled row is not read), and ours greys it by a rule read off this one frame (`Eliminations` is inert while `Mode` is not `Elimination`). Measured, not fixed.
 
@@ -1985,7 +1986,7 @@ Ship Select, `@TICKS@` race ticks, START, 120 ticks) with `--original-menu`; `ps
 `data/saves/pulse-psp/time-trial-moa-therma-white-venom-grid.ppst` loaded (`psp-state.py`, the serial default is Pulse USA's), 4 s, START, 4 s. The saved state reads the HUD clock 0.40.6 to 0.40.8 at the
 pause (the CPU is held after the load; the wall waits do not move it), so `--pause-clock` is the `CURRENT` the frame shows, read by eye, and ours is played to it (`PAUSE_CLOCK_ZERO_TICKS["pulse"]` = 276:
 ours read 0.35.4 at 2,400 ticks, 0.40.8 at 2,724); with that the record 1.17.1, `current`, the GO board and the camera match. Fixed: the HUD under the tint, the tag off the footer, GAME MANUAL
-in a compare shot, and the header (taken settled, see `docs/ui/pause-menu.md`, "Pulse"). **Largest regions left** (of 2,031): the rows 807 and the focused row 279: the original's rows are
+in a compare shot, and the header (taken settled, see `docs/ui/pause-menu.md`, "Pulse"). **The pause menu is the worst pair now (1.56 %).** **Largest regions left** (of 2,031): the rows 807 and the focused row 279: the original's rows are
 brighter (peak (65, 204, 225) against ours' (49, 155, 173), the bloom of the front end's glow stamps), because ours' glow pass runs only on a cleared target (`Renderer::render`'s `glowing` needs
 `LoadOp::Clear`) and a menu over a parked race draws with `Load`: **the cause, not fixed** (a renderer change); the music pill and `FENIX FUNK 5 (WIPEOUT EDIT)` 672 (the original is playing, ours
 runs `--no-audio` and has no now-playing line to draw); the `Confirm` ring 212. The focused row's pulse level is not pinned on the drive route (the session's own clock runs it).

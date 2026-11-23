@@ -8,7 +8,7 @@
 //! (`MainMenu_Definition.xml`, `RaceBox_Definition.xml`, `Additional_Definition.xml`), every row
 //! points at its own page because a still never activates one, and they draw through the
 //! same `oag_ui::menu::draw_list` the live pages do. `docs/tools/compare-page.md`, "Pulse
-//! front-end list screens".
+//! list screens and the pause menu".
 
 use anyhow::{Context, Result};
 use oag_title::{ListScreen, Title};
