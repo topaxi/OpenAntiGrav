@@ -182,6 +182,20 @@ pub struct WallContact {
     pub collider: u32,
 }
 
+/// How many [`FrictionlessRecord`]s a frame keeps. **Chosen, not measured:** the original's ring
+/// size is unread.
+pub const MAX_FRICTIONLESS: usize = 8;
+
+/// One contact against a surface with no friction: where it met the hull and the impulse it
+/// applied.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct FrictionlessRecord {
+    /// Where the probe met the triangle, in world space.
+    pub point: Vec3,
+    /// `|p|`, the impulse the contact applied.
+    pub impulse: f32,
+}
+
 /// What the wall constraint did this frame.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct WallResponse {
@@ -207,6 +221,13 @@ pub struct WallResponse {
     /// `MagFloor`), and so moved the body without driving any reaction ([`reacts`]).
     /// Reporting only.
     pub floor_contacts: u32,
+    /// The frictionless records of this frame (`Floor`, `MagFloor`), the first
+    /// [`MAX_FRICTIONLESS`] of them, in resolve order; [`Self::floor_contacts`] counts them all.
+    /// **Reporting only**, not read by physics and not hashed: what the original's ring walk
+    /// hands `Ship_SpawnContactFx`, whose kind rule gives a record with no friction the
+    /// no-damage spark (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`, "which
+    /// records carry no friction").
+    pub frictionless: [FrictionlessRecord; MAX_FRICTIONLESS],
     /// Set when the hull box is too small to probe with, so nothing can respond: a loud
     /// "this did nothing and here is why" instead of a feature that silently stops working.
     pub hull_degenerate: bool,
@@ -297,10 +318,10 @@ pub fn responds(surface: Surface) -> bool {
 /// `0x088426ac`. A floor or magstrip is the `-1.0` sentinel and never damages.
 /// Confidence **90** on the damage gate.
 ///
-/// The impact edge, sparks and zone test share the predicate, **chosen, not measured**:
-/// the original's spark and camera-shake dispatch at `0x0884263c` is gated on `0x0883e37c`
-/// (unread) and a camera proximity test, so whether a floor contact sparks is open. Kept
-/// wall-only so floor contacts change the body and nothing a player hears or is scored on.
+/// The impact edge, the attached spark, the camera shake and the zone test share the
+/// predicate, **chosen, not measured**. A frictionless record does throw the one-shot
+/// no-damage spark on the titles whose ring walk was read (`WallResponse::frictionless`,
+/// `oag-raceplay`'s `floor_sparks`); it changes nothing else a player hears or is scored on.
 #[must_use]
 pub fn reacts(friction: f32) -> bool {
     friction > 0.0
@@ -378,7 +399,16 @@ pub fn resolve<R: Raycaster + ?Sized>(
         response.velocity_delta += applied.velocity_delta;
         response.angular_velocity_delta += applied.angular_velocity_delta;
         if !reacts(friction) {
-            // A floor contact moves the body and nothing else ([`reacts`]).
+            // A floor contact moves the body and drives no reaction ([`reacts`]).
+            if let Some(slot) = response
+                .frictionless
+                .get_mut(response.floor_contacts as usize)
+            {
+                *slot = FrictionlessRecord {
+                    point: contact.point,
+                    impulse: applied.impulse_magnitude,
+                };
+            }
             response.floor_contacts += 1;
             continue;
         }

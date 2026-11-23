@@ -53,7 +53,8 @@ const SYSTEMS: usize = 35;
 const NO_TRIGGER_RECOVERED: &[(&str, &str)] = &[
     // **Not `WO_SHIP_COLL_SPARK_NODAMAGE`**, as of 2026-10-26: it is the collision cage's contact
     // spark (`Ship_DispatchCollisionFx`'s `damaged` is the record's friction above zero, the cage's
-    // is `0`), wired as `Trigger::CollisionSparkNoDamage` off `Stage::throw_cage_sparks`.
+    // is `0`), wired as `Trigger::CollisionSparkNoDamage` off `Stage::throw_cage_sparks`, and on
+    // HD's ring walk a floor, mag-floor or reset record's one-shot (`floor_sparks`).
     (
         "WO_SHIP_COLL_SPARK_TRAIL_SMOKE",
         "a sibling of the `_TRAIL` the damage tree embeds, and nothing reads \

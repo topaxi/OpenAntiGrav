@@ -462,6 +462,7 @@ impl Race {
             self.draw_extension_effects();
             self.view.advance_damage_smoke(&self.core);
             self.view.advance_wreck_fx(&self.core);
+            self.view.advance_floor_sparks(&self.core);
             self.view.advance_particles(&self.core);
             self.view.advance_scenery_fx(&self.core, self.core.sim.dt);
         }

@@ -184,8 +184,9 @@ struct Riding {
 pub(super) struct HitSparks {
     /// Model-space locators per slot - see [`anchors`].
     anchors: Vec<Vec<SparkAnchor>>,
-    /// HD's Cannon-hit locators per slot - see [`weapon_anchors`]. Empty on
-    /// every other title.
+    /// `Ship_DispatchCollisionFx`'s locators per slot - see [`weapon_anchors`]: HD's Cannon-hit
+    /// spark and a frictionless record's one-shot ([`crate::floor_sparks`]) pick from them.
+    /// Empty on every other title.
     weapon_anchors: Vec<Vec<SparkAnchor>>,
     /// Seconds before each slot's locator may fire again.
     cooldown: [[f32; MAX_NODES]; MAX_SHIPS],
@@ -217,6 +218,12 @@ impl HitSparks {
     pub(super) fn with_weapon_anchors(mut self, anchors: Vec<Vec<SparkAnchor>>) -> Self {
         self.weapon_anchors = anchors;
         self
+    }
+
+    /// `slot`'s locators for `Ship_DispatchCollisionFx`'s dispatch, empty on a title that does
+    /// not throw the Cannon's craft-hit spark (see [`weapon_anchors`]).
+    pub(super) fn dispatch_anchors(&self, slot: usize) -> &[SparkAnchor] {
+        self.weapon_anchors.get(slot).map_or(&[], Vec::as_slice)
     }
 
     /// How many sparks are still riding their locator.

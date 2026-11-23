@@ -212,7 +212,7 @@ impl ContactFx {
                 self.attached,
                 shielded,
                 evaluated.wall.impact,
-                evaluated.wall.resolved.is_some(),
+                evaluated.wall.resolved.is_some() || evaluated.wall.floor_contacts > 0,
                 pair.is_some(),
             )
         });

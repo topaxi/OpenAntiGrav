@@ -987,7 +987,19 @@ impl Race {
             if self.draws() {
                 self.view.note_field_wall(slot, evaluated.wall);
             }
-            let reset_contact = self.core.sim.reset_zone_contact(slot, &env, position);
+            let reset_hit = self.core.sim.reset_zone_contact(slot, &env, position);
+            let reset_contact = reset_hit.is_some();
+            #[cfg(feature = "view")]
+            if self.draws() {
+                let point = reset_hit.map(|contact| contact.point);
+                self.view.floor_sparks.note(
+                    slot,
+                    &self.core.sim.world.ships[slot],
+                    &evaluated.wall,
+                    point,
+                    self.view.hit_sparks.dispatch_anchors(slot),
+                );
+            }
             let eliminator_route = self.core.sim.world.mode() == Mode::Eliminator;
             let cage = oag_gameplay::cage::pass(
                 self.core.sim.spline.cage(),

@@ -277,7 +277,12 @@ impl RaceView {
             core.sim.dt,
             crate::contact_fx::Touch {
                 evaluated,
-                pair: self.pair_contacts[slot],
+                pair: self.pair_contacts[slot].or_else(|| {
+                    crate::floor_sparks::not_racing_record(
+                        &core.sim.world.ships[slot],
+                        &evaluated.wall,
+                    )
+                }),
             },
         );
     }
@@ -306,7 +311,12 @@ impl RaceView {
                     core.sim.dt,
                     crate::contact_fx::Touch {
                         evaluated: &step.evaluated,
-                        pair: self.pair_contacts[slot],
+                        pair: self.pair_contacts[slot].or_else(|| {
+                            crate::floor_sparks::not_racing_record(
+                                &core.sim.world.ships[slot],
+                                &step.evaluated.wall,
+                            )
+                        }),
                     },
                 );
             }

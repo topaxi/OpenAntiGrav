@@ -316,7 +316,18 @@ impl Race {
             &*self.core.sim.collision,
             self.core.sim.dt,
         );
-        let reset_contact = self.core.sim.reset_zone_contact(slot, &env, before);
+        let reset_hit = self.core.sim.reset_zone_contact(slot, &env, before);
+        let reset_contact = reset_hit.is_some();
+        #[cfg(feature = "view")]
+        if self.draws() {
+            self.view.floor_sparks.note(
+                slot,
+                &self.core.sim.world.ships[slot],
+                &evaluated.wall,
+                reset_hit.map(|contact| contact.point),
+                self.view.hit_sparks.dispatch_anchors(slot),
+            );
+        }
         let eliminator_route = self.core.sim.world.mode() == oag_race::Mode::Eliminator;
         let ship = &mut self.core.sim.world.ships[slot];
         let cage = oag_gameplay::cage::pass(

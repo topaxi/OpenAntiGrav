@@ -217,12 +217,16 @@ impl RaceSim {
     /// the original's `Reset` contact comes out of the narrowphase inside
     /// `Body_StepWorld`, and the cage (`oag_gameplay::cage::pass`) runs after it, in
     /// the entity update that then reads the contact ring.
-    pub(super) fn reset_zone_contact(&self, slot: usize, env: &Environment, before: Vec3) -> bool {
+    pub(super) fn reset_zone_contact(
+        &self,
+        slot: usize,
+        env: &Environment,
+        before: Vec3,
+    ) -> Option<oag_physics::reset::ResetContact> {
         let ship = &self.world.ships[slot];
         // The same `env` the force law just ran with, so the self-collider
         // exclusion cannot differ between the two.
         oag_physics::reset::contact(&ship.physics, &ship.handling, env, &self.collision, before)
-            .is_some()
     }
 
     /// Whether this craft has gone longer without a hover contact than the

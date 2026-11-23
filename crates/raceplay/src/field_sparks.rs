@@ -25,7 +25,7 @@ use super::*;
 use crate::contact_fx::{Attach, PairContact, attach_rule, nearest_locator};
 
 /// How close a view's eye must be, squared (`10000`, `0x000ec378`..`0x000ec4a4`).
-const REACH_SQUARED: f32 = 10_000.0;
+pub(super) const REACH_SQUARED: f32 = 10_000.0;
 
 /// One craft's spark while it is held.
 #[derive(Debug, Clone, Copy)]
@@ -65,7 +65,7 @@ impl FieldSparks {
 #[cfg(feature = "view")]
 impl RaceView {
     /// Every local view's eye: the player's and each extra seat's.
-    fn view_eyes(&self, core: &SimRace) -> Vec<Vec3> {
+    pub(super) fn view_eyes(&self, core: &SimRace) -> Vec<Vec3> {
         let player = self.camera_frame(core).position;
         std::iter::once(player)
             .chain(self.viewpoint_eyes())
@@ -90,7 +90,13 @@ impl RaceView {
                 && ship.in_world()
                 && !core.sim.world.person_flown(slot);
             let wall = self.field_sparks.walls[slot].filter(|_| stepped);
-            let pair: Option<PairContact> = self.pair_contacts[slot].filter(|_| stepped);
+            let pair: Option<PairContact> = self.pair_contacts[slot]
+                .or_else(|| {
+                    self.field_sparks.walls[slot]
+                        .as_ref()
+                        .and_then(|wall| crate::floor_sparks::not_racing_record(ship, wall))
+                })
+                .filter(|_| stepped);
             let shielded = ship.physics.shield_pickup_timer > 0.0;
             let position = ship.physics.body.position;
             let seen = eyes.iter().any(|eye| {
@@ -106,7 +112,7 @@ impl RaceView {
                 held.is_some(),
                 false,
                 wall.is_some_and(|wall| wall.impact),
-                wall.is_some_and(|wall| wall.resolved.is_some()),
+                wall.is_some_and(|wall| wall.resolved.is_some() || wall.floor_contacts > 0),
                 pair.is_some(),
             );
             let model = self.ship_model_matrix_of(core, slot);
