@@ -429,3 +429,4 @@
 0x8117cb9c	function	Detonator_SpawnObject	60	detonator-placement.md
 0x810bfd54	function	Team_LoadHandlingStats	75	detonator-hull.md
 
+0x811a1870	function	Collision_PairFriction	82	craft-laws.md

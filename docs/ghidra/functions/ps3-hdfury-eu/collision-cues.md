@@ -374,3 +374,173 @@ original's range, then set `grind_played: true`.
 - **Which ring slot a craft pair's record takes**, and so which stale normal it reads. The
   count (`body + 0x4a0`) restarts each frame and records fill in resolve order; whether the
   track or the pairs are resolved first is unread. Modelling the stale normal needs it.
+
+## 2026-11-23: which records carry no friction, and the spark they throw
+
+Lane `hd-spark-row5-re`, static only (Ghidra and the file's bytes, TOC `0x008ad4d8` for every
+HD function below, checked with `scripts/ps3-toc.py toc`). No RPCS3 run: the packaged build
+refused HD save states. The question is the ring walk's other branch: `Ship_SpawnContactFx`
+picks the spark kind from the record's friction (`+0x40`), so a record with none throws
+`WO_SHIP_COLL_SPARK_NODAMAGE` instead of restarting the attached damage spark, and the same
+zero skips `Ship_ApplyDamage` (`0x000ec51c`).
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x002eaba8` | function | `TrackCollision_AddMeshCollider` | 82 |
+| `0x0098d5b8` | data | `g_ShipFloorFriction` | 78 |
+
+### Bottom line
+
+| The craft (material 0) against | Built by | Material | Class `+0x74` | Record friction | Kind | Confidence |
+| --- | --- | ---: | ---: | --- | ---: | ---: |
+| `Wall Collision` (`0x3ba`) | `0x002eaba8` | 3 | 0 | `0.035` (`0.025` in the masked modes) | 0, the attached damage spark | 88 |
+| `collision_trackwall` (`0x3ed`) | `0x002eaba8` | 3 | 5 | the same | 0 | 85 |
+| another craft's body | `Ship_Construct` `0x000dece0`, twin `0x000e0d24` | 0 | - | `0.035` (`+0x28`) | 0 (landed row 1 stands) | 85 |
+| `Floor Collision` (`0x3b9`) | `0x002eaba8` | 2 | 1 | `g_ShipFloorFriction`, never written: **0** | **2** | 78 |
+| `Mag Floor Collision` (`0x3e6`) | `0x002eaba8` | 2 | 3 | the same: **0** | **2** | 78 |
+| `Reset Collision` (`0x3cd`) | `0x002eaba8` | 4 | 2 | the same: **0** | **2**, and the record sends the craft to state 6 | 78 |
+| a wreck (state 6's compound collider) | `Ship_Construct` `0x000ded38`.. | 1 | - | `(0, 1)` is outside the table: 0, **but no such record is made**: a compound (type 6) is tested against meshes and compounds only ([collision.md](collision.md), "type 6 is a compound shape"), never against a craft's box (type 3) | none | 75 |
+| anything of material 5 | not read | 5 | - | `(5, 0)` returns 0 | 2, if it ever touches a craft | - |
+| `Cage Collision` (`0x3e7`) | none: `0x002eacc8` skips the node | - | - | no record | - | 82 |
+
+So on HD the one-shot no-damage spark is what a craft throws when its box meets the floor, the
+mag floor or a reset plane. Walls and live craft keep the attached damage spark. The cage makes
+no collider, and a wreck's compound never meets a live craft's box, so neither makes a record.
+Material 5 is unread: its restitution against 2 and 4 is a random pick (`Libc_Rand`), which reads
+like debris; the place to start is the debris body `0x0010c958`, whose collider comes from its own
+constructor. If that collider is a sphere (type 5), HD tests it against meshes only
+([mp-time-trial-collision.md](mp-time-trial-collision.md)) and it never makes a craft record.
+
+### The kind rule (`Ship_SpawnContactFx`, `0x000e6fd8`)
+
+```text
+r31 = 0                                                    0x000e72c4
+f31 = 0.0   (TOC -0x49d8 -> 0x008a8b00, 0x00000000)        0x000e71fc
+if record.friction(+0x40) <= f31: r31 = 2                  0x000e7348 lfs, 0x000e734c fcmpu, 0x000e7414 ble -> 0x000e7730
+if ship+0x6a64 & 0x800: FUN_00054628 / FUN_00055e30(.., ship+0x6284) gate   0x000e7418..0x000e7424, 0x000e7610 (unread)
+if ship.state(+0x5fa4) != 1: r31 = 3                       0x000e7428..0x000e7434
+ShipCollisionFx_Trigger(locator, r31, ..)                  0x000e74dc
+ship+0x7d80 = 1                                            0x000e74f0, every kind
+```
+
+`fcmpu` with `ble` takes the branch on less or equal only, so a NaN friction keeps kind 0.
+Kind 3 overrides kind 2: a frictionless record of a craft that is not racing restarts the
+attached spark like any other. The byte `ship + 0x7d80` is set after **every** kind, so a frame
+whose only record is frictionless still keeps a running attached spark alive (the release at
+`0x000ebf8c` sees the byte). Confidence 85.
+
+### The friction table (`Collision_PairFriction`, `0x000be068`)
+
+Read instruction by instruction. The function orders the pair so that a 0 goes first (`r0`),
+then:
+
+| Pair | Returns | Where |
+| --- | --- | --- |
+| `(0, 0)`, `(1, 1)` | `table + 0x28` = `0.035` | `0x000be118`, `(1, 1)` via `0x000be138`/`0x000be140` |
+| `(0, 1)` | `0.0` (TOC `-0x50e8`, `0x008a83f0`) | `0x000be110` sends `r4 = 1` to `0x000be150` |
+| `(0, 2)`, `(0, 4)`, `(1, 2)`, `(1, 4)` | `*(TOC -0x50e0)`, the float at `0x0098d5b8` | `0x000be168` |
+| `(0, 3)`, `(1, 3)` | `table + 0x2c`, or `+0x38` under the mode mask `0x206040` with the net byte clear | `0x000be1d4`, `0x000be174` |
+| `(5, 3)` | `table + 0x34` | `0x000be0f4` |
+| `(5, 2)`, `(5, 4)`, `(5, 5)` | `table + 0x30` | `0x000be0c8` |
+| `(5, 0)`, `(5, 1)`, and any pair with neither side 0, 1 or 5 | `0.0` | `0x000be0a4` (`bnelr`), `0x000be150` |
+
+This corrects one row of [wall-response.md](wall-response.md)'s coefficient table, which gives
+`+0x28` to `(0, 0)` and `(0, 1)`: the second pair is `(1, 1)`, and `(0, 1)` returns zero. The
+row is that page's and is left as it is.
+
+**`0x0098d5b8` is never written.** It lies in the data segment's zero-filled tail (file size
+`0x0d6f80` from `0x00860000`, so it ends at `0x00936f80`). One TOC slot in the whole image holds
+the address (`0x008a83f8`, file offset `0x8983f8`), and one instruction under this TOC loads that
+slot: `0x000be168`. The seven other `lwz rX,-0x50e0(r2)` hits (`0x003fccdc`..`0x0040a2b0`) run
+on the other TOC (`0x008bd3c4`) and read another slot. A scan of every TOC load in the image
+that yields an address up to `0x8000` below it, followed by `addi` and every store and pointer
+argument within the function, finds no write to `0x0098d5b8` and no pointer to it. The same
+scan finds the known writes beside it (`0x000bdd7c` at `0x0098d494`, `0x000bddfc` at
+`0x0098d5b4`, `0x000bf9d8` at `0x0098d5bc`), so it sees this kind of store. The weapon
+`Stats` parser's `+0x188` store (`0x0002bdf0`, `venomspeed`) writes a `0x7a8`-byte heap object
+(`0x000311e8` allocates three), not this float. Confidence 78: static, and the two later titles
+agree (below). The live read that would take it past 90: any RPCS3 memory read of `0x0098d5b8`
+in a race, or a breakpoint on `0x000be16c` reading `f1`.
+
+### Which collider has which material
+
+`0x002eaba8` builds one mesh collider (`0x00039a90`, `0xb0` bytes) per object of a collision
+node (the loop `0x002ead7c`..`0x002ead90` runs the payload's object count), adds it
+(`Collision_AddObject`, `0x002ead14`), then sets the material `+0x84` and the class `+0x74` from
+the node's class id (`*(node + 0xc8)`):
+
+```text
+0x3e7 (Cage)          skipped before the allocation          0x002eacc8..0x002eaccc
+0x3b9 (Floor)         material 2, class 1                    0x002eadd8, 0x002eade8
+0x3e6 (Mag Floor)     material 2, class 3                    0x002eadd8, 0x002eae60
+0x3ba (Wall)          material 3, class 0                    0x002eadf8, 0x002eae78
+0x3ed (trackwall)     material 3, class 5                    0x002eadf8, 0x002eae6c
+0x3cd (Reset)         material 4, class 2                    0x002eae88, 0x002eae8c
+```
+
+The class values are Pulse's surface types for the same four nodes (Wall 0, Floor 1, Reset 2,
+Mag Floor 3, [collision.md](../../../formats/collision.md)), and class 2 is the one the ring
+walk sends to state 6 (`0x000ec548`), so the reading is consistent. Confidence 82. Both ship
+constructors give the body's box material 0 (`li r25, 0` at `0x000deb48`, stored at
+`0x000dece0`; `0x000e0b8c`, `0x000e0d24`) and the seven-child compound at `ship + 0x694c`
+material 1 (`li r26, 1`, stored at `0x000ded38` and on each child). That compound is the
+wreck's collider, swapped in at state 6 ([ship-destroy.md](ship-destroy.md)), so a live craft
+could meet material 1 only from a wreck, and the shape dispatch never pairs the wreck's compound
+with a craft's box. Confidence 75: the stores and the dispatch are read, the swap is that page's.
+
+A record carries `Collision_PairFriction` of the two materials either way: the track resolver
+passes `contact + 0x2c` (`0x000f7afc`, call `0x000f7b0c`), the pair resolver the same field
+for both bodies (`0x000f824c`, `0x000f8264`).
+
+### What kind 2 spawns (`ShipCollisionFx_Trigger`, `0x002d9d18`)
+
+```text
+every kind returns at once when *(locator+0xe4)+0x5f42 != 0      0x002d97a0..0x002d97e8
+name = net byte clear and mode in 0x206040 ? "WO_SHIP_SPARK_NODAMAGE_ZONE" (0x007a1ca8)
+                                         : "WO_SHIP_COLL_SPARK_NODAMAGE" (0x007a1c88)   0x002d9d18..0x002d9d50
+node = new 0x180-byte LinkObj ("System\LinkObj.h", line 0x21e), zeroed, node+0xc = locator
+FUN_003238f8(locator, node)                    a child of the locator node
+FUN_002c9108(node, name, 'DNPS', matrix = 0, flags = 0, 0)                  0x002d9e64
+node+8 = 0x008745a0; if node+0x34 & 8: FUN_003265c8(node)                   0x002d9e70..0x002d9e88
+```
+
+With a null matrix and flags 0, `FUN_002c8c70` gives the node its own matrix, the identity
+(`0x00769d70`), and hands the particle instance that matrix (`node + 0xf0`). So kind 2 is a new,
+unattached, one-shot instance per record, a child of the nearest of the ten locators
+(`ship + 0x79d0`). It takes no strength (the trigger's `f1` is not read on this path), no
+carried velocity and none of the caller's basis vectors; its lifetime is the effect file's own.
+The gate on `ship + 0x5f42` (read elsewhere as the cockpit view, inferred: its setter is unread,
+[cannon.md](cannon.md)) stops every kind, the attached spark included.
+
+**One spark per record, whatever the number of views.** The ring walk's view loop
+(`0x000ec3e4`..`0x000ec4a4`) calls `Ship_SpawnContactFx` from `0x000ec9fc` for the first view
+that passes, then branches past the loop (`0x000eca00`, `b 0x000ec4a8`). A kind 2 node is
+allocated per call, so a frame with three floor records makes three. Confidence 85. Confidence 80 for the branch; **60 that the spark sits at the locator**: whether
+the scene update composes the parent locator's world matrix into `node + 0xf0` is not read.
+Recipe: after a floor contact, read `node + 0x120` (the translation row) against the locator's
+world position, or read the update reached through the node's vtable.
+
+### Not read here
+
+- How often the craft's box reaches a floor at all: HD hovers on rays, and the box meets the
+  floor only on a hard landing or scrape. The rate decides how often a player sees this spark.
+  Recipe: RPCS3, a jump landing on a hover-heavy circuit, poll the ring's class word
+  (`body + 0x264 + 0x50 * i`) for `1`, `3` and `2`.
+- The `ship + 0x6a64 & 0x800` gate at `0x000e7610` (`FUN_00054628`, `FUN_00055e30`).
+- When a kind 2 node is freed.
+
+### 2048 and Omega
+
+- **2048: checked, the frictionless floor applies, not wired.** `Collision_PairFriction`
+  (`0x811a1870`, `/2048/eboot-vita-2048-eu-v104.elf`, [craft-laws.md](../vita-2048-eu-v104/craft-laws.md))
+  has HD's shape with more materials: a craft (0 or 1) against a craft returns `0x8151fc18`
+  (`0.035`), against walls 4, 5, 6 `0x8151fc1c`/`0x8151fc20` (`0.025`/`0.035` by the Zone test),
+  and against 2, 3, 7, 10, 11, 12 the float at `0x818a5390`, past the data segment's file size
+  (`0x8153fae0`) and read only by this function: zero, as HD's. `(0, 1)` gives `0.035` there;
+  what 2048's material 1 is, is not read. Which 2048 surface is which material, and its contact-fx
+  caller, are not read.
+- **Omega: checked, the frictionless floor applies, not wired.** The pair tables are inlined
+  into each narrowphase test (`FUN_012539b0` and its siblings, all readers of `shipWallCofR` at
+  `0x0193fc54`). A craft (0 or 1) gets `0x3d0f5c29` (`0.035`) against a craft, `0.025`/`0.035`
+  against 4, 5, 6, and the literal `0` against everything else: the compiler folded the
+  never-written float to a constant. Same law as 2048's.
