@@ -60,8 +60,8 @@ fn wrapped(sub: [f32; 4], width: f32, height: f32) -> Option<Vec<([f32; 2], [f32
 const SELECT_ARROW_OFFSET: [f32; 2] = [-11.0, 4.0];
 
 /// The frame screen's widgets a list places itself rather than the frame: the cursor beside the
-/// selected row, and the two scroll arrows, which Pure shows only on a list that scrolls (none of
-/// seven PPSSPP frames of its chain and team screens draws them).
+/// selected row, and the two scroll arrows, which a list draws only while it scrolls (none of
+/// seven PPSSPP frames of Pure's chain and team screens, none of which scrolls, draws them).
 const PLACED_BY_THE_LIST: [&str; 3] = ["ArrowSelect", "ArrowScrollUp", "ArrowScrollDown"];
 
 /// One title's menu frame, split by what may come between the two halves.
@@ -118,6 +118,9 @@ pub struct Frame {
     /// The screen's `ArrowSelect`, at the origin: the cursor a list puts beside its selected
     /// row ([`Self::select_arrow_at`]). `None` where the frame authors none.
     pub select_arrow: Option<Draw>,
+    /// The screen's `ArrowScrollUp` and `ArrowScrollDown`, where authored: drawn by a list
+    /// that scrolls ([`Self::scroll_arrows_for`]), never as fixed marks.
+    pub scroll_arrows: [Option<Draw>; 2],
 }
 
 impl Frame {
@@ -154,6 +157,22 @@ impl Frame {
             }),
             _ => None,
         }
+    }
+
+    /// The scroll arrows a list of `total` rows showing `visible` of them from `first` draws:
+    /// up while rows sit above the window, down while rows sit below it. Pure's seven measured
+    /// screens never scroll and draw neither; that they show on a list that does is read off
+    /// the widgets' names, not measured (`docs/ui/selection-screens.md`, "Pure's cursor arrow
+    /// and footer frame").
+    #[must_use]
+    pub fn scroll_arrows_for(&self, first: usize, visible: usize, total: usize) -> Vec<Draw> {
+        let [up, down] = &self.scroll_arrows;
+        let above = first > 0;
+        let below = first + visible < total;
+        [(above, up), (below, down)]
+            .into_iter()
+            .filter_map(|(shown, arrow)| shown.then(|| arrow.clone()).flatten())
+            .collect()
     }
 
     /// This frame without the marks in the lower half of a screen `height` high: the footer
@@ -410,6 +429,7 @@ pub fn read(
         })
         .collect();
     let mut select_arrow = None;
+    let mut scroll_arrows = [None, None];
     for image in &screen.images {
         let placed_by_the_list = image
             .name
@@ -454,12 +474,17 @@ pub fn read(
         // makes a rule grey.
         let color = argb_to_rgba(image.color);
         if placed_by_the_list {
-            if image.name.as_deref() == Some("ArrowSelect") {
-                select_arrow = Some(Draw::Sprite {
-                    rect: [0.0, 0.0, width, height],
-                    uv: placed.sheet_rect(sub),
-                    color,
-                });
+            let sprite = |rect: [f32; 4]| Draw::Sprite {
+                rect,
+                uv: placed.sheet_rect(sub),
+                color,
+            };
+            match image.name.as_deref() {
+                Some("ArrowSelect") => select_arrow = Some(sprite([0.0, 0.0, width, height])),
+                Some("ArrowScrollUp") => {
+                    scroll_arrows[0] = Some(sprite([x, image.y, width, height]))
+                }
+                _ => scroll_arrows[1] = Some(sprite([x, image.y, width, height])),
             }
             continue;
         }
@@ -497,5 +522,6 @@ pub fn read(
         blocks,
         settings: None,
         select_arrow,
+        scroll_arrows,
     }
 }

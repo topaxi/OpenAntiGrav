@@ -144,7 +144,8 @@ fn a_sub_rect_past_its_texture_repeats_it() {
 }
 
 /// `ArrowSelect` and the two scroll arrows are the list's to place, not fixed marks: the cursor
-/// is kept apart and lands beside a row at the row's scale; the scroll arrows draw nothing.
+/// lands beside a row at the row's scale, and each scroll arrow shows only while rows sit past
+/// its end of the window.
 #[test]
 fn the_list_placed_arrows_are_not_marks_and_the_cursor_follows_a_row() {
     let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
@@ -174,6 +175,34 @@ fn the_list_placed_arrows_are_not_marks_and_the_cursor_follows_a_row() {
         None,
     );
     assert!(frame.marks.is_empty(), "{:?}", frame.marks);
+    let ys = |draws: Vec<Draw>| -> Vec<f32> {
+        draws
+            .iter()
+            .map(|draw| match draw {
+                Draw::Sprite { rect, .. } => rect[1],
+                _ => f32::NAN,
+            })
+            .collect()
+    };
+    assert!(
+        frame.scroll_arrows_for(0, 7, 7).is_empty(),
+        "a list that fits"
+    );
+    assert_eq!(
+        ys(frame.scroll_arrows_for(0, 7, 9)),
+        vec![209.0],
+        "rows below"
+    );
+    assert_eq!(
+        ys(frame.scroll_arrows_for(2, 7, 9)),
+        vec![39.0],
+        "rows above"
+    );
+    assert_eq!(
+        ys(frame.scroll_arrows_for(1, 7, 9)),
+        vec![39.0, 209.0],
+        "both"
+    );
     let Some(Draw::Sprite { rect, .. }) = frame.select_arrow_at(21.0, 45.0 + 18.0, 1.15) else {
         panic!("the frame keeps its cursor: {frame:?}");
     };

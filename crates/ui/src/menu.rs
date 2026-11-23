@@ -1357,6 +1357,11 @@ pub fn draw_list(
         Some(strip) => strip::draw(menu, skin, strip, measure, frame),
         None => rows::draw(menu, skin, bindings, frame),
     };
+    layers.body.extend(frame.scroll_arrows_for(
+        menu.scroll(),
+        menu.visible_rows(),
+        page.entries.len(),
+    ));
 
     layers
 }
