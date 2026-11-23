@@ -84,6 +84,7 @@ def rerender(pj, binary):
     flags = (rec.get("ours") or {}).get("flags")
     if not flags:
         return "skipped: no recorded ours.flags"
+    ce.ensure_detonator_inputs(rec, pair_dir)
     # Pairs recorded with their own `--screenshot <path>` would meet the one appended below twice (a clap error).
     while "--screenshot" in flags:
         at = flags.index("--screenshot")
