@@ -60,19 +60,20 @@ fn model(
     .map_err(|error| format!("{name}: its .rcsmodel does not build ({error:#})"))
 }
 
-/// Draws every batch of the shell source-alpha over one, the blend of its sibling model, the
-/// Detonator death shell (`detonator_deathshell`, `mesh::rcs::psp2::lineage_blend`).
+/// Draws the shell's opaque and alpha-tested batches source-alpha over one, the blend of its
+/// sibling model, the Detonator death shell (`detonator_deathshell`,
+/// `mesh::rcs::psp2::lineage_blend`). A batch the build already blended, with factors the file
+/// authors or inherits, keeps them.
 ///
-/// **Chosen, not measured for the Zone shell:** its own `.rcsmaterial` is unread. The builder
-/// reads its one material as an opaque cutout, which paints the electricity texture's black
-/// cells solid over the hull, where the original's shell is white.
+/// **Chosen, not measured for the Zone shell:** its own `.rcsmaterial` is unread. Its material
+/// reads as an opaque cutout on HD, which paints the electricity texture's black cells solid
+/// over the hull, where the original's shell is white.
 fn additive(model: &mut Model) {
     use oag_rcs::rcsmodel::Factor;
     let blend = mesh::rcs::blend_state(Factor::SrcAlpha, Factor::One);
     let draws = std::mem::take(&mut model.draws)
         .into_iter()
-        .chain(std::mem::take(&mut model.alpha_tested_draws))
-        .chain(std::mem::take(&mut model.transparent_draws));
+        .chain(std::mem::take(&mut model.alpha_tested_draws));
     for mut draw in draws {
         draw.blend_state = Some(blend);
         model.transparent_draws.push(draw);
