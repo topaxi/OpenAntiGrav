@@ -179,7 +179,7 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `oag_ui::font::ink_width`, `Campaign::flow_footer` (Cell Selection's Difficulty, and on Omega Records, follow Back). On
   `hd/menu-cell-select` all seven prompts land on the original's first ink column (288, 460, 502, 639, 682, 771, 814); legend
   region box (150,955,1100,70) 16.71 -> 4.02, pair mean grey 2.81 -> 2.34; the other four HD menu pairs 2.90 -> 2.63, 3.32 -> 3.06,
-  3.04 -> 2.77, 4.59 -> 4.32. Omega's five menu pairs improve too (cell 12.64 -> 11.94). Open: the other four `AddPrompt` callers
+  3.04 -> 2.77, 4.59 -> 4.32. Omega's five menu pairs improve too (cell 12.61 -> 11.94). 2048 authors no legend (checked, differs). Open: the other four `AddPrompt` callers
   (`0x001a7588`, `0x001f0b50`, `0x002587a0`, `0x0069dc98`) and which screens set the Confirm/Back bits (pages that register
   extras beyond Cell Selection's draw none yet); the shadPS4 Omega frame's backdrop keeps that pair's legend region at 29 to 33.
 - The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).

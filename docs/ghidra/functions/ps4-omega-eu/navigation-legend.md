@@ -60,7 +60,10 @@ Omega's own `helv.fnt` (`data00.psarc`).
 **no pen snap** (**chosen, not measured**: the prediction above drifts 4 to 14 px with the snap and about 1 px a prompt without;
 Omega's own measure is unread). On `omega/menu-cell-select` the glyphs and words land at 435, 487, 625, 677, 768, 820, 965 and
 1017 within 3 px (`omegas_footer_prompts_flow_to_where_the_original_draws_them`). The original draws Records (the triangle) before
-Difficulty; ours dropped it because the file authors both at x 944, and now draws it. Nothing is behind the prompt (no leaderboard).
+Difficulty; ours dropped it because the file authors both at x 944, and now draws it. Nothing is behind the prompt (no leaderboard; triangle opens no panel on Omega's Cell Selection, which authors no `Cell
+Help`), and it is drawn in Difficulty's colour, which differs from the other prompts'. **2048: checked, differs**: its front-end
+root authors no `NavigationController` and ours reads no legend from it (`the_2048_root_authors_no_footer_legend`), so there is
+nothing to flow.
 
 ## Names
 
