@@ -18,7 +18,7 @@ pub mod pose_hold;
 pub mod pose_lean;
 mod race_bench;
 mod shot;
-mod spectrum;
+pub mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
 
@@ -334,21 +334,10 @@ pub struct CaptureOptions {
     pub weather: oag_display::display::Weather,
     /// Whether the drawn hulls shake, `Race::set_hull_shake`; `--no-hull-shake` turns it off.
     pub hull_shake: bool,
-    /// Replaces the live audio spectrum with a fixed synthetic ramp before
-    /// the frame is drawn. `--zone-spectrum-test`.
-    ///
-    /// **Exists because the live spectrum otherwise makes a Zone capture
-    /// useless as evidence twice over.** On the null backend `--screenshot`
-    /// always runs on - `audio.output().spectrum()` never publishes, since no
-    /// render-ahead thread ever spawns without a device - so an ordinary
-    /// capture shows no glow at all, whatever the scene actually authors.
-    /// With a real device attached instead, the spectrum is live and
-    /// non-deterministic, which is the wrong kind of input for a comparison
-    /// two runs are supposed to agree on. A fixed ramp is neither: visible on
-    /// the null backend and identical on every run, on the same terms
-    /// `--zone-stage` exists to make the colour grade itself checkable
-    /// without a live race to drive it there.
-    pub zone_spectrum_test: bool,
+    /// Where the band levels the frame is drawn with come from: the live spectrum, a
+    /// fixed ramp (`--zone-spectrum-test`) or levels read off the original
+    /// (`--zone-bands`); see [`spectrum::ZoneFeed`].
+    pub zone_feed: spectrum::ZoneFeed,
     /// The row [`crate::records::Store`] already held for this circuit/mode/
     /// class before this capture, if any - read by the caller, off the same
     /// `<config dir>/oag/records.toml` a real session would, so a

@@ -907,7 +907,11 @@ pub(crate) fn run_race(
                         gamma: settings.display.gamma,
                     },
                 }),
-                zone_spectrum_test: cli.zone_spectrum_test,
+                zone_feed: crate::race_capture::spectrum::ZoneFeed::from_flags(
+                    cli.zone_spectrum_test,
+                    cli.zone_bands,
+                    cli.zone_bands_raw,
+                ),
                 touch_demo: cli
                     .intro
                     .touch_overlay

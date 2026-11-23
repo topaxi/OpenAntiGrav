@@ -683,9 +683,34 @@ pub(crate) struct Cli {
     /// so an ordinary capture shows no glow whatever the scene authors, and
     /// a real device's spectrum is live and non-deterministic, the wrong
     /// input for a comparison two runs are meant to agree on. See
-    /// `crate::race_capture::CaptureOptions::zone_spectrum_test`'s own doc comment.
-    #[arg(long)]
+    /// `crate::race_capture::spectrum::ZoneFeed`'s own doc comment.
+    #[arg(long, conflicts_with = "zone_bands")]
     pub(crate) zone_spectrum_test: bool,
+
+    /// Comparison input: draw the Zone and Detonator music-driven look from these
+    /// sixteen held band levels, read off the original at the frame being compared
+    /// (`+0x32f8` of its Environment stage block, comma-separated).
+    ///
+    /// The floor's visualiser reads these as they are, with no hold applied on top.
+    /// Without `--zone-bands-raw` the Detonator mine's envelope reads them too.
+    /// Replaces the live spectrum the way `--zone-spectrum-test` does, with
+    /// the original's levels instead of a ramp.
+    #[arg(
+        long,
+        value_name = "B0,...,B15",
+        value_parser = crate::race_capture::spectrum::parse_bands
+    )]
+    pub(crate) zone_bands: Option<crate::race_capture::spectrum::Bands>,
+
+    /// The sixteen raw band levels (`+0x32b8` of the stage block) the Detonator mine's
+    /// envelope reads; defaults to `--zone-bands`.
+    #[arg(
+        long,
+        value_name = "R0,...,R15",
+        requires = "zone_bands",
+        value_parser = crate::race_capture::spectrum::parse_bands
+    )]
+    pub(crate) zone_bands_raw: Option<crate::race_capture::spectrum::Bands>,
 
     /// Development view: draw the driveable ribbon instead of the track's art
     /// meshes.
