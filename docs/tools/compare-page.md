@@ -2291,10 +2291,44 @@ hull is 6 percent of the frame and the rest (floor, sky, mines) dominates; the c
 The two new pairs' mean grey of the original / ours: 18.2 / 21.7, 17.5 / 18.8, 14.5 / 17.6.
 
 Two circuit pairs (`hd/anulpha-pass`, `hd/chenghou-project`) re-rendered with and without the engine change: **bit-identical** (maximum difference
-0 over every pixel), since the factor is `1.0` outside Detonator and the pair script's new path is `--detonator` only. These pairs are not
-publishable as made: their world-clock read found no scenery node (`reason` in `<stem>.clock.json`) and the heading check reads 1.4 to 1.9
-degrees against 1.0 (`--pose` carries a yaw, the original's pitch and roll differ by about that); re-grab on a host where the clock read
-succeeds before adopting them.
+0 over every pixel), since the factor is `1.0` outside Detonator and the pair script's new path is `--detonator` only. Those grabs were not publishable (no world clock, heading 1.4 to 1.9 degrees); "Detonator pairs re-grabbed" below explains both and replaces them.
+
+### Detonator pairs re-grabbed (2026-11-23, `det-regrab`)
+
+The `det-camera` grabs had no world clock and a heading check of 1.4 to 1.9 degrees (tolerance 1.0). Both are read and neither
+tolerance nor filter was changed.
+
+**World clock.** `rpcs3_hd_field.scenery_nodes` found 1,151 `MeshImporter` nodes on a restored Detonator state (560 static at 0.0, 387 and
+177 on the global clock, 18 and 1 stragglers) and `_scenery_mode` kept none: it ignores a node whose time is not past `GANTRY_WINDOW_END` (13.3 s,
+the gantry's own nodes sit in `[3.83, 13.3)`). The dump of one paused frame on two boots of the old state read the global clock at 10.92 and
+10.96 s with the lap clock at 4.75 and 3.90 s (offset 6.2 and 7.1): the state was saved a few seconds into the START RACE prompt and the
+world clock only runs on from there, so the pair's frames (lap 2.0 to 2.7 s) fall under 13.3 s. It is the guard doing its job, not a Detonator
+limit: **the clock runs at about 0.4 s per wall second at the prompt** (3.1 at 17:56:15, 10.8, 18.8, 28.8, 36.2 at 17:57:43 on a cold walk, read with `scenery_nodes`
+every 20 s), so **`--pre-wait` does not help on a restored state** (60 s against 30 s moved the offset only from 6.2 to 7.1: the restored game's clock hardly runs before START RACE), so the saved state is the fix: a state saved a minute into the prompt (`data/saves/hd-fury/hd-detonator-talons-feisar-grid-late`, same sidecar,
+`mode: detonator`) restores to a world clock of 54 to 59 s at the pair: 24 nodes of 24 agree, offset 52.3 to 56.3 on eight boots. Recipe: `det_walk`'s walk
+(`emu-hd-race-walk.sh`, circuit 8, team 0, six `right`s on RACE TYPE), poll the clock, `emu-save-state.sh` once it reads over 30 s. A
+scenery clock at or under 13.3 s (a Racebox race read soon after START RACE, any mode) is refused with the same reason; widening the guard
+would let a gantry node pass for scenery.
+
+**Heading.** The check compares the original's hull forward (push buffer) with ours' trace forward at the rendered tick. `--pose` carries a
+yaw only, so ours' pitch is its own: 1.6 to 2.0 degrees (forward y 0.028 to 0.035) on every pair. The original's forward y is 0.031 to 0.044
+(mean 0.037, 5 frames on 3 boots, no volley fired) and 0.041 to 0.055 (mean 0.048, 7 frames on 4 boots) after a volley, so about 0.6 degrees
+higher, with the ranges overlapping (confidence 50). The volley frame at lap 2.2 s read 1.06, 1.54 and 1.10
+degrees (3 of 3 boots, refused); the fired frames at 2.6 and 3.0 s read 0.70 to 0.89 (4 of 4, passed). **The cause of the extra pitch at 2.2 s is
+undetermined:** unfired frames at lap 2.6 (forward y 0.040, 0.044) sit inside the fired range at the same clock, and no unfired frame exists at 2.21;
+open discriminator: one boot with no fire and `--shot 2.21`. The refusal itself is pitch (`--pose` carries yaw only; ours runs under
+`--pose-hold-ticks`, so its pitch is not a reading of its physics). The pair is the 2.6 s frame. Whether the original pitches from the
+cannon's recoil or ours rests low is unread.
+
+`--field` is not used by these pairs (`--detonator` only; no `--field` in any `ours.flags`). A published pair carries no `ours.inputs` (the
+private repository's allowlist), so `compare_env.ensure_detonator_inputs` makes it again from `original.detonator.fire` on a re-render
+(`compare-rerender-ours.py`; before it, a re-render of a published Detonator pair skipped with "no ours.inputs in the pair directory").
+Pairs on `main` `3f8f627`, two boots each, mean grey (the page's score) / RMSE: `pad` 10.48 / 0.137 and 11.80 / 0.147, `mines-ahead`
+18.53 / 0.195 and 19.39 / 0.212, `cannon-volley` 17.42 / 0.187 and 20.10 / 0.207; heading 0.15 to 0.85 degrees; hull rim box (white rim,
+`min(r,g,b) > 200` inside `x 780..1130 y 690..1000`) within 1 to 4 px on every edge and 3 to 14 px short at the bottom
+(`pad` 826,705 to 1093,943 original, 827,706 to 1094,939 ours). One boot of the volley never fired (the press landed with no tick
+running: lap clock before 1.867, after 1.867) and was discarded, and one boot's camera pick failed (`no frame-unique value`) and was
+retaken. The Detonator thread's "Render accuracy" holds the table and the region differences.
 
 ### The original's music bands in a Detonator pair (2026-11-23, `det-pair-bands`)
 
