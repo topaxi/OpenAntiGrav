@@ -239,7 +239,9 @@ fn vs_main(@builtin(vertex_index) index: u32, instance: Instance) -> VertexOut {
     out.tiles = corner * instance.tile;
     let graded = mix(instance.color, instance.border, corner.x);
     out.color = select(instance.color, graded, is_gradient);
-    out.border = select(instance.border, graded, is_gradient);
+    // A gradient fill has no outline: its border alpha is zero, so an outlined font's second
+    // pass (`fs_main`) does not draw the fill twice.
+    out.border = select(instance.border, vec4<f32>(graded.rgb, 0.0), is_gradient);
     let flat_mode = select(0.0, 1.0, is_sheet_gradient);
     out.mode = select(instance.mode, flat_mode, is_gradient);
     return out;

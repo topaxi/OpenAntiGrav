@@ -158,7 +158,7 @@ impl Quad {
             rect: [a[0], a[1], b[0], b[1]],
             uv: [c[0], c[1], solid[0], solid[1]],
             color,
-            border: color,
+            border: [color[0], color[1], color[2], 0.0],
             mode: MODE_TRIANGLE_SOLID,
             rotation: 0.0,
             chamfer: [0.0, 0.0],
@@ -178,8 +178,10 @@ impl Renderer {
             uv: [solid.x as f32 + 0.5, solid.y as f32 + 0.5, 0.0, 0.0],
             color,
             // A fill samples the solid patch, whose mask is all body, so the mix
-            // is a no-op and this only has to be a real value.
-            border: color,
+            // is a no-op and this only has to be a real value. Its alpha is zero: an
+            // outlined font's second pass draws `border.a` over the body, and a fill has
+            // no outline (a translucent one would read `2a - a^2`).
+            border: [color[0], color[1], color[2], 0.0],
             mode: MODE_ATLAS,
             rotation: 0.0,
             chamfer,
