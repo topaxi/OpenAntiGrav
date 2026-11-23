@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, omega, 2048, pulse, pure]
-updated: 2026-11-12
+updated: 2026-11-23
 categories: [frontend, rendering]
 summary: "Menu pairs on the compare page, ranked differences; Omega chooser drawn (2048 card art done; pose, grid open), XML main/racebox/options gaps"
 difficulty: medium (30)
@@ -128,3 +128,7 @@ Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no st
 6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); measure the description's type-in rate on PPSSPP, draw the two frame rules, the team description line and the record separators (the `Scroll` face is drawn since 2026-11-01); then re-run
    `scripts/psp-menu-pair.py pairs`.
 7. Pulse and Pure pause menus: a `--menu-page pause` still would turn those two gaps into pairs.
+8. Pulse PS2 menu pairs (2026-11-23, `ps2-ship-select`): the Ship Select pair carries the original's footer ticker message and tag (`docs/tools/compare-page.md`, "PS2 menu pairs: the footer
+   ticker and the tag are read from PCSX2 RAM"; footer box >40-grey share 18.0 % to 8.8 %). Open: the Grid Selection and Cell Selection states are from PCSX2 v2.9.138 and do not load, so
+   `menu-grid` and `menu-cell` need the same walk (their footers then take the ticker and tag through the same script); the PS2 ticker widget's own fields (item index, weight) are not
+   recovered, so only the six tips are pinnable and a frame with a statistic message (menu time, favourite music) is not grabbed.
