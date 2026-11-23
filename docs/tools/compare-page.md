@@ -1992,7 +1992,7 @@ and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)` (`docs/ui/
   the head is **fitted within the bracket** (117; the box grey is 14.4 there and 19.0 / 22.7 one unit either side). `original.footer_ticker` carries the item, text, both
   addresses, both reads and the fit table. The text sits at the record's head plus the PSP's 2 px origin (inherited from PSP, not measured on the PS2; the fit absorbs it).
   The state carries `rand()`'s state, so a reload draws the same message: two grabs of the Ship Select state both caught `TKR_ZTIM`.
-- **The tag is the profile's, read from RAM.** The profile record keeps the name as an 11-byte space-padded field with the 3-character tag straight after it (`AAAA      \0AAA\0`
+- **The tag is the profile's, read from RAM.** The profile record keeps the name as an 10-byte space-padded field and its NUL with the 3-character tag straight after it (`AAAA      \0AAA\0`
   at `0x00d9463c`, the tag at `0x00d94647`; the one such record in 32 MiB). The state the walk started from, `main-menu-pcsx2-2.9.168.p2s`, reads name `AAAA` and tag `AAA` there. The pair script writes `[player] name` and `tag` into ours'
   profile (`compare_menu.extra_settings(player=)`, recorded in `ours.player` so `compare-rerender-ours.py` puts them back) and the footer's tag box, already drawn
   (`NavigationLegend::set_tag`), shows `AAA`. A re-render of the new pair on a copy is byte-identical to the pair script's own.

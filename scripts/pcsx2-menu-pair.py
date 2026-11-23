@@ -122,7 +122,7 @@ def grab(slot, state_file, dest, settle, oag_wad, source):
     if len(addrs) != 2:
         sys.exit("STALLED: %d ticker records found in EE RAM (a screen with a footer shows two)" % len(addrs))
     entries = pt.load_entries(oag_wad, "%s:%s" % (source, DATA_WAD))
-    lone = wait_lone_message(pine, addrs, entries)
+    wait_lone_message(pine, addrs, entries)
     bracket = shot_in_bracket(pine, keyboard, addrs, dest)
     if bracket is None:
         sys.exit("no GS screenshot (is the VM paused?)")
@@ -131,11 +131,14 @@ def grab(slot, state_file, dest, settle, oag_wad, source):
     lone_before, lone_after = (pt.lone_message(r, HEAD_MARGIN) for r in bracket)
     if not (lone_before and lone_after and lone_before["addr"] == lone_after["addr"] and lone_before["text"] == lone_after["text"]):
         sys.exit("STALLED: the ticker changed across the screenshot (%s then %s); run again" % (before, after))
+    item = pt.item_of(lone_before["text"], entries)
+    if item is None:
+        sys.exit("STALLED: the message %r is not an untried tip, so no item names it; run again" % lone_before["text"])
     ram = pt.read_ram(pine)
     profile = pt.profile_name_tag(ram)
     if profile is None:
         sys.exit("STALLED: no single name/tag profile record in EE RAM")
-    return {"item": pt.item_of(lone_before["text"], entries), "text": lone_before["text"], "record": lone_before["addr"], "addrs": addrs,
+    return {"item": item, "text": lone_before["text"], "record": lone_before["addr"], "addrs": addrs,
             "head_before": lone_before["head_x"], "head_after": lone_after["head_x"], "name": profile[0], "tag": profile[1], "tag_addr": profile[2]}
 
 
@@ -214,7 +217,7 @@ def build_pair(args, item, out, plat, profile, raw, captured_at, capture):
         "head_fitted": {"value": head, "ticker_box_mean_grey": scores, "box": list(TICKER_BOX),
                         "basis": "fitted: the head in the read bracket whose ticker box in ours is closest to the original's (ours rendered at each)"}}
     pair.rec["original"]["player"] = {"name": capture["name"], "tag": capture["tag"], "tag_address": "0x%08x" % capture["tag_addr"],
-                                      "basis": "the profile record's name field (11 bytes, space padded) and the 3 characters after it, found in EE RAM by that shape"}
+                                      "basis": "the profile record's name field (10 bytes, space padded, then a NUL) and the 3 characters after it, found in EE RAM by that shape"}
     cp.build(pair, args, "menu", "savestate_restore", item["state"], {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
     try:
         cm.menu_pair(pair, theirs_png=pdir / "resized.png", oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",

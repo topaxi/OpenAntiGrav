@@ -15,7 +15,7 @@ left, so a frame holds one message or two. The item id is not read from the widg
 with nothing counted) names its item by `UNTRIED`, and any other text names none and is refused, as the PSP reader refuses an item ours does not
 count.
 
-The profile record holds the name as an 11-byte space-padded field and the 3-character tag straight after it.
+The profile record holds the name as a 10-byte space-padded field and a NUL and the 3-character tag straight after it.
 
 Reads are PINE word reads against a running VM (a paused VM presents no frame, so PCSX2's GS screenshot fails; `docs/tools/compare-page.md`).
 """
@@ -35,7 +35,8 @@ TEXT_MAX = 0x100
 UNTRIED = {"TKR_NOSR": "TKR_SRTIM", "TKR_NOSL": "TKR_SLTIM", "TKR_NOTT": "TKR_TTTIM", "TKR_NOTOURN": "TKR_TOURTIM", "TKR_NOELIM": "TKR_ELIMTIM",
            "TKR_NOZONE": "TKR_ZTIM"}
 
-PROFILE_NAME_TAG = re.compile(rb"([A-Za-z0-9-]{1,10}) {1,9}\x00([A-Z0-9]{3})\x00")
+NAME_FIELD = 10
+PROFILE_NAME_TAG = re.compile(rb"([A-Za-z0-9-]{1,10})( *)\x00([A-Z0-9]{3})\x00")
 ENTRY = re.compile(r'<entry id="([^"]+)" string="([^"]*)"')
 
 
@@ -101,7 +102,7 @@ def load_entries(oag_wad, wad, plugin="PI000"):
     """The English `<entry id=... string=...>` table of a language plugin, `{id: text}`: `oag-wad cat --expand WAD Data\\Plugins\\<plugin>\\entries.xml`."""
     import subprocess
     xml = subprocess.run([str(oag_wad), "cat", "--expand", str(wad), "Data\\Plugins\\%s\\entries.xml" % plugin], check=True, capture_output=True,
-                         text=True).stdout
+                         text=True, encoding="utf-8").stdout
     return dict(ENTRY.findall(xml))
 
 
@@ -115,8 +116,18 @@ def item_of(text, entries):
 
 def profile_name_tag(ram):
     """`(name, tag, address of the tag)` of the one profile record in `ram` (read from `RAM_START`), or `None` unless exactly one matches."""
-    hits = list(PROFILE_NAME_TAG.finditer(ram))
+    hits = [m for m in PROFILE_NAME_TAG.finditer(ram) if len(m.group(1)) + len(m.group(2)) == NAME_FIELD]
     if len(hits) != 1:
         return None
     m = hits[0]
-    return m.group(1).decode("latin1"), m.group(2).decode("latin1"), RAM_START + m.start(2)
+    return m.group(1).decode("latin1"), m.group(3).decode("latin1"), RAM_START + m.start(3)
+
+
+if __name__ == "__main__":
+    pad = lambda name: name.encode() + b" " * (NAME_FIELD - len(name)) + b"\0"
+    ram = b"\0" * 8 + pad("AAAA") + b"AAA\0" + b"\0" * 8
+    assert profile_name_tag(ram) == ("AAAA", "AAA", RAM_START + 8 + NAME_FIELD + 1)
+    assert profile_name_tag(b"\0" + pad("ABCDEFGHIJ") + b"XYZ\0")[:2] == ("ABCDEFGHIJ", "XYZ"), "a full 10-character name has no padding"
+    assert profile_name_tag(b"\0" + b"AAAA  \0AAA\0") is None, "a short field is not the 10-byte name field"
+    assert profile_name_tag(b"\0" + pad("AAAA") + b"AAA\0" + pad("BB") + b"BBB\0") is None, "two records are ambiguous"
+    print("ps2_ticker self-check ok")
