@@ -831,6 +831,9 @@ pub struct TickerLayout {
     /// `description_draws` reads them.
     text_scale: f32,
     text_lines: usize,
+    /// How far apart the description's lines sit, in pixels: the `TextInfo`'s `gap` where the
+    /// file resolves it, [`DESCRIPTION_LINE_GAP`] where it does not.
+    text_gap: f32,
     /// The `TextInfo`'s own `font` name, as authored (Pure: `scroll`).
     text_font: String,
     /// The messages the ticker draws among, the title's `PI_News` rows
@@ -891,6 +894,9 @@ impl TickerLayout {
                     },
                     |lines| lines.max(1.0) as usize,
                 ),
+            text_gap: bar
+                .and_then(|bar| number(globals, bar, "gap"))
+                .unwrap_or(DESCRIPTION_LINE_GAP),
             text_font: bar
                 .and_then(|bar| bar.value("font"))
                 .unwrap_or("default")
@@ -944,10 +950,18 @@ pub const DESCRIPTION_SCALE: f32 = 0.8;
 /// Confidence 70: one offset, five pairs, no authored number.
 pub const DESCRIPTION_TOP: f32 = 1.0;
 
+/// How far apart the description's lines are, in pixels, where the `TextInfo`'s `gap` does not
+/// resolve: Pure's names `FEGlobals->TextInfoGap`, which its `FEGlobals` never declares. **Measured,
+/// not read**: the original's three lines of `menu-team` and of `menu-t-sel` have their ink rows
+/// 222 to 228, 232 to 238 and 242 to 248, a steady 10 px, where the viewport's 32 px shared among
+/// its three lines put ours 10.67 apart (222, 233, 243). Confidence 75: two pairs, three lines each,
+/// one value (`docs/ui/selection-screens.md`, "The description line").
+pub const DESCRIPTION_LINE_GAP: f32 = 10.0;
+
 /// `text` wrapped into the viewport of `layout`, one [`Draw`] a line, in the
 /// `TextInfo`'s own colour and scale ([`DESCRIPTION_SCALE`] where it names
 /// none), at most its line count (the rest is cut: the original's box holds
-/// that many), spread evenly down the viewport's height. The description
+/// that many), [`DESCRIPTION_LINE_GAP`] apart down the viewport. The description
 /// Wipeout Pure types along a selection screen's bottom.
 ///
 /// `since` is the seconds since the screen appeared: the line is wrapped whole and then
@@ -962,7 +976,7 @@ pub fn description_draws(
     since: Option<f32>,
     measure: &dyn Fn(&str, f32) -> f32,
 ) -> Vec<Draw> {
-    let [x, y, width, height] = layout.viewport;
+    let [x, y, width, _] = layout.viewport;
     // No line to lay the text on: nothing to draw, and the pitch below would divide by zero.
     if text.trim().is_empty() || width <= 0.0 || layout.text_lines == 0 {
         return Vec::new();
@@ -995,7 +1009,7 @@ pub fn description_draws(
         - 1;
     let shown = since.map(|since| typein::typed(total, since));
     let mut left = shown.map_or(total, |shown| shown.chars);
-    let pitch = height / layout.text_lines as f32;
+    let pitch = layout.text_gap;
     let mut draws = Vec::new();
     for (index, line) in lines.into_iter().enumerate() {
         let length = line.chars().count();
