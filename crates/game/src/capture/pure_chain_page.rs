@@ -130,6 +130,7 @@ pub(super) fn capture(
         ticker,
         strings,
         font,
+        skin,
     );
     if let (Some(layout), Some(row)) = (ticker, choice.selected_row()) {
         let measure = crate::boot::fonts::description_ink(font, stats_font, snapped);

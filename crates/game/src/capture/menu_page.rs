@@ -23,6 +23,7 @@ pub(super) fn picker_footer(
     ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
     strings: &oag_ui::language::StringTable,
     default_font: &oag_ui::font::Atlas,
+    skin: &oag_ui::menu::Skin,
 ) -> TickerClip {
     let layout = ticker?;
     let tips = crate::records::ticker_tips(
@@ -31,7 +32,7 @@ pub(super) fn picker_footer(
         &crate::records::load(),
         crate::records::TICKER_CAPTURE_SEED,
     );
-    let faces = oag_ui_screens::picker::FaceScales::default();
+    let faces = crate::prompts::footer_faces(skin);
     let measure = |text: &str| oag_ui::font::measure(default_font, text);
     if let Some(legend) = nav_legend {
         list.extend(legend.draw_gated(&faces, show_back));
@@ -439,21 +440,16 @@ pub(super) fn menu_page(
     // `model.depth()` is always `1` regardless of which page was named.
     // See `crate::app::menu_stage::MenuStage::render`'s own call site,
     // which this mirrors, for the live session's own gate.
-    let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> =
-        nav_legend.map_or_else(Vec::new, |legend| {
-            legend.draw_gated(
-                &oag_ui_screens::picker::FaceScales {
-                    small_role: skin.small_font(),
-                    ..oag_ui_screens::picker::FaceScales::default()
-                },
-                model.depth() > 1,
-            )
+    let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> = nav_legend
+        .map_or_else(Vec::new, |legend| {
+            legend.draw_gated(&crate::prompts::footer_faces(skin), model.depth() > 1)
         });
     // The reset prompt, as the live footer draws it (`MenuStage::footer_overlay`).
     nav_legend_draws.extend(
         crate::prompts::reset_prompt(
             &model,
             nav_legend,
+            &crate::prompts::footer_faces(skin),
             &|button| settings.controls.live_bindings().names_for(button),
             prompt_ink,
             skin.space().size.0,

@@ -1053,6 +1053,7 @@ impl MenuStage {
             crate::prompts::reset_prompt(
                 &self.menu,
                 self.nav_legend.as_ref(),
+                &crate::prompts::footer_faces(&self.skin),
                 bound_keys,
                 &measure,
                 self.skin.space().size.0,

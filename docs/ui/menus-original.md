@@ -877,8 +877,10 @@ reaches `oag_ui_screens::picker::FaceScales::small_role`; with it a `font="small
 the campaign still, the picker's texts) and `faces.small` is not applied. Test: `pulse_menu_ticker_ground_truth::pulses_footer_button_glyphs_draw_in_the_small_face_at_its_own_size`
 (fails with the skin field removed), unit test `a_small_face_in_a_glyph_slot_draws_the_button_glyphs_at_its_own_size`.
 
-Share of pixels over 40 grey, Pulse PSP USA pairs re-rendered with main's binary and with this one against the same `theirs.png`: Cell 0.40 % to 0.10 %
-(522 to 127 px), Track Select 0.53 % to 0.45 % (689 to 592).
+Share of pixels over 40 grey on the Cell pair re-rendered with main's binary and with this change alone against the same `theirs.png`: 0.40 % to 0.10 % (522 to 127 px).
+The picker stills (Track, Team) draw their footer through `menu_page::picker_footer`, a second route that built its own `FaceScales`; it takes the skin's `small_font`
+too (and so does the reset prompt, `prompts::footer_faces`), pinned for both stills by `the_stills_footer_glyphs_are_the_small_faces_own_cells` (the brightest pixel of the ring is 246 and 239 from the minified cell, 254 from the 17 px one).
+A prompt-style substitute (`--prompt-style xbox`) still draws on both stills: the `Title` face carries the substitute art like the others.
 
 **Cross-title.** HD, Omega and 2048 author `font="buttons"` and have their own `PS_BUTTONS.fnt` slot (not changed: their grid, cell and Track Select pairs re-render
 byte-identical). Pure's prompts draw in its `Stats` face (unchanged, byte-identical). **Pulse PS2: checked, differs in wiring** - its skin carries no
@@ -890,7 +892,7 @@ original over their first ten rows: (original minus background) over ours is 0.5
 the words (row-mean differences -21, -22, -13, -9 ... on both rings), and not on `Help`, which belongs to a later screen. The ramp ends where the lower footer strip
 (`Viewport y=249 height=13`) ends, and `Skin.xml` authors the `NavigationController` before the two strips, so the likely cause is draw order: the original draws the
 strip's translucent lower rows **over** the prompts; ours draws the strips in the frame, under every text. Confidence 50 (not tested: ours has no way to put one
-frame image above a text). About 40 px over 40 grey on Cell, 180 px on Track Select.
+frame image above a text). 56 px over 40 grey on each of the Cell and Track Select stills.
 
 ## A text's pen starts at its first glyph's ink (2026-11-23, `pulse-fe-leftovers`)
 
@@ -899,14 +901,14 @@ of the pen, and the next pen is the previous ink edge plus the advance less the 
 at `x` minus the first glyph's bearing; the same measure `font::ink_width` states). `Pulse_14.fnt` gives every letter but `T` a left bearing of -1, so
 the advance-only pen this build used inked every such letter one pixel right of the original's: Track Select's heading `TRACK SELECT` (x 50, `Title` role) had
 ink starts 50, 60, 68, 77, 86, 100, 109, 118, 126, 135, 143 against the original's 50, 59, 67, 76, 85, 99, 108, 117, 125, 134, 143. With the law they agree
-(the two `T`s have bearing 0 and never moved). Applying the bearing **without** shifting the first pen puts a one-glyph string such as the prompt `ε` one
-pixel left (whole-frame 2.71 % on Cell), so the first-glyph rule is part of the law; it differs from Pure's (`pen_step` from `x`, ink at `x` plus the first bearing, rounded
+(the two `T`s have bearing 0 and never moved). Applying the bearing **without** shifting the first pen moves the first glyph of every string one
+pixel left wherever its bearing is -1 (prompt glyphs, words; whole-frame 2.71 % on Cell), so the first-glyph rule is part of the law; it differs from Pure's (`pen_step` from `x`, ink at `x` plus the first bearing, rounded
 up).
 
 Wired as `oag_title::MenuSkin::bearing_pens` (`Renderer::set_bearing_pens`, with the faces in `install_faces`): Pulse PSP measured; **Pulse PS2 inherits it from the PSP**
 (its skin sets the same field; the three PS2 pairs improve 0.02 to 0.05 points, 24876 to 24708, 23351 to 22874 and 60066 to 59656 px over 40 grey, so it is not
-a regression there; not measured on the PS2). Share over 40 grey on the Pulse PSP pairs, main's binary against this one, same `theirs.png`, after the glyph
-change above: Cell 0.10 % to 0.04 %, Track Select 0.45 % to 0.26 %, Grid 1.28 % to 1.13 %, Team 1.21 % to 1.09 %. Test: `render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`
+a regression there; not measured on the PS2). Share over 40 grey on the four stored Pulse PSP pairs, main's binary against the branch (the glyph face, this pen law and the footer routes together), same
+`theirs.png`: Cell 0.40 % to 0.04 %, Track Select 0.53 % to 0.13 %, Grid 1.41 % to 1.13 %, Team 1.38 % to 0.96 %. Test: `render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`
 (fails with the pen law off), `title_behaviour_data::only_pulse_lays_its_front_end_pens_out_by_bearing`.
 
 **Cross-title: HD, Omega, 2048 checked, not measured.** `Font_MeasureString` is the same bearing arithmetic on HD (`font::ink_width`); whether HD's *draw* uses it has no

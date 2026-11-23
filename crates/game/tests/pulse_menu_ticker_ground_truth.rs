@@ -721,3 +721,39 @@ fn track_selects_circuit_name_takes_its_own_glow_phase() {
         "{label}: the name's glow phase moved something outside the name panel"
     );
 }
+
+/// **The Cell and Track Select stills draw the footer's Confirm and Back glyphs in `Pulse_14` at its own size, as the live
+/// footer does.** The stills build their legend through two routes (the campaign still's faces, the picker still's
+/// `picker_footer`) and each had to be given the skin's `small_font`: from the minified `Pulse_20` cell the ring never
+/// reaches full white (brightest pixel 246 and 239), from the 17 px cell it does (254).
+#[test]
+#[ignore = "needs a Pulse PSP disc image in data/images and a GPU adapter"]
+fn the_stills_footer_glyphs_are_the_small_faces_own_cells() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let Some((label, image)) = images.into_iter().next() else {
+        return;
+    };
+    let brightest = |rgba: &[u8], (x, y, w, h): (usize, usize, usize, usize)| {
+        (y..y + h)
+            .flat_map(|row| (x..x + w).map(move |col| (row * 480 + col) * 4))
+            .map(|at| rgba[at + 1])
+            .max()
+            .unwrap_or(0)
+    };
+    for page in ["cell-select", "track-select"] {
+        let still = menu_still(&image, page, &["--menu-picker-seconds", "0.2"], None, page);
+        for (glyph, at) in [
+            ("Confirm", (348, 252, 17, 17)),
+            ("Back", (415, 252, 17, 17)),
+        ] {
+            assert!(
+                brightest(&still, at) >= 250,
+                "{label}: {page}'s {glyph} glyph is not drawn from Pulse_14's 17 px cell"
+            );
+        }
+    }
+}

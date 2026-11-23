@@ -1476,6 +1476,7 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
         crate::prompts::reset_prompt(
             menu,
             Some(&legend),
+            &oag_ui_screens::picker::FaceScales::default(),
             &|_| Vec::new(),
             &|_, text, scale| text.chars().count() as f32 * 6.0 * scale,
             480.0,

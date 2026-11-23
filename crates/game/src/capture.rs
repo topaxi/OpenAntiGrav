@@ -854,8 +854,9 @@ pub fn run(
                 }
                 if !layout.is_hd() {
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
-                    ticker_clip =
-                        menu_page::picker_footer(&mut list, legend, true, ticker, &strings, &font);
+                    ticker_clip = menu_page::picker_footer(
+                        &mut list, legend, true, ticker, &strings, &font, &skin,
+                    );
                     // The selected entry's description, typed along the footer as the live
                     // screen types it (`MenuStage`'s picker pass).
                     let selected = match kind {
