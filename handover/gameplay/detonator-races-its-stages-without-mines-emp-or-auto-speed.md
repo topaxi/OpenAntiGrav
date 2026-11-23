@@ -479,6 +479,12 @@ Ours' blue is still about 1.7 to 2.3 times the original's (a constant of about 2
 darker: the Track Fog `1.8 0.141 0.007` is not drawn), the upper right (ours 15 to 40 brighter), the floor (ours 10 to 20 brighter, now about 5 to 10),
 the mines and pad. Ours' floor also carries more red than the original's (box A red 9.8 against 5.1).
 
+**The vis texel's gamma flag, read (2026-11-23, `det-floor-gain-re`, `docs/ghidra/functions/ps3-hdfury-eu/zone-vis-gamma.md`).** `zoneTexVis`'s address
+word is `0x60730303` (gamma nibble 7, confidence 80): the original sRGB-decodes the strip, ours samples it raw into the linear sum. Applied alone (scratch,
+reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0.89. **Not wired: wire it only together with the next factor.** Open, in
+order: the viewport z mapping (`SET_VIEWPORT_SCALE`/`OFFSET` z; a doubled depth factor is about 1.33x after the encode), the band-independent floor term
+(the original's floor red 5-9 is not the strip: Track Fog, the Detonator radial bloom), and one RPCS3 frame dump confirming `0x60730303` on the vis unit.
+
 Cheapest first was row 1, then row 2's gantries, then the bloom arm (all three wired, below), then rows 7 and 4.
 
 **Zone's look in Detonator (read 2026-11-22, `det-look-re`, `detonator-look.md`).** Mode 14 is in the effect gate's mask
