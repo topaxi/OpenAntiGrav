@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-23
-summary: "Destroyed craft wired on all five titles (HD sequence); HD Zone end read; open: sound, camera 8/9, collider, debris, Zone wire"
+summary: "Destroyed craft wired on all five titles (HD sequence); HD Zone end, Pure's sequence read; open: sound, camera 8/9, collider, debris, Pure diffs, Zone"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
@@ -24,8 +24,8 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   (`crates/pure/src/race.rs`), the swap and the node effects ride Pulse's rule
   (`crates/pure/src/effects.rs`, `hull_wreck`, `Origin::InheritedFrom`); the big blast is
   Pure's own read (`docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`). Pure's own
-  `Ship_SetState` and death set (`WO_SHIP_EXPLO_SMOKE`, `WO_SHIP_EXPLOSION_DEBRIS`, ...)
-  are not read.
+  `Ship_SetState` is read against Pulse's (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, item 3
+  below): mostly the same, four differences ready to wire.
 - **HD/Fury: wired (rows 1, 2, 9, 10, 11 partly, 12), 2026-11-22.** `Title::destroyed` carries
   the timers and the two edges (`oag_title::destroyed`), `Looks::hull_wreck` loads
   `shipwreck.vex` for every team, `WO_SHIP_EXPLOSION` is thrown on state 4 and the death plume
@@ -64,7 +64,18 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    and a live run of the state timings.
 2. ~~2048 and Omega wired~~. Their second ship family (`WO_SHIP_EXPLOSION_PLAYER`,
    2048 `0x812c7e2c`, Omega `0x0176fe30`) is unread.
-3. Pure's own `Ship_SetState` against the inherited Pulse rule; Pulse PS2's port.
+3. ~~Pure's own `Ship_SetState` against the inherited Pulse rule~~ read 2026-11-23, static, 28 rows
+   (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`). **Same as Pulse, so the wire lane flips
+   `crates/pure/src/effects.rs` from `Origin::InheritedFrom("Wipeout Pulse")` to `Origin::Measured`:**
+   `hull_wreck` (the swap on the state 5 edge, row 11), `Trigger::WreckNode` and `Trigger::WreckSparks`
+   (rows 15, every Pure wreck has 3 to 7 locators), and the timers and destroy camera rows 1, 6, 7, 10, 24, 25.
+   **Differs, ready to wire on Pure:** the `explosion_gaseous.vex` flash (`ShipGaseousFlash_Construct`
+   `0x0885a7d8`) at the 4 -> 5 edge and again at the big blast in place of Pulse's shockwave ring (rows 8, 21);
+   the wreck hidden from the big blast on, where ours draws it for all of `Eliminated` (row 22);
+   `Phantom_shipwreck.vex` for a Phantom craft (row 12, after a Phantom hull loads at all); `EXPLSMALL`/`EXPLBIG`
+   for every craft with no `_PC` variant and no `SHIP_DEST` (rows 14, 18). **Unread:** row 16 (`90.0` on the
+   death sparks' instance), row 19 (big flash kind 6 against Pulse's 7), row 28 (state 7's callers), and a live
+   run of state 4's 0.5 s and row 22 (recipe on the page). Still open: Pulse PS2's port.
 4. **The Zone destruction sequence on every title** (maintainer, 2026-11-22). Pulse's is
    wired (`zonewreck.vex`, case 4's `~BLOWUP` for the local player, the death camera mode 5,
    the HUD hide on `DAT_08ab0838`; `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`,

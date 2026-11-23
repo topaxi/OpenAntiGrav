@@ -29,10 +29,13 @@ Pure has no `WO_SHIP_EXPLOSION`. Its executable names `WO_SHIP_FXNODE_BIGEXPLO`,
   from `craft+0x9a8`; at zero or below it:
   1. plays a sound and the screen flash (the player's own shake and flash, which this port already
      throws for the `Destroyed` to `Eliminated` timeout);
-  2. for each of up to **eight** nodes spawns `WO_SHIP_FXNODE_BIGEXPLO` (tag `FXBI`) parented to the
-     node (`Psys_Spawn_q`-shaped call `0x08871e1c`, parent `*(node+0x30)`);
-  3. builds a 0xa0-byte object from the craft's matrix row (`0x0885a7d8`) - not read, left unwired;
-  4. scales the live model's matrix by `1e-4` (`0x38d1b717`), hiding the hull, and calls
+  2. for each of up to **eight** nodes spawns `WO_SHIP_FXNODE_BIGEXPLO` (tag `FXBI`) placed by the
+     node's world matrix (`Psys_Spawn_q`-shaped call `0x08871e1c`, matrix `*(node+0x30)`), parented to the
+     particle world root, not to the node (corrected 2026-11-23, [`ship-destroy.md`](ship-destroy.md) row 20);
+  3. builds a 0xa0-byte object from the craft's position (`0x0885a7d8`): the `explosion_gaseous.vex` flash,
+     read 2026-11-23 ([`ship-destroy.md`](ship-destroy.md) rows 8 and 21), not wired;
+  4. scales the live model's matrix by `1e-4` (`0x38d1b717`), which since state 5 is the **wreck**, not the
+     hull (corrected 2026-11-23: the wreck then stays hidden, [`ship-destroy.md`](ship-destroy.md) row 22), and calls
      `Ship_SetState(craft, 6)`;
   5. spawns `WO_SHIP_EXPLOSION_DEBRIS` (tag `EXDE`) and `WO_SHIP_EXPLO_SMOKE` (tag `EXSM`) at the model
      node's matrix (`model+0x80`, 16 words), **with no drop along `-up`** (Pulse moves its blast 4.0 rows
@@ -44,7 +47,8 @@ Pure has no `WO_SHIP_EXPLOSION`. Its executable names `WO_SHIP_FXNODE_BIGEXPLO`,
 
 `oag_title::Trigger::WreckBigNode`, `WreckDebris`, `WreckSmoke` in `oag_pure::EFFECTS`, thrown by
 `RaceView::throw_wreck_explosion` 1.5 s after the state 5 edge (`docs/rendering/hull-sparks.md`, "Other
-titles"). Unread: the 0xa0 object at step 3 (Pulse's equivalent is the ship shockwave; Pure throws none),
+titles"). Unread: ~~the 0xa0 object at step 3~~ (read 2026-11-23: the `explosion_gaseous.vex` flash, Pure's own in place of
+Pulse's shockwave ring, [`ship-destroy.md`](ship-destroy.md)),
 the per-title sound, the effects' scale (the craft row scale `0.75` is carried from Pulse), and the
 particle parent of step 5 (placed in the world, like Pulse's).
 
