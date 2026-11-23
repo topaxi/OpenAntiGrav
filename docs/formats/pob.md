@@ -777,6 +777,11 @@ Alpha comes from the alpha channel scaled by an instance field:
 both, straight off the decompilation, with the caveat that nothing has read
 what feeds `+0x40`.
 
+HD's `WO_SHIP_EXPLOSION` (and 2048's) author `+0xbc` = **3** on the root, `trail` and
+`TRAIL_SMOKE` emitters; nothing reads it (our parser takes it as the over-life walk). The root's
+table is white at entry 0 and black for entries 1 to 31 over a fire flipbook, which draws black
+if multiplied (`ship-destroy.md`, "The black blast"). Confidence 85 for the values, 0 for the meaning.
+
 ### The two releases author colour at different scales - 2026-08-12
 
 The one thing about a `.pob` that is a property of the **release** rather

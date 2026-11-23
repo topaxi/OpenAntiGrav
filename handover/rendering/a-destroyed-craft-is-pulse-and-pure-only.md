@@ -59,9 +59,12 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   before judging the picture against the original.
 
 - **The HD blast frame reads as a soft black ball with sparks and no fire** (ours, `--force-wreck 60:7` on
-  Talon's Junction, 2026-11-22, `hd-wreck-wire`). Pulse's `WO_SHIP_EXPLOSION` draws an orange textured
-  fireball. Check HD's `WO_SHIP_EXPLOSION` against an original frame (or its `.pob` templates' blend and
-  sprites) before trusting the picture: a black fireball is the shape a wrong blend mode or missing sprite takes.
+  Talon's Junction, 2026-11-22, `hd-wreck-wire`). **Cause found 2026-11-23 (`hd-black-blast`, `ship-destroy.md`,
+  "The black blast"):** the root emitter of `WO_SHIP_EXPLOSION`, a fire flipbook (`smoke_new4_8x4`) under a
+  `colour_mode` 3 table that is black for entries 1 to 31, multiplied; 2048 authors the same table. Not a decode,
+  blend or missing-texture bug, and nothing is fixed. **Open, RE:** what `colour_mode` 3 does in HD's particle
+  update (a multiply, or not), and HD's frame advance and flipbook direction; listing the effect in
+  `oag_hd::effects::SPRITES` before that read gives a white blowout instead.
 
 1. ~~HD/Fury: read `Ship_SetState`'s destroy states~~ Read 2026-11-22
    (`ship-destroy.md`). Still open there: the death kick's formula, the wreck collider's child
