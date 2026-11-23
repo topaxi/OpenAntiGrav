@@ -42,7 +42,7 @@ impl ZoneEndDraws {
                 debris: None,
             });
         };
-        let make = |model: &oag_mesh::mesh::Model| {
+        let make = |model: &oag_mesh::mesh::Model, blend| {
             if model.indices.is_empty() {
                 return Ok(None);
             }
@@ -55,7 +55,7 @@ impl ZoneEndDraws {
                 slots.anisotropy,
                 slots.sample_count,
                 depth,
-                mesh_render::TRANSPARENT_BLEND,
+                blend,
                 mesh_render::GlowMask::Protected,
                 zone_art,
                 slots.shadow_maps,
@@ -65,8 +65,8 @@ impl ZoneEndDraws {
             .map(Some)
         };
         Ok(Self {
-            shell: make(&models.shell)?,
-            debris: make(&models.debris)?,
+            shell: make(&models.shell, mesh_render::TRANSPARENT_BLEND)?,
+            debris: make(&models.debris, mesh_render::TRANSPARENT_BLEND)?,
         })
     }
 }
@@ -93,7 +93,10 @@ impl Scene {
                 prev_vp * prev.ship(slot, race),
                 HullLayers::default(),
             );
+            // The shell's own clock: what its `Anim Transform` and any texture track author
+            // (HD's is one static key, so there it moves nothing; 2048's carries a track).
             shell.write_node_anims(queue, time);
+            shell.write_anims(queue, time);
         }
         if let Some(debris) = &self.zone_end.debris
             && race.view.zone_end_thrown()

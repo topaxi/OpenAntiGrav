@@ -87,7 +87,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    `Ship_UpdateWrecked` arm (the shell animation) and both twins' race-manager side; everything
    else below is read on all three titles. Pure's Zone wreck rides Pulse's rule.
    The Zone wreck's livery is `zone-livery-wreck-lods.md`'s item.
-   **HD/Fury: read 2026-11-23, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
+   **HD/Fury: read 2026-11-23, wired 2026-11-23 (`zone-destroy-wire`: shell, hide, debris, `shipdestroy` on HD, HUD hide, results at 5.5 s; 2048 and Omega the same without the cue; `zone-destroy.md`, "Wired")** (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
    rows Z1-Z12, static, 2048 and Omega lines per row). Mode 6 is Zone, mode 14 Detonator. A Zone
    craft never becomes a wreck (`shipwreck.vex` is never selected in Zone, so the Zone wreck livery
    is unused there): `shipdestroy` from the environment bank after every cue is stopped, camera
@@ -105,6 +105,6 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 1. ~~HD wire lane~~ landed (above). Left on HD: rows 3 and 6 (needs the death kick formula and
    collider read), row 5, a frame pair against RPCS3 once a build boots the HD states.
 2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` did HD; 2048's banks and Omega's Wwise events are unread), mode 9's view.
-3. Zone (item 4): ~~an `oag-re` measure lane on HD's Zone end~~ read (`zone-destroy.md`). Next: a wire
-   lane on HD, 2048 and Omega together (the twins agree), then a frame pair of a Zone end against
-   RPCS3 with the page's read recipe.
+3. Zone (item 4): ~~read~~ ~~wired on HD, 2048 and Omega~~. Left: a frame pair of a Zone end against
+   RPCS3 with the page's read recipe (the debris velocity, the shell's look and camera mode 2 are
+   chosen or inherited until then), 2048's and Omega's `shipdestroy`.

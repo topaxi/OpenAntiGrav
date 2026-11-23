@@ -60,6 +60,25 @@ fn model(
     .map_err(|error| format!("{name}: its .rcsmodel does not build ({error:#})"))
 }
 
+/// Draws every batch of the shell source-alpha over one, the blend of its sibling model, the
+/// Detonator death shell (`detonator_deathshell`, `mesh::rcs::psp2::lineage_blend`).
+///
+/// **Chosen, not measured for the Zone shell:** its own `.rcsmaterial` is unread. The builder
+/// reads its one material as an opaque cutout, which paints the electricity texture's black
+/// cells solid over the hull, where the original's shell is white.
+fn additive(model: &mut Model) {
+    use oag_rcs::rcsmodel::Factor;
+    let blend = mesh::rcs::blend_state(Factor::SrcAlpha, Factor::One);
+    let draws = std::mem::take(&mut model.draws)
+        .into_iter()
+        .chain(std::mem::take(&mut model.alpha_tested_draws))
+        .chain(std::mem::take(&mut model.transparent_draws));
+    for mut draw in draws {
+        draw.blend_state = Some(blend);
+        model.transparent_draws.push(draw);
+    }
+}
+
 /// Loads the shell and the debris of a Zone race, or says why it draws nothing.
 ///
 /// `None` outside a Zone race and on a title whose Zone craft has no directory of its own.
@@ -78,8 +97,9 @@ pub fn load(
     let debris_name = entry_name(ships, end.debris)?;
     let mut textures = zone_livery::Reads::new(None).named("Zone");
     let shell = match model(archives, &shell_name, store, &mut textures) {
-        Ok((model, note)) => {
+        Ok((mut model, note)) => {
             report.push(format!("{shell_name}: {note}"));
+            additive(&mut model);
             model
         }
         Err(line) => {

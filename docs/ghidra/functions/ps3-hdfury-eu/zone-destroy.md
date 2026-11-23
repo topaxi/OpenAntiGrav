@@ -11,7 +11,7 @@ Read 2026-11-23, `zone-destroy-re`. Static only. Method: the jump-table arms Ghi
 not disassemble were read with capstone over the ELF, every TOC load resolved through
 `scripts/ps3-toc.py` against the function's own TOC (`0x008ad4d8` for every HD function
 here); the jump tables were decoded by hand. Live check: not run (see "Measured on
-RPCS3: not run").
+RPCS3: not run"). Wired: see "Wired" below.
 
 **Mode 14 is Detonator** ([mode-manager.md](mode-manager.md), settled 2026-08-30), so the
 table below is scoped to **mode 6, Zone**. Modes 6 and 14 share the `0x4040` branches of
@@ -103,6 +103,32 @@ scan): it is reached through a virtual, not from `RaceManager_Update`, so nothin
 race manager's phase switch gates it. Not proven live; **70** for "the debris flies at
 2.5 s, 3 s before the results screen".
 
+## Wired (2026-11-23, `zone-destroy-wire`)
+
+`oag_title::destroyed::ZoneEnd` (HD, 2048 and Omega; Pulse and Pure `None`) carries the timers
+and the model stems; `oag_livery::zone_end` loads the shell and the debris; the view clock and
+the drawing are `oag_raceplay::zone_end` and `scene/zone_end.rs`. Test: `tests/zone_end.rs`
+(timeline, cue, Pulse untouched), disc-backed `zone_craft_ground_truth` (all three titles' models).
+
+| Row | State | Notes |
+| --- | --- | --- |
+| Z1 | wired | state 4 is one tick; the HUD hides at the blast (`Race::hud_shown`); the camera prologue is today's destroy camera, **inherited** (see Z2) |
+| Z2 | inherited | camera mode 2's per-frame law is unread: the existing destroy camera runs, as for every title |
+| Z3 | wired | no blast, plume, node sparks, wash or shake in a Zone end (`craft_flash`), no wreck model (the Zone `shipwreck.vex` is built and not drawn) |
+| Z4 | not wired | the rumble is the ordinary destroyed rumble, unchanged |
+| Z5 | wired on HD | `shipdestroy` from `env0_zone.bnk` once on the blast (`Cue::ShipDestroy`, `ZoneEnd::cue`). "After every other cue is stopped" is **not** wired: ours stops none. 2048 and Omega: no cue (`ZoneEnd::HD_SILENT`), they keep `~BLOWUP` |
+| Z6, Z7 | wired | state 4 one tick (`launch_hover::destroy_sequence`), state 5 runs the 5.5 s to the results, the shell's 2.5 s inside it |
+| Z8 | wired, look unread | the shell plays over the hull for 2.5 s on `1 - max(0.4 t, 0)` (`zone_end::shell_time`). **HD's whiteshell `Anim Transform` is one static key** (translation and scale, no rotation, `loop_seconds` 6000), so the clock moves no geometry; what the original varies with it is the material (unread). 2048's shell carries a texture track, which the clock drives. The blend is chosen (additive, the Detonator death shell's), the builder otherwise reads the material as an opaque cutout |
+| Z9 | wired | the race ends 5.5 s after the blast (`eliminate_if_wrecked` waits for state 6, rules stop at the blast); the results are the existing flow |
+| Z10 | wired in part | hull, flare and shell hide at 2.5 s, the debris is thrown. Not wired: the two side calls (`0x000f9610`, `0x003f5878`) and the second rumble |
+| Z11 | wired, velocity chosen | 112 pieces split by their `ShipBit_N` node on all three titles (HD 3,838 triangles, 2048 and Omega the same count); the launch velocity is **chosen, not measured** (`zone_end::OUTWARD`, `LIFT`, `SPIN`, `GRAVITY`, the view's generator), the pieces rest on the craft's plane and collide with nothing; no fire |
+| Z12 | wired | nothing of the craft is drawn after Z10 but the debris |
+
+2048 and Omega: **ported**. The models are the same 112 pieces and 5-node shell on both; their
+`.rcsmodel` is read through `mesh::rcs::psp2::build_with_vex`, because the shell's motion is in
+the `.vex` and neither title ships a skeleton for it. 2048's shell is 9 submeshes (60,294
+triangles), Omega's one (28,229), HD's one (28,229): re-cooked, not identical.
+
 ## Mode 14 diverges (Detonator, not this lane's table)
 
 For [detonator-hull.md](detonator-hull.md) and the Detonator pages, not edited here:
@@ -168,6 +194,8 @@ at 1.0 s, phase 4 at 5.5 s), photographing each change.
 
 ## Open
 
+0. What the shell's animation time varies on HD (its material, unread: `.rcsmaterial`), and
+   `Sound_StopAllBankCues_q`'s counterpart in ours.
 1. Camera mode 2's per-frame law (Z2): the per-frame twelve-way switch on `cam+0x40`, entry 2.
 2. `0x003f5878`'s 24-slot pool (Z10): read its consumers through `*0x008b819c`.
 3. The debris launch velocity (Z11) from the disassembly of `0x00104a58`
