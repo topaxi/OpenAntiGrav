@@ -178,3 +178,21 @@ a_2048_event_starts_on_its_own_level_not_the_difficulty}`.
   (`scripts/vita3k-mem.py`) would take the mass to 90.
 - The integrator `FUN_811d2742` rewrites `+0xe0` and `+0x160` every step; its arithmetic was
   not decoded.
+
+## 2026-11-23: the pair friction, and the frictionless floor
+
+Lane `hd-spark-row5-re`, decompile only. The contact recorder `FUN_81187c52` stores the record's
+friction (`+0x470`) from `0x811a1870` and its restitution (`+0x474`) from
+`Collision_PairRestitution` (`0x811a19fc`), both on the two colliders' materials.
+
+| Address | Kind | Name | Confidence |
+| --- | --- | --- | --- |
+| `0x811a1870` | function | `Collision_PairFriction` | 82 |
+
+A craft (material 0 or 1) gets `0x8151fc18` (`0.035`) against a craft, `0x8151fc1c` or
+`0x8151fc20` (`0.025`, `0.035`; the first when `GameMode_IsZoneFamily_q`) against materials 4,
+5 and 6, and the float at `0x818a5390` against 2, 3, 7, 10, 11 and 12. That float lies past the
+data segment's file size (`0x8153fae0`) and its only references are this function's two reads,
+so it is zero: those surfaces give a frictionless record, which HD's contact path turns into the
+no-damage spark (`ps3-hdfury-eu/collision-cues.md`, "which records carry no friction"). Material
+9 against a craft is `0.0`. Which 2048 surface carries which material is not read here.

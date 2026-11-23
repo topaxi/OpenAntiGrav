@@ -1177,3 +1177,5 @@
 0x002ac9f8	function	Font_GetKerning	75	navigation-legend.md
 0x002cfb28	function	Font_DrawString	72	navigation-legend.md
 0x008c267c	data	g_FontPenSnap	75	navigation-legend.md
+0x002eaba8	function	TrackCollision_AddMeshCollider	82	collision-cues.md
+0x0098d5b8	data	g_ShipFloorFriction	78	collision-cues.md
