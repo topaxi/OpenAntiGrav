@@ -1018,6 +1018,25 @@ mod tests {
         }
     }
 
+    /// A pinned level puts the ink that far from the trough to the peak: what a still stands at to
+    /// match a frame that caught the pulse mid-cycle.
+    #[test]
+    fn a_pinned_level_puts_the_ink_that_far_along() {
+        let (normal, white) = (skin().normal(), argb(0xFFFF_FFFF));
+        for level in [0.0_f32, 0.25, 0.5, 0.9, 1.0] {
+            let mut skin = skin();
+            skin.pin_pulse_level(level);
+            let ink = skin.selected();
+            for channel in 0..3 {
+                let want = normal[channel] + (white[channel] - normal[channel]) * level;
+                assert!(
+                    (ink[channel] - want).abs() < 1e-3,
+                    "level {level}: {ink:?} against {want}"
+                );
+            }
+        }
+    }
+
     /// A whole period on, it is back at the trough - the point of measuring a
     /// period at all being that the animation repeats rather than drifts.
     #[test]

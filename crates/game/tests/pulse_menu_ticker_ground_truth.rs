@@ -663,4 +663,24 @@ fn the_discs_list_screens_draw_their_own_rows_and_header() {
         differing_in(&live_options, &disc_options, second_row) > 100,
         "{label}: pulse-options does not list the disc's own rows"
     );
+
+    // The focused row rides a colour pulse a still rests at the trough of; `--menu-focus-level` puts it
+    // where a frame caught it, and only the focused row (`GAME OPTIONS`, the first) moves.
+    let first_row = (50, 38, 200, 14);
+    let peak = menu_page_still(
+        &image,
+        "pulse-options",
+        &["--menu-focus-level", "1"],
+        None,
+        "peak",
+    );
+    assert!(
+        differing_in(&disc_options, &peak, first_row) > 100,
+        "{label}: --menu-focus-level does not move the focused row's ink"
+    );
+    assert_eq!(
+        differing_in(&disc_options, &peak, second_row),
+        0,
+        "{label}: --menu-focus-level moved a row that is not focused"
+    );
 }
