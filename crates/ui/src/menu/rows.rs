@@ -413,6 +413,7 @@ fn draw_text_rows(
             if selected
                 && entry.is_adjustable()
                 && !inert
+                && menu.unavailable(entry).is_none()
                 && let Some(glow) = skin.glow()
             {
                 out.push(Draw::GlowText {
