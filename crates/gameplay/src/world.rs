@@ -583,8 +583,13 @@ impl World {
     /// `Ship::active` decide, because a slot marked human but never filled
     /// (`oag-headless-sim` marks three with one craft on the grid) has no body
     /// for a player step to move, and stepping its zeroed hull would spend
-    /// pickups and respawns on a ghost. The fallback slot is exempt: it was
-    /// stepped before this existed, whatever its flags say.
+    /// pickups and respawns on a ghost. **The primary slot is exempt, whatever its
+    /// flags say**, whether it is marked human or is only the fallback: the view
+    /// every full-screen consumer follows has to resolve to a flown slot, and a
+    /// world with no craft yet (`World::new`: slot 0 [`Controller::Local`],
+    /// `ship_count` 0) answers `true` for slot 0. `Ship::active` is set at the grid
+    /// and nothing in the gameplay, raceplay or physics crates clears it, so a
+    /// started race has a craft in its primary slot.
     #[must_use]
     pub fn person_flown(&self, slot: usize) -> bool {
         if slot == self.primary_slot() {
@@ -706,6 +711,26 @@ mod tests {
         assert_eq!(world.ship_count, 0);
         assert_eq!(world.active_ships().count(), 0);
         assert!(world.ships.iter().all(|ship| !ship.active));
+    }
+
+    /// The primary slot is flown with no craft in it (the view must resolve), an
+    /// away primary is not, and any other human slot needs a craft on the grid.
+    #[test]
+    fn a_human_slot_with_no_craft_is_flown_only_where_it_is_primary() {
+        let mut world = World::new(1);
+        assert_eq!(world.primary_slot(), 0);
+        assert!(world.person_flown(0), "primary, no craft: exempt");
+
+        world.controllers[3] = Controller::Remote;
+        assert!(!world.person_flown(3), "non-primary human, no craft");
+        world.ship_count = 4;
+        assert!(!world.person_flown(3), "on the grid but not active");
+        world.ships[3].active = true;
+        assert!(world.person_flown(3), "on the grid and active");
+
+        world.controllers[0] = Controller::Away;
+        assert_eq!(world.primary_slot(), 3);
+        assert!(!world.person_flown(0), "an away seat is not flown");
     }
 
     #[test]

@@ -134,7 +134,10 @@ impl Pose {
     /// ask. That is the honest fallback rather than the right answer.
     ///
     /// Both the lift and `ground` are along world up rather than the slot's own,
-    /// because the bind has already forced that axis to `(0, 1, 0)`.
+    /// because the bind has already forced that axis to `(0, 1, 0)`. The lift
+    /// still uses the slot's `up` normalised, as [`Self::from_sample`] does, so a
+    /// slot that skipped the bind lifts `height` units rather than `height`
+    /// times its length.
     #[must_use]
     pub fn from_start_position(slot: &StartPosition, ground: Option<f32>, height: f32) -> Self {
         let up = Vec3::from_array(slot.up);
@@ -145,7 +148,7 @@ impl Pose {
         }
 
         Self {
-            position: position + up * height,
+            position: position + up.normalize_or_zero() * height,
             orientation: orientation_from_axes(forward, up),
         }
     }
@@ -713,6 +716,20 @@ mod tests {
     fn a_slot_lifts_along_world_up() {
         let pose = Pose::from_start_position(&level_slot(), None, 4.0);
         assert_eq!(pose.position, Vec3::new(8.0, -46.0, -196.0));
+    }
+
+    /// A slot's `up` that is not unit length still lifts by `height`, not by `height`
+    /// times its length, and a zero one does not lift or produce a NaN.
+    #[test]
+    fn the_lift_is_the_height_whatever_the_length_of_up() {
+        let mut slot = level_slot();
+        slot.up = [0.0, 3.0, 0.0];
+        let pose = Pose::from_start_position(&slot, None, 4.0);
+        assert!((pose.position - Vec3::new(8.0, -46.0, -196.0)).length() < 1e-6);
+
+        slot.up = [0.0, 0.0, 0.0];
+        let pose = Pose::from_start_position(&slot, None, 4.0);
+        assert_eq!(pose.position, Vec3::new(8.0, -50.0, -196.0));
     }
 
     /// The authored `y` is not a ride height, so a caller that knows where the
