@@ -601,8 +601,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         title.race,
         title.hud_art.lap_hud,
         options.mode,
-        title.destroyed.value.zone_end.and_then(|end| end.cue),
-        title.destroyed.value.sound == oag_title::destroyed::DestroyedSound::BlowupAndBlasts,
+        title.destroyed.value,
         slot_teams,
         &mut report,
     );

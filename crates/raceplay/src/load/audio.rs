@@ -13,8 +13,7 @@ pub(super) fn banks_and_announcers(
     race: &'static oag_title::RaceDefaults,
     lap_hud: Option<oag_title::lap_hud::LapHud>,
     mode: Mode,
-    zone_end_cue: Option<oag_title::destroyed::ZoneEndCue>,
-    destroyed_blasts: bool,
+    destroyed: oag_title::destroyed::DestroyedCraft,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
@@ -31,7 +30,7 @@ pub(super) fn banks_and_announcers(
     let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
     // A Zone craft's end plays `shipdestroy` out of the environment bank
     // (`oag_title::destroyed::ZoneEnd::cue`).
-    if let (Mode::Zone, Some(cue)) = (mode, zone_end_cue) {
+    if let (Mode::Zone, Some(cue)) = (mode, destroyed.zone_end.and_then(|end| end.cue)) {
         sounds.load_named_as(
             archives,
             cue.bank,
@@ -41,7 +40,7 @@ pub(super) fn banks_and_announcers(
         );
     }
     // Pure's `EXPLSMALL` and `EXPLBIG` out of its ship bank, for every craft.
-    if destroyed_blasts {
+    if destroyed.sound == oag_title::destroyed::DestroyedSound::BlowupAndBlasts {
         let bank = if mode == Mode::Zone {
             race.sounds.ship_zone
         } else {
