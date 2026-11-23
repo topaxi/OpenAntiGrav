@@ -56,6 +56,14 @@ fn wrapped(sub: [f32; 4], width: f32, height: f32) -> Option<Vec<([f32; 2], [f32
     Some(repeats)
 }
 
+/// Where [`Frame::select_arrow_at`] puts the arrow against its row's text origin.
+const SELECT_ARROW_OFFSET: [f32; 2] = [-11.0, 4.0];
+
+/// The frame screen's widgets a list places itself rather than the frame: the cursor beside the
+/// selected row, and the two scroll arrows, which Pure shows only on a list that scrolls (none of
+/// seven PPSSPP frames of its chain and team screens draws them).
+const PLACED_BY_THE_LIST: [&str; 3] = ["ArrowSelect", "ArrowScrollUp", "ArrowScrollDown"];
+
 /// One title's menu frame, split by what may come between the two halves.
 ///
 /// A menu can have a looping movie behind it *and* a frame around it, and the
@@ -107,6 +115,9 @@ pub struct Frame {
     /// The original's settings-screen look for the pages that stand where one
     /// does - see [`settings::Layout`]. `None` for a title that names none.
     pub settings: Option<settings::Layout>,
+    /// The screen's `ArrowSelect`, at the origin: the cursor a list puts beside its selected
+    /// row ([`Self::select_arrow_at`]). `None` where the frame authors none.
+    pub select_arrow: Option<Draw>,
 }
 
 impl Frame {
@@ -121,6 +132,28 @@ impl Frame {
                 _ => None,
             })
             .collect()
+    }
+
+    /// [`Self::select_arrow`] beside a selected row whose text starts at `(x, y)` and is drawn at
+    /// `scale`: the arrow takes the row's scale, its left edge 11 grid units left of the row's
+    /// and its top 4 below the row's. Measured off PPSSPP frames of Pure's Team Selection and six
+    /// chain screens, the cursor on rows 1 to 3 (`docs/ui/selection-screens.md`, "Pure's
+    /// cursor arrow"); the executable's placement is not read.
+    #[must_use]
+    pub fn select_arrow_at(&self, x: f32, y: f32, scale: f32) -> Option<Draw> {
+        match self.select_arrow.clone()? {
+            Draw::Sprite { rect, uv, color } => Some(Draw::Sprite {
+                rect: [
+                    x + SELECT_ARROW_OFFSET[0],
+                    y + SELECT_ARROW_OFFSET[1],
+                    rect[2] * scale,
+                    rect[3] * scale,
+                ],
+                uv,
+                color,
+            }),
+            _ => None,
+        }
     }
 
     /// This frame without the marks in the lower half of a screen `height` high: the footer
@@ -376,7 +409,12 @@ pub fn read(
             fill.draw()
         })
         .collect();
+    let mut select_arrow = None;
     for image in &screen.images {
+        let placed_by_the_list = image
+            .name
+            .as_deref()
+            .is_some_and(|name| PLACED_BY_THE_LIST.contains(&name));
         let Some(placed) = sprites
             .iter()
             .find(|(src, _)| *src == image.src)
@@ -415,6 +453,16 @@ pub fn read(
         // three: the textures themselves are white and the colour is what
         // makes a rule grey.
         let color = argb_to_rgba(image.color);
+        if placed_by_the_list {
+            if image.name.as_deref() == Some("ArrowSelect") {
+                select_arrow = Some(Draw::Sprite {
+                    rect: [0.0, 0.0, width, height],
+                    uv: placed.sheet_rect(sub),
+                    color,
+                });
+            }
+            continue;
+        }
         if let Some(repeats) = wrapped(sub, placed.width as f32, placed.height as f32) {
             marks.extend(repeats.into_iter().map(|(dest, texels)| Draw::Sprite {
                 rect: [x + dest[0] * width, image.y, dest[1] * width, height],
@@ -448,5 +496,6 @@ pub fn read(
         tab_selected,
         blocks,
         settings: None,
+        select_arrow,
     }
 }

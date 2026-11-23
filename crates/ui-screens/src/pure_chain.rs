@@ -306,6 +306,21 @@ impl Choice {
         self.scroll = self.window_start(&Layout::new(skin, self.pitch));
     }
 
+    /// The frame's cursor arrow beside the selected row, when that row is on screen. See
+    /// [`Frame::select_arrow_at`].
+    #[must_use]
+    pub fn selected_arrow(&self, skin: &Skin, frame: &Frame) -> Option<Draw> {
+        let layout = Layout::new(skin, self.pitch);
+        let first = self.window_start(&layout);
+        let slot = self.selected.checked_sub(first)?;
+        (slot < layout.visible && self.selected < self.rows.len()).then_some(())?;
+        frame.select_arrow_at(
+            layout.text_x,
+            layout.rows_y + slot as f32 * layout.line,
+            layout.scale,
+        )
+    }
+
     /// The rows and the context line, drawn on the skin's grid.
     #[must_use]
     pub fn body(&self, skin: &Skin) -> Vec<Draw> {
@@ -377,6 +392,7 @@ pub fn draw_list(
     let mut layers = Layers::behind(skin, frame, backdrop, race_behind);
     layers.push_title(skin, frame, choice.title.clone());
     layers.body = choice.body(skin);
+    layers.body.extend(choice.selected_arrow(skin, frame));
     layers
 }
 

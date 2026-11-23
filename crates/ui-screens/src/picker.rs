@@ -883,9 +883,23 @@ pub fn draw_list(
     layers.body = match (layout.hd.as_deref(), layout.hd_track.as_deref()) {
         (Some(extra), _) => hd::body(picker, layout, extra, frame, sprites),
         (None, Some(extra)) => hd::track::body(picker, layout, extra, frame, sprites),
-        (None, None) => body::body(picker, layout, skin, sprites, measure),
+        (None, None) => {
+            let mut body = body::body(picker, layout, skin, sprites, measure);
+            body.extend(selected_arrow(picker, layout, skin, frame));
+            body
+        }
     };
     layers
+}
+
+/// The frame's cursor arrow beside the selected entry of a listing screen (Pure's), at the
+/// entry's own origin and scale. Nothing on a screen with no `<Menu>` (Pulse's) or a frame
+/// with no `ArrowSelect`.
+fn selected_arrow(picker: &Picker, layout: &Layout, skin: &Skin, frame: &Frame) -> Option<Draw> {
+    let menu = layout.screen.menu.as_ref()?;
+    picker.entries().get(picker.index())?;
+    let (scale, pitch) = entry_geometry(layout, skin, menu);
+    frame.select_arrow_at(menu.x, menu.y + picker.index() as f32 * pitch, scale)
 }
 
 /// The entry list, on a screen that lists rather than shows one at a time.

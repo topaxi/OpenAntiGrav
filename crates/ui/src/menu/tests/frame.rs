@@ -143,6 +143,48 @@ fn a_sub_rect_past_its_texture_repeats_it() {
     }
 }
 
+/// `ArrowSelect` and the two scroll arrows are the list's to place, not fixed marks: the cursor
+/// is kept apart and lands beside a row at the row's scale; the scroll arrows draw nothing.
+#[test]
+fn the_list_placed_arrows_are_not_marks_and_the_cursor_follows_a_row() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
+<Screen>
+  <Screen name="Frame">
+    <Image name="ArrowSelect"><Values x="0" y="0" width="6" height="11" U="53" V="0" TxtrWidth="6" TxtrHeight="11" Color="0xFFFF3399" src="fe.mip"></Values></Image>
+    <Image name="ArrowScrollUp"><Values x="9" y="39" width="10" height="9" U="69" V="0" TxtrWidth="10" TxtrHeight="9" Color="0xFF11ACD0" src="fe.mip"></Values></Image>
+    <Image name="ArrowScrollDown"><Values x="9" y="209" width="10" height="9" U="59" V="0" TxtrWidth="10" TxtrHeight="9" Color="0xFF11ACD0" src="fe.mip"></Values></Image>
+  </Screen>
+</Screen>"#;
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 256,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    let frame = crate::menu::read_frame(
+        &Screens::from_xml(xml),
+        &[("fe.mip".to_string(), placed)],
+        oag_display::space::Space::PSP,
+        Some("Frame"),
+        None,
+        None,
+    );
+    assert!(frame.marks.is_empty(), "{:?}", frame.marks);
+    let Some(Draw::Sprite { rect, .. }) = frame.select_arrow_at(21.0, 45.0 + 18.0, 1.15) else {
+        panic!("the frame keeps its cursor: {frame:?}");
+    };
+    assert_eq!(rect[0], 10.0);
+    assert_eq!(rect[1], 67.0);
+    assert!(
+        (rect[2] - 6.9).abs() < 0.001 && (rect[3] - 12.65).abs() < 0.001,
+        "{rect:?}"
+    );
+}
+
 /// A title that names no frame screen gets an empty one, and so does a name
 /// that is not on this source.
 #[test]
