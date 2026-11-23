@@ -42,9 +42,7 @@ impl Frontend {
     /// skin names such a face ([`oag_title::MenuSkin::stats_font`]).
     pub(crate) fn stats_face_named(&self, role: &str) -> bool {
         (role.eq_ignore_ascii_case("stats") || role.eq_ignore_ascii_case("scroll"))
-            && self
-                .menu_skin
-                .is_some_and(|skin| skin.stats_font.is_some())
+            && self.menu_skin.is_some_and(|skin| skin.stats_font.is_some())
     }
 
     /// The scale a widget authored in font `role` draws at, against

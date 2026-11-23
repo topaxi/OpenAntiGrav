@@ -678,7 +678,10 @@ fn a_stats_text_draws_in_the_stats_face_where_the_skin_has_one() {
         } => {
             assert_eq!(role, crate::language::roles::STATS);
             assert_eq!((x, y), (416.0, 239.0));
-            assert_eq!(scale, 0.7, "the face's own size: no ratio against `Default`");
+            assert_eq!(
+                scale, 0.7,
+                "the face's own size: no ratio against `Default`"
+            );
             assert_eq!(align, Align::Right);
         }
         other => panic!("not drawn in the Stats face: {other:?}"),
