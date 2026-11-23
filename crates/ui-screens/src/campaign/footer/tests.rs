@@ -728,7 +728,7 @@ fn a_description_types_across_its_wrapped_lines_and_loops() {
 <Text Name="Text0"></Text><Text Name="Text1"></Text><Text Name="Text2"></Text></TextInfo></Viewport></Screen>"#,
     );
     let layout = TickerLayout::read(&root, &HashMap::new()).expect("the viewport");
-    let measure = |text: &str, scale: f32| text.len() as f32 * 10.0 * scale;
+    let measure = |text: &str, _scale: f32| text.len() as f32 * 7.0;
     let text = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj";
     let texts = |since: Option<f32>| -> Vec<String> {
         description_draws(&layout, text, since, &measure)
