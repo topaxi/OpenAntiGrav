@@ -270,7 +270,10 @@ impl Chain {
                 .modes
                 .iter()
                 .enumerate()
-                .map(|(tag, mode)| Row::event(say(mode), tag, Status::Open, String::new()))
+                .map(|(tag, mode)| {
+                    Row::event(say(mode), tag, Status::Open, String::new())
+                        .described(note("Mode", mode))
+                })
                 .collect(),
             Step::Class => {
                 context.push(mode_name);
