@@ -1907,7 +1907,7 @@ from a mean abs diff of 44.9 grey to 0.28 and the Ship Select hull box from 29.0
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
 scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (ours is run with an empty `$OAG_DLC`, `compare_menu.render_ours`, so `data/dlc` packs do not join its lists; about 90 s on Pulse from a walked
-`Main Menu`, about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
+`Main Menu` without a `tick:` step (the default plan has two, each waiting up to 480 s for a pinnable message: run it with `emu-run.py --bg --status F` and `wait F`, or one id's plan with `--plan` as the foreground watchdog's 570 s allows), about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
@@ -1917,7 +1917,7 @@ then `just compare-page`.
 is stripped) and sets ours' `[player]` to it (`original.footer_tag`, `ours.player`, which `compare-rerender-ours.py` puts back), so the footer's tag box is drawn on
 every Pulse PSP pair. `track` is in `TICKER_PINNED` beside `team`: `PULSE_PLAN` has `tick:480` before `shot:track`, the grab waits for a pinnable message and ours is
 drawn with `--menu-ticker ITEM@X` and the matching lifetime row. The walk to the shot takes 20 to 30 emulated seconds longer, and `--menu-picker-seconds` (photo cards,
-turntable) held at 21 to 26 s: the photo box stayed at 0.2 % of its area differing on every grab.
+turntable) held at 21 to 26 s: the photo box read 0.2 % of its area differing on three of four grabs (50, 51, 50 px) and 0.7 % (215 px) on the fourth (22.0 s, the adopted pair), where it is now the largest region left and unexplained (a slideshow card or crossfade phase).
 
 ### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
 

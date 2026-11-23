@@ -120,8 +120,10 @@ class Ticker:
 
 
 def profile_name_tag(dbg):
-    """`(name, tag, address of the tag)` of the live profile (`*0x08b31774`): the stored player the footer's tag box draws."""
+    """`(name, tag, address of the tag)` of the live profile (`*0x08b31774`): the stored player the footer's tag box draws, or `None` while the pointer is not a heap address (a boot that has not made the profile yet)."""
     profile = struct.unpack("<I", dbg.read(PROFILE_PTR, 4))[0]
+    if not HEAP[0] <= profile < HEAP[1]:
+        return None
     text = lambda at, size: dbg.read(profile + at, size).split(b"\0")[0].decode("latin1")
     return text(NAME_AT, 11), text(TAG_AT, 4), profile + TAG_AT
 
