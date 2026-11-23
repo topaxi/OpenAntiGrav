@@ -1,5 +1,6 @@
 //! A texture fetch that runs only where the interpolated tangent's length says so takes explicit
-//! gradients, and the sun terms the shadowed redraw needs travel with the lit colour.
+//! gradients, the sun terms the shadowed redraw needs travel with the lit colour, and a depth tap
+//! outside its layer reads uncovered.
 //!
 //! The tangent is a smooth varying, so `dot(tangent, tangent) > 0.25` is not constant across a
 //! primitive: an implicit-level fetch (or a `dpdx`) behind it has derivatives in non-uniform control
@@ -101,4 +102,23 @@ fn the_shadowed_redraw_takes_its_sun_terms_from_the_lit_pixel() {
             "a shadowed() call without the lit pixel's terms: {call}"
         );
     }
+}
+
+#[test]
+fn a_depth_tap_outside_its_layer_reads_uncovered() {
+    // Half a texel out, a tap of a point inside the layer's rim can leave the layer; the clamped
+    // sampler would answer with the edge texel. The tap is tested, and outside counts as lit.
+    let body = SHADOW
+        .split("fn depth_layer_shadow(")
+        .nth(1)
+        .and_then(|rest| rest.split("\n}\n").next())
+        .expect("depth_layer_shadow's body");
+    assert!(
+        body.contains("let in_layer = all(tap >= vec2<f32>(0.0)) && all(tap <= vec2<f32>(1.0));"),
+        "depth_layer_shadow no longer tests each tap against its layer"
+    );
+    assert!(
+        body.contains("select(1.0, select(0.0, 1.0, coords.z - bias <= nearest), in_layer)"),
+        "a tap outside the layer must count as lit"
+    );
 }

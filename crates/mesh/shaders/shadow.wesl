@@ -182,16 +182,21 @@ fn depth_layer_shadow(coords: vec4<f32>, layer: i32, bias: f32) -> f32 {
             f32(i % 2) * 2.0 - 1.0,
             f32(i / 2) * 2.0 - 1.0
         ) * texel * 0.5;
+        let tap = coords.xy + offset;
         let nearest = textureSampleLevel(
             shadow_depth_tex,
             shadow_depth_sampler,
-            coords.xy + offset,
+            tap,
             layer,
             // A depth texture's own `textureSampleLevel` takes an `i32` mip
             // level, not the `f32` a colour texture's does.
             0
         );
-        lit = lit + select(0.0, 1.0, coords.z - bias <= nearest);
+        // A tap half a texel out can leave the layer while the point is still inside it, where the
+        // clamped sampler would answer with the layer's edge texel. Outside reads as uncovered, as
+        // `depth_layer_coords` has it for a whole point.
+        let in_layer = all(tap >= vec2<f32>(0.0)) && all(tap <= vec2<f32>(1.0));
+        lit = lit + select(1.0, select(0.0, 1.0, coords.z - bias <= nearest), in_layer);
     }
     return 1.0 - lit * 0.25;
 }
