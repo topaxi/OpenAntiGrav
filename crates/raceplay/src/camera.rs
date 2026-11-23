@@ -66,6 +66,7 @@ pub fn craft_scale(title: &oag_title::Title, mode: oag_race::Mode) -> f32 {
 /// What the drawn hull's matrix is scaled by on top of the `0.75` its model carries, for a `mode`
 /// race on `title`: the title's Detonator hull scale over that `0.75`, `1.0` everywhere else
 /// (`oag_title::Detonator::hull_scale`).
+#[cfg(feature = "view")]
 #[must_use]
 pub fn hull_draw_factor(title: &oag_title::Title, mode: oag_race::Mode) -> f32 {
     match (mode, title.race.detonator.and_then(|d| d.hull_scale)) {
@@ -978,7 +979,9 @@ impl RaceView {
 
 #[cfg(test)]
 mod tests {
-    use super::{craft_scale, hull_draw_factor};
+    use super::craft_scale;
+    #[cfg(feature = "view")]
+    use super::hull_draw_factor;
     use oag_race::Mode;
 
     /// `0.7` in a Detonator race on a title that offers one, `0.75` in every other race.
@@ -990,6 +993,7 @@ mod tests {
         assert_eq!(craft_scale(oag_pulse::TITLE, Mode::Detonator), 0.75);
     }
 
+    #[cfg(feature = "view")]
     /// HD's Detonator hull is drawn at `0.63` over the model's `0.75`; every other race, and a
     /// title whose Detonator hull scale is not measured (2048, Omega), keeps the model's own.
     #[test]
