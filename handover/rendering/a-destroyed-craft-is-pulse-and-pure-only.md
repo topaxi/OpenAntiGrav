@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
-updated: 2026-11-22
-summary: "Destroyed craft wired on Pulse and Pure; HD/Fury states 4 to 8 read and ready to wire (ship-destroy.md), 2048/Omega twins read; Zone end unread"
+updated: 2026-11-23
+summary: "Destroyed craft wired on Pulse/Pure; HD states 4-8 and the HD Zone end read, ready to wire (ship-destroy.md, zone-destroy.md); 2048/Omega twins read"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
@@ -70,11 +70,22 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    wired (`zonewreck.vex`, case 4's `~BLOWUP` for the local player, the death camera mode 5,
    the HUD hide on `DAT_08ab0838`; `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`,
    `zone-rest.md`); its open reads (`0x08ab10e8`, `0x08ab2120`) are in
-   `handover/gameplay/zone-ends-now-what-is-missing-is-the.md`. HD/Fury, 2048 and Omega:
-   which model a Zone craft becomes (2048 maps a Zone death shell,
-   `docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`, confidence 80), the effects,
-   camera, HUD and sound at the Zone's end, are unread. Pure's Zone wreck rides Pulse's rule.
+   `handover/gameplay/zone-ends-now-what-is-missing-is-the.md`. Still unread for the Zone end: 2048's
+   `Ship_UpdateWrecked` arm (the shell animation) and both twins' race-manager side; everything
+   else below is read on all three titles. Pure's Zone wreck rides Pulse's rule.
    The Zone wreck's livery is `zone-livery-wreck-lods.md`'s item.
+   **HD/Fury: read 2026-11-23, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
+   rows Z1-Z12, static, 2048 and Omega lines per row). Mode 6 is Zone, mode 14 Detonator. A Zone
+   craft never becomes a wreck (`shipwreck.vex` is never selected in Zone, so the Zone wreck livery
+   is unused there): `shipdestroy` from the environment bank after every cue is stopped, camera
+   mode 2 on the craft, state 4 for one tick, the white shell `zoneship_dead_whiteshell.vex`
+   (drawn over the hull all race) animated `1 - max(0.4 t, 0)` over 2.5 s, then hull, flare and
+   shell hidden and 112 `zoneship_dead.vex` debris pieces thrown with the body's velocity (no
+   fire); HUD hidden on the blast, `EndRace Results` 1.0 + 4.5 s later. 2048 and Omega: checked,
+   applies, not wired for every row but no rumble on 2048, Omega's extra camera-2 condition and
+   shell visibility, and Omega's `shipdestroy` event container (not checkable by bank census).
+   Unread, each with its address on the page: camera mode 2's per-frame law, the debris launch
+   velocity, the `0x003f5878` pool, 2048's `Ship_UpdateWrecked` arm, the `+0x5f9c` branch.
 
 ## Next Steps
 
@@ -84,6 +95,6 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    rumble on 2048), flip `Looks::hull_wreck`, name `WO_SHIP_DEATH_DAMAGE_PLUME` in their tables;
    the livery's external-geometry branch is shared with HD, the `.rcsmodel` psp2 branch is
    `shield::shield_model`'s (check its shield-only alpha tweak first).
-3. Then a Zone lane (item 4): an `oag-re` measure lane on HD's Zone end first (it reuses
-   step 1's `Ship_SetState` reading), checked against 2048 and Omega, then wire it with a
-   frame pair of a Zone end against RPCS3.
+3. Zone (item 4): ~~an `oag-re` measure lane on HD's Zone end~~ read (`zone-destroy.md`). Next: a wire
+   lane on HD, 2048 and Omega together (the twins agree), then a frame pair of a Zone end against
+   RPCS3 with the page's read recipe.

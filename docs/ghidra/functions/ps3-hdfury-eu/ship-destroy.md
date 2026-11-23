@@ -103,7 +103,7 @@ says "live".
 | 9 | 4 -> 5 | **0.3 s**: case 4 sets `+0x6a78 = 0.3` (`0x3e99999a`, TOC `-0x49f0`); `Ship_UpdateExploding` subtracts the frame time and enters 5 at `<= 0` | `0x000e21a0`, `0x000e3d18` | 85 | `+0x60b8 = 0.3` | `+0x7208 = 0.3` |
 | 10 | 5, on entry | Timer `+0x6a78 = 2.0` (modes `0x3f2101`), `2.5` (modes 6, 14) or `2.0` plus **the death plume**: `ShipDamageFx_Update(flare +0x5f70, shield, 1)` in every other mode (its `param_4 != 0` branch, `0x002a1840`-`0x002a191c`: outside mode 14 it spawns **`WO_SHIP_DEATH_DAMAGE_PLUME`** once, fourcc `0x4c504457`, attached (`r7 = 1`) at the flare anchor `object+0x1c0` that `0x002a0268` rebuilds each tick, then sets the death flag `object+0x2b4 = 1`, which moves that anchor from `1.5` to `2.0` along the flare node's Z ([particle-triggers.md](particle-triggers.md), "The smoke's anchor"); mode 14 branches to `0x002a1920`, unread). On the 4 -> 5 edge `Ship_UpdateExploding` also calls `0x00104f18` (outside the `0x206040` modes) or `0x00105450` (a craft whose entry names `"nitro"`) on `+0x7e40` with the body matrix (unread) | `0x000e2088`, `0x000e20d8`, `0x000e3d18` | 75 | same masks and timers, `FUN_81271a50(.., 1)` | same masks `0x3f2101`/`0x4040`, `FUN_016f3ef0(shield, +0x64c8, 1)` |
 | 11 | 5 -> 6 or 8 | `Ship_UpdateWrecked`: settled is `\|body velocity\|^2 < 0.5` and `body+0x210 == 2`. Leave when (time in state `> 6.0` and settled) or time `> 20.0` (tuning `+0x12c`, `+0x130`; file values), to **6**, or to **8** in modes 8, 13 and the MP modes 16, 17, 20, 21 with `+0x6a64 & 0x800`. A respawning mode also leaves at the 2.0 s timer. Local player after 6 s: `0x003048c0(6)` if `0x00304610() < 6`. | `0x000e37d0`-`0x000e3928` | 78 | not read | not read |
-| 12 | 6, on entry | **The wreck leaves the world**: `+0x6a78 = 0`; `PhysicsWorld_RemoveBody(*0x00992ce0, body)` and `*(body+0x4cc)+0x70 = 0`, the pair byte both craft colliders need ([mp-time-trial-collision.md](mp-time-trial-collision.md)); stops `~SHIP_DESTROYED` (`+0x7a34`, `0x002fea88`) and frees the emitter `+0x5ef8` (`0x002fd528`). **The model is not touched: the wreck stays drawn.** Modes 6 and 14 instead hide the live model, the `+0x6af4` and `+0x6afc` models and play their own sequence (Zone, the next lane). | `0x000e2710`-`0x000e277c` | 82 | checked, applies, not wired: `*(+0x5f84+0x434)+0x30 = 0`, `FUN_811d44f8` | checked, applies, not wired: `*(+0x70c8+0x4c8)+0x40 = 0`, `FUN_01320730` |
+| 12 | 6, on entry | **The wreck leaves the world**: `+0x6a78 = 0`; `PhysicsWorld_RemoveBody(*0x00992ce0, body)` and `*(body+0x4cc)+0x70 = 0`, the pair byte both craft colliders need ([mp-time-trial-collision.md](mp-time-trial-collision.md)); stops `~SHIP_DESTROYED` (`+0x7a34`, `0x002fea88`) and frees the emitter `+0x5ef8` (`0x002fd528`). **The model is not touched: the wreck stays drawn.** Modes 6 and 14 instead hide the live model, the engine flare `+0x6af4` and the death shell `+0x6afc` and play their own sequence: [zone-destroy.md](zone-destroy.md). | `0x000e2710`-`0x000e277c` | 82 | checked, applies, not wired: `*(+0x5f84+0x434)+0x30 = 0`, `FUN_811d44f8` | checked, applies, not wired: `*(+0x70c8+0x4c8)+0x40 = 0`, `FUN_01320730` |
 | 13 | 6 -> 7 | Only in MP modes (`> 0xf`) without `+0x6a64 & 0x800`; a single-player wreck stays in 6 to the race's end | `0x000ed018` | 80 | not read | not read |
 | 14 | 7 | `*(body+0x4cc)+0x70 = 0`; `+0x6a64 \|= 0x1000` by mode; per tick, back to 1 when `g_GameState+0x4e4[slot]` is set (an MP rejoin) | `0x000e2590`, `0x000ecf0c` | 65 | same shape | same shape |
 | 15 | 8, on entry | Timer `0.8` (others) or `1.0` (local); stops `~SHIP_ONFIRE` and `~SHIP_DESTROYED`, frees the emitter | `0x000e254c` | 82 | `0.8`/`1.0` | `0.8`/`1.0` |
@@ -214,7 +214,12 @@ the live model still `wreck`.
    `0x00039c90`); count and placement unread.
 3. **Camera mode 8's view** (HD) against Pulse's mode 5 law; `Camera_SetMode`'s
    enter table `0x008a7e84` entry 8.
-4. **The `+0x7e40` call on the 4 -> 5 edge** (`0x00104f18`, `0x00105450`).
-5. Zone (modes 6 and 14, rows 1, 3, 5, 12) is the next lane's: case 6 at
-   `0x000e2cc8`, `+0x6afc` faded by `1 - clamp(0.4 t)` in `Ship_UpdateWrecked`'s
-   mode-6 arm (`0x000e3a38`), `shipdestroy`.
+4. **The `+0x7e40` call on the 4 -> 5 edge** (`0x00104f18`, `0x00105450`). Pointer (2026-11-23,
+   [zone-destroy.md](zone-destroy.md), "Functions"): `+0x7e40` is the debris manager and `0x00104f18` is
+   `DebrisManager_SpawnShipDebris`, which throws **19 `Ship_Damage%d` pieces** at the body matrix with
+   random velocities, those past a tuning count with `WO_DEBRIS_FIRE`; `0x00105450` is its nitro
+   variant (32 pieces). So an ordinary HD death very likely throws debris at 0.3 s, and "one blast at
+   the swap, then the death plume, then nothing" above is incomplete (72, decompile only; the table
+   is not changed here).
+5. ~~Zone (modes 6 and 14, rows 1, 3, 5, 12)~~ Read 2026-11-23: [zone-destroy.md](zone-destroy.md)
+   (mode 6 is Zone, mode 14 Detonator; the shell's `0.4` term is its animation time, not an alpha).

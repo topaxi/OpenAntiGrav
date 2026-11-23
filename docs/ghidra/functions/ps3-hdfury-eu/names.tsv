@@ -1147,3 +1147,15 @@
 0x002234b0	function	EndRaceResults_FillDetonatorRows	80	detonator-endrace.md
 0x0022bdb8	function	EndRaceResults_ShowRecordNotice	72	detonator-endrace.md
 
+# 2026-11-23 zone-destroy-re: the Zone end, Ship_SetState mode 6 (zone-destroy.md). Static only.
+0x00104a58	function	DebrisManager_SpawnZoneDebris	80	zone-destroy.md
+0x00105a48	function	DebrisManager_Construct	75	zone-destroy.md
+0x00104f18	function	DebrisManager_SpawnShipDebris	72	zone-destroy.md
+0x0010c958	function	Debris_Launch	72	zone-destroy.md
+0x000758a0	function	SPZone_UpdateFinish	78	zone-destroy.md
+0x00053fc0	function	RaceManager_SetSubState	82	zone-destroy.md
+0x00053ff0	function	RaceManager_IsPhaseTimeAtLeast	82	zone-destroy.md
+0x00683048	function	SceneNode_SetFlags	80	zone-destroy.md
+0x000a9b18	function	Camera_SetTarget	60	zone-destroy.md
+0x000aa090	function	Camera_EnterTrackView	60	zone-destroy.md
+0x002ff600	function	Sound_StopAllBankCues	60	zone-destroy.md
