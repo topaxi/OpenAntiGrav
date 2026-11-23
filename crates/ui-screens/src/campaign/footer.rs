@@ -945,7 +945,8 @@ pub fn description_draws(
     measure: &dyn Fn(&str) -> f32,
 ) -> Vec<Draw> {
     let [x, y, width, height] = layout.viewport;
-    if text.trim().is_empty() || width <= 0.0 {
+    // No line to lay the text on: nothing to draw, and the pitch below would divide by zero.
+    if text.trim().is_empty() || width <= 0.0 || layout.text_lines == 0 {
         return Vec::new();
     }
     let scale = layout.text_scale;
