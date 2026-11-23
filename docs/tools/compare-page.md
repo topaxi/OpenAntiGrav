@@ -1971,6 +1971,44 @@ frame. `scripts/gs_fb_decode.py` decodes PSMCT32 from it, VRAM at byte 425 of th
 registers of a dump for the replay above.) The selected ring: before the selector fix `+15.4 / +8.2` (grid) and `+13.9 / +7.7` (cell) px, 12 px
 and 11 px of that the PSP's `(-5, -7)` used on the PS2's `(-11, -14)` (`docs/ui/campaign-screens.md`, "PS2: the selector sits at...").
 
+**PS2 menu pairs: the footer ticker and the tag are read from PCSX2 RAM (2026-11-23, `ps2-ship-select`).** `scripts/pcsx2-menu-pair.py` now does for the PS2 what
+`psp-menu-pair.py`'s `tick:` step does for the PSP (`scripts/ps2_ticker.py`), and the Ship Select pair carries the original's footer.
+
+- **The text record, found by signature** (confidence 80: the same two addresses after the walk and after two loads of the saved state; a heap object, so the script scans EE RAM rather than trusting an address).
+  The PS2 ticker widget's own fields were **not recovered**: the row count 121 lies 0x34 before the first record where the PSP's `+0xc8` lies 0x40 before it, so the PSP's offsets do not carry over. The record layout is the
+  PSP's: `+0` active, `+4` head x (float; a message enters at the viewport width and moves left 1 a frame), `+8` the viewport width **493.0** (`0x43f68000`, the PS2 footer
+  ticker's width, `Selection_Definition.xml`), `+0xc` minus the text width, `+0x10` the NUL-terminated message. Two records, `0x114` apart (`0x00395db0` and `0x00395ec4` in the
+  v2.9.168 Ship Select state); one of them holds the message on screen, the other waits inactive at head 492 with the next message until the first is mostly gone, so a frame shows one
+  message or two. The signature is the `0x43f68000` word at `+8` with a negative width at `+0xc`, printable text at `+0x10` and a second such
+  record `0x114` away; about 70 other 493.0 floats elsewhere in RAM fail it.
+- **The item comes from the text.** The message is a tip (`TKR_NOSR`, `NOSL`, `NOTT`, `NOTOURN`, `NOELIM`, `NOZONE`: what a time item says with nothing counted), looked up in
+  the disc's English `entries.xml` (`oag-wad cat --expand <image>:54748/WADS2.WAD Data\Plugins\PI000\entries.xml`) and named by the item that says it
+  (`oag_ui_screens::news::untried_tip`'s pairs). Any other text names no item and the frame is not grabbed (the PSP reader refuses an item ours does not count the same way).
+  Ours is drawn with `--menu-ticker ITEM@X`, the head in the record's own units.
+- **A paused VM cannot be grabbed**: PCSX2's GS screenshot fails while the VM is paused, even after a frame advance, so the screenshot runs against the running VM and is bracketed by
+  two reads of the record (about a millisecond each): the grab waits for a frame with exactly one message on screen at least 40 units inside the viewport, reads, presses F8, reads
+  again when the file appears, and refuses the pair when the same message is not alone at both reads. The bracket was 6 to 10 frames wide (124 to 118, 124 to 114). Ours is then
+  rendered at every third head in the bracket and at the neighbours of the best, scoring the ticker box (210, 628, 1030 x 40 at 1280x720, text rows only) against the original's;
+  the head is **fitted within the bracket** (117; the box grey is 14.4 there and 19.0 / 22.7 one unit either side). `original.footer_ticker` carries the item, text, both
+  addresses, both reads and the fit table. The text sits at the record's head plus the PSP's 2 px origin (inherited from PSP, not measured on the PS2; the fit absorbs it).
+  The state carries `rand()`'s state, so a reload draws the same message: two grabs of the Ship Select state both caught `TKR_ZTIM`.
+- **The tag is the profile's, read from RAM.** The profile record keeps the name as an 11-byte space-padded field with the 3-character tag straight after it (`AAAA      \0AAA\0`
+  at `0x00d9463c`, the tag at `0x00d94647`; the one such record in 32 MiB). The walk typed `AAAA` and `AAA`. The pair script writes `[player] name` and `tag` into ours'
+  profile (`compare_menu.extra_settings(player=)`, recorded in `ours.player` so `compare-rerender-ours.py` puts them back) and the footer's tag box, already drawn
+  (`NavigationLegend::set_tag`), shows `AAA`. A re-render of the new pair on a copy is byte-identical to the pair script's own.
+- **The old Ship Select state does not load.** `data/saves/pulse-ps2/menu/team-selection.p2s` was made by PCSX2 v2.9.138, which v2.9.168 refuses; the grid and cell states are the
+  same. The Ship Select state was walked again from `main-menu-pcsx2-2.9.168.p2s` (cross, cross, cross: Grid Selection, Cell Selection, Ship Select) and is to be kept as `data/saves/pulse-ps2/menu/team-selection.p2s` (the old file is unloadable).
+  `menu-grid` and `menu-cell` need the same walk before they can be re-made.
+
+| `pulse-ps2/menu-team`, same original frame | RMSE | edge | mean grey (magick) | >40 grey, whole frame | >40 grey, footer box (30, 626, 1220 x 44) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| before: ours with an empty ticker and no tag | 0.1374 | 0.267 | 6.09 | 9.05 % | 18.01 % |
+| after: `TKR_ZTIM@117`, tag `AAA` | 0.1294 | 0.301 | 5.61 | 8.70 % | **8.80 %** |
+
+(`>40 grey` is the share of pixels whose grey differs by more than 40 of 255; the box is the tag box and the ticker bar, measured on `theirs.png`. The whole-frame remainder is the
+backdrop movie's streaks and the hull's turntable phase, not this change; the footer box's remainder is the silver bar's gradient and the glyph antialiasing, which a one-pixel
+shift costs 25 to 70 grey on.)
+
 ## Pulse PSP pairs over 5 mean grey: where the grey sits (2026-11-19, `pulse-psp-pairs`)
 
 Three pairs re-rendered at main `e51ae21d2` reproduce their recorded numbers exactly (`basilico-black` 5.08, `menu-team` 5.89, `pulse-psp-zone-talons-white-z8` 8.19).
