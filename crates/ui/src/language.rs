@@ -155,6 +155,10 @@ pub struct Language {
     /// `fonts` are the disc's English ones, so the table underneath it is the
     /// disc's English text, and this names what overlays it.
     pub disc_strings: Option<&'static str>,
+    /// The overlay plugins this language's release loads over its strings
+    /// ([`oag_title::FrontEnd::language_overlays`]), set by
+    /// [`load::with_overlays`]; [`load::load_strings`] lays each over the table.
+    pub overlays: Vec<String>,
 }
 
 impl Language {
@@ -207,6 +211,7 @@ impl Language {
             name,
             entries,
             disc_strings: None,
+            overlays: Vec::new(),
         })
     }
 }
@@ -224,6 +229,21 @@ impl StringTable {
         Self {
             entries: string_entries(&parse(xml)).into_iter().collect(),
         }
+    }
+
+    /// What an overlay plugin's `StringTable` says for `language`.
+    ///
+    /// An overlay states several languages in one file, and an entry's `Language`
+    /// attribute opens a section that every entry after it belongs to until the next
+    /// one (`PI012`: `Language="English"` on its first entry, `Language="French"`
+    /// partway down), so a flat read would let the last language's text win every id.
+    /// Entries before any marker belong to no language.
+    #[must_use]
+    pub fn section(xml: &str, language: &str) -> HashMap<String, String> {
+        let mut current = None;
+        let mut out = HashMap::new();
+        section_entries(&parse(xml), language, &mut current, &mut out);
+        out
     }
 
     /// Looks up an id, **exactly**: what this copy of the table literally says.
@@ -551,6 +571,30 @@ fn collect_font_borders(node: &Node, out: &mut Vec<(String, u32)>) {
 }
 
 /// Every `<Entry ID=... String=...>` in the tree, in document order.
+fn section_entries<'a>(
+    node: &'a Node,
+    language: &str,
+    current: &mut Option<&'a str>,
+    out: &mut HashMap<String, String>,
+) {
+    if node.name.eq_ignore_ascii_case("Entry")
+        && let Some(id) = node.attr("ID")
+    {
+        if let Some(marker) = node.attr("Language") {
+            *current = Some(marker);
+        }
+        if current.is_some_and(|marker| marker.eq_ignore_ascii_case(language)) {
+            out.insert(
+                id.to_string(),
+                node.attr("String").unwrap_or_default().to_string(),
+            );
+        }
+    }
+    for child in &node.children {
+        section_entries(child, language, current, out);
+    }
+}
+
 fn string_entries(node: &Node) -> Vec<(String, String)> {
     let mut out = Vec::new();
     collect_entries(node, &mut out);
@@ -625,6 +669,29 @@ mod tests {
         assert_eq!(table.len(), 2);
         assert_eq!(table.get("FE_CONFIRM"), Some("Confirm"));
         assert_eq!(table.get("BOOT_PRESS_START"), Some("Press START button"));
+    }
+
+    /// Trimmed to shape from `Data\Plugins\PI012\Definition.xml`: one marker opens a
+    /// section that holds until the next, and an id repeats across sections.
+    #[test]
+    fn an_overlay_section_runs_to_the_next_language_marker() {
+        let xml = r#"<StringTable>
+            <Entry ID="before any marker" String="nobody's"></Entry>
+            <Entry Language="English" ID="On Line" String="Download"></Entry>
+            <Entry ID="Memory" String="At least"></Entry>
+            <Entry Language="French" ID="On Line" String="Telechargement"></Entry>
+            <Entry ID="Memory" String="REQUIS"></Entry>
+            <Entry Language="Spanish" ID="On Line" String="Descarga"></Entry>
+          </StringTable>"#;
+        let english = StringTable::section(xml, "english");
+        assert_eq!(english.len(), 2);
+        assert_eq!(english["On Line"], "Download");
+        assert_eq!(english["Memory"], "At least");
+        let french = StringTable::section(xml, "French");
+        assert_eq!(french["On Line"], "Telechargement");
+        assert_eq!(french["Memory"], "REQUIS");
+        assert_eq!(StringTable::section(xml, "Spanish").len(), 1);
+        assert!(StringTable::section(xml, "German").is_empty());
     }
 
     #[test]

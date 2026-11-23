@@ -440,6 +440,7 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[oag_title::Lang
         r"Languages\turkish",
         r"Languages\portuguesebr",
     ],
+    overlays: &[],
     evidence: "omega-ps4-eu eboot FUN_0174ca60 table, region mask 1 (USER_DEFINED_PARAM_1 = 1); patch 1.07 table adds Turkish",
 }];
 

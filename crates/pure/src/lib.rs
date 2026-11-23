@@ -848,7 +848,8 @@ pub fn open_with_packs(source: &str, packs: Vec<oag_assets::dlc::Pack>) -> Resul
 /// USA loads `PI000 PI010 PI008 PI012 PI001 PI004`: English, Spanish, French -
 /// the three languages the USA picker was observed to offer, in the order it
 /// offered them - then `PI012` (a US-spelling overlay on `PI000`, no `<Font>`,
-/// not a language and so left out here), the skin and the billboards. EU loads
+/// not a language: it is the release's `overlays`, applied over the chosen
+/// language's strings), the skin and the billboards. EU loads
 /// `PI000 PI010 PI008 PI009 PI011 PI001 PI004`: those three plus German and
 /// Italian. Neither manifest names `PI003` or `PI005`, so the Japanese plugin
 /// is never loaded on either pressing. Confidence 85: the tables are read
@@ -858,11 +859,13 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
     oag_title::LanguageManifest {
         serial: "UCUS-98612",
         plugins: &["PI000", "PI010", "PI008"],
-        evidence: "pure-psp-usa BOOT.BIN plugin manifest, PI012 overlay not offered",
+        overlays: &["PI012"],
+        evidence: "pure-psp-usa BOOT.BIN plugin manifest, PI012 is an overlay, not a language",
     },
     oag_title::LanguageManifest {
         serial: "UCES-00001",
         plugins: &["PI000", "PI010", "PI008", "PI009", "PI011"],
+        overlays: &[],
         evidence: "pure-psp-eu BOOT.BIN plugin manifest",
     },
 ];

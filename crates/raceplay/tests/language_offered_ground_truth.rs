@@ -181,6 +181,78 @@ fn pure_psp_usa_offers_three_not_the_five_on_the_disc() {
     check("pure-psp-usa.chd", "UCUS-98612", PURE_US);
 }
 
+/// The string a boot reads for `id` in `language`, on the release a Pure image is.
+fn pure_string(image: &str, language: &str, id: &str) -> Option<String> {
+    let path = oag_testdata::image(image)?;
+    let opened =
+        oag_source::title::open_source(&path.display().to_string(), Vec::new(), Vec::new())
+            .expect("the source opens");
+    let mut archives = opened.archives;
+    let front_end = opened.title.front_end.expect("a front end");
+    let serial = archives.layout.serial.clone();
+    let mut report = Vec::new();
+    let languages = oag_ui::language::load::with_overlays(
+        oag_ui::language::load::load_languages(
+            &mut archives,
+            front_end.offered_languages(serial.as_deref()),
+            None,
+            &mut report,
+        ),
+        front_end.language_overlays(serial.as_deref()),
+    );
+    let strings = oag_ui::language::load::load_strings(
+        &mut archives,
+        &languages,
+        Some(language),
+        &mut report,
+    );
+    Some(strings.get(id)?.to_string())
+}
+
+/// `PI012` is on both Pure discs, byte for byte, and only the USA executable's manifest loads
+/// it: the row the original calls `Download` is `On Line` on a EU boot. English is what the
+/// capture of the USA Main Menu shows; French and Spanish are read from the file's own
+/// sections, not captured.
+#[test]
+#[ignore = "needs data/images"]
+fn pure_usa_reads_the_pi012_overlay_and_pure_eu_does_not() {
+    for (language, id, usa) in [
+        ("English", "On Line", "Download"),
+        ("French", "On Line", "Téléchargement"),
+        ("Spanish", "On Line", "Descarga"),
+        (
+            "English",
+            "Text->Settings->Camera",
+            "Set your favored camera angle.",
+        ),
+    ] {
+        let Some(got) = pure_string("pure-psp-usa.chd", language, id) else {
+            return;
+        };
+        assert_eq!(got, usa, "pure usa {language} {id}");
+    }
+    assert_eq!(
+        pure_string("pure-psp-eu.chd", "English", "On Line").as_deref(),
+        Some("On Line"),
+        "the EU disc holds PI012 and its executable never loads it"
+    );
+    assert_eq!(
+        pure_string(
+            "pure-psp-usa.chd",
+            "English",
+            "Text->Main Menu->Mode->On Line"
+        )
+        .as_deref(),
+        pure_string(
+            "pure-psp-eu.chd",
+            "English",
+            "Text->Main Menu->Mode->On Line"
+        )
+        .as_deref(),
+        "an id PI012 does not state keeps the base table's text"
+    );
+}
+
 #[test]
 #[ignore = "needs data/images"]
 fn hd_eu_reaches_twelve_and_not_the_four_it_ships_unreachable() {
