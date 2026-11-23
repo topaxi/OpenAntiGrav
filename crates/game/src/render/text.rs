@@ -16,7 +16,7 @@
 //! [`Draw::Text`]: oag_ui::frontend::Draw::Text
 
 use super::*;
-use oag_ui::font::wrap;
+use oag_ui::font::wrap_pens;
 
 /// Where the pen ends after `text` under the snapped law ([`oag_ui::font::pen_step`]), from a whole-unit
 /// origin, at `scale` screen units per texel: the width an aligned string is placed by.
@@ -324,7 +324,10 @@ impl Renderer {
         };
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let line_height = atlas.line_height * scale;
-        for (index, line) in wrap(atlas, text, scale, width).into_iter().enumerate() {
+        for (index, line) in wrap_pens(atlas, text, scale, width, self.hud.snapped_pens)
+            .into_iter()
+            .enumerate()
+        {
             self.push_text(
                 slot,
                 x,

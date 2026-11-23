@@ -1079,6 +1079,20 @@ pub fn pen_step(cell: &Cell, scale: f32, x: f32, snap: bool) -> (f32, f32) {
 /// text.
 #[must_use]
 pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
+    wrap_pens(atlas, text, scale, max_width, false)
+}
+
+/// [`wrap`] on the pen the draw lays out: `snapped` measures each candidate line by [`ink_width`]'s
+/// snapped pass, as a front end whose pens step up to whole units ([`pen_step`]) draws it, and
+/// otherwise by the fractional advance sum.
+#[must_use]
+pub fn wrap_pens(
+    atlas: &Atlas,
+    text: &str,
+    scale: f32,
+    max_width: f32,
+    snapped: bool,
+) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -1087,7 +1101,12 @@ pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && measure(atlas, &candidate) * scale > max_width {
+        let width = if snapped {
+            ink_width(atlas, &candidate, scale, true)
+        } else {
+            measure(atlas, &candidate) * scale
+        };
+        if !line.is_empty() && width > max_width {
             out.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {
