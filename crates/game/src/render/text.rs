@@ -20,6 +20,8 @@ use oag_ui::font::wrap_pens;
 
 /// Where the pen ends after `text` under the snapped law ([`oag_ui::font::pen_step`]), from a whole-unit
 /// origin, at `scale` screen units per texel: the width an aligned string is placed by.
+/// **Chosen, not measured**: no captured Pure frame has a right- or centre-aligned string in a snapped
+/// face, so where the original places one is unknown; this keeps the string's drawn width.
 fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> f32 {
     text.chars()
         .filter_map(|c| atlas.cell(c))
