@@ -214,6 +214,57 @@ fn the_zone_dome_takes_the_stages_horizon_and_zenith_colours() {
     assert!(eye_level > 0 && overhead > 0);
 }
 
+const TALONS: &str = r"Data\Environments\talons_junction\track.vex";
+
+/// **A Detonator race takes Zone's sky gate and draws Detonator's own stage colours
+/// through it.** The original's one byte opens for modes 6, 13, 14 and 21, so the
+/// `ZoneSky.gtf` swap and the gradient dome are not Zone's alone
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`). Both loads name Talon's
+/// Junction, so the mode is the only variable; stage 1 of `DetonatorMode.effectSettings`
+/// authors a black horizon and zenith.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_detonator_race_draws_the_zone_dome_in_its_own_stage_colours() {
+    let (Some(detonator), Some(single_race)) = (
+        load_on(oag_race::Mode::Detonator, TALONS),
+        load_on(oag_race::Mode::SingleRace, TALONS),
+    ) else {
+        return;
+    };
+    let sky = detonator
+        .sky_model
+        .as_ref()
+        .expect("the Detonator sky loads");
+    assert_eq!(sky.label, oag_mesh::mesh::sky_cube::ZONE_DOME_LABEL);
+    assert!(sky.textures.iter().all(Option::is_none));
+    let reflection = sky
+        .sky_reflection
+        .as_ref()
+        .expect("ZoneSky.gtf is the dome's reflection map");
+    let circuit = oag_mesh::mesh::sky_paraboloid::from_sky(
+        single_race
+            .sky_model
+            .as_ref()
+            .expect("the circuit's sky loads"),
+    )
+    .expect("the circuit's cubemap makes a reflection map");
+    assert_ne!(reflection.as_slice(), circuit.as_slice());
+    assert!(
+        detonator
+            .report
+            .iter()
+            .any(|line| line.contains("zonesky.gtf: loaded as the Zone sky's reflection map")),
+        "the load report names the Zone cubemap"
+    );
+    let palette = detonator
+        .zone_grade
+        .as_ref()
+        .expect("a Detonator race on HD carries its grade")
+        .palette();
+    assert_eq!(palette.sky_horizon_colour, Some([0.0, 0.0, 0.0]));
+    assert_eq!(palette.sky_zenith_colour, Some([0.0, 0.0, 0.0]));
+}
+
 /// **Outside HD, nothing swaps.** Pulse ships no located Zone sky, so a Zone
 /// race there keeps whatever sky the track authors - the absence is a `None`
 /// in the title record rather than a special case in the loader.

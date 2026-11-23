@@ -89,7 +89,7 @@ this section reuses them.
 | `0x00133660` | `DetonatorBomb_IsInOwnerGrace` | 75 |
 | `0x00134960` | `DetonatorBomb_Update` | 80 |
 | `0x00134540` | `DetonatorBomb_Detonate` | 78 |
-| `0x001340d8` | `DetonatorBomb_AnimateToMusic` | 60 |
+| `0x001340d8` | `DetonatorBomb_AnimateToMusic` | 76 |
 | `0x00137690` | `DetonatorBombBlast_Construct` | 78 |
 | `0x00137150` | `DetonatorBombBlast_Start` | 78 |
 | `0x00136420` | `DetonatorBombBlast_Update` | 65 |

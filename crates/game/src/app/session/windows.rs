@@ -798,6 +798,9 @@ impl Session {
         // and does not. The jitter's length is a property of the upscaler resolving this
         // window's frames, as for window 1.
         stage.scene.set_blur_resolution(blur_resolution);
+        stage
+            .scene
+            .set_band_levels(self.audio.output().spectrum().levels());
         let effects = oag_raceplay::WindowEffects {
             motion_blur: profile.motion_blur,
             camera_jitter: upscale::jitter_phases(

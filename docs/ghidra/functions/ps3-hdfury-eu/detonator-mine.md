@@ -31,7 +31,7 @@ bomb's half is [detonator-bomb.md](detonator-bomb.md).
 | `0x00138e58` | `DetonatorMine_Explode` | 82 |
 | `0x00688280` | `DetonatorMine_SetDark` | 72 |
 | `0x00688290` | `DetonatorMine_IsLive` | 72 |
-| `0x001395f0` | `DetonatorMine_AnimateToMusic` | 62 |
+| `0x001395f0` | `DetonatorMine_AnimateToMusic` | 78 |
 
 `MineManager_*` live in `MineManager.cpp`'s span (constructors `0x0011b538`/`0x0011b8e8`,
 `scripts/ps3-toc.py map`), `BaseMine_*` in `BaseMine.cpp`'s (`0x0010ec28`/`0x0010ee10`),
@@ -134,7 +134,8 @@ Confidence **80**.
 `DetonatorMine_Update` (`0x00139d18`) calls `BaseMine_Update`, then, while the mine is not
 triggered, spins it (`+0xfc = +0xc0 * k`) and, when visible, runs `DetonatorMine_AnimateToMusic`
 (`0x001395f0`: on a live mine, size and colour pulse on `SoundSystem_GetBandLevel`; a dark mine
-skips the pulse). Presentation only.
+skips the pulse). Presentation only; the writes of `MineColour`, `MineBrightness` and the
+visualiser's binds are read on [detonator-mine-material.md](detonator-mine-material.md).
 
 ```text
 age += dt; life -= dt                                    ; 0x0010eca8-0x0010ece0

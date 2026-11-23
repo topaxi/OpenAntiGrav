@@ -340,6 +340,7 @@ pub const ZONE_FRAME: &oag_title::ZoneFrame = &oag_title::ZoneFrame {
     // `2 * 0.5`, at `0x003db260`: the hull programs' `iblScalePower`. Live on RPCS3 at two
     // stages of two files (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`).
     hull_probe_tint_scale: Some(2.0),
+    detonator_arm: true,
 };
 
 /// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.

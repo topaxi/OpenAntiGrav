@@ -224,8 +224,8 @@ after.
   port has no radial pass (renderer.md, "Is HD's glare under-reproduced?"; the
   block's `+0x558`..`+0x570`).
 - **Detonator.** Its arm keeps the circuit's frame contribution and adaption
-  boost and takes the rest; static only, and `ZONE_FRAME` is applied in Zone
-  alone. Zone Battle (mode 13) takes the common tail, the Zone values but
+  boost and takes the rest; static only. Applied since 2026-11-22
+  (`ZoneFrame::detonator_arm`, `bloom::for_mode`), without the radial set. Zone Battle (mode 13) takes the common tail, the Zone values but
   radial contribution `0.1`; not wired.
 - **The hull.** Read in [zone-hull-light.md](zone-hull-light.md): the `+0x4b0`
   byte does not reach the hull (no hull draw reads it); its probe tint is twice the

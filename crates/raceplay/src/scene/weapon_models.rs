@@ -253,6 +253,7 @@ impl super::Scene {
             prev_vp,
             None,
         );
+        self.write_detonator_looks(race, queue, seconds, bomb_matrices.len());
         self.write_detonator_parts(
             (race, &mine_matrices, &bomb_matrices),
             prev,

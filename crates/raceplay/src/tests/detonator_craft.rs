@@ -104,3 +104,30 @@ fn the_team_wears_its_detonator_livery_on_the_detonator_hull() {
         .expect("Omega takes the same rows");
     assert_eq!(own.own, "zoneship_team", "Omega's key");
 }
+
+/// The draw's per-mine constants line up with the matrices it draws: the ordinary mines first,
+/// then each laid Detonator mine the survey can place, in the matrices' own order. A mine whose
+/// constants went to another mine's slot would take that mine's colour and envelope.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn the_laid_mines_the_draw_colours_are_the_ones_it_places() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD Detonator race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.tick(&oag_gameplay::PlayerInputs::none());
+    let (ordinary, laid) = race.detonator_mine_looks();
+    assert!(!laid.is_empty(), "stage 1 laid mines");
+    assert_eq!(ordinary + laid.len(), race.mine_model_matrices().len());
+    assert!(
+        laid.iter().all(|mine| mine.live),
+        "the opening stage's mines are all live"
+    );
+}

@@ -625,6 +625,13 @@ impl ZoneGrade {
         self.blend
     }
 
+    /// The Detonator mine's and bomb's colours of the stage showing (the committed one: they
+    /// snap when it steps), or `None` for a file that does not author them.
+    #[must_use]
+    pub fn detonator_colours(&self) -> Option<oag_tables::effectsettings::DetonatorColours> {
+        self.table.detonator_colours(self.blend.current)
+    }
+
     /// The highest stage this file names.
     #[must_use]
     pub fn last_stage(&self) -> u32 {

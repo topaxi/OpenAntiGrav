@@ -302,3 +302,40 @@ fn a_2048_stage_reads_its_eight_zone_colours_and_the_title_wide_light() {
     assert!(hd.zone_colours(0).iter().all(Option::is_none));
     assert!(hd.zone_lighting().is_none());
 }
+
+/// `detonatormode.effectsettings`' stages 1 and 14 and its all-black "Start", as the file spells
+/// them: four integers a key.
+const DETONATOR_EXCERPT: &str = concat!(
+    "\"0 Start.Detonator Mine Colour\"=0 0 0 255\n",
+    "\"1 Sub Venom.Detonator Mine Colour\"=122 25 255 255\n",
+    "\"1 Sub Venom.Detonator Mine Electricity Colour\"=109 0 232 255\n",
+    "\"1 Sub Venom.Detonator Bomb Inner Colour\"=255 128 65 255\n",
+    "\"1 Sub Venom.Detonator Bomb Outer Colour\"=255 112 25 255\n",
+    "\"14 Supersonic.Detonator Mine Colour\"=255 255 255 255\n",
+    "\"14 Supersonic.Detonator Mine Electricity Colour\"=255 255 255 255\n",
+    "\"14 Supersonic.Detonator Bomb Inner Colour\"=255 255 255 0\n",
+    "\"14 Supersonic.Detonator Bomb Outer Colour\"=255 255 255 255\n",
+);
+
+#[test]
+fn a_detonator_stage_reads_its_four_colours_as_bytes_over_255_in_file_order() {
+    let e = EffectSettings::parse(DETONATOR_EXCERPT).expect("it parses");
+    let c = e.detonator_colours(1).expect("stage 1 authors all four");
+    assert_eq!(c.mine, [122.0 / 255.0, 25.0 / 255.0, 1.0]);
+    assert_eq!(c.mine_electricity, [109.0 / 255.0, 0.0, 232.0 / 255.0]);
+    assert_eq!(c.bomb_inner, [1.0, 128.0 / 255.0, 65.0 / 255.0]);
+    assert_eq!(c.bomb_outer, [1.0, 112.0 / 255.0, 25.0 / 255.0]);
+}
+
+#[test]
+fn a_zero_authored_alpha_is_harmless_and_a_missing_key_is_none() {
+    let e = EffectSettings::parse(DETONATOR_EXCERPT).expect("it parses");
+    assert_eq!(
+        e.detonator_colours(14).expect("authored").bomb_inner,
+        [1.0; 3]
+    );
+    // Stage 0 names only the mine colour; a stage with a key missing answers nothing rather
+    // than a half-filled set.
+    assert_eq!(e.detonator_colours(0), None);
+    assert_eq!(e.detonator_colours(99), None);
+}

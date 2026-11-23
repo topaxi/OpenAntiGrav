@@ -212,6 +212,7 @@ pub const TITLE: &Title = &Title {
         // over authored UVs up to 2.0, which only mean something wrapped.
         wrap: true,
         zone_shares_one_texture: false,
+        detonator_shares_one_texture: false,
         zone_equaliser_bars: false,
         // Measured: the same dump shows the gantry as pass B into the 128 x 128 target,
         // and the PPSSPP software renderer draws the board as an opaque panel with

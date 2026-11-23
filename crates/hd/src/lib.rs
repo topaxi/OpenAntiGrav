@@ -340,6 +340,7 @@ pub const TITLE: &Title = &Title {
         flip_v: false,
         wrap: true,
         zone_shares_one_texture: true,
+        detonator_shares_one_texture: true,
         zone_equaliser_bars: true,
         gantry_card: true,
         adverts_unlit: true,

@@ -22,10 +22,11 @@ fn gantry_mode(mode: Mode) -> Option<oag_title::adverts::GantryMode> {
 /// Whether `mode` on `title` swaps the per-slot adverts for the one shared
 /// texture of the stage's offscreen target ([`crate::zone_equaliser`]).
 pub(super) fn zone_shares_texture(title: &oag_title::Title, mode: Mode) -> bool {
-    mode == Mode::Zone
-        && title
-            .adverts
-            .is_some_and(|spec| spec.zone_shares_one_texture)
+    title.adverts.is_some_and(|spec| match mode {
+        Mode::Zone => spec.zone_shares_one_texture,
+        Mode::Detonator => spec.detonator_shares_one_texture,
+        _ => false,
+    })
 }
 
 /// Which advert pass `title` runs in `mode`, and why none does when it does not.
@@ -313,4 +314,23 @@ pub(super) fn build(
         _ => {}
     }
     (gantry, visibility, adverts, equaliser)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// HD binds the stage's shared equaliser target to billboard slots 1 to 7 in a Zone race
+    /// and in a Detonator race (one byte gates both); Omega and 2048 keep Detonator's
+    /// per-slot adverts, which no capture of theirs has measured.
+    #[test]
+    fn a_detonator_race_shares_the_stage_target_on_hd_alone() {
+        assert!(zone_shares_texture(oag_hd::TITLE, Mode::Zone));
+        assert!(zone_shares_texture(oag_hd::TITLE, Mode::Detonator));
+        assert!(!zone_shares_texture(oag_hd::TITLE, Mode::SingleRace));
+        for title in [oag_omega::TITLE, oag_2048::TITLE] {
+            assert!(zone_shares_texture(title, Mode::Zone));
+            assert!(!zone_shares_texture(title, Mode::Detonator));
+        }
+    }
 }

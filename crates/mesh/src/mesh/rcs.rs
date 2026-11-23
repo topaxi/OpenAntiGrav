@@ -168,6 +168,7 @@ pub fn no_textures(_: &str) -> Option<Vec<u8>> {
 
 mod alpha_emissive;
 mod billboard_glass;
+mod bomb_tint;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;
@@ -176,6 +177,7 @@ mod hull_normal;
 mod isolate;
 mod light_cone;
 mod mag_wave;
+mod mine_rim;
 mod pad_ne;
 mod pads;
 mod picture_tint;
@@ -188,6 +190,7 @@ pub use pads::{build_pads, build_weapon_pads};
 mod bounds;
 mod glass_sheen;
 mod glow;
+mod hull_overlay;
 mod ice;
 mod probe_lit;
 pub mod psp2;

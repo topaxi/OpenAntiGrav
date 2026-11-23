@@ -290,6 +290,25 @@ pub(super) fn material_setup(
         }
     }
     super::mag_wave::merge(&mut mag_emissive, hull_maps);
+    // The Detonator mine's rim glow takes its slot and an entry of its own, and binds its normal
+    // map third like a hull's.
+    let mine_maps = super::mine_rim::mine_rim(
+        model,
+        &material_variants,
+        textures,
+        (&mut material_slots, &mut skins),
+        (&mut emissive, &mut material_tangent),
+        report,
+    );
+    super::mag_wave::merge(&mut mag_emissive, mine_maps);
+    super::bomb_tint::bomb_tint(
+        model,
+        &material_variants,
+        textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
     // Water reads its picture as a normal map and has none to paint.
     // Its taps bind the normal map third and `water_noref`'s second map fourth.
     let water = super::water::water(
@@ -312,6 +331,15 @@ pub(super) fn material_setup(
         model,
         &material_variants,
         textures,
+        &mut material_slots,
+        &mut emissive,
+        report,
+    );
+    // The Detonator hull's iridescent overlay claims a slot the families above left alone.
+    super::hull_overlay::hull_overlay(
+        model,
+        &picks,
+        &seconds,
         &mut material_slots,
         &mut emissive,
         report,
