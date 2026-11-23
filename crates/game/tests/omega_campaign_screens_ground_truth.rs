@@ -25,9 +25,9 @@ fn omega_and_hd_draw_hd_campaign_screens_and_nothing_else_does() {
 }
 
 /// Omega's `Cell Selection` authors `RecordsButton` at `DifficultyButton`'s own
-/// position, so only one can be on screen - the premise of dropping the
-/// Records one - and both carry the raw placeholder texts a Pulse-shaped draw
-/// list would print.
+/// position: the footer controller overwrites both x
+/// (`Campaign::flow_footer`), so the file's value is a placeholder, and both
+/// carry the raw placeholder texts a Pulse-shaped draw list would print.
 #[test]
 #[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
 fn omega_cell_selection_authors_records_and_difficulty_buttons_in_one_place() {
@@ -607,4 +607,84 @@ fn the_campaign_select_frame_shows_the_2048_banner() {
     let share = navy as f32 / total as f32;
     println!("banner navy share {share}");
     assert!(share > 0.5, "the banner box is {share} navy");
+}
+
+/// Omega's footer legend flows by its own law (the word at the glyph's measured width plus 14, no
+/// pen snap): `Confirm`, `Back`, then Cell Selection's `Records` and `Difficulty` prompts follow
+/// `NAVIGATION`. The original's `omega/menu-cell-select` frame reads the glyphs and words at
+/// 435, 487, 625, 677, 768, 820, 965 and 1017 (a pair with no Safe Area, authored x = screen x);
+/// the law predicts within 3. Dropping the flow leaves the authored 490 to 944.
+#[test]
+#[ignore = "needs the decrypted PS4 package pair in data/extracted/ps4/"]
+fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
+    let Some(omega) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let options = oag_game::boot::Options {
+        language: None,
+        source: omega.display().to_string(),
+        dlc: Vec::new(),
+        leg: oag_ui::frontend::Leg::LogoFmv,
+        movie: None,
+        cache: std::env::temp_dir().join("oag-omega-legend-flow-ground-truth"),
+        audio_cache: oag_source::cache::default_audio_cache_dir(),
+        extent: oag_game::movie::Extent::Frames(oag_game::INTRO_FRAMES_NEEDED),
+        no_video: true,
+        refresh_video: false,
+        prefer_av1_cache: false,
+        find_texture_packs: None,
+    };
+    let (shell, mut archives, title) = oag_game::boot::load_shell(&options).expect("omega boots");
+    let globals: Vec<(&str, &str)> = shell
+        .screens
+        .globals
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let mut campaign = oag_game::campaign::load(
+        &mut archives,
+        &shell.strings,
+        oag_ui_screens::picker::FaceScales::default(),
+        [shell.space.size.0, shell.space.size.1],
+        &shell.sprites,
+        &globals,
+        title,
+        &shell.tracks.clone(),
+    )
+    .expect("the campaign loads");
+    let law = title
+        .front_end
+        .and_then(|front_end| front_end.legend_flow)
+        .expect("Omega's title data carries the flow");
+    campaign.flow_footer(
+        law,
+        &oag_game::boot::fonts::legend_ink(&shell.font, shell.buttons_font.as_ref()),
+    );
+    let legend = campaign.nav_legend.as_ref().expect("a legend");
+    let mut xs: Vec<f32> = legend
+        .draw(&oag_ui_screens::picker::FaceScales::default())
+        .iter()
+        .filter_map(|draw| match draw {
+            oag_ui::frontend::Draw::Text { x, .. } | oag_ui::frontend::Draw::FacedText { x, .. } => {
+                Some(*x)
+            }
+            _ => None,
+        })
+        .filter(|x| *x > 400.0)
+        .collect();
+    let texts = &campaign.cell_layout.screen.texts;
+    let x = |name: &str| texts.iter().find(|t| t.name.as_deref() == Some(name)).map(|t| t.x);
+    for name in [
+        "RecordsButtonIcon",
+        "RecordsButton",
+        "DifficultyButtonIcon",
+        "DifficultyButton",
+    ] {
+        xs.push(x(name).unwrap_or_else(|| panic!("Cell Selection authors {name}")));
+    }
+    let original = [435.0, 487.0, 625.0, 677.0, 768.0, 820.0, 965.0, 1017.0];
+    assert_eq!(xs.len(), original.len(), "{xs:?}");
+    for (want, got) in original.iter().zip(&xs) {
+        assert!((want - got).abs() <= 3.0, "{got} against the frame's {want}: {xs:?}");
+    }
 }

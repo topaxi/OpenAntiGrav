@@ -814,3 +814,127 @@ fn the_footer_draws_the_players_tag_at_the_authored_position_and_nothing_without
         "`<TextInfo type=\"tag\" x=\"30\" y=\"235\">`"
     );
 }
+
+const FLOW_XML: &str = r#"
+<Screen name="BodgeScreenContainingNavigationController">
+<Text name="ControlTextNavigationButton">
+<Values idstring="FE_NAVIGATION_BUTTON" font="buttons" x="160" y="988" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextNavigation">
+<Values idstring="FE_NAVIGATION" x="260" y="994" scale="0.8"></Values>
+</Text>
+<NavigationController name="NavigationController">
+<Text name="ControlTextConfirmButton">
+<Values idstring="FE_CONFIRM_BUTTON" font="buttons" x="490" y="988" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextConfirm">
+<Values idstring="FE_CONFIRM" x="534" y="994" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextBackButton">
+<Values idstring="FE_BACK_BUTTON" font="buttons" x="720" y="988" scale="0.8"></Values>
+</Text>
+<Text name="ControlTextBack">
+<Values idstring="FE_BACK" x="764" y="994" scale="0.8"></Values>
+</Text>
+</NavigationController>
+</Screen>
+"#;
+
+fn flow_legend() -> NavigationLegend {
+    let strings = StringTable::from_xml(
+        r#"<Entries><Entry ID="FE_NAVIGATION_BUTTON" String="n"></Entry><Entry ID="FE_NAVIGATION" String="NAV"></Entry><Entry ID="FE_CONFIRM_BUTTON" String="e"></Entry><Entry ID="FE_CONFIRM" String="CONFIRM"></Entry><Entry ID="FE_BACK_BUTTON" String="g"></Entry><Entry ID="FE_BACK" String="BACK"></Entry></Entries>"#,
+    );
+    NavigationLegend::read(&parse(FLOW_XML), &HashMap::new(), &strings).expect("controller present")
+}
+
+/// A width of 10 per character, a button glyph 20.7 wide whatever it is: a measure with no font.
+fn ink(face: &str, text: &str, _scale: f32, _snap: bool) -> f32 {
+    if face.eq_ignore_ascii_case("buttons") {
+        20.7
+    } else {
+        10.0 * text.chars().count() as f32
+    }
+}
+
+/// The x each drawn prompt lands at, by its text.
+fn xs(legend: &NavigationLegend, show_back: bool) -> Vec<(String, f32)> {
+    legend
+        .draw_gated(&FaceScales::default(), show_back)
+        .iter()
+        .filter_map(|draw| match draw {
+            Draw::Text { text, x, .. } | Draw::FacedText { text, x, .. } => {
+                Some((text.clone(), *x))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+fn x_of(xs: &[(String, f32)], text: &str) -> f32 {
+    xs.iter().find(|(t, _)| t == text).expect(text).1
+}
+
+/// HD's law: the first glyph at `(int)(260 + 20 + w(NAV))`, its word 44 on, the next glyph 20 past
+/// that word's width, and a hidden `Back` leaves no gap. Fails if the flow is dropped, because the
+/// authored x (490, 534, 720, 764) is nowhere near.
+#[test]
+fn a_flowed_legend_puts_each_prompt_a_gap_past_the_last_word() {
+    let law = oag_title::legend::LegendFlow {
+        gap: 20.0,
+        word_after: oag_title::legend::WordAfter::Fixed(44.0),
+        snap_pen: true,
+    };
+    let legend = flow_legend().with_flow(law, &ink);
+    let placed = xs(&legend, true);
+    assert_eq!(x_of(&placed, "NAV"), 260.0, "NAVIGATION keeps its authored x");
+    assert_eq!(x_of(&placed, "e"), 310.0, "260 + 20 + 30");
+    assert_eq!(x_of(&placed, "CONFIRM"), 354.0, "44 past the glyph");
+    assert_eq!(x_of(&placed, "g"), 444.0, "354 + 70 + 20");
+    assert_eq!(x_of(&placed, "BACK"), 488.0);
+    assert!(legend.is_flowed());
+    let root_page = xs(&legend, false);
+    assert!(root_page.iter().all(|(t, _)| t != "g" && t != "BACK"));
+    assert_eq!(x_of(&root_page, "CONFIRM"), 354.0, "a hidden Back moves nothing before it");
+    // A screen's own extra prompt takes the cursor after Back, or after Confirm without it.
+    assert_eq!(
+        legend.extra_prompts_x(true, &[[20.7, 50.0]]),
+        Some(vec![[488.0 + 40.0 + 20.0, 488.0 + 40.0 + 20.0 + 44.0]])
+    );
+    assert_eq!(
+        legend.extra_prompts_x(false, &[[20.7, 50.0]]),
+        Some(vec![[444.0, 488.0]])
+    );
+}
+
+/// Omega's law: the word follows the glyph's own measured width (truncated) plus 14, and a second
+/// extra prompt follows the first.
+#[test]
+fn omegas_word_follows_the_glyphs_measured_width() {
+    let law = oag_title::legend::LegendFlow {
+        gap: 20.0,
+        word_after: oag_title::legend::WordAfter::GlyphWidthPlus(14.0),
+        snap_pen: false,
+    };
+    let legend = flow_legend().with_flow(law, &ink);
+    let placed = xs(&legend, true);
+    assert_eq!(x_of(&placed, "e"), 310.0);
+    assert_eq!(x_of(&placed, "CONFIRM"), 344.0, "310 + 20 + 14");
+    assert_eq!(x_of(&placed, "g"), 434.0, "344 + 70 + 20");
+    let extras = legend
+        .extra_prompts_x(true, &[[20.7, 60.0], [20.7, 50.0]])
+        .expect("flowed");
+    // Back's glyph at 434, its word at 468: the cursor is 468 + 40 + 20.
+    assert_eq!(extras[0], [528.0, 528.0 + 34.0]);
+    assert_eq!(extras[1][0], extras[0][1] + 60.0 + 20.0);
+}
+
+/// A title with no flow keeps every prompt at the x its skin authors.
+#[test]
+fn an_unflowed_legend_draws_where_the_skin_authors() {
+    let legend = flow_legend();
+    assert!(!legend.is_flowed());
+    let placed = xs(&legend, true);
+    assert_eq!(x_of(&placed, "e"), 490.0);
+    assert_eq!(x_of(&placed, "BACK"), 764.0);
+    assert_eq!(legend.extra_prompts_x(true, &[[20.7, 50.0]]), None);
+}

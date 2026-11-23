@@ -266,6 +266,11 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
         "unlocked_corner",
     ],
     runtime_palette_faces: false,
+    legend_flow: Some(oag_title::legend::LegendFlow {
+        gap: 20.0,
+        word_after: oag_title::legend::WordAfter::GlyphWidthPlus(14.0),
+        snap_pen: false,
+    }),
     // See this module's own "What is not here" section.
     race_box: None,
     // Omega's own `Team Selection`, `Team Selection Player 1` and `Player 2` (`data09`), HD's

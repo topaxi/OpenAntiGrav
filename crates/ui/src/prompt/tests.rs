@@ -53,6 +53,7 @@ fn an_outlined_face_keeps_a_substitutes_empty_pixels_empty() {
             v0: 0,
             v1: 8,
             advance: 8,
+            bearing: 0,
         }],
     };
     assert!(font.is_outlined(), "the fixture must be an outlined font");

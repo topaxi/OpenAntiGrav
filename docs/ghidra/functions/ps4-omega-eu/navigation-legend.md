@@ -54,6 +54,14 @@ its doubled texel size. Not read: Omega's `Text` width virtual (`+0xa0`) and its
 `+0xa0` slot of a `Text` vtable to the measure, as HD's page does through `0x00202748`, and run the table on
 Omega's own `helv.fnt` (`data00.psarc`).
 
+## Wired
+
+2026-11-23, `hd-legend-wire`: `oag_title::legend::LegendFlow` for Omega is `gap 20`, word at the glyph's measured width plus 14,
+**no pen snap** (**chosen, not measured**: the prediction above drifts 4 to 14 px with the snap and about 1 px a prompt without;
+Omega's own measure is unread). On `omega/menu-cell-select` the glyphs and words land at 435, 487, 625, 677, 768, 820, 965 and
+1017 within 3 px (`omegas_footer_prompts_flow_to_where_the_original_draws_them`). The original draws Records (the triangle) before
+Difficulty; ours dropped it because the file authors both at x 944, and now draws it. Nothing is behind the prompt (no leaderboard).
+
 ## Names
 
 | Address | Name | Confidence |

@@ -23,6 +23,7 @@ fn font() -> fnt::Font {
             v0: 1,
             v1: 5,
             advance: 5,
+            bearing: 0,
         }],
     }
 }

@@ -142,7 +142,7 @@ impl Atlas {
         pen: &mut Pen,
         ch: char,
         (width, height): (u32, u32),
-        advance: f32,
+        (advance, bearing, ink): (f32, f32, f32),
         alpha: &[u8],
     ) {
         if pen.x + width > self.width {
@@ -177,6 +177,8 @@ impl Atlas {
                 width,
                 height,
                 advance,
+                bearing,
+                ink,
                 extend: 0,
             },
         );
@@ -202,7 +204,7 @@ impl Atlas {
                     &mut pen,
                     sub_char(index, art_cell),
                     (cell.width, cell.height),
-                    cell.advance,
+                    (cell.advance, cell.bearing, cell.ink),
                     &alpha,
                 );
             }

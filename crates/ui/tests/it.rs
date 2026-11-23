@@ -10,6 +10,7 @@
 //! `every_test_file_is_listed` below fails until it is.
 
 mod bracket_ground_truth;
+mod ink_width_ground_truth;
 mod menu_layout_ground_truth;
 mod menu_schema;
 mod menu_skin;

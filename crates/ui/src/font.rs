@@ -571,6 +571,12 @@ pub struct Cell {
     /// into the box and a quad drawn at the line's top edge lands correctly.
     /// There is no separate bearing to apply.
     pub advance: f32,
+    /// How far the ink's left edge sits right of the pen, in the units of [`Self::advance`]
+    /// (the font's signed left bearing). Layout only: the quad is already cut at the ink.
+    pub bearing: f32,
+    /// The glyph's authored ink width, in the units of [`Self::advance`]. Not [`Self::width`]:
+    /// a texture pack or a reduction changes the box, and the layout must not follow.
+    pub ink: f32,
     /// How many atlas pixels past this box the quad may draw: the face's
     /// authored `borderExtendPixels`, cut to half the gap to the nearest other
     /// box (see [`Atlas::with_border_extend`]). `0` until that is called.
@@ -720,6 +726,8 @@ impl Atlas {
                     width: u32::from(glyph.width),
                     height: u32::from(glyph.height),
                     advance: f32::from(glyph.advance),
+                    bearing: f32::from(glyph.bearing),
+                    ink: f32::from(glyph.width),
                     extend: 0,
                 },
             );
@@ -832,6 +840,8 @@ impl Atlas {
             cell.width *= fx;
             cell.height *= fx;
             cell.advance *= factor;
+            cell.bearing *= factor;
+            cell.ink *= factor;
         }
         atlas.texel_scale /= factor;
         Ok(atlas)
@@ -976,6 +986,8 @@ impl Atlas {
             width: GLYPH_WIDTH,
             height: GLYPH_HEIGHT,
             advance: (GLYPH_WIDTH + 1) as f32,
+            bearing: 0.0,
+            ink: GLYPH_WIDTH as f32,
             extend: 0,
         })
     }
@@ -1012,6 +1024,34 @@ pub fn measure(atlas: &Atlas, text: &str) -> f32 {
         .filter_map(|c| atlas.cell(c))
         .map(|cell| cell.advance * atlas.texel_scale)
         .sum()
+}
+
+/// The width a text widget reports to a layout: the ink extent from the first glyph's left edge
+/// to the last glyph's right edge at `scale`, in screen units.
+///
+/// This is the original's `Font_MeasureString`
+/// (`docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`, "What measures a word"), not
+/// [`measure`]'s advance sum: a glyph's pen starts at the previous pen plus its advance less its
+/// bearing, and the string ends at the last glyph's ink. `snap` rounds each glyph's pen up to a
+/// whole unit, which the original's measure does after any text has drawn and its draw never
+/// does, so a layout snaps and a draw does not. A face carries no kerning pairs here. Glyphs the
+/// atlas lacks are left out, as [`measure`] leaves them.
+#[must_use]
+pub fn ink_width(atlas: &Atlas, text: &str, scale: f32, snap: bool) -> f32 {
+    let scale = scale * atlas.texel_scale;
+    let cells: Vec<Cell> = text.chars().filter_map(|c| atlas.cell(c)).collect();
+    let (Some(first), Some(last)) = (cells.first(), cells.last()) else {
+        return 0.0;
+    };
+    let mut x = -first.bearing * scale;
+    for cell in &cells[..cells.len() - 1] {
+        let mut pen = cell.bearing.mul_add(scale, x);
+        if snap {
+            pen = pen.ceil();
+        }
+        x = (cell.advance - cell.bearing).mul_add(scale, pen);
+    }
+    (last.bearing + last.ink).mul_add(scale, x)
 }
 
 /// Breaks `text` into lines no wider than `max_width` in screen units.
@@ -1064,6 +1104,8 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
         width: 2,
         height: 2,
         advance: 0.0,
+        bearing: 0.0,
+        ink: 0.0,
         extend: 0,
     }
 }
@@ -1168,6 +1210,7 @@ mod tests {
                 v0: 1,
                 v1: 5,
                 advance: 5,
+                bearing: 0,
             }],
         }
     }

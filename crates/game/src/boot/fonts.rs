@@ -39,6 +39,22 @@
 use super::*;
 use oag_ui::language::load::{role_border, role_font};
 
+/// A text's measured width for a footer legend's flow ([`oag_ui_screens::campaign::footer::flow::Ink`]):
+/// the `buttons` face's atlas for a `font="buttons"` widget, the body face's for every other.
+pub fn legend_ink<'a>(
+    font: &'a oag_ui::font::Atlas,
+    buttons_font: Option<&'a oag_ui::font::Atlas>,
+) -> impl Fn(&str, &str, f32, bool) -> f32 + 'a {
+    move |face, text, scale, snap| {
+        let atlas = if face.eq_ignore_ascii_case("buttons") {
+            buttons_font.unwrap_or(font)
+        } else {
+            font
+        };
+        oag_ui::font::ink_width(atlas, text, scale, snap)
+    }
+}
+
 /// Makes the texture pack that is on and names this disc the active one for the faces, unless
 /// this title's faces take a runtime palette ([`oag_title::FrontEnd::runtime_palette_faces`]):
 /// a pack is then not asked, and the report says why.

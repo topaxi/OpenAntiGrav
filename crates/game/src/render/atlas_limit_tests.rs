@@ -24,6 +24,7 @@ fn big_face(factor: u32) -> Atlas {
             v0: 1,
             v1: 5,
             advance: 5,
+            bearing: 0,
         }],
     };
     let (width, height) = (128 * factor, 8 * factor);

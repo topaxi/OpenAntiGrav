@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-23
-summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow law read, ready to wire"
+summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow wired"
 difficulty: medium (30)
 ---
 
@@ -173,19 +173,15 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 ## Next Steps
 
 - Ring and lattice slide on a step (`hd-step-banner`, opus RE lane, size large 60): `HexSelection`'s update (class name `0x0078b348`; ring pulse and displacement, the lattice slide over game frames 4 to 10); targets in `team-selection-model.md`: hex box on k04 to k10 (16.8, 21.5, 22.6, 14.1) down to the 4 floor, the panel fill 31 against 50. **The banner logo's `vwipe` is wired** (`hd-banner-wipe`: `oag_ui::screen::Vwipe`, replayed by `picker::hd::logo_draw` from `Picker::seconds_since_step`; banner box 29.66, 19.27, 18.76, 20.54, 17.15, 25.97, 15.41 on k04 to k29 now 16.07, 16.07, 16.07, 16.83, 16.22, 16.07, 16.02, the bare-panel floor, see `image-widget.md`, "Wired"). Open on it: the ramp starts at the press, the original's 0 to 2 frames later (sensitivity in `image-widget.md`). **The page-entry wipes are WIRED (2026-11-20, `hd-vwipe-wire`, `image-widget.md`, "Wired: page entry")**: every `vwipe` Image waits its authored `delay` from the page entry (`Widget_ArmTransition` `0x00165018`), draws nothing meanwhile, then ramps its in-time: Team Selection's Logo 0.5 s, Track Select's Emblem 0.6 s, Grid Selection's `unlockboxbrackets` 0.45 s and `flyerlogo` 0.65 s, Cell Selection's `flyerlogo` 0.8 s and four emblems (0.37 s hold, then 0.05 to 0.275 s); the clock is `oag_ui::screen::EntryClock`, `--menu-entry-seconds` states it on a still, and no stated time is finished (ten HD and Omega menu pairs pixel-identical). The disc test reads each measured page's authored delays against RAM's frames (no disagreement; the 76 against 71 count gap is named by widget). **Ours draws no such widget on** Racebox (`Single Player`), Controls, Credits and Race Records (our `menu.toml` pages), the network pages, Show Unlocks and SoundTest, so those delays are checked and inherited, not played. **The re-arms are WIRED (2026-11-20, `hd-vwipe-rearm`, `image-widget.md`, "Re-arming" and "The corner brackets")**: a cell change or a `Square` rung step re-arms the four Cell emblems' wipes with their delay and no hold (`CellSelection::refreshed_at`, `cell_emblems::since_armed`), a circuit step restarts the Track Select emblem with no delay (`oag_ui::screen::restart_draw`, shared with the Team logo), the Grid unlock box's `Bracket` waits its own 0.4 s and opens out over 0.1 s (`Bracket::inset`; a `Bracket` is not wiped by the image it sits in), the hold is a 0.4 s countdown in `CellSelection_Update` (read; ours keeps the measured 0.37), and `--menu-picker-step-seconds` stills `track-select` and `cell-select`. Open on it: the same arm is recursive, so the original also blanks and restores the emblems' child `Text`/arrows and `RightColumnText` in stages on a change (a `transition="0"` widget with a `delay` draws nothing until it is out) and ours draws no delay on a `Text`; every other `Bracket` (Cell, Track, Team pages) draws from frame 0 though each authors a `delay` (0.1 to 0.675 s), their clocks (page entry, or the re-armed parent) unmeasured; the Omega-only `TrackPreview` (0.4 s) is unwired. The ramp-start offset after a team step and the Track Select circuit emblem's restart (no delay, `Widget_ResetTransition`) are unchanged.
-- **The footer legend is a flow layout: READY TO WIRE (law read 2026-11-23, `hd-legend-re`;
-  `docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`).** `NavigationController` overwrites every prompt's
-  authored x: `cursor = (int)(nav.x + 20 + w(nav))` (`ControlTextNavigation`, x 260), then per prompt glyph at the
-  cursor, word at `cursor + 44`, `cursor = (int)w(word) + word.x + 20`; order Confirm, Back, the screen's registered
-  extras (Cell Selection adds `DifficultyButtonIcon`/`DifficultyButton`, so the Difficulty prompt flows too), Invite.
-  `w` is the font's ink extent at the Text's scale (0.8) with each glyph's pen rounded up (`ceilf`). Predicted
-  screen x on `hd/menu-cell-select` (0.96 Safe Area): 459.8, 639.4, 770.9 for the glyphs against the original's 460,
-  639, 771, every prompt within 1 px. Wiring: measure with `oag_ui::font` metrics of HD's `helv`/`PS_BUTTONS` at the
-  Text's scale with the ceil per glyph for the layout only (the draw is unsnapped: glyphs keep their natural
-  advance), and replace the authored x in `NavigationLegend` for HD; Omega has its own law
-  (word at glyph width + 14; `docs/ghidra/functions/ps4-omega-eu/navigation-legend.md`) and wires with it. Open: the
-  other four `AddPrompt` callers (`0x001a7588`, `0x001f0b50`, `0x002587a0`, `0x0069dc98`) and which screens set the
-  Confirm/Back bits.
+- **The footer legend is a flow layout: WIRED (2026-11-23, `hd-legend-wire`; `docs/ui/campaign-screens.md`, "The footer legend
+  flows (HD and Omega)"; law `docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`).** `oag_title::legend::LegendFlow`
+  (`FrontEnd::legend_flow`, HD word at +44 with pen snap, Omega word at glyph width + 14 without), `NavigationLegend::with_flow`,
+  `oag_ui::font::ink_width`, `Campaign::flow_footer` (Cell Selection's Difficulty, and on Omega Records, follow Back). On
+  `hd/menu-cell-select` all seven prompts land on the original's first ink column (288, 460, 502, 639, 682, 771, 814); legend
+  region box (150,955,1100,70) 16.71 -> 4.02, pair mean grey 2.81 -> 2.34; the other four HD menu pairs 2.90 -> 2.63, 3.32 -> 3.06,
+  3.04 -> 2.77, 4.59 -> 4.32. Omega's five menu pairs improve too (cell 12.64 -> 11.94). Open: the other four `AddPrompt` callers
+  (`0x001a7588`, `0x001f0b50`, `0x002587a0`, `0x0069dc98`) and which screens set the Confirm/Back bits (pages that register
+  extras beyond Cell Selection's draw none yet); the shadPS4 Omega frame's backdrop keeps that pair's legend region at 29 to 33.
 - The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904

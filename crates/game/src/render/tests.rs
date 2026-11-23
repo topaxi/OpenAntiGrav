@@ -349,6 +349,7 @@ fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
             v0: 0,
             v1: 4,
             advance: 4,
+            bearing: 0,
         }],
     };
     assert!(font.is_outlined(), "the fixture must be an outlined font");
@@ -467,6 +468,7 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
         v0: 0,
         v1: 4,
         advance,
+        bearing: 0,
     };
     let font = Font {
         line_height: 8,
@@ -555,6 +557,7 @@ fn a_half_unit_glyph_quad_grows_by_half_a_unit_at_any_scale() {
             v0: 30,
             v1: 50,
             advance: 24,
+            bearing: 0,
         }],
     };
     let mut renderer = Renderer::new(

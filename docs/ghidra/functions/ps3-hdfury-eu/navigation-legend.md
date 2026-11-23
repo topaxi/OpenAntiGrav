@@ -143,6 +143,14 @@ seed is the same (`nav.x + 20.0 + w(nav)`), but its layout is a different law: t
 width plus 14, not a fixed 44, and there is a right-to-left variant. See
 [../ps4-omega-eu/navigation-legend.md](../ps4-omega-eu/navigation-legend.md).
 
+## Wired
+
+2026-11-23, `hd-legend-wire`: the law runs in the front end (`oag_title::legend::LegendFlow`, `NavigationLegend::with_flow`,
+`oag_ui::font::ink_width`). `ink_width` reproduces the widths above from `helv.fnt` (156.0, 120.0, 72.8 unsnapped; 159.8, 123.4,
+73.6 snapped; `ink_width_ground_truth`), the layout x's are 439, 483, 626, 670, 763, 807 (`hd_legend_flow_ground_truth`), and on
+`hd/menu-cell-select` ours and the original have the same first ink column for all seven prompts (288, 460, 502, 639, 682, 771,
+814). Scores and the other pairs: `docs/ui/campaign-screens.md`, "The footer legend flows (HD and Omega)".
+
 ## Names
 
 | Address | Name | Confidence |

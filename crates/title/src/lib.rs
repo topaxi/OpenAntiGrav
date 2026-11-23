@@ -47,6 +47,7 @@ pub mod hover_rig;
 pub mod hud;
 pub mod hull_shake;
 pub mod language;
+pub mod legend;
 pub mod lap_hud;
 pub mod launch_hover;
 pub mod loading;
@@ -556,6 +557,9 @@ pub struct FrontEnd {
     /// A pack is not asked for such a face (`docs/formats/ppsspp-texture-pack.md`, "The front
     /// end's faces"). `false` where nothing says the palette moves, which is Pulse.
     pub runtime_palette_faces: bool,
+    /// How this title's footer legend flows its prompts, or `None` where the legend is laid out
+    /// as the skin authors it (Pulse and Pure). See [`legend::LegendFlow`].
+    pub legend_flow: Option<legend::LegendFlow>,
     /// The definition file that authors the race box's own selection screens
     /// (`Track Creation`/`Track Selection`, `Team Selection`), or `None` for a
     /// title whose race box has not been read.
