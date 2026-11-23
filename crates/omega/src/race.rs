@@ -182,6 +182,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         // The executable names no `EmpReady` string, so its binder probably never binds the
         // lamp its layout authors (`detonator-hud.md`, "Omega: checked, applies", 60).
         binds_emp_ready: oag_title::pre_race::Sourced::measured(false),
+        // Its `Detonator_HUD.xml` authors the same three medals at the same values as HD's, and
+        // its Detonator HUD binder is HD's lineage; the executable's `DetonatorGoldMedal`
+        // strings are one site where HD's are two, so the binder itself is unread (`detonator-hud.md`).
+        shows_medals: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),

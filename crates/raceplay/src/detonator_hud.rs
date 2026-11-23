@@ -138,6 +138,29 @@ mod tests {
     }
 
     #[test]
+    fn the_medal_follows_the_score_through_each_target() {
+        use oag_tables::race_campaign::{Medal, MedalTargets};
+        let targets = Some(MedalTargets {
+            gold: 9_000,
+            silver: 6_000,
+            bronze: 3_000,
+        });
+        for (score, shown) in [
+            (0, None),
+            (2_999, None),
+            (3_000, Some(Medal::Bronze)),
+            (5_999, Some(Medal::Bronze)),
+            (6_000, Some(Medal::Silver)),
+            (8_999, Some(Medal::Silver)),
+            (9_000, Some(Medal::Gold)),
+            (50_000, Some(Medal::Gold)),
+        ] {
+            assert_eq!(medal(score, targets), shown, "score {score}");
+        }
+        assert_eq!(medal(50_000, None), None, "no cell, no medal");
+    }
+
+    #[test]
     fn a_volley_lights_its_pip_once_a_round_hit() {
         let mut cannon = Cannon::new();
         cannon.hits[0] = 1;

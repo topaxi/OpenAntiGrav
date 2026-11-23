@@ -505,6 +505,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     // Its skin binds `EmpCharge`/`EmpFull`; the executable has no `EmpReady` string
     // (`detonator-hud.md`, "2048: checked, differs").
     binds_emp_ready: oag_title::pre_race::Sourced::measured(false),
+    // Its own skin authors the medals at `ImageX 720` on a 960x540 grid; that layout is left
+    // undrawn (`detonator-hud.md`, "2048: checked, differs").
+    shows_medals: oag_title::pre_race::Sourced::chosen(false),
 };
 
 /// 2048's Detonator object models. The archives ship each under both `Data\Weapons` (HD's own

@@ -293,11 +293,98 @@ fn the_detonator_hud_reads_the_cannon(image: &str, localised_streak: bool, emp_r
     );
 }
 
+/// A campaign cell's targets, and the score at which each medal is first reached.
+const TARGETS: oag_tables::race_campaign::MedalTargets = oag_tables::race_campaign::MedalTargets {
+    gold: 9_000,
+    silver: 6_000,
+    bronze: 3_000,
+};
+
+/// The Detonator HUD draws `DetonatorGoldMedal`, `Silver` or `Bronze` as the score passes the
+/// cell's targets: the model of the best medal reached, loaded from the disc, and none without
+/// a cell. Fails when the layout reader drops the three `<ImageModel>`s, when the targets stop
+/// reaching the race, when a medal's `.vex` does not decode, or when a title that does not
+/// show them (2048) loads them.
+fn the_medal_follows_the_score(image: &str) {
+    use oag_tables::race_campaign::Medal;
+    let Some(loaded) = load(image) else {
+        return;
+    };
+    let report = loaded.report.join("\n");
+    let context = loaded
+        .hud
+        .context()
+        .unwrap_or_else(|| panic!("the Detonator layout did not load:\n{report}"));
+    let medal_models = &loaded.medal_models;
+    assert_eq!(
+        medal_models.len(),
+        3,
+        "the three medal models decode:\n{report}"
+    );
+    for (widget, model) in medal_models {
+        assert!(
+            !model.vertices.is_empty() && !model.indices.is_empty(),
+            "{} is a mesh:\n{}",
+            widget.src,
+            report
+                .lines()
+                .filter(|line| line.contains("Trophies"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        );
+        assert!(!widget.start_enabled, "{} starts off", widget.name);
+        assert_eq!(widget.rect, [1440.0, 80.0, 208.0, 150.0], "{}", widget.name);
+    }
+    let mut race = racing(&loaded);
+    race.set_medal_targets(Some(TARGETS));
+    let shown = |race: &mut race::Race, score: i32| {
+        race.core.sim.world.detonator.cannon.score = score;
+        race.tick(&PlayerInputs::none());
+        let readout = race.readout();
+        oag_hud::detonator_medal_model(context.layout, &readout).map(|model| model.name.clone())
+    };
+    assert_eq!(shown(&mut race, 0), None, "no score, no medal");
+    assert_eq!(shown(&mut race, 2_999), None, "under bronze");
+    for (score, medal) in [
+        (3_000, Medal::Bronze),
+        (5_999, Medal::Bronze),
+        (6_000, Medal::Silver),
+        (8_999, Medal::Silver),
+        (9_000, Medal::Gold),
+        (40_000, Medal::Gold),
+    ] {
+        let name = oag_hud::DETONATOR_MEDAL_WIDGETS
+            .iter()
+            .find(|(m, _)| *m == medal)
+            .map(|(_, name)| *name);
+        assert_eq!(shown(&mut race, score).as_deref(), name, "score {score}");
+    }
+    race.set_medal_targets(None);
+    assert_eq!(
+        shown(&mut race, 40_000),
+        None,
+        "a race with no cell shows none"
+    );
+}
+
 /// HD's language table carries no `HUD_CHAIN_n`, so the streak line is empty there.
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_hd_detonator_hud_reads_the_cannon() {
     the_detonator_hud_reads_the_cannon(HD_IMAGE, false, true);
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_race_shows_the_medal_the_score_has_reached() {
+    the_medal_follows_the_score(HD_IMAGE);
+}
+
+/// Omega's `Detonator_HUD.xml` authors the same three medals at the same values.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_omega_detonator_race_shows_the_medal_the_score_has_reached() {
+    the_medal_follows_the_score(OMEGA_IMAGE);
 }
 
 /// Omega's weapons file spells `EmpBarEffect`'s element `<aImageModel>`; the layout still loads.
@@ -337,6 +424,14 @@ fn a_2048_detonator_hud_reads_the_cannon() {
         "{report}"
     );
     let context = loaded.hud.context().expect("the layout loads");
+    // Its skin authors the medals at its own place on its own grid, which is left undrawn
+    // (`oag_title::Detonator::shows_medals`).
+    assert!(
+        loaded.medal_models.is_empty() && context.layout.image_models.is_empty(),
+        "2048 shows no medal: {:?}",
+        context.layout.image_models
+    );
+    assert!(report.contains("HUD: the medal models are authored but this title does not show"));
     for name in ["Bullet14", "Multi14", "DetonatorWeaponDisplay", "EmpCharge"] {
         let sprite = context
             .layout

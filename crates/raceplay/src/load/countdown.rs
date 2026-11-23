@@ -55,3 +55,47 @@ pub(super) fn model(
             }
         })
 }
+
+/// Detonator's three medal `<ImageModel>`s (`DetonatorGoldMedal`, `Silver`, `Bronze`), decoded
+/// through the HUD's own model builder, each with the widget that places it. A medal whose
+/// entry is absent or does not decode is reported and left out: that medal then draws nothing.
+pub(super) fn medal_models(
+    hud: &oag_hud::Assets,
+    archives: &mut oag_assets::Archives,
+    report: &mut Vec<String>,
+) -> Vec<(oag_hud::ImageModel, Model)> {
+    let Some(layout) = hud.layout.as_ref() else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for widget in layout.image_models.iter().filter(|widget| {
+        oag_hud::DETONATOR_MEDAL_WIDGETS
+            .iter()
+            .any(|(_, name)| *name == widget.name)
+    }) {
+        match archives.read_name(&widget.src) {
+            Ok(blob) => match crate::hud::build_model(archives, &widget.src, &blob) {
+                Ok(model) => {
+                    report.push(format!(
+                        "{}: {} triangle(s), radius {:.2} - {}'s ImageModel, in {:?}",
+                        widget.src,
+                        model.indices.len() / 3,
+                        model.radius,
+                        widget.name,
+                        widget.rect
+                    ));
+                    out.push((widget.clone(), model));
+                }
+                Err(error) => report.push(format!(
+                    "{}: did not decode ({error}) - {} draws nothing",
+                    widget.src, widget.name
+                )),
+            },
+            Err(_) => report.push(format!(
+                "{}: absent - {} draws nothing this race",
+                widget.src, widget.name
+            )),
+        }
+    }
+    out
+}

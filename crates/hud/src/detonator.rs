@@ -57,6 +57,32 @@ pub struct Detonator {
     pub medal: Option<oag_tables::race_campaign::Medal>,
 }
 
+/// The three medal widgets, by the medal each shows.
+pub const MEDAL_WIDGETS: [(oag_tables::race_campaign::Medal, &str); 3] = [
+    (oag_tables::race_campaign::Medal::Gold, "DetonatorGoldMedal"),
+    (
+        oag_tables::race_campaign::Medal::Silver,
+        "DetonatorSilverMedal",
+    ),
+    (
+        oag_tables::race_campaign::Medal::Bronze,
+        "DetonatorBronzeMedal",
+    ),
+];
+
+/// The medal model to draw this frame: the `<ImageModel>` of the medal the score has reached
+/// ([`Detonator::medal`]), or `None` below bronze, in a race with no cell, or where the layout
+/// authors none (a title that does not show them has dropped them).
+#[must_use]
+pub fn medal_model<'a>(
+    layout: &'a super::Layout,
+    readout: &Readout,
+) -> Option<&'a super::ImageModel> {
+    let medal = readout.detonator.as_ref()?.medal?;
+    let name = MEDAL_WIDGETS.iter().find(|(m, _)| *m == medal)?.1;
+    layout.image_models.iter().find(|model| model.name == name)
+}
+
 /// The EMP pips, `Emp_0`-`Emp_7`.
 pub const EMP_PIPS: usize = 8;
 

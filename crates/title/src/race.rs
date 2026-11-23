@@ -601,6 +601,10 @@ pub struct Detonator {
     /// Whether the HUD's `EmpReady` lamp is bound by the executable: where it is not, the
     /// layout's widget is dropped (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`).
     pub binds_emp_ready: crate::pre_race::Sourced<bool>,
+    /// Whether the HUD's three medal models (`DetonatorGoldMedal`, `Silver`, `Bronze`) are drawn
+    /// as a campaign race's score passes the cell's targets. Where it is `false` the layout's
+    /// widgets are dropped.
+    pub shows_medals: crate::pre_race::Sourced<bool>,
 }
 
 /// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads
