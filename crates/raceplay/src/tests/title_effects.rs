@@ -481,11 +481,7 @@ fn a_burst_staggers_its_locators_the_way_the_original_spawns_them() {
 fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inherited() {
     // What a title takes from another's measured law instead of reading its own, and from whom.
     let inherited = |title: &Title, trigger: Trigger| match (title.name, trigger) {
-        (n, Trigger::HitSpark | Trigger::WreckNode | Trigger::WreckSparks)
-            if n == oag_pure::TITLE.name =>
-        {
-            Some("Wipeout Pulse")
-        }
+        (n, Trigger::HitSpark) if n == oag_pure::TITLE.name => Some("Wipeout Pulse"),
         (
             n,
             Trigger::ShieldAbsorb
