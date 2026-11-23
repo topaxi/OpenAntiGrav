@@ -1857,7 +1857,7 @@ read side by side):
 
 | Pair | Overlap | Differs | Most visible difference |
 | --- | --- | --- | --- |
-| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
+| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` **2026-11-23 (`pulse-psp-track`), three footer fixes on one fresh grab (the TKR_TTTIM frame, `TICKER_PINNED`):** whole frame 1.60 % to 0.69 % over 40 grey; the footer below y 232 1543 to 358 px (ticker box 1267 to 226, `AAA` tag box 172 to 34, the line at y 249 316 to 0); everything above the footer unchanged at 543 px. The ticker is pinned (`tick:480` before `shot:track`, as `team`), the tag is read from the profile in PPSSPP RAM, and the footer strips are cut to their viewports (`docs/ui/menus-original.md`, "A viewport clips its images"). **Open, with the evidence:** the heading's glyph pens (every letter but the first and last one pixel right of the original's, `TRACK SELECT`: ours 50, 60, 68, 77, 86, 100 ... against 50, 59, 67, 76, 85, 99 ...; the other Pulse headings miss by one glyph each; a pen-rounding difference of the title face); one grab in four (the one at 26.3 s since entry) showed a bright teal haze left of and under the circuit name on the original that no frame of the backdrop movie reproduces (best of 270 scored on the panel box 15.1 against 16.4 grey at frame 0), so it is another clock (the text glow's `s` ladder is `caught up to the game clock`, `Text::glow_stamp`) and that grab read 2.22 % whole against 3.13 % before the three fixes, the glow-phase read being the next step (read the stamp off EDRAM as `selector_stamp` does); the footer prompts' icons are one pixel left of the original's (the nav legend, not this lane's files) |
 | Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % (7.0 % re-made) | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` on both sides since 2026-10-29 (it was `1/12`: four DLC teams) |
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
 | Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
@@ -1911,6 +1911,13 @@ scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --diff
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+**The tag and the Track Select ticker (2026-11-23, `pulse-psp-track`).** `psp-menu-pair.py` reads the stored player off the live profile at every Pulse grab
+(`psp_ticker.profile_name_tag`: `*0x08b31774 + 0x44c` the 11-byte name, `+ 0x457` the 4-byte footer tag, `AAA` on a fresh profile; the name field is space-padded and
+is stripped) and sets ours' `[player]` to it (`original.footer_tag`, `ours.player`, which `compare-rerender-ours.py` puts back), so the footer's tag box is drawn on
+every Pulse PSP pair. `track` is in `TICKER_PINNED` beside `team`: `PULSE_PLAN` has `tick:480` before `shot:track`, the grab waits for a pinnable message and ours is
+drawn with `--menu-ticker ITEM@X` and the matching lifetime row. The walk to the shot takes 20 to 30 emulated seconds longer, and `--menu-picker-seconds` (photo cards,
+turntable) held at 21 to 26 s: the photo box stayed at 0.2 % of its area differing on every grab.
 
 ### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
 

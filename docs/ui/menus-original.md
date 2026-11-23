@@ -797,3 +797,19 @@ still cannot show a transition at all.
 Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_ui::language::roles`; `font_roles_ground_truth::pures_stats_slot_is_its_own_face_and_the_scroll_face` pins it on both pressings). Every `font="Stats"` widget of a team's `screen.xml` (the stat labels and `n/5` values, scale 0.8) and of a circuit's (`RACE RECORD`, `LAP RECORD`, `LENGTH`, `HEIGHT` and their values), the footer's `Confirm`/`Back` (`font="scroll"`) and the typed description all print in it: in a PPSSPP frame at 8x they are 5-pixel capitals with a wide letter space and an upper-case `M` for the unit, where this build had drawn them in the menu face (`FX300ANG.fnt`). It rides the renderer's third glyph slot (`oag_title::MenuSkin::stats_font`, Pure only: its `Buttons` role does not exist, so the slot is free), and a `Draw::FacedText { role: "Stats" }` falls back to the menu face on a title that loads no such face. The `<Menu>` rows of `Team Selection` name no `font`; they draw in the menu face at `MenuScale` 1.15, 18 grid lines apart (measured 18.2 on the frame, the chain's own `FlowFiles::row_pitch`). Confidence 90 (a frame measurement, one capture each).
 
 **Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.
+
+## A viewport clips its images (2026-11-23, `pulse-psp-track`)
+
+Pulse's `Skin.xml` draws its two footer strips as 14-row images (`pulse_assets.mip` at `v=27` and `v=52`, `height="14"`) in
+`<Viewport>`s authored `y="236" height="13"` and `y="249" height="13"`. Measured on PPSSPP's frame of Track Select (confidence 85, four
+grabs, and the Ship Select, Grid and Cell pairs read the same): the original's row `y=249` holds the lower strip's first row (grey 72 at
+`x=200`) and **nothing of the upper strip's last row**; ours drew that row (grey 123), a one-pixel line across the whole ticker bar
+(316 of the pair's 2022 differing pixels). So the viewport is a scissor on what it holds, here its bottom edge.
+`oag_ui::screen::Screens::clip_images_to_viewport` cuts an image's height (and its sampled rows) to the viewport's `y + height` when the
+viewport authors `x`, `y`, `width` and `height`. Census of Pulse's and Pure's PSP front-end XML (the 24 files `Skin.xml` loads, and Pure's
+`Skin.xml`): exactly these two images clip; Pure's viewports clip nothing. HD, Omega and 2048 front ends were **not** censused
+(checked, not run: their XML is in PSARCs, and the reader change is generic); a viewport there that authors all four numbers over an image
+that runs past its bottom edge would now be cut. Test: `a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it`,
+`menu_layout_ground_truth::pulses_footer_strips_are_cut_to_their_viewports`. Not wired: the top, left and right edges (no image
+overruns them in Pulse), and the strips' slide-in `Key` animation, which moves the image inside the viewport and is cut by it live.
+

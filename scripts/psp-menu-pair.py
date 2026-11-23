@@ -88,6 +88,8 @@ FE_CLOCK_PTR = 0x08B317B0
 FE_CLOCK_FIELD = 0x40
 #: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
 STOPPED = ("grid", "cell", "team", "track")
+#: The pages with a footer ticker ours can pin (`tick:` before their `shot:`): the grab carries the message read from RAM.
+TICKER_PINNED = ("team", "track")
 
 #: Pure has no recovered front-end clock or state name, so its clock is the emulator's own tick counter (`cpu.status.ticks`, the PSP's
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
@@ -262,6 +264,7 @@ class Rig:
                 ship_t = self.ship_node_time()
             self.dbg.call("cpu.resume")
         state = self.state()
+        player = pt.profile_name_tag(self.dbg) if self.title == "pulse" else None
         # The grab takes `after - before`; the frame is read about the middle of it. Only when the entry was watched and the screen is still it.
         since = (before + after) / 2 - self.entered[1] if self.entered and self.entered[0] == state and self.entered[1] is not None else None
         phase = None if level is None else level / 2
@@ -271,7 +274,7 @@ class Rig:
             since = since_ticks
         self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
                            "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None,
-                           "ticker": self.ticker_frozen if stopped and name.split("@")[0] == "team" else None}
+                           "player": player, "ticker": self.ticker_frozen if stopped and name.split("@")[0] in TICKER_PINNED else None}
         if self.seen[name]["ticker"] is not None:
             self.ticker_frozen = None
         print("shot", name, "since_entry", self.seen[name]["since_entry"], "ship_node_time", ship_t, "clock", clock, flush=True)
@@ -342,7 +345,7 @@ PULSE_PLAN = ",".join([
     "key:cross", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
-    "key:cross", "st:Track Creation", "wait:3", "shot:track",
+    "key:cross", "st:Track Creation", "wait:3", "tick:480", "shot:track",
     "key:cross", "st:Team Selection", "wait:3", "tick:480", "shot:team", "back:Main Menu", "wait:1",
     "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "shot:options", "back:Main Menu", "wait:1",
 ])
@@ -409,12 +412,13 @@ PURE_WALK = [
 ]
 
 
-def prepare_profile(plat, profile, title_name, difficulty, race=None):
+def prepare_profile(plat, profile, title_name, difficulty, race=None, player=None):
     """Ours' private profile: the compare settings, `[dev] unlock_everything = false` (a debug build unlocks everything, the original's
     fresh profile does not), `race` (the pickers' cursor: the team the original's fresh list rests on, where it is not ours' default) and
-    the campaign difficulty row of `records.toml` (none for a title with no such control), written and read back by the run."""
+    the campaign difficulty row of `records.toml` (none for a title with no such control), and `player` (`{"name", "tag"}`: the stored player the
+    original's profile holds, which the footer's tag box draws), written and read back by the run."""
     ce.write_ours_settings(plat, profile)
-    cm.extra_settings(profile, race=race, locked=True)
+    cm.extra_settings(profile, race=race, locked=True, player=player)
     if difficulty:
         (ce.settings_path(profile).parent / "records.toml").write_text('[[campaign_difficulty]]\ntitle = "%s"\ndifficulty = "%s"\n' % (title_name.lower(), difficulty))
 
@@ -472,7 +476,10 @@ def build_pairs(args, seen, out, plat, walk):
         elif shot.get("since_entry") is not None:
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
-        prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"))
+        stored = {k: v.strip() for k, v in zip(("name", "tag"), (shot["player"] or ("", ""))[:2]) if v.strip()}
+        if stored:
+            pair.rec["original"]["footer_tag"] = {"name": stored.get("name", ""), "tag": stored.get("tag", ""), "basis": "read from the live profile (*0x08b31774 + 0x44c name, + 0x457 tag) at the grab; ours' stored player is set to it, as the footer's tag box draws the profile's tag"}
+        prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"), stored or None)
         clocked = (("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in (CLOCKED if args.title == "pulse" else PURE_CLOCKED) and shot.get("since_entry") is not None else ()
         pin = shot.get("ticker")
         lag = 0
@@ -496,7 +503,7 @@ def build_pairs(args, seen, out, plat, walk):
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                         selection=item["selection"], route=item.get("route"), race=item.get("race"),
+                         selection=item["selection"], route=item.get("route"), race=item.get("race"), player=stored or None,
                          extra_args=clocked + (("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)) if pin else ()), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:

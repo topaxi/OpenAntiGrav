@@ -26,6 +26,9 @@ PROFILE_PTR = 0x08B31774
 STATS_AT = 0x11C
 STATS_SLOTS = 200
 FAVOURITE_AT = 0x3C
+#: The profile's player name (11 bytes) and footer tag (4 bytes; `AAA` on a fresh profile): `docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`.
+NAME_AT = 0x44C
+TAG_AT = 0x457
 FAVOURITE_FIELD = 0x20
 NEWS_ROWS = 124
 NEWS_WEIGHT = 122
@@ -114,6 +117,13 @@ class Ticker:
         return {"widget": "0x%08x" % self.widget, "item": item, "next_starts_at": word(0xB4), "speed": flt(0x330), "buffers": buffers, "profile": "0x%08x" % profile,
                 "stats_u32": {str(i): v for i, v in enumerate(stats) if v}, "stats_f32": {str(i): struct.unpack("<f", struct.pack("<I", v))[0] for i, v in enumerate(stats) if v},
                 "favourites": favourites}
+
+
+def profile_name_tag(dbg):
+    """`(name, tag, address of the tag)` of the live profile (`*0x08b31774`): the stored player the footer's tag box draws."""
+    profile = struct.unpack("<I", dbg.read(PROFILE_PTR, 4))[0]
+    text = lambda at, size: dbg.read(profile + at, size).split(b"\0")[0].decode("latin1")
+    return text(NAME_AT, 11), text(TAG_AT, 4), profile + TAG_AT
 
 
 class Watch:

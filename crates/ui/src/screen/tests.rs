@@ -1265,3 +1265,41 @@ fn a_list_widget_lands_in_lists_and_adds_no_text_to_the_screen() {
     assert_eq!(list.label.idstring.as_deref(), Some("FE_PILOT_ASSIST"));
     assert!(screen.texts.is_empty(), "{:?}", screen.texts);
 }
+
+/// Pulse's two footer strips (`Skin.xml`): a 14-row image in a viewport 13 rows tall. The viewport
+/// clips it, so the image's last row is never drawn (`docs/ui/menus-original.md`, "A viewport clips
+/// its images"): the strip above the ticker reaches `y=249` only as the next strip's first row.
+const FOOTER_STRIPS: &str = r#"
+<Screen>
+  <Screen name="Strips">
+    <Viewport>
+      <Values x="0" y="236" width="480" height="13"></Values>
+      <Image><Values x="12" y="236" height="14" width="454" u="5" v="27" txtrwidth="454" txtrheight="14" src="a.mip"></Values></Image>
+    </Viewport>
+    <Viewport>
+      <Values x="0" y="249" width="480" height="13"></Values>
+      <Image><Values x="12" y="249" height="14" width="454" u="5" v="52" txtrwidth="454" txtrheight="14" src="a.mip"></Values></Image>
+    </Viewport>
+    <Viewport>
+      <Values y="0" width="480" height="10"></Values>
+      <Image><Values x="0" y="0" height="14" width="454" txtrheight="14" src="a.mip"></Values></Image>
+    </Viewport>
+    <Image><Values x="12" y="100" height="14" width="454" txtrheight="14" src="a.mip"></Values></Image>
+  </Screen>
+</Screen>
+"#;
+
+#[test]
+fn a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it() {
+    let screens = Screens::from_xml(FOOTER_STRIPS);
+    let images = &screens.by_name("Strips").unwrap().images;
+    let rows = |at: usize| (images[at].height, images[at].texture_height);
+    assert_eq!(rows(0), (Some(13.0), Some(13.0)), "236 + 14 past 249");
+    assert_eq!(rows(1), (Some(13.0), Some(13.0)), "249 + 14 past 262");
+    assert_eq!(
+        rows(2),
+        (Some(14.0), Some(14.0)),
+        "a viewport that states no x clips nothing"
+    );
+    assert_eq!(rows(3), (Some(14.0), Some(14.0)), "outside any viewport");
+}
