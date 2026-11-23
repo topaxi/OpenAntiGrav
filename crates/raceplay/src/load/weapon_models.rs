@@ -217,7 +217,7 @@ fn cull_as_authored(model: &mut Model, states: &[Option<u32>]) -> bool {
 /// a title fact, not a load failure, so this says nothing and returns
 /// `None` rather than a report line for a field that was never going to
 /// resolve.
-fn load_optional(
+pub(super) fn load_optional(
     archives: &mut oag_assets::Archives,
     entry: Option<&str>,
     fallback: &str,
@@ -387,6 +387,7 @@ pub(super) fn load_bodies(
                     hemisphere: one(Some(pulse.hemisphere), "a bomb blast hemisphere", false),
                     shockwave: one(Some(pulse.shockwave), "a bomb blast shockwave", false),
                     repulser_field: None,
+                    gaseous: None,
                     mag_floor: [None, None],
                     hd: [None, None, None, None, None, None],
                     detonator: crate::detonator_models::DetonatorModels::default(),

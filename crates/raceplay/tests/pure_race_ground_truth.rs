@@ -509,6 +509,51 @@ fn a_pure_race_loads_its_own_plasma_blast_trio() {
     }
 }
 
+/// A destroyed Pure craft's own pieces resolve on the disc
+/// (`psp-pure-usa/ship-destroy.md`): `explosion_gaseous.vex` builds, `EXPLSMALL` and `EXPLBIG`
+/// load out of the ship bank, and the wreck's locators are read. Fails if the model or either
+/// cue stops resolving, or the title stops naming them.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_pure_race_loads_its_destroyed_craft_pieces() {
+    for (label, image) in images() {
+        let loaded = load(&image, oag_pure::race::DEFAULT_TRACK);
+        assert!(
+            loaded.bomb_blast_models.gaseous.is_some(),
+            "{label}: explosion_gaseous.vex did not load: {:#?}",
+            loaded.report
+        );
+        for cue in ["EXPLSMALL", "EXPLBIG"] {
+            let said = |line: &&String| line.starts_with(&format!("sfx: {cue}"));
+            assert!(
+                loaded
+                    .report
+                    .iter()
+                    .filter(said)
+                    .all(|l| !l.contains("not played")),
+                "{label}: {cue} is not in the ship bank: {:#?}",
+                loaded.report
+            );
+            assert!(
+                loaded
+                    .report
+                    .iter()
+                    .any(|l| l.starts_with(&format!("sfx: {cue} ->"))),
+                "{label}: {cue} was never loaded: {:#?}",
+                loaded.report
+            );
+        }
+        assert!(
+            loaded
+                .report
+                .iter()
+                .any(|l| l.contains("shipwreck.vex") && l.contains("Ship Collision Fx locator")),
+            "{label}: the wreck's locators were not read: {:#?}",
+            loaded.report
+        );
+    }
+}
+
 /// Pure spawns its own weapon effects: every trigger the executable was read
 /// for (`psp-pure-usa/weapon-effects.md`, `plasma.md`) resolves to a decoded
 /// `Data\Psys` effect on the disc, the Missile, Mine and Bomb group as well as

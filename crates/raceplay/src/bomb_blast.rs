@@ -157,6 +157,28 @@ pub(super) const SHIP_SHOCKWAVE_ALPHA: Ease = Ease {
 /// When `FUN_0885efc4` retires the ship explosion's shockwave, in seconds (`1.5 <= age`).
 pub(super) const SHIP_SHOCKWAVE_LIFETIME_SECONDS: f32 = 1.5;
 
+/// The gaseous flash's scale ease: `0.1` toward `4.0` at `0.05` a tick
+/// (`ShipGaseousFlash_Update`, `docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, row 8).
+pub(super) const GASEOUS_SCALE: Ease = Ease {
+    start: 0.1,
+    target: 4.0,
+    rate: 0.05,
+};
+
+/// When the gaseous flash retires, in seconds.
+pub(super) const GASEOUS_LIFETIME_SECONDS: f32 = 0.5;
+
+/// The gaseous flash's grey, `255, 255, 0` at ages `0`, `0.4` and `0.5`, as a `0..=1` multiplier
+/// of the model's vertex colours (the original writes `0xff000000 | grey * 0x10101`, so the
+/// additive mesh darkens to nothing and its alpha stays 255). Linear between the keyframes.
+pub(super) fn gaseous_grey(age: f32) -> f32 {
+    if age <= 0.4 {
+        1.0
+    } else {
+        ((GASEOUS_LIFETIME_SECONDS - age) / (GASEOUS_LIFETIME_SECONDS - 0.4)).clamp(0.0, 1.0)
+    }
+}
+
 /// How far the shockwave sits from the hemisphere, pulled back along the
 /// basis's own `dir` axis - `DAT_08ab1070`, read directly as `1.0`.
 pub(super) const SHOCKWAVE_PULLBACK: f32 = 1.0;
@@ -197,6 +219,9 @@ pub struct BombBlastModels {
     /// weapon tuple from `load.rs` to `Scene::new`, all of which sit at their
     /// line ceilings. Played by [`super::repulser_field`].
     pub repulser_field: Option<Model>,
+    /// A destroyed craft's gaseous flash (`oag_title::destroyed::DestroyedCraft::gaseous_flash`):
+    /// the same kind of eased, faded, view-side object, in the same pool.
+    pub gaseous: Option<Model>,
     /// The magstrip effect's two models, `[MagEffect1, MagEffect2]` - riding
     /// this container for the Repulser field's own reason above. Played by
     /// [`super::mag_floor_fx`].
@@ -219,6 +244,8 @@ pub(crate) struct BombBlastDrawables {
     pub(crate) shockwave: Vec<Drawable>,
     /// One per pool slot - see [`BombBlastModels::repulser_field`].
     pub(crate) repulser_field: Vec<Drawable>,
+    /// One per pool slot - see [`BombBlastModels::gaseous`].
+    pub(crate) gaseous: Vec<Drawable>,
     /// One per ship slot - see [`BombBlastModels::mag_floor`].
     pub(crate) mag_floor: [Vec<Drawable>; 2],
     /// HD's blast: one drawable per pool slot for each of the first three
@@ -262,6 +289,7 @@ impl BombBlastDrawables {
             hemisphere: build_one(models.hemisphere)?,
             shockwave: build_one(models.shockwave)?,
             repulser_field: build_one(models.repulser_field)?,
+            gaseous: build_one(models.gaseous)?,
             mag_floor: {
                 let [first, second] = models.mag_floor;
                 // A pool per ship, not per projectile: every craft builds one
@@ -320,6 +348,8 @@ pub(super) enum BlastKind {
     Bomb,
     /// `Ship_SpawnExplosionBig`'s: the shockwave alone, scaled on all three axes.
     ShipExplosion,
+    /// `ShipGaseousFlash_Construct`'s: `explosion_gaseous.vex` billboarded to the camera.
+    Gaseous,
 }
 
 /// One blast's own transform and visibility, for one frame.
@@ -331,6 +361,8 @@ pub(super) struct BombBlastDraw {
     pub(super) shockwave_visible: bool,
     /// The alpha [`Drawable::tint`] multiplies the shockwave's vertex colours by.
     pub(super) shockwave_alpha: f32,
+    /// The gaseous flash's matrix and grey, `Some` for [`BlastKind::Gaseous`] alone.
+    pub(super) gaseous: Option<(Mat4, f32)>,
     /// The blast's age in seconds: the time both models' texture tracks play at.
     /// `BombBlast_Construct` seeds each model with `Node_SetAnimTimeTree(0.0)` and
     /// the mesh update then integrates the clock's delta, so the texture time *is*
@@ -377,8 +409,22 @@ impl Race {
     /// slot, in slot order - `None` for a slot with nothing live.
     #[must_use]
     pub(crate) fn bomb_blast_draws(&self) -> [Option<BombBlastDraw>; BOMB_BLAST_SLOTS] {
+        let eye = self.view.view(&self.core).inverse().w_axis.truncate();
         std::array::from_fn(|slot| {
             self.view.bomb_blasts[slot].map(|blast| {
+                if blast.kind == BlastKind::Gaseous {
+                    let matrix = crate::blast_models::billboard_matrix(blast.position, eye)
+                        * Mat4::from_scale(Vec3::splat(blast.shockwave_scale));
+                    return BombBlastDraw {
+                        hemisphere_matrix: Mat4::IDENTITY,
+                        hemisphere_visible: false,
+                        shockwave_matrix: Mat4::IDENTITY,
+                        shockwave_visible: false,
+                        shockwave_alpha: 1.0,
+                        gaseous: Some((matrix, gaseous_grey(blast.age))),
+                        age: blast.age,
+                    };
+                }
                 if blast.kind == BlastKind::ShipExplosion {
                     return BombBlastDraw {
                         hemisphere_matrix: Mat4::IDENTITY,
@@ -387,6 +433,7 @@ impl Race {
                             * Mat4::from_scale(Vec3::splat(blast.shockwave_scale)),
                         shockwave_visible: true,
                         shockwave_alpha: blast.shockwave_alpha,
+                        gaseous: None,
                         age: blast.age,
                     };
                 }
@@ -413,6 +460,7 @@ impl Race {
                         )),
                     shockwave_visible: true,
                     shockwave_alpha: blast.shockwave_alpha,
+                    gaseous: None,
                     age: blast.age,
                 }
             })
@@ -528,6 +576,34 @@ impl RaceView {
         });
     }
 
+    /// Starts a destroyed craft's gaseous flash at `position` (`ShipGaseousFlash_Construct`).
+    /// Dropped silently when every slot is live.
+    pub(crate) fn spawn_gaseous_flash(&mut self, position: Vec3) {
+        let Some(slot) = self.bomb_blasts.iter().position(Option::is_none) else {
+            return;
+        };
+        self.bomb_blasts[slot] = Some(BombBlast {
+            kind: BlastKind::Gaseous,
+            position,
+            dir: Vec3::Y,
+            age: 0.0,
+            hemisphere_scale: HEMISPHERE_SCALE.start,
+            shockwave_scale: GASEOUS_SCALE.start,
+            shockwave_alpha: 1.0,
+        });
+    }
+
+    /// How many gaseous flashes are live, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn live_gaseous_flashes_for_tests(&self) -> usize {
+        self.bomb_blasts
+            .iter()
+            .flatten()
+            .filter(|blast| blast.kind == BlastKind::Gaseous)
+            .count()
+    }
+
     /// Ages every live blast one tick, steps its three eases and retires
     /// whichever just crossed [`LIFETIME_SECONDS`].
     ///
@@ -542,6 +618,13 @@ impl RaceView {
         for slot in &mut self.bomb_blasts {
             let Some(blast) = slot else { continue };
             blast.age += dt;
+            if blast.kind == BlastKind::Gaseous {
+                blast.shockwave_scale = GASEOUS_SCALE.step(blast.shockwave_scale);
+                if blast.age >= GASEOUS_LIFETIME_SECONDS {
+                    *slot = None;
+                }
+                continue;
+            }
             if blast.kind == BlastKind::ShipExplosion {
                 blast.shockwave_scale = SHIP_SHOCKWAVE_SCALE.step(blast.shockwave_scale);
                 blast.shockwave_alpha = SHIP_SHOCKWAVE_ALPHA.step(blast.shockwave_alpha);

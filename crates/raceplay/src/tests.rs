@@ -110,6 +110,7 @@ mod photo_rewind;
 #[cfg(feature = "extensions")]
 mod portal_view;
 mod pure_absorb_bar;
+mod pure_destroyed;
 mod quake_armed;
 mod quake_lift;
 mod reconcile;

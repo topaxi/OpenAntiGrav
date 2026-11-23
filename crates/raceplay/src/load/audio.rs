@@ -14,6 +14,7 @@ pub(super) fn banks_and_announcers(
     lap_hud: Option<oag_title::lap_hud::LapHud>,
     mode: Mode,
     zone_end_cue: Option<oag_title::destroyed::ZoneEndCue>,
+    destroyed_blasts: bool,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
@@ -37,6 +38,23 @@ pub(super) fn banks_and_announcers(
             cue.tick,
             cue.hashed,
             &[(oag_gameplay::cue::Cue::ShipDestroy, "shipdestroy")],
+        );
+    }
+    // Pure's `EXPLSMALL` and `EXPLBIG` out of its ship bank, for every craft.
+    if destroyed_blasts {
+        let bank = if mode == Mode::Zone {
+            race.sounds.ship_zone
+        } else {
+            race.sounds.ship
+        };
+        sounds.load_named(
+            archives,
+            bank,
+            tick,
+            &[
+                (oag_gameplay::cue::Cue::ShipExplosionSmall, "EXPLSMALL"),
+                (oag_gameplay::cue::Cue::ShipExplosion, "EXPLBIG"),
+            ],
         );
     }
     // A title whose cues are Wwise events (Omega) plays those in place of the

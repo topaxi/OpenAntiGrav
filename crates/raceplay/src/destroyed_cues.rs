@@ -20,6 +20,10 @@ pub(crate) struct Heard {
     destroyed: bool,
     /// `~SHIP_ONFIRE` is open.
     on_fire: bool,
+    /// Pure's `EXPLSMALL` was raised (state 5 reached).
+    small: bool,
+    /// Pure's `EXPLBIG` was raised (state 6 reached).
+    big: bool,
 }
 
 impl RaceSim {
@@ -31,6 +35,10 @@ impl RaceSim {
     pub(super) fn raise_destroyed_cues(&mut self) {
         if let Some(end) = self.zone_end() {
             self.raise_zone_end_cue(end);
+            return;
+        }
+        if self.destroyed.sound == DestroyedSound::BlowupAndBlasts {
+            self.raise_blast_cues();
             return;
         }
         if self.destroyed.sound != DestroyedSound::Ship {
@@ -51,6 +59,7 @@ impl RaceSim {
                 blast: down,
                 destroyed: down && local && !past_state_6,
                 on_fire: down && !eliminator,
+                ..Heard::default()
             };
             self.destroyed_heard[slot] = now;
             if now.blast && !heard.blast {
@@ -80,6 +89,29 @@ impl RaceSim {
                     (true, false) => self.cues.push(CueEvent::new(stop, slot)),
                     _ => {}
                 }
+            }
+        }
+    }
+
+    /// Pure's `EXPLSMALL` as a craft goes out of the race (state 5) and `EXPLBIG` at the big
+    /// blast (state 6), on every craft with no `_PC` variant (`ship-destroy.md`, rows 14 and
+    /// 18). A Zone craft ends as a wreck on this title too, with the same two cues.
+    fn raise_blast_cues(&mut self) {
+        let eliminator = self.world.mode() == Mode::Eliminator;
+        for slot in 0..self.world.ship_count as usize {
+            let ship = &self.world.ships[slot];
+            let state = ship.physics.craft_state;
+            let now = Heard {
+                small: ship.active && state == oag_physics::CraftState::Eliminated,
+                big: ship.active && oag_physics::damage::in_state_6(&ship.physics, eliminator),
+                ..Heard::default()
+            };
+            let heard = std::mem::replace(&mut self.destroyed_heard[slot], now);
+            if now.small && !heard.small {
+                self.cues.push(CueEvent::new(Cue::ShipExplosionSmall, slot));
+            }
+            if now.big && !heard.big {
+                self.cues.push(CueEvent::new(Cue::ShipExplosion, slot));
             }
         }
     }

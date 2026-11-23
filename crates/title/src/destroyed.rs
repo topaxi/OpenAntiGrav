@@ -31,6 +31,10 @@ pub enum DestroyedSound {
     /// The player's own `~BLOWUP`, held through the explosion (Pulse, Pure); an opponent's
     /// destruction plays nothing.
     Blowup,
+    /// Pure's: `~BLOWUP` held through the explosion as above, then `EXPLSMALL` at state 5 and
+    /// `EXPLBIG` at the big blast on every craft, positional, with no `_PC` variant and no
+    /// `SHIP_DEST` (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, rows 2, 14, 18).
+    BlowupAndBlasts,
     /// HD's `Ship_PlayDestroyExplosion`: `EXPLBIG_PC` (the local player) or `EXPLBIG` at the
     /// blast, the player's looped `~SHIP_DESTROYED`, and `~SHIP_ONFIRE` on every craft of an
     /// ordinary race (`ship-destroy.md`, rows 3, 12 and 15).
@@ -135,6 +139,15 @@ pub struct DestroyedCraft {
     /// Where the destroy camera comes from. HD's own mode 8 is unread, so it keeps the
     /// existing destroy camera, which is Pulse's.
     pub camera: crate::effects::Origin,
+    /// Whether the wreck stops being drawn at the big blast: its matrix is squashed to `1e-4`
+    /// and the per-state update skips the live model's matrix in state 6 (Pulse
+    /// `0x08841e50`, Pure `0x089233f0`, `ship-destroy.md` row 22). Not HD's, whose wreck lies
+    /// in view until it is taken out of the world.
+    pub wreck_hidden_at_blast: bool,
+    /// The additive flash model thrown at the body on the 4 -> 5 edge and again at the big
+    /// blast (`ShipGaseousFlash_Construct`, rows 8 and 21), as an archive path. `None` where
+    /// the title throws no such object.
+    pub gaseous_flash: Option<&'static str>,
 }
 
 impl DestroyedCraft {
@@ -150,6 +163,17 @@ impl DestroyedCraft {
         leaves_world: false,
         sound: DestroyedSound::Blowup,
         camera: crate::effects::Origin::Measured,
+        wreck_hidden_at_blast: true,
+        gaseous_flash: None,
+    };
+
+    /// Pure's `Ship_SetState` states 4 to 6 (`ship-destroy.md`): Pulse's timers and edges, the
+    /// gaseous flash in place of the shockwave ring, its own cues. The destroy camera stays
+    /// Pulse's mode with Pure's index.
+    pub const PURE: Self = Self {
+        sound: DestroyedSound::BlowupAndBlasts,
+        gaseous_flash: Some(r"Data\Weapons\explosion_gaseous.vex"),
+        ..Self::PULSE
     };
 
     /// HD/Fury's `Ship_SetState` states 4 to 6 (`ship-destroy.md`, rows 1, 2, 9,
@@ -169,6 +193,8 @@ impl DestroyedCraft {
         leaves_world: true,
         sound: DestroyedSound::Ship,
         camera: crate::effects::Origin::InheritedFrom("Wipeout Pulse"),
+        wreck_hidden_at_blast: false,
+        gaseous_flash: None,
     };
 
     /// HD's sequence on a title whose destroy cues are not wired: it keeps `~BLOWUP`

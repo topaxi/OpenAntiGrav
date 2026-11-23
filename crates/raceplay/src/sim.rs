@@ -681,6 +681,17 @@ impl RaceSim {
             && oag_physics::damage::in_state_6(&self.world.ships[slot].physics, false)
     }
 
+    /// Whether `slot`'s wreck is gone from view: from the big blast on (state 6), on a title
+    /// whose blast squashes the wreck and whose state 6 never rewrites its matrix
+    /// (`DestroyedCraft::wreck_hidden_at_blast`). The Eliminator's craft goes on to state 8.
+    pub(crate) fn wreck_hidden(&self, slot: usize) -> bool {
+        self.destroyed.wreck_hidden_at_blast
+            && oag_physics::damage::in_state_6(
+                &self.world.ships[slot].physics,
+                self.world.mode() == oag_race::Mode::Eliminator,
+            )
+    }
+
     /// [`SimRace::may_use_pickup`]'s check, for the paths that hold a `RaceSim` alone (a
     /// module's commands): only a racing craft uses a pickup.
     pub(super) fn may_use_pickup(&self, slot: usize) -> bool {

@@ -107,6 +107,7 @@ impl RaceView {
                 }
             }
             if out_of_the_race_now {
+                self.throw_gaseous_flash(core, position);
                 // Kind 0 falls off with distance from the *active* camera,
                 // and by state 5 the original has put the player in its
                 // destroy camera ([`super::destroy_camera`]); the flash reads
@@ -140,6 +141,7 @@ impl RaceView {
                     };
                     self.start_flash(kind, at);
                     self.throw_wreck_explosion(core, slot, model);
+                    self.throw_gaseous_flash(core, at);
                     if slot == player {
                         self.hold_destroy_camera();
                     }
@@ -160,6 +162,14 @@ impl RaceView {
         if let Some(fx) = self.seat_contact_mut(core, slot) {
             fx.shake
                 .arm_with(magnitude, duration, side, &mut fx.shake_rng);
+        }
+    }
+
+    /// The gaseous flash at the body, where the title throws one (`ship-destroy.md`, rows 8 and
+    /// 21): on the state 5 edge and again at the big blast.
+    fn throw_gaseous_flash(&mut self, core: &SimRace, at: Vec3) {
+        if core.sim.destroyed.gaseous_flash.is_some() {
+            self.spawn_gaseous_flash(at);
         }
     }
 
