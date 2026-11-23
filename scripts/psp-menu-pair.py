@@ -219,7 +219,7 @@ class Rig:
                     if a != 4:
                         counts[a] = counts.get(a, 0) + 1
             if not counts:
-                return None
+                continue
             value = max(counts, key=counts.get)
             if value in range(70, 221, 15):
                 return {"value": value, "seconds": ((220 - value) // 15 + 0.5) / 20, "pixels": counts[value]}
