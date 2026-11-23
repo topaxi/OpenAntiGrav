@@ -45,4 +45,10 @@ pub struct ZoneFrame {
     /// contribution and skips those two
     /// (`docs/ghidra/functions/ps3-hdfury-eu/zone-frame.md`).
     pub detonator_arm: bool,
+    /// The original's GL near plane in a Zone circuit race, which the visualiser glow's
+    /// `1 - windowDepth` factor is `near / viewDepth` of (`0.0`: use this renderer's own window
+    /// depth). Read off the projection recorded in the pairs' `original.camera.view_proj`.
+    pub glow_window_near: f32,
+    /// The same in a Detonator race, whose camera sits on another field of view.
+    pub detonator_glow_window_near: f32,
 }

@@ -462,6 +462,23 @@ predicts. **Open:** grabs where raw is below held, or a lag-scanned frame; the v
 in ours, bright violet in the original, not measured); the mine rims (a one-frame capture gives the envelope no history, and ours picks its
 own band and places its own mines).
 
+**Floor visualiser, re-measured (2026-11-23, `det-floor`).** The three pairs re-rendered on `main` with the recorded bands (`--zone-bands`),
+then with the glow's depth factor on the original's near plane (`zone-shader.md`, "The glow's depth factor": near 0.4773-0.4805 on the
+Detonator pairs, 0.5417 on circuits, off `view_proj`). Whole-frame mean grey / RMSE, floor box A `x250..800 y780..850` and B `x1090..1230 y780..1000`
+mean RGB ours / original:
+
+| Pair | Mean grey main to after | RMSE | A ours before to after / original | B ours before to after / original |
+| --- | --- | --- | --- | --- |
+| `mines-ahead` | 19.96 to 18.58 | 0.200 to 0.198 | `(15.1, 3.1, 33.2)` to `(9.8, 1.5, 23.3)` / `(5.1, 0, 14.0)` | `(31.0, 6.8, 65.4)` to `(20.4, 3.3, 46.4)` / `(7.4, 0, 24.9)` |
+| `cannon-volley` | 19.60 to 18.28 | 0.198 to 0.192 | `(25.8, 3.6, 51.7)` to `(17.6, 1.7, 37.3)` / `(6.2, 0, 18.3)` | `(44.9, 7.1, 88.2)` to `(31.2, 3.7, 64.1)` / `(8.5, 0, 28.2)` |
+| `pad` | 14.52 to 12.74 | 0.158 to 0.149 | `(21.5, 4.2, 45.5)` to `(14.2, 1.8, 32.2)` / `(6.7, 0, 19.1)` | `(36.3, 7.9, 74.7)` to `(24.6, 3.8, 53.4)` / `(9.5, 0, 29.1)` |
+
+Ours' blue is still about 1.7 to 2.3 times the original's (a constant of about 2 in linear light is unread: the vis texel's gamma flags at
+`0x003d6dc8`, and the original's floor blue is nearly flat across held band 3 0.51 to 0.93, so the texel the frame sampled is unmeasured; recipe in
+`zone-shader.md`). Where the rest of the mean grey sits (6 x 8 grid, signed ours minus original, any pair): the mid-distance red band (ours 30 to 55
+darker: the Track Fog `1.8 0.141 0.007` is not drawn), the upper right (ours 15 to 40 brighter), the floor (ours 10 to 20 brighter, now about 5 to 10),
+the mines and pad. Ours' floor also carries more red than the original's (box A red 9.8 against 5.1).
+
 Cheapest first was row 1, then row 2's gantries, then the bloom arm (all three wired, below), then rows 7 and 4.
 
 **Zone's look in Detonator (read 2026-11-22, `det-look-re`, `detonator-look.md`).** Mode 14 is in the effect gate's mask

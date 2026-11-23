@@ -1080,6 +1080,15 @@ pub(super) fn zone_grade(
                         .and_then(|frame| frame.hull_probe_tint_scale),
                 )
             })
+            .map(|grade| {
+                grade.with_glow_window_near(race.zone_frame.map_or(0.0, |frame| {
+                    if mode == oag_race::Mode::Detonator {
+                        frame.detonator_glow_window_near
+                    } else {
+                        frame.glow_window_near
+                    }
+                }))
+            })
             .map(|grade| grade.with_arena(in_play.on_zone_circuit(track)))
             .map(|grade| {
                 if mode == oag_race::Mode::Detonator {

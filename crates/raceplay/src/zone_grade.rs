@@ -223,6 +223,9 @@ pub struct ZoneGrade {
     /// The stage is a lap counter's ([`Self::show_stage`]), not a zone ladder's: a
     /// Detonator race. See [`Self::with_lap_stages`].
     lap_stages: bool,
+    /// The near plane the visualiser glow's depth factor is built from; `0.0` keeps the
+    /// renderer's own window depth. See [`Self::with_glow_window_near`].
+    glow_window_near: f32,
 }
 
 impl ZoneGrade {
@@ -251,6 +254,7 @@ impl ZoneGrade {
             lap_stages: false,
             arena: false,
             stage_lit: false,
+            glow_window_near: 0.0,
             hull_probe_tint_scale: None,
         })
     }
@@ -291,6 +295,14 @@ impl ZoneGrade {
     #[must_use]
     pub fn with_stage_light(mut self, stage_lit: bool) -> Self {
         self.stage_lit = stage_lit;
+        self
+    }
+
+    /// The original's near plane for the visualiser glow's `1 - windowDepth` factor
+    /// ([`oag_title::ZoneFrame::glow_window_near`]); `0.0` leaves it the renderer's window depth.
+    #[must_use]
+    pub fn with_glow_window_near(mut self, near: f32) -> Self {
+        self.glow_window_near = near;
         self
     }
 
@@ -980,7 +992,7 @@ impl ZoneGrade {
             aniso_power,
             shape: [
                 if self.arena { 1.0 } else { 0.0 },
-                0.0,
+                self.glow_window_near,
                 0.0,
                 if self.stage_lit { 1.0 } else { 0.0 },
             ],

@@ -203,7 +203,7 @@ fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
 // so the ring is drawn only while the radius is positive.
 // `docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`, "The wavefront ring".
 //
-// `window_depth` is `@builtin(position).z` read at fragment time - WebGPU's
+// `frag` is `@builtin(position)`; its `.z` is the window depth - WebGPU's
 // own window-space depth in `0..1`, the same convention the microcode's own
 // `f[POS]` carries.
 //
@@ -216,7 +216,7 @@ fn zone_aniso(rim: f32, slots: u32, world: vec3<f32>) -> vec3<f32> {
 // early-return that makes the analysis give up, and the band sample and the
 // visualiser lookup keep the neighbours they need.
 @diagnostic(off, derivative_uniformity)
-fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
+fn zone_glow(n: vec3<f32>, frag: vec4<f32>, uv: vec2<f32>, slots: u32, world: vec3<f32>) -> vec3<f32> {
     let zone_uv = scene.zone.uv_scale * (1.0 - uv);
     // The band comes from whichever stage texture this chunk publishes - the
     // scene set's is alpha 255 everywhere, so a scene chunk indexes the last
@@ -232,9 +232,14 @@ fn zone_glow(n: vec3<f32>, window_depth: f32, uv: vec2<f32>, slots: u32, world: 
         band = textureSample(zone_scene_tex, zone_nearest_sampler, zone_uv, layer).a;
     }
     let vis = textureSample(zone_vis_tex, zone_vis_sampler, vec2<f32>(band, 0.5)).rgb;
+    // `1 - windowDepth` is `near / viewDepth` on the original's GL projection (`near`
+    // from `shape.y`); `frag.w` is the reciprocal of the view depth. Without a near it is
+    // this renderer's own window depth.
+    let near = scene.zone.shape.y;
+    let depth_term = select(1.0 - frag.z, near * frag.w, near > 0.0);
     let up = clamp(n.y - 0.5, 0.0, 1.0);
     let drive = zone_set(slots, world).effect.w;
-    let visualiser = max(up * (1.0 - window_depth) * drive * vis, vec3<f32>(0.0));
+    let visualiser = max(up * depth_term * drive * vis, vec3<f32>(0.0));
     let edge = abs(distance(world, scene.zone.origin.xyz) - scene.zone.radius);
     let ring = select(0.0, 5.0 * clamp(1.0 - 0.1 * edge, 0.0, 1.0), scene.zone.radius > 0.0);
     return visualiser + vec3<f32>(ring);
