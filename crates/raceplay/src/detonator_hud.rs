@@ -73,6 +73,27 @@ impl ChainWatch {
     }
 }
 
+/// The best medal the score has reached against the cell's targets: `score >= target`, a
+/// counting mode (`PI_Cell_EvaluateMedalForValue` flips for mode 14, so the HUD can never show a
+/// medal the results then withhold). Gold, silver and bronze share one rectangle, so only the
+/// best tier reached is shown (**chosen**: the original's per-widget enable rule is unread, 50).
+#[must_use]
+pub(super) fn medal(
+    score: i32,
+    targets: Option<oag_tables::race_campaign::MedalTargets>,
+) -> Option<oag_tables::race_campaign::Medal> {
+    let targets = targets?;
+    let value = i64::from(score);
+    if value <= 0 {
+        return None;
+    }
+    oag_tables::race_campaign::evaluate_targets(
+        &[targets.gold, targets.silver, targets.bronze],
+        value,
+        true,
+    )
+}
+
 /// The readout of a Detonator race from its cannon and stage.
 ///
 /// A spent bullet icon is one volley fired: the clip refills at the start of a reload lockout,
@@ -82,9 +103,11 @@ pub(super) fn readout(
     cannon: &Cannon,
     stage: u32,
     emp: (u32, bool),
+    medal: Option<oag_tables::race_campaign::Medal>,
     watch: &ChainWatch,
 ) -> oag_hud::Detonator {
     oag_hud::Detonator {
+        medal,
         emp_charge: emp.0,
         emp_ready: emp.1,
         score: cannon.score,
@@ -132,7 +155,7 @@ mod tests {
     fn the_readout_carries_the_cannon_and_the_stage() {
         let mut cannon = after(3, Awards::default());
         cannon.score = 12_345;
-        let shown = readout(&cannon, 3, (5, true), &ChainWatch::default());
+        let shown = readout(&cannon, 3, (5, true), None, &ChainWatch::default());
         assert_eq!((shown.emp_charge, shown.emp_ready), (5, true));
         assert_eq!(
             (

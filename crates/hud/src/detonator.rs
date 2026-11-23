@@ -50,6 +50,11 @@ pub struct Detonator {
     pub emp_charge: u32,
     /// The charge has reached the EMP's threshold: `EmpReady` is shown.
     pub emp_ready: bool,
+    /// The best medal the score has reached against the campaign cell's targets: the one of
+    /// `DetonatorGoldMedal`/`Silver`/`Bronze` to show. `None` below bronze and in a race with no
+    /// cell. The layout reader records the three models ([`crate::ImageModel`]); the game draws
+    /// the one this names.
+    pub medal: Option<oag_tables::race_campaign::Medal>,
 }
 
 /// The EMP pips, `Emp_0`-`Emp_7`.
@@ -177,6 +182,29 @@ mod tests {
         assert_eq!(emp_pip("Emp_7"), Some(7));
         assert_eq!(emp_pip("Emp_8"), None);
         assert_eq!(emp_pip("EmpReady"), None);
+    }
+
+    /// HD's `Detonator_HUD.xml` medals, as the disc authors them (inside an `<Image>`).
+    const MEDALS: &str = r#"<Screen><Image name="ForwardHUD">
+      <ImageModel name="DetonatorGoldMedal" DisableTransition="0" StartEnabled="false">
+        <Values ImageX="1440" ImageY="80" ImageWidth="208" ImageHeight="150" Src="Data\FE\Trophies\hd_gold.vex" Colour="0xffffffff" ModelX="0" ModelY="0" ModelZ="-87.0" RotX="0.0" RotY="-0.5"></Values>
+      </ImageModel>
+      <aImageModel name="EmpBarEffect"><Values Src="Data\x.vex"></Values></aImageModel>
+    </Image></Screen>"#;
+
+    #[test]
+    fn the_layout_records_an_image_model_with_its_rectangle_and_camera() {
+        let layout = crate::Layout::from_xml(MEDALS);
+        let [gold] = layout.image_models.as_slice() else {
+            panic!("one ImageModel, the typo'd spelling is not one: {layout:?}");
+        };
+        assert_eq!(gold.name, "DetonatorGoldMedal");
+        assert_eq!(gold.src, r"Data\FE\Trophies\hd_gold.vex");
+        assert_eq!(gold.rect, [1440.0, 80.0, 208.0, 150.0]);
+        assert_eq!(gold.model, [0.0, 0.0, -87.0]);
+        assert_eq!(gold.rotation, [0.0, -0.5]);
+        assert!(!gold.start_enabled);
+        assert!(layout.skipped.is_empty(), "{:?}", layout.skipped);
     }
 
     #[test]

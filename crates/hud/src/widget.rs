@@ -275,3 +275,33 @@ pub struct Model {
     /// never appears alongside `mode="orthographic"` in any layout read.
     pub origin: [f32; 2],
 }
+
+/// One `<ImageModel>`: a `.vex` model drawn inside a rectangle of the HUD, with its own camera.
+///
+/// Recorded, never drawn by [`super::draw_list`]: a layout author's `StartEnabled="false"` widget
+/// is switched on by the controller that binds it, and what that is differs per widget
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`: the medals show as the score passes
+/// the cell's targets; `EmpBarEffect` takes a gauge). A caller draws the one it has a binding for.
+///
+/// HD's `Detonator_HUD.xml` authors four: `DetonatorGoldMedal`/`Silver`/`Bronze`
+/// (`Data\FE\Trophies\hd_*.vex`) and `EmpBarEffect` (`emp_hud.vex`), each as
+/// `<ImageModel name=".." StartEnabled=".."><Values ImageX ImageY ImageWidth ImageHeight Src Colour
+/// ModelX ModelY ModelZ RotX RotY>`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ImageModel {
+    /// The `name` attribute.
+    pub name: String,
+    /// The `.vex` entry name (`Src`).
+    pub src: String,
+    /// `[ImageX, ImageY, ImageWidth, ImageHeight]` in layout pixels, with the enclosing
+    /// `<Item>` offsets composed.
+    pub rect: [f32; 4],
+    /// `ModelX`, `ModelY`, `ModelZ`: where the model sits in front of the widget's own camera.
+    pub model: [f32; 3],
+    /// `RotX`, `RotY`, in radians.
+    pub rotation: [f32; 2],
+    /// `Colour`, resolved; white when absent.
+    pub colour: [f32; 4],
+    /// `StartEnabled`: whether the widget is up before anything switches it.
+    pub start_enabled: bool,
+}
