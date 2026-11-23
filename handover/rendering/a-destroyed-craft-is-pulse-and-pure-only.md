@@ -74,8 +74,9 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    the wreck hidden from the big blast on, where ours draws it for all of `Eliminated` (row 22);
    `Phantom_shipwreck.vex` for a Phantom craft (row 12, after a Phantom hull loads at all); `EXPLSMALL`/`EXPLBIG`
    for every craft with no `_PC` variant and no `SHIP_DEST` (rows 14, 18). **Unread:** row 16 (`90.0` on the
-   death sparks' instance), row 19 (big flash kind 6 against Pulse's 7), row 28 (state 7's callers), and a live
-   run of state 4's 0.5 s and row 22 (recipe on the page). Still open: Pulse PS2's port.
+   death sparks' instance), row 19 (big flash kind 6 against Pulse's 7), row 28 (state 7's callers). The state timings
+   (0.5, 1.5, 2.0 s), the swap and row 22 (the wreck stays squashed in state 6) are measured live on PPSSPP
+   (`scripts/psp-pure-wreck-states.py`). Still open: Pulse PS2's port.
 4. **The Zone destruction sequence on every title** (maintainer, 2026-11-22). Pulse's is
    wired (`zonewreck.vex`, case 4's `~BLOWUP` for the local player, the death camera mode 5,
    the HUD hide on `DAT_08ab0838`; `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`,
