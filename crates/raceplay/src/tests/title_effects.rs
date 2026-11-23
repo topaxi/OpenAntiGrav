@@ -466,11 +466,13 @@ fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inheri
         {
             Some("Wipeout Pulse")
         }
-        (n, Trigger::ShieldAbsorb | Trigger::WeaponSpark)
-            if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name =>
-        {
-            Some("Wipeout HD")
-        }
+        (
+            n,
+            Trigger::ShieldAbsorb
+            | Trigger::WeaponSpark
+            | Trigger::WreckExplosion
+            | Trigger::WreckPlume,
+        ) if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name => Some("Wipeout HD"),
         _ => None,
     };
     for title in ALL {
