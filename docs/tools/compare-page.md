@@ -330,7 +330,7 @@ The node matrix at `ship+0x40` equals the body on all eight craft on every pause
 
 **So a pair that takes the camera from the push buffer and the craft from RAM draws every craft 1 or 2 ticks ahead of its camera**: smaller, higher and farther up the road. On the stored `hd-race/talons-pack`, ours re-rendered with every craft moved back along its own velocity (sigma 7, mean absolute RGB): frame **18.82 at 0 ticks, 17.98 at 1, 21.80 at 2**; the hull's box (`640,330 640x420`) **17.29, 13.34, 17.47**; at one tick the hull is the original's size and sits where the original's does. That pair's skew is one tick. The earlier note that `run2`'s opponent wanted no rewind is not borne out by the push buffer (`r1`, `r2`: opponents skewed with the player).
 
-**Open, ready to wire (tooling, no engine change):** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
+**Wired for `--detonator` (2026-11-23, `det-camera`, "Detonator pairs: the hull's frame pose"); still open for `--field`:** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
 
 ## Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`)
 
@@ -2257,6 +2257,44 @@ manifests are developer material, not a publishing set.
 (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "Wired").
 
 What differs, by region and size: the Detonator thread's "Render accuracy" section.
+
+### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
+
+**Report (maintainer, from the pairs):** "ours' shots use the wrong camera setting/distance, the original is 'close', ours is 'far'."
+**True; the camera was not the cause.** `--camera-pose` and `--camera-fov` are honoured (the original's eye is 11.7 units from its RAM
+body, the close view; ours' craft attitude is within 1 degree of the original's). Two things made ours' hull small and high:
+
+1. **The craft was fed at the RAM body, the camera at the push buffer, and the pause leaves RAM 1 to 4 ticks ahead of the frame**
+   (the skew section above). The push buffer's own hull matrix read **2.06, 1.99, 2.0 and 4.05 ticks** behind the body along its
+   velocity on four pauses (off-axis 0.1 to 0.4 units, `pad` and `mines-ahead` 2, `cannon-volley` 4, the cannon frame being slower to
+   present). `scripts/ps3_pose.py` (`hull_matrices`, `hull_near`, `whole_ticks`, `python3 scripts/ps3_pose.py` for the self test) finds it;
+   `rpcs3-hd-detonator-shots.py` records it as `ship.hull_pb` and saves the three push-buffer blobs beside each frame;
+   `rpcs3-hd-pair.py --detonator` feeds ours' `--pose` and heading from it, records `original.presented_lag.craft_ticks`, and refuses a pause
+   with no hull or a skew that is not within 0.1 of a whole tick.
+2. **Detonator draws the hull at 0.63, ours at 0.75** (`ps3-hdfury-eu/camera.md`, "The drawn hull in Detonator is 0.63"): with the
+   frame pose fed and nothing else changed ours' hull was 19 percent too wide (315 px against 266). Fixed in the engine.
+
+Hull rim box (white rim, `min(r,g,b) > 200` inside `x 700..1220 y 600..1060`), x0,y0 to x1,y1, in a 1920x1080 frame; a new grab of each
+pair on one boot (`pad` and `mines-ahead` together at lap clock 2.03 and 2.67, `cannon-volley` 2.23 after a 1.84 s volley):
+
+| Pair | Original | Ours before (RAM body, 0.75) | Ours, frame pose only | Ours after (frame pose, 0.63) |
+| --- | --- | --- | --- | --- |
+| `mines-ahead` | 823,712 to 1089,960 (266x248) | 849,613 to 1078,747 (229x134) | 805,703 to 1120,1018 (315x315) | 829,710 to 1096,942 (267x232) |
+| `cannon-volley` | 832,709 to 1098,959 (266x250) | 873,600 to 1051,648 (rim sparse) | 816,702 to 1131,1015 | 841,708 to 1107,939 (266x231) |
+| `pad` | 829,712 to 1098,972 (269x260) | 845,615 to 1079,757 (234x142) | 811,704 to 1130,1027 | 836,711 to 1105,948 (269x237) |
+
+Top, left and right edges are within 9 px after; the bottom is 18 to 24 px short: the original's engine nozzles and exhaust flare reach
+lower than ours' and ours' hull rear is lit blue where the original's is dark metal (open, not tuned). Whole-frame mean absolute grey
+difference (0-255) and RMSE (0-1) against the same new `theirs.png`, before then after: `mines-ahead` 19.81 to 19.81 and 0.174 to 0.175,
+`cannon-volley` 18.60 to 18.74 and 0.167 to 0.169, `pad` 16.85 to 16.90 and 0.149 to 0.150. **The whole-frame numbers do not move**: the
+hull is 6 percent of the frame and the rest (floor, sky, mines) dominates; the claim is the hull's place and size, read on the crops.
+The two new pairs' mean grey of the original / ours: 18.2 / 21.7, 17.5 / 18.8, 14.5 / 17.6.
+
+Two circuit pairs (`hd/anulpha-pass`, `hd/chenghou-project`) re-rendered with and without the engine change: **bit-identical** (maximum difference
+0 over every pixel), since the factor is `1.0` outside Detonator and the pair script's new path is `--detonator` only. These pairs are not
+publishable as made: their world-clock read found no scenery node (`reason` in `<stem>.clock.json`) and the heading check reads 1.4 to 1.9
+degrees against 1.0 (`--pose` carries a yaw, the original's pitch and roll differ by about that); re-grab on a host where the clock read
+succeeds before adopting them.
 
 ### The original's music bands in a Detonator pair (2026-11-23, `det-pair-bands`)
 

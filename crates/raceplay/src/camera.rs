@@ -63,6 +63,17 @@ pub fn craft_scale(title: &oag_title::Title, mode: oag_race::Mode) -> f32 {
     }
 }
 
+/// What the drawn hull's matrix is scaled by on top of the `0.75` its model carries, for a `mode`
+/// race on `title`: the title's Detonator hull scale over that `0.75`, `1.0` everywhere else
+/// (`oag_title::Detonator::hull_scale`).
+#[must_use]
+pub fn hull_draw_factor(title: &oag_title::Title, mode: oag_race::Mode) -> f32 {
+    match (mode, title.race.detonator.and_then(|d| d.hull_scale)) {
+        (oag_race::Mode::Detonator, Some(scale)) => scale / oag_physics::hover::TARGET_GLOBAL_SCALE,
+        _ => 1.0,
+    }
+}
+
 /// One `<ExternalCamera*>` block as the renderer's [`ChaseParams`].
 ///
 /// Both external views go through this, so [`chase_pos_length`] is applied to
@@ -967,7 +978,7 @@ impl RaceView {
 
 #[cfg(test)]
 mod tests {
-    use super::craft_scale;
+    use super::{craft_scale, hull_draw_factor};
     use oag_race::Mode;
 
     /// `0.7` in a Detonator race on a title that offers one, `0.75` in every other race.
@@ -977,5 +988,17 @@ mod tests {
         assert_eq!(craft_scale(oag_2048::TITLE, Mode::Detonator), 0.7);
         assert_eq!(craft_scale(oag_hd::TITLE, Mode::TimeTrial), 0.75);
         assert_eq!(craft_scale(oag_pulse::TITLE, Mode::Detonator), 0.75);
+    }
+
+    /// HD's Detonator hull is drawn at `0.63` over the model's `0.75`; every other race, and a
+    /// title whose Detonator hull scale is not measured (2048, Omega), keeps the model's own.
+    #[test]
+    fn the_detonator_hull_scale_is_the_titles_where_it_is_measured() {
+        assert!((hull_draw_factor(oag_hd::TITLE, Mode::Detonator) - 0.84).abs() < 1e-6);
+        assert_eq!(hull_draw_factor(oag_hd::TITLE, Mode::TimeTrial), 1.0);
+        assert_eq!(hull_draw_factor(oag_hd::TITLE, Mode::Zone), 1.0);
+        assert_eq!(hull_draw_factor(oag_2048::TITLE, Mode::Detonator), 1.0);
+        assert_eq!(hull_draw_factor(oag_omega::TITLE, Mode::Detonator), 1.0);
+        assert_eq!(hull_draw_factor(oag_pulse::TITLE, Mode::Detonator), 1.0);
     }
 }

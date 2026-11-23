@@ -64,6 +64,9 @@ pub struct RaceView {
     pub(super) hull_shake: [Option<super::hull_shake::Shake>; MAX_SHIPS],
     /// The title's shake law, `None` for a title without one.
     pub(super) hull_shake_law: Option<oag_title::hull_shake::HullShake>,
+    /// What [`super::Race::drawn_model`]'s hull matrix is scaled by on top of the model's own `0.75`
+    /// (`crate::camera::hull_draw_factor`).
+    pub(super) hull_draw_factor: f32,
     /// Whether the shake runs ([`super::Race::set_hull_shake`]).
     pub(super) hull_shake_on: bool,
     /// Whether an impact shakes the camera; a demo's does not ([`super::Race::fly_as_demo`]).
