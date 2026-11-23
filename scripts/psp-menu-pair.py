@@ -398,7 +398,7 @@ PURE_WALK = [
     {"id": "sr-track", "title": "Single Race: Track Selection", "screen": "Track Selection", "page": "pure-chain:arcade:0:0", "xml": "Selection_Definition.xml Track Selection",
      "selection": {"original": "VINETA K (first row)", "ours": "VINETA K (first row)"}},
     {"id": "team", "title": "Team Selection", "screen": "Team Selection", "page": "ship-select", "xml": "Selection_Definition.xml Team Selection",
-     "selection": {"original": "FEISAR (first row)", "ours": "FEISAR (first row), the fresh profile's own row (`RaceDefaults::fresh_team`)"}},
+     "selection": {"original": "FEISAR (first row)", "ours": "FEISAR (first row)"}},
     {"id": "t-class", "title": "Tournament: Class Selection", "screen": "Class Selection", "page": "pure-chain:tournament", "xml": "Selection_Definition.xml Class Selection",
      "selection": {"original": "VECTOR (first row)", "ours": "VECTOR (first row)"}},
     {"id": "t-sel", "title": "Tournament: Tournament Selection (the campaign)", "screen": "Tournament Selection", "page": "pure-chain:tournament:0",
