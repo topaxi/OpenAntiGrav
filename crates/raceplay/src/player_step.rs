@@ -322,8 +322,10 @@ impl Race {
         if self.draws() {
             self.view.floor_sparks.note(
                 slot,
+                &self.core.sim.world.ships[slot],
                 &evaluated.wall,
                 reset_hit.map(|contact| contact.point),
+                self.view.hit_sparks.dispatch_anchors(slot),
             );
         }
         let eliminator_route = self.core.sim.world.mode() == oag_race::Mode::Eliminator;

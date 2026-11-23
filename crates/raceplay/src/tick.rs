@@ -462,6 +462,7 @@ impl Race {
             self.draw_extension_effects();
             self.view.advance_damage_smoke(&self.core);
             self.view.advance_wreck_fx(&self.core);
+            self.view.advance_floor_sparks(&self.core);
             self.view.advance_particles(&self.core);
             self.view.advance_scenery_fx(&self.core, self.core.sim.dt);
         }
@@ -687,7 +688,6 @@ impl Race {
             }
             self.view.advance_seat_contact_fx(&self.core, &steps, seat);
             self.view.advance_field_sparks(&self.core);
-            self.view.advance_floor_sparks(&self.core);
         }
 
         // Last, after every write this tick makes: the recording stores the

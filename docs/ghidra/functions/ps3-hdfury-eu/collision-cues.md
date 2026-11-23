@@ -549,7 +549,7 @@ release rule, for the seat and for the opponents.
   (`ship + 0x5f42`) is not applied.
 - **Kind 3** (`NotRacing`) restarts the attached spark from the floor record's point and impulse
   (`floor_sparks::not_racing_record`, handed to `attach_rule` as a pair record, for the seat and
-  the opponents; test `a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark`).
+  the opponents; test `a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark`). "Racing" is state 1: `CraftState::Racing` and off the grid (the countdown is state 0, so a floor record there is kind 3); a state 6 wreck makes none. The spark's place and the reach test are taken when the record is made, because a reset plane's record teleports the craft that tick.
   Not wired: the reset plane's record holding an attached spark (the craft is sent to state 6 the
   same frame).
 - **Rate, measured on ours:** Chenghou Project, an Ace field with the seat on the autopilot, 6000

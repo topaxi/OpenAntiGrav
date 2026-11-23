@@ -35,8 +35,11 @@ fn race(anchors: Vec<Vec<SparkAnchor>>, colliders: Vec<oag_physics::TriangleSoup
     Race::start(setup, view, crate::extensions::Prepared::default())
 }
 
+/// An HD-shaped race with the seat off the grid.
 fn hd_race() -> Race {
-    race(vec![locators(); MAX_SHIPS], Vec::new())
+    let mut race = race(vec![locators(); MAX_SHIPS], Vec::new());
+    race.core.sim.world.ships[0].physics.on_grid = false;
+    race
 }
 
 /// A wall response holding `points` as frictionless records.
@@ -52,9 +55,16 @@ fn floor_records(points: &[Vec3]) -> WallResponse {
     wall
 }
 
+fn note(race: &mut Race, wall: &WallResponse, reset: Option<Vec3>) {
+    let anchors = race.view.hit_sparks.dispatch_anchors(0);
+    race.view
+        .floor_sparks
+        .note(0, &race.core.sim.world.ships[0], wall, reset, anchors);
+}
+
 /// Notes `wall` on the seat's craft and runs the throw, once.
 fn throw(race: &mut Race, wall: &WallResponse) {
-    race.view.floor_sparks.note(0, wall, None);
+    note(race, wall, None);
     race.view.advance_floor_sparks(&race.core);
 }
 
@@ -104,11 +114,35 @@ fn a_wall_response_throws_no_one_shot() {
 fn a_reset_plane_is_a_record() {
     let mut race = hd_race();
     let at = race.core.sim.world.ships[0].physics.body.position;
-    race.view
-        .floor_sparks
-        .note(0, &WallResponse::default(), Some(at));
+    note(&mut race, &WallResponse::default(), Some(at));
     race.view.advance_floor_sparks(&race.core);
     assert_eq!(race.floor_sparks_started_for_tests(), 1);
+}
+
+/// **A reset plane's record teleports the craft the same tick; the spark is still thrown, at the
+/// impact.** Red when the placement and the reach test read the pose after the respawn.
+#[test]
+fn a_reset_record_sparks_at_the_impact_not_the_respawn() {
+    let mut race = hd_race();
+    let at = race.core.sim.world.ships[0].physics.body.position;
+    note(&mut race, &WallResponse::default(), Some(at));
+    race.core.sim.world.ships[0].physics.body.position = Vec3::new(0.0, 0.0, 9000.0);
+    race.view.advance_floor_sparks(&race.core);
+    assert_eq!(
+        race.floor_sparks_started_for_tests(),
+        1,
+        "the reach test read the respawn pose"
+    );
+}
+
+/// **The countdown is state 0: a floor record on the grid is kind 3, no one-shot.**
+#[test]
+fn a_floor_record_on_the_grid_is_not_the_one_shot() {
+    let mut race = hd_race();
+    race.core.sim.world.ships[0].physics.on_grid = true;
+    let wall = floor_records(&[race.core.sim.world.ships[0].physics.body.position]);
+    throw(&mut race, &wall);
+    assert_eq!(race.floor_sparks_started_for_tests(), 0);
 }
 
 /// **Pulse's shape (no dispatch locators) throws nothing**, and neither does a craft under a
@@ -160,9 +194,27 @@ fn a_craft_in_a_floor_sparks_and_in_a_wall_does_not() {
             vec![locators(); MAX_SHIPS],
             vec![upward_plane(-0.3, surface)],
         );
-        for _ in 0..30 {
+        let mut on_the_grid = 0;
+        let mut first_alive = None;
+        for tick in 0..330 {
             race.core.sim.world.ships[0].physics.body.position = Vec3::ZERO;
             race.tick(&PlayerInputs::none());
+            if first_alive.is_none() && race.floor_sparks_started_for_tests() > 0 {
+                first_alive = Some(race.view.stage.alive_count());
+            }
+            if tick == 200 {
+                on_the_grid = race.floor_sparks_started_for_tests();
+            }
+        }
+        assert_eq!(
+            on_the_grid, 0,
+            "{surface:?}: a record on the grid threw the one-shot"
+        );
+        if surface == oag_physics::Surface::Floor {
+            assert!(
+                first_alive.is_some_and(|alive| alive > 0),
+                "the spark drew nothing on the tick it started: {first_alive:?}"
+            );
         }
         race.floor_sparks_started_for_tests()
     };
@@ -237,6 +289,7 @@ fn a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark() {
     .expect("the hand-laid effect parses");
     view.handles.insert(Trigger::CollisionSpark, effect);
     let mut race = Race::start(setup, view, crate::extensions::Prepared::default());
+    race.core.sim.world.ships[0].physics.on_grid = false;
     let evaluated = oag_physics::Evaluated {
         wall: floor_records(&[Vec3::ZERO]),
         ..oag_physics::Evaluated::idle(&race.core.sim.world.ships[0].physics)
@@ -248,6 +301,11 @@ fn a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark() {
     );
 
     race.core.sim.world.ships[0].physics.craft_state = oag_physics::CraftState::Eliminated;
+    race.core.sim.world.ships[0].physics.state_timer = 0.0;
+    race.view.advance_contact_fx(&race.core, 0, &evaluated);
+    assert!(!race.view.contact.attached, "a state 6 wreck sparked");
+
+    race.core.sim.world.ships[0].physics.state_timer = 1.0;
     race.view.advance_contact_fx(&race.core, 0, &evaluated);
     assert!(
         race.view.contact.attached,

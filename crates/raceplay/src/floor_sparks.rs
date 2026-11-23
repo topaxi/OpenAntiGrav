@@ -25,7 +25,8 @@
 //! **Nothing here is simulation state.**
 
 use super::*;
-use oag_physics::wall::{FrictionlessRecord, MAX_FRICTIONLESS, WallResponse};
+use crate::drawable::model_matrix_of;
+use oag_physics::wall::{MAX_FRICTIONLESS, WallResponse};
 
 /// What `Ship_SpawnContactFx` throws for a record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,9 +51,16 @@ pub(super) fn contact_kind(friction: f32, racing: bool) -> ContactKind {
     }
 }
 
+/// Whether the craft is in the original's state 1: racing and off the grid (the countdown is
+/// state 0).
+fn is_racing(ship: &Ship) -> bool {
+    ship.physics.craft_state == oag_physics::CraftState::Racing && !ship.physics.on_grid
+}
+
 /// Kind 3: the frictionless record of a craft that is not racing, as the craft-to-craft record the
 /// attached spark restarts from (kinds 0 and 3 run one body, `ship-collision-fx.md`, "kind 0 and
-/// kind 3"). `None` for a racing craft, whose floor records throw the one-shot instead.
+/// kind 3"). `None` for a racing craft, whose floor records throw the one-shot instead, and for a
+/// craft in state 6, whose contact walk the original skips.
 pub(super) fn not_racing_record(
     ship: &Ship,
     wall: &WallResponse,
@@ -61,8 +69,8 @@ pub(super) fn not_racing_record(
         .frictionless
         .first()
         .filter(|_| wall.floor_contacts > 0)?;
-    let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
-    (contact_kind(0.0, racing) == ContactKind::NotRacing).then_some(
+    let wreck = oag_physics::damage::in_state_6(&ship.physics, false);
+    (!wreck && contact_kind(0.0, is_racing(ship)) == ContactKind::NotRacing).then_some(
         crate::contact_fx::PairContact {
             point: record.point,
             impulse: record.impulse,
@@ -70,11 +78,15 @@ pub(super) fn not_racing_record(
     )
 }
 
-/// One craft's frictionless records of this tick.
+/// One craft's frictionless records of this tick, already placed: where each spark spawns (the
+/// locator nearest the record, at the pose the record was made in) and where the craft was, for
+/// the reach test. Placed when noted because a reset plane's record teleports the craft the same
+/// tick.
 #[derive(Debug, Clone, Copy, Default)]
 struct Hits {
-    records: [FrictionlessRecord; MAX_FRICTIONLESS],
+    at: [Vec3; MAX_FRICTIONLESS],
     count: usize,
+    position: Vec3,
 }
 
 /// The frictionless records every craft made this tick, for [`RaceView::advance_floor_sparks`].
@@ -83,27 +95,55 @@ pub(super) struct FloorSparks {
     hits: [Hits; MAX_SHIPS],
     /// How many sparks have started, ever - for tests.
     started: u32,
+    /// How many records were noted for a kind 2 throw, ever - for tests.
+    noted: u32,
 }
 
 impl FloorSparks {
-    /// Stashes `slot`'s records: the wall pass's floor and mag-floor ones, then the reset
-    /// plane's point when it touched one (a record with no impulse).
-    pub(super) fn note(&mut self, slot: usize, wall: &WallResponse, reset: Option<Vec3>) {
-        let hits = &mut self.hits[slot];
-        let walls = (wall.floor_contacts as usize).min(MAX_FRICTIONLESS);
-        hits.records[..walls].copy_from_slice(&wall.frictionless[..walls]);
-        hits.count = walls;
-        if let Some(point) = reset.filter(|_| walls < MAX_FRICTIONLESS) {
-            hits.records[walls] = FrictionlessRecord {
-                point,
-                impulse: 0.0,
-            };
-            hits.count += 1;
+    /// Stashes `slot`'s kind 2 records: the wall pass's floor and mag-floor ones, then the reset
+    /// plane's point when it touched one (a record with no impulse), each placed on the locator of
+    /// `anchors` nearest it under the craft's pose now. Nothing for a title with no locators or a
+    /// craft that is not racing.
+    pub(super) fn note(
+        &mut self,
+        slot: usize,
+        ship: &Ship,
+        wall: &WallResponse,
+        reset: Option<Vec3>,
+        anchors: &[oag_livery::SparkAnchor],
+    ) {
+        if anchors.is_empty() || contact_kind(0.0, is_racing(ship)) != ContactKind::NoDamage {
+            return;
         }
+        let model = model_matrix_of(ship);
+        let walls = (wall.floor_contacts as usize).min(MAX_FRICTIONLESS);
+        let points = wall.frictionless[..walls]
+            .iter()
+            .map(|record| record.point)
+            .chain(reset)
+            .take(MAX_FRICTIONLESS);
+        let hits = &mut self.hits[slot];
+        hits.count = 0;
+        hits.position = ship.physics.body.position;
+        for point in points {
+            if let Some(at) = crate::hit_sparks::nearest_locator(anchors, model, point) {
+                hits.at[hits.count] = at;
+                hits.count += 1;
+            }
+        }
+        self.noted += hits.count as u32;
     }
 }
 
 impl Race {
+    /// How many records were ever noted for a kind 2 throw, whether or not a view saw them, for
+    /// tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn floor_records_noted_for_tests(&self) -> u32 {
+        self.view.floor_sparks.noted
+    }
+
     /// How many frictionless sparks have ever started, for tests.
     #[doc(hidden)]
     #[must_use]
@@ -130,30 +170,13 @@ impl RaceView {
         let eyes = self.view_eyes(core);
         for (slot, hits) in hits.iter().enumerate() {
             let ship = &core.sim.world.ships[slot];
-            let anchors = self.hit_sparks.dispatch_anchors(slot);
-            let position = ship.physics.body.position;
-            let seen = eyes
-                .iter()
-                .any(|eye| (position - *eye).length_squared() < crate::field_sparks::REACH_SQUARED);
-            if hits.count == 0
-                || anchors.is_empty()
-                || !ship.in_world()
-                || !seen
-                || ship.physics.shield_pickup_timer > 0.0
-            {
+            let seen = eyes.iter().any(|eye| {
+                (hits.position - *eye).length_squared() < crate::field_sparks::REACH_SQUARED
+            });
+            if hits.count == 0 || !seen || ship.physics.shield_pickup_timer > 0.0 {
                 continue;
             }
-            let model = model_matrix_of(ship);
-            for record in &hits.records[..hits.count] {
-                let racing = ship.physics.craft_state == oag_physics::CraftState::Racing;
-                // A record with no friction: `contact_kind(0.0, ..)`.
-                if contact_kind(0.0, racing) != ContactKind::NoDamage {
-                    continue;
-                }
-                let Some(at) = crate::hit_sparks::nearest_locator(anchors, model, record.point)
-                else {
-                    continue;
-                };
+            for &at in &hits.at[..hits.count] {
                 if self.stage.play(&effect, at, 1.0).is_some() {
                     self.floor_sparks.started += 1;
                     log::trace!("floor spark: slot {slot} tick {}", core.sim.world.tick);

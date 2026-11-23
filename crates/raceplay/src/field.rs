@@ -992,7 +992,13 @@ impl Race {
             #[cfg(feature = "view")]
             if self.draws() {
                 let point = reset_hit.map(|contact| contact.point);
-                self.view.floor_sparks.note(slot, &evaluated.wall, point);
+                self.view.floor_sparks.note(
+                    slot,
+                    &self.core.sim.world.ships[slot],
+                    &evaluated.wall,
+                    point,
+                    self.view.hit_sparks.dispatch_anchors(slot),
+                );
             }
             let eliminator_route = self.core.sim.world.mode() == Mode::Eliminator;
             let cage = oag_gameplay::cage::pass(

@@ -1,6 +1,6 @@
 //! A frictionless contact on HD's own circuits throws the disc's own
 //! `WO_SHIP_COLL_SPARK_NODAMAGE` (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
-//! "which records carry no friction"), and Pulse, whose ring walk is not read, throws none.
+//! "which records carry no friction").
 //!
 //! Chenghou Project's autopilot lap, whose ramp landings meet a floor: the seat's craft lands at
 //! tick 3273 (three records) and again at 5466, and a floor contact is rare enough that a lap
@@ -14,6 +14,7 @@
 use oag_gameplay::PlayerInputs;
 use oag_raceplay as race;
 
+/// The first landing is at tick 3273; the run stops at the first spark.
 const TICKS: u64 = 6_000;
 
 fn started(
@@ -42,6 +43,9 @@ fn started(
     race.core.sim.set_autopilot(true);
     for _ in 0..TICKS {
         race.tick(&PlayerInputs::none());
+        if race.floor_sparks_started_for_tests() > 0 {
+            break;
+        }
     }
     Some((race.floor_sparks_started_for_tests(), loaded_effect))
 }
@@ -62,13 +66,4 @@ fn hd_throws_the_no_damage_spark_on_a_floor_contact() {
         count > 0,
         "no floor contact threw the spark in {TICKS} ticks"
     );
-}
-
-#[test]
-#[ignore = "needs data/images/pulse-psp-usa.chd"]
-fn pulse_throws_none() {
-    let Some((count, _)) = started("data/images/pulse-psp-usa.chd", None, "VENOM", None) else {
-        return;
-    };
-    assert_eq!(count, 0);
 }
