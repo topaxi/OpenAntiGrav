@@ -368,7 +368,8 @@ impl RaceView {
         if let Some(flown) = self.flown_model(core, slot) {
             return flown;
         }
-        let model = shaken_model_matrix_of(&core.sim.world.ships[slot], self.hull_shake_of(slot));
+        let model = shaken_model_matrix_of(&core.sim.world.ships[slot], self.hull_shake_of(slot))
+            * Mat4::from_scale(Vec3::splat(self.hull_draw_factor));
         match self.correction[slot] {
             offset if offset == Vec3::ZERO => model,
             offset => Mat4::from_translation(offset) * model,

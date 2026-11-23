@@ -588,6 +588,12 @@ pub struct Detonator {
     /// mode uses: HD's craft constructors write `0.7` on mode `14`
     /// (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`).
     pub camera_scale: f32,
+    /// The scale the drawn hull's world matrix carries in this mode, in place of the `0.75` of
+    /// `TARGET_GLOBAL_SCALE` every other mode draws it at: the craft
+    /// constructors that write [`Self::camera_scale`] write `0.9` beside it, and the hull's world
+    /// matrix reads `0.7 * 0.9`. `None` where it is not measured, the hull is drawn at the
+    /// model's own scale (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`, "The drawn hull").
+    pub hull_scale: Option<f32>,
     /// The two files that say what Detonator lays on a circuit, or `None` where a title's are
     /// not located.
     pub layouts: Option<DetonatorLayouts>,

@@ -250,6 +250,10 @@ pub struct ViewSetup {
     pub rumble: oag_tables::rumble::Library,
     /// The title's drawn-hull shake, `oag_title::RaceDefaults::hull_shake` ([`crate::hull_shake`]).
     pub hull_shake: Option<oag_title::hull_shake::HullShake>,
+    /// What the drawn hull's matrix is multiplied by for this race's mode: the title's
+    /// Detonator hull scale over the `0.75` the model carries ([`hull_draw_factor`]), `1.0` in
+    /// every other race.
+    pub hull_draw_factor: f32,
     /// HD/Fury's zoom-streak ring, `oag_title::RaceDefaults::zoom_ring`; `None` elsewhere.
     pub zoom_ring: Option<&'static oag_title::ZoomRing>,
     /// Whether [`Self::zoom_ring`] is HD's ring borrowed on a title that draws none
@@ -370,6 +374,7 @@ impl ViewSetup {
             class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
             rumble: oag_tables::rumble::Library::default(),
             hull_shake: None,
+            hull_draw_factor: 1.0,
             zoom_ring: None,
             zoom_borrowed: false,
             capture_hud: None,

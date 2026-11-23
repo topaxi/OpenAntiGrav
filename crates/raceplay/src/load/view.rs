@@ -840,6 +840,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             .value
             .contains(&options.mode.name()),
         hull_shake: title.race.hull_shake.map(|shake| shake.value),
+        hull_draw_factor: crate::camera::hull_draw_factor(title, options.mode),
         now_playing,
         world_clock_offset: options.world_clock_offset,
         gantry_seconds: options.gantry_seconds,

@@ -445,6 +445,19 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
 
+**Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
+camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
+ours drew the Detonator hull at 0.75 where the original draws 0.63. Both fixed (`docs/tools/compare-page.md`, "The hull's frame pose in a
+Detonator pair"; `ps3-hdfury-eu/camera.md`, "The drawn hull in Detonator is 0.63"). Hull rim box now within 9 px of the original on
+top, left, right on all three new grabs (before: 229x134 against 266x248); the bottom is 18-24 px short (nozzles, exhaust flare; ours'
+hull rear is lit blue where the original's is dark metal). Whole-frame mean absolute grey difference / RMSE, before then after, against
+the same new `theirs.png`: `mines-ahead` 19.81 to 19.81 / 0.174 to 0.175, `cannon-volley` 18.60 to 18.74 / 0.167 to 0.169, `pad` 16.85 to
+16.90 / 0.149 to 0.150: **the whole-frame score does not move with the hull** (6 percent of the frame), so the earlier 18.58 / 18.28 / 12.74
+stand as the floor-and-sky scores of the old grabs and are not comparable with these (new boots, new music phase). **Open:** 2048 and
+Omega draw the hull at the model's 0.75 (`hull_scale: None`) until a live frame reads their hull matrix; the physics and camera-rig use
+of the `0.7` scale is wired for the rig only; the new pairs carry no world clock (the grab's read found no node) and the heading check
+reads 1.4 to 1.9 degrees (tolerance 1.0), so they are not published; `--field` still feeds the RAM body.
+
 **The original's bands in the pairs (2026-11-23, `det-pair-bands`).** `--zone-bands` / `--zone-bands-raw` feed the original's held
 (`+0x32f8`) and raw (`+0x32b8`) bands, read in the frame's own pause, to the floor visualiser and the mine envelope
 (`docs/tools/compare-page.md`, "The original's music bands in a Detonator pair"). The three pairs were re-grabbed (the old ones recorded

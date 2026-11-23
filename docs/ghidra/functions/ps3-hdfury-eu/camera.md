@@ -90,6 +90,23 @@ Not read: what `+0xa8`, `+0xac` and `+0xb0` of the same object scale (`1.0`, and
 `0.9` in Detonator); the byte at `0x009384e1` that gates the Detonator values;
 whether the internal rig reads the scale (Pulse's does not).
 
+## The drawn hull in Detonator is 0.63, measured 2026-11-23
+
+**The drawn hull.** A live Detonator frame (RPCS3, Racebox Detonator, Talon's Junction, Feisar, three pauses at lap clock 2.0, 2.2
+and 2.7 s) loads the player's hull world matrix into the push buffer 53 times a frame (`ps3_pose.hull_matrices`): three orthogonal
+rows of length **0.630**, last column `(0, 0, 0, 1)`, the translation in the fourth row. Every other HD mode measured carries `0.75` on
+the same matrix (the Venom pack, `compare-page.md`, "The skew is the pause"). `0.630` is the `0.7` the constructors write at
+`0x008c15e0 + 0x44` times the `0.9` they write beside it (`+0xb0`, above, "Not read"): the neighbouring words scale the hull, the
+first the rig. Confidence **85**: three pauses agree to 1e-3, the product is exact, and with it ours' hull box is within 9 px of the
+original's on all three pairs (without it 19 percent wide). Wired: `oag_title::Detonator::hull_scale` (HD `Some(0.63)`),
+`oag_raceplay::camera::hull_draw_factor` over the model's `0.75`, applied to the drawn hull matrix only. The hover target, the
+collider probes and every craft-scale physics read keep `0.75` (the `0.7` is not applied there; unmeasured).
+
+**Checked against 2048 and Omega:** *not checkable* for now, no live Detonator frame on either: 2048's constructor carries the same
+`0.7`/`0.9` pair statically ([vita-2048-eu-v104/camera.md](../vita-2048-eu-v104/camera.md)), so the hull is probably `0.63` there too,
+and both titles keep `hull_scale: None` (the model's own `0.75`) until a Vita3K or shadPS4 frame reads the hull matrix. Omega's races
+are incomplete (`omega-status.md`).
+
 ## The default view is `OPT_CLOSE`, measured 2026-10-21
 
 A fresh HD profile starts on the **Close** chase view. Confidence **92**: two clean
