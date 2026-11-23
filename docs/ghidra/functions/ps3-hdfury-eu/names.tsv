@@ -1179,3 +1179,5 @@
 0x008c267c	data	g_FontPenSnap	75	navigation-legend.md
 0x002eaba8	function	TrackCollision_AddMeshCollider	82	collision-cues.md
 0x0098d5b8	data	g_ShipFloorFriction	78	collision-cues.md
+0x005a6ce0	function	Image_Create	65	zone-vis-gamma.md
+0x005aa1d8	function	Texture_CreateForImage	70	zone-vis-gamma.md
