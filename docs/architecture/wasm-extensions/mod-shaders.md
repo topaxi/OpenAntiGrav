@@ -44,10 +44,10 @@ struct ModInput {
     between: f32,          // how far short of this tick the frame is drawn, ticks: -1..0
 }
 fn mod_texture(uv: vec2<f32>) -> vec4<f32>      // the header's PNG, opaque white with none
-fn engine_texture(uv: vec2<f32>) -> vec4<f32>   // the engine's picture for this view, gamma-authored and opaque; transparent black with none
+fn engine_texture(uv: vec2<f32>) -> vec4<f32>   // the engine's picture for this view, gamma-authored and opaque; transparent black with none, and for a point behind its camera
 fn engine_texture_bound() -> bool               // whether this view has one
 fn camera_cut() -> bool                         // whether this tick cut the camera: no blend with the tick before
-fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance
+fn engine_uv(world: vec3<f32>) -> vec2<f32>     // world to engine_texture, for a surface at the entrance; far outside the picture for a point behind its camera
 fn craft_frame() -> mat4x4<f32>                 // the view's own craft in eye space: right, up, back, place
 fn eye_ray(screen_uv: vec2<f32>) -> vec3<f32>   // the ray through that point of the view, eye space, z -1
 fn view_aspect() -> f32                         // the view's width over its height: a circle on screen_uv is round with uv.x * view_aspect()
@@ -104,6 +104,17 @@ across; a fill, the view.
 | A screen fill | `screen_fill_shaded(&craft, rgba, shader)` (`screen-fill` with `arg` the place plus one) | `rgba` | After the flash, over the world, under the HUD. The slot's view alone |
 | A backdrop | the same call, through a shader whose header says `fill = "backdrop"` | `rgba` | After the circuit and the shadows, before the crafts. See below |
 | A beam | `draw_beam(&craft, to, rgba, half_width, Some(shader))` (`draw-beam`) | `rgba` | Depth tested, with the effects. Nothing while either craft is out of the world |
+
+**`mod_fragment` runs once per pixel of an ordinary draw and twice per pixel of a backdrop fill.**
+The module has three fragment entries, each calling it: `fs_main` for a surface, a particle, a
+beam or an ordinary fill, and for a `fill = "backdrop"` two draws over the same rectangle,
+`fs_backdrop` (keeps the texels at or over `BACKDROP_ALPHA`) and `fs_fringe` (keeps the rest). Each
+runs the whole function for every pixel and then discards by alpha, so a backdrop pays for the
+shader twice whatever its alpha. A shader that is expensive (many taps, long arithmetic) costs that
+much more as a backdrop. The entries also treat colour and alpha differently: the colour goes
+through the target's clamp (0..1 on an 8-bit target; only below 0 on a float scene), and the alpha
+is written as `mod_fragment` returned it, so keep it in 0..1 yourself (a backdrop's test is
+`a < 0.5`).
 
 **A backdrop stands in for the world behind the view's own craft.** Where it is at least half
 there (alpha 0.5) it is drawn before the crafts and writes a depth nearer than anything else in the
@@ -208,7 +219,10 @@ let view = engine_texture(engine_uv(input.world)).rgb;   // stays on the surface
 ```
 
 `engine_uv(world)` is the camera that drew the texture, carried back through the pair, so a point of
-the entrance's surface lands on the texel it covers on the screen. With `update` continuous that is
+the entrance's surface lands on the texel it covers on the screen. A point at or behind that camera's plane (`w` of the clip position at
+or under `1e-4`) has no place in its picture: `engine_uv` gives it a coordinate far outside it and
+`engine_texture` reads that as transparent black, so a fill that reaches such a point draws its
+fallback, not the picture mirrored (`a_point_behind_the_engine_camera_reads_transparent_black`). With `update` continuous that is
 `screen_uv`; under a snapshot only `engine_uv` stays on the surface, so use it. `engine_texture` reads
 what the scene target holds, turned back into gamma-authored colour (HD stores sRGB-encoded values and is read back with the sRGB curve, 2048
 gamma 2), so a shader that returns it writes the scene's own value through `fs_main`, and is opaque:
