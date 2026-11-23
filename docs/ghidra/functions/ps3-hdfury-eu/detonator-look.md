@@ -284,9 +284,12 @@ removed: both families carry `ADD_SECOND`; it also pins the panel's overlay entr
   materials. Test: `a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table` (red with the field `None`: no
   `15/15 per-stage Zone` line). Before, the fallback table graded nothing visible (no stage texture, so no
   recolour); on Vineta K now black scenery and red edge strips, the same Detonator look as HD's pair. **Open:** the
-  floor draws black on Vineta K under `--zone-spectrum-test` (the thread notes the same of `zone_1`..`4` in
-  every mode; Vineta K was not shot in Zone), so its `zoneTexVis` feed may not be the HD one; no 2048 Detonator frame of the original
-  exists to compare against. The sky: not checkable here; its Detonator reaches `<circuit>\ZoneMode2048.effectSettings` or HD's Detonator
+  road draws black on Vineta K in Detonator under `--zone-spectrum-test`, where the same flags in Zone mode draw
+  its blue spectrum pattern on the road (shot, same circuit, tick 700): the cause is not separated. The thread notes a black
+  floor on `zone_1`..`4` in every mode. A candidate is the Track/Scene bit ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md),
+  "Open: the Track/Scene bit": every chunk draws from the Scene group, and Detonator's stage 1 authors its Scene colours
+  `0`), but Zone's pattern on the same chunks shows that the group alone does not explain it; the other is the EQ tint lookup on
+  2048's path. No 2048 Detonator frame of the original exists to compare against. The sky: not checkable here; its Detonator reaches `<circuit>\ZoneMode2048.effectSettings` or HD's Detonator
   pair through `Environment_Load`'s Zone-family gate ([detonator-mode.md](detonator-mode.md)); whether its sky draw
   is gated by the same byte is unread (its Zone sky draw is unread, [zone-sky.md](zone-sky.md)), and there is no
   Detonator frame pair of 2048 to read it from.
