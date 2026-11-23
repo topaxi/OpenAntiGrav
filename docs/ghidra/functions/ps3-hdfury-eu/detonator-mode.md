@@ -115,5 +115,30 @@ call while the counter is under `15`, and the end at `15` or the out-of-race bit
 | Omega | `FUN_012a0fc0` (state `2` of a phase switch) | `craft+0x77e1`, `+0x7ff0` | `rm[0x6017]` | `FUN_012a2300(rm)`, also once at race start with the opening stage |
 
 Omega adds a per-stage event list (`rm[0x6019]`, entries skipped on `"BLANKEVENT"`) and writes the stage,
-capped at `14`, into a craft field `+0x5e4`. On 2048 and Omega the crossing-count reading is structural
+capped at `14`, into a field of the craft's sub-object. On 2048 and Omega the crossing-count reading is structural
 (the fields were not read back to their writers), confidence **70**.
+
+### Omega's race-start placement and stage cap, read 2026-11-23 (`det-parity`)
+
+Both builds read: v1.00 `eboot.bin` by `objdump` (`0x012a0fc0`-`0x012a2300`), v1.07 in Ghidra
+(`FUN_012b6c70`, the same switch). Confidence 85.
+
+| Piece | v1.00 | v1.07 | HD's |
+| --- | --- | --- | --- |
+| Opening stage laid once at the start (state `0` of the switch) | `FUN_012a2300` with the old stage, behind a one-shot latch (the placer is `FUN_012a2300`; the start call site itself was not located on this build) | `FUN_012b80a0(rm, rm[0x30108] - 1)` behind the byte `rm+0x30114`; the counter starts at `1`, so the old stage is `0` | `Detonator_PlaceOpeningStage` (`rm+0x2e1c` latch, `oldStage = 0`) |
+| Stage step (state `2`, crossing count `> 1`) | counter `rm+0x300b8`, `cmpl $0xf` at `0x012a11f0` ends the race; the HUD stage `rm+0x30086` is capped `0xe` (`cmp $0xe` at `0x012a14ab`) | `rm[0x30108] + 1`, `FUN_012b80a0` while `< 0xf`, race over at `0xf` | `Detonator_UpdateRace`, same |
+| The stage written to the craft | `mov %ecx,0x5e4(%rdx)` at `0x012a1568`, `rdx = *(craft+0x6518)`, `ecx` = the HUD stage `rm+0x30086` (u16) | `*(*(craft+0x6a18)+0x5f4) = rm[0x300d6]` (u16, `+1` per step, **capped `0xe`**) | the auto-speed's `n` ([detonator-speed.md](detonator-speed.md)) |
+| Written at the start? | no (only on a crossing) | no | `n = 0` on stage 1 |
+
+The v1.00 `+0x5e4` and v1.07 `+0x5f4` are one store: 1.07 moved the struct by `0x10`
+([patch-v107-addresses.md](../ps4-omega-eu/patch-v107-addresses.md)); it is the field the engine's
+auto-speed branch reads (`detonator-speed.md`, "2048 and Omega"), not a second write. **Ported, no `Title`
+field needed**: the law is HD's, so one generic path serves all three. `oag_raceplay::detonator` lays the
+opening stage on the first tick for every title and `unramped_target` takes `n = 0` on stage 1, then
+`min(stage, 14)`; `detonator_ground_truth::{an_omega_detonator_race_runs_fourteen_stages_without_a_grade,
+a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table}` pin both through
+`assert_the_opening_stage_and_the_stage_cap` (red when the cap is dropped, checked by mutation). Also in
+Omega's state `2` (v1.07): the clean-lap `+1000` (the craft byte `+0x76f6 & 0x20` adds `1000` to the score
+`rm+0x300d8`), the per-stage announcer events, and `FUN_0179e2d0(0x1d)` from stage 10
+when `rm+0x9b540 == 0` (a music change, unread); none is wired (HD's `+0x200000` clean-lap `+1000` is the
+same law, see [detonator-cannon.md](detonator-cannon.md) "Open").

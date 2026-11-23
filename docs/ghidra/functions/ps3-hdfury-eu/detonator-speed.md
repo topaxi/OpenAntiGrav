@@ -181,7 +181,7 @@ runs without the ramp on every title, HD's included (see "Open").
   * increment + start) * ramp` when `flags & 1 && !(flags & 2)`. Which field Omega's Detonator
   update writes the stage into is traced: the update holding `EMPREADY` (`FUN_012b6c70`) stores the
   HUD stage `rm+0x300d6` (u16) into `*(ship+0x6a18)+0x5f4` after the stage step, the field this
-  engine reads ([detonator-mode.md](detonator-mode.md)'s `craft+0x5e4` is another write).
+  engine reads (v1.00's `craft` sub-object `+0x5e4` is the same store, not another write: [detonator-mode.md](detonator-mode.md), "Omega's race-start placement and stage cap").
 - **2048: checked, applies, not wired.** `/2048/eboot-vita-2048-eu-v104.elf`:
   `Handling_ReadGlobalSettings` stores `increment` at `0x818a6390` (`start` beside it at
   `0x818a638c`); the reader `FUN_811cf532` has the same ramp (`craft+0x540`, `0.7692308`, `- 0.1`,
