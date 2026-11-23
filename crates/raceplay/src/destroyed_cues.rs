@@ -107,7 +107,7 @@ impl RaceSim {
             let mut big_in = heard.big_in;
             if small && !heard.small {
                 self.cues.push(CueEvent::new(Cue::ShipExplosionSmall, slot));
-                big_in = Some(crate::craft_flash::BLOWUP_DELAY);
+                big_in = Some(crate::eliminator::DESTROYED_DWELL);
             } else if let Some(left) = big_in {
                 let left = left - self.dt;
                 big_in = if left <= 0.0 {
