@@ -111,7 +111,7 @@ then pulls back to a slow drift at a normal field while the debris flies.
 
 **2048 against HD: checked, differs** (the mode numbers and the hold mode).
 
-**Omega against 2048: checked, applies, not wired.** Same update, same mode set, same timer, plus
+**Omega against 2048: ported** (wired 2026-11-23, see "Wired"; the view dispatcher `0x01383a10` stays unread). Same update, same mode set, same timer, plus
 one Omega-only fallback.
 
 | Row | 2048 v1.04 | Omega | Against HD |
@@ -129,7 +129,29 @@ So on 2048 and Omega the blast cuts to mode 9 as on HD (ship-destroy.md row 5). 
 hands back to the chase camera (its subject chosen as in HD's H1). On a craft that respawns, the chase
 camera's subject sits in states 5, 6 and 8, so W8 holds the view still until the craft races again.
 
-## Ready to wire
+## Wired
+
+**2026-11-23 (`destroy-cameras-wire`).** `oag_title::destroyed::DestroyCamera` carries each title's law as data (`HD`, `VITA`, `OMEGA`, Pulse's `PULSE`); `oag_render::camera::destroy` has the station view's substeps, the hold view and `orbit`; `oag_raceplay::destroy_camera` runs the camera clock, the latch and the cut. Zone's orbit is `ZoneEnd::orbit_camera`.
+
+| Title | Wired | Ground truth |
+| --- | --- | --- |
+| HD | mode 8: nearest-aim `Camera` node, `framing(60) + rand(-10, 20)` start, substeps of `trunc(dt x 6000)`, both rates drawn with their random factor, the 8 s camera clock then the chase camera on the player's own wreck. Zone end: the orbit | `destroy_camera_ground_truth::an_hd_destroyed_seat_picks_a_camera_node_near_the_wreck` (Talon's Junction, ten nodes) |
+| 2048 | mode 9 as HD (substep constant `5999.9995`, which is also 100 substeps at 60 Hz in `f32`) plus the hold view after the hand-back. **2048's own circuits author no `Camera` node** (`altima`, `tower`, `sol`: no class `0xf7` in `track.vex`), so the pick has nothing and the camera is the hold view from the cut | `a_2048_destroyed_seat_holds_on_a_circuit_with_no_camera_node` |
+| Omega | **ported** from 2048: its HD circuits under `Data\environments\` author the same ten to thirteen nodes as HD (Talon's Junction 10, Amphiseum 11, Modesto Heights 13, Tech de Ra 10, Vineta K 13, Zone 1 10); its 2048-era circuits author none and fall to the hold view, as the page's Omega-only fallback reads | `an_omega_destroyed_seat_is_cut_to_a_camera_node_then_held` |
+| Pulse, Pure | unchanged: mode 5, one step a frame, exact rates, never hands back | `a_wrecked_player_is_seen_from_the_circuits_own_camera` |
+
+**Chosen, not measured** (each cites this page's "Open" item):
+
+- **No look-at wobble** (D5, Open 1): the noise's time source and tables are unread, so the look-at is the craft itself.
+- **The camera clock** (H1): free-running from the race's first tick, reset at 8 s as the original's does in mode 0; what starts the original's clock (`0x000ab2d8`) is unread, so the phase at the blast, and so how long the station view lasts (0 to 8 s), is ours.
+- **The hand-back subject** (H1, Open 2): the player's own wreck, as read for a single player; `RaceManager+0xe8` is unread.
+- **The orbit's first entry** (Z2a, Open 3): the spin direction is fixed positive, the eye direction is the craft's rear axis turned by `Ry(yaw) Rx(-0.7 + pitch)` (which row of the composed matrix the original takes is unread), the up is the craft's.
+- **The hold view** (W8, Open 4): eye frozen at the chase camera's at the hand-back (or at the cut with no station), look-at the craft plus `7.5 x` its velocity as the sim holds it, field 65; the track-section tie `0x8121476a` is unread and left out. Omega's substep constant is HD's (view `0x01383a10` unread). 2048's pick `0x812199c0` is unread: 2048 takes Omega's no-station fallback.
+- **2048's Zone end** inherits HD's orbit (its twin calls `0x81218cd8`, unread); Omega's enter writes the same constants.
+
+Not run against the original: RPCS3 belonged to another lane, so there is no live pair; frames are ours, judged against the law, not a capture.
+
+## Ready to wire (before 2026-11-23)
 
 | Title | Mode | Eye | Look-at | Field | Motion | Hands back | Conf. |
 | --- | --- | --- | --- | --- | --- | --- | ---: |

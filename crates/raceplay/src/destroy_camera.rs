@@ -24,12 +24,30 @@
 //! The player's own shakes at the explosions (`Camera_ArmShake(0.3, 0.4)` at
 //! state 5 and `(0.8, 0.6)` at state 6) are not ported.
 //!
-//! Pulse on a PSP disc only: the aim point at payload `+0x10` was read off the
-//! PSP's `track.vex` and nothing else (the PS2's was not looked at), so another
-//! source, or a circuit with no cameras, keeps the chase camera.
+//! # HD, 2048 and Omega
+//!
+//! The title's [`oag_title::destroyed::DestroyCamera`] says how the same view moves
+//! (`docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`): substeps and random rate factors on
+//! the cut, the hand-back to the chase camera on the camera's own 8 s clock, and on 2048 and
+//! Omega the hold view after it. Their stations are the `Camera` nodes of the circuit's
+//! `track.vex`, read whether or not the title draws the circuit's effects. A Zone end whose
+//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the close orbit instead.
+//!
+//! **Chosen, not measured:**
+//!
+//! - The 8 s clock starts when the race's camera is built and resets each time it passes 8 s,
+//!   as the original's resets in mode 0 (row H1). Its phase at the blast sets how long the
+//!   station view lasts, 0 to 8 s; what starts the original's clock is unread (`0x000ab2d8`).
+//! - The subject the camera hands to is the player's own wreck: `RaceManager+0xe8`, the list the
+//!   original picks another subject from, is unread, and the single-player case leaves the
+//!   player's craft as read (row H1).
+//! - The eye the hold view freezes is the chase camera's at the hand-back, or at the cut on a
+//!   circuit with no `Camera` node. 2048's own circuits author none (a census of `altima`,
+//!   `tower` and `sol`), so there the hold view is the whole destroy camera: Omega's fallback
+//!   is read (row W8), 2048's pick `0x812199c0` is not, and 2048 takes Omega's.
 
 use super::*;
-use oag_render::camera::destroy::{self, Destroy, Station};
+use oag_render::camera::destroy::{self, Destroy, Ease, Station, orbit::Orbit};
 
 /// The seed for the starting field's draw. Distinct from the other streams.
 pub const DESTROY_CAMERA_SEED: u64 = 0x5_9a_2b_04;
@@ -43,6 +61,15 @@ pub(super) struct DestroyCamera {
     rng: Rng,
     active: Option<Destroy>,
     held: bool,
+    /// The camera's own free-running clock, seconds (row H1).
+    clock: f32,
+    /// The 8 s clock has handed the view back for this wreck: it is not cut to again until the
+    /// craft has raced.
+    released: bool,
+    /// The eye the hold view stands at, once it has taken over.
+    hold_eye: Option<Vec3>,
+    /// HD's Zone end orbit, once it has taken over.
+    orbit: Option<Orbit>,
     /// How many times the camera has taken over or let go - see
     /// [`crate::RaceView::camera_cuts`].
     pub(super) cuts: u32,
@@ -62,19 +89,25 @@ impl DestroyCamera {
             rng: Rng::new(DESTROY_CAMERA_SEED),
             active: None,
             held: false,
+            clock: 0.0,
+            released: false,
+            hold_eye: None,
+            orbit: None,
             cuts: 0,
         }
     }
 }
 
-/// Every authored `Camera` in a circuit as a [`Station`], or none off a source
-/// whose `circuit_effects` rule is not read (`circuit_fx`, the loader's flag).
+/// Every authored `Camera` in a circuit as a [`Station`], or none off a source whose
+/// `circuit_effects` rule is not read (`circuit_fx`, the loader's flag) unless the title's
+/// destroy camera reads them anyway ([`oag_title::destroyed::DestroyCamera`]).
 pub(super) fn stations(
     circuit_fx: bool,
+    law: &oag_title::destroyed::DestroyCamera,
     track_blob: &[u8],
     report: &mut Vec<String>,
 ) -> Vec<Station> {
-    if !circuit_fx {
+    if !circuit_fx && !law.stations_without_circuit_effects {
         return Vec::new();
     }
     let stations: Vec<Station> = oag_vex::camera::cameras(track_blob)
@@ -130,29 +163,106 @@ impl RaceView {
         let ship = &core.sim.world.ships[player];
         let state = ship.physics.craft_state;
         let subject = ship.physics.body.position;
+        let dt = core.sim.dt;
+        let law = core.sim.destroyed.camera;
+        let orbits = core.sim.zone_end().is_some_and(|end| end.orbit_camera);
         let out = matches!(
             state,
             oag_physics::CraftState::Destroyed | oag_physics::CraftState::Eliminated
         );
+        let mut cuts = 0;
         let camera = &mut self.destroy_camera;
+        camera.clock += dt;
+        let handback_due = law
+            .hands_back_after_secs
+            .is_some_and(|secs| camera.clock > secs);
+        if handback_due {
+            camera.clock = 0.0;
+        }
         if !out {
             if camera.active.take().is_some() {
-                camera.cuts = camera.cuts.wrapping_add(1);
+                cuts += 1;
             }
+            camera.orbit = None;
+            camera.hold_eye = None;
+            camera.released = false;
             camera.held = false;
+            camera.cuts = camera.cuts.wrapping_add(cuts);
             return;
         }
-        match &mut camera.active {
-            Some(active) => active.advance(subject, camera.held),
-            None => {
-                let (low, high) = destroy::START_FOV_SPREAD;
-                let offset = low + (high - low) * camera.rng.next_f32();
-                camera.active =
-                    Destroy::start(&camera.stations, subject, camera.focus_rate, offset);
-                if camera.active.is_some() {
-                    camera.cuts = camera.cuts.wrapping_add(1);
+        if orbits {
+            let orbit = match &mut camera.orbit {
+                Some(orbit) => {
+                    orbit.advance(dt, subject);
+                    *orbit
+                }
+                None => {
+                    cuts += 1;
+                    *camera.orbit.insert(Orbit::start(subject))
+                }
+            };
+            camera.active = Some(orbit.pose(ship.physics.body.orientation));
+            camera.cuts = camera.cuts.wrapping_add(cuts);
+            return;
+        }
+        if handback_due && !camera.released && camera.active.is_some() {
+            camera.released = true;
+            camera.active = None;
+            cuts += 1;
+            if law.holds_the_wreck {
+                let eye = self.tick_view_unshaken(core).inverse().w_axis.truncate();
+                self.destroy_camera.hold_eye = Some(eye);
+            }
+        }
+        let camera = &mut self.destroy_camera;
+        if let Some(eye) = camera.hold_eye {
+            camera.active = Some(Destroy::hold(
+                eye,
+                subject,
+                ship.physics.body.linear_velocity,
+            ));
+        } else if !camera.released {
+            match &mut camera.active {
+                Some(active) => active.advance(subject, camera.held, dt),
+                None => {
+                    let (low, high) = destroy::START_FOV_SPREAD;
+                    let offset = low + (high - low) * camera.rng.next_f32();
+                    let ease = camera.ease(&law);
+                    camera.active = Destroy::start(&camera.stations, subject, ease, offset);
+                    if camera.active.is_some() {
+                        cuts += 1;
+                    } else if law.holds_the_wreck {
+                        // No station to stand on: the pick gives mode 7 and Omega goes to the
+                        // hold mode 8 (`0x013832f0`) from there (row W8).
+                        camera.released = true;
+                        cuts += 1;
+                        let chase = self.tick_view_unshaken(core).inverse().w_axis.truncate();
+                        self.destroy_camera.hold_eye = Some(chase);
+                        self.destroy_camera.active = Some(Destroy::hold(
+                            chase,
+                            subject,
+                            ship.physics.body.linear_velocity,
+                        ));
+                    }
                 }
             }
         }
+        self.destroy_camera.cuts = self.destroy_camera.cuts.wrapping_add(cuts);
+    }
+}
+
+impl DestroyCamera {
+    /// The rates a cut is made with: the class's focus rate and the field's, each scaled by the
+    /// title's random factor where it has one (row D4).
+    #[cfg(feature = "view")]
+    fn ease(&mut self, law: &oag_title::destroyed::DestroyCamera) -> Ease {
+        let mut ease = Ease::per_frame(self.focus_rate);
+        ease.substeps_per_second = law.substeps_per_second;
+        if let Some(factors) = law.rate_factors {
+            let mut draw = |(low, high): (f32, f32)| low + (high - low) * self.rng.next_f32();
+            ease.fov_rate *= draw(factors.field);
+            ease.focus_rate *= draw(factors.focus);
+        }
+        ease
     }
 }

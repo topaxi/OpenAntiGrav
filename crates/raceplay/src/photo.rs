@@ -745,13 +745,7 @@ impl Photo {
                 (pose.eye, pose.orientation * roll)
             }
             (Lens::Track, Some(node)) => {
-                let aim = Destroy {
-                    eye: node,
-                    focus: craft.position,
-                    focus_target: craft.position,
-                    fov: self.track_fov,
-                    focus_rate: 1.0,
-                };
+                let aim = Destroy::posed(node, craft.position, self.track_fov, 1.0);
                 let (_, orientation, _) = aim.to_world().to_scale_rotation_translation();
                 (node, orientation * roll)
             }
