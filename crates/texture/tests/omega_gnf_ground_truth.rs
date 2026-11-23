@@ -341,9 +341,14 @@ macro_rules! per_slice {
 }
 
 per_slice! {
-    data00_slice_0: BASE, "data00.psarc", 0 of 3;
-    data00_slice_1: BASE, "data00.psarc", 1 of 3;
-    data00_slice_2: BASE, "data00.psarc", 2 of 3;
+    data00_slice_0: BASE, "data00.psarc", 0 of 8;
+    data00_slice_1: BASE, "data00.psarc", 1 of 8;
+    data00_slice_2: BASE, "data00.psarc", 2 of 8;
+    data00_slice_3: BASE, "data00.psarc", 3 of 8;
+    data00_slice_4: BASE, "data00.psarc", 4 of 8;
+    data00_slice_5: BASE, "data00.psarc", 5 of 8;
+    data00_slice_6: BASE, "data00.psarc", 6 of 8;
+    data00_slice_7: BASE, "data00.psarc", 7 of 8;
     data01_slice_0: BASE, "data01.psarc", 0 of 3;
     data01_slice_1: BASE, "data01.psarc", 1 of 3;
     data01_slice_2: BASE, "data01.psarc", 2 of 3;
