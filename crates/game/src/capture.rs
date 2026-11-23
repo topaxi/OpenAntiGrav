@@ -258,10 +258,13 @@ pub fn run(
         face_scales,
         ..
     } = loaded;
-    if let Some(pin) = &options.menu_ticker
-        && let Some(ticker) = ticker.as_mut()
-    {
-        ticker.pin = Some(parse_ticker_pin(pin)?);
+    let pinned_ticker = options
+        .menu_ticker
+        .as_deref()
+        .map(parse_ticker_pin)
+        .transpose()?;
+    if let (Some(pin), Some(ticker)) = (&pinned_ticker, ticker.as_mut()) {
+        ticker.pin = Some(pin.clone());
     }
     let nav_legend = nav_legend
         .map(|legend| legend.with_tag(options.settings.player.footer_tag(&loaded.title.profile)));
@@ -922,7 +925,12 @@ pub fn run(
                 // `records` `--menu-page` arm above already makes - see
                 // `campaign_page`'s own `records` parameter doc.
                 let records = crate::records::load();
-                let (list, shot) = campaign_page(
+                let footer = campaign_page::Footer {
+                    tag: options.settings.player.footer_tag(&loaded.title.profile),
+                    pin: pinned_ticker.clone(),
+                    font: &font,
+                };
+                let (list, shot, clip) = campaign_page(
                     kind,
                     &mut archives,
                     &strings,
@@ -943,8 +951,10 @@ pub fn run(
                     options.menu_model_seconds,
                     (options.menu_entry_seconds, options.menu_picker_step_seconds),
                     &crate::boot::fonts::legend_ink(&font, buttons_font.as_ref()),
+                    footer,
                 )?;
                 flyer_shot = shot;
+                ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some(seated) = join_page::seats(page) {
                 // The split-screen join screen - see `crate::app::session::join`

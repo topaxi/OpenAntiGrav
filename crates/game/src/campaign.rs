@@ -243,17 +243,20 @@ impl Campaign {
 }
 
 /// [`Campaign::nav_legend`]/[`Campaign::ticker`]'s own draw list for a
-/// caller with no [`crate::records::Store`] to rotate the ticker's tips off
-/// of - `crate::capture::menu_page`'s `--menu-page grid-select`/
+/// caller with no [`crate::records::Store`] session to rotate the ticker's tips
+/// off of - `crate::capture::menu_page`'s `--menu-page grid-select`/
 /// `cell-select`, the same "no live session to fold through" gap this
-/// module's own `load_hd` leaves `circuit_names` with. The ticker draws its
-/// own layout but an empty rotation (nothing to show, honestly, rather than
-/// a guessed one) at a frozen `elapsed`; the `Confirm`/`Back` legend needs
-/// neither and draws in full.
+/// module's own `load_hd` leaves `circuit_names` with. The ticker draws at a
+/// frozen `elapsed` through `tips`: one pinned message (`--menu-ticker`), or
+/// none, honestly, rather than a guessed rotation. `measure` is the `Default`
+/// role's text width, as the live stage measures the ticker. The legend needs
+/// neither and draws in full, with whatever tag it was given.
 #[must_use]
 pub fn static_footer_overlay(
     campaign: &Campaign,
     faces: &FaceScales,
+    tips: &[String],
+    measure: &dyn Fn(&str) -> f32,
 ) -> Vec<oag_ui::frontend::Draw> {
     let mut overlay = campaign
         .nav_legend
@@ -261,11 +264,7 @@ pub fn static_footer_overlay(
         .map_or_else(Vec::new, |legend| legend.draw(faces));
     if let Some(ticker) = &campaign.ticker {
         overlay.extend(oag_ui_screens::campaign::footer::ticker_draw(
-            ticker,
-            0.0,
-            &[],
-            faces,
-            &|_| 0.0,
+            ticker, 0.0, tips, faces, measure,
         ));
     }
     overlay
