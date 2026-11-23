@@ -30,7 +30,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   the timers and the two edges (`oag_title::destroyed`), `Looks::hull_wreck` loads
   `shipwreck.vex` for every team, `WO_SHIP_EXPLOSION` is thrown on state 4 and the death plume
   on state 5, a settled wreck leaves the pair test at 6 s and the world with it. Sound wired 2026-11-23 (`ship-destroy.md`,
-  "Sound on HD"). Not wired: row 6 (collider, kick), row 5 (HD's own camera, read and ready to wire in `docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`), rows 4, 7 and 14, the `body+0x210`
+  "Sound on HD"). Not wired: row 6 (collider, kick), row 5's camera is wired (`destroy-camera.md`, "Wired"), rows 4, 7 and 14, the `body+0x210`
   half of row 11, a live RPCS3 pair. Table: `ship-destroy.md`, "Wired on HD". The text below is
   what was read.
 - **HD/Fury, as read before wiring.** `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`
@@ -48,13 +48,12 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   (inherited), `hull_wreck` is on, `WO_SHIP_EXPLOSION` and the death plume are named; every team and
   Omega's 2048-era ships load a wreck. Our blast frames show fire (Altima, Modesto Heights). Not
   wired, as on HD: sound (Omega's is Wwise `ShipDestroyed_*` and no `.bnk` carries it; 2048's bank resolution is unread, both keep `~BLOWUP` via `DestroyedCraft::HD_BLOWUP`; 2048 has no rumble), camera mode 9
-  (read in `destroy-camera.md`, not wired: HD's inherited camera runs), collider and kick, the `_n1` set's `WO_NITRO_SHIP_DEATH`
+  (wired 2026-11-23, `destroy-camera.md` "Wired"), collider and kick, the `_n1` set's `WO_NITRO_SHIP_DEATH`
   (modes 13 and 21), the second ship family's `WO_SHIP_EXPLOSION_PLAYER` (unread).
 
 ## Open
 
-- **The Zone end's debris fills the screen** (ours, HD, `--force-wreck 400:0`, frames 2026-11-23): the chase
-  camera stays on (Z2's view is read and not wired: a close orbit, `destroy-camera.md` Z2a to Z2f) and the throw velocity is chosen, so at 2.5 s the 112
+- **The Zone end's debris fills the screen** (ours, HD, `--force-wreck 400:0`, frames 2026-11-23): the Zone end's camera is wired (the close orbit, `destroy-camera.md` Z2a to Z2f) and the throw velocity is chosen, so at 2.5 s the 112
   `zoneship_dead.vex` pieces cover the whole frame around the camera. Wire Z2's orbit and read Z11's throw speed
   before judging the picture against the original.
 

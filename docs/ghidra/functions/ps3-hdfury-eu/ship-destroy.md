@@ -122,7 +122,7 @@ the wreck rule is `Looks::hull_wreck`. 2048 and Omega run `DestroyedCraft::HD` t
 | 2 | wired: `WO_SHIP_EXPLOSION` on entering state 4, `4.0` rows behind the model, no Pulse shockwave | `craft_flash`, `wreck_fx::throw_wreck_explosion` |
 | 3 | wired 2026-11-23 (`hd-wreck-sound`): see "Sound on HD" below | `oag_raceplay::destroyed_cues`, `oag_sound::sfx::slot_held` |
 | 4 | not wired (65) | open |
-| 5 | not wired: HD keeps the existing destroy camera, **inherited from Pulse** (`DestroyedCraft::camera`); mode 8's view is read and ready to wire ([destroy-camera.md](destroy-camera.md), "Ready to wire") | open |
+| 5 | wired 2026-11-23 (`destroy-cameras-wire`): `DestroyedCraft::camera` is `DestroyCamera::HD`, mode 8's station view, rates and 8 s hand-back ([destroy-camera.md](destroy-camera.md), "Wired") | `oag_raceplay::destroy_camera`, `oag_render::camera::destroy` |
 | 6 | **not wired**: the compound collider and death kick (open items 1 and 2) | open |
 | 7 | not wired | open |
 | 8, 13, 15, 16 | the Eliminator route is the existing Pulse mechanism, unchanged and with Pulse's timers (`raceplay::eliminator`) | open for HD's own timers |
@@ -168,8 +168,8 @@ everywhere, and each names `WO_SHIP_EXPLOSION` (`Trigger::WreckExplosion`) and
 `WO_SHIP_DEATH_DAMAGE_PLUME` (`Trigger::WreckPlume`) in its effects table; Pulse's two per-locator
 wreck effects stay unset, as on HD. Rows 1, 2, 9, 10 and 12 follow HD's wiring and carry its status
 above; rows 3 to 7, 11's `body+0x210` half and 14 are open exactly as on HD. The destroy camera is
-HD's inherited one: the twins' mode 9 (`Camera_SetMode` `0x8121963a`, `0x01382720`) is read in
-[destroy-camera.md](destroy-camera.md) and not wired, so `DestroyedCraft::camera` stays labelled inherited from Pulse. Not run against Vita3K or shadPS4.
+wired as mode 9 (`Camera_SetMode` `0x8121963a`, `0x01382720`) with the hold view
+([destroy-camera.md](destroy-camera.md), "Wired"). Not run against Vita3K or shadPS4.
 Our frames (`--race --force-wreck 40:7 --opponents`, Altima on 2048, Modesto Heights on Omega,
 960x540, ticks 60 and 100): an orange fireball with white smoke puffs and sparks at the blast, the
 wreck lying inside it, so the HD black-ball picture is not seen here. On 2048 the tick-60 blast has a hard vertical
