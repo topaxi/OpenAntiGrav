@@ -202,13 +202,18 @@ should say the primary slot is exempt regardless of `active`; if not, the early
 return needs the same `active`/`ship_count` guard the other branch has. As
 written the two halves of the function answer the same question two ways.
 
-**Status: reviewed, kept, documented and pinned.** Not a defect. The primary
-slot is exempt on purpose and the exemption is relied on: `World::new` marks
-slot 0 `Local` with `ship_count` 0, and a guard would turn `person_flown(0)`
-false for every blank-grid world (`oag-net`'s redial test, the pad-join test,
-unit worlds). In a started race the case cannot arise: `Ship::active` is set
-once at the grid and nothing clears it on a wreck, so a primary with no craft
-is only the pre-grid world. The doc comment now says the exemption covers the
+**Status: reviewed, kept, documented and pinned.** Not changed in behaviour.
+`World::new` marks slot 0 `Local` with `ship_count` 0 (`SINGLE_PLAYER`), so a world
+with no craft yet answers `person_flown(0) == true`. `Ship::active` is set once at
+the grid (`start.rs`, `spawn.rs`) and nothing in the gameplay, raceplay or physics
+crates clears it, so a started race has a craft in its primary slot. Tried the
+guard (primary also needs `slot < ship_count && ships[slot].active`): the only
+red in `oag-gameplay`, `oag-net` and `oag-raceplay` (1,701 tests) was the new test
+below, and `oag-game`'s `pad_join_end_to_end` (12 tests) stayed green, so no
+existing test pins the exemption. It stays because it changes nothing for a
+running race and the fallback slot is documented as stepped whatever its flags
+say; guarding it is a one-line change if the maintainer prefers the stricter
+answer for a pre-grid world. The doc comment now says the exemption covers the
 primary slot whether marked human or fallback, and
 `world::tests::a_human_slot_with_no_craft_is_flown_only_where_it_is_primary`
 pins both branches.

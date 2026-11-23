@@ -586,10 +586,10 @@ impl World {
     /// pickups and respawns on a ghost. **The primary slot is exempt, whatever its
     /// flags say**, whether it is marked human or is only the fallback: the view
     /// every full-screen consumer follows has to resolve to a flown slot, and a
-    /// world built with no craft on it (`World::new`, a test's blank grid) marks
-    /// slot 0 [`Controller::Local`] with `ship_count` 0. `active` is set once at
-    /// the grid and never cleared by a wreck, so nothing in a started race reaches
-    /// the exemption with a ghost; it exists for the world that has no craft yet.
+    /// world with no craft yet (`World::new`: slot 0 [`Controller::Local`],
+    /// `ship_count` 0) answers `true` for slot 0. `Ship::active` is set at the grid
+    /// and nothing in the gameplay, raceplay or physics crates clears it, so a
+    /// started race has a craft in its primary slot.
     #[must_use]
     pub fn person_flown(&self, slot: usize) -> bool {
         if slot == self.primary_slot() {
