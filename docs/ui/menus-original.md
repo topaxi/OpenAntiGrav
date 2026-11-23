@@ -883,6 +883,12 @@ Half-way variants tried on the same frame, whole `menu-sr-track`: an integer qua
 fixed the Stats face (stats region 871 to 0) and broke the menu face (title 174 to 436, list 76 to 382); a texture shift in y as
 well made every region worse (0.91 %); a width of `round((w - 1) x s)` is as good on the Stats face and worse in the list (31
 px); a u shift of 0.3 to 0.7 texel is within 0.05 points of 0.5, so the half texel is the principled value, not a fit.
+Guards (a review's findings, measured on both Pure faces): no glyph of `LTe50325.fnt` or `FX300ANG.fnt` is under two texels wide, so
+the floor never reaches zero on a measured glyph (a box with ink is still held to one pixel); no box starts left of texel 2 and
+none has ink in the texel before it, so the half-texel shift reads transparent texels on both faces (the shift is clamped at the
+atlas edge for any other face). Every snapped line starts on a whole pixel (`ceil` of its aligned pen), so `snapped_run`, which
+counts from 0, measures it wherever it is placed; the pointer rects of a wrapped or scanned line follow one pen across the
+line and the glyph quads' own extent.
 What is still open: the pen law that ceils the ink edge and the quad that ceils the pen are two readings of one rule that this
 data cannot separate (every Stats pen is fractional), and the remaining 108 px on the stat labels and 101 on the footer are the
 record separators' dots (`0 . 00 . 00`) and the `Confirm` glyph rings.

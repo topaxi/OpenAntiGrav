@@ -1081,7 +1081,7 @@ pub struct SnappedQuad {
     /// The pen rounded up (the quad starts at the pen, not at the ink: the box's bearing is in
     /// the texture).
     pub left: f32,
-    /// The box's width at `scale`, rounded down.
+    /// The box's width at `scale`, rounded down, at least one pixel for a box with ink.
     pub width: f32,
     /// The box's height at `scale`, rounded down.
     pub height: f32,
@@ -1092,10 +1092,20 @@ pub struct SnappedQuad {
 /// pixels"); not read from the executable.
 #[must_use]
 pub fn snapped_quad(cell: &Cell, scale: f32, pen: f32) -> SnappedQuad {
+    // A box with ink is at least one pixel: a one-texel glyph at a scale under 1 would vanish.
+    // No glyph of Pure's two faces is under two texels, so the floor alone decides on every
+    // measured glyph.
+    let whole = |texels: u32| {
+        if texels == 0 {
+            0.0
+        } else {
+            (texels as f32 * scale).floor().max(1.0)
+        }
+    };
     SnappedQuad {
         left: pen.ceil(),
-        width: (cell.width as f32 * scale).floor(),
-        height: (cell.height as f32 * scale).floor(),
+        width: whole(cell.width),
+        height: whole(cell.height),
     }
 }
 

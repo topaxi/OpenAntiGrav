@@ -214,6 +214,11 @@ impl Renderer {
             Align::Centre => x - (width - trailing) / 2.0,
             Align::Right => x - width + trailing,
         });
+        if self.hud.snapped_pens {
+            // The glyph quads start at whole pixels from a whole pen, so a line measures the same
+            // wherever it is placed (`oag_ui::font::snapped_run` counts from 0).
+            pen = pen.ceil();
+        }
         let y = self.hud.snap(y);
 
         for ch in text.chars() {
@@ -250,7 +255,7 @@ impl Renderer {
                 // A PSP sprite: whole pixels from the pen, the texture started half a texel early.
                 let quad = font::snapped_quad(&cell, scale * texel, pen);
                 (rect[0], rect[2], rect[3]) = (quad.left, quad.width, quad.height);
-                uv[0] -= font::SNAPPED_UV_SHIFT;
+                uv[0] = (uv[0] - font::SNAPPED_UV_SHIFT).max(0.0);
             }
             if self.hud.whole_advances || half_unit {
                 // The PSP's glyph rect is the box grown half a pixel each side with the uv grown

@@ -157,6 +157,8 @@ pub fn scan<'a>(
             Align::Centre => x - width / 2.0,
             Align::Right => x - width,
         };
+        // A snapped line starts on a whole pixel, as the draw's does.
+        let left = if face.snapped { left.ceil() } else { left };
         runs.push(Run {
             index,
             text,
@@ -254,24 +256,29 @@ fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
     let mut pen = run.left;
     for ch in run.text.chars() {
-        let next = atlas.cell(ch).map_or(pen, |cell| {
-            let scale = atlas.texel_scale * run.scale;
+        let scale = atlas.texel_scale * run.scale;
+        // The glyph's own extent: its quad on a snapped face (whole pixels from the pen), the
+        // advance otherwise.
+        let (next, left, right) = atlas.cell(ch).map_or((pen, pen, pen), |cell| {
             if run.face.snapped {
-                crate::font::pen_step(&cell, scale, pen, true).1
+                let quad = crate::font::snapped_quad(&cell, scale, pen);
+                let next = crate::font::pen_step(&cell, scale, pen, true).1;
+                (next, quad.left, quad.left + quad.width)
             } else {
-                pen + cell.advance * scale
+                let next = pen + cell.advance * scale;
+                (next, pen, next)
             }
         });
         match substitution.button_drawn(ch, run.face.buttons) {
             Some(prompt) => out.push(Segment {
                 prompt,
-                left: pen,
-                glyph_right: next,
-                word_right: next,
+                left,
+                glyph_right: right,
+                word_right: right,
             }),
             None if ch.is_whitespace() => {}
             None => match out.last_mut() {
-                Some(segment) => segment.word_right = next,
+                Some(segment) => segment.word_right = right,
                 None => return Vec::new(),
             },
         }
@@ -408,7 +415,6 @@ pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry], snapped: bo
         .iter()
         .enumerate()
     {
-        let mut pen = 0.0;
         let mut from = None;
         let mut last = (0.0, 0.0);
         let flush = |entry: usize, left: f32, right: f32, out: &mut Vec<Hint>| {
@@ -424,23 +430,28 @@ pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry], snapped: bo
                 });
             }
         };
+        let mut start = 0;
         for piece in line.split(' ') {
-            let width = placed(face, piece, at.scale).1;
-            let space = placed(face, " ", at.scale).0;
+            // One pen walks the whole line, as the draw's does: a word is where the text before
+            // it puts the pen, not where it would stand measured alone.
+            let end = start + piece.len();
+            let pen = placed(face, &line[..start], at.scale).0;
+            let left = if snapped { pen.ceil() } else { pen };
+            let right = placed(face, &line[..end], at.scale).1;
+            start = end + 1;
             let entry = owner[word];
             match from {
                 Some((current, _)) if current != entry => {
                     flush(current, last.0, last.1, &mut out);
-                    from = Some((entry, pen));
-                    last = (pen, pen + width);
+                    from = Some((entry, left));
+                    last = (left, right);
                 }
                 None => {
-                    from = Some((entry, pen));
-                    last = (pen, pen + width);
+                    from = Some((entry, left));
+                    last = (left, right);
                 }
-                Some(_) => last.1 = pen + width,
+                Some(_) => last.1 = right,
             }
-            pen += width + space;
             word += 1;
         }
         if let Some((current, _)) = from {

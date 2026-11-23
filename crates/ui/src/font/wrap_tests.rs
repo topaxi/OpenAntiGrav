@@ -72,3 +72,19 @@ fn a_snapped_glyph_is_a_whole_pixel_quad_from_the_pen_and_the_run_ends_at_its_ri
         quad.left + quad.width
     );
 }
+
+/// A box with ink is never narrower than a pixel: a one-texel glyph at a scale under 1 would floor to
+/// nothing, and a zero-width quad inside a clip window divides 0 by 0.
+#[test]
+fn a_one_texel_glyph_keeps_a_pixel_and_an_empty_box_none() {
+    let atlas = Atlas::build();
+    let one = Cell {
+        width: 1,
+        height: 1,
+        ..atlas.cell('A').expect("a glyph")
+    };
+    let quad = snapped_quad(&one, 0.8, 10.0);
+    assert_eq!((quad.width, quad.height), (1.0, 1.0));
+    let none = Cell { width: 0, ..one };
+    assert_eq!(snapped_quad(&none, 0.8, 10.0).width, 0.0);
+}
