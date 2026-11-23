@@ -204,7 +204,7 @@ const ROCK: Shape = Shape {
 
 /// Whether a material file has a pixel program of this shape.
 fn declares(file: &[u8], shape: &Shape) -> bool {
-    gcn::scan(file).into_iter().any(|(_, program)| {
+    gcn::scan(file).iter().any(|(_, program)| {
         let Ok(program) = program else {
             return false;
         };

@@ -30,6 +30,11 @@ fn texel_fingerprint(model: &Model) -> Vec<(u32, u32, u64)> {
                 match &texture.texels {
                     Texels::Rgba8(bytes) => bytes.hash(&mut hasher),
                     Texels::Chain(levels) => levels.hash(&mut hasher),
+                    // The bytes hashed as bytes: their `Debug` text was most of the test's CPU.
+                    Texels::Blocks { format, levels } => {
+                        format!("{format:?}").hash(&mut hasher);
+                        levels.hash(&mut hasher);
+                    }
                     other => format!("{other:?}").hash(&mut hasher),
                 }
                 (texture.width, texture.height, hasher.finish())

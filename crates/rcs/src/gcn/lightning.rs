@@ -23,7 +23,7 @@ pub struct LightningRates {
     pub noise_rate: f32,
 }
 
-impl Program<'_> {
+impl Program {
     /// The rates, for a pixel program that declares a `LightningTexture`; `None` for any other
     /// program or one whose literals do not feed the taps described above.
     ///
@@ -113,7 +113,7 @@ impl Program<'_> {
 #[must_use]
 pub fn lightning_rates(file: &[u8]) -> Option<LightningRates> {
     let mut found: Option<LightningRates> = None;
-    for (_, program) in super::scan(file) {
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else { continue };
         let is_lightning = program.stage == Stage::Pixel
             && program.reflection.as_ref().is_ok_and(|r| {

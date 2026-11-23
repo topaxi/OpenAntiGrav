@@ -46,7 +46,7 @@ const EYE: &str = "eyePositionWorldSpace";
 /// The constant a shadow-receiving permutation reads.
 const SHADOW_LIGHT: &str = "shadowLightDirection";
 
-impl Program<'_> {
+impl Program {
     /// The pixel interpolant (`attrN`, `N` the index into the program's input list) that the
     /// `z` lane of a `2t - 1` decoded sample is multiplied by, when one multiply names it.
     #[must_use]
@@ -214,8 +214,8 @@ impl Program<'_> {
 #[must_use]
 pub fn third_axis_is_eye(file: &[u8]) -> EyeFrame {
     let mut found = EyeFrame::default();
-    let mut vertex: Option<Program<'_>> = None;
-    for (_, program) in super::scan(file) {
+    let mut vertex: Option<&Program> = None;
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else {
             vertex = None;
             continue;

@@ -50,7 +50,7 @@ impl Factor {
 pub fn input_is_factor(file: &[u8], name: &str) -> Factor {
     let mut found = Factor::default();
     let mut param = None;
-    for (_, program) in super::scan(file) {
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else { continue };
         match program.stage {
             Stage::Vertex => {
@@ -80,7 +80,7 @@ pub fn input_is_factor(file: &[u8], name: &str) -> Factor {
 /// The constant every lit pixel program of a hull or track reads its sun colour from.
 const LIGHT: &str = "liveLighting0diffuse";
 
-impl Program<'_> {
+impl Program {
     /// Whether the reflection declares a constant called `name`.
     #[must_use]
     pub fn names_constant(&self, name: &str) -> bool {
@@ -187,7 +187,7 @@ mod tests {
 
     /// A pixel program whose three lanes of `attr2` land in `v4..v6` and are then used by
     /// `last`, a VOP2 reading `v4`.
-    fn pixel(last: u32) -> Program<'static> {
+    fn pixel(last: u32) -> Program {
         let mut words = Vec::new();
         for lane in 0..3 {
             words.push(interp(0, 4 + lane, 2, lane));
@@ -201,7 +201,6 @@ mod tests {
         Program {
             at: 0,
             code_at: 0,
-            code: &[],
             stage: Stage::Pixel,
             info: 0,
             instructions: decode_all(&bytes).expect("decodes"),

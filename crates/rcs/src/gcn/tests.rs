@@ -180,3 +180,22 @@ fn packed_math_and_sdwa_take_a_second_dword() {
         "v_mov_b32_sdwa v0, v3 dst_sel:WORD_0 dst_unused:2 src0_sel:DWORD src1_sel:BYTE_0"
     );
 }
+
+/// Inside `memoised` a file's programs are scanned once and shared; outside it, and after it,
+/// each scan is its own.
+#[test]
+fn a_memoised_scan_is_shared_only_while_the_memo_is_open() {
+    let file = b"not a shader file, no tag in it".to_vec();
+    let same = file.clone();
+    let shared =
+        super::memoised(|| std::sync::Arc::ptr_eq(&super::scan(&file), &super::scan(&same)));
+    assert!(shared);
+    assert!(!std::sync::Arc::ptr_eq(
+        &super::scan(&file),
+        &super::scan(&file)
+    ));
+    let other = b"another file, also untagged".to_vec();
+    assert!(super::memoised(|| {
+        !std::sync::Arc::ptr_eq(&super::scan(&file), &super::scan(&other))
+    }));
+}

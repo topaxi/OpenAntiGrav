@@ -490,6 +490,12 @@ opt-level = 2
 # walk, and the sector-at-a-time read under all of them.
 [profile.dev.package.oag-disc]
 opt-level = 2
+# The byte readers every decoder above calls per field (`u32_at` and kin). At
+# opt-level 0 each read is three un-inlined calls: they were 40 % of the Omega
+# normal-map census (docs/architecture/workspace-layout.md, "The byte readers
+# at opt-level 0").
+[profile.dev.package.oag-bytes]
+opt-level = 2
 
 # The picture vocabulary. Small, but every settings round-trip and every menu
 # row reads it, so it is on the path of the front-end tests rather than off it.
