@@ -91,7 +91,12 @@ impl Session {
         } else {
             &shell.strings
         };
-        let built = trial.open_on_pause_screen(pause, mode, strings);
+        // This project's PHOTO MODE row is not on the disc's screen: a compare shot leaves it out.
+        let authored = oag_title::PauseMenu {
+            offers_photo: pause.offers_photo && !self.original_menu,
+            ..*pause
+        };
+        let built = trial.open_on_pause_screen(&authored, mode, strings);
         let resumes = trial
             .page(oag_ui::menu::PAUSE_PAGE)
             .is_some_and(|page| page.row_with_id("pause_resume").is_some());

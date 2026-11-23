@@ -32,6 +32,7 @@ const SCREENS: &PauseMenu = &PauseMenu {
     scrim_argb: 0xe800_0000,
     layout: None,
     hud_under_scrim: false,
+    song_line_under_scrim: true,
     offers_photo: true,
     origin: Origin::Chosen,
 };
@@ -341,6 +342,7 @@ fn an_audio_row_opens_the_audio_page_and_the_pause_page_is_a_column_not_a_strip(
         scrim_argb: 0xc000_0000,
         layout: None,
         hud_under_scrim: false,
+        song_line_under_scrim: true,
         offers_photo: false,
         origin: Origin::Chosen,
     };

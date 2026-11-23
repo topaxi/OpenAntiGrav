@@ -402,6 +402,78 @@ fn pulses_main_menu_help_title_text_and_fills_author_their_glow() {
     }
 }
 
+/// A still of `--menu-page <page>` on a Pulse disc, the PNG's bytes. `pin` is `--menu-ticker`, `tag`
+/// the stored `[player] tag` (none when empty); every run has its own profile, so a settings file
+/// of the player's decides nothing.
+fn campaign_still(image: &std::path::Path, page: &str, pin: Option<&str>, tag: &str) -> Vec<u8> {
+    let dir = std::env::temp_dir().join(format!(
+        "oag-campaign-footer-{}-{page}-{}-{}",
+        std::process::id(),
+        pin.is_some(),
+        tag.len()
+    ));
+    let config = dir.join("config").join("oag");
+    std::fs::create_dir_all(&config).expect("a profile directory");
+    if !tag.is_empty() {
+        std::fs::write(
+            config.join("settings.toml"),
+            format!("[player]\nname = \"AAAA\"\ntag = \"{tag}\"\n"),
+        )
+        .expect("the settings");
+    }
+    let out = dir.join("still.png");
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args(["--no-audio", "--size", "960x544", "--menu-page", page])
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"));
+    if let Some(pin) = pin {
+        command.args(["--menu-ticker", pin]);
+    }
+    let status = command
+        .arg("--screenshot")
+        .arg(&out)
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page {page}");
+    let bytes = std::fs::read(&out).expect("the screenshot");
+    std::fs::remove_dir_all(&dir).ok();
+    oag_texture::png::picture_only(&bytes)
+}
+
+/// **Grid and Cell Selection draw the pinned ticker message and the stored tag in their footer.**
+/// The pair scripts pass the original's message as `--menu-ticker` and its tag as `[player]`; the
+/// campaign pages build their own legend and ticker from the screen file, and once drew an empty
+/// bar and a blank tag box whatever was passed. Drop the pin or the tag from either page and its
+/// still is the unpinned or untagged one again.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU adapter"]
+fn the_campaign_pages_draw_the_pinned_ticker_and_the_tag() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    for page in ["grid-select", "cell-select"] {
+        let bare = campaign_still(&image, page, None, "");
+        assert_eq!(
+            bare,
+            campaign_still(&image, page, None, ""),
+            "{page}: two unpinned stills differ, so a pinned one proves nothing"
+        );
+        assert_ne!(
+            bare,
+            campaign_still(&image, page, Some("TKR_ZTIM@120"), ""),
+            "{page}: the pinned message is not drawn"
+        );
+        assert_ne!(
+            bare,
+            campaign_still(&image, page, None, "AAA"),
+            "{page}: the stored tag is not drawn"
+        );
+    }
+}
+
 /// `--menu-page cell-select` on `image`: [`menu_page_still`] of that page.
 fn cell_select_still(
     image: &std::path::Path,

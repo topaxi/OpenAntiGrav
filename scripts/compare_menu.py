@@ -88,9 +88,40 @@ def ours_menu_command(oag_game, image, plat, page, size, route=None):
     return [str(oag_game), str(image)] + (list(route) if route else ["--menu-page", page]) + clean
 
 
+DRIVE = "--drive-file"
+
+
+def box_down(out_png):
+    """A drive draws at the window's own size: box-filter its picture to the 480x272 of a PSP frame (an exact 3x from 1440x816)."""
+    from PIL import Image
+    image = Image.open(out_png).convert("RGB")
+    if image.size != (480, 272):
+        if image.size[0] % 480 or image.size[1] % 272 or image.size[0] // 480 != image.size[1] // 272:
+            sys.exit("a drive picture of %s does not scale to 480x272 by a whole factor" % (image.size,))
+        image.resize((480, 272), Image.BOX).save(out_png)
+
+
+def drive_command(oag_game, image, route, out_png, work):
+    """`oag-game IMAGE --drive-file SCRIPT ...` for a route `[DRIVE, TEMPLATE, flag...]`: the template (kept beside the pair as
+    `ours.drive`, `@OUT@` in it) is run as `ours.run.drive` with `@OUT@` replaced by `out_png`."""
+    template = Path(work) / "ours.drive"
+    if Path(route[1]).resolve() != template.resolve():
+        shutil.copyfile(route[1], template)
+    script = Path(work) / "ours.run.drive"
+    script.write_text(template.read_text().replace("@OUT@", str(out_png)))
+    return [str(oag_game), str(image), DRIVE, str(script)] + list(route[2:])
+
+
 def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_args=(), route=None):
-    """Render ours' page into `out_png`; returns the command that did. Runs under the pair's private XDG profile."""
-    cmd = ours_menu_command(oag_game, image, plat, page, size, route) + list(extra_args) + ["--screenshot", str(out_png)]
+    """Render ours' page into `out_png`; returns the command that did. Runs under the pair's private XDG profile. A `route` that
+    starts with `--drive-file TEMPLATE` plays our own menus and race through the real session (a pause screen is a menu over a held
+    race; no still draws it): the flags after the template are kept, the compare render settings follow."""
+    drive = bool(route) and route[0] == DRIVE
+    if drive:
+        base = ours_menu_command(oag_game, image, plat, page, size, ["--no-intro"])
+        cmd = drive_command(oag_game, image, route, out_png, Path(out_png).parent) + base[2:] + list(extra_args)
+    else:
+        cmd = ours_menu_command(oag_game, image, plat, page, size, route) + list(extra_args) + ["--screenshot", str(out_png)]
     # The original's fresh profile holds no downloaded pack: an empty `$OAG_DLC` keeps the maintainer's `data/dlc` circuits and teams
     # out of ours' lists (they made Pulse's Track Select 11 circuits, not 3, and Ship Select 12 teams, not 8).
     no_dlc = Path(profile_dir) / "no-dlc"
@@ -98,6 +129,8 @@ def render_ours(oag_game, image, plat, page, out_png, profile_dir, size, extra_a
     env = dict(os.environ, **ce.ours_env(profile_dir), RUST_LOG="warn", OAG_DLC=str(no_dlc))
     log("+ " + " ".join(cmd[2:]))
     subprocess.run(cmd, check=True, env=env, stdout=subprocess.DEVNULL)
+    if drive:
+        box_down(out_png)
     return cmd
 
 
@@ -147,7 +180,8 @@ def menu_pair(pair, *, theirs_png, oag_game, image, page, drawn_from, xml_file, 
     if pair.failed():
         return False  # a doomed pair is not rendered; `Pair.finish` names every failed check
     cmd = render_ours(oag_game, image, plat, page, out / "ours.png", profile_dir, size, extra_args, route)
-    pair.rec["ours"]["flags"] = [str(c) for c in cmd[2:]]
+    # A drive route is recorded as its pair-relative script (`ours.drive`): the run's own copy names a screenshot path of this run.
+    pair.rec["ours"]["flags"] = [DRIVE, "ours.drive"] + [str(c) for c in cmd[4:]] if cmd[2] == DRIVE else [str(c) for c in cmd[2:]]
     offset = ce.display_offset_record(plat["key"], "menu")
     if offset:
         offset["pixels"] = ce.apply_display_offset(out / "ours.png", offset)
