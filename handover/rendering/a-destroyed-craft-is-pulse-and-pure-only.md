@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-23
-summary: "Destroyed craft wired on all five titles, HD sound too; Zone end and Pure read; open: camera, collider, debris, Pure diffs, Zone, 2048/Omega sound"
+summary: "Destroyed craft wired on all titles; Zone end wired on HD, 2048, Omega; open: camera, collider, Pure diffs, Zone look and velocity, Omega sound"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
@@ -87,7 +87,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    `Ship_UpdateWrecked` arm (the shell animation) and both twins' race-manager side; everything
    else below is read on all three titles. Pure's Zone wreck rides Pulse's rule.
    The Zone wreck's livery is `zone-livery-wreck-lods.md`'s item.
-   **HD/Fury: read 2026-11-23, wired 2026-11-23 (`zone-destroy-wire`: shell, hide, debris, `shipdestroy` on HD, HUD hide, results at 5.5 s; 2048 and Omega the same without the cue; `zone-destroy.md`, "Wired")** (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
+   **HD/Fury: read 2026-11-23, wired 2026-11-23 (`zone-destroy-wire`: shell, hide, debris, `shipdestroy` on HD, HUD hide, results at 5.5 s; 2048 the same with its own cue, Omega without it; `zone-destroy.md`, "Wired")** (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
    rows Z1-Z12, static, 2048 and Omega lines per row). Mode 6 is Zone, mode 14 Detonator. A Zone
    craft never becomes a wreck (`shipwreck.vex` is never selected in Zone, so the Zone wreck livery
    is unused there): `shipdestroy` from the environment bank after every cue is stopped, camera

@@ -116,15 +116,15 @@ the drawing are `oag_raceplay::zone_end` and `scene/zone_end.rs`. Test: `tests/z
 | Z2 | inherited | camera mode 2's per-frame law is unread: the existing destroy camera runs, as for every title |
 | Z3 | wired | no blast, plume, node sparks, wash or shake in a Zone end (`craft_flash`), no wreck model (the Zone `shipwreck.vex` is built and not drawn) |
 | Z4 | not wired | the rumble is the ordinary destroyed rumble, unchanged |
-| Z5 | wired on HD | `shipdestroy` from `env0_zone.bnk` once on the blast (`Cue::ShipDestroy`, `ZoneEnd::cue`). "After every other cue is stopped" is **not** wired: ours stops none. 2048 and Omega: no cue (`ZoneEnd::HD_SILENT`), they keep `~BLOWUP` |
+| Z5 | wired on HD and 2048 | `shipdestroy` once on the blast (`Cue::ShipDestroy`, `ZoneEnd::cue`): HD from `env0_zone.bnk` (Ps3 tick), 2048 from its hashed `env0_zone.bnk` (Vita tick; resolves to one timeline of 6 voices, `zone_craft_ground_truth`). No other cue plays in a Zone end, `~BLOWUP` included. "After every other cue is stopped" is **not** wired: ours stops none. Omega: silent, its Wwise event is unread |
 | Z6, Z7 | wired | state 4 one tick (`launch_hover::destroy_sequence`), state 5 runs the 5.5 s to the results, the shell's 2.5 s inside it |
-| Z8 | wired, look unread | the shell plays over the hull for 2.5 s on `1 - max(0.4 t, 0)` (`zone_end::shell_time`). **HD's whiteshell `Anim Transform` is one static key** (translation and scale, no rotation, `loop_seconds` 6000), so the clock moves no geometry; what the original varies with it is the material (unread). 2048's shell carries a texture track, which the clock drives. The blend is chosen (additive, the Detonator death shell's), the builder otherwise reads the material as an opaque cutout |
+| Z8 | wired, look unread | the shell plays over the hull for 2.5 s on `1 - max(0.4 t, 0)` (`zone_end::shell_time`). Our decoder returns HD's whiteshell `Anim Transform` as one key (translation and scale, no rotation channel) whose translation quantum and base come back denormal (`1.8e-43`, `5.9e-39`): so the clock moves no geometry, **but that payload may be misread** (conf 50); what the original varies with the clock is likely the material (`.rcsmaterial`, unread). 2048's shell carries a texture track, which the clock drives. Our blend is **chosen** (additive over a batch the build read as opaque or alpha-tested, the Detonator death shell's; a batch the build already blended keeps its factors) |
 | Z9 | wired | the race ends 5.5 s after the blast (`eliminate_if_wrecked` waits for state 6, rules stop at the blast); the results are the existing flow |
 | Z10 | wired in part | hull, flare and shell hide at 2.5 s, the debris is thrown. Not wired: the two side calls (`0x000f9610`, `0x003f5878`) and the second rumble |
 | Z11 | wired, velocity chosen | 112 pieces split by their `ShipBit_N` node on all three titles (HD 3,838 triangles, 2048 and Omega the same count); the launch velocity is **chosen, not measured** (`zone_end::OUTWARD`, `LIFT`, `SPIN`, `GRAVITY`, the view's generator), the pieces rest on the craft's plane and collide with nothing; no fire |
 | Z12 | wired | nothing of the craft is drawn after Z10 but the debris |
 
-2048 and Omega: **ported**. The models are the same 112 pieces and 5-node shell on both; their
+2048 and Omega: **ported** (2048's cue too, Omega's not). The models are the same 112 pieces and 5-node shell on both; their
 `.rcsmodel` is read through `mesh::rcs::psp2::build_with_vex`, because the shell's motion is in
 the `.vex` and neither title ships a skeleton for it. 2048's shell is 9 submeshes (60,294
 triangles), Omega's one (28,229), HD's one (28,229): re-cooked, not identical.
@@ -194,8 +194,9 @@ at 1.0 s, phase 4 at 5.5 s), photographing each change.
 
 ## Open
 
-0. What the shell's animation time varies on HD (its material, unread: `.rcsmaterial`), and
-   `Sound_StopAllBankCues_q`'s counterpart in ours.
+0. What the shell's animation time varies on HD (its material, unread: `.rcsmaterial`; and whether
+   our `Anim Transform` decode of the whiteshell is right), `Sound_StopAllBankCues_q`'s counterpart
+   in ours, Omega's `shipdestroy` Wwise event, and a live pair against RPCS3.
 1. Camera mode 2's per-frame law (Z2): the per-frame twelve-way switch on `cam+0x40`, entry 2.
 2. `0x003f5878`'s 24-slot pool (Z10): read its consumers through `*0x008b819c`.
 3. The debris launch velocity (Z11) from the disassembly of `0x00104a58`
