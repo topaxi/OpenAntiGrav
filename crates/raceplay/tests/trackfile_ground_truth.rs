@@ -110,6 +110,18 @@ fn same(a: &Track, b: &Track) -> Result<(), String> {
 /// proof (`art_proof`). One test per image, because the walk is the slow part
 /// and nextest runs tests, not loop iterations, in parallel.
 fn every_circuit_exports_and_reads_back_the_same(image: &str) {
+    every_circuit_of_a_slice_exports_and_reads_back_the_same(image, 0, 1);
+}
+
+/// The circuits of one image whose catalogue index is `slice` modulo `slices`.
+/// Every assertion is per circuit or a tally that adds over circuits (the
+/// pad-model counts), so each slice holds exactly what the whole walk does for
+/// its circuits, and the slices together cover the catalogue.
+fn every_circuit_of_a_slice_exports_and_reads_back_the_same(
+    image: &str,
+    slice: usize,
+    slices: usize,
+) {
     let mut total = 0;
     let mut refused = Vec::new();
     let mut art = art_proof::Tally::default();
@@ -119,7 +131,11 @@ fn every_circuit_exports_and_reads_back_the_same(image: &str) {
         };
         let path = path.display().to_string();
         let mut archives = open(image, &path);
-        for track in circuits(image, &path) {
+        for track in circuits(image, &path)
+            .into_iter()
+            .skip(slice)
+            .step_by(slices)
+        {
             total += 1;
             let exported = match race::export_track(&options(&path, &track)) {
                 Ok(t) => t,
@@ -158,6 +174,10 @@ fn every_circuit_exports_and_reads_back_the_same(image: &str) {
         }
     }
     println!("{image}: {total} circuit(s); refused: {refused:#?}");
+    assert!(
+        total > 0,
+        "{image}: slice {slice} of {slices} walked nothing"
+    );
     println!("art: {art:#?}");
     assert!(refused.is_empty(), "{refused:#?}");
     // The host's pad art on a circuit's volumes alone covers every circuit whose
@@ -177,10 +197,25 @@ fn every_pulse_psp_usa_circuit_exports_and_reads_back_the_same() {
     every_circuit_exports_and_reads_back_the_same(IMAGES[1]);
 }
 
-#[test]
-#[ignore = "needs the Pulse PS2 image"]
-fn every_pulse_ps2_circuit_exports_and_reads_back_the_same() {
-    every_circuit_exports_and_reads_back_the_same(IMAGES[2]);
+/// The PS2 walk is the longest of the images (about 75 CPU-s whole), so it is dealt
+/// into six tests by catalogue index.
+macro_rules! ps2_slices {
+    ($($name:ident: $slice:expr,)*) => {$(
+        #[test]
+        #[ignore = "needs the Pulse PS2 image"]
+        fn $name() {
+            every_circuit_of_a_slice_exports_and_reads_back_the_same(IMAGES[2], $slice, 6);
+        }
+    )*};
+}
+
+ps2_slices! {
+    every_pulse_ps2_circuit_exports_and_reads_back_the_same_slice_0: 0,
+    every_pulse_ps2_circuit_exports_and_reads_back_the_same_slice_1: 1,
+    every_pulse_ps2_circuit_exports_and_reads_back_the_same_slice_2: 2,
+    every_pulse_ps2_circuit_exports_and_reads_back_the_same_slice_3: 3,
+    every_pulse_ps2_circuit_exports_and_reads_back_the_same_slice_4: 4,
+    every_pulse_ps2_circuit_exports_and_reads_back_the_same_slice_5: 5,
 }
 
 #[test]

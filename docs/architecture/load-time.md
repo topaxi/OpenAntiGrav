@@ -158,7 +158,7 @@ before its model, and the load asks for it four times (`ps2_texture_set` in
 `load/track_inputs.rs`); the trackfile walk of all PS2 circuits asked nine times
 per circuit and read 1,091 MiB of disc for 152 MiB of distinct ranges, 46% of its
 CPU in LZMA hunk decoding. With the memo the walk is 62-64 s of CPU against
-90-114 s (`every_pulse_ps2_circuit_exports_and_reads_back_the_same`, load 20-42).
+90-114 s (the PS2 walk, now six `..._slice_N` tests, load 20-42).
 
 A hit still copies the bytes, because `oag_mesh::mesh::rcs::Textures` returns
 an owned `Vec<u8>`; that copy is about 3% of the remaining HD load. Removing it

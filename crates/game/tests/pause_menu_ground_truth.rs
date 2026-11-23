@@ -753,35 +753,50 @@ mod pure_screens {
         assert_eq!(ended.states.last().expect("a state")["stage"], "menu");
     }
 
-    /// START and CONTINUE resume, CIRCLE on the root does nothing, RESTART loads the race again,
-    /// QUIT leaves for the main page and PHOTO MODE opens from the screen.
+    /// One game run per row, each its own test: START and CONTINUE resume, CIRCLE on the root
+    /// does nothing, RESTART loads the race again, QUIT leaves for the main page and PHOTO MODE
+    /// opens from the screen.
+    fn the_race_paused(tag: &str, then: &str) -> Run {
+        let race = to_the_race("single_race");
+        run_pure(tag, &format!("{race} {OPEN} {then}"))
+    }
+
     #[test]
     #[ignore = "needs a disc image in data/images/"]
-    fn the_rows_work_by_pad() {
+    fn start_resumes_by_pad() {
         if pure().is_none() {
             return;
         }
-        let race = to_the_race("single_race");
-        let resumed = run_pure(
-            "start",
-            &format!("{race} {OPEN} press start; until stage=race; ticks 30"),
-        );
+        let resumed = the_race_paused("start", "press start; until stage=race; ticks 30");
         assert_eq!(
             resumed.states.last().expect("a state")["stage"],
             "race",
             "START resumes"
         );
-        let circle = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn circle_on_the_pause_root_does_nothing_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let circle = the_race_paused(
             "circle",
-            &format!("{race} {OPEN} press circle; ticks 20; expect stage=menu page=pause"),
+            "press circle; ticks 20; expect stage=menu page=pause",
         );
         assert_eq!(rows(&circle), rows_with_restart(), "CIRCLE does nothing");
-        let restart = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn restart_loads_the_race_again_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let restart = the_race_paused(
             "restart",
-            &format!(
-                "{race} {OPEN} select pause_restart; press cross; until stage=race within 4000; \
-                 ticks 20"
-            ),
+            "select pause_restart; press cross; until stage=race within 4000; ticks 20",
         );
         let sims: Vec<u64> = restart
             .states
@@ -792,16 +807,30 @@ mod pure_screens {
             sims.last().copied().unwrap_or(u64::MAX) < 100,
             "RESTART: {sims:?}"
         );
-        let quit = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn quit_leaves_for_the_main_page_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let quit = the_race_paused(
             "quit",
-            &format!(
-                "{race} {OPEN} select pause_quit; press cross; until stage=menu; expect page=main"
-            ),
+            "select pause_quit; press cross; until stage=menu; expect page=main",
         );
         assert_eq!(quit.states.last().expect("a state")["screen"]["id"], "main");
-        let photo = run_pure(
+    }
+
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn photo_mode_opens_from_the_pause_screen_by_pad() {
+        if pure().is_none() {
+            return;
+        }
+        let photo = the_race_paused(
             "photo",
-            &format!("{race} {OPEN} select photo_mode; press cross; until photo=free within 200"),
+            "select photo_mode; press cross; until photo=free within 200",
         );
         assert!(
             photo.states.iter().any(|state| state["photo"] == "free"),
