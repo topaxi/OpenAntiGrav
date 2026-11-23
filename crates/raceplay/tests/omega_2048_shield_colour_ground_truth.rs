@@ -171,3 +171,83 @@ fn every_2048_team_builds_a_shell_and_settles_to_the_magnetic_colour() {
         );
     }
 }
+
+/// The team's wreck as a race that reads it loads it: `hull_wreck` on, the title's own rule.
+fn wreck_of(
+    archives: &mut oag_assets::Archives,
+    title: &'static oag_title::Title,
+    team: &str,
+) -> (Option<oag_livery::Wreck>, Vec<String>) {
+    let mut report = Vec::new();
+    let mut liveries = oag_livery::load(
+        archives,
+        std::slice::from_ref(&team.to_string()),
+        &oag_livery::LoadContext {
+            store: Default::default(),
+            race: title.race,
+            mode: oag_race::Mode::SingleRace,
+            flare: title.flare,
+            hull_overlay: false,
+            leach_overlay: false,
+            hull_shine: false,
+            hull_wreck: title.looks.hull_wreck.applies(archives.layout.platform),
+            absorb_shell: false,
+            own_shield: false,
+            zone_liveries: &[],
+            forced_skins: &[],
+            circuit_hull: None,
+            player_livery: None,
+        },
+        None,
+        None,
+        &[],
+        &mut report,
+    )
+    .expect("the livery loads");
+    (liveries.remove(0).wreck, report)
+}
+
+fn assert_wreck(wreck: Option<oag_livery::Wreck>, report: &[String], team: &str) {
+    let wreck = wreck.unwrap_or_else(|| panic!("{team}: no wreck\n{}", report.join("\n")));
+    assert!(
+        wreck.model.label.ends_with("shipwreck.vex"),
+        "{team}: {}",
+        wreck.model.label
+    );
+    assert!(!wreck.model.indices.is_empty(), "{team}: an empty wreck");
+}
+
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn every_omega_team_loads_a_wreck_and_so_does_every_2048_era_ship() {
+    let Some(path) = present("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("omega");
+    let era = ["AG_Systems", "Auricom", "Feisar", "Piranha", "Qirex"];
+    let teams = OMEGA
+        .iter()
+        .map(|(team, _)| (*team).to_string())
+        .chain(era.iter().map(|team| format!(r"{team}2048\1")));
+    for team in teams {
+        let (wreck, report) = wreck_of(&mut archives, oag_omega::TITLE, &team);
+        assert_wreck(wreck, &report, &team);
+    }
+}
+
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007/base"]
+fn every_2048_team_loads_a_wreck() {
+    let Some(path) = present("data/extracted/vita/PCSF00007/base") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("2048");
+    let teams = ["ag_systems", "auricom", "feisar", "piranha", "qirex"]
+        .map(|team| format!(r"{team}2048\1"))
+        .into_iter()
+        .chain(["Feisar", "Qirex"].map(String::from));
+    for team in teams {
+        let (wreck, report) = wreck_of(&mut archives, oag_2048::TITLE, &team);
+        assert_wreck(wreck, &report, &team);
+    }
+}

@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-23
-summary: "Destroyed craft wired on Pulse/Pure; HD states 4-8 and the HD Zone end read, ready to wire (ship-destroy.md, zone-destroy.md); 2048/Omega twins read"
+summary: "Destroyed craft wired on Pulse, Pure, HD, 2048 and Omega (HD sequence); HD Zone end read (zone-destroy.md); open: sound, camera mode 8/9, collider and kick, debris, Zone wire"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
@@ -44,12 +44,12 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   byte, the wreck still drawn. Every ship directory ships `shipwreck.vex`. Not measured live:
   the host's packaged RPCS3 0.0.42 refuses the HD save states and a cold boot stalled at `boot`
   (the page's "Measured on RPCS3: not run" has the exact failures and the read recipe).
-- **2048 and Omega: read as twins, not wired.** `Ship_SetState` is `0x811c711e` (2048) and
-  `0x012ff700` (Omega) with HD's ten cases, timers and masks; both ship `shipwreck` per team
-  (HD set plus their own `<team>2048/<n>`). Differences: the destroy camera is mode 9 on both,
-  2048 has no rumble, Omega's death sounds are Wwise `ShipDestroyed_Player`/`_NPC`. Both carry
-  a second ship family naming `WO_SHIP_EXPLOSION_PLAYER`, unread. The Zone wreck livery is a
-  separate thread's item.
+- **2048 and Omega: wired with HD's data, 2026-11-23.** `Title::destroyed` is `DestroyedCraft::HD`
+  (inherited), `hull_wreck` is on, `WO_SHIP_EXPLOSION` and the death plume are named; every team and
+  Omega's 2048-era ships load a wreck. Our blast frames show fire (Altima, Modesto Heights). Not
+  wired, as on HD: sound (Omega's is Wwise `ShipDestroyed_*`; 2048 has no rumble), camera mode 9
+  (unread, HD's inherited camera runs), collider and kick, the `_n1` set's `WO_NITRO_SHIP_DEATH`
+  (modes 13 and 21), the second ship family's `WO_SHIP_EXPLOSION_PLAYER` (unread).
 
 ## Open
 
@@ -62,8 +62,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    (`ship-destroy.md`). Still open there: the death kick's formula, the wreck collider's child
    shapes, camera mode 8's view against Pulse's mode 5, the `+0x7e40` call on the 4 -> 5 edge,
    and a live run of the state timings.
-2. 2048 and Omega: the twins are read (`ship-destroy.md`, "Twins named here"); wire them with
-   HD, by the backport rule. Their second ship family (`WO_SHIP_EXPLOSION_PLAYER`,
+2. ~~2048 and Omega wired~~. Their second ship family (`WO_SHIP_EXPLOSION_PLAYER`,
    2048 `0x812c7e2c`, Omega `0x0176fe30`) is unread.
 3. Pure's own `Ship_SetState` against the inherited Pulse rule; Pulse PS2's port.
 4. **The Zone destruction sequence on every title** (maintainer, 2026-11-22). Pulse's is
@@ -91,10 +90,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 
 1. ~~HD wire lane~~ landed (above). Left on HD: rows 3 and 6 (needs the death kick formula and
    collider read), row 5, a frame pair against RPCS3 once a build boots the HD states.
-2. **2048/Omega next** (item 2): set `Title::destroyed` to `DestroyedCraft::HD` (camera mode 9, no
-   rumble on 2048), flip `Looks::hull_wreck`, name `WO_SHIP_DEATH_DAMAGE_PLUME` in their tables;
-   the livery's external-geometry branch is shared with HD, the `.rcsmodel` psp2 branch is
-   `shield::shield_model`'s (check its shield-only alpha tweak first).
+2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` lane), mode 9's view.
 3. Zone (item 4): ~~an `oag-re` measure lane on HD's Zone end~~ read (`zone-destroy.md`). Next: a wire
    lane on HD, 2048 and Omega together (the twins agree), then a frame pair of a Zone end against
    RPCS3 with the page's read recipe.
