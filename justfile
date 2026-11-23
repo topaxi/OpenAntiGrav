@@ -278,7 +278,8 @@ test-data-affected:
     exit "$budget"
 
 # Compiles what `gate-affected` and `test-data-affected` (scope `affected`) or `check` and
-# `lead-test-data` (scope `full`) would compile, and runs no test: `scripts/gate-run.sh`
+# `lead-test-data` (scope `full`) would compile, and runs no engine test (the mod guests'
+# own tests run, as in the gate): `scripts/gate-run.sh`
 # runs it while it waits for the gate lock, so the lock is held for the checks and the
 # tests and not for the build. The same commands as the recipes they mirror (the
 # feature lists are shared variables), so a prebuild that falls behind a recipe costs the

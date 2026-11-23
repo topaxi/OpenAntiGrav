@@ -9,10 +9,11 @@
 # (`docs/architecture/gate-wall-time.md`):
 #
 # - While the lock is busy it compiles what the recipe will compile (`just gate-prep`,
-#   at nice 5) and no test runs. The lock is then held for the checks and the tests,
-#   not for the build. If the lock is free at once nothing is prebuilt, and when it
-#   is taken before the prebuild is done the prebuild is stopped (a half-done cargo
-#   build is safe to stop) so the gate does the rest at its own priority.
+#   at idle priority, so it only takes cores nothing else wants) and no engine test runs.
+#   The lock is then held for the checks and the tests, not for the build. If the lock
+#   is free at once nothing is prebuilt, and when it is taken before the prebuild is
+#   done the prebuild is stopped (a half-done cargo build is safe to stop) so the gate
+#   does the rest at its own priority.
 # - Every run appends a row to `$HOME/.cache/oag/gate-times.tsv`: when, who (the
 #   worktree), the recipe, seconds waited, seconds held, prebuild state, exit code and
 #   the load average at the start of the hold.
@@ -87,7 +88,7 @@ if [ -n "$scope" ]; then
     mkdir -p target
     echo "gate-run: the lock is busy; prebuilding (just gate-prep $scope, log target/gate-prep.log)" >&2
     # Its own session, so stopping it stops cargo and every compiler under it.
-    setsid nice -n 5 just gate-prep "$scope" >target/gate-prep.log 2>&1 </dev/null &
+    setsid chrt -i 0 ionice -c 3 nice -n 19 just gate-prep "$scope" >target/gate-prep.log 2>&1 </dev/null &
     prep_pid=$!
 fi
 exec flock -o "$lock" "$self" --locked "$(date +%s)" "$prep_pid" "$prep_started" "$@"
