@@ -904,6 +904,9 @@ pub struct Loaded {
     /// [`Self::rocket_model`], and also whenever this mode's own layout carries
     /// no `Cockpit321Go` widget to place it by (Pure's, and any other title's).
     pub countdown_model: Option<(Model, oag_hud::Model)>,
+    /// Detonator's medal models, each with the `<ImageModel>` that places it (empty outside
+    /// Detonator, on a title that does not show them, and for a medal that did not decode).
+    pub medal_models: Vec<(oag_hud::ImageModel, Model)>,
     pub liveries: Vec<Livery>,
     /// The collision soup, if [`Options::collision`] asked for it.
     pub collision_model: Option<Model>,

@@ -390,6 +390,19 @@ impl Overlay {
         safe_area_frame(frame, self.safe_area_scale, self.space.size)
     }
 
+    /// `rect` (`[x, y, width, height]` of the layout's grid) where the safe area puts it.
+    #[must_use]
+    pub fn place_rect(&self, rect: [f32; 4]) -> [f32; 4] {
+        let scale = self.safe_area_scale;
+        let size = self.space.size;
+        [
+            rect[0] * scale + (1.0 - scale) * size.0 * 0.5,
+            rect[1] * scale + (1.0 - scale) * size.1 * 0.5,
+            rect[2] * scale,
+            rect[3] * scale,
+        ]
+    }
+
     /// The grid this HUD is authored in: the title's own, per `Assets::space`.
     #[must_use]
     pub fn space(&self) -> oag_display::space::Space {

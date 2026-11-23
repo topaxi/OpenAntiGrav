@@ -249,10 +249,32 @@ pub(super) fn load_hud(
             );
         }
     }
+    let shows_medals = title
+        .race
+        .detonator
+        .is_none_or(|detonator| detonator.shows_medals.value);
+    if let Some(layout) = layout
+        .as_mut()
+        .filter(|_| mode == Mode::Detonator && !shows_medals)
+    {
+        let before = layout.image_models.len();
+        layout.image_models.retain(|model| {
+            !oag_hud::DETONATOR_MEDAL_WIDGETS
+                .iter()
+                .any(|(_, name)| *name == model.name)
+        });
+        if layout.image_models.len() != before {
+            report.push(
+                "HUD: the medal models are authored but this title does not show them; \
+                 not drawn"
+                    .to_string(),
+            );
+        }
+    }
     if mode == Mode::Detonator && layout.is_some() {
         report.push(
-            "HUD: Detonator draws no EmpBarEffect (an ImageModel the layout reader does not \
-             model; its gauge is RaceSim::detonator_emp_gauge), no bomb-ahead warning, no ScoreFeedBack0-15 and no medal models; \
+            "HUD: Detonator draws no EmpBarEffect (an ImageModel; its gauge is \
+             RaceSim::detonator_emp_gauge), no bomb-ahead warning and no ScoreFeedBack0-15; \
              PulseScore, PulseMultiplier, EmpScore and PulseBankedScore are never bound by the \
              original; the reload gauge is the craft's own material constant, not a HUD widget"
                 .to_string(),
@@ -786,6 +808,12 @@ pub(super) fn build_model(
     src: &str,
     blob: &[u8],
 ) -> anyhow::Result<oag_mesh::mesh::Model> {
+    // A PS3 `.vex` keeps its geometry in the `.rcsmodel` beside it (HD's `<ImageModel>` medals).
+    if oag_vex::vex::geometry_is_external(blob) {
+        let mut report = Vec::new();
+        return oag_livery::entry::ps3_scene_model(archives, src, blob, None, &mut report)
+            .map(|(model, _)| model);
+    }
     let model = oag_mesh::mesh::build(src, blob)?;
     if !model.textures.is_empty()
         && model.textures.iter().all(Option::is_none)

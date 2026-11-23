@@ -43,6 +43,7 @@ pub mod flyer;
 pub mod ghosts;
 pub mod heap;
 pub mod hud_countdown;
+pub mod hud_medal;
 pub mod hud_overlay;
 pub mod hud_views;
 pub mod icon;

@@ -509,6 +509,7 @@ pub fn run(
                 music_discs: options.music_discs.clone(),
                 force_wreck: None,
                 force_hit: None,
+                force_detonator_score: None,
                 force_wall_slide: None,
                 force_leach_lock: None,
                 leach_path: None,

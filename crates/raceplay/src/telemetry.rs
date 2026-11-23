@@ -238,7 +238,8 @@ impl Race {
                 .zip(self.core.sim.detonator_stage())
                 .map(|(cannon, stage)| {
                     let emp = self.core.sim.detonator_emp().unwrap_or((0, false));
-                    super::detonator_hud::readout(cannon, stage, emp, &hud.chain)
+                    let medal = super::detonator_hud::medal(cannon.score, self.view.medal_targets);
+                    super::detonator_hud::readout(cannon, stage, emp, medal, &hud.chain)
                 }),
             campaign_event: self.view.campaign_event,
             // The reticle, whatever it is doing. `Sight::visible` is what

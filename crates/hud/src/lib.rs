@@ -85,7 +85,10 @@ mod widget;
 
 pub use assets::{Assets, SplitAssets, split_family};
 pub use compose::{Composed, compose};
-pub use detonator::{Bonus as DetonatorBonus, Detonator, chain_id as detonator_chain_id};
+pub use detonator::{
+    Bonus as DetonatorBonus, Detonator, MEDAL_WIDGETS as DETONATOR_MEDAL_WIDGETS,
+    chain_id as detonator_chain_id, medal_model as detonator_medal_model,
+};
 pub use draw::{Context, Frame, Span, draw_list, draw_list_without_sight, sprite_draw};
 pub use head_to_head::HeadToHead;
 pub use kill_tags::KillTag;
@@ -96,7 +99,7 @@ pub use race_line::RaceLine;
 pub use sight_draw::sight_draws;
 pub use sub_weapon::SubWeapon;
 pub use time_trial_pace::{PaceTier, RecordTarget, TimeTrialPace, pace_for};
-pub use widget::{Fill, Font, Label, Model, Sprite, VertAlign};
+pub use widget::{Fill, Font, ImageModel, Label, Model, Sprite, VertAlign};
 
 // The two the outline default is built from. Everything else `draw` decides is
 // private to it; `tests` reaches those through `super::draw::*`.
@@ -117,6 +120,8 @@ pub struct Layout {
     pub labels: Vec<Label>,
     /// Every `<Mode3D><Model>`, recorded but not drawn.
     pub models: Vec<Model>,
+    /// Every `<ImageModel>`, recorded and never drawn here ([`ImageModel`]).
+    pub image_models: Vec<ImageModel>,
     /// The `<Variable global=>` table, by name, before `FEConst->` resolution.
     pub constants: HashMap<String, String>,
     /// Anything the parser met and did not model, for the load report.
@@ -320,6 +325,13 @@ impl Layout {
                 continue;
             }
 
+            if name.eq_ignore_ascii_case("ImageModel") {
+                if let Some(model) = self.image_model_from(child, offset_x, offset_y) {
+                    self.image_models.push(model);
+                }
+                continue;
+            }
+
             // `Screen`, `Variable` and `Values` are containers or
             // already-handled carriers; everything else is walked into so a
             // widget nested somewhere unexpected is still found.
@@ -463,6 +475,34 @@ impl Layout {
                 }),
             orthographic,
             origin,
+        })
+    }
+
+    fn image_model_from(
+        &mut self,
+        node: &Node,
+        offset_x: f32,
+        offset_y: f32,
+    ) -> Option<ImageModel> {
+        let name = anonymous_or(node);
+        let Some(src) = node.value("Src").map(str::to_string) else {
+            self.skipped.push(format!("<ImageModel {name}> has no Src"));
+            return None;
+        };
+        let at = |key: &str| number(&self.constants, node.value(key)).unwrap_or(0.0);
+        Some(ImageModel {
+            name,
+            src,
+            rect: [
+                offset_x + at("ImageX"),
+                offset_y + at("ImageY"),
+                at("ImageWidth"),
+                at("ImageHeight"),
+            ],
+            model: [at("ModelX"), at("ModelY"), at("ModelZ")],
+            rotation: [at("RotX"), at("RotY")],
+            colour: colour(&self.constants, node.value("Colour")),
+            start_enabled: node.flag("StartEnabled").unwrap_or(true),
         })
     }
 

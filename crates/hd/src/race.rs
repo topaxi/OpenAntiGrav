@@ -481,6 +481,9 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     }),
     // `DetonatorHud_BindEmpWidgets` (`0x00082138`) binds it (`detonator-hud.md`, 65).
     binds_emp_ready: oag_title::pre_race::Sourced::measured(true),
+    // `Detonator_UpdateHud` (`0x00067120`) compares the cell's thresholds against the score
+    // (`detonator-hud.md`, 65).
+    shows_medals: oag_title::pre_race::Sourced::measured(true),
 };
 
 /// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,

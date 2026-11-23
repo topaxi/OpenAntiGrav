@@ -158,6 +158,31 @@ that knows the chunk (on most inline chunks the tail is two halves - see
 `Mesh::inline_uv_before_colour`). Open: the same reading on the other 2,488
 inline chunks.
 
+### Inline chunks authored in other units: the front-end trophies (2026-11-23)
+
+`Data/FE/Trophies/hd_gold`, `hd_silver` and `hd_bronze` (`.vex` + `.rcsmodel`, `DATA02`, one inline
+chunk each, stride 18, 1,578 vertices and 1,480 triangles) decoded to **0 triangles** through the
+scene reader: the one submesh was dropped as a stray by `Mesh::submesh_fits`. The node's authored
+box (mesh payload `+0x40`/`+0x50`) is `-0.375 -0.286 -0.040 .. 0.371 0.375 0.040`; the dequantised
+positions (scale `1/128`, bias `-0.1875 4.4219 -0.0078`) are `-37.5 -28.59 -4.0 .. 37.125 37.445
+4.0`: **exactly 100 times it on all six bounds**, with the node's world and anchor matrices the
+identity, the `HD_Gold` joint's `Anim Transform` a plain spin about Y (`world_transforms_at` at 0,
+0.1, 0.5, 1 and 2 s: a rotation, no scale), and no `0.01` or `100.0` word in either file. 90 for
+the factor, 50 for where it comes from (a unit the front end's trophy models are authored in).
+`Mesh::fits_in_authored_units` accepts that shape, **inline chunks only**, with every one of the
+six bounds on the factor to within 1.5 quantisation steps: positions read out of attribute bytes do
+not land on one factor on six bounds, so the stray guard keeps its job. Held: 197 `oag-mesh` and
+179 `oag-rcs` disc-backed tests pass unchanged, and five HD race frames (Race, Zone, Speed Lap,
+Detonator, Time Trial) are pixel-identical with the rule on and off. Checked against Omega: its
+`data00` ships the same three `Data/fe/trophies/hd_*.vex` as PS4 models (the 2048-lineage container,
+not this one), which `oag_livery::entry::ps3_scene_model` reads through `mesh::rcs::psp2::build` as a
+hull is (ported: `detonator_hud_ground_truth::an_omega_detonator_race_shows_the_medal_the_score_has_reached`
+decodes all three); 2048 draws its trophies from `.gxt` card art.
+
+The trophies share `fe/trophies/materials/medal.rcsmaterial` and author three parameter sets in their
+own records (diffuse `0x0fe400f9`, specular colour `0x370a63cb`, exponent `0x64341a19`):
+`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`, "The medals".
+
 ## The `.vex` is not optional
 
 This format cannot be read on its own, and that is a property of the format:

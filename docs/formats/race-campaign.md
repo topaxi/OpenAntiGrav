@@ -290,9 +290,10 @@ ladders, the nitro triple a dummy `1`/`1`/`1`). `NitroBattle` (13 cells) stays r
   `rm+0x2df0`) to `Profile_RecordCampaignResult`'s mode-14 case (`0x0001f770`), which calls
   `PI_Cell_EvaluateMedalForValue(cell, score)`; 2048 passes the same record field. Both endings of a
   run (finished or destroyed) call the builder with `force = 1`, so a destroyed run records too.
-  Still chosen: the mid-race medal cues
-  (`DetonatorGoldMedal`..) are the HUD's (phase 12) and `medal_watch::live_value` does not read
-  Detonator; 2048 draws a Detonator card with Elimination's crosshair icon (it has four glyphs).
+  The mid-race medal widgets (`DetonatorGoldMedal`..) are the HUD's and are drawn since
+  2026-11-23 (`detonator-hud.md`, "The medals"): `medal_watch::tick` hands the cell's targets at the
+  launch rung to the race; `medal_watch::live_value` still does not read Detonator, so the
+  `ER_*MA` lines and cues are not raised (nothing measured them for Detonator); 2048 draws a Detonator card with Elimination's crosshair icon (it has four glyphs).
 - Ours adds no clean-lap bonus (`+1000` per `0x200000` crossing, hypothesis 50 in
   `detonator-cannon.md`): the score is the cannon's awards alone, so it can sit under the
   original's on the same line.

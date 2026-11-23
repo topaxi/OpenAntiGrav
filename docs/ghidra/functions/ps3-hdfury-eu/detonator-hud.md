@@ -35,7 +35,7 @@ Its two per-tick updaters are vtable entries (`0x00862e3c` -> `0x00080830`, `0x0
 | `DamageBar`, `DamageBarBg`, `ShieldBarText` | generic | `Hud_BindWidgets` `0x0009bb30` | shield (energy) percent, the shared readout, white in mode 14 | `(int)pct`, no `%` | `Hud_UpdateShieldReadout` `0x000866c8` | 82 |
 | `ForwardWarningBackground`, `ForwardWarningBombIcon`, `WarningFront*`/`WarningBack*` (Image) | warning slots | `0x0023bb98` | the bomb-ahead warning, HUD message `8` (see below) | visibility + 2.0 s timers | `0x00083318`, table walk `0x0008f9f0`-`0x0008fb04` | 55 |
 | `ScoreFeedBack0`..`15` (Text) | `hud+0x3d0 + 0xc*k` | `0x0009bb30` | a floating `+N` for every score add: `DetonatorScoring_Add*` -> `Hud_RaiseScoreFeedback` (`0x00083ba0`) | `+%3.0f` (`+%3.2f` under 1.0) | `0x00083ba0` | 75 |
-| `DetonatorGoldMedal`/`Silver`/`Bronze` (ImageModel, `hd_gold/silver/bronze.vex`, `StartEnabled=false`) | not bound by this controller | - | shown when the score passes the cell's `DetonatorGoldMedal`/`Silver`/`Bronze` thresholds, in `Detonator_UpdateHud` ([detonator-cannon.md](detonator-cannon.md)) | model | `0x00067120` | 65 |
+| `DetonatorGoldMedal`/`Silver`/`Bronze` (ImageModel, `hd_gold/silver/bronze.vex`, `StartEnabled=false`) | not bound by this controller | - | shown when the score passes the cell's `DetonatorGoldMedal`/`Silver`/`Bronze` thresholds, in `Detonator_UpdateHud` ([detonator-cannon.md](detonator-cannon.md)); wired, see "The medals" | model | `0x00067120` | 65 |
 | `HUD_info_text`, `HUD_time_diff`, `HUD_ready_go`, `HUD_colours` fragments | generic | generic binders | the shared message lines, lap-line gap and start gate; what Detonator raises into them is unread | - | `Hud_Update` | 60 |
 | `PulseScore`, `PulseMultiplier` (Text) | `+0xd8`, `+0xdc` | **none** | nothing: see below | - | - | 75 |
 | `EmpScore` (Text) | `+0xe0` | `0x00081958` | nothing: bound, never read or written again | - | - | 70 |
@@ -283,12 +283,35 @@ which stands a race on a known cannon and compares the drawn texts exactly.
 Not drawn, and named in the loader report: the four widgets the original never binds
 (`PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore`), `EmpBarEffect` (an
 `<ImageModel>`; its gauge is `RaceSim::detonator_emp_gauge`),
-`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread), `ScoreFeedBack0`..`15`, and the three
-medal models (`<ImageModel>` `.vex`; the layout reader records none, and the cell's thresholds do
-not reach the race). The reload gauge is the craft's own `detonator_bulletgaugesegments` material
+`ForwardWarning*`/`Warning*` (the bomb-ahead raise is unread) and `ScoreFeedBack0`..`15`.
+The reload gauge is the craft's own `detonator_bulletgaugesegments` material
 constant, not a HUD widget: untouched.
 
-- **Omega: ported.** Same test; the EMP pips draw as HD's; `EmpReady`, which Omega's layout authors but
+### The medals (wired, 2026-11-23)
+
+| Piece | What it does |
+| --- | --- |
+| Reader | `oag_hud::Layout::image_models`: every `<ImageModel>` as `oag_hud::ImageModel` (name, `Src`, `ImageX/Y/Width/Height` with the `<Item>` offsets composed, `ModelX/Y/Z`, `RotX/Y`, `Colour`, `StartEnabled`). Record only: no generic draw, so `EmpBarEffect` stays off. A `<aImageModel>` (Omega's typo) is not one. |
+| Targets | `medal_watch::tick` hands a Detonator cell's `targets_for_difficulty(rung)` to the race (`Race::set_medal_targets`, view state, never in `World`); both tick loops (`RaceStage::tick_messages`, the headless capture's `--campaign-cell`) reach it. A race with no cell has none and draws no medal. |
+| Law | `oag_raceplay::detonator_hud::medal`: `score >= target` (`evaluate_targets`, flipped: Detonator is a counting mode, the same law the results use, so the HUD cannot promise a medal the results withhold), best tier only. **Chosen:** all three widgets share `ImageX 1440 ImageY 80`, and when each one enables, and whether a lower one stays up under a higher, is not read (the page's row above is 65 on the compare, no more). |
+| Model | `oag_game::hud_medal::Medals`: one `oag_game::preview::Preview` (the front end's model preview) per medal, drawn into the widget's rectangle where the HUD's safe area puts it, in `RaceStage::draw_window_hud` and `race_capture::capture`. The spin is the file's own `Anim Transform` (a turn about Y, `LoopEnd 360`); the camera is the preview's orbit with `RotX`/`RotY` as pitch/yaw (**chosen**: the projection `ModelZ -87` sits in is unread). |
+| Gate | `oag_title::Detonator::shows_medals`: HD measured `true`, Omega inherited `true` (same layout bytes, the executable carries each medal string once where HD's carries two, so its binder is unread), 2048 `false`. |
+
+The three `.vex` files are PS3 models (geometry in `hd_*.rcsmodel` beside them, `DATA02`); they now
+decode (1,480 triangles each). The front-end trophies author the node's box 0.01x the vertices
+(`docs/formats/rcsmodel.md`, "Inline chunks authored in other units"), which dropped the one
+submesh as a stray before. **Open: the tiers' colour.** The three share `medal.rcsmaterial` and differ
+in the model's own parameters (diffuse `0x0fe400f9`: gold `0.178 0.130 0`, silver `0.252` grey, bronze
+`0.199 0.075 0`; specular colour `0x370a63cb`: `1 0.91 0.41`, `0.706 0.849 1`, `1 0.913 0.431`;
+exponent `0x64341a19`: 25, 25, 73.36). The program is a lit sum over a normal map plus a
+reflection of the paraboloid probe on unit 1 (`scripts/ps3-microcode.py fp-file`, block 0), which the
+mesh reader classes as the glint-water family, so a preview draws it as a plain grey metal and
+the three tiers look the same. The tier is the model drawn, not its tint, until that is read.
+Picture: a frame of a campaign cell (`grid8_4_3`) at the cell's Medium targets with the score forced
+(`--force-detonator-score 600:180000`) shows the hexagonal trophy at the widget's rectangle;
+without a cell or below bronze nothing draws.
+
+- **Omega: ported.** Same test (the medals too: `Detonator_HUD.xml` authors the same three at the same values, tested); the EMP pips draw as HD's; `EmpReady`, which Omega's layout authors but
   its executable names no string for (so probably never binds, 60, above), is dropped from the
   layout (`oag_title::Detonator::binds_emp_ready`, the loader report says so); `<aImageModel>` on `EmpBarEffect` composes with nothing skipped
   and no error (the layout reader models no `<ImageModel>` at all, spelled right or not; the
@@ -296,6 +319,7 @@ constant, not a HUD widget: untouched.
   Omega atlas (`detonator_hud2.tga` 1024x1024 beside a 2048x2048 `fury_hud.gtf`) resolves for every
   sprite checked. Omega's `LAYOUTS_2048` (a 2048-lineage circuit raced as Detonator) names the bare
   Omega root too, since the executable names no other.
+- **2048: checked, differs, medals left.** Its skin authors the three at `ImageX 720` on its 960x540 grid; `shows_medals` is `false` there (the brief for this change excluded it).
 - **2048: checked, differs, wired to its own layout.** `Detonator_HUD_HD.xml` composes from nine
   files; the `DetonatorWeapons.xml` the archive order serves is the 960x540 copy with
   `EmpCharge`/`EmpFull` (the widgets the executable binds), `DetonatorWeaponDisplay` frame and the

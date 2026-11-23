@@ -911,6 +911,7 @@ impl Race {
                 hull_reach: [0.0; MAX_SHIPS],
                 trail_sparks,
                 campaign_event,
+                medal_targets: None,
                 trail_inside: [0; MAX_SHIPS],
                 trail_hit_rest: [0; MAX_SHIPS],
                 hd_flame: [exhaust::hd::Flame::new(); MAX_SHIPS],

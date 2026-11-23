@@ -360,6 +360,21 @@ impl Race {
         let slot = self.core.player_slot();
         self.view.huds[slot].messages.set_standing(id);
     }
+
+    /// The Detonator medal the HUD shows now: the best the score has reached against
+    /// [`Self::set_medal_targets`]. The same answer the readout carries.
+    #[must_use]
+    pub fn detonator_medal(&self) -> Option<oag_tables::race_campaign::Medal> {
+        let score = self.core.sim.detonator_score()?;
+        super::detonator_hud::medal(score, self.view.medal_targets)
+    }
+
+    /// Gives the race the campaign cell's medal targets (at the rung it was launched at), so a
+    /// Detonator HUD can show the medal the score has reached. `None`, a race with no cell,
+    /// shows none. View state: nothing here reaches the simulation or its hash.
+    pub fn set_medal_targets(&mut self, targets: Option<oag_tables::race_campaign::MedalTargets>) {
+        self.view.medal_targets = targets;
+    }
 }
 
 #[cfg(feature = "view")]

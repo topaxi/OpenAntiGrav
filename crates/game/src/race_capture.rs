@@ -8,11 +8,11 @@ use anyhow::{Context, Result};
 use log::warn;
 use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
-use oag_race::RaceState;
 use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
+mod overlays;
 pub mod pose_flaps;
 pub mod pose_hold;
 pub mod pose_lean;
@@ -98,6 +98,8 @@ pub struct CaptureOptions {
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
+    /// `--force-detonator-score TICK:SCORE`: the Detonator score is set at the end of a tick.
+    pub force_detonator_score: Option<(u32, i32)>,
     /// `--force-wall-slide TICK:SLOT`: see [`RaceSim::force_wall_slide`].
     pub force_wall_slide: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: see [`RaceSim::force_leach_lock`].
@@ -442,6 +444,7 @@ pub fn capture(
         leach_ball_model,
         shield_cockpit,
         countdown_model,
+        medal_models,
         fog_volumes,
         light,
         circuit_lighting,
@@ -1364,35 +1367,16 @@ pub fn capture(
                         None,
                         hud_viewport,
                     );
-                    // The countdown, on the same terms `RaceStage::draw_hud` draws
-                    // it on - see `oag_hud::countdown`,
-                    // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
-                    // which stands this overlay down where the circuit's own gantry
-                    // is already showing the count.
-                    if let (Some((model, widget)), true) = (
-                        countdown_model.clone(),
-                        RaceState::thrust_gated(race.core.sim.world.tick) && !scene.draws_gantry(),
-                    ) {
-                        match crate::hud_countdown::Countdown::new(
-                            &device, &queue, format, model, &widget,
-                        ) {
-                            Ok(mut countdown) => countdown.draw(
-                                &device,
-                                &queue,
-                                &mut encoder,
-                                &hud_view,
-                                race.core.sim.world.tick as f32 / 60.0,
-                                None,
-                                hud_viewport,
-                                (width, height),
-                            ),
-                            Err(why) => {
-                                warn!(
-                                    "the countdown overlay did not build ({why}); capturing without one"
-                                );
-                            }
-                        }
-                    }
+                    overlays::draw_over_hud(
+                        (&device, &queue, format),
+                        &mut encoder,
+                        &hud_view,
+                        (&race, &scene, &overlay),
+                        &medal_models,
+                        countdown_model.as_ref(),
+                        hud_viewport,
+                        (width, height),
+                    );
                 }
                 Ok(None) => warn!("no HUD layout: capturing without one"),
                 Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),
