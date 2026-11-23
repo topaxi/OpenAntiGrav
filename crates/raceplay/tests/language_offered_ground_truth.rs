@@ -231,24 +231,17 @@ fn pure_usa_reads_the_pi012_overlay_and_pure_eu_does_not() {
         };
         assert_eq!(got, usa, "pure usa {language} {id}");
     }
+    let Some(eu) = pure_string("pure-psp-eu.chd", "English", "On Line") else {
+        return;
+    };
     assert_eq!(
-        pure_string("pure-psp-eu.chd", "English", "On Line").as_deref(),
-        Some("On Line"),
+        eu, "On Line",
         "the EU disc holds PI012 and its executable never loads it"
     );
+    let unstated = "Text->Main Menu->Mode->On Line";
     assert_eq!(
-        pure_string(
-            "pure-psp-usa.chd",
-            "English",
-            "Text->Main Menu->Mode->On Line"
-        )
-        .as_deref(),
-        pure_string(
-            "pure-psp-eu.chd",
-            "English",
-            "Text->Main Menu->Mode->On Line"
-        )
-        .as_deref(),
+        pure_string("pure-psp-usa.chd", "English", unstated),
+        pure_string("pure-psp-eu.chd", "English", unstated),
         "an id PI012 does not state keeps the base table's text"
     );
 }

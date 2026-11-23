@@ -1140,8 +1140,8 @@ holds the file". It states three languages in one `StringTable`; an entry's
 `Language` attribute opens a section that holds until the next marker
 (`StringTable::section`), so English reads `<Entry ID="On Line" String="Download">`
 and the French and Spanish sections their own `Téléchargement` and `Descarga`. It
-carries 14 English ids: the Main Menu's `On Line` row (`Download`), the US spellings
-of the Settings camera, Zone 1-4, Profile and Energy Save descriptions and the
+carries 15 English ids: the Main Menu's `On Line` row (`Download`), the US spellings
+of the Settings camera, Zone 1-4, Profile and Energy Save descriptions (which also drops "Duo" from "Memory Stick Duo") and the
 `Network Sync` line, the four team descriptions whose grammar changes (Qirex,
 Triakis, AG Systems, Auricom: `presents`, `muscles`, `brings`), `Synchronising` and
 `MSInfoText Memory` (450 KB against the EU's 512). Confidence 95 that the USA
