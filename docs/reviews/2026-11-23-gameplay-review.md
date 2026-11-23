@@ -179,8 +179,7 @@ decision, not a one-line change.
 carrying both shoulders) reaches `oag-gameplay`, `oag-input`, `oag-replay` and
 `oag-net`'s wire. A narrower route exists upstream of the snapshot: the pad
 resolve raises `Flip` for L1 without `L` or the airbrake in a flip race, so the
-snapshot keeps its shape. Untested; the design and its open checks are in the
-`handover/gameplay` thread `l1-flip-zeroes-the-l2-airbrake`.
+snapshot keeps its shape. Untested; the design and its open checks are written up as an open thread.
 
 ### G5 - `World::person_flown` flies the primary slot with no craft check
 
