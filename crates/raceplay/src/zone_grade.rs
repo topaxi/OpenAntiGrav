@@ -752,15 +752,21 @@ impl ZoneGrade {
 
     /// The fog this stage authors, or `base` where it authors none.
     ///
-    /// **A zero density leaves the circuit's own fog standing.** Stage `Start`
-    /// authors `Fog density`=`0.000000`, and this build reads that as "this
-    /// stage adds no fog of its own" rather than "this stage switches the
-    /// circuit's fog off" - the same `density <= 0.0` guard
-    /// `envsettings_fog` already applies to a circuit file. Which of the two
-    /// the original means is unread, and so is what selects between the
-    /// `Fog`, `Alt Fog` and `Track Fog` blocks each stage authors; the primary
-    /// pair is used, exactly as `.envsettings`' own reader uses the primary
-    /// pair and ignores its alternate.
+    /// **A stage that authors a `Fog density` of zero has no fog**, whatever
+    /// the circuit's own fog is and whatever colour the stage carries beside
+    /// it. The density is the coefficient of the exp2 curve
+    /// ([`mesh_render::Fog::authored_exp2`]), which is one at zero, and the
+    /// colour does not stand alone: Detonator stage 2 authors an orange `Fog
+    /// colour` with a density of zero, which would be a dense orange haze if
+    /// the circuit's density were borrowed for it. Stage `Start` of every
+    /// table authors zeros (black, density 0), and Talon's Junction's own
+    /// lilac fog (`0.26 0.22 0.38`, density `0.001`) is what drew the far
+    /// scenery pale where the original's frame is black (`docs/ghidra/
+    /// functions/ps3-hdfury-eu/detonator-look.md`, "Fog"). A stage that
+    /// authors neither key leaves the circuit's fog standing. Which of the
+    /// `Fog`, `Alt Fog` and `Track Fog` blocks each draw takes is unread;
+    /// the primary pair is used, as `.envsettings`' own reader uses its
+    /// primary pair.
     #[must_use]
     pub fn fog(&self, base: Option<mesh_render::Fog>) -> Option<mesh_render::Fog> {
         let palette = self.palette();
@@ -768,7 +774,7 @@ impl ZoneGrade {
             return base;
         };
         if density <= 0.0 {
-            return base;
+            return Some(mesh_render::Fog::off());
         }
         Some(mesh_render::Fog::authored_exp2(colour, density))
     }

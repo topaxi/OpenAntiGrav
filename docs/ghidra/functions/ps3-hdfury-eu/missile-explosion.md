@@ -203,7 +203,7 @@ it when its last node dies.
   4 then 0 elements, the streaks outliving the blast by their node life, the step
   along row 1 equal to the speed and not scaled by `dt`), `oag-fx`'s `fat_line`
   tests (a node born at `t = scale` has width `2 (1 - scale)` and alpha
-  `1 - scale`) and `hd_missile_blast_ground_truth::the_explosions_streaks_draw_and_outlive_it`
+  `1 - scale`) and `hd_missile_blast_ground_truth::the_explosions_streaks_*` (three tests, one frame each)
   (frames from a camera 130 units to the side and 60 above the blast: near-white
   pixels 13,658 with the streaks and 3,635 without at tick 335, 9,524 against 2,548
   at tick 365 after the blast retired, 2,567 at tick 410 once every node is dead).
