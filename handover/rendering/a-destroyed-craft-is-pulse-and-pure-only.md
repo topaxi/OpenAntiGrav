@@ -68,8 +68,9 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   `RibbonEffects_SampleLighting` at the instance. The root is white (entry 0) from life 1/256 to 1/8,
   then `L` from 0.16. **Ready to wire on HD:** an `oag_fx` colour mode carrying the weight law, with `L`
   a stand-in until the lighting volume or a live `ctx+0xb04` read (recipe on the page) gives it.
-  2048 plays mode 3 as the reversed walk (white, then black for the last eighth), and Omega's 2048
-  reader matches. Still open: HD's frame-advance sources (count, rate, `[lo, hi]`; partly read on the
+  2048 plays modes 1 and 3 as the reversed walk (white, then black for the last eighth), and
+  Omega's 2048 reader matches. Ours walks forward on every title, so on 2048 and Omega every
+  mode 1 or 3 emitter is affected, not only the blast. HD's mode 1 is the plain forward walk. Still open: HD's frame-advance sources (count, rate, `[lo, hi]`; partly read on the
   same page), so listing the effect in `oag_hd::effects::SPRITES` may still give a white blowout.
 
 1. ~~HD/Fury: read `Ship_SetState`'s destroy states~~ Read 2026-11-22

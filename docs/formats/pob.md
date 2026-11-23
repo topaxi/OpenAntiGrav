@@ -791,11 +791,11 @@ draws a black ball. Each title reads mode 3 differently:
   the scene's light colour. Addresses, the SPU twin and `L`'s read recipe:
   [ship-destroy.md](../ghidra/functions/ps3-hdfury-eu/ship-destroy.md), "`colour_mode` 3 is a
   blend toward the scene light".
-- **2048 (confidence 70).** No light term. Any mode other than 0 and 2 walks the table from
-  the end (`f = 1 - age`), so this table is white for most of the life and black for the last
-  eighth.
-- **Omega.** Its 2048-layout reader matches 2048. Its HD-layout reader (`FUN_016ddf70`) has
-  only the plain walk (confidence 55).
+- **2048 (confidence 65; the runtime record's mapping to `+0xbc` is unread).** No light term.
+  Any mode other than 0 and 2 walks the table from the end (`f = 1 - age`), so this table is
+  white for most of the life and black for the last eighth. Modes 1 and 3 are both affected.
+- **Omega.** Its 2048-layout reader (`FUN_016e06b0`) matches 2048 instruction for
+  instruction. Its HD-layout reader (`FUN_016ddf70`) has only the plain walk (confidence 55).
 
 So the alpha column of these tables (falling `ff` to `00`) is still never read, in any mode.
 

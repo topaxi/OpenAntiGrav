@@ -271,7 +271,7 @@ The table is stored in file byte order, and HD's `.pob` writes each entry as a b
 `u32` whose bytes are `A, B, G, R` (`oag_pob` reverses them to RGBA). So the weight byte at
 `+0x1c` is **red**, and the particle word has the same `A, B, G, R` layout. The alpha
 channel block (`ctx+0x6a0`, after the colour step) then overwrites the alpha byte as it does
-in every mode.
+in every mode, when `ctx+0x6a0` is set (copied from render state `+0xc34`).
 
 **The SPU job agrees.** The `MaintainParticles` job in the image at `0x0080a000`, read with
 `scripts/ps3-spu-disasm.py 0x0080a000 0x1b80`, offsets into that range:
@@ -288,7 +288,7 @@ bc8..c60   the plain walk: keep the top byte, RGB from the entry
 1154..1160 store to particle +0x74
 ```
 
-Two independent compilations of one source agree byte for byte. Which path runs depends on
+Two independent compilations of one source agree on every step. Which path runs depends on
 `*(0x008b2964)+0x28` and on the job queue (`Psys_UpdateInstance_q`, `0x00285020`), so the
 answer is the same either way. The score is 84, the ceiling for a static read. A live
 `ctx+0xb04` read moves it up (below).
@@ -315,10 +315,10 @@ So, by life fraction:
   blast. Blended over life fractions 0.125 to 0.16, about 6 ticks.
 
 `L`'s value is unread: the lighting volume behind `RibbonEffects_SampleLighting` is open in
-[rocket-trail.md](rocket-trail.md). Live rocket samples on one circuit ran from `0xbaffff`
-near the grid to `0x2b5d7b` in the dark (byte order as packed: R, G, B, then alpha `0xff`).
-The original's blast is therefore white-hot fire for its first eighth, then the same flipbook
-in the circuit's ambient colour. It is never black.
+[rocket-trail.md](rocket-trail.md), whose live rocket samples on one circuit ran from
+`0xbaffff` near the grid to `0x2b5d7b` in the dark. The original's blast is therefore
+white-hot fire for its first eighth, then the same flipbook in the scene's light colour. It is
+never the table's black. How dark it gets later depends on `L`, which is unread.
 
 **Read recipe for `L`** (raises the 84): RPCS3 with the patched build, a breakpoint at
 `0x002821d4` (just after the `SampleLighting` call, `bl` at `0x002821cc`, in
@@ -336,7 +336,9 @@ have no `0x40`, so it steps at a rate. The count's and rate's sources (render st
 `+0xc44`/`+0xc60`) are not read.
 
 **2048: checked, differs.** 2048's per-particle update `Psys_UpdateParticle` (`0x812ab114`,
-v1.04) has no lighting branch. At `0x812ab1f2`-`0x812ab23a`:
+v1.04) has no lighting branch. `s17 = 1 - p[+0x6c] / p[+0x70]` (`vdiv` at `0x812ab1b0`, `vsub`
+at `0x812ab1b8`), where `+0x6c` is the countdown the function decrements at its end and
+`+0x70` the lifetime. So `s17` is the age fraction. At `0x812ab1f2`-`0x812ab23a`:
 
 ```text
 mode = record+0x870; mode == 2 -> no walk
@@ -345,16 +347,20 @@ mode != 0 -> f = 1 - f                                      0x812ab1fe..0x812ab2
 idx = trunc(f * 255.99997) & 0xff; RGB bytes = record+0x470 + idx*4, bytes 0..2
 ```
 
-So 2048 plays mode 3 as the walk **reversed**. The same table gives white for most of the
-life (indices 255 down to 41), the grey ramp at life fractions 0.84 to 0.875, and black for
-the last eighth. That is 2048's fire that ends in dark smoke, from the same file, with no
-light term (confidence 70, decompile plus the instruction read above; the record's `+0x870`
-is the runtime home of the file's `+0xbc`, inferred because only its `2` and `else`
-semantics are read).
+So 2048 plays mode 3, and mode 1, as the walk **reversed**. The same table gives white for
+most of the life (indices 255 down to 41), the grey ramp at life fractions 0.84 to 0.875, and
+black for the last eighth. That is 2048's fire that ends in dark smoke, from the same file, with
+no light term. Omega's copy of this reader agrees (below), so two binaries read the same
+logic. Confidence 65: the runtime record's `+0x870` and `+0x470` are taken to be the file's
+`+0xbc` and `+0xc4`. That mapping is unread, because no direct store to `+0x870` exists (the
+record is presumably filled in bulk). Our player walks forward on every title, so on 2048
+and Omega every emitter with mode 1 or 3 is affected, not only this blast. HD's mode 1 is
+the plain forward walk.
 
-**Omega: checked, differs.** Omega carries both readers. `FUN_016e06b0` is 2048's
-(`+0x870` at `0x016e08dc`: 0 forward, 2 none, otherwise the walk from `xmm5`), the reversed
-walk, ported from 2048. `FUN_016ddf70` reads an HD-layout record (table at `+0xc4`,
+**Omega: checked, differs.** Omega carries both readers. `FUN_016e06b0` is 2048's.
+`xmm5 = remaining / lifetime` (`0x016e06f6`) and `xmm10 = 1 - xmm5` (`0x016e0737`).
+`+0x870` is read at `0x016e08dc`: 0 walks with `xmm3 = xmm10`, the age (`0x016e08d1`); 2
+skips; any other value walks with `xmm5`, reversed. That is the same law as 2048. `FUN_016ddf70` reads an HD-layout record (table at `+0xc4`,
 `0x016de807`). It makes only the `mode != 2` test (`cmp r13d, 2`, `0x016de77e`) before the
 plain walk (keep the top byte, `& 0xffffff`, `0x016de7e4`-`0x016de817`). No light lerp
 appears there. Whether Omega's HD-layout path is reached for HD's ship explosion is not read
