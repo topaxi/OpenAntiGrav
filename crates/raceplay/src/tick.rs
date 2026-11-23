@@ -687,6 +687,7 @@ impl Race {
             }
             self.view.advance_seat_contact_fx(&self.core, &steps, seat);
             self.view.advance_field_sparks(&self.core);
+            self.view.advance_floor_sparks(&self.core);
         }
 
         // Last, after every write this tick makes: the recording stores the

@@ -234,6 +234,8 @@ mod field_sparks;
 pub mod finish_camera;
 mod finished_thrust;
 mod flip;
+#[cfg(feature = "view")]
+mod floor_sparks;
 pub mod foreign;
 #[cfg(feature = "view")]
 pub mod gantry;

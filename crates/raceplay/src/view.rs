@@ -81,6 +81,9 @@ pub struct RaceView {
     /// The attached collision spark of every craft no person flies, on a title that authors it
     /// looping. See [`FieldSparks`](super::field_sparks::FieldSparks).
     pub(super) field_sparks: super::field_sparks::FieldSparks,
+    /// The frictionless records of this tick, for the one-shot no-damage spark. See
+    /// [`FloorSparks`](super::floor_sparks::FloorSparks).
+    pub(super) floor_sparks: super::floor_sparks::FloorSparks,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].

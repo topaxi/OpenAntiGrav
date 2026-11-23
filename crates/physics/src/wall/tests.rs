@@ -602,6 +602,17 @@ fn a_floor_inside_the_hull_pushes_it_out_and_drives_no_reaction() {
         );
         assert_eq!(response.contacts, 5, "{surface:?}: {response:?}");
         assert_eq!(response.floor_contacts, 5, "{surface:?}");
+        for record in &response.frictionless[..5] {
+            assert!(
+                record.point.x > 1.0 && record.impulse > 0.0,
+                "{surface:?}: {record:?}"
+            );
+        }
+        assert_eq!(
+            response.frictionless[5],
+            FrictionlessRecord::default(),
+            "{surface:?}"
+        );
         assert!(state.body.position.x < 1.0, "{surface:?}: {:?}", state.body);
         assert!(state.body.linear_velocity.x < 10.0, "{surface:?}");
         assert_eq!(response.impulse_sum, 0.0, "{surface:?}: no damage");

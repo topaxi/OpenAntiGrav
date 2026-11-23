@@ -875,6 +875,7 @@ impl Race {
                 contact: super::contact_fx::ContactFx::new(),
                 pair_contacts: [None; oag_gameplay::MAX_SHIPS],
                 field_sparks: Default::default(),
+                floor_sparks: Default::default(),
                 intro: intro_camera
                     .filter(|_| camera_override.is_none())
                     .map(|(grid, rule)| {

@@ -17,6 +17,7 @@
 
 mod add_on_circuits_ground_truth;
 mod field_capture_ground_truth;
+mod floor_sparks_ground_truth;
 mod flyby_section_ground_truth;
 mod in_parallel;
 mod perturb;
