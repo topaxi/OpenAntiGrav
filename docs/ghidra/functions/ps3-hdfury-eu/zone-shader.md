@@ -509,3 +509,7 @@ take `0x1030000`; decode those two fields against the RSX texture-address/contro
 floor's band 3 is what the original's texel held at the frame (the original's floor blue is nearly flat, 14 to 19 in box A, across held
 band 3 of 0.51 to 0.93). Read recipe: in one RPCS3 pause read the texel `*(*(0x00c7dfb0 + 0x32b0) + 0x10) + 4 * 164` (`rpcs3-hd-zone-equaliser.py`
 already writes `vis-N.bin`) beside the grabbed frame; the pixel over the texel at a known view depth gives the gain with no band timing in it.
+
+**The strip's sampler decodes sRGB (2026-11-23, `det-floor-gain-re`).** `zoneTexVis`'s address word is `0x60730303`, gamma
+nibble 7: the unit decodes R, G and B before the program, where ours samples raw. Applying it alone overshoots (ours' floor blue
+0.38 to 0.89 of the original's); the law, evidence and what is still unread are on [zone-vis-gamma.md](zone-vis-gamma.md).
