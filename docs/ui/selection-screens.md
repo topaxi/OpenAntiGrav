@@ -428,8 +428,11 @@ not the same team:
 
 Ours carries the Pure row as `oag_title::RaceDefaults::fresh_team` (`Measured`); every other title's is `None`, so the
 stored team stands, and on a fresh profile that is `oag_raceplay::DEFAULT_TEAM` (Assegai, which is Pulse's first row).
-"Never picked" is `race.team_chosen` in `settings.toml`, set the first time the player moves Ship Select's cursor or
-changes a TEAM row (`Race::opening_team`); the `--race` default team is untouched. Whether HD, 2048 or Omega open on
+"Never picked" is `race.team_chosen` in `settings.toml`, set the first time the player moves Ship Select's cursor,
+confirms a team (single seat, or seat 0 of a split) or changes a TEAM row (`Race::pick_team`). Opening the screen on the
+fresh row only shows it (`Race::open_team`): `race.team` is shared across titles, and storing Feisar there would open
+Pulse's Ship Select on Feisar for a profile that only looked at Pure's list. `Race::opening_team` is what both screens
+open on; the `--race` default team is untouched. Whether HD, 2048 or Omega open on
 their first row is not measured here (Omega's Ship Select pair shows the original on the first unlocked craft and ours
 on the top hex: the same field would carry it once measured).
 
