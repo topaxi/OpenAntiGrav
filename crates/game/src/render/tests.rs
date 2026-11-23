@@ -522,6 +522,74 @@ fn a_right_aligned_hud_string_ends_on_its_last_glyphs_ink() {
     assert_eq!(centred_by_ink.rect[0] - centred_by_advance.rect[0], 1.5);
 }
 
+/// `MenuSkin::snapped_pens`: each glyph's ink edge steps up to a whole grid unit.
+///
+/// A glyph of advance 9 and left bearing 1 at scale 0.8 (Pure's `Stats` face, `RACE RECORD`) drawn
+/// from x 249 lands at 250, 258, 266: the unsnapped pen lands at 249, 256.2, 263.4.
+///
+/// **Skips with no adapter.**
+#[test]
+fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
+    use oag_texture::fnt::{Font, Glyph};
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 64],
+        glyphs: vec![Glyph {
+            codepoint: u16::from(b'a'),
+            width: 4,
+            height: 4,
+            u0: 0,
+            u1: 4,
+            v0: 0,
+            v1: 4,
+            advance: 9,
+            bearing: 1,
+        }],
+    };
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        wgpu::TextureFormat::Rgba8Unorm,
+        None,
+        Atlas::from_font(&font),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    let lefts = |renderer: &mut Renderer| -> Vec<f32> {
+        renderer.quads.clear();
+        renderer.push_text(
+            GlyphSlot::Primary,
+            249.0,
+            0.0,
+            0.8,
+            [1.0; 4],
+            [0.0; 4],
+            Align::Left,
+            "aaa",
+            None,
+        );
+        renderer.quads.iter().map(|quad| quad.rect[0]).collect()
+    };
+    let loose = lefts(&mut renderer);
+    renderer.set_snapped_pens(true);
+    assert_eq!(lefts(&mut renderer), [250.0, 258.0, 266.0]);
+    assert!((loose[1] - 256.2).abs() < 1e-3, "{loose:?}");
+}
+
 /// `HudArt::half_unit_glyph_quads`: a glyph is its cell grown half a grid unit on every side with the
 /// uv grown half a texel, whatever the text scale - the lap count `3` of the RPCS3 draw capture is
 /// 43 texels at 0.6 drawn 26.8 wide over a uv 44 wide (`43 * 0.6 + 1`). The authored

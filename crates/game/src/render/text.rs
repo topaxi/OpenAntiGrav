@@ -18,6 +18,14 @@
 use super::*;
 use oag_ui::font::wrap;
 
+/// Where the pen ends after `text` under the snapped law ([`oag_ui::font::pen_step`]), from a whole-unit
+/// origin, at `scale` screen units per texel: the width an aligned string is placed by.
+fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> f32 {
+    text.chars()
+        .filter_map(|c| atlas.cell(c))
+        .fold(0.0, |x, cell| font::pen_step(&cell, scale, x, true).1)
+}
+
 /// Which atlas [`Renderer::push_text`]/[`Renderer::push_wrapped_text`] draw
 /// a line of text from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,7 +183,9 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
-        let width: f32 = if self.hud.whole_advances {
+        let width: f32 = if self.hud.snapped_pens {
+            snapped_run(atlas, text, scale * atlas.texel_scale)
+        } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
                 .map(|cell| self.hud.advance(cell.advance * scale * atlas.texel_scale))
@@ -229,8 +239,15 @@ impl Renderer {
             };
             let half_unit = self.hud.half_unit_glyphs && !self.hud.whole_advances;
             let bare = oag_ui::font::Cell { extend: 0, ..cell };
+            // The original's pen steps up to a whole unit before each glyph is drawn
+            // ([`oag_ui::font::pen_step`]): the quad sits at the snapped ink edge, not the pen.
+            let (ink_left, next) = if self.hud.snapped_pens {
+                font::pen_step(&cell, scale * texel, pen, true)
+            } else {
+                (pen, pen + self.hud.advance(cell.advance * scale * texel))
+            };
             let (mut rect, mut uv) =
-                atlas.glyph_quad(if half_unit { &bare } else { &cell }, pen, y, scale);
+                atlas.glyph_quad(if half_unit { &bare } else { &cell }, ink_left, y, scale);
             if self.hud.whole_advances || half_unit {
                 // The PSP's glyph rect is the box grown half a pixel each side with the uv grown
                 // half a texel to match (`225.5..249.5` for the box `226..249` in a GE list of
@@ -245,7 +262,7 @@ impl Renderer {
             if let Some((left, right)) = clip {
                 let (glyph_left, glyph_right) = (rect[0], rect[0] + rect[2]);
                 if glyph_right <= left || glyph_left >= right {
-                    pen += cell.advance * scale * texel;
+                    pen = next;
                     continue;
                 }
                 // `rect` and `uv` trimmed together, so a half-visible glyph
@@ -268,7 +285,7 @@ impl Renderer {
                 tile: [0.0, 0.0],
                 warp: [0.0; 4],
             });
-            pen += self.hud.advance(cell.advance * scale * texel);
+            pen = next;
         }
     }
 

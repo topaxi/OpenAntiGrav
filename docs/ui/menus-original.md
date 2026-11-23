@@ -797,3 +797,42 @@ still cannot show a transition at all.
 Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_ui::language::roles`; `font_roles_ground_truth::pures_stats_slot_is_its_own_face_and_the_scroll_face` pins it on both pressings). Every `font="Stats"` widget of a team's `screen.xml` (the stat labels and `n/5` values, scale 0.8) and of a circuit's (`RACE RECORD`, `LAP RECORD`, `LENGTH`, `HEIGHT` and their values), the footer's `Confirm`/`Back` (`font="scroll"`) and the typed description all print in it: in a PPSSPP frame at 8x they are 5-pixel capitals with a wide letter space and an upper-case `M` for the unit, where this build had drawn them in the menu face (`FX300ANG.fnt`). It rides the renderer's third glyph slot (`oag_title::MenuSkin::stats_font`, Pure only: its `Buttons` role does not exist, so the slot is free), and a `Draw::FacedText { role: "Stats" }` falls back to the menu face on a title that loads no such face. The `<Menu>` rows of `Team Selection` name no `font`; they draw in the menu face at `MenuScale` 1.15, 18 grid lines apart (measured 18.2 on the frame, the chain's own `FlowFiles::row_pitch`). Confidence 90 (a frame measurement, one capture each).
 
 **Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.
+
+## Pure's text pens step up to whole pixels (2026-11-23, `pure-sr-track`)
+
+**Law (confidence 85).** On Pure's front end a glyph's ink edge is the pen plus the glyph's left bearing at the
+widget's scale, **rounded up to a whole pixel**; the next pen is that edge plus the advance less the bearing
+(`oag_ui::font::pen_step`, the arithmetic of `Font_MeasureString`'s snapped pass on HD, which on HD only a layout
+uses and the draw does not). The first pen is the widget's authored `x`. Nothing is read from the text's length:
+a label is as wide as its glyphs' snapped steps make it, so `RACE RECORD` at 0.8 spans 79 px where the fractional
+pen (advance 9 texels = 7.2 px) spans 73.
+
+Evidence: PPSSPP software renderer, USA, `Track Selection` (`menu-sr-track`, a fresh grab), glyph ink-left columns
+read off `theirs.png` (rows of the label, first column of each run of inked columns) against the law with **no free
+offset** where the widget's `x` is authored, otherwise one integer offset:
+
+| string | face, scale | glyphs | residual, snapped pen | residual, fractional pen |
+| --- | --- | ---: | --- | --- |
+| `MODESTO HEIGHTS`, `CHENGHOU PROJECT`, `BLUE RIDGE` (x 21) | `FX300ANG`, 1.15 (`MenuScale`) | 14, 15, 9 | 0.00 px, 0.00 px, 0.00 px (absolute) | 1.84, 1.42, 0.81 px mean |
+| `TRACK SELECTION` (x 21) | `FX300ANG`, 0.97 (`TitleScale`) | 14 | 0.00 px (absolute) | 2.42 px mean |
+| `RACE RECORD`, `LAP RECORD`, `LENGTH`, `HEIGHT` | `LTe50325`, 0.8 | 10, 9, 6, 6 | 0.00 px each (offset 249 or 357) | 2.9 to 0.4 px mean at 0.7 to 0.85, no scale fits |
+| description line, 46 glyphs | `LTe50325`, scale not authored (see below) | 47 | 0.04 px mean, 2 px max at one glyph (offset 21) | 0.29 px mean at 0.865, a scale nothing authors |
+| `SPEED` on `Team Selection` (`menu-team`) | `LTe50325`, 0.8 | 5 | 0.00 px (offset 249) | not separable on five glyphs |
+
+A pen of 7.2 or 13.8 px stepping a steady 8 or 14 px is what the picture shows: `CHENGHOU PROJECT` stands at 21, 35,
+49, 63 ... (steady 14, advance 12 texels at 1.15 is 13.8), `TRACK SELECTION` at 21, 33, 45 ... (steady 12, 11.64), the
+label at 250, 258, 266, 274 and, across its space, 289. The same glyphs' ink widths are unchanged, so only where
+each glyph sits moved: ours drew the list 2 % and the title 4 % narrower than the original, the stat labels 9 %, and the
+description line 20 %, all of which is this and (for the description line) its scale.
+
+Wired for Pure alone as `oag_title::MenuSkin::snapped_pens` (`Renderer::set_snapped_pens`, set where the front end
+installs its faces); the race HUD keeps its measured `round` advances (`docs/ui/hud.md`, "Pulse's HUD text steps the
+pen a whole pixel per glyph"). Pure's seven Single Race and Tournament pairs, re-rendered on copies against the same
+`theirs.png` (share of pixels differing by more than 40 grey, whole frame, before to after):
+`menu-team` 1.86 % to 1.00 %, `menu-sr-track` 2.73 % to 1.57 %, `menu-mode` 1.51 % to 0.70 %, `menu-sr-class` 0.88 % to 0.50 %,
+`menu-sr-league` 0.99 % to 0.62 %, `menu-t-class` 0.86 % to 0.49 %, `menu-t-sel` 1.21 % to 0.65 %.
+
+Checked against the other titles, as the rule asks: **HD**: checked, differs (HD's measure snaps and its draw does not,
+`oag_ui::font::ink_width`; no HD pair has been measured for a snapped draw). **Pulse**: not measured; its front end
+keeps the fractional pen, and a Pulse pair's label spacing is the check. **2048 and Omega**: not checkable here
+(no Pure-shaped front end).

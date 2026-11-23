@@ -22,6 +22,9 @@ pub(super) struct HudStretch {
     /// Whether each glyph's advance is rounded to a whole pixel, see
     /// [`Renderer::set_whole_pixel_advances`].
     pub(super) whole_advances: bool,
+    /// Whether each glyph's ink edge steps up to a whole grid unit, see
+    /// [`Renderer::set_snapped_pens`].
+    pub(super) snapped_pens: bool,
     /// Whether right- and centre-aligned text ends on its last glyph's ink, see
     /// [`Renderer::set_ink_aligned_text`].
     pub(super) ink_aligned: bool,
@@ -36,6 +39,7 @@ impl Default for HudStretch {
             mode: HudScale::Linear,
             pixels_per_grid: 0.0,
             whole_advances: false,
+            snapped_pens: false,
             ink_aligned: false,
             half_unit_glyphs: false,
         }
@@ -130,6 +134,13 @@ impl Renderer {
     /// raster art (`HudArt::raster`: Pulse, Pure); Pure inherits it unmeasured.
     pub fn set_whole_pixel_advances(&mut self, on: bool) {
         self.hud.whole_advances = on;
+    }
+
+    /// Steps each glyph's ink edge up to a whole grid unit ([`oag_ui::font::pen_step`]), as Pure's
+    /// front end does (`oag_title::MenuSkin::snapped_pens`). Set for the front end's renderer
+    /// only; the race HUD keeps [`Self::set_whole_pixel_advances`].
+    pub fn set_snapped_pens(&mut self, on: bool) {
+        self.hud.snapped_pens = on;
     }
 
     /// Ends right- and centre-aligned text on its last glyph's ink rather than its advance

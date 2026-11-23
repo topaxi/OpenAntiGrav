@@ -163,6 +163,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_font: Some("Title"),
     body_font: Some("Default"),
     stats_font: None,
+    snapped_pens: false,
     default_face_is_row_face: false,
     // `MainMenu_Definition.xml`'s menu widget, `y="32"`.
     first_row_y: Some(32.0),
@@ -311,6 +312,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_font: None,
     body_font: None,
     stats_font: None,
+    snapped_pens: false,
     default_face_is_row_face: false,
     first_row_y: Some(53.0),
     row_extra_leading: Some(17.0),
