@@ -190,6 +190,10 @@ impl Race {
         self.view.advance_wreck_fx(&self.core);
         self.view.stage.advance(dt, &mut self.view.stage_rng);
         self.view.advance_scenery_fx(&self.core, dt);
+        if self.core.sim.destroyed.sound == oag_title::destroyed::DestroyedSound::BlowupAndBlasts {
+            // The sim stands still, so the blasts' cues are raised from here (outside the hash).
+            self.core.sim.raise_blast_cues();
+        }
         self.view.advance_craft_flashes(&self.core);
         self.view.advance_destroy_camera(&self.core);
         let eye = self.view.camera_position(&self.core);

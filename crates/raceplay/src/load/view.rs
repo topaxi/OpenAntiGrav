@@ -170,7 +170,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         mut bomb_blast_models,
         leach_ball_model,
     ) = weapon_models::load_bodies(&mut archives, wm, store, &mut report);
-    if let Some(entry) = craft_title.destroyed.value.gaseous_flash {
+    if let Some(entry) = title.destroyed.value.gaseous_flash {
         bomb_blast_models.gaseous = weapon_models::load_optional(
             &mut archives,
             Some(entry),

@@ -42,8 +42,9 @@ fn step(race: &mut Race, slot: usize, state: CraftState, timer: f32) -> Vec<Cue>
 }
 
 /// Every craft, the player included, voices the same two cues: no `_PC`, no `SHIP_DEST`.
+/// `EXPLBIG` follows `EXPLSMALL` by the blast's delay.
 #[test]
-fn every_craft_voices_explsmall_at_state_5_and_explbig_at_state_6() {
+fn every_craft_voices_explsmall_at_state_5_and_explbig_at_the_big_blast() {
     for slot in [PLAYER, OPPONENT] {
         let mut race = race(DestroyedCraft::PURE);
         assert_eq!(step(&mut race, slot, CraftState::Racing, 0.0), []);
@@ -53,14 +54,33 @@ fn every_craft_voices_explsmall_at_state_5_and_explbig_at_state_6() {
             [Cue::ShipExplosionSmall],
             "state 5"
         );
-        assert_eq!(step(&mut race, slot, CraftState::Eliminated, 0.5), []);
-        assert_eq!(
-            step(&mut race, slot, CraftState::Eliminated, 0.0),
-            [Cue::ShipExplosion],
-            "state 6"
-        );
-        assert_eq!(step(&mut race, slot, CraftState::Eliminated, 0.0), []);
+        let mut heard = Vec::new();
+        for _ in 0..100 {
+            heard.extend(step(&mut race, slot, CraftState::Eliminated, 1.0));
+        }
+        assert_eq!(heard, [Cue::ShipExplosion], "the big blast, once");
     }
+}
+
+/// A world that stands still under the results (a Zone wreck) still sounds the big blast: the
+/// cue rides the blast's own clock, not the sim's state timer.
+#[test]
+fn explbig_sounds_in_a_world_that_stands_still() {
+    let mut race = race(DestroyedCraft::PURE);
+    step(&mut race, PLAYER, CraftState::Destroyed, 0.5);
+    step(&mut race, PLAYER, CraftState::Eliminated, 1.5);
+    let mut heard = Vec::new();
+    for _ in 0..100 {
+        race.tick_cosmetics();
+        heard.extend(
+            race.core
+                .sim
+                .drain_cues()
+                .into_iter()
+                .map(|event| event.cue),
+        );
+    }
+    assert!(heard.contains(&Cue::ShipExplosion), "{heard:?}");
 }
 
 /// Pulse voices neither: its table is not Pure's.

@@ -45,6 +45,33 @@ fn load_with_opponents() -> Option<race::Loaded> {
     Some(loaded)
 }
 
+/// A wreck the big blast squashed (Pulse and Pure hide it, `ship-destroy.md` row 22) casts no
+/// shadow: the blob under it goes with the mesh, while the rest of the field keeps theirs.
+#[test]
+#[ignore = "needs a real disc image under data/images/"]
+fn a_wreck_the_big_blast_squashed_casts_no_blob_shadow() {
+    let Some(loaded) = load_with_opponents() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let casts = |race: &race::Race, slot: usize| {
+        race.shadow_placements()
+            .iter()
+            .any(|placement| placement.silhouette == slot)
+    };
+    assert!(casts(&race, 1), "a racing craft casts");
+    race.core.sim.force_destroy(1);
+    for _ in 0..40 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    assert!(casts(&race, 1), "the exploding craft still casts");
+    for _ in 0..140 {
+        race.tick(&oag_gameplay::PlayerInputs::none());
+    }
+    assert!(!casts(&race, 1), "the squashed wreck casts nothing");
+    assert!(casts(&race, 2), "the rest of the field keeps its shadow");
+}
+
 /// Every craft on the grid gets a blob shadow, on the floor it is actually
 /// hovering over.
 ///

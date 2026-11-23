@@ -40,9 +40,10 @@ impl Race {
     /// shadow at its last known height.
     #[must_use]
     pub fn shadow_placements(&self) -> Vec<Placement> {
-        self.core
-            .sim
-            .shadow_placements_of(|slot| self.view.body_between(&self.core, slot))
+        self.core.sim.shadow_placements_of(
+            |slot| self.view.body_between(&self.core, slot),
+            |slot| self.view.wreck_gone(slot),
+        )
     }
 }
 
@@ -54,11 +55,13 @@ impl RaceSim {
     pub fn shadow_placements_of(
         &self,
         body: impl Fn(usize) -> oag_physics::Body,
+        wreck_gone: impl Fn(usize) -> bool,
     ) -> Vec<Placement> {
         let mut out = Vec::with_capacity(self.world.ship_count as usize);
         for slot in 0..self.world.ship_count as usize {
             let ship = &self.world.ships[slot];
-            if !ship.in_world() {
+            // A wreck the big blast squashed casts nothing.
+            if !ship.in_world() || wreck_gone(slot) {
                 continue;
             }
             // The body as this draw places it, so the blob stays under a hull

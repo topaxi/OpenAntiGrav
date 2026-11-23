@@ -68,10 +68,10 @@ impl HullGather {
         slots.clear();
         vertices.clear();
         if hulls.iter().any(Option::is_some) {
-            let placements = race
-                .core
-                .sim
-                .shadow_placements_of(|slot| race.view.ship_tick_body(&race.core, slot));
+            let placements = race.core.sim.shadow_placements_of(
+                |slot| race.view.ship_tick_body(&race.core, slot),
+                |slot| race.view.wreck_gone(slot),
+            );
             project(
                 race,
                 hulls,
