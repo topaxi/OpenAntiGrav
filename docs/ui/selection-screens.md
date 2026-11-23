@@ -464,10 +464,12 @@ scroll arrow at y 209 gone from the frame's fixed marks, the frame's content bot
 chain screens' measured type-in law (`oag_ui_screens::campaign::footer::typein`: 58 characters a second, a 3.12 s hold,
 looping). On the pair's frame both sides show `YOU KNOW WHE_`. **Closed 2026-11-23 (`pure-sr-track`):** the line's advance was the pen law and its scale, not a face
 constant: Pure's pens step up to whole pixels and `TextInfoScale` is 0.8 (`docs/ui/menus-original.md`, "Pure's text
-pens step up to whole pixels"). **Still open, on every Pure screen that types**: ours' glyphs sit 1 px above the
-original's (ink rows 221 to 227 against 222 to 228 on `menu-sr-track`, `menu-sr-class`, `menu-sr-league`, `menu-t-class`
-and `menu-t-sel`), where the first row's `y` is the viewport's 217 plus the `TextInfo`'s `y="1"`; `TextInfoGap` is undeclared
-and is the likeliest source.
+pens step up to whole pixels"). Its height was a constant offset: on five pairs (`menu-sr-track`, `menu-sr-class`,
+`menu-sr-league`, `menu-t-class`, `menu-t-sel`) the original's ink is rows 222 to 228 where the viewport's 217 plus the
+`TextInfo`'s `y="1"` put ours at 221 to 227, so the first line draws `footer::DESCRIPTION_TOP` (1 px) lower (measured,
+confidence 70). **Open:** why. `TextInfoGap` and `TextInfoNumLines` are undeclared in `FEGlobals` and are the likeliest
+carriers; a one-line description cannot separate a gap from a top offset, and the original's second line has never been
+captured (no Pure description in the walk wraps).
 
 ### HD's hex grids pan under a finger (2026-10-09)
 
