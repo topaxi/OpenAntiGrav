@@ -169,7 +169,8 @@ on Omega and `views` 1 and 2 (the doc's compare did not cover these).
   a hoist of the `own` map saves nothing. Each player faces opponents with its own
   family suffix (`""`, `_c1`, `_n1`), so the team keys do not overlap across the
   three players. The load already has `ribbon: true`.
-- **`hd_bomb_blast_ground_truth` and `photo_mode_ground_truth`**: frames are the
+- **`hd_bomb_blast_ground_truth`**: done 2026-11-23, one test per frame and the 0.67 s
+  frame drawn once (5 game runs to 4). **`photo_mode_ground_truth`**: frames are the
   claim; no cut found on reading.
 - **`gxt_ground_truth` census** (24.9 s): `rgba.len()` is asserted, so the decode
   is read. A header-only check would weaken it.

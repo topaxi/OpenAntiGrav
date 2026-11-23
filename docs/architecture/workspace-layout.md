@@ -1537,5 +1537,29 @@ The whole suite, both runs with the CPU runner: `just test-data --full` at `54ff
 Measured and not done:
 
 - `atrac9dec` at `opt-level = 3` (the thread's step 3): one `omega_wem` shard read 38-45 CPU-s at opt-level 2 and 37.5-38.6 at 3, within noise. `Atrac9Decoder::decode` itself is 53 % of the shard and `floor` 5 %; the decoder is vendored third-party code.
-- `replay_timeline_ground_truth::omega_seeks_reproduce_a_pad_flown_race` (70 CPU-s): 47 % `zlib_rs` inflate and 4 % AES-XTS, the PS4 package's PFS blocks under the PSARC reads. A counting run: 1,338 PSARC entry reads, 5.1 GB for 2.25 GB of distinct entries; the 89 MB `data02`/`data03` entries are read twice per race load.
+- `replay_timeline_ground_truth::omega_seeks_reproduce_a_pad_flown_race` (70 CPU-s): 47 % `zlib_rs` inflate and 4 % AES-XTS, the PS4 package's PFS blocks under the PSARC reads. A counting run: 1,338 PSARC entry reads, 5.1 GB for 2.25 GB of distinct entries; the 89 MB `data02`/`data03` entries are read twice per race load. Corrected in the next section: most of the "twice" is the test's own two loads.
 - The `net_*` tests that spawn `oag-server` run `cargo build -p oag-net --bin oag-server` first. Its feature set is not the workspace test build's, so after any change below `oag-net` the first such test compiles that graph again (212 CPU-s for `net_hosted_ground_truth` in a fresh worktree; 43 CPU-s for a rebuild after another feature set had built `oag-server` in between). `cargo build --workspace --bin oag-server` does not match the test build's features either.
+
+### Serial matrices, a second picture decode and the bank read twice
+
+Measured 2026-11-23 with the same CPU runner, at load 10 to 35. Where load moved the CPU seconds more than the change, the number is `taskset -c 0-5 perf stat -e cpu_core/instructions/u` on the test binary (user instructions on the performance cores, run-to-run noise 0.1 %), two runs each.
+
+| Change | Test | Before | After |
+| --- | --- | --- | --- |
+| One test per frame, the 0.67 s frame drawn once (5 `oag-game` runs to 4) | `hd_bomb_blast_ground_truth` | 1 test, 40-43 CPU-s, 38-40 s wall alone (290-328 s in lead runs under load) | 4 tests, 9-11 CPU-s and 10-11 s wall each, 39 CPU-s summed |
+| One test per circuit, Talon's Junction forward loaded once | `hd_env_probes_ground_truth` | 60 s wall alone (204 s in a lead slice), 65 CPU-s with its Talon's Junction test | 17 tests, at most 9 s wall each; 65 CPU-s serial |
+| HD and Omega idle-demo drives as two tests | `drive_ground_truth::an_idle_main_menu_launches_a_demo_*` | 1 test, 151 s in a lead slice | HD 36 CPU-s, Omega 75 CPU-s, separate |
+| A model build decodes each material picture once (`psp2::picture_memo`) | `replay_timeline_ground_truth::omega_seeks_reproduce_a_pad_flown_race` | 389.1 G instructions, 46-50 CPU-s | 365.8 G (-6.0 %) |
+| The event start's `ready` and `go` from one bank read (`oag_sound` `load_event_start`) | same | 365.8 G | 364.3 G (-0.4 %); both 43-44 CPU-s |
+
+A split moves no CPU: the 16 probe loads summed 65 CPU-s serial in one test and 65 in 16 (88 when all 17 ran at once, which is contention on the shared cores, not cost). What it moves is the per-test wall clock under load, which the 300 s ceiling judges: one test of five GPU runs queued in series inside the four-wide `gpu-vram` group.
+
+**The Omega double read was mostly the test.** A counting run (an `eprintln!` in `oag_assets::psarc::Archive::read`, with a backtrace above 8 MB) on the replay test: 1,400 reads, 5,132 MB stored. The test loads the race twice by design (`record`, then `race::replay::load_recorded` rebuilds it from the file), and one load read 2,569 MB stored, of which 307 MB were repeats. Of those, 200 MB were three Tech De Ra textures (two of 89 MB stored) that `psp2::emissive_add` and `psp2::normal_map` each read and decoded into their own per-planner map, and 75 MB were Omega's 37 MB event bank read three times: `load_countdown` once per cue (`ready`, `go`) and `load_wwise_cues` once. After both changes one load reads 2,321 MB stored with 59 MB of repeats: the bank's `load_wwise_cues` read, and entries of 1.0 to 2.8 MB, just over the read memo's 1 MB `MAX_ENTRY`.
+
+`picture_memo::scoped` opens one memo per model build beside `gcn::memoised`; every planner that read a picture as `textures(path)` then `decode_material_texture` asks it instead, and each answer counts its `.gnf` form in the report again, as its own decode did. Proof: a headless time trial (`--race --mode time_trial --no-audio --size 960x544 --ticks 600 --screenshot`) on Omega (`omega-ps4-eu.pkg`) and on 2048 (`data/extracted/vita/PCSF00007`), base and branch binaries: the frames decode to the same RGBA on both titles, and the debug logs, sorted and with timings stripped, differ only in the read memo's line (Omega 2,766 to 2,756 archive reads, 2048 1,365 to 1,364).
+
+Measured and not done:
+
+- The `net_*` tests' `cargo build -p oag-net --bin oag-server`: 226 CPU-s in a fresh worktree (3 min 29 s user, 17 s sys, 33 s wall at load 10), and it recompiles third-party crates too (`serde`, `syn`, `tokio`, `ring`, `quinn`), as features differ across the whole graph. The `--workspace` test build already builds an `oag-server` (oag-net has integration tests), but with `oag-net`'s dev-dependency features `client` (`oag-raceplay/view`) and `test-cheats`. Running that one instead would test a lobby built like the client it re-simulates, so a divergence between a no-view and a view load would go unseen; the build stays.
+- `autopilot_original_ground_truth` (180 s in a lead slice): splitting it made the suite slower on 2026-11-02 (above), and its Pulse loads keep their art (`test-tail-4`).
+
