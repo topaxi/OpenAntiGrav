@@ -176,11 +176,6 @@ impl super::Scene {
         seconds: f32,
         weapon_scene: &mesh_render::Scene,
     ) -> WeaponMatrices {
-        // The laid mines' sizes first: the matrices below read them.
-        let (_, laid) = race.detonator_mine_looks();
-        if !laid.is_empty() {
-            self.step_mine_envelopes(race, &laid, seconds);
-        }
         let rocket_matrices = race.rocket_model_matrices();
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
         let mine_matrices = race.mine_model_matrices();
@@ -298,7 +293,7 @@ impl super::Scene {
         // A round or a flash has no pose to blur against: drawn without a previous one.
         let none: Vec<Mat4> = Vec::new();
         for (pool, matrices, previous) in [
-            (&parts.mine_spikes, mines, &prev.mines),
+            (&parts.mine_spikes, mines, &prev.mine_spikes),
             (&parts.bomb_equalisers, bombs, &prev.bombs),
             (&parts.bomb_glow_edges, bombs, &prev.bombs),
             (&parts.cannon_bolt, &rounds[..], &none),

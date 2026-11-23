@@ -234,6 +234,39 @@ mod contact {
     }
 
     #[test]
+    fn a_bomb_is_not_lifted_where_a_mine_is() {
+        let (survey, layout) = (lap(300, 7), layout());
+        let lane = layout.values.distance_offset_between_mines;
+        let placed = Placed {
+            entry: 5,
+            lane: 1,
+            live: true,
+        };
+        let at = Vec3::new(3.5, 0.0, 50.0);
+        let contact = contact();
+        // The bomb's trigger sphere is 6: 7 above its lane point is out of reach, on it is in.
+        let mut field = Field::new();
+        field.bombs[0] = placed;
+        field.live_bombs = 1;
+        let mut ship = craft_at(50.0);
+        ship.physics.body.position = at + Vec3::new(0.0, 7.0, 0.0);
+        let went = step_contacts(&mut field, &survey, lane, &contact, &mut [ship], rules());
+        assert!(went.is_empty(), "a bomb is not lifted");
+        let mut ship = craft_at(50.0);
+        ship.physics.body.position = at;
+        let went = step_contacts(&mut field, &survey, lane, &contact, &mut [ship], rules());
+        assert_eq!(went.len(), 1, "a craft on the lane point touches the bomb");
+        // The mine in the same place is the other way about: on the lane point is 3 off, out of reach.
+        let mut field = Field::new();
+        field.mines[0] = placed;
+        field.live_mines = 1;
+        let mut ship = craft_at(50.0);
+        ship.physics.body.position = at;
+        let went = step_contacts(&mut field, &survey, lane, &contact, &mut [ship], rules());
+        assert!(went.is_empty(), "a mine stands 3 above its lane point");
+    }
+
+    #[test]
     fn a_craft_outside_the_trigger_sphere_touches_nothing() {
         let survey = lap(300, 7);
         let mut field = field_with(true);
@@ -300,12 +333,18 @@ mod contact {
 fn a_mine_stands_its_lift_above_its_lane_point_and_a_bomb_on_it() {
     let (survey, layout) = (lap(300, 7), layout());
     let lane = layout.values.distance_offset_between_mines;
-    let mine = Placed {
+    let placed = Placed {
         entry: 5,
         lane: 1,
         live: true,
     };
-    let (on_lane, up) = survey.point(&mine, lane).expect("in the survey");
-    let (stands, _) = survey.mine_point(&mine, lane).expect("in the survey");
-    assert_eq!(stands, on_lane + up * MINE_LIFT);
+    let at = Vec3::new(3.5, 0.0, 50.0);
+    // The lane point is the survey's own, not a copy of the lift's arithmetic: entry 5 of the test lap,
+    // one lane over.
+    assert_eq!(survey.point(&placed, lane).expect("in the survey").0, at);
+    assert_eq!(
+        survey.mine_point(&placed, lane).expect("in the survey").0,
+        at + Vec3::new(0.0, 3.0, 0.0),
+        "the lift is the measured 3.0, along up"
+    );
 }

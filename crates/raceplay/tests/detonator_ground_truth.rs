@@ -883,7 +883,7 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
     };
     let loaded = race::load(&race::Options {
         source: path.display().to_string(),
-        class: "FEISAR".to_string(),
+        class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,
         track: Some(r"Data\Environments\Talons_Junction\track.vex".to_string()),
         ..race::Options::default()
@@ -902,12 +902,21 @@ fn carried_mines_stand_where_the_originals_objects_stood() {
             .sim
             .detonator_mine_position(index)
             .expect("a carried mine");
-        let apart = at - *read;
-        let flat = (apart.x * apart.x + apart.z * apart.z).sqrt();
-        println!("ours {at:?}, read {read:?}, {flat:.2} apart across the lane plane");
+        // The whole distance, height included: a mine left on its lane point is 3 units off.
+        let apart = (at - *read).length();
+        println!("ours {at:?}, read {read:?}, {apart:.2} apart");
         assert!(
-            flat < 1.5,
-            "{read:?} lands {flat:.2} units from the original's"
+            apart < 1.0,
+            "{read:?} lands {apart:.2} units from the original's"
         );
     }
+    // The same position twice (one lane holds one mine) and one at the right place across but 33
+    // units too high (a lane on another deck): the twin and the high one are dropped.
+    let first = positions[0];
+    let high = first + oag_core::math::Vec3::new(0.0, 33.0, 0.0);
+    assert_eq!(
+        race.core.sim.carry_detonator_mines(&[first, first, high]),
+        2
+    );
+    assert_eq!(race.core.sim.world.detonator.live_mines, 1);
 }

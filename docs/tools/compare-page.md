@@ -2451,8 +2451,8 @@ stands") and records `ship.mines` (flags, position, entry, lane, live, age; `OAG
 of its other fields). `rpcs3-hd-pair.py --detonator` writes the armed ones (`flags & 9 == 9`; a mine that left the pool keeps flag
 `1`) to `original.detonator.mines` and gives ours
 `--detonator-mines "X,Y,Z;X,Y,Z;..."`: ours lays the opening stage as usual (its bomb, its counter), then puts every mine on the
-survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units; a position with
-no lane is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and
+survey lane nearest each position across the section (`RaceSim::carry_detonator_mines`, a snap of at most 4 units across and 1.5 of the 3.0 lift in height, so a lane on another deck never takes it; a position with
+no lane, or whose lane another carried mine or the bomb holds, is dropped with a warning). Positions, not the original's entry numbers: its survey starts at the player's start cursor and
 ours at the spline's origin, 7 entries apart on Talon's Junction. The flag is in `ours.flags`, so `compare-rerender-ours.py` replays
 it. A shot without mines (an older record) keeps ours' seeded layout and the pair says so.
 

@@ -59,6 +59,10 @@ const START_ZONE: f32 = 150.0;
 /// under one lane step.
 const SNAP_RADIUS: f32 = 4.0;
 
+/// How far a carried mine's height above a lane may differ from [`oag_weapons::detonator::MINE_LIFT`] (the
+/// measured spread is 2.5 to 3.2): under one lane step, so a lane on another deck never takes the snap.
+const LIFT_TOLERANCE: f32 = 1.5;
+
 /// The share of the measured width the lanes fan across.
 const USABLE_WIDTH: f32 = 0.9;
 
@@ -304,14 +308,15 @@ impl crate::sim::RaceSim {
     /// (`--detonator-mines`): each position is snapped to the free lane of ours' survey nearest to it
     /// across the section (the offset along the section's up axis is the mine's hover height and is not
     /// compared). The stage is laid first so the bomb and the stage counter are the race's own. Returns how
-    /// many positions had no lane within [`SNAP_RADIUS`] and were dropped. Nothing happens off Detonator.
+    /// many positions had no lane within [`SNAP_RADIUS`] across and [`LIFT_TOLERANCE`] of the mine's height, or
+    /// a lane another carried mine or the bomb already holds, and were dropped. Nothing happens off Detonator.
     ///
     /// A comparison against the original carries its mines this way: the placer's `Libc_Rand` stream is not
     /// carried, and the original numbers its entries from the player's start cursor where ours starts at the
     /// spline's origin (7 apart on Talon's Junction), so a mine's own entry number does not transfer; its
     /// position does (`docs/tools/compare-page.md`, "Detonator pairs").
     pub fn carry_detonator_mines(&mut self, positions: &[Vec3]) -> usize {
-        use oag_weapons::detonator::{MAX_MINES, Placed};
+        use oag_weapons::detonator::{MAX_MINES, MINE_LIFT, Placed};
         let Some(detonator) = self.detonator.clone() else {
             return 0;
         };
@@ -325,6 +330,7 @@ impl crate::sim::RaceSim {
             );
         }
         let lane_width = detonator.layout.values.distance_offset_between_mines;
+        let bombs: Vec<Placed> = self.world.detonator.live_bombs().to_vec();
         let mut laid: Vec<Placed> = Vec::new();
         let mut dropped = 0;
         for &position in positions {
@@ -346,14 +352,28 @@ impl crate::sim::RaceSim {
                         continue;
                     };
                     let apart = position - at;
-                    let across = (apart - up * apart.dot(up)).length();
+                    let along = apart.dot(up);
+                    // A lane on another deck (an overpass) has the right place across and the wrong height.
+                    if (along - MINE_LIFT).abs() > LIFT_TOLERANCE {
+                        continue;
+                    }
+                    let across = (apart - up * along).length();
                     if best.is_none_or(|(nearest, _)| across < nearest) {
                         best = Some((across, placed));
                     }
                 }
             }
             match best {
-                Some((across, placed)) if across <= SNAP_RADIUS && laid.len() < MAX_MINES => {
+                Some((across, placed))
+                    if across <= SNAP_RADIUS
+                        && laid.len() < MAX_MINES
+                        && !laid
+                            .iter()
+                            .any(|l| (l.entry, l.lane) == (placed.entry, placed.lane))
+                        && !bombs
+                            .iter()
+                            .any(|b| (b.entry, b.lane) == (placed.entry, placed.lane)) =>
+                {
                     laid.push(placed);
                 }
                 _ => dropped += 1,

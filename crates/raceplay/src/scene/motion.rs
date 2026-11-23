@@ -117,6 +117,8 @@ pub(super) struct Snapshot {
     pub(super) missile_heads: Vec<Mat4>,
     /// The Mine's own, same terms as [`Self::rockets`].
     pub(super) mines: Vec<Mat4>,
+    /// A laid Detonator mine's spikes at their own size, the pose the spikes pool is measured against.
+    pub(super) mine_spikes: Vec<Mat4>,
     /// The Bomb's own, same terms.
     pub(super) bombs: Vec<Mat4>,
     /// The Cannon round's own, same terms.
@@ -144,6 +146,7 @@ impl Snapshot {
             shurikens: race.shuriken_model_matrices(),
             missile_heads: race.missile_head_model_matrices(),
             mines: race.mine_model_matrices(),
+            mine_spikes: race.mine_spike_matrices(),
             bombs: race.bomb_model_matrices(),
             cannon_rounds: race.cannon_model_matrices(cannon),
         }
