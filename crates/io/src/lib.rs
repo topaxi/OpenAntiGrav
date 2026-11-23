@@ -1,4 +1,4 @@
-//! The atomic write behind [`super::write`] (ADR-0095).
+//! The atomic write (ADR-0095): `path` holds the old content or the new, never a mix.
 
 use std::fs::OpenOptions;
 use std::io::{self, Write};
@@ -16,11 +16,11 @@ enum Access {
     OwnerOnly,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "crash-hook"))]
 thread_local! {
     /// A test sets this to cut the next write short: that many bytes reach the temp file,
     /// then the write fails as a crash would, leaving the temp file where it is.
-    pub(super) static CUT_AFTER: std::cell::Cell<Option<usize>> =
+    static CUT_AFTER: std::cell::Cell<Option<usize>> =
         const { std::cell::Cell::new(None) };
     static CRASHED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
@@ -65,7 +65,7 @@ fn replace(path: &Path, contents: &[u8], access: Access) -> io::Result<()> {
     let staged = stage(&temp, contents, access).and_then(|()| commit(&temp, path));
     if let Err(why) = staged {
         // A crashed process leaves its temp file; a failed write cleans up after itself.
-        #[cfg(test)]
+        #[cfg(any(test, feature = "crash-hook"))]
         if CRASHED.with(|crashed| crashed.replace(false)) {
             return Err(why);
         }
@@ -89,7 +89,7 @@ fn stage(temp: &Path, contents: &[u8], access: Access) -> io::Result<()> {
     #[cfg(not(unix))]
     let _ = access;
     let mut file = options.open(temp)?;
-    #[cfg(test)]
+    #[cfg(any(test, feature = "crash-hook"))]
     if let Some(cut) = CUT_AFTER.with(std::cell::Cell::take) {
         file.write_all(&contents[..cut.min(contents.len())])?;
         CRASHED.with(|crashed| crashed.set(true));
@@ -118,6 +118,13 @@ fn commit(temp: &Path, path: &Path) -> io::Result<()> {
     }
     #[cfg(not(windows))]
     std::fs::rename(temp, path)
+}
+
+/// Makes the next [`write`] on this thread die after `bytes` bytes of the new content, leaving its
+/// temp file as a crashed process would.
+#[cfg(any(test, feature = "crash-hook"))]
+pub fn cut_the_next_write_after(bytes: usize) {
+    CUT_AFTER.with(|cut| cut.set(Some(bytes)));
 }
 
 #[cfg(test)]

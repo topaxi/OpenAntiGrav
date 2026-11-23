@@ -152,8 +152,8 @@ the smoke is not released, it finishes. The decrement of `+0x240` was not read.
 **Anchor.** `0x002a0268` rebuilds `+0x1c0` each tick: the identity matrix
 (`0x00769d70`, world-aligned) with its translation taken from the node's matrix
 offset `1.5` (`2.0` with the death flag `+0x2b4`) along one row, sign and
-meaning unsettled. This port anchors at the craft's origin, **chosen, not
-measured**.
+meaning unsettled there. Settled and wired since: see "The smoke's anchor against a frame"
+below.
 
 **Wired**, `oag_raceplay::damage_fx`, HD only through `Trigger::DamageMild`,
 `DamageModerate` and `DamageCritical`. `--force-shield` plus the new
@@ -288,10 +288,8 @@ Lane `hd-impact`. Four corrections to "The damage smoke" above, each from the di
    plume's caller. Both belong to the wreck sequence, not to a weapon hit. Read to this
    depth only. Confidence 75.
 
-**This engine** (`oag_raceplay::damage_fx`): lets an old state's smoke finish (1), gives the
-smoke no velocity (2), anchors at the craft's origin (3). All three are open, ready to wire;
-`psys::Stage::kill` and the carried-play calls in `oag_fx::psys::carried` are the two pieces
-1 and 2 need.
+**This engine** (`oag_raceplay::damage_fx`): kills the old state's smoke (1), carries the craft's
+velocity (2) and anchors at the flare node (3); all three wired.
 
 ### A film of a hit
 
@@ -313,6 +311,50 @@ The run does not say which effect each spark is: a rival's first Missile hit lea
 this question: it puts ours' camera where the film's was relative to the **blast**, in ours'
 own scenario at the start line, so the struck craft is a few pixels in the distance. A pair
 for the hit effect needs the struck craft's pose matched, not the blast's place.
+
+### The smoke's anchor against a frame
+
+Lane `hd-smoke-anchor`. Wired: `damage_fx::anchor` is the `Engine Flare` locator plus `1.5`
+(`2.0` once the craft has no shield) of the locator's Z axis, carried through the pose the hull is
+drawn at, for the damage smoke, its per-tick follow and the LeachBeam spark that shares `+0x1c0`.
+Tests: `the_anchor_is_the_flare_nodes_origin_plus_one_and_a_half_of_its_z_row`,
+`the_smoke_leaves_the_flare_node_and_follows_it` (red with the craft's origin).
+
+**The sign.** Every HD hull's locator reads Z axis `(0, 0, 1)` with the nozzle at negative Z
+(Feisar `-4.93`, Qirex `-7.35`, Piranha `-8.03`; load report, `Locators.vex`), so `+Z` is toward the
+nose and the smoke starts `1.5` model units (`1.125` world, the hull's `0.75`) **toward the nose
+from the nozzle, inside the engine bay**. It is the mirror of the engine light's
+`node - Z * Distance` ("behind the nozzle", renderer.md, confidence 85; that law's node matches
+ours on Assegai, Assegai_c1 and Harimau). Confidence 70: the arithmetic is read (80, above); the
+direction rests on that node convention.
+
+**Against the original.** `hit0` of `data/reference/hd-capture/missile-hit/` (the struck rival,
+`craft[6]` of each frame's json, projected with the frame's own `view_proj`, row vector times
+matrix): at 0.60 s and 0.67 s the engine glow, the node, is at about (483, 388) and (475, 378) in
+1278x718, at the end of the hull the projected `+Z` points away from, and the first sparks sit
+within about 15 px of it (the rival's team is not recorded, so the nozzle Z spans `-4.9` to `-8.0`:
+the two signs project 15 px apart for one team and the nozzle's own spread is 30 px). **The film
+cannot separate the two signs**, and it shows neither the other way: its hit leaves the rival
+above 70 shield (`WO_DAMAGE_MILD`, small sparks, no dark smoke). Ours, `--force-shield 0:30
+--force-hit 275:0`, tick 300, 1280x720: the plume rises from the rear of the hull about 100 px
+above the nozzles, from the engine housing toward the nose. A frame of a CRITICAL rival (shield
+poked under 40 before the hit) would settle the sign to a pixel and is not taken.
+
+**Not wired: the `1.9` of the second row.** `0x002a0340..0x002a0378` subtracts `1.9` of the node's
+Y row when `ship + 0x5f43` is set and a global object is absent or has its flag bits `6` clear.
+`+0x5f43` is read elsewhere only as the gate of `MagstripWake_UpdateRibbons`'s pool call
+(magstrip-wake.md), and no page names the global object, so which view flag it is stays open.
+The brief's own rule: leave it open with the address.
+
+**The death flag.** `object + 0x2b4` selects `2.0`; its writer is unread. A craft with no shield
+left stands for it, **chosen, not measured**, and the follow is the only consumer (a smoke is not
+started on a spent shield, the original's rule).
+
+**Lineage: 2048 and Omega, checked, applies, not wired.** Both ship the same three
+`WO_DAMAGE_*` effects and an `EngineFlare` with the same locator convention
+([engine-trail.md](engine-trail.md)), so the anchor holds in shape; the callers' twin of
+`0x002a0268` was not located (no `-1.5` constant read near either caller), and the trigger is
+HD-gated (`Trigger::DamageMild`).
 
 ## Names applied
 

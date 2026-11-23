@@ -250,6 +250,18 @@
 
 # 2026-11-19 zone-hud-gate: Zone's HUD gate at the start (hud-start-gate.md)
 0x012b3400	function	SPZoneRaceManager_Update	80	hud-start-gate.md
+
+# 2026-11-22 hd-wreck-re: the destroyed-craft twins of HD's Ship_SetState (../ps3-hdfury-eu/ship-destroy.md)
+0x012ff700	function	Ship_SetState	82	../ps3-hdfury-eu/ship-destroy.md
+0x01301260	function	Ship_SelectWreckModel	78	../ps3-hdfury-eu/ship-destroy.md
+0x012f7a60	function	Ship_PlayDestroyExplosion	78	../ps3-hdfury-eu/ship-destroy.md
+
 # 2026-11-22 detonator-placement: HD's placer, read line by line (detonator-placement.md)
 0x012a2300	function	Detonator_PlaceStageObjects	75	detonator-placement.md
 0x012a3aa0	function	Detonator_SpawnObject	70	detonator-placement.md
+
+# 2026-11-23 zone-destroy-re: the Zone end twin (../ps3-hdfury-eu/zone-destroy.md)
+0x013080f0	function	Ship_UpdateWrecked	78	../ps3-hdfury-eu/zone-destroy.md
+# 2026-11-23 hd-legend-re: the footer legend (HD's law in ../ps3-hdfury-eu/navigation-legend.md)
+0x01475290	function	NavigationController_Init	85	navigation-legend.md
+0x01475f50	function	NavigationController_Layout	85	navigation-legend.md

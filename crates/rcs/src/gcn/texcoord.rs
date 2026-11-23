@@ -45,7 +45,7 @@ impl TexcoordFlip {
     }
 }
 
-impl Program<'_> {
+impl Program {
     /// Whether the program fetches `Uv1` and exports `(u, 1 - v)` of it to a parameter.
     /// `None` when it fetches no `Uv1`.
     #[must_use]
@@ -92,7 +92,7 @@ impl Program<'_> {
 #[must_use]
 pub fn flips_v(file: &[u8]) -> TexcoordFlip {
     let mut found = TexcoordFlip::default();
-    for (_, program) in super::scan(file) {
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else { continue };
         if program.stage != Stage::Vertex {
             continue;
@@ -128,7 +128,7 @@ mod tests {
     }
 
     /// A vertex program fetching `Uv1` into `v8..v9`, running `words`.
-    fn vertex(words: &[u32]) -> Program<'static> {
+    fn vertex(words: &[u32]) -> Program {
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         let uv = Attribute {
             kind: 1 << 24 | 1,
@@ -138,7 +138,6 @@ mod tests {
         Program {
             at: 0,
             code_at: 0,
-            code: &[],
             stage: Stage::Vertex,
             info: 0,
             instructions: decode_all(&bytes).expect("decodes"),

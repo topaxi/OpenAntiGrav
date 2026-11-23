@@ -65,6 +65,7 @@ impl Race {
             craft_laws,
             autopilot_engine,
             opponent_autopilot,
+            destroyed,
             weapon_pad_glow,
             leach_drain,
             blast_push,
@@ -111,6 +112,7 @@ impl Race {
             chase_close,
             internal,
             nozzles,
+            nozzle_axes,
             engine_lights,
             spu_vertex_lights,
             hull_points,
@@ -764,6 +766,7 @@ impl Race {
                     inertia_frame,
                     physics_laws,
                     autopilot_engine,
+                    destroyed,
                     weapon_pad_glow,
                     leach_beams: leach_beams
                         .min(oag_weapons::projectile::leach_beam::POOL_SIZE as u8),
@@ -927,6 +930,7 @@ impl Race {
                     })
                 }),
                 nozzles,
+                nozzle_axes,
                 engine_lights,
                 spu_vertex_lights,
                 hull_points,

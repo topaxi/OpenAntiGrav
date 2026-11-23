@@ -62,7 +62,7 @@ pub mod own_shield;
 pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
-mod wreck;
+pub mod wreck;
 pub mod zone_livery;
 
 pub use shield::cockpit_shield;
@@ -83,6 +83,9 @@ pub struct Livery {
     /// Per team because the hulls differ: mounting eight ribbons on one team's
     /// nozzle put the flare inside the fuselage on some of them.
     pub nozzle: Option<Vec3>,
+    /// The `Engine Flare` locator's Z axis in the same space as [`Self::nozzle`] (row 2 of its
+    /// matrix, the `0.75` hull scale still on it), when the hull has one.
+    pub nozzle_axis: Option<Vec3>,
     /// The `Ship Muzzle` locator in this hull's own model space: the weapon node a
     /// charging Plasma's head is parented to. Per team; Assegai's is `(0, 0, 5.653)`
     /// (`docs/ghidra/functions/psp-pulse-usa/plasma.md`, "the head's matrix and node").
@@ -377,6 +380,7 @@ pub fn load(
                 team: team.clone(),
                 hull: source.hull.clone(),
                 nozzle: source.nozzle,
+                nozzle_axis: source.nozzle_axis,
                 muzzle: source.muzzle,
                 collision_fx: source.collision_fx.clone(),
                 absorb: source.absorb.clone(),
@@ -434,6 +438,7 @@ pub fn load(
                     team: player.team.clone(),
                     hull: player.hull.clone(),
                     nozzle: player.nozzle,
+                    nozzle_axis: player.nozzle_axis,
                     muzzle: player.muzzle,
                     collision_fx: player.collision_fx.clone(),
                     absorb: player.absorb.clone(),
@@ -550,6 +555,7 @@ fn one(
                     team: team.to_string(),
                     hull: mesh::Model::none(&hull_name),
                     nozzle: None,
+                    nozzle_axis: None,
                     muzzle: None,
                     collision_fx: Vec::new(),
                     absorb: Vec::new(),
@@ -643,13 +649,21 @@ fn one(
         return Ok(Livery {
             team: team.to_string(),
             nozzle,
+            nozzle_axis,
             muzzle: vex::ship_muzzle(&blob).map(Vec3::from),
             collision_fx,
             absorb,
             absorb_overlay: None,
             leach_overlay: None,
             shine: None,
-            wreck: None,
+            // Not drawn in a Zone race: modes 6 and 14 hide the model and play their own
+            // sequence, which is a later row of `ship-destroy.md`. `wreck::load` builds the Zone
+            // craft's wreck through the hull's livery swap for when that row lands.
+            wreck: if ctx.hull_wreck && ctx.mode != Mode::Zone {
+                wreck::load(archives, team, ships, ctx.mode, ctx.store, None, report)
+            } else {
+                None
+            },
             absorb_shell: {
                 let (absorb_dir, absorb_team) = entry::model_directory_with(
                     archives,
@@ -741,7 +755,7 @@ fn one(
     // which decoder its hull happened to take.
     let lit = authored_flare(archives, team, ships, ctx, nozzle, report);
     let wreck = if ctx.hull_wreck {
-        wreck::load(archives, team, ships.dir, ctx.mode, report)
+        wreck::load(archives, team, ships, ctx.mode, ctx.store, None, report)
     } else {
         None
     };
@@ -775,6 +789,7 @@ fn one(
         team: team.to_string(),
         hull,
         nozzle,
+        nozzle_axis,
         muzzle: vex::ship_muzzle(&blob).map(Vec3::from),
         collision_fx,
         absorb: Vec::new(),

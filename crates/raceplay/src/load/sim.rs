@@ -531,6 +531,7 @@ pub fn load_sim(options: &Options) -> Result<SimLoad> {
             .race
             .opponent_autopilot
             .flies(&options.class, options.difficulty.name()),
+        destroyed: title.destroyed.value,
         weapon_pad_glow: title.weapon_pad_glow,
         leach_drain: title.weapons.leach_drain,
         blast_push: title.weapons.blast_push.value,

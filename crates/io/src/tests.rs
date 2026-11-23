@@ -1,7 +1,7 @@
 use super::*;
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("oag-profile-{}-{name}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("oag-io-{}-{name}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a scratch directory");
     dir
@@ -23,7 +23,7 @@ fn a_write_cut_short_keeps_the_old_file_whole() {
     let file = dir.join("records.toml");
     write(&file, "medals = 12\n").expect("first write");
 
-    super::super::cut_the_next_write_after(3);
+    cut_the_next_write_after(3);
     let crashed = write(&file, "medals = 13 and a great deal more\n");
 
     assert!(crashed.is_err(), "the cut write reports its failure");

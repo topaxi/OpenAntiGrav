@@ -215,6 +215,7 @@ carry those, and a README that repeats them drifts.
 | `oag-livery` | A race's hulls, skins, shields, plumes, wrecks from a title's archive entries. |
 | `oag-thread` | A closure on another thread on every target (`std::thread` or a Web Worker). Depends on nothing of ours. |
 | `oag-ffmpeg` | The one resolver for `ffmpeg`/`ffprobe` (`PATH`, then a downloaded copy) and the verified download of a pinned LGPL build ([`docs/architecture/ffmpeg.md`](docs/architecture/ffmpeg.md)). Leaf crate. |
+| `oag-io` | File I/O helpers: the atomic write (ADR-0095) behind `oag-game`'s `profile::write`, the campaign editor and the PS3 disc-key cache. Std only; leaf crate. |
 | `oag-log` | Binaries' log sink: terminal plus a pruned timestamped file. |
 | `oag-mobile` | Android/iOS app glue under `oag-game` ([ADR-0065](docs/architecture/adr/0065-one-mobile-crate-for-every-phone-os.md)). |
 | `oag-mod` | Mods (folder, `.zip`, `.oagmod`), `oag-mod.toml`, search path, built-in `oag-extras` ([ADR-0066](docs/architecture/adr/0066-the-menu-is-the-disc-plus-mods.md)). |

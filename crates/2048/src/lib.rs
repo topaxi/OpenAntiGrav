@@ -164,6 +164,13 @@ pub const TITLE: &Title = &Title {
     photo_shot: Some(oag_title::photo::Accumulation::WIPEOUT_2048),
     // 2048's own recovery is unread; HD's, which runs Pulse's.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
+    // The `Ship_SetState` twin runs HD's cases 4 to 6 with the same timers
+    // (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, the 2048 and Omega columns).
+    // The destroy camera's mode 9 is unread, so `DestroyedCraft::camera` stays labelled.
+    destroyed: oag_title::pre_race::Sourced::inherited(
+        oag_title::destroyed::DestroyedCraft::HD,
+        "Wipeout HD",
+    ),
     // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
     // "Lineage"); not switched on, because its race cues are a flat pick.
     contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
@@ -301,6 +308,12 @@ pub const TITLE: &Title = &Title {
             on: oag_title::Platforms::Any,
             origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
         },
+        // `Ship_SelectWreckModel` twin, called in `Ship_SetState` case 4
+        // (`ship-destroy.md`, row 1); every ship directory ships its own `shipwreck.vex`.
+        hull_wreck: oag_title::Rule {
+            on: oag_title::Platforms::Any,
+            origin: oag_title::Origin::InheritedFrom("Wipeout HD"),
+        },
         // `docs/ghidra/functions/vita-2048-eu-v104/shield.md`: Omega's shield law, halves decoded.
         ..oag_title::Looks::unread(oag_title::ShieldPalettes {
             ps2: oag_title::ShieldPalette::Omega,
@@ -433,6 +446,24 @@ const EFFECTS: oag_title::Effects = {
             Trigger::WeaponSpark,
             EffectSpec::new(
                 engine_effects::WEAPON_SPARK_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            ),
+        )
+        // `Ship_PlayDestroyExplosion` names `WO_SHIP_EXPLOSION` on entering state 4, and
+        // `ShipDamageFx_Update`'s death branch the plume on state 5; the twins name both
+        // (`ship-destroy.md`, rows 2 and 10). Pulse's two per-locator wreck effects are not
+        // named, so they stay unset.
+        .with(
+            Trigger::WreckExplosion,
+            EffectSpec::new(
+                engine_effects::EXPLOSION_EFFECT,
+                Origin::InheritedFrom("Wipeout HD"),
+            ),
+        )
+        .with(
+            Trigger::WreckPlume,
+            EffectSpec::new(
+                engine_effects::DEATH_PLUME_EFFECT,
                 Origin::InheritedFrom("Wipeout HD"),
             ),
         );
@@ -679,5 +710,20 @@ mod tests {
             TITLE.looks.material_render_state.origin,
             oag_title::Origin::InheritedFrom("Wipeout HD")
         );
+    }
+
+    /// The destroyed-craft sequence is HD's `Ship_SetState` twin (`ship-destroy.md`, the 2048 and
+    /// Omega columns): `shipwreck.vex` at the blast, `WO_SHIP_EXPLOSION` and the death plume, and
+    /// none of Pulse's two per-locator wreck effects.
+    #[test]
+    fn the_2048s_destroyed_craft_runs_hds_sequence() {
+        use oag_title::Trigger;
+        use oag_title::destroyed::DestroyedCraft;
+        assert_eq!(TITLE.destroyed.value, DestroyedCraft::HD);
+        assert!(TITLE.looks.hull_wreck.applies_everywhere());
+        assert!(TITLE.effect_on(Trigger::WreckExplosion).is_some());
+        assert!(TITLE.effect_on(Trigger::WreckPlume).is_some());
+        assert!(TITLE.effect_on(Trigger::WreckNode).is_none());
+        assert!(TITLE.effect_on(Trigger::WreckSparks).is_none());
     }
 }

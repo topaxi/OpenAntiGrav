@@ -300,7 +300,7 @@ pub fn step<R: Raycaster + ?Sized>(
         env.damage_rules,
     );
     crate::damage::regenerate(state, &handling.dimensions, env.damage_rules, dt);
-    crate::damage::advance_state(state, dt);
+    crate::damage::advance_state(state, dt, &env.destroy_sequence);
     // After `evaluate`, so the tick a pickup is fired on gets the boost (`advance_turbo`).
     crate::engine::advance_turbo(state, dt);
     // After `apply_contact`, so the tick a Shield is fired on is protected, not skipped: same

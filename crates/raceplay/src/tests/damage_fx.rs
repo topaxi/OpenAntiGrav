@@ -240,3 +240,55 @@ fn the_damage_smoke_carries_the_crafts_velocity() {
         "carried {carried} resting {resting}: the smoke did not take the craft's velocity"
     );
 }
+
+/// The anchor law on its own: the flare node's origin plus 1.5 (2.0 once dead) of its Z row.
+#[test]
+fn the_anchor_is_the_flare_nodes_origin_plus_one_and_a_half_of_its_z_row() {
+    let nozzle = Vec3::new(0.0, 0.2, -3.0);
+    let axis = Vec3::new(0.0, 0.0, 0.75);
+    assert_eq!(
+        crate::damage_fx::anchor(nozzle, axis, false),
+        Vec3::new(0.0, 0.2, -3.0 + 1.5 * 0.75)
+    );
+    assert_eq!(
+        crate::damage_fx::anchor(nozzle, axis, true),
+        Vec3::new(0.0, 0.2, -3.0 + 2.0 * 0.75)
+    );
+}
+
+/// A craft with a flare locator smokes from the locator offset along its axis, through the
+/// pose it is drawn at, and not from its origin. Red to green: with the origin the smoke sits
+/// at `sim_at`.
+#[test]
+fn the_smoke_leaves_the_flare_node_and_follows_it() {
+    let mut race = race_with_smoke(true);
+    let nozzle = Vec3::new(0.0, 0.3, -4.0);
+    let axis = Vec3::new(0.0, 0.0, 0.75);
+    race.view.nozzles[0] = Some(nozzle);
+    race.view.nozzle_axes[0] = Some(axis);
+    hit_leaving(&mut race, 90.0, false);
+    let want = |race: &Race| {
+        race.view
+            .drawn_model(&race.core, 0)
+            .transform_point3(crate::damage_fx::anchor(nozzle, axis, false))
+    };
+    let origin = race.core.sim.world.ships[0].physics.body.position;
+    let placed = race.damage_smoke_anchors_for_tests();
+    assert_eq!(placed.len(), 1);
+    assert!((placed[0] - want(&race)).length() < 1e-3, "{placed:?}");
+    assert!((placed[0] - origin).length() > 1.0, "still at the origin");
+
+    race.core.sim.world.ships[0].physics.body.position += Vec3::new(5.0, 0.0, 0.0);
+    race.view.advance_damage_smoke(&race.core);
+    let followed = race.damage_smoke_anchors_for_tests();
+    assert!((followed[0] - want(&race)).length() < 1e-3, "{followed:?}");
+
+    race.core.sim.world.ships[0].physics.shield = 0.0;
+    race.view.advance_damage_smoke(&race.core);
+    let dead = race.damage_smoke_anchors_for_tests();
+    let want_dead = race
+        .view
+        .drawn_model(&race.core, 0)
+        .transform_point3(crate::damage_fx::anchor(nozzle, axis, true));
+    assert!((dead[0] - want_dead).length() < 1e-3, "{dead:?}");
+}

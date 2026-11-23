@@ -163,6 +163,8 @@ pub struct ViewSetup {
     /// models, so one team's locator carried onto another's craft puts the
     /// flare inside the fuselage.
     pub nozzles: Vec<Option<Vec3>>,
+    /// Each locator's Z axis, indexed like [`Self::nozzles`] (`oag_livery::Livery::nozzle_axis`).
+    pub nozzle_axes: Vec<Option<Vec3>>,
     /// The engine light per slot (HD, 2048, Omega) - `EngineLightData.xml` and the
     /// flare locator's Z axis - or `None` on a title with no engine light law and on a
     /// craft that ships neither. Indexed like [`Self::nozzles`], which
@@ -349,6 +351,7 @@ impl ViewSetup {
                 pitch: 0.0,
             },
             nozzles: Vec::new(),
+            nozzle_axes: Vec::new(),
             engine_lights: Vec::new(),
             spu_vertex_lights: true,
             hull_points: oag_mesh::mesh_render::HullPointLights::none(),

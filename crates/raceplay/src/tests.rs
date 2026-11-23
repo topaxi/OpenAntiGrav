@@ -86,6 +86,7 @@ mod hash;
 mod hd_effect_sprites;
 mod hd_plasma_effects;
 mod hd_sprite;
+mod hd_wreck;
 mod headless;
 mod held_buttons;
 mod hit_sparks;
@@ -348,6 +349,7 @@ fn setup(handling: Handling) -> SimSetup {
         craft_laws: None,
         autopilot_engine: oag_title::autopilot_engine::MEASURED,
         opponent_autopilot: false,
+        destroyed: oag_title::destroyed::DestroyedCraft::PULSE,
         weapon_pad_glow: &oag_title::weapon_pad::WeaponPadGlow::Authored,
         leach_drain: oag_title::weapons::LeachDrain::PerTick,
         blast_push: oag_title::weapons::BlastPush::Posted,
@@ -476,6 +478,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         // same path a model with no `Engine Flare` node takes. Sparks
         // likewise fall back to anchoring at the contact point.
         nozzles: vec![None; MAX_SHIPS],
+        nozzle_axes: vec![None; MAX_SHIPS],
         engine_lights: vec![None; MAX_SHIPS],
         spu_vertex_lights: true,
         hull_points: oag_mesh::mesh_render::HullPointLights::none(),

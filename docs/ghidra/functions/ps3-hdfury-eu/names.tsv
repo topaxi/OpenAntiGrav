@@ -1034,6 +1034,19 @@
 0x006cf358	function	TrackReflect_RenderJob	85	track-reflect.md
 0x006ce6e0	function	TrackRefract_RenderJob	75	track-reflect.md
 0x00403a30	function	TrackReflect_DrawList	72	track-reflect.md
+
+# 2026-11-22 hd-wreck-re: a destroyed craft, Ship_SetState states 4 to 8 (ship-destroy.md)
+0x000db400	function	Ship_SelectWreckModel	88	ship-destroy.md
+0x000d96c8	function	Ship_PlayDestroyExplosion	82	ship-destroy.md
+0x000d44d0	function	Ship_ApplyDeathKick	60	ship-destroy.md
+0x000e3d18	function	Ship_UpdateExploding	82	ship-destroy.md
+0x000e3768	function	Ship_UpdateWrecked	78	ship-destroy.md
+0x000e2f48	function	Ship_UpdateResetting	78	ship-destroy.md
+0x000abc20	function	Camera_SetMode	80	ship-destroy.md
+0x000acab0	function	Camera_SetSubject	72	ship-destroy.md
+0x00033578	function	CollisionWorld_ReplaceObject	80	ship-destroy.md
+0x000f76e8	function	PhysicsWorld_RemoveBody	75	ship-destroy.md
+
 # 2026-11-22 detonator-placement: the stage placer, its spawn and the two DetonatorLayouts loaders (detonator-placement.md)
 0x000654e0	function	Detonator_PlaceStageObjects	80	detonator-placement.md
 0x00064f70	function	Detonator_SpawnObject	78	detonator-placement.md
@@ -1121,6 +1134,8 @@
 0x0007e498	function	DetonatorHud_ResetVolleyIcons	70	detonator-hud.md
 0x0007e5a8	function	DetonatorHud_ShowBankedScore	62	detonator-hud.md
 0x00083318	function	Hud_RaiseWarning	65	detonator-hud.md
+
+
 # 2026-11-22 det-speed-emp-re: Detonator auto-speed, pads, EMP (detonator-speed.md, detonator-emp.md)
 0x0002bbc8	function	WeaponStats_ParseEmp	85	detonator-emp.md
 0x000d4078	function	Ship_TestWeaponPad	72	detonator-emp.md
@@ -1131,3 +1146,34 @@
 # Detonator end-of-race screen (2026-11-22, det-end-re). Static only.
 0x002234b0	function	EndRaceResults_FillDetonatorRows	80	detonator-endrace.md
 0x0022bdb8	function	EndRaceResults_ShowRecordNotice	72	detonator-endrace.md
+
+# 2026-11-23 zone-destroy-re: the Zone end, Ship_SetState mode 6 (zone-destroy.md). Static only.
+0x00104a58	function	DebrisManager_SpawnZoneDebris	80	zone-destroy.md
+0x00105a48	function	DebrisManager_Construct	75	zone-destroy.md
+0x00104f18	function	DebrisManager_SpawnShipDebris	72	zone-destroy.md
+0x0010c958	function	Debris_Launch	72	zone-destroy.md
+0x000758a0	function	SPZone_UpdateFinish	78	zone-destroy.md
+0x00053fc0	function	RaceManager_SetSubState	82	zone-destroy.md
+0x00053ff0	function	RaceManager_IsPhaseTimeAtLeast	82	zone-destroy.md
+0x00683048	function	SceneNode_SetFlags	80	zone-destroy.md
+0x000a9b18	function	Camera_SetTarget	60	zone-destroy.md
+0x000aa090	function	Camera_EnterTrackView	60	zone-destroy.md
+0x002ff600	function	Sound_StopAllBankCues	60	zone-destroy.md
+# 2026-11-23 hd-legend-re: the footer legend's flow layout and the text measure
+0x001da048	function	NavigationController_Init	85	navigation-legend.md
+0x001dab20	function	NavigationController_Layout	88	navigation-legend.md
+0x001da6e8	function	NavigationController_Update	70	navigation-legend.md
+0x001da470	function	NavigationController_Construct	80	navigation-legend.md
+0x001d9ee0	function	NavigationController_AddPrompt	85	navigation-legend.md
+0x001d9f30	function	NavigationController_PlacePrompt	72	navigation-legend.md
+0x009a7fe8	data	g_NavigationPrompts	80	navigation-legend.md
+0x00201118	function	Text_Construct	80	navigation-legend.md
+0x00202748	function	Text_GetWidth	85	navigation-legend.md
+0x002003d0	function	Text_ShrinkToWidth	65	navigation-legend.md
+0x00203208	function	Text_Render	70	navigation-legend.md
+0x002cd268	function	Font_MeasureText	80	navigation-legend.md
+0x002cd048	function	Font_MeasureString	85	navigation-legend.md
+0x002ac950	function	Font_FindGlyph	80	navigation-legend.md
+0x002ac9f8	function	Font_GetKerning	75	navigation-legend.md
+0x002cfb28	function	Font_DrawString	72	navigation-legend.md
+0x008c267c	data	g_FontPenSnap	75	navigation-legend.md

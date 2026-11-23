@@ -13,7 +13,7 @@ const ALL: [&Title; 5] = [
 ];
 
 /// The triggers a title answers for itself; the rest are the engine's.
-const OWN: [Trigger; 23] = [
+const OWN: [Trigger; 24] = [
     Trigger::PlasmaCharging,
     Trigger::PlasmaLaunch,
     Trigger::BombGlow,
@@ -30,6 +30,7 @@ const OWN: [Trigger; 23] = [
     Trigger::WreckBigNode,
     Trigger::WreckDebris,
     Trigger::WreckSmoke,
+    Trigger::WreckPlume,
     Trigger::DamageMild,
     Trigger::DamageModerate,
     Trigger::DamageCritical,
@@ -127,10 +128,13 @@ fn each_trigger_is_answered_by_exactly_the_titles_that_read_it() {
     for wreck in [Trigger::WreckNode, Trigger::WreckSparks] {
         assert_eq!(has(wreck), [true, true, false, false, false], "{wreck:?}");
     }
+    // HD, 2048 and Omega name `WO_SHIP_EXPLOSION` too (`Ship_PlayDestroyExplosion`, thrown at
+    // state 4) and the death plume (`WO_SHIP_DEATH_DAMAGE_PLUME`, state 5).
     assert_eq!(
         has(Trigger::WreckExplosion),
-        [true, false, false, false, false]
+        [true, false, true, true, true]
     );
+    assert_eq!(has(Trigger::WreckPlume), [false, false, true, true, true]);
     // Pure's own big blast is built from three names Pulse's executable does not carry.
     for big in [
         Trigger::WreckBigNode,
@@ -401,9 +405,9 @@ fn a_race_loads_each_name_of_its_own_table_once_and_the_superset_covers_every_ti
     // 43 since Pure, the last title that named it, dropped `WO_SHIP_ENGINEFLARE`; 44 with
     // `WO_SHIP_COLL_SPARK_NODAMAGE`, the collision cage's contact spark; 47 with Pure's three
     // big-blast names; 50 with Pure's Bomb glow and Disruptor head and explosion; 51 with its
-    // Disruptor launch; 53 with HD's Plasma wind-up and release; 57 with HD's four Detonator
-    // names.
-    assert_eq!(crate::RACE_EFFECTS.len(), 57);
+    // Disruptor launch; 53 with HD's Plasma wind-up and release; 54 with HD's death plume; 58 with
+    // HD's four Detonator names.
+    assert_eq!(crate::RACE_EFFECTS.len(), 58);
 }
 
 #[test]
@@ -482,11 +486,13 @@ fn no_title_labels_a_present_effect_chosen_and_the_others_are_measured_or_inheri
         {
             Some("Wipeout Pulse")
         }
-        (n, Trigger::ShieldAbsorb | Trigger::WeaponSpark)
-            if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name =>
-        {
-            Some("Wipeout HD")
-        }
+        (
+            n,
+            Trigger::ShieldAbsorb
+            | Trigger::WeaponSpark
+            | Trigger::WreckExplosion
+            | Trigger::WreckPlume,
+        ) if n == oag_2048::TITLE.name || n == oag_omega::TITLE.name => Some("Wipeout HD"),
         _ => None,
     };
     for title in ALL {
@@ -549,8 +555,9 @@ fn the_flags_the_loader_derived_from_a_name_are_the_titles() {
     ] {
         assert!(!psp(other) && !ps2(other), "{}", other.name);
     }
-    for other in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
-        assert!(!wreck(other, Platform::Psp), "{}", other.name);
+    // HD, 2048 and Omega swap in their `shipwreck.vex` at state 4 (`Ship_SelectWreckModel`).
+    for title in [oag_hd::TITLE, oag_2048::TITLE, oag_omega::TITLE] {
+        assert!(wreck(title, Platform::Psp), "{}", title.name);
     }
 }
 

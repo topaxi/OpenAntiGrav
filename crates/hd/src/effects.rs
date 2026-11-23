@@ -54,6 +54,18 @@ pub const EFFECTS: &Effects = &{
             Trigger::DamageCritical,
             EffectSpec::new(engine_effects::DAMAGE_CRITICAL_EFFECT, Origin::Measured),
         )
+        // `Ship_PlayDestroyExplosion` (`0x000d96c8`), state 4's entry, and
+        // `ShipDamageFx_Update_q`'s death branch, state 5's;
+        // `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, rows 2 and 10. HD names
+        // neither of Pulse's two per-locator wreck effects, so those stay unset.
+        .with(
+            Trigger::WreckExplosion,
+            EffectSpec::new(engine_effects::EXPLOSION_EFFECT, Origin::Measured),
+        )
+        .with(
+            Trigger::WreckPlume,
+            EffectSpec::new(engine_effects::DEATH_PLUME_EFFECT, Origin::Measured),
+        )
         // `0x000e7760` sets `+0x260` on a LeachBeam hit and `0x002a06e0` spawns
         // it attached; `particle-triggers.md`, "The LeachBeam hit spark".
         .with(
@@ -192,6 +204,12 @@ const SHIELD: ShieldPalettes = ShieldPalettes {
 
 /// HD's race looks.
 pub const LOOKS: &Looks = &Looks {
+    // `Ship_SelectWreckModel` (`0x000db400`) in `Ship_SetState` case 4;
+    // `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 1.
+    hull_wreck: Rule {
+        on: Platforms::Any,
+        origin: Origin::Measured,
+    },
     // `ShipAbsorbShell_Load` and its step; `absorb-feedback.md`, "The absorb shell".
     absorb_shell: Rule {
         on: Platforms::Any,

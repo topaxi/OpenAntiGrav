@@ -51,7 +51,7 @@ const SHADOW_MAP: &str = "shadowMap";
 pub fn signed_samplers(file: &[u8]) -> SignedSamplers {
     let mut found = SignedSamplers::default();
     let mut common: Option<BTreeSet<String>> = None;
-    for (_, program) in super::scan(file) {
+    for (_, program) in super::scan(file).iter() {
         let Ok(program) = program else { continue };
         if program.stage != super::Stage::Pixel {
             continue;
@@ -107,7 +107,7 @@ fn decodes_signed(instruction: &Instruction, first: u8, count: u8) -> bool {
             .any(|s| overlaps(s, first, count))
 }
 
-impl Program<'_> {
+impl Program {
     /// The textures this program reads as `2x - 1`. See the module docs.
     #[must_use]
     pub fn signed_textures(&self) -> SignedTextures {

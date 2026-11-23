@@ -259,6 +259,7 @@ impl Race {
         // The mode's rules, read before the craft is borrowed: `World::mode`
         // asks the whole world and the borrow checker will not have both.
         let env_damage_rules = self.core.sim.damage_rules();
+        let destroy_sequence = self.core.sim.destroy_sequence();
         let pilot_assist = self.core.sim.pilot_assist_input(slot);
         let engine_flags = self.core.sim.autopilot_engine_flags(slot);
         let ship = &mut self.core.sim.world.ships[slot];
@@ -290,6 +291,7 @@ impl Race {
             // regenerates, exactly as the disc's manual text describes. See
             // `oag_gameplay::damage_rules`.
             damage_rules: env_damage_rules,
+            destroy_sequence,
             pilot_assist,
             barrel_rolls: self.core.sim.barrel_rolls,
             engine_flags,

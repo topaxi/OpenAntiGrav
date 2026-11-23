@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [hd]
-updated: 2026-11-22
-summary: "HD front end: Ship Select matches RAM; team banner wipe and the page-entry wipes (Team, Track, Grid, Cell) wired"
+updated: 2026-11-23
+summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow law read, ready to wire"
 difficulty: medium (30)
 ---
 
@@ -123,8 +123,9 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   field, four `_bw` icons, `corner2` brackets, next-grid logo, barcode, rule,
   capitals; 2026-11-18, `hd-menu-cell`: the card's level, the wordmark's glow and the bloom are the front end's
   bloom chain, the pair `hd/menu-cell-select` 5.06 to 3.00 mean grey, walked live with the pointer). Open, by
-  share of the pair's remaining 3.00: the footer legend's spacing (0.63: ours spreads the prompts wider), the
-  wordmark 6 pixels right of the original's (0.58 in its box), the black hexagon field in the scene (about 0.25:
+  share of the pair's remaining 3.00: the footer legend's spacing (0.63: ours spreads the prompts wider; law read
+  2026-11-23, bullet below), the wordmark's box (0.58; not a position: on the 2026-11-19 re-render it sits at the
+  original's pixels, shift (0, 0) on this pair and on `hd/menu-grid-select`, `navigation-legend.md`, "The wordmark"), the black hexagon field in the scene (about 0.25:
   the flyer thread), `EVENT 01/08`'s letter spacing (0.11), the selected cell's white outline (0.05: ours draws a
   grey fill; a different widget from Ship Select's ring: `CellMode`'s `Bg_x_y`/`Outline_x_y` layers), the title rule's fade at its right end (the original's is solid). Also open: the base campaign's page
   (a first frame of `01_uplift` exists since 2026-11-18: values and the selected outline are cyan `0, 178, 231`,
@@ -141,7 +142,9 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 - Main Menu and Racebox setup are our own tree, not HD's pages
 - Layout scale: the original is drawn at about 0.904 of the authored space,
   offset (+150, -8); ours is 1:1. Not applied: may be the maintainer's
-  `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first
+  `Safe Area Setting`. Re-measure on a fresh RPCS3 profile first. 2026-11-23 (`hd-legend-re`): on
+  `hd/menu-cell-select` (Safe Area 96 % in its `pair.json`) the footer fits `0.96 * x + 38.4` exactly (the 96 %
+  scaled about the centre), not 0.904 (`docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`, "The Safe Area mapping")
 - Track Select (2026-10-27: corner marks and header arrows landed; open: the
   circuit thumbnail landed 2026-11-19, page `Squares`): hex grid LANDED 2026-10-08 (`hd-track-select`, shared
   `hex::draw_cells`; direction glyphs open; ring thickness LANDED 2026-11-19). Circuit model
@@ -170,17 +173,23 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
 ## Next Steps
 
 - Ring and lattice slide on a step (`hd-step-banner`, opus RE lane, size large 60): `HexSelection`'s update (class name `0x0078b348`; ring pulse and displacement, the lattice slide over game frames 4 to 10); targets in `team-selection-model.md`: hex box on k04 to k10 (16.8, 21.5, 22.6, 14.1) down to the 4 floor, the panel fill 31 against 50. **The banner logo's `vwipe` is wired** (`hd-banner-wipe`: `oag_ui::screen::Vwipe`, replayed by `picker::hd::logo_draw` from `Picker::seconds_since_step`; banner box 29.66, 19.27, 18.76, 20.54, 17.15, 25.97, 15.41 on k04 to k29 now 16.07, 16.07, 16.07, 16.83, 16.22, 16.07, 16.02, the bare-panel floor, see `image-widget.md`, "Wired"). Open on it: the ramp starts at the press, the original's 0 to 2 frames later (sensitivity in `image-widget.md`). **The page-entry wipes are WIRED (2026-11-20, `hd-vwipe-wire`, `image-widget.md`, "Wired: page entry")**: every `vwipe` Image waits its authored `delay` from the page entry (`Widget_ArmTransition` `0x00165018`), draws nothing meanwhile, then ramps its in-time: Team Selection's Logo 0.5 s, Track Select's Emblem 0.6 s, Grid Selection's `unlockboxbrackets` 0.45 s and `flyerlogo` 0.65 s, Cell Selection's `flyerlogo` 0.8 s and four emblems (0.37 s hold, then 0.05 to 0.275 s); the clock is `oag_ui::screen::EntryClock`, `--menu-entry-seconds` states it on a still, and no stated time is finished (ten HD and Omega menu pairs pixel-identical). The disc test reads each measured page's authored delays against RAM's frames (no disagreement; the 76 against 71 count gap is named by widget). **Ours draws no such widget on** Racebox (`Single Player`), Controls, Credits and Race Records (our `menu.toml` pages), the network pages, Show Unlocks and SoundTest, so those delays are checked and inherited, not played. **The re-arms are WIRED (2026-11-20, `hd-vwipe-rearm`, `image-widget.md`, "Re-arming" and "The corner brackets")**: a cell change or a `Square` rung step re-arms the four Cell emblems' wipes with their delay and no hold (`CellSelection::refreshed_at`, `cell_emblems::since_armed`), a circuit step restarts the Track Select emblem with no delay (`oag_ui::screen::restart_draw`, shared with the Team logo), the Grid unlock box's `Bracket` waits its own 0.4 s and opens out over 0.1 s (`Bracket::inset`; a `Bracket` is not wiped by the image it sits in), the hold is a 0.4 s countdown in `CellSelection_Update` (read; ours keeps the measured 0.37), and `--menu-picker-step-seconds` stills `track-select` and `cell-select`. Open on it: the same arm is recursive, so the original also blanks and restores the emblems' child `Text`/arrows and `RightColumnText` in stages on a change (a `transition="0"` widget with a `delay` draws nothing until it is out) and ours draws no delay on a `Text`; every other `Bracket` (Cell, Track, Team pages) draws from frame 0 though each authors a `delay` (0.1 to 0.675 s), their clocks (page entry, or the re-armed parent) unmeasured; the Omega-only `TrackPreview` (0.4 s) is unwired. The ramp-start offset after a team step and the Track Select circuit emblem's restart (no delay, `Widget_ResetTransition`) are unchanged.
-- **The footer legend is a flow layout and its law is unread (measured 2026-11-22, `hd-cell-footer`).** On `hd/menu-cell-select` the
-  original's prompts start at x 288, 462, 641, 773 (1920x1080): each glyph about 24-25 px after the previous word ends (437 to 462,
-  616 to 641, 749 to 773). Ours places the authored `skin.xml` x (490, 720, 900, scaled 0.96) at 511, 732, 904. `skin.xml` carries the
-  same x in DATA00 and DATA02-06, so no archive authors the original's positions; the grid, track, ship and campaign select pairs show
-  the same flow, so one fix moves every HD menu pair. A fitted gap (about 25.5 authored units) would match and is not wired. Next: an
-  `oag-re` lane on the HD EBOOT's `NavigationController`/legend layout (flow gap; how glyph and word advance are measured; whether the
-  Cell page's Difficulty prompt flows too), plus the `flyerlogo` wordmark's placement (authored x 188 in the Viewport at 178,708).
+- **The footer legend is a flow layout: READY TO WIRE (law read 2026-11-23, `hd-legend-re`;
+  `docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`).** `NavigationController` overwrites every prompt's
+  authored x: `cursor = (int)(nav.x + 20 + w(nav))` (`ControlTextNavigation`, x 260), then per prompt glyph at the
+  cursor, word at `cursor + 44`, `cursor = (int)w(word) + word.x + 20`; order Confirm, Back, the screen's registered
+  extras (Cell Selection adds `DifficultyButtonIcon`/`DifficultyButton`, so the Difficulty prompt flows too), Invite.
+  `w` is the font's ink extent at the Text's scale (0.8) with each glyph's pen rounded up (`ceilf`). Predicted
+  screen x on `hd/menu-cell-select` (0.96 Safe Area): 459.8, 639.4, 770.9 for the glyphs against the original's 460,
+  639, 771, every prompt within 1 px. Wiring: measure with `oag_ui::font` metrics of HD's `helv`/`PS_BUTTONS` at the
+  Text's scale with the ceil per glyph for the layout only (the draw is unsnapped: glyphs keep their natural
+  advance), and replace the authored x in `NavigationLegend` for HD; Omega has its own law
+  (word at glyph width + 14; `docs/ghidra/functions/ps4-omega-eu/navigation-legend.md`) and wires with it. Open: the
+  other four `AddPrompt` callers (`0x001a7588`, `0x001f0b50`, `0x002587a0`, `0x0069dc98`) and which screens set the
+  Confirm/Back bits.
 - The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
-   scale survive? If yes, one HD-only presentation transform on `Space::HD`.
+   scale survive? (2026-11-23: the Cell pair at 96 % fits `0.96 * x + 38.4`, `navigation-legend.md`, "The Safe Area mapping") If yes, one HD-only presentation transform on `Space::HD`.
 1. Compose `ShipModel`'s authored pose and compare against a Feisar frame on a
    fresh-profile RPCS3 boot.
 2. Add a campaign-page tween measured off `trans-campsel-original.png`.

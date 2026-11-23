@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [all]
-updated: 2026-11-16
+updated: 2026-11-22
 summary: "Slow test-data tests that load art or run ticks their assertions never read; ribbon batch on HD, Omega, 2048 first"
 categories: [tooling]
 size: S (30)
@@ -109,6 +109,12 @@ on Omega and `views` 1 and 2 (the doc's compare did not cover these).
      the decode and wall time. A read memo saves CPU but is still unmeasured.
    - Change: a test-side memo from texture path to bytes, shared across the models
      of one test.
+   - **2026-11-22:** the cost was not the texture reads. Each model build re-scanned
+     every material file's GCN programs once per planner (60,504 scans of 895 files);
+     `gcn::memoised` now scans each once per build, and `oag-bytes` builds at opt-level 2:
+     the normal-map census 243 to 48 CPU-s alone, `psp2_twin_blend` 109 to 37
+     (`workspace-layout.md`, "The byte readers at opt-level 0"). The texture-read memo
+     stays open, with smaller stakes.
    - Saving: low confidence (20). Only the read share is saved.
    - Check: first count reads against unique paths with a counter in a scratch
      copy. Build the memo only if repeats are more than half the calls. Run the

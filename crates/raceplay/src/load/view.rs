@@ -783,9 +783,12 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         weapon_spark_anchors: super::hit_sparks::weapon_anchors(craft_title, &liveries),
         cockpit_hit_noise,
         wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
+        // Pulse's ship shockwave goes with its blast; HD's is thrown on a different edge and its
+        // shockwave is unread.
         wreck_shockwave: craft_title
             .effect_on(oag_title::Trigger::WreckExplosion)
-            .is_some(),
+            .is_some()
+            && craft_title.destroyed.value.blast_at == oag_title::destroyed::BlastAt::DwellEnd,
         destroy_stations,
         intro_camera,
         intro_voice,
@@ -799,6 +802,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         chase_close,
         internal,
         nozzles: liveries.iter().map(|livery| livery.nozzle).collect(),
+        nozzle_axes: liveries.iter().map(|livery| livery.nozzle_axis).collect(),
         engine_lights: engine_light::per_slot(&liveries, title, &track),
         spu_vertex_lights,
         hull_points: oag_mesh::mesh_render::HullPointLights::none(),

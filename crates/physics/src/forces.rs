@@ -279,6 +279,8 @@ pub struct Environment {
     /// which this crate does not know. The default is both on, the original's default for
     /// every game mode except three ([`crate::damage`]).
     pub damage_rules: crate::damage::DamageRules,
+    /// How the title's destroyed sequence times itself; Pulse's by default.
+    pub destroy_sequence: crate::damage::DestroySequence,
     /// The one-shot thrust scale a LeachBeam drain armed, `craft+0x31c`.
     ///
     /// `Ship_UpdateEngine` reads it once and writes `1.0` back ([`crate::engine::engine`]);
@@ -328,6 +330,7 @@ impl Default for Environment {
             auto_speed: None,
             pad_hit: None,
             damage_rules: crate::damage::DamageRules::default(),
+            destroy_sequence: crate::damage::DestroySequence::default(),
             thrust_scale: 1.0,
             extension_thrust: 1.0,
             start_boost: None,

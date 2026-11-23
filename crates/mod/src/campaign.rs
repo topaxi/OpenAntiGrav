@@ -707,9 +707,9 @@ pub fn write_mod(
     };
     let manifest_text = toml::to_string(&manifest).map_err(|e| other(&folder, e.to_string()))?;
     let manifest_path = folder.join(crate::MANIFEST);
-    std::fs::write(&manifest_path, manifest_text).map_err(io(&manifest_path))?;
+    oag_io::write(&manifest_path, manifest_text).map_err(io(&manifest_path))?;
     let file = campaigns.join(format!("{id}.toml"));
-    std::fs::write(&file, campaign_text).map_err(io(&file))?;
+    oag_io::write(&file, campaign_text).map_err(io(&file))?;
     Ok(folder)
 }
 

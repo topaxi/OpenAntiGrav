@@ -22,6 +22,7 @@ members = [
   "crates/hd",
   "crates/hud",
   "crates/input",
+  "crates/io",
   "crates/livery",
   "crates/log",
   "crates/mobile",
@@ -94,6 +95,7 @@ oag-mod = { path = "crates/mod" }
 oag-modhost = { path = "crates/modhost" }
 oag-ext-abi = { path = "crates/ext-abi" }
 oag-input = { path = "crates/input" }
+oag-io = { path = "crates/io" }
 oag-livery = { path = "crates/livery" }
 oag-mesh = { path = "crates/mesh" }
 oag-music = { path = "crates/music" }
@@ -487,6 +489,12 @@ opt-level = 2
 # The asset decode path: LZSS, the GS and GE texture swizzles, the `.vex` node
 # walk, and the sector-at-a-time read under all of them.
 [profile.dev.package.oag-disc]
+opt-level = 2
+# The byte readers every decoder above calls per field (`u32_at` and kin). At
+# opt-level 0 each read is three un-inlined calls: they were 40 % of the Omega
+# normal-map census (docs/architecture/workspace-layout.md, "The byte readers
+# at opt-level 0").
+[profile.dev.package.oag-bytes]
 opt-level = 2
 
 # The picture vocabulary. Small, but every settings round-trip and every menu
