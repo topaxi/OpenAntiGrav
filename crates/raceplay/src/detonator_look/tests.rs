@@ -159,3 +159,28 @@ fn a_dark_mine_never_steps() {
     let envelope = envelopes.advance(&dark, &[1.0; 16], 1.0)[0];
     assert_eq!(envelope, MineEnvelope::default());
 }
+
+#[test]
+fn the_football_and_spikes_sizes_follow_the_envelopes_the_way_the_original_writes_them() {
+    // The values one mine held in the original's heap (`m+0xf4`, `m+0xf8`, `m+0xd8`), Talon's Junction,
+    // lap clock 2.7 s: `scale = clamp(2.3 s, 1, 2.3)` read back as 1.3537.
+    let held = MineEnvelope {
+        football: 0.5886,
+        spikes: 0.568,
+    };
+    assert!((held.football_scale() - 1.3537).abs() < 1e-3);
+    assert!(
+        (held.spike_scale() - 2.272).abs() < 1e-3,
+        "4 t, under scale + 0.95"
+    );
+    assert!((held.brightness() - 1.1771).abs() < 1e-3, "m+0x100");
+    // A silent mine is size 1 and the spikes never pass the football by more than 0.95.
+    let silent = MineEnvelope::default();
+    assert_eq!((silent.football_scale(), silent.spike_scale()), (1.0, 1.0));
+    let loud = MineEnvelope {
+        football: 1.0,
+        spikes: 1.0,
+    };
+    assert_eq!(loud.football_scale(), 2.3);
+    assert!((loud.spike_scale() - 3.25).abs() < 1e-6);
+}

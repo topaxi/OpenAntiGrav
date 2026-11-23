@@ -93,7 +93,7 @@ def observe(session, gdb, ship, body, out, stem, flush):
     except Exception as error:  # noqa: BLE001 - a bonus
         print("  %s: no gantry time (%s)" % (stem, error), flush=True)
     try:
-        pose["mines"] = rpcs3_hd_field.detonator_mines(rpcs3_hd_field.Mem(session.open_mem()))
+        pose["mines"] = rpcs3_hd_field.detonator_mines(rpcs3_hd_field.Mem(session.open_mem()), keep_raw=bool(os.environ.get("OAG_MINE_RAW")))
         print("  %s: %d active mines" % (stem, len(pose["mines"])), flush=True)
     except Exception as error:  # noqa: BLE001 - a bonus
         print("  %s: no mines (%s)" % (stem, error), flush=True)

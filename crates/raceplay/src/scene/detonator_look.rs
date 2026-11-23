@@ -5,6 +5,34 @@ use super::*;
 use crate::detonator_look::{MinePart, bomb_constants, mine_constants};
 
 impl super::Scene {
+    /// Steps every laid mine's music envelope for the race clock `seconds` (a clock already stepped is left as
+    /// it is) and puts each live mine's football and spikes size where the matrices read it
+    /// ([`Race::mine_model_matrices`]). Called before the matrices are written, so the frame draws the
+    /// size its own envelope has.
+    pub(super) fn step_mine_envelopes(
+        &self,
+        race: &Race,
+        laid: &[crate::detonator_look::LaidMine],
+        seconds: f32,
+    ) -> Vec<crate::detonator_look::MineEnvelope> {
+        let envelopes = crate::drawable::lock(&self.bomb_blast.detonator.envelopes).advance(
+            laid,
+            &self.band_levels.get(),
+            seconds,
+        );
+        let mut sizes = crate::drawable::lock(&race.view.mine_sizes);
+        sizes.clear();
+        for (mine, envelope) in laid.iter().zip(&envelopes) {
+            if mine.live {
+                sizes.insert(
+                    (mine.entry, mine.lane),
+                    (envelope.football_scale(), envelope.spike_scale()),
+                );
+            }
+        }
+        envelopes
+    }
+
     /// Gives every laid mine's football and spikes this frame's constants: the stage's colour
     /// and the music's envelope for a live mine, the dark literals for a dark one.
     ///
@@ -49,11 +77,7 @@ impl super::Scene {
         if laid.is_empty() {
             return;
         }
-        let envelopes = crate::drawable::lock(&parts.envelopes).advance(
-            &laid,
-            &self.band_levels.get(),
-            seconds,
-        );
+        let envelopes = self.step_mine_envelopes(race, &laid, seconds);
         for (index, (mine, envelope)) in laid.iter().zip(&envelopes).enumerate() {
             for (pool, part) in [
                 (&self.mines, MinePart::Football),

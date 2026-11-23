@@ -176,6 +176,11 @@ impl super::Scene {
         seconds: f32,
         weapon_scene: &mesh_render::Scene,
     ) -> WeaponMatrices {
+        // The laid mines' sizes first: the matrices below read them.
+        let (_, laid) = race.detonator_mine_looks();
+        if !laid.is_empty() {
+            self.step_mine_envelopes(race, &laid, seconds);
+        }
         let rocket_matrices = race.rocket_model_matrices();
         let plasma_ball_matrices = race.plasma_ball_model_matrices();
         let mine_matrices = race.mine_model_matrices();
@@ -255,7 +260,7 @@ impl super::Scene {
         );
         self.write_detonator_looks(race, queue, seconds, bomb_matrices.len());
         self.write_detonator_parts(
-            (race, &mine_matrices, &bomb_matrices),
+            (race, &race.mine_spike_matrices(), &bomb_matrices),
             prev,
             queue,
             (view_projection, prev_vp),
