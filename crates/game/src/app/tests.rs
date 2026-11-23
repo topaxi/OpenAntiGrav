@@ -189,6 +189,17 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
     assert!(pose::parse_hud_state("1,1,-3,3").is_err());
 }
 
+#[test]
+fn a_head_to_head_pin_is_a_gap_and_who_leads() {
+    let ahead = pose::parse_head_to_head("150,lead").expect("a gap and a leader");
+    assert_eq!((ahead.gap, ahead.player_leads), (150.0, true));
+    let behind = pose::parse_head_to_head(" 42.5 , trail ").expect("spaces are allowed");
+    assert_eq!((behind.gap, behind.player_leads), (42.5, false));
+    assert!(pose::parse_head_to_head("150").is_err());
+    assert!(pose::parse_head_to_head("150,ahead").is_err());
+    assert!(pose::parse_head_to_head("-3,lead").is_err());
+}
+
 /// One frame of the PSP's backdrop, to the nanosecond.
 const BACKDROP_FRAME: f64 = 1001.0 / 30_000.0;
 

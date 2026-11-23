@@ -105,6 +105,30 @@ Open: the original's hexagon is translucent (the scene shows through it) where o
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 
+### The marquee and head-to-head bars of a race shot (2026-11-24, `hud-bars-headless`)
+
+Two more `CaptureHud` pins, for a HUD part no headless route reached: `--hud-song TITLE [--hud-song-artist ARTIST] [--hud-song-ticks N]`
+holds the now-playing marquee on a song (a capture runs no music, so none starts), and `--hud-head-to-head GAP,lead|trail` draws the
+Head to Head bar on the readout alone (`--mode` has no head-to-head, and a posed capture runs no standings). Both need `--hud-state` and
+reach nothing in the race: the marquee's display is stepped `N` times (default 60, past the fade-in, where the bar has stopped climbing) at load and then frozen, so the tick count of the capture does not move it, and the readout's gap is not read from the standings.
+The bar exists only in a layout that authors it: the arcade one (`--mode single_race`), not the time trial's.
+
+Measured on a posed Pulse PSP single race at 480x272, by regression of the frame with the pin against the frame without, over the bar's
+pixels left of the scrolled text (1,512 pixels, per channel; the marquee bar is black, so its alpha is `1 - slope`):
+
+| | marquee bar alpha | head-to-head bar |
+| --- | --- | --- |
+| with the fill drawn once (`4a445a7fa`) | 0.199 (about 51 over 255, where the fade-in ends: `Display::step`) | `0xFF7DEFC0` opaque |
+| with that fix reverted | 0.35 (`1 - 0.8^2`: drawn twice) | identical |
+
+The head-to-head bar is opaque in Pulse's layout (`HudColour2`), so the fix cannot show on it; it shows on the marquee's bar and on
+a translucent fill under the HUD font (`a_translucent_fill_under_an_outlined_font_is_drawn_once` is the unit pin, and
+`hud_boost_glow_ground_truth::the_capture_flags_draw_the_marquee_bar_and_the_head_to_head_bar` the frame). None of the 30 Pulse PSP
+`theirs.png` in `pulse-psp/` (circuits) and `pulse-psp-race/` shows either bar: the marquee's rectangle (x 130 to 280, y 247 to 267) is
+not darkened in any, and no pixel of the bar's mint is in the top right. The one original frame that shows the marquee is Pulse PS2's
+`moa-therma-white` (its text tail), outside the PSP set; ours draws none there until a song is pinned for it.
+
+
 ## Environment parity: the profile and the checks (2026-10-20)
 
 **The set from before 2026-10-20 is archived** (the maintainer's request: start fresh, make the original's and

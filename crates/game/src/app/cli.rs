@@ -1104,7 +1104,7 @@ pub(crate) struct Cli {
     pub(crate) hud_song_artist: Option<String>,
 
     /// With `--hud-song`: marquee updates (60 per second) into the song's animation. The bar and text fade in over
-    /// the first few, then the text scrolls. Default 40, which is past the fade.
+    /// the first few, then the text scrolls. Default 60, past the fade-in, where the bar has stopped climbing.
     #[arg(long, value_name = "TICKS", requires = "hud_song")]
     pub(crate) hud_song_ticks: Option<u32>,
 

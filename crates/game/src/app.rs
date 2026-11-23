@@ -427,7 +427,7 @@ fn run(mut cli: Cli) -> Result<()> {
         hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
             artist: cli.hud_song_artist.clone(),
             title,
-            ticks: cli.hud_song_ticks.unwrap_or(40),
+            ticks: cli.hud_song_ticks.unwrap_or(60),
         });
         hud.head_to_head = cli
             .hud_head_to_head
