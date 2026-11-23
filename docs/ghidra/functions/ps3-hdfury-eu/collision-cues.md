@@ -522,16 +522,49 @@ world position, or read the update reached through the node's vtable.
 
 ### Not read here
 
-- How often the craft's box reaches a floor at all: HD hovers on rays, and the box meets the
-  floor only on a hard landing or scrape. The rate decides how often a player sees this spark.
+- How often the original's box reaches a floor at all (ours: "Wired", Rate). HD hovers on rays, and
+  the box meets the floor only on a hard landing or scrape. The rate decides how often a player sees
+  this spark.
   Recipe: RPCS3, a jump landing on a hover-heavy circuit, poll the ring's class word
   (`body + 0x264 + 0x50 * i`) for `1`, `3` and `2`.
 - The `ship + 0x6a64 & 0x800` gate at `0x000e7610` (`FUN_00054628`, `FUN_00055e30`).
 - When a kind 2 node is freed.
 
+### Wired (`crates/raceplay/src/floor_sparks.rs`)
+
+`oag_physics::wall::WallResponse::frictionless` keeps the first eight frictionless records of a
+frame (point and impulse; reporting only, not hashed) and `oag_physics::reset::contact`'s point
+is the reset plane's record. `RaceView::advance_floor_sparks` plays `Trigger::CollisionSparkNoDamage`
+once per record, unattached (`Stage::play`), at the world position of the locator nearest the
+record, scale `1.0`, no carried velocity, no cooldown and no `.COLLISIONS` cue (the kind 2 path
+raises none). The kind rule is `floor_sparks::contact_kind` (`friction <= 0` is 2, a craft not
+racing is 3, NaN keeps 0). Gates: a Shield, a craft no local view sees within 100 units (the
+ring walk's reach, as `field_sparks`), a craft that is not racing, and a title with no
+`Ship_DispatchCollisionFx` locators (`HitSparks::dispatch_anchors`, so Pulse and Pure throw
+nothing). A frame of only frictionless records counts as touching for the attached spark's
+release rule, for the seat and for the opponents.
+
+- **Chosen, not measured:** the spark stays where it spawned instead of riding its locator (the
+  confidence-60 value above stays open); the eight-record cap; the cockpit-view flag
+  (`ship + 0x5f42`) is not applied.
+- **Kind 3** (`NotRacing`) restarts the attached spark from the floor record's point and impulse
+  (`floor_sparks::not_racing_record`, handed to `attach_rule` as a pair record, for the seat and
+  the opponents; test `a_floor_record_of_a_craft_that_is_not_racing_restarts_the_attached_spark`).
+  Not wired: the reset plane's record holding an attached spark (the craft is sent to state 6 the
+  same frame).
+- **Rate, measured on ours:** Chenghou Project, an Ace field with the seat on the autopilot, 6000
+  ticks: seven sparks in four landings (the seat's at tick 3273 and 5466, three records each),
+  so a player sees it on a hard landing, not a scrape. Frame: the seat's landing at tick 3273
+  and 3275 to 3277 against the same ticks with the throw off shows the spark behind both rear
+  wing tips.
+
 ### 2048 and Omega
 
-- **2048: checked, the frictionless floor applies, not wired.** `Collision_PairFriction`
+- **Floor spark: ported by title data, not run.** Both carry the `WeaponSpark` entry that gates
+  `dispatch_anchors`, both name `WO_SHIP_COLL_SPARK_NODAMAGE` (`particle-paths.md`, this
+  directory's `ps4-omega-eu/ship-collision-fx.md`), and their races run the same physics and
+  `oag-raceplay` path, so a floor record throws it there too. No 2048 or Omega race was run for it.
+- **2048: checked, the frictionless floor applies.** `Collision_PairFriction`
   (`0x811a1870`, `/2048/eboot-vita-2048-eu-v104.elf`, [craft-laws.md](../vita-2048-eu-v104/craft-laws.md))
   has HD's shape with more materials: a craft (0 or 1) against a craft returns `0x8151fc18`
   (`0.035`), against walls 4, 5, 6 `0x8151fc1c`/`0x8151fc20` (`0.025`/`0.035` by the Zone test),
@@ -539,7 +572,7 @@ world position, or read the update reached through the node's vtable.
   (`0x8153fae0`) and read only by this function: zero, as HD's. `(0, 1)` gives `0.035` there;
   what 2048's material 1 is, is not read. Which 2048 surface is which material, and its contact-fx
   caller, are not read.
-- **Omega: checked, the frictionless floor applies, not wired.** The pair tables are inlined
+- **Omega: checked, the frictionless floor applies.** The pair tables are inlined
   into each narrowphase test (`FUN_012539b0` and its siblings, all readers of `shipWallCofR` at
   `0x0193fc54`). A craft (0 or 1) gets `0x3d0f5c29` (`0.035`) against a craft, `0.025`/`0.035`
   against 4, 5, 6, and the literal `0` against everything else: the compiler folded the
