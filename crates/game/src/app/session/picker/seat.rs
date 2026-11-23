@@ -173,6 +173,10 @@ impl Session {
             self.speak_name(Kind::Ship, id);
         }
         if index == 0 {
+            // Seat 0's confirmed team is a pick (`Race::open_team` only showed a fresh row).
+            if let Some(id) = &chosen {
+                self.settings.race.pick_team(id);
+            }
             super::livery::confirmed(&mut self.settings.race, fixed);
             self.split_picks.clear();
         } else if let Some(entry_id) = chosen {
@@ -234,6 +238,9 @@ impl Session {
                 }];
             }
         } else {
+            if let Some(id) = &chosen {
+                self.settings.race.pick_team(id);
+            }
             super::livery::confirmed(&mut self.settings.race, fixed);
         }
         if both {

@@ -201,6 +201,30 @@ impl Race {
         }
     }
 
+    /// Ship Select opened showing `shown`: stored as the team, unless it is the title's
+    /// fresh-profile row standing in for a team never picked. That row is shown, not stored, so
+    /// a profile that only looked at Pure's list still opens Pulse's on its own first row;
+    /// [`Self::pick_team`] stores it once confirmed. Whether anything changed.
+    pub fn open_team(&mut self, title: &oag_title::Title, shown: &str) -> bool {
+        let fresh_row = !self.team_chosen
+            && self.team == default_team()
+            && title
+                .race
+                .fresh_team
+                .is_some_and(|fresh| fresh.team == shown);
+        if fresh_row || self.team == shown {
+            return false;
+        }
+        self.team = shown.to_string();
+        true
+    }
+
+    /// The player picked `team`: moved the cursor to it, confirmed it or chose it on a TEAM row.
+    pub fn pick_team(&mut self, team: &str) {
+        self.team = team.to_string();
+        self.team_chosen = true;
+    }
+
     /// The model Ship Select opens on: the stored variant, or on Wipeout
     /// HD/Fury the fresh-profile default (`oag_hd::race::FRESH_PROFILE_VARIANT`)
     /// while the player has not picked one. A non-empty stored variant always
@@ -239,6 +263,20 @@ mod tests {
             ..Race::default()
         };
         assert_eq!(stored.opening_team(oag_pure::TITLE), "Qirex");
+    }
+
+    /// Opening Pure's list on its fresh row does not store it: the profile is still unpicked, and
+    /// Pulse's Ship Select still opens on Assegai. Confirming stores it as a pick, for both.
+    #[test]
+    fn a_fresh_row_only_shown_is_not_another_titles_team() {
+        let mut race = Race::default();
+        assert!(!race.open_team(oag_pure::TITLE, "Feisar"));
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Feisar");
+        assert_eq!(race.opening_team(oag_pulse::TITLE), "Assegai");
+
+        race.pick_team("Feisar");
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Feisar");
+        assert_eq!(race.opening_team(oag_pulse::TITLE), "Feisar");
     }
 
     /// The TARGET row reaches a launch only in an Eliminator, and only once touched.

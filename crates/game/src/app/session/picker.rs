@@ -291,10 +291,10 @@ impl Session {
         // A later seat's pick is its own and the settings are the first
         // player's, so it leaves them alone.
         if seat == 0 {
-            if let Some(entry) = model.selected()
-                && entry.id != self.settings.race.team
+            let title = self.shell.as_ref().map(|shell| shell.title);
+            if let (Some(entry), Some(title)) = (model.selected(), title)
+                && self.settings.race.open_team(title, &entry.id)
             {
-                self.settings.race.team = entry.id.clone();
                 self.resupply_race_variant();
             }
             // What the screen opened on is what a bare Confirm races.
@@ -731,8 +731,7 @@ impl Session {
                     let axis = picker.livery_axis;
                     let fixed = picker.model.fixed_livery();
                     picker.refresh_preview(&self.gpu);
-                    self.settings.race.team = team;
-                    self.settings.race.team_chosen = true;
+                    self.settings.race.pick_team(&team);
                     let kept = picker.model.variant().map(|(id, _)| id.clone());
                     livery::stepped(&mut self.settings.race, axis, kept, layout_is_hd, fixed);
                     self.resupply_race_variant();
@@ -770,6 +769,9 @@ impl Session {
                 let fixed = picker.model.fixed_livery();
                 stage.picker = None;
                 if let Some(id) = chosen {
+                    // A confirmed team is a pick, the fresh-profile row included
+                    // (`Race::open_team` only showed it).
+                    self.settings.race.pick_team(&id);
                     self.speak_name(Kind::Ship, &id);
                 }
                 livery::confirmed(&mut self.settings.race, fixed);
