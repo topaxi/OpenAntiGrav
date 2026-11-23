@@ -2243,6 +2243,50 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         1.0,
         ramp_sheen || ((in.slots & 262144u) != 0u && zone_program == 0.0),
     );
+    // **HD's Detonator mine** (`Emissive::program` mode 23, `oag_mesh::mesh::rcs::mine_rim`): an
+    // unlit rim, `rim^(4 sat(1 - B) + 1) / (1 - 0.9 C)` per channel, `B` the entry's offset
+    // (`MineBrightness`) and `C` its tint (`MineColour`), read off the program's own microcode
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The mine's fragment
+    // program"). The map (the program's unit 0) is the third binding, at the second coordinate set
+    // (`TC3`), put through the chunk's tangent frame as a hull's is; the program dots a
+    // tangent-space eye vector with it, which is the same angle in the world frame. Its alpha is
+    // the program's output alpha: both mine models are cutouts (state word 62), so the draw's alpha
+    // test cuts the lattice's holes. The fogged variant the race resolves ends in `/2`
+    // (`output_scale`); the fog is applied by the caller after `lit_texel` returns.
+    //
+    // **Chosen, not measured: a divisor at or below zero** (a dark mine's literal `2` makes
+    // `1 - 0.9 C` negative) **draws black**: the program's negative colour is what the RSX target
+    // does with it, unread.
+    let mine_rim_on = glow_program > 22.5 && glow_program < 23.5;
+    var mine_normal = n;
+    var mine_alpha = 1.0;
+    if mine_rim_on {
+        let mine_map = material_sample(MATERIAL_PAD_MASK, in.lightmap_texcoord.xy);
+        mine_normal = hull_normal(mine_map, n, in.tangent);
+        mine_alpha = mine_map.a;
+    }
+    let mine_angle = max(clamp(1.0 - dot(to_eye, mine_normal), 0.0, 1.0), 1.0e-6);
+    let mine_power = 4.0 * clamp(1.0 - glow_tint_offset.w, 0.0, 1.0) + 1.0;
+    let mine_divisor = vec3<f32>(1.0) - 0.9 * glow_tint_offset.rgb;
+    let mine_rim = select(
+        vec3<f32>(0.0),
+        vec3<f32>(pow(mine_angle, mine_power)) / max(mine_divisor, vec3<f32>(1.0e-6)),
+        mine_divisor > vec3<f32>(0.0),
+    );
+    if mine_rim_on {
+        return vec4<f32>(min(scene.light.output_scale * mine_rim, vec3<f32>(HALF_MAX)), mine_alpha);
+    }
+    // **HD's Detonator bomb colour and brightness** (`Emissive::program` mode 24,
+    // `oag_mesh::mesh::rcs::bomb_tint`): the entry's tint times its offset, unlit, through the
+    // `/2` the fogged programs end in. **Chosen, not measured**: how the programs combine the
+    // colour with their normal map and environment picture is unread; the brightness is their
+    // last multiply.
+    if glow_program > 23.5 && glow_program < 24.5 {
+        return vec4<f32>(
+            min(scene.light.output_scale * glow_tint_offset.rgb * glow_tint_offset.w, vec3<f32>(HALF_MAX)),
+            1.0,
+        );
+    }
     if !(rim_glow_on || rim_edge_on) {
         // **Only where the colour returned is still the generic combine's**, which is
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip

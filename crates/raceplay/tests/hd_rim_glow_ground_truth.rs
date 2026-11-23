@@ -379,3 +379,98 @@ fn the_missile_head_loads_off_the_disc_and_glows_like_the_leach_ball() {
         "exactly the sphere takes the rim glow: {roles:x?}"
     );
 }
+
+/// The glow-table row index (1-based) of the first entry running `program`, and whether some
+/// slot of `model` names it.
+fn program_row(model: &mesh::Model, program: f32) -> Option<(usize, bool)> {
+    let at = model
+        .emissive
+        .iter()
+        .position(|e| e.program[0] == program)?;
+    let named = model
+        .material_slots
+        .iter()
+        .any(|&word| slots::material_index(word) as usize == at + 1);
+    Some((at + 1, named))
+}
+
+/// The Detonator mine's two models run `detonator_mine_normal_alpha`, an unlit rim over
+/// `MineColour` and `MineBrightness` (`detonator-mine-material.md`, "The mine's fragment program"):
+/// each earns a `PROGRAM_MINE_RIM` entry its slot names, holding the authored colour and
+/// brightness, with the normal map bound third, the tangent frame carried and the draw naming
+/// its slot (a draw with no picture reads the shared row, which holds no normal map).
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_mine_models_earn_their_rim_program_with_a_bound_normal_map() {
+    let Some(image) = image() else { return };
+    for (path, colour) in [
+        ("/data/weapons/mine_rita_football.vex", [0.239, 0.5596, 1.0]),
+        ("/data/weapons/mine_rita_spikes.vex", [0.329, 0.7275, 1.0]),
+    ] {
+        let model = build(&image, path);
+        let (row, named) = program_row(&model, mesh::PROGRAM_MINE_RIM)
+            .unwrap_or_else(|| panic!("{path}: no mine rim entry"));
+        assert!(named, "{path}: no slot names row {row}");
+        let entry = model.emissive[row - 1];
+        for (got, want) in entry.tint.iter().zip(colour) {
+            assert!((got - want).abs() < 1e-3, "{path}: {:?}", entry.tint);
+        }
+        assert_eq!(entry.offset, 0.0, "{path}: authored MineBrightness");
+        assert!(
+            model.pad_masks.iter().flatten().count() == 1,
+            "{path}: the normal map rides the third binding"
+        );
+        assert!(
+            model.material_tangent.iter().any(|frame| frame.carried()),
+            "{path}: the chunk carries its tangent"
+        );
+        // The state word makes both models cutouts (`alpha_tested_draws`), which the map's
+        // alpha, the program's output alpha, is tested in.
+        assert!(
+            model.draws.is_empty() && model.transparent_draws.is_empty(),
+            "{path}: the draws are a cutout's"
+        );
+        assert!(
+            !model.alpha_tested_draws.is_empty()
+                && model
+                    .alpha_tested_draws
+                    .iter()
+                    .all(|draw| draw.texture.is_some()),
+            "{path}: every draw names its slot"
+        );
+    }
+}
+
+/// The bomb body and its equalisers run programs that patch a named colour and brightness pair:
+/// each earns a `PROGRAM_BOMB_TINT` entry holding the authored values.
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn the_bomb_body_and_equalisers_earn_their_tint_program() {
+    let Some(image) = image() else { return };
+    for (path, colour, brightness) in [
+        (
+            "/data/weapons/detonator_bomb_final.vex",
+            [1.0, 0.5843, 0.9922],
+            2.24584,
+        ),
+        (
+            "/data/weapons/detonator_bomb_final_equalisers.vex",
+            [1.0, 1.0, 1.0],
+            0.0,
+        ),
+    ] {
+        let model = build(&image, path);
+        let (row, named) = program_row(&model, mesh::PROGRAM_BOMB_TINT)
+            .unwrap_or_else(|| panic!("{path}: no bomb tint entry"));
+        assert!(named, "{path}: no slot names row {row}");
+        let entry = model.emissive[row - 1];
+        for (got, want) in entry.tint.iter().zip(colour) {
+            assert!((got - want).abs() < 1e-3, "{path}: {:?}", entry.tint);
+        }
+        assert!(
+            (entry.offset - brightness).abs() < 1e-3,
+            "{path}: {}",
+            entry.offset
+        );
+    }
+}

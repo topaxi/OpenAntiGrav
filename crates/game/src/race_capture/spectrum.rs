@@ -23,3 +23,15 @@ pub(super) fn zone_spectrum(
         audio.output().spectrum().levels()
     }
 }
+
+/// [`zone_spectrum`], also handed to `scene` as the frame's raw band levels
+/// ([`oag_raceplay::Scene::set_band_levels`], read by the Detonator mine's envelope).
+pub(super) fn feed(
+    options: &CaptureOptions,
+    audio: &oag_sound::Audio,
+    scene: &oag_raceplay::Scene,
+) -> [f32; oag_audio::BANDS] {
+    let levels = zone_spectrum(options, audio);
+    scene.set_band_levels(levels);
+    levels
+}

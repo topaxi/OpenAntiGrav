@@ -1,7 +1,7 @@
 # Detonator: what writes the mine's and the bomb's shader constants
 
 Functions in `EBOOT.elf` (WipEout HD Fury, PS3, EU, `BCES00664`), Ghidra program
-`/hdfury/EBOOT-ps3-hdfury-eu.elf`. Static reading only, 2026-11-22: nothing here ran. Bodies read
+`/hdfury/EBOOT-ps3-hdfury-eu.elf`. Static reading only, 2026-11-22: nothing here ran in the original (the wiring below, 2026-11-23, runs in ours). Bodies read
 off `llvm-objdump -d --mattr=+altivec,+vsx` over their real extent (Ghidra's decompile of both
 `AnimateToMusic` functions is garbled by the AltiVec words); TOC slots through
 `scripts/ps3-toc.py resolve <fn>` (both functions declare TOC `0x008ad4d8`, "exact"). Tuning
@@ -24,8 +24,9 @@ colour keys come from is [zone-effectsettings-loader.md](zone-effectsettings-loa
 | `BombBrightness`, `BombEQBrightness` | final, equalisers | same | `0.2 + 2.0 f`, `0.8 + 2.0 f`, `f` a flash value that decays | 72 |
 | equalisers `Brightness` | equalisers | same | `clamp(scale / 4 - g + f, 0, 1)`, `scale` from a band-4 envelope | 66 |
 
-Not read, and so not scored: **how a shader combines these constants** (whether `MineColour` is an
-albedo, a rim or an emissive term, what `MineBrightness == 0` looks like). See "What stays open".
+How the **mine's** shader combines `MineColour` and `MineBrightness` is read now, from the material's
+own microcode ("The mine's fragment program", 80). How the **bomb's** programs combine theirs is not
+(only that the brightness is the last multiply); see "What stays open".
 
 Both functions take the player's colour from the same place: `RaceManager_GetInstance()+0x13e8`
 is the player craft, and its word `+0x6284` is the index passed to the getter. The getters are
@@ -224,6 +225,77 @@ Confidence 74 for the three colours (getter and field read, channel order inferr
 brightness words (constants resolved, flash writer unread), 66 for equaliser `Brightness`
 (a global of unknown value is in the formula).
 
+## The mine's fragment program
+
+`detonator_mine_normal_alpha.rcsmaterial` (`/data/weapons/materials/`, `DATA00.PSARC`, 31,872 bytes),
+read with `scripts/ps3-microcode.py fp-file`. The race's lit pass resolves the fogged variant at
+`@0x1a30` (static class, feature `0xfb61d927`); its unfogged twin (`@0x15d0`) is the same program
+without the closing fog lerp. One sampler, unit 0, `0xc78c9866`: the model's `_n` map, read as a
+tangent-space normal (`TEX R0, f[TC3]`, then `* 2 - 1`), `TC3` the second coordinate set. Writing
+`C` for `MineColour`, `B` for `MineBrightness`, `V` for the normalised tangent-space eye vector
+(`f[TC1]`) and `N` for the map's normal:
+
+```text
+rim = sat(1 - dot(V, N))                      ; DP3_SAT, then ADD 1 - x
+p   = 4 sat(1 - B) + 1                        ; ADD_SAT 1 - B, MOV x4, ADD 1
+rgb = rim^p / (1 - 0.9 C)   per channel       ; LG2, MUL, EX2; RCP of MAD(-C, 0.9, 1)
+out = lerp(fogColour, rgb, fogFactor) / 2     ; the fogged variant; the unfogged one has neither
+a   = the map's alpha, through globalAlphaScaler (identity)
+```
+
+So the mine is an **unlit** Fresnel rim glow, no light, no albedo: with `B = 0` (silence) it is a thin
+`rim^5` edge, with `B >= 1` a wide `rim^1` shell; `C` dodges per channel, so a saturated colour
+(`122 25 255`: `1.75, 1.1, 10` times the rim) goes blue-white at the edge. **A dark mine's literal
+`C = (2, 2, 2)` makes the divisor `-0.8`**, a negative output; `(10, 10, 10)` on the spikes `-8`. What
+the target does with a negative is unread. Confidence 80 for the formula (every instruction and
+literal is read; the order of the two `x4`/`/2` scales is the encoding's), 70 for "the draw is a
+cutout on the map's alpha": both models' state word is `62` and the engine sorts each into its
+alpha-tested draw list (`mesh::Model::alpha_tested_draws`, one draw each), so the map's alpha, the
+program's output alpha, is tested; the reference value and what the original's blend does with a
+partial alpha are not observed.
+
+## The bomb's programs
+
+The bomb body (`detonator_bomb_normal`, `@0x1750`) is a longer program: a normal-mapped facing
+term `0.92 N.V` and `0.2 BombColour` through an overlay-shaped `x / (1 - ...)`, a power by
+`4 sat(1 - |TC2|^2) + 1`, an environment picture read at `4 dot(TC2, TC0)` on unit 1 (the
+`Envmap` weight patches the first constant), a second overlay, and **a last multiply by
+`BombBrightness`** (`@0x3f`, confidence 80; that is the unfogged block, the race resolves the
+fogged variants `@0x1e00` for the body and `@0x1d80` for the equalisers, which end in the same fog
+lerp as the mine's, `MAD /2`, so the brightness is the last multiply before the fog). Only that last
+step is used (below).
+
+## Wired
+
+HD Detonator races draw the mine from the program above (`oag_mesh::mesh::rcs::mine_rim`,
+`Emissive::program` mode 23, `shade.wesl`): the football and the spikes each earn a glow-table
+entry holding the authored `MineColour` and `MineBrightness`, the `_n` map is bound third and the
+chunk carries its tangent; the map's alpha is the output alpha, which the cutout draw tests. A chunk
+with no albedo draws through the model's shared row 0, which holds no normal map, so the slot also
+gets a 1x1 skin. The values per instance are `oag_raceplay::detonator_look`'s: a live mine
+takes the committed stage's `Detonator Mine Colour` (`EffectSettings::detonator_colours`) and
+`2 s`, a dark one `(2, 2, 2)` / `(10, 10, 10)` and `0`, written into the mine pool slot's own
+glow-table row each frame (`Drawable::write_program_glow`). The envelope `s` steps once per race
+tick for a live mine only, keyed by the mine's survey entry and lane (not its pool slot), against
+the frame's sixteen band levels: the football band is **chosen** from the same key (the original's
+`Libc_Rand() % 4`), the spikes' `+ 11`. Bombs: a material that patches `BombColour` +
+`BombBrightness` or `BombEQColour` + `BombEQBrightness` draws as colour times brightness, unlit
+(`PROGRAM_BOMB_TINT`, mode 24, **chosen, not measured**: the rest of the bomb programs is unread),
+with the stage's inner colour on the body and the outer on the equalisers, brightness `0.2` and
+`0.8` for a flash of `0`.
+
+**Chosen, not measured:** the normal is the map through the chunk's tangent frame in the world frame
+(the program dots a tangent-space `V`; the angle is the same); a divisor at or below zero draws
+black; the football band (a key hash for `Libc_Rand() % 4`); the envelope steps once per tick, not
+per rendered frame; the bomb is colour times brightness; the bomb flash is `0` (no writer read). The
+band levels are the raw array (`Scene::set_band_levels`, fed from `Spectrum::levels()` next to
+`set_blur_resolution` in the three draw sites and the capture).
+
+**Not wired:** the equalisers' rays (`Colour`, `Brightness`) and the glow edges (`RainbowColour`,
+`Brightness`) keep their authored values (their names are shared with other families and their
+programs are unread); the mine's size (`scale`, `spikeScale`, `m+0xd8`) stays at `1`; the visualiser
+(`Electric_Visualiser`) is still not loaded.
+
 ## What the port needs
 
 1. **Stage colour.** `EffectSettings::stage_rgba8(stage, "Detonator Mine Colour")` already answers
@@ -243,8 +315,8 @@ brightness words (constants resolved, flash writer unread), 66 for equaliser `Br
    The per-mine `idx` is the original's `Libc_Rand`; the port's own choice (for example the lane
    index modulo 4) is **chosen, not measured**, and must never touch the simulation (render side
    only, like the rest of the spectrum).
-4. **Where it reaches the draw.** The constants are per-mine and per-bomb, set every frame. Today no
-   per-draw named-constant path exists in `oag-mesh`: the HD material readers in
+4. **Where it reaches the draw** (done, "Wired" above). The constants are per-mine and per-bomb, set
+   every frame. Before this lane no per-draw named-constant path existed in `oag-mesh`: the HD material readers in
    `crates/mesh/src/mesh/rcs/` (`alpha_emissive.rs`, `chevron_pulse.rs`, `curve_track.rs`) read a
    material's authored parameters once, at load, into a slot's lanes
    (`mesh::rcs::skin`). The mine and the bomb each need a per-instance override of two or three
@@ -256,18 +328,16 @@ brightness words (constants resolved, flash writer unread), 66 for equaliser `Br
    (several hours, not minutes): size it before taking the lane.
 5. **What not to do first.** Do not draw the mine with the authored defaults and call it done: the
    defaults (`MineBrightness 0`, `MineColour (0.239, 0.56, 1.0)`) are the dark-mine look only if the
-   shader reads them as authored. See the next section.
+   shader reads them as authored. They are read now: see "The mine's fragment program".
 
 ## What stays open
 
-- **How the fragment program combines the constants.** Unread: the `detonator_mine_normal_alpha`
-  fragment program (`/data/weapons/materials/detonator_mine_normal_alpha.rcsmaterial`, 31,872 bytes)
-  and its bind of `MineColour`/`MineBrightness`. Next step: `oag_rcs::rcsmaterial::fragment::Program`
-  on that material's variant (the readers `alpha_gated_parameter`, `output_depends_on` and
-  `patches`, as `mesh/rcs/alpha_emissive.rs` uses them), then whether `MineBrightness` multiplies
-  the colour or the glow. Until then the dark mine's `(2,2,2)` against `0` and the live mine's
-  `[0,2]` brightness against a `[0,1]` colour cannot be turned into a picture. Today's white
-  football is the missing binds on a material the generic path does not know.
+- **How the bomb's fragment programs combine their constants.** The mine's is read ("The mine's
+  fragment program"). The bomb body's and equalisers' are not beyond their last multiply by the
+  brightness: the overlay terms, the environment picture and `Envmap` are unread, so the draw is
+  the chosen colour times brightness. The flash `b+0x154` has no recovered writer, so it is `0`.
+- **What a dark mine's negative output looks like in the original.** `1 - 0.9 * 2` is negative;
+  the render target's treatment is unobserved, so a dark mine draws black here.
 - **Four-lane copies.** `MineColour` is bound by a pointer to three floats followed by other
   fields (`m+0x144` after `m+0x138`); whether the bind copies three or four words is unread
   (`Material_BindInstanceParamPointer`'s copy width). The w lane is harmless if the shader reads

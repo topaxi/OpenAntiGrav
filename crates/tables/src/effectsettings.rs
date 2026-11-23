@@ -88,6 +88,23 @@ pub struct ZoneLighting {
     pub direction: [f32; 3],
 }
 
+/// The four colours of one Detonator stage that the mine and the bomb are drawn in,
+/// [`EffectSettings::detonator_colours`]: each key's red, green and blue over 255.
+///
+/// The byte order is inferred, not read (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`,
+/// "Result": the file's first integer is the red lane, corroborated by hue against `Airbrake Colour`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DetonatorColours {
+    /// `Detonator Mine Colour`: the football's and the spikes' `MineColour` while the mine is live.
+    pub mine: [f32; 3],
+    /// `Detonator Mine Electricity Colour`, before the `1.5` the mine's update scales it by.
+    pub mine_electricity: [f32; 3],
+    /// `Detonator Bomb Inner Colour`: the bomb body's `BombColour`.
+    pub bomb_inner: [f32; 3],
+    /// `Detonator Bomb Outer Colour`: the equalisers' and the glow edges' colour.
+    pub bomb_outer: [f32; 3],
+}
+
 /// Everything one `.effectSettings`/`.effectsettings` file says.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct EffectSettings {
@@ -246,6 +263,24 @@ impl EffectSettings {
                 .or_else(|| self.stage_rgb(stage, key::SKY_ZENITH_COLOUR_2048)),
             eq_colour_tint: self.stage_rgba8(stage, key::EQ_COLOUR_TINT),
             eq_analogue_colour_tint: self.stage_rgba8(stage, key::EQ_ANALOGUE_COLOUR_TINT),
+        })
+    }
+
+    /// The four Detonator colours of `stage`, or `None` unless the stage authors all four.
+    ///
+    /// Only `detonatormode` and `detonatormodedlc3` do. The low byte is never read, so an
+    /// authored alpha of `0` (stage 11) is harmless.
+    #[must_use]
+    pub fn detonator_colours(&self, stage: u32) -> Option<DetonatorColours> {
+        let rgb = |key: &str| {
+            let [r, g, b, _] = self.stage_rgba8(stage, key)?;
+            Some([r, g, b].map(|byte| f32::from(byte) / 255.0))
+        };
+        Some(DetonatorColours {
+            mine: rgb(key::DETONATOR_MINE_COLOUR)?,
+            mine_electricity: rgb(key::DETONATOR_MINE_ELECTRICITY_COLOUR)?,
+            bomb_inner: rgb(key::DETONATOR_BOMB_INNER_COLOUR)?,
+            bomb_outer: rgb(key::DETONATOR_BOMB_OUTER_COLOUR)?,
         })
     }
 
@@ -452,6 +487,16 @@ pub mod key {
     /// struct: the smoothed variant beside [`EQ_COLOUR_TINT`], equally
     /// unconfirmed.
     pub const EQ_ANALOGUE_COLOUR_TINT: &str = "EQ analogue colour tint";
+
+    /// Four integers `R G B A`, byte-written: the colour `DetonatorMine_AnimateToMusic` hands a live
+    /// mine's `MineColour` (`Environment_GetStageMineColour`, `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`).
+    pub const DETONATOR_MINE_COLOUR: &str = "Detonator Mine Colour";
+    /// As [`DETONATOR_MINE_COLOUR`]: the mine visualiser's `ElectricityColour`.
+    pub const DETONATOR_MINE_ELECTRICITY_COLOUR: &str = "Detonator Mine Electricity Colour";
+    /// As [`DETONATOR_MINE_COLOUR`]: the bomb body's `BombColour`.
+    pub const DETONATOR_BOMB_INNER_COLOUR: &str = "Detonator Bomb Inner Colour";
+    /// As [`DETONATOR_MINE_COLOUR`]: the bomb equalisers' and glow edges' colour.
+    pub const DETONATOR_BOMB_OUTER_COLOUR: &str = "Detonator Bomb Outer Colour";
 
     /// 2048's spelling of the environment's distance fog, and the one key here
     /// **not** in HD's schema table.

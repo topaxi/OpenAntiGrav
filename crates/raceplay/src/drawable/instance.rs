@@ -23,7 +23,8 @@ impl Drawable {
     /// `wgpu`'s handles are reference counted, so a clone is another name for the same GPU
     /// object.
     ///
-    /// **A model that animates gets animation blocks of its own per slot.** Both are
+    /// **A model that animates, or whose glow table holds a per-instance program, gets blocks
+    /// of its own per slot.** Both are
     /// per-drawable state a caller may scrub per slot - a Plasma blast does, one clock per
     /// slot - and sharing them would show every slot the last clock written. They start as
     /// `mesh_render::build` makes them (all-identity, plus the model's own emissive table),
@@ -62,7 +63,8 @@ impl Drawable {
             oag_gpu::init_buffer::init(device, label, usage, &contents)
         };
         let uniforms = pool("race uniforms", mesh_render::UNIFORMS_SIZE, &[]);
-        let animates = !(self.model.anim_tracks.is_empty() && self.model.anim_nodes.is_empty());
+        let animates = !(self.model.anim_tracks.is_empty() && self.model.anim_nodes.is_empty())
+            || Self::carries_per_instance_program(&self.model);
         let animation = animates.then(|| {
             (
                 pool(
