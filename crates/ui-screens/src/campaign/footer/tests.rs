@@ -972,8 +972,12 @@ fn a_layout_with_no_lines_draws_nothing() {
         ..TickerLayout::default()
     };
     assert_eq!(layout.text_lines, 0);
-    assert!(description_draws(&layout, "some words", None, &|text| text.len() as f32).is_empty());
     assert!(
-        description_draws(&layout, "some words", Some(1.0), &|text| text.len() as f32).is_empty()
+        description_draws(&layout, "some words", None, &|text, _| text.len() as f32).is_empty()
+    );
+    assert!(
+        description_draws(&layout, "some words", Some(1.0), &|text, _| text.len()
+            as f32)
+        .is_empty()
     );
 }
