@@ -302,3 +302,18 @@ fn the_stamp_group_is_kept_until_the_target_view_changes() {
     );
     drop(encoder);
 }
+
+/// The shader's `STAMP_LIMIT` is the length of its `stamps` and `stamp_values` arrays; a host
+/// that stamps more than the shader reads would drop the rest silently.
+#[test]
+fn the_shader_s_stamp_limit_is_the_host_s_max() {
+    let source = include_str!("../../../shaders/bloom.wesl");
+    let declared = source
+        .lines()
+        .find_map(|line| line.strip_prefix("const STAMP_LIMIT"))
+        .and_then(|rest| rest.split_once('='))
+        .map(|(_, value)| value.trim().trim_end_matches(';').trim_end_matches('u'))
+        .and_then(|value| value.parse::<usize>().ok())
+        .expect("bloom.wesl declares `const STAMP_LIMIT = <n>u;`");
+    assert_eq!(declared, MAX);
+}
