@@ -36,7 +36,8 @@ UNTRIED = {"TKR_NOSR": "TKR_SRTIM", "TKR_NOSL": "TKR_SLTIM", "TKR_NOTT": "TKR_TT
            "TKR_NOZONE": "TKR_ZTIM"}
 
 NAME_FIELD = 10
-PROFILE_NAME_TAG = re.compile(rb"([A-Za-z0-9-]{1,10})( *)\x00([A-Z0-9]{3})\x00")
+#: The name field starts after a non-identifier byte: the tail of a longer string (`...Between\0DOF\0`) has the same shape.
+PROFILE_NAME_TAG = re.compile(rb"(?<![A-Za-z0-9-])([A-Za-z0-9-]{1,10})( *)\x00([A-Z0-9]{3})\x00")
 ENTRY = re.compile(r'<entry id="([^"]+)" string="([^"]*)"')
 
 
@@ -130,4 +131,5 @@ if __name__ == "__main__":
     assert profile_name_tag(b"\0" + pad("ABCDEFGHIJ") + b"XYZ\0")[:2] == ("ABCDEFGHIJ", "XYZ"), "a full 10-character name has no padding"
     assert profile_name_tag(b"\0" + b"AAAA  \0AAA\0") is None, "a short field is not the 10-byte name field"
     assert profile_name_tag(b"\0" + pad("AAAA") + b"AAA\0" + pad("BB") + b"BBB\0") is None, "two records are ambiguous"
+    assert profile_name_tag(b"\0" + pad("AAAA") + b"AAA\0" + b"\0" + b"distanceBetween\0DOF\0")[:2] == ("AAAA", "AAA"), "the tail of a longer identifier is not a name field"
     print("ps2_ticker self-check ok")

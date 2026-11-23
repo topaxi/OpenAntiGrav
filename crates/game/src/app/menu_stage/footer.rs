@@ -100,7 +100,11 @@ impl MenuStage {
         let Some(layout) = self.ticker.as_ref() else {
             return Vec::new();
         };
-        let measure = |text: &str| font::measure(&self.default_atlas, text);
+        let measure = crate::boot::fonts::description_ink(
+            &self.default_atlas,
+            self.stats_atlas.as_ref(),
+            self.snapped_pens,
+        );
         oag_ui_screens::campaign::footer::description_draws(
             layout,
             description,

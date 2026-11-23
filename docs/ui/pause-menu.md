@@ -333,7 +333,8 @@ widget in page order, the one with the cursor at full ink, and each is a pointer
 doing nothing and the rows' actions are the menu's (`Definition::open_on_pause_screen`), as on the other titles.
 
 - **PHOTO MODE** follows CONTINUE (`PauseMenu::offers_photo`; the screen authors none, photo mode is one
-  implementation on every title, maintainer). So ours has one row more than the original on every screen.
+  implementation on every title, maintainer). So ours has one row more than the original on every screen, except in a
+  compare shot: `--original-menu` leaves it out (`original_menu_leaves_photo_mode_out_of_the_pause_screen`).
 - **END SESSION** (Free Play) leaves the race the way QUIT does, for the main page: **chosen, not measured**. The
   original shows the one-row `RETURN TO MAIN MENU` screen first; this build races Free Play as a single race with no
   session results to show (`docs/formats/pure-campaign.md`, "The modes"). Free Play is chosen by the campaign cell's
@@ -353,11 +354,12 @@ Residuals:
 
 - **The cursor wraps** in ours (the menu's rule on every title); the original's does not. Not changed here.
 - **Our rows**: PHOTO MODE is extra, so the third row on the original (QUIT) is the fourth in ours.
-- **The race's now-playing line** (the music title at the foot, "COLD STORAGE - ONYX") draws under the pause in ours;
-  the original's frames show none. The disc authors that text as widgets of the `InGame` screen
+- **The race's now-playing line** (the music title at the foot, "COLD STORAGE - ONYX"): the original's frames show none.
+  The disc authors that text as widgets of the `InGame` screen
   (`InGameArtistText`, `InGameTrackText`, `InGameLabelText`), and the pause screens are siblings of it, so the original
-  cannot draw it while paused. Ours draws it because `hud_under_scrim` brings the whole race HUD under the band.
-  Open: leave the music line out of the HUD drawn under a Pure pause.
+  cannot draw it while paused. **Fixed**: `PauseMenu::song_line_under_scrim` is `false` on Pure (`true` on the titles
+  with no such measurement) and the HUD drawn under the tint leaves the line out; the pair's song box went from 335 to 54
+  px over 40 grey (`docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs").
 - **Craft livery**: the Feisar in ours is gold, the original's blue and yellow. Not this lane's.
 
 Tests: the three screens' rows against both pressings, the redirect's rows against `by_mode` and the band, rules and

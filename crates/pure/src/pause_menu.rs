@@ -58,6 +58,9 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         }),
     }),
     hud_under_scrim: true,
+    // The music widgets belong to `InGame`, not to the pause screens (`docs/ui/pause-menu.md`, "Pure"): the original's frames show
+    // no line under a pause.
+    song_line_under_scrim: false,
     offers_photo: true,
     origin: Origin::Measured,
 };
@@ -87,5 +90,13 @@ mod tests {
             assert!(builds.contains(&Resume), "{}", screen.name);
             assert!(builds.contains(&Quit), "{}", screen.name);
         }
+    }
+
+    /// The original's pause frames show no song line (the music widgets are `InGame`'s, the pause
+    /// screens are its siblings), and the HUD under the tint stays: the two facts are separate.
+    #[test]
+    fn the_hud_stays_under_the_tint_and_the_song_line_does_not() {
+        assert!(PAUSE_MENU.hud_under_scrim);
+        assert!(!PAUSE_MENU.song_line_under_scrim);
     }
 }

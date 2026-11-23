@@ -36,6 +36,7 @@ mod pure_boot_ground_truth;
 mod pure_chain_walk_ground_truth;
 mod pure_dlc_ground_truth;
 mod pure_menu_art_ground_truth;
+mod pure_menu_pens_ground_truth;
 mod pure_music_ground_truth;
 mod pure_original_ai_ground_truth;
 mod pure_sign_glow_ground_truth;

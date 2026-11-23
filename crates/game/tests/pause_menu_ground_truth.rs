@@ -38,6 +38,10 @@ fn hd() -> Option<std::path::PathBuf> {
 }
 
 fn run_on(image: &std::path::Path, tag: &str, script: &str) -> Run {
+    run_on_with(image, tag, script, &[])
+}
+
+fn run_on_with(image: &std::path::Path, tag: &str, script: &str, flags: &[&str]) -> Run {
     let shots = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("pause-shots");
     let run = drive_binary(
         env!("CARGO_BIN_EXE_oag-game"),
@@ -45,7 +49,7 @@ fn run_on(image: &std::path::Path, tag: &str, script: &str) -> Run {
         &format!("pause-{tag}"),
         script,
         &shots,
-        &[],
+        flags,
     );
     assert!(run.status.success(), "{tag}: {}", run.stderr);
     run
@@ -675,6 +679,28 @@ mod pure_screens {
             ),
         );
         assert_eq!(rows(&zone), rows_with_restart(), "zone");
+    }
+
+    /// A compare shot leaves out this project's PHOTO MODE row (`--original-menu`): the pause
+    /// screen is then the disc's three rows, as `scripts/pure-pause.drive` draws it.
+    #[test]
+    #[ignore = "needs a disc image in data/images/"]
+    fn original_menu_leaves_photo_mode_out_of_the_pause_screen() {
+        let Some(image) = pure() else { return };
+        let run = run_on_with(
+            &image,
+            "pure-original-menu",
+            &format!("{} {OPEN}", to_the_race("time_trial")),
+            &["--original-menu"],
+        );
+        assert_eq!(
+            rows(&run),
+            pairs(&[
+                ("Continue", "back"),
+                ("Restart", "restart_race"),
+                ("Quit", "quit_race")
+            ])
+        );
     }
 
     /// A Tournament race takes `InGame NoRestart Main Menu`: no RESTART.

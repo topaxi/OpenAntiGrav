@@ -814,16 +814,22 @@ impl Session {
         // A race parked behind the menus has no HUD, except under a pause screen whose title
         // keeps it (dimmed by the tint the menus draw over it); its glow still lands, before
         // the menu rows go on.
-        let hud_under_tint = matches!(
-            &self.stage,
-            Stage::Menu(menu) if menu.pause_scrim.is_some()
-                && menu.pause_view.as_ref().is_some_and(|view| view.table.hud_under_scrim)
-        );
+        let pause_table = match &self.stage {
+            Stage::Menu(menu) if menu.pause_scrim.is_some() => {
+                menu.pause_view.as_ref().map(|view| view.table)
+            }
+            _ => None,
+        };
+        let hud_under_tint = pause_table.is_some_and(|table| table.hud_under_scrim);
+        let song_line_held = pause_table.is_some_and(|table| !table.song_line_under_scrim);
         if let (Stage::Menu(_), Some(parked)) = (&self.stage, self.suspended_race.as_mut()) {
             parked
                 .scene
                 .composite_bloom_under_hud(&mut encoder, self.framebuffer.output(), rect);
             if hud_under_tint {
+                if let Some(hud) = &mut parked.hud {
+                    hud.hold_song_line(song_line_held);
+                }
                 parked.draw_view_hud(
                     &self.gpu,
                     &mut encoder,
@@ -831,6 +837,9 @@ impl Session {
                     rect,
                     self.framebuffer.output_size(),
                 );
+                if let Some(hud) = &mut parked.hud {
+                    hud.hold_song_line(false);
+                }
             }
             parked
                 .scene

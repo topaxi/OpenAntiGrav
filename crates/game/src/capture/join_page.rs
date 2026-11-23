@@ -168,7 +168,7 @@ pub(super) fn capture_online(
     };
     let mut list = oag_ui_screens::join::draw_list(&screen, skin, frame, backdrop, false).flatten();
     let (legend, ticker, font) = footer;
-    let clip = menu_page::picker_footer(&mut list, legend, ticker, strings, font);
+    let clip = menu_page::picker_footer(&mut list, legend, true, ticker, strings, font);
     (list, clip)
 }
 
@@ -262,7 +262,7 @@ pub(super) fn capture_lan(
     };
     let mut list = oag_ui_screens::join::draw_list(&screen, skin, frame, backdrop, false).flatten();
     let (legend, ticker, font) = footer;
-    let clip = menu_page::picker_footer(&mut list, legend, ticker, strings, font);
+    let clip = menu_page::picker_footer(&mut list, legend, true, ticker, strings, font);
     (list, clip)
 }
 
@@ -295,6 +295,6 @@ pub(super) fn capture(
     );
     let mut list = oag_ui_screens::join::draw_list(&screen, skin, frame, backdrop, false).flatten();
     let (legend, ticker, font) = footer;
-    let clip = menu_page::picker_footer(&mut list, legend, ticker, strings, font);
+    let clip = menu_page::picker_footer(&mut list, legend, true, ticker, strings, font);
     (list, clip)
 }

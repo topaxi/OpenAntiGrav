@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [pulse, hd, omega, 2048, pure]
-updated: 2026-11-07
+updated: 2026-11-23
 summary: "Pulse, HD, Fury, Omega and Pure pause into the disc's own screen per mode; 2048 opens the main page"
 ---
 
@@ -27,8 +27,9 @@ pause screen where one applies). Online pause stays the maintainer's decision
 - **Pure: wired** (`oag_pure::pause_menu`, original frames of Single Race, Time Trial, Tournament and Free
   Play on PPSSPP in `docs/ui/pause-menu.md`, "Pure"). Open: the original's cursor does not wrap and ours
   does; Free Play's END SESSION leaves like QUIT where the original shows a `RETURN TO MAIN MENU` screen first
-  (chosen); the race's now-playing line draws under the pause where the original shows none (the music widgets
-  belong to `InGame`, not to the pause screens: leave it out of the HUD drawn under a Pure pause).
+  (chosen). The now-playing line under the pause is left out since 2026-11-23 (`song_line_under_scrim`); the pause has
+  a compare pair (`docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs"): the band matches to the pixel row,
+  ours' words are 3 px narrower over 105.
 - **2048: not wired** (`pause_menu: None`). 2048 has `InGame_Definition.xml` (36 screens) and
   `LegacyInGame_Definition.xml` on Vita, with a binder of its own; Omega's reads the same mode ids as HD's, so
   compare 2048's against it first. No Vita frame yet. A 2048 finding is checked against Omega and the reverse.

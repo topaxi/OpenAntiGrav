@@ -79,6 +79,9 @@ pub struct Face<'a> {
     /// Whether it is the title's buttons face, the only face a `Scope::ButtonsFace` table
     /// holds glyphs in.
     pub buttons: bool,
+    /// Whether the renderer steps this face's pens up to whole units ([`crate::font::pen_step`]):
+    /// a rectangle then covers the ink as drawn, not the fractional advances.
+    pub snapped: bool,
 }
 
 /// One drawn line, laid out.
@@ -148,7 +151,7 @@ pub fn scan<'a>(
             continue;
         }
         let Some(face) = faces(role) else { continue };
-        let width = advance(face.atlas, text) * scale;
+        let width = placed(face, text, scale).0;
         let left = match align {
             Align::Left => x,
             Align::Centre => x - width / 2.0,
@@ -207,7 +210,7 @@ pub fn scan<'a>(
             .min_by(|a, b| a.left.total_cmp(&b.left));
         let (right, top, bottom) = match near {
             Some(word) => (
-                word.left + advance(word.face.atlas, word.text.trim_end()) * word.scale,
+                word.left + placed(word.face, word.text.trim_end(), word.scale).1,
                 glyph.top.min(word.top),
                 (glyph.top + glyph.height).max(word.top + word.height),
             ),
@@ -231,6 +234,19 @@ fn advance(atlas: &Atlas, text: &str) -> f32 {
     crate::font::measure(atlas, text)
 }
 
+/// `(pen end, ink right)` of `text` drawn at `scale` from its origin: the fractional advance sum
+/// for both, or [`crate::font::snapped_run`] on a snapped face. A string is aligned by the first
+/// and a rectangle over it stops at the second.
+fn placed(face: Face, text: &str, scale: f32) -> (f32, f32) {
+    if face.snapped {
+        let run = crate::font::snapped_run(face.atlas, text, scale);
+        (run.end, run.ink_right)
+    } else {
+        let width = advance(face.atlas, text) * scale;
+        (width, width)
+    }
+}
+
 /// The glyph-and-word pairs a string is made of, when it opens with a glyph and holds nothing but
 /// such pairs. A string that has text before its first glyph is a sentence and has none.
 fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
@@ -238,10 +254,14 @@ fn segments(run: &Run, substitution: &Substitution) -> Vec<Segment> {
     let mut out: Vec<Segment> = Vec::new();
     let mut pen = run.left;
     for ch in run.text.chars() {
-        let next = pen
-            + atlas
-                .cell(ch)
-                .map_or(0.0, |cell| cell.advance * atlas.texel_scale * run.scale);
+        let next = atlas.cell(ch).map_or(pen, |cell| {
+            let scale = atlas.texel_scale * run.scale;
+            if run.face.snapped {
+                crate::font::pen_step(&cell, scale, pen, true).1
+            } else {
+                pen + cell.advance * scale
+            }
+        });
         match substitution.button_drawn(ch, run.face.buttons) {
             Some(prompt) => out.push(Segment {
                 prompt,
@@ -366,7 +386,7 @@ pub struct Wrapped {
 /// it at word boundaries ([`crate::font::wrap`]), so an entry's words are found on the lines they
 /// fall on, and an entry broken across two lines is a rectangle on each.
 #[must_use]
-pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry]) -> Vec<Hint> {
+pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry], snapped: bool) -> Vec<Hint> {
     let text = line_text(entries);
     // The entry each word belongs to, in the order `wrap` reads them.
     let owner: Vec<usize> = entries
@@ -379,7 +399,12 @@ pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry]) -> Vec<Hint
     let line_height = atlas.line_height * at.scale;
     let mut out = Vec::new();
     let mut word = 0;
-    for (row, line) in crate::font::wrap(atlas, &text, at.scale, at.width)
+    let face = Face {
+        atlas,
+        buttons: false,
+        snapped,
+    };
+    for (row, line) in crate::font::wrap_pens(atlas, &text, at.scale, at.width, snapped)
         .iter()
         .enumerate()
     {
@@ -400,8 +425,8 @@ pub fn legend_wrapped(atlas: &Atlas, at: Wrapped, entries: &[Entry]) -> Vec<Hint
             }
         };
         for piece in line.split(' ') {
-            let width = advance(atlas, piece) * at.scale;
-            let space = advance(atlas, " ") * at.scale;
+            let width = placed(face, piece, at.scale).1;
+            let space = placed(face, " ", at.scale).0;
             let entry = owner[word];
             match from {
                 Some((current, _)) if current != entry => {

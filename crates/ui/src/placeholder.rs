@@ -56,6 +56,7 @@ pub const MENU_SKIN: MenuSkin = MenuSkin {
     title_font: None,
     body_font: None,
     stats_font: None,
+    snapped_pens: false,
     default_face_is_row_face: false,
     first_row_y: None,
     row_extra_leading: None,

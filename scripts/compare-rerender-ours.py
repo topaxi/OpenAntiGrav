@@ -167,8 +167,16 @@ def rerender(pj, binary):
             # The same rule as `compare_menu.render_ours`: the original's fresh profile holds no downloaded pack.
             (tmp / "no-dlc").mkdir()
             env["OAG_DLC"] = str(tmp / "no-dlc")
-        done = subprocess.run([str(binary), image] + flags + ["--screenshot", str(shot)], env=env, cwd=ROOT,
-                              capture_output=True, text=True, timeout=600)
+        if cm.DRIVE in flags:
+            # A menu pair played through our own session (the pause screen): the pair's `ours.drive` is the script.
+            at = flags.index(cm.DRIVE)
+            line = cm.drive_command(binary, image, [cm.DRIVE, str(pair_dir / "ours.drive")] + flags[at + 2:], shot, tmp)
+            done = subprocess.run(line + [f for f in flags[:at]], env=env, cwd=ROOT, capture_output=True, text=True, timeout=900)
+            if done.returncode == 0:
+                cm.box_down(shot)
+        else:
+            done = subprocess.run([str(binary), image] + flags + ["--screenshot", str(shot)], env=env, cwd=ROOT,
+                                  capture_output=True, text=True, timeout=600)
         if done.returncode != 0 or not shot.exists():
             tail = (done.stderr.strip().splitlines() or ["no output"])[-1]
             return "FAILED (rc %d): %s" % (done.returncode, tail)
