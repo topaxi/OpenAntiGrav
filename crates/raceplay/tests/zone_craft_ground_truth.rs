@@ -405,3 +405,107 @@ fn omega_zone_wreck_asks_for_a_folder_the_hulls_key_does_not_name() {
     let want = r"Data\art\published\hdships\Zone\shipwreck.vex: Qirex: Zone livery zoneship_quirex replaces zoneship_team on 0 texture request(s)";
     assert!(report.contains(want), "{report}");
 }
+
+/// A Zone end's shell and debris load from the Zone ship directory and split into the 112
+/// pieces `DebrisManager_Construct` collects (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
+/// row Z11); the shell carries the one `Anim Transform` that plays it.
+fn check_zone_end(
+    title: &str,
+    defaults: &oag_title::RaceDefaults,
+    end: oag_title::destroyed::ZoneEnd,
+    archives: &mut oag_assets::Archives,
+    team: &str,
+) {
+    let mut report = Vec::new();
+    let models = oag_livery::zone_end::load(
+        archives,
+        defaults.ships_for(team),
+        Mode::Zone,
+        Default::default(),
+        end,
+        &mut report,
+    )
+    .unwrap_or_else(|| panic!("{title}: the Zone end loads: {report:?}"));
+    assert_eq!(
+        models.pieces.len(),
+        oag_livery::zone_end::PIECES,
+        "{title}: the debris splits into its pieces: {report:?}"
+    );
+    assert!(
+        models.pieces.iter().all(|piece| !piece.is_empty()),
+        "{title}: every piece has vertices"
+    );
+    let vertices = models.debris.vertices.len() as u32;
+    assert!(
+        models.pieces.iter().flatten().all(|&v| v < vertices),
+        "{title}: a piece's vertex is in the model"
+    );
+    assert!(
+        !models.shell.anim_nodes.is_empty(),
+        "{title}: the shell's Anim Transform survives the build"
+    );
+    assert!(
+        models.shell.indices.len() >= 3,
+        "{title}: the shell has geometry"
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_zone_end_models_load_and_split_into_their_pieces() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    check_zone_end(
+        "HD",
+        oag_hd::TITLE.race,
+        oag_hd::TITLE
+            .destroyed
+            .value
+            .zone_end
+            .expect("HD ends Zone its own way"),
+        &mut archives,
+        oag_hd::TITLE.race.team,
+    );
+}
+
+#[test]
+#[ignore = "needs the decrypted Vita package in data/extracted/vita/"]
+fn vita_2048_zone_end_models_load_and_split_into_their_pieces() {
+    let Some(path) = oag_testdata::exact("data/extracted/vita/PCSF00007") else {
+        return;
+    };
+    let mut archives = oag_2048::open(&path.display().to_string()).expect("opening 2048");
+    check_zone_end(
+        "2048",
+        oag_2048::race::DEFAULTS,
+        oag_2048::TITLE
+            .destroyed
+            .value
+            .zone_end
+            .expect("2048 inherits HD's Zone end"),
+        &mut archives,
+        oag_2048::race::DEFAULT_TEAM,
+    );
+}
+
+#[test]
+#[ignore = "needs the corrected Omega extraction"]
+fn omega_zone_end_models_load_and_split_into_their_pieces() {
+    let Some(path) = oag_testdata::exact("data/extracted/ps4") else {
+        return;
+    };
+    let mut archives = oag_omega::open(&path.display().to_string()).expect("opening Omega");
+    check_zone_end(
+        "Omega",
+        oag_omega::race::DEFAULTS,
+        oag_omega::TITLE
+            .destroyed
+            .value
+            .zone_end
+            .expect("Omega inherits HD's Zone end"),
+        &mut archives,
+        oag_omega::race::DEFAULTS.team,
+    );
+}

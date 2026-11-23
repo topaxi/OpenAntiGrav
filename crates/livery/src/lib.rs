@@ -63,11 +63,13 @@ pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
 pub mod wreck;
+pub mod zone_end;
 pub mod zone_livery;
 
 pub use shield::cockpit_shield;
 use shield::shell;
 pub use wreck::Wreck;
+pub use zone_end::ZoneEndModels;
 
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
