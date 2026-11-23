@@ -14,9 +14,9 @@ jobs:
   bump:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: python3 -I scripts/bump-ffmpeg-pin.py
-      - uses: peter-evans/create-pull-request@v7
+      - uses: peter-evans/create-pull-request@v8
         with:
           branch: ffmpeg-pin-bump
           title: "ffmpeg: bump the pinned build to the newest month-end release"
