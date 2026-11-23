@@ -68,18 +68,20 @@ fn a_table_with_no_stages_builds_no_grade() {
 }
 
 /// **Stage 0 and stage 1 are two different, correctly-sourced fogs**: `Start`
-/// authors none and leaves the circuit's own standing, `Sub Venom` authors the
-/// cyan the file states, at the density the file states.
+/// authors a density of zero, which is no fog (the circuit's own fog does not
+/// stand in for it), and `Sub Venom` authors the cyan the file states, at the
+/// density the file states.
 #[test]
 fn stage_zero_and_stage_one_produce_different_fog() {
     let mut grade = grade();
     let base = Some(circuit_fog());
 
-    let start = grade.fog(base).expect("stage 0 leaves the circuit's fog");
-    assert_eq!(
+    let start = grade.fog(base).expect("stage 0 authors its own fog block");
+    assert_eq!(start.enabled, 0.0, "Start authors density 0: no fog at all");
+    assert_ne!(
         start.colour,
         circuit_fog().colour,
-        "Start authors density 0, so the circuit's own fog stands"
+        "the circuit's own fog does not stand in for a stage that authors none"
     );
 
     grade.request_stage(1);
@@ -87,10 +89,7 @@ fn stage_zero_and_stage_one_produce_different_fog() {
     // The commit zeroes the weight, so the stage is asked for but not yet
     // showing - it reads as `Start` until something raises the weight.
     assert_eq!(grade.blend().weight, 0.0);
-    assert_eq!(
-        grade.fog(base).expect("still the circuit's fog").colour,
-        circuit_fog().colour
-    );
+    assert_eq!(grade.fog(base).expect("still Start's").enabled, 0.0);
 
     grade.set_weight(1.0);
     let sub_venom = grade.fog(base).expect("stage 1 authors its own fog");

@@ -139,6 +139,45 @@ The slot 8 gate (`Mode::Zone`, the card's Zone-grade exemption) was also tried o
 pixel-identical (whether the exemption fires there was not separated), so it stays. What the frame still lacks: the lit scenery at upper right (the
 original draws it dark), the lit blue strip and cyan wing edges (the pale hull itself is fixed, below) and the mine and bomb colours (`det-colour-re`).
 
+## Fog: a stage that authors density 0 has no fog (2026-11-23, `det-scene`)
+
+**Law (confidence 80: the file's keys and the exp2 curve are read, which fog block each draw takes is not).** The stage's `Lighting.Fog
+density` is the coefficient of HD's own curve `exp(-(density * depth)^2)` (`shade`'s `authored_fog`), which is 1 at zero: a stage that
+authors density `0` draws no fog. The colour is not a fog on its own: `detonatormode.effectsettings` stage 2 (`Venom`) authors an orange
+`Fog colour 1.8 0.338824 0.007059` beside density `0`, and stages 0 to 1 author `0 0 0` beside `0`; borrowing the circuit's density for
+a colour like that would invent a dense orange haze. Ours had read a zero density as "this stage adds no fog" and kept the circuit's
+own `.envsettings` fog (Talon's Junction: `0.26 0.22 0.38`, density `0.001`), which is a pale lilac over every far surface and the cause
+of the lilac skyline blocks in the upper-middle third. `ZoneGrade::fog` now returns the fog-off state for a stage that authors density
+0 (keys absent: the circuit's fog still stands).
+
+Found by measurement: fog forced off for a zero-density stage moved the upper-middle third (3 x 3 grid, mean absolute grey difference)
+`mines-ahead` 32.3 to 24.7 and the skyline blocks left the frame; keeping the circuit's density `0.001` and forcing only the fog
+*colour* to black gave the same picture (whole-frame 16.16 against 16.23), so what shows is the lilac colour, and the two readings
+differ by 0.07 grey: density 0 is chosen as the law because stage 2 pairs an orange colour with density 0 (above), which a
+borrowed density would turn into a haze. Ambient to zero (`amb0` knob, reverted) darkened the plain track surfaces and left
+the cell unmoved, so the ambient `1 1 1 0` is not what lights the upper wall. Whole-frame, before to after, page scorer, same boots
+and flags as `det-regrab`:
+
+| Pair | Mean grey | RMSE | Upper-middle cell (MAD, signed ours minus original) |
+| --- | --- | --- | --- |
+| `pad` | 10.48 to 8.81 | 0.137 to 0.130 | 31.0 (+12.3) to 21.7 (+2.3) |
+| `mines-ahead` | 18.53 to 16.23 | 0.195 to 0.187 | 32.3 (+13.4) to 24.7 (+4.2) |
+| `cannon-volley` | 17.42 to 14.88 | 0.187 to 0.178 | 33.5 (+13.6) to 25.7 (+4.3) |
+
+Controls, pixel-identical (0 differing pixels): `talons`, `tech-de-ra`, `zone-vineta-k-z5` (Zone stage 5 authors density `0.003`).
+**Zone's own stages 0, 13 and 14 author density 0 as well** (`zonemode.effectsettings`, black colour; DLC3 table stage 0 and 13), so
+a Zone race on those stages now draws no circuit fog where it drew the circuit's: no original frame of those stages is on the
+compare page (the one Zone pair is stage 5), so that move is by the data and unchecked against a capture.
+
+**Still open in the upper-middle third:** a bright ribbed slab (a vertical-louvre texture) over the track at the right of the cell,
+drawn white-grey in ours and near black in the original, and the HUD score panel (the original's chevrons carry white stripes ours
+lacks; the panel box is about 45 % of the cell and its own difference is not a scene term: the cell excluding it reads 23.1 to 10.5
+`pad`, 25.3 to 15.0 `mines-ahead`, 24.6 to 14.1 `cannon-volley`). Ruled out by a removed or muted term, one at a time: the circuit's
+lilac fog (fixed above), the stage ambient, the sky reflection map, the billboard equaliser bands (`--zone-bands` dropped), the
+scene-class zone surface (its lit sum reads black at the slab), the rim-glow classes, the shadow tier, circuit lighting, track shine.
+A debug build that replaced the fragment output per class showed the slab's scene-class fragments black while the normal frame is grey
+there, so its source is a draw or pass outside the class split and is not found.
+
 ## The floor's violet: the visualiser, read and fixed (2026-11-23, `det-track-look`)
 
 **Which draws what (settled, 90).** `/data/tex/detonatormodetrack1.gtf` (DATA00, 256x256 DXT5, stage 1's track texture; the

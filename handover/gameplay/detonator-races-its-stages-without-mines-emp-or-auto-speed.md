@@ -526,6 +526,18 @@ reverted) it overshoots: box blue ours over original goes from 1.7-2.3 to 0.38-0
 order: the viewport z mapping (`SET_VIEWPORT_SCALE`/`OFFSET` z; a doubled depth factor is about 1.33x after the encode), the band-independent floor term
 (the original's floor red 5-9 is not the strip: Track Fog, the Detonator radial bloom), and one RPCS3 frame dump confirming `0x60730303` on the vis unit.
 
+**The upper-middle third, partly found (2026-11-23, `det-scene`).** Cause: the stage's zero `Fog density` was read as "keep the circuit's
+fog", so Talon's Junction's lilac fog (`0.26 0.22 0.38`, `0.001`) lay over the far scenery where the original's frame is black. Now a
+stage that authors density 0 has no fog (`ZoneGrade::fog`; `detonator-look.md`, "Fog"). Cell (3 x 3 grid, mean absolute grey
+difference, signed ours minus original) and whole-frame mean grey, before to after: `pad` 31.0 (+12.3) to 21.7 (+2.3) and 10.48 to
+**8.81**; `mines-ahead` 32.3 to 24.7 and 18.53 to 16.23; `cannon-volley` 33.5 to 25.7 and 17.42 to 14.88. `pad` is under 10, the other
+two are not. "Well under half" of the cell is not reached: what is left there is a white-grey ribbed slab over the track at the right
+of the cell (near black in the original; not the ambient, sky reflection, bands, shadow tier, track shine or the scene-class surface,
+which reads black at the slab; its draw is unfound) and the HUD panel (about 45 % of the cell; the cell without it is 10.5, 15.0 and
+14.1). **Zone stages 0, 13 and 14 now draw no circuit fog too** (they author density 0); no original frame of those stages is held.
+Next biggest difference per pair: the middle right third on `mines-ahead` (36.4, ours 20.7 darker) and `cannon-volley` (26.2, ours 17.8
+darker), the lit mines and debris; `pad`: the upper-middle cell (21.7) then the lower-middle (14.4, ours 7.3 brighter).
+
 Cheapest first was row 1, then row 2's gantries, then the bloom arm (all three wired, below), then rows 7 and 4.
 
 **Zone's look in Detonator (read 2026-11-22, `det-look-re`, `detonator-look.md`).** Mode 14 is in the effect gate's mask
