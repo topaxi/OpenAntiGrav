@@ -185,13 +185,13 @@ pub(super) fn menu_page(
     // is kept here, since a still never races it.
     let installed = loaded.installed_for(title, &|_| true);
     crate::campaign::custom::add_picker(&mut definition, &mut mods, &installed, title, strings);
-    let disc_screen = super::disc_screen_page::spec(page);
+    let disc_screen = super::disc_screen_page::spec(title, page);
     if let Some(spec) = disc_screen {
         let source = source.context("a disc screen needs the disc it is read off")?;
         let own = definition.pages.len();
-        definition
-            .pages
-            .push(super::disc_screen_page::page(spec, source, strings, own)?);
+        definition.pages.push(super::disc_screen_page::page(
+            title, spec, source, strings, own,
+        )?);
     }
     if definition.page(page).is_none() {
         anyhow::bail!(

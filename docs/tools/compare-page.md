@@ -1961,7 +1961,7 @@ columns are two measurements, not one frame twice):
 | Options+ (`Additional`) | gap; `menu.toml`'s `options` 5.88 % (9.15) | 0.44 % (2.01, 0.32) | `--menu-page pulse-options` |
 | Pause menu (Time Trial, Moa Therma White, Venom) | gap | 1.56 % (4.51, 0.94); 4.10 % on the first grab (2 s after START, header mid-slide) | `--drive-file scripts/pulse-pause.drive --original-menu` |
 
-**The four list screens are compare-only pages of the menu model** (`oag_game::capture::disc_screen_page`): the title, the rows and the help lines are read off the screen's own XML
+**The four list screens are compare-only pages of the menu model** (`oag_game::capture::disc_screen_page`, named by the title's `FrontEnd::list_screens`: Pulse's four, empty elsewhere): the title, the rows and the help lines are read off the screen's own XML
 (`MainMenu_Definition.xml`'s `Main Menu`: `FE_MM`, the seven `Entry` rows, `helptext0` to `6`; `RaceBox_Definition.xml`'s `Racebox` and `Single Player`: the three rows, and the
 five `<List>`s with their `Text` labels and `default`s; `Additional_Definition.xml`'s `Additional`), through the same `oag_ui::menu::draw_list` the live pages use. The live pages stay
 `menu.toml`'s (ADR-0066, rule: our menu additions stay in play, compare shots draw the original's screen), every row of a still points at its own page (it is never activated), and

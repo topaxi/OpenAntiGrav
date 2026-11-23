@@ -1,4 +1,5 @@
-//! `--menu-page pulse-main|pulse-racebox|pulse-single|pulse-options`: the disc's own list
+//! `--menu-page pulse-main|pulse-racebox|pulse-single|pulse-options` (the title's
+//! [`oag_title::FrontEnd::list_screens`]): the disc's own list
 //! screens as a page of the menu model, so a comparison against the original's frame draws
 //! the same rows, title and help lines the original does.
 //!
@@ -10,77 +11,37 @@
 //! front-end list screens".
 
 use anyhow::{Context, Result};
+use oag_title::{ListScreen, Title};
 use oag_ui::language::StringTable;
 use oag_ui::menu::{Choice, Condition, Entry, Page, Value};
 use oag_ui::screen::{Screen, Screens};
 
-/// One of the disc's list screens.
-pub(super) struct Spec {
-    /// The `--menu-page` name.
-    pub page: &'static str,
-    /// The archive entry that authors it.
-    definition: &'static str,
-    /// The screen's own `name` attribute.
-    screen: &'static str,
-    /// The header's string id where the screen authors no title `Text`: the Racebox screens
-    /// are headed by their `AreaController`'s area, whose header text the executable draws.
-    /// The frames read `RACEBOX`, the string of the Main Menu's `FE_RACEBOX` row; the area
-    /// table itself is not read, so this id is **chosen, not measured**.
-    title_id: Option<&'static str>,
-    /// Whether the screen has a way back, so the footer legend draws `Back` as it does on a
-    /// page opened from another. `Main Menu` has none (`backward="none"`); `Racebox` names
-    /// `DefaultPrevious`, and `Additional` and `Single Player` redirect the backward button.
-    pub back: bool,
-}
-
-const SCREENS: [Spec; 4] = [
-    Spec {
-        page: "pulse-main",
-        definition: oag_pulse::names::MAIN_MENU_DEFINITION,
-        screen: "Main Menu",
-        title_id: None,
-        back: false,
-    },
-    Spec {
-        page: "pulse-racebox",
-        definition: oag_pulse::names::RACE_SETUP_DEFINITION,
-        screen: "Racebox",
-        title_id: Some("FE_RACEBOX"),
-        back: true,
-    },
-    Spec {
-        page: "pulse-single",
-        definition: oag_pulse::names::RACE_SETUP_DEFINITION,
-        screen: "Single Player",
-        title_id: Some("FE_RACEBOX"),
-        back: true,
-    },
-    Spec {
-        page: "pulse-options",
-        definition: oag_pulse::names::ADDITIONAL_DEFINITION,
-        screen: "Additional",
-        title_id: None,
-        back: true,
-    },
-];
-
-/// Which disc screen a `--menu-page` name asks for, if any.
-pub(super) fn spec(page: &str) -> Option<&'static Spec> {
-    SCREENS.iter().find(|spec| spec.page == page)
+/// The title's list screen a `--menu-page` name asks for, if any.
+pub(super) fn spec(title: &'static Title, page: &str) -> Option<&'static ListScreen> {
+    title.front_end.and_then(|front_end| {
+        front_end
+            .list_screens
+            .iter()
+            .find(|screen| screen.page == page)
+    })
 }
 
 /// The screen as a page whose index in the definition will be `own_index`.
 ///
 /// `source` is the disc image the page is read off.
 pub(super) fn page(
-    spec: &Spec,
+    title: &'static Title,
+    spec: &ListScreen,
     source: &str,
     strings: &StringTable,
     own_index: usize,
 ) -> Result<Page> {
-    let mut archives = oag_pulse::open(source).context("this source is not Pulse's own")?;
+    let front_end = title.front_end.context("this title has no front end")?;
+    let mut archives = oag_source::title::open_source(source, Vec::new(), Vec::new())
+        .context("opening the disc")?
+        .archives;
     let skin_raw = archives
-        .read_name(oag_pulse::names::FRONTEND_ROOT)
+        .read_name(front_end.root)
         .context("no front-end root on this disc")?;
     let skin = oag_tables::fexml::text(&skin_raw).context("front-end root text")?;
     let globals = Screens::from_xml(&skin).globals;
@@ -89,15 +50,15 @@ pub(super) fn page(
         .map(|(name, value)| (name.as_str(), value.as_str()))
         .collect();
     let raw = archives
-        .read_name(spec.definition)
-        .with_context(|| format!("no {} on this disc", spec.definition))?;
-    let xml = oag_tables::fexml::text(&raw).with_context(|| spec.definition.to_string())?;
+        .read_name(spec.file)
+        .with_context(|| format!("no {} on this disc", spec.file))?;
+    let xml = oag_tables::fexml::text(&raw).with_context(|| spec.file.to_string())?;
     let screens = Screens::from_xml_with_fallback_globals(&xml, &fallback);
     let screen = screens
         .by_name(spec.screen)
-        .with_context(|| format!("{} authors no {:?} screen", spec.definition, spec.screen))?;
+        .with_context(|| format!("{} authors no {:?} screen", spec.file, spec.screen))?;
     let text = |id: &str| strings.get_or_id(id).to_string();
-    let title = screen
+    let heading = screen
         .texts
         .iter()
         .find(|text| text.font.eq_ignore_ascii_case("title"))
@@ -110,7 +71,7 @@ pub(super) fn page(
     } else {
         list_rows(screen, &text)
     };
-    Ok(Page::new(spec.page, title, entries, subtitles))
+    Ok(Page::new(spec.page, heading, entries, subtitles))
 }
 
 /// A `<Menu>` screen: one row per `Entry`, and the screen's `helptext{n}` widget under row `n`
