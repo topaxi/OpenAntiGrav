@@ -984,7 +984,7 @@ pub(super) fn zone_grade(
         ),
         oag_race::Mode::Detonator => {
             let detonator = race.detonator?;
-            if detonator.palette.is_none() {
+            if detonator.palette.is_none() && detonator.fallback_palette.is_none() {
                 report.push(
                     "detonator: this title's stage grade is not drawn; the circuit keeps its own \
                      colours"
@@ -995,9 +995,10 @@ pub(super) fn zone_grade(
                 detonator.palette,
                 detonator.fallback_palette.map(|palette| Fallback {
                     palette,
-                    textures: detonator.stage_textures,
+                    textures: detonator.fallback_stage_textures,
                     stages: None,
-                    held_back: false,
+                    // The loader's fork is the circuit path's, whatever the mode.
+                    held_back: race.zone_fallback.is_some_and(|f| f.holds_back(track)),
                 }),
                 detonator.stage_textures,
                 None,

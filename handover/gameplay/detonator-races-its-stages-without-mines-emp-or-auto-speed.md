@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-23
-summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen wired; open: radial bloom, floor gain vs bands, hull strip, mines"
+summary: "Detonator: all 15 phases in; open: Omega EndRace Menu, 2048 Results, medal tiers, radial bloom, floor gain vs bands"
 categories: [rendering]
 ---
 
@@ -34,7 +34,7 @@ evidence), then start at "Next Steps".
 | 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; the three medal models draw on HD and Omega (`det-medals`, 2026-11-23; 2048 left); open: their tier colour, `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback (below) | `det-medals` |
 | 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
-| 15 | Omega and 2048 parity leftovers | open | |
+| 15 | Omega and 2048 parity leftovers | done: Omega's opening placement and stage cap are HD's law (pinned, `detonator-mode.md`); 2048's per-stage `.gxt` sets wired on its fallback; Omega's grade wired on its HD-lineage circuits (`det-parity`, 2026-11-23) | `det-parity` |
 
 A race can already be launched from the command line:
 `oag-game --race --mode detonator [--autopilot --ticks N] data/images/hdfury-ps3-eu-dec.iso`
@@ -252,14 +252,29 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   title, not 14 (`docs/formats/race-campaign.md`, "Detonator cells launch"). The value handed to the
   compare is the score, read (`0x0005c3c0`, 82; `detonator-endrace.md`). A destroyed run records
   too (both endings call the builder with `force = 1`).
-- **15 Parity.** Omega race-start placement call, stage cap into `craft+0x5e4`, grade drawing;
-  2048 per-stage `.gxt` textures.
+- **15 Parity: done** (`det-parity`). Omega's race-start placement call and the stage cap (v1.00
+  `+0x5e4` = v1.07 `+0x5f4`, the auto-speed's field, not a second write) are HD's law: ported, no `Title` field
+  (`detonator-mode.md`, "Omega's race-start placement and stage cap"); 2048's per-stage `.gxt` sets ride
+  `Detonator::fallback_stage_textures` on its fallback circuits only; Omega's grade is HD/Fury's Detonator pair
+  and `detonatorModeTrack<n>.gnf` on its HD-lineage circuits (`Environments2048` held back); see
+  `detonator-look.md`, "Cross-title".
 
 Overall risks: most of EMP, auto-speed and the HUD is unread (RE-first, may need Ghidra
 AltiVec workarounds: `llvm-objdump -d --mattr=+altivec,+vsx` and `scripts/ps3-toc.py`); the
 placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
 ## Open
+
+**What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
+misses is, by title. *All three:* the medal tier colours (the tiers draw one grey), the bomb flash writer
+(`b+0x154`, unread: brightness stays `0.2`/`0.8`), the EMP wave's reach (chosen) and the radial bloom
+(`oag-post` has no pass, Zone included), the floor spectrum feed (the pairs stay black under `--no-audio`), the
+hull strip and wreck. *HD:* the new-record banner (needs the best-score table `0x0001ef28` and a store).
+*Omega:* the end-race screen (its `endrace_entry` is `None`, wiring HD's reader leaves `EndRace Menu` with no
+options: Omega's `EndRace Menu`), the sky (`zone_sky: None`), the announcer events and the stage-10 music change
+in its state `2`. *2048:* the `Results` page (the four-row list is modelled, no page to draw on), its pads'
+EMP charge, `EmpCharge`/`EmpFull`, the medals' `ImageX 720` skin, a black floor on its ported circuits, and no
+original frame to compare. The detail is below.
 
 - **Mine and bomb colour binds: mine wired, bomb partly** (`det-colour`, 2026-11-23;
   `docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-material.md`, "The mine's fragment program",
@@ -400,9 +415,10 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
   the mid-race medal models are phase 12's (wired, `det-medals`); their cues and `ER_*MA` lines are not (nothing measured them for Detonator).
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
   (`Ship_SetState` state 4, `detonator-mine.md`); Phase 7 wires it with the contact law.
-- **Omega's grade** is not drawn (Omega draws no Zone grade either); Omega's camera scale is
-  inherited from HD, its craft constructor unread. **2048's per-stage `.gxt` textures** are
-  unwired, as Zone's are.
+- **Omega's grade** is drawn on its HD-lineage circuits (phase 15); Omega's camera scale is
+  inherited from HD, its craft constructor unread. **2048's per-stage `.gxt` textures** are wired on
+  its fallback circuits (phase 15); an `Environments2048` circuit's own `ZoneMode2048` table in Detonator is
+  unread on both titles.
 - **2048 `zone_1`..`zone_4` draw a black floor** in every mode (Time Trial too): not
   Detonator's, seen while capturing.
 

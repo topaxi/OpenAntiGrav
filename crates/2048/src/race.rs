@@ -475,7 +475,8 @@ pub const ZONE_PALETTE: &str = "ZoneMode2048.effectSettings";
 /// with no environment tree of their own, HD/Fury's Detonator table out of the v1.04 patch
 /// (`data2.psarc`), the DLC3 revision on the four `zone_N`
 /// (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`). The per-stage
-/// textures are `.gxt`, unwired here as Zone's are.
+/// textures are `.gxt` and ride with that fallback alone, as Zone's do ([`ZONE_FALLBACK`]): the
+/// base package's `detonatorMode<n>` and the patch's `detonatorModeTrack<n>`.
 pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
     palette: Some(oag_title::ZonePalette::BesideCircuit(ZONE_PALETTE)),
     fallback_palette: Some(oag_title::ZonePalette::TitleWide {
@@ -484,6 +485,12 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         zone_circuit_entry: "data/ZoneEnvironmentHDFury/DetonatorModeHDFuryDLC3.effectSettings",
     }),
     stage_textures: None,
+    fallback_stage_textures: Some(&oag_title::ZoneStageTextures {
+        general: "data/Tex/detonatorMode",
+        track: "data/Tex/detonatorModeTrack",
+        extension: ".gxt",
+        stages: 15,
+    }),
     camera_scale: 0.7,
     layouts: Some(oag_title::DetonatorLayouts {
         pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",

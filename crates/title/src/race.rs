@@ -578,6 +578,12 @@ pub struct Detonator {
     pub fallback_palette: Option<ZonePalette>,
     /// The per-stage texture sets, or `None` where none is located.
     pub stage_textures: Option<&'static ZoneStageTextures>,
+    /// The per-stage texture sets of [`Self::fallback_palette`]'s circuits alone. 2048 loads
+    /// `DetonatorModeTrack<n>.gxt` inside `Environment_LoadHDFuryContent`, the branch HD's ported
+    /// circuits take, so a circuit with an environment tree of its own keeps its own materials
+    /// and takes none (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`);
+    /// the counterpart of [`ZoneFallback::stage_textures`].
+    pub fallback_stage_textures: Option<&'static ZoneStageTextures>,
     /// The chase rig's craft scale in this mode, in place of the `0.75` every other
     /// mode uses: HD's craft constructors write `0.7` on mode `14`
     /// (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`).

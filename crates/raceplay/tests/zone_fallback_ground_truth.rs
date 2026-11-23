@@ -126,6 +126,27 @@ fn a_native_2048_circuit_keeps_its_own_zone_table_and_draws_no_surface() {
     assert_eq!(grade.stage_art_counts().0, 0);
 }
 
+/// Detonator's per-stage `.gxt` sets ride the fallback alone
+/// (`Detonator::fallback_stage_textures`, `Environment_LoadHDFuryContent`): a native circuit's
+/// Detonator race loads its own table and no stage art, and a ported one loads both sets.
+#[test]
+#[ignore = "needs data/extracted/vita/PCSF00007"]
+fn a_2048_detonator_race_binds_its_stage_art_on_a_ported_circuit_and_not_a_native_one() {
+    let Some(source) = vita() else { return };
+    let native = load(&source, ALTIMA, oag_race::Mode::Detonator);
+    let grade = native.zone_grade.expect("its own ZoneMode2048 table");
+    assert_eq!(grade.zone_uniform().enabled, 0.0);
+    assert_eq!(grade.stage_art_counts().0, 0, "{:#?}", native.report);
+    assert!(
+        !native.report.iter().any(|l| l.contains("detonatorMode")),
+        "{:#?}",
+        native.report
+    );
+    let ported = load(&source, VINETA_K, oag_race::Mode::Detonator);
+    let grade = ported.zone_grade.expect("HD/Fury's Detonator table");
+    assert_eq!(grade.stage_art_counts(), (15, 15), "{:#?}", ported.report);
+}
+
 /// Outside a Zone race nothing is graded.
 #[test]
 #[ignore = "needs data/extracted/vita/PCSF00007"]
