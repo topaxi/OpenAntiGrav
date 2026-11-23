@@ -665,15 +665,19 @@ fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
         .draw(&oag_ui_screens::picker::FaceScales::default())
         .iter()
         .filter_map(|draw| match draw {
-            oag_ui::frontend::Draw::Text { x, .. } | oag_ui::frontend::Draw::FacedText { x, .. } => {
-                Some(*x)
-            }
+            oag_ui::frontend::Draw::Text { x, .. }
+            | oag_ui::frontend::Draw::FacedText { x, .. } => Some(*x),
             _ => None,
         })
         .filter(|x| *x > 400.0)
         .collect();
     let texts = &campaign.cell_layout.screen.texts;
-    let x = |name: &str| texts.iter().find(|t| t.name.as_deref() == Some(name)).map(|t| t.x);
+    let x = |name: &str| {
+        texts
+            .iter()
+            .find(|t| t.name.as_deref() == Some(name))
+            .map(|t| t.x)
+    };
     for name in [
         "RecordsButtonIcon",
         "RecordsButton",
@@ -685,6 +689,9 @@ fn omegas_footer_prompts_flow_to_where_the_original_draws_them() {
     let original = [435.0, 487.0, 625.0, 677.0, 768.0, 820.0, 965.0, 1017.0];
     assert_eq!(xs.len(), original.len(), "{xs:?}");
     for (want, got) in original.iter().zip(&xs) {
-        assert!((want - got).abs() <= 3.0, "{got} against the frame's {want}: {xs:?}");
+        assert!(
+            (want - got).abs() <= 3.0,
+            "{got} against the frame's {want}: {xs:?}"
+        );
     }
 }

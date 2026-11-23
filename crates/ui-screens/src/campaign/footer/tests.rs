@@ -886,7 +886,11 @@ fn a_flowed_legend_puts_each_prompt_a_gap_past_the_last_word() {
     };
     let legend = flow_legend().with_flow(law, &ink);
     let placed = xs(&legend, true);
-    assert_eq!(x_of(&placed, "NAV"), 260.0, "NAVIGATION keeps its authored x");
+    assert_eq!(
+        x_of(&placed, "NAV"),
+        260.0,
+        "NAVIGATION keeps its authored x"
+    );
     assert_eq!(x_of(&placed, "e"), 310.0, "260 + 20 + 30");
     assert_eq!(x_of(&placed, "CONFIRM"), 354.0, "44 past the glyph");
     assert_eq!(x_of(&placed, "g"), 444.0, "354 + 70 + 20");
@@ -894,7 +898,11 @@ fn a_flowed_legend_puts_each_prompt_a_gap_past_the_last_word() {
     assert!(legend.is_flowed());
     let root_page = xs(&legend, false);
     assert!(root_page.iter().all(|(t, _)| t != "g" && t != "BACK"));
-    assert_eq!(x_of(&root_page, "CONFIRM"), 354.0, "a hidden Back moves nothing before it");
+    assert_eq!(
+        x_of(&root_page, "CONFIRM"),
+        354.0,
+        "a hidden Back moves nothing before it"
+    );
     // A screen's own extra prompt takes the cursor after Back, or after Confirm without it.
     assert_eq!(
         legend.extra_prompts_x(true, &[[20.7, 50.0]]),

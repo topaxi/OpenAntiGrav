@@ -38,8 +38,14 @@ fn the_legend_words_measure_as_the_original_measures_them() {
     };
     for &(word, plain, snapped) in WORDS {
         let got = ink_width(&atlas, word, 0.8, false);
-        assert!((got - plain).abs() < 0.05, "{word} unsnapped {got} vs {plain}");
+        assert!(
+            (got - plain).abs() < 0.05,
+            "{word} unsnapped {got} vs {plain}"
+        );
         let got = ink_width(&atlas, word, 0.8, true);
-        assert!((got - snapped).abs() < 0.05, "{word} snapped {got} vs {snapped}");
+        assert!(
+            (got - snapped).abs() < 0.05,
+            "{word} snapped {got} vs {snapped}"
+        );
     }
 }

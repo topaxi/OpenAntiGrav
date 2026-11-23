@@ -51,17 +51,19 @@ fn the_legend_and_the_difficulty_prompt_flow_by_the_originals_law() {
     };
     let (shell, mut archives, title) =
         boot::load_shell(&options(&image)).expect("HD's front end is wired");
-    let legend = shell.nav_legend.as_ref().expect("HD's skin authors a legend");
+    let legend = shell
+        .nav_legend
+        .as_ref()
+        .expect("HD's skin authors a legend");
     assert!(legend.is_flowed(), "HD's title data flows its legend");
     let draws = legend.draw(&oag_ui_screens::picker::FaceScales::default());
-    let xs: Vec<f32> = draws
-        .iter()
-        .filter_map(text_x)
-        .map(|(_, x)| x)
-        .collect();
+    let xs: Vec<f32> = draws.iter().filter_map(text_x).map(|(_, x)| x).collect();
     // Navigation's two Texts keep their authored x (160 and 260); the controller's four follow.
     for (law, got) in LAW[..4].iter().zip(xs.iter().filter(|x| **x > 400.0)) {
-        assert!((law - got).abs() < 1.0, "legend prompt {got} against the law's {law}");
+        assert!(
+            (law - got).abs() < 1.0,
+            "legend prompt {got} against the law's {law}"
+        );
     }
     assert!(xs.contains(&260.0), "NAVIGATION is the anchor: {xs:?}");
 
@@ -102,9 +104,19 @@ fn the_legend_and_the_difficulty_prompt_flow_by_the_originals_law() {
             .unwrap_or_else(|| panic!("Cell Selection authors {name}"))
             .x
     };
-    for (name, want) in [("DifficultyButtonIcon", LAW[4]), ("DifficultyButton", LAW[5])] {
-        assert!((x(name) - want).abs() < 1.0, "{name} at {} against the law's {want}", x(name));
+    for (name, want) in [
+        ("DifficultyButtonIcon", LAW[4]),
+        ("DifficultyButton", LAW[5]),
+    ] {
+        assert!(
+            (x(name) - want).abs() < 1.0,
+            "{name} at {} against the law's {want}",
+            x(name)
+        );
     }
-    let campaign_legend = campaign.nav_legend.as_ref().expect("the campaign carries a legend");
+    let campaign_legend = campaign
+        .nav_legend
+        .as_ref()
+        .expect("the campaign carries a legend");
     assert!(campaign_legend.is_flowed());
 }
