@@ -316,8 +316,12 @@ it stops it (`0x000ed0cc`), then clears the byte. The same block decays the cont
   view's eye (the player's and each extra seat's) and not under a Shield. A full twelve-craft grid
   reaches 11 such instances beside the seat's own pool, inside the stage's 64.
 - **A frictionless record throws kind 2** (`WO_SHIP_COLL_SPARK_NODAMAGE`, or the `_ZONE`
-  file under the mode mask), a one-shot. Which records carry no friction on HD (the cage, the
-  floor) is not read.
+  file under the mode mask), a one-shot. Read on [collision-cues.md](collision-cues.md)
+  ("2026-11-23: which records carry no friction, and the spark they throw"): floor, mag floor
+  and reset contacts carry friction 0 (`g_ShipFloorFriction` at `0x0098d5b8`, never written,
+  conf 78) and throw kind 2 while racing; walls and live craft carry `0.035` (`0.025` for
+  walls in the masked modes) and keep kind 0; `Cage Collision` makes no collider (conf 82)
+  and a wreck's compound is never paired with a craft's box (conf 75).
 - **The spark's strength is `min(speed / 80, 1) + min(|p| / 80, 1)`, cut to zero under 0.1**,
   in the instance's scale block slot 5, and the instance carries the craft's velocity over 60.
   Wired (`oag_fx::sparks::attached_strength`) where the effect is authored looping, the craft's

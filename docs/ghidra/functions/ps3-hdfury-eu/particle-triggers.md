@@ -55,7 +55,7 @@ today after this change.
 | `WO_SHIP_COLL_SPARK_DAMAGE` | wall contact (attached, looping) | **created once per ship in the ship constructor**, `0x000ddd58` / twin `0x000dfd90`, attached (`FUN_002c9108(..., 1, 0)`), conf 80 | yes (attached mode), Pulse-inherited |
 | `WO_SHIP_COLL_SPARK_DAMAGE_ZONE` | none | the same two constructors pick it when `mode < 22 && (1<<mode) & 0x206040` and the net flag is clear (modes 6, 13, 14, 21), conf 80 | **no**: this port has no map from those ids to its modes (`zone-sky.md`) |
 | `WO_SHIP_SPARK_DAMAGE_WEAPON` | none (Pulse sparks from `Ship_Damage`) | `Cannon_ApplyCraftHit` -> `Ship_DispatchCollisionFx(kind 1)` -> `ShipCollisionFx_Trigger` kind 1, conf 72 | **yes, new** (`race::hit_sparks::throw_weapon_spark`) |
-| `WO_SHIP_COLL_SPARK_NODAMAGE`, `WO_SHIP_SPARK_NODAMAGE_ZONE` | floor/magstrip contact, read, unwired | `ShipCollisionFx_Trigger` kind 2 (zone mask picks the `_ZONE` name); **no caller with kind 2 found**: `Ship_DispatchCollisionFx`'s only direct caller passes 1 | no |
+| `WO_SHIP_COLL_SPARK_NODAMAGE`, `WO_SHIP_SPARK_NODAMAGE_ZONE` | floor/magstrip contact, read, unwired | `ShipCollisionFx_Trigger` kind 2 (zone mask picks the `_ZONE` name); **read 2026-11-23**: called by `Ship_SpawnContactFx` (`0x000e6fd8`, sets kind 2 at `0x000e7730` on frictionless records while racing: floor, mag floor and reset), conf 85 ([collision-cues.md](collision-cues.md), "2026-11-23: which records carry no friction, and the spark they throw") | no |
 | `WO_SHIP_SPARK_DAMAGE_LEACHBEAM` | a LeachBeam drain's hit (`Ship_Damage`) | **resolved 2026-10-07:** `Ship_ApplyDamage` (`0x000e7760`) sets `object + 0x260` on a kind 7 hit and `0x002a06e0` (also the engine-flare enqueue) clears it and spawns the effect attached at `+0x1c0`, conf 78 | **yes, HD only** (`race::damage_fx`), once per hit |
 | `WO_WEAPON_ABSORB` | `Ship_PlayAbsorbFeedback` | `ShipAbsorbNode_SpawnBurst` `0x002d8d10` (`absorb-feedback.md`) | yes (HD path) |
 | `WO_TRAIL_HITSHIP`, `_RED` | (HD-only) | `0x002d9ec0` (`engine-trail.md`) | yes |
@@ -403,8 +403,11 @@ HD Zone race already plays.
 
 ## Open
 
-- The caller of kind 2 (`WO_SHIP_COLL_SPARK_NODAMAGE`), and whether the wall
-  contact's attached effect is toggled by `+0x5f42`.
+- Whether the wall contact's attached effect is toggled by `+0x5f42` (the caller of
+  kind 2, `WO_SHIP_COLL_SPARK_NODAMAGE`, is now read: `Ship_SpawnContactFx` sets
+  kind 2 at `0x000e7730` on frictionless records, conf 85;
+  [collision-cues.md](collision-cues.md), "2026-11-23: which records carry no friction,
+  and the spark they throw").
 - The three `WO_LEACHBEAM_LAUNCH/HIT_TARGET/BREAK` spawners have no code xref; the
   dispatcher behind OPD run `0x00875a40..` is unfound.
 - `0x0010c958` is `WO_DEBRIS_FIRE`'s one load, unread. The decrement site of the
