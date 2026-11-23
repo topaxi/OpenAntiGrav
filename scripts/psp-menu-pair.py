@@ -121,6 +121,25 @@ EDRAM = 0x04000000
 #: that steps every 1/20 s of a counter of its own (`docs/ui/campaign-screens.md`, "The front end's bloom, wired from the widgets' own attributes").
 TITLE_BOX = {"grid": (262, 88, 340, 116), "cell": (262, 30, 420, 60)}
 
+#: `id: (focused row box, unfocused row box)` of the Pulse list screens, `(x0, y0, x1, y1)`: the focused row's ink rides a colour pulse the frame
+#: caught at some level, so ours is pinned to it (`--menu-focus-level`): the brightest red in the focused row's ink, against the row below's
+#: (no pulse, same bloom), reads `0` at the unselected ink and `1` at white. Single Player whitens the focused *value*, not the label.
+FOCUS_BOXES = {
+    "main": ((50, 38, 215, 52), (50, 66, 215, 80)), "racebox": ((50, 38, 215, 52), (50, 66, 215, 80)),
+    "options": ((50, 38, 215, 52), (50, 66, 215, 80)), "single": ((250, 38, 330, 52), (250, 61, 330, 75)),
+}
+
+
+def focus_level(png, item_id):
+    """The pulse level (0 to 1) of the focused row in `png`, or `None` for a screen with no box."""
+    if item_id not in FOCUS_BOXES:
+        return None
+    from PIL import Image
+    image = Image.open(png).convert("RGB")
+    reds = [max(px[0] for px in image.crop(box).getdata()) for box in FOCUS_BOXES[item_id]]
+    return max(0.0, min(1.0, (reds[0] - reds[1]) / max(1.0, 255.0 - reds[1])))
+
+
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
 
@@ -552,6 +571,10 @@ def build_pairs(args, seen, out, plat, walk):
             clocked += ("--menu-title-seconds", "%.3f" % shot["title"]["seconds"])
             pair.rec["original"]["title_glow"] = {"value": shot["title"]["value"], "pixels": shot["title"]["pixels"], "seconds": round(shot["title"]["seconds"], 3),
                                                   "basis": "the displayed buffer's glow-mask byte over the card title's glyph box (CPU stopped for the grab), a step of the title's own ladder (220 - 15 k): ours pins its title ladder to that step (--menu-title-seconds), apart from the Selector's phase"}
+        level = focus_level(shot["png"], item["id"]) if args.title == "pulse" else None
+        if level is not None:
+            clocked += ("--menu-focus-level", "%.3f" % level)
+            pair.rec["original"]["focus_level"] = {"value": round(level, 3), "basis": "the brightest red of the focused row's ink in the frame against the row below's, 0 at the unselected ink and 1 at white (scripts/psp-menu-pair.py `focus_level`); ours pins its row pulse to it (--menu-focus-level)"}
         pin = shot.get("ticker")
         lag = 0
         if pin:

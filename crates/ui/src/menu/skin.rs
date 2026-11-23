@@ -374,6 +374,17 @@ impl Skin {
         self.pulse_elapsed += dt.max(0.0);
     }
 
+    /// Puts [`Self::selected`]'s pulse where its colour is `level` of the way from the unselected
+    /// ink to the peak (`0` to `1`), on the rising half of the cycle: what a still stands at to
+    /// match a frame that caught the pulse mid-cycle. A skin with no measured pulse is unchanged.
+    pub fn pin_pulse_level(&mut self, level: f32) {
+        if let Some(period) = self.skin.selected_pulse_period_secs.filter(|p| *p > 0.0) {
+            let t = level.clamp(0.0, 1.0);
+            let phase = (1.0 - 2.0 * t).acos() / std::f32::consts::TAU;
+            self.pulse_elapsed = phase * period;
+        }
+    }
+
     /// The grid these numbers are in, for whoever has to set a `screen` uniform
     /// from it.
     #[must_use]

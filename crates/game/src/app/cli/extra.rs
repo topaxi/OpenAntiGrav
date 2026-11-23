@@ -195,6 +195,12 @@ pub(crate) struct MenuArgs {
     #[arg(long, value_name = "SECONDS")]
     pub(crate) menu_title_seconds: Option<f32>,
 
+    /// With `--menu-page`, where the focused row's colour pulse stands, `0` at the unselected ink
+    /// and `1` at the peak: a still has no clock, so the pulse rests at `0`, and a pair script reads
+    /// the level the original's frame caught off the focused row's own ink. `None` rests at `0`.
+    #[arg(long, value_name = "LEVEL")]
+    pub(crate) menu_focus_level: Option<f32>,
+
     /// With `--menu-page`, the frame of the disc's looping menu backdrop movie
     /// to draw behind the page, counting from zero; past the end it wraps.
     ///

@@ -1840,9 +1840,9 @@ the evidence.
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
-| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `menu.toml`'s `main` | **gap** | pair |
-| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | `menu.toml`'s `race`, `options` pages | **gap** x4 | none (Pure has no Racebox or Options row) |
-| pause menu | Pure: `--drive-file scripts/pure-pause.drive --original-menu` (our own session: a Time Trial on Vineta K, START); Pulse is a `Stage::Menu` with no route | **gap** | pair |
+| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `--menu-page pulse-main` (`MainMenu_Definition.xml`, the menu model) | pair | pair |
+| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | Pulse: `--menu-page pulse-racebox`, `pulse-single`, `pulse-options` (`RaceBox_Definition.xml`, `Additional_Definition.xml`) | pair x3 | none (Pure has no Racebox or Options row) |
+| pause menu | `--drive-file scripts/pure-pause.drive` / `scripts/pulse-pause.drive` with `--original-menu` (our own session: a Time Trial, START) | pair | pair |
 
 **The campaign pair (required).** Pulse: the Race Campaign's Grid Selection (`GRID 1`, the first tier, cursor on tier one) and **Cell
 Selection** (`SINGLE RACE`, `Moa Therma White`, the default cell), both with the footer's `AI difficulty (Medium)`. The difficulty
@@ -1885,10 +1885,9 @@ every pair. The original against itself: Pure 0.0 mean grey and at most 0.06 % o
 deterministic); Pulse 0.7-4.7 mean grey, 0.1-3.5 % over 40, the Ship Select turntable and the footer ticker (Track Select's photo cards
 2.5 %, the title 0.0 %).
 
-**Gaps** (original kept under `gap-*` with `gap.json`): Pulse `Main Menu` (ours' page is `menu.toml`'s with extra REMIX, RECORDS and MODS
-rows, title `OPENANTIGRAV`), `Racebox`, `Single Player` (the Racebox setup, ours' `race` page with different rows), `Additional`
-(Options+: GAME OPTIONS, CONTROLS, MUSIC PLAYLIST against ours' `options`) and the pause menu (`GAME PAUSED`: CONTINUE, GAME OPTIONS,
-PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a savestate, Start pressed); Pure's `Main Menu` and pause menu were gaps until 2026-11-23 (`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
+**Gaps** (original kept under `gap-*` with `gap.json`): none left on Pulse. Pulse's `Main Menu`, `Racebox`, `Single Player`, `Additional` and
+pause menu were gaps (ours drew them from `menu.toml`, or not at all) until 2026-11-23 (`pulse-gap-pairs`, below); Pure's `Main Menu` and pause menu likewise
+(`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
 
 **Screen-entry clock (2026-10-29).** `original.seconds_since_entry` (`value`, `basis: measured`) is the wall clock from the state-name poll
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
@@ -1946,6 +1945,50 @@ box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75
 **Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (ours'
 words are 3 px narrower over 105: `CONTINUE` ink 188-290 against 188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as the description's), the
 footer line 522.
+
+### Pulse list screens and the pause menu (2026-11-23, `pulse-gap-pairs`)
+
+Claim: Pulse PSP's Main Menu, Racebox, Single Player, Additional (Options+) and pause menu each have a pair against a fresh capture of the original (ours drawn from
+the disc's own screen, both English, a fresh profile), with the footer ticker and tag pinned, and the largest region of the worst pair is fixed or measured. Share of
+pixels over 40 grey, whole 480 x 272 frame, one fresh capture each (the BEFORE is `menu.toml`'s page against a fresh capture with its own ticker pin; the grabs differ, so the
+columns are two measurements, not one frame twice):
+
+| Pair | Before | After (mean grey, edge) | Route |
+| --- | --- | --- | --- |
+| Main Menu | gap; `menu.toml`'s `main` 11.40 % (mean grey 15.10) | 0.97 % (3.01, 0.41) | `--menu-page pulse-main` |
+| Racebox | gap (no page: RACEBOX opens `race`) | 0.44 % (1.66, 0.31) | `--menu-page pulse-racebox` |
+| Single Player | gap; `menu.toml`'s `race` 1.91 % (3.90) | 1.71 % (3.06, 0.41) | `--menu-page pulse-single` |
+| Options+ (`Additional`) | gap; `menu.toml`'s `options` 5.88 % (9.15) | 0.44 % (2.01, 0.32) | `--menu-page pulse-options` |
+| Pause menu (Time Trial, Moa Therma White, Venom) | gap | 1.56 % (4.51, 0.94); 4.10 % on the first grab (2 s after START, header mid-slide) | `--drive-file scripts/pulse-pause.drive --original-menu` |
+
+**The four list screens are compare-only pages of the menu model** (`oag_game::capture::disc_screen_page`): the title, the rows and the help lines are read off the screen's own XML
+(`MainMenu_Definition.xml`'s `Main Menu`: `FE_MM`, the seven `Entry` rows, `helptext0` to `6`; `RaceBox_Definition.xml`'s `Racebox` and `Single Player`: the three rows, and the
+five `<List>`s with their `Text` labels and `default`s; `Additional_Definition.xml`'s `Additional`), through the same `oag_ui::menu::draw_list` the live pages use. The live pages stay
+`menu.toml`'s (ADR-0066, rule: our menu additions stay in play, compare shots draw the original's screen), every row of a still points at its own page (it is never activated), and
+Pulse's `MenuSettings.pages` lists `pulse-single` beside `race` so the settings look (rules, value column, step arrows) applies. `oag_ui::screen::Menu` keeps its `Entry` ids and
+`ListWidget` its literal entries (`Eliminations`' `5`, `10`, ...). The header of `Racebox` and `Single Player` is not authored on either screen (`AreaController area="RaceBox"`
+names it and the executable draws it); the frames read `RACEBOX`, the string of the Main Menu's `FE_RACEBOX` row, so that id is **chosen, not measured**. The footer is the same
+pin the campaign pages take (`--menu-ticker`, the stored tag, the Back prompt where the screen has a way back: `Main Menu` has none, `backward="none"`). The focused row's colour pulse is a
+clock a still does not have: the pair script reads its level off the frame (`focus_level`: the brightest red in the focused row's ink against the row below's) and ours pins to it
+(`--menu-focus-level`, `Skin::pin_pulse_level`); Options went 1.87 % to 0.55 % with it on the same grab (the focused `GAME OPTIONS` was the original's white and ours cyan). The backdrop movie's frame is
+fitted per pair (`compare-menu-movie-phase.py`: Main Menu needs frame 42, 4.75 to 0.45 grey over the bare pixels).
+
+**Largest regions left** (px over 40 grey): Main Menu 1,265: the typed help line and the focused row's glow 814, the footer ticker 324 and prompt rings 110. Racebox 571 and Options 580: the
+footer ticker 322 to 345 (glyph edges of the scrolling tip) and the prompt rings 225 (`Confirm`/`Back`, the half-texel softness `pulse-psp-cell` already measured). **Single Player, the worst of the four
+list screens, 2,238: row 1 878 (the focused value's halo and the step arrows), rows 2 to 4 341 (the arrows), KILLS 128, the `Help` prompt (a triangle and `Help` at (20, 252): the screen's own `Text`s, not drawn) 191.**
+The original's step arrows are dimmed where the list is at its first entry (every row is at entry 0 here, so every left arrow is dark and only the right one lit); ours lights both, because
+ours' lists wrap (the `race` page's design). KILLS is greyed on the original (ink peak 36 against ours' dimmed (114, 127, 142)) and holds `5` where the list's authored default is `10` (the
+native screen's rule for a disabled row is not read), and ours greys it by a rule read off this one frame (`Eliminations` is inert while `Mode` is not `Elimination`). Measured, not fixed.
+
+**Pause menu.** No still draws a menu over a parked race, so the route is `scripts/pulse-pause.drive` (`boot`, RACEBOX, the race page's `race.mode=time_trial`, Track Select `03_Track`,
+Ship Select, `@TICKS@` race ticks, START, 120 ticks) with `--original-menu`; `psp-menu-pair.py pairs --title pulse --plan "$PULSE_PAUSE_PLAN" --ids pause --pause-clock C`. The original is
+`data/saves/pulse-psp/time-trial-moa-therma-white-venom-grid.ppst` loaded (`psp-state.py`, the serial default is Pulse USA's), 4 s, START, 4 s. The saved state reads the HUD clock 0.40.6 to 0.40.8 at the
+pause (the CPU is held after the load; the wall waits do not move it), so `--pause-clock` is the `CURRENT` the frame shows, read by eye, and ours is played to it (`PAUSE_CLOCK_ZERO_TICKS["pulse"]` = 276:
+ours read 0.35.4 at 2,400 ticks, 0.40.8 at 2,724); with that the record 1.17.1, `current`, the GO board and the camera match. Fixed: the HUD under the tint, the tag off the footer, GAME MANUAL
+in a compare shot, and the header (taken settled, see `docs/ui/pause-menu.md`, "Pulse"). **Largest regions left** (of 2,031): the rows 807 and the focused row 279: the original's rows are
+brighter (peak (65, 204, 225) against ours' (49, 155, 173), the bloom of the front end's glow stamps), because ours' glow pass runs only on a cleared target (`Renderer::render`'s `glowing` needs
+`LoadOp::Clear`) and a menu over a parked race draws with `Load`: **the cause, not fixed** (a renderer change); the music pill and `FENIX FUNK 5 (WIPEOUT EDIT)` 672 (the original is playing, ours
+runs `--no-audio` and has no now-playing line to draw); the `Confirm` ring 212. The focused row's pulse level is not pinned on the drive route (the session's own clock runs it).
 
 ### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
 
