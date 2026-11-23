@@ -90,6 +90,12 @@ def rerender(pj, binary):
         at = flags.index("--screenshot")
         del flags[at:at + 2]
     flags, problems = resolve_flags(flags, pair_dir)
+    # A Detonator pair's recorded `--input-script` names its place in `data/reference`; a copy of the pair elsewhere
+    # (a lane's scratch) runs on the copy's own script, which `ensure_detonator_inputs` made above.
+    if "--input-script" in flags:
+        at = flags.index("--input-script") + 1
+        if not (ROOT / flags[at]).exists() and (pair_dir / "ours.inputs").exists():
+            flags[at] = str(pair_dir / "ours.inputs")
     # The HD and PS2 pair scripts record the run length beside the flags (`ours.ticks`), not in them; without it the
     # frame is tick 0 (a clock of 0.00.0, no GO board).
     if "--ticks" not in flags and rec["ours"].get("ticks") is not None:

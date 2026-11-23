@@ -482,10 +482,9 @@ The hull is within 1 to 4 px on every edge but the bottom (3 to 14 px, the exhau
 original is near black), then on `mines-ahead` and `cannon-volley` the **middle right third** (25 to 37, ours 19 to 22 darker: the original's
 lit mines and, on the volley, debris, where ours' mines are elsewhere and its rims dark). `pad` has no mine in the right third and its next
 region is the upper left (11, ours 9 brighter). **`cannon-volley` was re-framed:** at lap 2.21 (0.23 s after the release) the heading
-check refused on 3 of 3 boots (1.06, 1.54, 1.10 degrees); the original's pitch is about 0.6 degrees higher after a volley (forward y mean 0.048 over 7 frames, 4 boots, against 0.037 over 5 frames
-without one; the ranges overlap, confidence 50) and stays so to lap 3.0; the frames at 2.6 and 3.0 s passed on every boot (0.59 to 0.89 degrees),
-and one more boot's volley never fired (the press landed with no tick running), so the pair is the 2.6 s frame. Ours does not
-pitch after firing; whether the original's does (recoil) or ours' rest pitch is low is unread.
+check refused on 3 of 3 boots (1.06, 1.54, 1.10 degrees); the refusal is pitch (`--pose` carries yaw only) and the cause of the extra pitch at 2.2 s is undetermined: unfired frames at lap 2.6 sit inside the
+fired range, and no unfired frame exists at 2.21 (open: one no-fire boot at `--shot 2.21`); the fired frames at 2.6 and 3.0 s passed on every boot
+(0.70 to 0.89 degrees), and one more boot's volley never fired (the press landed with no tick running), so the pair is the 2.6 s frame. Hull crops read: the fuselage's lit blue strip is missing in ours and its rear is lit pale blue where the original's is dark with a magenta flare.
 
 **The original's bands in the pairs (2026-11-23, `det-pair-bands`).** `--zone-bands` / `--zone-bands-raw` feed the original's held
 (`+0x32f8`) and raw (`+0x32b8`) bands, read in the frame's own pause, to the floor visualiser and the mine envelope

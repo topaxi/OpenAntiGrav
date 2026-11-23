@@ -2304,7 +2304,7 @@ the gantry's own nodes sit in `[3.83, 13.3)`). The dump of one paused frame on t
 10.96 s with the lap clock at 4.75 and 3.90 s (offset 6.2 and 7.1): the state was saved a few seconds into the START RACE prompt and the
 world clock only runs on from there, so the pair's frames (lap 2.0 to 2.7 s) fall under 13.3 s. It is the guard doing its job, not a Detonator
 limit: **the clock runs at about 0.4 s per wall second at the prompt** (3.1 at 17:56:15, 10.8, 18.8, 28.8, 36.2 at 17:57:43 on a cold walk, read with `scenery_nodes`
-every 20 s), so a state saved a minute into the prompt (`data/saves/hd-fury/hd-detonator-talons-feisar-grid-late`, same sidecar,
+every 20 s), so **`--pre-wait` does not help on a restored state** (60 s against 30 s moved the offset only from 6.2 to 7.1: the restored game's clock hardly runs before START RACE), so the saved state is the fix: a state saved a minute into the prompt (`data/saves/hd-fury/hd-detonator-talons-feisar-grid-late`, same sidecar,
 `mode: detonator`) restores to a world clock of 54 to 59 s at the pair: 24 nodes of 24 agree, offset 52.3 to 56.3 on eight boots. Recipe: `det_walk`'s walk
 (`emu-hd-race-walk.sh`, circuit 8, team 0, six `right`s on RACE TYPE), poll the clock, `emu-save-state.sh` once it reads over 30 s. A
 scenery clock at or under 13.3 s (a Racebox race read soon after START RACE, any mode) is refused with the same reason; widening the guard
@@ -2313,8 +2313,11 @@ would let a gantry node pass for scenery.
 **Heading.** The check compares the original's hull forward (push buffer) with ours' trace forward at the rendered tick. `--pose` carries a
 yaw only, so ours' pitch is its own: 1.6 to 2.0 degrees (forward y 0.028 to 0.035) on every pair. The original's forward y is 0.031 to 0.044
 (mean 0.037, 5 frames on 3 boots, no volley fired) and 0.041 to 0.055 (mean 0.048, 7 frames on 4 boots) after a volley, so about 0.6 degrees
-higher, with the ranges overlapping (confidence 50); it stays so 1.2 s after the release. The volley frame at lap 2.2 s read 1.06, 1.54 and 1.10
-degrees (3 of 3 boots, refused) and the frames at 2.6 and 3.0 s read 0.59 to 0.89 (4 of 4, passed). The pair is the 2.6 s frame. Whether the original pitches from the
+higher, with the ranges overlapping (confidence 50). The volley frame at lap 2.2 s read 1.06, 1.54 and 1.10
+degrees (3 of 3 boots, refused); the fired frames at 2.6 and 3.0 s read 0.70 to 0.89 (4 of 4, passed). **The cause of the extra pitch at 2.2 s is
+undetermined:** unfired frames at lap 2.6 (forward y 0.040, 0.044) sit inside the fired range at the same clock, and no unfired frame exists at 2.21;
+open discriminator: one boot with no fire and `--shot 2.21`. The refusal itself is pitch (`--pose` carries yaw only; ours runs under
+`--pose-hold-ticks`, so its pitch is not a reading of its physics). The pair is the 2.6 s frame. Whether the original pitches from the
 cannon's recoil or ours rests low is unread.
 
 `--field` is not used by these pairs (`--detonator` only; no `--field` in any `ours.flags`). A published pair carries no `ours.inputs` (the
