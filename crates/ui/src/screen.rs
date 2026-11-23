@@ -712,6 +712,43 @@ impl Screens {
         }
     }
 
+    /// Cuts the bottom off each of `images` (the ones a `<Viewport>` just collected) that run past the
+    /// viewport's authored `y + height`, the way the engine's viewport clips what it holds
+    /// (`docs/ui/menus-original.md`, "A viewport clips its images"). Pulse's two footer strips are 14
+    /// rows tall in viewports 13 rows tall; the strip's last row never reaches the screen. Only a
+    /// viewport that authors `x`, `y`, `width` and `height` all clips, and only the bottom edge: the
+    /// strips' own slide-in `Key` animation moves the image inside the viewport, so the edge that
+    /// matters at rest is the one the image is cut at.
+    fn clip_images_to_viewport(&self, images: &mut [Image], viewport: &Node, offset: (f32, f32)) {
+        // The viewport's own `OffsetX`/`OffsetY` would move its children and not its rect in a way
+        // this has not measured: such a viewport clips nothing.
+        if viewport.value("OffsetX").is_some() || viewport.value("OffsetY").is_some() {
+            return;
+        }
+        let [Some(_), Some(top), Some(_), Some(height)] =
+            ["x", "y", "width", "height"].map(|name| self.number(viewport.value(name)))
+        else {
+            return;
+        };
+        // An image's `y` already has the enclosing screens' `OffsetY`s folded in, so the viewport's
+        // `y` is put in the same space.
+        let top = top + offset.1;
+        let bottom = top + height;
+        for image in images {
+            // A centred image's `y` is its middle, and one with no `TxtrHeight` would sample the
+            // sheet's own rows at a shorter size, squeezed: both are left whole.
+            let (Some(authored), Some(rows)) = (image.height, image.texture_height) else {
+                continue;
+            };
+            if image.centred || image.y < top || image.y >= bottom || image.y + authored <= bottom {
+                continue;
+            }
+            let kept = bottom - image.y;
+            image.texture_height = Some(rows * kept / authored);
+            image.height = Some(kept);
+        }
+    }
+
     /// One node of [`Self::collect_widgets`], without the bookkeeping that names the brackets it
     /// reached.
     fn collect_widget(
@@ -952,6 +989,7 @@ impl Screens {
             "taginput" => screen.tag_inputs.push(self.tag_input_from_node(child)),
             "viewport" => {
                 let width = self.number(child.value("width"));
+                let first = screen.images.len();
                 for grandchild in &child.children {
                     self.collect_widgets(
                         screen,
@@ -962,6 +1000,7 @@ impl Screens {
                         fallback_images,
                     );
                 }
+                self.clip_images_to_viewport(&mut screen.images[first..], child, offset);
             }
             // None carries a `width` of its own to pass down - whatever the
             // enclosing `Viewport` gave keeps applying inside. `BackgroundController`

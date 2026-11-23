@@ -798,6 +798,23 @@ Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_u
 
 **Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.
 
+## A viewport clips its images (2026-11-23, `pulse-psp-track`)
+
+Pulse's `Skin.xml` draws its two footer strips as 14-row images (`pulse_assets.mip` at `v=27` and `v=52`, `height="14"`) in
+`<Viewport>`s authored `y="236" height="13"` and `y="249" height="13"`. Measured on PPSSPP's frame of Track Select (confidence 85, four
+grabs, and the Ship Select, Grid and Cell pairs read the same): the original's row `y=249` holds the lower strip's first row (grey 72 at
+`x=200`) and **nothing of the upper strip's last row**; ours drew that row (grey 123), a one-pixel line across the whole ticker bar
+(316 of the pair's 2022 differing pixels). So the viewport is a scissor on what it holds, here its bottom edge.
+`oag_ui::screen::Screens::clip_images_to_viewport` cuts an image's height (and its sampled rows) to the viewport's `y + height` when the
+viewport authors `x`, `y`, `width` and `height`. Census (a temporary print in the clip, then `oag-game IMAGE --menu-page main|track-select|ship-select --screenshot` headless; on Pulse PSP it prints exactly the two strips,
+so the route reads the whole tree): **Pulse PSP** (USA) the two strips; **Pulse PS2** (EU) the same two strips, viewports `y=389` and `y=410` 21 rows tall over 23-row images,
+cut to 21 (the three PS2 menu pairs, ours re-rendered with and without the clip against the committed `theirs.png`: pixels over 40 grey fall 38374 to 36284 (Grid), 59487 to 57546
+(Cell), 79328 to 77230 (Team), the bottom 15 % 10820 to 8730, 16001 to 14060, 8937 to 6839; so the law holds on PS2, confidence 80); **Pure PSP** (USA and EU), **HD/Fury**
+(`hdfury-ps3-eu.iso`), **Omega** (`omega-ps4-eu.pkg`) and **2048** (`data/extracted/vita/PCSF00007`, `main`; it authors no Track selection screen): checked, clips nothing.
+Test: `a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it`,
+`menu_layout_ground_truth::pulses_footer_strips_are_cut_to_their_viewports`. Not wired: the top, left and right edges (no image
+overruns them in Pulse), and the strips' slide-in `Key` animation, which moves the image inside the viewport and is cut by it live.
+
 ## Pure's text pens step up to whole pixels (2026-11-23, `pure-sr-track`)
 
 **Law (confidence 85).** On Pure's front end a glyph's ink edge is the pen plus the glyph's left bearing at the
@@ -844,3 +861,4 @@ Checked against the other titles, as the rule asks: **HD**: checked, differs (HD
 `oag_ui::font::ink_width`; no HD pair has been measured for a snapped draw). **Pulse**: not measured; its front end
 keeps the fractional pen, and a Pulse pair's label spacing is the check. **2048 and Omega**: not checkable here
 (no Pure-shaped front end).
+
