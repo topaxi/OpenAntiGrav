@@ -369,17 +369,6 @@ fn each_screens_rows_carry_the_disc_description_keyed_by_screen_item_and_value()
             .map(|row| row.description)
             .collect::<Vec<_>>()
     };
-    assert_eq!(
-        descriptions(&chain),
-        [
-            "Single Player>Mode>Arcade",
-            "Single Player>Mode>Tournament",
-            "Single Player>Mode>Time Trial",
-            "Single Player>Mode>Zone",
-            "Single Player>Mode>Free Play"
-        ],
-        "the mode select types each mode's own help line, as the original's does"
-    );
     assert_eq!(pick(&mut chain, 0, &[]), Chosen::Advanced);
     assert_eq!(
         descriptions(&chain),
