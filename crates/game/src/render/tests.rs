@@ -438,6 +438,149 @@ fn an_outlined_font_draws_its_body_alpha_over_its_outline_alpha() {
     );
 }
 
+/// A translucent fill under an outlined font's atlas is drawn once, not twice.
+///
+/// An outlined atlas draws its text in two passes (the border's alpha, then the body's), and a fill
+/// samples the same atlas's solid patch: with its border carrying the fill's own alpha the second
+/// pass stacked the fill on itself, `2a - a^2` for an `a` of a quarter, 112 of 255 where 64 is one
+/// draw. Pulse PS2's stat-row bars and panels read that bright against the original's.
+///
+/// **Skips with no adapter.**
+#[test]
+fn a_translucent_fill_under_an_outlined_font_is_drawn_once() {
+    use oag_texture::fnt::{Font, Glyph};
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let mut palette = vec![[0, 0, 0, 0]; 16];
+    palette[1] = [100, 100, 100, 200];
+    palette[2] = [255, 255, 255, 255];
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette,
+        indices: (0..64)
+            .map(|at| u8::from(at % 8 < 4 && at / 8 < 4))
+            .collect(),
+        glyphs: vec![Glyph {
+            codepoint: u16::from(b'8'),
+            width: 4,
+            height: 4,
+            u0: 0,
+            u1: 4,
+            v0: 0,
+            v1: 4,
+            advance: 4,
+            bearing: 0,
+        }],
+    };
+    assert!(font.is_outlined(), "the fixture must be an outlined font");
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut renderer = Renderer::new(
+        &device,
+        &queue,
+        format,
+        None,
+        Atlas::from_font(&font),
+        &oag_hud::sprite::Sheet::default(),
+    )
+    .expect("the ui pipeline");
+    renderer.set_space(Space {
+        size: (4.0, 4.0),
+        display_aspect: 1.0,
+    });
+    let quarter = [1.0, 1.0, 1.0, 0.25];
+    // Left half a flat fill, right half a gradient that is flat at the same alpha, in the top two rows, and a
+    // solid triangle over the bottom two.
+    let list = [
+        Draw::Fill {
+            rect: [0.0, 0.0, 2.0, 2.0],
+            color: quarter,
+        },
+        Draw::GradientFill {
+            rect: [2.0, 0.0, 2.0, 2.0],
+            left: quarter,
+            right: quarter,
+        },
+        Draw::SolidTriangles {
+            triangles: vec![[[0.0, 2.0], [0.0, 10.0], [8.0, 2.0]]],
+            color: quarter,
+        },
+    ];
+    let target = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("fill under an outlined font"),
+        size: wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = target.create_view(&Default::default());
+    let readback = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("fill under an outlined font readback"),
+        size: (wgpu::COPY_BYTES_PER_ROW_ALIGNMENT * 4) as u64,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let mut encoder = device.create_command_encoder(&Default::default());
+    renderer.render_with(
+        wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+        &device,
+        &queue,
+        &mut encoder,
+        &view,
+        &list,
+        (0.0, 0.0, 4.0, 4.0),
+        None,
+    );
+    encoder.copy_texture_to_buffer(
+        target.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT),
+                rows_per_image: Some(4),
+            },
+        },
+        wgpu::Extent3d {
+            width: 4,
+            height: 4,
+            depth_or_array_layers: 1,
+        },
+    );
+    queue.submit(Some(encoder.finish()));
+    let slice = readback.slice(..);
+    slice.map_async(wgpu::MapMode::Read, |_| {});
+    device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .expect("the GPU");
+    let mapped = slice.get_mapped_range().expect("the readback");
+    for (name, x, row) in [("flat", 0, 0), ("gradient", 3, 0), ("solid triangle", 1, 3)] {
+        let at = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize * row + x * 4;
+        let red = i32::from(mapped[at]);
+        assert!(
+            (red - 64).abs() <= 3,
+            "a quarter-alpha white {name} fill over black should read about 64, got {red}: it was drawn twice"
+        );
+    }
+}
+
 /// A right-aligned HUD string ends on its last glyph's ink, not on its advance.
 ///
 /// The Pulse grid's GE lists put `0 kmh`, `100%` and `Record` 2, 1 and 1 px right of the

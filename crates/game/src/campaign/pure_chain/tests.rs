@@ -23,7 +23,7 @@ const STATS: &str = r#"<Stats>
 <ZoneMedals Bronze="20" Gold="30" Silver="25"/></Stats>"#;
 
 const SKIN: &str = r#"
-<Screen name="Main Menu"><Menu name="Mode"><Entry idstring="Single Player"/></Menu></Screen>
+<Screen name="Main Menu"><Menu name="Mode"><Entry idstring="Single Player"/><Entry idstring="Multiplayer"/><Entry idstring="Profile"/><Entry idstring="On Line"/><noEntry idstring="Teasers"/></Menu></Screen>
 <Screen name="Single Player">
   <Menu name="Mode"><Entry idstring="Arcade"/><Entry idstring="Tournament"/><Entry idstring="Time Trial"/><Entry idstring="Zone"/><Entry idstring="Free Play"/></Menu>
   <Redirect>
@@ -119,6 +119,41 @@ fn single_player_lists_the_modes_the_disc_authors() {
         labels(&view),
         ["ARCADE", "TOURNAMENT", "TIME TRIAL", "ZONE", "FREE PLAY"]
     );
+}
+
+#[test]
+fn single_player_rows_carry_the_disc_s_description_of_each_mode() {
+    let chain = chain();
+    let view = view(&chain, &[], false);
+    let described: Vec<&str> = view.rows.iter().map(|r| r.description.as_str()).collect();
+    assert_eq!(
+        described,
+        [
+            "Single Player>Mode>Arcade",
+            "Single Player>Mode>Tournament",
+            "Single Player>Mode>Time Trial",
+            "Single Player>Mode>Zone",
+            "Single Player>Mode>Free Play"
+        ]
+    );
+}
+
+#[test]
+fn the_main_menu_is_the_discs_own_four_rows_each_described_under_its_screen() {
+    let chain = chain();
+    let (words, say) = names();
+    let view = chain.main_view(&Names {
+        name_of: &say,
+        words: &words,
+        describe: &|screen, item, value| format!("{screen}>{item}>{value}"),
+    });
+    assert_eq!(view.title, "MAIN MENU");
+    assert_eq!(
+        labels(&view),
+        ["SINGLE PLAYER", "MULTIPLAYER", "PROFILE", "ON LINE"]
+    );
+    assert_eq!(view.rows[2].description, "Main Menu>Mode>Profile");
+    assert!(view.context.is_empty());
 }
 
 #[test]
