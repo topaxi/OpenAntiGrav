@@ -862,3 +862,52 @@ Checked against the other titles, as the rule asks: **HD**: checked, differs (HD
 keeps the fractional pen, and a Pulse pair's label spacing is the check. **2048 and Omega**: not checkable here
 (no Pure-shaped front end).
 
+
+## The footer's button glyphs are Pulse_14's (2026-11-23, `pulse-fe-leftovers`)
+
+**Law (confidence 90).** `ControlTextConfirmButton`/`BackButton` (and Cell Selection's `HELP` and `CHANGE DIFFICULTY` glyphs) author `font="small"`,
+which Pulse's language plugins resolve to `Pulse_14.fnt`, the 17 px face that is also the `Title` role. Its `ε γ δ β` cells are 17 x 17 (advance 16,
+bearing -1). This build drew them from the `menu` face (`Pulse_20.fnt`, 22 px cells) at `faces.small` = 17/22, a minified resample: the ring was a
+half texel soft and half a pixel off the original's crisp, pixel-aligned one (theirs: square edges 238 and 254 on one pixel each; ours 168 and 98 split
+over two). With the glyph drawn from `Pulse_14` at scale 1 the four rings agree with `theirs.png` to a grey level (`Help` ring 0 px over 40 grey in the
+region, 97 before; difficulty ring 0 of 129; maximum difference 1 to 3 grey; Confirm and Back keep a separate difference, below).
+
+**Wiring.** `oag_title::MenuSkin::small_font` (`Some("Title")` on Pulse PSP only: the renderer's third glyph slot already holds `Pulse_14` under `Title`)
+reaches `oag_ui_screens::picker::FaceScales::small_role`; with it a `font="small"` text is a `Draw::FacedText` in that role at scale 1 (the footer legend,
+the campaign still, the picker's texts) and `faces.small` is not applied. Test: `pulse_menu_ticker_ground_truth::pulses_footer_button_glyphs_draw_in_the_small_face_at_its_own_size`
+(fails with the skin field removed), unit test `a_small_face_in_a_glyph_slot_draws_the_button_glyphs_at_its_own_size`.
+
+Share of pixels over 40 grey, Pulse PSP USA pairs re-rendered with main's binary and with this one against the same `theirs.png`: Cell 0.40 % to 0.10 %
+(522 to 127 px), Track Select 0.53 % to 0.45 % (689 to 592).
+
+**Cross-title.** HD, Omega and 2048 author `font="buttons"` and have their own `PS_BUTTONS.fnt` slot (not changed: their grid, cell and Track Select pairs re-render
+byte-identical). Pure's prompts draw in its `Stats` face (unchanged, byte-identical). **Pulse PS2: checked, differs in wiring** - its skin carries no
+third slot (`PS2_MENU_SKIN.title_font` is `None`), so the glyphs keep the menu face; the PS2's `Pulse_14.fnt` carries the six glyphs at its own size
+(`prompt_glyphs_ground_truth`), so this is checked, applies, not wired (a PS2 glyph slot is the open step).
+
+**Open: Confirm and Back dim at the top.** On every Pulse pair the four `NavigationController` texts (the two glyphs and the two words) read dimmer in the
+original over their first ten rows: (original minus background) over ours is 0.58 at `y=252` and 1.0 from about `y=262`, the same ramp on the glyphs and
+the words (row-mean differences -21, -22, -13, -9 ... on both rings), and not on `Help`, which belongs to a later screen. The ramp ends where the lower footer strip
+(`Viewport y=249 height=13`) ends, and `Skin.xml` authors the `NavigationController` before the two strips, so the likely cause is draw order: the original draws the
+strip's translucent lower rows **over** the prompts; ours draws the strips in the frame, under every text. Confidence 50 (not tested: ours has no way to put one
+frame image above a text). About 40 px over 40 grey on Cell, 180 px on Track Select.
+
+## A text's pen starts at its first glyph's ink (2026-11-23, `pulse-fe-leftovers`)
+
+**Law (confidence 80).** On Pulse's front end the first glyph's ink starts at the widget's authored `x`, each later glyph's ink sits its font bearing right
+of the pen, and the next pen is the previous ink edge plus the advance less the bearing (`oag_ui::font::pen_step` without the whole-pixel step, started
+at `x` minus the first glyph's bearing; the same measure `font::ink_width` states). `Pulse_14.fnt` gives every letter but `T` a left bearing of -1, so
+the advance-only pen this build used inked every such letter one pixel right of the original's: Track Select's heading `TRACK SELECT` (x 50, `Title` role) had
+ink starts 50, 60, 68, 77, 86, 100, 109, 118, 126, 135, 143 against the original's 50, 59, 67, 76, 85, 99, 108, 117, 125, 134, 143. With the law they agree
+(the two `T`s have bearing 0 and never moved). Applying the bearing **without** shifting the first pen puts a one-glyph string such as the prompt `ε` one
+pixel left (whole-frame 2.71 % on Cell), so the first-glyph rule is part of the law; it differs from Pure's (`pen_step` from `x`, ink at `x` plus the first bearing, rounded
+up).
+
+Wired as `oag_title::MenuSkin::bearing_pens` (`Renderer::set_bearing_pens`, with the faces in `install_faces`): Pulse PSP measured; **Pulse PS2 inherits it from the PSP**
+(its skin sets the same field; the three PS2 pairs improve 0.02 to 0.05 points, 24876 to 24708, 23351 to 22874 and 60066 to 59656 px over 40 grey, so it is not
+a regression there; not measured on the PS2). Share over 40 grey on the Pulse PSP pairs, main's binary against this one, same `theirs.png`, after the glyph
+change above: Cell 0.10 % to 0.04 %, Track Select 0.45 % to 0.26 %, Grid 1.28 % to 1.13 %, Team 1.21 % to 1.09 %. Test: `render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`
+(fails with the pen law off), `title_behaviour_data::only_pulse_lays_its_front_end_pens_out_by_bearing`.
+
+**Cross-title: HD, Omega, 2048 checked, not measured.** `Font_MeasureString` is the same bearing arithmetic on HD (`font::ink_width`); whether HD's *draw* uses it has no
+capture here, so those three keep the advance-only pen (all their menu pairs re-render byte-identical with the field off). Pure: its own measured law above.

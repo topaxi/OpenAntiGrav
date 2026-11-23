@@ -134,7 +134,7 @@ pub(super) fn face_role_in(faces: &FaceScales, font: &str) -> Option<&'static st
 /// but its button glyphs are that face's own 17 px art: they draw through the
 /// glyph slot that holds it ([`face_role_in`], `FaceScales::small_role`) and
 /// not as `Pulse_20`'s 22 px glyph minified - see `docs/ui/menus-original.md`'s
-/// "Two faces, not one swapped for the other" and "The button glyphs are
+/// "Two faces, not one swapped for the other" and "The footer's button glyphs are
 /// Pulse_14's" sections.
 ///
 /// **`Buttons`**: Wipeout HD/Fury's own `font="buttons"`,
