@@ -29,7 +29,7 @@ pub enum PoseRequest {
 /// reads lap 1, zero clocks and the grid place, where the original's frame says "place 6 of 8,
 /// lap 1 of 3, 30.0 s". Those four numbers are read out of the original's RAM at the same stop as
 /// the pose and handed in here; nothing is derived. `None` is every race.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CaptureHud {
     /// The player's place, 1-based.
     pub place: u32,
@@ -62,8 +62,37 @@ pub struct CaptureHud {
     /// (`oag_hud::SubWeapon::Autopilot`). Drawn on the readout alone, the simulation's own
     /// timer untouched, so a posed capture's craft is not handed to the driver.
     pub autopilot_seconds: Option<f32>,
+    /// A song the now-playing marquee is held on, when the capture pins one. See [`CaptureSong`].
+    pub song: Option<CaptureSong>,
+    /// A Head to Head readout drawn on the HUD alone, when the capture pins one. See
+    /// [`CaptureHeadToHead`].
+    pub head_to_head: Option<CaptureHeadToHead>,
     /// Zone mode's counters as the original's frame showed them, when the capture read them.
     pub zone: Option<CaptureZone>,
+}
+
+/// A song held on the now-playing marquee: a capture runs no music, so no song starts and the
+/// marquee has nothing to show. The display is built at load, stepped `ticks` times through its own
+/// law and then frozen there, so the frame shows one phase of the animation whatever tick count the
+/// capture runs. A title with no marquee draws nothing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CaptureSong {
+    /// The artist, shown ahead of the title.
+    pub artist: Option<String>,
+    /// The song's title.
+    pub title: String,
+    /// Marquee updates taken since the song started (60 per second): the bar and text fade in
+    /// over the first few, then the text scrolls.
+    pub ticks: u32,
+}
+
+/// A Head to Head readout drawn on the HUD alone, the race's own mode and standings untouched.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CaptureHeadToHead {
+    /// The gap to the opponent in the race's arc-length units (the number printed before the `m`).
+    pub gap: f32,
+    /// Whether the player is in first place.
+    pub player_leads: bool,
 }
 
 /// Zone mode's own counters, read out of the original's RAM at the stop a Zone pair is taken at

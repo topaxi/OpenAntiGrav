@@ -1,7 +1,7 @@
 //! `--pose`, `--pose-from` and `--camera-pose`: where a captured frame puts
 //! the craft, and where it puts the camera.
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use log::warn;
 
 use oag_raceplay as race;
@@ -250,6 +250,27 @@ impl Field {
 
 /// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]]`,
 /// the clocks rounded to the tick; a best lap of zero is none.
+/// `--hud-head-to-head GAP,lead|trail`.
+pub(crate) fn parse_head_to_head(text: &str) -> Result<race::CaptureHeadToHead> {
+    let (gap, leads) = text
+        .split_once(',')
+        .context("--hud-head-to-head takes GAP,lead or GAP,trail")?;
+    let gap: f32 = gap
+        .trim()
+        .parse()
+        .with_context(|| format!("--hud-head-to-head GAP {gap:?} is not a number"))?;
+    ensure!(
+        gap.is_finite() && gap >= 0.0,
+        "--hud-head-to-head GAP {gap} is not a distance"
+    );
+    let player_leads = match leads.trim() {
+        "lead" => true,
+        "trail" => false,
+        other => bail!("--hud-head-to-head takes lead or trail after the comma, not {other:?}"),
+    };
+    Ok(race::CaptureHeadToHead { gap, player_leads })
+}
+
 pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
     let parts: Vec<&str> = text.split(',').map(str::trim).collect();
     ensure!(
@@ -312,6 +333,8 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
             .filter(|&centiseconds| centiseconds > 0),
         boost_phase: None,
         autopilot_seconds: None,
+        song: None,
+        head_to_head: None,
         zone: parts
             .get(7)
             .map(|text| -> Result<race::CaptureZone> {
