@@ -1077,12 +1077,10 @@ fn a_wallpaper_ignores_input_and_quits_on_escape() {
     );
 }
 
-/// The same idle launch on HD (Pulse's 60 s, inherited), and on Omega, whose `DemoConfig.xml`
-/// authors 30 s: the demo is on screen well before a minute, not after. Fails when the authored
-/// timeout is not laid over the title's.
+/// The same idle launch on HD (Pulse's 60 s, inherited).
 #[test]
-#[ignore = "needs an HD disc image in data/images/ and data/extracted/ps4"]
-fn an_idle_main_menu_launches_a_demo_on_hd_and_at_omegas_authored_30_seconds() {
+#[ignore = "needs an HD disc image in data/images/"]
+fn an_idle_main_menu_launches_a_demo_on_hd() {
     if let Some(image) = hd() {
         let run = drive(
             &image,
@@ -1095,6 +1093,13 @@ fn an_idle_main_menu_launches_a_demo_on_hd_and_at_omegas_authored_30_seconds() {
         );
         assert!(run.output.status.success(), "hd: {}", run.why_not_success());
     }
+}
+
+/// The same idle launch on Omega, whose `DemoConfig.xml` authors 30 s: the demo is on screen
+/// well before a minute, not after. Fails when the authored timeout is not laid over the title's.
+#[test]
+#[ignore = "needs data/extracted/ps4"]
+fn an_idle_main_menu_launches_a_demo_at_omegas_authored_30_seconds() {
     let omega = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/extracted/ps4");
     if omega.exists() {
         let run = drive(

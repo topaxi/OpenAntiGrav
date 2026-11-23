@@ -26,6 +26,9 @@ PROFILE_PTR = 0x08B31774
 STATS_AT = 0x11C
 STATS_SLOTS = 200
 FAVOURITE_AT = 0x3C
+#: The footer tag's three characters in the profile record (`Ticker_Update`'s tag branch; `docs/tools/compare-page.md`, "`menu-team`"); `AAA` on a fresh profile.
+TAG_AT = 0x457
+TAG_LEN = 3
 FAVOURITE_FIELD = 0x20
 NEWS_ROWS = 124
 NEWS_WEIGHT = 122
@@ -44,6 +47,15 @@ FAVOURITE_MUSIC = 3
 FORMATS = {"int": 0, "float": 1, "time": 2, "floattime": 3, "percent": 4, "string": 5}
 CLASSES = {"genstats": 0, "profile": 1, "teamstats": 2, "trackstats": 3, "unlockable": 4}
 NEWS_ENTRY = r"Data\Plugins\news\Definition.xml"
+
+
+def profile_tag(dbg):
+    """The profile's footer tag, three characters, or `None` when the record is not there or holds no letters or digits. CPU stopped."""
+    profile = struct.unpack("<I", dbg.read(PROFILE_PTR, 4))[0]
+    if not HEAP[0] <= profile < HEAP[1]:
+        return None
+    tag = dbg.read(profile + TAG_AT, TAG_LEN).decode("latin1")
+    return tag if len(tag) == TAG_LEN and tag.isalnum() else None
 
 
 def load_rows(oag_wad, wad):

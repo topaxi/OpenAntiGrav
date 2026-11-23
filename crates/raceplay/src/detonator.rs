@@ -247,14 +247,13 @@ impl crate::sim::RaceSim {
         Some([cannon.fives, cannon.tens, cannon.fifteens])
     }
 
-    /// Whether the person in slot 0 may work the cannon this tick: flying it themselves,
+    /// Whether the person in `slot` may work the cannon this tick: flying it themselves,
     /// racing, and past the countdown. **Chosen, not measured:** the original's gate on the
     /// green light is unread.
-    fn cannon_handed(&self) -> bool {
-        const SLOT: usize = 0;
-        self.world.controllers[SLOT].is_human()
-            && self.may_use_pickup(SLOT)
-            && !self.flown_for_the_player(SLOT)
+    fn cannon_handed(&self, slot: usize) -> bool {
+        self.world.controllers[slot].is_human()
+            && self.may_use_pickup(slot)
+            && !self.flown_for_the_player(slot)
             && !oag_race::RaceState::thrust_gated(self.world.tick)
     }
 
@@ -327,17 +326,19 @@ impl crate::sim::RaceSim {
             );
         }
         if let Some(config) = &detonator.cannon {
-            // Square fires and Circle reloads, slot 0 only. **Chosen:** the reload is a press
-            // edge; the original's edge-or-level is unread (`detonator-cannon.md`, "The reload").
-            let handed = self.cannon_handed();
-            let pad = inputs.get(0).buttons;
+            // Square fires and Circle reloads, the primary slot only (the one slot the EMP's
+            // charge and fire use). **Chosen:** the reload is a press edge; the original's
+            // edge-or-level is unread (`detonator-cannon.md`, "The reload").
+            let slot = self.world.primary_slot();
+            let handed = self.cannon_handed(slot);
+            let pad = inputs.get(slot).buttons;
             let input = oag_weapons::detonator::cannon::Input {
                 fire: handed && pad.is_held(oag_gameplay::input::Button::Square),
                 reload: handed && pad.is_pressed(oag_gameplay::input::Button::Circle),
             };
             let collision = &self.collision;
             let sweep = |from, to| cannon_sweep(collision, from, to);
-            let (field, owner) = (&mut self.world.detonator, &self.world.ships[0]);
+            let (field, owner) = (&mut self.world.detonator, &self.world.ships[slot]);
             let fired = oag_weapons::detonator::cannon::step_cannon(
                 field,
                 &detonator.survey,
@@ -385,12 +386,13 @@ impl crate::sim::RaceSim {
         use oag_weapons::detonator::emp;
         let charged = emp::step_charge(&mut self.world.detonator, config);
         self.detonator_events.extend(charged);
+        let slot = self.world.primary_slot();
         let pressed = inputs
-            .get(0)
+            .get(slot)
             .buttons
             .is_pressed(oag_gameplay::input::Button::Flip);
-        if pressed && self.cannon_handed() {
-            let at = self.world.ships[0].physics.body.position;
+        if pressed && self.cannon_handed(slot) {
+            let at = self.world.ships[slot].physics.body.position;
             let from = nearest_entry(&detonator.survey, at);
             let fired = emp::fire(&mut self.world.detonator, &detonator.survey, config, from);
             self.detonator_events.extend(fired);

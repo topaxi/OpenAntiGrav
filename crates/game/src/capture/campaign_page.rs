@@ -225,6 +225,8 @@ pub(super) fn campaign_page(
     // finished. `--menu-picker-step-seconds`: seconds since the cell or the rung changed on
     // `Cell Selection`, `None` for no change.
     (entry_seconds, step_seconds): (Option<f32>, Option<f32>),
+    // `--menu-title-seconds`: where the card title's glow ladder stands; `None` follows `pulse_seconds`.
+    title_seconds: Option<f32>,
     // Measures the footer legend's words for a title that flows it, as the live session does.
     legend_ink: oag_ui_screens::campaign::footer::flow::Ink,
     footer: Footer<'_>,
@@ -610,6 +612,7 @@ pub(super) fn campaign_page(
                 .with_tiers(tiers.clone());
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
+                model.pulse_mut().set_text_seconds(title_seconds);
                 oag_ui_screens::campaign::grid_draw_list(
                     &model,
                     &campaign.grid_layout,
@@ -637,6 +640,7 @@ pub(super) fn campaign_page(
                 );
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
+                model.pulse_mut().set_text_seconds(title_seconds);
                 oag_ui_screens::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,

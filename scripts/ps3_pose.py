@@ -471,6 +471,81 @@ def multiply(a, b):
             for r in range(4) for c in range(4)]
 
 
+#: A craft's hull is drawn with a plain row-layout world matrix whose rotation rows carry the craft scale, its last
+#: column (0, 0, 0, 1) and its translation in the fourth row (`docs/tools/compare-page.md`, "The skew is the pause,
+#: not the original's draw order"). The translation is where the frame draws the hull. The scale is the craft's own
+#: (0.75 on the Venom pack, 0.63 on a Detonator Feisar), so any uniform scale in this range matches.
+HULL_SCALES = (0.3, 2.5)
+
+
+def hull_matrices(blob, base=0, scales=HULL_SCALES, tolerance=0.01):
+    """Every 4-byte offset in `blob` that reads as a craft's world matrix.
+
+    Yields `(address, translation, rows)`: the matrix is row-layout, three mutually orthogonal rows of one common
+    length inside `scales`, a last column of `(0, 0, 0, 1)`, the translation in the fourth row. A match is a shape
+    test, not an identity: `hull_near` decides which of them is a given craft.
+    """
+    for at in range(0, len(blob) - 64 + 1, 4):
+        m = struct.unpack_from(">16f", blob, at)
+        if not all(v == v and abs(v) < 1e6 for v in m):
+            continue
+        if abs(m[15] - 1.0) > tolerance or abs(m[3]) > tolerance or abs(m[7]) > tolerance or abs(m[11]) > tolerance:
+            continue
+        rows = [m[0:3], m[4:7], m[8:11]]
+        norms = [sum(c * c for c in r) ** 0.5 for r in rows]
+        scale = norms[0]
+        if not scales[0] < scale < scales[1] or any(abs(n - scale) > tolerance for n in norms):
+            continue
+        if any(abs(sum(a * b for a, b in zip(rows[i], rows[j]))) > tolerance * scale * scale
+               for i, j in ((0, 1), (0, 2), (1, 2))):
+            continue
+        yield (base + at, list(m[12:15]), [list(r) for r in rows])
+
+
+def hull_near(matrices, position, radius=15.0, min_count=6):
+    """The hull translation nearest `position` that the frame loads at least `min_count` times.
+
+    `matrices` is every `hull_matrices` hit of one frame (all regions). A craft's draws load its world matrix 7 to 15
+    times, so a translation seen fewer times is chance (4 ticks at 105 units/s were 7 units, at 300 units/s 20). Returns `{"translation", "count", "distance", "rows"}` or
+    `None`.
+    """
+    seen = {}
+    for _, translation, rows in matrices:
+        key = tuple(round(v, 3) for v in translation)
+        entry = seen.setdefault(key, [0, rows])
+        entry[0] += 1
+    best = None
+    for key, (count, rows) in seen.items():
+        if count < min_count:
+            continue
+        distance = sum((a - b) ** 2 for a, b in zip(key, position)) ** 0.5
+        if distance <= radius and (best is None or distance < best["distance"]):
+            best = {"translation": list(key), "count": count, "distance": distance, "rows": rows}
+    return best
+
+
+def whole_ticks(translation, position, velocity, off_axis_max=1.0, whole_max=0.1):
+    """How many 60 Hz ticks the frame's hull is behind the RAM body, along the body's own velocity.
+
+    Returns `(ticks, off_axis_units)` with `ticks` the signed projection of `position - translation` on one tick of
+    travel (positive: the RAM body is ahead of the frame). Raises `ValueError` when the craft is at rest, or when the
+    offset is off the velocity by more than `off_axis_max` units, or not within `whole_max` of a whole number of ticks
+    (a skew that is not a tick is not the pause's, and must not be fed as one).
+    """
+    tick = [v / 60.0 for v in velocity]
+    t2 = sum(v * v for v in tick)
+    if t2 < 1e-6:
+        raise ValueError("the craft is at rest, a tick skew is not measurable")
+    d = [a - b for a, b in zip(position, translation)]
+    t = sum(a * b for a, b in zip(d, tick)) / t2
+    off = sum((a - t * b) ** 2 for a, b in zip(d, tick)) ** 0.5
+    if off > off_axis_max:
+        raise ValueError("the hull is %.2f units off the velocity line, not a tick skew" % off)
+    if abs(t - round(t)) > whole_max:
+        raise ValueError("the hull is %.3f ticks behind the body, not a whole number" % t)
+    return int(round(t)), off
+
+
 def self_test():
     """Plants a known camera in noise and insists the finder recovers it."""
     import random
@@ -622,7 +697,36 @@ def self_test_pick():
     return 0
 
 
+def self_test_hull():
+    """A planted 0.75-scale world matrix among noise is found, matched to its craft, and its tick skew is read."""
+    import random
+
+    random.seed(20261123)
+    body = (212.0, -44.8, -195.2)
+    velocity = (108.0, 12.0, 4.0)
+    frame_at = [b - v / 60.0 for b, v in zip(body, velocity)]
+    world = [0.75, 0.0, 0.0, 0.0, 0.0, 0.75, 0.0, 0.0, 0.0, 0.0, 0.75, 0.0] + frame_at + [1.0]
+    blob = bytearray(struct.pack(">%df" % 4000, *[random.uniform(-300, 300) for _ in range(4000)]))
+    for slot in range(8):
+        blob[slot * 1500:slot * 1500 + 64] = struct.pack(">16f", *world)
+    hits = list(hull_matrices(bytes(blob), base=0x40080000))
+    near = hull_near(hits, body)
+    assert near is not None and near["count"] >= 8, near
+    assert max(abs(a - b) for a, b in zip(near["translation"], frame_at)) < 1e-2, near
+    ticks, off = whole_ticks(near["translation"], body, velocity)
+    assert ticks == 1 and off < 0.01, (ticks, off)
+    try:
+        whole_ticks([b - v / 60.0 * 1.5 for b, v in zip(body, velocity)], body, velocity)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("a 1.5 tick skew must be refused")
+    assert hull_near(hits[:3], body) is None, "fewer than six loads is chance"
+    print("hull self test: found the planted matrix, read 1 tick, refused 1.5 ticks and a rare translation")
+    return 0
+
+
 if __name__ == "__main__":
     import sys
 
-    raise SystemExit(self_test() or self_test_packet() or self_test_pick())
+    raise SystemExit(self_test() or self_test_packet() or self_test_pick() or self_test_hull())

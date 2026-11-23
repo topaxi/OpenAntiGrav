@@ -42,8 +42,8 @@ use std::sync::Arc;
 use oag_rcs::gcn::{self, Stage};
 use oag_rcs::rcsmodel::psp2::{self, material::Material};
 
+use super::Report;
 use super::normal_map;
-use super::{Report, decode_material_texture};
 use crate::mesh::rcs::Textures;
 use crate::mesh::{Emissive, ModelTexture, PROGRAM_OMEGA_ROCK, PROGRAM_OMEGA_SNOW, slots};
 
@@ -336,11 +336,7 @@ pub(super) fn plan(
             let path = material.sampler(hash).filter(|p| !p.is_empty())?;
             cache
                 .entry(path.to_string())
-                .or_insert_with(|| {
-                    textures(path)
-                        .and_then(|blob| decode_material_texture(path, &blob, report))
-                        .map(Arc::new)
-                })
+                .or_insert_with(|| super::picture_memo::picture(path, textures, report))
                 .clone()
         };
         let (first, small, large, entries) = if rock {

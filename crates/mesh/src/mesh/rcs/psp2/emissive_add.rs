@@ -44,7 +44,7 @@ use std::sync::Arc;
 use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::{self, material::Material};
 
-use super::{Report, decode_material_texture};
+use super::Report;
 use crate::mesh::rcs::Textures;
 use crate::mesh::{
     Emissive, ModelTexture, PROGRAM_EMISSIVE_ADD, PROGRAM_EMISSIVE_ALPHA_MASK, PROGRAM_PICTURE_ADD,
@@ -228,11 +228,7 @@ pub(super) fn plan(
             Some(path) => {
                 let loaded = cache
                     .entry(path.to_string())
-                    .or_insert_with(|| {
-                        textures(path)
-                            .and_then(|blob| decode_material_texture(path, &blob, report))
-                            .map(Arc::new)
-                    })
+                    .or_insert_with(|| super::picture_memo::picture(path, textures, report))
                     .clone();
                 if loaded.is_none() {
                     report.emissive_add_unread += 1;

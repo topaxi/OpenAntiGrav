@@ -820,7 +820,7 @@ two boots): the sun reaches the road only in the baked `LM.a` streaks, and no cr
 gap is not `S`.** On Metro Park's grid every craft on the sunlit brick and grass casts one.
 
 **Why `Title::original_shadows` stays `Unbuilt` on Omega.** This project's coverage mode already applies Omega's receiver law
-(`shadowed()` removes the surface's own sun share, `sun_removed`, where `sun_known`), and its craft maps are fitted along the
+(`shadowed()` removes the surface's own sun share, `sun_removed`, where `SunTerms::known`), and its craft maps are fitted along the
 circuit's `light.direction`, which is Omega's axis. Rendered with `--shadows original`, Metro Park's player shadow on the left
 grass lands where the original's does, and the other craft's shadows fall on the same side with the same elongation (offset by
 the grid poses, which differ between ours and the original). But the same tier turns on HD's per-craft **sun-occlusion and
@@ -832,7 +832,7 @@ and `S` is 1 there on the grid). Against the adopted original frame the hull box
 cancelled by a darkening the original does not apply, not a matched shadow. Omega's hull reads `S` from the same cascades, not
 HD's road mask. Scored on the original's shadow mask (Metro Park, hull excluded, ours `off` then `original`): mean absolute grey
 43.85 to 42.57, bias -1.04 to -7.99 (the mask is from a second boot of the port, whole-frame MAE 13.2 against the adopted frame).
-That the receiver law holds on each Omega material is read from the shader (`sun_known` is set on the generic combine), not
+That the receiver law holds on each Omega material is read from the shader (`SunTerms::known` is set on the generic combine), not
 checked per draw: Metro Park's brick, its conditional-blender grass and the tarmac may each fall back to the `MAP_STRENGTH`
 multiply.
 

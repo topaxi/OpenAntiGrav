@@ -20,7 +20,7 @@ use oag_core::math::{Mat4, Vec3};
 use oag_rcs::gcn::signed_samplers;
 use oag_rcs::rcsmodel::psp2::{self, normal_map::Choice};
 
-use super::{Report, decode_material_texture, twin_blend};
+use super::{Report, twin_blend};
 use crate::mesh::ModelTexture;
 use crate::mesh::rcs::{Textures, pack_tangent};
 
@@ -157,10 +157,7 @@ pub(super) fn plan(
                         Choice::Ambiguous(_) => Outcome::Ambiguous,
                         Choice::Bound(path) => pictures
                             .entry(path)
-                            .or_insert_with(|| {
-                                let blob = textures(path)?;
-                                decode_material_texture(path, &blob, report).map(Arc::new)
-                            })
+                            .or_insert_with(|| super::picture_memo::picture(path, textures, report))
                             .clone()
                             .map_or(Outcome::Unread, Outcome::Bound),
                     }

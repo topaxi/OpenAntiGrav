@@ -172,6 +172,9 @@ pub struct Options {
     /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
     /// own docs.
     pub menu_ticker: Option<String>,
+    /// With `--menu-page grid-select`/`cell-select`, the seconds the card title's glow ladder has run -
+    /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
+    pub menu_title_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -950,6 +953,7 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
                     (options.menu_entry_seconds, options.menu_picker_step_seconds),
+                    options.menu_title_seconds,
                     &crate::boot::fonts::legend_ink(&font, buttons_font.as_ref()),
                     footer,
                 )?;

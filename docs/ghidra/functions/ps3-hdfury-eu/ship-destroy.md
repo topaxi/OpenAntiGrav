@@ -96,7 +96,7 @@ says "live".
 | 2 | 4, on entry | **The blast**: `Ship_PlayDestroyExplosion` spawns `WO_SHIP_EXPLOSION` (modes 13 and 21, whose model set is `<team>_n1` on 2048's loader: `WO_NITRO_SHIP_DEATH`) once, with the live model's node matrix (`*(model+0x38)`): its three rows as the rotation and **translation `t - 4.0 * row1`**, 4 units back along the node's second row (`0x000d9810`-`0x000d9874`: `lvlx v1,0,r9` at `0x000d9824` splats `4.0` from `0x008a8c54` = TOC `-0x4884`, `vmaddfp` then `vsubfp` off the `+0x30` row) | `0x000d98fc`, `0x000d9acc` | 80 | **ported**: `FUN_811bc2bc` names both; `WO_SHIP_EXPLOSION` thrown. The `_n1` model set's `WO_NITRO_SHIP_DEATH` (modes 13 and 21) is not wired | **ported**: `FUN_012f7a60` names both; same, `WO_NITRO_SHIP_DEATH` not wired |
 | 3 | 4, on entry | **Sound**: a new emitter (`0xb0` bytes, `+0x5ef8`) rides the body matrix (`body+0x1d0`). Local player: bank cue `EXPLBIG_PC` (`Sound_PlayBankCue`, flags `0x400`) and the looped `~SHIP_DESTROYED` into handle `+0x7a34`, distance params set `0x1c`. Others: `EXPLBIG`, params `0x1d`, no handle. Then (ordinary races only, not modes 8, 13 or MP) `~SHIP_ONFIRE` on the craft's own emitter `+0x5ee0`, handle `+0x7a30`, volume 1.0. Modes 6 and 14 play bank cue `shipdestroy` instead and skip all of this. | `0x000d9778`, `0x000d97e4`, `0x000d9a18`, `0x000e2358`, `0x000e299c` | 82 | checked, applies, not wired: same five strings, same branch shape; a `--dry-run` of the extracted `PCSF00007` with the four names added to the load reports every 2048 race cue "names no cue" (not only these), so whether they resolve is unread and `DestroyedCraft::HD_BLOWUP` keeps `~BLOWUP` there | checked, differs: `ShipDestroyed_Player` / `ShipDestroyed_NPC` (Wwise) beside `EXPLBIG`, `_SHIP_ONFIRE` (sic); no `.bnk` carries their ids (Z5), so not wired and `~BLOWUP` -> `_NGP_ShipDeath` stays |
 | 4 | 4, on entry | **Camera shake** (local only): `0x000a3528(camera[pad], 0.3, 0.4, 3)`, the same arguments as Pulse's `Camera_ArmShake(0.3, 0.4, camera, 3)` at its state 5 | `0x000d976c` | 65 | not read | not read |
-| 5 | 4, on entry | **Destroy camera** (local craft, or a remote one `RaceManager` `0x00055e30` says is watched; not if the camera is already in mode 2): HUD node `*0x009879dc` loses bits `1\|2\|4` of `+0x34` (hidden), `Camera_SetSubject(cam, ship, 1)` (station from `ship+0x7984` else picked near the body, field `fov + rand`, mode 10), `cam+0x34 \|= 6`, then `Camera_SetMode(cam, 8)`; modes 6 and 14 instead `0x000a9b18(cam, subject)`, `+0x6ad4 = 0`, mode 2. Single player also `0x000884d8(g_Hud)`, `*0xabc170+0x5c = 0` and `RaceManager+0x2dc4 = 4.5`. With `cam+0x34 & 6`, `cam+0x1ec` this craft and mode 8, the engine-flare gate in [engine-trail.md](engine-trail.md) (`0x002a0b84`, modes `{2, 6, 7, 8, 11}`) skips the subject's flare quad: no flare on the player's wreck (65, the two reads joined, not run). The view itself (mode 8's per-frame law) is unread: open item 3. | `0x000e21e4`-`0x000e2298`, `0x000e2c6c` | 78 | checked, differs: same calls, `Camera_SetMode(cam, 9)` (`FUN_8121963a`), not 8 | checked, differs: mode 9 (`FUN_01382720`), like 2048 |
+| 5 | 4, on entry | **Destroy camera** (local craft, or a remote one `RaceManager` `0x00055e30` says is watched; not if the camera is already in mode 2): HUD node `*0x009879dc` loses bits `1\|2\|4` of `+0x34` (hidden), `Camera_SetSubject(cam, ship, 1)` (station from `ship+0x7984` else picked near the body, field `fov + rand`, mode 10), `cam+0x34 \|= 6`, then `Camera_SetMode(cam, 8)`; modes 6 and 14 instead `0x000a9b18(cam, subject)`, `+0x6ad4 = 0`, mode 2. Single player also `0x000884d8(g_Hud)`, `*0xabc170+0x5c = 0` and `RaceManager+0x2dc4 = 4.5`. With `cam+0x34 & 6`, `cam+0x1ec` this craft and mode 8, the engine-flare gate in [engine-trail.md](engine-trail.md) (`0x002a0b84`, modes `{2, 6, 7, 8, 11}`) skips the subject's flare quad: no flare on the player's wreck (65, the two reads joined, not run). The view itself (mode 8's per-frame law) is read in [destroy-camera.md](destroy-camera.md): Pulse's mode 5 station view with substepped easing, random rate factors and a look-at wobble, handed back by the camera's 8 s clock. | `0x000e21e4`-`0x000e2298`, `0x000e2c6c` | 78 | checked, differs: same calls, `Camera_SetMode(cam, 9)` (`FUN_8121963a`), not 8 | checked, differs: mode 9 (`FUN_01382720`), like 2048 |
 | 6 | 4, on entry | **The wreck tumbles on its own collider**: `CollisionWorld_ReplaceObject(g_CollisionWorld, +0x6948, +0x694c)` swaps the hull box for the compound collider `Ship_Construct` builds at `+0x694c` (`0x160` bytes, type 5, child shapes sized off the hull box, `0x000ded30`-`0x000defb0`); `body+0x4cc = +0x694c`; `Body_SetBoxInertia(body, 1, 12, 6, 12)`; `body+4 = 1`; `*(body)+0x40 = 0`. `Ship_ApplyDeathKick_q` throws a random impulse at the hull node (tuning `0x008c15e0 + 0x18..0x34`: 4000, 8000, 200, 3500, 1, 15, 16, 2000). The swap, the inertia and `~SHIP_ONFIRE` share one path: single-player modes (`<= 0xf`) other than 8 and 13. Modes 8 and 13 set `body+0x4c8 \|= 2` instead; the MP modes do neither. The kick runs in every mode but 6 and 14. | `0x000e237c`-`0x000e23dc`, `0x000e2338` | 80 | checked, applies, not wired: `FUN_811d267a(+0x5f84, +0x5f8c)`, `FUN_811d35a8(1.0, .., 6.0, body)` | ported law, other code: inverse inertia written inline as `1/15, 1/24, 1/15`, which is `Body_SetBoxInertia(1, 12, 6, 12)` evaluated; collider `+0x70d8` into `+0x4c8` |
 | 7 | 4, on entry | **Rumble**: own pad `Rumble_QueueOnPad(.., pad, 0x3c)` (`Ship_Exploding_Player_Rumble`, 60); an opponent's blast queues `0x3b` (59, `Ship_Exploding_Rumble`) on every pad, positioned at the live model. Not in Demo. | `0x000e2408`, `0x000e2acc` | 85 | checked, differs: no rumble call (Vita) | checked, applies, not wired: `FUN_0174a880(.., 0x3c)` and the `0x3b` loop |
 | 8 | 4, on entry | **Out of the race**: `+0x6a64 \|= 0x1000` (the bit [eliminator-flip.md](eliminator-flip.md) and [detonator-mode.md](detonator-mode.md) read), deaths `+0x6f78 += 1`, announcer `cont_elim` (`Sound_QueueAnnouncerCue`) unless Eliminator, Demo or `RaceManager+0x2cd5`; `0x000d0128` (local: two rumble writes; `0x0011a0e8` on `+0x6f60`) | `0x000e2418`, `0x000e2320` | 85 | checked, applies, not wired | checked, applies, not wired (`+0x71f5 \|= 0x10`) |
@@ -122,7 +122,7 @@ the wreck rule is `Looks::hull_wreck`. 2048 and Omega run `DestroyedCraft::HD` t
 | 2 | wired: `WO_SHIP_EXPLOSION` on entering state 4, `4.0` rows behind the model, no Pulse shockwave | `craft_flash`, `wreck_fx::throw_wreck_explosion` |
 | 3 | wired 2026-11-23 (`hd-wreck-sound`): see "Sound on HD" below | `oag_raceplay::destroyed_cues`, `oag_sound::sfx::slot_held` |
 | 4 | not wired (65) | open |
-| 5 | not wired: HD keeps the existing destroy camera, **inherited from Pulse** (`DestroyedCraft::camera`), until mode 8's view is read (open item 3) | open |
+| 5 | not wired: HD keeps the existing destroy camera, **inherited from Pulse** (`DestroyedCraft::camera`); mode 8's view is read and ready to wire ([destroy-camera.md](destroy-camera.md), "Ready to wire") | open |
 | 6 | **not wired**: the compound collider and death kick (open items 1 and 2) | open |
 | 7 | not wired | open |
 | 8, 13, 15, 16 | the Eliminator route is the existing Pulse mechanism, unchanged and with Pulse's timers (`raceplay::eliminator`) | open for HD's own timers |
@@ -168,8 +168,8 @@ everywhere, and each names `WO_SHIP_EXPLOSION` (`Trigger::WreckExplosion`) and
 `WO_SHIP_DEATH_DAMAGE_PLUME` (`Trigger::WreckPlume`) in its effects table; Pulse's two per-locator
 wreck effects stay unset, as on HD. Rows 1, 2, 9, 10 and 12 follow HD's wiring and carry its status
 above; rows 3 to 7, 11's `body+0x210` half and 14 are open exactly as on HD. The destroy camera is
-HD's inherited one: the twins' mode 9 (`FUN_8121963a`, `FUN_01382720`) is unread, so
-`DestroyedCraft::camera` stays labelled inherited from Pulse. Not run against Vita3K or shadPS4.
+HD's inherited one: the twins' mode 9 (`Camera_SetMode` `0x8121963a`, `0x01382720`) is read in
+[destroy-camera.md](destroy-camera.md) and not wired, so `DestroyedCraft::camera` stays labelled inherited from Pulse. Not run against Vita3K or shadPS4.
 Our frames (`--race --force-wreck 40:7 --opponents`, Altima on 2048, Modesto Heights on Omega,
 960x540, ticks 60 and 100): an orange fireball with white smoke puffs and sparks at the blast, the
 wreck lying inside it, so the HD black-ball picture is not seen here. On 2048 the tick-60 blast has a hard vertical
@@ -180,6 +180,46 @@ edge on its right (a clipped sprite), not looked into.
 Ours' frames (`--race --force-wreck 60:7`, Talon's Junction grid, 1280x720): the hull is charred
 the tick state 4 begins, a white flash covers it for about 0.1 s, a black smoke ball with sparks
 follows, then the scorched wreck lies with a bright plume at its tail.
+
+### The black blast (HD, 2026-11-23, our frames, confidence 85 for the data, the original's picture unknown)
+
+Bisected on `--race --force-wreck 40:7` (Talon's Junction, 960x540, ticks 45 to 60) by silencing
+emitters (`per_emission = (0, 0)`): the black ball at tick 54 to 60 is `WO_SHIP_EXPLOSION`'s **root
+emitter** alone (alpha-over, 2 per emission, 180 ticks); muting the whole effect removes the ball
+and the sparks, muting the other eight emitters leaves it. The cause is in the file's colour
+table, not in a blend mode, a missing texture or the decode:
+
+- All nine sprites resolve (`/data/psys/tex/<stem>.gtf` in DATA00 to DATA06) and decode; the root's
+  is `smoke_new4_8x4`, a 1024x512 8x4 flipbook that is **fire, yellow and white-hot cells, not
+  smoke grey**, with alpha. `FIREBALL_ADDITIVE`'s is a 1024x1024 8x8 orange fire flipbook.
+- The root's `colour_mode` (`+0xbc`) is **3** (so are `trail` and `TRAIL_SMOKE`; the other six
+  are 0), a value nothing in `docs/` reads. Its 256-entry table is white at entry 0, then
+  **black with alpha 1 for entries 1 to 31**, grey at 32 and 33, white from 40. Sprite times that
+  table is black for the first eighth of a particle's life (age 0.12, about 22 ticks of 180),
+  which is where the ball is.
+- 2048's `WO_SHIP_EXPLOSION` (`data/particles/` and `particles2048/`) authors the **same** table
+  on its root emitter and the same black on `TRAIL_SMOKE`, so 2048 is not a counter-example of a
+  different file: it draws a small fireball with dark smoke at the same ticks, and its sprites
+  are not the white-hot flipbook. The HD root pairs a black ramp with fire art.
+- Evidence it is the table: replacing `sprite = colour * texel` with `texel.rgb` in
+  `psys.wesl` (a probe, not kept) draws an orange fireball with a white core at ticks 54 and 60.
+  That is the sprite's own colour and **not** a fix: it ignores a table the file authors.
+
+Two things the HD effect needs that this page cannot supply, both unread:
+
+1. **What `colour_mode` 3 does on HD.** Pulse knows `2` (random entry) and the over-life walk
+   (`pob.md`, "The colour table is RGB-only"). If HD's mode 3 does not take the table's RGB
+   (for instance it only drives alpha or brightness), the ramp is not a multiply and the fire
+   shows. If it does, the original's first 0.4 s of the blast is dark too.
+2. **HD's frame advance and flipbook direction** (`particle-triggers.md`, "What was missing: the
+   sprites"). With `WO_SHIP_EXPLOSION` listed in `Effects::sprites` the additive fireball draws
+   a white blowout at ticks 45 to 50 (frame advance on or off, same picture) that the procedural
+   profile did not, so listing it **without** this read replaces a black ball with a white one.
+   It was not listed and no code changed.
+
+Not shipped: no frame, shader or table was changed. Pinned: `psys_ground_truth.rs`,
+`hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp` (the sprite resolves, the
+table is black for entries 1 to 31).
 
 **Against Pulse.** Pulse swaps to the wreck at state 5, 0.5 s after the blast, throws
 `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` at every wreck locator then, and
@@ -255,8 +295,8 @@ the live model still `wreck`.
 2. **The wreck collider's child shapes**: `Ship_Construct` `0x000ded10`-`0x000defb0`
    builds a `0x160`-byte compound and adds `0x90`-byte children (radius at `+0x88`,
    `0x00039c90`); count and placement unread.
-3. **Camera mode 8's view** (HD) against Pulse's mode 5 law; `Camera_SetMode`'s
-   enter table `0x008a7e84` entry 8.
+3. ~~**Camera mode 8's view** (HD) against Pulse's mode 5 law~~ Read 2026-11-23:
+   [destroy-camera.md](destroy-camera.md) (enter entry 8 at `0x000abd14` writes the field `35.0`).
 4. **The `+0x7e40` call on the 4 -> 5 edge** (`0x00104f18`, `0x00105450`). Pointer (2026-11-23,
    [zone-destroy.md](zone-destroy.md), "Functions"): `+0x7e40` is the debris manager and `0x00104f18` is
    `DebrisManager_SpawnShipDebris`, which throws **19 `Ship_Damage%d` pieces** at the body matrix with

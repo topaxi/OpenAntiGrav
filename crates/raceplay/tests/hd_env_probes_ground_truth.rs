@@ -14,26 +14,6 @@ use oag_raceplay as race;
 const HD: &str = "data/images/hdfury-ps3-eu-dec.iso";
 const PULSE: &str = "data/images/pulse-psp-usa.chd";
 
-/// Every HD circuit on the disc, forward. Each loads its own `.probes`.
-const ENVIRONMENTS: &[&str] = &[
-    "amphiseum",
-    "modesto_heights",
-    "talons_junction",
-    "tech_de_ra",
-    "zone_1",
-    "zone_2",
-    "zone_3",
-    "zone_4",
-    "01_vineta_k",
-    "02_track",
-    "03_track",
-    "04_chenghou_project",
-    "05_ubermall",
-    "10_sebenco_climb",
-    "12_sol_2",
-    "15_anulpha_pass",
-];
-
 /// HD's original runs no cage off the track header (`docs/ghidra/functions/ps3-hdfury-eu/
 /// collision-cage.md`): on Chenghou Project ours pulled the craft down on both jumps with a
 /// one-tick `-35` vertical velocity step the original never shows. Chenghou is the one
@@ -70,18 +50,19 @@ fn load(image: &str, track: Option<&str>) -> Option<race::Loaded> {
 #[test]
 #[ignore = "needs a disc image in data/images/"]
 fn an_hd_circuit_loads_its_own_probes() {
-    for (track, probes) in [
-        ("/data/environments/talons_junction/track.vex", 862),
-        ("/data/environments/talons_junction/track_reversed.vex", 862),
-    ] {
-        let Some(loaded) = load(HD, Some(track)) else {
-            return;
-        };
-        let line = loaded.report.iter().find(|l| l.contains(".probes"));
-        let found = loaded.probes.hd.as_ref().map(oag_vex::probes::Probes::len);
-        assert_eq!(found, Some(probes), "{track}: {line:?}");
-        assert!(loaded.probes.sh.is_none(), "{track}: HD binds no SH probes");
-    }
+    let track = "/data/environments/talons_junction/track_reversed.vex";
+    let Some(loaded) = load(HD, Some(track)) else {
+        return;
+    };
+    loads_its_own_probes(track, &loaded);
+}
+
+/// Talon's Junction's 862 probes, forward and reversed, and no SH probes beside them.
+fn loads_its_own_probes(track: &str, loaded: &race::Loaded) {
+    let line = loaded.report.iter().find(|l| l.contains(".probes"));
+    let found = loaded.probes.hd.as_ref().map(oag_vex::probes::Probes::len);
+    assert_eq!(found, Some(862), "{track}: {line:?}");
+    assert!(loaded.probes.sh.is_none(), "{track}: HD binds no SH probes");
 }
 
 #[test]
@@ -100,29 +81,64 @@ fn a_title_with_no_probes_loads_none() {
 /// Every circuit loads its own probes, and **no circuit surface is tagged as reading the
 /// reflection probe**: the tag is for hull materials, and a track (water included, whose
 /// program reads a probe of its own) keeps the glow index its own family took. A hull
-/// is tagged on every circuit, which is the positive control.
-#[test]
-#[ignore = "needs a disc image in data/images/"]
-fn every_circuit_loads_probes_and_none_of_its_surfaces_reflects_them() {
-    for environment in ENVIRONMENTS {
-        let track = format!("/data/environments/{environment}/track.vex");
-        let Some(loaded) = load(HD, Some(&track)) else {
-            return;
-        };
-        runs_no_cage(environment, &loaded);
-        let count = loaded.probes.hd.as_ref().map(oag_vex::probes::Probes::len);
-        assert!(count.is_some_and(|n| n >= 2), "{environment}: {count:?}");
-        let tagged = |line: &&String| line.contains("reading the reflection probe");
-        for line in loaded.report.iter().filter(tagged) {
-            assert!(
-                line.starts_with("Data\\Ships\\"),
-                "{environment}: a surface that is not a hull was tagged: {line}"
-            );
-        }
+/// is tagged on every circuit, which is the positive control. Talon's Junction's forward
+/// load also carries [`an_hd_circuit_loads_its_own_probes`]'s count.
+fn every_circuit_loads_probes_and_none_of_its_surfaces_reflects_them(environment: &str) {
+    let track = format!("/data/environments/{environment}/track.vex");
+    let Some(loaded) = load(HD, Some(&track)) else {
+        return;
+    };
+    if environment == "talons_junction" {
+        loads_its_own_probes(&track, &loaded);
+    }
+    runs_no_cage(environment, &loaded);
+    let count = loaded.probes.hd.as_ref().map(oag_vex::probes::Probes::len);
+    assert!(count.is_some_and(|n| n >= 2), "{environment}: {count:?}");
+    let tagged = |line: &&String| line.contains("reading the reflection probe");
+    for line in loaded.report.iter().filter(tagged) {
         assert!(
-            loaded.report.iter().any(|line| tagged(&line)),
-            "{environment}: no hull was tagged at all"
+            line.starts_with("Data\\Ships\\"),
+            "{environment}: a surface that is not a hull was tagged: {line}"
         );
+    }
+    assert!(
+        loaded.report.iter().any(|line| tagged(&line)),
+        "{environment}: no hull was tagged at all"
+    );
+}
+
+/// One test per HD circuit on the disc, forward: each is a whole race load, so the circuits
+/// run side by side rather than in series in one test.
+mod every_circuit {
+    macro_rules! circuits {
+        ($($name:ident: $environment:literal;)*) => {$(
+            #[test]
+            #[ignore = "needs a disc image in data/images/"]
+            fn $name() {
+                super::every_circuit_loads_probes_and_none_of_its_surfaces_reflects_them(
+                    $environment,
+                );
+            }
+        )*};
+    }
+
+    circuits! {
+        amphiseum: "amphiseum";
+        modesto_heights: "modesto_heights";
+        talons_junction: "talons_junction";
+        tech_de_ra: "tech_de_ra";
+        zone_1: "zone_1";
+        zone_2: "zone_2";
+        zone_3: "zone_3";
+        zone_4: "zone_4";
+        vineta_k: "01_vineta_k";
+        track_02: "02_track";
+        track_03: "03_track";
+        chenghou_project: "04_chenghou_project";
+        ubermall: "05_ubermall";
+        sebenco_climb: "10_sebenco_climb";
+        sol_2: "12_sol_2";
+        anulpha_pass: "15_anulpha_pass";
     }
 }
 

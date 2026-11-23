@@ -330,7 +330,7 @@ The node matrix at `ship+0x40` equals the body on all eight craft on every pause
 
 **So a pair that takes the camera from the push buffer and the craft from RAM draws every craft 1 or 2 ticks ahead of its camera**: smaller, higher and farther up the road. On the stored `hd-race/talons-pack`, ours re-rendered with every craft moved back along its own velocity (sigma 7, mean absolute RGB): frame **18.82 at 0 ticks, 17.98 at 1, 21.80 at 2**; the hull's box (`640,330 640x420`) **17.29, 13.34, 17.47**; at one tick the hull is the original's size and sits where the original's does. That pair's skew is one tick. The earlier note that `run2`'s opponent wanted no rewind is not borne out by the push buffer (`r1`, `r2`: opponents skewed with the player).
 
-**Open, ready to wire (tooling, no engine change):** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
+**Wired for `--detonator` (2026-11-23, `det-camera`, "Detonator pairs: the hull's frame pose"); still open for `--field`:** `rpcs3-hd-pair.py --field` should read the player's hull matrix from the push-buffer regions it already dumps, record the whole-tick skew in `pair.json` (`original.presented_lag.craft_ticks`), refuse a pause where it is not within 0.1 of a whole number, and write the field with every craft moved back that many ticks of its own velocity (or take each hull's translation from the push buffer outright). The HUD clock's 3-tick text lag is a separate thing and stays. Until then a moving HD pair is checked with `hd-pair-lag-scan.py`.
 
 ## Pulse PS2: a race pair for every circuit (2026-11-11, `gallery-pulse-ps2`)
 
@@ -1860,8 +1860,8 @@ read side by side):
 | Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
 | Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % (7.0 % re-made) | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` on both sides since 2026-10-29 (it was `1/12`: four DLC teams) |
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
-| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % | the cursor hex glows in the original, plain in ours; the footer ticker scrolls in the original and is empty in ours at tick 0 |
-| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % | closest of all Pulse: the same glow and ticker only |
+| Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % (0.57 % on a 2026-11-23 grab, 1.32 % before the ticker and tag reached the campaign still) | the footer's prompt glyph rings and one bar row (the cursor halo is the bloom, drawn since 2026-10-29) |
+| Pulse Cell Selection | 0.077 / 0.39 / 4.3 | 1.8 % (0.65 % re-made 2026-11-23 on one fresh `theirs.png`, 2.14 % with main's binary on the same frame; see "Pulse Cell Selection: the footer, the tag and the title's glow phase" below) | what is left: the glyph rings of the four footer prompts (ours' rings are a half-texel softer) and one row of the silver bar (y 249) |
 | Pure Team Selection | 0.101 / 0.29 / 6.9 | 8.6 % (7.5 % re-made 2026-10-29, eight teams, Feisar to Harimau, as the original; 3.2 % on 2026-11-01 with the list in the menu face at the chain's 18-line pitch, the stat labels in the `Stats` face and the hull at the original's slideshow seconds (7.57 % the same fresh capture before)) | closed 2026-10-29: 17 teams listed (DLC and gated). Closed 2026-11-01: the list type (the `<Menu>` names no `font`, so it draws in the menu face at the chain's 18-line pitch, where it was the `default` role's 13/22 scale), the hull's angle (the three stills `Info`/`Side`/`Top` change every 2 s, the pair now at the original's seconds since entry), the stat labels (`font="Stats"` is Pure's `LTe50325.fnt`). Left: the description line the original types along the bottom, the two frame rules, the cursor arrow |
 | Pure Track Selection (single race) | 0.092 / 0.40 / 5.0 | 5.5 % (5.6 % re-made 2026-10-29 with the type-in; 4.2 % on 2026-11-01 with no context line in the still and the `Stats` face for the labels, cells and the description (5.63 % the same fresh capture before)) | what is left: the record separators (the original's are small mid-height dots with wide gaps, no `'` or `"` at 8x, and no Latin-1 character as the separator matches), the frame's dashed rule at y 217 and solid rule at y 251, the picker's scroll arrows against the original's pink cursor arrow. Closed 2026-11-01: the context line (the original draws none; the live screen keeps ours), the `m` case and the label type (the `Stats` face) |
 | Pure Single Player (mode) | 0.074 / 0.40 / 3.0 | 3.4 % | no context line here; the hint line and the `BACK` prompt differ (below) |
@@ -1911,6 +1911,30 @@ scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --diff
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
+
+Claim: the Cell Selection pair has a lower share of pixels differing by more than 40 grey, whole frame and in the region of each item fixed, on one fresh
+`theirs.png` (480 x 272, ticker `TKR_TOURTIM`, head 87, the title glow byte 205, movie frame 42). Whole frame **2.14 % to 0.65 %** (main's binary against
+this branch, same `theirs.png`, same movie frame; the committed pair on `main` reads 2.97 %, its frame being another grab):
+
+| Region (x, y, w, h) | before | after | what fixed it |
+| --- | ---: | ---: | --- |
+| footer ticker box (76, 236, 392, 18) | 1127 px | 370 px | the campaign still drew its ticker with no tips, so `--menu-ticker` reached no pixel on Cell or Grid Selection: it now takes the picker footer (`menu_page::picker_footer`, the tips from the records and the pin) |
+| footer tag box (12, 236, 64, 18) | 142 px | 5 px | the pair script reads the profile's tag (`profile + 0x457`, `psp_ticker.profile_tag`, `AAA`) and stores it as ours' `player.tag`; the campaign still tags its legend (`footer_tag`) |
+| card title glow (260, 34, 150, 50) | 1065 px | 18 px | the title's `pulse="true"` ladder and the `Selector`'s are two counters in the original: the pair script reads the title's glow-mask byte over its glyph box (`220 - 15 k`, EDRAM, CPU stopped) and passes `--menu-title-seconds`, apart from `--menu-picker-seconds` (the Selector's phase) |
+| everything above y 230 | 1100 px | 53 px | the title row above and the rest: the backdrop movie is drawn at frame 42 on both sides (`compare-menu-movie-phase.py`; at frame zero its bright streak at (440, 136) alone cost 693 px) |
+| cursor hex (100, 70, 100, 100) | 0 px, mean abs 0.14 | same | the halo is the front end's bloom, drawn since `pulse-frontend-bloom`: nothing left to draw |
+| footer prompt glyph rings (four boxes) | 419 px | 419 px | open: ours' rings are a half-texel softer than the original's |
+| silver bar, row y 249 (the lower strip's first row) | 341 px | 341 px | open: theirs shows the background there, ours a 55 % blend of a grey; rows 250 and on match to 1 grey |
+
+`scripts/psp-menu-pair.py`: `tick:480` runs before `shot:grid` and `shot:cell` (`TICKERED`), the same pin `team` had. The ticker's lag fit (0 or 1 frame) now means
+something on these pages (it settled on 1 and on 0 on two grabs). `--menu-title-seconds` is read back from the byte at the grab: 0.275 on a grid grab (byte 145), 0.075 on the cell
+grab (205). One cell grab found no ladder byte over the title box (the line `title glow: no ladder byte` is printed and ours keeps the Selector's phase for it); run again.
+The title box is `TITLE_BOX`: Cell (262, 30, 420, 60), Grid (262, 88, 340, 116).
+
+**Checked, not wired: Grid Selection's title** is pinned the same way and measured on one grab (title box 0 px over 40 grey); HD and Omega draw no pulse text (`frontend_glow` is `None`), so
+`--menu-title-seconds` is Pulse's alone (`campaign_page` sets it only in the Pulse branch).
 
 ### The backdrop movie's phase (2026-11-05, `pulse-track-select-streaks`)
 
@@ -2087,7 +2111,7 @@ head and at the head plus 1 and keeping the better ticker box (`original.footer_
 Grab C's whole-frame grey is high on both sides because the menu backdrop movie's phase differs (a bright streak in the original that ours' frame zero does not draw): that
 is not the footer. The ticker box keeps 5.4 to 6.3 after the message and the position match: the silver bar's gradient and glyph antialiasing (a shift of one pixel in any
 direction costs 25 to 70). **The left tag box is the profile's footer tag** (`profile + 0x457`, `AAA` on a fresh profile, read by `Ticker_Update`'s tag branch) and is blank in
-ours: with theirs' tag box pasted on grab C the footer goes 6.95 to 4.90. The player tag is a planned feature (one shared name, a 3-character tag on Pulse and Pure); open, not built.
+ours: with theirs' tag box pasted on grab C the footer goes 6.95 to 4.90. The player tag is a planned feature (one shared name, a 3-character tag on Pulse and Pure); open, not built. (The compare route stores the original's tag as `player.tag` in ours' profile, which `menu-grid` and `menu-cell` read from RAM, see below; `menu-team` still shows a blank tag box.)
 **PS2** ships the same code (`NewsItemBarText1`, `PI_News` and `NewsFrequency` are in `SCES_547.48`) and the same list less three rows (121; `pulses_news_items_are_the_discs_list`),
 and ours draws it on the PS2 ship select at the PS2 viewport (113, 392, 493 x 53), inherited from PSP. **Pure** ships no ticker: its `BOOT.BIN` on both pressings has no
 `TKR_`, `NewsItemBarText` or `PI_News` string and its `Data.wad` no `news` plugin; its `TextInfoIsAlwaysLast` is the description box.
@@ -2326,6 +2350,44 @@ manifests are developer material, not a publishing set.
 (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "Wired").
 
 What differs, by region and size: the Detonator thread's "Render accuracy" section.
+
+### The hull's frame pose in a Detonator pair (2026-11-23, `det-camera`)
+
+**Report (maintainer, from the pairs):** "ours' shots use the wrong camera setting/distance, the original is 'close', ours is 'far'."
+**True; the camera was not the cause.** `--camera-pose` and `--camera-fov` are honoured (the original's eye is 11.7 units from its RAM
+body, the close view; ours' craft attitude is within 1 degree of the original's). Two things made ours' hull small and high:
+
+1. **The craft was fed at the RAM body, the camera at the push buffer, and the pause leaves RAM 1 to 4 ticks ahead of the frame**
+   (the skew section above). The push buffer's own hull matrix read **2.06, 1.99, 2.0 and 4.05 ticks** behind the body along its
+   velocity on four pauses (off-axis 0.1 to 0.4 units, `pad` and `mines-ahead` 2, `cannon-volley` 4, the cannon frame being slower to
+   present). `scripts/ps3_pose.py` (`hull_matrices`, `hull_near`, `whole_ticks`, `python3 scripts/ps3_pose.py` for the self test) finds it;
+   `rpcs3-hd-detonator-shots.py` records it as `ship.hull_pb` and saves the three push-buffer blobs beside each frame;
+   `rpcs3-hd-pair.py --detonator` feeds ours' `--pose` and heading from it, records `original.presented_lag.craft_ticks`, and refuses a pause
+   with no hull or a skew that is not within 0.1 of a whole tick.
+2. **Detonator draws the hull at 0.63, ours at 0.75** (`ps3-hdfury-eu/camera.md`, "The drawn hull in Detonator is 0.63"): with the
+   frame pose fed and nothing else changed ours' hull was 19 percent too wide (315 px against 266). Fixed in the engine.
+
+Hull rim box (white rim, `min(r,g,b) > 200` inside `x 700..1220 y 600..1060`), x0,y0 to x1,y1, in a 1920x1080 frame; a new grab of each
+pair on one boot (`pad` and `mines-ahead` together at lap clock 2.03 and 2.67, `cannon-volley` 2.23 after a 1.84 s volley):
+
+| Pair | Original | Ours before (RAM body, 0.75) | Ours, frame pose only | Ours after (frame pose, 0.63) |
+| --- | --- | --- | --- | --- |
+| `mines-ahead` | 823,712 to 1089,960 (266x248) | 849,613 to 1078,747 (229x134) | 805,703 to 1120,1018 (315x315) | 829,710 to 1096,942 (267x232) |
+| `cannon-volley` | 832,709 to 1098,959 (266x250) | 873,600 to 1051,648 (rim sparse) | 816,702 to 1131,1015 | 841,708 to 1107,939 (266x231) |
+| `pad` | 829,712 to 1098,972 (269x260) | 845,615 to 1079,757 (234x142) | 811,704 to 1130,1027 | 836,711 to 1105,948 (269x237) |
+
+Top, left and right edges are within 9 px after; the bottom is 18 to 24 px short: the original's engine nozzles and exhaust flare reach
+lower than ours' and ours' hull rear is lit blue where the original's is dark metal (open, not tuned). Whole-frame mean absolute grey
+difference (0-255) and RMSE (0-1) against the same new `theirs.png`, before then after: `mines-ahead` 19.81 to 19.81 and 0.174 to 0.175,
+`cannon-volley` 18.60 to 18.74 and 0.167 to 0.169, `pad` 16.85 to 16.90 and 0.149 to 0.150. **The whole-frame numbers do not move**: the
+hull is 6 percent of the frame and the rest (floor, sky, mines) dominates; the claim is the hull's place and size, read on the crops.
+The two new pairs' mean grey of the original / ours: 18.2 / 21.7, 17.5 / 18.8, 14.5 / 17.6.
+
+Two circuit pairs (`hd/anulpha-pass`, `hd/chenghou-project`) re-rendered with and without the engine change: **bit-identical** (maximum difference
+0 over every pixel), since the factor is `1.0` outside Detonator and the pair script's new path is `--detonator` only. These pairs are not
+publishable as made: their world-clock read found no scenery node (`reason` in `<stem>.clock.json`) and the heading check reads 1.4 to 1.9
+degrees against 1.0 (`--pose` carries a yaw, the original's pitch and roll differ by about that); re-grab on a host where the clock read
+succeeds before adopting them.
 
 ### The original's music bands in a Detonator pair (2026-11-23, `det-pair-bands`)
 

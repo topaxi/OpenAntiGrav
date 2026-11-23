@@ -742,7 +742,7 @@ pub(super) fn push_text(
     pulse: &super::pulse::SelectorPulse,
 ) {
     out.push(text_draw(text, content, layout));
-    let value = text.glow_stamp(pulse.seconds());
+    let value = text.glow_stamp(pulse.text_seconds());
     if value > 0 {
         out.push(Draw::GlowText { value });
     }

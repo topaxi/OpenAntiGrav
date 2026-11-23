@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-23
-summary: "Destroyed craft wired on all titles; Zone end wired on HD, 2048, Omega; open: camera, collider, Pure diffs, Zone look and velocity, Omega sound"
+summary: "Destroyed craft wired on all titles; Zone end wired on HD, 2048, Omega; open: camera wiring, collider, Pure diffs, Zone look and velocity, Omega sound"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
@@ -30,7 +30,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   the timers and the two edges (`oag_title::destroyed`), `Looks::hull_wreck` loads
   `shipwreck.vex` for every team, `WO_SHIP_EXPLOSION` is thrown on state 4 and the death plume
   on state 5, a settled wreck leaves the pair test at 6 s and the world with it. Sound wired 2026-11-23 (`ship-destroy.md`,
-  "Sound on HD"). Not wired: row 6 (collider, kick), row 5 (HD's own camera), rows 4, 7 and 14, the `body+0x210`
+  "Sound on HD"). Not wired: row 6 (collider, kick), row 5 (HD's own camera, read and ready to wire in `docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`), rows 4, 7 and 14, the `body+0x210`
   half of row 11, a live RPCS3 pair. Table: `ship-destroy.md`, "Wired on HD". The text below is
   what was read.
 - **HD/Fury, as read before wiring.** `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`
@@ -48,24 +48,27 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   (inherited), `hull_wreck` is on, `WO_SHIP_EXPLOSION` and the death plume are named; every team and
   Omega's 2048-era ships load a wreck. Our blast frames show fire (Altima, Modesto Heights). Not
   wired, as on HD: sound (Omega's is Wwise `ShipDestroyed_*` and no `.bnk` carries it; 2048's bank resolution is unread, both keep `~BLOWUP` via `DestroyedCraft::HD_BLOWUP`; 2048 has no rumble), camera mode 9
-  (unread, HD's inherited camera runs), collider and kick, the `_n1` set's `WO_NITRO_SHIP_DEATH`
+  (read in `destroy-camera.md`, not wired: HD's inherited camera runs), collider and kick, the `_n1` set's `WO_NITRO_SHIP_DEATH`
   (modes 13 and 21), the second ship family's `WO_SHIP_EXPLOSION_PLAYER` (unread).
 
 ## Open
 
 - **The Zone end's debris fills the screen** (ours, HD, `--force-wreck 400:0`, frames 2026-11-23): the chase
-  camera stays on (Z2's trackside view is unread) and the throw velocity is chosen, so at 2.5 s the 112
-  `zoneship_dead.vex` pieces cover the whole frame around the camera. Read Z2's view and Z11's throw speed
+  camera stays on (Z2's view is read and not wired: a close orbit, `destroy-camera.md` Z2a to Z2f) and the throw velocity is chosen, so at 2.5 s the 112
+  `zoneship_dead.vex` pieces cover the whole frame around the camera. Wire Z2's orbit and read Z11's throw speed
   before judging the picture against the original.
 
 - **The HD blast frame reads as a soft black ball with sparks and no fire** (ours, `--force-wreck 60:7` on
-  Talon's Junction, 2026-11-22, `hd-wreck-wire`). Pulse's `WO_SHIP_EXPLOSION` draws an orange textured
-  fireball. Check HD's `WO_SHIP_EXPLOSION` against an original frame (or its `.pob` templates' blend and
-  sprites) before trusting the picture: a black fireball is the shape a wrong blend mode or missing sprite takes.
+  Talon's Junction, 2026-11-22, `hd-wreck-wire`). **Cause found 2026-11-23 (`hd-black-blast`, `ship-destroy.md`,
+  "The black blast"):** the root emitter of `WO_SHIP_EXPLOSION`, a fire flipbook (`smoke_new4_8x4`) under a
+  `colour_mode` 3 table that is black for entries 1 to 31, multiplied; 2048 authors the same table. Not a decode,
+  blend or missing-texture bug, and nothing is fixed. **Open, RE:** what `colour_mode` 3 does in HD's particle
+  update (a multiply, or not), and HD's frame advance and flipbook direction; listing the effect in
+  `oag_hd::effects::SPRITES` before that read gives a white blowout instead.
 
 1. ~~HD/Fury: read `Ship_SetState`'s destroy states~~ Read 2026-11-22
    (`ship-destroy.md`). Still open there: the death kick's formula, the wreck collider's child
-   shapes, camera mode 8's view against Pulse's mode 5, the `+0x7e40` call on the 4 -> 5 edge,
+   shapes, ~~camera mode 8's view against Pulse's mode 5~~ (read 2026-11-23, `destroy-camera.md`), the `+0x7e40` call on the 4 -> 5 edge,
    and a live run of the state timings.
 2. ~~2048 and Omega wired~~. Their second ship family (`WO_SHIP_EXPLOSION_PLAYER`,
    2048 `0x812c7e2c`, Omega `0x0176fe30`) is unread.
@@ -102,14 +105,14 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    fire); HUD hidden on the blast, `EndRace Results` 1.0 + 4.5 s later. 2048 and Omega: checked,
    applies, not wired for every row but no rumble on 2048, Omega's extra camera-2 condition and
    shell visibility, and Omega's `shipdestroy` event container (not checkable by bank census).
-   Unread, each with its address on the page: camera mode 2's per-frame law, the debris launch
+   Unread, each with its address on the page: ~~camera mode 2's per-frame law~~ (read, `destroy-camera.md`), the debris launch
    velocity, the `0x003f5878` pool, 2048's `Ship_UpdateWrecked` arm, the `+0x5f9c` branch.
 
 ## Next Steps
 
 1. ~~HD wire lane~~ landed (above). Left on HD: rows 3 and 6 (needs the death kick formula and
-   collider read), row 5, a frame pair against RPCS3 once a build boots the HD states.
-2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` did HD; 2048's banks and Omega's Wwise events are unread), mode 9's view.
+   collider read), row 5 (wire `destroy-camera.md`'s "Ready to wire" table onto `oag_render::camera::destroy`: per-title stations, substep easing, random rate factors, wobble, the 8 s hand-back), a frame pair against RPCS3 once a build boots the HD states.
+2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` did HD; 2048's banks and Omega's Wwise events are unread), mode 9's view (read, `destroy-camera.md`: HD's mode 8 plus the hold mode 8 rule, W8).
 3. Zone (item 4): ~~read~~ ~~wired on HD, 2048 and Omega~~. Left: a frame pair of a Zone end against
    RPCS3 with the page's read recipe (the debris velocity, the shell's look and camera mode 2 are
    chosen or inherited until then), 2048's and Omega's `shipdestroy`.

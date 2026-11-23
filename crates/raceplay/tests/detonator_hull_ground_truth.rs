@@ -260,3 +260,30 @@ fn an_hd_detonator_volley_leaves_from_the_hulls_cannon_flash_locators() {
         );
     }
 }
+
+/// The scale the player's hull is drawn at: the length of its model matrix's columns.
+fn drawn_hull_scale(loaded: race::Loaded) -> f32 {
+    let race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.ship_model_matrices()[0].x_axis.truncate().length()
+}
+
+/// A live Detonator frame's hull world matrix carries rows of length `0.630` (`0.7 * 0.9`), where
+/// every other HD mode carries `0.75` (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`, "The drawn
+/// hull"). Zone's race on the same disc is the control.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_hull_is_drawn_at_the_detonator_scale_and_zones_at_the_ordinary_one() {
+    let (Some(detonator), Some(zone)) = (
+        load(oag_race::Mode::Detonator, "Feisar"),
+        load(oag_race::Mode::Zone, "Feisar"),
+    ) else {
+        return;
+    };
+    let detonator = drawn_hull_scale(detonator);
+    let zone = drawn_hull_scale(zone);
+    assert!(
+        (detonator - 0.63).abs() < 1e-4,
+        "Detonator draws at {detonator}"
+    );
+    assert!((zone - 0.75).abs() < 1e-4, "Zone draws at {zone}");
+}
