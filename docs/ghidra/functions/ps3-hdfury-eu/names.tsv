@@ -1150,6 +1150,7 @@
 # 2026-11-23 zone-destroy-re: the Zone end, Ship_SetState mode 6 (zone-destroy.md). Static only.
 0x00104a58	function	DebrisManager_SpawnZoneDebris	80	zone-destroy.md
 0x00105a48	function	DebrisManager_Construct	75	zone-destroy.md
+0x00104f18	function	DebrisManager_SpawnShipDebris	72	zone-destroy.md
 0x0010c958	function	Debris_Launch	72	zone-destroy.md
 0x000758a0	function	SPZone_UpdateFinish	78	zone-destroy.md
 0x00053fc0	function	RaceManager_SetSubState	82	zone-destroy.md

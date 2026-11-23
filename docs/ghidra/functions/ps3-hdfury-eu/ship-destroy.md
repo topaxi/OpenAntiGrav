@@ -214,6 +214,12 @@ the live model still `wreck`.
    `0x00039c90`); count and placement unread.
 3. **Camera mode 8's view** (HD) against Pulse's mode 5 law; `Camera_SetMode`'s
    enter table `0x008a7e84` entry 8.
-4. **The `+0x7e40` call on the 4 -> 5 edge** (`0x00104f18`, `0x00105450`).
+4. **The `+0x7e40` call on the 4 -> 5 edge** (`0x00104f18`, `0x00105450`). Pointer (2026-11-23,
+   [zone-destroy.md](zone-destroy.md), "Functions"): `+0x7e40` is the debris manager and `0x00104f18` is
+   `DebrisManager_SpawnShipDebris`, which throws **19 `Ship_Damage%d` pieces** at the body matrix with
+   random velocities, those past a tuning count with `WO_DEBRIS_FIRE`; `0x00105450` is its nitro
+   variant (32 pieces). So an ordinary HD death very likely throws debris at 0.3 s, and "one blast at
+   the swap, then the death plume, then nothing" above is incomplete (72, decompile only; the table
+   is not changed here).
 5. ~~Zone (modes 6 and 14, rows 1, 3, 5, 12)~~ Read 2026-11-23: [zone-destroy.md](zone-destroy.md)
    (mode 6 is Zone, mode 14 Detonator; the shell's `0.4` term is its animation time, not an alpha).

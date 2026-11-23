@@ -70,10 +70,9 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    wired (`zonewreck.vex`, case 4's `~BLOWUP` for the local player, the death camera mode 5,
    the HUD hide on `DAT_08ab0838`; `docs/ghidra/functions/psp-pulse-usa/zone-mode.md`,
    `zone-rest.md`); its open reads (`0x08ab10e8`, `0x08ab2120`) are in
-   `handover/gameplay/zone-ends-now-what-is-missing-is-the.md`. HD/Fury, 2048 and Omega:
-   which model a Zone craft becomes (2048 maps a Zone death shell,
-   `docs/ghidra/functions/vita-2048-eu-v104/zone-craft.md`, confidence 80), the effects,
-   camera, HUD and sound at the Zone's end, are unread. Pure's Zone wreck rides Pulse's rule.
+   `handover/gameplay/zone-ends-now-what-is-missing-is-the.md`. Still unread for the Zone end: 2048's
+   `Ship_UpdateWrecked` arm (the shell animation) and both twins' race-manager side; everything
+   else below is read on all three titles. Pure's Zone wreck rides Pulse's rule.
    The Zone wreck's livery is `zone-livery-wreck-lods.md`'s item.
    **HD/Fury: read 2026-11-23, ready to wire** (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
    rows Z1-Z12, static, 2048 and Omega lines per row). Mode 6 is Zone, mode 14 Detonator. A Zone
