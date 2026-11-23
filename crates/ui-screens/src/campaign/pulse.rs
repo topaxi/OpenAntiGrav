@@ -18,6 +18,9 @@ const WHITE: u32 = 0xffff_ffff;
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SelectorPulse {
     seconds: f32,
+    /// Where the `pulse="true"` texts' own ladder stands when it is not the selector's: the two are
+    /// separate counters in the original, so a still can pin each. `None` follows [`Self::seconds`].
+    text_seconds: Option<f32>,
 }
 
 impl SelectorPulse {
@@ -32,6 +35,17 @@ impl SelectorPulse {
     #[must_use]
     pub fn seconds(&self) -> f32 {
         self.seconds
+    }
+
+    /// Pins the `pulse="true"` texts (the card title) to their own ladder position.
+    pub fn set_text_seconds(&mut self, seconds: Option<f32>) {
+        self.text_seconds = seconds.map(|seconds| seconds.max(0.0));
+    }
+
+    /// The seconds the card title's `Text::glow_stamp` reads.
+    #[must_use]
+    pub fn text_seconds(&self) -> f32 {
+        self.text_seconds.unwrap_or(self.seconds)
     }
 
     /// The pulse's position in its triangle, `0.0` at cyan to `1.0` at white: the `t` of [`Self::tint`].
@@ -132,6 +146,18 @@ mod tests {
         assert_eq!(phases.cell.seconds(), 0.0);
         phases.grid.set_seconds(1.1388 / 2.0);
         assert_eq!(phases.cell.seconds(), 0.0, "Cell's widget is not Grid's");
+    }
+
+    #[test]
+    fn the_title_ladder_follows_the_selector_until_pinned() {
+        let mut p = SelectorPulse::default();
+        p.set_seconds(0.3);
+        assert_eq!(p.text_seconds(), 0.3);
+        p.set_text_seconds(Some(0.7));
+        assert_eq!(p.text_seconds(), 0.7, "pinned apart from the Selector");
+        assert_eq!(p.seconds(), 0.3, "the Selector's own phase is untouched");
+        p.set_text_seconds(None);
+        assert_eq!(p.text_seconds(), 0.3);
     }
 
     #[test]
