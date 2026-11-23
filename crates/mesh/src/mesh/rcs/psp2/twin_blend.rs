@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use oag_rcs::rcsmodel::psp2::{self, material::Material};
 
-use super::{Report, decode_material_texture};
+use super::Report;
 use crate::mesh::rcs::Textures;
 use crate::mesh::rcs::twin_blend::{BARS, BLEND, FIRST, SECOND};
 use crate::mesh::{Emissive, ModelTexture, PROGRAM_TWIN_BLEND};
@@ -100,11 +100,7 @@ pub(super) fn plan(
         let picture = |path: &str| {
             cache
                 .entry(path.to_string())
-                .or_insert_with(|| {
-                    textures(path)
-                        .and_then(|blob| decode_material_texture(path, &blob, report))
-                        .map(Arc::new)
-                })
+                .or_insert_with(|| super::picture_memo::picture(path, textures, report))
                 .clone()
         };
         let pictures = paths.map(picture);

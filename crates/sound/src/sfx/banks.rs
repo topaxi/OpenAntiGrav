@@ -232,21 +232,7 @@ impl Banks {
         if voice.event_every_mode
             && let Some(event) = voice.event
         {
-            for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
-                match event_cue {
-                    oag_title::StartCue::Plays(name) => self.load_start_cues(
-                        archives,
-                        event.bank,
-                        voice,
-                        &[(cue, name)],
-                        None,
-                        &mut report,
-                    ),
-                    oag_title::StartCue::Unplayed { name, why } => {
-                        report.push(format!("sfx: {name} not played: {why}"));
-                    }
-                }
-            }
+            self.load_event_start(archives, &event, voice, None, &mut report);
             self.report.extend(report);
             return;
         }
@@ -264,21 +250,7 @@ impl Banks {
         self.load_start_cues(archives, entry, voice, &named, None, &mut report);
         if let Some(event) = voice.event {
             let mut staged = StagedStart::default();
-            for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
-                match event_cue {
-                    oag_title::StartCue::Plays(name) => self.load_start_cues(
-                        archives,
-                        event.bank,
-                        voice,
-                        &[(cue, name)],
-                        Some(&mut staged),
-                        &mut report,
-                    ),
-                    oag_title::StartCue::Unplayed { name, why } => {
-                        report.push(format!("sfx: {name} not played: {why}"));
-                    }
-                }
-            }
+            self.load_event_start(archives, &event, voice, Some(&mut staged), &mut report);
             self.event_start = Some(Box::new(staged));
         }
         self.report.extend(report);
@@ -338,6 +310,36 @@ impl Banks {
         self.timelines.extend(staged.timelines);
         self.programs.extend(staged.programs);
         true
+    }
+
+    /// The event start's `ready` and `go` out of its bank, into `self` or into `staged`. Cues
+    /// that play one after the other are loaded from one read of the bank (Omega's is 37 MB
+    /// stored); a cue the event does not play says so in its place in `report`.
+    fn load_event_start(
+        &mut self,
+        archives: &mut Archives,
+        event: &oag_title::CountdownEvent,
+        voice: &oag_title::CountdownVoice,
+        mut staged: Option<&mut StagedStart>,
+        report: &mut Vec<String>,
+    ) {
+        let mut plays: Vec<(Cue, &str)> = Vec::new();
+        for (cue, event_cue) in [(Cue::Ready, event.ready), (Cue::Go, event.go)] {
+            match event_cue {
+                oag_title::StartCue::Plays(name) => plays.push((cue, name)),
+                oag_title::StartCue::Unplayed { name, why } => {
+                    if !plays.is_empty() {
+                        let cues = std::mem::take(&mut plays);
+                        let area = staged.as_deref_mut();
+                        self.load_start_cues(archives, event.bank, voice, &cues, area, report);
+                    }
+                    report.push(format!("sfx: {name} not played: {why}"));
+                }
+            }
+        }
+        if !plays.is_empty() {
+            self.load_start_cues(archives, event.bank, voice, &plays, staged, report);
+        }
     }
 
     /// One bank blob, read once, and the start cues `cues` (each with the name
