@@ -223,6 +223,9 @@ pub struct Picker {
     /// Each entry's own description for the Help overlay, parallel to the entries - see
     /// [`Self::with_help_texts`].
     help_texts: Vec<Option<String>>,
+    /// Each entry's own description, typed along the footer while it is selected, parallel to
+    /// the entries - see [`Self::with_descriptions`].
+    descriptions: Vec<String>,
     /// Whether the Help overlay is up. It takes the tick whole.
     help_open: bool,
 }
@@ -248,6 +251,24 @@ impl Picker {
     pub fn with_help_texts(mut self, texts: Vec<Option<String>>) -> Self {
         self.help_texts = texts;
         self
+    }
+
+    /// Gives each entry the description the footer types while it is selected, parallel to the
+    /// entries, already worded: Pure's `Text->Team Selection->Team->Feisar` (see
+    /// [`description_key`]). Empty where the disc authors none.
+    #[must_use]
+    pub fn with_descriptions(mut self, descriptions: Vec<String>) -> Self {
+        self.descriptions = descriptions;
+        self
+    }
+
+    /// The selected entry's footer description, `None` where it has none.
+    #[must_use]
+    pub fn description(&self) -> Option<&str> {
+        self.descriptions
+            .get(self.index)
+            .map(String::as_str)
+            .filter(|text| !text.trim().is_empty())
     }
 
     /// The selected entry's own Help description, if it has one.
@@ -298,6 +319,7 @@ impl Picker {
             fixed_livery: false,
             help_available: false,
             help_texts: Vec::new(),
+            descriptions: Vec::new(),
             help_open: false,
         };
         out.variant = variant
@@ -963,6 +985,16 @@ fn entry_rows(picker: &Picker, layout: &Layout, skin: &Skin) -> Vec<Draw> {
             wrap_width: None,
         })
         .collect()
+}
+
+/// The string id of an entry's footer description on a listing screen: `Text->SCREEN->MENU->ID`,
+/// the form Pure's chain screens read their rows' descriptions by
+/// (`Text->Team Selection->Team->Feisar`, `Text->Track Selection->Track->Mandrashee` in its string
+/// table). `None` for a screen with no `<Menu>` (Pulse's).
+#[must_use]
+pub fn description_key(layout: &Layout, id: &str) -> Option<String> {
+    let menu = layout.screen.menu.as_ref()?;
+    Some(format!("Text->{}->{}->{id}", layout.screen.name, menu.name))
 }
 
 /// The scale and row pitch a `<Menu>`'s entries are drawn and hit-tested at.

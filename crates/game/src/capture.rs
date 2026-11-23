@@ -847,6 +847,22 @@ pub fn run(
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
                     ticker_clip =
                         menu_page::picker_footer(&mut list, legend, ticker, &strings, &font);
+                    // The selected entry's description, typed along the footer as the live
+                    // screen types it (`MenuStage`'s picker pass).
+                    let selected = match kind {
+                        oag_ui_screens::picker::Kind::Ship => settings.race.team.as_str(),
+                        oag_ui_screens::picker::Kind::Track => settings.race.track.as_str(),
+                    };
+                    let description = oag_ui_screens::picker::description_key(layout, selected)
+                        .and_then(|key| strings.get(&key));
+                    if let (Some(ticker), Some(text)) = (ticker, description) {
+                        list.extend(oag_ui_screens::campaign::footer::description_draws(
+                            ticker,
+                            text,
+                            options.menu_picker_seconds,
+                            &|text: &str| oag_ui::font::measure(&font, text),
+                        ));
+                    }
                 }
                 // Same disc read `picker_stills` already made for the
                 // hexagonal window's cards - reused here rather than read

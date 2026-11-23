@@ -443,6 +443,17 @@ impl Session {
         // team that authors none (every PS2 team) writes an empty string and the paragraph is
         // blank (`docs/ghidra/functions/psp-pulse-usa/race-box-screens.md`, "`Team Ship Help` is
         // set per team", and the PS2's `0x001bd368`).
+        // Each team's footer description (Pure's `Text->Team Selection->Team->Feisar`), typed
+        // while it is selected.
+        let descriptions = entries
+            .iter()
+            .map(|entry| {
+                picker::description_key(&layout, &entry.id)
+                    .and_then(|key| shell.strings.get(&key))
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect();
         let help_texts = entries
             .iter()
             .map(|entry| {
@@ -465,6 +476,7 @@ impl Session {
             Some(livery.as_str()),
         )
         .with_help_texts(help_texts)
+        .with_descriptions(descriptions)
         .with_fixed_livery(crate::livery_row::fixed_row(title, mode));
         // HD's screen lays the teams out across - see
         // `Picker::with_entries_across`.
