@@ -53,7 +53,11 @@ impl MenuStage {
         let Some(legend) = &self.nav_legend else {
             return Vec::new();
         };
-        legend.draw_gated(&picker::FaceScales::default(), self.menu.depth() > 1)
+        let faces = picker::FaceScales {
+            small_role: self.skin.small_font(),
+            ..picker::FaceScales::default()
+        };
+        legend.draw_gated(&faces, self.menu.depth() > 1)
     }
 
     /// The footer's own scrolling tip ticker, at [`Self::ticker_elapsed`] -

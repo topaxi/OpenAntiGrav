@@ -46,6 +46,7 @@ impl Session {
                 oag_ui_screens::picker::FaceScales::default().default,
                 |menu| shell.font.line_height / menu.line_height,
             ),
+            small_role: shell.menu_skin.small_font,
             ..oag_ui_screens::picker::FaceScales::default()
         };
         let grid = [shell.space.size.0, shell.space.size.1];

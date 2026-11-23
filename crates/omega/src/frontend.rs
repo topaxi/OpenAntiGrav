@@ -58,6 +58,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // color="FEGlobals->HD_Grey">`.
     title_font: Some("Title"),
     body_font: None,
+    small_font: None,
     stats_font: None,
     snapped_pens: false,
     default_face_is_row_face: true,

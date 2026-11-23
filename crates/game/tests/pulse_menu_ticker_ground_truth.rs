@@ -310,6 +310,55 @@ fn pulses_footer_tag_and_card_titles_author_their_glow() {
     }
 }
 
+/// **Pulse PSP's footer button glyphs draw in `Pulse_14`, the face its `small` role names, at its own
+/// 17 px.** The legend authors `font="small"` for `ε`/`γ`; with `Pulse_20`'s 22 px glyph scaled by 17/22 their
+/// rings sampled half a texel soft against the original's. `oag_pulse::FRONT_END.menu.small_font` carries the
+/// slot (`Title`), so dropping it turns both back into scaled menu-face text.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_footer_button_glyphs_draw_in_the_small_face_at_its_own_size() {
+    use oag_ui::frontend::Draw;
+    use oag_ui_screens::picker::FaceScales;
+
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let small_role = oag_pulse::FRONT_END
+        .menu
+        .expect("Pulse's PSP skin")
+        .small_font;
+    for (label, path) in images {
+        let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pulse::TITLE)
+            .unwrap_or_else(|e| panic!("{label}: the archives open: {e}"));
+        let xml = front_end_root_xml(&mut archives);
+        let screens = Screens::from_xml(&xml);
+        let legend = oag_ui_screens::campaign::footer::NavigationLegend::read(
+            &parse(&xml),
+            &screens.globals,
+            &oag_ui::language::StringTable::default(),
+        )
+        .unwrap_or_else(|| panic!("{label}: Skin.xml authors a NavigationController"));
+        let draws = legend.draw(&FaceScales {
+            small_role,
+            ..FaceScales::default()
+        });
+        let glyphs: Vec<_> = draws
+            .iter()
+            .filter(|draw| {
+                matches!(draw, Draw::FacedText { role, scale, .. }
+                    if role.eq_ignore_ascii_case("Title") && *scale == 1.0)
+            })
+            .collect();
+        assert_eq!(
+            glyphs.len(),
+            2,
+            "{label}: the Confirm and Back glyphs draw in the Title slot (Pulse_14) at scale 1: {draws:?}"
+        );
+    }
+}
+
 /// What Pulse authors for the glow it stamps on the title and the Main Menu, against the numbers
 /// `oag_pulse::FRONT_END.menu.glow` carries (EDRAM frames of both screens on PPSSPP): the seven
 /// `helptext` widgets author `RealGlow="128"` (the `help` reference), the title's

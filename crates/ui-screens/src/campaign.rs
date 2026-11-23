@@ -1332,6 +1332,7 @@ impl Layout {
     fn face_scale(&self, font: &str) -> f32 {
         match font.to_ascii_lowercase().as_str() {
             "default" => 1.0,
+            "small" if self.faces.small_role.is_some() => 1.0,
             "small" => self.faces.small,
             _ => 1.0,
         }

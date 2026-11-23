@@ -442,7 +442,10 @@ pub(super) fn menu_page(
     let mut nav_legend_draws: Vec<oag_ui::frontend::Draw> =
         nav_legend.map_or_else(Vec::new, |legend| {
             legend.draw_gated(
-                &oag_ui_screens::picker::FaceScales::default(),
+                &oag_ui_screens::picker::FaceScales {
+                    small_role: skin.small_font(),
+                    ..oag_ui_screens::picker::FaceScales::default()
+                },
                 model.depth() > 1,
             )
         });

@@ -718,6 +718,12 @@ impl Skin {
         self.skin.title_font
     }
 
+    /// The glyph-slot role whose face is the `small` face - see [`oag_title::MenuSkin::small_font`].
+    #[must_use]
+    pub fn small_font(&self) -> Option<&'static str> {
+        self.skin.small_font
+    }
+
     /// The screen title's colour.
     ///
     /// **The disc's own declared `TitleColor` first.** A title whose skin
@@ -959,6 +965,7 @@ mod tests {
         title_scale: 1.0,
         title_font: None,
         body_font: None,
+        small_font: None,
         stats_font: None,
         snapped_pens: false,
         default_face_is_row_face: false,

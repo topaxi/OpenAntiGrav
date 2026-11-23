@@ -909,6 +909,7 @@ pub fn run(
                         oag_ui_screens::picker::FaceScales::default().default,
                         |menu| font.line_height / menu.line_height,
                     ),
+                    small_role: menu_skin.small_font,
                     ..oag_ui_screens::picker::FaceScales::default()
                 };
                 let globals: Vec<(&str, &str)> = frontend

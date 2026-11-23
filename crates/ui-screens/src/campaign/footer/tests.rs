@@ -117,6 +117,45 @@ fn the_navigation_controller_s_four_prompts_resolve_through_the_string_table() {
     }
 }
 
+/// A title whose renderer holds the `small` face in a glyph slot ([`FaceScales::small_role`]) draws
+/// the button glyphs there at the face's own size; any other title keeps the menu face scaled by
+/// [`FaceScales::small`]. Dropping the role turns the first half into the second.
+#[test]
+fn a_small_face_in_a_glyph_slot_draws_the_button_glyphs_at_its_own_size() {
+    let root = parse(XML);
+    let strings = StringTable::from_xml(ENTRIES);
+    let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
+    let glyphs = |faces: &FaceScales| -> Vec<Draw> {
+        legend
+            .draw(faces)
+            .into_iter()
+            .filter(|draw| match draw {
+                Draw::Text { text, .. } | Draw::FacedText { text, .. } => {
+                    matches!(text.as_str(), "ε" | "γ")
+                }
+                _ => false,
+            })
+            .collect()
+    };
+    let native = glyphs(&FaceScales {
+        small_role: Some("Title"),
+        ..FaceScales::default()
+    });
+    assert_eq!(native.len(), 2);
+    for draw in &native {
+        assert!(
+            matches!(draw, Draw::FacedText { role, scale, .. } if *role == "Title" && *scale == 1.0),
+            "{draw:?}"
+        );
+    }
+    for draw in &glyphs(&FaceScales::default()) {
+        assert!(
+            matches!(draw, Draw::Text { scale, .. } if *scale == FaceScales::default().small),
+            "{draw:?}"
+        );
+    }
+}
+
 /// Pulse's `Confirm` draws as authored: left-aligned at `x="368"`, at the face's own scale
 /// (`1.0`), like every other footer word. It once right-aligned to the back glyph and shrank
 /// to fit, a workaround for a menu face wider than the original's; the face now matches the

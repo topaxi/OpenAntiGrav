@@ -162,6 +162,9 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // it, see `body_font`.
     title_font: Some("Title"),
     body_font: Some("Default"),
+    // `Small` and `Title` are both `Pulse_14.fnt` in Pulse's language plugins (`oag_ui::language::roles`),
+    // so the third slot's `Title` atlas is the `small` face (`docs/ui/menus-original.md`, "Prompt glyphs are Pulse_14's").
+    small_font: Some("Title"),
     stats_font: None,
     snapped_pens: false,
     default_face_is_row_face: false,
@@ -311,6 +314,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     title_scale: 0.8,
     title_font: None,
     body_font: None,
+    small_font: None,
     stats_font: None,
     snapped_pens: false,
     default_face_is_row_face: false,

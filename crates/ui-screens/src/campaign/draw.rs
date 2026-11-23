@@ -884,7 +884,7 @@ pub(crate) fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     };
     let content = content.to_string();
     let wrap_width = text.wrap_width;
-    match super::footer::face_role(&text.font) {
+    match super::footer::face_role_in(&layout.faces, &text.font) {
         Some(role) => Draw::FacedText {
             role,
             x,

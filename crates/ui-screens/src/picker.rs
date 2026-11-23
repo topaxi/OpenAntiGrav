@@ -607,6 +607,11 @@ pub struct FaceScales {
     /// than as the menu face scaled by [`Self::default`]. True on Pulse, where
     /// the renderer's face slot carries `pulse_text.fnt`.
     pub native_default: bool,
+    /// The glyph-slot role whose atlas is the `small` face, when the renderer holds it
+    /// ([`oag_title::MenuSkin::small_font`]): `small` text then draws in that atlas at its own
+    /// size ([`Self::small`] is not applied), where otherwise it is the menu face scaled by
+    /// [`Self::small`].
+    pub small_role: Option<&'static str>,
 }
 
 impl Default for FaceScales {
@@ -617,6 +622,7 @@ impl Default for FaceScales {
             default: 13.0 / 22.0,
             small: 17.0 / 22.0,
             native_default: false,
+            small_role: None,
         }
     }
 }
@@ -872,6 +878,7 @@ impl Layout {
         match font.to_ascii_lowercase().as_str() {
             "default" if self.faces.native_default => 1.0,
             "default" => self.faces.default,
+            "small" if self.faces.small_role.is_some() => 1.0,
             "small" => self.faces.small,
             _ => 1.0,
         }

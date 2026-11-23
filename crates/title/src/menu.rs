@@ -140,6 +140,13 @@ pub struct MenuSkin {
     /// a title whose body text is the `menu` face or its title's face (HD, Pure,
     /// 2048, Omega).
     pub body_font: Option<&'static str>,
+    /// The loaded role whose face is this title's `font="small"` face, **when a glyph slot
+    /// carries it**: Pulse's PSP pressings resolve `Small` and `Title` to the one file,
+    /// `Pulse_14.fnt` (17 px), and hold it in the renderer's third slot under `Title`. A
+    /// `font="small"` text then draws in that face at its native size, where the menu face
+    /// (`Pulse_20.fnt`, 22 px) would be minified by 17/22 and sample the footer's prompt
+    /// glyphs half a texel soft. `None` draws `small` text as that scaled menu face, as before.
+    pub small_font: Option<&'static str>,
     /// The role of the face a `font="Stats"` widget draws in, **when the title has
     /// a face of its own for it** and no `Buttons` face to hold the renderer's
     /// third glyph slot: Pure's `Stats` (`LTe50325.fnt`), the small letter-spaced
