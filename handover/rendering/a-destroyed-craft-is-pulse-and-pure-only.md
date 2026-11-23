@@ -53,6 +53,11 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 
 ## Open
 
+- **The Zone end's debris fills the screen** (ours, HD, `--force-wreck 400:0`, frames 2026-11-23): the chase
+  camera stays on (Z2's trackside view is unread) and the throw velocity is chosen, so at 2.5 s the 112
+  `zoneship_dead.vex` pieces cover the whole frame around the camera. Read Z2's view and Z11's throw speed
+  before judging the picture against the original.
+
 - **The HD blast frame reads as a soft black ball with sparks and no fire** (ours, `--force-wreck 60:7` on
   Talon's Junction, 2026-11-22, `hd-wreck-wire`). Pulse's `WO_SHIP_EXPLOSION` draws an orange textured
   fireball. Check HD's `WO_SHIP_EXPLOSION` against an original frame (or its `.pob` templates' blend and
