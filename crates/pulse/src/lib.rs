@@ -493,6 +493,10 @@ pub mod names {
     /// The race box's `Single Player` screen: its `Mode`, `Class`, `Weapons`,
     /// `Difficulty` and `Eliminations` lists. See `docs/formats/race-setup.md`.
     pub const RACE_SETUP_DEFINITION: &str = r"Data\Plugins\PI001\GUI\RaceBox_Definition.xml";
+    /// `MainMenu_Definition.xml`: the `Main Menu` screen, seven `Entry` rows and a help line each.
+    pub const MAIN_MENU_DEFINITION: &str = r"Data\Plugins\PI001\GUI\MainMenu_Definition.xml";
+    /// `Additional_Definition.xml`: the `Additional` screen (OPTIONS+), `Settings` and `Music`.
+    pub const ADDITIONAL_DEFINITION: &str = r"Data\Plugins\PI001\GUI\Additional_Definition.xml";
     /// The in-race screens: the pause menu, the photo mode's, and `Race End
     /// Photo`, the state a race sits in between the flag and `EndRace Results`.
     /// No recovered name list carried it; it is the hash `31b50f2e`'s name,

@@ -1265,3 +1265,24 @@ fn a_list_widget_lands_in_lists_and_adds_no_text_to_the_screen() {
     assert_eq!(list.label.idstring.as_deref(), Some("FE_PILOT_ASSIST"));
     assert!(screen.texts.is_empty(), "{:?}", screen.texts);
 }
+
+/// A `Menu` keeps its entries' `idstring`s, and a `List` its literal entries beside them.
+#[test]
+fn a_menu_and_a_list_keep_their_entries() {
+    let screens = Screens::from_xml(
+        r#"<Screen name="Top"><Screen name="Rows">
+        <Menu name="Mode" focus="true"><Values x="20" y="32" gap="15" font="menu"></Values>
+        <Entry idstring="FE_A"></Entry><Entry idstring="FE_B"></Entry></Menu>
+        <List name="Kills"><Values x="250" y="127" font="small"></Values>
+        <Entry string="5"></Entry><Entry string="10"></Entry></List>
+        </Screen></Screen>"#,
+    );
+    let screen = screens.by_name("Rows").expect("the screen reads");
+    let menu = screen.menu.as_ref().expect("a menu");
+    assert_eq!(menu.entries, ["FE_A", "FE_B"]);
+    let [list] = screen.lists.as_slice() else {
+        panic!("one list: {:?}", screen.lists);
+    };
+    assert!(list.entries.is_empty());
+    assert_eq!(list.literal_entries, ["5", "10"]);
+}

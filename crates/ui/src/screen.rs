@@ -396,6 +396,9 @@ pub struct Menu {
     pub font: String,
     /// `vertalign="middle"`: [`Self::y`] is the middle of the first row, not its top.
     pub middle: bool,
+    /// The `<Entry idstring>`s, in document order. Empty on the language picker, whose rows
+    /// `DisplayLanguages` fills in.
+    pub entries: Vec<String>,
 }
 
 /// One screen, flattened out of the tree.

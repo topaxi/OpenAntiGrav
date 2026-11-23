@@ -87,9 +87,9 @@ CLOCKED = ("grid", "cell", "team", "track")
 FE_CLOCK_PTR = 0x08B317B0
 FE_CLOCK_FIELD = 0x40
 #: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
-STOPPED = ("grid", "cell", "team", "track")
+STOPPED = ("grid", "cell", "team", "track", "main", "racebox", "single", "options")
 #: The shots whose footer ticker is pinned (`tick:N` before the `shot`): every Pulse screen with the footer's ticker, so the message ours draws is the one grabbed.
-TICKERED = ("grid", "cell", "team")
+TICKERED = ("grid", "cell", "team", "main", "racebox", "single", "options")
 
 #: Pure has no recovered front-end clock or state name, so its clock is the emulator's own tick counter (`cpu.status.ticks`, the PSP's
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
@@ -371,14 +371,14 @@ class Rig:
 
 #: One walk per title, from `Main Menu` (Pulse; Pure is walked from its own main page): `shot:ID` photographs the screen `WALK` names.
 PULSE_PLAN = ",".join([
-    "back:Main Menu", "wait:2", "shot:main",
+    "back:Main Menu", "wait:2", "tick:480", "shot:main",
     "key:cross", "st:Grid Selection", "wait:3", "tick:480", "shot:grid",
     "key:cross", "st:Cell Selection", "wait:3", "tick:480", "shot:cell", "back:Main Menu", "wait:1",
-    "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
-    "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
+    "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "tick:480", "shot:racebox",
+    "key:cross", "wait:2", "st:Single Player", "wait:2", "tick:480", "shot:single",
     "key:cross", "st:Track Creation", "wait:3", "shot:track",
     "key:cross", "st:Team Selection", "wait:3", "tick:480", "shot:team", "back:Main Menu", "wait:1",
-    "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "shot:options", "back:Main Menu", "wait:1",
+    "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "tick:480", "shot:options", "back:Main Menu", "wait:1",
 ])
 
 #: `screen` is the state name the game reports (Pulse) or the name read by eye (Pure); `page` is ours' `--menu-page`, `xml` where ours
@@ -397,14 +397,14 @@ PULSE_WALK = [
      "selection": {"original": "first circuit of the fresh profile's list", "ours": "first circuit of the fresh profile's list"}},
     {"id": "team", "title": "Ship Select", "screen": "Team Selection", "page": "ship-select", "xml": "Selection_Definition.xml (Team Selection)",
      "selection": {"original": "Assegai, first unlocked craft", "ours": "Assegai, first unlocked craft"}},
-    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "main", "xml": "MainMenu_Definition.xml",
-     "why": "ours' page is menu.toml's `main` (ADR-0066: the vanilla rows plus REMIX, RECORDS and MODS, title OPENANTIGRAV)"},
-    {"id": "racebox", "title": "Racebox", "screen": "Racebox", "page": "racebox", "xml": "RaceBox_Definition.xml",
-     "why": "ours has no page for it: RACEBOX opens menu.toml's `race` page directly"},
-    {"id": "single", "title": "Racebox setup (Single Player)", "screen": "Single Player", "page": "race", "xml": "Racebox settings",
-     "why": "ours' `race` page is menu.toml's (own rows MODE, SPEED CLASS, WEAPONS, AI DIFFICULTY, KILLS, START, BACK)"},
-    {"id": "options", "title": "Options+", "screen": "Additional", "page": "options", "xml": "Additional_Definition.xml",
-     "why": "ours' `options` pages are menu.toml's (Display, Graphics, Controls and the rest are ours)"},
+    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "pulse-main", "xml": "MainMenu_Definition.xml (`Main Menu`: the title, the seven rows, `helptext0`)",
+     "selection": {"original": "RACE CAMPAIGN (first row)", "ours": "RACE CAMPAIGN (first row)"}},
+    {"id": "racebox", "title": "Racebox", "screen": "Racebox", "page": "pulse-racebox", "xml": "RaceBox_Definition.xml (`Racebox`: the three rows)",
+     "selection": {"original": "CUSTOM RACE (first row)", "ours": "CUSTOM RACE (first row)"}},
+    {"id": "single", "title": "Racebox setup (Single Player)", "screen": "Single Player", "page": "pulse-single", "xml": "RaceBox_Definition.xml (`Single Player`: the five lists, the rules)",
+     "selection": {"original": "RACE TYPE (first row), SINGLE RACE, VENOM, ON, EASY", "ours": "RACE TYPE (first row), SINGLE RACE, VENOM, ON, EASY"}},
+    {"id": "options", "title": "Options+", "screen": "Additional", "page": "pulse-options", "xml": "Additional_Definition.xml (`Additional`: the three rows)",
+     "selection": {"original": "GAME OPTIONS (first row)", "ours": "GAME OPTIONS (first row)"}},
 ]
 
 

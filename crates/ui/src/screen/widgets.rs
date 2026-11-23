@@ -250,6 +250,10 @@ impl Screens {
             middle: node
                 .value("vertalign")
                 .is_some_and(|value| value.eq_ignore_ascii_case("middle")),
+            entries: node
+                .children_named("Entry")
+                .filter_map(|entry| entry.value("idstring").map(str::to_string))
+                .collect(),
         }
     }
 

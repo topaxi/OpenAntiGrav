@@ -13,6 +13,7 @@ use crate::render::{Renderer, VideoFormat};
 use oag_raceplay as race;
 mod campaign_page;
 mod card;
+mod disc_screen_page;
 mod endrace_page;
 mod endrace_touch_page;
 mod join_page;
