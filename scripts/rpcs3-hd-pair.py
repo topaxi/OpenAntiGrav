@@ -174,6 +174,23 @@ def zone_band_flags(pair, ship):
     return ["--zone-bands", csv(bands["held"]), "--zone-bands-raw", csv(bands["raw"])]
 
 
+def mine_flags(pair, ship):
+    """The original's laid mines (`rpcs3_hd_field.detonator_mines`, read in the pause) as ours' `--detonator-mines`.
+
+    The original numbers its track entries from the player's start cursor and ours from the spline's origin, so
+    a mine's entry does not transfer; its position does, and ours snaps each to its nearest survey lane
+    (`RaceSim::carry_detonator_mines`). A shot without them (an older record) keeps ours' seeded layout and says so."""
+    mines = [m for m in ship.get("mines") or [] if m["flags"] & 1]
+    if not mines:
+        pair.caveat("no mine objects were read at the pause: ours lays its own seeded mine layout")
+        return []
+    pair.rec["original"]["detonator"]["mines"] = [
+        {"entry": m["entry"], "lane": m["lane"], "position": m["position"], "live": bool(m["live"])} for m in mines]
+    pair.caveat("Detonator mines: the original's %d mine objects were read in the pause (track entry, lane, position) and ours lays each on its "
+                "survey lane nearest that position (`--detonator-mines`); its bomb and any mine laid later are ours" % len(mines))
+    return ["--detonator-mines", ";".join("%.3f,%.3f,%.3f" % tuple(m["position"]) for m in mines)]
+
+
 def detonator_inputs(pair, out, ship, clock):
     """Ours' `--input-script` for a Detonator frame: idle through the countdown and up to the original's press, SQUARE (our cannon
     button) over the lap-clock window the original's button was held, idle after. Records the window and what is not carried."""
@@ -186,9 +203,9 @@ def detonator_inputs(pair, out, ship, clock):
                                          "button": "square (ours; the original's cannon fired on %s)" % fire.get("button")}
     path = out / "ours.inputs"
     path.write_text("\n".join(lines) + "\n")
-    pair.caveat("Detonator: ours runs its own countdown, clock and stage laying (its own seeded mine layout, its own cannon "
-                "rounds from the held button) with the craft held on the original's pose and camera; the mine positions are "
-                "ours, not the original's (the placement RNG is not carried), so a mine in one frame is not the same mine in the other")
+    pair.caveat("Detonator: ours runs its own countdown, clock and stage laying (its own cannon rounds from the held button) with the "
+                "craft held on the original's pose and camera; the mines are the original's addresses where the shot read them, "
+                "else ours' own seeded layout (the placement RNG is not carried)")
     pair.caveat("Detonator: ours' craft is held at rest on the original's pose after every tick (`--pose-hold-ticks`): it never flies into a "
                 "mine, its exhaust is cold, and a round leaves at 500 units/s, "
                 "not 500 + 3.6 x the craft's speed")
@@ -433,6 +450,7 @@ def main():
     if args.detonator:
         detonator_flags = detonator_inputs(pair, out, ship, clock)
         detonator_flags += zone_band_flags(pair, ship)
+        detonator_flags += mine_flags(pair, ship)
     base = [args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(),
             "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags + field_flags + detonator_flags
     if args.field:

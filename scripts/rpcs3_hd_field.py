@@ -171,6 +171,36 @@ def scenery_nodes(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
     return found
 
 
+#: `DetonatorMine`'s vtable (`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine.md`, "The three vtables"); an object's
+#: `+0x40` is its flags (1 active), `+0x80` its position, `+0xc6`/`+0xc8` its track entry and lane, `+0x160` "live".
+DETONATOR_MINE_VTABLE = 0x008642F0
+MINE_OBJECT_BYTES = 0x170
+
+
+def detonator_mines(m, lo=0x30000000, hi=0x36000000, chunk=0x100000):
+    """Every active `DetonatorMine` in the heap: `{address, flags, position, entry, lane, live, age_s}`, read in one pass."""
+    needle = struct.pack(">I", DETONATOR_MINE_VTABLE)
+    found = []
+    for base in range(lo, hi, chunk):
+        try:
+            block = m.rd(base, chunk + MINE_OBJECT_BYTES)
+        except OSError:
+            continue
+        at = block.find(needle)
+        while 0 <= at < chunk:
+            if at % 4 == 0 and at + MINE_OBJECT_BYTES <= len(block):
+                o = block[at:at + MINE_OBJECT_BYTES]
+                flags = struct.unpack(">I", o[0x40:0x44])[0]
+                if flags & 1:
+                    found.append({"address": base + at, "flags": flags,
+                                  "position": list(struct.unpack(">3f", o[0x80:0x8c])),
+                                  "entry": struct.unpack(">H", o[0xC6:0xC8])[0], "lane": o[0xC8],
+                                  "live": struct.unpack(">I", o[0x160:0x164])[0],
+                                  "age_s": struct.unpack(">f", o[0xC0:0xC4])[0]})
+            at = block.find(needle, at + 4)
+    return found
+
+
 def _node_time(m, node):
     """`(time, stamp)` of one node, or `None` when it is no longer a `MeshImporter`."""
     block = m.rd(node, STAMP_OFFSET + 4)
