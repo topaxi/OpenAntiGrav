@@ -113,6 +113,10 @@ Gaps (original kept, no pair): none on Pulse or Pure. Pure's `Main Menu` and pau
 
 ## Next Steps
 
+0. Pulse Track Select (`pulse-psp-track`, 2026-11-23: 1.60 % to 0.69 % over 40 grey on one fresh grab; footer ticker pinned, tag, and the footer strips' viewport clip, which also fixes row y 249 on every Pulse pair). Open: the heading's glyph pens are one pixel off on most letters (the title face's pen rounding), the circuit-name panel's haze on some grabs (read the text glow stamp off EDRAM, a glow clock separate from `--menu-picker-seconds`), the footer prompt icons one pixel left, Track Select's photo box (215 px on the 22.0 s grab, 50 px on the other three).
+
+0. Pulse Track Select (`pulse-psp-track`, 2026-11-23: 1.60 % to 0.69 % over 40 grey on one fresh grab; footer ticker, tag and the footer strips' viewport clip done). Open: the heading's glyph pens are one pixel off on most letters (the title face's pen rounding, `docs/tools/compare-page.md`, "Pulse Track Select" row), the circuit-name panel's haze on some grabs (read the text glow stamp off EDRAM like `selector_stamp`, give ours a separate glow clock; `Text::glow_stamp` is "caught up to the game clock"), the footer prompt icons one pixel left, and Track Select's photo box (215 px on the 22.0 s grab, 50 px on the other three). The viewport clip is censused on every title (`docs/ui/menus-original.md`: Pulse PSP and PS2 cut their strips, the rest clip nothing).
+
 1. ~~Omega's campaign selector (2048, HD, Fury cards)~~ (drawn 2026-11-05). What is left of it (the `2048_campaign` card's art landed 2026-11-12): the turned cards' pose (needs the executable's `Campaign Selection` update, `ghidra-mcp` was down that session, and an original frame per selection), and 2048's grids (`grid_16`..`grid_18` stubs, `Campaign2048_Definition.xml`'s map): `docs/ui/campaign-screens.md`, "Omega: `Campaign Selection`".
 2. A `--menu-page` still for the HD pause menu and Racebox setup read from `racebox_definition.xml` / `ingame_definition.xml`
    if the maintainer wants those XML-driven; then pair them with `scripts/rpcs3-hd-menu-pair.py` (add a `WALK` step, change

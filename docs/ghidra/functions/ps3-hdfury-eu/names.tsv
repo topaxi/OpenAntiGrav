@@ -1192,3 +1192,8 @@
 0x000ae6c0	function	Camera_UpdateOrbitView	62	destroy-camera.md
 0x0027e908	function	Noise_SampleFractal1D	55	destroy-camera.md
 0x00060f90	function	RaceManager_UpdateEndCut	60	destroy-camera.md
+# 2026-11-23, hd-colour-mode3-re: what colour_mode 3 does (ship-destroy.md, "colour_mode 3 is a blend toward the scene light")
+0x00281ec0	function	Psys_BuildUpdateContext	84	ship-destroy.md
+0x0027c6d0	function	Psys_QueueSpuUpdate	72	ship-destroy.md
+0x00285020	function	Psys_UpdateInstance	65	ship-destroy.md
+0x002a39c8	function	Colour_PackFloat4	85	ship-destroy.md

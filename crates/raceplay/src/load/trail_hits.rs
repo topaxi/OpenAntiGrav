@@ -65,6 +65,7 @@ pub(super) fn lend(
         from.effects,
         name,
         from.looks.particle_laws.applies(platform),
+        from.effects.colour_walk_for(from.race.effect_dir_for("")),
     );
     match loaded {
         Ok((effect, note)) => {

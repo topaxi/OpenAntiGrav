@@ -130,6 +130,7 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
+    effects.colour_walk = oag_title::ColourWalk::LightBlend;
     effects.sprites = SPRITES;
     effects.extents = EXTENTS;
     effects.far_bars = FAR_BARS;
@@ -165,12 +166,15 @@ const TEMPLATES: &[&str] = &[
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
 /// smoke"), the Quake's wave, and the Missile's two heads, whose red
 /// filament-ring atlas the colour ramp is authored against (`weapons.md`,
-/// "The Missile's red rings"), and the Plasma's five, paired against the
+/// "The Missile's red rings"), the ship explosion, whose root's black colour ramp is a blend
+/// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
+/// and the Plasma's five, paired against the
 /// original phase by phase (`plasma.md`, "The pairs"). Every other HD effect
 /// still draws the procedural profile until a matched capture says its sprite
 /// reads right.
 const SPRITES: &[&str] = &[
     engine_effects::TRACK_BLAST_EFFECT,
+    engine_effects::EXPLOSION_EFFECT,
     engine_effects::QUAKE_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,

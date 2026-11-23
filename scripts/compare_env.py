@@ -64,6 +64,28 @@ def platform(key):
     return out
 
 
+def detonator_input_lines(fire, go_tick_):
+    """The lines of a Detonator pair's `ours.inputs`: idle through the countdown and up to the original's press, SQUARE (ours'
+    cannon button) over the window the original's button was held, idle after; `fire` is `original.detonator.fire` of
+    `pair.json` (`None` for a pair with no shot)."""
+    if not fire:
+        return ["%d none" % (go_tick_ + 1)]
+    before = round(fire["press_clock_before_s"] * 60)
+    held = max(1, round((fire["press_clock_after_s"] - fire["press_clock_before_s"]) * 60))
+    return ["%d none" % (go_tick_ + before), "%d square" % held, "1 none"]
+
+
+def ensure_detonator_inputs(rec, pair_dir):
+    """Writes `ours.inputs` beside a Detonator pair's `pair.json` when it is missing (the private repository keeps `pair.json`
+    and `theirs.png` only, and the script is made again from the recorded `original.detonator.fire`). Returns whether it wrote."""
+    det = (rec.get("original") or {}).get("detonator")
+    path = Path(pair_dir) / "ours.inputs"
+    if det is None or path.exists():
+        return False
+    path.write_text("\n".join(detonator_input_lines(det.get("fire"), go_tick())) + "\n")
+    return True
+
+
 def go_tick(plat=None):
     """Our race's tick at which the race clock leaves zero: the countdown's length, read from the source of truth
     (`oag_race::COUNTDOWN_TICKS`, `crates/race/src/state.rs`) rather than copied into each pair script. A platform
@@ -806,6 +828,9 @@ def main():
         assert gantry_pin(None, 3) is None
         assert abs(gantry_pin(4.368715286254883, 3) - 4.318715) < 1e-5
         assert gantry_pin(5.0, 0) == 5.0
+        assert detonator_input_lines(None, 272) == ["273 none"]
+        fire = {"press_clock_before_s": 1.8667, "press_clock_after_s": 1.9}
+        assert detonator_input_lines(fire, 272) == ["384 none", "2 square", "1 none"]
         print("compare_env selftest ok")
     elif cmd == "missing-safe-area":
         sys.exit(1 if missing_safe_area(sys.argv[2:]) else 0)

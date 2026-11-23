@@ -472,6 +472,7 @@ const EFFECTS: oag_title::Effects = {
             ),
         );
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
+    effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
     effects
 };
 

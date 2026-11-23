@@ -798,6 +798,23 @@ Pure's `Stats` and `Scroll` roles resolve to `LTe50325.fnt` (the table in `oag_u
 
 **Open, same capture:** the record's separators read `0 . 00 . 00` with small mid-height dots and wide gaps at 8x, which is neither this build's `0.00.00` (baseline dots) nor the `0'00"00` the 2x reading suggested; no Latin-1 character drawn in `LTe50325.fnt` as the separator matches the frame (a sweep, 2026-11-01), so the original's format string is not recovered.
 
+## A viewport clips its images (2026-11-23, `pulse-psp-track`)
+
+Pulse's `Skin.xml` draws its two footer strips as 14-row images (`pulse_assets.mip` at `v=27` and `v=52`, `height="14"`) in
+`<Viewport>`s authored `y="236" height="13"` and `y="249" height="13"`. Measured on PPSSPP's frame of Track Select (confidence 85, four
+grabs, and the Ship Select, Grid and Cell pairs read the same): the original's row `y=249` holds the lower strip's first row (grey 72 at
+`x=200`) and **nothing of the upper strip's last row**; ours drew that row (grey 123), a one-pixel line across the whole ticker bar
+(316 of the pair's 2022 differing pixels). So the viewport is a scissor on what it holds, here its bottom edge.
+`oag_ui::screen::Screens::clip_images_to_viewport` cuts an image's height (and its sampled rows) to the viewport's `y + height` when the
+viewport authors `x`, `y`, `width` and `height`. Census (a temporary print in the clip, then `oag-game IMAGE --menu-page main|track-select|ship-select --screenshot` headless; on Pulse PSP it prints exactly the two strips,
+so the route reads the whole tree): **Pulse PSP** (USA) the two strips; **Pulse PS2** (EU) the same two strips, viewports `y=389` and `y=410` 21 rows tall over 23-row images,
+cut to 21 (the three PS2 menu pairs, ours re-rendered with and without the clip against the committed `theirs.png`: pixels over 40 grey fall 38374 to 36284 (Grid), 59487 to 57546
+(Cell), 79328 to 77230 (Team), the bottom 15 % 10820 to 8730, 16001 to 14060, 8937 to 6839; so the law holds on PS2, confidence 80); **Pure PSP** (USA and EU), **HD/Fury**
+(`hdfury-ps3-eu.iso`), **Omega** (`omega-ps4-eu.pkg`) and **2048** (`data/extracted/vita/PCSF00007`, `main`; it authors no Track selection screen): checked, clips nothing.
+Test: `a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it`,
+`menu_layout_ground_truth::pulses_footer_strips_are_cut_to_their_viewports`. Not wired: the top, left and right edges (no image
+overruns them in Pulse), and the strips' slide-in `Key` animation, which moves the image inside the viewport and is cut by it live.
+
 ## Pure's text pens step up to whole pixels (2026-11-23, `pure-sr-track`)
 
 **Law (confidence 85).** On Pure's front end a glyph's ink edge is the pen plus the glyph's left bearing at the
@@ -844,3 +861,61 @@ Checked against the other titles, as the rule asks: **HD**: checked, differs (HD
 `oag_ui::font::ink_width`; no HD pair has been measured for a snapped draw). **Pulse**: not measured; its front end
 keeps the fractional pen, and a Pulse pair's label spacing is the check. **2048 and Omega**: not checkable here
 (no Pure-shaped front end).
+
+## Pure's glyph quads are whole pixels (2026-11-23, `pure-leftovers`)
+
+**Law (confidence 85 on the Stats face at 0.8, 75 on the menu face at 1.15 and 0.97).** Each glyph is a PSP sprite: its quad
+starts at the **pen rounded up** (`ceil(pen)`, where the pen is the one `pen_step` carries, not the ink edge), is the glyph box's
+width and height at the widget's scale **rounded down** (`floor(width x scale)` by `floor(height x scale)`), and its texture
+coordinates start **half a texel early** in x (`oag_ui::font::snapped_quad`, `SNAPPED_UV_SHIFT`; no shift in y). The line's ink
+edge, which every layout reads (`snapped_run`: wraps, alignment, the pointer rects), is the last quad's right edge.
+
+Evidence: a fresh PPSSPP software grab of Track Selection (`menu-sr-track`, USA). Free fits of a quad (x edges, y edges, bilinear
+sampling at pixel centres, the Stats atlas dumped from `LTe50325.fnt`) to the ten glyphs of `RACE RECORD`: every glyph fits
+`left = ink-edge law - 0.65`, width 4.95 (box 7 texels, so 5.6 nominal), step 8, height 10.5 to 10.85 (14 texels, 11.2
+nominal). The same fit on ours' frame returns the nominal 5.6 and 11. On the menu face (`FX300ANG.fnt`, `MODESTO` at 1.15) the
+free fit returns widths 1 px under nominal (12.85 to 13.05 against 13.8) and a left edge half a pixel right of the ink edge.
+Read as one convention: quad `[ceil(pen), + floor(w x s)]`, `u` from -0.5. Worked by hand for the `R`'s top bar (texel
+columns 61, 96, 85, 85, 91, 91 % ink, bilinear at pixel centres, 1.4 texels a pixel), it gives 43, 95, 85, 90 and 64 % across
+columns 249 to 253 against the frame's 44, 100, 90, 97 and 58 %, and nothing in 254, where ours drew a fractional quad from the
+ink edge (250, 5.6 wide) with nothing in 249 and a faint 255.
+
+Whole-frame share of pixels over 40 grey on `menu-sr-track` (one `theirs.png`, rendered by main's binary and by this branch) by
+region, ours as drawn before to after:
+
+| region (x, y, w, h) | before | after |
+| --- | ---: | ---: |
+| title (0, 25, 300, 10) | 174 px | 9 |
+| list rows (0, 51, 250, 47) | 76 px | 0 |
+| stat labels and values (240, 172, 240, 38) | 871 px | 108 |
+| description (0, 220, 480, 31) | 360 px | 81 |
+| footer Confirm and Back (0, 254, 480, 9) | 209 px | 101 |
+| **whole frame** | **1.32 %** | **0.26 %** |
+
+The seven Single Player and Tournament pairs, before (main) to after, on one fresh `theirs.png` each: `menu-team` 0.98 % to
+0.20 %, `menu-sr-track` 1.32 to 0.26, `menu-mode` 0.70 to 0.19, `menu-sr-class` 0.44 to 0.12, `menu-sr-league` 0.51 to 0.14,
+`menu-t-class` 0.44 to 0.14, `menu-t-sel` 0.51 to 0.14.
+
+Half-way variants tried on the same frame, whole `menu-sr-track`: an integer quad from the ink edge less one (`ink_left - 1`)
+fixed the Stats face (stats region 871 to 0) and broke the menu face (title 174 to 436, list 76 to 382); a texture shift in y as
+well made every region worse (0.91 %); a width of `round((w - 1) x s)` is as good on the Stats face and worse in the list (31
+px); a u shift of 0.3 to 0.7 texel is within 0.05 points of 0.5, so the half texel is the principled value, not a fit.
+Guards (a review's findings, measured on both Pure faces): no glyph of `LTe50325.fnt` or `FX300ANG.fnt` is under two texels wide, so
+the floor never reaches zero on a measured glyph (a box with ink is still held to one pixel); no box starts left of texel 2 and
+none has ink in the texel before it, so the half-texel shift reads transparent texels on both faces (the shift is clamped at the
+atlas edge for any other face). Every snapped line starts on a whole pixel (`ceil` of its aligned pen), so `snapped_run`, which
+counts from 0, measures it wherever it is placed; the pointer rects of a wrapped or scanned line follow one pen across the
+line and the glyph quads' own extent.
+What is still open: the pen law that ceils the ink edge and the quad that ceils the pen are two readings of one rule that this
+data cannot separate (every Stats pen is fractional), and the remaining 108 px on the stat labels and 101 on the footer are the
+record separators' dots (`0 . 00 . 00`) and the `Confirm` glyph rings.
+
+The second row of the description is **10 px** below the first (ink rows 222, 232, 242), not the viewport's 32 px shared among its
+three lines (222, 233, 243): `oag_ui_screens::campaign::footer::DESCRIPTION_LINE_GAP`, confidence 75, on a late grab of
+`menu-team` and `menu-t-sel` that shows all three lines (`TextInfoGap` is named by `Skin.xml` and undeclared in `FEGlobals`).
+`menu-team` 1.75 % to 1.54 % on that frame for the gap alone.
+
+Checked against the other titles: **Pulse and HD**: not applicable, the snapped quad is `MenuSkin::snapped_pens` (Pure only); a
+Pulse and an HD menu page rendered by main's binary and this one are byte for byte equal. **2048 and Omega**: not checkable
+(no Pure-shaped front end).
+

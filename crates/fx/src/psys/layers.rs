@@ -6,8 +6,8 @@ use oag_core::math::Vec3;
 use oag_mesh::mesh::GpuVertex;
 
 use super::{
-    Blend, ColourMode, Effect, EmitterSpec, Particle, Render, Stage, System, billboard,
-    channel_sample, guard, streak,
+    Blend, Effect, EmitterSpec, Particle, Render, Stage, System, billboard, channel_sample, guard,
+    streak,
 };
 
 impl System {
@@ -63,12 +63,9 @@ impl System {
         let half = channel_sample(&spec.size, age, particle.size_sample)
             * self.drawn_scale(spec, particle);
         let alpha = channel_sample(&spec.alpha, age, particle.alpha_sample) / spec.colour_divisor;
-        let colour = match spec.colour_mode {
-            ColourMode::RandomEntry => spec.palette[usize::from(particle.colour_index)],
-            // `palette[(int)(age * 255.999)]`, the original's own
-            // index; the alpha byte comes from the channel either way.
-            ColourMode::OverLife => spec.palette[(age * 255.999) as usize & 0xff],
-        };
+        let colour = spec
+            .colour_mode
+            .colour(&spec.palette, age, particle.colour_index);
         (age, half, alpha, colour)
     }
 

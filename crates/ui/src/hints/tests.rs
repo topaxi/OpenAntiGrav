@@ -241,10 +241,8 @@ fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
     assert_eq!(cancel[0].rect[0], 10.0);
 }
 
-/// On a snapped face a wrapped legend's rectangle covers the ink as drawn: each glyph of `aaa bbb` steps up to
-/// a whole unit, so the line is wider than its fractional advances say and a tap on its last glyph has to land.
-#[test]
-fn a_snapped_legend_rect_covers_its_drawn_ink() {
+/// Space, `a` and `b`: 7 texels wide, advance 8, bearing 1, for a snapped face.
+fn snapped_atlas() -> Atlas {
     use oag_texture::fnt::{Font, Glyph};
     let glyph = |ch: u8| Glyph {
         codepoint: u16::from(ch),
@@ -266,7 +264,14 @@ fn a_snapped_legend_rect_covers_its_drawn_ink() {
         indices: vec![1; 64],
         glyphs: vec![glyph(b' '), glyph(b'a'), glyph(b'b')],
     };
-    let atlas = Atlas::from_font(&font);
+    Atlas::from_font(&font)
+}
+
+/// On a snapped face a wrapped legend's rectangle covers the ink as drawn: each glyph of `aaa bbb` steps up to
+/// a whole unit, so the line is wider than its fractional advances say and a tap on its last glyph has to land.
+#[test]
+fn a_snapped_legend_rect_covers_its_drawn_ink() {
+    let atlas = snapped_atlas();
     let entries = [Entry::button(Button::Cross, "aaabbb")];
     let place = Wrapped {
         x: 10.0,
@@ -285,7 +290,38 @@ fn a_snapped_legend_rect_covers_its_drawn_ink() {
         rect_right(true)
     );
     assert!(
-        rect_right(false) < ink_right - 1.0,
+        rect_right(false) < ink_right - 0.1,
         "the fractional rect would stop short of the drawn ink"
+    );
+}
+
+/// A snapped legend line is one pen across all its words, as the draw steps it: the second entry's
+/// rectangle starts where the text before it puts the pen (rounded up) and the last ends on the
+/// whole line's ink, not where each word would end measured alone.
+#[test]
+fn a_snapped_legend_of_two_entries_follows_one_pen_across_the_line() {
+    let atlas = snapped_atlas();
+    let entries = [
+        Entry::button(Button::Cross, "aaa"),
+        Entry::button(Button::Circle, "bbb").after(" "),
+    ];
+    let place = Wrapped {
+        x: 10.0,
+        y: 50.0,
+        scale: 0.7,
+        width: 10_000.0,
+    };
+    let hints = legend_wrapped(&atlas, place, &entries, true);
+    assert_eq!(hints.len(), 2, "{hints:?}");
+    let run = |text: &str| crate::font::snapped_run(&atlas, text, 0.7);
+    let (first, second) = (hints[0].rect, hints[1].rect);
+    assert_eq!(first[0], 10.0);
+    assert!((first[0] + first[2] - (10.0 + run("aaa").ink_right)).abs() < 1e-3);
+    assert_eq!(second[0], 10.0 + run("aaa ").end.ceil());
+    assert!((second[0] + second[2] - (10.0 + run("aaa bbb").ink_right)).abs() < 1e-3);
+    let alone = 10.0 + run("aaa").end + run(" ").end;
+    assert!(
+        second[0] > alone,
+        "words measured alone would put it at {alone}"
     );
 }

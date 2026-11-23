@@ -570,7 +570,15 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     seams.mark(Seam::Effects, &report);
     for name in craft_title.effects.names_on(archives.layout.platform) {
         let dir = title.race.effect_dir_for(&track);
-        match listed_particle_effect(&mut archives, dir, craft_title.effects, name, particle_laws) {
+        let walk = title.effects.colour_walk_for(dir);
+        match listed_particle_effect(
+            &mut archives,
+            dir,
+            craft_title.effects,
+            name,
+            particle_laws,
+            walk,
+        ) {
             Ok((effect, note)) => {
                 report.push(note);
                 effects.insert(name, effect);

@@ -89,7 +89,7 @@ FE_CLOCK_FIELD = 0x40
 #: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
 STOPPED = ("grid", "cell", "team", "track", "main", "racebox", "single", "options")
 #: The shots whose footer ticker is pinned (`tick:N` before the `shot`): every Pulse screen with the footer's ticker, so the message ours draws is the one grabbed.
-TICKERED = ("grid", "cell", "team", "main", "racebox", "single", "options")
+TICKERED = ("grid", "cell", "team", "track", "main", "racebox", "single", "options")
 
 #: Pure has no recovered front-end clock or state name, so its clock is the emulator's own tick counter (`cpu.status.ticks`, the PSP's
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
@@ -272,6 +272,8 @@ class Rig:
         exactly one message on screen, its item one `records/lifetime.rs` counts, its head well inside the viewport. It returns with the CPU
         **stopped**, the state kept in `ticker_frozen`, and the `shot` that follows grabs that very frame (docs/tools/compare-page.md,
         "`menu-team`: the footer is the original's random ticker draw")."""
+        # A watch belongs to one wait: a record's item remembered from the previous screen's ticker could pair an old id with a new message.
+        self.watch = pt.Watch()
         ticker = pt.Ticker(self.dbg, self.news)
         if not ticker.find():
             sys.exit("STALLED: no footer ticker widget in RAM (is the front end on a screen with a footer?)")
@@ -421,7 +423,7 @@ PULSE_PLAN = ",".join([
     "key:cross", "st:Cell Selection", "wait:3", "tick:480", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "tick:480", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "tick:480", "shot:single",
-    "key:cross", "st:Track Creation", "wait:3", "shot:track",
+    "key:cross", "st:Track Creation", "wait:3", "tick:480", "shot:track",
     "key:cross", "st:Team Selection", "wait:3", "tick:480", "shot:team", "back:Main Menu", "wait:1",
     "key:down*5", "wait:1", "key:cross", "wait:2", "st:Additional", "wait:2", "tick:480", "shot:options", "back:Main Menu", "wait:1",
 ])

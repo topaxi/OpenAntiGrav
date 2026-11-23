@@ -1859,7 +1859,7 @@ read side by side):
 
 | Pair | Overlap | Differs | Most visible difference |
 | --- | --- | --- | --- |
-| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` |
+| Pulse Track Select | 0.180 / 0.26 / 19.4 | 16.2 % (14.6 % re-made 2026-10-29) | the circuit photo (stacked cards, a different view), `1/3` on both sides since 2026-10-29 (ours showed `1/11`: the three circuits that author no `<Unlock>` plus eight DLC-pack circuits from the maintainer's `data/dlc`, which the pair run mounted; the compare menu route now sets an empty `$OAG_DLC`), distance `5178` against `5094`, the empty records `-.--.--` against `-` **2026-11-23 (`pulse-psp-track`), three footer fixes on one fresh grab (the TKR_TTTIM frame, `TICKER_PINNED`):** whole frame 1.60 % to 0.69 % over 40 grey; the footer below y 232 1543 to 358 px (ticker box 1267 to 226, `AAA` tag box 172 to 34, the line at y 249 316 to 0); everything above the footer unchanged at 543 px. The ticker is pinned (`tick:480` before `shot:track`, as `team`), the tag read by the shared pair script, and the footer strips are cut to their viewports (`docs/ui/menus-original.md`, "A viewport clips its images"). **Open, with the evidence:** the heading's glyph pens (every letter but the first and last one pixel right of the original's, `TRACK SELECT`: ours 50, 60, 68, 77, 86, 100 ... against 50, 59, 67, 76, 85, 99 ...; the other Pulse headings miss by one glyph each; a pen-rounding difference of the title face); one grab in four (the one at 26.3 s since entry) showed a bright teal haze left of and under the circuit name on the original that no frame of the backdrop movie reproduces (best of 270 scored on the panel box 15.1 against 16.4 grey at frame 0), so it is another clock (the text glow's `s` ladder is `caught up to the game clock`, `Text::glow_stamp`) and that grab read 2.22 % whole against 3.13 % before the three fixes, the glow-phase read being the next step (read the stamp off EDRAM as `selector_stamp` does); the footer prompts' icons are one pixel left of the original's (the nav legend, not this lane's files) |
 | Pulse Ship Select | 0.129 / 0.34 / 9.5 | 7.1 % (7.0 % re-made) | the Assegai hull: the original's blue-white livery large and tilted, ours a dark livery smaller; `1/8` on both sides since 2026-10-29 (it was `1/12`: four DLC teams) |
 | Pulse title | 0.069 / 0.30 / 4.7 | 2.6 % | the type: the original's wide `PRESS START BUTTON` and legal line against ours' small mixed-case `Press START button`; the rays are at another phase (animated) |
 | Pulse Grid Selection | 0.076 / 0.35 / 4.2 | 2.1 % (0.57 % on a 2026-11-23 grab, 1.32 % before the ticker and tag reached the campaign still) | the footer's prompt glyph rings and one bar row (the cursor halo is the bloom, drawn since 2026-10-29) |
@@ -1906,10 +1906,12 @@ from a mean abs diff of 44.9 grey to 0.28 and the Ship Select hull box from 29.0
 **Reproduce:** `scripts/ppsspp-start.sh <lane> 91 <port> <image>` with `PPSSPP_EXTRA_INI` from `compare_env.py ppsspp-ini pulse-psp|pure-psp`,
 `source <scratch>/pp/env.sh`, ours' `XDG_*` under `data/scratch/<lane>/`, then `uv run --with websocket-client --with pillow python3
 scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --difficulty medium|""` (ours is run with an empty `$OAG_DLC`, `compare_menu.render_ours`, so `data/dlc` packs do not join its lists; about 90 s on Pulse from a walked
-`Main Menu`, about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
+`Main Menu` without a `tick:` step (the default plan has two, each waiting up to 480 s for a pinnable message: run it with `emu-run.py --bg --status F` and `wait F`, or one id's plan with `--plan` as the foreground watchdog's 570 s allows), about 3 min on Pure from a cold boot; `walk --plan "..."` photographs any plan, `--ids` restricts a run; Pulse's title is a
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+**The Track Select ticker (2026-11-23, `pulse-psp-track`).** `track` is in `TICKERED` beside `grid`, `cell` and `team`: `PULSE_PLAN` has `tick:480` before `shot:track`, the grab waits for a pinnable message and ours is drawn with `--menu-ticker ITEM@X` and the matching lifetime row; the tag is read as on the other pairs. The walk to the shot takes 20 to 30 emulated seconds longer, and `--menu-picker-seconds` (photo cards, turntable) held at 21 to 26 s: the photo box read 0.2 % of its area differing on three of four grabs (50, 51, 50 px) and 0.7 % (215 px) on the fourth (22.0 s, the adopted pair), where it is now the largest region left and unexplained (a slideshow card or crossfade phase). `wait_ticker` makes a fresh `Watch` each wait, so a record's item remembered from the previous screen cannot pair with a new message.
 
 ### Pure Main Menu and pause menu pairs (2026-11-23, `pure-main-pause`)
 
@@ -2464,10 +2466,44 @@ hull is 6 percent of the frame and the rest (floor, sky, mines) dominates; the c
 The two new pairs' mean grey of the original / ours: 18.2 / 21.7, 17.5 / 18.8, 14.5 / 17.6.
 
 Two circuit pairs (`hd/anulpha-pass`, `hd/chenghou-project`) re-rendered with and without the engine change: **bit-identical** (maximum difference
-0 over every pixel), since the factor is `1.0` outside Detonator and the pair script's new path is `--detonator` only. These pairs are not
-publishable as made: their world-clock read found no scenery node (`reason` in `<stem>.clock.json`) and the heading check reads 1.4 to 1.9
-degrees against 1.0 (`--pose` carries a yaw, the original's pitch and roll differ by about that); re-grab on a host where the clock read
-succeeds before adopting them.
+0 over every pixel), since the factor is `1.0` outside Detonator and the pair script's new path is `--detonator` only. Those grabs were not publishable (no world clock, heading 1.4 to 1.9 degrees); "Detonator pairs re-grabbed" below explains both and replaces them.
+
+### Detonator pairs re-grabbed (2026-11-23, `det-regrab`)
+
+The `det-camera` grabs had no world clock and a heading check of 1.4 to 1.9 degrees (tolerance 1.0). Both are read and neither
+tolerance nor filter was changed.
+
+**World clock.** `rpcs3_hd_field.scenery_nodes` found 1,151 `MeshImporter` nodes on a restored Detonator state (560 static at 0.0, 387 and
+177 on the global clock, 18 and 1 stragglers) and `_scenery_mode` kept none: it ignores a node whose time is not past `GANTRY_WINDOW_END` (13.3 s,
+the gantry's own nodes sit in `[3.83, 13.3)`). The dump of one paused frame on two boots of the old state read the global clock at 10.92 and
+10.96 s with the lap clock at 4.75 and 3.90 s (offset 6.2 and 7.1): the state was saved a few seconds into the START RACE prompt and the
+world clock only runs on from there, so the pair's frames (lap 2.0 to 2.7 s) fall under 13.3 s. It is the guard doing its job, not a Detonator
+limit: **the clock runs at about 0.4 s per wall second at the prompt** (3.1 at 17:56:15, 10.8, 18.8, 28.8, 36.2 at 17:57:43 on a cold walk, read with `scenery_nodes`
+every 20 s), so **`--pre-wait` does not help on a restored state** (60 s against 30 s moved the offset only from 6.2 to 7.1: the restored game's clock hardly runs before START RACE), so the saved state is the fix: a state saved a minute into the prompt (`data/saves/hd-fury/hd-detonator-talons-feisar-grid-late`, same sidecar,
+`mode: detonator`) restores to a world clock of 54 to 59 s at the pair: 24 nodes of 24 agree, offset 52.3 to 56.3 on eight boots. Recipe: `det_walk`'s walk
+(`emu-hd-race-walk.sh`, circuit 8, team 0, six `right`s on RACE TYPE), poll the clock, `emu-save-state.sh` once it reads over 30 s. A
+scenery clock at or under 13.3 s (a Racebox race read soon after START RACE, any mode) is refused with the same reason; widening the guard
+would let a gantry node pass for scenery.
+
+**Heading.** The check compares the original's hull forward (push buffer) with ours' trace forward at the rendered tick. `--pose` carries a
+yaw only, so ours' pitch is its own: 1.6 to 2.0 degrees (forward y 0.028 to 0.035) on every pair. The original's forward y is 0.031 to 0.044
+(mean 0.037, 5 frames on 3 boots, no volley fired) and 0.041 to 0.055 (mean 0.048, 7 frames on 4 boots) after a volley, so about 0.6 degrees
+higher, with the ranges overlapping (confidence 50). The volley frame at lap 2.2 s read 1.06, 1.54 and 1.10
+degrees (3 of 3 boots, refused); the fired frames at 2.6 and 3.0 s read 0.70 to 0.89 (4 of 4, passed). **The cause of the extra pitch at 2.2 s is
+undetermined:** unfired frames at lap 2.6 (forward y 0.040, 0.044) sit inside the fired range at the same clock, and no unfired frame exists at 2.21;
+open discriminator: one boot with no fire and `--shot 2.21`. The refusal itself is pitch (`--pose` carries yaw only; ours runs under
+`--pose-hold-ticks`, so its pitch is not a reading of its physics). The pair is the 2.6 s frame. Whether the original pitches from the
+cannon's recoil or ours rests low is unread.
+
+`--field` is not used by these pairs (`--detonator` only; no `--field` in any `ours.flags`). A published pair carries no `ours.inputs` (the
+private repository's allowlist), so `compare_env.ensure_detonator_inputs` makes it again from `original.detonator.fire` on a re-render
+(`compare-rerender-ours.py`; before it, a re-render of a published Detonator pair skipped with "no ours.inputs in the pair directory").
+Pairs on `main` `3f8f627`, two boots each, mean grey (the page's score) / RMSE: `pad` 10.48 / 0.137 and 11.80 / 0.147, `mines-ahead`
+18.53 / 0.195 and 19.39 / 0.212, `cannon-volley` 17.42 / 0.187 and 20.10 / 0.207; heading 0.15 to 0.85 degrees; hull rim box (white rim,
+`min(r,g,b) > 200` inside `x 780..1130 y 690..1000`) within 1 to 4 px on every edge and 3 to 14 px short at the bottom
+(`pad` 826,705 to 1093,943 original, 827,706 to 1094,939 ours). One boot of the volley never fired (the press landed with no tick
+running: lap clock before 1.867, after 1.867) and was discarded, and one boot's camera pick failed (`no frame-unique value`) and was
+retaken. The Detonator thread's "Render accuracy" holds the table and the region differences.
 
 ### The original's music bands in a Detonator pair (2026-11-23, `det-pair-bands`)
 

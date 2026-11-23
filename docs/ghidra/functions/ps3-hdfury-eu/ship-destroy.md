@@ -207,10 +207,9 @@ table, not in a blend mode, a missing texture or the decode:
 
 Two things the HD effect needs that this page cannot supply, both unread:
 
-1. **What `colour_mode` 3 does on HD.** Pulse knows `2` (random entry) and the over-life walk
-   (`pob.md`, "The colour table is RGB-only"). If HD's mode 3 does not take the table's RGB
-   (for instance it only drives alpha or brightness), the ramp is not a multiply and the fire
-   shows. If it does, the original's first 0.4 s of the blast is dark too.
+1. **What `colour_mode` 3 does on HD.** Read since: the table is not a colour there but a
+   blend weight, and the black run means "draw entry 0", white. See "`colour_mode` 3 is a blend
+   toward the scene light" below.
 2. **HD's frame advance and flipbook direction** (`particle-triggers.md`, "What was missing: the
    sprites"). With `WO_SHIP_EXPLOSION` listed in `Effects::sprites` the additive fireball draws
    a white blowout at ticks 45 to 50 (frame advance on or off, same picture) that the procedural
@@ -220,6 +219,182 @@ Two things the HD effect needs that this page cannot supply, both unread:
 Not shipped: no frame, shader or table was changed. Pinned: `psys_ground_truth.rs`,
 `hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp` (the sprite resolves, the
 table is black for entries 1 to 31).
+
+### `colour_mode` 3 is a blend toward the scene light (HD, 2026-11-23, confidence 84)
+
+Read at instruction level on both of HD's particle-update paths, the PPU one and the SPU job.
+They agree, and the result is not a multiply. Under mode 3 the table's red byte is a **blend
+weight**. It moves each particle's colour from table entry 0 toward a light colour sampled
+once per instance per update from the scene's lighting volume. Entries 1 to 31 are black, so
+their weight is 0 and the particle takes entry 0, which is white: the fire flipbook draws as
+authored. The black ball comes from our reading the weights as colours.
+
+**The context.** `Psys_BuildUpdateContext` (`0x00281ec0`) fills a per-instance block. The
+PPU update and the SPU job both read it: `Psys_QueueSpuUpdate` (`0x0027c6d0`) calls the builder,
+then hands the block to the `MaintainParticles` SPU job (its DMA list layout is not decoded).
+
+```text
+ctx+0x18  byte   = (emitter+0xbc != 2)                         colour animates
+ctx+0x19  0x400  = memcpy(emitter+0xc4)                        the table, file byte order
+if emitter+0xbc == 3:                                          cmpwi 3 at 0x00281f70
+    RibbonEffects_SampleLighting(1.0, instance+0x130, ctx+0xb04)  bl at 0x002821cc
+else:
+    ctx+0xb04 = 0                                              0x00281f9c
+```
+
+`RibbonEffects_SampleLighting` (`0x002a4280`, [rocket-trail.md](rocket-trail.md)) looks the
+instance's position up in the lighting volume. It scales the sample and clamps it to
+`[0, 1]`. Lane 3 is forced to `1.0`: `vsldoi`/`vsel` at `0x002a43b8`-`0x002a43c8`, constant
+`*0x0079bfd0 = 1.0`. `Colour_PackFloat4` (`0x002a39c8`) packs it as
+`x<<24 | y<<16 | z<<8 | w`, each lane times `255.0` (`*0x0079bf70`). The light word's low
+byte is therefore always `0xff`, never 0, so mode 3 always takes the lerp.
+
+**The law, PPU** (`Psys_UpdateParticles`, `0x0028cc10`; `r27 = r31 = ctx`, set at
+`0x0028cc54` and `0x0028cd24`):
+
+```text
+0x0028ce10  lbz   ctx+0x18; 0 -> skip the colour step
+0x0028ce1c  idx = trunc(age(+0x90) * 255.99997) & 0xff         (*0x008b2a70 = 0x437fffbe)
+0x0028ce2c  L   = ctx+0xb04
+0x0028ce48  (L & 0xff) == 0 -> 0x0028d2a8: the plain walk:
+                colour(+0x74) = (colour & 0xff000000) | (table[idx] & 0x00ffffff)
+otherwise:
+0x0028ce4c-0x0028ce84  E0 = table[0] as a word (unindexed ctx+0x19..+0x1c)
+0x0028ce58-0x0028cecc  L' = byteswap(L)                        lanes now match E0's order
+0x0028ce8c  w   = byte at ctx + idx*4 + 0x1c                   (the entry's last byte)
+0x0028cf28  t   = w * (1/255)                                  (*0x008b2a74 = 0x3b808081)
+0x0028cf60.. per byte b of the four: out.b = trunc(E0.b + (L'.b - E0.b) * t)
+            colour(+0x74) = out                                (alpha byte included)
+```
+
+The table is stored in file byte order, and HD's `.pob` writes each entry as a big-endian
+`u32` whose bytes are `A, B, G, R` (`oag_pob` reverses them to RGBA). So the weight byte at
+`+0x1c` is **red**, and the particle word has the same `A, B, G, R` layout. The alpha
+channel block (`ctx+0x6a0`, after the colour step) then overwrites the alpha byte as it does
+in every mode, when `ctx+0x6a0` is set (copied from render state `+0xc34`).
+
+**The SPU job agrees.** The `MaintainParticles` job in the image at `0x0080a000`, read with
+`scripts/ps3-spu-disasm.py 0x0080a000 0x1b80`, offsets into that range:
+
+```text
+b74..b8c   byte ctx+0x18 == 0 -> skip
+b90..bbc   idx = cfltu(age * 0x437fffbe) & 0xff; L = word ctx+0xb04 (il 2820)
+bb4..bc4   ceqbi on L's low byte; brhz -> 10a8 when it is not 0
+bc8..c60   the plain walk: keep the top byte, RGB from the entry
+10a8       brsl 0x950: byteswap(L)
+10cc..1148 w = byte ctx + idx*4 + 0x1c; t = w * (1/255) (frest/fi and a Newton step on 255.0)
+10d4..1144 E0 from ctx+0x19..+0x1c, unindexed
+1150       brsl 0x8a8: per byte, cfltu((b - a) * t + a), a = E0, b = L'
+1154..1160 store to particle +0x74
+```
+
+Two independent compilations of one source agree on every step. Which path runs depends on
+`*(0x008b2964)+0x28` and on the job queue (`Psys_UpdateInstance_q`, `0x00285020`), so the
+answer is the same either way. The score is 84, the ceiling for a static read. A live
+`ctx+0xb04` read moves it up (below).
+
+**The root of `WO_SHIP_EXPLOSION`.** From the table bytes in `DATA02`'s
+`/data/psys/wo_ship_explosion.pob` (emitter at file `+0x80`, flags `0x0440420c`, life
+`180 +- 20` ticks, rate 1.0):
+
+| entries | file bytes `A B G R` | weight `t` | colour |
+| --- | --- | --- | --- |
+| 0 | `ff ff ff ff` | 1.0 | `L` |
+| 1-31 | `ff 00 00 00` | 0 | entry 0: white, `(255, 255, 255, 255)` |
+| 32-40 | `ff 1a1a1a` .. `ff e6e6e6` | 0.10 .. 0.90 | white blended toward `L` |
+| 41-255 | `.. ff ff ff`, `A` falling `ff` -> `00` | 1.0 | `L` (the authored `A` column is never read) |
+
+So, by life fraction:
+
+- **0:** index 0, weight 1, `L`. A 160-200 tick particle's first update already puts it at
+  age `1/180`, index 1 (white). On this path the spawn writes only the alpha byte (`stb 0`,
+  `0x00289cb4`). The RGB store at `0x0028a3b8` is mode 2's random entry. So index 0 is
+  never what a frame shows. The first drawn colour is **white**.
+- **1/8:** `trunc(0.125 * 255.99997) = 31`, weight 0, **white**: the flipbook's own fire.
+- **1/2:** index 127, weight 1, **`L`**: the flipbook tinted by the scene light at the
+  blast. Blended over life fractions 0.125 to 0.16, about 6 ticks.
+
+`L`'s value is unread: the lighting volume behind `RibbonEffects_SampleLighting` is open in
+[rocket-trail.md](rocket-trail.md), whose live rocket samples on one circuit ran from
+`0xbaffff` near the grid to `0x2b5d7b` in the dark. The original's blast is therefore
+white-hot fire for its first eighth, then the same flipbook in the scene's light colour. It is
+never the table's black. How dark it gets later depends on `L`, which is unread.
+
+**Read recipe for `L`** (raises the 84): RPCS3 with the patched build, a breakpoint at
+`0x002821d4` (just after the `SampleLighting` call, `bl` at `0x002821cc`, in
+`Psys_BuildUpdateContext`), and `--force-wreck` on a known circuit. Read the word at
+`r28 + 0xb04` (the context).
+It runs on both update paths.
+
+**Wired (`pob-colour-mode-wire`, 2026-11-23).** `oag_title::Effects::colour_walk` names each title's reading
+(`oag_hd`: `LightBlend`; `oag_2048`, `oag_omega`: `Reversed`; Pulse and Pure keep `Forward`), and
+`oag_fx::psys::Effect::with_colour_law` applies it to the emitters that walk their table, at load. The player's
+three walks index with `255.99997` as the original does; Pulse's and Pure's forward walk is untouched. Pinned by
+`colour::tests` (the root's life 0, 1/8 and 1/2, with a non-white `L`),
+`psys_ground_truth.rs::hd_ship_explosion_root_draws_entry_zero_through_its_black_run_under_the_light_blend`,
+and `hd_effect_sprites.rs::the_loader_gives_hds_ship_explosion_the_light_blend`.
+
+**`L` is chosen, not measured.** Our lit ribbons use no lighting volume either: `rocket_smoke::UNLIT_RGB` (white,
+the bright end of the live `0xbaffff` to `0x2b5d7b` span) stands in, and `oag_fx::psys::LIGHT` is that
+constant. With a white `L` the blend returns white at every weight, so HD's root is white for its whole life
+until the read recipe above gives a real `L`. Never fit it to a frame.
+
+Frames (ours, `--race --opponents --force-wreck 40:7`, Talon's Junction, 960x540): `WO_SHIP_EXPLOSION` is
+now in `oag_hd::effects::SPRITES` (pinned in `hd_effect_sprites.rs`), so the root draws its `smoke_new4_8x4`
+flipbook. Tick 45 a white-hot flash, 54 and 60 an orange fireball with a white core, 75 the fireball
+spreading with the sparks; no white blowout (the earlier one was the table read as colours). Unlisted, the
+procedural soft ball drew white where it was black.
+2048 (Altima, same command): at tick 54 the dark smoke ball becomes white fire (reversed walk: indices 255
+down), the last eighth of the life is black by the table (not framed: tick 205 shows only the plume, the same before and after). Census, in `psys_2048_ground_truth.rs` and
+`psys_omega_ground_truth.rs`: 2048 authors modes 0, 2 and 3 only (31 mode-3 emitters in 12 effects: the
+ship explosion and its player twin, `WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK`, `WO_ROCKET_FLARE`, `WO_MINE_EXPLO`,
+`WO_CANNON_SPARKS`, `WO_DAMAGE_MODERATE`, `WO_DEBRIS_SPARKS`, `WO_GLOBE`, `WO_GLOBE_STATIC`,
+`WO_SHIP_DEATH_DAMAGE_PLUME`) and no mode 1; Omega's two archives author 29 and 27 mode-3 emitters and no mode 1.
+**Omega: ported by reader.** `Data\particles2048` (the 2048-layout set its 2048 reader `FUN_016e06b0` plays)
+walks reversed: `oag_title::Effects::colour_walk_in`. `Data\particles` keeps the plain forward walk the HD-layout
+reader `FUN_016ddf70` reads (no lerp; confidence 55, and which reader plays which directory is inferred from
+the directories' names and the race's `effect_dir_by_circuit`, not read). Omega's HD-era mode-3 effects
+therefore stay forward, with no light blend either.
+
+**The frame advance, partly read (confidence 60).** In the same update
+(`0x0028d0f0`-`0x0028d1bc`, context `ctx+0x6b0..+0x6c1`): with `ctx+0x6b2` set, emitter
+flag `0x40` (`ctx+0x6b4` is the emitter's `+0x20`) makes `frame = age * (count - 0.01)`.
+Otherwise `frame += rate * ctx+0x6bc`. Then a `[lo, hi]` byte pair (`ctx+0x6c0`/`+0x6c1`,
+from the baked record's `+0xc8f`/`+0xc94`) resets `frame > hi` to `lo`, and the count wraps
+it. `+0x78 = floor(frame)`. The direction is forward for a positive rate. The root's flags
+have no `0x40`, so it steps at a rate. The count's and rate's sources (render state
+`+0xc44`/`+0xc60`) are not read.
+
+**2048: checked, differs.** 2048's per-particle update `Psys_UpdateParticle` (`0x812ab114`,
+v1.04) has no lighting branch. `s17 = 1 - p[+0x6c] / p[+0x70]` (`vdiv` at `0x812ab1b0`, `vsub`
+at `0x812ab1b8`), where `+0x6c` is the countdown the function decrements at its end and
+`+0x70` the lifetime. So `s17` is the age fraction. At `0x812ab1f2`-`0x812ab23a`:
+
+```text
+mode = record+0x870; mode == 2 -> no walk
+f = age (1 - remaining/lifetime)
+mode != 0 -> f = 1 - f                                      0x812ab1fe..0x812ab204
+idx = trunc(f * 255.99997) & 0xff; RGB bytes = record+0x470 + idx*4, bytes 0..2
+```
+
+So 2048 plays mode 3, and mode 1, as the walk **reversed**. The same table gives white for
+most of the life (indices 255 down to 41), the grey ramp at life fractions 0.84 to 0.875, and
+black for the last eighth. That is 2048's fire that ends in dark smoke, from the same file, with
+no light term. Omega's copy of this reader agrees (below), so two binaries read the same
+logic. Confidence 65: the runtime record's `+0x870` and `+0x470` are taken to be the file's
+`+0xbc` and `+0xc4`. That mapping is unread, because no direct store to `+0x870` exists (the
+record is presumably filled in bulk). Our player walks forward on every title, so on 2048
+and Omega every emitter with mode 1 or 3 is affected, not only this blast. HD's mode 1 is
+the plain forward walk.
+
+**Omega: checked, differs.** Omega carries both readers. `FUN_016e06b0` is 2048's.
+`xmm5 = remaining / lifetime` (`0x016e06f6`) and `xmm10 = 1 - xmm5` (`0x016e0737`).
+`+0x870` is read at `0x016e08dc`: 0 walks with `xmm3 = xmm10`, the age (`0x016e08d1`); 2
+skips; any other value walks with `xmm5`, reversed. That is the same law as 2048. `FUN_016ddf70` reads an HD-layout record (table at `+0xc4`,
+`0x016de807`). It makes only the `mode != 2` test (`cmp r13d, 2`, `0x016de77e`) before the
+plain walk (keep the top byte, `& 0xffffff`, `0x016de7e4`-`0x016de817`). No light lerp
+appears there. Whether Omega's HD-layout path is reached for HD's ship explosion is not read
+(confidence 55 for "Omega dropped HD's mode 3 lerp").
 
 **Against Pulse.** Pulse swaps to the wreck at state 5, 0.5 s after the blast, throws
 `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` at every wreck locator then, and
@@ -234,6 +409,10 @@ the wreck is live from state 4.
 | Address | Name | Conf. | Evidence |
 | --- | --- | ---: | --- |
 | `0x000db400` | `Ship_SelectWreckModel` | 88 | instruction for instruction `Ship_SyncActiveModelPointer` (`0x000db090`) with `+0x6ae4` and `+0x6ae0` exchanged; `+0x6ae4` is where `Ship_ReloadModelForSkin` loads `shipwreck.vex`; called in `Ship_SetState` case 4; 2048 and Omega twins in their case 4 |
+| `0x00281ec0` | `Psys_BuildUpdateContext` | 84 | fills the update block both particle paths read: `ctx+0x18 = (+0xbc != 2)`, the table copied to `ctx+0x19`, `RibbonEffects_SampleLighting` into `ctx+0xb04` only when `+0xbc == 3` (else 0); called by `Psys_UpdateInstance_q` and `Psys_QueueSpuUpdate` alike ("`colour_mode` 3 is a blend toward the scene light") |
+| `0x0027c6d0` | `Psys_QueueSpuUpdate` | 72 | under 256 queued: builds the context, names `MaintainPariclesSpu pre-baking jobs...`, queues a job over the context, the pool and the instance, returns 1; 0 sends the caller to the PPU update |
+| `0x00285020` | `Psys_UpdateInstance` | 65 | per instance: SPU job when `*(0x008b2964)+0x28` and `Psys_QueueSpuUpdate` succeed, else `Psys_BuildUpdateContext` then `Psys_UpdateParticles`; then the bounds copy-back and collision |
+| `0x002a39c8` | `Colour_PackFloat4` | 85 | clamps a float4 to `[0, 1]`, times `255.0` (`*0x0079bf70`), packs `x<<24 \| y<<16 \| z<<8 \| w` |
 | `0x000d96c8` | `Ship_PlayDestroyExplosion` | 82 | the only function naming `~SHIP_DESTROYED`; `EXPLBIG_PC`/`EXPLBIG`; `WO_SHIP_EXPLOSION`/`WO_NITRO_SHIP_DEATH` (strings through its own TOC); the 2048 and Omega twins name the same set |
 | `0x000d44d0` | `Ship_ApplyDeathKick_q` | 60 | random draws (`0x0028c660`, `Libc_Rand`) over tuning `+0x18..+0x34`, then `0x000f6348` with the live model's node position and `0x000f5dd8` on the body; formula not decoded |
 | `0x000e3d18` | `Ship_UpdateExploding` | 82 | state-4 arm of the per-tick dispatcher; `+0x6a78 -= dt`, `Ship_SetState(5)` at `<= 0` |
