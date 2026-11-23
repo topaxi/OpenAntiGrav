@@ -6,7 +6,7 @@
 
 **The answer.** The strip's texture unit decodes R, G and B with the sRGB curve before the program sees them.
 Ours samples it raw and adds the raw texel into HD's linear scene. That is a real, read difference
-(confidence **80**), but applying it alone overshoots: ours goes from 1.7-2.3 times the original's blue to
+(confidence **75**), but it is **not the brief's factor of about 0.5**: applying it alone overshoots: ours goes from 1.7-2.3 times the original's blue to
 0.38-0.89 of it. **Read, not sufficient.** A second, unread factor makes the original's floor brighter than
 the decode alone predicts (candidates below).
 
@@ -55,8 +55,19 @@ object offsets `+0x20..+0x34` are those six words in that order. Three independe
 
 Nothing after the load clears the nibble: `Environment_UpdateStageBlend` (`0x003da540`) writes the texels
 through `*(tex+0x10)`, not the words ([zone-effectsettings-loader.md](zone-effectsettings-loader.md)).
-Confidence **80** that the unit decodes the strip's RGB: the field mapping is static (two live words of the
-same layout agree with it), and the strip's own word has not been read live at a Zone draw.
+**This is the writer [renderer.md](renderer.md) left unlocated.** Its "Gamma is in the ADDRESS word" entry
+reads `0x60730303` live on the sky faces and `0x60710101` on a mesh's diffuse unit, notes that
+`Texture_BuildGcmRegisters` only ever writes nibble 0, and concludes that the `0x700000` is ORed on after the
+builder "by code not located". `0x003d6dc8` is one such OR, on this object, at load. The older statements
+that the engine has no per-texture gamma control ([renderer.md](renderer.md), "Per-texture sRGB/`GAMMA`
+decode: settled negative", which searched `FILTER`; repeated in [magstrip-wake.md](magstrip-wake.md), "Still
+open", and [env-probes.md](env-probes.md)) are the ones that entry already corrects; they do not contradict
+this page.
+
+Confidence **75** that the unit decodes the strip's RGB at the draw: the OR on this object is read
+statically, the word layout is confirmed by live reads on other units, and a bind-time rebuild of the word is
+ruled out only indirectly (live words elsewhere carry bits the builder never writes). The strip's own word
+has not been read live at a Zone draw.
 
 **3. Ours.** `crates/mesh/shaders/zone.wesl` `zone_glow` samples `zone_vis_tex` (`Rgba8Unorm`) raw, and
 `shade.wesl` adds `zone_glow_term` into `lit_linear`, HD's linear sum, before the encode. So ours' strip is
@@ -75,8 +86,9 @@ Boxes: A `x 250..800, y 780..850`, B `x 1090..1230, y 780..1000`, mean RGB, 1920
 | `pad` | 0.584 | `(14.2, 1.8, 32.2)` / `(2.2, 0, 8.8)` / `(6.7, 0, 19.1)` | `(24.6, 3.8, 53.4)` / `(3.8, 0, 15.4)` / `(9.5, 0, 29.1)` | 12.74 to 11.79 |
 
 Blue ratio ours over original: main 1.66 to 2.27; decode 0.38, 0.47, 0.77, 0.89, 0.46, 0.53 (geometric
-mean 0.56). The main column reproduces `det-floor`'s "after" exactly. RMSE moves 0.198/0.192/0.149 to
-0.202/0.195/0.150.
+mean 0.56). The decode moves ours' box blue by about 0.23 (23.3 to 5.3), not 0.5. The main column reproduces
+`det-floor`'s "after" exactly. Whole-frame RMSE moves 0.198/0.192/0.149 to 0.202/0.195/0.150: slightly
+worse on all three, while mean grey falls on all three.
 
 **The level check does not settle it either way.** The original's box blue is 14.0, 18.3, 19.1 at held band 3
 0.51, 0.92, 0.58 (B: 24.9, 28.2, 29.1): nearly flat, and `pad` above `mines-ahead` by more than band 3 says.
@@ -100,20 +112,26 @@ original's floor: its red is 5.1 to 9.5 where the strip's decoded red (`14 * L`)
 
 ## Ready to wire
 
-Decode the strip's RGB on HD: `decode(textureSample(zone_vis_tex, ...).rgb)` in `zone_glow` (or an
-`Rgba8UnormSrgb` view of the strip) where the scene is linear; leave the gamma path as it is. A test: the
-visualiser glow of a smooth slot at level 1 against level 0.5 differs by the sRGB curve's ratio, not 2. Wire it
-together with item 1 or 2 above, or the floor turns 0.4-0.9 of the original's and the pairs' mean grey falls
-by 0.6 to 1.2 for the wrong reason.
+Wire the decode on its own, then measure items 1 and 2 against the decoded floor: it is a read law, it is how
+every other gamma-7 unit of HD is already handled ([hd-track-tone.md](../../../rendering/hd-track-tone.md),
+"The texture unit's decode is the sRGB curve"), and a factor measured against the raw floor would come out the
+wrong size. Decode the strip's RGB on HD: `decode(textureSample(zone_vis_tex, ...).rgb)` in `zone_glow` (or an
+`Rgba8UnormSrgb` view of the strip) where the scene is linear. Expect the table above: box blue 0.38-0.89 of
+the original's, mean grey down 0.6 to 1.2, RMSE up 0.001 to 0.004. A test: the visualiser glow of a smooth
+slot at level 1 against level 0.5 differs by the sRGB curve's ratio, not 2. The gamma-path comment in
+`shade.wesl` above `plain` ("it is a shader parameter and texture-lookup product ... owes no sRGB decode either
+way") contradicts this page and changes with the wiring.
 
 ## Cross-title
 
 - **2048: checked, differs.** Its effect-settings tables author no `EQ` tints, so ours' strip stays blank
   there ([detonator-look.md](detonator-look.md), "Cross-title"); there is nothing for a decode to act on.
-- **Omega: not checkable here.** Its visualiser is fed by another library and its `Environment_UpdateStageBlend`
-  is unread ([detonator-look.md](detonator-look.md), "Cross-title" under "The floor's violet"); on GNM the sRGB choice is the texture
-  descriptor's format, and the strip's descriptor has not been located. Next: find the 256 x 1 strip's create
-  in Omega's `eboot.bin` by the same `0x100, 1` call shape.
+- **Omega: open.** Searched once: `eboot.bin`'s only `zoneTexVis` string (`0x0182a6d1`) is referenced from
+  `ShaderConstants_InitNameTable` alone (`0x015c47de`, `0x015c4a6d`), so the strip's create is not reached
+  from the name. Its visualiser is fed by another library ([detonator-look.md](detonator-look.md),
+  "Cross-title" under "The floor's violet"); on GNM the sRGB choice is the texture descriptor's format. Next:
+  the counterpart of `Environment_LoadStageTextures` (the stage-texture loads beside a 256-texel zero fill),
+  and the descriptor format of the texture it creates.
 
 ## Names
 
