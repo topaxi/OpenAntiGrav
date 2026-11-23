@@ -99,6 +99,8 @@ PURE_CLOCKED = ("main", "mode", "sr-class", "sr-league", "sr-track", "team", "t-
 PSP_CPU_HZ = 222e6
 #: The disc id and version a Pure save state's file name carries (`psp-state.py --serial`).
 PURE_STATE_SERIAL = "UCUS98612_2.00"
+#: Where `CURRENT` reads 0 in ours' drive of `scripts/pure-pause.drive`: the tick after `until stage=race` at which the HUD clock starts (1,480 ticks read 20.1 s).
+PAUSE_CLOCK_ZERO_TICKS = 274
 #: A Time Trial on Vineta K, Feisar, Vector, just restarted: the pause menu's own frame is grabbed from it.
 PURE_PAUSE_STATE = "data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst"
 #: The pause screen's walk, run apart from `PURE_PLAN` (a state load leaves the front end): `--plan "$PURE_PAUSE_PLAN" --ids pause`.
@@ -503,6 +505,12 @@ def build_pairs(args, seen, out, plat, walk):
     for item in walk:
         if args.ids and item["id"] not in args.ids.split(","):
             continue
+        if item["id"] not in seen:
+            # A walk shoots only what its plan names: the pause screen is its own plan (`PURE_PAUSE_PLAN`, a state load leaves the front end).
+            if args.ids:
+                sys.exit("--ids names %r but the plan never shot it (the pause screen needs --plan PURE_PAUSE_PLAN)" % item["id"])
+            print("skip", item["id"], "(not shot by this plan)")
+            continue
         shot = seen[item["id"]]
         if "why" in item:
             cm.write_gap(out / ("gap-" + item["id"]), shot["png"], item["page"], "menu.toml",
@@ -554,11 +562,20 @@ def build_pairs(args, seen, out, plat, walk):
                 "basis": "the presented picture lags the CPU stop by 0 or 1 frame (a message moves one pixel a frame), so ours is drawn at the head read and at the head "
                          "plus one and the one that matches the grabbed ticker box (85, 235, 370 x 32) better is kept"}
         cp.build(pair, args, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
+        route = item.get("route")
+        if item["id"] == "pause":
+            # The drive plays to the clock the original's HUD shows: `PAUSE_GO_TICKS` sim ticks to GO's board, then the clock's seconds.
+            if args.pause_clock is None:
+                sys.exit("the pause pair needs --pause-clock: the race clock (`CURRENT`) the original's frame shows, read by eye")
+            ticks = round(PAUSE_CLOCK_ZERO_TICKS + args.pause_clock * 60)
+            (pdir / "ours.drive").write_text(Path(route[1]).read_text().replace("@TICKS@", str(ticks)))
+            route = [route[0], str(pdir / "ours.drive")] + route[2:]
+            pair.rec["original"]["race_clock_read"] = {"value": args.pause_clock, "basis": "the HUD's CURRENT in the grabbed frame, read by eye; ours is played %d sim ticks (clock zero at tick %d, 60 a second)" % (ticks, PAUSE_CLOCK_ZERO_TICKS)}
         try:
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                         selection=item["selection"], route=item.get("route"), race=item.get("race"), player={"tag": shot["tag"]} if shot.get("tag") else None,
+                         selection=item["selection"], route=route, race=item.get("race"), player={"tag": shot["tag"]} if shot.get("tag") else None,
                          extra_args=clocked + (("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)) if pin else ()), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:
@@ -583,13 +600,17 @@ def main():
     ap.add_argument("--campaign-title", default=None, help="records.toml campaign_difficulty row title (default: the game's name)")
     ap.add_argument("--difficulty", default="medium")
     ap.add_argument("--ids", default="", help="pairs: only these WALK ids (comma separated)")
+    ap.add_argument("--from-png", action="append", default=[], metavar="ID=PNG",
+                    help="pairs: build the pair of WALK id ID from an original frame already grabbed, with no emulator (a re-make of ours' side)")
+    ap.add_argument("--pause-clock", type=float, default=None,
+                    help="pairs, id pause: the race clock the original's HUD `CURRENT` reads in the frame (read by eye), in seconds; ours is played to it")
     cp.add_arguments(ap)
     args = ap.parse_args()
     args.platform = args.platform or args.title + "-psp"
     out = args.out.resolve()
     shots = out / "shots"
     shots.mkdir(parents=True, exist_ok=True)
-    rig = Rig(args.port, shots, args.title)
+    rig = None if args.from_png else Rig(args.port, shots, args.title)
     if args.cmd == "walk":
         rig.run(args.plan)
         return 0
@@ -600,8 +621,17 @@ def main():
     args.campaign_title = args.campaign_title or plat["title"]
     if args.title == "pulse":
         rig.news = pt.load_rows(Path(args.oag_game).with_name("oag-wad"), args.source + ":" + "PSP_GAME/USRDIR/Data.wad") if "tick:" in (args.plan or PULSE_PLAN) else None
-    rig.run(args.plan or (PULSE_PLAN if args.title == "pulse" else PURE_PLAN))
-    refused = build_pairs(args, rig.seen, out, plat, PULSE_WALK if args.title == "pulse" else PURE_WALK)
+    if rig is None:
+        seen = {}
+        for spec in args.from_png:
+            wid, _, png = spec.partition("=")
+            seen[wid] = {"png": Path(png), "at": datetime.datetime.fromtimestamp(Path(png).stat().st_mtime).astimezone().isoformat(timespec="seconds"),
+                         "state": None, "since_entry": None, "from_stamp": False, "level": None, "from_clock": False, "ship_t": None,
+                         "from_ticks": False, "title": None, "tag": None, "ticker": None}
+    else:
+        rig.run(args.plan or (PULSE_PLAN if args.title == "pulse" else PURE_PLAN))
+        seen = rig.seen
+    refused = build_pairs(args, seen, out, plat, PULSE_WALK if args.title == "pulse" else PURE_WALK)
     json.dump({"refused": refused}, open(out / "refused.json", "w"))
     return 3 if refused else 0
 

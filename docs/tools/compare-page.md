@@ -1920,7 +1920,7 @@ differing region is fixed or measured. Share of pixels over 40 grey, whole 480 x
 | Pair | Before | After | Route |
 | --- | --- | --- | --- |
 | Main Menu | gap (ours' `menu.toml` page against the same frame: 4.89 %, mean grey 3.68) | 2.97 % (mean grey 2.26, edge 0.48) | `--menu-page pure-main` |
-| Pause menu (Time Trial, Vineta K, Feisar) | gap | 3.23 % (mean grey 6.48, edge 0.81) | `--drive-file scripts/pure-pause.drive --original-menu --state-log /dev/null` |
+| Pause menu (Time Trial, Vineta K, Vector, Feisar) | gap | 2.82 % (mean grey 6.10, edge 0.85); song box 335 to 54 px | `--drive-file scripts/pure-pause.drive --original-menu --state-log /dev/null` |
 | Single Player (mode), its row descriptions | 3.13 % (the committed pair) | 1.90 % | `--menu-page pure-chain` |
 
 **Main Menu.** The page ours draws live is `menu.toml`'s `main` (ADR-0066: this build's rows, title `OPENANTIGRAV`), so a compare shot draws the disc's own screen
@@ -1934,15 +1934,18 @@ undeclared so 0.7 is chosen): measured, not fixed. **Row 4 reads `ON LINE` in ou
 (`oag_pure::LANGUAGE_MANIFESTS` leaves it out as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Open, with the evidence**:
 the overlay is not wired because it is a string-table layer over English only on the USA pressing, wider than this lane's claim.
 
-**Pause menu.** Ours is a menu over a parked race, so no still draws it: the route plays our own session (`boot`, RACEBOX, Time Trial, Vineta K, Feisar, 1,480 ticks, START) with
-`--original-menu`, which now leaves this project's PHOTO MODE row out of a pause screen that authors none (the original has three rows). The drive draws at 1440 x 816 and the pair
-script box-filters it to 480 x 272 (`compare_menu.box_down`); the pair records `ours.drive`, and `compare-rerender-ours.py` runs it. The original is
-`data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst` loaded, 4 s, START, 2 s (`PURE_PAUSE_PLAN`). **Fixed**: the race's song-name line under the tint (the original
-shows none: the music widgets are `InGame`'s and the pause screens are its siblings): `PauseMenu::song_line_under_scrim` is `false` on Pure, `true` elsewhere (unmeasured);
-song box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75 and 175, ink rows 103-114, 121-132, 139-150, peak ink 252/156/149 against 253/157/149. **Largest
-regions left** (px of 4,232): the HUD top 1,941 (the race clock digits: the original's `CURRENT` reads 0.22.3 where its `BRONZE TIME` has run 2.4 s, so the two counters are not one
-clock there, and ours' are; the clock at the grab is a wall-clock wait, not matched), the band's rows 819 (ours' words are 3 px narrower over 105: `CONTINUE` ink 188-290 against
-188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as above), the footer line 522 and the scene below 950 (the scenery clock).
+**Pause menu.** Ours is a menu over a parked race, so no still draws it: the route plays our own session the way the original is walked (`boot`, SINGLE PLAYER, TIME TRIAL, Vector,
+Alpha, Vineta K, the team, `@TICKS@` race ticks, START) with `--original-menu`, which now leaves this project's PHOTO MODE row out of a pause screen that authors none (the original has
+three rows). The racebox page offers no Vector class (Venom first), so the campaign flow is the route that races the original's class. The drive draws at 1440 x 816 and the pair
+script box-filters it to 480 x 272 (`compare_menu.box_down`); the pair keeps `ours.drive`, which `compare-rerender-ours.py` runs (re-rendered on a copy: byte-identical `ours.png`).
+The original is `data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst` loaded, 4 s, START, 2 s (`PURE_PAUSE_PLAN`). The grab's race clock varies by seconds between loads
+(wall waits), so `--pause-clock` is the `CURRENT` the frame shows, read by eye (22.3), and ours is played to it (`PAUSE_CLOCK_ZERO_TICKS`, 1,612 ticks); with that both HUD clocks read
+0.22.3 and `BRONZE TIME` 1.47.6. `--from-png pause=PNG` re-makes ours' side from a frame already grabbed, with no emulator. **Fixed**: the race's song-name line under the tint (the
+original shows none: the music widgets are `InGame`'s and the pause screens are its siblings): `PauseMenu::song_line_under_scrim` is `false` on Pure, `true` elsewhere (unmeasured); song
+box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75 and 175, ink rows 103-114, 121-132, 139-150, peak ink 252/156/149 against 253/157/149.
+**Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (ours'
+words are 3 px narrower over 105: `CONTINUE` ink 188-290 against 188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as the description's), the
+footer line 522.
 
 ### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
 

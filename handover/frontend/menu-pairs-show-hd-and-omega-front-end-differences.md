@@ -110,7 +110,7 @@ Pure shows no difficulty control). No renderer or UI code changed. Ranked by the
 4. **Title** (0.3 %): no visible difference.
 
 Gaps (original kept, no pair): Pulse `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), the pause menu;
-Pure's `Main Menu` and pause menu are pairs since 2026-11-23 (`pure-main-pause`: Main Menu 2.97 %, pause 3.23 % over 40 grey; `docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs"). Each other is drawn from `menu.toml` or has no still route.
+Pure's `Main Menu` and pause menu are pairs since 2026-11-23 (`pure-main-pause`: Main Menu 2.97 %, pause 2.82 % over 40 grey; `docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs"). Each other is drawn from `menu.toml` or has no still route.
 
 ## Next Steps
 
@@ -126,7 +126,7 @@ Pure's `Main Menu` and pause menu are pairs since 2026-11-23 (`pure-main-pause`:
    `route: None` to a route).
 6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); draw the record separators; read the typed line's face advance and baseline (2 px high, 0.86 of the original's advance) (the `Scroll` face is drawn since 2026-11-01); then re-run
    `scripts/psp-menu-pair.py pairs`.
-7. Pulse's pause menu: turn the gap into a pair the way Pure's was (`--drive-file` route with `--original-menu`, `scripts/pure-pause.drive`, a save state of the original). Pure's pause pair: the HUD clock digits (the original's `CURRENT` and `BRONZE TIME` are not one clock after a restart state) and the 3 px narrower words are open. Pure Main Menu: row 4 `DOWNLOAD` is the USA disc's `PI012` overlay (`On Line` -> `Download`), not applied by ours; the typed description's `Scroll` advance (6.5 px a character against 7.6) is the largest region.
+7. Pulse's pause menu: turn the gap into a pair the way Pure's was (`--drive-file` route with `--original-menu`, `scripts/pure-pause.drive`, a save state of the original). Pure's pause pair: the HUD digits' glyph edges and the 3 px narrower words are open (the race clock is matched by `--pause-clock`). Pure Main Menu: row 4 `DOWNLOAD` is the USA disc's `PI012` overlay (`On Line` -> `Download`), not applied by ours; the typed description's `Scroll` advance (6.5 px a character against 7.6) is the largest region.
 8. Pulse PS2 menu pairs (2026-11-23, `ps2-ship-select`): the Ship Select pair carries the original's footer ticker message and tag (`docs/tools/compare-page.md`, "PS2 menu pairs: the footer
    ticker and the tag are read from PCSX2 RAM"; footer box >40-grey share 18.0 % to 8.8 %). Open: the Grid Selection and Cell Selection states are from PCSX2 v2.9.138 and do not load, so
    `menu-grid` and `menu-cell` need the same walk (their footers then take the ticker and tag through the same script); the PS2 ticker widget's own fields (item index, weight) are not
