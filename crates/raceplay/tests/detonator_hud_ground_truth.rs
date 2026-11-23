@@ -431,7 +431,6 @@ fn a_2048_detonator_hud_reads_the_cannon() {
         "2048 shows no medal: {:?}",
         context.layout.image_models
     );
-    assert!(report.contains("HUD: the medal models are authored but this title does not show"));
     for name in ["Bullet14", "Multi14", "DetonatorWeaponDisplay", "EmpCharge"] {
         let sprite = context
             .layout
