@@ -153,7 +153,9 @@ fn triangle_vertex(index: u32, instance: Instance) -> VertexOut {
     out.position = to_clip(at);
     out.uv = select(sheet / uniforms.sprites, t0 / uniforms.atlas, solid);
     out.color = select(vec4<f32>(shade, 1.0), instance.color, solid);
-    out.border = out.color;
+    // A solid triangle has no outline: its border alpha is zero (see the gradient case in
+    // `vs_main`), the shaded sheet triangle keeps its colour.
+    out.border = select(out.color, vec4<f32>(out.color.rgb, 0.0), solid);
     out.mode = select(1.0, 0.0, solid);
     out.tile_rect = vec4<f32>(0.0);
     out.tiles = vec2<f32>(0.0);

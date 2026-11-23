@@ -499,16 +499,21 @@ fn a_translucent_fill_under_an_outlined_font_is_drawn_once() {
         display_aspect: 1.0,
     });
     let quarter = [1.0, 1.0, 1.0, 0.25];
-    // Left half a flat fill, right half a gradient that is flat at the same alpha.
+    // Left half a flat fill, right half a gradient that is flat at the same alpha, in the top two rows, and a
+    // solid triangle over the bottom two.
     let list = [
         Draw::Fill {
-            rect: [0.0, 0.0, 2.0, 4.0],
+            rect: [0.0, 0.0, 2.0, 2.0],
             color: quarter,
         },
         Draw::GradientFill {
-            rect: [2.0, 0.0, 2.0, 4.0],
+            rect: [2.0, 0.0, 2.0, 2.0],
             left: quarter,
             right: quarter,
+        },
+        Draw::SolidTriangles {
+            triangles: vec![[[0.0, 2.0], [0.0, 10.0], [8.0, 2.0]]],
+            color: quarter,
         },
     ];
     let target = device.create_texture(&wgpu::TextureDescriptor {
@@ -566,8 +571,8 @@ fn a_translucent_fill_under_an_outlined_font_is_drawn_once() {
         .poll(wgpu::PollType::wait_indefinitely())
         .expect("the GPU");
     let mapped = slice.get_mapped_range().expect("the readback");
-    for (name, x) in [("flat", 0), ("gradient", 3)] {
-        let at = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize + x * 4;
+    for (name, x, row) in [("flat", 0, 0), ("gradient", 3, 0), ("solid triangle", 1, 3)] {
+        let at = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize * row + x * 4;
         let red = i32::from(mapped[at]);
         assert!(
             (red - 64).abs() <= 3,
