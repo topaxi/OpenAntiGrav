@@ -692,17 +692,30 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
         height: 8,
         palette: vec![[255, 255, 255, 255]; 16],
         indices: vec![1; 64],
-        glyphs: vec![Glyph {
-            codepoint: u16::from(b'a'),
-            width: 4,
-            height: 4,
-            u0: 0,
-            u1: 4,
-            v0: 0,
-            v1: 4,
-            advance: 9,
-            bearing: 1,
-        }],
+        glyphs: vec![
+            Glyph {
+                codepoint: u16::from(b'a'),
+                width: 4,
+                height: 4,
+                u0: 2,
+                u1: 6,
+                v0: 0,
+                v1: 4,
+                advance: 9,
+                bearing: 1,
+            },
+            Glyph {
+                codepoint: u16::from(b'b'),
+                width: 4,
+                height: 4,
+                u0: 0,
+                u1: 4,
+                v0: 0,
+                v1: 4,
+                advance: 9,
+                bearing: 1,
+            },
+        ],
     };
     let mut renderer = Renderer::new(
         &device,
@@ -745,6 +758,20 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
         loose_uv - oag_ui::font::SNAPPED_UV_SHIFT,
         "the texture starts half a texel early"
     );
+    // A glyph at the atlas's left edge has no texel before it: the shift stops there.
+    renderer.quads.clear();
+    renderer.push_text(
+        GlyphSlot::Primary,
+        249.0,
+        0.0,
+        0.8,
+        [1.0; 4],
+        [0.0; 4],
+        Align::Left,
+        "b",
+        None,
+    );
+    assert_eq!(renderer.quads[0].uv[0], 0.0);
 
     // `font::snapped_run`, which every layout of a snapped face reads, is the extent the draw
     // makes: from the left edge, the last glyph's ink ends where `ink_right` says, and a
