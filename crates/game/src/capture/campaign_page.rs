@@ -216,8 +216,12 @@ pub(super) fn campaign_page(
     // finished. `--menu-picker-step-seconds`: seconds since the cell or the rung changed on
     // `Cell Selection`, `None` for no change.
     (entry_seconds, step_seconds): (Option<f32>, Option<f32>),
+    // `--menu-title-seconds`: where the card title's glow ladder stands; `None` follows `pulse_seconds`.
+    title_seconds: Option<f32>,
     // Measures the footer legend's words for a title that flows it, as the live session does.
     legend_ink: oag_ui_screens::campaign::footer::flow::Ink,
+    // The tag the footer's tag box draws (`Settings::player`'s, empty on a title with none).
+    footer_tag: &str,
 ) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
     let mut campaign = crate::campaign::load(
         archives,
@@ -232,6 +236,9 @@ pub(super) fn campaign_page(
     .context("this source has no Race Campaign to show")?;
     if let Some(law) = title.front_end.and_then(|front_end| front_end.legend_flow) {
         campaign.flow_footer(law, legend_ink);
+    }
+    if let Some(legend) = &mut campaign.nav_legend {
+        legend.set_tag(footer_tag);
     }
     let kind = page.kind;
     // A mod campaign: the disc's screens, its grids replaced, as
@@ -575,6 +582,7 @@ pub(super) fn campaign_page(
                 .with_tiers(tiers.clone());
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
+                model.pulse_mut().set_text_seconds(title_seconds);
                 oag_ui_screens::campaign::grid_draw_list(
                     &model,
                     &campaign.grid_layout,
@@ -602,6 +610,7 @@ pub(super) fn campaign_page(
                 );
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
+                model.pulse_mut().set_text_seconds(title_seconds);
                 oag_ui_screens::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,

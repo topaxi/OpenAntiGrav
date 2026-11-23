@@ -172,6 +172,9 @@ pub struct Options {
     /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
     /// own docs.
     pub menu_ticker: Option<String>,
+    /// With `--menu-page grid-select`/`cell-select`, the seconds the card title's glow ladder has run -
+    /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
+    pub menu_title_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -922,7 +925,7 @@ pub fn run(
                 // `records` `--menu-page` arm above already makes - see
                 // `campaign_page`'s own `records` parameter doc.
                 let records = crate::records::load();
-                let (list, shot) = campaign_page(
+                let (mut list, shot) = campaign_page(
                     kind,
                     &mut archives,
                     &strings,
@@ -942,8 +945,15 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
                     (options.menu_entry_seconds, options.menu_picker_step_seconds),
+                    options.menu_title_seconds,
                     &crate::boot::fonts::legend_ink(&font, buttons_font.as_ref()),
+                    options.settings.player.footer_tag(&loaded.title.profile),
                 )?;
+                // Pulse's footer ticker, as the picker pages draw it: HD's campaign footer has none.
+                if !crate::campaign::draws_hd_campaign(title) {
+                    ticker_clip =
+                        menu_page::picker_footer(&mut list, None, ticker.as_ref(), &strings, &font);
+                }
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
             } else if let Some(seated) = join_page::seats(page) {
