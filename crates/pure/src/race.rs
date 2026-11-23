@@ -149,6 +149,13 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // `oag_title::SpeedClasses::VECTOR`, which is where that is explained and
     // where the filter lives.
     fresh_variant: None,
+    // A fresh memory stick's `Team Selection` rests on the definition's first
+    // row, Feisar, not on `DEFAULT_TEAM` (`docs/ui/selection-screens.md`,
+    // "The row a fresh profile opens on").
+    fresh_team: Some(oag_title::race::FreshTeam {
+        team: "Feisar",
+        origin: oag_title::Origin::Measured,
+    }),
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::PURE_LADDER,
         union_only: &[oag_title::SpeedClasses::VECTOR],

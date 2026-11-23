@@ -404,6 +404,7 @@ const DEFAULTS: RaceDefaults = RaceDefaults {
     hull_variants: None,
     // A fixture, not a measurement: this crate holds no title's data, so the
     // ladder here is only shaped like one.
+    fresh_team: None,
     fresh_variant: None,
     speed_classes: None,
 };

@@ -187,7 +187,7 @@ pub use announcer::{
     CountdownEvent, CountdownVoice, SequenceTick, StartCue, ZoneAnnouncer, ZoneClassAnnouncer,
     ZoneClassTone,
 };
-pub use fresh::FreshVariant;
+pub use fresh::{FreshTeam, FreshVariant};
 pub use lineage::CircuitLineage;
 pub use sound::{
     CircuitBanks, Crossfade, SoundBanks, TrackBanks, WwiseBank, WwiseCue, WwiseCues, WwiseState,
@@ -417,6 +417,10 @@ pub struct RaceDefaults {
     /// The model Ship Select opens on while the player has not picked one, or
     /// `None` when the stored variant (empty) stands. See [`FreshVariant`].
     pub fresh_variant: Option<FreshVariant>,
+    /// The team the list opens on while the player has not picked one, or
+    /// `None` when the stored team ([`Self::team`] on a fresh profile) stands.
+    /// See [`FreshTeam`].
+    pub fresh_team: Option<FreshTeam>,
 }
 
 /// Where a title keeps the two per-stage texture sets a Zone race indexes by

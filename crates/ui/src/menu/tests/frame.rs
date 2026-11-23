@@ -74,6 +74,146 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
     assert!(frame.ink.is_none(), "with no marks there is no ink either");
 }
 
+/// A colour-only `<Image>` on the frame screen is a mark (Pure's footer rule and its ticks, inside
+/// `<Animation>` wrappers), and one over the whole screen is the ground and is not (Pulse's
+/// opaque black, which its backdrop movie covers).
+#[test]
+fn the_frames_colour_rules_are_marks_and_its_ground_is_not() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
+<Screen>
+  <Screen name="Frame">
+    <Image><Values x="0" y="0" width="480" height="272" Color="0xFF000000"></Values></Image>
+    <Animation name="MainAnim6" focus="true">
+      <Values Incbutton="none" Decbutton="none" Loop="false"></Values>
+      <Key Time="0" TextureWidth="-444"></Key>
+      <Key Time="0.67" TextureWidth="0"></Key>
+      <Image><Values x="21" y="251" width="444" height="1" TxtrWidth="441" TxtrHeight="1" Color="0xFF11ACD0"></Values></Image>
+    </Animation>
+  </Screen>
+</Screen>"#;
+    let frame = crate::menu::read_frame(
+        &Screens::from_xml(xml),
+        &[],
+        oag_display::space::Space::PSP,
+        Some("Frame"),
+        None,
+        None,
+    );
+    let rects: Vec<[f32; 4]> = frame.mark_rects();
+    assert_eq!(rects, vec![[21.0, 251.0, 444.0, 1.0]], "{frame:?}");
+}
+
+/// A sub-rect wider than its texture repeats it, as the PSP's GE wraps: Pure's dotted rule
+/// samples `U 0..432, V 32` of the 8x1 `dotline.mip` across 438 pixels, 54 dashes.
+#[test]
+fn a_sub_rect_past_its_texture_repeats_it() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
+<Screen>
+  <Screen name="Frame">
+    <Image><Values x="28.5" y="218" width="438" height="1" U="0" V="32" TxtrWidth="432" TxtrHeight="1" Color="0xFF11ACD0" src="dotline.mip"></Values></Image>
+  </Screen>
+</Screen>"#;
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 8,
+        height: 1,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    let frame = crate::menu::read_frame(
+        &Screens::from_xml(xml),
+        &[("dotline.mip".to_string(), placed)],
+        oag_display::space::Space::PSP,
+        Some("Frame"),
+        None,
+        None,
+    );
+    let rects = frame.mark_rects();
+    assert_eq!(rects.len(), 54, "{rects:?}");
+    let step = 438.0 * 8.0 / 432.0;
+    for (i, rect) in rects.iter().enumerate() {
+        assert!(
+            (rect[0] - (28.5 + i as f32 * step)).abs() < 0.01,
+            "{i}: {rect:?}"
+        );
+        assert!((rect[2] - step).abs() < 0.01, "{i}: {rect:?}");
+    }
+}
+
+/// `ArrowSelect` and the two scroll arrows are the list's to place, not fixed marks: the cursor
+/// lands beside a row at the row's scale, and each scroll arrow shows only while rows sit past
+/// its end of the window.
+#[test]
+fn the_list_placed_arrows_are_not_marks_and_the_cursor_follows_a_row() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
+<Screen>
+  <Screen name="Frame">
+    <Image name="ArrowSelect"><Values x="0" y="0" width="6" height="11" U="53" V="0" TxtrWidth="6" TxtrHeight="11" Color="0xFFFF3399" src="fe.mip"></Values></Image>
+    <Image name="ArrowScrollUp"><Values x="9" y="39" width="10" height="9" U="69" V="0" TxtrWidth="10" TxtrHeight="9" Color="0xFF11ACD0" src="fe.mip"></Values></Image>
+    <Image name="ArrowScrollDown"><Values x="9" y="209" width="10" height="9" U="59" V="0" TxtrWidth="10" TxtrHeight="9" Color="0xFF11ACD0" src="fe.mip"></Values></Image>
+  </Screen>
+</Screen>"#;
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 256,
+        height: 128,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    let frame = crate::menu::read_frame(
+        &Screens::from_xml(xml),
+        &[("fe.mip".to_string(), placed)],
+        oag_display::space::Space::PSP,
+        Some("Frame"),
+        None,
+        None,
+    );
+    assert!(frame.marks.is_empty(), "{:?}", frame.marks);
+    let ys = |draws: Vec<Draw>| -> Vec<f32> {
+        draws
+            .iter()
+            .map(|draw| match draw {
+                Draw::Sprite { rect, .. } => rect[1],
+                _ => f32::NAN,
+            })
+            .collect()
+    };
+    assert!(
+        frame.scroll_arrows_for(0, 7, 7).is_empty(),
+        "a list that fits"
+    );
+    assert_eq!(
+        ys(frame.scroll_arrows_for(0, 7, 9)),
+        vec![209.0],
+        "rows below"
+    );
+    assert_eq!(
+        ys(frame.scroll_arrows_for(2, 7, 9)),
+        vec![39.0],
+        "rows above"
+    );
+    assert_eq!(
+        ys(frame.scroll_arrows_for(1, 7, 9)),
+        vec![39.0, 209.0],
+        "both"
+    );
+    let Some(Draw::Sprite { rect, .. }) = frame.select_arrow_at(21.0, 45.0 + 18.0, 1.15) else {
+        panic!("the frame keeps its cursor: {frame:?}");
+    };
+    assert_eq!(rect[0], 10.0);
+    assert_eq!(rect[1], 67.0);
+    assert!(
+        (rect[2] - 6.9).abs() < 0.001 && (rect[3] - 12.65).abs() < 0.001,
+        "{rect:?}"
+    );
+}
+
 /// A title that names no frame screen gets an empty one, and so does a name
 /// that is not on this source.
 #[test]

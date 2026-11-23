@@ -523,6 +523,17 @@ impl MenuStage {
         // page tween or prompt applies. A circuit's stills live on a sheet of
         // the screen's own, handed to the renderer once per selection.
         let picker_footer = self.picker_footer(ticker_tips);
+        // The selected entry's description, typed from when the selection last moved, as the
+        // chain screens type theirs (`description_overlay`).
+        let description = self
+            .picker
+            .as_ref()
+            .and_then(|picker| {
+                let text = picker.model.description()?;
+                Some(self.description_overlay(text, picker.model.since_selection()))
+            })
+            .filter(|_| !frozen_race)
+            .unwrap_or_default();
         if let Some(picker) = self.picker.as_mut() {
             if let Some(sheet) = picker.take_sheet() {
                 self.renderer.set_sprites(&gpu.device, &gpu.queue, sheet);
@@ -559,7 +570,8 @@ impl MenuStage {
                 .chrome
                 .extend(footer::hd_nav(&self.nav_legend, picker));
             let layers = crate::campaign::gate_glow(self.frontend_glow, layers);
-            let (flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
+            let (mut flat, ticker_clip) = footer::append(layers.flatten(), picker_footer);
+            flat.extend(description);
             // The screen's Help goes over the page, its footer and the 3D preview, in a pass of
             // its own after them (below): its dimming covers the craft too.
             let help_draws: Vec<Draw> = match &picker.layout.help {

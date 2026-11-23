@@ -81,6 +81,19 @@ fn only_hd_has_a_fresh_profile_variant() {
     }
 }
 
+/// Pure alone opens a fresh profile's Team Selection on a team other than the stored default.
+#[test]
+fn only_pure_has_a_fresh_profile_team() {
+    for title in ALL {
+        assert_eq!(
+            title.race.fresh_team.map(|fresh| fresh.team),
+            (title.name == oag_pure::TITLE.name).then_some("Feisar"),
+            "{}",
+            title.name
+        );
+    }
+}
+
 /// 2048 reships HD's roster and names HD by its own name, which a title package
 /// cannot read from `oag-hd`. Omega carries 2048's five teams the other way
 /// round, as its own re-textured 2048-era craft.

@@ -39,6 +39,12 @@ pub struct Race {
     /// pressing and on Wipeout HD, nine on Pure.
     #[serde(default = "default_team")]
     pub team: String,
+    /// Whether the player has ever picked a team: moved Ship Select's cursor
+    /// or changed a TEAM row. Pure opens that screen on Feisar for a profile
+    /// that has not - see [`Self::opening_team`] - and [`Self::team`] alone
+    /// cannot say "chose the default team" from "never chose".
+    #[serde(default)]
+    pub team_chosen: bool,
     /// Which circuit, by the id its own plugin definition gives it.
     ///
     /// **A race, not a directory.** `16_Track` and `32_Track` are two entries
@@ -127,6 +133,7 @@ impl Default for Race {
             mode: default_mode(),
             class: default_class(),
             team: default_team(),
+            team_chosen: false,
             track: default_track(),
             variant: String::new(),
             variant_chosen: false,
@@ -181,6 +188,43 @@ impl Race {
             .flatten()
     }
 
+    /// The team Ship Select opens on: the stored team, or the title's
+    /// fresh-profile row ([`oag_title::RaceDefaults::fresh_team`]) while the
+    /// player has not picked one. A stored team other than the unpicked
+    /// default always wins, so a config written before [`Self::team_chosen`]
+    /// existed keeps what it had.
+    #[must_use]
+    pub fn opening_team(&self, title: &oag_title::Title) -> &str {
+        match title.race.fresh_team {
+            Some(fresh) if !self.team_chosen && self.team == default_team() => fresh.team,
+            _ => &self.team,
+        }
+    }
+
+    /// Ship Select opened showing `shown`: stored as the team, unless it is the title's
+    /// fresh-profile row standing in for a team never picked. That row is shown, not stored, so
+    /// a profile that only looked at Pure's list still opens Pulse's on its own first row;
+    /// [`Self::pick_team`] stores it once confirmed. Whether anything changed.
+    pub fn open_team(&mut self, title: &oag_title::Title, shown: &str) -> bool {
+        let fresh_row = !self.team_chosen
+            && self.team == default_team()
+            && title
+                .race
+                .fresh_team
+                .is_some_and(|fresh| fresh.team == shown);
+        if fresh_row || self.team == shown {
+            return false;
+        }
+        self.team = shown.to_string();
+        true
+    }
+
+    /// The player picked `team`: moved the cursor to it, confirmed it or chose it on a TEAM row.
+    pub fn pick_team(&mut self, team: &str) {
+        self.team = team.to_string();
+        self.team_chosen = true;
+    }
+
     /// The model Ship Select opens on: the stored variant, or on Wipeout
     /// HD/Fury the fresh-profile default (`oag_hd::race::FRESH_PROFILE_VARIANT`)
     /// while the player has not picked one. A non-empty stored variant always
@@ -199,6 +243,41 @@ impl Race {
 mod tests {
     use super::*;
     use oag_race::Mode;
+
+    /// A Pure profile that has never picked a team opens Team Selection on Feisar,
+    /// the definition's first row, where the original's fresh memory stick rests
+    /// (`docs/ui/selection-screens.md`, "The row a fresh profile opens on"); Pulse
+    /// keeps its stored default, Assegai, its own first row. A pick, or a stored
+    /// team from before the flag existed, wins.
+    #[test]
+    fn pure_opens_team_selection_on_feisar_until_a_team_is_picked() {
+        let mut race = Race::default();
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Feisar");
+        assert_eq!(race.opening_team(oag_pulse::TITLE), "Assegai");
+
+        race.team_chosen = true;
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Assegai");
+
+        let stored = Race {
+            team: "Qirex".to_string(),
+            ..Race::default()
+        };
+        assert_eq!(stored.opening_team(oag_pure::TITLE), "Qirex");
+    }
+
+    /// Opening Pure's list on its fresh row does not store it: the profile is still unpicked, and
+    /// Pulse's Ship Select still opens on Assegai. Confirming stores it as a pick, for both.
+    #[test]
+    fn a_fresh_row_only_shown_is_not_another_titles_team() {
+        let mut race = Race::default();
+        assert!(!race.open_team(oag_pure::TITLE, "Feisar"));
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Feisar");
+        assert_eq!(race.opening_team(oag_pulse::TITLE), "Assegai");
+
+        race.pick_team("Feisar");
+        assert_eq!(race.opening_team(oag_pure::TITLE), "Feisar");
+        assert_eq!(race.opening_team(oag_pulse::TITLE), "Feisar");
+    }
 
     /// The TARGET row reaches a launch only in an Eliminator, and only once touched.
     #[test]

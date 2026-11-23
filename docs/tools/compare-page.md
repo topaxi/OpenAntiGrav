@@ -502,8 +502,9 @@ A menu pair also records what its page was drawn with beyond the profile: `ours.
 (`race.team`, `race.track`, `race.variant_chosen`). `compare-rerender-ours.py` writes both back into the private settings
 (`compare_menu.extra_settings`); before 2026-10-27 it did not, so a re-rendered picker drew the title's first team, Assegai,
 on concept1, where the original shows Feisar. HD's Ship Select also needs `variant_chosen = true`: a profile that never picked
-a model opens on concept1 (stats 080/085), where the original's classic Feisar reads 070/100/080/080. The Omega menu script records `ours.race` from now on; the 2048-menu and Pulse/Pure
-menu scripts do not yet, so their re-renders still drop their `race` selection (older Omega pairs have none either).
+a model opens on concept1 (stats 080/085), where the original's classic Feisar reads 070/100/080/080. The Omega menu script records `ours.race` from now on, and since 2026-11-23 the Pulse/Pure menu script does too
+(`psp-menu-pair.py`; Pure's team item no longer needs one, a fresh profile opens on Feisar as the original's does); the 2048-menu script
+does not yet, so its re-renders still drop their `race` selection (older Omega pairs have none either).
 
 Open, measured the same day: with the pairs at 96 and the right team, the title rules, footer rule, footer prompts and stat bars of
 Ship Select and Track Select sit at 0 +/- 1 px, but ours' header text sits 1 to 2 px **left** of the original's (best shift of ours
@@ -1822,7 +1823,7 @@ with `New`). The frame is the emulator window at 480x272 (`xdotool windowsize`),
 origin: no scaling at any step. Ours is `oag-game --menu-page PAGE` (or `--screen`) at 480x272 in a private profile
 (`prepare_profile`): the compare render settings and **`[dev] unlock_everything = false`** (a debug build unlocks everything, the original's
 fresh profile does not; read back in the settings file the run rewrote). Pulse also gets `records.toml`'s `campaign_difficulty = medium`
-row, which the still **ignores** (see the campaign paragraph).
+row, which the still **ignores** (see the campaign paragraph). **Pure's plan Loads a profile** (`PURE_PLAN`: START, Profile, Load): on a new stick it stops on the system's "There is no data" dialog, so make one first on that instance (2026-11-23: Profile, NEW, cross through the name `NAME` until the SAVE PROFILE prompt, YES, then the system Save dialog's cross), then cold-boot it and run the pairs.
 
 **What is read and what is declared.** Pulse's screen name is read from the game's own state machine (`0x08b31784 + 0x18c`, the same
 `Debugger.state_name` the race pairs use); every Pulse pair's `original.screen_basis` says so. Pure has no recovered state name: its
