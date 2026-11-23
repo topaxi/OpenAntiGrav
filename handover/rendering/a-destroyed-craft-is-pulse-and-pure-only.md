@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-23
-summary: "Destroyed craft wired on Pulse, Pure, HD, 2048 and Omega (HD sequence); HD Zone end read (zone-destroy.md); open: sound, camera mode 8/9, collider and kick, debris, Zone wire"
+summary: "Destroyed craft wired on all five titles (HD sequence); HD Zone end read; open: sound, camera 8/9, collider, debris, Zone wire"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
