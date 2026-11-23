@@ -1342,7 +1342,7 @@ Ours mixed the two colours by the filtered grey and then multiplied by the filte
 wide, which a 0.6 scale makes of most of them, came out grey and dim (a one-pixel vertical stroke read 183 where the
 original's read 228 over the same ground; the summed coverage of the best-lap row was 82.5 against 140.4). `ui.wesl`
 now composites the two passes for an outlined atlas (`Atlas::is_outlined`, `hud.z`): `a1 = border.a * coverage`, `a2 =
-color.a * mask`, `over(color, a2)` over `over(border, a1)`. The menu fonts (one white, no outline) keep their one pass.
+color.a * mask`, `over(color, a2)` over `over(border, a1)`. The menu fonts (one white, no outline) keep their one pass. **Fills are not text and take neither pass twice:** a fill samples the same atlas's solid patch, and with its border colour equal to its own the second pass drew a translucent one as `2a - a^2` (a quarter-alpha bar read 112, one draw is 64; Pulse PS2's menu atlas is outlined, `docs/tools/compare-page.md`, "`menu-grid` and `menu-cell` re-made"), so a fill's border alpha is zero.
 This is why the labels were "slightly less sharp": every sub-pixel offset (+-0.5 px in both axes), uv shift, quad
 size and the `integer`/`nearest` sampler modes measured **worse** than the placement already had, so it was never
 placement. Gradient energy of the HUD text boxes against the original's: best-lap row 24.6 to 29.1 (original 30.3),
