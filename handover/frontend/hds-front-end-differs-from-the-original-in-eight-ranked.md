@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-23
-summary: "HD front end: Ship Select matches RAM; team banner wipe and the page-entry wipes (Team, Track, Grid, Cell) wired"
+summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow law read, ready to wire"
 difficulty: medium (30)
 ---
 
@@ -181,14 +181,15 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
   `w` is the font's ink extent at the Text's scale (0.8) with each glyph's pen rounded up (`ceilf`). Predicted
   screen x on `hd/menu-cell-select` (0.96 Safe Area): 459.8, 639.4, 770.9 for the glyphs against the original's 460,
   639, 771, every prompt within 1 px. Wiring: measure with `oag_ui::font` metrics of HD's `helv`/`PS_BUTTONS` at the
-  Text's scale with the ceil per glyph, and replace the authored x in `NavigationLegend` for HD; Omega has its own law
+  Text's scale with the ceil per glyph for the layout only (the draw is unsnapped: glyphs keep their natural
+  advance), and replace the authored x in `NavigationLegend` for HD; Omega has its own law
   (word at glyph width + 14; `docs/ghidra/functions/ps4-omega-eu/navigation-legend.md`) and wires with it. Open: the
   other four `AddPrompt` callers (`0x001a7588`, `0x001f0b50`, `0x002587a0`, `0x0069dc98`) and which screens set the
   Confirm/Back bits.
 - The step pairs (`rpcs3-hd-ship-step.py pairs`, one per frame count, lag 3) can go on the compare page (k=6 scores the gap, k=8 and later the settle); re-render the seven recorded pairs at lag 3 first (`--menu-picker-step-seconds` is `(k-3)/60`).
 
 0. Fresh-profile RPCS3 boot at the default `Safe Area Setting`: does the 0.904
-   scale survive? If yes, one HD-only presentation transform on `Space::HD`.
+   scale survive? (2026-11-23: the Cell pair at 96 % fits `0.96 * x + 38.4`, `navigation-legend.md`, "The Safe Area mapping") If yes, one HD-only presentation transform on `Space::HD`.
 1. Compose `ShipModel`'s authored pose and compare against a Feisar frame on a
    fresh-profile RPCS3 boot.
 2. Add a campaign-page tween measured off `trans-campsel-original.png`.

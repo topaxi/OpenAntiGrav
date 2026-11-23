@@ -79,6 +79,14 @@ the boot order before the first draw is not).
 bearing before its loop (`local_2bc = -(bearing * S - x)`), so a string's first ink column is its x. That is why the
 table below compares each x straight against the frame's first ink column. Confidence 72 (the rest of the draw not read).
 
+**The snap is in the measure only, not the draw.** `Font_DrawString` makes no call to `ceilf` (a scan of its 1,275
+instructions for `bl 0x006785d8` finds none) and advances its pen unrounded. The frame agrees: `NAVIGATION`'s ink is
+150 px wide (288 to 437), the unsnapped 156.0 x 0.96 = 149.8, not the snapped 159.8 x 0.96 = 153.4; `CONFIRM`'s is 115
+(502 to 616) against 115.2 unsnapped and 118.5 snapped. So a word is drawn at its natural width and the layout's gap
+after it is `20 + (snapped - unsnapped width)`: (20 + 3.8) x 0.96 = 22.8 px after `NAVIGATION`, (20 + 3.4) x 0.96 =
+22.5 after `CONFIRM`, which is the "about 24 px" a pixel-only reading saw. A port snaps `w()` for the layout and
+draws glyphs unsnapped.
+
 ## Prediction for `hd/menu-cell-select`
 
 Metrics from `DATA02`'s `/data/fe/fonts/helv.fnt` and `ps_buttons.fnt` (big-endian `.fnt`, [fnt.md](../../../formats/fnt.md)),
@@ -121,8 +129,12 @@ where the original does: a shift search over a 280x80 window around the logo fin
 both `hd/menu-cell-select` (mean difference 0.86) and `hd/menu-grid-select` (4.39). The original's ink starts at x 271
 (Cell, `impact`) and 221 (Grid, `uplift`); the authored x maps to 218.9 and the image's transparent left margin
 makes up the rest. The "6 pixels right" note in the HD front-end thread predates the 2026-11-19 re-render of both
-pairs and no longer holds. The Image draw itself is in [image-widget.md](image-widget.md); its x transform is not
-read beyond that. Confidence 75.
+pairs: it was written in `1d8e7a954` (2026-11-18 21:14), and both committed `ours.png` files were rendered on
+2026-11-19 (mtimes 04:13 Cell, 16:47 Grid). A fresh `--menu-page` still from current `main` would confirm it on today's
+code. The Image draw is `Image_Render` (`0x001b6398`, [image-widget.md](image-widget.md)); how a `Viewport` parent
+reaches a child's position is not read. Read recipe: `Text_Render` (`0x00203208`) adds the widget's `+0x4c`/`+0x50` to
+its x/y; find what writes `+0x4c` on a `Viewport`'s children (the original's pixels rule out adding the Viewport's X:
+188 + 178 would put the ink near x 390, not 219 to 271). Confidence 75.
 
 ## Omega
 
