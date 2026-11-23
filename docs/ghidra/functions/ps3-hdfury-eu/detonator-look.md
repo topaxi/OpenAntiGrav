@@ -178,9 +178,7 @@ three Detonator pairs under the ramp: `mines-ahead` 23.89 to 19.61, `pad` 17.41 
 12.18, 20.33, unchanged by the fix). The 18 other HD race and loading pairs re-render **pixel-identical** to the tree before (silent
 spectrum), and `zone-vineta-k-z5` is also identical under the ramp (its stage's track texture does not index the smooth slots).
 
-**What is still open.** (1) The spectrum is the original's, not ours: a pair needs the original's held bands (`Environment_UpdateStageBlend`'s
-`+0x32f8`, sixteen floats, read from the captured state) recorded in `pair.json` and a flag that feeds them to ours; until then the published
-Detonator pairs show a black floor and no dashes, and a ramp is only a stand-in. (2) The Track Fog (`1.8 0.141 0.007`, the orange-red
+**What is still open.** (1) ~~The spectrum is the original's, not ours~~ (closed 2026-11-23, `det-pair-bands`: the pairs record the held bands, `+0x32f8`, and `--zone-bands` feeds them to ours, `docs/tools/compare-page.md`, "The original's music bands in a Detonator pair"). **New:** fed the original's own band 3 (0.51 to 0.93) ours' floor blue is 2.2 to 3.1 times the original's and does not track it the way the original's does (five frames, r +0.44 with band 3); confidence 60 that the band-3 smooth-slot reading of the floor is incomplete. (2) The Track Fog (`1.8 0.141 0.007`, the orange-red
 authored on the track set) was not separated from the red residual in box B (ours red `19.8` against `9.0`). (3) Ours holds bands with
 `Hold` (frame-rate decay `0.1`), the original's cadence is read ([zone-visualiser.md](zone-visualiser.md)).
 
