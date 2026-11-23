@@ -24,6 +24,11 @@ set positional-arguments
 
 default: check
 
+# The feature lists `check-ballisticng`, `check-extensions` and `gate-prep` build with:
+# one spelling, so a prebuild compiles what the gate compiles.
+bng_features := "oag-game/ballisticng,oag-raceplay/ballisticng"
+ext_features := "oag-game/extensions,oag-raceplay/extensions"
+
 # Emulator binaries used by the launch-* recipes below. Override per-invocation with
 # `just --set ppsspp_bin /path/to/PPSSPP launch-pulse-psp`, or export PPSSPP_BIN etc.
 ppsspp_bin := env_var_or_default("PPSSPP_BIN", "PPSSPPSDL")
@@ -65,7 +70,7 @@ native_video_flags := if os() == "linux" { "--features native-video" } else { ""
 # order they get there, so nothing here changes what either asserts. Output of
 # the recipes interleaves; a failure names its recipe.
 [parallel]
-check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+check: fmt-check lint check-ballisticng check-extensions check-web test check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-handover check-link-data check-strings check-just-args check-status check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # Documentation is a deliverable, so its links are checked like any other build output
 check-docs:
@@ -139,8 +144,8 @@ lint:
 # feature) is compiled and linted here and run by hand, never by `test-data`:
 # `cargo nextest run -p oag-bng-import --features ground-truth --run-ignored only`.
 check-ballisticng:
-    cargo clippy -p oag-bng-import -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng,oag-bng-import/ground-truth --all-targets -- -D warnings
-    cargo nextest run -p oag-game -p oag-raceplay --features oag-game/ballisticng,oag-raceplay/ballisticng --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
+    cargo clippy -p oag-bng-import -p oag-game -p oag-raceplay --features {{bng_features}},oag-bng-import/ground-truth --all-targets -- -D warnings
+    cargo nextest run -p oag-game -p oag-raceplay --features {{bng_features}} --tests --cargo-profile quick -E 'test(custom_tracks::) | test(survey::)'
 
 # The `extensions` feature (simulation mods in WebAssembly through `oag-modhost` and
 # wasmtime) is `oag-game`'s default, so `test` compiles it through feature unification;
@@ -150,7 +155,7 @@ check-ballisticng:
 # feature on). The disc-backed Wall Penalty test runs by hand:
 # `cargo nextest run -p oag-raceplay --features extensions --run-ignored only -E 'test(/wall_penalty_ground_truth::/)'`.
 check-extensions:
-    cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features oag-game/extensions,oag-raceplay/extensions --all-targets -- -D warnings
+    cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features {{ext_features}} --all-targets -- -D warnings
     cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick
 
 # The browser module (`just web`'s `oag_web` example for wasm32-unknown-unknown)
@@ -213,6 +218,12 @@ lead-test-data *ARGS:
 check-test-data-script:
     python3 scripts/test-data.py selftest
 
+# `scripts/gate-run.sh` against a stand-in `just` and a private lock: the prebuild
+# starts only when the lock is busy and is stopped when the lock comes first, and
+# every run leaves a row in the times file. Offline, no build, about eight seconds.
+check-gate-run:
+    bash scripts/check-gate-run.sh
+
 # A member lane's gate: every check in `check` in full, but only the tests the
 # branch's change can reach. `scripts/affected.py` says what it selected and
 # why: the packages that link a changed one, narrowed to the test modules that
@@ -225,7 +236,7 @@ check-test-data-script:
 # `check-status` is left out: a member never commits `status.md`, so a stale table is
 # the lead's to regenerate, and the full `just` checks it.
 [parallel]
-gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
+gate-affected: fmt-check lint check-ballisticng check-extensions check-web test-affected check-docs check-deps check-unused-deps check-determinism check-size check-comment-history check-title-branching check-title-reach check-names check-captures check-hd-clock-grab check-pair-provenance check-test-data-script check-gate-run check-handover check-link-data check-strings check-just-args check-weapon-lineage check-test-groups check-schemas (check-guests "--strict")
 
 # `just test`, narrowed to what `scripts/affected.py` selects. A selection is
 # nextest arguments, one per line; `--no-tests=pass` because a narrowed
@@ -265,6 +276,40 @@ test-data-affected:
     python3 scripts/check-test-budget.py --partial target/test-data-affected.log || budget=$?
     [ "$tests" -ne 0 ] && exit "$tests"
     exit "$budget"
+
+# Compiles what `gate-affected` and `test-data-affected` (scope `affected`) or `check` and
+# `lead-test-data` (scope `full`) would compile, and runs no test: `scripts/gate-run.sh`
+# runs it while it waits for the gate lock, so the lock is held for the checks and the
+# tests and not for the build. The same commands as the recipes they mirror (the
+# feature lists are shared variables), so a prebuild that falls behind a recipe costs the
+# lock a little compile and never a wrong answer. A failure here is not the gate's: the
+# gate rebuilds and reports it.
+[parallel]
+gate-prep scope="affected": (prep-cargo scope) check-web (check-guests "--strict")
+
+prep-cargo scope:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo clippy -p oag-net --lib --bins -- -D warnings
+    cargo clippy -p oag-bng-import -p oag-game -p oag-raceplay --features {{bng_features}},oag-bng-import/ground-truth --all-targets -- -D warnings
+    cargo clippy -p oag-modhost -p oag-raceplay -p oag-game --features {{ext_features}} --all-targets -- -D warnings
+    cargo nextest run -p oag-game -p oag-raceplay --features {{bng_features}} --tests --cargo-profile quick --no-run
+    cargo nextest run -p oag-modhost -p oag-raceplay --features oag-raceplay/extensions --lib --cargo-profile quick --no-run
+    cargo nextest run --workspace --tests --cargo-profile quick --no-run
+    if [ "{{scope}}" = full ]; then
+        cargo nextest run --workspace --tests --run-ignored all --no-run
+    else
+        selection=$(python3 scripts/affected.py) || exit 0
+        case "$selection" in
+            none) ;;
+            full) cargo nextest run --workspace --tests --run-ignored only --no-run ;;
+            *)
+                mapfile -t args <<<"$selection"
+                cargo nextest run "${args[@]}" --tests --run-ignored only --no-run --no-tests=pass
+                ;;
+        esac
+    fi
 
 # The ratchet on how long `just test-data` takes, per test and in total.
 #
