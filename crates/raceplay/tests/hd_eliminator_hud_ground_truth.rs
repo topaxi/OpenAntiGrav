@@ -407,19 +407,24 @@ fn race_to_target(
     seed: u64,
     skill_level: Option<u8>,
 ) -> Outcome {
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    // The race is read for its score and its laps, which neither art nor sound feeds: only the
+    // simulation's half is loaded (`ViewSetup` reaches neither `RaceSim` nor the state hash).
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Eliminator,
         difficulty,
         seed: Some(seed),
         skill_level,
-        // The race is read for its score and its laps, which no art feeds.
         ribbon: true,
         ..oag_raceplay::Options::default()
     })
     .expect("loading an HD Eliminator");
-    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     assert_eq!(
         race.core.sim.pad_seeking(),
         oag_raceplay::PadSeeking::Off,
@@ -452,25 +457,34 @@ const PACE_SEEDS: std::ops::RangeInclusive<u64> = 1..=12;
 /// one set of twelve can pin (`docs/gameplay/race-modes.md`, "The pace of a score Eliminator").
 const NOVICE_PACE_SEEDS: std::ops::RangeInclusive<u64> = 1..=24;
 
-/// Runs `seeds` four at a time and answers their outcomes, sorted by laps.
+/// Runs `seeds` on eight workers that each take the next unclaimed seed, and answers their
+/// outcomes, sorted by laps. A race that runs to the cap does not hold three others idle.
 fn pace_laps(
     image: &std::path::Path,
     difficulty: oag_ai::Difficulty,
     seeds: std::ops::RangeInclusive<u64>,
 ) -> Vec<Outcome> {
     let seeds: Vec<u64> = seeds.collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
     let mut laps = Vec::new();
-    for chunk in seeds.chunks(4) {
-        std::thread::scope(|scope| {
-            let races: Vec<_> = chunk
-                .iter()
-                .map(|&seed| scope.spawn(move || race_to_target(image, difficulty, seed, None)))
-                .collect();
-            for race in races {
-                laps.push(race.join().expect("a race thread"));
-            }
-        });
-    }
+    std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..8)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    while let Some(&seed) =
+                        seeds.get(next.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+                    {
+                        done.push(race_to_target(image, difficulty, seed, None));
+                    }
+                    done
+                })
+            })
+            .collect();
+        for worker in workers {
+            laps.extend(worker.join().expect("a race thread"));
+        }
+    });
     laps.sort_unstable();
     laps
 }
