@@ -2279,7 +2279,7 @@ is), `--zone-bands-raw` the levels the mine envelope reads (default: the held on
 0.3) and picks its own band: mine rims are not like for like.
 
 **The grab is new, not the old one re-fed.** The old pairs recorded no bands and the music phase depends on the wall-clock START RACE tap,
-so all three were re-grabbed (two boots: `--shot 2.0 --shot 2.66`; `--fire-clock 1.84 --fire-hold 0.25 --shot 2.21`), and "before" is
+so all three were re-grabbed (two boots: `--shot 2.0 --shot 2.66`; `--fire-clock 1.84 --fire-hold 0.25 --shot 2.21`; `cannon-volley`'s frame came 0.19 s after the release with nothing in flight, so its title was rewritten), and "before" is
 ours silent against the same new `theirs.png` (`previous_ours` in each `pair.json`). RMSE (0-1), box means RGB, A `x250..800 y780..850`,
 B `x1090..1230 y780..1000`; held band 3 is the floor's smooth slot 164:
 
@@ -2291,11 +2291,14 @@ B `x1090..1230 y780..1000`; held band 3 is the floor's smooth slot 164:
 | `pad` repeat (C, not published; heading 1.09 deg, over the 1.0 check) | 2.02 | 0.68 | 0.150 to 0.169 | `(4.5, 0, 9.4)` / `(0.2, 0, 0)` / `(22.8, 4.2, 48.3)` | `(5.9, 0, 15.1)` / `(0.8, 0, 0)` / `(38.6, 7.6, 79.6)` |
 | `mines-ahead` repeat (C, not published) | 2.71 | 0.93 | 0.246 to 0.238 | `(7.7, 0.1, 19.3)` / `(0, 0, 0)` / `(21.1, 2.8, 43.1)` | `(8.9, 0, 30.5)` / `(0.5, 0, 0)` / `(42.5, 6.3, 85.3)` |
 
-The floor is lit now and the hue is right (violet, no red), but **ours is 2.2 to 3.1 times too bright on blue at the original's own
-band 3 (5 times on the pad repeat), and RMSE moves by at most 0.02 (0.004 worse on `pad`, 0.006 and 0.003 better on `mines-ahead` and `cannon-volley`)**. The cause is not the band feed:
-ours' box blue against band 3 alone, pad pair, rest zero: 0.29 gives 33.8, 0.58 gives 45.5, 1.0 gives 58.0 (about level^0.43, a
-gamma-shaped response; the texel is `55 x level`), while the original's box A blue over the five frames reads 19.1, 14.0, 18.3, 9.4,
-19.3 against band 3 of 0.58, 0.51, 0.92, 0.68, 0.93: not monotonic (r +0.44), and anti-correlated with band 2 (held r -0.78, raw
--0.86; n = 5, a hypothesis only, confidence 25). Whether the original's floor is band 3 at all, and what its texel-to-pixel gain is,
-is open; ours was not tuned.
+The floor is lit now and the hue is right (violet, no red; the billboard panels at the top right are violet in both, and ours' dashes
+show faintly where the original's are bright violet: seen on the side-by-side, not measured). **Ours is 2.2 to 3.1 times too bright on blue
+at the original's own band 3 (5 times on the pad repeat), and RMSE moves by at most 0.02** (0.004 worse on `pad`, 0.006 and 0.003 better on
+`mines-ahead` and `cannon-volley`). The brightness is not the feed: ours' box blue against band 3 alone, pad pair, rest zero, is 0.29: 33.8,
+0.58: 45.5, 1.0: 58.0 (about level^0.43, gamma-shaped; the texel is `55 x level`), so matching the original's 19 would take a presented band 3
+near 0.07 in every frame, and the original's was read at 0.51 to 0.93. **Whether the original's box tracks band 3 is undetermined:** the
+presented frame is 0 to 3 ticks older than the RAM read, and on three of the five frames the raw level equals the held one (band 3 was
+rising at the read), so the picture may predate the rise; only `pad` (A) and `mines-ahead` (A) were falling, and those two order the way
+band 3 predicts (box A blue 19.1 and 14.0 at 0.58 and 0.51). Next: grabs where raw is below held, or a lag-scanned frame
+(`hd-pair-lag-scan.py`). Ours was not tuned.
 

@@ -432,12 +432,13 @@ silent to fed: `pad` 0.154 to 0.158, `mines-ahead` 0.206 to 0.200, `cannon-volle
 `mines-ahead` `(5.1, 0, 14.0)` / `(0, 0, 0)` / `(15.1, 2.9, 33.1)`, `cannon-volley` `(6.2, 0, 18.3)` / `(0.1, 0, 0)` / `(25.8, 3.7, 51.7)`; box B
 `(9.5, 0, 29.1)` / `(0.7, 0, 0)` / `(36.3, 8.0, 74.7)`, `(7.4, 0, 24.9)` / `(0.6, 0, 0)` / `(31.0, 6.6, 65.3)`, `(8.5, 0, 28.2)` / `(0.7, 0, 0)` /
 `(44.8, 7.1, 88.2)`. **Result: the held bands are live under the muted emulator and non-zero at the grab (band 3 between 0.51 and 0.93
-on 5 frames), the floor lights, and the claim that feeding them closes the floor gap is false:** ours' blue is 2.2 to 3.1 times the
-original's (5 times on one repeat), and RMSE barely moves. Ours' box blue against band 3 alone is gamma-shaped (0.29: 33.8, 0.58: 45.5,
-1.0: 58.0, about level^0.43), while the original's box A blue over five frames (19.1, 14.0, 18.3, 9.4, 19.3) does not follow band 3
-(0.58, 0.51, 0.92, 0.68, 0.93; r +0.44) and anti-follows band 2 (held r -0.78; n = 5, hypothesis, confidence 25). **Open:** what the
-original's floor does with the smooth slot's level (its texel-to-pixel gain, and whether band 3 is the one that drives box A), and a
-mine's envelope in ours has no history in a one-frame capture, so mine rims are not compared.
+on 5 frames), the floor lights in the right hue, and ours' blue is 2.2 to 3.1 times the original's (5 times on one repeat) with RMSE barely
+moving.** Ours' box blue against band 3 alone is gamma-shaped (0.29: 33.8, 0.58: 45.5, 1.0: 58.0, about level^0.43), so matching the
+original's 19 would take a presented band 3 near 0.07. Whether the original's box tracks band 3 is **undetermined**: the frame is 0 to 3
+ticks older than the RAM read and on three of five frames raw equals held (rising at the read); the two falling frames order as band 3
+predicts. **Open:** grabs where raw is below held, or a lag-scanned frame; the visualiser's texel-to-pixel gain in ours; the dashes (faint
+in ours, bright violet in the original, not measured); the mine rims (a one-frame capture gives the envelope no history, and ours picks its
+own band and places its own mines).
 
 Cheapest first was row 1, then row 2's gantries, then the bloom arm (all three wired, below), then rows 7 and 4.
 
