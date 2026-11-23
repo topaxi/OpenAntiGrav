@@ -34,6 +34,10 @@ mkdir -p "$(dirname "$lock")"
 export OAG_GIT_HASH="${OAG_GIT_HASH:-test-data}"
 export OAG_BUILD_DATE="${OAG_BUILD_DATE-}"
 
+# The locked half marks that it ran, so a recipe that itself exits 111 is not read as a
+# busy lock.
+entered="${OAG_GATE_ENTERED:-}"
+
 # A finished prebuild is a zombie of this process, which `kill -0` still reaches.
 running() {
     local stat
@@ -45,6 +49,7 @@ if [ "${1:-}" = "--locked" ]; then
     # Re-entered through flock: this process holds the lock.
     requested=$2 prep_pid=$3 prep_started=$4
     shift 4
+    : >"$entered"
     state=none
     if [ "$prep_pid" != 0 ]; then
         if running "$prep_pid"; then
@@ -77,10 +82,14 @@ case "$1" in
     *) scope= ;;
 esac
 
-# A free lock is taken at once, with nothing prebuilt (exit 111 is flock's "busy").
+# A free lock is taken at once, with nothing prebuilt (flock exits 111 when it is busy).
+entered=$(mktemp)
+export OAG_GATE_ENTERED=$entered
+trap 'rm -f "$entered"' EXIT
+rm -f "$entered"
 flock -E 111 -n -o "$lock" "$self" --locked 0 0 0 "$@"
 rc=$?
-[ "$rc" -ne 111 ] && exit "$rc"
+if [ "$rc" -ne 111 ] || [ -e "$entered" ]; then exit "$rc"; fi
 
 prep_pid=0
 prep_started=$(date +%s)
@@ -91,4 +100,13 @@ if [ -n "$scope" ]; then
     setsid chrt -i 0 ionice -c 3 nice -n 19 just gate-prep "$scope" >target/gate-prep.log 2>&1 </dev/null &
     prep_pid=$!
 fi
-exec flock -o "$lock" "$self" --locked "$(date +%s)" "$prep_pid" "$prep_started" "$@"
+# An interrupted gate stops its prebuild and its wait for the lock, so neither outlives it.
+stop_prep() { [ "$prep_pid" != 0 ] && kill -TERM -- "-$prep_pid" 2>/dev/null; }
+waiter=0
+interrupted() { stop_prep; [ "$waiter" != 0 ] && kill -TERM "$waiter" 2>/dev/null; exit 130; }
+trap 'stop_prep; rm -f "$entered"' EXIT
+trap interrupted INT TERM HUP
+flock -o "$lock" "$self" --locked "$(date +%s)" "$prep_pid" "$prep_started" "$@" &
+waiter=$!
+wait "$waiter"
+exit $?

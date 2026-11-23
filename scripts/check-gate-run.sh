@@ -21,6 +21,7 @@ case "$1" in
         echo prep-finished >>"$FAKE_LOG"
         ;;
     fail) exit 7 ;;
+    busy-code) exit 111 ;;
 esac
 JUST
 chmod +x "$tmp/bin/just"
@@ -51,4 +52,19 @@ busy 2; run check-docs || fail "busy lock, no prebuild failed"
 run fail; [ $? -eq 0 ] && fail "a failing recipe passed"
 [ "$(col 5 7)" = 7 ] || fail "exit code not recorded: $(col 5 7)"
 [ "$(wc -l <"$OAG_GATE_TIMES")" -eq 5 ] || fail "expected five rows"
+run busy-code; [ $? -eq 111 ] || fail "a recipe's own 111 was swallowed"
+[ "$(grep -c '^busy-code' "$FAKE_LOG")" -eq 1 ] || fail "a recipe exiting 111 ran twice"
+[ "$(wc -l <"$OAG_GATE_TIMES")" -eq 6 ] || fail "expected six rows"
+
+: >"$FAKE_LOG"
+busy 4
+PREP_SLEEP=60 "$root/scripts/gate-run.sh" gate-affected >"$tmp/out" 2>&1 &
+waiter=$!
+sleep 1
+kill -TERM "$waiter"
+wait "$waiter" 2>/dev/null
+sleep 0.5
+grep -q prep-stopped "$FAKE_LOG" || fail "an interrupted gate left its prebuild running"
+sleep 4
+grep -q '^gate-affected' "$FAKE_LOG" && fail "an interrupted gate still ran"
 echo "check-gate-run: ok"
