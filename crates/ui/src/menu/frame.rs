@@ -138,7 +138,7 @@ impl Frame {
     /// `scale`: the arrow takes the row's scale, its left edge 11 grid units left of the row's
     /// and its top 4 below the row's. Measured off PPSSPP frames of Pure's Team Selection and six
     /// chain screens, the cursor on rows 1 to 3 (`docs/ui/selection-screens.md`, "Pure's
-    /// cursor arrow"); the executable's placement is not read.
+    /// cursor arrow and footer frame"); the executable's placement is not read.
     #[must_use]
     pub fn select_arrow_at(&self, x: f32, y: f32, scale: f32) -> Option<Draw> {
         match self.select_arrow.clone()? {

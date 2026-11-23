@@ -433,6 +433,34 @@ changes a TEAM row (`Race::opening_team`); the `--race` default team is untouche
 their first row is not measured here (Omega's Ship Select pair shows the original on the first unlocked craft and ours
 on the top hex: the same field would carry it once measured).
 
+### Pure's cursor arrow and footer frame (2026-11-23)
+
+Pure's `FE Screen` (the screen every Pure menu is nested in, `Skin.xml`) authors the footer frame and three widgets a list
+places itself. What each is and how ours draws it now:
+
+| Widget | Authored | Original (PPSSPP software, USA) | Ours |
+| --- | --- | --- | --- |
+| footer rule, five ticks | colour-only `<Image>`s in `MainAnim6/8/10/11/12/15`: `x=21 y=251 444x1`, ticks at x 21, 59, 88, 126, 226 | drawn | `menu::frame::read` takes the frame screen's fills as marks (a fill over the whole screen is the ground and is not: Pulse's opaque black under its movie) |
+| dot at (28.4, 216) | colour-only, `MainAnim4` | drawn | the same |
+| dotted rule | `dotline.mip` (8x1), `x=28.5 y=218 438x1 U=0 V=32 TxtrWidth=432` | 54 dashes | the sub-rect runs past its texture, so the frame draws the texture's repeats, as the GE wraps texture coordinates |
+| `ArrowSelect` | `FETextures.mip` `U=53 V=0` 6x11, `MenuHighLightArrowColor`, at (0, 0) | beside the selected row, at the menu's scale | `Frame::select_arrow`, placed by the Pure picker's list and the chain screens (`Frame::select_arrow_at`) |
+| `ArrowScrollUp`/`Down` | (9, 39) and (9, 209) | absent on all seven frames (no list scrolls) | not drawn |
+
+**The arrow's placement, measured.** On Team Selection with the cursor on rows 1, 2 and 3 (one walk, a fresh profile) the
+arrow's drawn pixels span x 11 to 16 and y 49 to 61, 67 to 79 and 85 to 97: it steps with the row pitch (18), its top 4 grid
+lines below the row's text origin (`Menu y=45`), its left edge 11 left of the row's x (`MenuXOffset` 21; the texture's
+first column is blank, so the sprite starts at x 10), and 13 rows tall, the 6x11 texture at `MenuScale` 1.15. The same
+position on Single Player, Class, League, Track, Tournament and Tournament Class Selection (cursor on row 1). The
+executable's placement code is not read; confidence 70 (three rows, seven screens, one title). Whether a list that
+scrolls shows the scroll arrows is not measured: ours draws them nowhere.
+
+**The description line.** Team Selection types the selected team's own string, `Text->Team Selection->Team->Feisar`
+(`You know where you are with a Feisar ...`), the key form the chain screens read (`Text->SCREEN->MENU->VALUE`), at the
+chain screens' measured type-in law (`oag_ui_screens::campaign::footer::typein`: 58 characters a second, a 3.12 s hold,
+looping). On the pair's frame both sides show `YOU KNOW WHE_`. **Still open, on every Pure screen that types**: ours'
+line sits 2 px higher (glyph tops at y 220 against 222 on five pairs) and its advance is narrower (the same 12 characters
+span 78 px against 91), so it also wraps later; the face's advance or the line's scale is not read.
+
 ### HD's hex grids pan under a finger (2026-10-09)
 
 **Chosen, not measured**: the original is a pad-only PS3 game, so every line
