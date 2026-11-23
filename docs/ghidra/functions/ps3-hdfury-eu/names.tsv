@@ -1159,3 +1159,21 @@
 0x000a9b18	function	Camera_SetTarget	60	zone-destroy.md
 0x000aa090	function	Camera_EnterTrackView	60	zone-destroy.md
 0x002ff600	function	Sound_StopAllBankCues	60	zone-destroy.md
+# 2026-11-23 hd-legend-re: the footer legend's flow layout and the text measure
+0x001da048	function	NavigationController_Init	85	navigation-legend.md
+0x001dab20	function	NavigationController_Layout	88	navigation-legend.md
+0x001da6e8	function	NavigationController_Update	70	navigation-legend.md
+0x001da470	function	NavigationController_Construct	80	navigation-legend.md
+0x001d9ee0	function	NavigationController_AddPrompt	85	navigation-legend.md
+0x001d9f30	function	NavigationController_PlacePrompt	72	navigation-legend.md
+0x009a7fe8	data	g_NavigationPrompts	80	navigation-legend.md
+0x00201118	function	Text_Construct	80	navigation-legend.md
+0x00202748	function	Text_GetWidth	85	navigation-legend.md
+0x002003d0	function	Text_ShrinkToWidth	65	navigation-legend.md
+0x00203208	function	Text_Render	70	navigation-legend.md
+0x002cd268	function	Font_MeasureText	80	navigation-legend.md
+0x002cd048	function	Font_MeasureString	85	navigation-legend.md
+0x002ac950	function	Font_FindGlyph	80	navigation-legend.md
+0x002ac9f8	function	Font_GetKerning	75	navigation-legend.md
+0x002cfb28	function	Font_DrawString	72	navigation-legend.md
+0x008c267c	data	g_FontPenSnap	75	navigation-legend.md
