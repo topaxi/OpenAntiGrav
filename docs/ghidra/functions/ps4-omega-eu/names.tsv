@@ -265,3 +265,6 @@
 # 2026-11-23 hd-legend-re: the footer legend (HD's law in ../ps3-hdfury-eu/navigation-legend.md)
 0x01475290	function	NavigationController_Init	85	navigation-legend.md
 0x01475f50	function	NavigationController_Layout	85	navigation-legend.md
+# 2026-11-23 destroy-cameras-re: the race camera twins of HD's (../ps3-hdfury-eu/destroy-camera.md)
+0x01382720	function	Camera_SetMode	82	../ps3-hdfury-eu/destroy-camera.md
+0x01381c70	function	Camera_Update	78	../ps3-hdfury-eu/destroy-camera.md
