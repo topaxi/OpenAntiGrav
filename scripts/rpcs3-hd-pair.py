@@ -180,7 +180,7 @@ def mine_flags(pair, ship):
     The original numbers its track entries from the player's start cursor and ours from the spline's origin, so
     a mine's entry does not transfer; its position does, and ours snaps each to its nearest survey lane
     (`RaceSim::carry_detonator_mines`). A shot without them (an older record) keeps ours' seeded layout and says so."""
-    mines = [m for m in ship.get("mines") or [] if m["flags"] & 1]
+    mines = [m for m in ship.get("mines") or [] if m["flags"] & 9 == 9]
     if not mines:
         pair.caveat("no mine objects were read at the pause: ours lays its own seeded mine layout")
         return []
