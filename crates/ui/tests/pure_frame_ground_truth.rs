@@ -112,3 +112,54 @@ fn the_date_patch_is_at_its_authored_position_and_sub_rect() {
     );
     assert!(date.src.ends_with("FETextures.mip"));
 }
+
+/// `FE Screen`'s colour-only rules reach the menu frame as marks off the real disc: the footer
+/// rule at y 251 and its five ticks, which need no texture
+/// (`docs/ui/selection-screens.md`, "Pure's cursor arrow and footer frame").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn the_footer_rule_and_its_ticks_are_frame_marks() {
+    let Some(path) = image() else {
+        return;
+    };
+    let mut archives = oag_assets::Archives::open(&path.to_string_lossy(), oag_pure::TITLE)
+        .expect("the archives open");
+    // The frame's inks (`FEGlobals->DesignColor`) are the style skin's globals, as the boot
+    // reads them (`oag_game::boot::screens`'s `style_skin_globals`).
+    let style = archives
+        .read_name(r"Data\Skins\Default\Skin.xml")
+        .expect("Pure carries its default style skin");
+    let style = Screens::from_xml(&fexml::text(&style).expect("it is text")).globals;
+    let style: Vec<(&str, &str)> = style
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    let raw = archives
+        .read_name(oag_pure::names::FRONTEND_ROOT)
+        .expect("Pure carries a front-end root");
+    let screens =
+        Screens::from_xml_with_fallback_globals(&fexml::text(&raw).expect("it is text"), &style);
+    let frame = oag_ui::menu::read_frame(
+        &screens,
+        &[],
+        oag_display::space::Space::PSP,
+        Some(oag_pure::frontend::states::FE_SCREEN),
+        None,
+        None,
+    );
+    let rects = frame.mark_rects();
+    assert!(
+        rects.contains(&[21.0, 251.0, 444.0, 1.0]),
+        "the footer rule: {rects:?}"
+    );
+    let ticks: Vec<f32> = rects
+        .iter()
+        .filter(|rect| rect[2] == 1.0 && (rect[1] == 251.0 || rect[1] == 252.0))
+        .map(|rect| rect[0])
+        .collect();
+    assert_eq!(ticks, vec![21.0, 59.0, 88.0, 126.0, 226.0], "{rects:?}");
+    assert!(
+        rects.iter().all(|rect| rect[2] < 480.0 || rect[3] < 272.0),
+        "no full-screen ground among the marks: {rects:?}"
+    );
+}
