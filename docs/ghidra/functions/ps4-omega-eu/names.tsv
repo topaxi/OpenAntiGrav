@@ -260,3 +260,5 @@
 0x012a2300	function	Detonator_PlaceStageObjects	75	detonator-placement.md
 0x012a3aa0	function	Detonator_SpawnObject	70	detonator-placement.md
 
+# 2026-11-23 zone-destroy-re: the Zone end twin (../ps3-hdfury-eu/zone-destroy.md)
+0x013080f0	function	Ship_UpdateWrecked	78	../ps3-hdfury-eu/zone-destroy.md
