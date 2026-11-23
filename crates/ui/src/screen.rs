@@ -719,24 +719,32 @@ impl Screens {
     /// viewport that authors `x`, `y`, `width` and `height` all clips, and only the bottom edge: the
     /// strips' own slide-in `Key` animation moves the image inside the viewport, so the edge that
     /// matters at rest is the one the image is cut at.
-    fn clip_images_to_viewport(&self, images: &mut [Image], viewport: &Node) {
+    fn clip_images_to_viewport(&self, images: &mut [Image], viewport: &Node, offset: (f32, f32)) {
+        // The viewport's own `OffsetX`/`OffsetY` would move its children and not its rect in a way
+        // this has not measured: such a viewport clips nothing.
+        if viewport.value("OffsetX").is_some() || viewport.value("OffsetY").is_some() {
+            return;
+        }
         let [Some(_), Some(top), Some(_), Some(height)] =
             ["x", "y", "width", "height"].map(|name| self.number(viewport.value(name)))
         else {
             return;
         };
+        // An image's `y` already has the enclosing screens' `OffsetY`s folded in, so the viewport's
+        // `y` is put in the same space.
+        let top = top + offset.1;
         let bottom = top + height;
         for image in images {
-            let Some(authored) = image.height else {
+            // A centred image's `y` is its middle, and one with no `TxtrHeight` would sample the
+            // sheet's own rows at a shorter size, squeezed: both are left whole.
+            let (Some(authored), Some(rows)) = (image.height, image.texture_height) else {
                 continue;
             };
-            if image.y < top || image.y >= bottom || image.y + authored <= bottom {
+            if image.centred || image.y < top || image.y >= bottom || image.y + authored <= bottom {
                 continue;
             }
             let kept = bottom - image.y;
-            if let Some(rows) = image.texture_height {
-                image.texture_height = Some(rows * kept / authored);
-            }
+            image.texture_height = Some(rows * kept / authored);
             image.height = Some(kept);
         }
     }
@@ -992,7 +1000,7 @@ impl Screens {
                         fallback_images,
                     );
                 }
-                self.clip_images_to_viewport(&mut screen.images[first..], child);
+                self.clip_images_to_viewport(&mut screen.images[first..], child, offset);
             }
             // None carries a `width` of its own to pass down - whatever the
             // enclosing `Viewport` gave keeps applying inside. `BackgroundController`

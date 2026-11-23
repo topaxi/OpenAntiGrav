@@ -153,6 +153,15 @@ impl FlyerShot {
 
 use crate::unlock::{campaign_tier, to_campaign_difficulty};
 
+/// What the footer of a campaign still shows of the player: the tag in its box and, when the
+/// original's frame is being matched, the one message its ticker had on screen.
+pub(super) struct Footer<'a> {
+    pub tag: &'a str,
+    pub pin: Option<oag_ui_screens::campaign::footer::TickerPin>,
+    /// The `Default`-role face the ticker's text is measured through.
+    pub font: &'a oag_ui::font::Atlas,
+}
+
 /// Draws `Campaign Selection`, `Grid Selection` on its first tier, or `Cell
 /// Selection` on that tier's own cells - the same shape
 /// [`super::menu_page::picker_page`] draws the race box's two screens in,
@@ -216,9 +225,16 @@ pub(super) fn campaign_page(
     // finished. `--menu-picker-step-seconds`: seconds since the cell or the rung changed on
     // `Cell Selection`, `None` for no change.
     (entry_seconds, step_seconds): (Option<f32>, Option<f32>),
+    // `--menu-title-seconds`: where the card title's glow ladder stands; `None` follows `pulse_seconds`.
+    title_seconds: Option<f32>,
     // Measures the footer legend's words for a title that flows it, as the live session does.
     legend_ink: oag_ui_screens::campaign::footer::flow::Ink,
-) -> Result<(Vec<oag_ui::frontend::Draw>, Option<FlyerShot>)> {
+    footer: Footer<'_>,
+) -> Result<(
+    Vec<oag_ui::frontend::Draw>,
+    Option<FlyerShot>,
+    super::menu_page::TickerClip,
+)> {
     let mut campaign = crate::campaign::load(
         archives,
         strings,
@@ -268,10 +284,28 @@ pub(super) fn campaign_page(
         campaign.selection_layout = None;
         campaign.chooser = None;
     }
-    // No per-session tip rotation, the same gap `circuit_names` below has -
-    // see `crate::campaign::static_footer_overlay`. Read before
-    // `campaign.sprites` moves out below.
-    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces);
+    // The player's tag and the pinned ticker message (`--menu-ticker`), as `capture` gives
+    // the picker pages' footer. Read before `campaign.sprites` moves out below.
+    if let Some(legend) = campaign.nav_legend.as_mut() {
+        legend.set_tag(footer.tag);
+    }
+    if let (Some(layout), Some(pin)) = (campaign.ticker.as_mut(), footer.pin) {
+        layout.pin = Some(pin);
+    }
+    // The picker pages' rule (`menu_page::picker_footer`): the pinned message, else the capture
+    // seed's rotation frozen at its start.
+    let tips = crate::records::ticker_tips(
+        campaign.ticker.as_ref(),
+        strings,
+        records,
+        crate::records::TICKER_CAPTURE_SEED,
+    );
+    let measure = |text: &str| oag_ui::font::measure(footer.font, text);
+    let footer_overlay = crate::campaign::static_footer_overlay(&campaign, &faces, &tips, &measure);
+    let ticker_draw = campaign.ticker.as_ref().and_then(|layout| {
+        oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)
+            .map(|draw| (draw, layout.viewport))
+    });
     let tiers = custom.as_ref().map_or_else(
         || oag_tables::race_campaign::MedalTiers::standard().clone(),
         |custom| custom.tiers.clone(),
@@ -575,6 +609,7 @@ pub(super) fn campaign_page(
                 .with_tiers(tiers.clone());
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
+                model.pulse_mut().set_text_seconds(title_seconds);
                 oag_ui_screens::campaign::grid_draw_list(
                     &model,
                     &campaign.grid_layout,
@@ -602,6 +637,7 @@ pub(super) fn campaign_page(
                 );
                 let mut model = model;
                 model.pulse_mut().set_seconds(pulse_seconds.unwrap_or(0.0));
+                model.pulse_mut().set_text_seconds(title_seconds);
                 oag_ui_screens::campaign::cell_draw_list(
                     &model,
                     &campaign.cell_layout,
@@ -634,5 +670,12 @@ pub(super) fn campaign_page(
             split,
         })
     });
-    Ok((layers.flatten(), shot))
+    let list = layers.flatten();
+    // The pinned message is clipped to the ticker's viewport: its index in the flattened list
+    // is found by equality, as `menu_page` does.
+    let clip = ticker_draw.and_then(|(draw, [x, _, width, _])| {
+        let at = list.iter().position(|d| *d == draw)?;
+        Some((at, x, x + width))
+    });
+    Ok((list, shot, clip))
 }

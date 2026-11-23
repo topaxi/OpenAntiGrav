@@ -48,6 +48,7 @@ fn found(list: &[Draw], clip: Option<usize>, substitution: &Substitution) -> Vec
         Some(Face {
             atlas: &atlas,
             buttons: role == Some("Buttons"),
+            snapped: false,
         })
     })
 }
@@ -220,7 +221,7 @@ fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
         scale: 1.0,
         width,
     };
-    let one = legend_wrapped(&atlas, place(10_000.0), &entries);
+    let one = legend_wrapped(&atlas, place(10_000.0), &entries, false);
     assert_eq!(one.len(), 2);
     // `wrap` joins the words with one space, as the renderer draws them.
     assert_eq!(one[0].rect[0], 10.0);
@@ -230,7 +231,7 @@ fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
     assert!((one[1].rect[0] - (10.0 + width("X TYPE "))).abs() < 0.01);
 
     // Narrow enough that the second entry wraps below the first.
-    let narrow = legend_wrapped(&atlas, place(width("X TYPE") + 2.0), &entries);
+    let narrow = legend_wrapped(&atlas, place(width("X TYPE") + 2.0), &entries, false);
     let cancel: Vec<_> = narrow
         .iter()
         .filter(|hint| hint.press == Press::Button(Button::Circle))
@@ -238,4 +239,53 @@ fn a_wrapped_legend_puts_a_rect_on_each_line_an_entry_falls_on() {
     assert!(!cancel.is_empty());
     assert!(cancel.iter().all(|hint| hint.rect[1] > 50.0), "{narrow:?}");
     assert_eq!(cancel[0].rect[0], 10.0);
+}
+
+/// On a snapped face a wrapped legend's rectangle covers the ink as drawn: each glyph of `aaa bbb` steps up to
+/// a whole unit, so the line is wider than its fractional advances say and a tap on its last glyph has to land.
+#[test]
+fn a_snapped_legend_rect_covers_its_drawn_ink() {
+    use oag_texture::fnt::{Font, Glyph};
+    let glyph = |ch: u8| Glyph {
+        codepoint: u16::from(ch),
+        width: 7,
+        height: 4,
+        u0: 0,
+        u1: 7,
+        v0: 0,
+        v1: 4,
+        advance: 8,
+        bearing: 1,
+    };
+    let font = Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 64],
+        glyphs: vec![glyph(b' '), glyph(b'a'), glyph(b'b')],
+    };
+    let atlas = Atlas::from_font(&font);
+    let entries = [Entry::button(Button::Cross, "aaabbb")];
+    let place = Wrapped {
+        x: 10.0,
+        y: 50.0,
+        scale: 0.7,
+        width: 10_000.0,
+    };
+    let rect_right = |snapped| {
+        let hints = legend_wrapped(&atlas, place, &entries, snapped);
+        hints[0].rect[0] + hints[0].rect[2]
+    };
+    let ink_right = 10.0 + crate::font::snapped_run(&atlas, "aaabbb", 0.7).ink_right;
+    assert!(
+        rect_right(true) >= ink_right - 1e-3,
+        "the rect ends at {}, the ink at {ink_right}",
+        rect_right(true)
+    );
+    assert!(
+        rect_right(false) < ink_right - 1.0,
+        "the fractional rect would stop short of the drawn ink"
+    );
 }

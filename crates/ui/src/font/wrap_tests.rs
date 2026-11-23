@@ -31,3 +31,14 @@ fn a_word_wider_than_the_column_is_kept_whole() {
     let lines = wrap(&atlas, "antigravitational", 1.0, 10.0);
     assert_eq!(lines, ["antigravitational"]);
 }
+
+/// A snapped pen steps up to a whole unit before each glyph, so a line is wider than its fractional
+/// advance sum says: at 0.7 the five glyphs of `aa bb` measure 21 and draw 23.5 wide. A limit
+/// between the two keeps the line whole by the first measure and breaks it by the second.
+#[test]
+fn a_snapped_pen_breaks_a_line_the_fractional_one_keeps() {
+    let atlas = Atlas::build();
+    assert_eq!(wrap(&atlas, "aa bb", 0.7, 22.0), ["aa bb"]);
+    assert_eq!(wrap_pens(&atlas, "aa bb", 0.7, 22.0, false), ["aa bb"]);
+    assert_eq!(wrap_pens(&atlas, "aa bb", 0.7, 22.0, true), ["aa", "bb"]);
+}

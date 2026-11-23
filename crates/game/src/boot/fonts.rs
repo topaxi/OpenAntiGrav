@@ -55,6 +55,38 @@ pub fn legend_ink<'a>(
     }
 }
 
+/// A description line's measured width at a scale, for the wrap in
+/// [`oag_ui_screens::campaign::footer::description_draws`]: the `Stats` face's atlas where the title
+/// has one ([`oag_title::MenuSkin::stats_font`], held in the third glyph slot), the body face's
+/// otherwise, laid out on the same pen the renderer draws it with (`snapped`,
+/// [`oag_title::MenuSkin::snapped_pens`]).
+pub fn description_ink<'a>(
+    font: &'a oag_ui::font::Atlas,
+    stats_font: Option<&'a oag_ui::font::Atlas>,
+    snapped: bool,
+) -> impl Fn(&str, f32) -> f32 + 'a {
+    move |text, scale| oag_ui::font::run_width(stats_font.unwrap_or(font), text, scale, snapped)
+}
+
+/// A footer prompt's width at a scale, for the rectangles the reset prompt's tap target is laid
+/// out from ([`oag_ui_screens::campaign::footer::NavigationLegend::reset_prompt`]): `font` is the
+/// widget's own, the `Stats` face's atlas for a `scroll`/`stats` widget where the title has one,
+/// the body face's for every other, on the pen the renderer draws it with (`snapped`).
+pub fn prompt_ink<'a>(
+    font: &'a oag_ui::font::Atlas,
+    stats_font: Option<&'a oag_ui::font::Atlas>,
+    snapped: bool,
+) -> impl Fn(&str, &str, f32) -> f32 + 'a {
+    move |face, text, scale| {
+        let atlas = if face.eq_ignore_ascii_case("scroll") || face.eq_ignore_ascii_case("stats") {
+            stats_font.unwrap_or(font)
+        } else {
+            font
+        };
+        oag_ui::font::run_width(atlas, text, scale, snapped)
+    }
+}
+
 /// Makes the texture pack that is on and names this disc the active one for the faces, unless
 /// this title's faces take a runtime palette ([`oag_title::FrontEnd::runtime_palette_faces`]):
 /// a pack is then not asked, and the report says why.
@@ -395,6 +427,7 @@ pub fn install_faces(
     renderer.set_face_atlas(device, queue, face, face_role);
     let (third, third_role) = third_atlas_slot(skin, title_font, buttons_font);
     renderer.set_buttons_atlas(device, queue, third, third_role);
+    renderer.set_snapped_pens(skin.snapped_pens);
 }
 
 /// Reads the PlayStation button-glyph face

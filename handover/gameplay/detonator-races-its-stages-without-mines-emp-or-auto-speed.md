@@ -263,6 +263,11 @@ Overall risks: most of EMP, auto-speed and the HUD is unread (RE-first, may need
 AltiVec workarounds: `llvm-objdump -d --mattr=+altivec,+vsx` and `scripts/ps3-toc.py`); the
 placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
+## Review fixes
+
+- The auto-speed ramp is in the state hash in every Detonator race, not only where an EMP armed (`hash::write_detonator`; `Field::is_empty` now tests it). Detonator hashes move, other modes do not.
+- The cannon, the EMP fire and the EMP charge all key on `primary_slot()` (`cannon_handed(slot)`); `detonator_ground_truth::an_hd_detonator_cannon_and_emp_work_off_the_primary_slot`.
+
 ## Open
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still
@@ -444,6 +449,19 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | 7 | Hull | 6.6 % | 0.25-0.29 | 1.6-1.9 | Pose agrees (0.000 units, 0.9 degrees). Original: dark gunmetal body, blue strip lit, cyan wing edges. Ours was a pale silver body with white wing edges. **Cause read and fixed (90, `det-hull-look`, `detonator-look.md`, "The hull's paint"): `emissive` added the hull's second texture as a glow** (`detonator_stripe.gtf`, a facing ramp, on the panels; `detonator_ao.gtf`, the picture itself, on the body), and the panels' iridescent overlay `2 * Colour * AO * stripe(N.V)` is now drawn (`mesh::rcs::hull_overlay`, 85). Side-panel box mean RGB ours `(109.4, 97.4, 98.1)` to `(67.7, 50.1, 50.6)` (`(54.1, 30.9, 32.0)` with the glow refusal alone), original `(60.5, 44.2, 44.5)`; ours is now 6 grey above it, cause open; the other HD pairs unchanged. **Still open:** the fuselage's own overlay (`rich_iridescent`, the iridescence ramp at another coordinate), and the lit blue strip and cyan wing edges (the `Charge1`/`Charge2` block's writer, `detonator-hull.md`). |
 | 8 | HUD score panel | 5.7 % | 0.46-0.59 | 2.6-3.4 | The numbers, layout and clip pips agree; the translucent red panel in ours lets the bright sky through (the "red translucent layer"), the original's panel sits on a dark scene. Mostly row 1 bleeding through, not a HUD error; panel alpha not separately measured. |
 | 9 | HUD stage, energy, clip | 8 % | 0.05-0.14 | under 1 | Close: `1/14`, `100` (both, with ours held at rest) and the `15`/`12` clip match, including the clip falling to 12 after three volleys; the score reads 0 in the original and 100 in ours after its round hit a mine, ours' mines being elsewhere. |
+
+**Hull camera and size, re-based (2026-11-23, `det-camera`).** The maintainer's "ours is far, the original is close" was true and the
+camera flags were not the cause: the pair fed the RAM body (2 to 4 ticks ahead of the presented frame) with the push-buffer camera, and
+ours drew the Detonator hull at 0.75 where the original draws 0.63. Both fixed (`docs/tools/compare-page.md`, "The hull's frame pose in a
+Detonator pair"; `ps3-hdfury-eu/camera.md`, "The drawn hull in Detonator is 0.63"). Hull rim box now within 9 px of the original on
+top, left, right on all three new grabs (before: 229x134 against 266x248); the bottom is 18-24 px short (nozzles, exhaust flare; ours'
+hull rear is lit blue where the original's is dark metal). Whole-frame mean absolute grey difference / RMSE, before then after, against
+the same new `theirs.png`: `mines-ahead` 19.81 to 19.81 / 0.174 to 0.175, `cannon-volley` 18.60 to 18.74 / 0.167 to 0.169, `pad` 16.85 to
+16.90 / 0.149 to 0.150: **the whole-frame score does not move with the hull** (6 percent of the frame), so the earlier 18.58 / 18.28 / 12.74
+stand as the floor-and-sky scores of the old grabs and are not comparable with these (new boots, new music phase). **Open:** 2048 and
+Omega draw the hull at the model's 0.75 (`hull_scale: None`) until a live frame reads their hull matrix; the physics and camera-rig use
+of the `0.7` scale is wired for the rig only; the new pairs carry no world clock (the grab's read found no node) and the heading check
+reads 1.4 to 1.9 degrees (tolerance 1.0), so they are not published; `--field` still feeds the RAM body.
 
 **The original's bands in the pairs (2026-11-23, `det-pair-bands`).** `--zone-bands` / `--zone-bands-raw` feed the original's held
 (`+0x32f8`) and raw (`+0x32b8`) bands, read in the frame's own pause, to the floor visualiser and the mine envelope

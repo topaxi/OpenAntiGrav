@@ -1033,8 +1033,8 @@ pub fn measure(atlas: &Atlas, text: &str) -> f32 {
 /// (`docs/ghidra/functions/ps3-hdfury-eu/navigation-legend.md`, "What measures a word"), not
 /// [`measure`]'s advance sum: a glyph's pen starts at the previous pen plus its advance less its
 /// bearing, and the string ends at the last glyph's ink. `snap` rounds each glyph's pen up to a
-/// whole unit, which the original's measure does after any text has drawn and its draw never
-/// does, so a layout snaps and a draw does not. A face carries no kerning pairs here. Glyphs the
+/// whole unit, which HD's measure does after any text has drawn and its draw never
+/// does, so a layout snaps and a draw does not (Pure's draw snaps too, see [`pen_step`]). A face carries no kerning pairs here. Glyphs the
 /// atlas lacks are left out, as [`measure`] leaves them.
 #[must_use]
 pub fn ink_width(atlas: &Atlas, text: &str, scale: f32, snap: bool) -> f32 {
@@ -1045,13 +1045,71 @@ pub fn ink_width(atlas: &Atlas, text: &str, scale: f32, snap: bool) -> f32 {
     };
     let mut x = -first.bearing * scale;
     for cell in &cells[..cells.len() - 1] {
-        let mut pen = cell.bearing.mul_add(scale, x);
-        if snap {
-            pen = pen.ceil();
-        }
-        x = (cell.advance - cell.bearing).mul_add(scale, pen);
+        x = pen_step(cell, scale, x, snap).1;
     }
     (last.bearing + last.ink).mul_add(scale, x)
+}
+
+/// One glyph's place on a line: `(ink_left, next)`, where `x` is the pen before it and `scale` is
+/// the glyph's size in screen units per texel.
+///
+/// The ink's left edge sits its bearing right of the pen, and the next pen is one advance less
+/// that bearing past it. `snap` rounds the ink's left edge up to a whole screen unit, as the
+/// original's pens do on Pure's front end (`docs/ui/menus-original.md`, "Pure's text pens step
+/// up to whole pixels") and its `Font_MeasureString` does on HD.
+#[must_use]
+pub fn pen_step(cell: &Cell, scale: f32, x: f32, snap: bool) -> (f32, f32) {
+    let mut ink_left = cell.bearing.mul_add(scale, x);
+    if snap {
+        ink_left = ink_left.ceil();
+    }
+    (
+        ink_left,
+        (cell.advance - cell.bearing).mul_add(scale, ink_left),
+    )
+}
+
+/// Where a line of text ends when it is drawn on the snapped pen ([`pen_step`]) from a whole-unit
+/// origin: the single measure every layout of Pure's front end (wrap, alignment, hit rectangles)
+/// reads, so that none of them disagrees with the draw.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SnappedRun {
+    /// The pen after the last glyph (its advance past the snapped ink edge): what an aligned
+    /// string is placed by (which edge a right- or centre-aligned string is placed by is chosen:
+    /// no captured Pure frame has one in a snapped face).
+    pub end: f32,
+    /// The right edge of the last glyph's ink: where the drawn text stops.
+    pub ink_right: f32,
+}
+
+/// [`SnappedRun`] of `text` at `scale` screen units per texel of `atlas` (its own `texel_scale`
+/// applies). Every glyph is snapped, the last included, from the origin 0; glyphs the atlas lacks
+/// are left out, as the draw leaves them. Unlike [`ink_width`] it starts at the pen, not at the
+/// first glyph's ink, and so is what a draw at `x` occupies from `x`.
+#[must_use]
+pub fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> SnappedRun {
+    let scale = scale * atlas.texel_scale;
+    let mut run = SnappedRun {
+        end: 0.0,
+        ink_right: 0.0,
+    };
+    for cell in text.chars().filter_map(|c| atlas.cell(c)) {
+        let (left, next) = pen_step(&cell, scale, run.end, true);
+        run.ink_right = cell.ink.mul_add(scale, left);
+        run.end = next;
+    }
+    run
+}
+
+/// The width `text` draws at `scale` from its origin: [`snapped_run`]'s ink edge on a snapped
+/// pen, the fractional advance sum otherwise.
+#[must_use]
+pub fn run_width(atlas: &Atlas, text: &str, scale: f32, snapped: bool) -> f32 {
+    if snapped {
+        snapped_run(atlas, text, scale).ink_right
+    } else {
+        measure(atlas, text) * scale
+    }
 }
 
 /// Breaks `text` into lines no wider than `max_width` in screen units.
@@ -1064,6 +1122,20 @@ pub fn ink_width(atlas: &Atlas, text: &str, scale: f32, snap: bool) -> f32 {
 /// text.
 #[must_use]
 pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String> {
+    wrap_pens(atlas, text, scale, max_width, false)
+}
+
+/// [`wrap`] on the pen the draw lays out: `snapped` measures each candidate line by [`ink_width`]'s
+/// snapped pass, as a front end whose pens step up to whole units ([`pen_step`]) draws it, and
+/// otherwise by the fractional advance sum.
+#[must_use]
+pub fn wrap_pens(
+    atlas: &Atlas,
+    text: &str,
+    scale: f32,
+    max_width: f32,
+    snapped: bool,
+) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -1072,7 +1144,7 @@ pub fn wrap(atlas: &Atlas, text: &str, scale: f32, max_width: f32) -> Vec<String
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && measure(atlas, &candidate) * scale > max_width {
+        if !line.is_empty() && run_width(atlas, &candidate, scale, snapped) > max_width {
             out.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {
@@ -1320,6 +1392,49 @@ mod tests {
         let atlas = Atlas::build();
         assert!(atlas.cell(' ').is_some());
         assert_eq!(measure(&atlas, "A B"), 18.0);
+    }
+
+    /// The run of a string is the pen steps of [`pen_step`], the last glyph included.
+    #[test]
+    fn a_snapped_run_ends_on_the_last_glyphs_snapped_ink() {
+        let atlas = Atlas::build();
+        let cell = atlas.cell('A').expect("a glyph");
+        let run = snapped_run(&atlas, "AAA", 0.7);
+        let (mut x, mut left) = (0.0, 0.0);
+        for _ in 0..3 {
+            (left, x) = pen_step(&cell, 0.7, x, true);
+        }
+        assert_eq!((run.end, run.ink_right), (x, left + cell.ink * 0.7));
+        assert_eq!(run_width(&atlas, "AAA", 0.7, true), run.ink_right);
+        assert_eq!(run_width(&atlas, "AAA", 0.7, false), 18.0 * 0.7);
+        assert_eq!(snapped_run(&atlas, "", 0.7).ink_right, 0.0);
+    }
+
+    /// Pure's `Stats` glyphs: advance 9, left bearing 1, drawn at 0.8. The pen steps 8 whole
+    /// pixels a glyph from a whole-pixel origin, where the unsnapped pen steps 7.2.
+    #[test]
+    fn a_snapped_pen_steps_up_to_whole_pixels_and_an_unsnapped_one_does_not() {
+        let cell = Cell {
+            advance: 9.0,
+            bearing: 1.0,
+            ..Atlas::build().cell('A').expect("a glyph")
+        };
+        let walk = |snap: bool| {
+            let mut x = 249.0;
+            (0..4)
+                .map(|_| {
+                    let (left, next) = pen_step(&cell, 0.8, x, snap);
+                    x = next;
+                    left
+                })
+                .collect::<Vec<f32>>()
+        };
+        assert_eq!(walk(true), [250.0, 258.0, 266.0, 274.0]);
+        let loose = walk(false);
+        assert!(
+            loose[1] - loose[0] < 7.3 && loose[1] - loose[0] > 7.1,
+            "{loose:?}"
+        );
     }
 }
 

@@ -345,5 +345,25 @@ fn pures_stats_slot_is_its_own_face_and_the_scroll_face() {
             !font.glyphs.is_empty(),
             "{label}: {stats} decoded to no glyphs"
         );
+        // The original's pen on this face at the circuit panel's 0.8: `LENGTH` at x 357 puts
+        // its glyphs' ink at 358, 366, 374, 382, 390, 397 in the PPSSPP frame
+        // (`docs/ui/menus-original.md`, "Pure's text pens step up to whole pixels"). The two
+        // 8-texel `T` and `W` advances are the 7 px steps; the rest are 8.
+        let atlas = oag_ui::font::Atlas::from_font(&font);
+        let mut pen = 357.0;
+        let lefts: Vec<f32> = "LENGTH"
+            .chars()
+            .map(|c| {
+                let cell = atlas.cell(c).expect("a glyph");
+                let (left, next) = oag_ui::font::pen_step(&cell, 0.8, pen, true);
+                pen = next;
+                left
+            })
+            .collect();
+        assert_eq!(
+            lefts,
+            [358.0, 366.0, 374.0, 382.0, 390.0, 397.0],
+            "{label}: {stats}'s pen at 0.8"
+        );
     }
 }

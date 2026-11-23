@@ -1303,3 +1303,38 @@ fn a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it() {
     );
     assert_eq!(rows(3), (Some(14.0), Some(14.0)), "outside any viewport");
 }
+
+#[test]
+fn a_viewport_clip_is_compared_in_the_images_space_and_spares_what_it_cannot_cut_whole() {
+    // Inside a screen offset by 100 the viewport's `y="36"` is 136 on screen, where the image's own
+    // `y="36"` has the same offset folded in.
+    let xml = r#"
+<Screen>
+  <Screen name="Outer">
+    <Screen OffsetY="100">
+      <Viewport>
+        <Values x="0" y="36" width="480" height="13"></Values>
+        <Image><Values x="0" y="36" height="14" width="454" txtrheight="14" src="a.mip"></Values></Image>
+        <Image><Values x="0" y="36" height="14" width="454" src="a.mip"></Values></Image>
+        <Image><Values x="0" y="36" height="14" width="454" txtrheight="14" Centred="true" src="a.mip"></Values></Image>
+      </Viewport>
+      <Viewport OffsetY="5">
+        <Values x="0" y="36" width="480" height="13"></Values>
+        <Image><Values x="0" y="41" height="14" width="454" txtrheight="14" src="b.mip"></Values></Image>
+      </Viewport>
+    </Screen>
+  </Screen>
+</Screen>
+"#;
+    let screens = Screens::from_xml(xml);
+    let images = &screens.by_name("Outer").unwrap().images;
+    let rows = |at: usize| (images[at].height, images[at].texture_height);
+    assert_eq!(rows(0), (Some(13.0), Some(13.0)), "cut in the offset space");
+    assert_eq!(rows(1), (Some(14.0), None), "no TxtrHeight: left whole");
+    assert_eq!(rows(2), (Some(14.0), Some(14.0)), "centred: left whole");
+    assert_eq!(
+        rows(3),
+        (Some(14.0), Some(14.0)),
+        "a viewport with its own offset clips nothing"
+    );
+}

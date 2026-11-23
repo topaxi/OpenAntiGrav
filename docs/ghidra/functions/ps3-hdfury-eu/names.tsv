@@ -1181,3 +1181,14 @@
 0x0098d5b8	data	g_ShipFloorFriction	78	collision-cues.md
 0x005a6ce0	function	Image_Create	65	zone-vis-gamma.md
 0x005aa1d8	function	Texture_CreateForImage	70	zone-vis-gamma.md
+# 2026-11-23 destroy-cameras-re: the race camera's update, the spectator view (mode 8) and the orbit view (mode 2) (destroy-camera.md)
+0x000b0830	function	Camera_Update	80	destroy-camera.md
+0x000b0060	function	Camera_UpdateView	78	destroy-camera.md
+0x000ac048	function	Camera_UpdateSpectatorView	85	destroy-camera.md
+0x000ac7a0	function	Camera_PickStation	82	destroy-camera.md
+0x000ac468	function	Camera_RepickNearSubject	65	destroy-camera.md
+0x000a9f20	function	Camera_PickRandomSubject	72	destroy-camera.md
+0x000aaa50	function	Camera_Construct	72	destroy-camera.md
+0x000ae6c0	function	Camera_UpdateOrbitView	62	destroy-camera.md
+0x0027e908	function	Noise_SampleFractal1D	55	destroy-camera.md
+0x00060f90	function	RaceManager_UpdateEndCut	60	destroy-camera.md

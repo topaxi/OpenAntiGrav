@@ -99,6 +99,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
         menu_rows: None,
     }),
     hud_under_scrim: false,
+    song_line_under_scrim: true,
     offers_photo: true,
     origin: Origin::Measured,
 };

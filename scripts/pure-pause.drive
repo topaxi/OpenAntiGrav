@@ -1,0 +1,18 @@
+# Wipeout Pure's pause screen over a Time Trial on Vineta K (Feisar, Vector), played through our own menus the way the original is
+# walked (SINGLE PLAYER, TIME TRIAL, Vector, Alpha, Vineta K, the team): START pauses the race and opens the disc's own
+# `InGame Main Menu`. `@OUT@` is the screenshot path and `@TICKS@` the race ticks to play, which `compare_menu.drive_command` and
+# `psp-menu-pair.py` fill in. Run with `--original-menu` (no PHOTO MODE row) and `--no-intro`.
+boot
+select campaign; press cross; ticks 40
+press down; ticks 10; press down; ticks 10; press cross; ticks 40
+press cross; ticks 40
+press cross; ticks 40
+press cross; ticks 40
+press cross; ticks 40
+until stage=race within 6000
+ticks @TICKS@
+press start
+ticks 10
+draw
+screenshot @OUT@
+quit

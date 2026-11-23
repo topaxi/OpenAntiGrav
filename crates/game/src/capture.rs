@@ -172,6 +172,9 @@ pub struct Options {
     /// With `--menu-page`, the one footer-ticker message to draw, `ITEM@X` - see the CLI flag's
     /// own docs.
     pub menu_ticker: Option<String>,
+    /// With `--menu-page grid-select`/`cell-select`, the seconds the card title's glow ladder has run -
+    /// see the CLI flag's own docs. `None` follows `menu_picker_seconds`.
+    pub menu_title_seconds: Option<f32>,
     /// Which modal prompt to draw over that page: `rename`, `rename-note`,
     /// `delete` or `delete-built-in`.
     ///
@@ -258,10 +261,13 @@ pub fn run(
         face_scales,
         ..
     } = loaded;
-    if let Some(pin) = &options.menu_ticker
-        && let Some(ticker) = ticker.as_mut()
-    {
-        ticker.pin = Some(parse_ticker_pin(pin)?);
+    let pinned_ticker = options
+        .menu_ticker
+        .as_deref()
+        .map(parse_ticker_pin)
+        .transpose()?;
+    if let (Some(pin), Some(ticker)) = (&pinned_ticker, ticker.as_mut()) {
+        ticker.pin = Some(pin.clone());
     }
     let nav_legend = nav_legend
         .map(|legend| legend.with_tag(options.settings.player.footer_tag(&loaded.title.profile)));
@@ -846,7 +852,7 @@ pub fn run(
                 if !layout.is_hd() {
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
                     ticker_clip =
-                        menu_page::picker_footer(&mut list, legend, ticker, &strings, &font);
+                        menu_page::picker_footer(&mut list, legend, true, ticker, &strings, &font);
                     // The selected entry's description, typed along the footer as the live
                     // screen types it (`MenuStage`'s picker pass).
                     let selected = match kind {
@@ -860,7 +866,13 @@ pub fn run(
                             ticker,
                             text,
                             options.menu_picker_seconds,
-                            &|text: &str| oag_ui::font::measure(&font, text),
+                            &crate::boot::fonts::description_ink(
+                                &font,
+                                buttons_font
+                                    .as_ref()
+                                    .filter(|_| menu_skin.stats_font.is_some()),
+                                menu_skin.snapped_pens,
+                            ),
                         ));
                     }
                 }
@@ -922,7 +934,12 @@ pub fn run(
                 // `records` `--menu-page` arm above already makes - see
                 // `campaign_page`'s own `records` parameter doc.
                 let records = crate::records::load();
-                let (list, shot) = campaign_page(
+                let footer = campaign_page::Footer {
+                    tag: options.settings.player.footer_tag(&loaded.title.profile),
+                    pin: pinned_ticker.clone(),
+                    font: &font,
+                };
+                let (list, shot, clip) = campaign_page(
                     kind,
                     &mut archives,
                     &strings,
@@ -942,9 +959,12 @@ pub fn run(
                     options.menu_picker_seconds,
                     options.menu_model_seconds,
                     (options.menu_entry_seconds, options.menu_picker_step_seconds),
+                    options.menu_title_seconds,
                     &crate::boot::fonts::legend_ink(&font, buttons_font.as_ref()),
+                    footer,
                 )?;
                 flyer_shot = shot;
+                ticker_clip = clip;
                 (backdrop, video_format, list, space)
             } else if let Some(seated) = join_page::seats(page) {
                 // The split-screen join screen - see `crate::app::session::join`
@@ -1015,10 +1035,18 @@ pub fn run(
                 );
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
-            } else if let Some(answers) = pure_chain_page::answers(page) {
-                // Wipeout Pure's SINGLE PLAYER screens - see
+            } else if let Some(request) = pure_chain_page::request(page) {
+                // Wipeout Pure's SINGLE PLAYER screens and its `Main Menu` - see
                 // `crate::app::session::pure_chain` for the live flow.
-                let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
+                let footer = (
+                    nav_legend.as_ref(),
+                    ticker.as_ref(),
+                    &font,
+                    buttons_font
+                        .as_ref()
+                        .filter(|_| menu_skin.stats_font.is_some()),
+                    menu_skin.snapped_pens,
+                );
                 let globals: Vec<(&str, &str)> = frontend
                     .screens()
                     .globals
@@ -1026,7 +1054,7 @@ pub fn run(
                     .map(|(name, value)| (name.as_str(), value.as_str()))
                     .collect();
                 let (list, clip) = pure_chain_page::capture(
-                    answers,
+                    request,
                     &globals,
                     &mut sprites,
                     options.race.as_ref(),
@@ -1105,6 +1133,13 @@ pub fn run(
                     options.race.as_ref().map(|r| r.source.as_str()),
                     nav_legend.as_ref(),
                     &|text| oag_ui::font::measure(&font, text),
+                    &crate::boot::fonts::prompt_ink(
+                        &font,
+                        buttons_font
+                            .as_ref()
+                            .filter(|_| menu_skin.stats_font.is_some()),
+                        menu_skin.snapped_pens,
+                    ),
                     ticker.as_ref(),
                     &ticker_tips,
                 )?;

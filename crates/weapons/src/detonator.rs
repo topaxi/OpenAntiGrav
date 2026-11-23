@@ -168,6 +168,7 @@ impl Field {
             && self.live_bombs == 0
             && !self.cannon.armed
             && !self.emp.armed
+            && self.ramp == 0.0
     }
 
     /// Removes mine `index`, filling its place with the last one.

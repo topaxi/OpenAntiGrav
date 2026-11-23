@@ -809,6 +809,7 @@ fn run(mut cli: Cli) -> Result<()> {
         replay_png: cli.shot.replay_png.clone(),
         give,
         no_intro: cli.intro.no_intro,
+        original_menu: cli.original_menu,
         dev: cli.dev.dev(cli.driver.people())?,
         net: None,
         net_bot: cli.net.net_bot,

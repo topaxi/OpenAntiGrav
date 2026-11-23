@@ -782,3 +782,64 @@ fn an_atlas_grid_is_columns_in_the_high_half_so_its_cells_are_square() {
     assert_eq!((columns, rows), (2, 1));
     assert_eq!((width, height), (64.0, 64.0));
 }
+
+/// HD's `WO_SHIP_EXPLOSION` root emitter is the black ball of a wrecked craft: an alpha-over
+/// emitter on the 8x4 `smoke_new4_8x4` flipbook (white-hot, yellow and fire cells, not
+/// smoke-grey ones) whose colour table, `colour_mode` 3, is white at entry 0 and then black
+/// (alpha 1) for entries 1 to 31, about the first eighth of a particle's life. Sprite times
+/// that table is black. The data carries no orange of its own for those ticks, so painting
+/// them orange would be an invention; what the original draws there is open
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, "The black blast").
+#[test]
+#[ignore = "needs a decrypted PS3 disc image in data/images"]
+fn hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/images/hdfury-ps3-eu-dec.iso");
+    if !path.exists() {
+        assert!(
+            std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none(),
+            "OAG_REQUIRE_GAME_DATA is set but {} is missing",
+            path.display()
+        );
+        println!("skipping: {} not present", path.display());
+        return;
+    }
+    let spec = format!("{}:PS3_GAME/USRDIR/DATA02.PSARC", path.display());
+    let mut data02 = oag_assets::psarc::Archive::open(&spec).expect("DATA02 opens");
+    let blob = data02
+        .read_path("/data/psys/wo_ship_explosion.pob")
+        .expect("DATA02 carries wo_ship_explosion.pob");
+    let tex = |archives: &mut [oag_assets::psarc::Archive], authored: &str| {
+        let stem = authored.rsplit(['\\', '/']).next()?.rsplit_once('.')?.0;
+        let entry = format!("/data/psys/tex/{stem}.gtf");
+        archives.iter_mut().find_map(|archive| {
+            let blob = archive.read_path(&entry).ok()?;
+            oag_fx::psys::sprite::Sprite::from_gtf(&blob)
+        })
+    };
+    let mut archives: Vec<_> = HD_ARCHIVES
+        .iter()
+        .map(|name| {
+            let spec = format!("{}:PS3_GAME/USRDIR/{name}.PSARC", path.display());
+            oag_assets::psarc::Archive::open(&spec).expect("the archive opens")
+        })
+        .collect();
+    let effect = Effect::parse_listed(&blob, ColourScale::Full, false, &mut |authored| {
+        tex(&mut archives, authored)
+    })
+    .expect("parses");
+
+    let root = &effect.emitters[0];
+    assert_eq!(root.name, "WO_SHIP_EXPLOSION");
+    assert_eq!(root.blend, oag_fx::psys::Blend::AlphaOver);
+    assert_eq!((root.atlas.columns, root.atlas.rows), (8, 4));
+    let sprite = root.sprite.as_ref().expect("the flipbook resolves");
+    assert_eq!((sprite.width, sprite.height), (1024, 512));
+    assert_eq!(root.palette[0][..3], [1.0, 1.0, 1.0]);
+    for entry in 1..=31 {
+        assert_eq!(root.palette[entry][..3], [0.0, 0.0, 0.0], "entry {entry}");
+        assert_eq!(root.palette[entry][3], 1.0, "entry {entry}");
+    }
+    assert!(root.palette[64][..3].iter().all(|&c| c == 1.0));
+}

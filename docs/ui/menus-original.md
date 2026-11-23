@@ -815,3 +815,50 @@ Test: `a_viewport_cuts_the_bottom_off_an_image_that_runs_past_it`,
 `menu_layout_ground_truth::pulses_footer_strips_are_cut_to_their_viewports`. Not wired: the top, left and right edges (no image
 overruns them in Pulse), and the strips' slide-in `Key` animation, which moves the image inside the viewport and is cut by it live.
 
+## Pure's text pens step up to whole pixels (2026-11-23, `pure-sr-track`)
+
+**Law (confidence 85).** On Pure's front end a glyph's ink edge is the pen plus the glyph's left bearing at the
+widget's scale, **rounded up to a whole pixel**; the next pen is that edge plus the advance less the bearing
+(`oag_ui::font::pen_step`, the arithmetic of `Font_MeasureString`'s snapped pass on HD, which on HD only a layout
+uses and the draw does not). The first pen is the widget's authored `x`. Nothing is read from the text's length:
+a label is as wide as its glyphs' snapped steps make it, so `RACE RECORD` at 0.8 spans 79 px where the fractional
+pen (advance 9 texels = 7.2 px) spans 73.
+
+Evidence: PPSSPP software renderer, USA, `Track Selection` (`menu-sr-track`, a fresh grab), glyph ink-left columns
+read off `theirs.png` (rows of the label, first column of each run of inked columns) against the law with **no free
+offset** where the widget's `x` is authored, otherwise one integer offset:
+
+| string | face, scale | glyphs | residual, snapped pen | residual, fractional pen |
+| --- | --- | ---: | --- | --- |
+| `MODESTO HEIGHTS`, `CHENGHOU PROJECT`, `BLUE RIDGE` (x 21) | `FX300ANG`, 1.15 (`MenuScale`) | 14, 15, 9 | 0.00 px, 0.00 px, 0.00 px (absolute) | 1.84, 1.42, 0.81 px mean |
+| `TRACK SELECTION` (x 21) | `FX300ANG`, 0.97 (`TitleScale`) | 14 | 0.00 px (absolute) | 2.42 px mean |
+| `RACE RECORD`, `LAP RECORD`, `LENGTH`, `HEIGHT` | `LTe50325`, 0.8 | 10, 9, 6, 6 | 0.00 px each (offset 249 or 357) | 2.9 to 0.4 px mean at 0.7 to 0.85, no scale fits |
+| description line, 46 glyphs and the cursor | `LTe50325`, 0.8 (not authored, see below) | 47 | 0.04 px mean, 2 px max at one glyph (offset 21) | 0.29 px mean at 0.865, a scale nothing authors |
+| `SPEED` on `Team Selection` (`menu-team`) | `LTe50325`, 0.8 | 5 | 0.00 px (offset 249) | not separable on five glyphs |
+
+A pen of 7.2 or 13.8 px stepping a steady 8 or 14 px is what the picture shows: `CHENGHOU PROJECT` stands at 21, 35,
+49, 63 ... (steady 14, advance 12 texels at 1.15 is 13.8), `TRACK SELECTION` at 21, 33, 45 ... (steady 12, 11.64), the
+label at 250, 258, 266, 274 and, across its space, 289. **The description line's scale is 0.8, not 0.7 (confidence 75).** The footer's `TextInfo` names `FEGlobals->TextInfoScale`
+(and `TextInfoGap`, `TextInfoNumLines`), none of which `FEGlobals` declares, so the value is in the executable's code.
+The snapped pen fits the line's 47 glyphs from 0.78 to 0.80 and from no other scale (0.7 leaves 13 px of residual, 0.85
+2.6 px); 0.8 is also `MSWarningScale`'s value and the stat labels'. At 0.8 the line's ink is 8 rows tall in both
+frames. The earlier 0.7 was chosen off the capital height of one pair. With the right scale and the right face for
+the wrap (the `Stats` face's snapped widths, `boot::fonts::description_ink`; the wrap had measured the menu face) the line stays on one
+line as the original's does.
+
+The same glyphs' ink widths are unchanged, so only where
+each glyph sits moved: ours drew the list 2 % and the title 4 % narrower than the original, the stat labels 9 %, and the
+description line 20 %, all of which is this and (for the description line) its scale.
+
+Wired for Pure alone as `oag_title::MenuSkin::snapped_pens` (`Renderer::set_snapped_pens`, set where the front end
+installs its faces); the race HUD keeps its measured `round` advances (`docs/ui/hud.md`, "Pulse's HUD text steps the
+pen a whole pixel per glyph"). Pure's seven Single Race and Tournament pairs, re-rendered on copies against the same
+`theirs.png` (share of pixels differing by more than 40 grey, whole frame, before to after):
+`menu-team` 1.86 % to 1.00 %, `menu-sr-track` 2.73 % to 1.57 %, `menu-mode` 1.51 % to 0.70 %, `menu-sr-class` 0.88 % to 0.50 %,
+`menu-sr-league` 0.99 % to 0.62 %, `menu-t-class` 0.86 % to 0.49 %, `menu-t-sel` 1.21 % to 0.65 %.
+
+Checked against the other titles, as the rule asks: **HD**: checked, differs (HD's measure snaps and its draw does not,
+`oag_ui::font::ink_width`; no HD pair has been measured for a snapped draw). **Pulse**: not measured; its front end
+keeps the fractional pen, and a Pulse pair's label spacing is the check. **2048 and Omega**: not checkable here
+(no Pure-shaped front end).
+

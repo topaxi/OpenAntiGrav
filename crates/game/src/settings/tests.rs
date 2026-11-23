@@ -1477,7 +1477,7 @@ fn the_reset_prompt_sits_on_confirms_row_and_only_off_default() {
             menu,
             Some(&legend),
             &|_| Vec::new(),
-            &|text| text.chars().count() as f32 * 6.0,
+            &|_, text, scale| text.chars().count() as f32 * 6.0 * scale,
             480.0,
             &[],
         )

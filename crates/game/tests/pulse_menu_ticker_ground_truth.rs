@@ -401,3 +401,223 @@ fn pulses_main_menu_help_title_text_and_fills_author_their_glow() {
         );
     }
 }
+
+/// A still of `--menu-page <page>` on a Pulse disc, the PNG's bytes. `pin` is `--menu-ticker`, `tag`
+/// the stored `[player] tag` (none when empty); every run has its own profile, so a settings file
+/// of the player's decides nothing.
+fn campaign_still(image: &std::path::Path, page: &str, pin: Option<&str>, tag: &str) -> Vec<u8> {
+    let dir = std::env::temp_dir().join(format!(
+        "oag-campaign-footer-{}-{page}-{}-{}",
+        std::process::id(),
+        pin.is_some(),
+        tag.len()
+    ));
+    let config = dir.join("config").join("oag");
+    std::fs::create_dir_all(&config).expect("a profile directory");
+    if !tag.is_empty() {
+        std::fs::write(
+            config.join("settings.toml"),
+            format!("[player]\nname = \"AAAA\"\ntag = \"{tag}\"\n"),
+        )
+        .expect("the settings");
+    }
+    let out = dir.join("still.png");
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"));
+    command
+        .arg(image)
+        .args(["--no-audio", "--size", "960x544", "--menu-page", page])
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"));
+    if let Some(pin) = pin {
+        command.args(["--menu-ticker", pin]);
+    }
+    let status = command
+        .arg("--screenshot")
+        .arg(&out)
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page {page}");
+    let bytes = std::fs::read(&out).expect("the screenshot");
+    std::fs::remove_dir_all(&dir).ok();
+    oag_texture::png::picture_only(&bytes)
+}
+
+/// **Grid and Cell Selection draw the pinned ticker message and the stored tag in their footer.**
+/// The pair scripts pass the original's message as `--menu-ticker` and its tag as `[player]`; the
+/// campaign pages build their own legend and ticker from the screen file, and once drew an empty
+/// bar and a blank tag box whatever was passed. Drop the pin or the tag from either page and its
+/// still is the unpinned or untagged one again.
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd and a GPU adapter"]
+fn the_campaign_pages_draw_the_pinned_ticker_and_the_tag() {
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    for page in ["grid-select", "cell-select"] {
+        let bare = campaign_still(&image, page, None, "");
+        assert_eq!(
+            bare,
+            campaign_still(&image, page, None, ""),
+            "{page}: two unpinned stills differ, so a pinned one proves nothing"
+        );
+        assert_ne!(
+            bare,
+            campaign_still(&image, page, Some("TKR_ZTIM@120"), ""),
+            "{page}: the pinned message is not drawn"
+        );
+        assert_ne!(
+            bare,
+            campaign_still(&image, page, None, "AAA"),
+            "{page}: the stored tag is not drawn"
+        );
+    }
+}
+
+/// `--menu-page cell-select` on `image` at the PSP's own 480x272, with `args` after the page and `tag` stored as the
+/// player's footer tag (`None` stores none), as the PNG's RGBA bytes.
+fn cell_select_still(
+    image: &std::path::Path,
+    args: &[&str],
+    tag: Option<&str>,
+    label: &str,
+) -> Vec<u8> {
+    let dir = std::env::temp_dir().join(format!(
+        "oag-pulse-cell-footer-{}-{label}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    for empty in ["no-dlc", "no-mods", "config/oag"] {
+        std::fs::create_dir_all(dir.join(empty)).expect("a temp directory");
+    }
+    if let Some(tag) = tag {
+        std::fs::write(
+            dir.join("config/oag/settings.toml"),
+            format!("[player]\nname = \"\"\ntag = \"{tag}\"\n"),
+        )
+        .expect("settings.toml");
+    }
+    let out = dir.join("still.png");
+    let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
+        .arg(image)
+        .args([
+            "--no-audio",
+            "--size",
+            "480x272",
+            "--menu-page",
+            "cell-select",
+        ])
+        .args(args)
+        .arg("--screenshot")
+        .arg(&out)
+        .env("XDG_CONFIG_HOME", dir.join("config"))
+        .env("XDG_STATE_HOME", dir.join("state"))
+        .env("XDG_DATA_HOME", dir.join("data"))
+        .env("OAG_DLC", dir.join("no-dlc"))
+        .env("OAG_MODS", dir.join("no-mods"))
+        .env_remove("WAYLAND_DISPLAY")
+        .env_remove("DISPLAY")
+        .status()
+        .expect("running oag-game");
+    assert!(status.success(), "oag-game --menu-page cell-select");
+    let rgba = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
+        .expect("a PNG")
+        .rgba;
+    let _ = std::fs::remove_dir_all(&dir);
+    rgba
+}
+
+/// How many pixels of `(x, y, w, h)` differ between two 480-wide RGBA frames by more than 40 in some channel.
+fn differing_in(a: &[u8], b: &[u8], (x, y, w, h): (usize, usize, usize, usize)) -> usize {
+    (y..y + h)
+        .flat_map(|row| (x..x + w).map(move |col| (row * 480 + col) * 4))
+        .filter(|at| (0..3).any(|c| a[at + c].abs_diff(b[at + c]) > 40))
+        .count()
+}
+
+/// **The Race Campaign's still takes the pinned ticker message, the stored footer tag and the card title's own glow
+/// phase.** The campaign route drew its footer through a ticker with no tips and an untagged legend, so a pair script's
+/// `--menu-ticker` and the player's tag reached every other page's footer and not Cell Selection's. Each of the three
+/// changes only its own box: the ticker's `(85, 235, 370, 32)`, the tag's `(12, 236, 64, 18)` and the title's
+/// `(262, 30, 158, 30)`, the last with the `Selector`'s box untouched.
+#[test]
+#[ignore = "needs a Pulse PSP disc image in data/images and a GPU adapter"]
+fn cell_selects_footer_takes_the_ticker_pin_and_the_tag_and_its_title_the_glow_phase() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let Some((label, image)) = images.into_iter().next() else {
+        return;
+    };
+    let ticker = (85, 235, 370, 32);
+    let tag = (12, 236, 64, 18);
+    let title = (262, 30, 158, 30);
+    let selector = (100, 70, 100, 100);
+
+    let plain = cell_select_still(&image, &["--menu-picker-seconds", "0.2"], None, "plain");
+    let pinned = cell_select_still(
+        &image,
+        &[
+            "--menu-picker-seconds",
+            "0.2",
+            "--menu-ticker",
+            "TKR_TOURTIM@120",
+        ],
+        None,
+        "pinned",
+    );
+    assert!(
+        differing_in(&plain, &pinned, ticker) > 150,
+        "{label}: --menu-ticker draws no message on Cell Selection"
+    );
+    assert_eq!(
+        differing_in(&plain, &pinned, tag) + differing_in(&plain, &pinned, title),
+        0,
+        "{label}: the ticker pin moved something outside the ticker"
+    );
+
+    let tagged = cell_select_still(
+        &image,
+        &["--menu-picker-seconds", "0.2"],
+        Some("AAA"),
+        "tagged",
+    );
+    assert!(
+        differing_in(&plain, &tagged, tag) > 40,
+        "{label}: the stored tag is not drawn in Cell Selection's footer tag box"
+    );
+
+    let high = cell_select_still(
+        &image,
+        &[
+            "--menu-picker-seconds",
+            "0.2",
+            "--menu-title-seconds",
+            "0.0",
+        ],
+        None,
+        "title-high",
+    );
+    let low = cell_select_still(
+        &image,
+        &[
+            "--menu-picker-seconds",
+            "0.2",
+            "--menu-title-seconds",
+            "0.5",
+        ],
+        None,
+        "title-low",
+    );
+    assert!(
+        differing_in(&high, &low, title) > 300,
+        "{label}: --menu-title-seconds does not move the card title's glow"
+    );
+    assert_eq!(
+        differing_in(&high, &low, selector),
+        0,
+        "{label}: the title's glow phase moved the Selector's box"
+    );
+}

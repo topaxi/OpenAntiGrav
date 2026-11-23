@@ -466,6 +466,8 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         stages: 15,
     }),
     camera_scale: 0.7,
+    // A live Detonator frame's hull world matrix in the push buffer, rows of length 0.630 (`0.7 * 0.9`).
+    hull_scale: Some(0.63),
     layouts: Some(oag_title::DetonatorLayouts {
         pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
         gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",

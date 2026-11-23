@@ -54,6 +54,7 @@ mod hull_colour;
 mod lit_alpha;
 mod normal_map;
 mod panel_map;
+mod picture_memo;
 pub mod placement;
 pub mod refraction;
 pub mod refraction_only;
@@ -278,8 +279,11 @@ fn build_planned(
     water: Water,
 ) -> Result<(Model, Report)> {
     // The planners below each read a PS4 material file's programs; decode each file once.
+    // And they share their pictures: a texture two planners bind is read and decoded once.
     oag_rcs::gcn::memoised(|| {
-        build_scanned(label, model_blob, planner, billboard_vex, textures, water)
+        picture_memo::scoped(|| {
+            build_scanned(label, model_blob, planner, billboard_vex, textures, water)
+        })
     })
 }
 
@@ -1084,11 +1088,7 @@ fn bind_textures(
                             .as_deref()
                             .and_then(|lmap| {
                                 let entry = atlases.entry(lmap).or_insert_with(|| {
-                                    let atlas = textures(lmap)
-                                        .and_then(|blob| {
-                                            decode_material_texture(lmap, &blob, report)
-                                        })
-                                        .map(std::sync::Arc::new);
+                                    let atlas = picture_memo::picture(lmap, textures, report);
                                     report.lightmaps += usize::from(atlas.is_some());
                                     report.lightmap_misses += usize::from(atlas.is_none());
                                     atlas

@@ -159,6 +159,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         }),
         stage_textures: None,
         camera_scale: 0.7,
+        hull_scale: None,
         layouts: Some(oag_title::DetonatorLayouts {
             pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
             gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",

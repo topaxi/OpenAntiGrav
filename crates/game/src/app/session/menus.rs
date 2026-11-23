@@ -307,6 +307,11 @@ impl Session {
                 skin,
                 text_atlas,
                 default_atlas: shell.font.clone(),
+                stats_atlas: shell
+                    .buttons_font
+                    .clone()
+                    .filter(|_| shell.menu_skin.stats_font.is_some()),
+                snapped_pens: shell.menu_skin.snapped_pens,
                 frame: if pause_view.is_some() {
                     shell.frame.without_marks()
                 } else if pause_scrim.is_some() {

@@ -430,3 +430,11 @@
 0x810bfd54	function	Team_LoadHandlingStats	75	detonator-hull.md
 
 0x811a1870	function	Collision_PairFriction	82	craft-laws.md
+# 2026-11-23 destroy-cameras-re: the race camera twins of HD's (../ps3-hdfury-eu/destroy-camera.md)
+0x8121963a	function	Camera_SetMode	82	../ps3-hdfury-eu/destroy-camera.md
+0x81218576	function	Camera_FramingFov	85	../ps3-hdfury-eu/destroy-camera.md
+0x81218638	function	Camera_UpdateSpectatorView	82	../ps3-hdfury-eu/destroy-camera.md
+0x8121888a	function	Camera_UpdateView	75	../ps3-hdfury-eu/destroy-camera.md
+0x8121a156	function	Camera_SetSubject	75	../ps3-hdfury-eu/destroy-camera.md
+0x81219040	function	Camera_EnterHoldView	58	../ps3-hdfury-eu/destroy-camera.md
+0x81217616	function	Camera_UpdateHoldView	55	../ps3-hdfury-eu/destroy-camera.md

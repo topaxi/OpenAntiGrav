@@ -100,8 +100,16 @@ def observe(session, gdb, ship, body, out, stem, flush):
         if at:
             blobs.append((at, gdb.read(at, size)))
     candidates = []
+    hulls = []
     for at, blob in blobs:
         candidates.extend(ps3_pose.packet_candidates(blob, base=at))
+        hulls.extend(ps3_pose.hull_matrices(blob, base=at))
+        (out / ("%s-%08x.bin" % (stem, at))).write_bytes(blob)
+    # Where the frame draws the player's hull: the pause's RAM is 1 or 2 whole ticks ahead of the frame, so the pair feeds
+    # ours this translation, not the body's (`compare-page.md`, "The skew is the pause, not the original's draw order").
+    pose["hull_pb"] = ps3_pose.hull_near(hulls, pose["pos"])
+    print("  %s: %d hull-shaped matrices, player's %s" % (stem, len(hulls), None if pose["hull_pb"] is None else
+          "x%d at %s" % (pose["hull_pb"]["count"], ["%.2f" % v for v in pose["hull_pb"]["translation"]])), flush=True)
     print("  %s: lap clock %.3f, world clock %s, %d camera candidate(s), held bands %s" % (
         stem, pose["race_clock_s"], None if grab_clock is None else grab_clock["world_clock_s"], len(candidates),
         " ".join("%.2f" % v for v in pose["zone_bands"]["held"])), flush=True)
@@ -213,6 +221,15 @@ def main():
         picks = []
         for stem, first, second in stops:
             picks.append(ps3_pose.pick_camera([first[1], second[1]])[0])
+        # A stop whose own second frame was not redrawn (the game ran under a tick between the two reads) has no
+        # frame-unique camera of its own: its camera is the value loaded into registers 256 and 260 that no other STOP's
+        # frame carries, so a different stop's frame stands in as the discriminator.
+        for at, (pick, stop) in enumerate(zip(picks, stops)):
+            if pick[0] is None and len(stops) > 1:
+                other = stops[(at + 1) % len(stops)]
+                retry = ps3_pose.pick_camera([stop[1][1], other[1][1]])[0]
+                if retry[0] is not None:
+                    picks[at] = retry
         for (stem, first, second), (camera, reason, count) in zip(stops, picks):
             shot, _, pose = first
             # The next stop's bands, `--interval` of wall time later: how far the held levels move between two reads

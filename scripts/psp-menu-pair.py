@@ -88,15 +88,23 @@ FE_CLOCK_PTR = 0x08B317B0
 FE_CLOCK_FIELD = 0x40
 #: A shot of these ids is grabbed with the CPU stopped, so the frame and the clock read are one moment.
 STOPPED = ("grid", "cell", "team", "track")
-#: The pages with a footer ticker ours can pin (`tick:` before their `shot:`): the grab carries the message read from RAM.
-TICKER_PINNED = ("team", "track")
+#: The shots whose footer ticker is pinned (`tick:N` before the `shot`): every Pulse screen with the footer's ticker, so the message ours draws is the one grabbed.
+TICKERED = ("grid", "cell", "team", "track")
 
 #: Pure has no recovered front-end clock or state name, so its clock is the emulator's own tick counter (`cpu.status.ticks`, the PSP's
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
 #: press that entered the screen and again with the CPU stopped for the grab. Error: the press-to-screen latency (a frame or two) and
 #: the one frame the presented picture lags the stop. The `PURE_WALK` ids whose description types in (`oag_ui_screens::campaign::footer::typein`).
-PURE_CLOCKED = ("sr-class", "sr-league", "sr-track", "team", "t-class", "t-sel")
+PURE_CLOCKED = ("main", "mode", "sr-class", "sr-league", "sr-track", "team", "t-class", "t-sel")
 PSP_CPU_HZ = 222e6
+#: The disc id and version a Pure save state's file name carries (`psp-state.py --serial`).
+PURE_STATE_SERIAL = "UCUS98612_2.00"
+#: Where `CURRENT` reads 0 in ours' drive of `scripts/pure-pause.drive`: the tick after `until stage=race` at which the HUD clock starts (1,480 ticks read 20.1 s).
+PAUSE_CLOCK_ZERO_TICKS = 274
+#: A Time Trial on Vineta K, Feisar, Vector, just restarted: the pause menu's own frame is grabbed from it.
+PURE_PAUSE_STATE = "data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst"
+#: The pause screen's walk, run apart from `PURE_PLAN` (a state load leaves the front end): `--plan "$PURE_PAUSE_PLAN" --ids pause`.
+PURE_PAUSE_PLAN = ",".join(["state:" + PURE_PAUSE_STATE, "wait:4", "key:start", "wait:2", "shot:pause"])
 #: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
 SHIP_NODE_LOOP = 5.9833336
 
@@ -105,12 +113,16 @@ SHIP_NODE_LOOP = 5.9833336
 #: end's bloom, wired for the cursor"), which gives the pulse phase exactly where the wall clock does not.
 SELECTOR_CENTRE = {"grid": (81, 159), "cell": (141, 111)}
 EDRAM = 0x04000000
+#: The card title's glyph box on `grid` and `cell` (x0, y0, x1, y1): `Text_Draw` stamps `220 - s` over its glyph quads, `s` a ladder 0, 15 .. 150 and back
+#: that steps every 1/20 s of a counter of its own (`docs/ui/campaign-screens.md`, "The front end's bloom, wired from the widgets' own attributes").
+TITLE_BOX = {"grid": (262, 88, 340, 116), "cell": (262, 30, 420, 60)}
 
 PREDICATES = {"title": lambda png: orange_share(png) > 0.03}
 
 
 class Rig:
     def __init__(self, port, shots, title):
+        self.port = port
         self.dbg = Debugger(port)
         self.shots = shots
         self.title = title
@@ -200,6 +212,28 @@ class Rig:
                 at = raw.find(key, at + 1)
         return best
 
+    def title_stamp(self, name):
+        """The seconds that put ours' card-title glow ladder where the original's is: the displayed buffer's most common glow-mask byte over the
+        title's glyph box (`220 - 15 k`, `k` 0 to 10) read as step `k` of the rising half, at the middle of its 1/20 s. `None` when no byte of the ladder
+        is there. The CPU must be stopped."""
+        x0, y0, x1, y1 = TITLE_BOX[name]
+        for offset in (0, 0x88000):
+            raw = self.dbg.read(EDRAM + offset, 512 * 272 * 4)
+            if raw[(5 * 512 + 5) * 4 + 3] != 4:
+                continue
+            counts = {}
+            for y in range(y0, y1):
+                row = raw[(y * 512 + x0) * 4 + 3:(y * 512 + x1) * 4 + 3:4]
+                for a in row:
+                    if a != 4:
+                        counts[a] = counts.get(a, 0) + 1
+            if not counts:
+                continue
+            value = max(counts, key=counts.get)
+            if value in range(70, 221, 15):
+                return {"value": value, "seconds": ((220 - value) // 15 + 0.5) / 20, "pixels": counts[value]}
+        return None
+
     def selector_stamp(self, name):
         """The pulse level `t` (0 cyan, 1 white) read off the displayed buffer's `Selector` stamp, or `None`. The CPU must be stopped."""
         cx, cy = SELECTOR_CENTRE[name]
@@ -215,6 +249,8 @@ class Rig:
         exactly one message on screen, its item one `records/lifetime.rs` counts, its head well inside the viewport. It returns with the CPU
         **stopped**, the state kept in `ticker_frozen`, and the `shot` that follows grabs that very frame (docs/tools/compare-page.md,
         "`menu-team`: the footer is the original's random ticker draw")."""
+        # A watch belongs to one wait: a record's item remembered from the previous screen's ticker could pair an old id with a new message.
+        self.watch = pt.Watch()
         ticker = pt.Ticker(self.dbg, self.news)
         if not ticker.find():
             sys.exit("STALLED: no footer ticker widget in RAM (is the front end on a screen with a footer?)")
@@ -250,11 +286,18 @@ class Rig:
         subprocess.run(["import", "-window", "root", "-crop", "%dx%d+%d+%d" % (w, h, x, y), "+repage", str(dst)], check=True)
         after = time.monotonic()
         level = None
+        title = tag = None
         since_ticks = None
         clock = ship_t = None
         if stopped:
             if name in SELECTOR_CENTRE:
                 level = self.selector_stamp(name)
+            if name in TITLE_BOX:
+                title = self.title_stamp(name)
+                if title is None:
+                    print("title glow: no ladder byte over the title box of %s; ours keeps the Selector's phase for it" % name, flush=True)
+            if self.title == "pulse":
+                tag = pt.profile_tag(self.dbg)
             if self.title == "pure":
                 ticks = self.dbg.call("cpu.status")["ticks"]
                 if self.press_ticks is not None:
@@ -264,7 +307,6 @@ class Rig:
                 ship_t = self.ship_node_time()
             self.dbg.call("cpu.resume")
         state = self.state()
-        player = pt.profile_name_tag(self.dbg) if self.title == "pulse" else None
         # The grab takes `after - before`; the frame is read about the middle of it. Only when the entry was watched and the screen is still it.
         since = (before + after) / 2 - self.entered[1] if self.entered and self.entered[0] == state and self.entered[1] is not None else None
         phase = None if level is None else level / 2
@@ -273,8 +315,8 @@ class Rig:
         if since_ticks is not None:
             since = since_ticks
         self.seen[name] = {"png": dst, "at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "state": state,
-                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None,
-                           "player": player, "ticker": self.ticker_frozen if stopped and name.split("@")[0] in TICKER_PINNED else None}
+                           "since_entry": phase if phase is not None else since, "from_stamp": phase is not None, "level": level, "from_clock": phase is None and clock is not None, "ship_t": ship_t, "from_ticks": since_ticks is not None, "title": title, "tag": tag,
+                           "ticker": self.ticker_frozen if stopped and name.split("@")[0] in TICKERED else None}
         if self.seen[name]["ticker"] is not None:
             self.ticker_frozen = None
         print("shot", name, "since_entry", self.seen[name]["since_entry"], "ship_node_time", ship_t, "clock", clock, flush=True)
@@ -304,8 +346,18 @@ class Rig:
                 return
         sys.exit("STALLED: never reached Main Menu, last state %r" % self.state())
 
+    def load_state(self, path):
+        """Load a save state (`psp-state.py`, by the emulator's own pause menu: a 960x544 window) and let the game run on from it."""
+        set_window(960, 544)
+        if self.dbg.is_stepping():
+            self.dbg.call("cpu.resume")
+        subprocess.run([sys.executable, str(HERE / "psp-state.py"), "--port", str(self.port), "--home", os.environ["PP_HOME"], "load", "2",
+                        "--file", str(path), "--serial", PURE_STATE_SERIAL], check=True)
+        self.dbg = Debugger(self.port)
+
     def run(self, plan):
-        """Plan steps: boot, wait:S, key:BUTTON[*N], pu:BUTTON:PREDICATE, st:STATE, back:STATE (Pulse state wait), shot:NAME."""
+        """Plan steps: boot, wait:S, key:BUTTON[*N], pu:BUTTON:PREDICATE, st:STATE, back:STATE (Pulse state wait), state:PATH (a save
+        state), shot:NAME."""
         steps = list(filter(None, plan.split(",")))
         for at, item in enumerate(steps):
             kind, _, rest = item.partition(":")
@@ -329,6 +381,8 @@ class Rig:
                 self.back_to(rest)
             elif kind == "st":
                 self.expect(rest)
+            elif kind == "state":
+                self.load_state(rest)
             elif kind == "tick":
                 self.wait_ticker(float(rest or 480))
             elif kind == "shot":
@@ -341,8 +395,8 @@ class Rig:
 #: One walk per title, from `Main Menu` (Pulse; Pure is walked from its own main page): `shot:ID` photographs the screen `WALK` names.
 PULSE_PLAN = ",".join([
     "back:Main Menu", "wait:2", "shot:main",
-    "key:cross", "st:Grid Selection", "wait:3", "shot:grid",
-    "key:cross", "st:Cell Selection", "wait:3", "shot:cell", "back:Main Menu", "wait:1",
+    "key:cross", "st:Grid Selection", "wait:3", "tick:480", "shot:grid",
+    "key:cross", "st:Cell Selection", "wait:3", "tick:480", "shot:cell", "back:Main Menu", "wait:1",
     "key:down", "key:cross", "wait:2", "st:Racebox", "wait:2", "shot:racebox",
     "key:cross", "wait:2", "st:Single Player", "wait:2", "shot:single",
     "key:cross", "st:Track Creation", "wait:3", "tick:480", "shot:track",
@@ -381,9 +435,9 @@ PULSE_WALK = [
 #: recovered state name), then START, Profile > Load (three crosses: the list, the dialog, the completion), and the Single Player chain.
 #: Triangle is Pure's BACK.
 PURE_PLAN = ",".join([
-    "pu:cross:title", "wait:3", "shot:title", "key:start", "wait:5", "key:cross", "wait:5", "key:cross", "wait:5", "key:cross", "wait:6", "shot:main",
-    "key:cross", "wait:4", "shot:mode",
-    "key:cross", "wait:4", "shot:sr-class", "key:cross", "wait:5", "shot:sr-league", "key:cross", "wait:5", "shot:sr-track",
+    "pu:cross:title", "wait:3", "shot:title", "key:start", "wait:5", "key:cross", "wait:5", "key:cross", "wait:5", "key:cross", "wait:6",
+    "key:cross", "wait:4", "shot:mode", "key:triangle", "wait:3", "shot:main",
+    "key:cross", "wait:4", "key:cross", "wait:4", "shot:sr-class", "key:cross", "wait:5", "shot:sr-league", "key:cross", "wait:5", "shot:sr-track",
     "key:cross", "wait:5", "shot:team", "key:triangle", "wait:3", "key:triangle", "wait:3", "key:triangle", "wait:3", "key:triangle", "wait:3",
     "key:down", "wait:2", "key:cross", "wait:4", "shot:t-class", "key:cross", "wait:5", "shot:t-sel",
 ])
@@ -407,16 +461,18 @@ PURE_WALK = [
     {"id": "t-sel", "title": "Tournament: Tournament Selection (the campaign)", "screen": "Tournament Selection", "page": "pure-chain:tournament:0",
      "xml": "Selection_Definition.xml Tournament Selection",
      "selection": {"original": "ALPHA (the only tournament open), class VECTOR", "ours": "ALPHA (the only tournament open), class VECTOR"}},
-    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "main", "xml": "Skin.xml Main Menu",
-     "why": "ours' page is menu.toml's `main` (ADR-0066: the vanilla rows plus more, drawn dark teal on the Pulse-style frame); `--screen \"Top FE Screen->FE Screen->Main Menu\"` draws the heading alone on black"},
+    {"id": "pause", "title": "Pause menu (Time Trial)", "screen": "InGame Main Menu", "page": "pause", "xml": "InGame_Definition.xml InGame Main Menu",
+     "route": ["--drive-file", str(HERE / "pure-pause.drive"), "--original-menu", "--state-log", "/dev/null"],
+     "selection": {"original": "CONTINUE (first row)", "ours": "CONTINUE (first row)"}},
+    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "pure-main", "xml": "Skin.xml Main Menu",
+     "selection": {"original": "SINGLE PLAYER (first row)", "ours": "SINGLE PLAYER (first row)"}},
 ]
 
 
 def prepare_profile(plat, profile, title_name, difficulty, race=None, player=None):
     """Ours' private profile: the compare settings, `[dev] unlock_everything = false` (a debug build unlocks everything, the original's
     fresh profile does not), `race` (the pickers' cursor: the team the original's fresh list rests on, where it is not ours' default) and
-    the campaign difficulty row of `records.toml` (none for a title with no such control), and `player` (`{"name", "tag"}`: the stored player the
-    original's profile holds, which the footer's tag box draws), written and read back by the run."""
+    the campaign difficulty row of `records.toml` (none for a title with no such control), written and read back by the run."""
     ce.write_ours_settings(plat, profile)
     cm.extra_settings(profile, race=race, locked=True, player=player)
     if difficulty:
@@ -451,6 +507,12 @@ def build_pairs(args, seen, out, plat, walk):
     for item in walk:
         if args.ids and item["id"] not in args.ids.split(","):
             continue
+        if item["id"] not in seen:
+            # A walk shoots only what its plan names: the pause screen is its own plan (`PURE_PAUSE_PLAN`, a state load leaves the front end).
+            if args.ids:
+                sys.exit("--ids names %r but the plan never shot it (the pause screen needs --plan PURE_PAUSE_PLAN)" % item["id"])
+            print("skip", item["id"], "(not shot by this plan)")
+            continue
         shot = seen[item["id"]]
         if "why" in item:
             cm.write_gap(out / ("gap-" + item["id"]), shot["png"], item["page"], "menu.toml",
@@ -476,11 +538,14 @@ def build_pairs(args, seen, out, plat, walk):
         elif shot.get("since_entry") is not None:
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "measured: wall clock from the poll that saw the state name change (+-%.2f s; when the first poll already saw the new name, from the midpoint between the press and that poll, wider) to the middle of the frame grab; PPSSPP runs at 60 fps, its pulse period reads 1 s on this clock" % (ENTRY_POLL / 2)}
         pair.rec["original"]["screen_basis"] = ("the game's own state machine (0x08b31784+0x18c): %r" % shot["state"]) if shot["state"] else "read by eye from the frame (no recovered state name for this title)"
-        stored = {k: v.strip() for k, v in zip(("name", "tag"), (shot["player"] or ("", ""))[:2]) if v.strip()}
-        if stored:
-            pair.rec["original"]["footer_tag"] = {"name": stored.get("name", ""), "tag": stored.get("tag", ""), "basis": "read from the live profile (*0x08b31774 + 0x44c name, + 0x457 tag) at the grab; ours' stored player is set to it, as the footer's tag box draws the profile's tag"}
-        prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"), stored or None)
+        prepare_profile(plat, profile, args.campaign_title, args.difficulty, item.get("race"), {"tag": shot["tag"]} if shot.get("tag") else None)
+        if shot.get("tag"):
+            pair.rec["original"]["player"] = {"tag": shot["tag"], "basis": "the profile record's footer tag (profile + 0x457, three characters) read from RAM with the CPU stopped (scripts/psp_ticker.py `profile_tag`); ours stores it as `player.tag`, which the footer's tag box draws"}
         clocked = (("--menu-picker-seconds", "%.3f" % shot["since_entry"]) + (("--menu-model-seconds", "%.3f" % shot["ship_t"]) if shot.get("ship_t") is not None else ())) if item["id"] in (CLOCKED if args.title == "pulse" else PURE_CLOCKED) and shot.get("since_entry") is not None else ()
+        if shot.get("title"):
+            clocked += ("--menu-title-seconds", "%.3f" % shot["title"]["seconds"])
+            pair.rec["original"]["title_glow"] = {"value": shot["title"]["value"], "pixels": shot["title"]["pixels"], "seconds": round(shot["title"]["seconds"], 3),
+                                                  "basis": "the displayed buffer's glow-mask byte over the card title's glyph box (CPU stopped for the grab), a step of the title's own ladder (220 - 15 k): ours pins its title ladder to that step (--menu-title-seconds), apart from the Selector's phase"}
         pin = shot.get("ticker")
         lag = 0
         if pin:
@@ -499,11 +564,20 @@ def build_pairs(args, seen, out, plat, walk):
                 "basis": "the presented picture lags the CPU stop by 0 or 1 frame (a message moves one pixel a frame), so ours is drawn at the head read and at the head "
                          "plus one and the one that matches the grabbed ticker box (85, 235, 370 x 32) better is kept"}
         cp.build(pair, args, "menu", "cold_boot", None, {"value": None, "unit": None, "basis": "not applicable: a menu is a still"})
+        route = item.get("route")
+        if item["id"] == "pause":
+            # The drive plays to the clock the original's HUD shows: `PAUSE_GO_TICKS` sim ticks to GO's board, then the clock's seconds.
+            if args.pause_clock is None:
+                sys.exit("the pause pair needs --pause-clock: the race clock (`CURRENT`) the original's frame shows, read by eye")
+            ticks = round(PAUSE_CLOCK_ZERO_TICKS + args.pause_clock * 60)
+            (pdir / "ours.drive").write_text(Path(route[1]).read_text().replace("@TICKS@", str(ticks)))
+            route = [route[0], str(pdir / "ours.drive")] + route[2:]
+            pair.rec["original"]["race_clock_read"] = {"value": args.pause_clock, "basis": "the HUD's CURRENT in the grabbed frame, read by eye; ours is played %d sim ticks (clock zero at tick %d, 60 a second)" % (ticks, PAUSE_CLOCK_ZERO_TICKS)}
         try:
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                         selection=item["selection"], route=item.get("route"), race=item.get("race"), player=stored or None,
+                         selection=item["selection"], route=route, race=item.get("race"), player={"tag": shot["tag"]} if shot.get("tag") else None,
                          extra_args=clocked + (("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)) if pin else ()), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:
@@ -528,13 +602,17 @@ def main():
     ap.add_argument("--campaign-title", default=None, help="records.toml campaign_difficulty row title (default: the game's name)")
     ap.add_argument("--difficulty", default="medium")
     ap.add_argument("--ids", default="", help="pairs: only these WALK ids (comma separated)")
+    ap.add_argument("--from-png", action="append", default=[], metavar="ID=PNG",
+                    help="pairs: build the pair of WALK id ID from an original frame already grabbed, with no emulator (a re-make of ours' side)")
+    ap.add_argument("--pause-clock", type=float, default=None,
+                    help="pairs, id pause: the race clock the original's HUD `CURRENT` reads in the frame (read by eye), in seconds; ours is played to it")
     cp.add_arguments(ap)
     args = ap.parse_args()
     args.platform = args.platform or args.title + "-psp"
     out = args.out.resolve()
     shots = out / "shots"
     shots.mkdir(parents=True, exist_ok=True)
-    rig = Rig(args.port, shots, args.title)
+    rig = None if args.from_png else Rig(args.port, shots, args.title)
     if args.cmd == "walk":
         rig.run(args.plan)
         return 0
@@ -543,10 +621,19 @@ def main():
     plat = ce.platform(args.platform)
     args.source = args.source or str(ce.MAIN / plat["image"])
     args.campaign_title = args.campaign_title or plat["title"]
-    if args.title == "pulse":
+    if args.title == "pulse" and rig is not None:
         rig.news = pt.load_rows(Path(args.oag_game).with_name("oag-wad"), args.source + ":" + "PSP_GAME/USRDIR/Data.wad") if "tick:" in (args.plan or PULSE_PLAN) else None
-    rig.run(args.plan or (PULSE_PLAN if args.title == "pulse" else PURE_PLAN))
-    refused = build_pairs(args, rig.seen, out, plat, PULSE_WALK if args.title == "pulse" else PURE_WALK)
+    if rig is None:
+        seen = {}
+        for spec in args.from_png:
+            wid, _, png = spec.partition("=")
+            seen[wid] = {"png": Path(png), "at": datetime.datetime.fromtimestamp(Path(png).stat().st_mtime).astimezone().isoformat(timespec="seconds"),
+                         "state": None, "since_entry": None, "from_stamp": False, "level": None, "from_clock": False, "ship_t": None,
+                         "from_ticks": False, "title": None, "tag": None, "ticker": None}
+    else:
+        rig.run(args.plan or (PULSE_PLAN if args.title == "pulse" else PURE_PLAN))
+        seen = rig.seen
+    refused = build_pairs(args, seen, out, plat, PULSE_WALK if args.title == "pulse" else PURE_WALK)
     json.dump({"refused": refused}, open(out / "refused.json", "w"))
     return 3 if refused else 0
 
