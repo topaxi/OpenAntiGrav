@@ -1069,6 +1069,36 @@ pub fn pen_step(cell: &Cell, scale: f32, x: f32, snap: bool) -> (f32, f32) {
     )
 }
 
+/// How far, in atlas texels, the texture coordinates of a glyph on Pure's snapped pen start before
+/// its box: the original samples each glyph half a texel to the left of where the box begins
+/// (`docs/ui/menus-original.md`, "Pure's glyph quads are whole pixels"). Horizontal only.
+pub const SNAPPED_UV_SHIFT: f32 = 0.5;
+
+/// The quad of one glyph on Pure's snapped pen, in screen units: whole pixels, as a PSP sprite
+/// is.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SnappedQuad {
+    /// The pen rounded up (the quad starts at the pen, not at the ink: the box's bearing is in
+    /// the texture).
+    pub left: f32,
+    /// The box's width at `scale`, rounded down.
+    pub width: f32,
+    /// The box's height at `scale`, rounded down.
+    pub height: f32,
+}
+
+/// [`SnappedQuad`] of `cell` with the pen before it at `pen` and `scale` screen units per atlas
+/// texel. Measured on every Pure face (`docs/ui/menus-original.md`, "Pure's glyph quads are whole
+/// pixels"); not read from the executable.
+#[must_use]
+pub fn snapped_quad(cell: &Cell, scale: f32, pen: f32) -> SnappedQuad {
+    SnappedQuad {
+        left: pen.ceil(),
+        width: (cell.width as f32 * scale).floor(),
+        height: (cell.height as f32 * scale).floor(),
+    }
+}
+
 /// Where a line of text ends when it is drawn on the snapped pen ([`pen_step`]) from a whole-unit
 /// origin: the single measure every layout of Pure's front end (wrap, alignment, hit rectangles)
 /// reads, so that none of them disagrees with the draw.
@@ -1078,7 +1108,7 @@ pub struct SnappedRun {
     /// string is placed by (which edge a right- or centre-aligned string is placed by is chosen:
     /// no captured Pure frame has one in a snapped face).
     pub end: f32,
-    /// The right edge of the last glyph's ink: where the drawn text stops.
+    /// The right edge of the last glyph's quad: where the drawn text stops.
     pub ink_right: f32,
 }
 
@@ -1094,9 +1124,9 @@ pub fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> SnappedRun {
         ink_right: 0.0,
     };
     for cell in text.chars().filter_map(|c| atlas.cell(c)) {
-        let (left, next) = pen_step(&cell, scale, run.end, true);
-        run.ink_right = cell.ink.mul_add(scale, left);
-        run.end = next;
+        let quad = snapped_quad(&cell, scale, run.end);
+        run.ink_right = quad.left + quad.width;
+        run.end = pen_step(&cell, scale, run.end, true).1;
     }
     run
 }
@@ -1394,17 +1424,19 @@ mod tests {
         assert_eq!(measure(&atlas, "A B"), 18.0);
     }
 
-    /// The run of a string is the pen steps of [`pen_step`], the last glyph included.
+    /// The run of a string is the pen steps of [`pen_step`] and ends at the last glyph's quad ([`snapped_quad`]).
     #[test]
     fn a_snapped_run_ends_on_the_last_glyphs_snapped_ink() {
         let atlas = Atlas::build();
         let cell = atlas.cell('A').expect("a glyph");
         let run = snapped_run(&atlas, "AAA", 0.7);
-        let (mut x, mut left) = (0.0, 0.0);
+        let (mut x, mut right) = (0.0, 0.0);
         for _ in 0..3 {
-            (left, x) = pen_step(&cell, 0.7, x, true);
+            let quad = snapped_quad(&cell, 0.7, x);
+            right = quad.left + quad.width;
+            x = pen_step(&cell, 0.7, x, true).1;
         }
-        assert_eq!((run.end, run.ink_right), (x, left + cell.ink * 0.7));
+        assert_eq!((run.end, run.ink_right), (x, right));
         assert_eq!(run_width(&atlas, "AAA", 0.7, true), run.ink_right);
         assert_eq!(run_width(&atlas, "AAA", 0.7, false), 18.0 * 0.7);
         assert_eq!(snapped_run(&atlas, "", 0.7).ink_right, 0.0);

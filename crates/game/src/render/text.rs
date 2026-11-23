@@ -239,8 +239,19 @@ impl Renderer {
             } else {
                 (pen, pen + self.hud.advance(cell.advance * scale * texel))
             };
-            let (mut rect, mut uv) =
-                atlas.glyph_quad(if half_unit { &bare } else { &cell }, ink_left, y, scale);
+            let snapped = self.hud.snapped_pens;
+            let (mut rect, mut uv) = atlas.glyph_quad(
+                if half_unit || snapped { &bare } else { &cell },
+                ink_left,
+                y,
+                scale,
+            );
+            if snapped {
+                // A PSP sprite: whole pixels from the pen, the texture started half a texel early.
+                let quad = font::snapped_quad(&cell, scale * texel, pen);
+                (rect[0], rect[2], rect[3]) = (quad.left, quad.width, quad.height);
+                uv[0] -= font::SNAPPED_UV_SHIFT;
+            }
             if self.hud.whole_advances || half_unit {
                 // The PSP's glyph rect is the box grown half a pixel each side with the uv grown
                 // half a texel to match (`225.5..249.5` for the box `226..249` in a GE list of

@@ -285,7 +285,7 @@ fn a_snapped_legend_rect_covers_its_drawn_ink() {
         rect_right(true)
     );
     assert!(
-        rect_right(false) < ink_right - 1.0,
+        rect_right(false) < ink_right - 0.1,
         "the fractional rect would stop short of the drawn ink"
     );
 }

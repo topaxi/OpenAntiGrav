@@ -42,3 +42,33 @@ fn a_snapped_pen_breaks_a_line_the_fractional_one_keeps() {
     assert_eq!(wrap_pens(&atlas, "aa bb", 0.7, 22.0, false), ["aa bb"]);
     assert_eq!(wrap_pens(&atlas, "aa bb", 0.7, 22.0, true), ["aa", "bb"]);
 }
+
+/// Pure's glyph is a PSP sprite: it starts at the pen rounded up and is the box's size at the scale
+/// rounded down, so a `Stats` glyph (box 7 by 14 texels) at 0.8 is 5 by 11 pixels from x 249 and
+/// the next pen (256.4) starts the next quad at 257. The run's ink edge is the last quad's right.
+#[test]
+fn a_snapped_glyph_is_a_whole_pixel_quad_from_the_pen_and_the_run_ends_at_its_right() {
+    let atlas = Atlas::build();
+    let cell = Cell {
+        width: 7,
+        height: 14,
+        advance: 9.0,
+        bearing: 1.0,
+        ..atlas.cell('A').expect("a glyph")
+    };
+    assert_eq!(
+        snapped_quad(&cell, 0.8, 249.0),
+        SnappedQuad {
+            left: 249.0,
+            width: 5.0,
+            height: 11.0
+        }
+    );
+    assert_eq!(snapped_quad(&cell, 0.8, 256.4).left, 257.0);
+    let one = atlas.cell('A').expect("a glyph");
+    let quad = snapped_quad(&one, 0.8, 0.0);
+    assert_eq!(
+        snapped_run(&atlas, "A", 0.8).ink_right,
+        quad.left + quad.width
+    );
+}
