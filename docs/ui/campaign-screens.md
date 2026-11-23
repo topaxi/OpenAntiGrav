@@ -5420,3 +5420,12 @@ arm, so Records is not drawn over Difficulty in it. The root page (`--menu-page 
 puts Confirm after `NAVIGATION` at the original's spacing (20 against 22 px) with no room kept for the hidden `Back`; the
 page's own scale and offset still differ from the frame (the `gap-main` note). 2048's front-end root authors no
 `NavigationController` (`the_2048_root_authors_no_footer_legend`): **checked, differs** (nothing to flow).
+
+#### The card title's ladder is its own counter (2026-11-23, `pulse-psp-cell`)
+
+`Text_Draw`'s pulse byte and the `Selector`'s `+0x9c` phase run apart, so a pair pins each: the title's stamp `220 - 15 k` (k 0 to 10, 1/20 s a step, 1 s period) is read from the displayed
+buffer's glow-mask byte over the title's glyph box (EDRAM, CPU stopped) and ours' `SelectorPulse::set_text_seconds` (`--menu-title-seconds`) draws that step, while `seconds` (the
+`Selector`'s) keeps its own. **Not a function of the front end's clock**: 20 samples of `*(0x08b317b0) + 0x40` against the byte on Cell Selection matched no constant offset (6 of 20 at best),
+so the counter is its own (confidence 70, one session; the `Text_Draw` counter's source is unread). Cell Selection's title box (260, 34, 150, 50) went from 1065 px over 40 grey to 18 on one frame
+(`docs/tools/compare-page.md`, "Pulse Cell Selection: the footer, the tag and the title's glow phase"). The cursor hex box on the same frame: 0 px over 40 grey, mean abs 0.14: the halo
+asked for in "The halo is the front end's bloom" is drawn.
