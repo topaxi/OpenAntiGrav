@@ -49,7 +49,7 @@ compiled, then live (2026-10-20, Time Trial and Single Race, Talon's Junction):
 | `+0x14` | `(1, 3)` | restitution | `0.01` | `0.01` | |
 | `+0x18`..`+0x20` | `(5, 2)`, `(5, 4)` | restitution | `0.05`, `2.5`, `0.5` | same | a random pick, `Libc_Rand` |
 | `+0x24` | `(5, 3)` | restitution | `0.1` | `0.1` | |
-| `+0x28` | `(0, 0)`, `(0, 1)` | friction | `0.035` | `0.035` | |
+| `+0x28` | `(0, 0)`, `(1, 1)` | friction | `0.035` | `0.035` | `(0, 1)` returns `0.0` ([collision-cues.md](collision-cues.md), "2026-11-23: which records carry no friction, and the spark they throw") |
 | `+0x2c` | `(0, 3)` | friction | **`0.035`** | **`0.035`** | ship against wall |
 | `+0x38` | `(0, 3)` on four mode ids | friction | `0.025` | | mode mask `0x206040`, not seen |
 | `+0x30`, `+0x34` | type `5` pairs | friction | `0.025`, `0.05` | | |
