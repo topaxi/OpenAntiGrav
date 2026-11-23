@@ -263,6 +263,23 @@ pub fn ps3_scene_model(
         .with_context(|| format!("{entry}: reading its {sibling}"))?;
     let mut textures = Vec::new();
     let mut reads = crate::zone_livery::Reads::new(livery);
+    // 2048's and Omega's container is a different file under the same extension and needs no
+    // `.vex` at all (`oag_mesh::mesh::rcs::psp2`).
+    if mesh::rcs::psp2::is_psp2(&geometry) {
+        let (mut model, built) = mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| {
+            if oag_texture::decode::Container::of_name(path)
+                == Some(oag_texture::decode::Container::Gtf)
+            {
+                textures.push(path.to_string());
+            }
+            reads.read(archives, path)
+        })
+        .with_context(|| format!("decoding the model {entry}"))?;
+        report.push(format!("{entry}: {}", built.describe()));
+        report.extend(reads.describe(entry));
+        model.keep_nearest();
+        return Ok((model, textures));
+    }
     let (mut model, built) = mesh::rcs::build_scene(
         entry,
         blob,

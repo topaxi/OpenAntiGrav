@@ -87,7 +87,7 @@ pub(super) fn medal_models(
                     out.push((widget.clone(), model));
                 }
                 Err(error) => report.push(format!(
-                    "{}: did not decode ({error}) - {} draws nothing",
+                    "{}: did not decode ({error:#}) - {} draws nothing",
                     widget.src, widget.name
                 )),
             },

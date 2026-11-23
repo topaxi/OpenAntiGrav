@@ -174,8 +174,10 @@ six bounds on the factor to within 1.5 quantisation steps: positions read out of
 not land on one factor on six bounds, so the stray guard keeps its job. Held: 197 `oag-mesh` and
 179 `oag-rcs` disc-backed tests pass unchanged, and five HD race frames (Race, Zone, Speed Lap,
 Detonator, Time Trial) are pixel-identical with the rule on and off. Checked against Omega: its
-`data00` ships the same three `Data/fe/trophies/hd_*.vex` as PS4 models (not this container), left
-to its own reader; 2048 draws its trophies from `.gxt` card art.
+`data00` ships the same three `Data/fe/trophies/hd_*.vex` as PS4 models (the 2048-lineage container,
+not this one), which `oag_livery::entry::ps3_scene_model` reads through `mesh::rcs::psp2::build` as a
+hull is (ported: `detonator_hud_ground_truth::an_omega_detonator_race_shows_the_medal_the_score_has_reached`
+decodes all three); 2048 draws its trophies from `.gxt` card art.
 
 The trophies share `fe/trophies/materials/medal.rcsmaterial` and author three parameter sets in their
 own records (diffuse `0x0fe400f9`, specular colour `0x370a63cb`, exponent `0x64341a19`):
