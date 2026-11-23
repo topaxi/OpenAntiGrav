@@ -617,11 +617,11 @@ impl NavigationLegend {
     /// The span each authored prompt covers on the footer row, `(start, end)` in grid units,
     /// every kind included and `Back` too whether or not the page shows it. A glyph is as wide
     /// as the distance to its word, which is all this has to go on: `measure` reads the word
-    /// face, not the button face.
+    /// face, not the button face (`font`, the text, the scale: the width it draws at).
     fn prompt_spans(
         prompts: &[Prompt],
         faces: &FaceScales,
-        measure: &dyn Fn(&str) -> f32,
+        measure: &dyn Fn(&str, &str, f32) -> f32,
         glyph_width: f32,
     ) -> Vec<(f32, f32)> {
         prompts
@@ -630,7 +630,11 @@ impl NavigationLegend {
                 if prompt.glyph {
                     return (prompt.x, prompt.x + glyph_width);
                 }
-                let width = measure(&prompt.text) * face_scale(faces, &prompt.font) * prompt.scale;
+                let width = measure(
+                    &prompt.font,
+                    &prompt.text,
+                    face_scale(faces, &prompt.font) * prompt.scale,
+                );
                 (prompt.x, prompt.x + width)
             })
             .collect()
@@ -655,7 +659,7 @@ impl NavigationLegend {
         glyph: Option<char>,
         word: &str,
         faces: &FaceScales,
-        measure: &dyn Fn(&str) -> f32,
+        measure: &dyn Fn(&str, &str, f32) -> f32,
         width: f32,
         blocked: &[[f32; 4]],
     ) -> Option<(Vec<Draw>, [f32; 4])> {
@@ -672,8 +676,12 @@ impl NavigationLegend {
         let margin = first.min(width - last).max(0.0);
         // The spacing between two of the legend's own prompts: from `Confirm`'s word to
         // whatever starts after it, else from what ends before its glyph.
-        let confirm_end =
-            label.x + measure(&label.text) * face_scale(faces, &label.font) * label.scale;
+        let confirm_end = label.x
+            + measure(
+                &label.font,
+                &label.text,
+                face_scale(faces, &label.font) * label.scale,
+            );
         let spacing = spans
             .iter()
             .map(|span| span.0 - confirm_end)
@@ -690,7 +698,7 @@ impl NavigationLegend {
         };
         let spacing = if spacing < f32::MAX { spacing } else { 12.0 };
         let word_scale = face_scale(faces, &label.font) * label.scale;
-        let word_width = measure(word) * word_scale;
+        let word_width = measure(&label.font, word, word_scale);
         let lead = if glyph.is_some() { gap } else { 0.0 };
         let total = lead + word_width;
         let y = button.y.min(label.y);
@@ -967,7 +975,8 @@ pub fn description_draws(
         } else {
             format!("{line} {word}")
         };
-        if !line.is_empty() && measure(&candidate, scale) > width {
+        // The type-in cursor is drawn after the line's last glyph, so it is reserved in the width.
+        if !line.is_empty() && measure(&format!("{candidate}_"), scale) > width {
             lines.push(std::mem::take(&mut line));
             line = word.to_string();
         } else {

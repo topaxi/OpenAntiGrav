@@ -85,10 +85,17 @@ fn still(image: &Path, scratch: &Path) -> Vec<u8> {
 #[test]
 #[ignore = "needs a Pure disc image in data/images/"]
 fn the_circuit_panels_label_steps_eight_pixels_a_glyph_as_the_originals_does() {
-    for name in ["pure-psp-eu.chd", "pure-psp-usa.chd"] {
-        let Some(image) = oag_testdata::image(name) else {
-            continue;
-        };
+    let images: Vec<(&str, std::path::PathBuf)> = ["pure-psp-eu.chd", "pure-psp-usa.chd"]
+        .into_iter()
+        .filter_map(|name| oag_testdata::image(name).map(|path| (name, path)))
+        .collect();
+    // A missing `data/images/` skips honestly, `OAG_REQUIRE_GAME_DATA=1` makes it a failure: the
+    // loop below asserts nothing for an image that is not there.
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pure PSP image is present"
+    );
+    for (name, image) in images {
         let scratch = std::env::temp_dir().join(format!("oag-pure-pens-{name}"));
         let frame = decode(&still(&image, &scratch));
         let starts = glyph_starts(&frame, 171..180, 244..340);

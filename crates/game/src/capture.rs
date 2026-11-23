@@ -1119,6 +1119,13 @@ pub fn run(
                     options.race.as_ref().map(|r| r.source.as_str()),
                     nav_legend.as_ref(),
                     &|text| oag_ui::font::measure(&font, text),
+                    &crate::boot::fonts::prompt_ink(
+                        &font,
+                        buttons_font
+                            .as_ref()
+                            .filter(|_| menu_skin.stats_font.is_some()),
+                        menu_skin.snapped_pens,
+                    ),
                     ticker.as_ref(),
                     &ticker_tips,
                 )?;

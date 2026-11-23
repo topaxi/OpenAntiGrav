@@ -1045,7 +1045,11 @@ impl MenuStage {
         // The footer's own draws, skipped mid-transition too - see `footer.rs`. The reset
         // prompt's rect goes back to the menu for the next pointer tick.
         let reset = if self.change.is_none() && !self.on_pause_page() {
-            let measure = |text: &str| font::measure(&self.default_atlas, text);
+            let measure = crate::boot::fonts::prompt_ink(
+                &self.default_atlas,
+                self.stats_atlas.as_ref(),
+                self.snapped_pens,
+            );
             crate::prompts::reset_prompt(
                 &self.menu,
                 self.nav_legend.as_ref(),

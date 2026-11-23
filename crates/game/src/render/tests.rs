@@ -588,6 +588,36 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
     renderer.set_snapped_pens(true);
     assert_eq!(lefts(&mut renderer), [250.0, 258.0, 266.0]);
     assert!((loose[1] - 256.2).abs() < 1e-3, "{loose:?}");
+
+    // `font::snapped_run`, which every layout of a snapped face reads, is the extent the draw
+    // makes: from the left edge, the last glyph's ink ends where `ink_right` says, and a
+    // right- or centre-aligned string starts where `end` says.
+    let atlas = Atlas::from_font(&font);
+    let run = oag_ui::font::snapped_run(&atlas, "aaa", 0.8);
+    let drawn = |renderer: &mut Renderer, align: Align| -> (f32, f32) {
+        renderer.quads.clear();
+        renderer.push_text(
+            GlyphSlot::Primary,
+            249.0,
+            0.0,
+            0.8,
+            [1.0; 4],
+            [0.0; 4],
+            align,
+            "aaa",
+            None,
+        );
+        let last = renderer.quads.last().expect("a glyph");
+        (renderer.quads[0].rect[0], last.rect[0] + 4.0 * 0.8)
+    };
+    let (first, ink_end) = drawn(&mut renderer, Align::Left);
+    assert!((ink_end - 249.0 - run.ink_right).abs() < 1e-3);
+    assert_eq!(first, 250.0);
+    // Right-aligned at 249: the pen starts `end` to the left, and the first ink edge snaps from there.
+    let (right_first, _) = drawn(&mut renderer, Align::Right);
+    assert_eq!(right_first, (249.0 - run.end + 0.8).ceil());
+    let (centre_first, _) = drawn(&mut renderer, Align::Centre);
+    assert_eq!(centre_first, (249.0 - run.end / 2.0 + 0.8).ceil());
 }
 
 /// `HudArt::half_unit_glyph_quads`: a glyph is its cell grown half a grid unit on every side with the

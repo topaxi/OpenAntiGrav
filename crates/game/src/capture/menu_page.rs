@@ -124,6 +124,8 @@ pub(super) fn menu_page(
     nav_legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
     // The `Default`-role face `nav_legend`'s own word half draws through.
     default_measure: &dyn Fn(&str) -> f32,
+    // The widths the reset prompt's rectangle is laid out from, by widget face and scale.
+    prompt_ink: &dyn Fn(&str, &str, f32) -> f32,
     // The footer's own scrolling tip ticker layout - `None` on a source
     // whose front-end root authors no `TextInfoIsAlwaysLast` viewport
     // (every title but Pulse today). See
@@ -449,7 +451,7 @@ pub(super) fn menu_page(
             &model,
             nav_legend,
             &|button| settings.controls.live_bindings().names_for(button),
-            default_measure,
+            prompt_ink,
             skin.space().size.0,
             &frame.mark_rects(),
         )

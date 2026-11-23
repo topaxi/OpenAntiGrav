@@ -18,16 +18,6 @@
 use super::*;
 use oag_ui::font::wrap_pens;
 
-/// Where the pen ends after `text` under the snapped law ([`oag_ui::font::pen_step`]), from a whole-unit
-/// origin, at `scale` screen units per texel: the width an aligned string is placed by.
-/// **Chosen, not measured**: no captured Pure frame has a right- or centre-aligned string in a snapped
-/// face, so where the original places one is unknown; this keeps the string's drawn width.
-fn snapped_run(atlas: &Atlas, text: &str, scale: f32) -> f32 {
-    text.chars()
-        .filter_map(|c| atlas.cell(c))
-        .fold(0.0, |x, cell| font::pen_step(&cell, scale, x, true).1)
-}
-
 /// Which atlas [`Renderer::push_text`]/[`Renderer::push_wrapped_text`] draw
 /// a line of text from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,6 +105,7 @@ impl Renderer {
                     && self
                         .buttons_role
                         .eq_ignore_ascii_case(oag_ui::language::roles::BUTTONS),
+                snapped: self.hud.snapped_pens,
             })
         });
         self.hints.extend(found);
@@ -186,7 +177,7 @@ impl Renderer {
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
         let width: f32 = if self.hud.snapped_pens {
-            snapped_run(atlas, text, scale * atlas.texel_scale)
+            font::snapped_run(atlas, text, scale).end
         } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))

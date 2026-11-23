@@ -65,7 +65,26 @@ pub fn description_ink<'a>(
     stats_font: Option<&'a oag_ui::font::Atlas>,
     snapped: bool,
 ) -> impl Fn(&str, f32) -> f32 + 'a {
-    move |text, scale| oag_ui::font::ink_width(stats_font.unwrap_or(font), text, scale, snapped)
+    move |text, scale| oag_ui::font::run_width(stats_font.unwrap_or(font), text, scale, snapped)
+}
+
+/// A footer prompt's width at a scale, for the rectangles the reset prompt's tap target is laid
+/// out from ([`oag_ui_screens::campaign::footer::NavigationLegend::reset_prompt`]): `font` is the
+/// widget's own, the `Stats` face's atlas for a `scroll`/`stats` widget where the title has one,
+/// the body face's for every other, on the pen the renderer draws it with (`snapped`).
+pub fn prompt_ink<'a>(
+    font: &'a oag_ui::font::Atlas,
+    stats_font: Option<&'a oag_ui::font::Atlas>,
+    snapped: bool,
+) -> impl Fn(&str, &str, f32) -> f32 + 'a {
+    move |face, text, scale| {
+        let atlas = if face.eq_ignore_ascii_case("scroll") || face.eq_ignore_ascii_case("stats") {
+            stats_font.unwrap_or(font)
+        } else {
+            font
+        };
+        oag_ui::font::run_width(atlas, text, scale, snapped)
+    }
 }
 
 /// Makes the texture pack that is on and names this disc the active one for the faces, unless

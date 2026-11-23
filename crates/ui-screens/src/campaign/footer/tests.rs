@@ -532,10 +532,10 @@ fn a_notice_is_one_row_above_the_legend_in_its_word_face() {
     );
 }
 
-fn text_x_and_extent(draw: &Draw, measure: &dyn Fn(&str) -> f32) -> (f32, f32) {
+fn text_x_and_extent(draw: &Draw, measure: &dyn Fn(&str, &str, f32) -> f32) -> (f32, f32) {
     match draw {
         Draw::Text { x, text, scale, .. } | Draw::FacedText { x, text, scale, .. } => {
-            (*x, *x + measure(text) * scale)
+            (*x, *x + measure("", text, *scale))
         }
         other => panic!("expected a text, got {other:?}"),
     }
@@ -551,7 +551,7 @@ fn the_reset_prompt_shares_confirms_row_and_stays_clear_of_every_prompt() {
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
     assert!(legend.can_model_reset_prompt());
-    let measure = |text: &str| text.chars().count() as f32 * 6.0;
+    let measure = |_: &str, text: &str, scale: f32| text.chars().count() as f32 * 6.0 * scale;
     let (draws, rect) = legend
         .reset_prompt(
             Some('δ'),
@@ -587,7 +587,14 @@ fn the_reset_prompt_shares_confirms_row_and_stays_clear_of_every_prompt() {
     // and so never lands on `Back`, which sits from x=415.
     assert!(last.1 <= 348.0, "ends before Confirm: {last:?}");
     let (words_only, _) = legend
-        .reset_prompt(None, "RESET", &FaceScales::default(), &|_| 30.0, 480.0, &[])
+        .reset_prompt(
+            None,
+            "RESET",
+            &FaceScales::default(),
+            &|_, _, scale| 30.0 * scale,
+            480.0,
+            &[],
+        )
         .expect("words alone");
     assert_eq!(words_only.len(), 1);
 }
@@ -599,7 +606,7 @@ fn the_reset_prompt_goes_after_back_where_the_footer_has_room() {
     let root = parse(XML);
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
-    let measure = |text: &str| text.chars().count() as f32 * 6.0;
+    let measure = |_: &str, text: &str, scale: f32| text.chars().count() as f32 * 6.0 * scale;
     let (draws, rect) = legend
         .reset_prompt(None, "RESET", &FaceScales::default(), &measure, 960.0, &[])
         .expect("a Confirm pair");
@@ -615,7 +622,14 @@ fn the_reset_prompt_goes_after_back_where_the_footer_has_room() {
 fn the_reset_prompt_needs_a_confirm_pair() {
     assert!(
         NavigationLegend::default()
-            .reset_prompt(None, "RESET", &FaceScales::default(), &|_| 30.0, 480.0, &[])
+            .reset_prompt(
+                None,
+                "RESET",
+                &FaceScales::default(),
+                &|_, _, scale| 30.0 * scale,
+                480.0,
+                &[]
+            )
             .is_none()
     );
 }
@@ -628,7 +642,7 @@ fn the_reset_prompt_keeps_clear_of_the_frames_own_marks() {
     let root = parse(XML);
     let strings = StringTable::from_xml(ENTRIES);
     let legend = NavigationLegend::read(&root, &globals(), &strings).expect("controller");
-    let measure = |text: &str| text.chars().count() as f32 * 6.0;
+    let measure = |_: &str, text: &str, scale: f32| text.chars().count() as f32 * 6.0 * scale;
     let prompt = |blocked: &[[f32; 4]]| {
         legend
             .reset_prompt(
@@ -728,7 +742,7 @@ fn a_description_types_across_its_wrapped_lines_and_loops() {
 <Text Name="Text0"></Text><Text Name="Text1"></Text><Text Name="Text2"></Text></TextInfo></Viewport></Screen>"#,
     );
     let layout = TickerLayout::read(&root, &HashMap::new()).expect("the viewport");
-    let measure = |text: &str, _scale: f32| text.len() as f32 * 7.0;
+    let measure = |text: &str, _scale: f32| text.len() as f32 * 6.5;
     let text = "aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj";
     let texts = |since: Option<f32>| -> Vec<String> {
         description_draws(&layout, text, since, &measure)

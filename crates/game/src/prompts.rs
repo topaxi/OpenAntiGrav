@@ -218,7 +218,7 @@ pub fn reset_prompt(
     menu: &oag_ui::menu::Menu,
     legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
     bindings: &dyn Fn(Button) -> Vec<&'static str>,
-    measure: &dyn Fn(&str) -> f32,
+    measure: &dyn Fn(&str, &str, f32) -> f32,
     width: f32,
     blocked: &[[f32; 4]],
 ) -> Option<(Vec<oag_ui::frontend::Draw>, [f32; 4])> {
