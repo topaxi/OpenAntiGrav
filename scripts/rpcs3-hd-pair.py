@@ -49,6 +49,7 @@ HUD_LAG_TICKS = 3
 # The RSX presents the frames it was handed after the game is paused, so a grab taken at once is older than the
 # memory read (the HUD's lap clock lagged RAM's by 0.1 to 0.3 s); 3 s lets it catch up (`rpcs3-drive.py capture`).
 os.environ.setdefault("OAG_CAPTURE_FLUSH", "3")
+import ps3_pose  # noqa: E402
 import rpcs3_place  # noqa: E402
 
 
@@ -125,6 +126,32 @@ def solve_yaw(oag_game, image, track, pos, theirs_forward, scratch):
         if best is None or agree > best[1]:
             best = (candidate, agree, up)
     return best
+
+
+def frame_pose(pair, ship):
+    """`(position, ticks)`: where the presented frame draws the player's hull, and how far behind the RAM body that is.
+
+    An RPCS3 pause leaves RAM 1 or 2 whole ticks ahead of the frame in the push buffer, for the camera and every craft
+    alike (`docs/tools/compare-page.md`, "The skew is the pause, not the original's draw order"). The camera is read off
+    the push buffer, so ours' craft goes where the push buffer draws the hull, not at the body. A pause that reads no hull
+    matrix, or a hull not a whole number of ticks behind the body along its velocity, refuses the pair. `rows` is the
+    hull's own attitude in the same frame (unit rows, `ship["rows"]`'s layout), what the heading check reads."""
+    hull = ship.get("hull_pb")
+    pair.check("the push buffer's hull matrix for the player was read", hull is not None,
+               "no 0.3 to 2.5 scale world matrix loaded 6 times within 15 units of the body (re-grab)")
+    if hull is None:
+        sys.exit("no hull in the push buffer: the pair would draw ours' craft a tick or two ahead of its camera")
+    try:
+        ticks, off_axis = ps3_pose.whole_ticks(hull["translation"], ship["pos"], ship["vel"])
+        pair.check("the frame's hull is a whole number of ticks behind the body", True,
+                   "%d tick(s), %.3f units off the velocity line, hull scale %.3f" % (ticks, off_axis, math.dist(hull["rows"][0], (0, 0, 0))))
+    except ValueError as error:
+        pair.check("the frame's hull is a whole number of ticks behind the body", False, str(error))
+        sys.exit(str(error))
+    lag = {"craft_ticks": ticks, "hull_scale": math.dist(hull["rows"][0], (0, 0, 0)), "hull_translation": hull["translation"],
+           "ram_body": ship["pos"], "craft_basis": "push-buffer hull world matrix against the RAM body, one pause"}
+    rows = [[v / math.dist(r, (0, 0, 0)) for v in r] for r in hull["rows"]]
+    return list(hull["translation"]), rows, lag
 
 
 def zone_band_flags(pair, ship):
@@ -271,6 +298,10 @@ def main():
     track = track.replace(".rcsmodel", ".vex")
     pos, forward = ship["pos"], ship["rows"][2]
     clock = ship.get("race_clock_s")
+    frame_lag, frame_rows = {}, ship["rows"]
+    if args.detonator:
+        pos, frame_rows, frame_lag = frame_pose(pair, ship)
+        forward = frame_rows[2]
     if args.field or args.zone:
         args.ours_ticks = 0
     if args.ours_ticks is None:
@@ -281,6 +312,7 @@ def main():
     pair.rec["original"]["capture_path"] = os.environ.get("OAG_HD_CAPTURE_PATH", "restored savestate (RPCS3 paints garbage on the glass of a restored state)")
     pair.rec["original"]["presented_lag"] = {"hud_clock_ticks": HUD_LAG_TICKS, "picture": "no correction to the picture; on a moving craft the presented frame was measured 0 to 3 ticks older than the RAM read "
                                               "(`hd-pair-lag-scan.py`, docs/tools/compare-page.md, \"A moving HD craft\"); ours' ticks and gantry pin take the HUD lag"}
+    pair.rec["original"]["presented_lag"].update(frame_lag)
     note = ship.get("autopilot_timer")
     if args.field and args.keep_autopilot:
         pair.caveat("the player's Autopilot is armed for good (--keep-autopilot): the HUD's pickup row prints its "
@@ -336,7 +368,7 @@ def main():
     print("yaw %.3f deg, forward agreement %.6f" % (yaw, agree), file=sys.stderr)
     # What `--pose` cannot carry: the angle between the original's body up and ours (the
     # spline's), i.e. the pitch and roll off the track surface, in degrees.
-    theirs_up = ship["rows"][1]
+    theirs_up = frame_rows[1]
     dot = sum(a * b for a, b in zip(theirs_up, our_up)) / (
         math.dist(theirs_up, (0, 0, 0)) * math.dist(our_up, (0, 0, 0)))
     tilt = math.degrees(math.acos(max(-1.0, min(1.0, dot))))

@@ -493,6 +493,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         stages: 15,
     }),
     camera_scale: 0.7,
+    hull_scale: None,
     layouts: Some(oag_title::DetonatorLayouts {
         pattern_file: r"Data\XML\DetonatorLayouts\PatternFile.xml",
         gameplay_values: r"Data\XML\DetonatorLayouts\GamePlayValues.xml",

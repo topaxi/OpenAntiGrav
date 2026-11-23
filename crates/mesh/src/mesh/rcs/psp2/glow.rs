@@ -33,7 +33,7 @@ use std::sync::Arc;
 use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2::material::Material;
 
-use super::{Report, decode_material_texture};
+use super::Report;
 use crate::mesh::rcs::{Textures, vertex_scroll};
 use crate::mesh::{AnimTrack, Emissive, ModelTexture, slots};
 
@@ -98,11 +98,7 @@ pub(super) fn plan(materials: &[Material], textures: Textures<'_>, report: &mut 
         let layer = layer_of(material).and_then(|(emissive, path, diffuse)| {
             let texture = decoded
                 .entry(path.clone())
-                .or_insert_with(|| {
-                    textures(&path)
-                        .and_then(|blob| decode_material_texture(&path, &blob, report))
-                        .map(Arc::new)
-                })
+                .or_insert_with(|| super::picture_memo::picture(&path, textures, report))
                 .clone()?;
             let at = out
                 .emissive

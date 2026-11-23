@@ -19,7 +19,7 @@ table below is scoped to **mode 6, Zone**. Modes 6 and 14 share the `0x4040` bra
 
 **Answer in one line.** A Zone craft never becomes a wreck: at the blast the hull stays
 drawn, the bank cue `shipdestroy` plays after every other cue is stopped, the camera
-holds a trackside view on the craft (mode 2); for 2.5 s the white death shell
+orbits the craft closely (mode 2, [destroy-camera.md](destroy-camera.md)); for 2.5 s the white death shell
 (`zoneship_dead_whiteshell.vex`, drawn over the hull all race) plays its animation from
 `0` to `1`; then the hull, flare and shell are hidden and 112 pieces of
 `zoneship_dead.vex` fly off with the craft's velocity. The race hides the HUD on the
@@ -76,7 +76,7 @@ reading, its trigger at `0x000ec928` unread).
 ## The ready-to-wire table (mode 6)
 
 **Ready to wire:** Z1, Z3-Z9 and Z12 fully; Z2 (camera mode 2's per-frame view, what the player
-watches for 5.5 s), Z10 (the side calls `0x000f9610` and `0x003f5878`) and Z11 (the launch velocity)
+watches for 5.5 s, now read in [destroy-camera.md](destroy-camera.md) with the orbit's first-entry branch open), Z10 (the side calls `0x000f9610` and `0x003f5878`) and Z11 (the launch velocity)
 each with one unread value and its address under "Open".
 
 Role is `ship+0x628c` (`0` local, `2` AI, `1` remote). A Zone race has the one local craft.
@@ -85,7 +85,7 @@ Role is `ship+0x628c` (`0` local, `2` AI, `1` remote). A Zone race has the one l
 | # | State, when | What happens | Address | Conf. | 2048 | Omega |
 | ---: | --- | --- | --- | ---: | --- | --- |
 | Z1 | 4, on entry | **Shared**: `+0x6f78 += 1`; destroy camera prologue (HUD node `*0x009879dc` `+0x34 &= ~7`, `Camera_SetSubject(cam, ship, 1)`, `cam+0x34 \|= 6`; skipped if the camera is already in mode 2); single player: `0x000884d8(g_Hud)` (frees `g_Hud+0x98..+0xa8`, unread what they hold), `*0x00abc170 + 0x5c = 0`, `RaceManager+0x2dc4 = 4.5` (the race end's second wait, Z9); the `0x1000` out-of-race bit and `0x000d0128` (ship-destroy.md rows 5, 8) | `0x000e20e8`-`0x000e2244`, `0x000e2c6c`-`0x000e2c9c`, `0x000e2410`-`0x000e2420` | 85 | checked, applies, not wired: the same prologue, `0x131ac = 4.5` (`0x40900000`), `+0x60a4 \|= 0x1000` | checked, applies, not wired: same prologue, `+0x1aff0 = 4.5`, `+0x71f5 \|= 0x10` |
-| Z2 | 4, on entry | **Camera mode 2, not 8**: for modes in `0x206040` except 13 and 21: `ship+0x6ad4 = 0` (the shell's in-race clock), `Camera_SetTarget_q(cam, cam+0x1ec)` (`0x000a9b18`, `cam+0x1f0 = craft`), `Camera_SetMode(cam, 2)`. Mode 2's enter, `Camera_EnterTrackView_q` (`0x000aa090`): stores the craft's body position (`body+0x200`) at `cam+0x390`, clears `cam+0x48` bit 2, and either reuses its stored station (`cam+0x3a0 > 0`: `+0x2a4 = +0x3a4`, `+0x2a0 = +0x3a8`, field `+0x288 = 35.0`, `+0x22c = +0x230 = 65.0`) or looks one up in `"AI track data"` within `10000.0` (`0x000a97f0`, read from the disassembly only: Ghidra marks `0x000a97f0` no-return and truncates the decompile). **The per-frame law of mode 2 is unread**: next read is the camera's per-frame twelve-way switch on `cam+0x40`, entry 2. | `0x000e2248`-`0x000e2298`, `0x000abe20`, `0x000aa090` | 75 (the enter: 65) | checked, applies, not wired: `+0x6124 = 0`, `FUN_81218884(cam, cam+0x1e8)`, `FUN_8121963a(cam, 2)` for the Zone family except 13 and 21 | checked, differs: mode 2 for modes 6, 13, 14, 21 (`0x8181 >> (mode-6)`) **or** when `FUN_01669270` (behind `DAT_0203a728`) or `*(DAT_01e31910+0x21c) == 0`, except 13 and 21; `+0x7278 = 0`; `FUN_01382720(cam, 2)` |
+| Z2 | 4, on entry | **Camera mode 2, not 8**: for modes in `0x206040` except 13 and 21: `ship+0x6ad4 = 0` (the shell's in-race clock), `Camera_SetTarget_q(cam, cam+0x1ec)` (`0x000a9b18`, `cam+0x1f0 = craft`), `Camera_SetMode(cam, 2)`. Mode 2's enter, `Camera_EnterTrackView_q` (`0x000aa090`): stores the craft's body position (`body+0x200`) at `cam+0x390`, clears `cam+0x48` bit 2, and either reuses its stored station (`cam+0x3a0 > 0`: `+0x2a4 = +0x3a4`, `+0x2a0 = +0x3a8`, field `+0x288 = 35.0`, `+0x22c = +0x230 = 65.0`) or looks one up in `"AI track data"` within `10000.0` (`0x000a97f0`, read from the disassembly only: Ghidra marks `0x000a97f0` no-return and truncates the decompile). The per-frame law is read in [destroy-camera.md](destroy-camera.md) (Z2a to Z2f): an orbit a few units off the craft, fast and tight with a 20 degree field target for 2.5 s, then a slow drift at 65 degrees until the results; the enter is not a trackside view. | `0x000e2248`-`0x000e2298`, `0x000abe20`, `0x000aa090` | 75 (the enter: 65) | checked, applies, not wired: `+0x6124 = 0`, `FUN_81218884(cam, cam+0x1e8)`, `FUN_8121963a(cam, 2)` for the Zone family except 13 and 21 | checked, differs: mode 2 for modes 6, 13, 14, 21 (`0x8181 >> (mode-6)`) **or** when `FUN_01669270` (behind `DAT_0203a728`) or `*(DAT_01e31910+0x21c) == 0`, except 13 and 21; `+0x7278 = 0`; `FUN_01382720(cam, 2)` |
 | Z3 | 4, on entry | **No wreck, no blast**: the live model gets `+0x34 \|= 2` (as in every mode) and the mode-6/14 branch jumps over `Ship_SelectWreckModel`, `Ship_PlayDestroyExplosion`, the announcer, `Ship_ApplyDeathKick_q`, `~SHIP_ONFIRE`, the collider swap and the inertia (ship-destroy.md rows 1, 2, 3, 6) | `0x000e22a0`-`0x000e22bc` -> `0x000e296c` | 88 | checked, applies, not wired: the `(iVar4 == 6 \|\| iVar4 == 0xe)` branch skips `FUN_811c6f72`, `FUN_811bc2bc`, `cont_elim`, `~SHIP_ONFIRE` | checked, applies, not wired: `(mode \| 8) == 0xe` skips `FUN_01301260` and the explosion |
 | Z4 | 4, on entry | **Rumble**: local craft `Rumble_QueueOnPad(pad, 0x3c)` (`Ship_Exploding_Player_Rumble`); no `0x3b` broadcast | `0x000e2974` -> `0x000e2ca8` | 85 | checked, differs: no rumble call (Vita) | checked, applies, not wired: `FUN_0174a880(.., 0x3c)` for a local craft |
 | Z5 | 4, on entry | **Sound**: `+0x6a78 = 0`; `Sound_StopAllBankCues_q(*0x00b6cc28)` (`0x002ff600` -> `0x00315c58`: for every loaded bank, stop every playing instance of every cue, `0x00315598`), then `Sound_PlayBankCue(*0x00b6cc28, *0x00b6cc50, "shipdestroy", 0x400, 0...)`, dry (no emitter). `*0x00b6cc50` is the environment bank, live-read as `env0_zone.bnk` in a Zone race ([sound.md](sound.md), conf 90); **`shipdestroy` is in `env0_zone.bnk` and `env0_det.bnk` only** (strings census of `DATA00`'s banks; `weapons.bnk` has `EXPLBIG*`, `~SHIP_*`, `~BLOWUP`, not it). Its only call site in the binary is this one (`attrib 0x00782538`). | `0x000e2978`-`0x000e29c4` | 85 | checked, applies, not wired: `FUN_812641f0(mgr)` then `"shipdestroy"` at volume 1.0; 2048's `data/audio/sound/env0_zone.bnk` names it | not checkable by census: posted by name through `FUN_01779800(2, .., "shipdestroy")`; no `.bnk` in the merged tree carries its FNV-1 id `0xb26629e7` (nor `ShipDestroyed_*`/`EXPLBIG`; the hash code checks out against `env0_zone`'s bank id `0xe5044d7b`), so the event's container is unread |
@@ -113,7 +113,7 @@ the drawing are `oag_raceplay::zone_end` and `scene/zone_end.rs`. Test: `tests/z
 | Row | State | Notes |
 | --- | --- | --- |
 | Z1 | wired | state 4 is one tick; the HUD hides at the blast (`Race::hud_shown`); the camera prologue is today's destroy camera, **inherited** (see Z2) |
-| Z2 | inherited | camera mode 2's per-frame law is unread: the existing destroy camera runs, as for every title |
+| Z2 | inherited | camera mode 2's per-frame law is read ([destroy-camera.md](destroy-camera.md), Z2a to Z2f) and not wired: the existing destroy camera runs, as for every title |
 | Z3 | wired | no blast, plume, node sparks, wash or shake in a Zone end (`craft_flash`), no wreck model (the Zone `shipwreck.vex` is built and not drawn) |
 | Z4 | not wired | the rumble is the ordinary destroyed rumble, unchanged |
 | Z5 | wired on HD and 2048 | `shipdestroy` once on the blast (`Cue::ShipDestroy`, `ZoneEnd::cue`): HD from `env0_zone.bnk` (Ps3 tick), 2048 from its hashed `env0_zone.bnk` (Vita tick; resolves to one timeline of 6 voices, `zone_craft_ground_truth`). No other cue plays in a Zone end, `~BLOWUP` included. "After every other cue is stopped" is **not** wired: ours stops none. Omega: silent, its Wwise event is unread |
@@ -165,7 +165,7 @@ wreck.
 | `0x00053ff0` | `RaceManager_IsPhaseTimeAtLeast` | 82 | `return k <= +0x196c`, whole function |
 | `0x00683048` | `SceneNode_SetFlags` | 80 | `+0x34 \|= flags`, with the `0x20`/`0x40` side calls; called with `4` on the shell at load |
 | `0x000a9b18` | `Camera_SetTarget_q` | 60 | `cam+0x1f0 = arg`, whole function; mode 2's enter reads `cam+0x1f0` as a craft (`+0x6944`) |
-| `0x000aa090` | `Camera_EnterTrackView_q` | 60 | `Camera_SetMode`'s enter table entry 2 tail-calls it; `"AI track data"`, the target's body position |
+| `0x000aa090` | `Camera_EnterTrackView_q` | 60 | `Camera_SetMode`'s enter table entry 2 tail-calls it; `"AI track data"`, the target's body position. The name is a misnomer: mode 2 is an orbit around the craft ([destroy-camera.md](destroy-camera.md)) |
 | `0x002ff600` | `Sound_StopAllBankCues_q` | 60 | `0x00315c58`: every bank slot of `*0x00b6e308` through `0x00315598`, which stops every playing instance (`0x0031c7b0`) and its emitters |
 
 Unnamed, below 50 or unread: `0x000884d8` and `0x00087d40` (HUD-side; what `g_Hud+0x98..+0xa8`
@@ -197,7 +197,8 @@ at 1.0 s, phase 4 at 5.5 s), photographing each change.
 0. What the shell's animation time varies on HD (its material, unread: `.rcsmaterial`; and whether
    our `Anim Transform` decode of the whiteshell is right), `Sound_StopAllBankCues_q`'s counterpart
    in ours, Omega's `shipdestroy` Wwise event, and a live pair against RPCS3.
-1. Camera mode 2's per-frame law (Z2): the per-frame twelve-way switch on `cam+0x40`, entry 2.
+1. ~~Camera mode 2's per-frame law (Z2)~~ Read 2026-11-23 in [destroy-camera.md](destroy-camera.md); its
+   open items (the first-entry branch `0x000a97f0`, the eye row) are listed there.
 2. `0x003f5878`'s 24-slot pool (Z10): read its consumers through `*0x008b819c`.
 3. The debris launch velocity (Z11) from the disassembly of `0x00104a58`
    (`0x00104be4`-`0x00104d50`), and the debris node class `0x00685f38` collects.

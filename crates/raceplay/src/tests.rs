@@ -506,6 +506,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         class_announcer: oag_sound::sfx::ClassAnnouncer::default(),
         rumble: oag_tables::rumble::Library::default(),
         hull_shake: None,
+        hull_draw_factor: 1.0,
         zoom_ring: None,
         zoom_borrowed: false,
         capture_hud: None,

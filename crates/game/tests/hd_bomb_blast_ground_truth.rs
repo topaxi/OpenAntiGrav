@@ -133,33 +133,57 @@ fn yellow([r, g, b]: [u8; 3]) -> bool {
     r > 200 && g > 150 && b < 120
 }
 
+// One test per frame: each claim reads one frame, and one `oag-game` run per
+// test lets the four runs share the `gpu-vram` group instead of queueing in one
+// test. Warm pixels (yellow to white) of 522,240, measured 2026-10-22 on HD's
+// encoded scene store (`oag_gpu::formats::SceneStore::Encoded`), where the
+// stacked additive rings add encoded values and burn through to white, so a
+// yellow-only count no longer sees them. Before the blast: 4,920. The fireball
+// at 0.67 s: 20,582 drawn (26,688 before its taps were decoded, 2026-10-26),
+// 4,145 with the bomb's models dropped (`OAG_SKIP_MATERIAL=bomb`; the smoke
+// ring and rays the psys stage draws remain). The ripple rings at 1.8 s:
+// 25,549 drawn, 1,656 dropped.
+
 #[test]
 #[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
-fn a_detonating_bomb_draws_its_fireball_and_then_its_ripple_rings() {
-    // Warm pixels (yellow to white) of 522,240, measured 2026-10-22 on HD's
-    // encoded scene store (`oag_gpu::formats::SceneStore::Encoded`), where the
-    // stacked additive rings add encoded values and burn through to white, so
-    // a yellow-only count no longer sees them. Before the blast: 4,920. The
-    // fireball at 0.67 s: 20,582 drawn (26,688 before its taps
-    // were decoded, 2026-10-26), 4,145 with the bomb's models dropped
-    // (`OAG_SKIP_MATERIAL=bomb`; the smoke ring and rays the psys stage draws
-    // remain). The ripple rings at 1.8 s: 25,549 drawn, 1,656 dropped.
-    let at = |ticks| count(&frame_of(ticks).expect("image"), warm);
-    let (before, ball, rings) = (at(420), at(460), at(528));
-    println!("warm pixels: before {before}, fireball {ball}, ripple rings {rings}");
+fn the_scene_before_the_blast_does_not_glow() {
+    let frame = frame_of(420).expect("image");
+    let before = count(&frame, warm);
+    println!("warm pixels before: {before}");
+    assert!(before < 10_000, "the control already glows: {before}");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_detonating_bomb_draws_its_fireball_in_yellow() {
+    let frame = frame_of(460).expect("image");
+    let ball = count(&frame, warm);
+    // Age 0.67 s: yellow, not white. With the taps read raw the ball drew pale
+    // (2,263 yellow pixels, 4,230 near-white); decoded, 21,247 and 1,270.
+    let gold = count(&frame, yellow);
+    println!("warm pixels of the fireball: {ball}; yellow pixels at 0.67 s: {gold}");
+    assert!(gold > 10_000, "the fireball reads its taps raw: {gold}");
+    assert!(ball > 15_000, "the fireball is missing: {ball}");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn the_fireball_burns_away() {
     // Age 1.32 s: the fireball is burning away. Its alpha test is `GL_LESS`
     // 0.5, so as `AlphaAnim` falls the texels with the most alpha go; yellow to
     // white pixels of the frame, 2026-10-26: 36,309 with the test, 52,441 with the
     // discard dropped (a solid ball).
-    let burnt = count(&frame_of(500).expect("image"), bright);
+    let frame = frame_of(500).expect("image");
+    let burnt = count(&frame, bright);
     println!("bright pixels at 1.32 s: {burnt}");
-    // Age 0.67 s: yellow, not white. With the taps read raw the ball drew pale
-    // (2,263 yellow pixels, 4,230 near-white); decoded, 21,247 and 1,270.
-    let gold = count(&frame_of(460).expect("image"), yellow);
-    println!("yellow pixels at 0.67 s: {gold}");
-    assert!(gold > 10_000, "the fireball reads its taps raw: {gold}");
     assert!(burnt < 45_000, "the fireball is not burning away: {burnt}");
-    assert!(before < 10_000, "the control already glows: {before}");
-    assert!(ball > 15_000, "the fireball is missing: {ball}");
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso and a GPU adapter"]
+fn a_detonating_bomb_then_draws_its_ripple_rings() {
+    let frame = frame_of(528).expect("image");
+    let rings = count(&frame, warm);
+    println!("warm pixels of the ripple rings: {rings}");
     assert!(rings > 12_000, "the ripple rings are missing: {rings}");
 }
