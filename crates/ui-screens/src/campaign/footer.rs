@@ -928,6 +928,14 @@ const TIPS_PLAYED: usize = 24;
 /// 0.8 is compared in the same section.
 pub const DESCRIPTION_SCALE: f32 = 0.8;
 
+/// How far below the viewport's top the description's first line is drawn, in pixels. **Measured,
+/// not read**: on the five Pure pairs that type a description (`menu-sr-track`, `menu-sr-class`,
+/// `menu-sr-league`, `menu-t-class`, `menu-t-sel`) the original's ink is rows 222 to 228 where the
+/// viewport's 217 plus the `TextInfo`'s `y="1"` puts ours at 221 to 227; `TextInfoGap` is the
+/// undeclared name that likely carries it (`docs/ui/selection-screens.md`, "The description line").
+/// Confidence 70: one offset, five pairs, no authored number.
+pub const DESCRIPTION_TOP: f32 = 1.0;
+
 /// `text` wrapped into the viewport of `layout`, one [`Draw`] a line, in the
 /// `TextInfo`'s own colour and scale ([`DESCRIPTION_SCALE`] where it names
 /// none), at most its line count (the rest is cut: the original's box holds
@@ -997,7 +1005,7 @@ pub fn description_draws(
         draws.push(Draw::in_role(
             face_role(&layout.text_font),
             x,
-            y + pitch * index as f32,
+            y + DESCRIPTION_TOP + pitch * index as f32,
             scale,
             layout.color,
             Align::Left,
