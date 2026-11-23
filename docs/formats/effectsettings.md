@@ -156,8 +156,9 @@ branch, and DLC3's stage 3 `Sun colour` `1.143733 1.091405 1.906221` is the hull
 `oag_title::ZonePalette::TitleWide` carries the split (`zone_circuits`,
 `zone_circuit_entry`). The DLC3 table authors 48 keys a stage against the base file's 23,
 so the Zone circuits' whole grade moves with it, not the sun alone. Omega ships both HD
-tables (`Data/zoneenvironmenthdfury/`, the DLC3 one byte-identical) and draws no Zone grade
-yet: checked, applies, not wired.
+tables (`Data/zoneenvironmenthdfury/`, the DLC3 one byte-identical), and its HD-lineage circuits
+take them as the Zone and Detonator grade (`oag_omega::race::{ZONE_FALLBACK, DETONATOR}`), the
+`Environments2048` circuits held back: ported.
 
 ## What is read and what is not
 

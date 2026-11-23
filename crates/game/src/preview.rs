@@ -595,51 +595,20 @@ fn model_named_in(
     Ok(named(model))
 }
 
-/// [`model`]'s PS3 branch: the scene `.vex` and the `.rcsmodel` beside it,
-/// with every material and `.gtf` read through the same archive set a race
-/// reads them through.
-///
-/// `build_scene` and not `build`: the viewer and the race both take the scene
-/// path, and a flyer is all first-pass (every mesh node addresses a chunk), so
-/// the two give the same model; the scene path is the one the rest of this
-/// project's HD ground truth is pinned against.
+/// [`model`]'s PS3 branch ([`oag_livery::entry::ps3_scene_model`]).
 fn ps3_model(
     archives: &mut oag_assets::Archives,
     entry: &str,
     blob: &[u8],
     livery: Option<oag_livery::LiveryFolder<'_>>,
 ) -> Result<(Model, Vec<String>)> {
-    let sibling = oag_mesh::mesh::rcs::sibling_name(entry)
-        .with_context(|| format!("{entry} names no .rcsmodel"))?;
-    let geometry = archives
-        .read_name(&sibling)
-        .with_context(|| format!("{entry}: reading its {sibling}"))?;
-    // The `.gtf` requests come in texture-slot order, which is how a draw
-    // names its texture.
-    let mut textures = Vec::new();
-    let mut reads = oag_livery::zone_livery::Reads::new(livery);
-    let (mut model, report) = oag_mesh::mesh::rcs::build_scene(
-        entry,
-        blob,
-        &geometry,
-        &mut |path| {
-            if oag_texture::decode::Container::of_name(path)
-                == Some(oag_texture::decode::Container::Gtf)
-            {
-                textures.push(path.to_string());
-            }
-            reads.read(archives, path)
-        },
-        // A menu preview draws into a gamma target, whose shaders decode with the plain power.
-        Default::default(),
-    )
-    .with_context(|| format!("decoding the preview mesh {entry}"))?;
-    log::debug!("preview {entry}: {}", report.describe());
-    if let Some(line) = reads.describe(entry) {
+    let mut report = Vec::new();
+    let built = oag_livery::entry::ps3_scene_model(archives, entry, blob, livery, &mut report)
+        .with_context(|| format!("decoding the preview mesh {entry}"));
+    for line in report {
         log::debug!("preview {line}");
     }
-    model.keep_nearest();
-    Ok((model, textures))
+    built
 }
 
 /// The light a front-end screen's models are drawn in, or `None` where the title lights them

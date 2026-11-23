@@ -163,6 +163,75 @@ fn assert_the_cannon_fires(loaded: &race::Loaded) {
     assert!(cannon.rounds_in_flight() > 0);
 }
 
+/// The race-start placement call and the stage cap, read on HD (`Detonator_PlaceOpeningStage`) and
+/// on Omega (`FUN_012b80a0(rm, stage - 1)` once at the start; the stage `rm+0x300d6`, capped `14`,
+/// into `*(craft+0x6a18)+0x5f4`, v1.07; `+0x5e4` on v1.00): the first tick lays the opening
+/// stage's mines and at most one bomb on distinct lanes, and the auto-speed's stage count is
+/// `0` on stage 1, the stage after, and `14` at most (`detonator-mode.md`, "The same law on 2048
+/// and Omega"). Returns the mines the first tick laid.
+fn assert_the_opening_stage_and_the_stage_cap(loaded: &race::Loaded) -> u16 {
+    assert!(
+        loaded
+            .report
+            .iter()
+            .any(|line| line.contains("PatternFile.xml") && line.contains("18 pattern group")),
+        "the layout load is reported: {:?}",
+        loaded.report
+    );
+    let mut race = race::Race::start(
+        loaded.setup.clone(),
+        loaded.view.clone(),
+        loaded.modules.clone(),
+    );
+    assert_eq!(
+        race.core.sim.world.detonator.stages_laid, 0,
+        "nothing laid before tick 1"
+    );
+    race.core.sim.set_autopilot(true);
+    race.tick(&PlayerInputs::none());
+    let first = race.core.sim.world.detonator;
+    assert_eq!(
+        first.stages_laid, 1,
+        "the opening stage is laid on the first tick"
+    );
+    assert!(
+        (40..=80).contains(&first.live_mines),
+        "stage 1 aims for 80: {}",
+        first.live_mines
+    );
+    assert!(first.live_bombs <= 1);
+    let mut seen = std::collections::BTreeSet::new();
+    assert!(
+        first
+            .live_mines()
+            .iter()
+            .all(|m| seen.insert((m.entry, m.lane)) && m.lane.abs() <= 10),
+        "no two mines share a lane, and a lane is at most ten either side of the centre"
+    );
+    // The ramp is full by GO (`assert_auto_speed_and_pads`); the target below is its full value.
+    race.core.sim.world.detonator.ramp = 1.0;
+    for laid in [1u8, 2, 13, 14] {
+        race.core.sim.world.detonator.stages_laid = laid;
+        let n = if laid == 1 { 0.0 } else { f32::from(laid) };
+        assert_eq!(
+            race.core.sim.detonator_speed_target(),
+            Some(34.0 + 4.4 * n),
+            "stage {laid}"
+        );
+    }
+    race.core.sim.world.detonator.stages_laid = 14;
+    let at_cap = race.core.sim.detonator_speed_target();
+    for beyond in [15u8, 200] {
+        race.core.sim.world.detonator.stages_laid = beyond;
+        assert_eq!(
+            race.core.sim.detonator_speed_target(),
+            at_cap,
+            "stage {beyond} reads the stage 14 target"
+        );
+    }
+    first.live_mines
+}
+
 /// A title's Detonator craft flies the auto-speed (the ramp full by GO, the stage-1 target `34`),
 /// and over a lap on the autopilot its speed pads either charge the EMP and never boost
 /// (`charges`) or keep their race boost and charge nothing (2048, whose pad arms are unread).
@@ -265,14 +334,27 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         grade.describe()
     );
     assert_eq!(grade.last_stage(), 14);
+    // The fallback's two per-stage texture sets, as `.gxt` (`Environment_LoadHDFuryContent`
+    // loads `DetonatorModeTrack<n>`): the track set from the patch, the general set from the base.
+    for set in ["detonatorModeTrack", "detonatorMode"] {
+        let line = format!("data/Tex/{set}0.gxt..14: 15/15 per-stage Zone");
+        assert!(
+            loaded.report.iter().any(|l| l.contains(&line)),
+            "{line}: {:#?}",
+            loaded.report
+        );
+    }
     assert_the_cannon_fires(&loaded);
+    assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, false);
 }
 
-/// Omega runs the mode's rules and draws no grade, which it does not draw for Zone either.
+/// Omega runs the mode's rules and grades an HD-lineage circuit (its default, `tech_de_ra`) the
+/// way Zone does: HD/Fury's Detonator table and the `detonatorModeTrack<n>.gnf` set, the loader's
+/// fork being the circuit path's (`FUN_0162a390`).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
+fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
     let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
         return;
     };
@@ -296,15 +378,43 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
             .laps_target,
         Some(14)
     );
-    assert!(loaded.zone_grade.is_none());
+    let grade = loaded.zone_grade.as_ref().expect("a grade");
     assert!(
-        loaded
-            .report
-            .iter()
-            .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
+        grade
+            .describe()
+            .starts_with("Data/zoneenvironmenthdfury/DetonatorModeHDFury.effectSettings"),
+        "graded from {}",
+        grade.describe()
+    );
+    assert_eq!(grade.last_stage(), 14);
+    assert!(
+        loaded.report.iter().any(|l| l
+            .contains("Data/tex/detonatorModeTrack0.gnf..14: 15/15 per-stage Zone track textures")),
+        "{:#?}",
+        loaded.report
     );
     assert_the_cannon_fires(&loaded);
+    assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, true);
+}
+
+/// Omega's `Environments2048` circuits take the loader's primary branch (their own
+/// `ZoneMode2048` table, unwired for Detonator), so HD/Fury's pair does not grade them.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_omega_detonator_race_on_a_2048_circuit_keeps_its_own_colours() {
+    let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        track: Some(r"Data\Environments2048\tower\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading an Omega Detonator race on a 2048 circuit");
+    assert!(loaded.zone_grade.is_none(), "{:#?}", loaded.report);
 }
 
 /// **Mines and bombs.** The opening stage lays up to the first stage's count (the disc's
@@ -317,39 +427,9 @@ fn an_hd_detonator_race_lays_its_mines_and_steps_the_total_a_stage() {
     let Some(loaded) = load() else {
         return;
     };
-    assert!(
-        loaded
-            .report
-            .iter()
-            .any(|line| line.contains("PatternFile.xml") && line.contains("18 pattern group")),
-        "the layout load is reported: {:?}",
-        loaded.report
-    );
+    let laid = assert_the_opening_stage_and_the_stage_cap(&loaded);
     let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
     race.core.sim.set_autopilot(true);
-    race.tick(&PlayerInputs::none());
-    let first = race.core.sim.world.detonator;
-    assert_eq!(first.stages_laid, 1);
-    assert!(
-        (40..=80).contains(&first.live_mines),
-        "stage 1 aims for 80 and a lane the spawn refuses costs one: {}",
-        first.live_mines
-    );
-    assert!(first.live_bombs <= 1);
-    let laid = first.live_mines;
-    let mut seen = std::collections::BTreeSet::new();
-    assert!(
-        first
-            .live_mines()
-            .iter()
-            .all(|m| seen.insert((m.entry, m.lane))),
-        "no two mines share a lane"
-    );
-    assert!(
-        first.live_mines().iter().all(|m| m.lane.abs() <= 10),
-        "a lane is at most ten either side of the centre"
-    );
-
     for _ in 0..60 * 60 * 3 {
         race.tick(&PlayerInputs::none());
         keep_alive(&mut race);
@@ -361,7 +441,7 @@ fn an_hd_detonator_race_lays_its_mines_and_steps_the_total_a_stage() {
     assert_eq!(second.stages_laid, 2, "the first crossing lays stage 2");
     assert!(second.live_mines <= 90);
     assert!(
-        second.live_mines >= laid.min(first.live_mines) / 2,
+        second.live_mines >= laid / 2,
         "the top-up refills toward the stage's count"
     );
 }

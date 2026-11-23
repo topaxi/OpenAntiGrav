@@ -260,6 +260,13 @@ pub(crate) struct WreckArgs {
     #[arg(long, value_name = "TICK:SLOT", requires = "race")]
     pub(crate) force_hit: Option<String>,
 
+    /// With `--race --mode detonator --screenshot`, set the Detonator score at the end of a
+    /// tick: `TICK:SCORE`, e.g. `60:200000`. A verification aid for what the HUD shows as the
+    /// score passes a campaign cell's targets (with `--campaign-cell`), there because a headless
+    /// run cannot shoot a campaign cell's tens of thousands of points.
+    #[arg(long, value_name = "TICK:SCORE", requires = "race")]
+    pub(crate) force_detonator_score: Option<String>,
+
     /// With `--race --screenshot`, throw one craft sideways to its right at
     /// 600 units a second at the end of a tick: `TICK:SLOT`, e.g. `60:1`. A verification aid
     /// for a seat's wall sparks, shake and contact sound, there because a

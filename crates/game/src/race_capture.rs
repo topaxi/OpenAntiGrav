@@ -8,17 +8,17 @@ use anyhow::{Context, Result};
 use log::warn;
 use oag_gameplay::ControlScheme;
 use oag_mesh::mesh_render::Anisotropy;
-use oag_race::RaceState;
 use oag_raceplay::*;
 mod bench;
 mod describe;
 pub mod gpu;
+mod overlays;
 pub mod pose_flaps;
 pub mod pose_hold;
 pub mod pose_lean;
 mod race_bench;
 mod shot;
-mod spectrum;
+pub mod spectrum;
 pub mod tick;
 use tick::advance_one_tick;
 
@@ -98,6 +98,8 @@ pub struct CaptureOptions {
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
+    /// `--force-detonator-score TICK:SCORE`: the Detonator score is set at the end of a tick.
+    pub force_detonator_score: Option<(u32, i32)>,
     /// `--force-wall-slide TICK:SLOT`: see [`RaceSim::force_wall_slide`].
     pub force_wall_slide: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: see [`RaceSim::force_leach_lock`].
@@ -332,21 +334,10 @@ pub struct CaptureOptions {
     pub weather: oag_display::display::Weather,
     /// Whether the drawn hulls shake, `Race::set_hull_shake`; `--no-hull-shake` turns it off.
     pub hull_shake: bool,
-    /// Replaces the live audio spectrum with a fixed synthetic ramp before
-    /// the frame is drawn. `--zone-spectrum-test`.
-    ///
-    /// **Exists because the live spectrum otherwise makes a Zone capture
-    /// useless as evidence twice over.** On the null backend `--screenshot`
-    /// always runs on - `audio.output().spectrum()` never publishes, since no
-    /// render-ahead thread ever spawns without a device - so an ordinary
-    /// capture shows no glow at all, whatever the scene actually authors.
-    /// With a real device attached instead, the spectrum is live and
-    /// non-deterministic, which is the wrong kind of input for a comparison
-    /// two runs are supposed to agree on. A fixed ramp is neither: visible on
-    /// the null backend and identical on every run, on the same terms
-    /// `--zone-stage` exists to make the colour grade itself checkable
-    /// without a live race to drive it there.
-    pub zone_spectrum_test: bool,
+    /// Where the band levels the frame is drawn with come from: the live spectrum, a
+    /// fixed ramp (`--zone-spectrum-test`) or levels read off the original
+    /// (`--zone-bands`); see [`spectrum::ZoneFeed`].
+    pub zone_feed: spectrum::ZoneFeed,
     /// The row [`crate::records::Store`] already held for this circuit/mode/
     /// class before this capture, if any - read by the caller, off the same
     /// `<config dir>/oag/records.toml` a real session would, so a
@@ -442,6 +433,7 @@ pub fn capture(
         leach_ball_model,
         shield_cockpit,
         countdown_model,
+        medal_models,
         fog_volumes,
         light,
         circuit_lighting,
@@ -1364,35 +1356,16 @@ pub fn capture(
                         None,
                         hud_viewport,
                     );
-                    // The countdown, on the same terms `RaceStage::draw_hud` draws
-                    // it on - see `oag_hud::countdown`,
-                    // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
-                    // which stands this overlay down where the circuit's own gantry
-                    // is already showing the count.
-                    if let (Some((model, widget)), true) = (
-                        countdown_model.clone(),
-                        RaceState::thrust_gated(race.core.sim.world.tick) && !scene.draws_gantry(),
-                    ) {
-                        match crate::hud_countdown::Countdown::new(
-                            &device, &queue, format, model, &widget,
-                        ) {
-                            Ok(mut countdown) => countdown.draw(
-                                &device,
-                                &queue,
-                                &mut encoder,
-                                &hud_view,
-                                race.core.sim.world.tick as f32 / 60.0,
-                                None,
-                                hud_viewport,
-                                (width, height),
-                            ),
-                            Err(why) => {
-                                warn!(
-                                    "the countdown overlay did not build ({why}); capturing without one"
-                                );
-                            }
-                        }
-                    }
+                    overlays::draw_over_hud(
+                        (&device, &queue, format),
+                        &mut encoder,
+                        &hud_view,
+                        (&race, &scene, &overlay),
+                        &medal_models,
+                        countdown_model.as_ref(),
+                        hud_viewport,
+                        (width, height),
+                    );
                 }
                 Ok(None) => warn!("no HUD layout: capturing without one"),
                 Err(why) => warn!("the HUD overlay did not build ({why}); capturing without one"),

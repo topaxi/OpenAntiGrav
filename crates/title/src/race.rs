@@ -578,6 +578,12 @@ pub struct Detonator {
     pub fallback_palette: Option<ZonePalette>,
     /// The per-stage texture sets, or `None` where none is located.
     pub stage_textures: Option<&'static ZoneStageTextures>,
+    /// The per-stage texture sets of [`Self::fallback_palette`]'s circuits alone. 2048 loads
+    /// `DetonatorModeTrack<n>.gxt` inside `Environment_LoadHDFuryContent`, the branch HD's ported
+    /// circuits take, so a circuit with an environment tree of its own keeps its own materials
+    /// and takes none (`docs/ghidra/functions/vita-2048-eu-v104/zone-environment-fallback.md`);
+    /// the counterpart of [`ZoneFallback::stage_textures`].
+    pub fallback_stage_textures: Option<&'static ZoneStageTextures>,
     /// The chase rig's craft scale in this mode, in place of the `0.75` every other
     /// mode uses: HD's craft constructors write `0.7` on mode `14`
     /// (`docs/ghidra/functions/ps3-hdfury-eu/camera.md`).
@@ -601,6 +607,10 @@ pub struct Detonator {
     /// Whether the HUD's `EmpReady` lamp is bound by the executable: where it is not, the
     /// layout's widget is dropped (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hud.md`).
     pub binds_emp_ready: crate::pre_race::Sourced<bool>,
+    /// Whether the HUD's three medal models (`DetonatorGoldMedal`, `Silver`, `Bronze`) are drawn
+    /// as a campaign race's score passes the cell's targets. Where it is `false` the layout's
+    /// widgets are dropped.
+    pub shows_medals: crate::pre_race::Sourced<bool>,
 }
 
 /// What Detonator's pads do (`docs/ghidra/functions/ps3-hdfury-eu/detonator-emp.md`, "Pads

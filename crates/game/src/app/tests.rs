@@ -523,3 +523,37 @@ fn only_a_plain_launch_is_interactive() {
         assert!(!cli.is_interactive(), "{flags:?} is automation");
     }
 }
+
+#[test]
+fn zone_bands_take_sixteen_levels_and_conflict_with_the_ramp() {
+    let levels = (0..16)
+        .map(|i| format!("0.{i:02}"))
+        .collect::<Vec<_>>()
+        .join(",");
+    let cli = Cli::try_parse_from(["oag-game", "--race", "--zone-bands", &levels])
+        .expect("sixteen levels parse");
+    let bands = cli.zone_bands.expect("the flag was given");
+    assert!((bands[15] - 0.15).abs() < 1e-6);
+    assert_eq!(cli.zone_bands_raw, None);
+
+    let short = (0..15).map(|_| "0.5").collect::<Vec<_>>().join(",");
+    for bad in [short.as_str(), "NaN,0.5", "-0.5,0.5"] {
+        Cli::try_parse_from(["oag-game", "--race", "--zone-bands", bad])
+            .expect_err("a wrong count, NaN or a negative level is refused");
+    }
+    let error = Cli::try_parse_from([
+        "oag-game",
+        "--race",
+        "--zone-bands",
+        &levels,
+        "--zone-spectrum-test",
+    ])
+    .expect_err("the ramp and the original's bands are two feeds");
+    assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+    let error = Cli::try_parse_from(["oag-game", "--race", "--zone-bands-raw", &levels])
+        .expect_err("raw levels alone mean nothing");
+    assert_eq!(
+        error.kind(),
+        clap::error::ErrorKind::MissingRequiredArgument
+    );
+}

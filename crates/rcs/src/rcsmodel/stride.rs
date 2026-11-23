@@ -26,6 +26,10 @@ use super::{
 };
 use oag_bytes::ByteOrder;
 
+/// How many times a node's authored box the dequantised positions of the front-end trophies
+/// are: see `Mesh::fits_in_authored_units`.
+const AUTHORED_BOX_UNITS: f32 = 100.0;
+
 impl Mesh {
     /// Recovers the vertex stride from the bounding box the `.vex` node
     /// authors, or `None` when no single stride explains it.
@@ -415,10 +419,39 @@ impl Mesh {
     ) -> bool {
         let (min, max) = bounds;
         let slack = 1e-2;
-        self.drawn_extent(data, submesh, stride)
-            .is_some_and(|(lo, hi)| {
-                (0..3).all(|i| lo[i] >= min[i] - slack && hi[i] <= max[i] + slack)
-            })
+        let Some((lo, hi)) = self.drawn_extent(data, submesh, stride) else {
+            return false;
+        };
+        if (0..3).all(|i| lo[i] >= min[i] - slack && hi[i] <= max[i] + slack) {
+            return true;
+        }
+        self.fits_in_authored_units(lo, hi, bounds)
+    }
+
+    /// Whether an inline chunk's drawn extent is its node's authored box **in other units**:
+    /// every one of the six bounds [`AUTHORED_BOX_UNITS`] times the box's, to within a
+    /// quantisation step of the chunk's own scale.
+    ///
+    /// **Measured on the three front-end trophies** (`hd_gold`, `hd_silver`, `hd_bronze`,
+    /// `Data\FE\Trophies`, one inline chunk each, stride 18): the node's box is
+    /// `-0.375 -0.286 -0.040 .. 0.371 0.375 0.040` and the dequantised positions are
+    /// `-37.5 -28.59 -4.0 .. 37.125 37.445 4.0`, exactly 100 times it on all six bounds, with
+    /// nothing in either file storing the factor (no `0.01` or `100.0` word in the `.vex` or the
+    /// `.rcsmodel`; the node's transform is the identity and its `Anim Transform` is a spin about
+    /// Y). Positions that scatter out of attribute bytes do not land on one factor on six
+    /// bounds, so this keeps the guard [`Mesh::submesh_fits`] is for. Inline chunks only: the
+    /// 39,372 described chunks measured need no such unit (0 of 507 submeshes leave their
+    /// box, above).
+    fn fits_in_authored_units(&self, lo: [f32; 3], hi: [f32; 3], bounds: Bounds) -> bool {
+        if self.layout != super::Layout::Inline {
+            return false;
+        }
+        let (min, max) = bounds;
+        let step = self.scale.iter().fold(0.0f32, |a, &b| a.max(b.abs())) * 1.5;
+        (0..3).all(|i| {
+            (lo[i] - min[i] * AUTHORED_BOX_UNITS).abs() <= step
+                && (hi[i] - max[i] * AUTHORED_BOX_UNITS).abs() <= step
+        })
     }
 
     /// The box the submeshes that *fit* inside `bounds` at `stride` occupy, and

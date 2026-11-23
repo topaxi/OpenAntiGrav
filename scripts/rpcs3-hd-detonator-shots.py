@@ -41,6 +41,13 @@ import rpcs3_place as place  # noqa: E402
 from rpcs3_debugger import Debugger  # noqa: E402
 
 CLOCK = 0x7014
+#: `*(STAGE_POINTER)` is the Environment stage block (`0x00c7dfb0`); at `+0x32b8` sixteen raw band floats
+#: (`SoundSystem_GetBandLevel(b) * gain`) and at `+0x32f8` the sixteen held ones the floor's `zoneTexVis` reads
+#: (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`).
+STAGE_POINTER = 0x008B7940
+STAGE_BLOCK = 0x00C7DFB0
+RAW_BANDS = 0x32B8
+HELD_BANDS = 0x32F8
 
 
 def race_clock(gdb, ship):
@@ -59,12 +66,24 @@ def run_until(gdb, ship, target, label):
     sys.exit("%s: the lap clock stopped short of %.2f (a race still on START RACE?)" % (label, target))
 
 
+def read_bands(gdb):
+    """The stage block's raw and held music bands in one read, paused; refuses a block that moved."""
+    block = struct.unpack(">I", gdb.read(STAGE_POINTER, 4))[0]
+    if block != STAGE_BLOCK:
+        raise RuntimeError("stage block pointer %#x, expected %#x" % (block, STAGE_BLOCK))
+    blob = gdb.read(block + RAW_BANDS, HELD_BANDS - RAW_BANDS + 64)
+    floats = struct.unpack(">32f", blob[:128])
+    return {"block": block, "raw": list(floats[:16]), "held": list(floats[16:]),
+            "raw_offset": RAW_BANDS, "held_offset": HELD_BANDS}
+
+
 def observe(session, gdb, ship, body, out, stem, flush):
     """One paused frame: the screenshot with its world clock, the pushbuffer camera candidates, the pose."""
     time.sleep(flush)
     shot, grab_clock = drive.grab_with_clock(out / ("%s.png" % stem), trim=True)
     pose = place.read_pose(gdb, body)
     pose["race_clock_s"] = race_clock(gdb, ship)
+    pose["zone_bands"] = read_bands(gdb)
     try:
         pose["scene_width"] = __import__("hd_scene_width").live(gdb.read)
     except Exception as error:  # noqa: BLE001 - a bonus
@@ -83,8 +102,9 @@ def observe(session, gdb, ship, body, out, stem, flush):
     candidates = []
     for at, blob in blobs:
         candidates.extend(ps3_pose.packet_candidates(blob, base=at))
-    print("  %s: lap clock %.3f, world clock %s, %d camera candidate(s)" % (
-        stem, pose["race_clock_s"], None if grab_clock is None else grab_clock["world_clock_s"], len(candidates)), flush=True)
+    print("  %s: lap clock %.3f, world clock %s, %d camera candidate(s), held bands %s" % (
+        stem, pose["race_clock_s"], None if grab_clock is None else grab_clock["world_clock_s"], len(candidates),
+        " ".join("%.2f" % v for v in pose["zone_bands"]["held"])), flush=True)
     return shot, candidates, pose
 
 
@@ -193,8 +213,11 @@ def main():
         picks = []
         for stem, first, second in stops:
             picks.append(ps3_pose.pick_camera([first[1], second[1]])[0])
-        for (stem, first, _), (camera, reason, count) in zip(stops, picks):
+        for (stem, first, second), (camera, reason, count) in zip(stops, picks):
             shot, _, pose = first
+            # The next stop's bands, `--interval` of wall time later: how far the held levels move between two reads
+            # bounds what the presented frame's age (0 to 3 ticks) can change.
+            pose["zone_bands_next_stop"] = dict(second[2]["zone_bands"], race_clock_s=second[2]["race_clock_s"])
             if fire is not None and pose["race_clock_s"] >= fire["press_clock_after_s"]:
                 pose["fire"] = fire
             record = drive.describe(camera, reason, count, drive.track_name(), shot, args.team, None, pose)

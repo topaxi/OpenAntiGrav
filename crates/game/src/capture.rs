@@ -509,6 +509,7 @@ pub fn run(
                 music_discs: options.music_discs.clone(),
                 force_wreck: None,
                 force_hit: None,
+                force_detonator_score: None,
                 force_wall_slide: None,
                 force_leach_lock: None,
                 leach_path: None,
@@ -574,7 +575,7 @@ pub fn run(
                     },
                 }),
                 // No CLI flag on this path for either: see `app/headless.rs`.
-                zone_spectrum_test: false,
+                zone_feed: crate::race_capture::spectrum::ZoneFeed::Live,
                 touch_demo: None,
                 net_overlay: false,
                 previous_best,

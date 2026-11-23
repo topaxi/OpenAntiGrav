@@ -117,6 +117,11 @@ pub(super) fn advance_one_tick(
     {
         race.core.sim.force_destroy(slot);
     }
+    if let Some((at, score)) = options.force_detonator_score
+        && at == tick
+    {
+        race.core.sim.world.detonator.cannon.score = score;
+    }
     if let Some((at, slot)) = options.force_hit
         && at == tick
     {

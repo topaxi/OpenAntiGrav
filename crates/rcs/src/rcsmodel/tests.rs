@@ -392,6 +392,31 @@ fn a_mesh_whose_stride_is_not_determined_reports_nothing_rather_than_guessing() 
     assert_eq!(mesh.solve_stride(&data, CUBE_BOUNDS, 2.0 / 128.0), None);
 }
 
+/// An inline chunk whose positions are exactly 100 times its node's authored box fits it (the
+/// front-end trophies); a described chunk, and a box that is 100 times too small on one bound
+/// only, do not.
+#[test]
+fn an_inline_chunk_fits_a_box_authored_in_other_units() {
+    let data = model(18, 64);
+    let parsed = Model::parse(&data).unwrap();
+    let mut mesh = parsed.meshes[0].clone();
+    let sub = mesh.submeshes[0];
+    let (min, max) = CUBE_BOUNDS;
+    let small = (min.map(|v| v * 0.01), max.map(|v| v * 0.01));
+    assert!(!mesh.submesh_fits(&data, &sub, 18, small), "described: no");
+    mesh.layout = Layout::Inline;
+    assert!(
+        mesh.submesh_fits(&data, &sub, 18, small),
+        "inline, 100x: yes"
+    );
+    let mut lopsided = small;
+    lopsided.1[2] *= 1.5;
+    assert!(
+        !mesh.submesh_fits(&data, &sub, 18, lopsided),
+        "one bound off the factor: no"
+    );
+}
+
 /// A declared vertex count that overruns its own buffer does not condemn the
 /// submesh, because no triangle names the vertices it overruns onto.
 ///

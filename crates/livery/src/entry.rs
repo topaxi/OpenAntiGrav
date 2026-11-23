@@ -234,3 +234,71 @@ pub fn ps2_texture_set(
     let blob = archives.read_preceding(entry_name).ok()?;
     mesh::Ps2TextureSet::parse(&blob).ok()
 }
+
+/// A PS3 `.vex` as a model: its scene, the `.rcsmodel` beside it, and every material and `.gtf`
+/// read through `archives`, the way a race reads them. The `.gtf` requests come back in
+/// texture-slot order, which is how a draw names its texture; `report` gets what the build and
+/// the texture reads say.
+///
+/// `build_scene` and not `build`: the viewer and the race both take the scene path, and a flyer
+/// is all first-pass (every mesh node addresses a chunk), so the two give the same model; the
+/// scene path is the one the rest of this project's HD ground truth is pinned against.
+///
+/// # Errors
+///
+/// The `.vex` names no `.rcsmodel`, the sibling is not in the archives, or the scene will not
+/// decode.
+pub fn ps3_scene_model(
+    archives: &mut oag_assets::Archives,
+    entry: &str,
+    blob: &[u8],
+    livery: Option<crate::LiveryFolder<'_>>,
+    report: &mut Vec<String>,
+) -> anyhow::Result<(mesh::Model, Vec<String>)> {
+    use anyhow::Context as _;
+    let sibling =
+        mesh::rcs::sibling_name(entry).with_context(|| format!("{entry} names no .rcsmodel"))?;
+    let geometry = archives
+        .read_name(&sibling)
+        .with_context(|| format!("{entry}: reading its {sibling}"))?;
+    let mut textures = Vec::new();
+    let mut reads = crate::zone_livery::Reads::new(livery);
+    // 2048's and Omega's container is a different file under the same extension and needs no
+    // `.vex` at all (`oag_mesh::mesh::rcs::psp2`).
+    if mesh::rcs::psp2::is_psp2(&geometry) {
+        let (mut model, built) = mesh::rcs::psp2::build(entry, &geometry, None, &mut |path| {
+            if oag_texture::decode::Container::of_name(path)
+                == Some(oag_texture::decode::Container::Gtf)
+            {
+                textures.push(path.to_string());
+            }
+            reads.read(archives, path)
+        })
+        .with_context(|| format!("decoding the model {entry}"))?;
+        report.push(format!("{entry}: {}", built.describe()));
+        report.extend(reads.describe(entry));
+        model.keep_nearest();
+        return Ok((model, textures));
+    }
+    let (mut model, built) = mesh::rcs::build_scene(
+        entry,
+        blob,
+        &geometry,
+        &mut |path| {
+            if oag_texture::decode::Container::of_name(path)
+                == Some(oag_texture::decode::Container::Gtf)
+            {
+                textures.push(path.to_string());
+            }
+            reads.read(archives, path)
+        },
+        // A front-end or HUD model draws into a gamma target, whose shaders decode with the
+        // plain power.
+        Default::default(),
+    )
+    .with_context(|| format!("decoding the model {entry}"))?;
+    report.push(format!("{entry}: {}", built.describe()));
+    report.extend(reads.describe(entry));
+    model.keep_nearest();
+    Ok((model, textures))
+}

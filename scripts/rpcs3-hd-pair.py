@@ -127,6 +127,26 @@ def solve_yaw(oag_game, image, track, pos, theirs_forward, scratch):
     return best
 
 
+def zone_band_flags(pair, ship):
+    """The original's music bands at the pause (`rpcs3-hd-detonator-shots.py`) as ours' `--zone-bands` flags.
+
+    The floor's visualiser reads the held levels (`+0x32f8` of the Environment stage block), the mines' envelope
+    the raw ones (`+0x32b8`). A shot without them (an older record) leaves ours silent and says so."""
+    bands = ship.get("zone_bands")
+    pair.rec["original"]["zone_bands"] = bands
+    if not bands:
+        pair.caveat("no music bands were read at the pause: ours draws the Detonator floor and mines on a silent spectrum")
+        return []
+    if ship.get("zone_bands_next_stop"):
+        bands["next_stop"] = ship["zone_bands_next_stop"]
+    pair.caveat("the floor, dashes, billboards and mine rims are music-driven: ours is fed the original's held bands (`+0x32f8`) and raw "
+                "bands (`+0x32b8`) read in the same pause as the frame, held constant over the run; the picture was presented 0 to 3 "
+                "ticks before the RAM read and the held levels fall 0.1 a tick, so each band is good to about that; a mine's envelope "
+                "in ours has no history and picks its own band")
+    csv = lambda values: ",".join("%.6f" % v for v in values)  # noqa: E731
+    return ["--zone-bands", csv(bands["held"]), "--zone-bands-raw", csv(bands["raw"])]
+
+
 def detonator_inputs(pair, out, ship, clock):
     """Ours' `--input-script` for a Detonator frame: idle through the countdown and up to the original's press, SQUARE (our cannon
     button) over the lap-clock window the original's button was held, idle after. Records the window and what is not carried."""
@@ -382,6 +402,7 @@ def main():
     detonator_flags = []
     if args.detonator:
         detonator_flags = detonator_inputs(pair, out, ship, clock)
+        detonator_flags += zone_band_flags(pair, ship)
     base = [args.oag_game, args.image, "--race", "--track", track, "--team", args.team.upper(),
             "--pose=" + pose, "--camera-pose=" + numbers, "--camera-fov", "%.4f" % camera["fov_y_deg"]] + flags + field_flags + detonator_flags
     if args.field:

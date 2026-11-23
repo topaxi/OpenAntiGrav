@@ -1497,8 +1497,11 @@ RACE page's mode row drops it elsewhere, and `--mode detonator` on Pulse or Pure
 - **The grade** is Detonator's own table (`detonatormode.effectsettings`, the DLC3 revision on
   the four Zone circuits) and texture sets, through the same `ZoneGrade` and HD transition
   sphere Zone uses, stepping on the lap. 2048 reads the circuit's own table and falls back to
-  HD/Fury's (shipped in the v1.04 patch) on the ported circuits; Omega's grade is not drawn,
-  as its Zone grade is not.
+  HD/Fury's (shipped in the v1.04 patch) on the ported circuits, with the fallback's own
+  `detonatorMode<n>`/`detonatorModeTrack<n>.gxt` sets; Omega takes HD/Fury's Detonator pair and
+  `detonatorModeTrack<n>.gnf` on its HD-lineage circuits (the loader's fork is the circuit path's,
+  not the mode's), and leaves its `Environments2048` circuits their own colours
+  ([detonator-look.md](../ghidra/functions/ps3-hdfury-eu/detonator-look.md), "Cross-title").
 - **HD's Zone-modes mask covers it** (`0x206040`, modes 6, 13, 14, 21): a Detonator craft on
   HD flies the Zone hover rig with no brakes and the Zone grid hover (`Mode::on_zone_mask`). The
   same mask skips split recording; this build still shows lap times.

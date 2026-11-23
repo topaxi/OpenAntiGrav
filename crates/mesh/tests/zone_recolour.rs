@@ -1090,7 +1090,12 @@ fn draw_frame_scaled(
     .expect("building the mesh pipeline");
     queue.write_buffer(&built.fog_buffer, 0, bytemuck::bytes_of(&scene));
     if let Some((bands, tint)) = zone_vis {
-        mesh_render::zone::write_vis(queue, &built.zone_vis_texture, bands, Some(tint));
+        mesh_render::zone::write_vis(
+            queue,
+            &built.zone_vis_texture,
+            bands,
+            Some(mesh_render::zone::EqTints::uniform(tint)),
+        );
     }
 
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {

@@ -106,9 +106,7 @@ What is **not** read and stays a measurement for the wiring lane:
 - **The mine and bomb colours.** The four `Detonator Mine/Bomb` colour keys exist per stage (table above) and are
   parsed; where the mine and bomb materials bind them is the `det-colour-re` lane's function set and is not
   read here.
-- **Track violet.** Whether the floor's violet dashes are the equaliser bars (billboards on the floor) or the
-  `zoneTexVis` visualiser glow tinted by `EQ colour tint` ([zone-visualiser.md](zone-visualiser.md)) is one frame
-  away from settled: both share the tint and the byte gate; which one draws these dashes was not separated.
+- **Track violet.** Separated, read and wired 2026-11-23 (`det-track-look`): ["The floor's violet"](#the-floors-violet-the-visualiser-read-and-fixed-2026-11-23-det-track-look). The dashes are `zoneTexVis` bar segments, the floor its smooth slot 164; neither is a billboard.
 
 ## Wired
 
@@ -138,8 +136,59 @@ Result on the three Detonator pairs (Talon's Junction, Feisar; the upper band is
 The billboards draw the stage target in Detonator (the pad pair with `--zone-spectrum-test` shows violet bars where the
 original's are); the pairs themselves show none because their re-render is silent, a zero spectrum being a black grid on black.
 The slot 8 gate (`Mode::Zone`, the card's Zone-grade exemption) was also tried on the mask: a Detonator start frame came out
-pixel-identical (whether the exemption fires there was not separated), so it stays. What the frame still lacks: the floor's violet dashes and the lit scenery at upper right (the
+pixel-identical (whether the exemption fires there was not separated), so it stays. What the frame still lacks: the lit scenery at upper right (the
 original draws it dark), the lit blue strip and cyan wing edges (the pale hull itself is fixed, below) and the mine and bomb colours (`det-colour-re`).
+
+## The floor's violet: the visualiser, read and fixed (2026-11-23, `det-track-look`)
+
+**Which draws what (settled, 90).** `/data/tex/detonatormodetrack1.gtf` (DATA00, 256x256 DXT5, stage 1's track texture; the
+index is the stage) carries the `zoneTexVis` lookup index in its alpha ([zone-shader.md](zone-shader.md), "`zoneTexVis` is a
+256-entry lookup"). Mip 0's decoded alpha: **57,136 of 65,536 texels are `164`** (smooth slot `161 + 3`, band 3), 6,144 are `255`
+(unlit), and ten values `1, 19, 36, 54, 72, 89, 107, 125, 142, 160` (72 texels each, `60` x512) are bar segments of bands 0 to 15:
+2,256 texels, 3.4 %. Stage 0 and stage 2 (`detonatormodetrack0/2.gtf`) have the same shape (`164` on 53,760 and 54,244 texels). So the
+**floor is band 3's smooth slot and the dashes are bar segments**: no billboard is involved, which closes the "equaliser billboards or the
+visualiser glow" item above. Reproduce:
+
+```sh
+python3 scripts/psarc.py cat data/images/hdfury-ps3-eu-dec.iso:PS3_GAME/USRDIR/DATA00.PSARC /data/tex/detonatormodetrack1.gtf > t1.gtf
+# GTF: data offset = big-endian u32 at 0x10 (0x80); mip 0 is 65,536 bytes of DXT5 blocks, alpha = 8 bytes per 4x4 block
+```
+
+**The two colours (zone-equaliser.md, "The colours", read live, 90).** The lit bar segments carry the cross-faded `EQ colour tint`
+(`171 9 255` at stage 1); slot `161 + b` carries `EQ analogue colour tint` (`14 1 55`) times band `b`'s level. Ours wrote the bar tint
+into both halves (`mesh_render::zone::vis_pixels` took one tint), so the floor, which is the smooth slot, came out red-violet
+(blue over red 1.2 at every spectrum level tried, against the original's 3.0 to 3.5 and the analogue tint's 3.9). Fix: `EqTints { bars,
+smooth }`, `ZoneGrade::eq_tints` (cross-faded palette, both words). The floor is spectrum-driven: with the spectrum silent
+(`--no-audio`, every published pair) nothing of it draws in ours, before or after.
+
+**Boxes** (mean RGB, 1920x1080; box A `x 250..800, y 780..850`, box B `x 1090..1230, y 780..1000`, on `detonator-talons-mines-ahead`,
+floor between the red strips, clear of the hull, HUD and mines; ours re-rendered through the page's own rerender path on a scratch
+copy, `--zone-spectrum-test`, the existing ramp `band / 15`):
+
+| | Box A | Box B |
+| --- | --- | --- |
+| original (`theirs.png`) | `(5.9, 0.0, 18.0)` | `(9.0, 0.0, 31.5)` |
+| ours, silent (before and after) | `(0.0, 0.0, 0.0)` | `(0.6, 0.0, 0.0)` |
+| ours, ramp, before | `(33.7, 5.0, 41.3)` | `(65.7, 10.8, 80.1)` |
+| ours, ramp, **after** | **`(9.5, 0.0, 21.7)`** | **`(19.8, 0.0, 42.9)`** |
+
+The ramp puts band 3 at `0.2`, a texel blue of `55 x 0.2 = 11`; box A renders `21.7` and box B `42.9` in ours, so ours' texel-to-pixel gain is about 2 in A and 3.9 in B (a flat `0.6` after the fix: texel `33`, A `37.9`, B `70.2`: 1.1 and 2.1), not constant across the floor and not shared with the original. **The original's band 3 level is therefore not determined** by these frames (one frame, a position-dependent gain, the other bands unread); the held bands in the capture's RAM are the measurement. The pad and cannon-volley pairs under the ramp move
+the same way (their box A `(42.9, 7.1, 52.5)` to `(12.5, 0.0, 27.3)` and `(41.8, 6.9, 51.1)` to `(15.7, 1.2, 29.2)`). Mean grey of the
+three Detonator pairs under the ramp: `mines-ahead` 23.89 to 19.61, `pad` 17.41 to 11.79, `cannon-volley` 22.42 to 19.13 (silent: 20.34,
+12.18, 20.33, unchanged by the fix). The 18 other HD race and loading pairs re-render **pixel-identical** to the tree before (silent
+spectrum), and `zone-vineta-k-z5` is also identical under the ramp (its stage's track texture does not index the smooth slots).
+
+**What is still open.** (1) ~~The spectrum is the original's, not ours~~ (closed 2026-11-23, `det-pair-bands`: the pairs record the held bands, `+0x32f8`, and `--zone-bands` feeds them to ours, `docs/tools/compare-page.md`, "The original's music bands in a Detonator pair"). **New:** fed the original's own band 3 (0.51 to 0.93) ours' floor blue is 2.2 to 3.1 times the original's, and matching it would take a presented band 3 near 0.07; whether the original's floor tracks band 3 is undetermined (the frame is 0 to 3 ticks older than the RAM read, and band 3 was rising on three of five frames); next, grabs where raw is below held or a lag-scanned frame. (2) The Track Fog (`1.8 0.141 0.007`, the orange-red
+authored on the track set) was not separated from the red residual in box B (ours red `19.8` against `9.0`). (3) Ours holds bands with
+`Hold` (frame-rate decay `0.1`), the original's cadence is read ([zone-visualiser.md](zone-visualiser.md)).
+
+**Cross-title.** 2048: checked, differs - its effect-settings tables author no `EQ` tints, so the lookup stays blank. Omega: not
+checkable here - its band source is another library's (`zone-visualiser.md`, "Omega") and its `Environment_UpdateStageBlend` is unread; HD's
+tables are what its Detonator grade carries, so the two-tint split applies the day its spectrum is read.
+
+Tests: `oag-mesh` `mesh_render::zone::tests::the_bars_take_the_eq_tint_and_the_smooth_slots_the_analogue_tint` (red with one tint for both
+halves), `oag-raceplay` `zone_sky_ground_truth::a_detonator_race_feeds_the_visualiser_its_bar_and_its_analogue_tint` (stage 1's `171 9 255` and
+`14 1 55` off the disc).
 
 ## The hull's paint: the second texture was added as a glow (read and fixed 2026-11-23, `det-hull-look`)
 
@@ -207,11 +256,38 @@ removed: both families carry `ADD_SECOND`; it also pins the panel's overlay entr
 
 ## Cross-title
 
-- **Omega: checked, differs** (and the Detonator billboard share stays off: `detonator_shares_one_texture: false`). `oag_omega` carries `zone_sky: None` and Omega's Zone sky source is unread in its
-  `eboot.bin` ([zone-sky.md](zone-sky.md), "2048 and Omega"); its Detonator grade table is HD's (the four paths are
-  in its `eboot.bin` and `data00.psarc`, [zone-palette-select.md](zone-palette-select.md)). Nothing to wire until
-  the sky draw is read.
-- **2048: not checkable here.** Its Detonator reaches `<circuit>\ZoneMode2048.effectSettings` or HD's Detonator
+- **Omega: the grade is wired, the sky and billboards differ** (`det-parity`, 2026-11-23; the grade was
+  recorded "differs" before, because Omega's Zone grade was unwired then). Omega's environment loader `FUN_0162a390`
+  forks on the circuit path, not on the mode: HD-lineage `Data\Environments\<n>_<name>` take the HD fallback, "the
+  Detonator pair when the mode is `0xe`" through `FUN_01623120`
+  ([zone-speed-class-ladder.md](../ps4-omega-eu/zone-speed-class-ladder.md), "Which table a race loads", 70).
+  Both Detonator tables and the fifteen `Data/tex/detonatorModeTrack<n>.gnf` (65,792 bytes each, no
+  `detonatorMode<n>` general set) ship in `data00.psarc`. Wired as `oag_omega::race::DETONATOR`'s
+  `fallback_palette` and `fallback_stage_textures` (general slot: the flat white, inherited from HD), held back
+  on `Data\Environments2048` through `ZoneFallback::own_model_under` like Zone's: before, the default
+  `tech_de_ra` race drew the circuit's blue-grey day colours; now black scenery, red edge strips and a violet
+  floor under `--zone-spectrum-test`, as HD's pair reads
+  (`detonator_ground_truth::an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade`, and
+  `...on_a_2048_circuit_keeps_its_own_colours` for the held-back side). Unchanged and still differing:
+  `oag_omega` carries `zone_sky: None` (Omega's Zone sky source is unread in its `eboot.bin`,
+  [zone-sky.md](zone-sky.md), "2048 and Omega") and the Detonator billboard share stays off
+  (`detonator_shares_one_texture: false`). The primary branch (an `Environments2048` circuit's own
+  `ZoneMode2048` table in Detonator) is unread there: **checked, differs, not wired**.
+- **2048: the per-stage textures are wired on the fallback** (`det-parity`, 2026-11-23). `Environment_LoadHDFuryContent`
+  loads `data/Tex/DetonatorModeTrack0..14.gxt` in the branch HD's ported circuits take
+  ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md), "`Environment_LoadHDFuryContent`", 75),
+  so `oag_2048::race::DETONATOR.fallback_stage_textures` names `data/Tex/detonatorMode` (the base package's
+  general set, 349,568 bytes) and `data/Tex/detonatorModeTrack` (the base ships it too; the v1.04 patch's is 262,208 bytes) as
+  `.gxt`, 15 stages, for those circuits alone: a circuit with an environment tree of its own keeps its own
+  materials. Test: `a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table` (red with the field `None`: no
+  `15/15 per-stage Zone` line). Before, the fallback table graded nothing visible (no stage texture, so no
+  recolour); on Vineta K now black scenery and red edge strips, the same Detonator look as HD's pair. **Open:** the
+  road draws black on Vineta K in Detonator under `--zone-spectrum-test`, where the same flags in Zone mode draw
+  its blue spectrum pattern on the road (shot, same circuit, tick 700): the cause is not separated. The thread notes a black
+  floor on `zone_1`..`4` in every mode. A candidate is the Track/Scene bit ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md),
+  "Open: the Track/Scene bit": every chunk draws from the Scene group, and Detonator's stage 1 authors its Scene colours
+  `0`), but Zone's pattern on the same chunks shows that the group alone does not explain it; the other is the EQ tint lookup on
+  2048's path. No 2048 Detonator frame of the original exists to compare against. The sky: not checkable here; its Detonator reaches `<circuit>\ZoneMode2048.effectSettings` or HD's Detonator
   pair through `Environment_Load`'s Zone-family gate ([detonator-mode.md](detonator-mode.md)); whether its sky draw
   is gated by the same byte is unread (its Zone sky draw is unread, [zone-sky.md](zone-sky.md)), and there is no
   Detonator frame pair of 2048 to read it from.
@@ -227,7 +303,7 @@ removed: both families carry `ADD_SECOND`; it also pins the panel's overlay entr
 | Bloom has a Detonator arm that keeps the circuit's frame contribution and adaption boost | `0x003ad940`-`0x003aebb0`, static only | 70 |
 | The pale hull was not the mode's sun; it was the second texture added as a glow | five switches on one pair, "The hull's paint" | 90 |
 | The panels' iridescent overlay is `2 * Colour * AO * stripe(N.V)`, `TC1 = eye - position` | `0x46d0` `@0x22`..`@0x4a`, vertex block `0x3a20` `@9`, box `(67.7, 50.1, 50.6)` against `(60.5, 44.2, 44.5)` (without it `(54.1, 30.9, 32.0)`) | 85 |
-| The floor's violet dashes are the EQ tint | one pixel sample of one frame | 60 |
+| The floor is band 3's smooth slot (analogue tint), the dashes are bar segments (EQ tint) | alpha histogram of `detonatormodetrack1.gtf`, `zone-equaliser.md` "The colours", boxes above | 90 |
 
 ## Reproduce
 

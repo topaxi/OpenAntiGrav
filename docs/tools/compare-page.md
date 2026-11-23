@@ -2258,3 +2258,47 @@ manifests are developer material, not a publishing set.
 
 What differs, by region and size: the Detonator thread's "Render accuracy" section.
 
+### The original's music bands in a Detonator pair (2026-11-23, `det-pair-bands`)
+
+The Detonator floor, its dashes, the billboards and the mine rims are music-driven, and the pairs' `--no-audio` ours is silent, so
+the floor drew black. `rpcs3-hd-detonator-shots.py` now reads the original's bands in the same pause as the frame (`observe`, one
+`gdb.read`): `*(0x008b7940)` must be the stage block `0x00c7dfb0` (refused otherwise), then sixteen raw floats at `+0x32b8` and sixteen
+held floats at `+0x32f8` (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`). The record carries them as `ship.zone_bands`, with
+the next stop's pair (`--interval` later) as `zone_bands_next_stop`. They are live under RPCS3's Null audio renderer: the game mixes
+them itself, so a muted emulator still gives bands (seen on every one of 5 grabs on 4 boots).
+`rpcs3-hd-pair.py --detonator` writes them to `original.zone_bands` and passes them to ours as
+
+```sh
+oag-game ... --zone-bands H0,...,H15 [--zone-bands-raw R0,...,R15]
+```
+
+`--zone-bands` is the floor's held levels (no hold applied on top: ours' `Hold` is the live path's, a capture feeds the level as it
+is), `--zone-bands-raw` the levels the mine envelope reads (default: the held ones); it conflicts with `--zone-spectrum-test` and
+`--zone-bands-raw` requires it (`oag_game::race_capture::spectrum::ZoneFeed`). The flags are in `ours.flags`, so
+`compare-rerender-ours.py` replays them. A capture is one frame, so a mine's envelope in ours has no history (its jump rule needs a rise of
+0.3) and picks its own band: mine rims are not like for like.
+
+**The grab is new, not the old one re-fed.** The old pairs recorded no bands and the music phase depends on the wall-clock START RACE tap,
+so all three were re-grabbed (two boots: `--shot 2.0 --shot 2.66`; `--fire-clock 1.84 --fire-hold 0.25 --shot 2.21`; `cannon-volley`'s frame came 0.19 s after the release with nothing in flight, so its title was rewritten), and "before" is
+ours silent against the same new `theirs.png` (`previous_ours` in each `pair.json`). RMSE (0-1), box means RGB, A `x250..800 y780..850`,
+B `x1090..1230 y780..1000`; held band 3 is the floor's smooth slot 164:
+
+| Pair (boot) | Lap clock | Held band 3 | RMSE silent to fed | A theirs / silent / fed | B theirs / silent / fed |
+| --- | ---: | ---: | --- | --- | --- |
+| `pad` (A) | 2.03 | 0.58 | 0.154 to 0.158 | `(6.7, 0, 19.1)` / `(0.1, 0, 0)` / `(21.5, 4.3, 45.5)` | `(9.5, 0, 29.1)` / `(0.7, 0, 0)` / `(36.3, 8.0, 74.7)` |
+| `mines-ahead` (A) | 2.66 | 0.51 | 0.206 to 0.200 | `(5.1, 0, 14.0)` / `(0, 0, 0)` / `(15.1, 2.9, 33.1)` | `(7.4, 0, 24.9)` / `(0.6, 0, 0)` / `(31.0, 6.6, 65.3)` |
+| `cannon-volley` (B) | 2.25 | 0.92 | 0.201 to 0.198 | `(6.2, 0, 18.3)` / `(0.1, 0, 0)` / `(25.8, 3.7, 51.7)` | `(8.5, 0, 28.2)` / `(0.7, 0, 0)` / `(44.8, 7.1, 88.2)` |
+| `pad` repeat (C, not published; heading 1.09 deg, over the 1.0 check) | 2.02 | 0.68 | 0.150 to 0.169 | `(4.5, 0, 9.4)` / `(0.2, 0, 0)` / `(22.8, 4.2, 48.3)` | `(5.9, 0, 15.1)` / `(0.8, 0, 0)` / `(38.6, 7.6, 79.6)` |
+| `mines-ahead` repeat (C, not published) | 2.71 | 0.93 | 0.246 to 0.238 | `(7.7, 0.1, 19.3)` / `(0, 0, 0)` / `(21.1, 2.8, 43.1)` | `(8.9, 0, 30.5)` / `(0.5, 0, 0)` / `(42.5, 6.3, 85.3)` |
+
+The floor is lit now and the hue is right (violet, no red; the billboard panels at the top right are violet in both, and ours' dashes
+show faintly where the original's are bright violet: seen on the side-by-side, not measured). **Ours is 2.2 to 3.1 times too bright on blue
+at the original's own band 3 (5 times on the pad repeat), and RMSE moves by at most 0.02** (0.004 worse on `pad`, 0.006 and 0.003 better on
+`mines-ahead` and `cannon-volley`). The brightness is not the feed: ours' box blue against band 3 alone, pad pair, rest zero, is 0.29: 33.8,
+0.58: 45.5, 1.0: 58.0 (about level^0.43, gamma-shaped; the texel is `55 x level`), so matching the original's 19 would take a presented band 3
+near 0.07 in every frame, and the original's was read at 0.51 to 0.93. **Whether the original's box tracks band 3 is undetermined:** the
+presented frame is 0 to 3 ticks older than the RAM read, and on three of the five frames the raw level equals the held one (band 3 was
+rising at the read), so the picture may predate the rise; only `pad` (A) and `mines-ahead` (A) were falling, and those two order the way
+band 3 predicts (box A blue 19.1 and 14.0 at 0.58 and 0.51). Next: grabs where raw is below held, or a lag-scanned frame
+(`hd-pair-lag-scan.py`). Ours was not tuned.
+

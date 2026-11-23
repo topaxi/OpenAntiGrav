@@ -113,6 +113,8 @@ tables, `ZoneModeHDFury.effectSettings` (21,160 B) and `ZoneModeHDFuryDLC3.effec
 (`python3 scripts/psarc.py list` on that archive). So on a patched 2048 the fallback finds all
 four. A 2048 Detonator race reads Detonator's pair (`oag_2048::race::DETONATOR`); a 2048 Zone
 race on a ported circuit reads Zone's table too (wired 2026-11-16, see "Wired on HD's ported circuits" below).
+The Detonator pair's per-stage textures (`detonatorMode<n>`, `detonatorModeTrack<n>`, `.gxt`) are wired on the same fallback
+(2026-11-23, `oag_2048::race::DETONATOR.fallback_stage_textures`; [detonator-look.md](../ps3-hdfury-eu/detonator-look.md), "Cross-title").
 
 ## `Environment_LoadHDFuryContent` (`0x8102493c`), confidence 75 - a separate subsystem, not a shared one
 

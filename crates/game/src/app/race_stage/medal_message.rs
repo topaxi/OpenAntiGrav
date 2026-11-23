@@ -15,7 +15,8 @@ impl RaceStage {
         let Some(cell) = self.campaign_cell.as_ref() else {
             return;
         };
-        if !matches!(cell.mode, Mode::Zone | Mode::SpeedLap) {
+        let detonator = cell.mode == Mode::Other(crate::campaign::DETONATOR_CELL_MODE.to_string());
+        if !detonator && !matches!(cell.mode, Mode::Zone | Mode::SpeedLap) {
             return;
         }
         let difficulty = self
@@ -54,6 +55,34 @@ mod tests {
         assert!(
             capture.contains("crate::medal_watch::tick("),
             "the headless capture's tick must run the shared medal watch"
+        );
+    }
+
+    /// Detonator's medal models: a cell's targets reach the race through the shared watch, from
+    /// both tick loops, and both draw sites (the window and the headless capture) draw the model.
+    /// Source-level for the same reason as above; the disc-backed
+    /// `detonator_hud_ground_truth` holds the readout and the decode.
+    #[test]
+    fn the_detonator_medal_is_still_fed_and_drawn_in_both_places() {
+        let watch = include_str!("../../medal_watch.rs");
+        assert!(
+            watch.contains("race.set_medal_targets("),
+            "medal_watch::tick must hand a Detonator cell's targets to the race"
+        );
+        let watcher = include_str!("medal_message.rs");
+        assert!(
+            watcher.contains("DETONATOR_CELL_MODE"),
+            "RaceStage::tick_messages must run the watch for a Detonator cell"
+        );
+        let stage = include_str!("../race_stage.rs");
+        assert!(
+            stage.contains("medals.draw("),
+            "RaceStage::draw_window_hud must draw the medal"
+        );
+        let capture = include_str!("../../race_capture/overlays.rs");
+        assert!(
+            capture.contains("race.detonator_medal()"),
+            "the headless capture must draw the medal"
         );
     }
 

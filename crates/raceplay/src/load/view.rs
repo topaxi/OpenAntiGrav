@@ -701,6 +701,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
 
     // The countdown's own `<Mode3D><Model>` mesh - see `load::countdown`.
     let countdown_model = countdown::model(&hud, &mut archives, &mut report);
+    let medal_models = countdown::medal_models(&hud, &mut archives, &mut report);
     stages::reach(stages::Stage::CraftsBuilt)?;
     let circuit_fx = vex_geometry
         && title
@@ -879,6 +880,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         leach_ball_model,
         shield_cockpit: roster::own_cockpit(shield_cockpit, options, craft_title),
         countdown_model,
+        medal_models,
         visibility,
         flare,
         leach_beam_texture,

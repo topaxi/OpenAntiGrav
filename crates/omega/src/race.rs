@@ -137,13 +137,26 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     zone_stage_textures: None,
     zone_fallback: Some(ZONE_FALLBACK),
     zone_sky: None,
-    // The same stage law as HD's and 2048's (`FUN_012a0fc0`); Omega draws no Zone grade
-    // yet, so Detonator's (`Data/zoneenvironmenthdfury/DetonatorModeHDFury*.effectSettings`,
-    // shipped) is not drawn either. The camera scale is HD's, **inherited from HD**: Omega's
-    // craft constructor was not read for it.
+    // The same stage law as HD's and 2048's (`FUN_012a0fc0`), graded the way Zone is: the loader
+    // fork is the circuit path's, not the mode's (`FUN_0162a390`), so HD-lineage circuits take
+    // HD/Fury's Detonator pair and its `detonatorModeTrack<n>.gnf`, and the `Environments2048`
+    // ones, whose primary-branch table is unwired, stay held back
+    // (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "Cross-title"). The camera scale
+    // is HD's, **inherited from HD**: Omega's craft constructor was not read for it.
     detonator: Some(&oag_title::Detonator {
         palette: None,
-        fallback_palette: None,
+        fallback_palette: Some(oag_title::ZonePalette::TitleWide {
+            entry: "Data/zoneenvironmenthdfury/DetonatorModeHDFury.effectSettings",
+            zone_circuits: HD_ZONE_CIRCUITS,
+            zone_circuit_entry: "Data/zoneenvironmenthdfury/DetonatorModeHDFuryDLC3.effectSettings",
+        }),
+        // Omega ships no `detonatorMode<n>` set either: the general slot binds the flat white.
+        fallback_stage_textures: Some(&oag_title::ZoneStageTextures {
+            general: "",
+            track: "Data/tex/detonatorModeTrack",
+            extension: ".gnf",
+            stages: 15,
+        }),
         stage_textures: None,
         camera_scale: 0.7,
         layouts: Some(oag_title::DetonatorLayouts {
@@ -182,6 +195,10 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         // The executable names no `EmpReady` string, so its binder probably never binds the
         // lamp its layout authors (`detonator-hud.md`, "Omega: checked, applies", 60).
         binds_emp_ready: oag_title::pre_race::Sourced::measured(false),
+        // Its `Detonator_HUD.xml` authors the same three medals at the same values as HD's, and
+        // its Detonator HUD binder is HD's lineage; the executable's `DetonatorGoldMedal`
+        // strings are one site where HD's are two, so the binder itself is unread (`detonator-hud.md`).
+        shows_medals: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
     }),
     team_variants: Some(&TEAM_VARIANTS),
     guest_roster: Some(&ERA_2048_ROSTER),
@@ -685,6 +702,14 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
     )),
 };
 
+/// The four circuits whose HD/Fury table is its `DLC3` revision.
+const HD_ZONE_CIRCUITS: &[&str] = &[
+    r"Data\environments\zone_1\track.vex",
+    r"Data\environments\zone_2\track.vex",
+    r"Data\environments\zone_3\track.vex",
+    r"Data\environments\zone_4\track.vex",
+];
+
 /// What a Zone race takes on an HD-lineage circuit, which ships no table of its own: HD/Fury's
 /// title-wide one (`Data/zoneenvironmenthdfury`, the `DLC3` revision on the four `zone_N`) and its
 /// two fifteen-entry texture sets as `.gnf`, the same shape as 2048's
@@ -699,12 +724,7 @@ pub const CRAFT_LAWS: oag_title::craft_laws::CraftLaws = oag_title::craft_laws::
 pub const ZONE_FALLBACK: &oag_title::ZoneFallback = &oag_title::ZoneFallback {
     palette: oag_title::ZonePalette::TitleWide {
         entry: "Data/zoneenvironmenthdfury/ZoneModeHDFury.effectSettings",
-        zone_circuits: &[
-            r"Data\environments\zone_1\track.vex",
-            r"Data\environments\zone_2\track.vex",
-            r"Data\environments\zone_3\track.vex",
-            r"Data\environments\zone_4\track.vex",
-        ],
+        zone_circuits: HD_ZONE_CIRCUITS,
         zone_circuit_entry: "Data/zoneenvironmenthdfury/ZoneModeHDFuryDLC3.effectSettings",
     },
     stage_textures: &oag_title::ZoneStageTextures {
