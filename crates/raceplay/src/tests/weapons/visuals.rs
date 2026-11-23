@@ -585,7 +585,6 @@ fn the_loader_draws_the_pulse_psp_heads_arcs_under_the_alpha_over_layer() {
             pulse_psp,
             pulse_psp,
             false,
-            oag_fx::psys::ColourLaw::Forward,
             Kept::NONE,
         )
         .expect("the head loads");

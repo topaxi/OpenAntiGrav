@@ -52,7 +52,6 @@ fn absorb_burst(title: &Title, load: Load) -> Option<oag_fx::psys::Effect> {
             false,
             false,
             false,
-            oag_fx::psys::ColourLaw::Forward,
             kept,
         )
     };

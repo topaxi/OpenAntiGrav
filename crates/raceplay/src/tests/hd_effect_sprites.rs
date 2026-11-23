@@ -114,7 +114,6 @@ fn track_blast(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
-        oag_fx::psys::ColourLaw::Forward,
         Kept::NONE,
     )
     .expect("the effect loads");
@@ -146,7 +145,6 @@ fn quake(extent_law: bool) -> Option<oag_fx::psys::Effect> {
         false,
         extent_law,
         true,
-        oag_fx::psys::ColourLaw::Forward,
         Kept::NONE,
     )
     .expect("the effect loads");
@@ -181,7 +179,6 @@ fn missile_head(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
-        oag_fx::psys::ColourLaw::Forward,
         Kept::NONE,
     )
     .expect("the effect loads");
@@ -224,7 +221,6 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
-        oag_fx::psys::ColourLaw::Forward,
         if listed {
             Kept::bar(KeptBar::Far)
         } else {
