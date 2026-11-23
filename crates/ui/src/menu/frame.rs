@@ -34,6 +34,28 @@ use crate::frontend::{Draw, Placed};
 use crate::screen::{Screens, argb_to_rgba, parse_argb};
 use oag_display::space::Space;
 
+/// A sub-rect `[u, v, w, h]` that runs past its `width` x `height` texture along `u`, as the
+/// texture's repeats: each as `([start, length], texels)`, the start and length a fraction of the
+/// widget's width. The PSP's GE wraps texture coordinates, and Pure's dotted rule is an 8x1
+/// `dotline.mip` sampled `U 0..432, V 32` across 438 pixels. `None` for a sub-rect inside its
+/// texture, or one that also runs past it along `v` (no frame authors that).
+fn wrapped(sub: [f32; 4], width: f32, height: f32) -> Option<Vec<([f32; 2], [f32; 4])>> {
+    let [u, v, w, h] = sub;
+    let v = v.rem_euclid(height);
+    if width <= 0.0 || w <= 0.0 || u + w <= width || v + h > height {
+        return None;
+    }
+    let mut repeats = Vec::new();
+    let mut at = u;
+    while at < u + w {
+        let texel = at.rem_euclid(width);
+        let length = (width - texel).min(u + w - at);
+        repeats.push(([(at - u) / w, length / w], [texel, v, length, h]));
+        at += length;
+    }
+    Some(repeats)
+}
+
 /// One title's menu frame, split by what may come between the two halves.
 ///
 /// A menu can have a looping movie behind it *and* a frame around it, and the
@@ -383,19 +405,28 @@ pub fn read(
         // patches of one shared `pulse_assets.mip`. Without it every mark
         // would draw that sheet's own top-left corner instead of its own
         // patch, same failure `frontend::draw` had before it read these.
-        let uv = placed.sheet_rect([
+        let sub = [
             image.u.unwrap_or(0.0),
             image.v.unwrap_or(0.0),
             image.texture_width.unwrap_or(placed.width as f32),
             image.texture_height.unwrap_or(placed.height as f32),
-        ]);
+        ];
+        // The widget's tint, which on HD is `FEGlobals->HD_Grey` for all
+        // three: the textures themselves are white and the colour is what
+        // makes a rule grey.
+        let color = argb_to_rgba(image.color);
+        if let Some(repeats) = wrapped(sub, placed.width as f32, placed.height as f32) {
+            marks.extend(repeats.into_iter().map(|(dest, texels)| Draw::Sprite {
+                rect: [x + dest[0] * width, image.y, dest[1] * width, height],
+                uv: placed.sheet_rect(texels),
+                color,
+            }));
+            continue;
+        }
         marks.push(Draw::Sprite {
             rect: [x, image.y, width, height],
-            uv,
-            // The widget's tint, which on HD is `FEGlobals->HD_Grey` for all
-            // three: the textures themselves are white and the colour is what
-            // makes a rule grey.
-            color: argb_to_rgba(image.color),
+            uv: placed.sheet_rect(sub),
+            color,
         });
     }
 

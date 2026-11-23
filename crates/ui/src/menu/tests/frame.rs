@@ -103,6 +103,46 @@ fn the_frames_colour_rules_are_marks_and_its_ground_is_not() {
     assert_eq!(rects, vec![[21.0, 251.0, 444.0, 1.0]], "{frame:?}");
 }
 
+/// A sub-rect wider than its texture repeats it, as the PSP's GE wraps: Pure's dotted rule
+/// samples `U 0..432, V 32` of the 8x1 `dotline.mip` across 438 pixels, 54 dashes.
+#[test]
+fn a_sub_rect_past_its_texture_repeats_it() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
+<Screen>
+  <Screen name="Frame">
+    <Image><Values x="28.5" y="218" width="438" height="1" U="0" V="32" TxtrWidth="432" TxtrHeight="1" Color="0xFF11ACD0" src="dotline.mip"></Values></Image>
+  </Screen>
+</Screen>"#;
+    let placed = crate::frontend::Placed {
+        x: 0,
+        y: 0,
+        width: 8,
+        height: 1,
+        quad_extent: None,
+        quad_centre: None,
+        blend: None,
+        scale: [1.0, 1.0],
+    };
+    let frame = crate::menu::read_frame(
+        &Screens::from_xml(xml),
+        &[("dotline.mip".to_string(), placed)],
+        oag_display::space::Space::PSP,
+        Some("Frame"),
+        None,
+        None,
+    );
+    let rects = frame.mark_rects();
+    assert_eq!(rects.len(), 54, "{rects:?}");
+    let step = 438.0 * 8.0 / 432.0;
+    for (i, rect) in rects.iter().enumerate() {
+        assert!(
+            (rect[0] - (28.5 + i as f32 * step)).abs() < 0.01,
+            "{i}: {rect:?}"
+        );
+        assert!((rect[2] - step).abs() < 0.01, "{i}: {rect:?}");
+    }
+}
+
 /// A title that names no frame screen gets an empty one, and so does a name
 /// that is not on this source.
 #[test]
