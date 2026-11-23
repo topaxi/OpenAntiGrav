@@ -71,6 +71,8 @@ byte is cross-faded: `trunc(byte_n * w) + trunc(byte_prev * (1 - w))`, clamped t
 - `EQ colour tint` feeds the bars: the `zoneTexVis` segment word `r17`, the target's cap word and its
   halved body word.
 - `EQ analogue colour tint` feeds the `zoneTexVis` smooth slots `161 + b`.
+  Ours wires both since 2026-11-23 (`mesh_render::zone::EqTints`, `ZoneGrade::eq_tints`); the split moves the Detonator
+  floor, whose track texture indexes the smooth slots ([detonator-look.md](detonator-look.md), "The floor's violet").
 
 **Read live (RPCS3, Vineta K, stage 2).** Stage 2's two words are `11e6ffff` / `7df910ff` (bytes as
 authored, `R G B A`). The `zoneTexVis` lookup's lit segments read `0xff11e6ff` (`A R G B`) and slot

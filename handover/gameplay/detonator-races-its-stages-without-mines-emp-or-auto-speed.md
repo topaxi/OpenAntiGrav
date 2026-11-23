@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega]
 updated: 2026-11-23
-summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen, Zone scene wired; radial bloom, floor violet, hull strip, mine colour open"
+summary: "Detonator: mines, bombs, hull, cannon, HUD, EMP, auto-speed, end screen, scene wired; open: radial bloom, floor spectrum feed, hull strip, mines"
 categories: [rendering]
 ---
 
@@ -415,7 +415,7 @@ positions differ by construction (ours places with its own seeded `Rng`), so a m
 | ---: | --- | ---: | ---: | ---: | --- |
 | 1 | Sky and background (upper band, y < 340) | 31 % | 0.38-0.41 | 12-13 | Ours draws the circuit's day sky (clouds, blue); the original's frame is near black (mean `(18, 10, 11)` over `x 200..900, y 60..300`, ours `(96, 111, 121)`). **Cause read (80):** the original swaps in `ZoneSky.gtf` and draws the gradient dome on `g_ZoneEffectsActive`, which mode 14 sets; Detonator stage 1 authors `Sky horizon colour` and `Sky zenith colour` `0 0 0`, so the dome is black. Ours gates the sky swap and dome on `Mode::Zone` (`load/environment.rs:71`). `docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`. |
 | 2 | Mid band (far track, mines, pad, y 340-640) | 28 % | 0.18-0.36 | 5-10 | Mines (row 4), pad (row 5), the original's bluish-purple ambient on gantries against ours' neutral grey. The gantry violet is likely the stage's `EQ colour tint` `171 9 255` on the billboards, which ours leaves off (the shared stage target is `Mode::Zone` only, `load/gantry_visibility.rs:25`; the original's gate is the byte, 80). |
-| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. Ours already applies Detonator's grade (its file, texture sets, Track recolour `[0.97, 0, 0]`); what is missing is the violet: the floor's dashes read `(132..143, 6..7, 199..211)`, the hue of `EQ colour tint` (60, one frame), and the bloom's Detonator arm (below). 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
+| 3 | Lower band (near track, hull, y > 640) | 41 % | 0.14-0.22 | 6-9 | The original's track is a saturated blue-violet with red edge strips; ours is near black with the same red strips. Brighter by 10-19 grey in the original. Ours already applies Detonator's grade (its file, texture sets, Track recolour `[0.97, 0, 0]`); **Cause read (85, `det-track-look`, `detonator-look.md`, "The floor's violet"): the floor is the `zoneTexVis` visualiser, which is spectrum-driven and wholly black under the pairs' `--no-audio`.** 87 % of Detonator's track texture indexes smooth slot 164 (band 3), which takes `EQ analogue colour tint` `14 1 55` times the band's level; the dashes are bar segments (3.5 % of the texels) in `EQ colour tint` `171 9 255`. Ours wrote the bar tint into the smooth slots too (hue wrong at every level); now the analogue tint (`EqTints`). Floor boxes under `--zone-spectrum-test`, ours before to after against the original: A `(33.7, 5.0, 41.3)` to `(9.5, 0.0, 21.7)` against `(5.9, 0.0, 18.0)`, B `(65.7, 10.8, 80.1)` to `(19.8, 0.0, 42.9)` against `(9.0, 0.0, 31.5)`. **The published pairs stay black here until a pair records the original's held bands** (`+0x32f8`, 16 floats) and ours is fed them. 0.22 on the volley pair (the ground ahead of the hull lit by the flash in the original). |
 | 4 | Mines | 1-3 % (by eye) | not cropped | 1-2 (estimate) | Original: a spiky purple-white sphere with a lit shell, grows large as it nears. Ours: a small hard white ball before `det-colour`; since then a stage-coloured rim sphere (the colour and brightness binds are wired; the spikes still barely show at a distance, and the mine's size breathing is open). |
 | 5 | Detonator pad | 2-3 % (by eye) | not cropped | 1 (estimate) | Original: a white slab with red squares, matt. Ours: a purple glassy slab with cut-out squares. Different material and colour; position and size agree. |
 | 6 | Cannon muzzle flash and rounds | under 1 % (by eye) | not cropped | under 1 (estimate) | Original: two blue-white flashes at the wing tips and blue-white rounds with a trail, still lit 6 ticks after the hold. Ours (craft held at rest, volley of 16 ticks, frame 4 ticks after it): no flash at the wing tips, and a white burst far ahead where a round hit one of ours' mines (score 0000100). Confidence 55: ours' flash window and round colour were not read, only the one frame compared. |
@@ -451,9 +451,9 @@ are not applied: `oag-post` has no radial bloom pass, in Zone either (`zone-fram
 pixel-identical Detonator start frame (whether the exemption fires there was not separated), so it is left. **The pairs' violet
 billboards need a spectrum:** the re-render runs `--no-audio`, whose held bands are zero, so the equaliser target is a black grid
 on black and the pairs show no violet panel; with `--zone-spectrum-test` the same pad frame draws violet bars on the billboards
-where the original's are (checked by eye, upper right). Row 3's floor violet, row 2's gantry violet and row 8 are not fixed by
-these three: the frames still show a dark floor with no violet dashes and a lit grey scenery band at upper right where the
-original is dark (Scene colours authored black), so the grade's Scene recolour or the visualiser glow is the next suspect. Re-measure
+where the original's are (checked by eye, upper right). Row 3's floor violet is the spectrum-driven `zoneTexVis` (row 3), not a missing term; row 2's gantry violet and row 8 are not fixed by
+these three: the frames still show a lit grey scenery band at upper right where the
+original is dark (Scene colours authored black), so the grade's Scene recolour is the next suspect. Re-measure
 the hull (row 7) and the mine and bomb colours (row 4): the colours' binds are `det-colour-re`'s reading.
 
 What stays as it is: palette, textures, stage source, hull model, handling. 2048 and Omega: Omega's `zone_sky` is `None`
