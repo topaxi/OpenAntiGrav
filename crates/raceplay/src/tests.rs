@@ -83,6 +83,7 @@ mod extensions;
 mod field;
 mod field_sparks;
 mod hash;
+mod hd_destroyed_cues;
 mod hd_effect_sprites;
 mod hd_plasma_effects;
 mod hd_sprite;

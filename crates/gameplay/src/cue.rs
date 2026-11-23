@@ -618,12 +618,36 @@ pub enum Cue {
     /// Chosen, not measured: the sound group has no mixer counterpart, so the
     /// player's craft and a rival's differ only in slot, and `~magstrip01` is a
     /// 35-waveform tree this reader flattens, so the voice is drawn until one
-    /// loops (see `sfx::magstrip`).
+    /// loops (see `sfx::slot_held`).
     Magstrip,
     /// The falling edge of [`Self::Magstrip`]: `Ship_StopMagstripSound`
     /// (`0x01312770`) sets the stop bit on the instance and every group voice. An
     /// action, not a sound: loads nothing, not in [`Self::ALL`].
     MagstripStop,
+    /// HD's destroyed craft at the blast, the local player's: `EXPLBIG_PC`.
+    ///
+    /// `Ship_PlayDestroyExplosion` (`0x000d96c8`) plays it with `Sound_PlayBankCue` (flags
+    /// `0x400`) on the emitter that rides the body; every other craft plays [`Self::ShipExplosion`].
+    /// Raised on entering state 4 when `oag_title::destroyed::DestroyedSound::Ship` is the
+    /// title's. `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 3, confidence 82.
+    ShipExplosionPlayer,
+    /// HD's destroyed craft at the blast, any craft but the local player: `EXPLBIG`.
+    ShipExplosion,
+    /// The local player's looped `~SHIP_DESTROYED`, started with the blast (row 3).
+    ///
+    /// Held, per slot: the cue is the start and [`Self::ShipDestroyedStop`] the end, which
+    /// state 6 and state 8 raise (rows 12 and 15). Not in [`Self::ALL`]: see [`Self::HD_DESTROYED`].
+    ShipDestroyed,
+    /// The end of [`Self::ShipDestroyed`]. An action, not a sound.
+    ShipDestroyedStop,
+    /// `~SHIP_ONFIRE` on a destroyed craft's own emitter, ordinary races only (row 3).
+    ///
+    /// Held, per slot, started with the blast and stopped by [`Self::ShipOnFireStop`] when
+    /// state 8 is reached (row 15), which an ordinary race never reaches: the wreck burns to
+    /// the race's end.
+    ShipOnFire,
+    /// The end of [`Self::ShipOnFire`]. An action, not a sound.
+    ShipOnFireStop,
     /// The front end's cursor moving up a list: `"UPDOWN"` in Pulse's
     /// `frontend.bnk`, `"navUp"` in HD's.
     ///
@@ -751,6 +775,14 @@ impl Cue {
     /// Detonator's two explosion cues, loaded beside [`Self::HD_CONTACT`] and on no other title:
     /// only HD's Detonator events raise them.
     pub const DETONATOR: [Self; 3] = [Self::MineExplosion, Self::BombExplosion, Self::WeaponPickup];
+
+    /// HD's destroyed-craft cues, loaded beside [`Self::HD_CONTACT`] and on no other title.
+    pub const HD_DESTROYED: [Self; 4] = [
+        Self::ShipExplosionPlayer,
+        Self::ShipExplosion,
+        Self::ShipDestroyed,
+        Self::ShipOnFire,
+    ];
 
     pub const ALL: [Self; 43] = [
         Self::SpeedupPad,

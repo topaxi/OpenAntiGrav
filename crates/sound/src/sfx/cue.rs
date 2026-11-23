@@ -186,6 +186,12 @@ impl CueTables for Cue {
             | Self::MineExplosion
             | Self::BombExplosion
             | Self::WeaponPickup
+            | Self::ShipExplosionPlayer
+            | Self::ShipExplosion
+            | Self::ShipDestroyed
+            | Self::ShipDestroyedStop
+            | Self::ShipOnFire
+            | Self::ShipOnFireStop
             | Self::Turbo => BankName::Weapons,
             Self::ShieldActive
             | Self::Engaging
@@ -251,6 +257,10 @@ impl CueTables for Cue {
             Self::Blowup => "~BLOWUP",
             Self::LockOn => "~ROCKLOCK",
             Self::MineLaunch => "MINELAUNCH",
+            Self::ShipExplosionPlayer => "EXPLBIG_PC",
+            Self::ShipExplosion => "EXPLBIG",
+            Self::ShipDestroyed | Self::ShipDestroyedStop => "~SHIP_DESTROYED",
+            Self::ShipOnFire | Self::ShipOnFireStop => "~SHIP_ONFIRE",
             Self::MineExplosion => "MINEEXPL",
             Self::BombExplosion => "BOMBEXPL",
             Self::Plasma => "PLASMA",
@@ -318,6 +328,10 @@ impl CueTables for Cue {
                 | Self::ShurikenTravel
                 | Self::Magstrip
                 | Self::MagstripStop
+                | Self::ShipDestroyed
+                | Self::ShipDestroyedStop
+                | Self::ShipOnFire
+                | Self::ShipOnFireStop
         )
     }
 
@@ -409,6 +423,14 @@ impl CueTables for Cue {
             Self::EmpReady | Self::EmpFull => Placement::Unplaced,
             // `SoundEmitter_PlayCue` on the ship's emitter `ship+0x5ee0`.
             Self::WeaponPickup => Placement::Craft,
+            // The emitter `Ship_PlayDestroyExplosion` makes rides the body matrix; `~SHIP_ONFIRE`
+            // plays on the craft's own emitter `+0x5ee0` (`ship-destroy.md`, row 3).
+            Self::ShipExplosionPlayer
+            | Self::ShipExplosion
+            | Self::ShipDestroyed
+            | Self::ShipDestroyedStop
+            | Self::ShipOnFire
+            | Self::ShipOnFireStop => Placement::Craft,
             // Read: case 4 hands it to the path with no emitter at `0x400`.
             Self::Blowup | Self::Message => Placement::Unplaced,
             // Both halves of `Ship_FireHeldWeapon`'s case 6 use `FUN_0883e9b0`, the

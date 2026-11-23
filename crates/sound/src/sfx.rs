@@ -85,11 +85,11 @@ mod cue;
 mod engine;
 mod hd;
 mod layers;
-mod magstrip;
 mod menu;
 mod mod_sound;
 mod name_voice;
 mod repeating;
+mod slot_held;
 mod track;
 mod travel;
 mod wwise_cues;
@@ -197,8 +197,9 @@ pub(super) struct SfxVoices {
     /// Whether this lock has been answered with a loopless start, so it is
     /// not started again when the one-shot ends.
     leach_latched: bool,
-    /// The magstrip hum, per grid slot. See [`Cue::Magstrip`].
-    magstrip: magstrip::Voices,
+    /// The held voices that ride a craft, per grid slot: [`Cue::Magstrip`], [`Cue::ShipDestroyed`]
+    /// and [`Cue::ShipOnFire`].
+    slot_held: slot_held::Set,
     /// The mods' own sounds that are held, as loops.
     mod_sounds: mod_sound::Voices,
     rng: Rng,
@@ -296,7 +297,7 @@ impl Audio {
                 leach_attach: None,
                 leach_once: Vec::new(),
                 leach_latched: false,
-                magstrip: magstrip::Voices::default(),
+                slot_held: slot_held::Set::default(),
                 mod_sounds: mod_sound::Voices::default(),
                 rng: Rng::new(SFX_SEED),
             }
@@ -310,23 +311,15 @@ impl Audio {
         self.output.with_mixer(|mixer| {
             for event in cues {
                 let slot = usize::from(event.slot);
-                match event.cue {
-                    Cue::Magstrip => {
-                        voices.magstrip.start(
-                            slot,
-                            mixer,
-                            banks,
-                            &mut voices.rng,
-                            &listener,
-                            &craft,
-                        );
-                        continue;
-                    }
-                    Cue::MagstripStop => {
-                        voices.magstrip.stop(slot, mixer);
-                        continue;
-                    }
-                    _ => {}
+                if voices.slot_held.handle(
+                    event,
+                    mixer,
+                    banks,
+                    &mut voices.rng,
+                    &listener,
+                    &craft,
+                ) {
+                    continue;
                 }
                 // A held cue is not a one-shot: `~ENGINE` here would start a second
                 // engine each time it was raised.
@@ -356,6 +349,11 @@ impl Audio {
                 let Some(started) = started else {
                     continue;
                 };
+                log::trace!(
+                    "sfx: {:?} on slot {slot}, {} voice(s)",
+                    event.cue,
+                    started.len()
+                );
                 // Handles dropped: a one-shot is fire-and-forget, and a refused
                 // voice is counted by `Mixer::starved`.
                 let _ = layers::start(
@@ -737,7 +735,7 @@ impl Audio {
                 );
             }
 
-            voices.magstrip.follow(mixer, &listener, &craft);
+            voices.slot_held.follow(mixer, &listener, &craft);
             voices.mod_sounds.play(
                 (&mod_sounds, &mod_loops),
                 &banks.mod_sounds,
@@ -858,7 +856,7 @@ impl Audio {
                     mixer.stop(id);
                 }
                 voices.leach_latched = false;
-                voices.magstrip.stop_all(mixer);
+                voices.slot_held.stop_all(mixer);
                 voices.mod_sounds.stop_all(mixer);
                 voices.ambience.stop(mixer);
             });

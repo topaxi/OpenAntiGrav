@@ -211,7 +211,7 @@ fn the_sp_event_campaign_resolves_circuits_under_environments_2048() {
 fn omega_destroyed_craft_runs_hds_sequence() {
     use oag_title::Trigger;
     use oag_title::destroyed::DestroyedCraft;
-    assert_eq!(TITLE.destroyed.value, DestroyedCraft::HD);
+    assert_eq!(TITLE.destroyed.value, DestroyedCraft::HD_BLOWUP);
     assert!(TITLE.looks.hull_wreck.applies_everywhere());
     assert!(TITLE.effect_on(Trigger::WreckExplosion).is_some());
     assert!(TITLE.effect_on(Trigger::WreckPlume).is_some());

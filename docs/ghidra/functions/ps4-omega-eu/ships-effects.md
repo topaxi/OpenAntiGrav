@@ -496,7 +496,7 @@ raises the shape to 80 for a reader of this page.
 
 Decompiled again from `/omega/eboot-ps4-omega-eu.bin` (`0x012e1260`, `0x012e2770`); static, PS4 only, 65. The
 implementation is `oag_fx::magstrip` (module doc lists each rule), `oag_raceplay::magstrip_wake` and
-`oag_sound::sfx::magstrip`. HD builds the class (`oag_title::weapons::WeaponModels::magstrip_wake`,
+`oag_sound::sfx::slot_held`. HD builds the class (`oag_title::weapons::WeaponModels::magstrip_wake`,
 `oag_hd::race::WEAPON_MODELS`); Omega's table is still `EMPTY` and inherits it when it races.
 
 - **Corrections to the earlier reading.** `rand()` is used as a 30-bit source: every constant is

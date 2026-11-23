@@ -442,6 +442,10 @@ fn hd_s_explosion_and_launch_cues_play_their_layered_voices(banks: &Banks) {
         !Cue::ALL.iter().any(|c| Cue::DETONATOR.contains(c)),
         "Detonator's two explosion cues are loaded beside Cue::ALL, not in it"
     );
+    assert!(
+        !Cue::ALL.iter().any(|c| Cue::HD_DESTROYED.contains(c)),
+        "HD's destroyed-craft cues are loaded beside Cue::ALL, not in it"
+    );
 }
 
 /// The identity of a waveform as the mixer's sound shows it: its frames and its rate.

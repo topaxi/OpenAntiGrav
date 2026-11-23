@@ -136,6 +136,7 @@ impl Race {
     /// explosion left it.
     pub(super) fn tick_destroyed_craft(&mut self) {
         self.core.sim.tick_wreck_voice();
+        self.core.sim.raise_destroyed_cues();
         let mode = self.core.sim.world.mode();
 
         for slot in 0..self.core.sim.world.ship_count as usize {

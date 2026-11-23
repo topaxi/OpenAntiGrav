@@ -200,6 +200,7 @@ mod demo;
 pub mod demo_overlay;
 #[cfg(feature = "view")]
 mod destroy_camera;
+mod destroyed_cues;
 mod detonator;
 #[cfg(feature = "view")]
 mod detonator_fx;

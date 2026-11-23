@@ -94,7 +94,7 @@ says "live".
 | ---: | --- | --- | --- | ---: | --- | --- |
 | 1 | 4, on entry | **The wreck replaces the hull**: `Ship_SelectWreckModel` points `+0x6adc` at `+0x6ae4` (`shipwreck.vex`), clears visible bit `4` on the hull and both LODs, sets it on the wreck unless `+0x5f42`, regathers the node lists. Before it, the then-live model's `+0x34 \|= 2`. Not in modes 6 and 14. | `0x000e22c8` (and `0x000e2dbc` for Demo) | 88 | **ported**: `FUN_811c6f72` (slot `+0x6134`), case 4 after `+0x60b8 = 0.3`; every team's wreck loads (`omega_2048_shield_colour_ground_truth::every_2048_team_loads_a_wreck`) | **ported**: `FUN_01301260` (slot `+0x7288`), case 4; every team and every 2048-era ship loads one (`every_omega_team_loads_a_wreck_and_so_does_every_2048_era_ship`) |
 | 2 | 4, on entry | **The blast**: `Ship_PlayDestroyExplosion` spawns `WO_SHIP_EXPLOSION` (modes 13 and 21, whose model set is `<team>_n1` on 2048's loader: `WO_NITRO_SHIP_DEATH`) once, with the live model's node matrix (`*(model+0x38)`): its three rows as the rotation and **translation `t - 4.0 * row1`**, 4 units back along the node's second row (`0x000d9810`-`0x000d9874`: `lvlx v1,0,r9` at `0x000d9824` splats `4.0` from `0x008a8c54` = TOC `-0x4884`, `vmaddfp` then `vsubfp` off the `+0x30` row) | `0x000d98fc`, `0x000d9acc` | 80 | **ported**: `FUN_811bc2bc` names both; `WO_SHIP_EXPLOSION` thrown. The `_n1` model set's `WO_NITRO_SHIP_DEATH` (modes 13 and 21) is not wired | **ported**: `FUN_012f7a60` names both; same, `WO_NITRO_SHIP_DEATH` not wired |
-| 3 | 4, on entry | **Sound**: a new emitter (`0xb0` bytes, `+0x5ef8`) rides the body matrix (`body+0x1d0`). Local player: bank cue `EXPLBIG_PC` (`Sound_PlayBankCue`, flags `0x400`) and the looped `~SHIP_DESTROYED` into handle `+0x7a34`, distance params set `0x1c`. Others: `EXPLBIG`, params `0x1d`, no handle. Then (ordinary races only, not modes 8, 13 or MP) `~SHIP_ONFIRE` on the craft's own emitter `+0x5ee0`, handle `+0x7a30`, volume 1.0. Modes 6 and 14 play bank cue `shipdestroy` instead and skip all of this. | `0x000d9778`, `0x000d97e4`, `0x000d9a18`, `0x000e2358`, `0x000e299c` | 82 | checked, applies, not wired: same five strings, same branch shape | checked, differs: `ShipDestroyed_Player` / `ShipDestroyed_NPC` (Wwise) beside `EXPLBIG`, `_SHIP_ONFIRE` (sic) |
+| 3 | 4, on entry | **Sound**: a new emitter (`0xb0` bytes, `+0x5ef8`) rides the body matrix (`body+0x1d0`). Local player: bank cue `EXPLBIG_PC` (`Sound_PlayBankCue`, flags `0x400`) and the looped `~SHIP_DESTROYED` into handle `+0x7a34`, distance params set `0x1c`. Others: `EXPLBIG`, params `0x1d`, no handle. Then (ordinary races only, not modes 8, 13 or MP) `~SHIP_ONFIRE` on the craft's own emitter `+0x5ee0`, handle `+0x7a30`, volume 1.0. Modes 6 and 14 play bank cue `shipdestroy` instead and skip all of this. | `0x000d9778`, `0x000d97e4`, `0x000d9a18`, `0x000e2358`, `0x000e299c` | 82 | checked, applies, not wired: same five strings, same branch shape; a `--dry-run` of the extracted `PCSF00007` with the four names added to the load reports every 2048 race cue "names no cue" (not only these), so whether they resolve is unread and `DestroyedCraft::HD_BLOWUP` keeps `~BLOWUP` there | checked, differs: `ShipDestroyed_Player` / `ShipDestroyed_NPC` (Wwise) beside `EXPLBIG`, `_SHIP_ONFIRE` (sic); no `.bnk` carries their ids (Z5), so not wired and `~BLOWUP` -> `_NGP_ShipDeath` stays |
 | 4 | 4, on entry | **Camera shake** (local only): `0x000a3528(camera[pad], 0.3, 0.4, 3)`, the same arguments as Pulse's `Camera_ArmShake(0.3, 0.4, camera, 3)` at its state 5 | `0x000d976c` | 65 | not read | not read |
 | 5 | 4, on entry | **Destroy camera** (local craft, or a remote one `RaceManager` `0x00055e30` says is watched; not if the camera is already in mode 2): HUD node `*0x009879dc` loses bits `1\|2\|4` of `+0x34` (hidden), `Camera_SetSubject(cam, ship, 1)` (station from `ship+0x7984` else picked near the body, field `fov + rand`, mode 10), `cam+0x34 \|= 6`, then `Camera_SetMode(cam, 8)`; modes 6 and 14 instead `0x000a9b18(cam, subject)`, `+0x6ad4 = 0`, mode 2. Single player also `0x000884d8(g_Hud)`, `*0xabc170+0x5c = 0` and `RaceManager+0x2dc4 = 4.5`. With `cam+0x34 & 6`, `cam+0x1ec` this craft and mode 8, the engine-flare gate in [engine-trail.md](engine-trail.md) (`0x002a0b84`, modes `{2, 6, 7, 8, 11}`) skips the subject's flare quad: no flare on the player's wreck (65, the two reads joined, not run). The view itself (mode 8's per-frame law) is unread: open item 3. | `0x000e21e4`-`0x000e2298`, `0x000e2c6c` | 78 | checked, differs: same calls, `Camera_SetMode(cam, 9)` (`FUN_8121963a`), not 8 | checked, differs: mode 9 (`FUN_01382720`), like 2048 |
 | 6 | 4, on entry | **The wreck tumbles on its own collider**: `CollisionWorld_ReplaceObject(g_CollisionWorld, +0x6948, +0x694c)` swaps the hull box for the compound collider `Ship_Construct` builds at `+0x694c` (`0x160` bytes, type 5, child shapes sized off the hull box, `0x000ded30`-`0x000defb0`); `body+0x4cc = +0x694c`; `Body_SetBoxInertia(body, 1, 12, 6, 12)`; `body+4 = 1`; `*(body)+0x40 = 0`. `Ship_ApplyDeathKick_q` throws a random impulse at the hull node (tuning `0x008c15e0 + 0x18..0x34`: 4000, 8000, 200, 3500, 1, 15, 16, 2000). The swap, the inertia and `~SHIP_ONFIRE` share one path: single-player modes (`<= 0xf`) other than 8 and 13. Modes 8 and 13 set `body+0x4c8 \|= 2` instead; the MP modes do neither. The kick runs in every mode but 6 and 14. | `0x000e237c`-`0x000e23dc`, `0x000e2338` | 80 | checked, applies, not wired: `FUN_811d267a(+0x5f84, +0x5f8c)`, `FUN_811d35a8(1.0, .., 6.0, body)` | ported law, other code: inverse inertia written inline as `1/15, 1/24, 1/15`, which is `Body_SetBoxInertia(1, 12, 6, 12)` evaluated; collider `+0x70d8` into `+0x4c8` |
@@ -120,7 +120,7 @@ the wreck rule is `Looks::hull_wreck`. 2048 and Omega run `DestroyedCraft::HD` t
 | ---: | --- | --- |
 | 1 | wired: `shipwreck.vex` (+ `.rcsmodel`) of the craft's own directory, drawn from state 4; not in Zone (modes 6 and 14, row 12's Zone half) | `oag_livery::wreck`, `scene::wreck::live_model_for` |
 | 2 | wired: `WO_SHIP_EXPLOSION` on entering state 4, `4.0` rows behind the model, no Pulse shockwave | `craft_flash`, `wreck_fx::throw_wreck_explosion` |
-| 3 | **not wired**: the bank cues and `~SHIP_ONFIRE` need HD's authored-mix cue path | open |
+| 3 | wired 2026-11-23 (`hd-wreck-sound`): see "Sound on HD" below | `oag_raceplay::destroyed_cues`, `oag_sound::sfx::slot_held` |
 | 4 | not wired (65) | open |
 | 5 | not wired: HD keeps the existing destroy camera, **inherited from Pulse** (`DestroyedCraft::camera`), until mode 8's view is read (open item 3) | open |
 | 6 | **not wired**: the compound collider and death kick (open items 1 and 2) | open |
@@ -131,6 +131,35 @@ the wreck rule is `Looks::hull_wreck`. 2048 and Omega run `DestroyedCraft::HD` t
 | 11 | wired: `6.0` s then speed squared under `0.5`, or `20.0` s; the `body+0x210 == 2` half is **not read** and is not tested | `oag_physics::damage::advance_state` |
 | 12 | wired: state 6 is solid to no craft, the body is no longer integrated (opponents; the player's wreck ends the race) and the wreck stays drawn | `solid_to_craft`, `RaceSim::wreck_left_world` |
 | 14 | not wired (65) | open |
+
+### Sound on HD (2026-11-23, `hd-wreck-sound`)
+
+Row 3, row 12's stop and row 15's stop, off `Title::destroyed.sound` (`DestroyedSound::Ship`, HD
+only; Pulse and Pure keep `~BLOWUP`, and HD no longer plays `~BLOWUP`, which its executable never
+names). `RaceSim::raise_destroyed_cues` runs once a tick after the states settle and raises edges:
+
+| State edge | Cues (slot = the craft) | Our state |
+| --- | --- | --- |
+| 4, local player | `EXPLBIG_PC`, then held `~SHIP_DESTROYED`, then held `~SHIP_ONFIRE` | `Racing` to `Destroyed` |
+| 4, any other craft | `EXPLBIG`, then held `~SHIP_ONFIRE` (no `~SHIP_DESTROYED`) | same |
+| 6 | stops `~SHIP_DESTROYED`; the fire burns on | `Eliminated` with its timer at `0` (`in_state_6`) |
+| 8 | stops what is open | the craft back to `Racing` (Eliminator only; an ordinary wreck never reaches it) |
+
+The Eliminator plays the blast and `~SHIP_DESTROYED` but no `~SHIP_ONFIRE` (row 3's mode gate) and
+holds the loop to state 8; Zone and Detonator (modes 6 and 14) raise nothing here (`shipdestroy` is
+[zone-destroy.md](zone-destroy.md)'s). Cues are an output, never `World` state. Held voices are
+`oag_sound::sfx::slot_held`, the magstrip hum's mechanism generalised to a start and stop cue pair.
+**Chosen, not measured:** the two loops are drawn like the magstrip's (one draw that loops), a flat
+pick, not the original's list (the thread `hd-race-cues-are-guarded-lists-played-as-one-flat-pick`,
+open item 2: held cues need a runner); `EXPLBIG` is a 40-waveform tree picked uniformly, `EXPLBIG_PC`
+plays its 10-voice timeline; the multiplayer gate (modes 16 to 21) is not modelled. Placed on the craft
+(`Placement::Craft`), the player's own too; whether the original's `0x400` flag makes the player's blast
+dry is unread. Not heard against the original (no live RPCS3). Cue order of an HD opponent destroyed
+(`--race --opponents --force-wreck 100:7`, `RUST_LOG=oag_sound=trace`): `ShipExplosion` on slot 7, held
+`ShipOnFire` opened on slot 7. The player (`--force-wreck 100:0`): `ShipExplosionPlayer` (10 voices),
+`ShipDestroyed`, `ShipOnFire`. Tests: `raceplay::tests::hd_destroyed_cues`, and on the disc
+`hd_destroyed_sound_ground_truth` (cue edges for both, and the mixer's voice count with and without the
+loops at the four states).
 
 ### Wired on 2048 and Omega (2026-11-23, `wreck-2048-omega`)
 
