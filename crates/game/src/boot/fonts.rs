@@ -428,6 +428,7 @@ pub fn install_faces(
     let (third, third_role) = third_atlas_slot(skin, title_font, buttons_font);
     renderer.set_buttons_atlas(device, queue, third, third_role);
     renderer.set_snapped_pens(skin.snapped_pens);
+    renderer.set_bearing_pens(skin.bearing_pens);
 }
 
 /// Reads the PlayStation button-glyph face

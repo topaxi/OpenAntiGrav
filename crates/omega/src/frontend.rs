@@ -61,6 +61,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     small_font: None,
     stats_font: None,
     snapped_pens: false,
+    bearing_pens: false,
     default_face_is_row_face: true,
     // Not authored, on HD's own terms: Omega's main menu is the same
     // `<HorizMenu>` idiom HD's is (see `strip` below), so there is no

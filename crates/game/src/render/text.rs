@@ -176,8 +176,12 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
+        let bearing_pens =
+            self.hud.bearing_pens && !self.hud.snapped_pens && !self.hud.whole_advances;
         let width: f32 = if self.hud.snapped_pens {
             font::snapped_run(atlas, text, scale).end
+        } else if bearing_pens {
+            font::ink_width(atlas, text, scale, false)
         } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
@@ -215,6 +219,13 @@ impl Renderer {
             Align::Right => x - width + trailing,
         });
         let y = self.hud.snap(y);
+        if bearing_pens {
+            // The text's first glyph's ink starts at `x` (`font::ink_width` measures from there).
+            let first = text
+                .chars()
+                .find_map(|c| self.atlas_for(slot).and_then(|atlas| atlas.cell(c)));
+            pen -= first.map_or(0.0, |cell| cell.bearing * scale * texel);
+        }
 
         for ch in text.chars() {
             // Re-derived rather than reusing `atlas` above: `self.quads.push`
@@ -236,6 +247,8 @@ impl Renderer {
             // ([`oag_ui::font::pen_step`]): the quad sits at the snapped ink edge, not the pen.
             let (ink_left, next) = if self.hud.snapped_pens {
                 font::pen_step(&cell, scale * texel, pen, true)
+            } else if bearing_pens {
+                font::pen_step(&cell, scale * texel, pen, false)
             } else {
                 (pen, pen + self.hud.advance(cell.advance * scale * texel))
             };

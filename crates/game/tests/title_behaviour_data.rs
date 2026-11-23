@@ -216,3 +216,24 @@ fn only_pure_snaps_its_front_end_pens() {
         );
     }
 }
+
+/// Pulse alone starts a front-end text's first ink at its x and steps every pen by bearing (PPSSPP,
+/// `docs/ui/menus-original.md`, "A text's pen starts at its first glyph's ink"; its PS2 skin inherits
+/// the law from the PSP): every other title's front end lays the pen out on the advance.
+#[test]
+fn only_pulse_lays_its_front_end_pens_out_by_bearing() {
+    for title in ALL {
+        let skins = [
+            title.front_end.and_then(|front_end| front_end.menu),
+            title.front_end.and_then(|front_end| front_end.menu_ps2),
+        ];
+        for skin in skins.into_iter().flatten() {
+            assert_eq!(
+                skin.bearing_pens,
+                title.name == oag_pulse::TITLE.name,
+                "{}",
+                title.name
+            );
+        }
+    }
+}
