@@ -574,7 +574,7 @@ pub fn run(
                     },
                 }),
                 // No CLI flag on this path for either: see `app/headless.rs`.
-                zone_spectrum_test: false,
+                zone_feed: crate::race_capture::spectrum::ZoneFeed::Live,
                 touch_demo: None,
                 net_overlay: false,
                 previous_best,
