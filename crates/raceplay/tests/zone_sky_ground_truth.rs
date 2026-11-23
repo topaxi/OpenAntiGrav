@@ -265,6 +265,27 @@ fn a_detonator_race_draws_the_zone_dome_in_its_own_stage_colours() {
     assert_eq!(palette.sky_zenith_colour, Some([0.0, 0.0, 0.0]));
 }
 
+/// **A Detonator stage's visualiser takes two colours.** Stage 1 authors `EQ colour tint`
+/// `171 9 255` (the bar segments, the floor's dashes) and `EQ analogue colour tint` `14 1 55`
+/// (the smooth slots, which 87 % of the stage's track texture indexes: the floor's blue-violet).
+/// Drawn from the bar tint alone the floor is red-violet and the wrong hue
+/// (`detonator-look.md`, "The floor").
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_detonator_race_feeds_the_visualiser_its_bar_and_its_analogue_tint() {
+    let Some(detonator) = load_on(oag_race::Mode::Detonator, TALONS) else {
+        return;
+    };
+    let tints = detonator
+        .zone_grade
+        .as_ref()
+        .expect("a Detonator race on HD carries its grade")
+        .eq_tints()
+        .expect("stage 1 authors an EQ colour tint");
+    assert_eq!(tints.bars, [171, 9, 255]);
+    assert_eq!(tints.smooth, Some([14, 1, 55]));
+}
+
 /// **Outside HD, nothing swaps.** Pulse ships no located Zone sky, so a Zone
 /// race there keeps whatever sky the track authors - the absence is a `None`
 /// in the title record rather than a special case in the loader.

@@ -1013,24 +1013,21 @@ impl ZoneGrade {
         zone
     }
 
-    /// The showing stage's own `EQ colour tint`, for tinting the visualiser
-    /// glow - see `oag_mesh::mesh_render::zone::write_vis`.
-    ///
-    /// **Naming, not a traced shader input.** `EQ colour tint` and its
-    /// `EQ analogue colour tint` sibling are parsed and land in this table's
-    /// own per-stage struct, but no consumer of either is traced in the
-    /// executable - see
-    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-effectsettings-loader.md`'s
-    /// row for `+0x150`. Confidence 70 on "this is the spectrum's own
-    /// colour", from the name and the `EQ` cluster's own reading in
-    /// `docs/formats/effectsettings.md`. The showing stage's own palette
-    /// rather than [`Self::palette`]'s cross-fade, on the same terms
-    /// [`Self::zone_uniform`] already reads unblended.
+    /// The two colours the visualiser lookup is written with: the cross-faded `EQ colour tint`
+    /// for the bar segments and `EQ analogue colour tint` for the smooth slots
+    /// (`Environment_UpdateStageBlend`, `docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`,
+    /// "The colours"; read live against the lookup's texels, confidence 90). `None` where the stage
+    /// authors no `EQ colour tint`; a stage with no analogue tint leaves its smooth slots dark.
     #[must_use]
-    pub fn eq_tint(&self) -> Option<[u8; 3]> {
-        let palette = self.table.stage_palette(self.blend.current)?;
+    pub fn eq_tints(&self) -> Option<mesh_render::zone::EqTints> {
+        let palette = self.palette();
         let [r, g, b, _] = palette.eq_colour_tint?;
-        Some([r, g, b])
+        Some(mesh_render::zone::EqTints {
+            bars: [r, g, b],
+            smooth: palette
+                .eq_analogue_colour_tint
+                .map(|[r, g, b, _]| [r, g, b]),
+        })
     }
 
     /// The equaliser target's bar colour: [`Self::palette`]'s cross-faded `EQ colour tint`,

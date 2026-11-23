@@ -492,12 +492,11 @@ impl Scene {
             quake: race.quake_wave(),
             sea_reflection: self.sea_reflection(),
         };
-        // The visualiser's own tint - the showing stage's `EQ colour tint`,
-        // or `None` where the file authors none (every 2048 table, and any
-        // HD stage this project has not measured past `Start`/`Sub Venom`).
-        // Not substituted with white: a missing input draws nothing, the
-        // same rule `zone_uniform` above already keeps for its own inputs.
-        let zone_tint = self.zone_grade.as_ref().and_then(|grade| grade.eq_tint());
+        // The visualiser's own tints - the stage's `EQ colour tint` for the bars and its
+        // `EQ analogue colour tint` for the smooth slots, or `None` where the file authors
+        // none (every 2048 table). Not substituted with white: a missing input draws
+        // nothing, the same rule `zone_uniform` above already keeps for its own inputs.
+        let zone_tint = self.zone_grade.as_ref().and_then(|grade| grade.eq_tints());
         // Cleared, not rebuilt: see `Scene::scratch`.
         let mut scratch = self.scratch.borrow_mut();
         scratch.clear();

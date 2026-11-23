@@ -51,7 +51,7 @@ fn the_hold_rises_at_once_and_falls_by_a_tenth_a_frame() {
 fn band_three_is_the_ten_texels_the_shipped_stage_texture_tags() {
     let mut bands = vec![0.0f32; 16];
     bands[3] = 0.5;
-    let pixels = vis_pixels(&bands, Some([10, 20, 30]));
+    let pixels = vis_pixels(&bands, Some(EqTints::uniform([10, 20, 30])));
     for (offset, texel) in pixels[31..=40].iter().enumerate() {
         let want = if offset < 5 {
             [10, 20, 30, 255]
@@ -72,7 +72,7 @@ fn the_smooth_half_is_one_texel_a_band_after_the_bars() {
     let mut bands = vec![0.0f32; 16];
     bands[0] = 1.0;
     bands[15] = 1.0;
-    let pixels = vis_pixels(&bands, Some([200, 100, 50]));
+    let pixels = vis_pixels(&bands, Some(EqTints::uniform([200, 100, 50])));
     assert_eq!(
         pixels[0], [0; 4],
         "texel 0 is the original's untouched slot"
@@ -90,7 +90,7 @@ fn the_smooth_half_is_one_texel_a_band_after_the_bars() {
 /// replaced produced, and what makes the effect visible at all.
 #[test]
 fn a_lit_segment_is_the_full_tint_and_an_unlit_one_is_transparent_black() {
-    let pixels = vis_pixels(&[0.2], Some([255, 128, 64]));
+    let pixels = vis_pixels(&[0.2], Some(EqTints::uniform([255, 128, 64])));
     assert_eq!(pixels[1], [255, 128, 64, 255], "segment 1 at level 2");
     assert_eq!(pixels[2], [255, 128, 64, 255], "segment 2 at level 2");
     assert_eq!(pixels[3], [0; 4], "segment 3 is dark, not dim");
@@ -109,7 +109,10 @@ fn write_vis_blanks_on_no_tint_or_no_bands() {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .expect("requesting the device");
 
-    for (bands, tint) in [(&[0.5f32; 8][..], None), (&[][..], Some([255, 255, 255]))] {
+    for (bands, tint) in [
+        (&[0.5f32; 8][..], None),
+        (&[][..], Some(EqTints::uniform([255, 255, 255]))),
+    ] {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("vis blank test"),
             size: wgpu::Extent3d {
@@ -128,7 +131,12 @@ fn write_vis_blanks_on_no_tint_or_no_bands() {
         });
         // Seed it with something not-black first, so a no-op that merely
         // left the old contents alone would still be caught.
-        write_vis(&queue, &texture, &[1.0; 4], Some([255, 255, 255]));
+        write_vis(
+            &queue,
+            &texture,
+            &[1.0; 4],
+            Some(EqTints::uniform([255, 255, 255])),
+        );
         write_vis(&queue, &texture, bands, tint);
 
         let readback = device.create_buffer(&wgpu::BufferDescriptor {
@@ -197,7 +205,7 @@ fn write_vis_changed_writes_only_new_texels() {
     });
     let log = std::cell::RefCell::new(oag_gpu::writes::Log::default());
     let mut last = None;
-    let tint = Some([255, 128, 64]);
+    let tint = Some(EqTints::uniform([255, 128, 64]));
     let mut write = |bands: &[f32], tint| write_vis_changed(&log, &texture, bands, tint, &mut last);
     assert!(write(&[0.5; 4], tint), "the first write is always made");
     assert!(!write(&[0.5; 4], tint), "the same texels again: nothing");
@@ -207,4 +215,38 @@ fn write_vis_changed_writes_only_new_texels() {
     assert!(!write(&[0.5; 4], None), "no tint is the same blank");
     assert_eq!(log.borrow().len(), 3);
     assert_eq!(last, Some([[0; 4]; VIS_WIDTH as usize]));
+}
+
+/// **The bars and the smooth slots are two colours.** The original's `zoneTexVis` lit segments
+/// carry the stage's `EQ colour tint` and slot `161 + b` its `EQ analogue colour tint` times the
+/// band's level (`zone-equaliser.md`, "The colours"); Detonator stage 1 authors `171 9 255` and
+/// `14 1 55`, and a track texture that indexes the smooth slots (87 % of its texels) draws the
+/// second. Draw both halves from one tint and the floor goes the bars' red-violet.
+#[test]
+fn the_bars_take_the_eq_tint_and_the_smooth_slots_the_analogue_tint() {
+    let tints = EqTints {
+        bars: [171, 9, 255],
+        smooth: Some([14, 1, 55]),
+    };
+    let mut bands = vec![0.0f32; 16];
+    bands[3] = 1.0;
+    let pixels = vis_pixels(&bands, Some(tints));
+    assert_eq!(pixels[31], [171, 9, 255, 255], "band 3's first segment");
+    assert_eq!(
+        pixels[SMOOTH_BASE + 3],
+        [14, 1, 55, 255],
+        "band 3's smooth slot"
+    );
+    bands[3] = 0.5;
+    let half = vis_pixels(&bands, Some(tints))[SMOOTH_BASE + 3];
+    assert_eq!(half, [7, 1, 28, 255], "the analogue tint times the level");
+    let bare = EqTints {
+        smooth: None,
+        ..tints
+    };
+    assert_eq!(
+        vis_pixels(&bands, Some(bare))[SMOOTH_BASE + 3],
+        [0; 4],
+        "a stage that authors no analogue tint draws no smooth slot"
+    );
 }

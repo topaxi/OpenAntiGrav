@@ -737,8 +737,34 @@ impl Hold {
     }
 }
 
+/// The two colours the visualiser lookup is written with: the stage's
+/// `EQ colour tint` for the bar segments, and its `EQ analogue colour tint` for
+/// the smooth slots (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`, "The
+/// colours": read live against the lookup's texels, confidence 90). A track texture
+/// whose alpha indexes the smooth half (Detonator's: 87 % of its texels, slot 164) takes
+/// the analogue colour, so the two are different on any stage that authors them differently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EqTints {
+    /// `EQ colour tint`: every lit bar segment.
+    pub bars: [u8; 3],
+    /// `EQ analogue colour tint`, scaled by the band's level in the smooth slots;
+    /// `None` where the stage authors none, and the smooth slots then draw nothing.
+    pub smooth: Option<[u8; 3]>,
+}
+
+impl EqTints {
+    /// One colour for both halves, for a caller that has only the one.
+    #[must_use]
+    pub fn uniform(tint: [u8; 3]) -> Self {
+        Self {
+            bars: tint,
+            smooth: Some(tint),
+        }
+    }
+}
+
 /// Rewrites the visualiser lookup from `bands` levels, each `0.0..=1.0`,
-/// tinted by `tint` - or blanks it when `tint` is `None`, which is what a
+/// tinted by `tints` - or blanks it when `tints` is `None`, which is what a
 /// stage that authors no `EQ colour tint` gets: a missing input draws
 /// nothing, not an invented white.
 ///
@@ -754,7 +780,7 @@ impl Hold {
 /// ```text
 /// texel 0                     never written
 /// texels 1 + 10b ..= 10 + 10b band b's bar: segment s is lit when s <= level
-/// texel  161 + b              band b's smooth level, the tint scaled by it
+/// texel  161 + b              band b's smooth level, the analogue tint scaled by it
 /// ```
 ///
 /// with `level = min(10, trunc(held * 11.0))` and a lit segment carrying the
@@ -777,9 +803,9 @@ pub fn write_vis(
     queue: &dyn oag_gpu::writes::Writes,
     texture: &wgpu::Texture,
     bands: &[f32],
-    tint: Option<[u8; 3]>,
+    tints: Option<EqTints>,
 ) {
-    upload_vis(queue, texture, &vis_pixels(bands, tint));
+    upload_vis(queue, texture, &vis_pixels(bands, tints));
 }
 
 /// The lookup's 256 RGBA texels, as [`write_vis`] uploads them.
@@ -794,10 +820,10 @@ pub fn write_vis_changed(
     queue: &dyn oag_gpu::writes::Writes,
     texture: &wgpu::Texture,
     bands: &[f32],
-    tint: Option<[u8; 3]>,
+    tints: Option<EqTints>,
     last: &mut Option<VisTexels>,
 ) -> bool {
-    let pixels = vis_pixels(bands, tint);
+    let pixels = vis_pixels(bands, tints);
     if last.as_ref() == Some(&pixels) {
         return false;
     }
@@ -839,12 +865,12 @@ fn upload_vis(queue: &dyn oag_gpu::writes::Writes, texture: &wgpu::Texture, pixe
 /// by `li r15,0`), and that is also the explicit "draw nothing" a `None`
 /// tint or an empty `bands` gets, rather than leaving whatever the texture
 /// held from a previous frame.
-fn vis_pixels(bands: &[f32], tint: Option<[u8; 3]>) -> VisTexels {
+fn vis_pixels(bands: &[f32], tints: Option<EqTints>) -> VisTexels {
     let mut texels = [[0u8; 4]; VIS_WIDTH as usize];
-    let Some(tint) = tint.filter(|_| !bands.is_empty()) else {
+    let Some(tints) = tints.filter(|_| !bands.is_empty()) else {
         return texels;
     };
-    let lit = [tint[0], tint[1], tint[2], 255];
+    let lit = [tints.bars[0], tints.bars[1], tints.bars[2], 255];
     let scaled = |channel: u8, by: f32| {
         #[expect(
             clippy::cast_possible_truncation,
@@ -860,16 +886,16 @@ fn vis_pixels(bands: &[f32], tint: Option<[u8; 3]>) -> VisTexels {
                 *texel = lit;
             }
         }
-        // The smooth half: the same tint scaled by the level rather than
+        // The smooth half: the analogue tint scaled by the level rather than
         // quantised to a segment. The original builds it by multiplying each
         // 0-255 colour component by the 0-255 level and keeping the high
         // byte, which is this to within a rounding step.
-        if let Some(texel) = texels.get_mut(SMOOTH_BASE + band) {
+        if let (Some(smooth), Some(texel)) = (tints.smooth, texels.get_mut(SMOOTH_BASE + band)) {
             let by = level.clamp(0.0, 1.0);
             *texel = [
-                scaled(tint[0], by),
-                scaled(tint[1], by),
-                scaled(tint[2], by),
+                scaled(smooth[0], by),
+                scaled(smooth[1], by),
+                scaled(smooth[2], by),
                 255,
             ];
         }
