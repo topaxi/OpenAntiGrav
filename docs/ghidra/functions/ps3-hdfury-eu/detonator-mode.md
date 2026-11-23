@@ -135,7 +135,7 @@ The v1.00 `+0x5e4` and v1.07 `+0x5f4` are one store: 1.07 moved the struct by `0
 auto-speed branch reads (`detonator-speed.md`, "2048 and Omega"), not a second write. **Ported, no `Title`
 field needed**: the law is HD's, so one generic path serves all three. `oag_raceplay::detonator` lays the
 opening stage on the first tick for every title and `unramped_target` takes `n = 0` on stage 1, then
-`min(stage, 14)`; `detonator_ground_truth::{an_omega_detonator_race_runs_fourteen_stages_without_a_grade,
+`min(stage, 14)`; `detonator_ground_truth::{an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade,
 a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table}` pin both through
 `assert_the_opening_stage_and_the_stage_cap` (red when the cap is dropped, checked by mutation). Also in
 Omega's state `2` (v1.07): the clean-lap `+1000` (the craft byte `+0x76f6 & 0x20` adds `1000` to the score
