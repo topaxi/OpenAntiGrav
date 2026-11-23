@@ -41,7 +41,10 @@
 //! - The subject the camera hands to is the player's own wreck: `RaceManager+0xe8`, the list the
 //!   original picks another subject from, is unread, and the single-player case leaves the
 //!   player's craft as read (row H1).
-//! - The eye the hold view freezes is the chase camera's at the hand-back.
+//! - The eye the hold view freezes is the chase camera's at the hand-back, or at the cut on a
+//!   circuit with no `Camera` node. 2048's own circuits author none (a census of `altima`,
+//!   `tower` and `sol`), so there the hold view is the whole destroy camera: Omega's fallback
+//!   is read (row W8), 2048's pick `0x812199c0` is not, and 2048 takes Omega's.
 
 use super::*;
 use oag_render::camera::destroy::{self, Destroy, Ease, Station, orbit::Orbit};
@@ -228,11 +231,23 @@ impl RaceView {
                     camera.active = Destroy::start(&camera.stations, subject, ease, offset);
                     if camera.active.is_some() {
                         cuts += 1;
+                    } else if law.holds_the_wreck {
+                        // No station to stand on: the pick gives mode 7 and Omega goes to the
+                        // hold mode 8 (`0x013832f0`) from there (row W8).
+                        camera.released = true;
+                        cuts += 1;
+                        let chase = self.tick_view_unshaken(core).inverse().w_axis.truncate();
+                        self.destroy_camera.hold_eye = Some(chase);
+                        self.destroy_camera.active = Some(Destroy::hold(
+                            chase,
+                            subject,
+                            ship.physics.body.linear_velocity,
+                        ));
                     }
                 }
             }
         }
-        camera.cuts = camera.cuts.wrapping_add(cuts);
+        self.destroy_camera.cuts = self.destroy_camera.cuts.wrapping_add(cuts);
     }
 }
 

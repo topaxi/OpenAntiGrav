@@ -211,3 +211,23 @@ fn pulse_zone_has_no_orbit() {
         Basis::Flattened
     );
 }
+
+/// Omega's pick finding no station goes to the hold view at the cut (row W8); HD, which has no
+/// hold view, keeps the chase camera.
+#[test]
+fn a_circuit_without_stations_holds_where_the_title_holds() {
+    let chase = |destroyed| {
+        let mut race = race_of(destroyed);
+        race.view.destroy_camera = DestroyCamera::new(Vec::new(), 0.4);
+        let chase_eye = eye(&race);
+        set_player(&mut race, CraftState::Destroyed);
+        (race, chase_eye)
+    };
+    let (race, chase_eye) = chase(DestroyedCraft::HD_BLOWUP);
+    let held = race.view.destroy_camera_now().expect("the hold view");
+    assert_eq!(held.basis, Basis::LookAt);
+    assert_eq!(held.eye, chase_eye);
+    assert_eq!(race.view.camera_cuts(&race.core), 1);
+    let (race, _) = chase(DestroyedCraft::HD);
+    assert!(race.view.destroy_camera_now().is_none());
+}
