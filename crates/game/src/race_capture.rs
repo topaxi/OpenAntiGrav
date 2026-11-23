@@ -1372,7 +1372,8 @@ pub fn capture(
                         &mut encoder,
                         &hud_view,
                         (&race, &scene, &overlay),
-                        (&medal_models, countdown_model.as_ref()),
+                        &medal_models,
+                        countdown_model.as_ref(),
                         hud_viewport,
                         (width, height),
                     );

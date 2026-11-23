@@ -14,10 +14,8 @@ pub(super) fn draw_over_hud(
     encoder: &mut wgpu::CommandEncoder,
     hud_view: &wgpu::TextureView,
     (race, scene, overlay): (&Race, &Scene, &crate::hud_overlay::Overlay),
-    (medal_models, countdown_model): (
-        &[(oag_hud::ImageModel, oag_mesh::mesh::Model)],
-        Option<&(oag_mesh::mesh::Model, oag_hud::Model)>,
-    ),
+    medal_models: &[(oag_hud::ImageModel, oag_mesh::mesh::Model)],
+    countdown_model: Option<&(oag_mesh::mesh::Model, oag_hud::Model)>,
     hud_viewport: (f32, f32, f32, f32),
     size: (u32, u32),
 ) {
