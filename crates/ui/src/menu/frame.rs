@@ -16,7 +16,8 @@
 //!
 //! # What is drawn, and what is left out
 //!
-//! The screen's `<ScreenClear>` and its `<Image>` widgets. **Not its
+//! The screen's `<ScreenClear>`, its colour-only `<Image>` widgets (fills) and its textured
+//! `<Image>` widgets. **Not its
 //! `<Text>`s**: on HD those are the trial build's (`FE_TRIAL_MODE`,
 //! `FE_PURCHASE_NOW`) or belong to a `<NavigationController>`, which decides
 //! per screen which button prompts to show and which this build does not have.
@@ -333,7 +334,26 @@ pub fn read(
         color: argb_to_rgba(argb),
     });
 
-    let mut marks = Vec::new();
+    // The screen's colour-only widgets first, as `crate::frontend`'s own screen drawing puts a
+    // screen's fills under its images: Pure's footer rule at y 251, its five ticks and the dot
+    // beside the dotted rule are `<Image>`s with a colour and no `src`. A fill over the whole
+    // screen is its ground, not a mark: Pulse's `FE Screen` authors an opaque black one that its
+    // backdrop movie covers, and as a mark it would be drawn over the movie.
+    let mut marks: Vec<Draw> = screen
+        .fills
+        .iter()
+        .filter(|fill| {
+            let width = fill.width.unwrap_or(space.size.0);
+            let height = fill.height.unwrap_or(space.size.1);
+            !(fill.x <= 0.0 && fill.y <= 0.0 && width >= space.size.0 && height >= space.size.1)
+        })
+        .map(|fill| {
+            let mut fill = fill.clone();
+            fill.width = fill.width.or(Some(space.size.0));
+            fill.height = fill.height.or(Some(space.size.1));
+            fill.draw()
+        })
+        .collect();
     for image in &screen.images {
         let Some(placed) = sprites
             .iter()

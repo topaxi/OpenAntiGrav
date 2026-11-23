@@ -74,6 +74,35 @@ fn an_image_the_sheet_has_no_placement_for_is_skipped() {
     assert!(frame.ink.is_none(), "with no marks there is no ink either");
 }
 
+/// A colour-only `<Image>` on the frame screen is a mark (Pure's footer rule and its ticks, inside
+/// `<Animation>` wrappers), and one over the whole screen is the ground and is not (Pulse's
+/// opaque black, which its backdrop movie covers).
+#[test]
+fn the_frames_colour_rules_are_marks_and_its_ground_is_not() {
+    let xml = r#"<?xml version="1.0" encoding="utf-8" ?>
+<Screen>
+  <Screen name="Frame">
+    <Image><Values x="0" y="0" width="480" height="272" Color="0xFF000000"></Values></Image>
+    <Animation name="MainAnim6" focus="true">
+      <Values Incbutton="none" Decbutton="none" Loop="false"></Values>
+      <Key Time="0" TextureWidth="-444"></Key>
+      <Key Time="0.67" TextureWidth="0"></Key>
+      <Image><Values x="21" y="251" width="444" height="1" TxtrWidth="441" TxtrHeight="1" Color="0xFF11ACD0"></Values></Image>
+    </Animation>
+  </Screen>
+</Screen>"#;
+    let frame = crate::menu::read_frame(
+        &Screens::from_xml(xml),
+        &[],
+        oag_display::space::Space::PSP,
+        Some("Frame"),
+        None,
+        None,
+    );
+    let rects: Vec<[f32; 4]> = frame.mark_rects();
+    assert_eq!(rects, vec![[21.0, 251.0, 444.0, 1.0]], "{frame:?}");
+}
+
 /// A title that names no frame screen gets an empty one, and so does a name
 /// that is not on this source.
 #[test]
