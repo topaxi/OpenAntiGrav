@@ -50,7 +50,7 @@ use oag_rcs::gxp::sampler_use;
 use oag_rcs::rcsmaterial::name_hash;
 use oag_rcs::rcsmodel::psp2;
 
-use super::{Report, decode_material_texture, glow, normal_map, twin_blend};
+use super::{Report, glow, normal_map, twin_blend};
 use crate::mesh::Emissive;
 use crate::mesh::rcs::Textures;
 use crate::mesh::rcs::{
@@ -276,10 +276,7 @@ pub(super) fn plan(
             let map = picture.filter(|_| free).and_then(|path| {
                 pictures
                     .entry(path)
-                    .or_insert_with(|| {
-                        let blob = textures(path)?;
-                        decode_material_texture(path, &blob, report).map(Arc::new)
-                    })
+                    .or_insert_with(|| super::picture_memo::picture(path, textures, report))
                     .clone()
             });
             let (Some(block), Some(map)) = (block(law, material), map) else {

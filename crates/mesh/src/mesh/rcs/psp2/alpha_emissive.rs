@@ -32,7 +32,7 @@ use std::sync::Arc;
 use oag_rcs::rcsmodel::psp2::{self, specular_picture};
 
 use super::emissive_add::{Add, Plan};
-use super::{Report, decode_material_texture, glow};
+use super::{Report, glow};
 use crate::mesh::rcs::Textures;
 use crate::mesh::rcs::alpha_emissive::{COLOUR, PICTURE};
 use crate::mesh::{
@@ -83,11 +83,7 @@ pub(super) fn plan(
             Some(w) => {
                 let map = maps
                     .entry(w.specular)
-                    .or_insert_with(|| {
-                        textures(w.specular)
-                            .and_then(|blob| decode_material_texture(w.specular, &blob, report))
-                            .map(Arc::new)
-                    })
+                    .or_insert_with(|| super::picture_memo::picture(w.specular, textures, report))
                     .clone();
                 if map.is_none() {
                     report.alpha_emissive_unread += 1;
