@@ -24,10 +24,19 @@ fn far_station() -> Station {
     }
 }
 
+/// Nearest to the craft by eye, farthest by aim: a pick by eye position takes this one.
+fn decoy_station() -> Station {
+    Station {
+        eye: Vec3::new(20.0, 5.0, 5.0),
+        aim: Vec3::new(-900.0, 0.0, 900.0),
+    }
+}
+
 fn race_of(destroyed: DestroyedCraft) -> Race {
     let mut race = race_with_a_grid();
     race.core.sim.destroyed = destroyed;
-    race.view.destroy_camera = DestroyCamera::new(vec![far_station(), near_station()], 0.4);
+    race.view.destroy_camera =
+        DestroyCamera::new(vec![far_station(), decoy_station(), near_station()], 0.4);
     race.core.sim.world.ships[0].physics.body.position = Vec3::new(8.0, 0.0, 3.0);
     race
 }
@@ -64,10 +73,25 @@ fn hd_cuts_to_the_station_whose_aim_is_nearest_with_hd_rates() {
     assert!((eye(&race) - near_station().eye).length() < 1e-3);
     let camera = race.view.destroy_camera_now().expect("cut");
     assert_eq!(camera.substeps_per_second, Some(6000.0));
-    let field = camera.fov_rate / 0.06;
-    assert!((0.5..=2.0).contains(&field), "field factor {field}");
-    let focus = camera.focus_rate / 0.4;
-    assert!((0.5..=1.0).contains(&focus), "focus factor {focus}");
+    // The draws in the cut's order: the starting field's offset, the field factor, the focus factor.
+    let mut rng = oag_core::rng::Rng::new(crate::destroy_camera::DESTROY_CAMERA_SEED);
+    let _offset = rng.next_f32();
+    let field = 0.5 + (2.0 - 0.5) * rng.next_f32();
+    let focus = 0.5 + (1.0 - 0.5) * rng.next_f32();
+    assert!(
+        (field - 1.0).abs() > 0.05 && (focus - 1.0).abs() > 0.05,
+        "seed lands off 1.0"
+    );
+    assert!(
+        (camera.fov_rate - 0.06 * field).abs() < 1e-6,
+        "{}",
+        camera.fov_rate
+    );
+    assert!(
+        (camera.focus_rate - 0.4 * focus).abs() < 1e-6,
+        "{}",
+        camera.focus_rate
+    );
 }
 
 #[test]

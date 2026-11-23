@@ -280,10 +280,23 @@ fn a_2048_destroyed_seat_holds_on_a_circuit_with_no_camera_node() {
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
+    let chase_eye = race.view_state().camera_position(&race.core);
     race.core.sim.force_destroy(0);
     for _ in 0..30 {
         race.tick(&PlayerInputs::none());
     }
+    let held = race.view_state().camera_position(&race.core);
+    assert!(
+        (held - chase_eye).length() < 0.5,
+        "held where the chase camera stood: {held:?} vs {chase_eye:?}"
+    );
+    for _ in 0..60 {
+        race.tick(&PlayerInputs::none());
+    }
+    assert!(
+        (race.view_state().camera_position(&race.core) - held).length() < 1e-3,
+        "the eye stays fixed"
+    );
     let fov = race
         .view_state()
         .vertical_fov(&race.core, 16.0 / 9.0, oag_display::display::Fov::AUTHORED)
