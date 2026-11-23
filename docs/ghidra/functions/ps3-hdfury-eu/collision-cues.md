@@ -399,12 +399,17 @@ zero skips `Ship_ApplyDamage` (`0x000ec51c`).
 | `Floor Collision` (`0x3b9`) | `0x002eaba8` | 2 | 1 | `g_ShipFloorFriction`, never written: **0** | **2** | 78 |
 | `Mag Floor Collision` (`0x3e6`) | `0x002eaba8` | 2 | 3 | the same: **0** | **2** | 78 |
 | `Reset Collision` (`0x3cd`) | `0x002eaba8` | 4 | 2 | the same: **0** | **2**, and the record sends the craft to state 6 | 78 |
-| a wreck (state 6's compound collider) | `Ship_Construct` `0x000ded38`.. | 1 | - | `(0, 1)` is outside the table: **0** | **2** | 72 |
+| a wreck (state 6's compound collider) | `Ship_Construct` `0x000ded38`.. | 1 | - | `(0, 1)` is outside the table: 0, **but no such record is made**: a compound (type 6) is tested against meshes and compounds only ([collision.md](collision.md), "type 6 is a compound shape"), never against a craft's box (type 3) | none | 75 |
+| anything of material 5 | not read | 5 | - | `(5, 0)` returns 0 | 2, if it ever touches a craft | - |
 | `Cage Collision` (`0x3e7`) | none: `0x002eacc8` skips the node | - | - | no record | - | 82 |
 
 So on HD the one-shot no-damage spark is what a craft throws when its box meets the floor, the
-mag floor or a reset plane, or a wreck tumbling on its compound collider. Walls and live craft
-keep the attached damage spark. The cage makes no collider, so no record and no spark.
+mag floor or a reset plane. Walls and live craft keep the attached damage spark. The cage makes
+no collider, and a wreck's compound never meets a live craft's box, so neither makes a record.
+Material 5 is unread: its restitution against 2 and 4 is a random pick (`Libc_Rand`), which reads
+like debris; the place to start is the debris body `0x0010c958`, whose collider comes from its own
+constructor. If that collider is a sphere (type 5), HD tests it against meshes only
+([mp-time-trial-collision.md](mp-time-trial-collision.md)) and it never makes a craft record.
 
 ### The kind rule (`Ship_SpawnContactFx`, `0x000e6fd8`)
 
@@ -459,7 +464,8 @@ in a race, or a breakpoint on `0x000be16c` reading `f1`.
 
 ### Which collider has which material
 
-`0x002eaba8` builds one mesh collider (`0x00039a90`, `0xb0` bytes) per collision node, adds it
+`0x002eaba8` builds one mesh collider (`0x00039a90`, `0xb0` bytes) per object of a collision
+node (the loop `0x002ead7c`..`0x002ead90` runs the payload's object count), adds it
 (`Collision_AddObject`, `0x002ead14`), then sets the material `+0x84` and the class `+0x74` from
 the node's class id (`*(node + 0xc8)`):
 
@@ -479,8 +485,8 @@ constructors give the body's box material 0 (`li r25, 0` at `0x000deb48`, stored
 `0x000dece0`; `0x000e0b8c`, `0x000e0d24`) and the seven-child compound at `ship + 0x694c`
 material 1 (`li r26, 1`, stored at `0x000ded38` and on each child). That compound is the
 wreck's collider, swapped in at state 6 ([ship-destroy.md](ship-destroy.md)), so a live craft
-meets material 1 only from a wreck. Confidence 72: the table and the stores are read, the swap
-is that page's, and no wreck contact was run.
+could meet material 1 only from a wreck, and the shape dispatch never pairs the wreck's compound
+with a craft's box. Confidence 75: the stores and the dispatch are read, the swap is that page's.
 
 A record carries `Collision_PairFriction` of the two materials either way: the track resolver
 passes `contact + 0x2c` (`0x000f7afc`, call `0x000f7b0c`), the pair resolver the same field
@@ -503,8 +509,13 @@ With a null matrix and flags 0, `FUN_002c8c70` gives the node its own matrix, th
 unattached, one-shot instance per record, a child of the nearest of the ten locators
 (`ship + 0x79d0`). It takes no strength (the trigger's `f1` is not read on this path), no
 carried velocity and none of the caller's basis vectors; its lifetime is the effect file's own.
-The cockpit gate (`ship + 0x5f42`, the inside-the-hull view) stops every kind, the attached
-spark included. Confidence 80 for the branch; **60 that the spark sits at the locator**: whether
+The gate on `ship + 0x5f42` (read elsewhere as the cockpit view, inferred: its setter is unread,
+[cannon.md](cannon.md)) stops every kind, the attached spark included.
+
+**One spark per record, whatever the number of views.** The ring walk's view loop
+(`0x000ec3e4`..`0x000ec4a4`) calls `Ship_SpawnContactFx` from `0x000ec9fc` for the first view
+that passes, then branches past the loop (`0x000eca00`, `b 0x000ec4a8`). A kind 2 node is
+allocated per call, so a frame with three floor records makes three. Confidence 85. Confidence 80 for the branch; **60 that the spark sits at the locator**: whether
 the scene update composes the parent locator's world matrix into `node + 0xf0` is not read.
 Recipe: after a floor contact, read `node + 0x120` (the translation row) against the locator's
 world position, or read the update reached through the node's vtable.
@@ -525,8 +536,8 @@ world position, or read the update reached through the node's vtable.
   has HD's shape with more materials: a craft (0 or 1) against a craft returns `0x8151fc18`
   (`0.035`), against walls 4, 5, 6 `0x8151fc1c`/`0x8151fc20` (`0.025`/`0.035` by the Zone test),
   and against 2, 3, 7, 10, 11, 12 the float at `0x818a5390`, past the data segment's file size
-  (`0x8153fae0`) and read only by this function: zero, as HD's. It differs on the wreck: 2048's
-  0 and 1 are both craft (`0.035`). Which 2048 surface is which material, and its contact-fx
+  (`0x8153fae0`) and read only by this function: zero, as HD's. `(0, 1)` gives `0.035` there;
+  what 2048's material 1 is, is not read. Which 2048 surface is which material, and its contact-fx
   caller, are not read.
 - **Omega: checked, the frictionless floor applies, not wired.** The pair tables are inlined
   into each narrowphase test (`FUN_012539b0` and its siblings, all readers of `shipWallCofR` at

@@ -189,7 +189,7 @@ friction (`+0x470`) from `0x811a1870` and its restitution (`+0x474`) from
 | --- | --- | --- | --- |
 | `0x811a1870` | function | `Collision_PairFriction` | 82 |
 
-A craft (material 0 or 1) gets `0x8151fc18` (`0.035`) against a craft, `0x8151fc1c` or
+Material 0 or 1 (0 a craft; 1 not read) gets `0x8151fc18` (`0.035`) against a craft, `0x8151fc1c` or
 `0x8151fc20` (`0.025`, `0.035`; the first when `GameMode_IsZoneFamily_q`) against materials 4,
 5 and 6, and the float at `0x818a5390` against 2, 3, 7, 10, 11 and 12. That float lies past the
 data segment's file size (`0x8153fae0`) and its only references are this function's two reads,
