@@ -193,7 +193,7 @@ impl CueTables for Cue {
             | Self::ShipOnFire
             | Self::ShipOnFireStop
             | Self::Turbo => BankName::Weapons,
-            Self::ShipDestroy => BankName::Ship,
+            Self::ShipDestroy | Self::ShipExplosionSmall => BankName::Ship,
             Self::ShieldActive
             | Self::Engaging
             | Self::Disengaging
@@ -260,6 +260,7 @@ impl CueTables for Cue {
             Self::MineLaunch => "MINELAUNCH",
             Self::ShipExplosionPlayer => "EXPLBIG_PC",
             Self::ShipExplosion => "EXPLBIG",
+            Self::ShipExplosionSmall => "EXPLSMALL",
             Self::ShipDestroyed | Self::ShipDestroyedStop => "~SHIP_DESTROYED",
             Self::ShipDestroy => "shipdestroy",
             Self::ShipOnFire | Self::ShipOnFireStop => "~SHIP_ONFIRE",
@@ -431,6 +432,7 @@ impl CueTables for Cue {
             // plays on the craft's own emitter `+0x5ee0` (`ship-destroy.md`, row 3).
             Self::ShipExplosionPlayer
             | Self::ShipExplosion
+            | Self::ShipExplosionSmall
             | Self::ShipDestroyed
             | Self::ShipDestroyedStop
             | Self::ShipOnFire

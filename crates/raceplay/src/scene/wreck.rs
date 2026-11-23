@@ -125,6 +125,13 @@ impl Scene {
             ) == Live::Wreck
     }
 
+    /// Whether the wreck is gone from view: from the big blast on, on a title whose blast
+    /// squashes the wreck's matrix and whose state 6 never rewrites it
+    /// ([`RaceView::wreck_gone`]). The hull stays undrawn: the live model is still the wreck.
+    pub(super) fn wreck_hidden(&self, race: &Race, slot: usize) -> bool {
+        race.view.wreck_gone(slot)
+    }
+
     /// Whether the hull is left undrawn for `slot`: the player's own in the
     /// cockpit view (`RaceView::draws_own_ship`), or any craft whose wreck is live.
     pub(super) fn hull_skipped(&self, race: &Race, slot: usize) -> bool {
@@ -141,7 +148,7 @@ impl Scene {
         prev: &motion::Snapshot,
     ) {
         for slot in 0..usize::from(race.core.sim.ship_count()) {
-            if !self.is_wrecked(race, slot) {
+            if !self.is_wrecked(race, slot) || self.wreck_hidden(race, slot) {
                 continue;
             }
             if let Some(wreck) = &self.wrecks.hull[slot] {
@@ -172,6 +179,7 @@ impl Scene {
     ) {
         for slot in 0..usize::from(race.core.sim.ship_count()) {
             if self.is_wrecked(race, slot)
+                && !self.wreck_hidden(race, slot)
                 && let Some(wreck) = &self.wrecks.hull[slot]
             {
                 wreck.select_lod(view, race.view.ship_model_matrix_of(&race.core, slot), eye);
@@ -186,7 +194,10 @@ impl Scene {
         list: &mut super::record::DrawList<'a>,
     ) {
         for slot in 0..usize::from(race.core.sim.ship_count()) {
-            if !self.is_wrecked(race, slot) || (slot == 0 && !race.view.draws_own_ship()) {
+            if !self.is_wrecked(race, slot)
+                || self.wreck_hidden(race, slot)
+                || (slot == 0 && !race.view.draws_own_ship())
+            {
                 continue;
             }
             if let Some(wreck) = &self.wrecks.hull[slot] {

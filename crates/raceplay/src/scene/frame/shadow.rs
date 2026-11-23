@@ -820,6 +820,9 @@ impl super::super::Scene {
         for slot in 0..drawn.min(self.ships.len()) {
             let model = race.view.ship_model_matrix_of(&race.core, slot);
             if self.is_wrecked(race, slot) {
+                if self.wreck_hidden(race, slot) {
+                    continue;
+                }
                 if let Some(wreck) = self.wrecks.hull(slot) {
                     bodies.push((wreck, model));
                 }

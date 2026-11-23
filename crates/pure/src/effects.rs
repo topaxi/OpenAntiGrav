@@ -32,9 +32,9 @@ pub const EFFECTS: &Effects = &{
             EffectSpec::new(engine_effects::ABSORB_EFFECT, Origin::Measured)
                 .with_burst(ABSORB_BURST),
         )
-        // Hit sparks and the wreck's node blast and death sparks are Pulse's trigger rule, inherited: Pure's
-        // `Ship_Damage` and `Ship_SetState` are unread, but its `Data.wad` authors those three
-        // effect files and its hulls carry the locators (`docs/formats/pure-status.md`).
+        // Hit sparks are Pulse's trigger rule, inherited: Pure's `Ship_Damage` is unread, but its
+        // `Data.wad` authors the effect and its hulls carry the locators
+        // (`docs/formats/pure-status.md`).
         .with(
             Trigger::HitSpark,
             EffectSpec::new(
@@ -42,19 +42,15 @@ pub const EFFECTS: &Effects = &{
                 Origin::InheritedFrom("Wipeout Pulse"),
             ),
         )
+        // The wreck's node blast and death sparks on each locator at the state 5 edge
+        // (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, row 15).
         .with(
             Trigger::WreckNode,
-            EffectSpec::new(
-                engine_effects::FXNODE_EXPLO_EFFECT,
-                Origin::InheritedFrom("Wipeout Pulse"),
-            ),
+            EffectSpec::new(engine_effects::FXNODE_EXPLO_EFFECT, Origin::Measured),
         )
         .with(
             Trigger::WreckSparks,
-            EffectSpec::new(
-                engine_effects::DEATH_SPARKS_EFFECT,
-                Origin::InheritedFrom("Wipeout Pulse"),
-            ),
+            EffectSpec::new(engine_effects::DEATH_SPARKS_EFFECT, Origin::Measured),
         )
         // `FUN_089258b8`, the wreck's 1.5 s timeout (state 5, `Ship_SetState` case 5 arms it):
         // `docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`.
@@ -239,11 +235,11 @@ pub const LOOKS: &Looks = &Looks {
     // pair is built from the same `-1.0`/`0.3` radian literals
     // (`0x08a8e8ec`) in `FUN_08864018`
     // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`).
-    // The swap to `Shipwreck.vex` and its locators ride the same inherited rule as the wreck
-    // effects above.
+    // The swap to `Shipwreck.vex` on the state 5 edge, read and run live
+    // (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, row 11).
     hull_wreck: Rule {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
-        origin: Origin::InheritedFrom("Wipeout Pulse"),
+        origin: Origin::Measured,
     },
     hull_shine: Rule {
         on: Platforms::Only(&[oag_title::Platform::Psp]),

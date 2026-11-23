@@ -133,6 +133,23 @@ The maximum is 7, under Pure's cap of 8 and Pulse's of 10.
 - **Same as Pulse, missing from ours on both titles:** the wreck hidden from the big blast on (row 22).
 - **Unread:** row 16 (`90.0` on the death sparks' instance), row 19's flash kind, row 28's callers, row 4's node class.
 
+## Wired (2026-11-23, lane `pure-wreck-wire`)
+
+| Rows | What | Where |
+| --- | --- | --- |
+| 1, 7, 10, 24 | the timers and edges: `DestroyedCraft::PURE` is **measured** (was inherited from Pulse) | `oag_title::destroyed`, `crates/pure/src/lib.rs` |
+| 11, 15 | `hull_wreck`, `WreckNode`, `WreckSparks` are **measured** (were `InheritedFrom`) | `crates/pure/src/effects.rs` |
+| 8, 21 | `explosion_gaseous.vex` thrown at the body on the 4 -> 5 edge and again at the big blast, in place of the shockwave ring (Pure has no `WreckExplosion`, so the ring was already absent). A billboard in the bomb-blast pool (`BlastKind::Gaseous`): scale `0.1` toward `4.0` at `0.05` a tick, grey `255, 255, 0` at `0, 0.4, 0.5` s (linear between, as a multiplier of the vertex colours; the original writes the colour outright), retired at `0.5` s. Loaded through `DestroyedCraft::gaseous_flash`; a disc without it draws nothing and the loader report says so | `bomb_blast.rs`, `craft_flash.rs` |
+| 14, 18 | `EXPLSMALL` at state 5 and `EXPLBIG` at state 6 on every craft, no `_PC`, no `SHIP_DEST`; out of the title's ship bank (`DestroyedSound::BlowupAndBlasts`, `Cue::ShipExplosionSmall`, `Cue::ShipExplosion`). Pulse voices neither | `destroyed_cues.rs`, `load/audio.rs` |
+| 22 | the wreck is not drawn from the big blast on, **Pulse and Pure** (`DestroyedCraft::wreck_hidden_at_blast`; HD keeps its wreck in view). View state set on the tick the blast fires, so a world standing still under the results (a Zone wreck, a solo headless run) hides it too | `craft_flash.rs`, `scene/wreck.rs` |
+| 26 | `~BLOWUP` is released at state 6 on both titles; `craft_is_exploding` still ties it to state 4's `0.5 s` | not wired |
+
+Not wired: row 12 (the Phantom wreck): ours never loads Pure's `Phantom.vex` hull (what selects it is a synced
+ad-hoc network byte, unread), so there is no Phantom craft to wear `Phantom_shipwreck.vex`; rows 16, 19, 28 stay unread.
+`ship_models_ground_truth.rs` already asserts the eight teams ship the Phantom wreck. The disc check for the rest is
+`pure_race_ground_truth::a_pure_race_loads_its_destroyed_craft_pieces`. Checked against Pulse: rows 8 and 21 are Pure
+only; row 22 and the hide are Pulse's static reading (`0x08841e50`) wired for both.
+
 ## Measured on PPSSPP (2026-11-23)
 
 PPSSPP 1.20.4, software renderer, Pure USA, the Vineta Time Trial state

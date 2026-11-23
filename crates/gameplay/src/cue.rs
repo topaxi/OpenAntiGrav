@@ -633,6 +633,11 @@ pub enum Cue {
     ShipExplosionPlayer,
     /// HD's destroyed craft at the blast, any craft but the local player: `EXPLBIG`.
     ShipExplosion,
+    /// Pure's small blast, `EXPLSMALL` on the craft's own emitter at state 5 (every craft, no
+    /// `_PC`: `docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, row 14). Its big blast is
+    /// [`Self::ShipExplosion`], thrown at state 6 (row 18). Loaded from the title's ship bank
+    /// where `DestroyedSound::BlowupAndBlasts` is the title's; not in [`Self::ALL`].
+    ShipExplosionSmall,
     /// The local player's looped `~SHIP_DESTROYED`, started with the blast (row 3).
     ///
     /// Held, per slot: the cue is the start and [`Self::ShipDestroyedStop`] the end, which

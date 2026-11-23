@@ -12,7 +12,7 @@ use oag_gameplay::cue::{Cue, CueEvent};
 use oag_title::destroyed::DestroyedSound;
 
 /// What a craft's destruction had started, so a tick raises only the edges.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub(crate) struct Heard {
     /// The blast was raised for this wreck.
     blast: bool,
@@ -20,6 +20,12 @@ pub(crate) struct Heard {
     destroyed: bool,
     /// `~SHIP_ONFIRE` is open.
     on_fire: bool,
+    /// Pure's `EXPLSMALL` was raised (state 5 reached).
+    small: bool,
+    /// Seconds before Pure's `EXPLBIG`, armed at state 5 and counted down on the big blast's own
+    /// clock (the view's, `craft_flash`), so it sounds where the sim stands still under the
+    /// results too.
+    big_in: Option<f32>,
 }
 
 impl RaceSim {
@@ -31,6 +37,10 @@ impl RaceSim {
     pub(super) fn raise_destroyed_cues(&mut self) {
         if let Some(end) = self.zone_end() {
             self.raise_zone_end_cue(end);
+            return;
+        }
+        if self.destroyed.sound == DestroyedSound::BlowupAndBlasts {
+            self.raise_blast_cues();
             return;
         }
         if self.destroyed.sound != DestroyedSound::Ship {
@@ -51,6 +61,7 @@ impl RaceSim {
                 blast: down,
                 destroyed: down && local && !past_state_6,
                 on_fire: down && !eliminator,
+                ..Heard::default()
             };
             self.destroyed_heard[slot] = now;
             if now.blast && !heard.blast {
@@ -81,6 +92,36 @@ impl RaceSim {
                     _ => {}
                 }
             }
+        }
+    }
+
+    /// Pure's `EXPLSMALL` as a craft goes out of the race (state 5) and `EXPLBIG` at the big
+    /// blast (`BLOWUP_DELAY` on), on every craft with no `_PC` variant (`ship-destroy.md`, rows 14 and
+    /// 18). A Zone craft ends as a wreck on this title too, with the same two cues.
+    pub(crate) fn raise_blast_cues(&mut self) {
+        for slot in 0..self.world.ship_count as usize {
+            let ship = &self.world.ships[slot];
+            let heard = self.destroyed_heard[slot];
+            let small =
+                ship.active && ship.physics.craft_state == oag_physics::CraftState::Eliminated;
+            let mut big_in = heard.big_in;
+            if small && !heard.small {
+                self.cues.push(CueEvent::new(Cue::ShipExplosionSmall, slot));
+                big_in = Some(crate::eliminator::DESTROYED_DWELL);
+            } else if let Some(left) = big_in {
+                let left = left - self.dt;
+                big_in = if left <= 0.0 {
+                    self.cues.push(CueEvent::new(Cue::ShipExplosion, slot));
+                    None
+                } else {
+                    Some(left)
+                };
+            }
+            self.destroyed_heard[slot] = Heard {
+                small,
+                big_in,
+                ..Heard::default()
+            };
         }
     }
 

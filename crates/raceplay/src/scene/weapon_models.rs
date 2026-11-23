@@ -574,8 +574,17 @@ impl super::Scene {
         let draws = race.bomb_blast_draws();
         let mut hemisphere_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
         let mut shockwave_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
+        let mut gaseous_active = [false; bomb_blast::BOMB_BLAST_SLOTS];
         for (slot, draw) in draws.iter().enumerate() {
             let Some(draw) = draw else { continue };
+            if let (Some((matrix, grey)), Some(drawable)) =
+                (draw.gaseous, self.bomb_blast.gaseous.get(slot))
+            {
+                drawable.write(queue, view_projection, matrix, view_projection * matrix);
+                drawable.write_anims(queue, draw.age);
+                drawable.tint(queue, [grey, grey, grey, 1.0], &mut Vec::new());
+                gaseous_active[slot] = true;
+            }
             if let (true, Some(drawable)) = (
                 draw.hemisphere_visible,
                 self.bomb_blast.hemisphere.get(slot),
@@ -625,6 +634,7 @@ impl super::Scene {
             missiles,
             hemisphere: hemisphere_active,
             shockwave: shockwave_active,
+            gaseous: gaseous_active,
             repulser_field: repulser_active,
             mag_floor: self.write_mag_floor_fx(race, queue, view_projection, seconds),
         }
@@ -678,6 +688,11 @@ impl super::Scene {
                 list.mesh(drawable);
             }
         }
+        for (slot, _) in active.gaseous.iter().enumerate().filter(|(_, live)| **live) {
+            if let Some(drawable) = self.bomb_blast.gaseous.get(slot) {
+                list.mesh(drawable);
+            }
+        }
         for (slot, _) in active
             .shockwave
             .iter()
@@ -702,6 +717,8 @@ pub(super) struct BlastsActive {
     missiles: [bool; crate::missile_blast::SLOTS],
     hemisphere: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     shockwave: [bool; bomb_blast::BOMB_BLAST_SLOTS],
+    /// Per pool slot - see `BombBlastModels::gaseous`.
+    gaseous: [bool; bomb_blast::BOMB_BLAST_SLOTS],
     /// Per Repulser pool slot - see `repulser_field`.
     repulser_field: [bool; POOL_SIZE],
     /// Per ship slot - see `mag_floor_fx`.

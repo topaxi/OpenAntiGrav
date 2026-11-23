@@ -69,7 +69,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    and a live run of the state timings.
 2. ~~2048 and Omega wired~~. Their second ship family (`WO_SHIP_EXPLOSION_PLAYER`,
    2048 `0x812c7e2c`, Omega `0x0176fe30`) is unread.
-3. ~~Pure's own `Ship_SetState` against the inherited Pulse rule~~ read 2026-11-23, static, 28 rows
+3. ~~Pure's own `Ship_SetState` against the inherited Pulse rule~~ read 2026-11-23, static, 28 rows. **Wired 2026-11-23 (`pure-wreck-wire`)**: rules measured, gaseous flash, `EXPLSMALL`/`EXPLBIG`, the wreck hidden from the big blast on Pulse and Pure (`ship-destroy.md`, "Wired"); **left: the Phantom wreck (row 12, no Phantom hull ever loads in ours)** and the unread rows below. The paragraph that follows is what was read, before the wiring
    (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`). **Same as Pulse, so the wire lane flips
    `crates/pure/src/effects.rs` from `Origin::InheritedFrom("Wipeout Pulse")` to `Origin::Measured`:**
    `hull_wreck` (the swap on the state 5 edge, row 11), `Trigger::WreckNode` and `Trigger::WreckSparks`

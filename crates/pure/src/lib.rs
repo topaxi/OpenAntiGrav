@@ -78,10 +78,7 @@ pub const TITLE: &Title = &Title {
     photo_shot: None,
     // Pure's own recovery is unread; Pulse's law.
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout Pulse"),
-    destroyed: oag_title::pre_race::Sourced::inherited(
-        oag_title::destroyed::DestroyedCraft::PULSE,
-        "Wipeout Pulse",
-    ),
+    destroyed: oag_title::pre_race::Sourced::measured(oag_title::destroyed::DestroyedCraft::PURE),
     contact_cues: oag_title::contact_cue::ContactCues::Rearmed,
     // Pure's effects law is unread; Pulse's commit helper squares the group volume.
     effects_volume_law: oag_title::pre_race::Sourced::inherited(
@@ -914,6 +911,42 @@ mod tests {
         };
         assert_eq!(origin, Origin::InheritedFrom("Wipeout Pulse"));
         assert_eq!(eye_origin, Origin::Chosen);
+    }
+
+    /// Pure's destroyed craft is its own read (`psp-pure-usa/ship-destroy.md`): the wreck swap and
+    /// its node effects are measured, the gaseous flash replaces Pulse's shockwave ring, and both
+    /// titles hide the wreck from the big blast on.
+    #[test]
+    fn pures_destroyed_craft_is_measured_and_throws_the_gaseous_flash() {
+        use oag_title::Origin;
+        use oag_title::destroyed::{DestroyedCraft, DestroyedSound};
+
+        assert_eq!(TITLE.destroyed.value, DestroyedCraft::PURE);
+        assert_eq!(TITLE.destroyed.origin, Origin::Measured);
+        assert_eq!(TITLE.destroyed.value.sound, DestroyedSound::BlowupAndBlasts);
+        assert_eq!(
+            TITLE.destroyed.value.gaseous_flash,
+            Some(r"Data\Weapons\explosion_gaseous.vex")
+        );
+        assert!(TITLE.destroyed.value.wreck_hidden_at_blast);
+        assert!(oag_pulse::TITLE.destroyed.value.wreck_hidden_at_blast);
+        assert_eq!(oag_pulse::TITLE.destroyed.value.gaseous_flash, None);
+        assert_eq!(TITLE.looks.hull_wreck.origin, Origin::Measured);
+        for trigger in [
+            oag_title::Trigger::WreckNode,
+            oag_title::Trigger::WreckSparks,
+        ] {
+            assert_eq!(
+                TITLE.effect_on(trigger).map(|spec| spec.origin),
+                Some(Origin::Measured),
+                "{trigger:?}"
+            );
+        }
+        assert!(
+            TITLE
+                .effect_on(oag_title::Trigger::WreckExplosion)
+                .is_none()
+        );
     }
 
     /// Pure has no Autopilot cancel while Pulse does: its executable has no absorb-side reader of

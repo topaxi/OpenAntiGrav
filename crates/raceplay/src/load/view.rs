@@ -170,6 +170,16 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         mut bomb_blast_models,
         leach_ball_model,
     ) = weapon_models::load_bodies(&mut archives, wm, store, &mut report);
+    if let Some(entry) = title.destroyed.value.gaseous_flash {
+        bomb_blast_models.gaseous = weapon_models::load_optional(
+            &mut archives,
+            Some(entry),
+            "the destroyed craft's gaseous flash (nothing else is drawn in its place)",
+            false,
+            store,
+            &mut report,
+        );
+    }
     if let Some(objects) = &detonator_objects {
         let pads = setup
             .speedup_pads
@@ -591,7 +601,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         title.race,
         title.hud_art.lap_hud,
         options.mode,
-        title.destroyed.value.zone_end.and_then(|end| end.cue),
+        title.destroyed.value,
         slot_teams,
         &mut report,
     );

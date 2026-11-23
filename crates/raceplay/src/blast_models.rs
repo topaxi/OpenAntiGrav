@@ -475,7 +475,7 @@ fn pulse_halo_frame(position: Vec3, camera: Mat4) -> Mat4 {
 /// A billboard basis at `position`, facing `camera_position` - see
 /// [`Race::plasma_blast_draws`]'s own doc comment for why this is a stated
 /// substitute rather than a decoded read.
-fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
+pub(crate) fn billboard_matrix(position: Vec3, camera_position: Vec3) -> Mat4 {
     let forward = (camera_position - position)
         .try_normalize()
         .unwrap_or(Vec3::Z);
