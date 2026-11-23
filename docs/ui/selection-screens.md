@@ -444,15 +444,17 @@ places itself. What each is and how ours draws it now:
 | dot at (28.4, 216) | colour-only, `MainAnim4` | drawn | the same |
 | dotted rule | `dotline.mip` (8x1), `x=28.5 y=218 438x1 U=0 V=32 TxtrWidth=432` | 54 dashes | the sub-rect runs past its texture, so the frame draws the texture's repeats, as the GE wraps texture coordinates |
 | `ArrowSelect` | `FETextures.mip` `U=53 V=0` 6x11, `MenuHighLightArrowColor`, at (0, 0) | beside the selected row, at the menu's scale | `Frame::select_arrow`, placed by the Pure picker's list and the chain screens (`Frame::select_arrow_at`) |
-| `ArrowScrollUp`/`Down` | (9, 39) and (9, 209) | absent on all seven frames (no list scrolls) | not drawn |
+| `ArrowScrollUp`/`Down` | (9, 39) and (9, 209) | absent on all seven frames (no list scrolls) | drawn by a list only while rows sit past that end of its window (`Frame::scroll_arrows_for`; our own `menu.toml` pages and the chain screens) |
 
 **The arrow's placement, measured.** On Team Selection with the cursor on rows 1, 2 and 3 (one walk, a fresh profile) the
 arrow's drawn pixels span x 11 to 16 and y 49 to 61, 67 to 79 and 85 to 97: it steps with the row pitch (18), its top 4 grid
 lines below the row's text origin (`Menu y=45`), its left edge 11 left of the row's x (`MenuXOffset` 21; the texture's
 first column is blank, so the sprite starts at x 10), and 13 rows tall, the 6x11 texture at `MenuScale` 1.15. The same
 position on Single Player, Class, League, Track, Tournament and Tournament Class Selection (cursor on row 1). The
-executable's placement code is not read; confidence 70 (three rows, seven screens, one title). Whether a list that
-scrolls shows the scroll arrows is not measured: ours draws them nowhere.
+executable's placement code is not read; confidence 70 (three rows, seven screens, one title). That a list which
+scrolls shows its scroll arrows is read off the widgets' names, not measured: no captured Pure screen scrolls. With the
+scroll arrow at y 209 gone from the frame's fixed marks, the frame's content bottom moves to the dot at y 216, so our own
+`menu.toml` pages on Pure fit one more row (MAIN shows RECORDS, GRAPHICS shows MSAA), still above the dotted rule.
 
 **The description line.** Team Selection types the selected team's own string, `Text->Team Selection->Team->Feisar`
 (`You know where you are with a Feisar ...`), the key form the chain screens read (`Text->SCREEN->MENU->VALUE`), at the
