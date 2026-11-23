@@ -79,7 +79,7 @@ mod tests {
             stage.contains("medals.draw("),
             "RaceStage::draw_window_hud must draw the medal"
         );
-        let capture = include_str!("../../race_capture.rs");
+        let capture = include_str!("../../race_capture/overlays.rs");
         assert!(
             capture.contains("race.detonator_medal()"),
             "the headless capture must draw the medal"
