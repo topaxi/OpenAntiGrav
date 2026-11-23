@@ -619,7 +619,7 @@ def main():
     plat = ce.platform(args.platform)
     args.source = args.source or str(ce.MAIN / plat["image"])
     args.campaign_title = args.campaign_title or plat["title"]
-    if args.title == "pulse":
+    if args.title == "pulse" and rig is not None:
         rig.news = pt.load_rows(Path(args.oag_game).with_name("oag-wad"), args.source + ":" + "PSP_GAME/USRDIR/Data.wad") if "tick:" in (args.plan or PULSE_PLAN) else None
     if rig is None:
         seen = {}
