@@ -181,6 +181,46 @@ Ours' frames (`--race --force-wreck 60:7`, Talon's Junction grid, 1280x720): the
 the tick state 4 begins, a white flash covers it for about 0.1 s, a black smoke ball with sparks
 follows, then the scorched wreck lies with a bright plume at its tail.
 
+### The black blast (HD, 2026-11-23, our frames, confidence 85 for the data, the original's picture unknown)
+
+Bisected on `--race --force-wreck 40:7` (Talon's Junction, 960x540, ticks 45 to 60) by silencing
+emitters (`per_emission = (0, 0)`): the black ball at tick 54 to 60 is `WO_SHIP_EXPLOSION`'s **root
+emitter** alone (alpha-over, 2 per emission, 180 ticks); muting the whole effect removes the ball
+and the sparks, muting the other eight emitters leaves it. The cause is in the file's colour
+table, not in a blend mode, a missing texture or the decode:
+
+- All nine sprites resolve (`/data/psys/tex/<stem>.gtf` in DATA00 to DATA06) and decode; the root's
+  is `smoke_new4_8x4`, a 1024x512 8x4 flipbook that is **fire, yellow and white-hot cells, not
+  smoke grey**, with alpha. `FIREBALL_ADDITIVE`'s is a 1024x1024 8x8 orange fire flipbook.
+- The root's `colour_mode` (`+0xbc`) is **3** (so are `trail` and `TRAIL_SMOKE`; the other six
+  are 0), a value nothing in `docs/` reads. Its 256-entry table is white at entry 0, then
+  **black with alpha 1 for entries 1 to 31**, grey at 32 and 33, white from 40. Sprite times that
+  table is black for the first eighth of a particle's life (age 0.12, about 22 ticks of 180),
+  which is where the ball is.
+- 2048's `WO_SHIP_EXPLOSION` (`data/particles/` and `particles2048/`) authors the **same** table
+  on its root emitter and the same black on `TRAIL_SMOKE`, so 2048 is not a counter-example of a
+  different file: it draws a small fireball with dark smoke at the same ticks, and its sprites
+  are not the white-hot flipbook. The HD root pairs a black ramp with fire art.
+- Evidence it is the table: replacing `sprite = colour * texel` with `texel.rgb` in
+  `psys.wesl` (a probe, not kept) draws an orange fireball with a white core at ticks 54 and 60.
+  That is the sprite's own colour and **not** a fix: it ignores a table the file authors.
+
+Two things the HD effect needs that this page cannot supply, both unread:
+
+1. **What `colour_mode` 3 does on HD.** Pulse knows `2` (random entry) and the over-life walk
+   (`pob.md`, "The colour table is RGB-only"). If HD's mode 3 does not take the table's RGB
+   (for instance it only drives alpha or brightness), the ramp is not a multiply and the fire
+   shows. If it does, the original's first 0.4 s of the blast is dark too.
+2. **HD's frame advance and flipbook direction** (`particle-triggers.md`, "What was missing: the
+   sprites"). With `WO_SHIP_EXPLOSION` listed in `Effects::sprites` the additive fireball draws
+   a white blowout at ticks 45 to 50 (frame advance on or off, same picture) that the procedural
+   profile did not, so listing it **without** this read replaces a black ball with a white one.
+   It was not listed and no code changed.
+
+Not shipped: no frame, shader or table was changed. Pinned: `psys_ground_truth.rs`,
+`hd_ship_explosion_root_is_a_fire_flipbook_under_a_black_colour_ramp` (the sprite resolves, the
+table is black for entries 1 to 31).
+
 **Against Pulse.** Pulse swaps to the wreck at state 5, 0.5 s after the blast, throws
 `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` at every wreck locator then, and
 `WO_SHIP_EXPLOSION` 1.5 s later at state 6 ([ship-wreck-model.md](../psp-pulse-usa/ship-wreck-model.md)).
