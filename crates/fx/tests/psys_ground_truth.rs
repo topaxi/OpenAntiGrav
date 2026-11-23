@@ -888,4 +888,16 @@ fn hd_ship_explosion_root_draws_entry_zero_through_its_black_run_under_the_light
     assert_eq!(at(0.125)[..3], [1.0, 1.0, 1.0], "an eighth: entry 0, white");
     assert_eq!(at(0.0)[..3], light, "life 0: the light");
     assert_eq!(at(0.5)[..3], light, "half: the light");
+    // The law itself, on the file's own table, with a light that is not entry 0: the weight
+    // 0 run draws entry 0, the weight 1 run the light, and the ramp between them neither.
+    let tint = [0.2, 0.4, 0.6];
+    let blend = |age| oag_fx::psys::light_blend(&root.palette, age, tint)[..3].to_vec();
+    assert_eq!(blend(0.125), [1.0, 1.0, 1.0]);
+    let bytes = |c: [f32; 3]| c.map(|v| (v * 255.0).round());
+    assert_eq!(blend(0.5), bytes(tint).map(|v| v / 255.0).to_vec());
+    let ramp = blend(36.0 / 255.99997 + 1e-4);
+    assert!(
+        ramp.iter().zip(tint).all(|(r, t)| *r > t && *r < 1.0),
+        "{ramp:?}"
+    );
 }

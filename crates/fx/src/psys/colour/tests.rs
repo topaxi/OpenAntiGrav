@@ -46,13 +46,12 @@ fn light_blend_at_half_is_the_light() {
 
 #[test]
 fn light_blend_truncates_a_partial_weight() {
-    // Index 36 has red 26 + 26 * 4 = 130; white toward (51, 102, 153): 255 + (51 - 255) * 130/255.
-    let out = light_blend(&hd_root_table(), 36.0 / 255.99997 + 1e-4, L);
-    let t = 130.0 / 255.0;
-    let want = |from: f32, to: f32| (from + (to - from) * t).trunc() / 255.0;
-    assert_eq!(out[0], want(255.0, 51.0));
-    assert_eq!(out[1], want(255.0, 102.0));
-    assert_eq!(out[2], want(255.0, 153.0));
+    // Index 36 has red 130; white toward (50, 100, 150): 255 + (50 - 255) * 130/255 = 150.49,
+    // 255 + (100 - 255) * 130/255 = 175.98, 255 + (150 - 255) * 130/255 = 201.47. Truncated
+    // 150, 175, 201; rounding would give 150, 176, 201.
+    let light = [50.0 / 255.0, 100.0 / 255.0, 150.0 / 255.0];
+    let out = light_blend(&hd_root_table(), 36.0 / 255.99997 + 1e-4, light);
+    assert_eq!(out[..3], [150.0 / 255.0, 175.0 / 255.0, 201.0 / 255.0]);
 }
 
 #[test]
@@ -93,4 +92,15 @@ fn a_laws_words() {
     ] {
         assert_eq!(with_word(word, law), want, "{law:?} word {word}");
     }
+}
+
+#[test]
+fn a_law_applied_again_replaces_the_first() {
+    let mut effect = (*effect("x", true, 10.0)).clone();
+    effect.emitters[0].colour_mode = ColourMode::OverLife;
+    effect.emitters[0].authored_colour_mode = 3;
+    effect.with_colour_law(ColourLaw::LightBlend);
+    assert_eq!(effect.emitters[0].colour_mode, ColourMode::LightBlend);
+    effect.with_colour_law(ColourLaw::Forward);
+    assert_eq!(effect.emitters[0].colour_mode, ColourMode::OverLife);
 }

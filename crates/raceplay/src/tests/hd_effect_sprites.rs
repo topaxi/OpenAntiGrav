@@ -83,11 +83,12 @@ fn each_title_names_how_its_particles_walk_the_colour_table() {
     let omega = oag_omega::TITLE.effects;
     assert_eq!(omega.colour_walk_for(r"Data\particles2048"), Reversed);
     assert_eq!(omega.colour_walk_for(r"Data\particles"), Forward);
+    assert_eq!(omega.colour_walk_for("data/Particles2048/"), Reversed);
 }
 
-/// The loader applies it: HD's ship explosion root, mode 3, blends; Pulse's reads the same file
-/// shape forward.
+/// The loader applies it: HD's ship explosion root, mode 3, blends.
 #[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
 fn the_loader_gives_hds_ship_explosion_the_light_blend() {
     use oag_fx::psys::ColourMode;
     let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
@@ -101,6 +102,7 @@ fn the_loader_gives_hds_ship_explosion_the_light_blend() {
         title.effects,
         oag_title::engine_effects::EXPLOSION_EFFECT,
         false,
+        title.effects.colour_walk,
     )
     .expect("the effect loads");
     assert_eq!(effect.emitters[0].authored_colour_mode, 3);

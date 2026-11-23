@@ -62,7 +62,7 @@ pub mod sprite;
 pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
-pub use colour::{ColourLaw, ColourMode, LIGHT};
+pub use colour::{ColourLaw, ColourMode, LIGHT, light_blend};
 use emitter_state::EmitterState;
 pub use error::Error;
 use frames::FrameAdvance;

@@ -520,9 +520,15 @@ impl Effects {
     /// [`Self::colour_walk`].
     #[must_use]
     pub fn colour_walk_for(&self, dir: &str) -> ColourWalk {
+        let norm = |s: &str| {
+            s.replace('/', "\\")
+                .trim_end_matches('\\')
+                .to_ascii_lowercase()
+        };
+        let dir = norm(dir);
         self.colour_walk_in
             .iter()
-            .find(|(listed, _)| listed.eq_ignore_ascii_case(dir))
+            .find(|(listed, _)| norm(listed) == dir)
             .map_or(self.colour_walk, |&(_, walk)| walk)
     }
 

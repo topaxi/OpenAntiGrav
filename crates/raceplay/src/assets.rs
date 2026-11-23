@@ -96,13 +96,15 @@ pub(super) fn leach_beam_texture(
 
 #[cfg(feature = "view")]
 /// [`particle_effect`] with the per-effect laws a title lists for `name`
-/// (`oag_title::Effects::{sprites, extents, far_bars, pool_bars, templates}`).
+/// (`oag_title::Effects::{sprites, extents, far_bars, pool_bars, templates}`). `walk` is the
+/// colour walk of the title whose archive `dir` is in, which is not always the one `effects` is.
 pub(super) fn listed_particle_effect(
     archives: &mut oag_assets::Archives,
     dir: &str,
     effects: &oag_title::Effects,
     name: &'static str,
     pulse_psp: bool,
+    walk: oag_title::ColourWalk,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let (mut effect, note) = particle_effect(
         archives,
@@ -122,7 +124,7 @@ pub(super) fn listed_particle_effect(
             templates: effects.templates.contains(&name),
         },
     )?;
-    effect.with_colour_law(match effects.colour_walk_for(dir) {
+    effect.with_colour_law(match walk {
         oag_title::ColourWalk::Forward => psys::ColourLaw::Forward,
         oag_title::ColourWalk::Reversed => psys::ColourLaw::Reversed,
         oag_title::ColourWalk::LightBlend => psys::ColourLaw::LightBlend,

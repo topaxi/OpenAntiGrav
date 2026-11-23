@@ -93,7 +93,7 @@ impl Effect {
     /// Applies a source's colour-table law to every emitter that walks its table over life.
     pub fn with_colour_law(&mut self, law: ColourLaw) {
         for spec in &mut self.emitters {
-            if spec.colour_mode != ColourMode::OverLife {
+            if spec.authored_colour_mode == 2 {
                 continue;
             }
             spec.colour_mode = match (law, spec.authored_colour_mode) {
