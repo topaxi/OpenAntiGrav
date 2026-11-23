@@ -193,6 +193,7 @@ impl CueTables for Cue {
             | Self::ShipOnFire
             | Self::ShipOnFireStop
             | Self::Turbo => BankName::Weapons,
+            Self::ShipDestroy => BankName::Ship,
             Self::ShieldActive
             | Self::Engaging
             | Self::Disengaging
@@ -260,6 +261,7 @@ impl CueTables for Cue {
             Self::ShipExplosionPlayer => "EXPLBIG_PC",
             Self::ShipExplosion => "EXPLBIG",
             Self::ShipDestroyed | Self::ShipDestroyedStop => "~SHIP_DESTROYED",
+            Self::ShipDestroy => "shipdestroy",
             Self::ShipOnFire | Self::ShipOnFireStop => "~SHIP_ONFIRE",
             Self::MineExplosion => "MINEEXPL",
             Self::BombExplosion => "BOMBEXPL",
@@ -421,6 +423,8 @@ impl CueTables for Cue {
             Self::PerfectLap | Self::NewLapRecord => Placement::Unplaced,
             // `Sound_QueueAnnouncerCue`, the announcer's queue, as the lap voices.
             Self::EmpReady | Self::EmpFull => Placement::Unplaced,
+            // `Sound_PlayBankCue` at `0x400` with no emitter (`zone-destroy.md`, row Z5).
+            Self::ShipDestroy => Placement::Unplaced,
             // `SoundEmitter_PlayCue` on the ship's emitter `ship+0x5ee0`.
             Self::WeaponPickup => Placement::Craft,
             // The emitter `Ship_PlayDestroyExplosion` makes rides the body matrix; `~SHIP_ONFIRE`

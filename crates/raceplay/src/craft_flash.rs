@@ -78,6 +78,7 @@ impl RaceView {
     /// Starts the washes a craft's state edges call for, once a tick, after
     /// the destroyed-craft pass has settled every state.
     pub(super) fn advance_craft_flashes(&mut self, core: &SimRace) {
+        self.advance_zone_end(core);
         let player = core.player_slot();
         let dt = core.sim.dt;
         for slot in 0..core.sim.world.ship_count as usize {
@@ -85,6 +86,11 @@ impl RaceView {
             let state = ship.physics.craft_state;
             let position = self.drawn_position(core, slot);
             let was = std::mem::replace(&mut self.craft_flashes.previous[slot], state);
+            // A Zone craft throws no blast, plume, node sparks, wash or shake: its end is the
+            // shell and the debris (`zone-destroy.md`, row Z3).
+            if core.sim.zone_end().is_some() {
+                continue;
+            }
             let out_of_the_race_now =
                 was == CraftState::Destroyed && state == CraftState::Eliminated;
             let blast_at = core.sim.destroyed.blast_at;

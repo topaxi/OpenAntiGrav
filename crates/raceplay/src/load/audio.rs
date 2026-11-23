@@ -13,6 +13,7 @@ pub(super) fn banks_and_announcers(
     race: &'static oag_title::RaceDefaults,
     lap_hud: Option<oag_title::lap_hud::LapHud>,
     mode: Mode,
+    zone_end_cue: Option<&'static str>,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
@@ -27,6 +28,16 @@ pub(super) fn banks_and_announcers(
         .zone_announcer
         .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
     let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
+    // A Zone craft's end plays `shipdestroy` out of the environment bank
+    // (`oag_title::destroyed::ZoneEnd::cue`).
+    if let (Mode::Zone, Some(bank)) = (mode, zone_end_cue) {
+        sounds.load_named(
+            archives,
+            bank,
+            tick,
+            &[(oag_gameplay::cue::Cue::ShipDestroy, "shipdestroy")],
+        );
+    }
     // A title whose cues are Wwise events (Omega) plays those in place of the
     // named cues, which its stub banks do not hold.
     if let Some(wwise) = race.sounds.wwise {

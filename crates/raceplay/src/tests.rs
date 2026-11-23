@@ -163,6 +163,7 @@ mod wreck_fx;
 mod wreck_voice;
 mod xp_edges;
 mod xp_feed;
+mod zone_end;
 mod zoom;
 
 /// A model declaring `slots` texture slots of which the first `decoded` filled.
@@ -435,6 +436,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         weapon_spark_anchors: Vec::new(),
         cockpit_hit_noise: None,
         wreck_anchors: Vec::new(),
+        zone_end: None,
         wreck_shockwave: true,
         magstrip_wake: None,
         magstrip_pob: false,

@@ -616,6 +616,7 @@ impl super::super::Scene {
             }
         }
         self.write_wrecks(queue, race, view_projection, prev_vp, prev);
+        self.write_zone_end(queue, race, view_projection, prev_vp, prev);
     }
 
     /// Writes the player's sun-occlusion map - layer 0 - as a greyscale PNG

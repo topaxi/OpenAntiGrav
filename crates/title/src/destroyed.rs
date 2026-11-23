@@ -62,9 +62,10 @@ pub struct ZoneEnd {
     pub shell: &'static str,
     /// The Zone ship directory's debris model, relative to the hull's own directory.
     pub debris: &'static str,
-    /// Whether the title plays `shipdestroy` from its environment bank at the blast
-    /// (row Z5), after every other cue is stopped.
-    pub cue: bool,
+    /// The bank the title's `shipdestroy` is played from at the blast (row Z5), its environment
+    /// bank in a Zone race, after every other cue is stopped. `None` where the event is not
+    /// resolved.
+    pub cue: Option<&'static str>,
 }
 
 impl ZoneEnd {
@@ -74,13 +75,13 @@ impl ZoneEnd {
         results_secs: 5.5,
         shell: r"Zoneship_dead\zoneship_dead_whiteshell",
         debris: r"Zoneship_dead\zoneship_dead",
-        cue: true,
+        cue: Some(r"Data\Sound\env0_zone.bnk"),
     };
 
     /// HD's Zone end on a title whose `shipdestroy` event is not resolved: 2048's bank
     /// resolution and Omega's Wwise container are unread, so the cue stays off there.
     pub const HD_SILENT: Self = Self {
-        cue: false,
+        cue: None,
         ..Self::HD
     };
 }

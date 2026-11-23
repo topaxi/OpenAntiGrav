@@ -29,6 +29,10 @@ impl RaceSim {
     /// instead and none of these (`zone-destroy.md`, row Z5). `~SHIP_ONFIRE` is for an
     /// ordinary race alone: not the Eliminator, whose craft returns by state 8.
     pub(super) fn raise_destroyed_cues(&mut self) {
+        if let Some(end) = self.zone_end() {
+            self.raise_zone_end_cue(end);
+            return;
+        }
         if self.destroyed.sound != DestroyedSound::Ship {
             return;
         }
@@ -77,6 +81,23 @@ impl RaceSim {
                     _ => {}
                 }
             }
+        }
+    }
+
+    /// A Zone craft's end: `shipdestroy` once, on the blast (`zone-destroy.md`, row Z5). Where
+    /// the title's event is not resolved the end is silent (`ZoneEnd::cue`).
+    fn raise_zone_end_cue(&mut self, end: oag_title::destroyed::ZoneEnd) {
+        let slot = self.world.primary_slot();
+        let down = self.world.ships[slot].physics.craft_state != oag_physics::CraftState::Racing;
+        let heard = std::mem::replace(
+            &mut self.destroyed_heard[slot],
+            Heard {
+                blast: down,
+                ..Heard::default()
+            },
+        );
+        if down && !heard.blast && end.cue.is_some() {
+            self.cues.push(CueEvent::new(Cue::ShipDestroy, slot));
         }
     }
 }

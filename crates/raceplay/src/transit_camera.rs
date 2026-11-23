@@ -137,7 +137,8 @@ impl crate::Race {
     /// ([`Self::ship_flown_in_view`]).
     #[must_use]
     pub fn ship_drawn(&self, slot: usize) -> bool {
-        self.core.sim.ship_active(slot) || self.ship_flown_in_view(slot)
+        (self.core.sim.ship_active(slot) || self.ship_flown_in_view(slot))
+            && !self.view.zone_end_hides_craft(&self.core, slot)
     }
 
     /// The rigid frame of the craft the view being drawn follows, in the world: its right, up
