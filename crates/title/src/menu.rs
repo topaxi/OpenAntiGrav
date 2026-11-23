@@ -147,6 +147,12 @@ pub struct MenuSkin {
     /// Selection` and `Track Selection`, `docs/ui/menus-original.md`). `None` draws
     /// a `Stats` widget in the menu face.
     pub stats_font: Option<&'static str>,
+    /// Whether the front end's text steps each glyph's ink edge up to a whole grid unit
+    /// (`oag_ui::font::pen_step`), instead of laying the pen out in fractions. **Measured on
+    /// Pure only** (PPSSPP, five strings in `LTe50325.fnt` at 0.8, a list in `FX300ANG.fnt` at
+    /// 1.15 and its title at 0.97: `docs/ui/menus-original.md`, "Pure's text pens step up to
+    /// whole pixels"); every other title draws fractions as before.
+    pub snapped_pens: bool,
     /// Whether a selection screen's `font="default"` rows draw at their authored
     /// scale in the one face the title has (`true`: HD and Omega, which load no
     /// `menu`-role face) or as the `menu` face scaled by Pulse's `default` over
@@ -550,6 +556,7 @@ mod tests {
         title_font: Some("Title"),
         body_font: Some("Default"),
         stats_font: None,
+        snapped_pens: false,
         default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),

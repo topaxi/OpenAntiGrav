@@ -625,6 +625,13 @@ impl Skin {
         self.line_height
     }
 
+    /// Whether this title's front end steps its text pens up to whole units
+    /// ([`oag_title::MenuSkin::snapped_pens`]).
+    #[must_use]
+    pub fn snapped_pens(&self) -> bool {
+        self.skin.snapped_pens
+    }
+
     /// The scale a row's text is drawn at. `FEGlobals->MenuScale`.
     #[must_use]
     pub fn row_scale(&self) -> f32 {
@@ -953,6 +960,7 @@ mod tests {
         title_font: None,
         body_font: None,
         stats_font: None,
+        snapped_pens: false,
         default_face_is_row_face: false,
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),

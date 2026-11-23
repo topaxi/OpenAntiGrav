@@ -199,3 +199,20 @@ fn only_pure_on_a_psp_draws_the_sun_lens_flare() {
         }
     }
 }
+
+/// Pure alone steps its front end's text pens up to whole pixels (PPSSPP, `docs/ui/menus-original.md`,
+/// "Pure's text pens step up to whole pixels"): the other titles draw the pen in fractions.
+#[test]
+fn only_pure_snaps_its_front_end_pens() {
+    for title in ALL {
+        assert_eq!(
+            title
+                .front_end
+                .and_then(|front_end| front_end.menu)
+                .is_some_and(|skin| skin.snapped_pens),
+            title.name == oag_pure::TITLE.name,
+            "{}",
+            title.name
+        );
+    }
+}
