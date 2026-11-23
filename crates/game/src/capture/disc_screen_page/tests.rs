@@ -24,7 +24,14 @@ fn discs() -> Vec<(String, StringTable)> {
 }
 
 fn page_of(name: &str, source: &str, strings: &StringTable) -> Page {
-    page(spec(name).expect("a disc screen"), source, strings, 0).expect("the screen reads")
+    page(
+        oag_pulse::TITLE,
+        spec(oag_pulse::TITLE, name).expect("a disc screen"),
+        source,
+        strings,
+        0,
+    )
+    .expect("the screen reads")
 }
 
 /// The four pages are what the disc authors: the rows `Title::main_menu` lists, in its
