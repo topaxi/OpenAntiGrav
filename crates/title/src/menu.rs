@@ -569,6 +569,7 @@ mod tests {
         title_scale: 1.0,
         title_font: Some("Title"),
         body_font: Some("Default"),
+        small_font: None,
         stats_font: None,
         snapped_pens: false,
         bearing_pens: false,

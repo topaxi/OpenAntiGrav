@@ -383,20 +383,20 @@ fn text_draw(text: &Text, content: &str, layout: &Layout) -> Draw {
     }
     // `font="small"` in the glyph slot that holds that face, at its own size
     // ([`FaceScales::small_role`]; `face_scale` above already left the scale alone).
-    if let Some(role) = layout.faces.small_role {
-        if text.font.eq_ignore_ascii_case("small") {
-            return Draw::FacedText {
-                role,
-                x,
-                y,
-                scale,
-                color,
-                border: None,
-                align,
-                text: text_in,
-                wrap_width: text.wrap_width,
-            };
-        }
+    if let Some(role) = layout.faces.small_role
+        && text.font.eq_ignore_ascii_case("small")
+    {
+        return Draw::FacedText {
+            role,
+            x,
+            y,
+            scale,
+            color,
+            border: None,
+            align,
+            text: text_in,
+            wrap_width: text.wrap_width,
+        };
     }
     // `font="default"` in its own face when the renderer loaded one: lowercase
     // is real glyph art there, where the menu face has only capitals.

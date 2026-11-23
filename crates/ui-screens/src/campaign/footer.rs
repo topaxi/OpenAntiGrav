@@ -114,10 +114,10 @@ fn face_scale(faces: &FaceScales, font: &str) -> f32 {
 /// face when the title has one ([`FaceScales::small_role`]), at the face's own size
 /// ([`face_scale`]).
 pub(super) fn face_role_in(faces: &FaceScales, font: &str) -> Option<&'static str> {
-    if font.eq_ignore_ascii_case("small") {
-        if let Some(role) = faces.small_role {
-            return Some(role);
-        }
+    if font.eq_ignore_ascii_case("small")
+        && let Some(role) = faces.small_role
+    {
+        return Some(role);
     }
     face_role(font)
 }
