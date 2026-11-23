@@ -263,6 +263,11 @@ Overall risks: most of EMP, auto-speed and the HUD is unread (RE-first, may need
 AltiVec workarounds: `llvm-objdump -d --mattr=+altivec,+vsx` and `scripts/ps3-toc.py`); the
 placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 
+## Review fixes
+
+- The auto-speed ramp is in the state hash in every Detonator race, not only where an EMP armed (`hash::write_detonator`; `Field::is_empty` now tests it). Detonator hashes move, other modes do not.
+- The cannon, the EMP fire and the EMP charge all key on `primary_slot()` (`cannon_handed(slot)`); `detonator_ground_truth::an_hd_detonator_cannon_and_emp_work_off_the_primary_slot`.
+
 ## Open
 
 **What remains open for Detonator (2026-11-23, after phase 15).** Phases 1-15 are in; what a player still

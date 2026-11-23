@@ -157,9 +157,10 @@ fn write_detonator(hasher: &mut StateHasher, field: &oag_weapons::detonator::Fie
         }
         write_cannon(hasher, cannon);
     }
-    // The EMP and the auto-speed ramp only where the race armed an EMP.
+    // The auto-speed ramp moves the engine target whether or not the table has an EMP.
+    hasher.write_f32(*ramp);
+    // The EMP only where the race armed one.
     if emp.armed {
-        hasher.write_f32(*ramp);
         write_emp(hasher, emp);
     }
 }
@@ -1024,20 +1025,35 @@ mod tests {
         assert_ne!(one, hash_world(&world));
     }
 
-    /// The EMP's charge, gauge, ramp and wave are simulation state where the race armed an EMP,
-    /// and move nothing where it did not: a Zone or race world with a charge flag left unspent
-    /// hashes as it always did.
+    /// The auto-speed ramp moves the engine target in any Detonator race, EMP or not, so it is
+    /// always simulation state; the EMP's charge, gauge and wave are state only where the race
+    /// armed an EMP, and a Zone or race world with a charge flag left unspent hashes as it
+    /// always did.
     #[test]
     fn the_emp_moves_the_hash_only_where_detonator_armed_it() {
         use oag_weapons::detonator::emp;
         let mut world = World::new(1);
         let empty = hash_world(&world);
-        world.detonator.ramp = 0.5;
         world.detonator.emp.charge = 3;
         assert_eq!(
             empty,
             hash_world(&world),
-            "an unarmed EMP is not in the hash"
+            "an unarmed EMP's charge is not in the hash"
+        );
+        world.detonator.emp.charge = 0;
+        world.detonator.stages_laid = 1;
+        let live = hash_world(&world);
+        world.detonator.ramp = 0.5;
+        assert_ne!(
+            live,
+            hash_world(&world),
+            "the ramp moves the hash with no EMP armed"
+        );
+        world.detonator.stages_laid = 0;
+        assert_ne!(
+            empty,
+            hash_world(&world),
+            "a ramp alone is a Detonator race, not an empty field"
         );
         world.detonator.ramp = 0.0;
         world.detonator.emp.charge = 0;

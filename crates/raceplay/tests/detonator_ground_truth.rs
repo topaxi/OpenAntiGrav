@@ -807,3 +807,57 @@ fn an_hd_detonator_emp_clears_the_mines_ahead_and_scores_the_emp_values() {
     assert_eq!(live, dark, "the same field, the same wave");
     assert_eq!(live_paid, 50 * live as i32);
 }
+
+/// A pad in the person's seat `slot`, with `button` pressed this tick.
+fn pad_in(slot: usize, button: oag_gameplay::input::Button) -> PlayerInputs {
+    let mut snapshot = oag_gameplay::InputSnapshot::new();
+    snapshot.buttons.begin_frame(button.bit());
+    let mut inputs = PlayerInputs::none();
+    inputs.set(slot, snapshot);
+    inputs
+}
+
+/// **One slot rule.** With the person in seat 1 and slot 0 an opponent, `primary_slot()` is 1:
+/// the cannon (Square) and the EMP's fire (L1) work off that seat's pad and craft, as the pad
+/// charge already does.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_hd_detonator_cannon_and_emp_work_off_the_primary_slot() {
+    use oag_gameplay::Controller;
+    const SEAT: usize = 1;
+    let Some(loaded) = load() else {
+        return;
+    };
+    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    race.core.sim.world.controllers[0] = Controller::Ai;
+    race.core.sim.world.controllers[SEAT] = Controller::Local;
+    assert_eq!(race.core.sim.world.primary_slot(), SEAT);
+    let alive = |race: &mut race::Race| {
+        let ship = &mut race.core.sim.world.ships[SEAT];
+        ship.physics.shield = ship.handling.dimensions.shield;
+    };
+    while oag_race::RaceState::thrust_gated(race.core.sim.world.tick) {
+        race.tick(&PlayerInputs::none());
+        alive(&mut race);
+    }
+
+    race.core.sim.world.detonator.emp.charge = 8;
+    race.core.sim.world.detonator.emp.gauge = 1.0;
+    race.tick(&pad_in(SEAT, oag_gameplay::input::Button::Flip));
+    alive(&mut race);
+    assert_eq!(
+        race.core.sim.detonator_emp(),
+        Some((0, false)),
+        "L1 in the primary seat fires the EMP"
+    );
+
+    let clip = race.core.sim.world.detonator.cannon.clip;
+    for _ in 0..10 {
+        race.tick(&pad_in(SEAT, oag_gameplay::input::Button::Square));
+        alive(&mut race);
+    }
+    assert!(
+        race.core.sim.world.detonator.cannon.clip < clip,
+        "Square in the primary seat fires the cannon"
+    );
+}
