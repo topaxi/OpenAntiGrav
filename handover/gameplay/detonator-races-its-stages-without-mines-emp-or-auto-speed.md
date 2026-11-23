@@ -31,7 +31,7 @@ evidence), then start at "Next Steps".
 | 9 | Wire the cannon, score, destroyed count and percentage | simulation done; rounds, flash, explosion effects and the cannon's cues drawn on HD; the HUD is row 12's, no end screen | `59215fc52`, the `det-fx` commits |
 | 10 | EMP: RE (pads, charge flag writer, `EMPManager`) then wire | done on HD and Omega (`detonator-emp.md`, "Wired"); the wave's reach is chosen (`emp::SECTIONS_PER_EXTENT`); 2048's pads unread, so its EMP never charges | `det-emp-wire` |
 | 11 | Auto-speed: RE Detonator's engine branch, then wire | done on HD, 2048, Omega (`detonator-speed.md`, "Wired"), ramp included | `det-emp-wire` |
-| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; open: `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback and the medal models (below) | |
+| 12 | Detonator HUD (`detonator_hud.xml`, `hud_detonatorweapons.xml`, `detonator_warnings.xml`) | wired on HD, Omega and 2048, the EMP pips and `EmpReady` included; the three medal models draw on HD and Omega (`det-medals`, 2026-11-23; 2048 left); open: their tier colour, `EmpBarEffect`, 2048's `EmpCharge`/`EmpFull`, bomb-ahead, score feedback (below) | `det-medals` |
 | 13 | End screen proper (stage, mines, bombs, three chain counts, score, new-record banner) | HD wired (`det-end`, `detonator-endrace.md`, "Wired"): the six rows and the score line, live; open: the new-record banner, Omega (no EndRace screens on main) and 2048 (its four-row list has no page to draw on) | `det-end` |
 | 14 | Campaign launch (`race_mode_for_cell` maps `Other("Detonator")`; medal = the cannon score, `>=`) | done: 12 cells on HD, Omega, 2048; see `git log` (`Detonator campaign`) | see `git log` |
 | 15 | Omega and 2048 parity leftovers | open | |
@@ -179,8 +179,14 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   `HudLayouts::detonator` names each title's root; score, clip, stage, bullet icons, volley pips,
   the streak line and the energy readout (white in Detonator) read the live cannon
   (`oag_hud::Detonator`, `oag_raceplay::detonator_hud`, test
-  `detonator_hud_ground_truth.rs`). **Still open:** the three medal models (HD `<ImageModel>`
-  `.vex`; no HUD path draws one, and the cell's thresholds are not passed into the race), the EMP
+  `detonator_hud_ground_truth.rs`). **Medals: wired** (`det-medals`: `oag_hud::ImageModel` reader,
+  `Race::set_medal_targets` from `medal_watch::tick`, `oag_game::hud_medal::Medals` through the model preview,
+  `Detonator::shows_medals` HD and Omega on, 2048 off; `detonator-hud.md`, "The medals"). **Open for the
+  medals:** the tiers draw the same grey (the model's own diffuse, specular and exponent parameters are
+  authored apart, the program reflects the paraboloid probe, which the mesh reader classes as glint
+  water and a preview has no probe for), the camera (`ModelZ -87`'s projection is unread), when each
+  widget enables and whether a lower tier stays under a higher (best tier only here), 2048's
+  `ImageX 720` skin, and HD's end-race `MedalModel*` (same models, not drawn there). **Still open:** the EMP
   widgets (phase 10), the bomb-ahead warning and `ScoreFeedBack0..15` (need an event stream),
   HD's streak line (its language table has no `HUD_CHAIN_n`), the bullet icons' per-state art and
   the per-volley fired words. The brief that follows is what was read, kept for those:
@@ -208,7 +214,7 @@ Law: `detonator-cannon.md` ("What the simulation needs"). Decisions already made
   | `DetonatorStage` | HUD stage over 14 | `%d/%d` | `World::detonator.stages_laid.min(14)`: the original's `rm+0x2dee` starts at 1 (the constructors store it) and counts start-line crossings, capped 14 (72) | ready |
   | `DamageBar`, `DamageBarBg`, `ShieldBarText` | energy percent (white in mode 14) | `(int)pct` | the generic shield readout (`oag_hud::shield_bar`, `Readout::shield`) fed with the craft's energy pool | ready once the layout loads |
   | `ScoreFeedBack0`..`15` | a floating `+N` per score add (`+%3.0f`) | text | **missing**: the sim exposes only the running score; add a per-tick score-add event list (det-fx's per-tick event stream is the natural carrier), or approximate with the score delta | needs an event |
-  | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | ready (phase 14's value) |
+  | `DetonatorGold/Silver/BronzeMedal` | model when the score passes the cell's thresholds | model | `crate::medal_watch::detonator_value` + the cell | wired (`det-medals`); best tier only, chosen |
   | `ForwardWarning*` | bomb-ahead warning, once per stage, 2.0 s | icons | **missing**: `Detonator_IsBombAhead` (500.0 track measure + straight distance, `0xd2a30`/`0x588f0` unread) and the per-stage latch. On HD message 8 selects `ForwardWarningMineIcon`, which `Detonator_warnings.xml` does not author, so HD probably draws no bomb icon (55, `detonator-hud.md`) | needs RE + a capture |
   | `Emp_0`..`7`, `EmpReady`, `EmpBarEffect` | `n = rm+0x2dd8` pips lit while `n > i`, `EmpReady` at `table+0x1bc`, gauge `min(n/8, 1)` | pips | `RaceSim::detonator_emp`, `detonator_emp_gauge` | pips and `EmpReady` wired (HD, Omega); `EmpBarEffect` not drawn (an `<ImageModel>`); 2048's `EmpCharge`/`EmpFull` open |
   | `PulseScore`, `PulseMultiplier`, `EmpScore`, `PulseBankedScore` | **nothing on HD**: the controller never binds the first two, never reads the third and its banked-score text setter has no caller | - | do not draw `x%02d` or the `%04d` counter | skip |
@@ -391,7 +397,7 @@ placement RNG cannot match the original's `Libc_Rand` (a departure, documented).
 - **Score, end screen, HUD.** Score and percentage are simulated and shown: the HUD is phase 12's,
   the end screen's rows phase 13's (HD wired, above). Campaign cells (`mode="Detonator"`, 12 on the
   Fury grids of HD, Omega and 2048's pack) launch and are medalled on the score (phase 14);
-  the mid-race medal cues are phase 12's.
+  the mid-race medal models are phase 12's (wired, `det-medals`); their cues and `ER_*MA` lines are not (nothing measured them for Detonator).
 - **The out-of-race ending** (`+0x6a64 & 0x1000`) is not modelled. Its writer is read
   (`Ship_SetState` state 4, `detonator-mine.md`); Phase 7 wires it with the contact law.
 - **Omega's grade** is not drawn (Omega draws no Zone grade either); Omega's camera scale is

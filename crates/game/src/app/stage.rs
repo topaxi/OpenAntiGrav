@@ -501,6 +501,7 @@ impl Stage {
             leach_ball_model,
             shield_cockpit,
             countdown_model,
+            medal_models,
             fog_volumes,
             light,
             circuit_lighting,
@@ -633,6 +634,14 @@ impl Stage {
         let overlay = hud_overlay(gpu, &hud, settings)?;
         let scoreboard = scoreboard_overlay(gpu, &hud)?;
         let countdown = countdown_overlay(gpu, countdown_model)?;
+        let medals = (!medal_models.is_empty()).then(|| {
+            Box::new(crate::hud_medal::Medals::new(
+                gpu.device(),
+                gpu.queue(),
+                gpu.format(),
+                medal_models,
+            ))
+        });
         let track_panel = track_panel_overlay(gpu, track_panel)?;
         let demo_overlay = demo_screen_overlay(gpu, demo_overlay)?;
         // Read before `Race::start` takes `setup` - `--autopilot-skill`'s
@@ -707,6 +716,7 @@ impl Stage {
             hud: overlay,
             scoreboard,
             countdown,
+            medals,
             resume_art: None,
             resume_go: String::new(),
             track_panel,

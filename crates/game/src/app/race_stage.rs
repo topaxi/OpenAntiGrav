@@ -34,6 +34,9 @@ pub(crate) struct RaceStage {
     /// mode's layout carries no `Cockpit321Go` widget to place it by - see
     /// `crate::hud_countdown`.
     pub(crate) countdown: Option<Box<crate::hud_countdown::Countdown>>,
+    /// Detonator's three medal models, or `None` outside a Detonator race on a title that shows
+    /// them - see `crate::hud_medal`.
+    pub(crate) medals: Option<Box<crate::hud_medal::Medals>>,
     /// The countdown art's own clock in seconds while a resume counts down (and
     /// `GO` lingers after it), set by the session each frame; `None` otherwise.
     /// The art is drawn on this clock through the same model the start uses, and
@@ -919,6 +922,24 @@ impl RaceStage {
                     down: crate::pause::anchor_y(views),
                     scale: crate::pause::SPLIT_ART_SCALE,
                 });
+            // Detonator's medal: the best the score has reached, in its widget's rectangle, where
+            // the HUD's safe area puts it. One view only: a split screen has no Detonator.
+            if let Some(medals) = &mut self.medals {
+                let medal = self.race.detonator_medal();
+                let seconds = self.race.core.sim.world.tick as f32 / 60.0;
+                medals.draw(
+                    gpu.device(),
+                    gpu.queue(),
+                    encoder,
+                    view,
+                    medal,
+                    seconds,
+                    hud.space(),
+                    &|rect| hud.place_rect(rect),
+                    viewport,
+                    target_size,
+                );
+            }
             if let Some(countdown) = &mut self.countdown
                 && let Some(seconds) = self.resume_art.or(start_line)
             {

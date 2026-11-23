@@ -805,6 +805,11 @@ pub(crate) fn run_race(
                     "wreck",
                 )?,
                 force_hit: crate::app::args::force_at_slot(cli.wreck.force_hit.as_deref(), "hit")?,
+                force_detonator_score: crate::app::args::force_at_slot(
+                    cli.wreck.force_detonator_score.as_deref(),
+                    "Detonator score",
+                )?
+                .map(|(tick, score)| (tick, i32::try_from(score).unwrap_or(i32::MAX))),
                 force_wall_slide: crate::app::args::force_at_slot(
                     cli.wreck.force_wall_slide.as_deref(),
                     "wall slide",

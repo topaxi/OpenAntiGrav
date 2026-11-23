@@ -119,7 +119,7 @@ pub fn improvement(had: Option<Medal>, now: Option<Medal>) -> Option<Medal> {
 /// updates the standing one. Returns the new tier.
 ///
 /// `counting` is the title's [`oag_title::Campaign::counting_modes`]. Only a Zone or Speed Lap
-/// race is watched: an Eliminator cell's medal is its place on the end-of-race board, which
+/// race is watched (a Detonator cell only has its targets handed to the race, for the HUD's medal): an Eliminator cell's medal is its place on the end-of-race board, which
 /// does not exist mid-race (the original records only at the end).
 pub fn tick(
     cell: &Cell,
@@ -128,6 +128,13 @@ pub fn tick(
     earned: &mut Option<Medal>,
     race: &mut Race,
 ) -> Option<Medal> {
+    if cell.mode == Mode::Other(crate::campaign::DETONATOR_CELL_MODE.to_string()) {
+        // A Detonator cell's HUD shows the medal the score has reached against these
+        // (`detonator-hud.md`, `DetonatorGoldMedal`..); the line and the cue are Zone's and
+        // Speed Lap's own, so nothing is raised.
+        race.set_medal_targets(Some(cell.targets_for_difficulty(difficulty)));
+        return None;
+    }
     if cell.mode == Mode::SpeedLap && race.speed_lap_medal_rule().is_some() {
         return every_best_lap(cell, difficulty, counting, earned, race);
     }

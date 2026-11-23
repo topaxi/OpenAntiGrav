@@ -98,6 +98,8 @@ pub struct CaptureOptions {
     pub force_wreck: Option<(u32, usize)>,
     /// `--force-hit TICK:SLOT`: see [`Race::force_weapon_hit`].
     pub force_hit: Option<(u32, usize)>,
+    /// `--force-detonator-score TICK:SCORE`: the Detonator score is set at the end of a tick.
+    pub force_detonator_score: Option<(u32, i32)>,
     /// `--force-wall-slide TICK:SLOT`: see [`RaceSim::force_wall_slide`].
     pub force_wall_slide: Option<(u32, usize)>,
     /// `--force-leach-lock TICK:TARGET`: see [`RaceSim::force_leach_lock`].
@@ -442,6 +444,7 @@ pub fn capture(
         leach_ball_model,
         shield_cockpit,
         countdown_model,
+        medal_models,
         fog_volumes,
         light,
         circuit_lighting,
@@ -1364,6 +1367,27 @@ pub fn capture(
                         None,
                         hud_viewport,
                     );
+                    // Detonator's medal, as `RaceStage::draw_window_hud` draws it.
+                    if !medal_models.is_empty() {
+                        crate::hud_medal::Medals::new(
+                            &device,
+                            &queue,
+                            format,
+                            medal_models.clone(),
+                        )
+                        .draw(
+                            &device,
+                            &queue,
+                            &mut encoder,
+                            &hud_view,
+                            race.detonator_medal(),
+                            race.core.sim.world.tick as f32 / 60.0,
+                            overlay.space(),
+                            &|rect| overlay.place_rect(rect),
+                            hud_viewport,
+                            (width, height),
+                        );
+                    }
                     // The countdown, on the same terms `RaceStage::draw_hud` draws
                     // it on - see `oag_hud::countdown`,
                     // `oag_race::RaceState::thrust_gated` and `Scene::draws_gantry`,
