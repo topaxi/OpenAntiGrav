@@ -176,8 +176,12 @@ impl Renderer {
         // at that size and its origin put on a whole pixel; every other mode
         // leaves `scale` and the origin as given.
         let scale = self.hud.text_scale(atlas.texel_scale, scale);
-        let width: f32 = if self.hud.snapped_pens {
-            font::snapped_run(atlas, text, scale).end
+        let snapped_run = self
+            .hud
+            .snapped_pens
+            .then(|| font::snapped_run(atlas, text, scale));
+        let width: f32 = if let Some(run) = snapped_run {
+            run.end
         } else if self.hud.whole_advances {
             text.chars()
                 .filter_map(|c| atlas.cell(c))
@@ -212,6 +216,9 @@ impl Renderer {
         let mut pen = self.hud.snap(match align {
             Align::Left => x,
             Align::Centre => x - (width - trailing) / 2.0,
+            // Pure's right-aligned text ends its last glyph's quad on `x`, not its pen
+            // (`docs/ui/menus-original.md`, "Pure's right-aligned text ends on its ink").
+            Align::Right if snapped_run.is_some() => x - snapped_run.map_or(0.0, |r| r.ink_right),
             Align::Right => x - width + trailing,
         });
         if self.hud.snapped_pens {

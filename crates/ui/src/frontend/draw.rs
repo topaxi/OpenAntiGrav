@@ -709,16 +709,35 @@ impl Frontend {
                 (true, Some(line)) => text.y - 0.5 * line * scale,
                 _ => text.y,
             };
-            out.push(Draw::Text {
-                x: text.x,
-                y,
-                scale,
-                color,
-                border: None,
-                align: Align::parse(&text.align),
-                text: self.strings.get_or_id(id).to_string(),
-                wrap_width: text.wrap_width,
-            });
+            let align = Align::parse(&text.align);
+            let body = self.strings.get_or_id(id).to_string();
+            // A `font="Stats"` (or `Scroll`) widget draws in the title's own small face where it
+            // has one (`oag_title::MenuSkin::stats_font`), at its authored scale: the face's own
+            // size, so no ratio against the `Default` atlas applies.
+            if self.stats_face_named(&text.font) {
+                out.push(Draw::FacedText {
+                    role: crate::language::roles::STATS,
+                    x: text.x,
+                    y,
+                    scale: text.scale,
+                    color,
+                    border: None,
+                    align,
+                    text: body,
+                    wrap_width: text.wrap_width,
+                });
+            } else {
+                out.push(Draw::Text {
+                    x: text.x,
+                    y,
+                    scale,
+                    color,
+                    border: None,
+                    align,
+                    text: body,
+                    wrap_width: text.wrap_width,
+                });
+            }
             // A title whose menu skin carries a glow blooms its front end: Pulse's.
             if self.menu_skin.is_some_and(|skin| skin.glow.is_some())
                 && let Some(value) = text.glow_stamp_at(elapsed)
