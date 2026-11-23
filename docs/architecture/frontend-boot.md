@@ -1130,8 +1130,29 @@ used elsewhere on this page; the strings sit 20 bytes apart):
 | Pure PSP EU (`UCES-00001`) | `0x2a54d8` | `PI000`, `PI010`, `PI008`, `PI009`, `PI011` | `PI003`, `PI005`, `PI012` |
 
 Pure USA's manifest also loads `PI012`, a US-spelling overlay on `PI000` with no
-`<Font>`: not a language, so it is not in the offered list (applying its
-spellings is open fidelity work). The three offered languages and their order
+`<Font>`: not a language, so it is not in the offered list; it is the release's
+`LanguageManifest::overlays`, which `oag_ui::language::load::load_strings` lays
+over the chosen language's table after the base text and before the project's own
+files. The file lives in `Data.wad` (not `FE.wad`) and is **byte-identical on the
+Pure EU disc, whose manifest never loads it**, so the overlay follows the
+release's manifest (`oag_title::FrontEnd::language_overlays`), never "the disc
+holds the file". It states three languages in one `StringTable`; an entry's
+`Language` attribute opens a section that holds until the next marker
+(`StringTable::section`), so English reads `<Entry ID="On Line" String="Download">`
+and the French and Spanish sections their own `Téléchargement` and `Descarga`. It
+carries 14 English ids: the Main Menu's `On Line` row (`Download`), the US spellings
+of the Settings camera, Zone 1-4, Profile and Energy Save descriptions and the
+`Network Sync` line, the four team descriptions whose grammar changes (Qirex,
+Triakis, AG Systems, Auricom: `presents`, `muscles`, `brings`), `Synchronising` and
+`MSInfoText Memory` (450 KB against the EU's 512). Confidence 95 that the USA
+English Main Menu reads `DOWNLOAD` (the PPSSPP capture of `pure-psp/menu-main`) and
+that the file is in the manifest; 70 for the sticky-section reading, which the
+French and Spanish text rests on (read from the file, not captured). Ground truth:
+`language_offered_ground_truth::pure_usa_reads_the_pi012_overlay_and_pure_eu_does_not`.
+Checked against the other titles: **checked, differs** - Pulse USA and PS2 load a
+`PI012` too, but as the English language itself (own `<Font>` and strings, in
+`plugins`); HD, 2048 and Omega have no manifest and no overlay plugin of this shape.
+The three offered languages and their order
 match the USA picker observed in `pure-boot.md`, and the EU five match too, which
 is what makes manifest order the picker order on Pure (confidence 85). Pulse's
 picker exits in under a frame and was never captured, so its order is Pure's rule

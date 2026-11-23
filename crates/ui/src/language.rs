@@ -19,7 +19,8 @@
 //! German, `PI010` Spanish, `PI011` Italian and `PI012` English; on Pure the
 //! same four non-English plugins keep their ids but English is `PI000`, not
 //! `PI012` - `PI012` on Pure is an unrelated American-spelling patch with no
-//! `<Font>` block of its own. Each mapping was recovered by reading every
+//! `<Font>` block of its own, applied as a string overlay
+//! ([`Language::overlays`]). Each mapping was recovered by reading every
 //! plugin on its own disc, never carried over from the other title. See
 //! `docs/formats/pure-status.md#the-language-plugin-id-space-is-pures-own-not-pulses`.
 //!
