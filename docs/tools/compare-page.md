@@ -1933,8 +1933,9 @@ heading `Main Menu`, the row descriptions (`Text->Main Menu->Mode->ROW`) and the
 1,342, row 1 544, row 4 344, heading 315. The description is the known open `Scroll` face advance (ours 6.5 px a character against the original's 7.6; `FEGlobals->TextInfoScale` is
 undeclared so 0.7 is chosen): measured, not fixed. **Row 4 reads `ON LINE` in ours and `DOWNLOAD` in the original**: the USA disc loads `PI012`, a US-spelling overlay
 (`Data\Plugins\PI012\Definition.xml`: `<Entry ID="On Line" String="Download">`, with `Téléchargement` and `Descarga` for French and Spanish), and ours does not
-(`oag_pure::LANGUAGE_MANIFESTS` leaves it out as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Open, with the evidence**:
-the overlay is not wired because it is a string-table layer over English only on the USA pressing, wider than this lane's claim.
+(`oag_pure::LANGUAGE_MANIFESTS` leaves it out of the offered list as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Fixed**: the
+manifest's `overlays` name it and `load_strings` lays its section for the chosen language over the table (`docs/architecture/frontend-boot.md`, "The offered languages are each executable's plugin manifest"), live and in this
+still alike; the EU disc ships the same file and its manifest never loads it, so a EU boot reads `On Line`. One fresh render of the shipped pair's flags, whole 480 x 272 frame: pixels with any channel more than 40 from the original 4,119 to 3,595 (3.16 % to 2.75 %; the shipped pair's `ours.png` predates later pure-menu work, which is why it is not the 2.97 % above), the same count on luma alone 1,381 to 1,027 (1.06 % to 0.79 %); row 4's band (y 100-120) 651 to 127 any-channel px and 354 to 0 luma px; mean grey 1.43 to 1.28, edge 0.533 to 0.543. The project's own main page (`menu.toml`) draws neither row.
 
 **Pause menu.** Ours is a menu over a parked race, so no still draws it: the route plays our own session the way the original is walked (`boot`, SINGLE PLAYER, TIME TRIAL, Vector,
 Alpha, Vineta K, the team, `@TICKS@` race ticks, START) with `--original-menu`, which now leaves this project's PHOTO MODE row out of a pause screen that authors none (the original has

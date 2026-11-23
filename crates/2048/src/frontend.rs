@@ -265,6 +265,7 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
             r"languages\norwegian",
             r"languages\polish",
         ],
+        overlays: &[],
         evidence: "2048 EU v1.04 eboot FUN_8122eac0, mode word 0 at Game_Main 0x81003e00",
     },
     oag_title::LanguageManifest {
@@ -274,6 +275,7 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
             r"languages\french",
             r"languages\spanish",
         ],
+        overlays: &[],
         evidence: "2048 US v1.04 eboot, mode word 1 (file offset 0x4dfe), FUN_8122eac0 mode 1",
     },
 ];

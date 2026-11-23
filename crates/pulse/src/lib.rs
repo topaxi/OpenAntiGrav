@@ -763,16 +763,19 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[
     oag_title::LanguageManifest {
         serial: "UCES-00465",
         plugins: &["PI000", "PI008", "PI009", "PI010", "PI011"],
+        overlays: &[],
         evidence: "pulse-psp-eu BOOT.BIN manifest; English is PI000, no PI012 on the disc",
     },
     oag_title::LanguageManifest {
         serial: "UCUS-98712",
         plugins: &["PI012", "PI010", "PI008", "PI009", "PI011"],
+        overlays: &[],
         evidence: "pulse-psp-usa BOOT.BIN manifest (0x08ab110c)",
     },
     oag_title::LanguageManifest {
         serial: "SCES-54748",
         plugins: &["PI012", "PI010", "PI008", "PI009", "PI011"],
+        overlays: &[],
         evidence: "pulse-ps2-eu SCES_547.48 manifest string run",
     },
 ];

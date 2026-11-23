@@ -925,6 +925,13 @@ impl FrontEnd {
             serial,
         )
     }
+
+    /// The overlay plugins a source with this `serial` loads over its language's
+    /// strings, in manifest order. Empty for a release that loads none.
+    #[must_use]
+    pub fn language_overlays(&self, serial: Option<&str>) -> &'static [&'static str] {
+        language::overlays_of(self.language_manifests, self.assumed_release, serial)
+    }
 }
 
 /// The archive names a title's releases carry, in the order they are tried.

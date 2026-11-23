@@ -582,6 +582,7 @@ pub const LANGUAGE_MANIFESTS: &[oag_title::LanguageManifest] = &[oag_title::Lang
         r"Languages\Danish",
         r"Languages\Norwegian",
     ],
+    overlays: &[],
     evidence: "hdfury-ps3-eu EBOOT FUN_003436b8 jump table; EU region = the unmatched value",
 }];
 
