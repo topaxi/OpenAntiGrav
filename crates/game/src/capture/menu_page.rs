@@ -14,11 +14,12 @@ pub(super) type TickerClip = Option<(usize, f32, f32)>;
 
 /// A Pulse picker's footer under `list`: the `Confirm`/`Back` legend and the
 /// ticker frozen at `elapsed = 0.0`, as `MenuStage::picker_footer` draws them
-/// live. Both in the `Default` role, measured through `default_font`.
-/// Returns the ticker's clip.
+/// live; `show_back` is `false` for a screen that authors no way back. Both in the `Default`
+/// role, measured through `default_font`. Returns the ticker's clip.
 pub(super) fn picker_footer(
     list: &mut Vec<oag_ui::frontend::Draw>,
     nav_legend: Option<&oag_ui_screens::campaign::footer::NavigationLegend>,
+    show_back: bool,
     ticker: Option<&oag_ui_screens::campaign::footer::TickerLayout>,
     strings: &oag_ui::language::StringTable,
     default_font: &oag_ui::font::Atlas,
@@ -33,7 +34,7 @@ pub(super) fn picker_footer(
     let faces = oag_ui_screens::picker::FaceScales::default();
     let measure = |text: &str| oag_ui::font::measure(default_font, text);
     if let Some(legend) = nav_legend {
-        list.extend(legend.draw_gated(&faces, true));
+        list.extend(legend.draw_gated(&faces, show_back));
     }
     let draw = oag_ui_screens::campaign::footer::ticker_draw(layout, 0.0, &tips, &faces, &measure)?;
     let at = list.len();

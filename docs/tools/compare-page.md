@@ -1840,7 +1840,9 @@ the evidence.
 | `Grid Selection`, `Cell Selection` (the Race Campaign) | `--menu-page grid-select`, `cell-select` (`CellMode_Definition.xml`, `grid_00.xml`) | pair, pair | none: Pure draws a list (`this source has no Race Campaign to show`) |
 | Pure's Single Player chain: `Single Player`, `Class Selection`, `League Selection`, `Tournament Selection`, `Track Selection` | `--menu-page pure-chain[:MODE[:ROW...]]` | none | pair x6 |
 | `Track Creation` (Track Select), `Team Selection` | `--menu-page track-select`, `ship-select` | pair, pair | `Team Selection` pair; Pure's circuit list is `Track Selection` above |
-| `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), pause | `menu.toml`'s `main`, `race`, `options` pages; the pause menu is a `Stage::Menu` with no still route | **gap** x5 | **gap** x2 (`Main Menu`, pause; Pure's main page has no Racebox or Options row) |
+| `Main Menu` | Pure: `--menu-page pure-main` (`Skin.xml`'s `Main Menu`, the chain's drawer; the live main page is `menu.toml`'s, ADR-0066). Pulse: `menu.toml`'s `main` | **gap** | pair |
+| `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+) | `menu.toml`'s `race`, `options` pages | **gap** x4 | none (Pure has no Racebox or Options row) |
+| pause menu | Pure: `--drive-file scripts/pure-pause.drive --original-menu` (our own session: a Time Trial on Vineta K, START); Pulse is a `Stage::Menu` with no route | **gap** | pair |
 
 **The campaign pair (required).** Pulse: the Race Campaign's Grid Selection (`GRID 1`, the first tier, cursor on tier one) and **Cell
 Selection** (`SINGLE RACE`, `Moa Therma White`, the default cell), both with the footer's `AI difficulty (Medium)`. The difficulty
@@ -1886,9 +1888,7 @@ deterministic); Pulse 0.7-4.7 mean grey, 0.1-3.5 % over 40, the Ship Select turn
 **Gaps** (original kept under `gap-*` with `gap.json`): Pulse `Main Menu` (ours' page is `menu.toml`'s with extra REMIX, RECORDS and MODS
 rows, title `OPENANTIGRAV`), `Racebox`, `Single Player` (the Racebox setup, ours' `race` page with different rows), `Additional`
 (Options+: GAME OPTIONS, CONTROLS, MUSIC PLAYLIST against ours' `options`) and the pause menu (`GAME PAUSED`: CONTINUE, GAME OPTIONS,
-PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a savestate, Start pressed); Pure `Main Menu` (SINGLE PLAYER,
-MULTIPLAYER, PROFILE, DOWNLOAD on the white frame, against ours' dark teal `menu.toml` page) and the pause menu (CONTINUE, RESTART, QUIT
-over the dimmed race). Pure has no Options or Racebox screen in its main menu.
+PHOTO MODE, GAME MANUAL, RESTART RACE, QUIT RACE; a Time Trial restored from a savestate, Start pressed); Pure's `Main Menu` and pause menu were gaps until 2026-11-23 (`pure-main-pause`, below). Pure has no Options or Racebox screen in its main menu.
 
 **Screen-entry clock (2026-10-29).** `original.seconds_since_entry` (`value`, `basis: measured`) is the wall clock from the state-name poll
 that saw the screen replace another (polled every 0.03 s, so +-0.015 s) to the middle of the frame grab; PPSSPP holds 60 fps, but entries
@@ -1911,6 +1911,41 @@ scripts/psp-menu-pair.py pairs --title pulse|pure --out D --autopilot off --diff
 separate boot: `--plan "st:Show Logo,wait:5,shot:title" --ids title`). Adopt: `python3 scripts/compare_env.py manifest
 data/reference/compare-page/menus-pulse.toml data/reference/compare-page/pulse-psp/menu-*` (and `menus-pure.toml` over `pure-psp/menu-*`),
 then `just compare-page`.
+
+### Pure Main Menu and pause menu pairs (2026-11-23, `pure-main-pause`)
+
+Claim: Pure's Main Menu and pause menu each have a pair (the original's screen against ours, environment-checked, both English, a fresh profile) and each pair's largest
+differing region is fixed or measured. Share of pixels over 40 grey, whole 480 x 272 frame, one fresh capture each:
+
+| Pair | Before | After | Route |
+| --- | --- | --- | --- |
+| Main Menu | gap (ours' `menu.toml` page against the same frame: 4.89 %, mean grey 3.68) | 2.97 % (mean grey 2.26, edge 0.48) | `--menu-page pure-main` |
+| Pause menu (Time Trial, Vineta K, Vector, Feisar) | gap | 2.82 % (mean grey 6.10, edge 0.85); song box 335 to 54 px | `--drive-file scripts/pure-pause.drive --original-menu --state-log /dev/null` |
+| Single Player (mode), its row descriptions | 3.13 % (the committed pair) | 1.90 % | `--menu-page pure-chain` |
+
+**Main Menu.** The page ours draws live is `menu.toml`'s `main` (ADR-0066: this build's rows, title `OPENANTIGRAV`), so a compare shot draws the disc's own screen
+instead: `--menu-page pure-main` reads `Skin.xml`'s `Main Menu` `Mode` entries (`Single Player`, `Multiplayer`, `Profile`, `On Line`; `Teasers` is a `noEntry`), the
+heading `Main Menu`, the row descriptions (`Text->Main Menu->Mode->ROW`) and the footer with `CONFIRM` alone (`backward="none"`), through the chain's drawer
+(`oag_ui_screens::pure_chain::draw_list`, `campaign::pure_chain::Chain::main_view`). The pair walk shoots it after BACK from Single Player, so the description's type-in clock
+(`--menu-picker-seconds`) is the press-to-grab tick count like every chain screen. **Largest regions** (px over 40 grey, of 3,029 on the shipped pair): the typed description
+1,342, row 1 544, row 4 344, heading 315. The description is the known open `Scroll` face advance (ours 6.5 px a character against the original's 7.6; `FEGlobals->TextInfoScale` is
+undeclared so 0.7 is chosen): measured, not fixed. **Row 4 reads `ON LINE` in ours and `DOWNLOAD` in the original**: the USA disc loads `PI012`, a US-spelling overlay
+(`Data\Plugins\PI012\Definition.xml`: `<Entry ID="On Line" String="Download">`, with `Téléchargement` and `Descarga` for French and Spanish), and ours does not
+(`oag_pure::LANGUAGE_MANIFESTS` leaves it out as "not a language"); it also holds `Synchronizing`, `favored` and the Zone and team descriptions. **Open, with the evidence**:
+the overlay is not wired because it is a string-table layer over English only on the USA pressing, wider than this lane's claim.
+
+**Pause menu.** Ours is a menu over a parked race, so no still draws it: the route plays our own session the way the original is walked (`boot`, SINGLE PLAYER, TIME TRIAL, Vector,
+Alpha, Vineta K, the team, `@TICKS@` race ticks, START) with `--original-menu`, which now leaves this project's PHOTO MODE row out of a pause screen that authors none (the original has
+three rows). The racebox page offers no Vector class (Venom first), so the campaign flow is the route that races the original's class. The drive draws at 1440 x 816 and the pair
+script box-filters it to 480 x 272 (`compare_menu.box_down`); the pair keeps `ours.drive`, which `compare-rerender-ours.py` runs (re-rendered on a copy: byte-identical `ours.png`).
+The original is `data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst` loaded, 4 s, START, 2 s (`PURE_PAUSE_PLAN`). The grab's race clock varies by seconds between loads
+(wall waits), so `--pause-clock` is the `CURRENT` the frame shows, read by eye (22.3), and ours is played to it (`PAUSE_CLOCK_ZERO_TICKS`, 1,612 ticks); with that both HUD clocks read
+0.22.3 and `BRONZE TIME` 1.47.6. `--from-png pause=PNG` re-makes ours' side from a frame already grabbed, with no emulator. **Fixed**: the race's song-name line under the tint (the
+original shows none: the music widgets are `InGame`'s and the pause screens are its siblings): `PauseMenu::song_line_under_scrim` is `false` on Pure, `true` elsewhere (unmeasured); song
+box (130, 238, 200 x 24) 335 px to 54. The band itself matches: rules at rows 75 and 175, ink rows 103-114, 121-132, 139-150, peak ink 252/156/149 against 253/157/149.
+**Largest regions left** (px over 40 grey of 3,688): the HUD top 1,396 (the digits' glyph edges and the blimp, the HUD lane's), the scene below the band 948, the band's rows 821 (ours'
+words are 3 px narrower over 105: `CONTINUE` ink 188-290 against 188-293, `RESTART` 190-288 against 190-291; the face's advance rounding, the same effect as the description's), the
+footer line 522.
 
 ### Pulse Cell Selection: the footer, the tag and the title's glow phase (2026-11-23, `pulse-psp-cell`)
 

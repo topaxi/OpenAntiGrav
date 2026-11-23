@@ -63,6 +63,8 @@ pub(crate) struct App {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`: skip the pre-race flyby. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--original-menu`: leave out what this build adds to the disc's own screens. See the CLI field.
+    pub(crate) original_menu: bool,
     /// `--preseat`, `--script`, `--frame-log`. See `crate::devrun`.
     pub(crate) dev: crate::devrun::Dev,
     /// `--connect`: the race is a server's. Joined once the race is built, then
@@ -553,6 +555,7 @@ impl App {
             log_every: self.log_every,
             give: self.give,
             no_intro: self.no_intro,
+            original_menu: self.original_menu,
             dev: std::mem::take(&mut self.dev),
             dev_clock: crate::app::session::devrun::Clock::default(),
             net: self.net.take(),

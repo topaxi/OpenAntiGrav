@@ -110,7 +110,7 @@ Pure shows no difficulty control). No renderer or UI code changed. Ranked by the
 4. **Title** (0.3 %): no visible difference.
 
 Gaps (original kept, no pair): Pulse `Main Menu`, `Racebox`, `Single Player` (Racebox setup), `Additional` (Options+), the pause menu;
-Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no still route.
+Pure's `Main Menu` and pause menu are pairs since 2026-11-23 (`pure-main-pause`: Main Menu 2.97 %, pause 2.82 % over 40 grey; `docs/tools/compare-page.md`, "Pure Main Menu and pause menu pairs"). Each other is drawn from `menu.toml` or has no still route.
 
 ## Next Steps
 
@@ -126,7 +126,7 @@ Pure `Main Menu` and the pause menu. Each is drawn from `menu.toml` or has no st
    `route: None` to a route).
 6. Pulse and Pure: (Track Select, Ship Select and Pure's team list closed 2026-10-29) make `--menu-page cell-select` read the persisted campaign difficulty on Pulse (only the HD branch does, so a non-default rung cannot be paired); draw the record separators; read the `Stats` face's glyph-edge fringe (ours 1 px wider, see item 2) and the typed line's second row (`TextInfoGap`; the pen, scale and top offset closed 2026-11-23); give `mode` (Single Player) its description line (the original types one, ours draws none); a Pure walk on a stick with no profile stops on the system's "There is no data" dialog and still passes all seven parity checks, because Pure's screen is declared, not read: check `shots/` by eye after a walk; then re-run
    `scripts/psp-menu-pair.py pairs`.
-7. Pulse and Pure pause menus: a `--menu-page pause` still would turn those two gaps into pairs.
+7. Pulse's pause menu: turn the gap into a pair the way Pure's was (`--drive-file` route with `--original-menu`, `scripts/pure-pause.drive`, a save state of the original). Pure's pause pair: the HUD digits' glyph edges and the 3 px narrower words are open (the race clock is matched by `--pause-clock`). Pure Main Menu: row 4 `DOWNLOAD` is the USA disc's `PI012` overlay (`On Line` -> `Download`), not applied by ours; the typed description's `Scroll` advance (6.5 px a character against 7.6) is the largest region.
 8. Pulse PS2 menu pairs (2026-11-23, `ps2-ship-select`, `ps2-grid-cell`): Ship Select, Grid Selection and Cell Selection carry the original's footer ticker message and tag (`docs/tools/compare-page.md`, "PS2 menu pairs: the footer
    ticker and the tag are read from PCSX2 RAM", and "`menu-grid` and `menu-cell` re-made"); footer box >40-grey share 17 % to 8.6-9.0 % on the two campaign pages, whole frame 3.3-3.5 % to 2.8-3.0 %; translucent fills under an outlined atlas were drawn twice
    (the largest region on both pairs, 31-50 % of the pixels over 40 grey) and are drawn once. Open: the PS2 ticker widget's own fields (item index, weight) are not recovered, so only the six tips are pinnable and a frame with a statistic message (menu time, favourite music) is not grabbed;

@@ -75,6 +75,7 @@ pub const PAUSE_MENU: &PauseMenu = &PauseMenu {
     scrim_argb: 0xe800_0000,
     layout: None,
     hud_under_scrim: false,
+    song_line_under_scrim: true,
     offers_photo: true,
     origin: Origin::Measured,
 };

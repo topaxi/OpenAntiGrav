@@ -451,6 +451,8 @@ pub(crate) struct Session {
     pub(crate) give: Option<oag_tables::weapons::Weapon>,
     /// `--no-intro`, carried into the race loop. See the CLI field.
     pub(crate) no_intro: bool,
+    /// `--original-menu`, carried into the loop. See the CLI field.
+    pub(crate) original_menu: bool,
     /// `--preseat`, `--script`, `--frame-log`, carried into the loop. See `session::devrun`.
     pub(crate) dev: crate::devrun::Dev,
     /// When the script and the frame log started counting, and the frame log's window.

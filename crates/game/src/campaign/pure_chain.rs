@@ -21,6 +21,9 @@ use oag_ui_screens::pure_chain::{Row, Status};
 
 use super::pure_list::{Names, PureCampaign};
 
+/// The screen the live main page replaces and a compare still draws.
+const MAIN_MENU: &str = "Main Menu";
+
 /// What `Single Player`'s mode names do. Literal disc idstrings: the ground
 /// truth holds the five authored modes to this table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,6 +254,30 @@ impl Chain {
         })
     }
 
+    /// The disc's `Main Menu` screen as rows: its `Mode` entries in file order, each with the
+    /// description the string table holds under `Text->Main Menu->Mode->ROW`. The chain never
+    /// stands on it (the live main page is `menu.toml`'s, ADR-0066), so this is what a compare
+    /// still of the original's screen draws.
+    #[must_use]
+    pub fn main_view(&self, names: &Names<'_>) -> View {
+        let rows = self
+            .flow
+            .main_modes
+            .iter()
+            .enumerate()
+            .map(|(tag, mode)| {
+                Row::event((names.name_of)(mode), tag, Status::Open, String::new())
+                    .described((names.describe)(MAIN_MENU, "Mode", mode))
+            })
+            .collect();
+        View {
+            title: (names.name_of)(MAIN_MENU),
+            context: String::new(),
+            pitch: 0.0,
+            rows,
+        }
+    }
+
     /// The screen the player is on, as rows.
     #[must_use]
     pub fn view(&self, profile: &Profile<'_>, names: &Names<'_>) -> View {
@@ -270,7 +297,10 @@ impl Chain {
                 .modes
                 .iter()
                 .enumerate()
-                .map(|(tag, mode)| Row::event(say(mode), tag, Status::Open, String::new()))
+                .map(|(tag, mode)| {
+                    Row::event(say(mode), tag, Status::Open, String::new())
+                        .described(note("Mode", mode))
+                })
                 .collect(),
             Step::Class => {
                 context.push(mode_name);
@@ -625,6 +655,29 @@ pub fn present(
     title: &oag_title::Title,
     records: &crate::records::Store,
 ) -> View {
+    present_with(strings, title, records, |profile, names| {
+        chain.view(profile, names)
+    })
+}
+
+/// The disc's `Main Menu` screen ([`Chain::main_view`]) worded the way [`present`] words the
+/// chain's.
+#[must_use]
+pub fn present_main(
+    chain: &Chain,
+    strings: &oag_ui::language::StringTable,
+    title: &oag_title::Title,
+    records: &crate::records::Store,
+) -> View {
+    present_with(strings, title, records, |_, names| chain.main_view(names))
+}
+
+fn present_with(
+    strings: &oag_ui::language::StringTable,
+    title: &oag_title::Title,
+    records: &crate::records::Store,
+    build: impl FnOnce(&Profile<'_>, &Names<'_>) -> View,
+) -> View {
     let say = |name: &str| strings.get(name).unwrap_or(name).to_uppercase();
     let describe = |screen: &str, item: &str, value: &str| {
         strings
@@ -643,7 +696,7 @@ pub fn present(
         unlock_all: crate::unlock::unlock_all(),
         classes_at_start: title.campaign.classes_at_start,
     };
-    let mut view = chain.view(
+    let mut view = build(
         &profile,
         &Names {
             name_of: &say,

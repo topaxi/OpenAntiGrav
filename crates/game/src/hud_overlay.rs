@@ -194,6 +194,10 @@ pub struct Overlay {
     /// Whether the HUD is drawn: `false` under Pulse's `Dynamic HUD` set to off
     /// ([`Self::set_dynamic_hud`]). The resume countdown is the host's own and still draws.
     hud_shown: bool,
+    /// Whether the song-name marquee is left out of the HUD: under a pause screen, where the disc's
+    /// widgets for it belong to `InGame` and the pause screens are siblings of that screen
+    /// (`docs/ui/pause-menu.md`, "Pure").
+    song_line_held: bool,
     /// Whether the HUD is drawn bent by the `Dynamic HUD` warp ([`Self::set_dynamic_hud`],
     /// `oag_hud::concave`).
     bent: bool,
@@ -321,6 +325,7 @@ impl Overlay {
             tag_label: assets.tag_label.clone(),
             safe_area_scale: assets.art.safe_area_scale(None),
             hud_shown: true,
+            song_line_held: false,
             bent: false,
             vector: assets
                 .layout
@@ -343,6 +348,11 @@ impl Overlay {
                     asked: 0.0,
                 }),
         }))
+    }
+
+    /// Leaves the song-name marquee out (`true`) or draws it again.
+    pub fn hold_song_line(&mut self, held: bool) {
+        self.song_line_held = held;
     }
 
     /// The player's `[display] dynamic_hud` in the camera view in use (`cockpit`: the internal
@@ -562,7 +572,11 @@ impl Overlay {
                 self.space,
             ));
         }
-        if let Some(marquee) = readout.now_playing.as_ref().filter(|_| self.hud_shown) {
+        if let Some(marquee) = readout
+            .now_playing
+            .as_ref()
+            .filter(|_| self.hud_shown && !self.song_line_held)
+        {
             let at = self.safe_area_placement();
             let marquee = at.map_or_else(|| marquee.clone(), |at| marquee.placed(&at));
             oag_hud::now_playing::append(
