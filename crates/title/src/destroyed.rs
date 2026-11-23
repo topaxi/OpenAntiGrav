@@ -25,6 +25,18 @@ pub enum BlastAt {
     Explosion,
 }
 
+/// Which sound a craft's destruction makes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DestroyedSound {
+    /// The player's own `~BLOWUP`, held through the explosion (Pulse, Pure); an opponent's
+    /// destruction plays nothing.
+    Blowup,
+    /// HD's `Ship_PlayDestroyExplosion`: `EXPLBIG_PC` (the local player) or `EXPLBIG` at the
+    /// blast, the player's looped `~SHIP_DESTROYED`, and `~SHIP_ONFIRE` on every craft of an
+    /// ordinary race (`ship-destroy.md`, rows 3, 12 and 15).
+    Ship,
+}
+
 /// When a wreck that has come to rest is let go before its dwell is up.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Settle {
@@ -51,6 +63,8 @@ pub struct DestroyedCraft {
     /// Whether state 6 takes the body out of the physics world (it stops being
     /// integrated) rather than leaving it to land and roll.
     pub leaves_world: bool,
+    /// The sound the destruction makes.
+    pub sound: DestroyedSound,
     /// Where the destroy camera comes from. HD's own mode 8 is unread, so it keeps the
     /// existing destroy camera, which is Pulse's.
     pub camera: crate::effects::Origin,
@@ -66,6 +80,7 @@ impl DestroyedCraft {
         wreck_from: WreckFrom::OutOfRace,
         blast_at: BlastAt::DwellEnd,
         leaves_world: false,
+        sound: DestroyedSound::Blowup,
         camera: crate::effects::Origin::Measured,
     };
 
@@ -83,6 +98,14 @@ impl DestroyedCraft {
         wreck_from: WreckFrom::Explosion,
         blast_at: BlastAt::Explosion,
         leaves_world: true,
+        sound: DestroyedSound::Ship,
         camera: crate::effects::Origin::InheritedFrom("Wipeout Pulse"),
+    };
+
+    /// HD's sequence on a title whose destroy cues are not wired: it keeps `~BLOWUP`
+    /// until its own cue names resolve in its banks.
+    pub const HD_BLOWUP: Self = Self {
+        sound: DestroyedSound::Blowup,
+        ..Self::HD
     };
 }

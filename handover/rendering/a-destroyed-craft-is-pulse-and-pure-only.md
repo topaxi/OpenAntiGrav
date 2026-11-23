@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
 updated: 2026-11-23
-summary: "Destroyed craft wired on all five titles (HD sequence); HD Zone end read; open: sound, camera 8/9, collider, debris, Zone wire"
+summary: "Destroyed craft wired on all five titles (HD sequence); HD Zone end read; open: camera 8/9, collider, debris, Zone wire, 2048/Omega sound"
 ---
 
 # A destroyed craft: wreck model, effects and states beyond Pulse
@@ -29,8 +29,8 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 - **HD/Fury: wired (rows 1, 2, 9, 10, 11 partly, 12), 2026-11-22.** `Title::destroyed` carries
   the timers and the two edges (`oag_title::destroyed`), `Looks::hull_wreck` loads
   `shipwreck.vex` for every team, `WO_SHIP_EXPLOSION` is thrown on state 4 and the death plume
-  on state 5, a settled wreck leaves the pair test at 6 s and the world with it. Not wired: row 3
-  (sound), row 6 (collider, kick), row 5 (HD's own camera), rows 4, 7 and 14, the `body+0x210`
+  on state 5, a settled wreck leaves the pair test at 6 s and the world with it. Sound wired 2026-11-23 (`ship-destroy.md`,
+  "Sound on HD"). Not wired: row 6 (collider, kick), row 5 (HD's own camera), rows 4, 7 and 14, the `body+0x210`
   half of row 11, a live RPCS3 pair. Table: `ship-destroy.md`, "Wired on HD". The text below is
   what was read.
 - **HD/Fury, as read before wiring.** `docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`
@@ -47,7 +47,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 - **2048 and Omega: wired with HD's data, 2026-11-23.** `Title::destroyed` is `DestroyedCraft::HD`
   (inherited), `hull_wreck` is on, `WO_SHIP_EXPLOSION` and the death plume are named; every team and
   Omega's 2048-era ships load a wreck. Our blast frames show fire (Altima, Modesto Heights). Not
-  wired, as on HD: sound (Omega's is Wwise `ShipDestroyed_*`; 2048 has no rumble), camera mode 9
+  wired, as on HD: sound (Omega's is Wwise `ShipDestroyed_*` and no `.bnk` carries it; 2048's bank resolution is unread, both keep `~BLOWUP` via `DestroyedCraft::HD_BLOWUP`; 2048 has no rumble), camera mode 9
   (unread, HD's inherited camera runs), collider and kick, the `_n1` set's `WO_NITRO_SHIP_DEATH`
   (modes 13 and 21), the second ship family's `WO_SHIP_EXPLOSION_PLAYER` (unread).
 
@@ -90,7 +90,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 
 1. ~~HD wire lane~~ landed (above). Left on HD: rows 3 and 6 (needs the death kick formula and
    collider read), row 5, a frame pair against RPCS3 once a build boots the HD states.
-2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` lane), mode 9's view.
+2. ~~2048/Omega wired~~ (above). Left there: sound (`hd-wreck-sound` did HD; 2048's banks and Omega's Wwise events are unread), mode 9's view.
 3. Zone (item 4): ~~an `oag-re` measure lane on HD's Zone end~~ read (`zone-destroy.md`). Next: a wire
    lane on HD, 2048 and Omega together (the twins agree), then a frame pair of a Zone end against
    RPCS3 with the page's read recipe.

@@ -569,7 +569,10 @@ impl SimRace {
     /// line that changes.
     #[must_use]
     pub fn craft_is_exploding(&self) -> bool {
-        self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
+        // HD's destruction is `EXPLBIG_PC` and `~SHIP_DESTROYED`, never `~BLOWUP`
+        // (`destroyed_cues`).
+        self.sim.destroyed.sound == oag_title::destroyed::DestroyedSound::Blowup
+            && self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
 }
 

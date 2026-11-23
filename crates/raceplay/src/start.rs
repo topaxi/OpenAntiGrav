@@ -737,6 +737,7 @@ impl Race {
                     last_weapon_hit: [0; oag_gameplay::MAX_SHIPS],
                     respawn_delay: [0.0; oag_gameplay::MAX_SHIPS],
                     wreck_voice: [0.0; oag_gameplay::MAX_SHIPS],
+                    destroyed_heard: Default::default(),
                     rolls_armed: [0; oag_gameplay::MAX_SHIPS],
                     rolls_spent: [0.0; oag_gameplay::MAX_SHIPS],
                     wall_contact_ticks: [0; oag_gameplay::MAX_SHIPS],

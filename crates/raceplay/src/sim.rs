@@ -261,6 +261,9 @@ pub struct RaceSim {
     /// Bookkeeping for a cue, which is an output: outside the state hash. See
     /// `RaceSim::tick_wreck_voice`.
     pub(super) wreck_voice: [f32; oag_gameplay::MAX_SHIPS],
+    /// Which of a craft's destroyed cues are open, for [`Self::raise_destroyed_cues`]. An
+    /// output's bookkeeping, outside the state hash.
+    pub(super) destroyed_heard: [crate::destroyed_cues::Heard; oag_gameplay::MAX_SHIPS],
     /// How many barrel rolls each craft has armed this race, and what they
     /// cost it.
     ///

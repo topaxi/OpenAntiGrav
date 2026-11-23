@@ -168,7 +168,7 @@ pub const TITLE: &Title = &Title {
     // (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, the 2048 and Omega columns).
     // The destroy camera's mode 9 is unread, so `DestroyedCraft::camera` stays labelled.
     destroyed: oag_title::pre_race::Sourced::inherited(
-        oag_title::destroyed::DestroyedCraft::HD,
+        oag_title::destroyed::DestroyedCraft::HD_BLOWUP,
         "Wipeout HD",
     ),
     // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
