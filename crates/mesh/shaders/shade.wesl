@@ -150,7 +150,7 @@ fn lit_texel(raw: VertexOutput) -> Lit {
 // and the hull normal map's test), so a fetch behind it takes explicit gradients
 // (`material_sample_grad`, gradients from `uv_gradients` taken before the test) and a fetch the
 // other side of `panel` runs is hoisted ahead of it. The audit that found this, site by site, is
-// `docs/reviews/2026-11-23-rendering-shaders-review.md`, R1.
+// R1 of the rendering shaders review in `docs/reviews/`.
 @diagnostic(off, derivative_uniformity)
 fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // Our own shield draws no texture and takes none of the lighting below.

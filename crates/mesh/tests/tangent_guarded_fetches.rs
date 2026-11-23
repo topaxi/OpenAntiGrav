@@ -4,7 +4,7 @@
 //! The tangent is a smooth varying, so `dot(tangent, tangent) > 0.25` is not constant across a
 //! primitive: an implicit-level fetch (or a `dpdx`) behind it has derivatives in non-uniform control
 //! flow. `lit_texel`'s other guards are flat or constant per submesh (`shade.wesl`, the comment on
-//! `lit_colour`; `docs/reviews/2026-11-23-rendering-shaders-review.md`, R1). Needs no GPU and no
+//! `lit_colour`; R1 of the rendering shaders review in `docs/reviews/`). Needs no GPU and no
 //! game content: it reads the shader sources, so it fails the moment a conversion is dropped.
 
 const SHADE: &str = include_str!("../shaders/shade.wesl");
