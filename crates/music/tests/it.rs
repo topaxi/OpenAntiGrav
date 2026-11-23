@@ -11,6 +11,7 @@
 
 mod aac_ground_truth;
 mod atrac9_ground_truth;
+mod omega_music_ground_truth;
 mod omega_wem_ground_truth;
 
 /// A `tests/*.rs` file missing from every `tests/it*.rs` listing compiles into

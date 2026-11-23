@@ -163,10 +163,14 @@ today: `oag_audio` plays the first two channels of a multi-channel sound.
 - **Omega**: every `.wem` decodes. Six posted race cues that stopped at their
   7.1 media now play (four hits, the Quake launch, and the death loop): 30 of
   43 race cues play their Wwise event, up from 24. The eleven songs stored as
-  one eight-channel file decode but are not played, since the fold to stereo is
-  unread ([wwise.md](wwise.md#what-is-not-read)).
+  one eight-channel file play folded to stereo (`oag_music::omega::fold_to_stereo`,
+  a standard 7.1 downmix, chosen, not measured: the original's fold is unread,
+  [wwise.md](wwise.md#what-is-not-read)).
 
 ## Cross-title
 
 2048 and Omega: **ported**. Both titles' ATRAC9 goes through the one decoder,
 with a ground truth each (`atrac9_ground_truth`, `omega_wem_ground_truth`).
+The eight-channel fold (`oag_music::omega::fold_to_stereo`) is **checked,
+differs**: all 9,486 of 2048's ATRAC9 files are stereo, so it has no
+eight-channel song to fold.

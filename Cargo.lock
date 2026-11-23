@@ -3523,6 +3523,7 @@ dependencies = [
  "oag-core",
  "oag-ffmpeg",
  "oag-formats",
+ "oag-omega",
  "oag-tables",
  "oag-testdata",
  "oag-title",

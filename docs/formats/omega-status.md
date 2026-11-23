@@ -1699,9 +1699,10 @@ the player's craft swings, as on Pulse; a rival's flaps stay stowed.
   `Music_Track` state: `Set_Music_Track_<location>__frontend` sets it, the
   music switch walks to one segment, and the song is that segment's 7 to 11
   stereo stems summed (unity, scaled down when it would clip - chosen, not
-  measured). **Not played, by name:** location 0 (no event in the bank) and
-  eleven songs that are one eight-channel file (decoded since 2026-11-19; the
-  fold to stereo is unread, so they are not played). A
+  measured). **Not played, by name:** location 0 (no event in the bank). The
+  eleven songs that are one eight-channel file play folded to stereo by a
+  standard 7.1 downmix (**chosen, not measured**: how the original folds is
+  unread, [`wwise.md`](wwise.md#music-a-music_track-state-per-song)). A
   headless `--race` WAV is the first song, `Shake It (WipEout Omega
   Instrumental Edit)`, at the music bus's 0.44 gain (correlation 0.9999999 with
   the offline mix). The front end's loop is `Game_FLOW` `Menus`, **not

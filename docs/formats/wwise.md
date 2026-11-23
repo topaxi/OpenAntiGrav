@@ -4,9 +4,8 @@
 The `.bnk` container, its `HIRC` object framing, events, `Play` actions,
 sounds and music tracks read exactly over all 107 banks in the base and patch
 archives. Every `.wem` is **Sony's ATRAC9**; mono and stereo ATRAC9 decode in
-process and agree with FFmpeg's independent decoder; **four-, six- and
-eight-channel files do not decode yet**. Nothing maps a Wwise event to this
-project's cue vocabulary, and nothing plays sound in a race on this title.
+process and agree with FFmpeg's independent decoder; four-, six- and
+eight-channel files decode too (since 2026-11-19, [`atrac9.md`](atrac9.md)).
 
 Reader: [`oag_formats::wwise`](../../crates/formats/src/wwise.rs) (banks) and
 [`oag_formats::wwise::wem`](../../crates/formats/src/wwise/wem.rs) (media
@@ -343,7 +342,8 @@ in `oag_formats::wwise::music` and `oag_music::omega`. Ground truth:
   alternatives** (confidence 85). Each stem has one unread property, id 13,
   ranging -100 to 100, which looks like a position (the authoring names say
   `Front`, `Spread`, `SUB`); **how it folds to stereo is not read**, so the
-  mix is a unity sum - **chosen, not measured**.
+  mix is a unity sum - **chosen, not measured**. The eleven eight-channel
+  songs are folded to stereo first (`oag_music::omega::fold_to_stereo`, below).
 * **Clip timing** (fitted, exact on 28 of 28): a source sample `t` plays at song
   time `play_at + t`, from `max(begin_trim, 0)` to `source_duration +
   end_trim`; all in milliseconds, `end_trim` is 0 or negative. Many songs
@@ -404,8 +404,17 @@ Counts come from the ground-truth tests, over every bank of each archive.
   the `None` branch.
 * **Front-end flow.** `Menus` is read to play the loop; which of `Menus` and
   `Loading` the original is in at which moment was not watched.
-* **Eight-channel streams.** 11 songs; they decode since 2026-11-19 but are not
-  played: folding eight channels to the stereo mix is unread.
+* **Eight-channel streams.** 11 songs, played since 2026-11-23 through
+  `oag_music::omega::fold_to_stereo`: front L/R at unity, the centre and both
+  surround pairs at -3 dB, LFE dropped (**chosen, not measured**: how the
+  original folds 7.1 is unread and there is no PS4 capture; which pair is side
+  and which back is unresolved, since the `0x63f` mask above orders back before
+  side and ATRAC9's own 7.1 layout the other way, so both get one weight). Measured on the 11 folded songs
+  against stereo song 1 (peak 0.998, RMS 0.109 of full scale, summed from its
+  stems and scaled to fit): folded peaks 0.11-0.37, RMS 0.031-0.091 (0.28-0.83,
+  median 0.65, of the stereo song's), no clipped sample. They are quieter
+  than the stems' sums by that margin; a measured fold or the track property
+  would settle the level.
 * **The property id 13** on tracks, and the track's other base parameters.
 * **Looping.** Whether the ranseq's `loop 1` or the segment loops the song was
   not read; the engine plays each track once and advances the playlist.
@@ -539,7 +548,8 @@ the `SBlk` reader's. **HD:** `SBlk` too, untouched.
   Mapping this project's cues to Omega's cue strings is wiring, not reading.
 * **Multi-channel mix-down**: four-, six- and eight-channel media decode, and
   `oag_audio` plays the first two channels of each; how the original folds
-  the rest is unread.
+  the rest is unread. Only the eleven eight-channel songs are folded (a chosen
+  7.1 downmix, "Eight-channel streams" above); cues stay on the first pair.
 * **The unread parts of `HIRC`**: the base parameters of sounds and
   actor-mixers, switch values, `Init.bnk`'s bus and state definitions. Music
   objects are read (above); `EventPlan::unread` still lists the events that
