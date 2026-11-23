@@ -46,6 +46,8 @@ fn every_2048_effect_plays_or_is_refused_by_name() {
     let dt = 1.0 / TICK_HZ;
     let (mut seen, mut played) = (0usize, 0usize);
     let mut refused = Vec::new();
+    let mut words = std::collections::BTreeMap::<u32, usize>::new();
+    let mut reversed = std::collections::BTreeSet::new();
     for (name, expected) in ARCHIVES {
         let mut archive = Archive::open_file(&root.join(name)).expect("the archive opens");
         let entries: Vec<String> = archive
@@ -71,6 +73,12 @@ fn every_2048_effect_plays_or_is_refused_by_name() {
                     continue;
                 }
             };
+            for spec in &effect.emitters {
+                *words.entry(spec.authored_colour_mode).or_default() += 1;
+                if spec.authored_colour_mode & !2 != 0 {
+                    reversed.insert(effect.name.clone());
+                }
+            }
             let mut rng = Rng::new(seen as u64);
             let mut system = System::new();
             system.ignite(&effect, Vec3::ZERO, 1.0);
@@ -94,6 +102,11 @@ fn every_2048_effect_plays_or_is_refused_by_name() {
         );
     }
     assert_eq!(played, 170);
+    // Modes 0, 2 and 3 only: the reversed walk (`ColourLaw::Reversed`) changes the 31 mode-3
+    // emitters of these 12 effects and no mode-1 emitter, of which 2048 authors none
+    // (`docs/formats/pob.md`, "The colour table is RGB-only").
+    assert_eq!(words, [(0, 367), (2, 127), (3, 31)].into());
+    assert_eq!(reversed.len(), 12, "{reversed:?}");
 }
 
 /// `Full` is right for Vita: some authored colour sits above the PS2's

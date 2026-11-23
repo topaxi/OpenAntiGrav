@@ -65,6 +65,44 @@ fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_bl
     }
 }
 
+/// Each title's executable reads the colour-mode word its own way (`docs/formats/pob.md`, "The
+/// colour table is RGB-only"): HD blends toward the scene light, 2048 and Omega walk backwards.
+#[test]
+fn each_title_names_how_its_particles_walk_the_colour_table() {
+    use oag_title::ColourWalk::{Forward, LightBlend, Reversed};
+    for (title, walk) in [
+        (oag_pulse::TITLE, Forward),
+        (oag_pure::TITLE, Forward),
+        (oag_hd::TITLE, LightBlend),
+        (oag_2048::TITLE, Reversed),
+        (oag_omega::TITLE, Reversed),
+    ] {
+        assert_eq!(title.effects.colour_walk, walk, "{}", title.name);
+    }
+}
+
+/// The loader applies it: HD's ship explosion root, mode 3, blends; Pulse's reads the same file
+/// shape forward.
+#[test]
+fn the_loader_gives_hds_ship_explosion_the_light_blend() {
+    use oag_fx::psys::ColourMode;
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let title: &Title = oag_hd::TITLE;
+    let (effect, _) = crate::assets::listed_particle_effect(
+        &mut archives,
+        title.race.effect_dir_for("track"),
+        title.effects,
+        oag_title::engine_effects::EXPLOSION_EFFECT,
+        false,
+    )
+    .expect("the effect loads");
+    assert_eq!(effect.emitters[0].authored_colour_mode, 3);
+    assert_eq!(effect.emitters[0].colour_mode, ColourMode::LightBlend);
+}
+
 fn track_blast(listed: bool) -> Option<oag_fx::psys::Effect> {
     let image = oag_testdata::image("hdfury-ps3-eu-dec.iso")?;
     let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
@@ -76,6 +114,7 @@ fn track_blast(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
+        oag_fx::psys::ColourLaw::Forward,
         Kept::NONE,
     )
     .expect("the effect loads");
@@ -107,6 +146,7 @@ fn quake(extent_law: bool) -> Option<oag_fx::psys::Effect> {
         false,
         extent_law,
         true,
+        oag_fx::psys::ColourLaw::Forward,
         Kept::NONE,
     )
     .expect("the effect loads");
@@ -141,6 +181,7 @@ fn missile_head(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
+        oag_fx::psys::ColourLaw::Forward,
         Kept::NONE,
     )
     .expect("the effect loads");
@@ -183,6 +224,7 @@ fn trail_hit_burst(listed: bool) -> Option<oag_fx::psys::Effect> {
         false,
         false,
         listed,
+        oag_fx::psys::ColourLaw::Forward,
         if listed {
             Kept::bar(KeptBar::Far)
         } else {

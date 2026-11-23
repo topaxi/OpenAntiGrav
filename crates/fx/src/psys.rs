@@ -44,6 +44,7 @@ use oag_core::Rng;
 use oag_core::math::Vec3;
 use oag_pob::{self as pob, Channel, ChannelMode, ParticleSystem};
 
+mod colour;
 mod distort;
 mod emitter_state;
 mod error;
@@ -61,6 +62,7 @@ pub mod sprite;
 pub use path::{effect_path, effect_path_in};
 pub mod streak;
 
+pub use colour::{ColourLaw, ColourMode, LIGHT};
 use emitter_state::EmitterState;
 pub use error::Error;
 use frames::FrameAdvance;
@@ -222,16 +224,6 @@ impl ColourScale {
     }
 }
 
-/// How a particle takes its colour from the emitter's 256-entry table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ColourMode {
-    /// `+0xbc == 2`: one random entry, drawn once at spawn.
-    RandomEntry,
-    /// Anything else: `palette[age * 255.999]`, walked over the particle's
-    /// life.
-    OverLife,
-}
-
 /// One emitter of an [`Effect`], in the original's own units.
 ///
 /// A translation of [`oag_pob::Emitter`], not a re-reading of it:
@@ -299,6 +291,8 @@ pub struct EmitterSpec {
     pub palette: Box<[[f32; 4]; 256]>,
     /// Which of them a particle takes.
     pub colour_mode: ColourMode,
+    /// The file's own `+0xbc` word, which [`Effect::with_colour_law`] reads.
+    pub authored_colour_mode: u32,
     /// Geometry class.
     pub render: Render,
     /// Which strip a [`Render::Streak`] builds - see [`streak`].
@@ -590,11 +584,8 @@ impl EmitterSpec {
             alpha: record.alpha.clone(),
             colour_divisor: divisor,
             palette,
-            colour_mode: if record.colour_mode == 2 {
-                ColourMode::RandomEntry
-            } else {
-                ColourMode::OverLife
-            },
+            colour_mode: ColourMode::authored(record.colour_mode),
+            authored_colour_mode: record.colour_mode,
             render,
             streak: StreakDraw::of(record.draw_class(), record.aspect),
             blend,

@@ -374,6 +374,7 @@ fn build(
         colour_divisor: ColourScale::Full.divisor(),
         palette: palette(&e.colour)?,
         colour_mode: ColourMode::OverLife,
+        authored_colour_mode: 0,
         render: Render::Billboard,
         streak: StreakDraw::Procedural,
         blend: match e.blend {

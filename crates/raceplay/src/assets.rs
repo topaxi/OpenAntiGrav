@@ -111,6 +111,11 @@ pub(super) fn listed_particle_effect(
         pulse_psp,
         effects.extents.contains(&name),
         effects.sprites.contains(&name),
+        match effects.colour_walk {
+            oag_title::ColourWalk::Forward => psys::ColourLaw::Forward,
+            oag_title::ColourWalk::Reversed => psys::ColourLaw::Reversed,
+            oag_title::ColourWalk::LightBlend => psys::ColourLaw::LightBlend,
+        },
         psys::streak::Kept {
             bar: if effects.far_bars.contains(&name) {
                 psys::streak::KeptBar::Far
@@ -139,6 +144,7 @@ pub(super) fn particle_effect(
     pulse_psp: bool,
     extent_law: bool,
     gtf_sprites: bool,
+    colour_law: psys::ColourLaw,
     kept: psys::streak::Kept,
 ) -> std::result::Result<(psys::Effect, String), String> {
     let path = psys::effect_path_in(dir, name);
@@ -208,6 +214,7 @@ pub(super) fn particle_effect(
         }
     })
     .map_err(|e| format!("{path}: {} bytes, does not parse ({e})", blob.len()))?;
+    effect.with_colour_law(colour_law);
     // Pulse's PSP laws only - see `psys::Effect::without_extents` and
     // `without_pulse_psp_draw`. A listed HD effect draws every particle on its
     // spawn frame: the flipbook's direction on HD is unread. The extent law

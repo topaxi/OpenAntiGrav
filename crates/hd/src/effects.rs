@@ -130,6 +130,7 @@ pub const EFFECTS: &Effects = &{
         .without(Trigger::MagstripSparks)
         .without(Trigger::MagstripZone);
     effects.scenery = SCENERY;
+    effects.colour_walk = oag_title::ColourWalk::LightBlend;
     effects.sprites = SPRITES;
     effects.extents = EXTENTS;
     effects.far_bars = FAR_BARS;

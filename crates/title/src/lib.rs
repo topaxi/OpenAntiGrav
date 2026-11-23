@@ -83,8 +83,8 @@ pub mod zoom;
 pub use boot::{BootProfile, BootStep, Provenance};
 pub use campaign::{Campaign, CampaignDialect, CardPose, FlowFiles, MainRow, Wording};
 pub use effects::{
-    Burst, EffectSpec, Effects, Looks, MATERIAL_LOD_BIAS, Origin, Platforms, QuakeLook, QuakeUp,
-    Rule, ShieldPalette, ShieldPalettes, Trigger,
+    Burst, ColourWalk, EffectSpec, Effects, Looks, MATERIAL_LOD_BIAS, Origin, Platforms, QuakeLook,
+    QuakeUp, Rule, ShieldPalette, ShieldPalettes, Trigger,
 };
 pub use endrace::{EndRaceDialect, EndRaceStyle};
 pub use hud::{BarModels, HudArt, HudLayouts, HudSkin, ResumeCountdown, ZoneSpeedClasses};
