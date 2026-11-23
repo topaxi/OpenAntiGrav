@@ -326,3 +326,12 @@
 0x0888681c	function	WorldNode_AdvanceAnimation	65	world-clock.md
 0x08898af8	function	Input_ParseButtonName	90	input.md
 0x08898eb4	function	Input_GetButtonName	85	input.md
+# 2026-11-23 pure-wreck-re: the destroyed-craft sequence against Pulse's (ship-destroy.md)
+0x089257b0	function	Ship_UpdateExploding	82	ship-destroy.md
+0x08925d7c	function	Ship_UpdateWrecked	76	ship-destroy.md
+0x0885a7d8	function	ShipGaseousFlash_Construct	75	ship-destroy.md
+0x0885aad4	function	ShipGaseousFlash_Update	75	ship-destroy.md
+0x08846464	function	Camera_SetMode	80	ship-destroy.md
+0x088462f8	function	Camera_SetSubject	74	ship-destroy.md
+0x08845d94	function	Camera_PickStation	72	ship-destroy.md
+0x088467f0	function	Camera_UpdateSpectatorView	74	ship-destroy.md
