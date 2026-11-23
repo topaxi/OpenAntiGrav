@@ -35,6 +35,9 @@ const MATERIAL_SIXTH_MAP: u32 = 5u;
 // value, which `spirv-val` rejects (`OpFunctionCall Argument ... type does not match`).
 // `oag_shader_check::validate` refuses that shape. Every constant is a literal at its call
 // site, so the switches fold away.
+//
+// Its derivative-uniformity diagnostic is off for `lit_colour`'s reason (`shade.wesl`): Tint judges
+// this fetch against this function, and the guards of its callers are constant across a primitive.
 @diagnostic(off, derivative_uniformity)
 fn material_sample(picture: u32, uv: vec2<f32>) -> vec4<f32> {
     // The `bindless` variant's slots - see `bindings.wesl`.
@@ -126,8 +129,18 @@ fn sample_at_slope_level(uv: vec2<f32>, lod: f32) -> vec4<f32> {
 // `material_sample` with explicit gradients: Omega's panel-map road samples its diffuse, normal and
 // emissive at the marched coordinate with the *unshifted* coordinate's derivatives
 // (`docs/ghidra/functions/ps4-omega-eu/panel-displacement.md`, `image_sample_cd`), so the level
-// does not jump at a channel's wall. [`material_lod_bias`] is not applied: no HD draw takes it.
-fn material_sample_grad(picture: u32, uv: vec2<f32>, ddx: vec2<f32>, ddy: vec2<f32>) -> vec4<f32> {
+// does not jump at a channel's wall. Every fetch that sits behind a test of the interpolated
+// tangent (`lit_texel`'s `panel`, `omega_snow_on`, `omega_rock_on`, the hull normal map) takes this
+// form too, with `uv_gradients` of its coordinate taken ahead of the test, because an implicit
+// level inside those branches is not defined where the tangent's length changes across a primitive.
+//
+// [`material_lod_bias`] is applied the way the sampler applies a bias, as a shift of the level:
+// both gradients times `2^bias`. The factor is `1.0` exactly where the override is `0`, so every
+// pipeline without a bias fetches as before.
+fn material_sample_grad(picture: u32, uv: vec2<f32>, ddx_in: vec2<f32>, ddy_in: vec2<f32>) -> vec4<f32> {
+    let level_scale = exp2(material_lod_bias);
+    let ddx = ddx_in * level_scale;
+    let ddy = ddy_in * level_scale;
     @if(bindless) {
         let albedo = textures[material.albedo];
         let albedo_sampler = samplers[material.albedo_sampler];

@@ -173,21 +173,3 @@ fn emissive_tint(entry: u32) -> vec4<f32> {
     return emissives.tint_offset[entry];
 }
 
-// What the sun added to the colour `lit_texel` last returned, in that colour's
-// own space: the amount the track's shadowed redraw takes back out. Written by
-// `shade::lit_texel` and read by `shadow::shadowed` within one fragment, so it
-// is per-invocation state and not a binding. Zero wherever the authored rig did
-// not shade the fragment, which makes `shadowed` fall back to its multiply.
-var<private> sun_delta: vec3<f32>;
-
-// Whether `sun_delta` was written for the colour `lit_texel` returned: set only
-// where that colour is the generic combine's, so a special combine (the glass
-// floor's facing ramp, the magstrip floor, a light cone) is never charged a sun
-// term it did not contain. Zero otherwise, per invocation.
-var<private> sun_known: f32;
-
-// Whether the fragment's own program lights with no sun, so `shadowed` leaves its colour alone: the
-// glass floor's facing-ramp combine (read live on Tech de Ra: neither variant, `0x76fac0` nor
-// `0x7704c0`, samples a shadow map) and the magstrip floor (its shadowed redraw `0x78d0c0` draws the
-// colour the lit pass does). The craft's shadow is absent from the original's frame there.
-var<private> shadow_exempt: f32;

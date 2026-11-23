@@ -1,7 +1,7 @@
 // `lit_texel`, the one fragment shading function every entry point calls.
 
 import package::absorb::{absorb_shading, shield_shading};
-import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_exempt, shadow_sampler, sky_probe_tex, sun_delta, sun_known, uniforms};
+import package::bindings::{behind_glass_tex, emissive_scale, emissive_tint, env_probe_tex, scene, sh_probe_table, shadow_sampler, sky_probe_tex, uniforms};
 @if(!bindless) import package::bindings::{albedo, albedo_sampler, fifth_map, lightmap, pad_mask, sixth_map, wave_map};
 @if(bindless) import package::bindings::{material, samplers, textures};
 import package::flame::{flame_alpha_scale, flame_colour_scale, flame_rim_min, flame_rim_power, flame_rim_scale, flame_shading, flame_speed};
@@ -18,7 +18,7 @@ import package::shading_modes::{colour_is_light, light_rig, lit_by_rig, nova_pre
 import package::shadow::{receives_shadow, sun_occlusion};
 import package::water::{enhanced_water, reflective_sea_weight, water_kind, water_normal, water_specular_colour, water_tap_uv};
 import package::texture_lod::{MATERIAL_ALBEDO, MATERIAL_FIFTH_MAP, MATERIAL_LIGHTMAP, MATERIAL_PAD_MASK, MATERIAL_SIXTH_MAP, MATERIAL_WAVE_MAP, material_lod_bias, material_sample, material_sample_grad, sample_at_slope_level, texlod_bias, texlod_slope, uv_gradients};
-import package::types::{VertexOutput};
+import package::types::{Lit, SunTerms, VertexOutput};
 import package::zone::{zone_aniso, zone_base_term, zone_glow, zone_sample, zone_set};
 
 // The largest finite half-precision float. The original's half registers turn the
@@ -130,8 +130,29 @@ override slots_present: u32 = 4294967295u;
 // reader runs.
 override second_read: f32 = 1.0;
 
+// `lit_colour` with the sun terms `shadowed` needs returned beside the colour. Its derivative-uniformity
+// diagnostic is off for `lit_colour`'s reason: the call below is judged against this body.
 @diagnostic(off, derivative_uniformity)
-fn lit_texel(raw: VertexOutput) -> vec4<f32> {
+fn lit_texel(raw: VertexOutput) -> Lit {
+    var sun = SunTerms(vec3<f32>(0.0), 0.0, 0.0);
+    let colour = lit_colour(raw, &sun);
+    return Lit(colour, sun);
+}
+
+// **Why its derivative-uniformity diagnostic is off.** Tint treats every fragment input, flat ones
+// included, as possibly different between the lanes of a 2x2 quad, so it rejects each implicit-level
+// fetch and `dpdx`/`dpdy` that sits after an early return or inside a branch. Every guard on the
+// path to one of them here is the same on all lanes of a quad, because a quad never spans two
+// primitives: an `override` or a uniform; `slots`, `specular_exponent` or `glow`, which are `flat`;
+// a row of the emissive table, indexed by `slots`; or `colour.a > 1.5`, the Zone stage tag, which
+// the loader writes onto every vertex of a submesh. **The one guard that is not constant across a
+// primitive is the length of the interpolated tangent** (`panel`, `omega_snow_on`, `omega_rock_on`
+// and the hull normal map's test), so a fetch behind it takes explicit gradients
+// (`material_sample_grad`, gradients from `uv_gradients` taken before the test) and a fetch the
+// other side of `panel` runs is hoisted ahead of it. The audit that found this, site by site, is
+// `docs/reviews/2026-11-23-rendering-shaders-review.md`, R1.
+@diagnostic(off, derivative_uniformity)
+fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // Our own shield draws no texture and takes none of the lighting below.
     if own_shield_shading != 0.0 {
         return own_shield(raw);
@@ -277,14 +298,14 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         n_hull = hull_normal(bump, n, in.tangent);
         n_lit = n_hull;
     } else if omega_snow_on {
-        n_hull = omega_snow_normal(omega_snow_entry, in, n);
+        n_hull = omega_snow_normal(omega_snow_entry, in, n, uv_grad);
         n_lit = n_hull;
     } else if omega_rock_on {
-        omega_rock_lit = omega_rock(omega_snow_entry, in, n);
+        omega_rock_lit = omega_rock(omega_snow_entry, in, n, uv_grad);
         n_hull = omega_rock_lit.normal;
         n_lit = n_hull;
     } else if simplified_lighting == 0.0 && dot(in.tangent.xyz, in.tangent.xyz) > 0.25 {
-        let map = material_sample(MATERIAL_PAD_MASK, in.texcoord);
+        let map = material_sample_grad(MATERIAL_PAD_MASK, in.texcoord, uv_grad[0], uv_grad[1]);
         // The crowd's programs weight the map's `z` by `eye - position` (`row_tint.w`, the entry's `offset`).
         let third = select(n, scene.fog.camera - in.world, crowd_lit && row_tint.w > 0.5);
         n_hull = hull_frame(map, n, in.tangent, third);
@@ -310,7 +331,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
 
     var omega_snow_lit: OmegaSnow;
     if omega_snow_on {
-        omega_snow_lit = omega_snow(omega_snow_entry, in, n_lit);
+        omega_snow_lit = omega_snow(omega_snow_entry, in, n_lit, uv_grad);
     }
     let ndl_raw = dot(n_lit, scene.light.direction);
     let ndl = clamp(ndl_raw, 0.0, 1.0);
@@ -736,10 +757,15 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             0.0,
         );
         first = sample_at_slope_level(first_uv, lod);
-    } else if panel {
-        first = material_sample_grad(MATERIAL_ALBEDO, panel_uv, uv_grad[0], uv_grad[1]);
     } else {
+        // The implicit-level fetch comes before the `panel` test, not in its `else`: `panel`
+        // reads the interpolated tangent, which is not constant across a primitive, so a fetch
+        // that only the other side of it runs would have derivatives in non-uniform flow. A
+        // panel pixel pays the extra fetch; every other pixel runs the one it always ran.
         first = material_sample(MATERIAL_ALBEDO, first_uv);
+        if panel {
+            first = material_sample_grad(MATERIAL_ALBEDO, panel_uv, uv_grad[0], uv_grad[1]);
+        }
     }
     // **A Detonator hull panel's iridescent overlay** (`slots` entry of rate 10,
     // `mesh::rcs::hull_overlay`): the second binding is a ramp the program reads at the facing
@@ -1568,7 +1594,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             let gloss = first.a;
             var weight = vec3<f32>(1.0);
             if row_scale.w > 0.5 {
-                weight = material_sample(MATERIAL_SIXTH_MAP, in.texcoord).rgb;
+                weight = material_sample_grad(MATERIAL_SIXTH_MAP, in.texcoord, uv_grad[0], uv_grad[1]).rgb;
             }
             specular = scene.light.sun_specular.rgb * (spec_row.x * gloss * mask * lobe * rig_on) * weight;
             let facing = clamp(1.0 - dot(n_lit, to_eye), 0.0, 1.0);
@@ -2238,7 +2264,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
     // The magstrip floor's `ShadowToAlpha` redraw (`0x78d0c0`) draws the very colour the lit pass
     // does - its light is `TC1 + TC2`, no sun in it - so the original's craft shadow is invisible
     // on it; the stand-in multiply would show one.
-    shadow_exempt = select(
+    (*sun).exempt = select(
         0.0,
         1.0,
         ramp_sheen || ((in.slots & 262144u) != 0u && zone_program == 0.0),
@@ -2292,7 +2318,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // what `sun_removed` was computed against. The facing-ramp sheen, the magstrip
         // floor, the light cone, the flame and the absorb shell each replace it with
         // their own program, and subtracting the generic sun term from one of those
-        // would take out light it never contained: they leave `sun_known` clear and
+        // would take out light it never contained: they leave `SunTerms::known` clear and
         // `shadowed` falls back to its multiply for them. Their own `ShadowToAlpha`
         // programs are unread.
         let generic_combine = !ramp_sheen
@@ -2301,8 +2327,8 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
             && flame_shading == 0.0
             && absorb_shading == 0.0;
         if generic_combine && rig_on != 0.0 {
-            sun_delta = rig_on * in.lit_light.x * sun_removed;
-            sun_known = 1.0;
+            (*sun).delta = rig_on * in.lit_light.x * sun_removed;
+            (*sun).known = 1.0;
         }
         // `grade-sky`: the sky draw only, and only when a track module asked, so every
         // other pixel keeps the path above untouched. The authored picture is flattened

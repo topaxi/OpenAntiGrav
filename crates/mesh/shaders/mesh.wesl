@@ -153,13 +153,14 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let shaded = lit_texel(in);
+    let lit = lit_texel(in);
+    let shaded = lit.colour;
     // This pipeline is opaque (`blend: None`), so the alpha channel is never
     // blended with - but it is still written to whatever render target is
     // bound, so it stays a hardcoded 1.0 here rather than the texture's and
     // vertex colour's combined alpha, matching every prior opaque render
     // exactly. `fs_main_blend` below is the one that actually reads it.
-    return vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a));
+    return vec4<f32>(target_out(opaque_colour(in, lit)), stamped_alpha(in, shaded.a));
 }
 
 const FOLIAGE_DEPTH_ALPHA: f32 = 0.5;
@@ -171,9 +172,10 @@ const FOLIAGE_DEPTH_ALPHA: f32 = 0.5;
 // point actually blend rather than replace.
 @fragment
 fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
-    let shaded = lit_texel(in);
+    let lit = lit_texel(in);
+    let shaded = lit.colour;
     return vec4<f32>(
-        target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
+        target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth)),
         shaded.a
     );
 }
@@ -184,10 +186,11 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
 // behind it. Chosen, not measured: the originals have no motion blur.
 @fragment
 fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
-    let shaded = lit_texel(in);
+    let lit = lit_texel(in);
+    let shaded = lit.colour;
     return BlendMrtOutput(
         vec4<f32>(
-            target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
+            target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth)),
             shaded.a
         ),
         vec4<f32>(velocity_of(in), 0.0, shaded.a),
@@ -200,7 +203,7 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
 // still blends. The colour pass is `fs_main_blend` against that depth.
 @fragment
 fn fs_blend_cutout_depth(in: VertexOutput) -> @location(0) vec4<f32> {
-    if lit_texel(in).a < FOLIAGE_DEPTH_ALPHA {
+    if lit_texel(in).colour.a < FOLIAGE_DEPTH_ALPHA {
         discard;
     }
     return vec4<f32>(0.0);
@@ -222,19 +225,20 @@ fn fs_blend_cutout_depth(in: VertexOutput) -> @location(0) vec4<f32> {
 // track data.
 @fragment
 fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
-    let shaded = lit_texel(in);
+    let lit = lit_texel(in);
+    let shaded = lit.colour;
     if shaded.a <= alpha_test_ref {
         discard;
     }
     return vec4<f32>(
-        target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
+        target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth)),
         stamped_alpha(in, shaded.a)
     );
 }
 
 @fragment
 fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
-    let shaded = lit_texel(in);
+    let shaded = lit_texel(in).colour;
     let glow = stamp_value(in, shaded.a);
     if stamp_discards(shaded, glow) {
         discard;
@@ -244,7 +248,7 @@ fn fs_main_stamp(in: VertexOutput) -> @location(0) vec4<f32> {
 
 @fragment
 fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
-    let shaded = lit_texel(in);
+    let shaded = lit_texel(in).colour;
     let glow = stamp_value(in, shaded.a);
     if stamp_discards(shaded, glow) {
         discard;
@@ -261,22 +265,24 @@ fn fs_main_stamp_velocity(in: VertexOutput) -> MrtOutput {
 // the opt-in for a model attached to a craft.
 @fragment
 fn fs_main_velocity(in: VertexOutput) -> MrtOutput {
-    let shaded = lit_texel(in);
+    let lit = lit_texel(in);
+    let shaded = lit.colour;
     return MrtOutput(
-        vec4<f32>(target_out(opaque_colour(in, shaded)), stamped_alpha(in, shaded.a)),
+        vec4<f32>(target_out(opaque_colour(in, lit)), stamped_alpha(in, shaded.a)),
         velocity_of(in),
     );
 }
 
 @fragment
 fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
-    let shaded = lit_texel(in);
+    let lit = lit_texel(in);
+    let shaded = lit.colour;
     if shaded.a <= alpha_test_ref {
         discard;
     }
     return MrtOutput(
         vec4<f32>(
-            target_out(fogged(shadowed(shaded.rgb, in.world), in.world, in.view_depth)),
+            target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth)),
             stamped_alpha(in, shaded.a)
         ),
         velocity_of(in),
