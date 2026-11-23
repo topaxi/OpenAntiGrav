@@ -334,15 +334,27 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         grade.describe()
     );
     assert_eq!(grade.last_stage(), 14);
+    // The fallback's two per-stage texture sets, as `.gxt` (`Environment_LoadHDFuryContent`
+    // loads `DetonatorModeTrack<n>`): the track set from the patch, the general set from the base.
+    for set in ["detonatorModeTrack", "detonatorMode"] {
+        let line = format!("data/Tex/{set}0.gxt..14: 15/15 per-stage Zone");
+        assert!(
+            loaded.report.iter().any(|l| l.contains(&line)),
+            "{line}: {:#?}",
+            loaded.report
+        );
+    }
     assert_the_cannon_fires(&loaded);
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, false);
 }
 
-/// Omega runs the mode's rules and draws no grade, which it does not draw for Zone either.
+/// Omega runs the mode's rules and grades an HD-lineage circuit (its default, `tech_de_ra`) the
+/// way Zone does: HD/Fury's Detonator table and the `detonatorModeTrack<n>.gnf` set, the loader's
+/// fork being the circuit path's (`FUN_0162a390`).
 #[test]
 #[ignore = "needs a disc image in data/images/"]
-fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
+fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
     let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
         return;
     };
@@ -366,16 +378,43 @@ fn an_omega_detonator_race_runs_fourteen_stages_without_a_grade() {
             .laps_target,
         Some(14)
     );
-    assert!(loaded.zone_grade.is_none());
+    let grade = loaded.zone_grade.as_ref().expect("a grade");
     assert!(
-        loaded
-            .report
-            .iter()
-            .any(|line| line.starts_with("detonator: this title's stage grade is not drawn")),
+        grade
+            .describe()
+            .starts_with("Data/zoneenvironmenthdfury/DetonatorModeHDFury.effectSettings"),
+        "graded from {}",
+        grade.describe()
+    );
+    assert_eq!(grade.last_stage(), 14);
+    assert!(
+        loaded.report.iter().any(|l| l
+            .contains("Data/tex/detonatorModeTrack0.gnf..14: 15/15 per-stage Zone track textures")),
+        "{:#?}",
+        loaded.report
     );
     assert_the_cannon_fires(&loaded);
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, true);
+}
+
+/// Omega's `Environments2048` circuits take the loader's primary branch (their own
+/// `ZoneMode2048` table, unwired for Detonator), so HD/Fury's pair does not grade them.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn an_omega_detonator_race_on_a_2048_circuit_keeps_its_own_colours() {
+    let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
+        return;
+    };
+    let loaded = race::load(&race::Options {
+        source: path.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: oag_race::Mode::Detonator,
+        track: Some(r"Data\Environments2048\tower\track.vex".to_string()),
+        ..race::Options::default()
+    })
+    .expect("loading an Omega Detonator race on a 2048 circuit");
+    assert!(loaded.zone_grade.is_none(), "{:#?}", loaded.report);
 }
 
 /// **Mines and bombs.** The opening stage lays up to the first stage's count (the disc's

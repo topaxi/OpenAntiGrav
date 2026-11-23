@@ -451,6 +451,7 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
         zone_circuit_entry: "/data/environments/detonatormodedlc3.effectsettings",
     }),
     fallback_palette: None,
+    fallback_stage_textures: None,
     stage_textures: Some(&oag_title::ZoneStageTextures {
         general: "/data/tex/detonatormode",
         track: "/data/tex/detonatormodetrack",

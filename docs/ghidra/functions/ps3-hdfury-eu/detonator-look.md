@@ -258,11 +258,35 @@ removed: both families carry `ADD_SECOND`; it also pins the panel's overlay entr
 
 ## Cross-title
 
-- **Omega: checked, differs** (and the Detonator billboard share stays off: `detonator_shares_one_texture: false`). `oag_omega` carries `zone_sky: None` and Omega's Zone sky source is unread in its
-  `eboot.bin` ([zone-sky.md](zone-sky.md), "2048 and Omega"); its Detonator grade table is HD's (the four paths are
-  in its `eboot.bin` and `data00.psarc`, [zone-palette-select.md](zone-palette-select.md)). Nothing to wire until
-  the sky draw is read.
-- **2048: not checkable here.** Its Detonator reaches `<circuit>\ZoneMode2048.effectSettings` or HD's Detonator
+- **Omega: the grade is wired, the sky and billboards differ** (`det-parity`, 2026-11-23; the grade was
+  recorded "differs" before, because Omega's Zone grade was unwired then). Omega's environment loader `FUN_0162a390`
+  forks on the circuit path, not on the mode: HD-lineage `Data\Environments\<n>_<name>` take the HD fallback, "the
+  Detonator pair when the mode is `0xe`" through `FUN_01623120`
+  ([zone-speed-class-ladder.md](../ps4-omega-eu/zone-speed-class-ladder.md), "Which table a race loads", 70).
+  Both Detonator tables and the fifteen `Data/tex/detonatorModeTrack<n>.gnf` (65,792 bytes each, no
+  `detonatorMode<n>` general set) ship in `data00.psarc`. Wired as `oag_omega::race::DETONATOR`'s
+  `fallback_palette` and `fallback_stage_textures` (general slot: the flat white, inherited from HD), held back
+  on `Data\Environments2048` through `ZoneFallback::own_model_under` like Zone's: before, the default
+  `tech_de_ra` race drew the circuit's blue-grey day colours; now black scenery, red edge strips and a violet
+  floor under `--zone-spectrum-test`, as HD's pair reads
+  (`detonator_ground_truth::an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade`, and
+  `...on_a_2048_circuit_keeps_its_own_colours` for the held-back side). Unchanged and still differing:
+  `oag_omega` carries `zone_sky: None` (Omega's Zone sky source is unread in its `eboot.bin`,
+  [zone-sky.md](zone-sky.md), "2048 and Omega") and the Detonator billboard share stays off
+  (`detonator_shares_one_texture: false`). The primary branch (an `Environments2048` circuit's own
+  `ZoneMode2048` table in Detonator) is unread there: **checked, differs, not wired**.
+- **2048: the per-stage textures are wired on the fallback** (`det-parity`, 2026-11-23). `Environment_LoadHDFuryContent`
+  loads `data/Tex/DetonatorModeTrack0..14.gxt` in the branch HD's ported circuits take
+  ([zone-environment-fallback.md](../vita-2048-eu-v104/zone-environment-fallback.md), "`Environment_LoadHDFuryContent`", 75),
+  so `oag_2048::race::DETONATOR.fallback_stage_textures` names `data/Tex/detonatorMode` (the base package's
+  general set, 349,568 bytes) and `data/Tex/detonatorModeTrack` (the base ships it too; the v1.04 patch's is 262,208 bytes) as
+  `.gxt`, 15 stages, for those circuits alone: a circuit with an environment tree of its own keeps its own
+  materials. Test: `a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table` (red with the field `None`: no
+  `15/15 per-stage Zone` line). Before, the fallback table graded nothing visible (no stage texture, so no
+  recolour); on Vineta K now black scenery and red edge strips, the same Detonator look as HD's pair. **Open:** the
+  floor draws black on Vineta K under `--zone-spectrum-test` (the thread notes the same of `zone_1`..`4` in
+  every mode; Vineta K was not shot in Zone), so its `zoneTexVis` feed may not be the HD one; no 2048 Detonator frame of the original
+  exists to compare against. The sky: not checkable here; its Detonator reaches `<circuit>\ZoneMode2048.effectSettings` or HD's Detonator
   pair through `Environment_Load`'s Zone-family gate ([detonator-mode.md](detonator-mode.md)); whether its sky draw
   is gated by the same byte is unread (its Zone sky draw is unread, [zone-sky.md](zone-sky.md)), and there is no
   Detonator frame pair of 2048 to read it from.
