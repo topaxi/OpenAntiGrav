@@ -100,9 +100,13 @@ PSP_CPU_HZ = 222e6
 #: The disc id and version a Pure save state's file name carries (`psp-state.py --serial`).
 PURE_STATE_SERIAL = "UCUS98612_2.00"
 #: Where `CURRENT` reads 0 in ours' drive of `scripts/pure-pause.drive`: the tick after `until stage=race` at which the HUD clock starts (1,480 ticks read 20.1 s).
-PAUSE_CLOCK_ZERO_TICKS = 274
+PAUSE_CLOCK_ZERO_TICKS = {"pure": 274, "pulse": 276}
 #: A Time Trial on Vineta K, Feisar, Vector, just restarted: the pause menu's own frame is grabbed from it.
 PURE_PAUSE_STATE = "data/saves/pure-psp/time-trial-vineta-vector-feisar-restart.ppst"
+#: Pulse's: a Time Trial on Moa Therma White, Venom, at the grid's GO (`pulse-psp/moa-therma-white`'s state; ours is `scripts/pulse-pause.drive`).
+PULSE_PAUSE_STATE = "data/saves/pulse-psp/time-trial-moa-therma-white-venom-grid.ppst"
+#: Pulse's pause walk: 4 s after START the header bar has finished its slide (`Animation delay="1"`, a 1 s `Key` run), which ours draws at rest.
+PULSE_PAUSE_PLAN = ",".join(["state:" + PULSE_PAUSE_STATE, "wait:4", "key:start", "wait:4", "shot:pause"])
 #: The pause screen's walk, run apart from `PURE_PLAN` (a state load leaves the front end): `--plan "$PURE_PAUSE_PLAN" --ids pause`.
 PURE_PAUSE_PLAN = ",".join(["state:" + PURE_PAUSE_STATE, "wait:4", "key:start", "wait:2", "shot:pause"])
 #: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
@@ -349,8 +353,9 @@ class Rig:
         set_window(960, 544)
         if self.dbg.is_stepping():
             self.dbg.call("cpu.resume")
+        serial = ["--serial", PURE_STATE_SERIAL] if self.title == "pure" else []
         subprocess.run([sys.executable, str(HERE / "psp-state.py"), "--port", str(self.port), "--home", os.environ["PP_HOME"], "load", "2",
-                        "--file", str(path), "--serial", PURE_STATE_SERIAL], check=True)
+                        "--file", str(path)] + serial, check=True)
         self.dbg = Debugger(self.port)
 
     def run(self, plan):
@@ -426,6 +431,9 @@ PULSE_WALK = [
      "selection": {"original": "RACE TYPE (first row), SINGLE RACE, VENOM, ON, EASY", "ours": "RACE TYPE (first row), SINGLE RACE, VENOM, ON, EASY"}},
     {"id": "options", "title": "Options+", "screen": "Additional", "page": "pulse-options", "xml": "Additional_Definition.xml (`Additional`: the three rows)",
      "selection": {"original": "GAME OPTIONS (first row)", "ours": "GAME OPTIONS (first row)"}},
+    {"id": "pause", "title": "Pause menu (Time Trial)", "screen": "InGame Pause SP Time Trial", "page": "pause", "xml": "InGame_Definition.xml (`InGame Pause SP Time Trial`: the six rows, `Music List`)",
+     "route": ["--drive-file", str(HERE / "pulse-pause.drive"), "--original-menu", "--state-log", "/dev/null"],
+     "selection": {"original": "CONTINUE (first row)", "ours": "CONTINUE (first row)"}},
 ]
 
 
@@ -522,10 +530,10 @@ def build_pairs(args, seen, out, plat, walk):
         pair = ce.Pair(args.platform, pdir)
         pair.rec["meta"] = {"id": "%s-menu-%s" % (args.platform, item["id"]), "title": item["title"], "track": "front end", "craft": "none (a menu)",
                             "note": "Ours is `oag-game --menu-page %s`, drawn from %s. Both sides English, a fresh profile, campaign difficulty Medium." % (item["page"], item["xml"]),
-                            "state": "PPSSPP software renderer, walked by pad from Main Menu on a fresh memory stick"}
+                            "state": ("PPSSPP software renderer, a Time Trial restored from a save state, START pressed" if item["id"] == "pause" else "PPSSPP software renderer, walked by pad from Main Menu on a fresh memory stick")}
         pair.rec["original"]["emulator"] = dict(plat["emulator"])
         pair.rec["original"]["captured_at"] = shot["at"]
-        pair.rec["original"]["capture_path"] = "walked by pad from Main Menu (no savestate)"
+        pair.rec["original"]["capture_path"] = ("restored from a save state, then START (the state is not committed: data/saves/)" if item["id"] == "pause" else "walked by pad from Main Menu (no savestate)")
         pair.rec["original"]["selection_basis"] = "read by eye from the frame; the cursor is where the walk left it"
         if shot.get("from_stamp"):
             pair.rec["original"]["seconds_since_entry"] = {"value": round(shot["since_entry"], 3), "basis": "not a wall clock: the pulse level %.3f the Selector's own glow-mask stamp reads in EDRAM (80 + 150 t, CPU stopped for the grab), as the seconds at which ours shows that level (t / 2 on the rising half; the original has no entry hold, `0x088a3e8c`); good to one game frame" % shot["level"]}
@@ -567,10 +575,11 @@ def build_pairs(args, seen, out, plat, walk):
             # The drive plays to the clock the original's HUD shows: `PAUSE_GO_TICKS` sim ticks to GO's board, then the clock's seconds.
             if args.pause_clock is None:
                 sys.exit("the pause pair needs --pause-clock: the race clock (`CURRENT`) the original's frame shows, read by eye")
-            ticks = round(PAUSE_CLOCK_ZERO_TICKS + args.pause_clock * 60)
+            zero = PAUSE_CLOCK_ZERO_TICKS[args.title]
+            ticks = round(zero + args.pause_clock * 60)
             (pdir / "ours.drive").write_text(Path(route[1]).read_text().replace("@TICKS@", str(ticks)))
             route = [route[0], str(pdir / "ours.drive")] + route[2:]
-            pair.rec["original"]["race_clock_read"] = {"value": args.pause_clock, "basis": "the HUD's CURRENT in the grabbed frame, read by eye; ours is played %d sim ticks (clock zero at tick %d, 60 a second)" % (ticks, PAUSE_CLOCK_ZERO_TICKS)}
+            pair.rec["original"]["race_clock_read"] = {"value": args.pause_clock, "basis": "the HUD's CURRENT in the grabbed frame, read by eye; ours is played %d sim ticks (clock zero at tick %d, 60 a second)" % (ticks, zero)}
         try:
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,

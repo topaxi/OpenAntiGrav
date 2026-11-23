@@ -815,9 +815,13 @@ impl Session {
         // keeps it (dimmed by the tint the menus draw over it); its glow still lands, before
         // the menu rows go on.
         let pause_table = match &self.stage {
-            Stage::Menu(menu) if menu.pause_scrim.is_some() => {
-                menu.pause_view.as_ref().map(|view| view.table)
-            }
+            // A title whose pause page is the front end's own list (Pulse) has no view, and its table
+            // still says what stays under the tint.
+            Stage::Menu(menu) if menu.pause_scrim.is_some() => menu
+                .pause_view
+                .as_ref()
+                .map(|view| view.table)
+                .or_else(|| self.shell.as_ref().and_then(|shell| shell.title.pause_menu)),
             _ => None,
         };
         let hud_under_tint = pause_table.is_some_and(|table| table.hud_under_scrim);
