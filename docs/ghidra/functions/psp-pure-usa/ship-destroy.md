@@ -94,7 +94,7 @@ timings, the swap and row 22 were then run live ("Measured on PPSSPP" below).
 | 19 | 5 -> 6 edge | big flash and shake | player: `ScreenFlash_Start(.., 6, body position)`, shake `(0.8, 0.6, camera, 1)`; others: kind `0` | player: kind `7`, the same shake; others kind `0` | shake same; flash kind **unread**: Pure's table has 10 kinds (`0x08a46a78`), Pulse's 12, so compare Pure's entry 6 with Pulse's entry 7 before calling it a difference | 75 |
 | 20 | 5 -> 6 edge | `WO_SHIP_FXNODE_BIGEXPLO` | for each of up to 8 locators: refresh its world matrix if dirty (`0x0889353c`), spawn `FXBI` **parented to the particle world root** (`*0x08ab4304`), placed by the locator's world matrix (`a3 = node+0x30`, disassembly `0x089259fc`..`0x08925a94`) | none | **differs**: Pure only, already wired as measured (`Trigger::WreckBigNode`); the fireballs sit in the world, they do not ride the wreck | 80 |
 | 21 | 5 -> 6 edge | gaseous flash | the same `explosion_gaseous.vex` object as row 8, at the body's position (`0x08925b54`) | `Bomb_Shockwave.vex` ring (`ShipShockwave_Construct`, [`ship-shockwave.md`](../psp-pulse-usa/ship-shockwave.md)) | **differs**: Pure throws the gaseous flash, not a shockwave ring; ready to wire | 75 |
-| 22 | 5 -> 6 edge | the wreck vanishes | the live model's matrix (the wreck since row 11) is scaled by `1e-4` (`0x089233f0`, `0x38d1b717`) and written (`0x08893f64`), then `Ship_SetState(6)`; the per-tick update writes the live model's matrix only while `+0xfc != 6` (`beql a0, s4, 0x08927270` at `0x08926f48`, `li s4, 0x6` at `0x08926b54`, the write `jal 0x08893f64` at `0x08927264`), so **the squash stands and the wreck is not drawn from state 6 on** | the same `1e-4` squash of the live model; Pulse's capture shows its wreck through state 6, mechanism not chased here | **differs from ours**: `oag_raceplay::scene::wreck` draws the wreck for the whole of `Eliminated`; ready to wire (hide it at the big blast on Pure). **Live**: the row stays `7.5e-05` long (`0.75 * 1e-4`) for every state 6 stop logged, and the frames show the spot empty | 90 |
+| 22 | 5 -> 6 edge | the wreck vanishes | the live model's matrix (the wreck since row 11) is scaled by `1e-4` (`0x089233f0`, `0x38d1b717`) and written (`0x08893f64`), then `Ship_SetState(6)`; the per-tick update writes the live model's matrix only while `+0xfc != 6` (`beql a0, s4, 0x08927270` at `0x08926f48`, `li s4, 0x6` at `0x08926b54`, the write `jal 0x08893f64` at `0x08927264`), so **the squash stands and the wreck is not drawn from state 6 on** | the same squash in `Ship_SpawnExplosionBig`, and the same gate in Pulse's per-state update `0x088418e0`: `li s1, 0x6` at `0x0884193c`, `beq a0(+0x8c), s1, 0x0884226c` at `0x08841e50` skips the live model's matrix write (`jal 0x08945284` at `0x08842264`). Pulse's capture row for state 6 is the transition stop, so it does not show otherwise | **same as Pulse, and both differ from ours**: `oag_raceplay::scene::wreck` draws the wreck for the whole of `Eliminated` on every title; ready to wire (hide it at the big blast). **Live** on Pure: the row stays `7.5e-05` long (`0.75 * 1e-4`) for every state 6 stop logged, and the frames show the spot empty; Pulse's half is static | 90 |
 | 23 | 5 -> 6 edge | `WO_SHIP_EXPLOSION_DEBRIS`, `WO_SHIP_EXPLO_SMOKE` | spawned at the live model's world matrix (`model+0x80`, copied before the squash), parented to the world root, **no drop** along `-up` | one `WO_SHIP_EXPLOSION`, moved `4.0` down the model's up row | differs, already wired as measured (`Trigger::WreckDebris`, `WreckSmoke`) | 80 |
 | 24 | 6 entry | state timer | `+0x9a8 = 2.0` for the player, `0.8` otherwise (`0x08928d94`..`0x08928dc0`) | the same | same; the player's `2.0` **live** (below, and [`wreck-big-blast.md`](wreck-big-blast.md)) | 90 |
 | 25 | 6 entry | **wreck collision** | `sb zero, 0x68(*(body+0x3fc))` at `0x08928dcc`: the wreck stops colliding with craft | the same store at `0x088445d0` | same (states 4 and 5 solid, 6 and 7 not, [`wreck-collision.md`](wreck-collision.md)) | 82 |
@@ -129,8 +129,8 @@ The maximum is 7, under Pure's cap of 8 and Pulse's of 10.
   stays), the wreck swap on the state 5 edge (row 11), `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` on the wreck's
   locators at that edge (row 15), the destroy camera (row 6), and the wreck's collision (row 25).
 - **Differs, ready to wire:** the gaseous flash at the 4 -> 5 edge and again at the big blast in place of the shockwave
-  ring (rows 8, 21), the wreck hidden from the big blast on (row 22), the Phantom wreck (row 12, once a Phantom hull is
-  loaded at all), and the sounds (rows 14, 18).
+  ring (rows 8, 21), the Phantom wreck (row 12, once a Phantom hull is loaded at all), and the sounds (rows 14, 18).
+- **Same as Pulse, missing from ours on both titles:** the wreck hidden from the big blast on (row 22).
 - **Unread:** row 16 (`90.0` on the death sparks' instance), row 19's flash kind, row 28's callers, row 4's node class.
 
 ## Measured on PPSSPP (2026-11-23)
@@ -159,8 +159,8 @@ empty.
 run that restored only the integer registers after the call fed the next update `dt = 0.5` and state 4 lasted one
 stop; the script restores `f12` too (`f12` read back unchanged, `0x3d08abd6`).
 
-Confidence, rows 1, 7, 11, 22, 24: one live run, one team, one circuit; the same timings are measured on Pulse, but
-row 22 is a difference from Pulse's capture, not a corroboration, so it stays at 90.
+Confidence, rows 1, 7, 11, 22, 24: one live run, one team, one circuit. The timings are also measured on Pulse; row 22's
+Pulse half is static, so it stays at 90.
 
 ## Not read
 

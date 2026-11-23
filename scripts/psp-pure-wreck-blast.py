@@ -12,6 +12,9 @@ the way `psp-wreck-capture.py` makes Pulse's. Pure's game loop runs at 30 Hz (th
 stop), so the 1.5 s blast fires 45 stops after the injection. Writes one photograph per stop from the blast on and a GE dump
 (`gpu.record.dump`, census with `psp-ge-dump.py`) one stop before the blast and at the offsets given. `--mode spawns`
 logs `0x08871e1c` calls instead (never hit on this build: unresolved). Docs: `psp-pure-usa/wreck-big-blast.md`.
+`inject` restores the integer registers only, and `Ship_SetState` loads its timer constants through `f12`, the update's
+`dt`; case 5 survives because its callees overwrite `f12`, but another state may not (`psp-pure-wreck-states.py`
+restores it).
 """
 
 

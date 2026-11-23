@@ -71,9 +71,11 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
    (rows 15, every Pure wreck has 3 to 7 locators), and the timers and destroy camera rows 1, 6, 7, 10, 24, 25.
    **Differs, ready to wire on Pure:** the `explosion_gaseous.vex` flash (`ShipGaseousFlash_Construct`
    `0x0885a7d8`) at the 4 -> 5 edge and again at the big blast in place of Pulse's shockwave ring (rows 8, 21);
-   the wreck hidden from the big blast on, where ours draws it for all of `Eliminated` (row 22);
    `Phantom_shipwreck.vex` for a Phantom craft (row 12, after a Phantom hull loads at all); `EXPLSMALL`/`EXPLBIG`
-   for every craft with no `_PC` variant and no `SHIP_DEST` (rows 14, 18). **Unread:** row 16 (`90.0` on the
+   for every craft with no `_PC` variant and no `SHIP_DEST` (rows 14, 18). **Same on Pulse and Pure, missing from ours on
+   every title that uses Pulse's rule:** the wreck is hidden from the big blast on (its matrix is squashed `1e-4` and
+   the per-state update skips the live model's matrix in state 6; Pure live, Pulse static at `0x08841e50`), where
+   `oag_raceplay::scene::wreck` draws it for all of `Eliminated` (row 22). **Unread:** row 16 (`90.0` on the
    death sparks' instance), row 19 (big flash kind 6 against Pulse's 7), row 28 (state 7's callers). The state timings
    (0.5, 1.5, 2.0 s), the swap and row 22 (the wreck stays squashed in state 6) are measured live on PPSSPP
    (`scripts/psp-pure-wreck-states.py`). Still open: Pulse PS2's port.
