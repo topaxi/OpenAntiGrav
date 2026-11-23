@@ -15,9 +15,9 @@ the front end plays its loop. Evidence is in `docs/formats/wwise.md`, "Music".
 
 - 11 songs are one eight-channel ATRAC9 file. They play since 2026-11-23
   through `oag_music::omega::fold_to_stereo` (front pair 0 dB, centre and
-  sides -3 dB, backs -6 dB, LFE dropped), **chosen, not measured**: how the
-  original folds 7.1 to stereo is unread. The folded songs sit at 0.26-0.80
-  (median about 0.6) of a stereo song's RMS, `docs/formats/wwise.md`,
+  both surround pairs -3 dB, LFE dropped), **chosen, not measured**: how the
+  original folds 7.1 to stereo is unread. The folded songs sit at 0.28-0.83
+  (median 0.65) of a stereo song's RMS, `docs/formats/wwise.md`,
   "Eight-channel streams".
 - Location 00 has no `Set_Music_Track_0__frontend` event in the bank: unplayed.
 - The mix is a unity sum of stems and a scale-down when it would clip (chosen,

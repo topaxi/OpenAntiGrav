@@ -4,9 +4,8 @@
 The `.bnk` container, its `HIRC` object framing, events, `Play` actions,
 sounds and music tracks read exactly over all 107 banks in the base and patch
 archives. Every `.wem` is **Sony's ATRAC9**; mono and stereo ATRAC9 decode in
-process and agree with FFmpeg's independent decoder; **four-, six- and
-eight-channel files do not decode yet**. Nothing maps a Wwise event to this
-project's cue vocabulary, and nothing plays sound in a race on this title.
+process and agree with FFmpeg's independent decoder; four-, six- and
+eight-channel files decode too (since 2026-11-19, [`atrac9.md`](atrac9.md)).
 
 Reader: [`oag_formats::wwise`](../../crates/formats/src/wwise.rs) (banks) and
 [`oag_formats::wwise::wem`](../../crates/formats/src/wwise/wem.rs) (media
@@ -406,13 +405,14 @@ Counts come from the ground-truth tests, over every bank of each archive.
 * **Front-end flow.** `Menus` is read to play the loop; which of `Menus` and
   `Loading` the original is in at which moment was not watched.
 * **Eight-channel streams.** 11 songs, played since 2026-11-23 through
-  `oag_music::omega::fold_to_stereo`: front L/R at unity, centre and the side
-  pair at -3 dB, the back pair at -6 dB, LFE dropped (**chosen, not measured**:
-  how the original folds 7.1 is unread and there is no PS4 capture; channel
-  order is ATRAC9's, [`atrac9.md`](atrac9.md)). Measured on the 11 folded songs
+  `oag_music::omega::fold_to_stereo`: front L/R at unity, the centre and both
+  surround pairs at -3 dB, LFE dropped (**chosen, not measured**: how the
+  original folds 7.1 is unread and there is no PS4 capture; which pair is side
+  and which back is unresolved, since the `0x63f` mask above orders back before
+  side and ATRAC9's own 7.1 layout the other way, so both get one weight). Measured on the 11 folded songs
   against stereo song 1 (peak 0.998, RMS 0.109 of full scale, summed from its
-  stems and scaled to fit): folded peaks 0.10-0.36, RMS 0.028-0.087 (0.26-0.80,
-  median about 0.6, of the stereo song's), no clipped sample. They are quieter
+  stems and scaled to fit): folded peaks 0.11-0.37, RMS 0.031-0.091 (0.28-0.83,
+  median 0.65, of the stereo song's), no clipped sample. They are quieter
   than the stems' sums by that margin; a measured fold or the track property
   would settle the level.
 * **The property id 13** on tracks, and the track's other base parameters.

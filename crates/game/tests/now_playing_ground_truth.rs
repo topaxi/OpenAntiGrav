@@ -637,11 +637,11 @@ fn hd_shows_its_own_item_with_the_bar_art_from_its_sheet() {
     );
 }
 
-/// Omega ships HD's item in its own `data00.psarc`; its 17 playable songs are named by the music
+/// Omega ships HD's item in its own `data00.psarc`; its 28 playable songs are named by the music
 /// plugin's `PI_Music` nodes, addressed by `location`.
 #[test]
 #[ignore = "needs data/extracted/ps4"]
-fn omega_shows_hds_item_and_names_its_seventeen_songs() {
+fn omega_shows_hds_item_and_names_its_twenty_eight_songs() {
     use oag_gameplay::PlayerInputs;
 
     let Some(source) = oag_testdata::image("data/extracted/ps4") else {
@@ -651,7 +651,7 @@ fn omega_shows_hds_item_and_names_its_seventeen_songs() {
     let (entries, names) = library::named_listing(&GameLibrary, &source)
         .expect("listing")
         .expect("Omega is an archived title");
-    assert_eq!(entries.len(), 17);
+    assert_eq!(entries.len(), 28);
     assert!(names.iter().all(Option::is_some), "{names:?}");
     let name = names.into_iter().next().flatten().expect("a first name");
     let text = name.text(" - ");

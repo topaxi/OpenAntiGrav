@@ -166,10 +166,11 @@ today: `oag_audio` plays the first two channels of a multi-channel sound.
   one eight-channel file play folded to stereo (`oag_music::omega::fold_to_stereo`,
   a standard 7.1 downmix, chosen, not measured: the original's fold is unread,
   [wwise.md](wwise.md#what-is-not-read)).
-- **2048**: checked, nothing to fold. Every one of its 9,486 ATRAC9 files is
-  stereo, so there is no eight-channel song to fold.
 
 ## Cross-title
 
 2048 and Omega: **ported**. Both titles' ATRAC9 goes through the one decoder,
 with a ground truth each (`atrac9_ground_truth`, `omega_wem_ground_truth`).
+The eight-channel fold (`oag_music::omega::fold_to_stereo`) is **checked,
+differs**: all 9,486 of 2048's ATRAC9 files are stereo, so it has no
+eight-channel song to fold.

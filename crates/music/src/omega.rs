@@ -139,7 +139,7 @@ fn bank_blob(archives: &mut Archives, st: &StateTracks) -> Result<Vec<u8>> {
 }
 
 /// Resolves the playlist. `check_media` reads each song's first stem to
-/// refuse one that is not stereo; leave it off when only the walk is needed.
+/// refuse one that is neither stereo nor eight-channel ([`fold_to_stereo`]); leave it off when only the walk is needed.
 ///
 /// # Errors
 ///
@@ -257,20 +257,19 @@ pub const FOLDED_CHANNELS: u16 = 8;
 ///
 /// **Chosen, not measured**: how the original folds 7.1 to stereo is unread and
 /// there is no PS4 capture to compare. This is a standard ITU-R BS.775 style
-/// downmix, replaceable by a measured one without touching a caller. The
-/// stream's channel order is ATRAC9's 7.1 layout (`docs/formats/atrac9.md`):
-/// front L/R, centre, LFE, side L/R, back L/R. Front pair at unity, centre and
-/// side pair at -3 dB, back pair at -6 dB, LFE dropped (the two decoders
-/// disagree on it, `docs/formats/atrac9.md`, "The LFE channel", and a
-/// low-frequency channel adds nothing a stereo pair can place).
+/// downmix, replaceable by a measured one without touching a caller. Front
+/// L/R at unity; the centre and both surround pairs at -3 dB; LFE dropped (the
+/// two decoders disagree on it, `docs/formats/atrac9.md`, "The LFE channel").
+/// Which of channels 4/5 and 6/7 is the side pair and which the back pair is
+/// unresolved (Wwise's `0x63f` mask orders back before side, ATRAC9's own
+/// layout the other way round), so both pairs get one weight and the answer
+/// does not matter. A stream that is not eight channels is returned as it is.
 ///
-/// A stream that is not eight channels is returned as it is. The result can
-/// exceed the 16-bit range before [`mix_with`]'s whole-song scale-down, so the
-/// samples saturate here only if one stream alone would clip.
+/// The sum can pass 16-bit range; a stream that would clip on its own
+/// saturates here, and [`mix_with`] scales a song's whole sum down.
 #[must_use]
 pub fn fold_to_stereo(pcm: Pcm) -> Pcm {
     const MINUS_3_DB: f32 = std::f32::consts::FRAC_1_SQRT_2;
-    const MINUS_6_DB: f32 = 0.5;
     if pcm.channels != FOLDED_CHANNELS {
         return pcm;
     }
@@ -278,8 +277,8 @@ pub fn fold_to_stereo(pcm: Pcm) -> Pcm {
     let mut samples = Vec::with_capacity(pcm.samples.len() / ch * 2);
     for frame in pcm.samples.chunks_exact(ch) {
         let at = |i: usize| f32::from(frame[i]);
-        let left = at(0) + MINUS_3_DB * (at(2) + at(4)) + MINUS_6_DB * at(6);
-        let right = at(1) + MINUS_3_DB * (at(2) + at(5)) + MINUS_6_DB * at(7);
+        let left = at(0) + MINUS_3_DB * (at(2) + at(4) + at(6));
+        let right = at(1) + MINUS_3_DB * (at(2) + at(5) + at(7));
         for side in [left, right] {
             samples.push(side.round().clamp(f32::from(i16::MIN), f32::from(i16::MAX)) as i16);
         }
@@ -325,8 +324,8 @@ pub fn front_end(archives: &mut Archives, st: &StateTracks) -> Result<Option<Son
 ///
 /// # Errors
 ///
-/// A stem that will not read or decode, or one that is not stereo at the
-/// same rate as the first.
+/// A stem that will not read or decode, or stems that disagree on rate once
+/// folded to stereo.
 pub fn mix(archives: &mut Archives, st: &StateTracks, song: &Song) -> Result<Pcm> {
     mix_with(archives, st, song, None)
 }
@@ -453,7 +452,7 @@ mod tests {
     }
 
     #[test]
-    fn centre_and_sides_come_in_at_minus_3_db_and_backs_at_minus_6_db() {
+    fn the_centre_and_both_surround_pairs_come_in_at_minus_3_db() {
         assert_eq!(
             fold_to_stereo(pcm([0, 0, 1000, 0, 0, 0, 0, 0])).samples,
             vec![707, 707]
@@ -464,7 +463,7 @@ mod tests {
         );
         assert_eq!(
             fold_to_stereo(pcm([0, 0, 0, 0, 0, 0, 1000, -1000])).samples,
-            vec![500, -500]
+            vec![707, -707]
         );
     }
 
