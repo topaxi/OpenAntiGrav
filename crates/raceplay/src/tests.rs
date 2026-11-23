@@ -36,6 +36,7 @@ mod cue_endings;
 mod cues;
 mod damage_fx;
 mod destroy_camera;
+mod destroy_camera_titles;
 mod destroyed_fire;
 mod detonator;
 mod detonator_craft;

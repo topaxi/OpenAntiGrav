@@ -66,6 +66,10 @@ pub struct ZoneEnd {
     pub shell: &'static str,
     /// The Zone ship directory's debris model, relative to the hull's own directory.
     pub debris: &'static str,
+    /// Whether the player's camera is the close orbit of `Camera_UpdateOrbitView` (mode 2) while
+    /// the end plays (row Z2a to Z2f in `destroy-camera.md`). HD's is read; Omega's enter writes
+    /// the same constants and 2048's twin calls its own orbit enter, so both inherit it.
+    pub orbit_camera: bool,
     /// The title's `shipdestroy`, played at the blast (row Z5) after every other cue is stopped.
     /// `None` where the event is not resolved: the Zone end is then silent.
     pub cue: Option<ZoneEndCue>,
@@ -87,6 +91,7 @@ impl ZoneEnd {
     pub const HD: Self = Self {
         shell_secs: 2.5,
         results_secs: 5.5,
+        orbit_camera: true,
         shell: r"Zoneship_dead\zoneship_dead_whiteshell",
         debris: r"Zoneship_dead\zoneship_dead",
         cue: Some(ZoneEndCue {
@@ -115,6 +120,84 @@ impl ZoneEnd {
     };
 }
 
+/// How a title's destroy camera moves between cutting to a wreck and letting go of it
+/// (`docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`, rows D3 to D6, H1 and W8).
+///
+/// Pulse's mode 5 is one step per frame with fixed rates and never hands back; HD's mode 8 eases
+/// in substeps with a random factor on each rate and hands back to the chase camera on the
+/// camera's own 8 s clock; 2048 and Omega's mode 9 add the hold mode 8 after that hand-back.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DestroyCamera {
+    /// Where the law comes from.
+    pub origin: crate::effects::Origin,
+    /// Whether the circuit's `Camera` nodes are read off `track.vex` for this camera even where
+    /// the title's `circuit_effects` rule does not apply (`oag_title::effects`). Pulse's stations
+    /// ride on that rule; HD's, 2048's and Omega's circuits author them beside an `.rcsmodel`.
+    pub stations_without_circuit_effects: bool,
+    /// `Some(k)`: each frame is `trunc(dt * k)` substeps of `rate / (dt * k)` (row D6). `None`:
+    /// one step of `rate` per frame (Pulse, measured).
+    pub substeps_per_second: Option<f32>,
+    /// The factors drawn on the cut that scale the field rate and the focus rate (row D4),
+    /// `None` where the rates are exact (Pulse).
+    pub rate_factors: Option<RateFactors>,
+    /// Seconds on the camera's own free-running clock after which the view hands back to the
+    /// chase camera (row H1), `None` where it never does (Pulse).
+    pub hands_back_after_secs: Option<f32>,
+    /// Whether the chase camera holds still on a wrecked or resetting craft once it has handed
+    /// back (row W8, 2048 and Omega).
+    pub holds_the_wreck: bool,
+}
+
+/// The ranges the random factors on a destroy camera's ease rates are drawn from.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RateFactors {
+    /// The factor on the field rate `0.06`: `Random_RangeFloat(0.5, 2.0)`.
+    pub field: (f32, f32),
+    /// The factor on the focus rate: `Random_RangeFloat(0.5, 1.0)`.
+    pub focus: (f32, f32),
+}
+
+impl DestroyCamera {
+    /// Pulse's mode 5, measured on a running PPSSPP; Pure keeps it.
+    pub const PULSE: Self = Self {
+        origin: crate::effects::Origin::Measured,
+        stations_without_circuit_effects: false,
+        substeps_per_second: None,
+        rate_factors: None,
+        hands_back_after_secs: None,
+        holds_the_wreck: false,
+    };
+
+    /// HD's mode 8 (rows D1 to D8, H1), read statically.
+    pub const HD: Self = Self {
+        origin: crate::effects::Origin::Measured,
+        stations_without_circuit_effects: true,
+        substeps_per_second: Some(6000.0),
+        rate_factors: Some(RateFactors {
+            field: (0.5, 2.0),
+            focus: (0.5, 1.0),
+        }),
+        hands_back_after_secs: Some(8.0),
+        holds_the_wreck: false,
+    };
+
+    /// 2048's mode 9: HD's view with its own substep constant (`5999.9995`, row W4) and the hold
+    /// mode 8 (row W8).
+    pub const VITA: Self = Self {
+        substeps_per_second: Some(5999.9995),
+        holds_the_wreck: true,
+        ..Self::HD
+    };
+
+    /// Omega's mode 9: 2048's, with HD's substep constant. **Chosen, not measured**: Omega's view
+    /// dispatcher `0x01383a10` is unread, so its substep constant is not.
+    pub const OMEGA: Self = Self {
+        substeps_per_second: Some(6000.0),
+        origin: crate::effects::Origin::InheritedFrom("Wipeout HD"),
+        ..Self::VITA
+    };
+}
+
 /// One title's destroyed-craft sequence.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DestroyedCraft {
@@ -136,9 +219,8 @@ pub struct DestroyedCraft {
     pub leaves_world: bool,
     /// The sound the destruction makes.
     pub sound: DestroyedSound,
-    /// Where the destroy camera comes from. HD's own mode 8 is unread, so it keeps the
-    /// existing destroy camera, which is Pulse's.
-    pub camera: crate::effects::Origin,
+    /// The camera the player is cut to when their craft is destroyed.
+    pub camera: DestroyCamera,
     /// Whether the wreck stops being drawn at the big blast: its matrix is squashed to `1e-4`
     /// and the per-state update skips the live model's matrix in state 6 (Pulse
     /// `0x08841e50`, Pure `0x089233f0`, `ship-destroy.md` row 22). Not HD's, whose wreck lies
@@ -162,7 +244,7 @@ impl DestroyedCraft {
         blast_at: BlastAt::DwellEnd,
         leaves_world: false,
         sound: DestroyedSound::Blowup,
-        camera: crate::effects::Origin::Measured,
+        camera: DestroyCamera::PULSE,
         wreck_hidden_at_blast: true,
         gaseous_flash: None,
     };
@@ -192,7 +274,7 @@ impl DestroyedCraft {
         blast_at: BlastAt::Explosion,
         leaves_world: true,
         sound: DestroyedSound::Ship,
-        camera: crate::effects::Origin::InheritedFrom("Wipeout Pulse"),
+        camera: DestroyCamera::HD,
         wreck_hidden_at_blast: false,
         gaseous_flash: None,
     };
@@ -202,12 +284,14 @@ impl DestroyedCraft {
     pub const HD_BLOWUP: Self = Self {
         zone_end: Some(ZoneEnd::HD_SILENT),
         sound: DestroyedSound::Blowup,
+        camera: DestroyCamera::OMEGA,
         ..Self::HD
     };
 
     /// [`Self::HD_BLOWUP`] with 2048's Zone end, whose `shipdestroy` resolves in its own bank.
     pub const HD_VITA: Self = Self {
         zone_end: Some(ZoneEnd::VITA),
+        camera: DestroyCamera::VITA,
         ..Self::HD_BLOWUP
     };
 }

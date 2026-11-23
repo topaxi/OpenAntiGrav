@@ -166,7 +166,7 @@ pub const TITLE: &Title = &Title {
     reset_enables: oag_title::recovery::ResetEnables::inherited("Wipeout HD"),
     // The `Ship_SetState` twin runs HD's cases 4 to 6 with the same timers
     // (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, the 2048 and Omega columns).
-    // The destroy camera's mode 9 is unread, so `DestroyedCraft::camera` stays labelled.
+    // The destroy camera is mode 9 (`DestroyedCraft::camera`, `destroy-camera.md` rows W1 to W8).
     destroyed: oag_title::pre_race::Sourced::inherited(
         oag_title::destroyed::DestroyedCraft::HD_BLOWUP,
         "Wipeout HD",
