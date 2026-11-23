@@ -127,10 +127,9 @@ impl Scene {
 
     /// Whether the wreck is gone from view: from the big blast on, on a title whose blast
     /// squashes the wreck's matrix and whose state 6 never rewrites it
-    /// (`oag_title::destroyed::DestroyedCraft::wreck_hidden_at_blast`). The hull stays
-    /// undrawn: the live model is still the wreck.
+    /// ([`RaceView::wreck_gone`]). The hull stays undrawn: the live model is still the wreck.
     pub(super) fn wreck_hidden(&self, race: &Race, slot: usize) -> bool {
-        race.core.sim.wreck_hidden(slot)
+        race.view.wreck_gone(slot)
     }
 
     /// Whether the hull is left undrawn for `slot`: the player's own in the

@@ -72,8 +72,9 @@ fn pulse_voices_neither_blast() {
     assert_eq!(step(&mut race, OPPONENT, CraftState::Eliminated, 0.0), []);
 }
 
-/// The wreck is drawn through state 5 and gone on the tick the timer runs out, on Pulse and Pure;
-/// HD's lies in view.
+/// The wreck is drawn through state 5 and gone once the big blast fires, on Pulse and Pure; HD's
+/// lies in view. Run with the world ticking and with it standing still under the results (a Zone
+/// wreck), where only the cosmetics step.
 #[test]
 fn the_wreck_is_gone_from_the_big_blast_on() {
     for (title, hidden) in [
@@ -81,17 +82,32 @@ fn the_wreck_is_gone_from_the_big_blast_on() {
         (DestroyedCraft::PULSE, true),
         (DestroyedCraft::HD, false),
     ] {
-        let mut race = race(title);
-        fn ship(race: &mut Race) -> &mut oag_physics::ShipState {
-            &mut race.core.sim.world.ships[OPPONENT].physics
+        for world_runs in [true, false] {
+            let mut race = race(title);
+            let step = |race: &mut Race| {
+                if world_runs {
+                    race.tick(&oag_gameplay::PlayerInputs::none());
+                } else {
+                    race.tick_cosmetics();
+                }
+            };
+            race.core.sim.world.ships[OPPONENT].physics.craft_state = CraftState::Destroyed;
+            race.view.advance_craft_flashes(&race.core);
+            race.core.sim.world.ships[OPPONENT].physics.craft_state = CraftState::Eliminated;
+            race.core.sim.world.ships[OPPONENT].physics.state_timer = 1.5;
+            race.view.advance_craft_flashes(&race.core);
+            for _ in 0..60 {
+                step(&mut race);
+            }
+            assert!(!race.view.wreck_gone(OPPONENT), "state 5");
+            for _ in 0..40 {
+                step(&mut race);
+            }
+            assert_eq!(race.view.wreck_gone(OPPONENT), hidden, "after the blast");
+            race.core.sim.world.ships[OPPONENT].physics.craft_state = CraftState::Racing;
+            race.view.advance_craft_flashes(&race.core);
+            assert!(!race.view.wreck_gone(OPPONENT), "put back on the track");
         }
-        ship(&mut race).craft_state = CraftState::Eliminated;
-        ship(&mut race).state_timer = 0.01;
-        assert!(!race.core.sim.wreck_hidden(OPPONENT), "state 5");
-        ship(&mut race).state_timer = 0.0;
-        assert_eq!(race.core.sim.wreck_hidden(OPPONENT), hidden, "state 6");
-        ship(&mut race).craft_state = CraftState::Racing;
-        assert!(!race.core.sim.wreck_hidden(OPPONENT), "put back on track");
     }
 }
 
@@ -132,7 +148,7 @@ fn the_wreck_is_hidden_on_the_tick_the_big_blast_fires() {
     for tick in 1..130 {
         let before = race.view.live_gaseous_flashes_for_tests();
         race.tick(&oag_gameplay::PlayerInputs::none());
-        if hidden_at.is_none() && race.core.sim.wreck_hidden(OPPONENT) {
+        if hidden_at.is_none() && race.view.wreck_gone(OPPONENT) {
             hidden_at = Some(tick);
         }
         if tick > 40 && before == 0 && race.view.live_gaseous_flashes_for_tests() == 1 {

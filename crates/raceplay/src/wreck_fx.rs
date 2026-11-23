@@ -45,9 +45,8 @@
 //!
 //! # Titles
 //!
-//! Read on Pulse (PSP). Pure runs the node loop by inheritance: its executable names
-//! `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` and its `Data.wad` authors both, but its
-//! `Ship_SetState` is unread. Its big blast is its own and read
+//! Read on Pulse (PSP). Pure runs the same node loop, read in its own `Ship_SetState`
+//! (`docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, row 15). Its big blast is its own and read
 //! (`docs/ghidra/functions/psp-pure-usa/wreck-big-blast.md`): `WO_SHIP_FXNODE_BIGEXPLO` on up to
 //! eight locators, `WO_SHIP_EXPLOSION_DEBRIS` and `WO_SHIP_EXPLO_SMOKE` at the model matrix, no
 //! `WO_SHIP_EXPLOSION` and no shockwave. HD names neither node effect

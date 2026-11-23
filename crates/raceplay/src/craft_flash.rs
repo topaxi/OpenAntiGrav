@@ -71,6 +71,10 @@ pub(super) struct CraftFlashes {
     /// the model matrix it was wrecked with - the explosion is placed with it,
     /// and an Eliminator craft has been put back on the track by then.
     blowup: [Option<(f32, Vec3, Mat4)>; MAX_SHIPS],
+    /// Whether each craft's wreck has been squashed by the big blast and is no longer drawn
+    /// (`DestroyedCraft::wreck_hidden_at_blast`). View state beside the blast's own timer, so a
+    /// world that stands still under the results (a Zone wreck) hides it on the same tick.
+    wreck_gone: [bool; MAX_SHIPS],
 }
 
 #[cfg(feature = "view")]
@@ -86,6 +90,9 @@ impl RaceView {
             let state = ship.physics.craft_state;
             let position = self.drawn_position(core, slot);
             let was = std::mem::replace(&mut self.craft_flashes.previous[slot], state);
+            if state != CraftState::Eliminated {
+                self.craft_flashes.wreck_gone[slot] = false;
+            }
             // A Zone craft throws no blast, plume, node sparks, wash or shake: its end is the
             // shell and the debris (`zone-destroy.md`, row Z3).
             if core.sim.zone_end().is_some() {
@@ -142,6 +149,7 @@ impl RaceView {
                     self.start_flash(kind, at);
                     self.throw_wreck_explosion(core, slot, model);
                     self.throw_gaseous_flash(core, at);
+                    self.craft_flashes.wreck_gone[slot] = core.sim.destroyed.wreck_hidden_at_blast;
                     if slot == player {
                         self.hold_destroy_camera();
                     }
@@ -163,6 +171,14 @@ impl RaceView {
             fx.shake
                 .arm_with(magnitude, duration, side, &mut fx.shake_rng);
         }
+    }
+
+    /// Whether `slot`'s wreck has been squashed by the big blast: its matrix is scaled `1e-4`
+    /// and state 6 never rewrites it (Pulse `0x08841e50`, Pure `0x089233f0`,
+    /// `docs/ghidra/functions/psp-pure-usa/ship-destroy.md`, row 22), so it is not drawn.
+    #[must_use]
+    pub(crate) fn wreck_gone(&self, slot: usize) -> bool {
+        self.craft_flashes.wreck_gone[slot]
     }
 
     /// The gaseous flash at the body, where the title throws one (`ship-destroy.md`, rows 8 and
