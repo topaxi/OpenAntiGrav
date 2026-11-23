@@ -58,17 +58,35 @@ dispatches on `cam+0x40` (table at `0x000b0234`: modes 8, 9 and 10 all go to `0x
 | D8 | **Re-pick** | Each frame in modes 8 to 10, if the current station's aim is **60 or more units** (`d^2 >= 3600.0`) from the craft, pick at random among the other stations whose aim is within 60 units. The new pick keeps the ease rates unrandomised. A wreck that lies still never fires it. Pulse's `Camera_RepickNearSubject_q`. | `0x000ac468`, `0x000b0a40` | 65 |
 | D9 | **Hidden subject** | `cam+0x34 \|= 6` and `Camera_UpdateView` keeps the visible bit of every racing craft's model set, outside Zone and Detonator. The flare gate in [engine-trail.md](engine-trail.md) skips the subject's flare in mode 8 (ship-destroy.md row 5). | `0x000b00fc`-`0x000b0204` | 70 |
 
+### The station census (D2)
+
+`oag_vex::camera::cameras` over each environment's `track.vex` in the decrypted EU image
+(`hdfury-ps3-eu-dec.iso`), 2026-11-23. Every node has a non-zero aim.
+
+| Environment | `Camera` nodes | Environment | `Camera` nodes |
+| --- | ---: | --- | ---: |
+| `amphiseum` | 11 | `01_vineta_k` | 13 |
+| `modesto_heights` | 13 | `02_track` | 11 |
+| `talons_junction` | 10 | `03_track` | 10 |
+| `tech_de_ra` | 10 | `04_chenghou_project` | 14 |
+| `zone_1` | 10 | `05_ubermall` | 12 |
+| `zone_2` | 10 | `10_sebenco_climb` | 12 |
+| `zone_3` | 14 | `12_sol_2` | 11 |
+| `zone_4` | 19 | `15_anulpha_pass` | 11 |
+
+Talon's Junction's first node, for a spot check: eye `(-339.649, 30.186, 90.449)`, aim
+`(-281.450, -74.622, 41.270)`.
+
 ### HD: how long mode 8 lasts and what hands back
 
-**Nothing in mode 8 itself times out.** Three things end it, and none of them is reset when the
-player is destroyed:
+**Nothing in mode 8 itself times out.** In single player only H1 ends it:
 
 | Row | Hand-back | Law | Address | Conf. |
 | --- | --- | --- | --- | ---: |
-| H1 | **The camera's own 8 s clock** | `Camera_Update` adds `dt` to `cam+0x4c` every frame in game modes below 16. When it passes **`8.0`** (`TOC-0x5588`), outside the Zone family (`0x206040`: modes 6, 13, 14, 21) unless the byte at `*(TOC-0x5594)` is set: `Camera_PickRandomSubject` (subject = a random craft still racing, never the current target), target = subject, `cam+0x1f4 = -1`. Then, if `cam+0x28c` (the constructor writes `1`) and the clock is at least `2.0`: clock = 0, and `Camera_SetMode(cam, 0)`, the **chase camera on that craft**, unless `cam+0x48 & 0x100` and pad check `9` fails. Neither `Ship_SetState` (the window `0x000e2a10`-`0x000e2c9c` was read for it), `Camera_SetSubject` nor `Camera_SetMode` resets `cam+0x4c`. So the cut to mode 8 lasts **between 0 and 8 s**, set by where this free-running clock stood at the blast. | `0x000b0868`-`0x000b09a4` | 65 |
-| H2 | **The wreck's state-6 timer** | While the subject is in state 6 with its state timer `+0x6a78 <= 0` and `dt > 0`: `Camera_PickRandomSubject`. The subject moves to another racing craft and mode 8 stays. | `0x000b09bc`-`0x000b09d0`, `0x000b0b00` | 62 |
-| H3 | **The race end** | `FUN_00060f90` (the race-end step that names `Race End Photo`). Sub-phase 0 waits **`1.0` s** in single player (`*0x008a6b2c`; `0.0` with more players). Then the target becomes the local craft, or the first other craft still racing if the local one is out (`+0x6a64 & 0x1000`), and `Camera_SetMode(cam, 0)`. With more than one local player, an out craft not in state 6 gets `Camera_SetMode(cam, 8)` back on itself. Sub-phase 1 waits `RaceManager+0x2dc4`, which the blast sets to **4.5** in single player (ship-destroy.md row 5), then a pad press opens the results. When this phase starts after an ordinary race's blast is unread; in a Zone race it starts at the blast (zone-destroy.md Z9). | `0x00060f90` | 60 |
-| H4 | A watched AI or remote wreck | `Ship_UpdateWrecked`: when camera 0's subject is this craft (`+0x628c == 1`) and others still race, `Camera_PickRandomSubject` and `Camera_SetMode(cam, 6)` on the new subject. A player's own wreck (`+0x628c == 0`) never takes this path. | `0x000e3990`-`0x000e3a14` | 70 |
+| H1 | **The camera's own 8 s clock** | `Camera_Update` adds `dt` to `cam+0x4c` every frame in game modes below 16. When the clock passes **`8.0`** (`TOC-0x5588`) outside the Zone family (`0x206040`: modes 6, 13, 14, 21; the byte at `*(TOC-0x5594)` lifts that exclusion), it calls `Camera_PickRandomSubject`. That sets the subject to `RaceManager+0x13e8`, then to a random entry (not the current target) of `0x00055c90`'s list: the `RaceManager+0xe8` crafts, `*g_GameState` of them, that are neither out of the race (`+0x6a64 & 0x1000`) nor in state 7. Then target = subject and `cam+0x1f4 = -1`. If `cam+0x28c` is set (the constructor writes `1`) and the clock is at least `2.0`, the clock resets to 0 and `Camera_SetMode(cam, 0)` runs, unless `cam+0x48 & 0x100` is set and pad check `9` fails. Nothing resets `cam+0x4c` at the blast: not `Ship_SetState` (the window `0x000e2a10`-`0x000e2c9c` was read for it), not `Camera_SetSubject`, not `Camera_SetMode`. So mode 8 lasts **0 to 8 s**, set by where this free-running clock stood at the blast. **In single player** the destroyed craft is out (ship-destroy.md row 8's `0x1000`), so the list is empty and the subject stays `RaceManager+0x13e8`, the player's own craft. The hand-back is the **chase camera on the player's own wreck**. The `+0xe8` list cannot be every craft (H1 runs in mode 0 too, and a full list would swap a racing player's chase view to a random opponent every 8 s), so it is read as the human players' crafts (60). | `0x000b0868`-`0x000b09a4`, `0x000a9f20`, `0x00055c90` | 62 |
+| H2 | **The wreck reaching state 6** | While the subject is in state 6 with its state timer `+0x6a78 <= 0` and `dt > 0`, `Camera_PickRandomSubject` runs, and mode 8 stays. State 6's entry writes `+0x6a78 = 0` (ship-destroy.md row 12), so this fires on state 6's first frame, once the wreck has lain still for 6 s (or after 20 s). In single player it changes nothing (H1's empty list). With several human players, the subject moves to another one still racing. | `0x000b09bc`-`0x000b09d0`, `0x000b0b00` | 62 |
+| H3 | **The race end does not cut** | `RaceManager_UpdateEndCut_q` (`0x00060f90`, names `Race End Photo`). Sub-phase 0's camera block runs only when the local craft is still racing, or with more than one player (`g_GameState+0xe4 != 1`). There it waits `1.0` s (`*0x008a6b2c`; `0.0` with more players), targets the local craft (or the list's first if it is out) with `Camera_SetMode(cam, 0)`, and puts an out craft not in state 6 back in mode 8 with several players. **A single player whose craft is out takes the other branch: sub-phase 1 and `Race End Photo`, with no camera call**, so mode 8 (or H1's chase) runs on. Sub-phase 1 waits `RaceManager+0x2dc4`, set to **4.5** at the blast in single player (ship-destroy.md row 5), then a pad press opens the results. `FUN_00072bc8` is a second chooser of the same shape (mode 8 on an out craft not in state 6, else mode 0). When the race-end phase starts after an ordinary race's blast is unread. | `0x00060f90`, `0x00072f50`, `0x000730dc` | 62 |
+| H4 | A watched network craft's wreck | `Ship_UpdateWrecked` branches on `ship+0x628c`: `0` runs the local path, `1` this one, and anything else returns. The value 1 is the network-remote craft: `+0x628c != 0` is remote in [absorb-feedback.md](absorb-feedback.md), and ship-destroy.md's recipe takes the opponents at `2`. When camera 0's subject is that craft and `0x00055c90` lists others, `Camera_PickRandomSubject` and `Camera_SetMode(cam, 6)` move the camera to a new subject. | `0x000e3870`-`0x000e3a14` | 65 |
 
 ## HD: the Zone end, mode 2 (zone-destroy.md Z2)
 
@@ -108,16 +126,16 @@ one Omega-only fallback.
 | W8 **hold mode 8** (new) | In mode 0, a subject in state 4, 5, 6 or 8 switches the camera to **mode 8**. In mode 8, a subject in any other state switches back to **mode 0** (`0x81219eb8`-`0x8121a008`). Mode 8's enter (`Camera_EnterHoldView_q`, `0x81219040`) freezes the eye where the last view was. Its view (`Camera_UpdateHoldView_q`, `0x81217616`) looks at the craft plus a lead of `7.5 x` its velocity, ties the look-at to the track section through `0x8121476a`, and holds the field at `65.0` (`97.5` with the two flags). | the same rule on the state set `{4, 5, 6, 8}` (`(s \| 1) == 5`, 6, 8). Mode 8's enter is `0x013832f0`. **Omega only**: when the station pick in mode 9 finds no station (mode 7), it goes to mode 8 instead | HD has no mode 8 of this kind and no state-driven switch: HD's chase camera does not leave a respawning craft |
 
 So on 2048 and Omega the blast cuts to mode 9 as on HD (ship-destroy.md row 5). The 8 s clock (W6)
-hands back to the chase camera on a random racing craft. On a craft that respawns, the chase
+hands back to the chase camera (its subject chosen as in HD's H1). On a craft that respawns, the chase
 camera's subject sits in states 5, 6 and 8, so W8 holds the view still until the craft races again.
 
 ## Ready to wire
 
 | Title | Mode | Eye | Look-at | Field | Motion | Hands back | Conf. |
 | --- | --- | --- | --- | --- | --- | --- | ---: |
-| HD | 8 | the circuit's `Camera` node whose aim is nearest the wreck (D1, D2) | the wreck + `0.015 d` noise wobble, frozen in state 6 (D5) | `2 atan(17.5 / d)` target, from `framing(60) + rand(-10, 20)` (D3) | eased in `trunc(6000 dt)` substeps at `0.06 x rand(0.5, 2)` and class rate `x rand(0.5, 1)` (D4, D6) | the 8 s camera clock, 0 to 8 s after the cut, to chase on a random racing craft (H1); the race end (H3) | 75 |
+| HD | 8 | the circuit's `Camera` node whose aim is nearest the wreck (D1, D2) | the wreck + `0.015 d` noise wobble, frozen in state 6 (D5) | `2 atan(17.5 / d)` target, from `framing(60) + rand(-10, 20)` (D3) | eased in `trunc(6000 dt)` substeps at `0.06 x rand(0.5, 2)` and class rate `x rand(0.5, 1)` (D4, D6) | the 8 s camera clock, 0 to 8 s after the cut, to the chase camera on the player's own wreck in single player (H1); the race end does not cut (H3) | 70 |
 | HD Zone | 2 | orbit `dist` 0.5 -> 5 -> 3 units off the craft, `Ry(pi) Ry(yaw) Rx(-0.7) Rx(pitch)` on the body (Z2d) | the craft, `0.6` per frame (Z2c) | 65 -> 20 (2.5 s) -> 65, `0.01` per frame (Z2e) | yaw `+-0.1 (9t + 1)` rad/s for 2.5 s, then `+-0.05`; pitch `0.35` rad/s for 2.5 s (Z2b) | results at 5.5 s (Z2f) | 62 |
-| 2048 | 9 | as HD mode 8 | as HD | as HD | as HD | the 8 s clock to chase; then hold mode 8 while the chase subject is wrecked or resetting (W6, W8) | 72 |
+| 2048 | 9 | as HD mode 8 | as HD | as HD | as HD | the 8 s clock to chase (subject as HD's H1); then hold mode 8 while the chase subject is wrecked or resetting (W6, W8) | 70 |
 | Omega | 9 | as 2048 | as 2048 (view not read: W4, W5) | as 2048 | as 2048 | as 2048 (W6, W8) | 68 |
 
 The engine already has Pulse's mode 5 as `oag_render::camera::destroy`. Wiring HD mode 8 and 2048/Omega
@@ -136,11 +154,11 @@ one input still unread. Labelled "chosen, not measured" until it is read, it can
 | `0x000ac048` | `Camera_UpdateSpectatorView` | 85 | dispatch entries 8, 9 and 10; Pulse's `Camera_UpdateSpectatorView` mode 5 law (framing, focus freeze in state 6, `0.008`/`0.4`), with substeps |
 | `0x000ac7a0` | `Camera_PickStation` | 82 | the nearest-aim loop over `cam+0x50`; mode 10 or 7; starting field and randomised rates; Pulse's `Camera_PickStation` |
 | `0x000ac468` | `Camera_RepickNearSubject` | 65 | the `3600.0` (60 squared) test, then a random station among those within 60 units; Pulse's `Camera_RepickNearSubject_q` |
-| `0x000a9f20` | `Camera_PickRandomSubject` | 72 | subject = `RaceManager+0x13e8`, then a random entry of the racing list (`0x00055c90`, `0x00055b30` online) that is not the current target |
+| `0x000a9f20` | `Camera_PickRandomSubject` | 72 | subject = `RaceManager+0x13e8`, then a random entry of `0x00055c90`'s list (`0x00055b30` online), never the current target; one entry is taken as is, an empty list leaves `+0x13e8` |
 | `0x000aaa50` | `Camera_Construct` | 72 | stores the vtable `0x00862ff0`; field `60.0`, rates `0.06` and the class focus rate, the three noise channels, `+0x28c = 1` |
 | `0x000ae6c0` | `Camera_UpdateOrbitView` | 62 | dispatch entry 2; the block at `0x008c1520`; yaw, pitch, distance and field as in Z2b to Z2e |
 | `0x0027e908` | `Noise_SampleFractal1D` | 55 | reseeds out of range with `rand % 0x4000`, sums `param[1]` octaves of table noise at `param[2]` scaling, times `param[3]`; the time source and tables unread |
-| `0x00060f90` | `RaceManager_UpdateEndCut` | 60 | the race-end step naming `Race End Photo`: the `1.0`/`0.0` wait, the chase cut (or mode 8 on an out craft with several players), then the `+0x2dc4` wait and a pad press |
+| `0x00060f90` | `RaceManager_UpdateEndCut` | 60 | the race-end step naming `Race End Photo`: for a racing or multi-player local craft the `1.0`/`0.0` wait and the chase cut (or mode 8 on an out craft); for a single out player no camera call; then the `+0x2dc4` wait and a pad press |
 
 Twins named here (rows in each binary's `names.tsv`):
 
@@ -160,16 +178,15 @@ Already named ([hull-shake.md](hull-shake.md)), and read whole again here for Z2
 
 Not renamed: `0x000ab2d8` (a second constructor-shaped writer of `+0x4c`/`+0x28c`, unread),
 `0x000abf70` (the `+0x28c`/2 s gate alone, reached through `0x00873a28`), `FUN_00072bc8`
-(another mode 0 or 8 race-end chooser, `0x00072f50`/`0x000730dc`), `FUN_000a3c38` (mode 8 with
+(H3's second chooser), `0x00055c90` (H1's list; whether `+0xe8` holds only human players is read from behaviour, not from its writer), `FUN_000a3c38` (mode 8 with
 `Camera_SetSubject(.., 0)`, `0x000a4cec`), and 2048's `0x81219c3c` (no function defined there).
 
 ## Open
 
 1. **The wobble's noise** (D5): `Noise_SampleFractal1D_q` `0x0027e908` with its tables at
    `*0x008b289c` and the time source through `+0x808`; the three channels' per-frame step.
-2. **When an ordinary race's end phase starts after a single-player blast** (H3): who sets
-   `RaceManager+0x1970` to the phase that runs `RaceManager_UpdateEndCut_q`, and whether it is
-   the blast itself as in Zone.
+2. **What fills `RaceManager+0xe8`** (H1): its writer, to settle that it holds the human players' crafts
+   only; and when an ordinary race's end phase starts after a blast (H3).
 3. **The orbit's first entry** (Z2a): `0x000a97f0` from the disassembly (Ghidra truncates it),
    which sets the spin direction byte `+0x3ac`; and which row of the composed matrix is the eye
    direction (Z2d).
