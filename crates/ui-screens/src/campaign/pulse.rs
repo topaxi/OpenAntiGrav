@@ -149,6 +149,18 @@ mod tests {
     }
 
     #[test]
+    fn the_title_ladder_follows_the_selector_until_pinned() {
+        let mut p = SelectorPulse::default();
+        p.set_seconds(0.3);
+        assert_eq!(p.text_seconds(), 0.3);
+        p.set_text_seconds(Some(0.7));
+        assert_eq!(p.text_seconds(), 0.7, "pinned apart from the Selector");
+        assert_eq!(p.seconds(), 0.3, "the Selector's own phase is untouched");
+        p.set_text_seconds(None);
+        assert_eq!(p.text_seconds(), 0.3);
+    }
+
+    #[test]
     fn tick_moves_the_tint() {
         let mut p = SelectorPulse::default();
         let before = p.tint();
