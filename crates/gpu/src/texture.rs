@@ -17,9 +17,11 @@ mod tests;
 /// error; `data` is then expected to hold that texel. `data` is tightly packed rows of
 /// an uncompressed colour `format` (its texel size is the row stride).
 ///
-/// # Panics
+/// # Preconditions
 ///
-/// `format` has no single-aspect copy size (a depth format) or is block compressed.
+/// `format` is an uncompressed colour format: one block is one texel and has a copy size (not a
+/// depth or block-compressed format). A debug build asserts it; a release build leaves it to
+/// wgpu's own validation of the write, which refuses the row stride that results.
 pub fn upload_2d(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
@@ -29,14 +31,14 @@ pub fn upload_2d(
     data: &[u8],
 ) -> wgpu::Texture {
     let (width, height) = (width.max(1), height.max(1));
-    assert_eq!(
+    debug_assert_eq!(
         format.block_dimensions(),
         (1, 1),
         "{label}: {format:?} is block compressed"
     );
-    let texel = format
-        .block_copy_size(None)
-        .unwrap_or_else(|| panic!("{label}: {format:?} has no copy size"));
+    let texel = format.block_copy_size(None);
+    debug_assert!(texel.is_some(), "{label}: {format:?} has no copy size");
+    let texel = texel.unwrap_or(0);
     let size = wgpu::Extent3d {
         width,
         height,

@@ -412,6 +412,60 @@ fn engine_uv_reads_the_top_of_the_picture_at_the_top_of_the_view() {
     assert!(bottom[1] > 200 && bottom[0] < 50, "{bottom:?}");
 }
 
+/// A point behind the camera that drew the picture has no place in it: `engine_uv` is there
+/// transparent black through `engine_texture`, not the mirrored texel the divide by a negative
+/// `w` lands on. The same picture through a camera in front of the point is read.
+#[test]
+fn a_point_behind_the_engine_camera_reads_transparent_black() {
+    let Some(gpu) = gpu() else { return };
+    let text = "fn mod_fragment(input: ModInput) -> vec4<f32> {
+    return vec4<f32>(engine_texture(engine_uv(input.world)).rgb, 1.0);
+}\n";
+    let mut stage = stage(&gpu, &[shader(text)]);
+    let surfaces = [(0, quad([1.0; 4]))];
+    let picture = gpu.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: FORMAT,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    gpu.queue.write_texture(
+        picture.as_image_copy(),
+        &[9, 200, 40, 255],
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(4),
+            rows_per_image: None,
+        },
+        picture.size(),
+    );
+    let view = picture.create_view(&Default::default());
+    stage.set_engine_texture(&gpu.device, Some(&view));
+    let mut through = |matrix: [[f32; 4]; 4]| {
+        let viewed = Frame {
+            engine_view_projection: Some(matrix),
+            ..frame(None, &surfaces, &[])
+        };
+        at(&render(&gpu, &mut stage, &viewed), 32, 32)
+    };
+    let behind = [
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, -1.0],
+    ];
+    assert_eq!(through(behind), [0, 0, 0, 255], "behind reads nothing");
+    assert_eq!(through(IDENTITY), [9, 200, 40, 255], "in front reads it");
+}
+
 /// The fragment a test draws: one channel in range, one above 1 and one below 0, so what the
 /// target keeps of each is read off one texel.
 const OVER_RANGE: &str = "fn mod_fragment(input: ModInput) -> vec4<f32> {

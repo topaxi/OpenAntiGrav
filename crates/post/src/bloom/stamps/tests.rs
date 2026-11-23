@@ -234,3 +234,71 @@ fn each_stamp_keeps_its_own_mask() {
     let alone = glow_at(&both[..1], &base, &probes).expect("the same adapter");
     assert_eq!(read[0], alone[0], "the second stamp leaves the first alone");
 }
+
+/// The stamp's bright-pass group is built once for a target view however many frames stamp over
+/// it, and again for a different view, so a steady frame allocates no bind group.
+#[test]
+fn the_stamp_group_is_kept_until_the_target_view_changes() {
+    let Some((device, queue)) = crate::split_fixture::device() else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let make = |side: u32| {
+        device
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("stamp group test target"),
+                size: wgpu::Extent3d {
+                    width: side,
+                    height: side,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING
+                    | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&wgpu::TextureViewDescriptor::default())
+    };
+    let bloom = Bloom::new(&device, format).expect("the pipelines build");
+    let one = [Stamp {
+        rect: [0.1, 0.1, 0.5, 0.5],
+        value: 255,
+    }];
+    let mut encoder = device.create_command_encoder(&Default::default());
+    let (a, b) = (make(64), make(128));
+    for _ in 0..4 {
+        bloom.stamp_glow(
+            &device,
+            &queue,
+            &mut encoder,
+            &a,
+            (0.0, 0.0),
+            (64, 64),
+            &one,
+        );
+    }
+    assert_eq!(
+        bloom.stamp_lane.bright_group.builds(),
+        1,
+        "four frames over one target, one group"
+    );
+    bloom.stamp_glow(
+        &device,
+        &queue,
+        &mut encoder,
+        &b,
+        (0.0, 0.0),
+        (128, 128),
+        &one,
+    );
+    assert_eq!(
+        bloom.stamp_lane.bright_group.builds(),
+        2,
+        "a different target builds a new group"
+    );
+    drop(encoder);
+}

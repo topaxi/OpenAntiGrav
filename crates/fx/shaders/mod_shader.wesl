@@ -56,9 +56,10 @@ fn mod_texture(uv: vec2<f32>) -> vec4<f32> {
 
 // The picture the engine provides, gamma-authored and opaque whatever the scene target stores
 // (its alpha is the bloom's glow mask, not coverage), so a shader that returns it writes back
-// what the scene holds; transparent black with no picture for this view.
+// what the scene holds; transparent black with no picture for this view, and for the
+// `oag_uv_behind` that `engine_uv` gives a point behind the camera that drew it.
 fn engine_texture(uv: vec2<f32>) -> vec4<f32> {
-    if !engine_texture_bound() {
+    if !engine_texture_bound() || any(abs(uv) >= vec2<f32>(OAG_UV_BEHIND_LIMIT)) {
         return vec4<f32>(0.0);
     }
     let stored = textureSampleLevel(oag_engine_texture, oag_sampler, uv, 0.0).rgb;
@@ -76,9 +77,19 @@ fn camera_cut() -> bool {
     return oag_frame.cut > 0.5;
 }
 
-// Where `world` lands in the engine texture, through the camera that drew it.
+// What `engine_uv` returns for a point at or behind the camera's plane, and the magnitude from
+// which `engine_texture` reads a coordinate as that.
+const OAG_UV_BEHIND = 1.0e6;
+const OAG_UV_BEHIND_LIMIT = 1.0e5;
+
+// Where `world` lands in the engine texture, through the camera that drew it. A point at or
+// behind the camera's plane has no place in the picture: it gets a coordinate far outside it,
+// which `engine_texture` reads as transparent black.
 fn engine_uv(world: vec3<f32>) -> vec2<f32> {
     let clip = oag_frame.engine_view_projection * vec4<f32>(world, 1.0);
+    if clip.w <= 1.0e-4 {
+        return vec2<f32>(OAG_UV_BEHIND);
+    }
     return clip.xy / clip.w * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5);
 }
 
