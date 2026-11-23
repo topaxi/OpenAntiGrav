@@ -168,7 +168,7 @@ pub const TITLE: &Title = &Title {
     // (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, the 2048 and Omega columns).
     // The destroy camera's mode 9 is unread, so `DestroyedCraft::camera` stays labelled.
     destroyed: oag_title::pre_race::Sourced::inherited(
-        oag_title::destroyed::DestroyedCraft::HD_BLOWUP,
+        oag_title::destroyed::DestroyedCraft::HD_VITA,
         "Wipeout HD",
     ),
     // Its executable carries HD's impulse law (`docs/ghidra/functions/ps3-hdfury-eu/collision-cues.md`,
@@ -719,7 +719,7 @@ mod tests {
     fn the_2048s_destroyed_craft_runs_hds_sequence() {
         use oag_title::Trigger;
         use oag_title::destroyed::DestroyedCraft;
-        assert_eq!(TITLE.destroyed.value, DestroyedCraft::HD_BLOWUP);
+        assert_eq!(TITLE.destroyed.value, DestroyedCraft::HD_VITA);
         assert!(TITLE.looks.hull_wreck.applies_everywhere());
         assert!(TITLE.effect_on(Trigger::WreckExplosion).is_some());
         assert!(TITLE.effect_on(Trigger::WreckPlume).is_some());

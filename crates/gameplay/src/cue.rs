@@ -648,6 +648,11 @@ pub enum Cue {
     ShipOnFire,
     /// The end of [`Self::ShipOnFire`]. An action, not a sound.
     ShipOnFireStop,
+    /// A Zone craft's end: `"shipdestroy"` out of the race's environment bank, played dry once
+    /// every other cue is stopped (`Ship_SetState`'s case 4 in mode 6, row Z5 of
+    /// `docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`, confidence 85). Named by the title
+    /// (`oag_title::destroyed::ZoneEnd::cue`); not in [`Self::ALL`].
+    ShipDestroy,
     /// The front end's cursor moving up a list: `"UPDOWN"` in Pulse's
     /// `frontend.bnk`, `"navUp"` in HD's.
     ///

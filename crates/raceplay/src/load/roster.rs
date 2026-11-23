@@ -423,7 +423,7 @@ pub(super) fn grid(
             skin: skin.as_deref(),
         })
         .collect();
-    let liveries = oag_livery::load(
+    let mut liveries = oag_livery::load(
         archives,
         slot_teams,
         &oag_livery::LoadContext {
@@ -465,6 +465,23 @@ pub(super) fn grid(
         &seat_paints,
         report,
     )?;
+    // A Zone craft is never a wreck: its end is the death shell and the debris, drawn for the
+    // player's craft (`zone-destroy.md`, rows Z7 to Z11). Loaded where the wreck would be.
+    if options.hull_wreck
+        && let Some(end) = craft_title.destroyed.value.zone_end
+        && let Some(player) = liveries.first_mut()
+        && let Some(team) = slot_teams.first()
+    {
+        player.zone_end = oag_livery::zone_end::load(
+            archives,
+            craft_title.race.ships_for(team),
+            options.mode,
+            store,
+            end,
+            report,
+        )
+        .map(std::sync::Arc::new);
+    }
     if craft_title
         .effect_on(oag_title::Trigger::WreckNode)
         .is_none()

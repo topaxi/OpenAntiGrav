@@ -440,6 +440,11 @@ impl Race {
     /// alone.
     #[must_use]
     pub fn hud_shown(&self) -> bool {
+        // A Zone craft's end hides the HUD at the blast (`zone-destroy.md`, row Z9: the race
+        // manager clears its bits on leaving the racing phase).
+        if self.core.sim.zone_end().is_some() && self.view.zone_end_age().is_some() {
+            return false;
+        }
         if self.view.hud_waits_for_go
             && self.view.capture_hud.is_none()
             && oag_race::RaceState::thrust_gated(self.core.sim.world.tick)

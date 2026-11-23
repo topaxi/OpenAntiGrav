@@ -363,6 +363,8 @@ pub mod wingtip;
 mod wreck_fx;
 mod wrong_way_kill;
 #[cfg(feature = "view")]
+mod zone_end;
+#[cfg(feature = "view")]
 pub(crate) use weapons::{CannonAssets, CannonDraw};
 #[cfg(feature = "view")]
 mod worker;

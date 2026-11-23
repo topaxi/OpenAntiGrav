@@ -156,6 +156,7 @@ impl Race {
             weapon_spark_anchors,
             cockpit_hit_noise,
             wreck_anchors,
+            zone_end,
             wreck_shockwave,
             magstrip_wake,
             magstrip_pob,
@@ -1001,6 +1002,7 @@ impl Race {
                     quake_flash.then(|| oag_fx::flash::ScreenFlash::only(oag_fx::flash::QUAKE))
                 },
                 craft_flashes: Default::default(),
+                zone_end: super::zone_end::ZoneEndFx::new(zone_end),
                 wreck_fx: super::wreck_fx::WreckFx::new(wreck_anchors)
                     .with_shockwave(wreck_shockwave),
                 destroy_camera: super::destroy_camera::DestroyCamera::new(

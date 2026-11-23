@@ -571,7 +571,9 @@ impl SimRace {
     pub fn craft_is_exploding(&self) -> bool {
         // HD's destruction is `EXPLBIG_PC` and `~SHIP_DESTROYED`, never `~BLOWUP`
         // (`destroyed_cues`).
+        // A Zone end plays `shipdestroy` and no other cue (`zone-destroy.md`, row Z5).
         self.sim.destroyed.sound == oag_title::destroyed::DestroyedSound::Blowup
+            && self.sim.zone_end().is_none()
             && self.ship().physics.craft_state == oag_physics::CraftState::Destroyed
     }
 }

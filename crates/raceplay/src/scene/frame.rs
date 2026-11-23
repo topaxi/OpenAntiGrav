@@ -1250,6 +1250,7 @@ impl Scene {
         draws.blended_after_craft(ribbon_first, blended_after_craft);
         draws.mark("wrecks, weapon bodies");
         self.draw_wrecks(race, &mut draws);
+        self.draw_zone_end(race, &mut draws);
         // Every weapon's own body: opaque painted models, bounded by how many
         // matrices were written this frame, same as the plumes below.
         for drawable in self.rockets.iter().take(rocket_matrices.len()) {

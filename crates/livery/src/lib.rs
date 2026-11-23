@@ -63,11 +63,13 @@ pub use flare::{Scale, Spike};
 mod shield;
 pub mod ship_skin;
 pub mod wreck;
+pub mod zone_end;
 pub mod zone_livery;
 
 pub use shield::cockpit_shield;
 use shield::shell;
 pub use wreck::Wreck;
+pub use zone_end::ZoneEndModels;
 
 /// Everything a single grid slot draws that belongs to its team.
 #[derive(Debug)]
@@ -146,6 +148,10 @@ pub struct Livery {
     /// [`wreck`]. `None` wherever the source ships none or the title's wreck is
     /// not measured. **No extra pass**: the wreck's mesh words carry no `0x2000`.
     pub wreck: Option<Wreck>,
+    /// The Zone end's shell and debris, on the one craft a Zone race draws it for (the player's
+    /// slot); `None` everywhere else. Set by the race's loader, which knows the title's
+    /// [`oag_title::destroyed::ZoneEnd`] - see [`zone_end`].
+    pub zone_end: Option<std::sync::Arc<ZoneEndModels>>,
     /// HD's `AbsorbEffect` shell - see [`absorb::shell`]. `None` elsewhere.
     pub absorb_shell: Option<Model>,
     /// The plume's own authored texture-transform animation.
@@ -377,6 +383,7 @@ pub fn load(
         if let Some(first) = source {
             let source = &out[first];
             let livery = Livery {
+                zone_end: None,
                 team: team.clone(),
                 hull: source.hull.clone(),
                 nozzle: source.nozzle,
@@ -435,6 +442,7 @@ pub fn load(
                 ));
                 let player = &out[0];
                 out.push(Livery {
+                    zone_end: None,
                     team: player.team.clone(),
                     hull: player.hull.clone(),
                     nozzle: player.nozzle,
@@ -552,6 +560,7 @@ fn one(
                     "{why} - nothing draws for this craft, and the race still runs"
                 ));
                 return Ok(Livery {
+                    zone_end: None,
                     team: team.to_string(),
                     hull: mesh::Model::none(&hull_name),
                     nozzle: None,
@@ -647,6 +656,7 @@ fn one(
             )
         };
         return Ok(Livery {
+            zone_end: None,
             team: team.to_string(),
             nozzle,
             nozzle_axis,
@@ -786,6 +796,7 @@ fn one(
         None
     };
     Ok(Livery {
+        zone_end: None,
         team: team.to_string(),
         hull,
         nozzle,

@@ -60,6 +60,19 @@ fn vita_2048_zone_hull_is_shared_by_native_and_guest_craft() {
             "Assegai",
         ],
     );
+    let end = oag_2048::TITLE
+        .destroyed
+        .value
+        .zone_end
+        .expect("2048 inherits HD's Zone end");
+    check_zone_end(
+        "2048",
+        oag_2048::race::DEFAULTS,
+        end,
+        &mut archives,
+        oag_2048::race::DEFAULT_TEAM,
+    );
+    check_zone_end_cue("2048", end, &mut archives);
 }
 
 #[test]
@@ -74,6 +87,17 @@ fn omega_zone_hull_is_shared_by_hd_and_2048_era_craft() {
         oag_omega::race::DEFAULTS,
         &mut archives,
         &[oag_omega::race::DEFAULTS.team, "assegai"],
+    );
+    check_zone_end(
+        "Omega",
+        oag_omega::race::DEFAULTS,
+        oag_omega::TITLE
+            .destroyed
+            .value
+            .zone_end
+            .expect("Omega inherits HD's Zone end"),
+        &mut archives,
+        oag_omega::race::DEFAULTS.team,
     );
 }
 
@@ -404,4 +428,98 @@ fn omega_zone_wreck_asks_for_a_folder_the_hulls_key_does_not_name() {
     let report = zone_wreck_report(&mut archives, oag_omega::race::DEFAULTS, &liveries, "Qirex");
     let want = r"Data\art\published\hdships\Zone\shipwreck.vex: Qirex: Zone livery zoneship_quirex replaces zoneship_team on 0 texture request(s)";
     assert!(report.contains(want), "{report}");
+}
+
+/// A Zone end's shell and debris load from the Zone ship directory and split into the 112
+/// pieces `DebrisManager_Construct` collects (`docs/ghidra/functions/ps3-hdfury-eu/zone-destroy.md`,
+/// row Z11); the shell carries the one `Anim Transform` that plays it.
+fn check_zone_end(
+    title: &str,
+    defaults: &oag_title::RaceDefaults,
+    end: oag_title::destroyed::ZoneEnd,
+    archives: &mut oag_assets::Archives,
+    team: &str,
+) {
+    let mut report = Vec::new();
+    let models = oag_livery::zone_end::load(
+        archives,
+        defaults.ships_for(team),
+        Mode::Zone,
+        Default::default(),
+        end,
+        &mut report,
+    )
+    .unwrap_or_else(|| panic!("{title}: the Zone end loads: {report:?}"));
+    assert_eq!(
+        models.pieces.len(),
+        oag_livery::zone_end::PIECES,
+        "{title}: the debris splits into its pieces: {report:?}"
+    );
+    assert!(
+        models.pieces.iter().all(|piece| !piece.is_empty()),
+        "{title}: every piece has vertices"
+    );
+    let vertices = models.debris.vertices.len() as u32;
+    assert!(
+        models.pieces.iter().flatten().all(|&v| v < vertices),
+        "{title}: a piece's vertex is in the model"
+    );
+    assert!(
+        !models.shell.anim_nodes.is_empty(),
+        "{title}: the shell's Anim Transform survives the build"
+    );
+    assert!(
+        models.shell.indices.len() >= 3,
+        "{title}: the shell has geometry"
+    );
+}
+
+/// The title's `shipdestroy` resolves in the bank it names (row Z5): a timeline of voices.
+fn check_zone_end_cue(
+    title: &str,
+    end: oag_title::destroyed::ZoneEnd,
+    archives: &mut oag_assets::Archives,
+) {
+    let cue = end.cue.expect("the title names the cue");
+    let mut banks = oag_sound::sfx::Banks::default();
+    banks.load_named_as(
+        archives,
+        cue.bank,
+        cue.tick,
+        cue.hashed,
+        &[(oag_gameplay::cue::Cue::ShipDestroy, "shipdestroy")],
+    );
+    let voices = banks.voices_for(
+        oag_gameplay::cue::Cue::ShipDestroy,
+        true,
+        &mut oag_core::Rng::new(1),
+    );
+    assert!(
+        voices.is_some_and(|voices| !voices.is_empty()),
+        "{title}: shipdestroy resolves in {}: {:?}",
+        cue.bank,
+        banks.report
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn hd_zone_end_models_load_and_split_into_their_pieces() {
+    let Some(image) = oag_testdata::image("data/images/hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let mut archives = oag_hd::open(&image.display().to_string()).expect("HD opens");
+    let end = oag_hd::TITLE
+        .destroyed
+        .value
+        .zone_end
+        .expect("HD ends Zone its own way");
+    check_zone_end(
+        "HD",
+        oag_hd::TITLE.race,
+        end,
+        &mut archives,
+        oag_hd::TITLE.race.team,
+    );
+    check_zone_end_cue("HD", end, &mut archives);
 }

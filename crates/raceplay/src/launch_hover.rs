@@ -100,9 +100,22 @@ pub(crate) fn inertia_frame(laws: Option<&CraftLaws>) -> oag_physics::InertiaFra
 }
 
 /// The destroyed sequence's timers a title's [`DestroyedCraft`] gives every craft's physics.
+///
+/// In a Zone race on a title with a [`ZoneEnd`](oag_title::destroyed::ZoneEnd) the explosion is
+/// one tick (`zone-destroy.md`, row Z6) and state 5 runs to the results' opening, with no
+/// early exit: the shell and the debris play inside it (rows Z7 to Z10).
 pub(crate) fn destroy_sequence(
     destroyed: &oag_title::destroyed::DestroyedCraft,
+    zone: bool,
+    dt: f32,
 ) -> oag_physics::damage::DestroySequence {
+    if let (true, Some(end)) = (zone, destroyed.zone_end) {
+        return oag_physics::damage::DestroySequence {
+            explosion_secs: dt,
+            dwell_secs: end.results_secs - dt,
+            settle: None,
+        };
+    }
     oag_physics::damage::DestroySequence {
         explosion_secs: destroyed.explosion_secs,
         dwell_secs: destroyed.dwell_secs,

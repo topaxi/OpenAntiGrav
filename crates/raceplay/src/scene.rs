@@ -46,6 +46,7 @@ mod viewports;
 mod weapon_models;
 mod weapon_quads;
 mod wreck;
+mod zone_end;
 
 use frame::{depth_texture, msaa_color_texture};
 use motion::Attachments;
@@ -226,6 +227,8 @@ pub struct Scene {
     /// Every slot's wreck, drawn instead of its hull once the craft is out of
     /// the race - see [`wreck`].
     wrecks: wreck::Wrecks,
+    /// A Zone craft's shell and debris - see [`zone_end`].
+    zone_end: zone_end::ZoneEndDraws,
     /// The circuit's own extra pass - see [`shine::TrackShine`].
     track_shine: Option<shine::TrackShine>,
     /// Pulse's caustic pass over the circuit - see [`caustic::TrackCaustic`].
@@ -1042,6 +1045,7 @@ impl Scene {
         let absorb_overlay = [slots.absorb_overlays()?, slots.leach_overlays()?];
         let shine = slots.shines()?;
         let wrecks = wreck::Wrecks::build(&slots, scene_depth, zone_art)?;
+        let zone_end = zone_end::ZoneEndDraws::build(&slots, scene_depth, zone_art)?;
         let shell = |l: &oag_livery::Livery| l.absorb_shell.clone();
         let never = mesh_render::ShadowReceiver::Never;
         let absorb_shell = slots.drawables(shell, exhaust::BLEND, scene_depth, never)?;
@@ -1250,6 +1254,7 @@ impl Scene {
             absorb_overlay,
             shine,
             wrecks,
+            zone_end,
             track_shine,
             track_caustic,
             anim_clock: std::cell::Cell::new(0.0),

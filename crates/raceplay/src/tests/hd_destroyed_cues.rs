@@ -105,12 +105,21 @@ fn the_eliminator_blasts_and_loops_until_state_8_but_never_burns() {
 }
 
 #[test]
-fn zone_and_detonator_play_none_of_it() {
-    for mode in [Mode::Zone, Mode::Detonator] {
-        let mut race = race(DestroyedCraft::HD, mode);
-        assert_eq!(step(&mut race, PLAYER, CraftState::Destroyed, 0.3), []);
-        assert_eq!(step(&mut race, OPPONENT, CraftState::Destroyed, 0.3), []);
-    }
+fn detonator_plays_none_of_it_and_zone_plays_shipdestroy_alone() {
+    let mut race = race(DestroyedCraft::HD, Mode::Detonator);
+    assert_eq!(step(&mut race, PLAYER, CraftState::Destroyed, 0.3), []);
+    assert_eq!(step(&mut race, OPPONENT, CraftState::Destroyed, 0.3), []);
+    let mut race = race_in_zone();
+    assert_eq!(
+        step(&mut race, PLAYER, CraftState::Destroyed, 0.3),
+        [Cue::ShipDestroy],
+        "Zone's own cue, none of the ordinary ones"
+    );
+    assert_eq!(step(&mut race, PLAYER, CraftState::Eliminated, 2.0), []);
+}
+
+fn race_in_zone() -> Race {
+    race(DestroyedCraft::HD, Mode::Zone)
 }
 
 #[test]

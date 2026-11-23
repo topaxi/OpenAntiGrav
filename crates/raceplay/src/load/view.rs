@@ -591,6 +591,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         title.race,
         title.hud_art.lap_hud,
         options.mode,
+        title.destroyed.value.zone_end.and_then(|end| end.cue),
         slot_teams,
         &mut report,
     );
@@ -782,6 +783,7 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         weapon_spark_anchors: super::hit_sparks::weapon_anchors(craft_title, &liveries),
         cockpit_hit_noise,
         wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
+        zone_end: liveries.first().and_then(|livery| livery.zone_end.clone()),
         // Pulse's ship shockwave goes with its blast; HD's is thrown on a different edge and its
         // shockwave is unread.
         wreck_shockwave: craft_title

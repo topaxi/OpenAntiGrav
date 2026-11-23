@@ -656,7 +656,18 @@ const _: () = {
 impl RaceSim {
     /// The title's destroyed-sequence timers, for every craft's physics step.
     pub(super) fn destroy_sequence(&self) -> oag_physics::damage::DestroySequence {
-        crate::launch_hover::destroy_sequence(&self.destroyed)
+        crate::launch_hover::destroy_sequence(
+            &self.destroyed,
+            self.world.mode() == Mode::Zone,
+            self.dt,
+        )
+    }
+
+    /// The Zone end this race plays, `None` outside Zone and on a title that wrecks the craft.
+    pub(crate) fn zone_end(&self) -> Option<oag_title::destroyed::ZoneEnd> {
+        (self.world.mode() == Mode::Zone)
+            .then_some(self.destroyed.zone_end)
+            .flatten()
     }
 
     /// Whether `slot`'s wreck has been taken out of the physics world: its title's state 6

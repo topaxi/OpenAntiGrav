@@ -188,6 +188,8 @@ pub struct RaceView {
     pub(super) screen_flash: Option<oag_fx::flash::ScreenFlash>,
     /// The washes a craft's state edges start - see `race::craft_flash`.
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
+    /// A Zone craft's end: the death shell and the debris - see `race::zone_end`.
+    pub(super) zone_end: super::zone_end::ZoneEndFx,
     /// The explosion and sparks a craft throws as it goes out - see
     /// `race::wreck_fx`.
     pub(super) wreck_fx: super::wreck_fx::WreckFx,
