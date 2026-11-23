@@ -398,7 +398,7 @@ PURE_WALK = [
     {"id": "sr-track", "title": "Single Race: Track Selection", "screen": "Track Selection", "page": "pure-chain:arcade:0:0", "xml": "Selection_Definition.xml Track Selection",
      "selection": {"original": "VINETA K (first row)", "ours": "VINETA K (first row)"}},
     {"id": "team", "title": "Team Selection", "screen": "Team Selection", "page": "ship-select", "xml": "Selection_Definition.xml Team Selection",
-     "race": {"team": "Feisar"}, "selection": {"original": "FEISAR (first row)", "ours": "FEISAR (first row)"}},
+     "selection": {"original": "FEISAR (first row)", "ours": "FEISAR (first row), the fresh profile's own row (`RaceDefaults::fresh_team`)"}},
     {"id": "t-class", "title": "Tournament: Class Selection", "screen": "Class Selection", "page": "pure-chain:tournament", "xml": "Selection_Definition.xml Class Selection",
      "selection": {"original": "VECTOR (first row)", "ours": "VECTOR (first row)"}},
     {"id": "t-sel", "title": "Tournament: Tournament Selection (the campaign)", "screen": "Tournament Selection", "page": "pure-chain:tournament:0",
@@ -496,7 +496,7 @@ def build_pairs(args, seen, out, plat, walk):
             cm.menu_pair(pair, theirs_png=shot["png"], oag_game=args.oag_game, image=args.source, page=item["page"], drawn_from="xml",
                          xml_file=item["xml"], screen_seen=shot["state"] or item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                          size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
-                         selection=item["selection"], route=item.get("route"),
+                         selection=item["selection"], route=item.get("route"), race=item.get("race"),
                          extra_args=clocked + (("--menu-ticker", "%s@%s" % (pin["item"]["id"], pin["head_x"] + lag)) if pin else ()), screen_source="PPSSPP, the front end's state name" if shot["state"] else "read by eye")
             pair.finish()
         except SystemExit as exc:

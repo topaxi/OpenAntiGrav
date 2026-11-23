@@ -89,7 +89,11 @@ impl Session {
     /// previous seat's.
     pub(super) fn seat_opening(&self, seat: usize, entries: &[Entry]) -> (String, Option<String>) {
         if seat == 0 {
-            return (self.settings.race.team.clone(), None);
+            let title = self.shell.as_ref().map(|shell| shell.title);
+            let team = title.map_or(self.settings.race.team.as_str(), |title| {
+                self.settings.race.opening_team(title)
+            });
+            return (team.to_string(), None);
         }
         if let Some(choice) = self.split_picks.get(seat - 1) {
             return (choice.entry_id.clone(), Some(choice.livery.clone()));

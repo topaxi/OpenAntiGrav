@@ -720,6 +720,7 @@ impl Session {
                     let fixed = picker.model.fixed_livery();
                     picker.refresh_preview(&self.gpu);
                     self.settings.race.team = team;
+                    self.settings.race.team_chosen = true;
                     let kept = picker.model.variant().map(|(id, _)| id.clone());
                     livery::stepped(&mut self.settings.race, axis, kept, layout_is_hd, fixed);
                     self.resupply_race_variant();

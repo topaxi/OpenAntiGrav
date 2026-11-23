@@ -133,6 +133,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
     // evidence for this one: it maps a zone count onto `MX_CLASS`/`A_CLASS`
     // and friends for the Zone HUD, which is a per-zone escalation rather
     // than the speed class a race is started in.
+    fresh_team: None,
     fresh_variant: None,
     speed_classes: Some(oag_title::SpeedClasses {
         names: oag_title::SpeedClasses::WIPEOUT_2048_LADDER,

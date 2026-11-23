@@ -416,6 +416,23 @@ as `TeamSelection_Update` calls it; `crates/ui-screens/src/picker/body.rs`). It 
 read-out with no pointer behaviour. A title with no loyalty counter
 (`Details::Ship::loyalty` is `None`) still leaves the block out whole.
 
+### The row a fresh profile opens on (2026-11-23)
+
+A profile that has never picked a team opens Team Selection on the list's **first row** on both PSP titles, which is
+not the same team:
+
+| Title | Fresh-profile row | Evidence | Confidence |
+| --- | --- | --- | --- |
+| Pure (PSP, USA) | `FEISAR`, the definition's first `PI_Team` | PPSSPP software renderer, a new memory stick, a profile made with `New` and saved, then cold-booted and walked by pad from the title to Single Race's Team Selection (`scripts/psp-menu-pair.py pairs --title pure --ids team`); the same row on the 2026-10-29 capture of another fresh stick | 85 (two fresh sticks, one walk each) |
+| Pulse (PSP, USA) | `ASSEGAI`, counter `1 / 8` | `pulse-psp/menu-team` pair, fresh memory stick | 80 |
+
+Ours carries the Pure row as `oag_title::RaceDefaults::fresh_team` (`Measured`); every other title's is `None`, so the
+stored team stands, and on a fresh profile that is `oag_raceplay::DEFAULT_TEAM` (Assegai, which is Pulse's first row).
+"Never picked" is `race.team_chosen` in `settings.toml`, set the first time the player moves Ship Select's cursor or
+changes a TEAM row (`Race::opening_team`); the `--race` default team is untouched. Whether HD, 2048 or Omega open on
+their first row is not measured here (Omega's Ship Select pair shows the original on the first unlocked craft and ours
+on the top hex: the same field would carry it once measured).
+
 ### HD's hex grids pan under a finger (2026-10-09)
 
 **Chosen, not measured**: the original is a pad-only PS3 game, so every line

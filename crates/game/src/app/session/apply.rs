@@ -969,6 +969,7 @@ impl Session {
             // same reason `race.mode` above resupplies CIRCUIT.
             "race.team" => {
                 self.settings.race.team = text;
+                self.settings.race.team_chosen = true;
                 self.resupply_race_variant();
             }
             "race.track" => self.settings.race.track = text,

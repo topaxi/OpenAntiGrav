@@ -39,6 +39,12 @@ pub struct Race {
     /// pressing and on Wipeout HD, nine on Pure.
     #[serde(default = "default_team")]
     pub team: String,
+    /// Whether the player has ever picked a team: moved Ship Select's cursor
+    /// or changed a TEAM row. Pure opens that screen on Feisar for a profile
+    /// that has not - see [`Self::opening_team`] - and [`Self::team`] alone
+    /// cannot say "chose the default team" from "never chose".
+    #[serde(default)]
+    pub team_chosen: bool,
     /// Which circuit, by the id its own plugin definition gives it.
     ///
     /// **A race, not a directory.** `16_Track` and `32_Track` are two entries
@@ -127,6 +133,7 @@ impl Default for Race {
             mode: default_mode(),
             class: default_class(),
             team: default_team(),
+            team_chosen: false,
             track: default_track(),
             variant: String::new(),
             variant_chosen: false,
@@ -179,6 +186,19 @@ impl Race {
         (mode == oag_race::Mode::Eliminator)
             .then(|| self.score_target.parse().ok())
             .flatten()
+    }
+
+    /// The team Ship Select opens on: the stored team, or the title's
+    /// fresh-profile row ([`oag_title::RaceDefaults::fresh_team`]) while the
+    /// player has not picked one. A stored team other than the unpicked
+    /// default always wins, so a config written before [`Self::team_chosen`]
+    /// existed keeps what it had.
+    #[must_use]
+    pub fn opening_team(&self, title: &oag_title::Title) -> &str {
+        match title.race.fresh_team {
+            Some(fresh) if !self.team_chosen && self.team == default_team() => fresh.team,
+            _ => &self.team,
+        }
     }
 
     /// The model Ship Select opens on: the stored variant, or on Wipeout

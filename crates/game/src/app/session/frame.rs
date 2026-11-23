@@ -125,6 +125,7 @@ impl Session {
             if let Stage::Frontend(stage) = &self.stage {
                 if let Some((team, variant)) = stage.frontend.team_choice() {
                     self.settings.race.team = team.to_string();
+                    self.settings.race.team_chosen = true;
                     self.settings.race.variant = variant.to_string();
                 }
                 if let Some(index) = stage.frontend.camera_choice() {

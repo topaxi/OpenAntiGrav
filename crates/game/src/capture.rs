@@ -663,6 +663,11 @@ pub fn run(
             // menu tree - they are the disc's own screens, opened over it -
             // so they are drawn by their own builder, off the same boot.
             if let Some(kind) = picker_kind(page) {
+                // The team the live screen opens on and writes into `race.team`
+                // (`Session::open_ship_picker_for`): a fresh profile's row on a title
+                // that authors one.
+                let mut settings = options.settings.clone();
+                settings.race.team = settings.race.opening_team(title).to_string();
                 let layout = match kind {
                     oag_ui_screens::picker::Kind::Track => track_select.as_ref(),
                     oag_ui_screens::picker::Kind::Ship => ship_select.as_ref(),
@@ -690,9 +695,7 @@ pub fn run(
                     &crate::records::load(),
                     &teams,
                 );
-                let selected = tracks
-                    .iter()
-                    .find(|track| track.id == options.settings.race.track);
+                let selected = tracks.iter().find(|track| track.id == settings.race.track);
                 let distance = match (kind, archives.as_mut(), selected) {
                     (oag_ui_screens::picker::Kind::Track, Some(archives), Some(track)) => {
                         let entry = track.entry_name();
@@ -723,7 +726,7 @@ pub fn run(
                     });
                 let (stills, mode3d_model) = picker_stills(
                     kind,
-                    &options.settings,
+                    &settings,
                     selected,
                     &tracks,
                     &teams,
@@ -739,7 +742,7 @@ pub fn run(
                     kind,
                     &circuit_names,
                     layout,
-                    &options.settings,
+                    &settings,
                     title,
                     &tracks,
                     &teams,
@@ -761,7 +764,7 @@ pub fn run(
                 if is_split_ship(page)
                     && let Some(halves) = ship_select_split.as_ref()
                 {
-                    let mut second = options.settings.clone();
+                    let mut second = settings.clone();
                     if let Some(at) = teams.iter().position(|team| team.id == second.race.team)
                         && let Some(next) = teams.get((at + 1) % teams.len())
                     {
@@ -771,7 +774,7 @@ pub fn run(
                         kind,
                         &circuit_names,
                         &halves[0],
-                        &options.settings,
+                        &settings,
                         title,
                         &tracks,
                         &teams,
