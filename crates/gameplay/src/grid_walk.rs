@@ -98,6 +98,38 @@ fn control(path: &Path, index: isize) -> &SplinePoint {
     &path.points[index.clamp(0, last) as usize]
 }
 
+fn window(path: &Path, segment: isize) -> [&SplinePoint; 4] {
+    [
+        control(path, segment - 1),
+        control(path, segment),
+        control(path, segment + 1),
+        control(path, segment + 2),
+    ]
+}
+
+/// Three Gauss-Newton steps on the squared distance from t = 0.5, unclamped
+/// (`FUN_0887c340` clamps once after them).
+fn fit(path: &Path, segment: isize, position: Vec3) -> f32 {
+    let corners = window(path, segment).map(lifted);
+    let mut t = 0.5f32;
+    for _ in 0..3 {
+        let weights = basis(t);
+        let slope = basis_derivative(t);
+        let mut point = Vec3::ZERO;
+        let mut derivative = Vec3::ZERO;
+        for k in 0..4 {
+            point += corners[k] * weights[k];
+            derivative += corners[k] * slope[k];
+        }
+        let speed = derivative.dot(derivative);
+        if speed <= 0.0 {
+            break;
+        }
+        t -= (point - position).dot(derivative) / speed;
+    }
+    t
+}
+
 /// The uniform cubic B-spline's derivative weights, the second polynomial
 /// `FUN_0887c1e0` evaluates.
 fn basis_derivative(t: f32) -> [f32; 4] {
@@ -121,7 +153,10 @@ fn basis_derivative(t: f32) -> [f32; 4] {
 /// scans every control point and clamps a window at the path's ends. The grids of all
 /// twenty-four circuit-directions stay within the interior of one path except
 /// `03_Track`, whose front slot sits one control point from its path's end, where the
-/// clamp moves a slot by under a tenth of a unit.
+/// clamp moves a slot by under a tenth of a unit. That figure is the clamp and the
+/// missing junction, not the choice of segment at the last control point: the grids of
+/// `03_Track`, `01_Track`, `16_Track` and `18_Track` are the same slot for slot with and
+/// without that choice.
 #[must_use]
 pub fn locate(ai: &AiTrack, position: Vec3) -> Option<Located> {
     let mut nearest: Option<(f32, usize, usize)> = None;
@@ -141,33 +176,17 @@ pub fn locate(ai: &AiTrack, position: Vec3) -> Option<Located> {
     // The segment between the nearest control point and whichever neighbour is nearer.
     let previous = (lifted(control(path, at - 1)) - position).length_squared();
     let next = (lifted(control(path, at + 1)) - position).length_squared();
-    let segment = if next < previous { at } else { (at - 1).max(0) };
-    let window = [
-        control(path, segment - 1),
-        control(path, segment),
-        control(path, segment + 1),
-        control(path, segment + 2),
-    ];
-    let corners = window.map(lifted);
-
-    // Three Gauss-Newton steps on the squared distance from t = 0.5, unclamped inside the
-    // loop and clamped once after it (`FUN_0887c340`).
-    let mut t = 0.5f32;
-    for _ in 0..3 {
-        let weights = basis(t);
-        let slope = basis_derivative(t);
-        let mut point = Vec3::ZERO;
-        let mut derivative = Vec3::ZERO;
-        for k in 0..4 {
-            point += corners[k] * weights[k];
-            derivative += corners[k] * slope[k];
-        }
-        let speed = derivative.dot(derivative);
-        if speed <= 0.0 {
-            break;
-        }
-        t -= (point - position).dot(derivative) / speed;
+    let mut segment = if next < previous { at } else { (at - 1).max(0) };
+    let mut t = fit(path, segment, position);
+    // At the last control point `at + 1` clamps back onto the point itself, so `next`
+    // always wins and the segment is the end-clamped one that spans only the final
+    // sixth of a spacing on a straight. A query that lies behind that stub belongs to the segment
+    // before it.
+    if segment == at && at > 0 && at + 1 >= path.points.len() as isize && t < 0.0 {
+        segment = at - 1;
+        t = fit(path, segment, position);
     }
+    let window = window(path, segment);
     let t = t.clamp(0.0, 1.0);
 
     // The record, blended with the original's own (slightly short) weights.
