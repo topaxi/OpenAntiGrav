@@ -95,7 +95,7 @@ TICKERED = ("grid", "cell", "team")
 #: 222 MHz CPU clock, which stops with the CPU and ran at 1.0000 of wall time over two 52 s recordings), read at the start of the pad
 #: press that entered the screen and again with the CPU stopped for the grab. Error: the press-to-screen latency (a frame or two) and
 #: the one frame the presented picture lags the stop. The `PURE_WALK` ids whose description types in (`oag_ui_screens::campaign::footer::typein`).
-PURE_CLOCKED = ("sr-class", "sr-league", "sr-track", "team", "t-class", "t-sel")
+PURE_CLOCKED = ("main", "mode", "sr-class", "sr-league", "sr-track", "team", "t-class", "t-sel")
 PSP_CPU_HZ = 222e6
 #: `team`: the ship's own `Anim Transform` node (loop `LoopEnd` 5.9833336 s on Assegai's `ship_FE.vex`) holds its own time at `+0x40`.
 SHIP_NODE_LOOP = 5.9833336
@@ -412,9 +412,9 @@ PULSE_WALK = [
 #: recovered state name), then START, Profile > Load (three crosses: the list, the dialog, the completion), and the Single Player chain.
 #: Triangle is Pure's BACK.
 PURE_PLAN = ",".join([
-    "pu:cross:title", "wait:3", "shot:title", "key:start", "wait:5", "key:cross", "wait:5", "key:cross", "wait:5", "key:cross", "wait:6", "shot:main",
-    "key:cross", "wait:4", "shot:mode",
-    "key:cross", "wait:4", "shot:sr-class", "key:cross", "wait:5", "shot:sr-league", "key:cross", "wait:5", "shot:sr-track",
+    "pu:cross:title", "wait:3", "shot:title", "key:start", "wait:5", "key:cross", "wait:5", "key:cross", "wait:5", "key:cross", "wait:6",
+    "key:cross", "wait:4", "shot:mode", "key:triangle", "wait:3", "shot:main",
+    "key:cross", "wait:4", "key:cross", "wait:4", "shot:sr-class", "key:cross", "wait:5", "shot:sr-league", "key:cross", "wait:5", "shot:sr-track",
     "key:cross", "wait:5", "shot:team", "key:triangle", "wait:3", "key:triangle", "wait:3", "key:triangle", "wait:3", "key:triangle", "wait:3",
     "key:down", "wait:2", "key:cross", "wait:4", "shot:t-class", "key:cross", "wait:5", "shot:t-sel",
 ])
@@ -438,8 +438,8 @@ PURE_WALK = [
     {"id": "t-sel", "title": "Tournament: Tournament Selection (the campaign)", "screen": "Tournament Selection", "page": "pure-chain:tournament:0",
      "xml": "Selection_Definition.xml Tournament Selection",
      "selection": {"original": "ALPHA (the only tournament open), class VECTOR", "ours": "ALPHA (the only tournament open), class VECTOR"}},
-    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "main", "xml": "Skin.xml Main Menu",
-     "why": "ours' page is menu.toml's `main` (ADR-0066: the vanilla rows plus more, drawn dark teal on the Pulse-style frame); `--screen \"Top FE Screen->FE Screen->Main Menu\"` draws the heading alone on black"},
+    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "pure-main", "xml": "Skin.xml Main Menu",
+     "selection": {"original": "SINGLE PLAYER (first row)", "ours": "SINGLE PLAYER (first row)"}},
 ]
 
 

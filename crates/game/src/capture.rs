@@ -849,7 +849,7 @@ pub fn run(
                 if !layout.is_hd() {
                     let (legend, ticker) = (nav_legend.as_ref(), ticker.as_ref());
                     ticker_clip =
-                        menu_page::picker_footer(&mut list, legend, ticker, &strings, &font);
+                        menu_page::picker_footer(&mut list, legend, true, ticker, &strings, &font);
                     // The selected entry's description, typed along the footer as the live
                     // screen types it (`MenuStage`'s picker pass).
                     let selected = match kind {
@@ -952,7 +952,7 @@ pub fn run(
                 // Pulse's footer ticker, as the picker pages draw it: HD's campaign footer has none.
                 if !crate::campaign::draws_hd_campaign(title) {
                     ticker_clip =
-                        menu_page::picker_footer(&mut list, None, ticker.as_ref(), &strings, &font);
+                        menu_page::picker_footer(&mut list, None, true, ticker.as_ref(), &strings, &font);
                 }
                 flyer_shot = shot;
                 (backdrop, video_format, list, space)
@@ -1025,8 +1025,8 @@ pub fn run(
                 );
                 ticker_clip = clip;
                 (backdrop, video_format, list, space)
-            } else if let Some(answers) = pure_chain_page::answers(page) {
-                // Wipeout Pure's SINGLE PLAYER screens - see
+            } else if let Some(request) = pure_chain_page::request(page) {
+                // Wipeout Pure's SINGLE PLAYER screens and its `Main Menu` - see
                 // `crate::app::session::pure_chain` for the live flow.
                 let footer = (nav_legend.as_ref(), ticker.as_ref(), &font);
                 let globals: Vec<(&str, &str)> = frontend
@@ -1036,7 +1036,7 @@ pub fn run(
                     .map(|(name, value)| (name.as_str(), value.as_str()))
                     .collect();
                 let (list, clip) = pure_chain_page::capture(
-                    answers,
+                    request,
                     &globals,
                     &mut sprites,
                     options.race.as_ref(),
