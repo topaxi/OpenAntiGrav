@@ -384,7 +384,7 @@ resource in a live PPSSPP session:
 | `+0x74` | f32 | gravity, units/tick², dormant unless flag `0x200` (-0.011232) |
 | `+0xa0` | i32 | live-particle cap (8) |
 | `+0xb8` | u32 | render-mode index into the blend table at `DAT_08ab2260`; the entry's top nibble is the draw class - 3 rotating billboard, 6/7 two-point streak (2 → class 3 here) |
-| `+0xbc` | u32 | colour mode: 2 = random table entry per particle; else over-life walk (2) |
+| `+0xbc` | u32 | colour mode: 2 = random table entry per particle; else over-life walk (2). **3 on HD** = the table's red byte is a weight blending entry 0 toward the scene light; **3 on 2048 and Omega** (any value but 0 and 2) = the walk reversed. See "The colour table is RGB-only" below |
 | `+0xc0` | u32 | blend class, dispatched by `ParticleSystem_ApplyBlendClass`: 2 additive, 3 alpha-over (3) |
 | `+0xc4` | u32[256] | RGBA colour table - a gradient, orange `(181,134,87,200)` → ember `(48,46,46,0)` here |
 | `+0x4c8` | f32 | **aspect**: a class 3 particle's half-width over its half-height (`ParticleSystem_DrawRolledQuads`, `0x089178c0`). `1.0` on 43 of the 45 class 3 emitters, `4.0` on the Shuriken's head and trail; `2`, `3` and `0.05` on class 6 and 7 streaks. On class 6 it is the bar's cap: `ParticleSystem_DrawPoolBars` (`0x08917c7c`) reaches `aspect * size` past each end of a `2 size`-wide rectangle (confidence 90, measured 2026-10-04). Class 7's use is unread. Played since 2026-09-30 (confidence 80, static read). See [particle-system.md](../ghidra/functions/psp-pulse-usa/particle-system.md), "An emitter's own particles" |
@@ -778,9 +778,26 @@ both, straight off the decompilation, with the caveat that nothing has read
 what feeds `+0x40`.
 
 HD's `WO_SHIP_EXPLOSION` (and 2048's) author `+0xbc` = **3** on the root, `trail` and
-`TRAIL_SMOKE` emitters; nothing reads it (our parser takes it as the over-life walk). The root's
-table is white at entry 0 and black for entries 1 to 31 over a fire flipbook, which draws black
-if multiplied (`ship-destroy.md`, "The black blast"). Confidence 85 for the values, 0 for the meaning.
+`TRAIL_SMOKE` emitters. The root's table is white at entry 0 and black for entries 1 to 31 over a
+fire flipbook. Our parser takes mode 3 as the over-life walk, which multiplies the black in and
+draws a black ball. Each title reads mode 3 differently:
+
+- **HD (confidence 84, PPU and SPU paths agree, static).** The table is not a colour. With
+  `idx = trunc(age * 255.99997) & 0xff` and `t = table[idx].R / 255`, every byte of the
+  particle's colour becomes `trunc(E0 + (L - E0) * t)`. `E0` is table entry 0, and `L` is a
+  light colour `RibbonEffects_SampleLighting` samples once per instance per update at the
+  instance's position (alpha `0xff`). Entries 1 to 31 have `R = 0`, so they draw entry 0,
+  white, and the fire shows as authored. From life fraction 0.16 on, the flipbook draws in
+  the scene's light colour. Addresses, the SPU twin and `L`'s read recipe:
+  [ship-destroy.md](../ghidra/functions/ps3-hdfury-eu/ship-destroy.md), "`colour_mode` 3 is a
+  blend toward the scene light".
+- **2048 (confidence 70).** No light term. Any mode other than 0 and 2 walks the table from
+  the end (`f = 1 - age`), so this table is white for most of the life and black for the last
+  eighth.
+- **Omega.** Its 2048-layout reader matches 2048. Its HD-layout reader (`FUN_016ddf70`) has
+  only the plain walk (confidence 55).
+
+So the alpha column of these tables (falling `ff` to `00`) is still never read, in any mode.
 
 ### The two releases author colour at different scales - 2026-08-12
 

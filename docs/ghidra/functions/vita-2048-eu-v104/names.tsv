@@ -438,3 +438,4 @@
 0x8121a156	function	Camera_SetSubject	75	../ps3-hdfury-eu/destroy-camera.md
 0x81219040	function	Camera_EnterHoldView	58	../ps3-hdfury-eu/destroy-camera.md
 0x81217616	function	Camera_UpdateHoldView	55	../ps3-hdfury-eu/destroy-camera.md
+0x812ab114	function	Psys_UpdateParticle	70	../ps3-hdfury-eu/ship-destroy.md

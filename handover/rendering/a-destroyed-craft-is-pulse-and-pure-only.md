@@ -62,9 +62,15 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
   Talon's Junction, 2026-11-22, `hd-wreck-wire`). **Cause found 2026-11-23 (`hd-black-blast`, `ship-destroy.md`,
   "The black blast"):** the root emitter of `WO_SHIP_EXPLOSION`, a fire flipbook (`smoke_new4_8x4`) under a
   `colour_mode` 3 table that is black for entries 1 to 31, multiplied; 2048 authors the same table. Not a decode,
-  blend or missing-texture bug, and nothing is fixed. **Open, RE:** what `colour_mode` 3 does in HD's particle
-  update (a multiply, or not), and HD's frame advance and flipbook direction; listing the effect in
-  `oag_hd::effects::SPRITES` before that read gives a white blowout instead.
+  blend or missing-texture bug, and nothing is fixed. ~~**Open, RE:** what `colour_mode` 3 does~~ Read
+  2026-11-23 (`hd-colour-mode3-re`, `ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light",
+  84): not a multiply. Each byte becomes `trunc(E0 + (L - E0) * table[idx].R / 255)`, where `L` is
+  `RibbonEffects_SampleLighting` at the instance. The root is white (entry 0) from life 1/256 to 1/8,
+  then `L` from 0.16. **Ready to wire on HD:** an `oag_fx` colour mode carrying the weight law, with `L`
+  a stand-in until the lighting volume or a live `ctx+0xb04` read (recipe on the page) gives it.
+  2048 plays mode 3 as the reversed walk (white, then black for the last eighth), and Omega's 2048
+  reader matches. Still open: HD's frame-advance sources (count, rate, `[lo, hi]`; partly read on the
+  same page), so listing the effect in `oag_hd::effects::SPRITES` may still give a white blowout.
 
 1. ~~HD/Fury: read `Ship_SetState`'s destroy states~~ Read 2026-11-22
    (`ship-destroy.md`). Still open there: the death kick's formula, the wreck collider's child
