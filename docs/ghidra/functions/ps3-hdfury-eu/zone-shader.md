@@ -486,3 +486,26 @@ retroactively validate output produced without it.
 - [renderer.md](renderer.md) - the engine parameter table and the shader registry
 - [effectsettings.md](../../../formats/effectsettings.md) - the authored table,
   and the play observation this page corroborates
+
+## The glow's depth factor is the original's near over the view depth (2026-11-23, `det-floor`)
+
+`glow = saturate(N.y - 0.5) * (1 - windowDepth) * E.w * zoneTexVis[band].rgb`: the `(1 - windowDepth)` term is a depth in `0..1`, so
+its size depends on the projection. The recorded `original.camera.view_proj` of every HD pair gives it: its depth column against its `w`
+column is `z = k * w + c` exactly (residual 5e-9), and a GL projection (`k = (f + n) / (f - n)`, `c = -2 f n / (f - n)`, the form
+`billboards.md` read for the cards) gives **near 0.5417, far 5501 on all 14 HD circuit pairs (four digits) and near 0.4773 / 0.4789 /
+0.4805, far 5499-5503 on the three Detonator pairs** (confidence 80: the GL window mapping is assumed from the cards' matrices; with a
+D3D mapping the factor doubles). The window depth is then `1 - near / w`, so `1 - windowDepth = near / w`. Ours drew
+`(1 - @builtin(position).z)` on its own near of 1.0, 1.85x (circuits) and 2.1x (Detonator) too bright in linear light. Fixed:
+`ZoneFrame::glow_window_near` and `detonator_glow_window_near` (`oag_hd::race::ZONE_FRAME`), carried in `Zone::shape.y`, used by
+`zone_glow` as `near * position.w`; `0.0` (every other title) keeps the renderer's window depth. Whether the near follows the field of
+view (n * tan(fov / 2) is 0.3127 on circuits at 60 degrees and 0.322 on the Detonator pairs at 67.6 to 68.1) is not read.
+Test: `oag-mesh` `zone_recolour::the_visualiser_glow_depth_factor_takes_the_originals_near_plane`. 2048 and Omega: **not checkable**
+(no `viewProj` capture of either; `zone_frame` is `None`, so unchanged).
+
+**Still unread: a constant of about 2 on blue after this** (Detonator pairs, floor boxes). Candidates, none fitted: the visualiser texel's
+gamma conversion (ours samples `Rgba8Unorm` raw; the original creates the strip at `Environment_LoadStageTextures` `0x003d6dc8`:
+`FUN_005a6ce0(0x100, 1, 8, ...)` then `+0x28 &= 0xff0fffff | 0x700000`, `+0x34 &= 0xf0f0ffff | 0x1010000`, where the 15 stage textures
+take `0x1030000`; decode those two fields against the RSX texture-address/control registers to see whether gamma is on), and whether the
+floor's band 3 is what the original's texel held at the frame (the original's floor blue is nearly flat, 14 to 19 in box A, across held
+band 3 of 0.51 to 0.93). Read recipe: in one RPCS3 pause read the texel `*(*(0x00c7dfb0 + 0x32b0) + 0x10) + 4 * 164` (`rpcs3-hd-zone-equaliser.py`
+already writes `vis-N.bin`) beside the grabbed frame; the pixel over the texel at a known view depth gives the gain with no band timing in it.

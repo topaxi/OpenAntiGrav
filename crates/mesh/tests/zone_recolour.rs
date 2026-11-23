@@ -583,6 +583,49 @@ fn the_visualiser_glow_is_driven_by_the_vis_lookup_and_gated_up_facing() {
     );
 }
 
+/// **The glow's depth factor is the original's near over the view depth**, not this
+/// renderer's window depth, when the grade carries a near (`shape.y`). Identity matrices put
+/// the quad at view depth 1, so `1 - windowDepth` reads `near`: `0.5 * 0.25 * 1.6 = 0.2`,
+/// `51` against the `102` the window-depth path gives. Dropping the near leaves `102`.
+#[test]
+fn the_visualiser_glow_depth_factor_takes_the_originals_near_plane() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let (device, queue) =
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
+            .expect("requesting the device");
+    let surface = up_facing_model(texture("albedo", [255, 255, 255, 255]));
+    let stage = texture("zone stage", [200, 200, 200, 128]);
+    let mut bands = [0.0f32; 16];
+    bands[12] = 1.0;
+    let mut scene = Scene::off();
+    scene.light.enabled = 0.0;
+    scene.zone = scene_zone(ZoneSet {
+        effect: [0.0, 0.0, 0.0, 1.6],
+        base: [0.0; 4],
+        base_alt: [0.0; 4],
+    });
+    scene.zone.shape[1] = 0.25;
+    let art = scene_art(&stage);
+    let lit = draw(
+        &device,
+        &queue,
+        &surface,
+        &art,
+        scene,
+        Some((&bands, [255, 255, 255])),
+    );
+    for (channel, got) in [("red", lit[0]), ("green", lit[1]), ("blue", lit[2])] {
+        assert!(
+            got.abs_diff(51) <= 2,
+            "{channel} came out {got}, want about 51: the glow ignored the original's near plane"
+        );
+    }
+}
+
 /// **The chunk's own bit picks the publication.** HD publishes the Zone
 /// parameters twice - `zoneModeTrack*` beside the `Track.*` colours and
 /// `zoneMode*` beside the `Scene.*` ones - and selects per chunk on bit 0 of

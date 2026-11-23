@@ -341,6 +341,12 @@ pub const ZONE_FRAME: &oag_title::ZoneFrame = &oag_title::ZoneFrame {
     // stages of two files (`docs/ghidra/functions/ps3-hdfury-eu/zone-hull-light.md`).
     hull_probe_tint_scale: Some(2.0),
     detonator_arm: true,
+    // `viewProj`'s depth column against its `w` column gives `z = k * w - 2 f n / (f - n)`
+    // with `k = (f + n) / (f - n)`: near 0.5417, far 5501 on every one of 14 circuit pairs
+    // (four digits), near 0.4773 to 0.4805 on the three Detonator pairs
+    // (`docs/ghidra/functions/ps3-hdfury-eu/zone-shader.md`, "The glow's depth factor").
+    glow_window_near: 0.5417,
+    detonator_glow_window_near: 0.479,
 };
 
 /// HD/Fury's boost and damage zoom-streak ring, `FunkLayerZoom`.

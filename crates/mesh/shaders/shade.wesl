@@ -1286,7 +1286,7 @@ fn lit_texel(raw: VertexOutput) -> vec4<f32> {
         // rather than trusting `effect.w` to be zero off a Zone race, the same
         // belt-and-braces `surface_linear`/`plain` below already take.
         zone_glow_term =
-            zone_glow(n, in.clip.z, in.texcoord, in.slots, in.world) * zone_weight;
+            zone_glow(n, in.clip, in.texcoord, in.slots, in.world) * zone_weight;
     }
 
     // The read specular term: half-vector against the sun, raised to
