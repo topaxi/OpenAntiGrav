@@ -122,7 +122,7 @@ pub(super) fn listed_particle_effect(
             templates: effects.templates.contains(&name),
         },
     )?;
-    effect.with_colour_law(match effects.colour_walk {
+    effect.with_colour_law(match effects.colour_walk_for(dir) {
         oag_title::ColourWalk::Forward => psys::ColourLaw::Forward,
         oag_title::ColourWalk::Reversed => psys::ColourLaw::Reversed,
         oag_title::ColourWalk::LightBlend => psys::ColourLaw::LightBlend,

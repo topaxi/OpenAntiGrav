@@ -339,19 +339,22 @@ the bright end of the live `0xbaffff` to `0x2b5d7b` span) stands in, and `oag_fx
 constant. With a white `L` the blend returns white at every weight, so HD's root is white for its whole life
 until the read recipe above gives a real `L`. Never fit it to a frame.
 
-Frames (ours, `--race --opponents --force-wreck 40:7`, Talon's Junction, 960x540, ticks 50 to 75): unlisted,
-the root's procedural soft ball is **white** where it was black. The effect is not in `SPRITES`, so it is not the
-fire flipbook. With `WO_SHIP_EXPLOSION` temporarily listed, ticks 54 and 60 draw an orange fireball with a
-white core, with no white blowout (the earlier blowout came with the table read as colours).
+Frames (ours, `--race --opponents --force-wreck 40:7`, Talon's Junction, 960x540): `WO_SHIP_EXPLOSION` is
+now in `oag_hd::effects::SPRITES` (pinned in `hd_effect_sprites.rs`), so the root draws its `smoke_new4_8x4`
+flipbook. Tick 45 a white-hot flash, 54 and 60 an orange fireball with a white core, 75 the fireball
+spreading with the sparks; no white blowout (the earlier one was the table read as colours). Unlisted, the
+procedural soft ball drew white where it was black.
 2048 (Altima, same command): at tick 54 the dark smoke ball becomes white fire (reversed walk: indices 255
 down), the last eighth of the life is black by the table (not framed: tick 205 shows only the plume, the same before and after). Census, in `psys_2048_ground_truth.rs` and
 `psys_omega_ground_truth.rs`: 2048 authors modes 0, 2 and 3 only (31 mode-3 emitters in 12 effects: the
 ship explosion and its player twin, `WO_ROCKET_EXPLO`, `WO_ROCKET_EXPLO_TRACK`, `WO_ROCKET_FLARE`, `WO_MINE_EXPLO`,
 `WO_CANNON_SPARKS`, `WO_DAMAGE_MODERATE`, `WO_DEBRIS_SPARKS`, `WO_GLOBE`, `WO_GLOBE_STATIC`,
 `WO_SHIP_DEATH_DAMAGE_PLUME`) and no mode 1; Omega's two archives author 29 and 27 mode-3 emitters and no mode 1.
-**Omega: ported on the 2048 reader's evidence for every Omega effect**; whether Omega's HD-layout reader
-(`FUN_016ddf70`, no lerp, plain walk, 55) plays its `Data/particles` effects instead is unread, so those
-could still be a forward walk.
+**Omega: ported by reader.** `Data\particles2048` (the 2048-layout set its 2048 reader `FUN_016e06b0` plays)
+walks reversed: `oag_title::Effects::colour_walk_in`. `Data\particles` keeps the plain forward walk the HD-layout
+reader `FUN_016ddf70` reads (no lerp; confidence 55, and which reader plays which directory is inferred from
+the directories' names and the race's `effect_dir_by_circuit`, not read). Omega's HD-era mode-3 effects
+therefore stay forward, with no light blend either.
 
 **The frame advance, partly read (confidence 60).** In the same update
 (`0x0028d0f0`-`0x0028d1bc`, context `ctx+0x6b0..+0x6c1`): with `ctx+0x6b2` set, emitter

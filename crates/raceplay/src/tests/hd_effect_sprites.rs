@@ -22,6 +22,7 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
         oag_hd::TITLE.effects.sprites,
         [
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
+            oag_title::engine_effects::EXPLOSION_EFFECT,
             oag_title::engine_effects::QUAKE_EFFECT,
             oag_title::engine_effects::MISSILE_FLARE_EFFECT,
             oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
@@ -75,10 +76,13 @@ fn each_title_names_how_its_particles_walk_the_colour_table() {
         (oag_pure::TITLE, Forward),
         (oag_hd::TITLE, LightBlend),
         (oag_2048::TITLE, Reversed),
-        (oag_omega::TITLE, Reversed),
     ] {
         assert_eq!(title.effects.colour_walk, walk, "{}", title.name);
     }
+    // Omega reads by layout: its 2048 set reversed, its HD-era set the plain walk.
+    let omega = oag_omega::TITLE.effects;
+    assert_eq!(omega.colour_walk_for(r"Data\particles2048"), Reversed);
+    assert_eq!(omega.colour_walk_for(r"Data\particles"), Forward);
 }
 
 /// The loader applies it: HD's ship explosion root, mode 3, blends; Pulse's reads the same file

@@ -427,7 +427,6 @@ const EFFECTS: oag_title::Effects = {
         // The original never spawns its own `WO_TRAIL_HITSHIP`
         // (`docs/ghidra/functions/ps4-omega-eu/trail-hits.md`).
         .trail_hits_on_setting()
-        .with_colour_walk(oag_title::ColourWalk::Reversed)
         .without(Trigger::PlasmaBlast)
         .without(Trigger::EngineFlare)
         .without(Trigger::LeachbeamEnergy)
@@ -473,6 +472,7 @@ const EFFECTS: oag_title::Effects = {
             ),
         );
     effects.scenery = &[oag_title::engine_effects::MODESTO_STEAM_EFFECT];
+    effects.colour_walk_in = &[(r"Data\particles2048", oag_title::ColourWalk::Reversed)];
     effects
 };
 

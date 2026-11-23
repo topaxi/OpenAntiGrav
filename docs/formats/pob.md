@@ -798,7 +798,7 @@ draws a black ball. Each title reads mode 3 differently:
   instruction. Its HD-layout reader (`FUN_016ddf70`) has only the plain walk (confidence 55).
 
 Wired: `oag_title::Effects::colour_walk` and `oag_fx::psys::Effect::with_colour_law` (HD blends toward
-`oag_fx::psys::LIGHT`, a white stand-in **chosen, not measured**; 2048 and Omega walk reversed; Pulse and Pure
+`oag_fx::psys::LIGHT`, a white stand-in **chosen, not measured**; 2048 and Omega's `Data\particles2048` walk reversed, Omega's `Data\particles` forward; Pulse and Pure
 unchanged). 2048 and Omega author no mode-1 emitter, so only mode 3 changes there (`psys_2048_ground_truth.rs`,
 `psys_omega_ground_truth.rs`).
 

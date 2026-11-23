@@ -426,6 +426,10 @@ pub struct Effects {
     /// particle's life, for every effect it plays (`docs/formats/pob.md`, "The colour table is
     /// RGB-only").
     pub colour_walk: ColourWalk,
+    /// Effect directories whose files are read another way than [`Self::colour_walk`]: Omega's
+    /// `Data\particles2048` is the 2048-layout set its 2048 reader plays, while its `Data\particles`
+    /// keeps the HD-layout reader's plain walk.
+    pub colour_walk_in: &'static [(&'static str, ColourWalk)],
     /// How the Quake wave is placed and washes the screen: its frame is read
     /// only for a title whose [`Self::extents`] list `WO_QUAKE`.
     pub quake_look: QuakeLook,
@@ -494,6 +498,7 @@ impl Effects {
         pool_bars: &[],
         templates: &[],
         colour_walk: ColourWalk::Forward,
+        colour_walk_in: &[],
         quake_look: QuakeLook::track(Origin::InheritedFrom("Wipeout Pulse")),
         trail_hits_native: false,
     };
@@ -509,6 +514,16 @@ impl Effects {
     pub const fn with(mut self, trigger: Trigger, spec: EffectSpec) -> Self {
         self.table[trigger.index()] = Some(spec);
         self
+    }
+
+    /// How the effects under `dir` walk their colour table: the directory's own entry, else
+    /// [`Self::colour_walk`].
+    #[must_use]
+    pub fn colour_walk_for(&self, dir: &str) -> ColourWalk {
+        self.colour_walk_in
+            .iter()
+            .find(|(listed, _)| listed.eq_ignore_ascii_case(dir))
+            .map_or(self.colour_walk, |&(_, walk)| walk)
     }
 
     /// This table with its particle colour walk read as `walk` ([`Self::colour_walk`]).
