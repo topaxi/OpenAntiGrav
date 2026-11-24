@@ -279,8 +279,7 @@ pub struct CaptureOptions {
     /// `--detonator-mines`: the original's mine positions, laid on ours' nearest survey lanes in place of
     /// the seeded opening layout ([`oag_raceplay::RaceSim::carry_detonator_mines`]).
     pub detonator_mines: Option<Vec<oag_core::math::Vec3>>,
-    /// `--detonator-emp-charge`: the EMP's charge at the start
-    /// ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
+    /// `--detonator-emp-charge` ([`oag_raceplay::RaceSim::charge_detonator_emp`]).
     pub detonator_emp_charge: Option<u32>,
     /// `--pose-spark`: contact sparks the original threw before the frame, thrown that long
     /// before it on the warmed field ([`Race::warm_up_contact_sparks`]).
@@ -507,9 +506,7 @@ pub fn capture(
             );
         }
     }
-    if let Some(n) = options.detonator_emp_charge
-        && !race.core.sim.charge_detonator_emp(n)
-    {
+    if (options.detonator_emp_charge).is_some_and(|n| !race.core.sim.charge_detonator_emp(n)) {
         warn!("--detonator-emp-charge: this race runs no EMP");
     }
     // A network race's AI and seats are the server's (`oag_net::race::prepare`,
