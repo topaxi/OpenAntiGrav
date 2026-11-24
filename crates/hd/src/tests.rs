@@ -211,3 +211,14 @@ fn the_front_end_names_each_circuits_model_scene() {
     );
     assert_eq!(front_end.circuit_model(r"Data\Environments\Zone_1"), None);
 }
+
+/// HD's `Team Selection` lets the player turn, zoom and pan the craft; the PSP titles' do not.
+#[test]
+fn hd_has_the_craft_control_law_and_pulse_does_not() {
+    let law = TITLE
+        .front_end
+        .and_then(|front_end| front_end.ship_control)
+        .expect("the update's control law");
+    assert_eq!((law.idle_frames, law.push_scale, law.deadzone), (181, 4.0, 0.2));
+    assert!(oag_pulse::TITLE.front_end.is_some_and(|f| f.ship_control.is_none()));
+}

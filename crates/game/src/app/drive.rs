@@ -24,6 +24,9 @@ use anyhow::{Context, Result, anyhow, bail};
 use oag_gameplay::input::Button;
 use oag_ui::menu::{Entry, Value};
 
+/// How many moves a `drag` step makes of its distance.
+const DRAG_STEPS: u32 = 8;
+
 use crate::app::gpu::Gpu;
 use crate::app::handler::App;
 use crate::app::menu_stage::MenuStage;
@@ -294,6 +297,32 @@ impl Driver {
                     .pointer
                     .button(left, winit::event::ElementState::Pressed);
                 self.frame(None)?;
+                self.session
+                    .pointer
+                    .button(left, winit::event::ElementState::Released);
+                self.frame(None)?;
+            }
+            Step::Wheel(detents) => {
+                self.session
+                    .pointer
+                    .wheel(winit::event::MouseScrollDelta::LineDelta(0.0, -(*detents as f32)));
+                self.frame(None)?;
+            }
+            Step::Drag { dx, dy } => {
+                let left = winit::event::MouseButton::Left;
+                let (x, y) = self.session.pointer.cursor_at().unwrap_or((0.0, 0.0));
+                self.session
+                    .pointer
+                    .button(left, winit::event::ElementState::Pressed);
+                self.frame(None)?;
+                // In steps, as a hand moves, so every tick of the drag has some travel.
+                for step in 1..=DRAG_STEPS {
+                    let along = step as f32 / DRAG_STEPS as f32;
+                    self.session
+                        .pointer
+                        .cursor_moved(f64::from(x + dx * along), f64::from(y + dy * along));
+                    self.frame(None)?;
+                }
                 self.session
                     .pointer
                     .button(left, winit::event::ElementState::Released);

@@ -93,3 +93,20 @@ fn a_trigger_is_conditioned_and_a_stick_deadzoned() {
     assert_eq!(read.r2, 1.0);
     assert!(read.r2 >= PLAY_PULL);
 }
+
+/// A screen with a dead band of its own reads the right stick before ours, and the left stick
+/// as the snapshot has it.
+#[test]
+fn the_view_keeps_the_raw_right_stick_and_the_left_stick() {
+    let mut controls = Controls::without_pad();
+    controls.inject_pad(ViewRaw {
+        right: (0.15, -0.5),
+        left: (0.6, 0.0),
+        ..ViewRaw::default()
+    });
+    controls.player_snapshots();
+    let view = controls.view();
+    assert_eq!(view.right_raw, (0.15, -0.5));
+    assert!(view.right.0 == 0.0 || view.right.0.abs() < 0.15, "ours has dropped its dead band");
+    assert!(view.left.0 > 0.0, "{:?}", view.left);
+}

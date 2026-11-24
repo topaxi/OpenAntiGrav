@@ -118,7 +118,7 @@ const MOUSE_FINGER: u64 = u64::MAX;
 
 impl Window {
     /// Whether the screen on show pans with a held left button (the 2048
-    /// campaign map). A press then waits for the release to be a click, as a
+    /// campaign map, the craft on HD's Ship Select). A press then waits for the release to be a click, as a
     /// finger's tap does, and a drag past [`DRAG_THRESHOLD`] is a pan.
     /// **Chosen, not measured.** Off, every other screen clicks on the press
     /// as before; turning it off lets go of a button held across the change.

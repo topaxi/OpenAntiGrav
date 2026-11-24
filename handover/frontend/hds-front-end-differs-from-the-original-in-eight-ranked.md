@@ -92,10 +92,12 @@ hull, `FrontEnd::ship_preview_hull`, pose chosen, not measured).
      (`--drive`): after a press the previous team's hull stays on screen until
      the new mesh's worker read lands (Assegai's hull under the MIRAGE label at
      tick 4), drawn at the new team's fit; the gap is not tied to the read.
-  3. **The player's own turn, pan and zoom of the craft** (right stick, the
-     idle return after 181 frames): read at confidence 65, not exercised, not
-     wired; a new input on a screen needs pointer support in the same change.
-     Medium (40).
+  3. ~~**The player's own turn, pan and zoom of the craft**~~ (LANDED, `hd-shipselect-controls`):
+     the update's law is `oag_title::ShipControl` (HD and Omega), applied by
+     `oag_game::preview::ship_model::control`; pad right stick, R1 and left stick, and a
+     pointer drag and the wheel over the craft's frame. Still open: the SIXAXIS tilt
+     (`st+0x1028`, `+0x102c`; `oag-input` reads no motion sensor) and the sign of the pad axes
+     (chosen). See `team-selection-model.md`, "The player's own turn, pan and zoom".
   4. **The Detonator box** (`-2.0..0`) is Title data nobody uses: the preview
      does not draw the Detonator hull. Small (50).
   5. ~~**Omega** keeps its borrowed pose~~ (LANDED 2026-11-19, `hd-ship-craft`): the update's rest

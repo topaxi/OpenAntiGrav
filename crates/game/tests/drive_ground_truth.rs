@@ -1202,3 +1202,28 @@ fn an_event_launched_from_omegas_2048_map_starts_a_race() {
         "{race}"
     );
 }
+
+/// On HD's Ship Select a wheel turned over the craft's frame zooms the craft and leaves the
+/// team alone; turned anywhere else it steps the team as it always did.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_wheel_over_the_craft_zooms_it_and_elsewhere_steps_the_team() {
+    let Some(image) = hd() else {
+        return;
+    };
+    let to_ship_select = "boot; select racebox; press cross; until page=race; \
+         select launch_race; press cross; until screen=picker; press cross; \
+         until screen.id=ship-select; ticks 120";
+    let focus = |tag: &str, aim: &str| {
+        let run = drive(&image, tag, &format!("{to_ship_select}; {aim}; wheel 1; ticks 30"), None);
+        assert!(run.output.status.success(), "{}", run.why_not_success());
+        text(run.last(), &["screen", "focus", "id"]).map(str::to_owned)
+    };
+    let before = {
+        let run = drive(&image, "hd-wheel-before", to_ship_select, None);
+        text(run.last(), &["screen", "focus", "id"]).map(str::to_owned)
+    };
+    assert!(before.is_some());
+    assert_eq!(focus("hd-wheel-craft", "mouse 900 380"), before, "over the craft");
+    assert_ne!(focus("hd-wheel-away", "mouse 150 780"), before, "off the craft");
+}
