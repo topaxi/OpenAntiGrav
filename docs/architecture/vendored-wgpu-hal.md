@@ -62,7 +62,8 @@ there later fails to compile instead of silently missing from the key.
 
 **The bound**: entries go when their module is destroyed, and the whole memo goes with the
 device. Total SPIR-V is capped at 32 MiB (`MAX_BYTES`); an insert past the cap is skipped,
-never evicting. A Pulse PSP race keeps 126 entries.
+never evicting. The Pulse PSP race walk produces 126 distinct keys over its whole run, front-end
+modules included, which are freed with their modules.
 
 **Inert elsewhere**: only the Vulkan backend changed. The browser build (`wasm32`,
 WebGPU) does not link `wgpu-hal` at all (`cargo tree --target wasm32-unknown-unknown -p

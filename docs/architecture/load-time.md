@@ -745,8 +745,8 @@ Load average 48 to 68 throughout.
 | The player's path: `--measure-race-load 2`, run 2's confirm to first race frame (Xvfb, lavapipe, six interleaved pairs) | 6.40, 7.18, 9.29, 11.60, 17.81, 37.06 s | 6.23, 6.70, 6.72, 6.90, 7.43, 9.55 s |
 
 The walk and the 1-tick launch move about 1 % between repeats. The ground-truth test moves
-under 0.001 %. A ground-truth test gains the most because its debug-profile build runs naga
-slower than a release build does, so naga is a larger share of what it pays.
+under 0.001 %. Its row is the `target/debug` test profile, not comparable with the release
+rows above. Why it gains more than the release launch was not measured.
 
 The player's-path row is wall clock. It went through lavapipe, because RADV cannot present
 on Xvfb, at a load of 48 to 63, so read it as a direction, not a size. The medians are
