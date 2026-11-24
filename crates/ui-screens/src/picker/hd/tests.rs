@@ -1171,7 +1171,7 @@ fn a_forward_step_slides_the_lattice_a_pitch_and_then_snaps() {
         );
     }
     let spare = column(&mid, 5);
-    assert!((spare[0] - (at_rest_x(&grid, 5) - 36.0)).abs() < 1e-2);
+    assert!((spare[0] - (grid.origin[0] + 5.0 * hex::PITCH[0] * grid.scale - 36.0)).abs() < 1e-2);
     for _ in 0..3 {
         picker.tick(1.0 / 60.0);
     }
@@ -1224,10 +1224,6 @@ fn the_ring_eases_half_a_row_and_never_moves_sideways() {
         );
         picker.tick(1.0 / 60.0);
     }
-}
-
-fn at_rest_x(grid: &hex::HexGrid, column: usize) -> f32 {
-    grid.origin[0] + column as f32 * hex::PITCH[0] * grid.scale
 }
 
 /// A step during a slide waits for the slide's end: the lattice keeps sliding away from the first
