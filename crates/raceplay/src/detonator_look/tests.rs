@@ -187,8 +187,10 @@ fn the_football_and_spikes_sizes_follow_the_envelopes_the_way_the_original_write
 
 #[test]
 fn a_live_visualiser_takes_the_stage_colour_times_one_and_a_half_and_a_dark_one_the_literals() {
-    let mut envelope = MineEnvelope::default();
-    envelope.football = 0.5;
+    let envelope = MineEnvelope {
+        football: 0.5,
+        ..MineEnvelope::default()
+    };
     let mut levels = [0.0_f32; 16];
     levels[0] = 0.1;
     levels[1] = 0.9;
