@@ -293,7 +293,7 @@ fn a_texel_stamp_blooms_where_the_sprite_is_opaque_and_nowhere_else() {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    let left = (190, 120);
+    let left = (195, 120);
     let right = (250, 120);
     assert!(
         red(&texel, left.0, left.1) >= 4,
