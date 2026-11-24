@@ -1,5 +1,6 @@
 //! Photo mode's camera laws, off a made-up craft: no disc.
 
+use super::mount::Follow;
 use super::*;
 
 fn craft(slot: usize) -> Subject {
@@ -892,4 +893,75 @@ fn a_control_is_set_outright_and_stops_where_the_panel_stops() {
     assert!(effects.depth_of_field().is_some());
     assert_eq!(effects.value(Row::MotionBlur), 2);
     assert!(!effects.is_neutral());
+}
+
+/// The craft some ticks later: moved on and turned.
+fn later(craft: &Subject) -> Subject {
+    Subject {
+        position: craft.position + Vec3::new(4.0, 0.5, -9.0),
+        orientation: craft.orientation * Quat::from_rotation_y(0.15) * Quat::from_rotation_x(0.05),
+        ..*craft
+    }
+}
+
+fn same_camera(got: &CameraOverride, want: &CameraOverride, what: &str) {
+    assert!(
+        (got.eye - want.eye).length() < 1e-4,
+        "{what}: {got:?} {want:?}"
+    );
+    assert!(
+        got.orientation.dot(want.orientation).abs() > 1.0 - 1e-6,
+        "{what}: {got:?} {want:?}"
+    );
+    assert_eq!(got.fov_deg, want.fov_deg, "{what}");
+}
+
+/// A mount taken at one tick puts the camera where the mode itself would at another, on every
+/// lens: the rule a track blur is drawn again by (`Mount`).
+#[test]
+fn a_mount_puts_the_camera_where_the_lens_would_for_the_craft_of_another_tick() {
+    let node = Some(Vec3::new(-40.0, 12.0, 25.0));
+    let at_the_shot = craft(0);
+    let moved = later(&at_the_shot);
+    let mut photos = Vec::new();
+    for lenses in 0..4 {
+        let mut photo = Photo::new(0, true, None);
+        (0..lenses).for_each(|_| photo.cycle_lens());
+        photo.step(stick(0.8, -0.3), &[0]);
+        photos.push(photo);
+    }
+    let (mut free, _, _) = on_free();
+    free.step(stick(0.5, 0.5), &[0]);
+    photos.push(free);
+    let mut follows = Vec::new();
+    for photo in &photos {
+        let mount = photo.mount(&at_the_shot, node);
+        follows.push(mount.follow);
+        let name = format!("{:?}", photo.lens());
+        same_camera(
+            &mount.pose(&at_the_shot, node),
+            &photo.pose(&at_the_shot, node),
+            &format!("{name}, at the shot"),
+        );
+        same_camera(
+            &mount.pose(&moved, node),
+            &photo.pose(&moved, node),
+            &format!("{name}, later"),
+        );
+    }
+    assert!(
+        [Follow::Craft, Follow::Offset, Follow::Node]
+            .iter()
+            .all(|follow| follows.contains(follow)),
+        "every rule was exercised: {follows:?}"
+    );
+}
+
+/// The words the text spells the rules with read back.
+#[test]
+fn a_follow_rule_reads_back_by_its_word() {
+    for follow in [Follow::Craft, Follow::Offset, Follow::Node] {
+        assert_eq!(Follow::from_name(follow.name()), Some(follow));
+    }
+    assert_eq!(Follow::from_name("orbit"), None);
 }

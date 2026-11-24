@@ -425,8 +425,9 @@ The picture controls the shot used (exposure, saturation, speed blur, depth of f
 aperture and focus, and for a shot of several frames the motion blur, its shutter and the frame
 count) are a `[picture]` section, written on every photo mode shot with the opening values as they are: a photo without it predates the keys.
 `oag-game --png-info FILE` prints the text; `--from-png FILE` re-simulates, checks the hash and draws
-the frame with those controls (one frame: a motion blur needs the race's past, and the output says
-so), and says when a photo has no such section. Layout, privacy and evidence: [the format page](../formats/shot-png.md). It is for
+the frame with those controls, and says when a photo has no such section. A motion blur shot is
+drawn from its frames and averaged as the mode averaged them, and a speed blur from the zoom ring's
+settled history ([the format page](../formats/shot-png.md#reading-it-back)). Layout, privacy and evidence: [the format page](../formats/shot-png.md). It is for
 rendering bug reports: take the shot in photo mode and attach the file.
 
 ## Accumulated shots and rewind

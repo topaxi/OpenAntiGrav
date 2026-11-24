@@ -30,6 +30,7 @@
 use super::*;
 
 pub mod effects;
+pub mod mount;
 pub mod rewind;
 pub mod shot;
 pub mod touch;
@@ -289,6 +290,10 @@ fn speed_blur_pulse(
 pub struct FixedPicture {
     effects: Effects,
     zoom: Option<oag_post::hd_zoom::Tuning>,
+    /// The ring's tick, as the mode's age is.
+    age: u64,
+    /// The eye moved across the lens for one frame of an accumulated shot.
+    shift: Option<LensShift>,
 }
 
 impl FixedPicture {
@@ -299,6 +304,8 @@ impl FixedPicture {
         Self {
             effects,
             zoom: zoom.map(crate::zoom::tuning),
+            age: 0,
+            shift: None,
         }
     }
 
@@ -308,10 +315,16 @@ impl FixedPicture {
         &self.effects
     }
 
+    /// The lens sample the frame is drawn with, if an accumulated shot is being drawn again.
+    #[must_use]
+    pub fn shift(&self) -> Option<LensShift> {
+        self.shift
+    }
+
     /// The speed blur's ring and pulse, when the row is above zero.
     #[must_use]
     pub fn speed_blur(&self) -> Option<(oag_post::hd_zoom::Tuning, oag_post::hd_zoom::Frame)> {
-        speed_blur_pulse(&self.effects, self.zoom?, 0)
+        speed_blur_pulse(&self.effects, self.zoom?, self.age)
     }
 }
 
@@ -1026,6 +1039,18 @@ impl Race {
     pub fn photo_set_shift(&mut self, shift: Option<LensShift>) {
         if let Some(photo) = self.view.photo.as_mut() {
             photo.shift = shift;
+        } else if let Some(picture) = self.view.picture.as_mut() {
+            picture.shift = shift;
+        }
+    }
+
+    /// Moves the speed blur's ring to its tick `age` (the mode's own tick count): the history
+    /// steps once per tick it is drawn under, as it does in the mode with the race standing still
+    /// ([`speed_blur_pulse`]). A frame drawn without photo mode open, with a saved shot's
+    /// controls ([`FixedPicture`]).
+    pub fn picture_set_age(&mut self, age: u64) {
+        if let Some(picture) = self.view.picture.as_mut() {
+            picture.age = age;
         }
     }
 
@@ -1047,18 +1072,7 @@ impl Race {
     #[must_use]
     pub fn photo_camera(&self) -> Option<CameraOverride> {
         let photo = self.view.photo.as_ref()?;
-        let slot = photo.subject();
-        let ship = &self.core.sim.world.ships[slot];
-        let craft = Subject {
-            slot,
-            position: ship.physics.body.position,
-            orientation: ship.physics.body.orientation,
-        };
-        let node = self
-            .view
-            .finish_camera
-            .as_ref()
-            .and_then(|director| director.node_eye_near(craft.position));
+        let (craft, node) = self.craft_and_node(photo.subject())?;
         Some(photo.pose(&craft, node))
     }
 

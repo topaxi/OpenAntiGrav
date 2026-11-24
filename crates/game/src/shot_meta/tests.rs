@@ -15,6 +15,7 @@ fn meta() -> Meta {
         forward: [0.0, 0.0, -1.0],
         up: [0.0, 1.0, 0.0],
         fov_deg: Some(70.0),
+        mount: None,
     };
     let craft = Craft {
         position: [4.0, 5.0, 6.0],

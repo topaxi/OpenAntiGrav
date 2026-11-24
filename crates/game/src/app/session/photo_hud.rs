@@ -21,9 +21,6 @@ pub(crate) struct Averaged {
     pub(super) under_hud: bool,
 }
 
-/// Rows of a buffer to texture copy start on this many bytes.
-const ROW_ALIGN: u32 = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-
 impl Session {
     /// Whether a shot still has a frame to draw: a frame of it, the one that puts the HUD over
     /// its average, the one that shows its bar before it begins, or the one a single
@@ -46,52 +43,15 @@ impl Session {
         let Some(averaged) = self.photo.as_mut().and_then(|open| open.averaged.as_mut()) else {
             return;
         };
-        let (width, height) = averaged.size;
         if self.framebuffer.output_size() != averaged.size {
             return;
         }
-        let texture = self.framebuffer.output_texture();
-        let swap = matches!(
-            texture.format(),
-            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-        );
-        let row = width * 4;
-        let padded = row.div_ceil(ROW_ALIGN) * ROW_ALIGN;
-        let mut padded_pixels = vec![0u8; padded as usize * height as usize];
-        for (line, out) in averaged
-            .pixels
-            .chunks_exact(row as usize)
-            .zip(padded_pixels.chunks_exact_mut(padded as usize))
-        {
-            out[..row as usize].copy_from_slice(line);
-            if swap {
-                for pixel in out[..row as usize].as_chunks_mut::<4>().0 {
-                    pixel.swap(0, 2);
-                }
-            }
-        }
-        let buffer = self.gpu.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("photo shot average"),
-            size: padded_pixels.len() as u64,
-            usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.gpu.queue.write_buffer(&buffer, 0, &padded_pixels);
-        encoder.copy_buffer_to_texture(
-            wgpu::TexelCopyBufferInfo {
-                buffer: &buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded),
-                    rows_per_image: Some(height),
-                },
-            },
-            texture.as_image_copy(),
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
+        crate::photo::average::encode(
+            (&self.gpu.device, &self.gpu.queue),
+            encoder,
+            self.framebuffer.output_texture(),
+            &averaged.pixels,
+            averaged.size,
         );
         averaged.under_hud = true;
     }
