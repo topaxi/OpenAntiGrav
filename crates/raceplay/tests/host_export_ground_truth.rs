@@ -45,7 +45,7 @@ fn assert_a_picture(file: &Path) {
     let image = decode(file);
     let first = &image.rgba[..4];
     assert!(
-        image.rgba.chunks_exact(4).any(|px| px != first),
+        image.rgba.as_chunks::<4>().0.iter().any(|px| px != first),
         "{} is one flat colour",
         file.display()
     );
