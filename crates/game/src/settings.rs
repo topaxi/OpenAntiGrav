@@ -1442,3 +1442,6 @@ mod trail_length_tests;
 
 #[cfg(test)]
 mod menu_back_tests;
+
+#[cfg(test)]
+mod photo_profile_tests;

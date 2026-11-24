@@ -13,7 +13,7 @@
 #
 # Usage:
 #   scripts/deploy-to-deck.sh [host] [--skip-build] [--appimage FILE]
-#                             [--dry-run] [--scp]
+#                             [--dry-run] [--scp] [--fast]
 #
 #   host          user@host to deploy to. Default: $OAG_DECK_HOST or
 #                 deck@steamdeck.
@@ -24,6 +24,8 @@
 #                 Touches nothing, locally or on the remote, beyond the ssh
 #                 probes needed to resolve paths.
 #   --scp         Force scp instead of probing the remote for rsync.
+#   --fast        Build with `build-appimage.sh --fast` (thin LTO, mold): a quick
+#                 edit-deploy loop, slower at run time, never for measuring.
 
 set -euo pipefail
 
@@ -35,6 +37,7 @@ skip_build=0
 dry_run=0
 force_scp=0
 host_given=0
+fast=0
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die()  { echo "error: $*" >&2; exit 1; }
@@ -46,6 +49,7 @@ while [[ $# -gt 0 ]]; do
                       appimage="$2"; skip_build=1; shift 2 ;;
         --dry-run)    dry_run=1; shift ;;
         --scp)        force_scp=1; shift ;;
+        --fast)       fast=1; shift ;;
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
                        "${BASH_SOURCE[0]}"; exit 0 ;;
         -*) die "unknown argument: $1" ;;
@@ -59,7 +63,12 @@ if (( skip_build )); then
     [[ -f $appimage ]] || die "$appimage not found. Run 'just appimage-portable' first, or drop --skip-build."
 else
     step "Building the portable AppImage"
-    "$project_root/scripts/build-appimage.sh" --container
+    if (( fast )); then
+        appimage="$project_root/data/appimage/OpenAntiGrav-x86_64-portable-fast.AppImage"
+        "$project_root/scripts/build-appimage.sh" --container --fast
+    else
+        "$project_root/scripts/build-appimage.sh" --container
+    fi
     [[ -f $appimage ]] || die "$appimage still missing after the build - see the output above."
 fi
 

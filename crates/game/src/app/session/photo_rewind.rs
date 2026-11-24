@@ -426,6 +426,9 @@ impl super::Session {
             started,
             ..
         } = shot;
+        if let Some(open) = self.photo.as_mut() {
+            open.clear_redraw_clock();
+        }
         let written = match pending {
             Some(pending) => pending.write(&path, size.0, size.1, &pixels),
             None => crate::capture::write_png(&path, size.0, size.1, &pixels),

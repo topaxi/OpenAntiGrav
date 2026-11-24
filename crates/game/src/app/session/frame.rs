@@ -37,6 +37,11 @@ use super::pointer;
 
 impl Session {
     pub(crate) fn frame(&mut self) -> Result<()> {
+        // Before the acquire: a dead device answers `Lost` to it forever, and the loop that
+        // reconfigures on that never draws again.
+        if self.device_check() {
+            return Ok(());
+        }
         // `--measure-race-load`'s clock and its `LAUNCH RACE`, first so the
         // frame it times is all of this one. A no-op on every other run.
         self.probe_begin_frame();

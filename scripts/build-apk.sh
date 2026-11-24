@@ -73,6 +73,11 @@ fi
 # perf-test app scripts/android-race-phases.sh drives with --seed.
 features=android,extensions
 [ -z "${OAG_APK_DEV_CLI:-}" ] || features+=,dev-cli
+# OAG_APK_PROFILEABLE=1 marks the app profileable by the shell user, which is what lets
+# simpleperf attach to a release build on a user-build phone (docs/tools/android.md,
+# "Performance on the Galaxy S21"). A shipped app is not.
+profileable=""
+[ -z "${OAG_APK_PROFILEABLE:-}" ] || profileable='<profileable android:shell="true" />'
 cargo ndk "${ndk_targets[@]}" -P "$api" build -p oag-game --example oag_android --no-default-features --features "$features" "${cargo_profile[@]}"
 so="$root/target/aarch64-linux-android/$profile/examples/liboag_android.so"
 # The frames under `android_main` (2 MiB, not ours to size): docs/tools/android.md, "The stack".
@@ -126,6 +131,7 @@ cat > "$stage/AndroidManifest.xml" <<MANIFEST
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        $profileable
     </application>
 </manifest>
 MANIFEST

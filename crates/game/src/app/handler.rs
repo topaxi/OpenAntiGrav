@@ -25,6 +25,7 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow};
 use winit::keyboard::{Key, NamedKey, NativeKeyCode, PhysicalKey};
 use winit::window::WindowId;
 
+use crate::app::device_loss;
 use crate::app::gpu::Gpu;
 use crate::app::hints;
 use crate::app::prepare;
@@ -197,7 +198,14 @@ impl App {
             &self.settings.graphics.renderer,
             self.settings.language.as_deref(),
         )?;
-        self.open_with(gpu)
+        let mut session = self.open_with(gpu)?;
+        // The run before this one ended on a lost device: said once, over the first screen.
+        if device_loss::marker_present()
+            && let Some(session) = session.as_mut()
+        {
+            session.last_run_lost_its_device();
+        }
+        Ok(session)
     }
 
     /// The session on a device that is already up: the second half of [`Self::open`], and what
@@ -616,6 +624,9 @@ impl App {
             // default, which is what a `--race` run has always carried.
             loading_assets: std::mem::take(&mut self.loading_assets),
             quit: false,
+            lost: None,
+            wound_down: false,
+            last_run_lost: false,
             // Both filled by `finish_loading`, off the movies the boot's own
             // worker is still decoding as this window opens. `--race` never
             // fills them at all.
@@ -1079,6 +1090,8 @@ impl ApplicationHandler for App {
                 if let Err(e) = session.frame() {
                     error!("frame error: {e:#}");
                     event_loop.exit();
+                } else if session.lost.is_some() {
+                    after_loss(event_loop);
                 }
             }
 
@@ -1147,6 +1160,11 @@ impl ApplicationHandler for App {
         let Some(session) = &self.state else {
             return;
         };
+        // A lost device draws nothing more: the window waits to be closed.
+        if session.lost.is_some() {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
         if self.suspended {
             event_loop.set_control_flow(ControlFlow::Wait);
             return;
@@ -1180,4 +1198,20 @@ impl ApplicationHandler for App {
             }
         }
     }
+}
+
+/// The session has saved and stopped after a lost device. On a desktop the game starts itself
+/// over on a fresh device when it may (`device_loss::restart_once`) and this process leaves; the
+/// new run shows the note the old one left. When it may not, the window stays up as it is, its
+/// title saying what happened, until the player closes it. A phone has no title to read and no
+/// second process to start: the run ends, and the next launch says why.
+fn after_loss(event_loop: &ActiveEventLoop) {
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    if device_loss::restart_once() {
+        event_loop.exit();
+    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    event_loop.exit();
+    #[cfg(target_arch = "wasm32")]
+    let _ = event_loop;
 }

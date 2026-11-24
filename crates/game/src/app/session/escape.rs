@@ -238,56 +238,7 @@ impl Session {
         // `stage` and `self.records` are different fields of the same
         // `self`, so the first has to stop being borrowed before the second
         // can be.
-        let unofficial = self.race_is_unofficial();
-        if let Stage::Race(stage) = &mut self.stage
-            && !unofficial
-        {
-            crate::app::race_stage::ghost::save(&mut stage.race, &stage.result_key);
-        }
-        let campaign_title = self.campaign_title();
-        if let Stage::Race(stage) = &mut self.stage
-            && !unofficial
-            && !stage.result_saved
-            // Not a split screen's: see the finish site in `Session::frame`.
-            && stage.race.view_state().viewport_count() <= 1
-        {
-            stage.result_saved = true;
-            let key = stage.result_key.clone();
-            let observation = stage.observation();
-            if let Some(cell) = stage.campaign_cell.as_ref() {
-                match stage.campaign_custom.as_ref() {
-                    Some(launch) => launch.record_result(
-                        &mut self.records,
-                        &cell.name,
-                        stage.campaign_tier_name().as_deref(),
-                        observation.campaign_difficulty,
-                    ),
-                    None => self.records.record_campaign(
-                        campaign_title.as_deref().unwrap_or(&key.title),
-                        &cell.name,
-                        observation.campaign_medal,
-                        observation.campaign_difficulty,
-                    ),
-                }
-            }
-            if let Some(progress) = stage.campaign_2048_event.as_ref() {
-                self.records.record_campaign(
-                    campaign_title.as_deref().unwrap_or(&key.title),
-                    &progress.name,
-                    observation.campaign_medal,
-                    None,
-                );
-            }
-            // A mod campaign's medal lives only under its own title.
-            let observation = records::Observation {
-                campaign_medal: observation
-                    .campaign_medal
-                    .filter(|_| stage.campaign_custom.is_none()),
-                ..observation
-            };
-            self.records.record(key, observation);
-            records::save_in_background(&self.records);
-        }
+        self.capture_race_result();
 
         // The chooser's disc-key prompt takes escape whole, the same rule a
         // menu's modal prompt follows below: escape closes it and does not quit.
@@ -398,5 +349,64 @@ impl Session {
         }
 
         self.quit = true;
+    }
+}
+
+impl Session {
+    /// Writes the race on screen into the records and the ghost, as leaving it does: the second
+    /// capture site, for the modes the finish never reaches (`SpeedLap`, `Zone`) and an abandoned
+    /// `TimeTrial`. Guarded by `result_saved`, so a race that saved on finishing writes nothing
+    /// twice. A lost device calls it too (`Session::device_check`).
+    pub(crate) fn capture_race_result(&mut self) {
+        let unofficial = self.race_is_unofficial();
+        if let Stage::Race(stage) = &mut self.stage
+            && !unofficial
+        {
+            crate::app::race_stage::ghost::save(&mut stage.race, &stage.result_key);
+        }
+        let campaign_title = self.campaign_title();
+        if let Stage::Race(stage) = &mut self.stage
+            && !unofficial
+            && !stage.result_saved
+            // Not a split screen's: see the finish site in `Session::frame`.
+            && stage.race.view_state().viewport_count() <= 1
+        {
+            stage.result_saved = true;
+            let key = stage.result_key.clone();
+            let observation = stage.observation();
+            if let Some(cell) = stage.campaign_cell.as_ref() {
+                match stage.campaign_custom.as_ref() {
+                    Some(launch) => launch.record_result(
+                        &mut self.records,
+                        &cell.name,
+                        stage.campaign_tier_name().as_deref(),
+                        observation.campaign_difficulty,
+                    ),
+                    None => self.records.record_campaign(
+                        campaign_title.as_deref().unwrap_or(&key.title),
+                        &cell.name,
+                        observation.campaign_medal,
+                        observation.campaign_difficulty,
+                    ),
+                }
+            }
+            if let Some(progress) = stage.campaign_2048_event.as_ref() {
+                self.records.record_campaign(
+                    campaign_title.as_deref().unwrap_or(&key.title),
+                    &progress.name,
+                    observation.campaign_medal,
+                    None,
+                );
+            }
+            // A mod campaign's medal lives only under its own title.
+            let observation = records::Observation {
+                campaign_medal: observation
+                    .campaign_medal
+                    .filter(|_| stage.campaign_custom.is_none()),
+                ..observation
+            };
+            self.records.record(key, observation);
+            records::save_in_background(&self.records);
+        }
     }
 }

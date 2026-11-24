@@ -117,10 +117,25 @@ impl Session {
         let picture = race
             .photo()
             .map(|photo| shot_meta::Picture::of(photo.effects(), None));
+        // A photo is drawn at the output's size with no upscaler (`RenderProfile::for_a_photo`),
+        // so that is what its `[render]` text says it was drawn with. `--from-png` draws it that way too;
+        // `reproduce.flags` carry no render flags.
+        let redrawn = source == "photo mode" && self.photo_redraws();
         let render = self
             .settings
             .render_profiles
             .get(&crate::settings::profile_key(shell.title, shell.platform))
+            .map(|profile| {
+                if redrawn {
+                    // The output's size is not a choice the player made.
+                    crate::settings::RenderProfile {
+                        render_scale_chosen: false,
+                        ..profile.for_a_photo()
+                    }
+                } else {
+                    profile.clone()
+                }
+            })
             .and_then(|profile| toml::Value::try_from(profile).ok())
             .and_then(|value| match value {
                 toml::Value::Table(table) => Some(table),

@@ -1218,6 +1218,12 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "CONTROLS")]
     pub(crate) picture: Option<String>,
 
+    /// Draw with the profile a photo mode shot is made with (`RenderProfile::for_a_photo`): set
+    /// by `--from-png` on a photo, so its re-render is not at the render scale or through the
+    /// upscaler of the profile it runs in.
+    #[arg(skip)]
+    pub(crate) photo_profile: bool,
+
     /// With `--screenshot`: force the exhaust into the state it would hold this
     /// many seconds after entering a speed pad, at saturated intensity.
     ///

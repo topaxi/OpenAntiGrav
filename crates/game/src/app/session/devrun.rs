@@ -60,6 +60,10 @@ impl Session {
                         button,
                     );
                 }
+                Step::LoseDevice => {
+                    info!("script: lose the device");
+                    self.gpu.lose_device();
+                }
                 Step::Quit => {
                     info!("script: quit");
                     self.quit = true;

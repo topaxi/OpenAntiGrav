@@ -914,15 +914,28 @@ pub(crate) fn race_launch(
                 field_warmup: field_warmup_velocities(cli)?,
                 detonator_mines: cli.detonator_mines.as_ref().map(|m| m.0.clone()),
                 pose_sparks: pose_sparks(cli)?,
-                presented: cli.presented.then_some(crate::race_capture::Presented {
-                    render_scale: render_profile.render_scale,
-                    presentation: oag_present::upscale::Presentation {
-                        reconstruction: render_profile.reconstruction,
-                        sharpness: render_profile.upscale_sharpness.stops(),
-                        brightness: settings.display.brightness,
-                        gamma: settings.display.gamma,
+                // A photo is drawn through the presentation chain, at the output's size and
+                // before the grade, as the session reads it back: no brightness, gamma or
+                // screen filter of the machine it is drawn on.
+                presented: (cli.presented || cli.photo_profile).then_some(
+                    crate::race_capture::Presented {
+                        render_scale: render_profile.render_scale,
+                        presentation: oag_present::upscale::Presentation {
+                            reconstruction: render_profile.reconstruction,
+                            sharpness: render_profile.upscale_sharpness.stops(),
+                            brightness: if cli.photo_profile {
+                                Default::default()
+                            } else {
+                                settings.display.brightness
+                            },
+                            gamma: if cli.photo_profile {
+                                Default::default()
+                            } else {
+                                settings.display.gamma
+                            },
+                        },
                     },
-                }),
+                ),
                 zone_feed: crate::race_capture::spectrum::ZoneFeed::from_flags(
                     cli.zone_spectrum_test,
                     cli.zone_bands,
@@ -940,10 +953,13 @@ pub(crate) fn race_launch(
                 // Resolved here rather than in `crate::race_capture::capture`, which has no
                 // config directory in hand: the same catalogue the window
                 // reads, so a `--presented` capture shows the same preset.
-                screen_filter:
+                screen_filter: if cli.photo_profile {
+                    None
+                } else {
                     crate::screen::Catalogue::load(crate::screen::Catalogue::directory())
                         .get(&render_profile.screen_filter)
-                        .cloned(),
+                        .cloned()
+                },
                 screen_filter_strength: render_profile.screen_filter_strength,
             },
             &mut audio,
