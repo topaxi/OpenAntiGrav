@@ -67,6 +67,8 @@ pub struct CaptureHud {
     /// posed capture's craft holds nothing and fires nothing. A running Autopilot
     /// ([`Self::autopilot_seconds`]) is its own pickup row and takes the icon when none is held.
     pub held_pickup: Option<oag_tables::weapons::Weapon>,
+    /// The shield bar's post-hit flash, when the capture read one running. See [`CaptureShieldFlash`].
+    pub shield_flash: Option<CaptureShieldFlash>,
     /// A song the now-playing marquee is held on, when the capture pins one. See [`CaptureSong`].
     pub song: Option<CaptureSong>,
     /// A Head to Head readout drawn on the HUD alone, when the capture pins one. See
@@ -74,6 +76,19 @@ pub struct CaptureHud {
     pub head_to_head: Option<CaptureHeadToHead>,
     /// Zone mode's counters as the original's frame showed them, when the capture read them.
     pub zone: Option<CaptureZone>,
+}
+
+/// The shield bar's post-hit flash as the original's HUD object held it at the frame's stop: the
+/// bar draws forced red while the flash timer runs, whatever the pool (`Hud_UpdateEnergyBar`,
+/// `docs/ghidra/functions/psp-pulse-usa/shield.md`). A capture runs no tick, so no drop of the
+/// pool ever arms the timer ours' own HUD state steps; the pin is the readout's alone.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CaptureShieldFlash {
+    /// The flash timer in seconds (`hud+0x11c` on Pulse PSP), above zero while the window runs.
+    pub timer: f32,
+    /// The blink accumulator in seconds (`hud+0x1dc`): its phase decides whether the bar is
+    /// drawn at all this frame (`oag_hud::Readout::shield_blink_phase_on`).
+    pub blink: f32,
 }
 
 /// A song held on the now-playing marquee: a capture runs no music, so no song starts and the

@@ -250,6 +250,28 @@ impl Field {
     }
 }
 
+/// `--hud-shield-flash TIMER,BLINK`, both in seconds and not negative.
+pub(crate) fn parse_shield_flash(text: &str) -> Result<race::CaptureShieldFlash> {
+    let (timer, blink) = text
+        .split_once(',')
+        .context("--hud-shield-flash takes TIMER,BLINK")?;
+    let number = |name: &str, value: &str| -> Result<f32> {
+        let value: f32 = value
+            .trim()
+            .parse()
+            .with_context(|| format!("--hud-shield-flash {name} {value:?} is not a number"))?;
+        ensure!(
+            value.is_finite() && value >= 0.0,
+            "--hud-shield-flash {name} {value} is not a duration"
+        );
+        Ok(value)
+    };
+    Ok(race::CaptureShieldFlash {
+        timer: number("TIMER", timer)?,
+        blink: number("BLINK", blink)?,
+    })
+}
+
 /// Parses `--hud-state`: `PLACE,LAP,LAP_SECONDS,RACE_SECONDS[,SPEED_KMH[,SHIELD_PERCENT[,BEST_LAP_SECONDS[,ZONE[,ZONE_SCORE[,ZONE_SECONDS]]]]]]`,
 /// the clocks rounded to the tick; a best lap of zero is none.
 /// `--hud-head-to-head GAP,lead|trail`.
@@ -288,6 +310,11 @@ pub(crate) fn capture_hud(cli: &Cli) -> Result<Option<race::CaptureHud>> {
                 oag_tables::weapons::Weapon::from_type(name)
                     .with_context(|| format!("--hud-pickup {name:?} is not a weapon's type"))
             })
+            .transpose()?;
+        hud.shield_flash = cli
+            .hud_shield_flash
+            .as_deref()
+            .map(parse_shield_flash)
             .transpose()?;
         hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
             artist: cli.hud_song_artist.clone(),
@@ -366,6 +393,7 @@ pub(crate) fn parse_hud_state(text: &str) -> Result<race::CaptureHud> {
         boost_phase: None,
         autopilot_seconds: None,
         held_pickup: None,
+        shield_flash: None,
         song: None,
         head_to_head: None,
         zone: parts

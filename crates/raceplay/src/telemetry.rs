@@ -324,6 +324,10 @@ impl Race {
             if let Some(weapon) = hud.held_pickup {
                 readout.pickup = Some(weapon);
             }
+            if let Some(flash) = hud.shield_flash {
+                readout.shield_flashing = flash.timer > 0.0;
+                readout.shield_blink_phase = flash.blink;
+            }
             if let Some(seconds) = hud.autopilot_seconds.filter(|&seconds| seconds > 0.0) {
                 // The same icon fallback and countdown a running Autopilot gives above.
                 readout.pickup = readout
