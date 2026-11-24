@@ -46,7 +46,11 @@ pub(super) struct PortalPass {
 
 impl Scene {
     /// `lights` with the Detonator cannon's own appended: the muzzles are the loaded hulls'.
-    fn with_detonator_lights(&self, mut lights: Vec<mesh_render::SpuLight>, race: &Race) -> Vec<mesh_render::SpuLight> {
+    fn with_detonator_lights(
+        &self,
+        mut lights: Vec<mesh_render::SpuLight>,
+        race: &Race,
+    ) -> Vec<mesh_render::SpuLight> {
         lights.extend(race.detonator_cannon_lights(&self.weapon_quads.draw));
         lights
     }
@@ -497,7 +501,9 @@ impl Scene {
             // The shadow map's own projection and strength, or `off` where
             // nothing casts - see `Scene::shadow_uniform`.
             shadow: self.shadow_uniform(shadows),
-            spu_lights: mesh_render::SpuLights::from_slice(&self.with_detonator_lights(race.hd_spu_lights(), race)),
+            spu_lights: mesh_render::SpuLights::from_slice(
+                &self.with_detonator_lights(race.hd_spu_lights(), race),
+            ),
             sun_occlusion: self.sun_occlusion_matrices(),
             craft_shadow: self.shadow_map.borrow().receiver_shadows(),
             refraction: self.target_projection(section_view).to_cols_array_2d(),

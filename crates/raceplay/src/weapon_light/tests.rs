@@ -209,8 +209,12 @@ fn firing_race() -> (Race, crate::CannonDraw) {
         round.pos = Vec3::new(10.0 * (index as f32 + 1.0), 0.0, 0.0);
     }
     let muzzles = vec![[
-        Some(oag_core::math::Mat4::from_translation(Vec3::new(-1.0, 0.0, 2.0))),
-        Some(oag_core::math::Mat4::from_translation(Vec3::new(1.0, 0.0, 2.0))),
+        Some(oag_core::math::Mat4::from_translation(Vec3::new(
+            -1.0, 0.0, 2.0,
+        ))),
+        Some(oag_core::math::Mat4::from_translation(Vec3::new(
+            1.0, 0.0, 2.0,
+        ))),
     ]];
     let draw = crate::CannonDraw {
         look: None,
@@ -237,7 +241,16 @@ fn the_detonator_lights_are_the_values_the_render_queue_loads() {
 fn a_detonator_round_lights_its_muzzle_while_young() {
     let (mut race, draw) = firing_race();
     assert_eq!(race.detonator_cannon_lights(&draw).len(), 4);
-    for round in race.core.sim.world.detonator.cannon.rounds.iter_mut().take(2) {
+    for round in race
+        .core
+        .sim
+        .world
+        .detonator
+        .cannon
+        .rounds
+        .iter_mut()
+        .take(2)
+    {
         round.age = 0.2;
     }
     let lights = race.detonator_cannon_lights(&draw);
@@ -264,7 +277,10 @@ fn the_detonator_flash_is_rolled_every_tick_and_apart_per_round() {
     let (mut race, draw) = firing_race();
     let first = race.detonator_flash_matrices(&draw);
     assert_eq!(first.len(), 2);
-    assert_ne!(first[0].x_axis, first[1].x_axis, "left and right roll apart");
+    assert_ne!(
+        first[0].x_axis, first[1].x_axis,
+        "left and right roll apart"
+    );
     let mut sizes = Vec::new();
     let mut stretches = Vec::new();
     for tick in 0..64 {
