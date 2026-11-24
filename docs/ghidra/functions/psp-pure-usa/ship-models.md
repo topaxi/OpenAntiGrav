@@ -289,10 +289,17 @@ it set, `ship_classic.bnk` (`0x08a47708`) and `weapons_classic.bnk` (`0x08a47724
 `for_circuit`; `oag_raceplay::load`, one read of the circuit's manifest; a Zone race keeps the
 Zone banks). The byte also switches `WO_QUAKE_VR` and `vr_Mine.vex` (`weapons-gfx.md`, `quake.md`),
 not wired. It is an **independent flag** that the Classic circuits happen to set together with the
-type. `Data\Tex\vr_env.tga` has no string in `BOOT.BIN` (the strings `vr_` finds are `vr_bomb`,
+type. **`FUN_08848bf8` only walks the `LevelFx` element when `*(char *)(_DAT_0028a960 + 0x5ded) == 0`**
+(the decompile's own guard; what that byte is, a mode or replay flag, is unread), so a state that
+sets it would leave the VR byte clear whatever the manifest says. `Data\Tex\vr_env.tga` is not a
+selector's file: `BOOT.BIN` has no string for it (the `vr_` strings it does carry are `vr_bomb`,
 `vr_mine`, `vr_Bomb`, `vr_Mine`, `vr_shield`, `vr_shield_cockpit`, `vr_engine_noise.mip` and
-`vr_fxgrid1.mip`), so the model data names it, not a selector; the thread
-`pure-classic-league-vr-set` carries what is left.
+`vr_fxgrid1.mip`), and no `Data\Tex\vr_env.tga` entry is in `Data.wad` (name hash `c99d94ff`).
+The name is **embedded in each team's `VR\Ship.vex`**: `Z:\Data\Tex\vr_env.tga` appears twice in
+Feisar's, Piranha's and AG Systems' hulls (once in the texture block ahead of a 64x64 texture, once
+in the material), so the hull loads it with the model and our race load report names no miss for
+it. Confidence 85 (three of the eleven hulls read, strings and one texture header).
+The thread `pure-classic-league-vr-set` carries what is left.
 
 **Cross-title check (CLAUDE.md, "A 2048 finding is checked against Omega"):** *checked, differs*.
 `PI_Track` `type` census over the plugin definitions the source reads: Pulse 24 `Race`; HD 28
