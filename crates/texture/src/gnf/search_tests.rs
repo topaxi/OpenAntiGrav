@@ -4,7 +4,8 @@
 //! `Thin_1DThin` (`Thin_2DThin` is index 14), which is why it scored at chance
 //! across its whole space. `micro_tile_tests.rs` is the corrected investigation.
 //! `#[ignore]`d, needs real game data, in-crate because it needs `pub(crate)`
-//! `crate::bcn::bc7`.
+//! `crate::bcn::bc7`. The search prints only, so it returns early unless
+//! `OAG_SWEEP` is set.
 //!
 //! It includes `EgBasedLib::ComputeSurfaceAlignmentsMacroTiled`'s pre-alignment
 //! steps and `HwlReduceBankWidthHeight`'s per-format reduction (both
@@ -314,8 +315,11 @@ fn decode_with(blob: &[u8], texture: &Texture, cfg: &TileConfig) -> Vec<[u8; 4]>
 }
 
 #[test]
-#[ignore]
+#[ignore = "superseded search: prints only; set OAG_SWEEP to run it"]
 fn search_the_reduced_tile_config_space_against_multi_size_oracle_pairs() {
+    if std::env::var_os("OAG_SWEEP").is_none() {
+        return;
+    }
     let pairs = collect_oracle_pairs(6);
     println!("{} oracle pairs collected for the search", pairs.len());
     assert!(!pairs.is_empty(), "no oracle pairs found");

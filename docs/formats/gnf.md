@@ -421,7 +421,8 @@ right is not evidence by itself** - the same lesson `gxt.md`'s own
 "a smoothness metric was tried first and is too weak to use" records.
 
 *Second pass, five oracle pairs, measured -
-`crates/texture/src/gnf/search_tests.rs::search_the_reduced_tile_config_space_against_multi_size_oracle_pairs`.*
+`crates/texture/src/gnf/search_tests.rs::search_the_reduced_tile_config_space_against_multi_size_oracle_pairs`
+(prints only, so it returns early unless `OAG_SWEEP` is set: `OAG_SWEEP=1 cargo nextest run -p oag-texture --run-ignored all --no-capture -E 'test(/search_the_reduced_tile_config_space/)'`).*
 A properly bounded search over all 14 AMD `pipe_config` values, `num_banks`
 in `{2,4,8,16}`, starting `bank_width`/`bank_height`/`macro_tile_aspect` in
 `{1,2,4,8}` each, and a DRAM row-size constant in `{1024,2048,4096}` bytes -
