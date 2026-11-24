@@ -1155,7 +1155,7 @@ fn trail_order_is_seeded_only_where_the_ribbon_is_the_psp_preset() {
             .any(|(key, _)| key == "graphics.trail_order")
     };
     assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
-    assert!(!seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
     assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
 }
 
@@ -1209,7 +1209,7 @@ fn weather_is_seeded_only_where_the_weather_is_played() {
             .any(|(key, _)| key == "graphics.weather")
     };
     assert!(seeded(oag_pulse::TITLE, oag_disc::Platform::Psp));
-    assert!(seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
+    assert!(!seeded(oag_pure::TITLE, oag_disc::Platform::Psp));
     assert!(!seeded(oag_hd::TITLE, oag_disc::Platform::Ps3));
 }
 
