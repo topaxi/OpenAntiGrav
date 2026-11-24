@@ -64,6 +64,12 @@ fn a_bad_script_names_its_line_and_the_fault() {
         ("select a b", "one row"),
         ("config controls.menu_back", "not setting=value"),
         ("config a=b c=d", "one setting=value"),
+        ("config graphics.renderer=vulkan", "does not apply"),
+        ("config display.window_mode=borderless", "does not apply"),
+        (
+            "config controls.menu_back=bad",
+            "takes original, circle, triangle",
+        ),
         ("until stage=menu within soon", "not a number"),
         ("select \"open", "never closed"),
     ] {
@@ -248,5 +254,17 @@ fn touch_steps_parse_and_name_what_is_wrong() {
     for (_, step) in &script.steps {
         let again = Script::parse(&step.to_string()).unwrap();
         assert_eq!(&again.steps[0].1, step);
+    }
+}
+
+#[test]
+fn config_takes_every_value_of_the_settings_it_applies_and_no_other() {
+    for (setting, values) in crate::drive::script::CONFIG_SETTINGS {
+        assert_eq!(*setting, "controls.menu_back");
+        let named: Vec<&str> = oag_title::prompts::MenuBack::ALL
+            .iter()
+            .map(|choice| choice.name())
+            .collect();
+        assert_eq!(&named[..], *values);
     }
 }

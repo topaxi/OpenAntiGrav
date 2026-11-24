@@ -954,6 +954,52 @@ fn leaves_on_the_resolved_button(image: &Path, screen: &Screen, original: &'stat
     profile.drive_on(image, &script, "folded.jsonl");
 }
 
+/// MENU BACK read from `settings.toml` at boot, which the folded tests above do not do for
+/// `circle` and `triangle` (they switch to those with `config`): the RACE page's footer shows the
+/// resolved Back, the button that is not Back leaves nothing and Back leaves.
+fn boots_under_menu_back(image: &Path, original: &'static str, choice: &str) {
+    let profile = Profile::fresh(&format!("boot-{choice}-{original}"));
+    let (back, other) = buttons(original, choice);
+    profile.menu_back(choice);
+    profile.drive_on(
+        image,
+        &format!(
+            "{}; ticks 20; draw; expect hints={back}; press {other}; ticks 30; expect {}; \
+             press {back}; ticks 30; expect {}",
+            RACE_PAGE.reach, RACE_PAGE.here, RACE_PAGE.away
+        ),
+        "booted.jsonl",
+    );
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_boots_under_menu_back_circle() {
+    let Some(image) = ps2() else { return };
+    boots_under_menu_back(&image, "triangle", "circle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-ps2-eu.chd"]
+fn pulse_ps2_boots_under_menu_back_triangle() {
+    let Some(image) = ps2() else { return };
+    boots_under_menu_back(&image, "triangle", "triangle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_boots_under_menu_back_circle() {
+    let Some(image) = psp() else { return };
+    boots_under_menu_back(&image, "circle", "circle");
+}
+
+#[test]
+#[ignore = "needs data/images/pulse-psp-eu.chd"]
+fn pulse_psp_boots_under_menu_back_triangle() {
+    let Some(image) = psp() else { return };
+    boots_under_menu_back(&image, "circle", "triangle");
+}
+
 fn ps2() -> Option<std::path::PathBuf> {
     oag_testdata::image("pulse-ps2-eu.chd")
 }
