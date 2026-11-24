@@ -104,11 +104,11 @@ impl Slide {
 
     /// Advances `dt` seconds toward `target` of `count` entries.
     pub fn tick(&mut self, dt: f32, target: usize, count: usize) {
-        let ease = if (dt * 60.0 - 1.0).abs() < 1e-3 {
-            RING_EASE
-        } else {
-            RING_EASE.powf(dt * 60.0)
-        };
+        // Per 60 Hz frame of time: whole frames halve, a part of one eases linearly.
+        let frames = (dt * 60.0).max(0.0);
+        let whole = (frames + 1e-3).floor();
+        let part = (frames - whole).max(0.0);
+        let ease = RING_EASE.powi(whole as i32) * (1.0 - (1.0 - RING_EASE) * part);
         if self.moving() {
             self.age += dt;
             self.ring *= ease;
