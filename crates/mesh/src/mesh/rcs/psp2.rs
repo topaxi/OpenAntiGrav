@@ -210,11 +210,21 @@ pub fn build_circuit(
     )
 }
 
-/// Whether a material file is one of the circuit's own pads: HD's two pad programs
-/// (`super::pads::is_pad_material`) and 2048's `speed_pads`.
+/// Whether a material file is one of the circuit's own pads: `weapon_pads`, `speed_pads` or
+/// `speedup_material`, whatever the case or separator, with or without the PS4 Pro `_1`/`_2`
+/// suffix.
 fn is_circuit_pad_material(name: &str) -> bool {
-    super::pads::is_pad_material(name)
-        || name.rsplit('/').next().unwrap_or(name) == "speed_pads.rcsmaterial"
+    let leaf = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(name)
+        .to_ascii_lowercase();
+    let stem = leaf.trim_suffix(".rcsmaterial");
+    let stem = stem
+        .strip_suffix("_1")
+        .or_else(|| stem.strip_suffix("_2"))
+        .unwrap_or(stem);
+    matches!(stem, "weapon_pads" | "speed_pads" | "speedup_material")
 }
 
 /// Whether a submesh is one of the circuit's own pads: on a pad material
@@ -1363,4 +1373,30 @@ fn finish_bounds(model: &mut Model) {
         })
         .fold(0.0f32, f32::max)
         .sqrt();
+}
+
+#[cfg(test)]
+mod pad_name_tests {
+    use super::is_circuit_pad_material;
+
+    #[test]
+    fn pad_materials_match_in_any_case_separator_and_suffix() {
+        for name in [
+            "data/environments/x/materials/weapon_pads.rcsmaterial",
+            "Data\\Environments2048\\x\\Materials\\Speed_Pads.rcsmaterial",
+            "materials/Speedup_Material.rcsmaterial",
+            "materials/weapon_pads_1.rcsmaterial",
+            "materials/WEAPON_PADS_2.rcsmaterial",
+        ] {
+            assert!(is_circuit_pad_material(name), "{name}");
+        }
+        for name in [
+            "materials/diffuse_normal_specular_emmissive.rcsmaterial",
+            "materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial",
+            "materials/chevron_facing_material.rcsmaterial",
+            "materials/speed_pads_extra.rcsmaterial",
+        ] {
+            assert!(!is_circuit_pad_material(name), "{name}");
+        }
+    }
 }
