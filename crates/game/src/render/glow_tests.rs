@@ -248,3 +248,114 @@ fn a_solid_triangle_fills_its_area_in_its_one_colour() {
     assert_eq!(red(&frame, 270, 170), 0, "beyond the hypotenuse");
     assert_eq!(red(&frame, 190, 90), 0, "outside the bounding box");
 }
+
+/// A sheet of two texels: opaque white, then white with no alpha.
+fn half_transparent_sheet() -> oag_hud::sprite::Sheet {
+    let mut sheet = oag_hud::sprite::Sheet::default();
+    sheet.width = 2;
+    sheet.rgba = vec![255, 255, 255, 255, 255, 255, 255, 0];
+    sheet
+}
+
+/// A white square under a sprite whose left half is opaque and whose right half is transparent,
+/// then `stamp`.
+fn half_sprite_list(stamp: Draw) -> Vec<Draw> {
+    vec![
+        Draw::Fill {
+            rect: RECT,
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        Draw::Sprite {
+            rect: RECT,
+            uv: [0.0, 0.0, 2.0, 1.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        stamp,
+    ]
+}
+
+/// A `Draw::GlowTexel` writes the sprite's texel alpha, not its rectangle: the stamped half blooms
+/// and the half whose texels have no alpha does not, though a white square shows through it. The
+/// same sprite stamped as a rectangle blooms past both edges.
+#[test]
+fn a_texel_stamp_blooms_where_the_sprite_is_opaque_and_nowhere_else() {
+    let sheet = half_transparent_sheet();
+    let (Some(texel), Some(rectangle)) = (
+        frame_with(&half_sprite_list(Draw::GlowTexel), &sheet),
+        frame_with(
+            &half_sprite_list(Draw::GlowStamp {
+                rect: RECT,
+                value: 255,
+            }),
+            &sheet,
+        ),
+    ) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let left = (195, 120);
+    let right = (250, 120);
+    assert!(
+        red(&texel, left.0, left.1) >= 4,
+        "the opaque half blooms past its edge, got {}",
+        red(&texel, left.0, left.1)
+    );
+    assert_eq!(
+        red(&texel, right.0, right.1),
+        0,
+        "the transparent half stamps nothing, so nothing blooms past its edge"
+    );
+    assert!(
+        red(&rectangle, right.0, right.1) >= 4,
+        "the rectangle stamp covers both halves, got {}",
+        red(&rectangle, right.0, right.1)
+    );
+    assert_eq!(
+        red(&texel, 20, 20),
+        0,
+        "far from the sprite nothing is added"
+    );
+}
+
+/// Where the fill of the test below sits: its glow, were it stamped, reaches a few pixels left of its
+/// edge, which no stamp of the sprite's reaches.
+const FILL: [f32; 4] = [260.0, 100.0, 40.0, 40.0];
+
+/// A texel stamp after a draw that is not a sprite stamps nothing, so nothing blooms: neither the
+/// earlier sprite's quads (a `last_sprite` that was not cleared) nor the fill's.
+#[test]
+fn a_texel_stamp_after_a_fill_blooms_nothing() {
+    let list = [
+        Draw::Sprite {
+            rect: RECT,
+            uv: [0.0, 0.0, 2.0, 1.0],
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        Draw::Fill {
+            rect: FILL,
+            color: [1.0, 1.0, 1.0, 1.0],
+        },
+        Draw::GlowTexel,
+    ];
+    let Some(frame) = frame_with(&list, &half_transparent_sheet()) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    assert_eq!(
+        red(&frame, 195, 120),
+        0,
+        "the sprite was not the draw before the stamp"
+    );
+    assert_eq!(red(&frame, 256, 120), 0, "nor was the fill a sprite");
+}
+
+/// The PS2 chain's picture is the letterboxed one: on the display's own aspect it is the whole
+/// viewport, and in a taller window it is the centred band the screen is fitted into, so the
+/// composite's `5/640` and `5/448` are fractions of the picture and not of the bars around it.
+#[test]
+fn the_ps2_chain_reads_the_letterboxed_picture() {
+    let wide = 16.0 / 9.0;
+    assert_eq!(picture_rect((1280, 720), wide), ((0.0, 0.0), (1280, 720)));
+    assert_eq!(picture_rect((1280, 960), wide), ((0.0, 120.0), (1280, 720)));
+    assert_eq!(picture_rect((1600, 720), wide), ((160.0, 0.0), (1280, 720)));
+}

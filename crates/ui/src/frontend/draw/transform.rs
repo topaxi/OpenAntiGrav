@@ -41,6 +41,7 @@ impl Draw {
             | Self::SceneBackdrop(_)
             | Self::GlowStamp { .. }
             | Self::GlowText { .. }
+            | Self::GlowTexel
             | Self::Triangles(_) => None,
         }
     }
@@ -134,12 +135,13 @@ impl Draw {
                 }
             }
             // A movie and the point-cloud pass have no alpha channel to fade
-            // and are never part of a page; a text's glow stamp follows its glyph quads, which
-            // moved with the text.
+            // and are never part of a page; a text's or a sprite's glow stamp follows the quads
+            // of the draw before it, which moved with it.
             Self::Video { .. }
             | Self::FuryBackdrop(_)
             | Self::SceneBackdrop(_)
-            | Self::GlowText { .. } => {}
+            | Self::GlowText { .. }
+            | Self::GlowTexel => {}
         }
     }
 
@@ -168,7 +170,10 @@ impl Draw {
                     point[0] += dx;
                 }
             }
-            Self::FuryBackdrop(_) | Self::SceneBackdrop(_) | Self::GlowText { .. } => {}
+            Self::FuryBackdrop(_)
+            | Self::SceneBackdrop(_)
+            | Self::GlowText { .. }
+            | Self::GlowTexel => {}
         }
     }
 

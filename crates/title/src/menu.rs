@@ -304,6 +304,20 @@ pub struct MenuSkin {
     /// halo the original lacks. Why the counter does not reach the PS2 pixels is not known.
     /// Texts that stamp a fixed `RealGlow` are not covered: nothing has measured them on PS2.
     pub pulse_text_glow: bool,
+    /// Whether the glow mask the frame-end bloom reads is the PS2's: the framebuffer's alpha,
+    /// cleared to `0`, written by the `Selector` alone at its own texel alpha, and bloomed by the
+    /// PS2's chain (`oag_post::ps2_bloom`) instead of the PSP's stencil mask and chain.
+    ///
+    /// `false` is Pulse PSP's measured behaviour (`docs/rendering/glow-mask.md`). **Pulse PS2 is
+    /// `true`, measured**, confidence 85: GS dumps of settled Grid Selection and Cell Selection list
+    /// the same five bloom passes as a race (a 320 x 224 downsample, seven taps `16 32 32 64 32 32
+    /// 16` per axis, a composite five pixels up and left with `FIX` `0x40`) and exactly two
+    /// groups that write the frame's alpha: the clear to `0` and the 56 x 56 `Selector` quad
+    /// (`FBMSK` 0, alpha test with `AFAIL` = FB only, so every fragment lands), whose written alpha
+    /// is the texel's times the vertex colour's `127/128`. Nothing else on either screen writes
+    /// alpha, the card title and the footer included (`docs/ui/campaign-screens.md`, "The
+    /// selector's halo on Pulse PS2").
+    pub glow_by_texel: bool,
     /// How long a page change takes, in seconds. Authored, `transition=`. Seconds,
     /// confirmed: Pulse's `Main Menu` is authored `0.5` and runs about 13 presented
     /// frames at the front end's 30 Hz.
@@ -597,6 +611,7 @@ mod tests {
         selected_pulse_period_secs: Some(1.1),
         selector_origin: None,
         pulse_text_glow: true,
+        glow_by_texel: false,
         transition_secs: 0.5,
         // Pulse's discs author no `<HorizMenu>`.
         strip: None,

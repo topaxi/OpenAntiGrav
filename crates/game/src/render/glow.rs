@@ -11,6 +11,10 @@
 //! target's alpha to the mask ([`BACKGROUND`] then each [`Draw::GlowStamp`](oag_ui::frontend::Draw)
 //! in list order, a pipeline that writes the alpha channel alone), runs `oag_post::bloom`'s bright
 //! pass and blurs over it, and composites the result onto the real target after the list.
+//!
+//! Pulse PS2's front end blooms through its own chain over its own mask
+//! ([`oag_title::MenuSkin::glow_by_texel`]): the alpha is cleared to `0`, a [`Stamp::Texel`] writes
+//! the quad's texel alpha, and `oag_post::ps2_bloom` reads it.
 
 use anyhow::Result;
 
@@ -20,12 +24,21 @@ use super::quad::{ATTRIBUTES, Quad};
 /// front-end screen (a `4` on 127,242 of the 130,560 visible pixels of Grid Selection).
 pub(super) const BACKGROUND: u8 = 4;
 
+/// What the PS2's frame clear leaves in the framebuffer's alpha (`docs/rendering/ps2-bloom.md`,
+/// "The mask, measured": the PS2 has no floor of `4`).
+pub(super) const PS2_BACKGROUND: u8 = 0;
+
+/// The PS2 front end's frame, which its bloom composite's `-5, -5` is measured in.
+const FRONT_END_FRAME: (f32, f32) = (640.0, 448.0);
+
 /// A rectangle larger than any grid, so the background stamp covers the whole viewport.
 const EVERYWHERE: [f32; 4] = [-65_536.0, -65_536.0, 131_072.0, 131_072.0];
 
 /// The scratch frame and the bloom that reads it.
 pub(super) struct Glow {
     pub(super) bloom: oag_post::bloom::Bloom,
+    /// Pulse PS2's chain, built the first time a list's mask is the PS2's.
+    pub(super) ps2: Option<oag_post::ps2_bloom::Ps2Bloom>,
     /// The ui vertex stage with `fs_stamp`, writing the alpha channel and nothing else.
     pipeline: wgpu::RenderPipeline,
     scratch: Option<Scratch>,
@@ -88,9 +101,26 @@ impl Glow {
         });
         Ok(Self {
             bloom: oag_post::bloom::Bloom::new(device, format)?,
+            ps2: None,
             pipeline,
             scratch: None,
         })
+    }
+
+    /// The PS2's chain, built on first use.
+    pub(super) fn ps2_bloom(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+    ) -> Result<&oag_post::ps2_bloom::Ps2Bloom> {
+        if self.ps2.is_none() {
+            self.ps2 = Some(oag_post::ps2_bloom::Ps2Bloom::with_frame(
+                device,
+                format,
+                FRONT_END_FRAME,
+            )?);
+        }
+        Ok(self.ps2.as_ref().expect("built above"))
     }
 
     /// The scratch target for a `size` viewport, rebuilt when the size changes.
@@ -161,8 +191,24 @@ impl Glow {
     }
 }
 
-/// The instances of a mask: the background, then each stamp in list order.
-pub(super) fn mask_quads(stamps: &[([f32; 4], u8)]) -> Vec<Quad> {
+/// One write into the glow mask.
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Stamp {
+    /// A rectangle at a stencil reference: the PSP's rule.
+    Value([f32; 4], u8),
+    /// A sprite's own quad at its texel alpha times its colour's alpha: the PS2's rule.
+    Texel(Quad),
+}
+
+/// Whether `stamps` is a PS2 mask: one write by texel makes the whole frame's rule the PS2's.
+pub(super) fn is_ps2_mask(stamps: &[Stamp]) -> bool {
+    stamps.iter().any(|stamp| matches!(stamp, Stamp::Texel(_)))
+}
+
+/// The instances of a mask: the background, then each stamp in list order. A PS2 mask
+/// ([`is_ps2_mask`]) clears to [`PS2_BACKGROUND`] and has no stencil references, so it drops the
+/// [`Stamp::Value`]s.
+pub(super) fn mask_quads(stamps: &[Stamp]) -> Vec<Quad> {
     let quad = |rect: [f32; 4], value: u8| Quad {
         rect,
         uv: [0.0; 4],
@@ -174,7 +220,12 @@ pub(super) fn mask_quads(stamps: &[([f32; 4], u8)]) -> Vec<Quad> {
         tile: [0.0; 2],
         warp: [0.0; 4],
     };
-    std::iter::once(quad(EVERYWHERE, BACKGROUND))
-        .chain(stamps.iter().map(|&(rect, value)| quad(rect, value)))
+    let ps2 = is_ps2_mask(stamps);
+    let background = if ps2 { PS2_BACKGROUND } else { BACKGROUND };
+    std::iter::once(quad(EVERYWHERE, background))
+        .chain(stamps.iter().filter_map(|stamp| match *stamp {
+            Stamp::Value(rect, value) => (!ps2).then(|| quad(rect, value)),
+            Stamp::Texel(sprite) => Some(sprite),
+        }))
         .collect()
 }

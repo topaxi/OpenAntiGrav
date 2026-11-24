@@ -722,6 +722,13 @@ impl Skin {
         self.skin.pulse_text_glow
     }
 
+    /// Whether the front end's glow mask is the PS2's, stamped by the `Selector`'s texel alpha. See
+    /// [`oag_title::MenuSkin::glow_by_texel`].
+    #[must_use]
+    pub fn glow_by_texel(&self) -> bool {
+        self.skin.glow_by_texel
+    }
+
     /// Where the screen title sits, and how big.
     ///
     /// The scale is dimensionless and stays as authored: it multiplies a face
@@ -1005,6 +1012,7 @@ mod tests {
         selected_pulse_period_secs: Some(1.1),
         selector_origin: None,
         pulse_text_glow: true,
+        glow_by_texel: false,
         transition_secs: 0.5,
         strip: None,
         blocks: None,
@@ -1079,6 +1087,7 @@ mod tests {
             selected_pulse_period_secs: None,
             selector_origin: None,
             pulse_text_glow: true,
+            glow_by_texel: false,
             ..PULSING
         };
         let mut skin = Skin::new(&FLAT, oag_display::space::Space::PSP, 22.0);

@@ -122,8 +122,10 @@ between two grabs is 1 on Grid and 0 on Cell. Ours rendered at each of the 11 st
 Cell grab scores 35.1 % of the title box over 40 grey at `s = 0` falling steadily to 10.9 % at
 `s = 135` and 150: the original reads as ours' dimmest step whatever its ladder holds. So the PS2
 draws `SINGLE RACE` and `GRID 1` with no visible pulse, and ours' bright halo at the ladder's top
-is ours' alone. Which part of `Text_Draw`'s output never lands (the white-to-colour lerp of a
-white text, the glow pass's alpha on a target the PS2 does not composite) is not read.
+is ours' alone. Which part of `Text_Draw`'s output never lands: **read since** (`ps2-selector-halo`, GS dumps of both
+screens): the title's draw carries `FBMSK 0xff000000`, so it writes no alpha and the bloom has nothing of it to read; only the
+`Selector`'s quad writes the frame's alpha (`docs/ui/campaign-screens.md`, "The selector's halo on Pulse PS2 ..."), and the
+stamp `Selector + 0xfc` never reaches it either.
 **Confidence 80** on "no visible pulse" (three grabs per screen, pixel-identical; one sweep).
 `--menu-title-seconds` is therefore not passed on PS2 (a value that fits by accident is a
 stand-in). Ours now draws the PS2's `pulse="true"` card title with no glow stamp

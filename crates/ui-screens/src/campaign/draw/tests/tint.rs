@@ -205,6 +205,78 @@ fn the_ps2_card_title_stamps_no_glow_where_the_psp_one_does() {
     assert_eq!(stamps(&ps2), (0, 0), "PS2: the title stamps nothing");
 }
 
+/// Pulse PS2's `Selector` writes its texel alpha into the glow mask (`MenuSkin::glow_by_texel`):
+/// the sprite is followed by a `Draw::GlowTexel` and no rectangle stamp, on Grid Selection and on
+/// Cell Selection, while the PSP skin stamps the quad's rectangle at the pulse's value. Dropping
+/// the skin field, or reading it nowhere, puts the PSP's whole-quad stamp back on the PS2.
+#[test]
+fn the_ps2_selector_stamps_its_texels_where_the_psp_one_stamps_its_quad() {
+    let grid = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    }]);
+    let cell = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    let ps2 = Skin::new(
+        oag_pulse::FRONT_END.menu_ps2.unwrap(),
+        oag_display::space::Space::PS2,
+        22.0,
+    );
+    let stamps = |skin: &Skin| {
+        let count = |layers: Layers| {
+            let sprite = layers
+                .body
+                .iter()
+                .position(|draw| matches!(draw, Draw::GlowTexel))
+                .map(|at| matches!(layers.body[at - 1], Draw::Sprite { .. }));
+            let rectangles = layers
+                .body
+                .iter()
+                .filter(|draw| matches!(draw, Draw::GlowStamp { .. }))
+                .count();
+            (sprite, rectangles)
+        };
+        let grid_layers = grid_draw_list(
+            &grid,
+            &grid_layout(),
+            skin,
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        let cell_layers = cell_draw_list(
+            &cell,
+            &cell_layout(),
+            skin,
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        (count(grid_layers), count(cell_layers))
+    };
+    assert_eq!(
+        stamps(&skin()),
+        ((None, 1), (None, 1)),
+        "PSP: one rectangle stamp, no texel stamp"
+    );
+    assert_eq!(
+        stamps(&ps2),
+        ((Some(true), 0), (Some(true), 0)),
+        "PS2: a texel stamp right after the sprite, no rectangle stamp"
+    );
+}
+
 /// `Outline_x_y` draws `TIER_OUTLINE_TINT` on `Grid Selection` - both the
 /// unlocked hex (`Outline_0_0`) and the locked one behind it
 /// (`Outline_1_0`) get the same dim cyan-teal tile colour
