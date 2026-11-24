@@ -278,14 +278,11 @@ mod tests {
     }
 
     #[test]
-    fn the_recorded_controls_are_drawn_again_and_a_blur_is_said_not_to_be() {
+    fn the_recorded_controls_are_drawn_again() {
         let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
         let picture = shot_meta::Picture {
             exposure: 60,
             saturation: 20,
-            motion_blur: "track".to_string(),
-            shutter: Some(40),
-            frames: 120,
             ..shot_meta::Picture::default()
         };
         let lines = picture_lines(&meta("photo mode", Some(picture)), &mut cli);
@@ -297,10 +294,40 @@ mod tests {
             lines[0].starts_with("picture controls applied"),
             "{lines:?}"
         );
-        assert!(
-            lines.iter().any(|line| line.contains("track motion blur")),
-            "{lines:?}"
-        );
+    }
+
+    fn blurred(kind: &str, mount: Option<shot_meta::Mount>) -> shot_meta::Meta {
+        let picture = shot_meta::Picture {
+            motion_blur: kind.to_string(),
+            shutter: Some(40),
+            frames: 120,
+            ..shot_meta::Picture::default()
+        };
+        let mut meta = meta("photo mode", Some(picture));
+        meta.camera = Some(shot_meta::Camera {
+            mount,
+            ..shot_meta::Camera::default()
+        });
+        meta
+    }
+
+    #[test]
+    fn a_motion_blur_is_drawn_from_its_frames_and_a_track_blur_needs_its_mount() {
+        let mount = shot_meta::Mount {
+            follow: "craft".to_string(),
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            ..shot_meta::Mount::default()
+        };
+        let (ship, line) = blurred_of(&blurred("ship", None));
+        assert!(ship.is_some_and(|ship| ship.mount.is_none()));
+        assert!(line.is_some_and(|line| line.contains("drawing its frames")));
+        let (track, line) = blurred_of(&blurred("track", Some(mount)));
+        assert!(track.is_some_and(|track| track.mount.is_some() && track.frames == 120));
+        assert!(line.is_some_and(|line| line.contains("track motion blur")));
+        let (old, line) = blurred_of(&blurred("track", None));
+        assert!(old.is_none());
+        assert!(line.is_some_and(|line| line.contains("predates the camera mount")));
+        assert_eq!(blurred_of(&meta("photo mode", None)), (None, None));
     }
 
     #[test]

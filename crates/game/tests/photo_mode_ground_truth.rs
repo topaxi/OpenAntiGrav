@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+mod from_png_blur;
 mod native_shot;
 mod picture_controls;
 mod shot_fidelity;
@@ -1013,6 +1014,8 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
         "a ship blur smeared the scenery the camera holds: {}",
         kept(&ship, SCENERY)
     );
+    // `--from-png` draws the same shots again from their frames.
+    from_png_blur::blurred_shots_are_drawn_again(GAME, &image, &run, &photos);
     // Any input abandons a shot under way, and the rest of the shot is not written.
     let abandoned = drive(
         &image,

@@ -572,7 +572,7 @@ pub struct Context {
 }
 
 /// A motion blur shot as its text recorded it, to be drawn as the frames it was made of.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Blurred {
     /// The controls, with the blur.
     pub effects: Effects,

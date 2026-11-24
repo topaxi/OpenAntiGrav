@@ -22,6 +22,7 @@ UTF-8, uncompressed, TOML text (`oag-game --png-info FILE` prints it). Sections:
 | `[title]` | `name`, `serial` (the disc's, which names the pressing), `platform` |
 | `[race]` | `track` (the archive entry, never a path), `mode`, `class`, `team`, `seed` |
 | `[camera]` | `lens`, `eye`, `forward`, `up`, `fov_deg`: the free lens included; absent for a shot with no camera of its own |
+| `[camera.mount]` | written by a **track blur** shot only: how the camera follows its craft, so that each frame of the blur is drawn with it on the craft of its own tick (`oag_raceplay::photo::mount`). `follow` (`craft`: `eye` and `rotation` in the craft's frame, as the `internal` and `close` lenses are; `offset`: the eye relative to the craft in world axes at a world `rotation`, the free lens; `node`: `eye` is the circuit camera node the shot stood on, `rotation` the roll on top of the aim at the craft, the `track` lens), `subject` (the grid slot framed), `eye`, `rotation` (quaternion `x, y, z, w`), `fov_deg`. A ship blur holds the camera, which `[camera]` already gives. A track blur that predates this key is drawn again as one frame, and says so |
 | `[picture]` | photo mode's picture controls, written on every photo mode shot, opening values included (a photo without it predates the keys): `exposure`, `saturation`, `speed_blur`, `depth_of_field` with `aperture` and `focus`, and with a motion blur `motion_blur` (`track` or `ship`), `shutter`, and `frames` (the number averaged); the panel's `0..=100` values |
 | `[craft]` | position and rotation quaternion of the framed craft |
 | `[render]` | the title's render profile as the settings file spells it (scale, MSAA, reconstruction, motion blur, ...) |
@@ -71,8 +72,20 @@ rebuild runs exactly the listed modules and **refuses by name**, before a tick, 
 machine lacks or has another build of. The re-render draws the picture controls in `[picture]` (it prints
 `from-png: picture controls applied: ...`, from `--picture`, which also sits in `reproduce.flags`), or
 for a photo-mode shot without the section prints `no picture controls recorded: the shot predates
-them, so it is drawn without any`. Like the mode, it draws none of the game's own motion blur (`--motion-blur` still overrides). It is one frame: a motion blur shot is drawn without
-its blur and the output says so. The re-render draws
+them, so it is drawn without any`. Like the mode, it draws none of the game's own motion blur (`--motion-blur` still overrides). **A motion blur shot is drawn from its frames**:
+the plan the recorded kind, shutter and frame count make (`oag_raceplay::photo::shot::Plan::of`), as the mode took it, with the
+race driven to the tick before the first frame and each frame drawn as the race passes its tick, at the alpha and lens sample the plan gives. A track blur has the camera ride the craft
+(`[camera.mount]`), a ship blur holds the camera of the shot's tick. Each frame is read back before the grade, without the HUD, the
+frames are averaged in 16 bits a channel and the HUD is drawn once over the average, as the session does (`oag-game`'s `photo::average`). The output says
+`from-png: the shot is a track motion blur (...); drawing its frames` and `drew N frames from tick A to tick B`; a title whose photo mode
+does not accumulate, a split screen or a track blur with no mount draws the one frame and says so. **A speed blur's ring has the history the paused mode
+had**: the ring is drawn for 40 ticks of its own at the shot's moment before the frame is kept (its history weighs at most `0.25` a frame, so it has settled). Measured on HD (Anulpha Pass, tick 702, 1440x816, mean absolute difference
+of the redraw from the saved shot over the whole picture, HUD on in both): a track blur 0.75 from its frames (11.2 from the one frame it used to be), a
+ship blur 0.75 (2.05); the floor, a plain shot against its redraw, is 0.75 to 1.1 (the HUD's own state). A speed blur at 100, along the two sides where the streak
+lands (0.25 to 0.70 of the height): 1.10 and 1.38 against 2.11 and 4.10 with no history, for a shot taken after another in the visit.
+**The first shot of a visit to the mode carries a history the settled ring does not reproduce** (its streak is stronger; the redraw is 4.2 and 7.4 from it, 3.4 and 9.2 before): two shots of one scene in one visit
+differ by 3.5 on average, and the cause (what the preview frames left in the ring's history before the first shot) was not found.
+The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
 there. A photo's re-render turns the visibility sets off, as photo mode does, and draws with the render scale and anti-aliasing of the photo's `[render]` section (at least 100 % and no upscaler) whatever the run's render flags (`docs/ui/photo-mode.md`, "A shot is drawn at the output's size"). **Default mods**: the
 mods that ship enabled in a dev checkout (`oag.energy-turbo` among them) run a simulation module, so
