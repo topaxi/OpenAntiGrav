@@ -197,7 +197,8 @@ struct TrackInfo {
 
 /// A CHD file exposed as a sector source.
 pub struct ChdSource {
-    chd: Chd<BufReader<crate::mount::ImageFile>>,
+    /// `None` only while [`Drop`] hands the handle to the pool.
+    chd: Option<Chd<BufReader<crate::mount::ImageFile>>>,
     path: PathBuf,
     layout: UnitLayout,
     sectors_per_hunk: u32,
@@ -205,6 +206,9 @@ pub struct ChdSource {
     hunk_buf: Vec<u8>,
     compressed_buf: Vec<u8>,
     cached_hunk: Option<u32>,
+    /// What the file was when it was opened, the pool's key.
+    #[cfg(not(target_arch = "wasm32"))]
+    stamp: Option<pool::Identity>,
 }
 
 impl std::fmt::Debug for ChdSource {
@@ -232,6 +236,26 @@ impl ChdSource {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         let file = crate::mount::open(&path).map_err(|e| Error::io(&path, e))?;
+        #[cfg(not(target_arch = "wasm32"))]
+        let stamp = pool::Identity::of(&file, &path);
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(source) = stamp.and_then(|stamp| pool::take(&path, stamp)) {
+            return Ok(source);
+        }
+        Self::open_file(
+            path,
+            file,
+            #[cfg(not(target_arch = "wasm32"))]
+            stamp,
+        )
+    }
+
+    /// Decodes the hunk map of the opened `file`, which is most of what [`Self::open`] costs.
+    fn open_file(
+        path: PathBuf,
+        file: crate::mount::ImageFile,
+        #[cfg(not(target_arch = "wasm32"))] stamp: Option<pool::Identity>,
+    ) -> Result<Self> {
         let mut chd = Chd::open(BufReader::new(file), None)?;
 
         let tracks = read_tracks(&mut chd);
@@ -281,7 +305,7 @@ impl ChdSource {
         let hunk_buf = chd.get_hunksized_buffer();
 
         Ok(Self {
-            chd,
+            chd: Some(chd),
             path,
             layout,
             sectors_per_hunk,
@@ -289,6 +313,8 @@ impl ChdSource {
             hunk_buf,
             compressed_buf: Vec::new(),
             cached_hunk: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            stamp,
         })
     }
 
@@ -307,6 +333,8 @@ impl ChdSource {
         // a hunk whose buffer contents are actually from the previous one.
         self.cached_hunk = None;
         self.chd
+            .as_mut()
+            .expect("a CHD handle is present until the source is dropped")
             .hunk(hunk)?
             .read_hunk_in(&mut self.compressed_buf, &mut self.hunk_buf)?;
         self.cached_hunk = Some(hunk);
@@ -407,6 +435,16 @@ impl ChdSource {
         Ok(())
     }
 }
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for ChdSource {
+    fn drop(&mut self) {
+        pool::give_back(self);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod pool;
 
 /// Reads the track table from a CHD's `CHTR`/`CHT2` metadata.
 ///

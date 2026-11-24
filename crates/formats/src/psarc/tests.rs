@@ -552,3 +552,25 @@ fn a_block_is_inflated_only_when_its_whole_stream_checks_out() {
     ));
     assert_eq!(out, plain, "the reused decompressor starts clean");
 }
+
+/// A path's digest is the MD5 of its uppercase spelling whichever way it is uppercased: bytewise
+/// for a short ASCII path, and by `to_uppercase` for a long one or one that is not ASCII (where
+/// one letter can become two).
+#[test]
+fn a_path_digest_is_the_md5_of_the_uppercased_path() {
+    let long = format!("/data/{}.gxt", "long_directory_name/".repeat(12));
+    assert!(long.len() > 192);
+    for path in [
+        "/data/fe/fonts/chinese.fnt",
+        "/Data/Mixed_Case/file.TXT",
+        long.as_str(),
+        "/data/stra\u{df}e/file.txt",
+        "",
+    ] {
+        assert_eq!(
+            path_digest(path),
+            super::md5::digest(path.to_uppercase().as_bytes()),
+            "{path:?}"
+        );
+    }
+}
