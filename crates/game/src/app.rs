@@ -57,7 +57,7 @@ use crate::app::handler::App;
 use crate::app::headless::{run_race, run_windowless};
 use crate::app::pose::{
     field_from_csv, parse_camera_pose, parse_head_to_head, parse_hud_state, parse_pose,
-    pose_from_trace,
+    parse_shield_flash, pose_from_trace,
 };
 
 /// Installs the sink every `log` call in this workspace ends up in.
@@ -431,6 +431,11 @@ fn run(mut cli: Cli) -> Result<()> {
                 oag_tables::weapons::Weapon::from_type(name)
                     .with_context(|| format!("--hud-pickup {name:?} is not a weapon's type"))
             })
+            .transpose()?;
+        hud.shield_flash = cli
+            .hud_shield_flash
+            .as_deref()
+            .map(parse_shield_flash)
             .transpose()?;
         hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
             artist: cli.hud_song_artist.clone(),

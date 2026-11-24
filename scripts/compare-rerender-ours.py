@@ -131,6 +131,9 @@ def rerender(pj, binary):
     # are the readout's, so a pair whose record names one but whose flags lack it keeps the row on a re-render.
     if "--hud-state" in flags and "--hud-pickup" not in flags and rec["profile"] == "pulse-psp" and not running:
         flags += ce.held_pickup_flags(held.get("held_word"))
+    # The shield bar's post-hit flash (`original.hud.shield_flash_s`): the bar is forced red while it runs, whatever the pool.
+    if "--hud-state" in flags and "--hud-shield-flash" not in flags and rec["profile"] == "pulse-psp":
+        flags += ce.shield_flash_flags(orig.get("hud"))
     # An HD pair's gantry pin is the RAM time less the presented lag (`ce.gantry_pin`); pairs made before 2026-10-27 pin the raw
     # RAM time, which sits on the GO board's rising edge on Tech de Ra and Modesto Heights.
     lag = (orig.get("presented_lag") or {}).get("hud_clock_ticks")

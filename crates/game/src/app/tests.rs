@@ -153,6 +153,7 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             boost_phase: None,
             autopilot_seconds: None,
             held_pickup: None,
+            shield_flash: None,
             song: None,
             head_to_head: None,
             zone: None,
@@ -199,6 +200,15 @@ fn a_head_to_head_pin_is_a_gap_and_who_leads() {
     assert!(pose::parse_head_to_head("150").is_err());
     assert!(pose::parse_head_to_head("150,ahead").is_err());
     assert!(pose::parse_head_to_head("-3,lead").is_err());
+}
+
+#[test]
+fn a_shield_flash_pin_is_the_timer_and_the_blink_accumulator() {
+    let pin = pose::parse_shield_flash("0.1335, 0").expect("a timer and a blink");
+    assert_eq!((pin.timer, pin.blink), (0.1335, 0.0));
+    assert!(pose::parse_shield_flash("0.1335").is_err());
+    assert!(pose::parse_shield_flash("x,0").is_err());
+    assert!(pose::parse_shield_flash("-0.1,0").is_err());
 }
 
 /// One frame of the PSP's backdrop, to the nanosecond.

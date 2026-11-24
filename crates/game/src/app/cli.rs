@@ -1109,6 +1109,12 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "TYPE", requires = "hud_state")]
     pub(crate) hud_pickup: Option<String>,
 
+    /// With `--hud-state`: the shield bar's post-hit flash as the original's HUD object held it, `TIMER,BLINK` in seconds
+    /// (Pulse PSP `hud+0x11c` and `hud+0x1dc`). While the timer is above zero the bar draws forced red whatever the
+    /// pool. Drawn on the HUD alone: a posed capture runs no tick, so no drop of the pool arms the timer.
+    #[arg(long, value_name = "TIMER,BLINK", requires = "hud_state")]
+    pub(crate) hud_shield_flash: Option<String>,
+
     /// With `--hud-state`: holds the now-playing marquee on this song title (Pulse draws one; a title without
     /// one draws nothing). A capture runs no music, so no song starts and the bar and scrolling text never appear.
     /// **A capture aid**: the display is stepped `--hud-song-ticks` times and frozen there.

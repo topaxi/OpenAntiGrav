@@ -945,6 +945,32 @@ craft, not "some external override" - it does not change the
 threshold-vs-gradient answer either way: whichever flag it is, the function
 still never blends between two colours by percentage.
 
+### The flash timer read live: a red bar at 99.98 % (2026-11-24, `pulse-uturn-bar`)
+
+Confidence **90** for "a running `fade_timer` (`hud+0x11c`) draws the bar forced red whatever the pool", up from the page's 82 for
+that branch: one live read and the frame it belongs to, in a state where the pool is far above 20 %. State
+`airbrake-uturn-c.ppst` (Pulse USA, Talon's Junction, a Venom flown 45 ticks with right, both air brakes and thrust held), stopped at
+race clock 175.958 on `Ship_UpdateCraft`. The HUD object is the pointer in `g_hud` (`0x08ab0838` holds `0x09a0be40`; the
+object itself, not `g_hud`, carries the fields):
+
+| Field | Read | Meaning |
+| --- | --- | --- |
+| `+0x40` | `0x1f` | update mask; bit `0x2` (`Hud_UpdateEnergyBar`) set |
+| `+0x118` | 99.9608 | the previous frame's percentage |
+| `+0x11c` | **0.13350** | `fade_timer`: above zero, so the forced-red branch |
+| `+0x1dc` | 0.0 | blink accumulator: `floor(0 * 8)` is even, the bar's "on" phase |
+
+The field row's pool at the same stop is 134.974 of 135 (99.98 %), so the 20 % floor cannot be what fires. The frame shows the bottom
+bar solid red, the pair's `theirs.png`; ours drew the authored cyan because a posed capture runs no tick and so never arms its own
+flash timer. `--hud-shield-flash TIMER,BLINK` (`oag_raceplay::CaptureShieldFlash`) pins the two values on the readout alone, and
+`psp-pulse-pair.py --hud-readout` reads them at the stop (`original.hud.shield_flash_s`, `shield_blink_s`);
+`compare-rerender-ours.py` replays them. The colour law is unchanged (`Readout::shield_forced_red`). On
+`pulse-psp-race/talons-uturn-airbrakes` the bar's box (x 304 to 448, y 245 to 259) over 40 grey went 68.06 % to 1.14 % of its pixels and
+the whole frame 6.468 % to 5.434 %; the `talons-boost` and `talons-alongside` re-renders are byte-identical to before. Not re-decompiled: the
+read is of the fields the earlier decompile names, and the absorb window (`iVar1`) is off in this state (red would be suppressed).
+2048 and Omega: **not checkable** for this read (a Pulse PSP RAM address); the 2048 dialect's own red tint
+(`oag_hud::dialect_2048`, `shield_flashing`) is the same arm-on-drop shape and has no live read.
+
 ## `Hud_UpdateEnergyBar`: the absorb flash (2026-09-25)
 
 Read to settle whether, and how, the energy bar flashes white and blinks

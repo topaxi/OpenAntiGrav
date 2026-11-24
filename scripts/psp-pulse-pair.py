@@ -226,7 +226,21 @@ def hud_readout_flags(pair, clock):
     h = pair.rec["original"]["hud"]
     return ["--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
         h["place"], h["lap_number"], h["lap_time_s"], clock, h["speed_kmh"],
-        100.0 * h["shield"] / h["shield_max"], h["best_lap_s"])] + held_pickup_hud_flags(pair) + autopilot_hud_flags(pair)
+        100.0 * h["shield"] / h["shield_max"], h["best_lap_s"])] + held_pickup_hud_flags(pair) + autopilot_hud_flags(pair) \
+        + ce.shield_flash_flags(h)
+
+
+#: `g_hud` (race-progress.md) holds a pointer to the HUD object; `Hud_UpdateEnergyBar` (shield.md) reads its flash timer at
+#: +0x11c (forced red while above zero) and the blink accumulator at +0x1dc.
+G_HUD = 0x08AB0838
+HUD_SHIELD_FLASH_TIMER = 0x11C
+HUD_SHIELD_BLINK = 0x1DC
+
+
+def shield_flash_state(dbg):
+    """`(timer, blink)` in seconds off the HUD object the energy bar's updater runs on."""
+    hud = dbg.read_u32(G_HUD)
+    return dbg.read_f32(hud + HUD_SHIELD_FLASH_TIMER), dbg.read_f32(hud + HUD_SHIELD_BLINK)
 
 
 def run_to_clock(port, target):
@@ -616,6 +630,10 @@ def main():
             "place": fr["place"], "lap_number": fr["lap"] - 1, "lap_time_s": fr["lap_time"], "race_clock_s": clock,
             "shield": fr["shield"], "shield_max": fr["shield_max"], "best_lap_s": fr["best_lap_cs"] / 100,
             "speed_kmh": fr.get("hud_kmh"), "source": "the player's field row at the stop (psp-race-field.py)"}
+        flash, blink = shield_flash_state(Debugger(args.port))
+        pair.rec["original"]["hud"].update({
+            "shield_flash_s": flash, "shield_blink_s": blink,
+            "shield_flash_source": "HUD object (*g_hud) +0x11c, the energy bar's forced-red timer, and +0x1dc, its blink accumulator"})
         pair.check("the HUD's own speed readout (PLAYER_HUD+0) was found in the registry", fr.get("hud_kmh") is not None,
                    "the block whose lap time (+0x24) is the player's")
         if fr.get("hud_kmh") is None:
