@@ -364,6 +364,13 @@ programs are unread); the visualiser (`Electric_Visualiser`) is still not loaded
   mine in RPCS3 (the football's `MineBrightness` against a known stage colour) would lift the law
   to 85+; `det-pairs` holds the RPCS3 session.
 
+## Correction: the dark branch does not submit the visualiser (2026-11-24, `det-mine-look-re`)
+
+The dark-mine block above says "Both models and the visualiser are re-submitted". The two calls at `0x00139ccc` and
+`0x00139cec` pass `m+0xcc` and `m+0xd0` (the football and the spikes); `m+0xd4`, the visualiser, is posed by
+`DetonatorMine_PoseVisualiser` (`0x00139308`), a camera-facing billboard scaled `1 + 0.4 (m+0xd8 - 1)` live and `0.9`
+dark: [detonator-mine-draw.md](detonator-mine-draw.md). That is also the reader of `m+0xd8` this page left open.
+
 ## Lineage (2048 and Omega)
 
 - **2048 v1.04: checked, applies, not wired.** `eboot.elf` carries the plain strings `MineColour`,

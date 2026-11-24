@@ -2555,3 +2555,37 @@ known (the lead's call).
 `pad` 8.81 to 8.80, 0.130 to 0.129, cell 6.3 (-2.1) to 6.3 (-2.1); `mines-ahead` 16.23 to 18.59, 0.187 to 0.209, 36.4 (-20.7) to
 46.4 (-12.7); `cannon-volley` 14.88 to 15.24, 0.178 to 0.179, 26.2 (-17.8) to 27.6 (-17.0). The carried read for `cannon-volley` is
 a boot where the volley fired (lap clock 1.900 to 1.967 over the hold): one mine had left the pool by 2.63 s.
+
+### The picture is older than the push buffer's camera (2026-11-24, `det-mine-look-re`)
+
+**The `det-mines` "unexplained part" is the pair's camera, not the mine.** The original draws a mine at its object's position
+(`docs/ghidra/functions/ps3-hdfury-eu/detonator-mine-draw.md`, no view-dependent term on the way to `SceneNode_SetLocalMatrix`).
+The camera the pair renders ours from is the push buffer's, and the picture RPCS3 shows at the pause is **1.5 to 4 ticks of travel
+older** than that camera. The hull rides with the camera, so it never showed the skew; the red strips run along the travel, so a move
+along it leaves them where they are. Near static things (the mines at 12 to 25 units) show it; far ones (185 units and more) hardly.
+
+| Grab | Fitted lag `k` (ticks of craft velocity) | Near-mine rms after / before |
+| --- | ---: | --- |
+| `mines-ahead` pair | 3.55 | 11.9 / 135 px |
+| `cannon-volley` pair | 2.30 | 9.4 / 107 px |
+| `pad` pair | 1.55 | 1.4 / 5 px (85 units away: a weak lever) |
+| shot A of one `det-mines` boot (lap 2.70 s, push-buffer eye `199.27, -41.48, -194.98`) | 2.15 | 11.7 / 93 px |
+| shot B of the same boot (push-buffer eye `206.47`, 4 ticks on) | its picture fits shot A's camera at 1.15 (20 px), about 3 behind its own | |
+
+Method: project the RAM mine objects through the push-buffer `viewProj` with every point moved forward by `k` ticks of the craft's
+velocity (the same as the camera moved back), against the centroid of the original's lavender pixels (`b > 180`, `r > 150`,
+`r - g > 12`) in a window of `0.8 * 800 * 2.5 / z` px around each mine; `k` minimises the rms. **Scenery confirms it**: ours
+re-rendered from the `mines-ahead` pair's flags with camera and craft moved back `k = 0..6` ticks puts the left edge of the violet
+overhead panel (top right, across the line of travel) at x `1565, 1554, 1540, 1524, 1512, 1501, 1491`, the original at `1518` (x only;
+its lower edge does not match on y). **The rest does not follow:** outside the near mines and the hull the plain mean absolute grey goes
+`16.67, 16.73, 17.52` at `k = 0, 2, 4` and the right wall's edge correlation peaks at `k = 0`; the eye was moved, its orientation was not.
+The whole-frame plain mean moved 22.99 to 20.74 at `k = 4`, mostly from the mines (this tree's render, not the page scorer). **Confidence
+70, and not reconciled** with "The skew is the pause" above (push-buffer hull and camera one frame, 1 or 2 ticks behind RAM; blind to
+this, both ride the camera) or with `hd-pair-lag-scan.py`'s 0 to 3 ticks behind RAM (whole-frame edge correlation, which the regions
+here show is dominated by along-track features): here the picture is `craft_ticks + k` = 5.6 to 6.3 ticks behind RAM.
+
+**What a fix needs (not done):** first settle the disagreement above. Then, since the lag varies by grab, measure it per grab:
+extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in Detonator) or a cross-track edge, record `k` in the
+existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
+original craft's velocity. Every HD pair takes its camera from
+the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.

@@ -1197,3 +1197,6 @@
 0x0027c6d0	function	Psys_QueueSpuUpdate	72	ship-destroy.md
 0x00285020	function	Psys_UpdateInstance	65	ship-destroy.md
 0x002a39c8	function	Colour_PackFloat4	85	ship-destroy.md
+# 2026-11-24 det-mine-look-re: the mine parts' matrices and the visualiser billboard (detonator-mine-draw.md)
+0x00327500	function	SceneNode_SetLocalMatrix	72	detonator-mine-draw.md
+0x00139308	function	DetonatorMine_PoseVisualiser	65	detonator-mine-draw.md

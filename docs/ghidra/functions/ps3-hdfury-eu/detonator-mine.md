@@ -403,6 +403,13 @@ not a model offset (both models are unit spheres about the origin) and not the o
 **2048/Omega:** not checked (the object layout is HD's `DetonatorMine`; 2048 and Omega place with the same files,
 `detonator-placement.md`). **Checked, applies, not wired**: the height and the carry are HD's.
 
+## The near-mine displacement is the pair's camera (2026-11-24, `det-mine-look-re`)
+
+The "Open" line above is answered on [detonator-mine-draw.md](detonator-mine-draw.md): the mine is drawn at its object's
+position (`m+0x80`, no view term), and the pair's push-buffer camera is 1.5 to 4 ticks of travel newer than the picture
+(`mines-ahead` 3.55, `cannon-volley` 2.30, `pad` 1.55, fitted on the near mines; one cross-track scenery edge agrees on
+x). Confidence 70: not reconciled with the earlier lag measurements (that page, "The displacement").
+
 ## Cross-check: 2048 and Omega
 
 - **Weapon table**: `weaponstats_Detonator.xml` (2048 v1.04 `data1.psarc`) and
