@@ -545,6 +545,14 @@ a replay's screenshot is a picture of the alpha. Run the replay with `pcsx2-qt -
 queue Xvfb lacks), press the screenshot hotkey; `--plain` cuts without the readout for
 a before and an after of one pass. See `docs/rendering/ps2-bloom.md`.
 
+**Where a frame row lands (2026-11-24, `ps2-fe-layout`).** `scripts/pcsx2-gs-bar-probe.py` writes a dump of a flat frame with white bars at known
+rows and columns under a real dump's display registers, replays it (`pcsx2-qt -batch -nogui -- probe.gs`, a private data path) and measures each
+bar's centroid in PCSX2's GS screenshot. On Pulse PS2 (`DISPLAY1/2.DY = 52`) PCSX2 puts frame row `r` on output row `2 (r + 2)` at upscale 2:
+`D0` is 50, the scale is exactly 2.000 and x has no offset (`docs/ps2/aspect-ratio.md`, "Measured against PCSX2's frame"). The ini keys that
+change the placement, read from `strings pcsx2-qt`: `pcrtc_offsets`, `pcrtc_antiblur` (default on: the two display circuits draw as one source;
+off gives 1.5 rows and a one-row blur), `pcrtc_overscan` (ignores `DY`), `deinterlace_mode` and `disable_interlace_offset` (no effect on the
+centroid), `UserHacks_HalfPixelOffset` (needs `UserHacks = true`).
+
 **Reading it:** `scripts/pcsx2-gsdump.py frame.gs` lists the state groups and
 `--draw N` prints one group's registers and vertices; its docstring has the file
 layout. Traps that cost this page time:
