@@ -297,6 +297,9 @@ impl Race {
             physics.steer_lean = 0.0;
             physics.body.linear_velocity = Vec3::ZERO;
         }
+        // The flaps at the recorded time: a pose view starts where the build stopped, which may
+        // still be the grid, and stands for ticks past it.
+        self.view.settle_flaps(&self.core, at as u64);
         // The chase camera follows the craft where it stands now, as a tick would have moved it.
         let target = self.view.camera_target(&self.core);
         self.view

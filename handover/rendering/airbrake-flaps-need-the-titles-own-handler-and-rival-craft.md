@@ -1,7 +1,7 @@
 ---
 status: re-first
 titles: [hd, 2048, omega]
-updated: 2026-11-19
+updated: 2026-11-24
 summary: "Read HD's Airbrake class 0x3c5 handler for axis and sign; deflect rival craft from their own sim level"
 ---
 
@@ -16,7 +16,8 @@ summary: "Read HD's Airbrake class 0x3c5 handler for axis and sign; deflect riva
 - Auricom's HD flap swings out sideways (world `y` delta 0.000) and `qirex2048/2`'s
   flaps sit at the nose and do not flare; both are authored frames, neither
   confirmed against the original running.
-- AI craft keep stowed flaps on every title (Pulse included). Since 2026-10-19 (`local-seat-contact-fx`)
+- AI craft hold their flaps out on the grid like every craft and fold them at `down_speed` after GO (2026-11-24, `grid-airbrakes`,
+  `docs/physics/grid-state.md`, "The flaps on the grid"); in the race they stay stowed on every title (Pulse included). Since 2026-10-19 (`local-seat-contact-fx`)
   every craft a *person* flies swings its own flaps (`RaceView::flaps` is per slot, `Race::airbrake_flaps_of`),
   not slot 0's drawable: a second local seat, and a network seat's own hull, deflect.
 - Pulse PSP has a pair with both air brakes out (`airbrake-pair`, 2026-11-19, `docs/tools/compare-page.md`, "A Pulse PSP pair with both air

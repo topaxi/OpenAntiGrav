@@ -8,6 +8,9 @@ functions and their evidence are on each binary's page:
 [2048](../ghidra/functions/vita-2048-eu-v104/photo-mode.md),
 [Omega](../ghidra/functions/ps4-omega-eu/photo-mode.md).
 
+Where this build's effects do something other than this page says, with a failing test or a
+capture for each: [the 2026-11-24 review](../reviews/2026-11-24-photo-mode-effects-review.md).
+
 ## By title
 
 | Title | Has one | Entry | Shot | Conf. |
@@ -494,10 +497,22 @@ for one while a shot is under way (`photo_job` in the state, `drawn/frames`).
   the scenery smears and the craft stays sharp. **Ship blur**: the camera holds the pose it has at
   the shot's tick and the craft smears.
 - **Depth of field**, chosen, not measured: the same tick drawn 7 times with the eye moved across the
-  lens (a centre sample and a ring of six) and aimed at the focus plane, so that plane stays sharp
-  (`LensShift`, applied after the blend in `RaceView::view`). The ring's radius is half of the widest
-  blur the single-frame pass draws at the aperture; each frame keeps the other half as that pass. The
-  intent is a total as wide as the preview's; the saved shot was not compared with the preview.
+  lens (a centre sample and a ring of six) through an off-axis frustum that holds the focus plane
+  across the whole frame (`LensShift`, applied after the blend in `RaceView::view`). **Every frame is
+  the single-frame pass at the full aperture, the picture the preview shows, and the ring only
+  refines it.** A thin lens has one sharp distance and no widest blur, while HD's curve is sharp over a
+  band and stops at a widest blur, so the ring is sized (`shot::ring_radius`) to move the band's ends
+  at most 1/4320 of the height (a quarter of a pixel at 1080 lines, half of one at 2160) and no depth
+  more than a quarter of the pass's blur there. Compared with the preview (HD, Anulpha Pass, tick 702,
+  close lens, 1440x816, over the craft): at the opening values the saved shot differs by a mean of
+  0.18 levels, 0.2 percent of pixels by more than 8, detail kept 0.997; at focus 100, 0.22, none over
+  8, 0.995. Before, 2.52 and 10.3 percent, and seven ghost craft at focus 100
+  ([review](../reviews/2026-11-24-photo-mode-effects-review.md), PF1).
+- **The single-frame pass** gathers over the blur that can reach a pixel: an 8x8 tile pass writes
+  each tile's widest radius, a second widens it to the tiles a blur reaches from, and the taps (32
+  quads of 2x2 pixels on a spiral, so one-pixel detail averages out) spread over that reach. A pixel
+  is its own circle's average of what is at or behind it, with nearer surfaces that reach it laid
+  over by the share of it they cover, so a blurred near edge thins out over what is behind it.
 - **Both on**: the frames of the blur, the lens samples taken in turn.
 
 **Measured** (HD, Time Trial, Anulpha Pass, close lens, tick 702, debug profile (opt-level 2), the

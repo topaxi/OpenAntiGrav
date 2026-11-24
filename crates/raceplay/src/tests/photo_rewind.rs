@@ -486,3 +486,252 @@ fn leaving_a_rewind_leaves_the_camera_where_the_live_race_had_it() {
         .distance(control.view.camera_position(&control.core));
     assert!(apart < 0.5, "the camera is {apart} units from where it was");
 }
+
+/// The close lens (field 65) with depth of field on at its opening aperture and focus, its plan,
+/// and where a view-space point lands on a 1920x1080 picture through `view`.
+fn a_depth_of_field_plan_on_the_close_lens() -> (Plan, impl Fn(Mat4, Vec3) -> (f32, f32)) {
+    let (mut race, _, _) = driven();
+    open(&mut race);
+    race.photo_cycle_lens();
+    race.photo_cycle_lens();
+    race.photo_effects(|effects| {
+        effects.select(Row::DepthOfField);
+        effects.adjust(1);
+    });
+    let photo = race.photo().expect("open");
+    assert_eq!(photo.lens(), crate::photo::Lens::Close);
+    assert_eq!(photo.fov(), 65.0);
+    let plan = Plan::new(photo, LIVE, false).expect("a depth of field");
+    let projection =
+        oag_core::math::camera::perspective(65f32.to_radians(), 16.0 / 9.0, 1.0, 4000.0);
+    let pixel = move |view: Mat4, point: Vec3| {
+        let ndc = (projection * view).project_point3(point);
+        (ndc.x * 960.0, ndc.y * 540.0)
+    };
+    (plan, pixel)
+}
+
+/// The focus plane is a plane: a point at the focus distance stays where it was across the whole
+/// frame, not only on the axis. Fails while a lens sample turns the camera to aim at the focus
+/// point (a toe-in), which holds a sphere through the eye and not the plane.
+#[test]
+fn a_lens_sample_keeps_the_focus_plane_sharp_at_the_edge_of_the_frame() {
+    let (plan, pixel) = a_depth_of_field_plan_on_the_close_lens();
+    let shift = plan.frame(1).lens.expect("the first sample of the ring");
+    let half_width = (65f32.to_radians() * 0.5).tan() * 16.0 / 9.0;
+    // On the focus plane, at the right edge of the picture and mid-height.
+    let edge = Vec3::new(shift.focus * half_width * 0.999, 0.0, -shift.focus);
+    let (before, after) = (
+        pixel(Mat4::IDENTITY, edge),
+        pixel(shift.apply(Mat4::IDENTITY), edge),
+    );
+    let moved = (after.0 - before.0).hypot(after.1 - before.1);
+    println!(
+        "lens sample ({}, {}) focus {}: the edge of the focus plane moved {moved} px of 1920x1080",
+        shift.dx, shift.dy, shift.focus
+    );
+    assert!(
+        moved < 0.5,
+        "a point on the focus plane at the frame's edge moved {moved} px"
+    );
+    // The ring is sized to the sharp band and is small at the opening values, so the plane is
+    // checked again under a 0.07-unit sample, half the preview's widest blur at the opening
+    // aperture: the frustum, not the ring's size, is what holds it.
+    let wide = LensShift {
+        dx: 0.07,
+        dy: 0.0,
+        focus: shift.focus,
+    };
+    for corner in [(1.0, 0.0), (1.0, 1.0), (-1.0, -1.0), (0.0, 1.0)] {
+        let point = Vec3::new(
+            shift.focus * half_width * 0.999 * corner.0,
+            shift.focus * (65f32.to_radians() * 0.5).tan() * 0.999 * corner.1,
+            -shift.focus,
+        );
+        let (before, after) = (
+            pixel(Mat4::IDENTITY, point),
+            pixel(wide.apply(Mat4::IDENTITY), point),
+        );
+        let moved = (after.0 - before.0).hypot(after.1 - before.1);
+        assert!(
+            moved < 0.01,
+            "a wide lens sample moved the focus plane at {corner:?} by {moved} px"
+        );
+    }
+    let far = Vec3::new(0.0, 0.0, -1.0e5);
+    let (before, after) = (
+        pixel(Mat4::IDENTITY, far),
+        pixel(wide.apply(Mat4::IDENTITY), far),
+    );
+    assert!(
+        (after.0 - before.0).abs() > 5.0,
+        "a lens sample moves the far field: {} px",
+        after.0 - before.0
+    );
+}
+
+/// An accumulated depth of field frame is drawn with the preview's own pass, at the full
+/// aperture. Fails if a frame under a lens sample asks the pass for less blur than the preview
+/// does: the ring is too small to stand for the rest.
+#[test]
+fn a_lens_sample_frame_asks_the_pass_for_the_previews_blur() {
+    let (mut race, _, _) = driven();
+    open(&mut race);
+    race.photo_effects(|effects| {
+        effects.select(Row::DepthOfField);
+        effects.adjust(1);
+    });
+    let preview = race.photo_fx(1.0, 4000.0).expect("a depth of field");
+    let plan = Plan::new(race.photo().expect("open"), LIVE, false).expect("a depth of field");
+    race.photo_set_shift(plan.frame(1).lens);
+    assert!(race.photo().expect("open").shift().is_some());
+    assert_eq!(race.photo_fx(1.0, 4000.0), Some(preview));
+}
+
+/// What the single-frame pass shows sharp, the accumulated shot keeps sharp: HD's curve is sharp
+/// from `d - c` to `d + 2c`, and the preview draws that band untouched. Fails while the lens
+/// samples are a thin lens focused at `d` alone, which smears both ends of the band.
+#[test]
+fn the_accumulated_shot_keeps_the_band_the_preview_shows_sharp() {
+    let (plan, pixel) = a_depth_of_field_plan_on_the_close_lens();
+    let edges = oag_post::photo_fx::Edges::new(0.2);
+    let shift = plan.frame(1).lens.expect("the first sample of the ring");
+    assert_eq!(shift.focus, edges.distance);
+    let moved = [edges.near_focus, edges.far_focus].map(|distance| {
+        let point = Vec3::new(0.0, 0.0, -distance);
+        let (before, after) = (
+            pixel(Mat4::IDENTITY, point),
+            pixel(shift.apply(Mat4::IDENTITY), point),
+        );
+        (after.0 - before.0).hypot(after.1 - before.1)
+    });
+    println!(
+        "a ring sample moves the near focus ({} units) {} px and the far focus ({} units) {} px of 1920x1080",
+        edges.near_focus, moved[0], edges.far_focus, moved[1]
+    );
+    assert!(
+        moved[0] < 0.5 && moved[1] < 0.5,
+        "the ends of the sharp band moved {moved:?} px in a lens sample"
+    );
+}
+
+/// A motion blur that cannot be drawn is not on offer: with no recording there is nothing to
+/// play between keyframes, the plan drops the blur and the shot is the one frame. Fails while the
+/// MOTION BLUR row is offered on the title's say alone.
+#[test]
+#[ignore = "photo-fx-review finding 8"]
+fn a_race_with_no_recording_is_not_offered_a_motion_blur() {
+    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
+    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
+        return;
+    }
+    let mut race = Box::new(Race::start(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+    ));
+    let mut keeper = Keeper::new(
+        fixture(),
+        crate::tests::fixture_view(),
+        crate::extensions::Prepared::default(),
+        &race,
+    );
+    for tick in 0..LIVE {
+        race.tick(&inputs(tick));
+        keeper.keep(&race);
+    }
+    open(&mut race);
+    let rewind = Rewind::begin(&mut keeper, &mut race).expect("running");
+    assert!(!rewind.resimulates(), "nothing was recorded");
+    blur(&mut race, 1, 100);
+    let photo = race.photo().expect("open");
+    assert_eq!(photo.effects().blur(), Some(Blur::Track));
+    assert!(
+        Plan::new(photo, LIVE, rewind.resimulates()).is_none(),
+        "the shot is the one frame on screen"
+    );
+    assert!(
+        !photo.effects().rows().contains(&Row::MotionBlur),
+        "the panel offers a MOTION BLUR row that the shot ignores"
+    );
+}
+
+/// The ring of an accumulated depth of field is half of the widest blur the preview draws
+/// (`shot`): a ring sample moves a point at infinity by `0.5 * MAX_RADIUS * aperture` of the
+/// picture's height. Fails while the ring's radius is worked out from the lens's own field and
+/// the frame is drawn with the speed widen added to that field.
+#[test]
+#[ignore = "photo-fx-review finding 9"]
+fn the_lens_ring_is_half_the_previews_blur_in_the_field_the_frame_is_drawn_with() {
+    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
+    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
+        return;
+    }
+    let (mut race, _, _) = driven();
+    open(&mut race);
+    race.photo_cycle_lens();
+    race.photo_cycle_lens();
+    race.photo_effects(|effects| {
+        effects.select(Row::DepthOfField);
+        effects.adjust(1);
+    });
+    // A craft at speed: the draw adds 0.075 degrees of field per unit a second of it.
+    let slot = race.core.player_slot();
+    let body = &mut race.core.sim.world.ships[slot].physics.body;
+    body.linear_velocity = body.forward() * 150.0;
+    race.photo_repose();
+    let photo = race.photo().expect("open");
+    assert_eq!(photo.fov(), 65.0);
+    let plan = Plan::new(photo, LIVE, false).expect("a depth of field");
+    let shift = plan.frame(1).lens.expect("the first sample of the ring");
+    let drawn = race
+        .view
+        .vertical_fov(&race.core, 16.0 / 9.0, oag_display::display::Fov::AUTHORED);
+    let far = shift
+        .apply(Mat4::IDENTITY)
+        .transform_point3(Vec3::new(0.0, 0.0, -1.0e6));
+    let moved = (far.x / -far.z).hypot(far.y / -far.z) / (2.0 * (drawn * 0.5).tan());
+    let wanted = 0.5 * oag_post::photo_fx::Dof::MAX_RADIUS * 0.4;
+    println!(
+        "the lens says 65 degrees and the frame is drawn at {}: a ring sample moves infinity {moved} of the height, {wanted} wanted",
+        drawn.to_degrees()
+    );
+    assert!(
+        (moved / wanted - 1.0).abs() < 0.02,
+        "the ring is {} of the half blur it stands for",
+        moved / wanted
+    );
+}
+
+/// Fails if a rewind into the grid draws the flaps of the live tick it left, or if leaving the
+/// rewind carries the grid's flaps back into the live race.
+#[test]
+fn a_rewind_draws_the_flaps_of_the_tick_it_shows_and_puts_the_live_ones_back() {
+    let (mut race, mut keeper, _) = driven();
+    let step = race.view.flap_graphics.down_speed * race.core.sim.dt;
+    let level = |tick: u64| -> f32 {
+        if tick < oag_race::COUNTDOWN_TICKS {
+            100.0
+        } else {
+            (100.0 - step * (tick - (oag_race::COUNTDOWN_TICKS - 1)) as f32).max(0.0)
+        }
+    };
+    let live = race.view.flaps[0];
+    assert!(
+        (live[0] - level(LIVE)).abs() < 1e-3,
+        "the live race is in the fold"
+    );
+    open(&mut race);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("a race that is running");
+    for target in [0, 120, 271, 299, 150] {
+        rewind.seek(&mut keeper, &mut race, target);
+        let drawn = race.view.flaps[0];
+        assert!(
+            (drawn[0] - level(target)).abs() < 1e-3,
+            "tick {target}: draws {drawn:?}, not {}",
+            level(target)
+        );
+    }
+    rewind.end(&mut keeper, &mut race);
+    assert_eq!(race.view.flaps[0], live, "the live flaps were not put back");
+}

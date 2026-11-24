@@ -473,7 +473,8 @@ lazily.
   (`Model::transparent_draws` is pushed to by `oag-livery` before it, never after).
   The additive pair is also drawn by `Drawable::draw_additive` and the alpha-over
   pair by the absorb overlay and the track shine, so those are not candidates.
-  Building lazily on first draw would put the compile on the frame thread.
+  Building lazily on first draw would put the compile on the frame thread. (Done in the fourth round,
+  by what the draws can pick rather than by lazy builds.)
 
 **A launch per MENU BACK choice became one.** The drive's new `config <setting>=<value>`
 step applies a setting as a changed menu row does, from any screen
@@ -494,6 +495,226 @@ is the CHD's LZMA hunks of `PS2MUSIC.WAD`, read to build a `Sound` whose length
 the null mixer still advances a song by (the marquee shows each race song once).
 Skipping the read means a length-only `Sound` from the WAD's index, an audio
 change, not a quiet one.
+
+### Fourth round (2026-11-24): a model builds only the pipelines its draws can pick
+
+**What a race binds against what it builds.** Pulse PSP race, 400 ticks and again 3,000
+ticks of autopilot (`oag_mesh::mesh_render::pipeline_cache`'s scope, a counter at each
+`create_render_pipeline` miss and a set of every pipeline passed to `set_pipeline`; the
+instrumentation was not kept): **158 distinct pipelines created, 31 bound**, the same 31 at
+both lengths. The rest are not drawn in a race that fires no weapon, absorbs nothing and
+wrecks nothing, but a weapon, a shield or a wreck can bind them at any time, so none of
+them is built lazily: a first-use compile on the frame thread is a hitch in play. What can
+be dropped with no hitch is a pipeline **no draw of the model can pick**, which is known at
+build because a built `Model` is immutable (`Drawable` holds it in an `Arc`).
+
+Where the 158 came from (`mesh_render::build_with`, per model, before): the alpha-over,
+additive and unblended pairs (two-sided and culled twin of each), a pair per authored
+blend state, the glow stamp's two pairs, the plain-draw copies of all of those on a
+circuit, and the model-level cutout pipeline, for every model whatever its draws name. A
+plasma halo of two blended draws built 6 blended pipelines, a hull with one transparent
+draw built 6 blended and 4 stamp pipelines, and a model with no cutout draw a cutout
+pipeline.
+
+**The change** (`mesh_render/reach.rs`): `build` asks which pipelines its draws can pick and
+builds those.
+
+- The pick is one rule, `blend::Pick::of`, read by `TransparentPipelines::select` and by
+  the build (`Stamp::is_additive` likewise for the stamp), so what is built and what is
+  drawn cannot drift apart. A draw's twin is its own `culled`.
+- The overlay and shine passes index the alpha-over (absorb overlay, track shine) or
+  additive (`draw_additive`) pair by any draw's `culled`, whatever its list, so those two
+  pairs are built for the twins of every list; the unblended pair, each authored pair and
+  the stamp pairs only for the transparent draws that select them (a circuit's plain draws
+  select the plain set, the rest the model-wide one).
+- A twin no draw picks holds the other twin's pipeline; a pair none picks holds the
+  alpha-over pair's two-sided pipeline (the stamp's additive pair, the stamp's alpha-over
+  one). The cutout pipeline a draw with no reference picks is built only where a cutout draw
+  names none; a model with no transparent draw has no stamp pairs.
+- The viewer, the capture and the race draw each `Built` with the model it was built from;
+  every writer of a model's draws (`oag-livery`, `flyer::clip`, the weapon loader's
+  `cull_as_authored`) runs before `build`.
+
+| Pulse PSP, 400 ticks | Before | After |
+| --- | ---: | ---: |
+| Pipelines created (mesh scope, which is about 97 % of the launch's `create_render_pipeline`: `oag-post`, `oag-fx` and `oag-render` together are about 1 %) | 158 | 104 |
+| Race launch, warm Mesa cache, `perf stat -e instructions:u` (`target/debug`), four interleaved pairs, load 35 to 41 | 24.12, 24.12, 24.22, 24.12 G | 21.13, 21.13, 21.13, 21.11 G (-12.4 %) |
+| Headless race load to first frame (`--race --screenshot --ticks 1`), five interleaved pairs, load 30 to 34 | 1.10 to 1.23 s | 0.89 to 0.94 s |
+| `photo_mode_ground_truth` (14 tests, whole races), `cargo nextest run`, two interleaved rounds, load 74 to 97 | 1,036.7 G, 1,025.0 G | 939.5 G, 931.5 G (-9.4 %, -9.1 %) |
+
+Nothing moved onto the frame thread: the pipelines are built where they were, at load.
+Pixels: the PNG's decoded scanlines are identical, base against new, for Pulse PSP
+(400 ticks held cross, 1,500 and 4,000 ticks autopilot), Pulse PS2, Pure PSP, Pulse PSP
+USA, HD/Fury (PS3) and Omega (600 ticks autopilot); the files differ only in the embedded
+command-line metadata (their own output path). None of those frames draws a weapon
+halo, a wreck or the absorb overlay, so the claim for them rests on
+`reach::tests::every_transparent_draw_selects_a_pipeline_built_for_it` (a model mixing all
+four classes and both cull modes picks a different pipeline for each draw), the shared
+rule above, and the frame tests of the gate.
+
+**Measured and left.** After the change a launch's `create_render_pipeline` is still
+about 29 % of its samples, 27 to 28 % of it the mesh scope. The largest piece left is
+`foliage::pipelines` (4 pipelines, 4 % of samples): they are drawn only under
+`graphics.scenery_sort = depth`, but that setting is applied every frame and changes in
+the pause menu, so a race that starts on `original` still needs them the moment it
+changes. Dropping them needs a rebuild on the change. Under the same constraint the
+masked (`Velocity::Gated`) and culled solid sets, the circuit's four cutout-reference sets
+and a role for each overlay build (the absorb overlay never draws additive; a shine pass
+only alpha-over) would cut more.
+
+### Fifth round (2026-11-24): build-time SPIR-V cannot reach the mesh pipelines
+
+**Question.** naga runs twice per race launch: `create_shader_module` parses and validates
+the WGSL, and `wgpu-hal`'s Vulkan `compile_stage` (inside every `create_render_pipeline`)
+processes the override constants, revalidates and writes SPIR-V. Would SPIR-V that naga
+writes at build time, handed over with `Device::create_shader_module_passthrough`, remove
+enough of that (a stop bar of about 10 % of the launch)?
+
+**Split** (Pulse PSP race, 400 ticks, warm Mesa cache, `target/debug` built with
+`-Cforce-frame-pointers=yes`; `perf record -e instructions:u -c 5000000 --user-callchains
+--call-graph fp`, two runs, load 70 to 73; children percentages):
+
+| Where | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| `compile_stage` (all of `create_render_pipeline` but 0.1 %) | 25.46 % | 25.36 % |
+| of it `process_overrides` (override substitution, compaction, `revalidate`) | 15.43 % | 15.43 % |
+| of it `spv::write_vec` | 9.35 % | 9.30 % |
+| `create_shader_module` (WGSL parse and validate) | 5.47 % | 5.59 % |
+| Launch total, `perf stat -e instructions:u`, three runs (the frame-pointer build, hence above the Fourth round's 21.13 G) | 21.82, 21.82, 21.82 G | |
+
+By caller (run 1, stacks walked up to the first `oag_` frame): `compile_stage` 25.0 % from
+the mesh scope (`mesh_render::build_with`, `foliage`, `stamp`, `prepass`) and 0.5 % from
+everything else; `create_shader_module` 4.3 % mesh and 1.1 % everything else. An earlier
+`cpu-clock:u` record (load 24) gave the same shape: 29.0 % compile, 28.6 of it mesh.
+
+**Why the mesh share is out of reach.** Every mesh pipeline carries override constants
+that only exist at run time: `slots_present` and `emissive_rows` from the model's
+textures on every pipeline, `alpha_test_ref` from a model's materials, the six `flame_*`
+numbers off the disc, `material_lod_bias` from the title, `aniso_max` from the player's
+setting, and about twenty 0/1 flags decided by the model (`mesh_render::build_with`,
+`texlod::constants`). The build has no disc, and naga 30's SPIR-V writer cannot emit
+specialization constants (`back/spv/block.rs:724` and `writer.rs:2772` return
+`Error::Override`), so there is no build-time blob to hand over for any mesh stage. What
+build-time SPIR-V can reach is the non-mesh 1.6 % (0.5 + 1.1), about 0.35 G per race
+launch, a fixed amount whatever the test does after. The cheapest race launch a module can
+make, `--race --screenshot --ticks 1` (same build and cache, three runs, load 47), is 11.94,
+11.94, 11.94 G, so no race-spawning module can save more than about 2.9 %. Below the bar:
+nothing was built.
+
+**Traps recorded for any later passthrough work** (`wgpu-hal` 30.0.2, `wgpu-core` 30.0.2):
+
+- Constants are silently dropped. `wgpu-core` passes each stage's `constants` down
+  (`device/resource.rs:4681`, `:4826`), and `compile_stage`'s `ShaderModule::Raw` branch
+  (`vulkan/device.rs:706-707`) never reads them. A passthrough module with overrides draws
+  with the defaults and reports nothing. Its interface is not validated either
+  (`validation.rs:325`, `ShaderMetaData::Passthrough` has none).
+- Bindings are renumbered per layout. Every bind group layout entry gets a dense Vulkan
+  binding by its position (`vulkan/device.rs` around 1416 to 1455), and the pipeline
+  layout hands that map to naga (around 1611 to 1630). A blob must carry the same numbers
+  and binding-array sizes as the layout it is used with.
+- The writer options depend on the device: SPIR-V version from the device's API version,
+  `Unchecked` against `Restrict` bounds checks from robust buffer and image access,
+  `LABEL_VARYINGS` off on Qualcomm, `DEBUG` from the instance flags (`vulkan/adapter.rs`
+  around 2774 to 2870). These live in a private field (`naga_options`).
+- `SEPARATE_ENTRY_POINTS` is set on every Vulkan device (`vulkan/adapter.rs:2299`), so
+  every module stays naga IR and is compiled again for each pipeline, entry point by
+  entry point.
+
+**Repeated work, measured.** A throwaway line at the mesh scope cache's miss (not kept)
+counted the stages the race compiles: 101 pipelines, 202 stages, **64 distinct**
+(module, entry point, constants) keys (22 vertex, 42 fragment), all on the two mesh
+modules. Blended twins and the plain-draw copies differ in blend, cull or depth state only,
+so two thirds of the stage compiles write SPIR-V that an earlier pipeline already wrote.
+
+**Designs left to the maintainer** (both break the approved invariant, "the blob is
+naga's build-time output", so neither was built):
+
+1. Memoise in process: write each distinct stage once with naga at run time and hand it to
+   later pipelines through passthrough. Ceiling about 2/3 of the mesh `compile_stage`, so
+   about 17 % of the launch, on the first launch and every later one. Needs the device's
+   writer options mirrored by hand (above) and a guard against the binding renumbering.
+2. A SPIR-V disk cache keyed on naga's version, the shader text, entry point, constants,
+   layout and the device's writer options. Ceiling all of naga, about 31 % (25.4 + 5.5),
+   on a warm launch. A cache read from disk is input the driver trusts, so it needs the
+   recovery a passthrough path would need anyway.
+
+3. Unmeasured, and with no `unsafe`: resolve the overrides once per distinct key with
+   `naga::back::pipeline_constants::process_overrides` and hand `wgpu` the resulting IR
+   (`ShaderSource::Naga`, behind `wgpu`'s `naga-ir` feature). A module with one entry point
+   and no overrides skips the compaction and revalidation (`pipeline_constants.rs` around
+   line 93), but `wgpu-core` still validates each module and the SPIR-V write still runs per
+   pipeline, so the gain is some part of `process_overrides`' 15.4 %. Measured in the Sixth
+   round: 6.2 % of a race walk, 8.6 % of a bare race launch.
+
+Neither of the first two has a device-lost fallback to lean on: the native build registers no device-lost
+callback (only the web build does, `oag-game`'s `app/gpu.rs`).
+
+Reproducing: build `oag-game` with `RUSTFLAGS=-Cforce-frame-pointers=yes` into a separate
+`CARGO_TARGET_DIR`, prime `MESA_SHADER_CACHE_DIR` with one run, then run the Pulse PSP
+`--drive` walk of the Fourth round (`boot; select racebox; ...; until stage=race within
+4000; ticks 400;`, `--seed 7 --no-audio --no-intro`, headless, `OAG_MODS` and `XDG_*` on a
+scratch profile) under `perf stat -e instructions:u` and the `perf record` above; split with
+`perf report --children --no-inline --sort sym`.
+
+### Sixth round (2026-11-24): resolving the overrides once per stage reaches 6 %, not 10
+
+**Question.** The Fifth round's safe design 3: resolve each distinct (variant, stage, entry
+point, constants) once with `naga::back::pipeline_constants::process_overrides` and hand
+`wgpu` the result as `ShaderSource::Naga` (`wgpu`'s `naga-ir` feature on `oag-mesh`, no
+`unsafe`, no passthrough), so `wgpu-hal` finds a module with one entry point and no overrides
+and returns it unchanged. Bar: about 10 % of a race launch, else docs only.
+
+**Prototype** (not landed): `mesh.wesl`'s two variants parsed and validated once into naga IR
+(the shared module created from that IR, so the WGSL is parsed once and not twice); on a
+pipeline cache miss, each stage got its own module from a memo; the pipeline then carried no
+constants. `cached_pipeline`'s closure received the two modules in place of the shared one.
+
+**Measured** (Pulse PSP race walk of the Fifth round, 400 ticks, same frame-pointer build
+flags, warm Mesa cache, `perf stat -e instructions:u`; baseline runs before and after the
+prototype runs, the bare launches alternated):
+
+| Build | Race walk, G user instructions | Race launch (`--race --screenshot --ticks 1`), G |
+| --- | ---: | ---: |
+| Baseline | 22.009, 22.009, 22.006 | 12.034, 12.032 |
+| Resolved modules, overrides arena left as naga returns it | 22.958 (**+4.3 %**) | not run |
+| Resolved modules, arena cleared (the prototype) | 20.632, 20.629 (**-6.2 %**) | 10.997, 10.997 (**-8.6 %**) |
+| The prototype with the shared module replaced by a stub, a ceiling test | 20.590, 20.587 (-6.4 %) | not run |
+
+The run-to-run spread is 3 M instructions in 22 G. Instruction counts do not move with load
+(the runs were at load 23 to 55). The 1-tick headless screenshot of the baseline and the
+prototype is byte-identical (`cmp` on the PNGs, two pairs). HD and the menu were not captured:
+the result stopped below the bar first.
+
+**The trap that cost the first attempt.** `process_overrides` documents its result as having
+"an empty `overrides` arena", but naga 30.0.2 puts the arena back before it revalidates
+(`back/pipeline_constants.rs`, `module.overrides = overrides;` just above the final
+`revalidate`). A resolved module that still lists overrides fails `process_overrides`'s early
+return (`entry_points.len() <= 1 && overrides.is_empty()`, around line 93), so `wgpu-hal`
+resolved every one of the 202 stages again on top of our 44 and the launch got 4.3 % worse.
+Every use of an override is a constant by then, so assigning `module.overrides = Default::default()`
+on the resolved module restores the documented contract; the prototype did exactly that, and a
+naga bump that changes it shows as the early return failing (a unit test on `Cow::Borrowed`
+would pin it).
+
+**Why it stops at 6 %.** `perf record` after the change (`children` percentages of the
+walk): `compile_stage` fell from 25.2 % to 11.5 %, and of what is left 9.9 % is
+`spv::write_vec`, which still runs for every pipeline (`wgpu-hal` keeps no SPIR-V between
+pipelines, and `SEPARATE_ENTRY_POINTS` keeps every module as IR). `process_overrides` fell
+from 15.3 % to 6.8 %, now all of it ours, for 44 resolved stages (counted on a 50-tick run;
+the Fifth round's census found 64 keys, a difference this round did not chase). Each
+resolved stage still validates twice, once inside `process_overrides` (`revalidate`, 3.7 %)
+and once in `wgpu-core`'s `create_shader_module`, and neither can be skipped without `unsafe`.
+The ceiling test shows the shared module's own validations are 0.2 % and not worth removing.
+
+**What could reach the bar**, as an estimated ceiling and not a measurement, is a cache in `wgpu-hal`'s `compile_stage` keyed on (module,
+entry point, constants, binding map), which also removes the 9.9 % SPIR-V write for the
+repeated stages: the stages compile 44 times instead of 202, so at most about 78 % of
+`compile_stage`'s 25 % (about 19 % of the launch, 44/202 arithmetic), with no change to what
+is drawn. That is a patch to
+`wgpu-hal` (vendored or upstream), which this lane did not make without the lead's word.
+The prototype above is the cheaper half: 6 % of a race walk and 8.6 % of a bare race launch,
+no `unsafe`, byte-identical in the one frame compared, about 150 lines in `oag-mesh`'s
+`pipeline_cache`, and it is what a later `wgpu-hal` cache would sit on top of.
 
 ## Reproducing
 

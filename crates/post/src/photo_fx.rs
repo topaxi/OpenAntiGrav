@@ -171,19 +171,44 @@ impl Constants {
     }
 }
 
-/// The pipelines and the scratch target.
+/// Pixels a side of the tiles the gather's reach is worked out over (`TILE` in
+/// `photo_fx.wesl`).
+const TILE: u32 = 8;
+
+/// The format of the two tile targets: one radius in pixels a tile.
+const TILE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R32Float;
+
+/// The pipelines and the targets sized to the frame.
 #[derive(Debug)]
 pub struct PhotoFx {
     main: wgpu::RenderPipeline,
     main_ms: wgpu::RenderPipeline,
+    tile: wgpu::RenderPipeline,
+    tile_ms: wgpu::RenderPipeline,
+    dilate: wgpu::RenderPipeline,
     copy: wgpu::RenderPipeline,
     layout: wgpu::BindGroupLayout,
     layout_ms: wgpu::BindGroupLayout,
+    tile_layout: wgpu::BindGroupLayout,
+    tile_layout_ms: wgpu::BindGroupLayout,
+    dilate_layout: wgpu::BindGroupLayout,
     copy_layout: wgpu::BindGroupLayout,
     constants: wgpu::Buffer,
-    scratch: Option<wgpu::TextureView>,
+    targets: Option<Targets>,
     format: wgpu::TextureFormat,
     size: (u32, u32),
+}
+
+/// What [`PhotoFx::render`] draws into, rebuilt when the frame's size changes.
+#[derive(Debug)]
+struct Targets {
+    scratch: wgpu::TextureView,
+    /// Each tile's widest blur radius.
+    tiles: wgpu::TextureView,
+    /// The widest radius that can reach each tile.
+    reach: wgpu::TextureView,
+    /// Reads `tiles`; owns nothing of the caller's, so it lives as long as the targets.
+    dilate: wgpu::BindGroup,
 }
 
 fn load_entry(binding: u32, multisampled: bool) -> wgpu::BindGroupLayoutEntry {
@@ -228,11 +253,24 @@ impl PhotoFx {
                     load_entry(0, false),
                     super::uniform_entry(1),
                     load_entry(2, multisampled),
+                    load_entry(3, false),
                 ],
             })
         };
         let layout = layout_of("photo fx", false);
         let layout_ms = layout_of("photo fx (msaa)", true);
+        let tile_layout_of = |label: &str, multisampled: bool| {
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some(label),
+                entries: &[super::uniform_entry(1), load_entry(2, multisampled)],
+            })
+        };
+        let tile_layout = tile_layout_of("photo fx tiles", false);
+        let tile_layout_ms = tile_layout_of("photo fx tiles (msaa)", true);
+        let dilate_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("photo fx reach"),
+            entries: &[super::uniform_entry(1), load_entry(4, false)],
+        });
         let copy_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("photo fx copy"),
             entries: &[load_entry(0, false)],
@@ -241,7 +279,8 @@ impl PhotoFx {
         let pipeline = |label: &str,
                         module: &wgpu::ShaderModule,
                         entry: &str,
-                        layout: &wgpu::BindGroupLayout| {
+                        layout: &wgpu::BindGroupLayout,
+                        format: wgpu::TextureFormat| {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some(label),
                 bind_group_layouts: &[Some(layout)],
@@ -260,7 +299,7 @@ impl PhotoFx {
                     module,
                     entry_point: Some(entry),
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: target_format,
+                        format,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -280,14 +319,50 @@ impl PhotoFx {
             mapped_at_creation: false,
         });
         Ok(Self {
-            main: pipeline("photo fx", &single, "fs_main", &layout),
-            main_ms: pipeline("photo fx (msaa)", &multi, "fs_main", &layout_ms),
-            copy: pipeline("photo fx copy", &single, "fs_copy", &copy_layout),
+            main: pipeline("photo fx", &single, "fs_main", &layout, target_format),
+            main_ms: pipeline(
+                "photo fx (msaa)",
+                &multi,
+                "fs_main",
+                &layout_ms,
+                target_format,
+            ),
+            tile: pipeline(
+                "photo fx tiles",
+                &single,
+                "fs_tile",
+                &tile_layout,
+                TILE_FORMAT,
+            ),
+            tile_ms: pipeline(
+                "photo fx tiles (msaa)",
+                &multi,
+                "fs_tile",
+                &tile_layout_ms,
+                TILE_FORMAT,
+            ),
+            dilate: pipeline(
+                "photo fx reach",
+                &single,
+                "fs_dilate",
+                &dilate_layout,
+                TILE_FORMAT,
+            ),
+            copy: pipeline(
+                "photo fx copy",
+                &single,
+                "fs_copy",
+                &copy_layout,
+                target_format,
+            ),
             layout,
             layout_ms,
+            tile_layout,
+            tile_layout_ms,
+            dilate_layout,
             copy_layout,
             constants,
-            scratch: None,
+            targets: None,
             format: target_format,
             size: (0, 0),
         })
@@ -306,17 +381,23 @@ impl PhotoFx {
             return false;
         }
         self.resize(device, frame.size);
-        let Some(scratch) = &self.scratch else {
+        let Some(targets) = &self.targets else {
             return false;
         };
         let constants = Constants::new(frame.viewport, frame.size, &frame.params);
         queue.write_buffer(&self.constants, 0, bytemuck::bytes_of(&constants));
         let multisampled = frame.sample_count > 1;
-        let (pipeline, layout) = if multisampled {
-            (&self.main_ms, &self.layout_ms)
+        let (pipeline, layout, tile_pipeline, tile_layout) = if multisampled {
+            (
+                &self.main_ms,
+                &self.layout_ms,
+                &self.tile_ms,
+                &self.tile_layout_ms,
+            )
         } else {
-            (&self.main, &self.layout)
+            (&self.main, &self.layout, &self.tile, &self.tile_layout)
         };
+        let view = wgpu::BindingResource::TextureView;
         let group = oag_gpu::perfprobe::bind_group(
             device,
             &wgpu::BindGroupDescriptor {
@@ -325,7 +406,7 @@ impl PhotoFx {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(frame.scene),
+                        resource: view(frame.scene),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
@@ -333,7 +414,11 @@ impl PhotoFx {
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::TextureView(frame.depth),
+                        resource: view(frame.depth),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: view(&targets.reach),
                     },
                 ],
             },
@@ -345,7 +430,7 @@ impl PhotoFx {
                 layout: &self.copy_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(scratch),
+                    resource: view(&targets.scratch),
                 }],
             },
         );
@@ -356,10 +441,18 @@ impl PhotoFx {
             (x1 - x0 + 1) as f32,
             (y1 - y0 + 1) as f32,
         );
+        let tile = TILE as i32;
+        let tile_rect = (
+            (x0 / tile) as f32,
+            (y0 / tile) as f32,
+            (x1 / tile - x0 / tile + 1) as f32,
+            (y1 / tile - y0 / tile + 1) as f32,
+        );
         let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,
-                        target: &wgpu::TextureView| {
+                        target: &wgpu::TextureView,
+                        rect: (f32, f32, f32, f32)| {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -383,32 +476,94 @@ impl PhotoFx {
             pass.set_bind_group(0, Some(group), &[]);
             pass.draw(0..3, 0..1);
         };
-        pass("photo fx", pipeline, &group, scratch);
-        pass("photo fx copy", &self.copy, &home, frame.scene);
+        if frame.params.dof.is_some() {
+            let tiles = oag_gpu::perfprobe::bind_group(
+                device,
+                &wgpu::BindGroupDescriptor {
+                    label: Some("photo fx tiles"),
+                    layout: tile_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: self.constants.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: view(frame.depth),
+                        },
+                    ],
+                },
+            );
+            pass(
+                "photo fx tiles",
+                tile_pipeline,
+                &tiles,
+                &targets.tiles,
+                tile_rect,
+            );
+            pass(
+                "photo fx reach",
+                &self.dilate,
+                &targets.dilate,
+                &targets.reach,
+                tile_rect,
+            );
+        }
+        pass("photo fx", pipeline, &group, &targets.scratch, rect);
+        pass("photo fx copy", &self.copy, &home, frame.scene, rect);
         true
     }
 
     fn resize(&mut self, device: &wgpu::Device, size: (u32, u32)) {
         let size = (size.0.max(1), size.1.max(1));
-        if self.size == size && self.scratch.is_some() {
+        if self.size == size && self.targets.is_some() {
             return;
         }
         self.size = size;
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("photo fx scratch"),
-            size: wgpu::Extent3d {
-                width: size.0,
-                height: size.1,
-                depth_or_array_layers: 1,
+        let target = |label: &str, (width, height): (u32, u32), format| {
+            device
+                .create_texture(&wgpu::TextureDescriptor {
+                    label: Some(label),
+                    size: wgpu::Extent3d {
+                        width,
+                        height,
+                        depth_or_array_layers: 1,
+                    },
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: wgpu::TextureDimension::D2,
+                    format,
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                        | wgpu::TextureUsages::TEXTURE_BINDING,
+                    view_formats: &[],
+                })
+                .create_view(&wgpu::TextureViewDescriptor::default())
+        };
+        let tiled = (size.0.div_ceil(TILE), size.1.div_ceil(TILE));
+        let tiles = target("photo fx tiles", tiled, TILE_FORMAT);
+        let dilate = oag_gpu::perfprobe::bind_group(
+            device,
+            &wgpu::BindGroupDescriptor {
+                label: Some("photo fx reach"),
+                layout: &self.dilate_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.constants.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(&tiles),
+                    },
+                ],
             },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: self.format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+        );
+        self.targets = Some(Targets {
+            scratch: target("photo fx scratch", size, self.format),
+            reach: target("photo fx reach", tiled, TILE_FORMAT),
+            tiles,
+            dilate,
         });
-        self.scratch = Some(texture.create_view(&wgpu::TextureViewDescriptor::default()));
     }
 }
 

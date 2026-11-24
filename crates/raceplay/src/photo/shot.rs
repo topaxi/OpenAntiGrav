@@ -12,10 +12,13 @@
 //!   smears and the craft stays sharp; a ship blur holds the camera where it is at the shot's
 //!   tick, so the craft smears and the scenery stays sharp. At most 15 ticks, the longest shutter.
 //! - **Depth of field.** The same tick drawn again with the eye moved across the lens, on a
-//!   centre sample and a ring of the rest, aimed at the focus plane so that plane stays sharp.
-//!   The ring's radius is half of the widest blur the single-frame pass draws at this aperture
-//!   ([`oag_post::photo_fx::Dof::MAX_RADIUS`]), and each frame keeps the other half as that pass.
-//!   Together they reach the width the preview shows.
+//!   centre sample and a ring of the rest, through an off-axis frustum that holds the focus
+//!   plane ([`LensShift`]). Every frame is the single-frame pass at the full aperture, the
+//!   picture the preview shows, and the ring only refines it: it is sized so that the ends of
+//!   HD's sharp band move at most [`BAND_DRIFT`] of the picture's height and nothing moves more
+//!   than [`RING_SHARE`] of the blur the pass draws at its depth. A thin lens has one sharp
+//!   distance and no widest blur, so a wider ring would blur the band the preview keeps sharp
+//!   and draw a near surface as copies far wider than the preview's blur.
 //! - **Both**: the frames of the blur, the lens samples taken in turn.
 
 use oag_post::photo_fx::{Dof, Edges};
@@ -31,6 +34,14 @@ const TICKS_PER_SECOND: f32 = 60.0;
 
 /// A shutter shorter than this many ticks moves nothing worth a frame.
 const LEAST_SHUTTER_TICKS: f32 = 0.01;
+
+/// The most a lens sample moves the ends of the sharp band, as a fraction of the picture's
+/// height: a quarter of a pixel at 1080 lines, half of one at 2160.
+pub const BAND_DRIFT: f32 = 1.0 / 4320.0;
+
+/// The most a lens sample moves a surface outside the sharp band, as a share of the blur
+/// radius the single-frame pass draws at its depth.
+pub const RING_SHARE: f32 = 0.25;
 
 /// What a shot is made of.
 #[derive(Debug, Clone, PartialEq)]
@@ -78,14 +89,10 @@ impl Plan {
                 (seconds * TICKS_PER_SECOND).min(Accumulation::LONGEST_SHUTTER * TICKS_PER_SECOND);
             (ticks >= LEAST_SHUTTER_TICKS).then_some((kind, ticks))
         });
-        let aperture = effects.depth_of_field().map(|(aperture, focus)| {
-            let distance = Edges::new(focus).distance;
-            let height = 2.0 * (photo.fov().to_radians() * 0.5).tan();
-            Aperture {
-                radius: 0.5 * Dof::MAX_RADIUS * aperture * height * distance,
-                focus: distance,
-                samples: acc.dof_frames.max(1),
-            }
+        let aperture = effects.depth_of_field().map(|(aperture, focus)| Aperture {
+            radius: ring_radius(aperture, focus, photo.fov()),
+            focus: Edges::new(focus).distance,
+            samples: acc.dof_frames.max(1),
         });
         let frames = match (blur, aperture) {
             (Some(_), _) => acc.blur_frames,
@@ -141,6 +148,51 @@ impl Plan {
             lens: self.aperture.map(|aperture| aperture.sample(index)),
         }
     }
+}
+
+/// The radius of the lens ring, in world units, for the aperture and focus sliders (`0..=1`)
+/// and a vertical field of `fov` degrees: the widest ring that keeps the band's ends within
+/// [`BAND_DRIFT`] and every other depth within [`RING_SHARE`] of the pass's blur there.
+///
+/// A ring sample of radius `s` moves a surface at distance `z` by `s * |1/z - 1/d|` of the
+/// picture's tangent, `d` the focus distance. The pass's blur ramps from nothing at the band's
+/// ends to its widest at the edges and stays there; the depths checked are the near plane,
+/// both ramps in steps and infinity, which bound every other.
+fn ring_radius(aperture: f32, focus: f32, fov: f32) -> f32 {
+    const STEPS: u32 = 16;
+    let e = Edges::new(focus);
+    let height = 2.0 * (fov.to_radians() * 0.5).tan();
+    let widest = aperture.clamp(0.0, 1.0) * Dof::MAX_RADIUS;
+    let drift = BAND_DRIFT * height;
+    let inverse_d = 1.0 / e.distance;
+    // The widest ring that moves a surface at `inverse_z` (1/distance) no more than `allowed`.
+    let ring = |inverse_z: f32, allowed: f32| {
+        let per_unit = (inverse_z - inverse_d).abs();
+        if per_unit > 0.0 {
+            allowed / per_unit
+        } else {
+            f32::INFINITY
+        }
+    };
+    let allowed = |blur: f32| drift.max(RING_SHARE * widest * blur * height);
+    let near = crate::camera::NEAR_PLANE;
+    let mut radius = ring(1.0 / e.near_focus.max(near), drift)
+        .min(ring(1.0 / e.far_focus, drift))
+        .min(ring(1.0 / near, allowed(1.0)))
+        .min(ring(0.0, allowed(1.0)));
+    let near_start = e.near_edge.max(near);
+    for step in 0..=STEPS {
+        let t = step as f32 / STEPS as f32;
+        if e.near_focus > near_start {
+            let z = near_start + (e.near_focus - near_start) * t;
+            let blur = (e.near_focus - z) / (e.near_focus - e.near_edge);
+            radius = radius.min(ring(1.0 / z, allowed(blur)));
+        }
+        let z = e.far_focus + (e.far_edge - e.far_focus) * t;
+        let blur = (z - e.far_focus) / (e.far_edge - e.far_focus);
+        radius = radius.min(ring(1.0 / z, allowed(blur)));
+    }
+    if widest > 0.0 { radius } else { 0.0 }
 }
 
 impl Aperture {

@@ -171,8 +171,9 @@ impl Scene {
                 &shown,
             );
         }
-        // The flaps the hull's base draw swings: a person's own (`deflect_airbrakes` runs for
-        // every craft a person flies), so a rival's pass stays with its own stowed hull.
+        // The flaps the hull's base draw swings: a craft's own, whoever flies it (`deflect_airbrakes`
+        // runs for every craft whose flaps are out, the grid's included, and once more to fold a flap
+        // back), so a rival's pass follows its own hull.
         for (slot, shine) in self.shines(race, cull.frustum) {
             shine.write(
                 queue,

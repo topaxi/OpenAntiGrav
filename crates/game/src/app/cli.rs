@@ -1286,6 +1286,13 @@ pub(crate) struct Cli {
     #[arg(long, requires = "pose_from")]
     pub(crate) pose_flaps: bool,
 
+    /// With `--race --screenshot`: draw every craft's flaps stowed through the grid state, which holds
+    /// them fully out in play. For a comparison against an original that stows them, and for a frame
+    /// of the flaps alone: the same race with and without this differs in the flaps and nothing else.
+    /// A posed capture (`--pose-from`, `--field-from`, `--pose`) stows them without it.
+    #[arg(long)]
+    pub(crate) no_grid_flaps: bool,
+
     /// With `--race --screenshot` or `--race --trace-out`: drive the run from
     /// a committed `.inputs` script (see `scripts/input_script.py` for the
     /// format) instead of `--hold`/`--press` - the same file

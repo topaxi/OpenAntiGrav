@@ -186,6 +186,52 @@ watched, held through the countdown is within 0.4 units of the original at 120 f
 window is not a boost percentage: it is the airbrake flaps' visual position
 (`Ship_UpdateAirbrakes`) releasing from the grid's forced-full.
 
+## The flaps on the grid (2026-11-24, `grid-airbrakes`)
+
+On the grid every craft stands with **both airbrake flaps fully out**, and they fold after GO. The word is the flaps'
+own visual position, not the input-ramped level: the drawn flap in ours is `oag_raceplay::RaceView::flaps`, `0..=100`, the
+scale `<AirbrakeGraphics>`'s `up_speed`/`down_speed` ramp on ([ship-parts.md](../ghidra/functions/psp-pulse-usa/ship-parts.md)).
+**Drawing state only**: no `World` field, no state hash (`tests::grid_flaps::the_grid_flaps_reach_no_state_hash`); the
+physics side of the same forced word on PS2 (`max(+0x2d8, +0x2dc)` into `slidegrip`, [craft-update.md](../ghidra/functions/ps2-pulse-eu/craft-update.md))
+is not touched here.
+
+**Ours**: while the countdown holds (`RaceState::thrust_gated`, the clock `ShipState::on_grid` follows) every slot's flaps are
+written to `GRID_FLAP_LEVEL` (`100`), player and AI, from the race's load; after it the existing chase folds them at the hull's
+`down_speed` toward the craft's airbrake level (zero with no input). A restart rebuilds the race and so re-arms it; a respawn
+after the start does not, because the original's respawn enters state 3, never state 0 (above). Wherever the simulation is put back without the ticks between (a replay seek, a pose view, a photo rewind, a client's catch-up and snap),
+`RaceView::settle_flaps` draws what the restored tick has: full before GO, partway down the fold in the ticks after, and the airbrakes'
+level past it (nothing moves from inside the race to inside the race, so a correction that rewinds a few ticks does not snap them).
+Replays re-run the race and show
+it; a ghost borrows the hull of the slot flying its team, so it shows that slot's flaps on the same clock.
+
+**Pulse PSP, measured** (confidence **85**): `craft+0x2d8`/`+0x2dc` read `100` through state 0 and run `100` to `0` linearly over
+the 59 frames after GO (the launch-boost read above, Assegai, Venom, `16_Track`). Assegai authors `down_speed` `100`, which is 60
+ticks of `100 / 60` a tick: the same line to within one frame
+(`grid_flaps_ground_truth::assegai_folds_linearly_in_the_original_s_59_frames`). So the release needs no law of its own.
+
+| Title | Grid force | Evidence |
+| --- | --- | --- |
+| Pulse PSP | measured | the live read above |
+| Pure PSP | measured in RAM, release inherited (confidence **75**) | PPSSPP, Time Trial Vineta K, the walk's own route, a `Ship_UpdateCraft` stop each 0.9 s through the intro and countdown: `craft+0x260` and `+0x264` (Pulse's `+0x2d8`/`+0x2dc` less `0x78`) read `100.0` while `craft+0x1c0` reads `0x3` and `0.0` from the first stop after it reads `0x1` (also `+0x274`, `+0x27c`, `+0x280`, `+0x290`, `+0x294` at `100.0`, unnamed); [countdown-voice.md](../ghidra/functions/psp-pure-usa/countdown-voice.md) read the same flip at GO with a 100 to 0 ramp of about 60 frames in `+0x290`. The 0.9 s sampling cannot say whether `+0x260`/`+0x264` jump or ramp; ours folds them as Pulse's do |
+| Pulse PS2 | inherited from PSP | `Ship_UpdateAirbrakes` (`0x00159bf4`) is the same function with the same two words; the grid force was not read on PS2 |
+| HD/Fury | inherited from Pulse | no HD comparison frame stands on the grid (the HD pairs are 2 to 9 s after GO, past the fold); consistent with 2048 and Omega, which share its lineage, both measured below |
+| 2048 | measured by picture | Vita3K, grid before GO (`2048-vita/*`, tick 175 to 187 of ours): the original's craft has both flaps out at the rear; ours drew them stowed |
+| Omega | measured by picture | shadPS4, single race at tick 100 (`omega/*`): the original's craft has both flaps out, large, one each side; ours drew them stowed |
+
+No title measured keeps the flaps stowed on the grid, so no title pins them stowed. **Capture-only**: a posed capture
+(`--pose-from`, `--field-from`, `--pose`) stands for a craft off the grid and calls `Race::stow_grid_flaps`, so every pair posed
+from a row read after GO draws as before, pixel for pixel (12 posed pairs on Pulse PSP and PS2, Pure and HD re-rendered with
+the old and the new binary); `--pose-flaps` still puts a trace row's levels on top. `--no-grid-flaps` is the same switch on
+an unposed run, for a frame of the flaps alone (`zone_airbrake_flaps_ground_truth` takes its stowed reference with it) or
+for a title whose original is found to stow them.
+
+**Pairs, before to after** (mean absolute grey against the original inside the player's flap region; whole-frame mean grey in
+brackets): Omega `sol-2` 48.5 to 40.2 (31.40 to 30.81), `anulpha-pass` 41.1 to 31.0 (20.94 to 20.30), `vineta-k` 28.0 to 24.4,
+`talons-junction` 46.3 to 42.9, `metropia` 34.4 to 30.8; 2048 `mall` 47.3 to 32.0 (23.84 to 23.42), `sol-2` 34.2 to 28.4,
+`metropia` 21.0 to 19.9, `talons-junction` 33.3 to 32.5, `empire-climb` 45.0 to 45.9 (its pose and camera are not matched, see
+its note). The flaps now stand out on both sides as the original's do; how far, against the original, is not measured (the cameras are
+not matched, and Omega's original flap reads larger in the frame).
+
 ## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)
 
 Zone runs `Ship_HoverFourCorner` (`0x0884ae90`) where every other mode runs `Ship_HoverTwoPoint`. Its epilogue

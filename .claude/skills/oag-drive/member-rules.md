@@ -85,6 +85,8 @@ Recipes: `docs/reverse-engineering/emulator-recipes.md`.
 - **Never end a turn waiting for a background job to notify you**; no member has ever been woken that way. Run long commands in the foreground with a 600000 ms timeout, or poll the output file. (Ending a turn to wait for the lead's answer is the opposite case and is correct: see "A question you cannot proceed without".)
 - **No fine-grained Monitors** (maintainer, 2026-10-19): each event wakes you and your idle turn wakes the lead. Watch only the whole run or gate finishing, or poll at 10 minute intervals or more.
 
+**A test that proves an open defect is `#[ignore]`d and also returns early unless `OAG_REVIEW_FINDINGS` is set.** `just test-data` and `lead-test-data` run every ignored test (that is where the disc-backed ground truth lives), so a bare `#[ignore]` on a test that fails today turns the lead's gate red. Run it with `OAG_REVIEW_FINDINGS=1` to see it fail; the fix removes both the guard and the `#[ignore]`.
+
 ## Commits
 
 - **A `git diff`/`git show` whose output is applied, parsed or saved takes `--no-ext-diff`** (the maintainer's `diff.external = difft` prints a structural view, not a patch). Never change that config. `git apply -R` also fails on a file later commits touched; use `--3way` or `git checkout A -- <path>`.

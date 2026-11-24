@@ -38,9 +38,8 @@ pub struct EmbeddedTexture {
     ///
     /// **Authored, not derived**: the bytes after the base level in the texel
     /// block, at the padded stride [`texture_row_stride`] establishes. Empty for a
-    /// one-level texture. A pre-swizzled node (flags bit 0) of version 5 or later
-    /// has each level unswizzled on its own first; a version-4 one keeps none (its
-    /// chain is synthesised).
+    /// one-level texture. A pre-swizzled node (flags bit 0) has each level
+    /// unswizzled on its own first, on every version.
     pub levels: Vec<Vec<u8>>,
 }
 
@@ -210,7 +209,6 @@ pub fn stored_textures<'a>(
 /// list.
 pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
     let tree = nodes(data)?;
-    let classes = classes_of(data)?;
     let mut out = Vec::new();
     for stored in stored_textures(data, &tree)? {
         let Some(StoredTexture {
@@ -238,8 +236,7 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // texel block is already in the GE's 16-byte by 8-row block order, so a
         // literal read comes out scrambled.
         //
-        // **Acted on for every version** (levels below the base only from version
-        // 5). It was once gated to version 4 and below because the bit appears on
+        // **Acted on for every version.** It was once gated to version 4 and below because the bit appears on
         // 88 Pulse PSP nodes with no known meaning. A live PPSSPP capture of
         // Pulse's shield shell (`pulse_shield_test_ADD`, flags `0xe5`) settled it:
         // the GE reads every Pulse texture swizzled (`TEXMODE` bit 0 on every
@@ -255,18 +252,14 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
         // stride past 16 bytes is copied through (none exists on a flagged Pulse
         // texture; unverified).
         let swizzled = flags & oag_formats::swizzle::FLAG_SWIZZLED != 0;
-        // **Version 4 and below (Pure, Pulse's Zone wrecks)** keep the base level
-        // unswizzled as one block and no authored levels, so the renderer
-        // synthesises their chain (`docs/rendering/frame-audit.md`). Their levels
-        // are swizzled like any other (236 of 236 flagged levels agree), but
-        // handing them on would switch Pure onto the slope level rule, which
-        // nothing here measured.
-        let authored_levels = classes.version >= 5;
+        // **Every version authors its levels.** A flagged version-4 file (Pure, Pulse's Zone
+        // wrecks) lays its levels out like a version-5 one, each swizzled at its own padded
+        // stride, and the GE selects among them by slope (`TEXLODSLOPE` `1/256` on all 430
+        // PRIMs of a Pure race frame, mode 2 on every texture), so the renderer takes them
+        // as the disc's own chain and runs the same slope rule
+        // (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "The hull's texture level").
         let linear;
-        let texels = if swizzled && !authored_levels {
-            linear = oag_formats::swizzle::unswizzle(block, stride, usize::from(height));
-            &linear[..]
-        } else if swizzled {
+        let texels = if swizzled {
             linear = unswizzle_levels(block, width, height, bits_per_pixel, mip_count);
             &linear[..]
         } else {
@@ -278,58 +271,40 @@ pub fn textures(data: &[u8]) -> Result<Vec<Option<EmbeddedTexture>>> {
             let Some(line) = texels.get(y * stride..y * stride + row) else {
                 break;
             };
-            if bits_per_pixel == 8 {
-                indices.extend_from_slice(line);
-            } else {
-                for &b in line {
-                    indices.push(b & 0x0f);
-                    indices.push(b >> 4);
-                }
-            }
+            push_row(&mut indices, line, usize::from(width), bits_per_pixel);
         }
         // `to_rgba` promises `width * height` texels and its consumers index
         // against them, so a block too short for every row (no Pulse PSP texture
-        // is; see `texture_row_stride`) is padded out. The same call caps a 4-bit
-        // odd width, where the last byte carries a pixel past the end.
+        // is; see `texture_row_stride`) is padded out.
         indices.resize(pixels, 0);
 
-        // The levels below the base, when texels are in row order: each follows
-        // the last at its own padded stride, stopping at the first level the block
-        // cannot hold (fewer levels, not padded ones).
+        // The levels below the base, in row order: each follows the last at its own
+        // padded stride, stopping at the first level the block cannot hold (fewer
+        // levels, not padded ones), at the 1x1 level, and at [`MAX_LEVELS`] (a
+        // header's `mip_count` is a byte and nothing bounds it).
         let mut levels = Vec::new();
-        if !swizzled || authored_levels {
-            let mut offset = stride * usize::from(height);
-            for level in 1..u32::from(mip_count) {
-                let (w, h) = (
-                    (width >> level).max(1),
-                    usize::from((height >> level).max(1)),
-                );
-                let (row, stride) = (
-                    texture_row_bytes(w, bits_per_pixel),
-                    texture_row_stride(w, bits_per_pixel),
-                );
-                let mut plane = Vec::with_capacity(usize::from(w) * h);
-                for y in 0..h {
-                    let at = offset + y * stride;
-                    let Some(line) = texels.get(at..at + row) else {
-                        break;
-                    };
-                    if bits_per_pixel == 8 {
-                        plane.extend_from_slice(line);
-                    } else {
-                        for &b in line {
-                            plane.push(b & 0x0f);
-                            plane.push(b >> 4);
-                        }
-                    }
-                }
-                if plane.len() < usize::from(w) * h {
+        let mut offset = stride * usize::from(height);
+        for level in 1..u32::from(mip_count) {
+            let Some((w, h)) = level_size(width, height, level) else {
+                break;
+            };
+            let (row, stride) = (
+                texture_row_bytes(w, bits_per_pixel),
+                texture_row_stride(w, bits_per_pixel),
+            );
+            let mut plane = Vec::with_capacity(usize::from(w) * h);
+            for y in 0..h {
+                let at = offset + y * stride;
+                let Some(line) = texels.get(at..at + row) else {
                     break;
-                }
-                plane.truncate(usize::from(w) * h);
-                levels.push(plane);
-                offset += stride * h;
+                };
+                push_row(&mut plane, line, usize::from(w), bits_per_pixel);
             }
+            if plane.len() < usize::from(w) * h {
+                break;
+            }
+            levels.push(plane);
+            offset += stride * h;
         }
 
         out.push(Some(EmbeddedTexture {
@@ -363,10 +338,16 @@ fn unswizzle_levels(
     let mut out = Vec::with_capacity(block.len());
     let mut offset = 0;
     for level in 0..u32::from(mip_count.max(1)) {
-        let w = (width >> level).max(1);
-        let h = usize::from((height >> level).max(1));
+        let Some((w, h)) = level_size(width, height, level) else {
+            break;
+        };
         let stride = texture_row_stride(w, bits_per_pixel);
         let Some(plane) = block.get(offset..offset + stride * h) else {
+            if level == 0 {
+                // A block shorter than its base level: every complete block of it is
+                // unswizzled, as a file with no levels reads.
+                return oag_formats::swizzle::unswizzle(block, stride, h);
+            }
             break;
         };
         out.extend_from_slice(&oag_formats::swizzle::unswizzle(plane, stride, h));
@@ -374,6 +355,37 @@ fn unswizzle_levels(
     }
     out.extend_from_slice(&block[offset.min(block.len())..]);
     out
+}
+
+/// The most levels a texture is read to. A header's `mip_count` is a byte, and a
+/// `u16` dimension has 16 halvings at most.
+const MAX_LEVELS: u32 = 16;
+
+/// The size of level `level` of a `width` by `height` texture: each dimension
+/// halved and kept at 1. `None` for a zero dimension (no levels can follow), for a
+/// level past [`MAX_LEVELS`], and for any level after the 1x1 one.
+fn level_size(width: u16, height: u16, level: u32) -> Option<(u16, usize)> {
+    if width == 0 || height == 0 || level >= MAX_LEVELS {
+        return None;
+    }
+    if level > 0 && (width >> (level - 1)) <= 1 && (height >> (level - 1)) <= 1 {
+        return None;
+    }
+    Some((
+        (width >> level).max(1),
+        usize::from((height >> level).max(1)),
+    ))
+}
+
+/// Appends one row's `width` indices to `out`: a byte per index at 8 bits, two
+/// nibbles per byte at 4 (low first), exactly `width` of them, so a row of odd width
+/// does not carry its last byte's padding nibble into the next row.
+fn push_row(out: &mut Vec<u8>, line: &[u8], width: usize, bits_per_pixel: u8) {
+    if bits_per_pixel == 8 {
+        out.extend_from_slice(line);
+    } else {
+        out.extend(line.iter().flat_map(|&b| [b & 0x0f, b >> 4]).take(width));
+    }
 }
 
 /// How many bytes of one texture row hold actual picture, before padding.

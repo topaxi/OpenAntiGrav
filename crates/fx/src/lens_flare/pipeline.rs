@@ -162,9 +162,9 @@ impl Pipeline {
             wgpu::util::TextureDataOrder::MipMajor,
             &atlas.levels.concat(),
         );
-        // Linear magnify, mipmap-linear minify. A version-4 `.vex` (Pure's) authors no level
-        // below the base, so the atlas is one level and minify is linear too: chosen, not
-        // measured (the original samples four mips).
+        // Linear magnify, mipmap-linear minify over the atlas's own levels (a version-4 `.vex`
+        // authors them too). The level is the sampler's own choice: chosen, not measured (the
+        // original samples four mips).
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("lens flare"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,

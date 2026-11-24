@@ -457,7 +457,10 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                                    "best_lap_s": player["best_lap_cs"] / 100,
                                    "speed_kmh": hud_speed,
                                    "speed_kmh_at_pose_stop": player.get("hud_kmh"),
-                                   "body_speed_kmh": theirs_row["speed"] * SPEED_TO_KMH}
+                                   "body_speed_kmh": theirs_row["speed"] * SPEED_TO_KMH,
+                                   "shield_flash_s": pair.rec["original"]["hud_at_freeze"]["shield_flash_s"],
+                                   "shield_blink_s": pair.rec["original"]["hud_at_freeze"]["shield_blink_s"],
+                                   "shield_flash_source": "HUD object (*g_hud) +0x11c, the energy bar's forced-red timer, and +0x1dc, its blink accumulator"}
     pair.check("the HUD's own speed readout (PLAYER_HUD+0) was found in the registry", hud_speed is not None,
                "the block whose lap time (+0x24) is the player's; at the pose's stop it reads %s, body |velocity| * 3.6 %.2f"
                % (player.get("hud_kmh"), theirs_row["speed"] * SPEED_TO_KMH))
@@ -483,7 +486,8 @@ def field_pair(args, pair, plat, out, image, facts, flags, csv, theirs_row, thei
                 hud_speed, 100.0 * player["shield"] / player["shield_max"],
                 player["best_lap_cs"] / 100),
             "--hud-boost-phase", "%.6f" % pair.rec["original"]["hud_at_freeze"]["boost_phase"]] + lean_and_boost_flags(
-                pair, theirs_row) + autopilot_hud_flags(pair) + flags + ["--camera-fov", "%.4f" % fov]
+                pair, theirs_row) + held_pickup_hud_flags(pair) + ce.shield_flash_flags(pair.rec["original"]["hud"]) \
+        + autopilot_hud_flags(pair) + flags + ["--camera-fov", "%.4f" % fov]
     pair.rec["ours"]["ticks"] = 0
     pair.rec["ours"]["flags"] = [str(c) for c in base[2:]] + ["--ticks", 0]
     pair.caveat("every craft's trail and plume in ours are an exhaust-only warm-up (`--field-warmup`): each craft "
@@ -667,6 +671,8 @@ def main():
         fr = [r for r in rf.Field(probe).rows() if r["player"]][0]
         pair.rec["original"]["hud_at_freeze"] = {"speed_kmh": fr.get("hud_kmh"), "lap_time": fr["lap_time"], "vel_kmh": math.sqrt(sum(v * v for v in fr["vel"])) * 3.6,
                                                  "boost_phase": boost_phase(probe)}
+        flash, blink = shield_flash_state(probe)
+        pair.rec["original"]["hud_at_freeze"].update({"shield_flash_s": flash, "shield_blink_s": blink})
     wid, wx, wy, ww, wh = set_window(*plat["output"])
     pair.check_equal("original window size", [ww, wh], list(plat["output"]))
     shots = out / "shots"

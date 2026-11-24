@@ -596,6 +596,64 @@ fn camera_of(photo: &Photo, craft: &Subject) -> Free {
     Free::from_orientation(pose.eye, pose.orientation)
 }
 
+/// Choosing the free lens from another starts on the picture that lens drew, its field included.
+/// Fails while the seed is held to the close lens's field: the track lens zooms to 3 degrees.
+#[test]
+#[ignore = "photo-fx-review finding 10"]
+fn the_free_lens_seeded_from_a_zoomed_track_lens_keeps_its_field() {
+    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
+    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
+        return;
+    }
+    let craft = craft(0);
+    let mut photo = Photo::new(0, true, None);
+    photo.cycle_lens();
+    photo.cycle_lens();
+    assert_eq!(photo.lens(), Lens::Track);
+    for _ in 0..40 {
+        photo.step(stick(0.0, 1.0), &[0]);
+    }
+    assert_eq!(photo.fov(), TRACK_FOV.0, "zoomed all the way in");
+    let node = Some(craft.position + Vec3::new(40.0, 10.0, 0.0));
+    let on_screen = photo.pose(&craft, node);
+    assert_eq!(on_screen.fov_deg, Some(TRACK_FOV.0));
+    photo.cycle_lens();
+    assert!(photo.needs_free_seed());
+    photo.seed_free(on_screen, craft.position);
+    assert_eq!(
+        photo.pose(&craft, node).fov_deg,
+        on_screen.fov_deg,
+        "the picture jumped: the free lens opened on another field"
+    );
+}
+
+/// The free lens stands where it was seeded until it is moved. Fails while the range is applied
+/// by every tick of the lens and not by the seed: a seed further than `FREE_RANGE` from the
+/// craft is drawn once where it was and then pulled in with nothing held.
+#[test]
+#[ignore = "photo-fx-review finding 10"]
+fn the_free_lens_seeded_beyond_its_range_does_not_move_with_nothing_held() {
+    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
+    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
+        return;
+    }
+    let craft = craft(0);
+    let far = pose_at(craft.position + Vec3::new(450.0, 20.0, 0.0), 0.0, 0.0, 0.0);
+    let mut photo = Photo::new(0, true, None).opening_on(far, craft.position);
+    let seeded = photo.pose(&craft, None).eye;
+    assert!(
+        (seeded - far.eye).length() < 1e-3,
+        "the first frame is the seed"
+    );
+    photo.step(Pad::default(), &[0]);
+    let after = photo.pose(&craft, None).eye;
+    assert!(
+        (after - seeded).length() < 1e-3,
+        "the eye moved {} units with nothing held",
+        (after - seeded).length()
+    );
+}
+
 #[test]
 fn opening_on_a_pose_shows_that_pose_to_the_bit() {
     let (photo, craft, start) = on_free();

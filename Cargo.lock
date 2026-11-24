@@ -4013,6 +4013,7 @@ dependencies = [
  "oag-disc",
  "oag-formats",
  "oag-pulse",
+ "oag-pure",
  "oag-testdata",
 ]
 

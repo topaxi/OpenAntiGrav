@@ -118,6 +118,90 @@ Region MAD against the original on the four pairs (grey, 480x272; hull `190..290
 Vineta K's and Chenghou's remaining bias is the scene-wide darkness of those two circuits (the
 track band reads -22 and -8 too), not the hull.
 
+## The hull's texture level
+
+Lane `pure-modesto-hull` (2026-11-24). The residual of the Modesto grid pair's hull box (`x 180..300, y 176..272`, grey MAD 5.83 on
+the stored pair) was **texture level selection**, not lighting, texture content, geometry or timing. Confidence **90**.
+
+**What the GE is given.** One `gpu.record.dump` of the pair's own save state, read twice (two dumps of one load; the original's
+frame is bit-identical across two loads of the state, MAD 0.0): the hull is the three PRIMs at command chunks 1128, 1138 and 1148
+(ordinary pass, lighting on, `BLENDMODE 0x2a`) preceded by 1104, 1111 and 1118 (the `TEXMAPMODE` 2 environment pass). Registers at
+those PRIMs:
+
+| Word | Ordinary pass | Extra pass |
+| --- | --- | --- |
+| `TEXLEVEL` `0xc8` | `0x350002`, `0x420002`, `0x3b0002` (mode 2, slope; bias 53, 66, 59 sixteenths = 3.31, 4.13, 3.69) | `0x2a0002` (bias 2.63) |
+| `TEXLODSLOPE` `0xd0` | `0x3b8000` = `1/256`, as on **all 430** PRIMs of the frame | same |
+| `TEXMODE` `0xc2` | `0x40001`: swizzled, levels 0 to 4 (128, 64, 32, 16, 8 px) | `0x1`: level 0 only |
+| `TEXFILTER` `0xc6` | `0x107`: minify linear-mipmap-linear, magnify linear | same |
+| Lights | ambient `(73, 63, 53)`, L0 `(-0.6797, 0.3998, -0.6149)` diffuse `(249, 249, 249)`, L1 `(-19.24, 7.19, 1.42)` diffuse `(208, 47, 1)` (the point light, above), no specular | |
+
+Ours reads the same values (a scratch run of `HullLights::from_track` on `03_Modesto_Heights`: ambient `(73, 63, 53)`, light 0 the same
+vector and `249`; light 1 is `HullPointLights`' slot 0, pinned by `modestos_grid_hull_takes_the_second_light_the_ge_list_carries`).
+The slope rule `level = log2(|z| * slope) + bias` is `mesh-draw.md`'s (`Gu_TexLodSlope`, `0x3b800000`). The hull's view depth is 6.2
+to 16.8 units (the dump's view matrix over the batches' bounds), so the level is **-0.6 to -2.1: level 0 over the whole hull**, at any
+bias up to 3.9. Replaying the dump with `TEXLEVEL` forced to const level 0 moves the original's hull by 0.16 grey MAD: it is already
+there. (The same replays: `TEXFILTER` nearest 0.003, ambient zeroed 9.1, light 1 off 3.1, extra pass removed 22.2.)
+
+**What ours did.** `vex::textures` dropped every level of a version-4 file ("handing them on would switch Pure onto the slope level
+rule, which nothing here measured"), so Pure's hull took the sampler's own derivative-driven level over a box-filtered chain, 2 to 3
+levels coarser than the original's level 0. The residual was almost all high-frequency (6 % of the squared error low-pass), the
+original carried 15 % more local contrast (high-pass gain 1.154), and the interior shading already matched to 1 to 3 levels. Forcing
+the hull's bias to -4 (level 0) as a scratch experiment read the box at 2.77; -2: 3.06, -1: 3.75, +1: 6.82, +2: 8.41.
+
+**The fix** reads the levels: a flagged version-4 texture authors them like a version-5 one (each swizzled at its own padded stride).
+The hull's levels 0 to 4 on all three textures equal the recorded list's byte for byte (both dumps); `envtest4`'s level 0 does (its
+`TEXMODE` allows no other). The base level of 387 flagged textures (the eight hulls, Modesto and Vineta K) is unchanged. Test:
+`oag-vex::it pure_texture_levels_ground_truth` (every texture of the eight hulls and Modesto's track reads `mip_count - 1` levels of
+the right size; Feisar's three hull textures are chained; red with the version gate restored).
+
+| Modesto grid, box `180..300 x 176..272` | before | after |
+| --- | ---: | ---: |
+| grey MAD, stored pair (no world clock) | 5.28 | 2.94 |
+| grey MAD, re-captured with the world clock (10.04 s) | 5.09 | **2.74** |
+| edge correlation at (0, 0) (`psp-pure-pair.py`'s `craft_offset`; 0.408 as first stored) | 0.465 | 0.479 |
+| high-pass correlation / gain | 0.846 / 1.154 | 0.965 / 1.017 |
+| teal body, MAD (signed original - ours) | 6.61 (-5.2) | 1.83 (-1.2) |
+| orange livery | 5.72 (-0.1) | 1.63 (-1.0) |
+| canopy | 16.9 (+11.7) | 5.21 (+0.5) |
+| hull silhouette edge | 8.62 | 3.93 |
+
+Regions are masks off the two frames' hull hues; the box splits into hull (4,600 px, 51 % of the box's error after, 68 % before),
+plume glow (386 px, 8 %) and ground, road and background (6,500 px, 41 %). Pairs, stored ours against re-render, hull box
+`190..290 x 175..272` / sky / track / frame, grey MAD:
+
+| Pair | Hull | Sky | Track | Frame |
+| --- | --- | --- | --- | --- |
+| Vineta K | 12.17 -> 9.02 | 6.01 -> 5.99 | 8.17 -> 7.63 | 7.35 -> 7.07 |
+| Chenghou | 10.49 -> 8.36 | 6.57 -> 6.54 | 7.08 -> 6.67 | 7.66 -> 7.46 |
+| Blue Ridge | 12.52 -> 12.13 | 6.06 -> 6.05 | 6.35 -> 6.24 | 7.13 -> 7.08 |
+| Modesto | 5.71 -> 3.31 | 3.74 -> 3.70 | 4.95 -> 4.52 | 6.18 -> 5.96 |
+| Sinucit | 14.14 -> 13.02 | 15.71 -> 15.85 | 14.40 -> 14.19 | 15.33 -> 15.31 |
+| Citta Nuova | 10.13 -> 6.90 | 6.87 -> 6.78 | 7.23 -> 6.62 | 8.64 -> 8.35 |
+| Sebenco Climb | 23.84 -> 22.77 | 12.10 -> 12.38 | 16.93 -> 16.71 | 15.46 -> 15.48 |
+| Sol 2 | 15.55 -> 13.96 | 11.30 -> 11.28 | 6.46 -> 6.14 | 10.27 -> 10.13 |
+| Karbonis | 14.63 -> 13.12 | 1.32 -> 1.32 | 2.84 -> 2.54 | 4.27 -> 4.16 |
+| Sagarmartha | 31.54 -> 31.76 | 4.41 -> 4.41 | 6.84 -> 6.88 | 8.74 -> 8.76 |
+| Manor Top | 11.63 -> 10.02 | 3.41 -> 3.40 | 3.17 -> 2.85 | 6.28 -> 6.15 |
+| Mandrashee | 11.67 -> 9.98 | 1.85 -> 1.85 | 3.00 -> 2.67 | 6.82 -> 6.69 |
+| Zone z8 | 59.31 -> 61.06 | 59.54 -> 59.54 | 42.15 -> 42.46 | 52.21 -> 52.34 |
+| Zone z9 | 63.38 -> 64.53 | 69.21 -> 69.21 | 56.93 -> 57.12 | 64.22 -> 64.31 |
+
+Ten of the twelve race pairs' hulls improve; Sagarmartha's hull is the 4 px shifted one (`compare-page.md`) and moves by +0.22. The
+Zone pairs read 52 to 64 grey (the camera and palette gap of `pures-render-what-the-pairs-do-not-show.md`, item 9) and move by +0.1 to
++0.2 on the frame, not attributed to the level rule; z8's track band is the one sky or track reading that moves by more than 0.3 (+0.31). Two Pulse PSP pairs (Amphiseum White, De Konstruct Black) re-render
+pixel-identical. Pulse's own version-4 textures (13 nodes, the Zone wreck set) take the slope rule now: their flags byte `0x61` is the one every Pure texture of the frame carries (Feisar's five, Modesto's 156) and the builder is the twin (confidence 75; no Pulse wreck frame was read).
+
+**Open.**
+
+- The per-texture bias. Ours uses `PSP_TEXLOD_BIAS` (1.0) on every chained texture. The original's is per texture (hull 3.3 to 4.1,
+  the extra pass 2.6, scenery `0x00` to `0xff` in the same frame); `mesh-draw.md` gives its source (`Texture_BuildBindList`,
+  `log2(sqrt(x)) + display term + 8.2` of a header float) and no Pure read of it exists. It changes nothing within about 26 units; a
+  distant opponent's hull and mid-distance scenery can step a level or two earlier in the original.
+- The environment pass's `TEXMODE` allows level 0 only; ours lets the slope rule step `envtest4` at depth (a far hull).
+- What the box still holds: the plume glow (ours brighter by 5 to 11, blue most), the ground band 2.0 MAD (the shadow's shape,
+  `compare-page.md`) and the canopy's edge (5.2).
+
 ## The circuits
 
 Pure draws its circuits' chrome-map pass too: the four lists carry 57, 36, 31 and 28 mode-2 PRIMs

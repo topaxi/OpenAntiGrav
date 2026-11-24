@@ -179,6 +179,15 @@ by user instructions of the whole module at the gate's profile:
 - Measured and not changed: the race build's pipeline compile (a disk pipeline
   cache adds about 1 % over mesa's own shader cache, which already takes a racing
   launch from 65.7 G to 24.0 G instructions, and naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.
+- Measured and not changed (`load-time.md`, "Fifth round"): SPIR-V written at build time
+  and passed through. naga is about 31 % of a race launch's instructions, but 29 of it is
+  the mesh pipelines, whose override constants exist only at run time; what a build-time
+  blob reaches is 1.6 %.
+- Measured and not built (`load-time.md`, "Sixth round"): resolving the override constants
+  once per distinct stage and handing `wgpu` the IR, no `unsafe`. Race walk -6.2 %
+  (22.01 -> 20.63 G user instructions), bare race launch -8.6 %, one frame byte-identical;
+  under the 10 % bar. naga 30.0.2 hands the resolved module back with its overrides arena
+  still filled, which makes `wgpu-hal` resolve it again (+4.3 % worse) until it is cleared.
 
 ## Still open
 

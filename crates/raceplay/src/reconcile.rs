@@ -49,8 +49,14 @@ impl Race {
     /// view** if they run through [`Race::tick`], which advances the chase
     /// camera, draws sparks, shakes on impact and raises sound cues again.
     /// Replay through [`Self::tick_sim_only`] instead.
+    ///
+    /// **The drawn flaps follow the restored tick** ([`RaceView::settle_flaps`]), the one piece
+    /// of the view this does touch: they are a function of the clock the grid and the fold run
+    /// on, and a restore across GO would otherwise leave them as the other side of it had them.
     pub fn restore_sim(&mut self, snapshot: &RaceSim) {
         self.core.sim = snapshot.clone();
+        #[cfg(feature = "view")]
+        self.view.settle_flaps(&self.core, self.core.sim.world.tick);
     }
 
     /// [`Self::restore_sim`] for a race that is being watched, not played: the state is put back
@@ -124,6 +130,9 @@ impl Race {
         let was_quiet = std::mem::replace(&mut self.quiet, true);
         let evaluations = self.tick(inputs);
         self.quiet = was_quiet;
+        // A sim-only tick advances no view, so the flaps are put where the clock now has them.
+        #[cfg(feature = "view")]
+        self.view.settle_flaps(&self.core, self.core.sim.world.tick);
         self.core.sim.cues.truncate(queued.0);
         self.core.sim.announcements.truncate(queued.1);
         self.core.sim.class_announcements.truncate(queued.2);
