@@ -535,8 +535,8 @@ fn a_lens_sample_keeps_the_focus_plane_sharp_at_the_edge_of_the_frame() {
         "a point on the focus plane at the frame's edge moved {moved} px"
     );
     // The ring is sized to the sharp band and is small at the opening values, so the plane is
-    // checked again under a sample as wide as the ring was before it was (half the preview's
-    // widest blur): the frustum, not the ring's size, is what holds it.
+    // checked again under a 0.07-unit sample, half the preview's widest blur at the opening
+    // aperture: the frustum, not the ring's size, is what holds it.
     let wide = LensShift {
         dx: 0.07,
         dy: 0.0,

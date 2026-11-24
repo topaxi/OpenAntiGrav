@@ -108,8 +108,8 @@ cross; until photo_job=none within 800`.
 ### PF2. A lens sample turns the camera, so the focus plane is sharp only on the axis
 
 **Fixed** in `5e6674042`: `LensShift::apply` shears the frustum (off-axis) instead of turning it.
-The test passes, and checks four points of the focus plane under a sample as wide as the old ring
-(0.07 units), which the rotation moved 6.9 px.
+The test passes, and checks four points of the focus plane under a 0.07-unit sample (half the preview's widest
+blur at the opening aperture), which the rotation moved 6.9 px.
 
 **Impact**: Medium - the same shot smears the plane of focus toward the frame's edge, more at a
 wide field.
