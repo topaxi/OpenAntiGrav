@@ -119,14 +119,31 @@ struct Kind {
     ps4: bool,
 }
 
-fn kind_of(material: &Material) -> Option<Kind> {
+fn kind_of(material: &Material, ps4: bool) -> Option<Kind> {
     let stem = material
         .name
         .rsplit(['/', '\\'])
         .next()
         .unwrap_or(&material.name);
     let stem = stem.trim_suffix(".rcsmaterial");
-    if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive_alpha") {
+    let names_alpha_sampler = material.sampler(name_hash("Texture2Alpha")).is_some();
+    if (ps4 || !names_alpha_sampler)
+        && stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive_alpha")
+    {
+        // Omega's Detonator pad (`gcn_dump` of the lit-by-ambient block, 60 instructions):
+        // `Constant1 * Texture2.a + constantAmbientColour * Texture1.rgb`, then fog. The mask
+        // is the `_ne` alpha **unsquared**, which is the plain family's reading, not the Vita
+        // program's `Texture2Alpha.rgb^2`. Only the block that takes no sun was read. A Vita file
+        // that names `Texture2` and no `Texture2Alpha` (2048's Detonator pad) takes the same
+        // reading, **inherited from Omega**: its own program is unread.
+        Some(Kind {
+            mask: Some("Texture2"),
+            program: PROGRAM_EMISSIVE_ALPHA_MASK,
+            colour: None,
+            tint: Some("Constant1"),
+            ps4: true,
+        })
+    } else if stem.eq_ignore_ascii_case("diffuse_normal_specular_emmissive_alpha") {
         Some(Kind {
             mask: Some("Texture2Alpha"),
             program: PROGRAM_EMISSIVE_ADD,
@@ -202,7 +219,7 @@ pub(super) fn plan(
             colour,
             tint,
             ..
-        }) = kind_of(material).filter(|k| !ps4 || k.ps4)
+        }) = kind_of(material, ps4).filter(|k| !ps4 || k.ps4)
         else {
             continue;
         };
@@ -288,9 +305,7 @@ mod tests {
     fn omegas_second_sampler_of_the_window_file_is_the_reflect_map() {
         // The sampler hash Omega's `fc10_lambert_2uv_emissive` records beside its window atlas.
         assert_eq!(name_hash("ReflectMap"), 0xdba5_1b4c);
-        let family = kind_of(&named(
-            "data/art/published/dlc1/environments/moa_therma/materials/fc10_lambert_2uv_emissive.rcsmaterial",
-        ))
+        let family = kind_of(&named("data/art/published/dlc1/environments/moa_therma/materials/fc10_lambert_2uv_emissive.rcsmaterial"), false)
         .expect("admitted");
         assert_eq!(family.mask, Some("ReflectMap"));
         assert!(!family.ps4, "Omega's programs are unread");
@@ -298,9 +313,7 @@ mod tests {
 
     #[test]
     fn chenghous_new_family_masks_by_norm_and_colours_by_texture1() {
-        let new = kind_of(&named(
-            "data/art/published/dlc1/environments/chenghou_project/materials/diffuse_normal_specular_emmissivenew.rcsmaterial",
-        ))
+        let new = kind_of(&named("data/art/published/dlc1/environments/chenghou_project/materials/diffuse_normal_specular_emmissivenew.rcsmaterial"), false)
         .expect("admitted");
         assert_eq!(new.mask, Some("Norm"));
         assert_eq!(new.colour, Some("Texture1"));
@@ -309,9 +322,7 @@ mod tests {
 
     #[test]
     fn the_track_surface_adds_its_emissive_map_untinted_on_2048_only() {
-        let road = kind_of(&named(
-            "data/art/published/environments/shared/objectlibrary/materials/fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial",
-        ))
+        let road = kind_of(&named("data/art/published/environments/shared/objectlibrary/materials/fc16_phong_AlphaSpec_Normal_Emissive.rcsmaterial"), false)
         .expect("admitted");
         assert_eq!(road.mask, Some("EmissiveMap"));
         assert_eq!(road.program, PROGRAM_EMISSIVE_ADD);
@@ -321,9 +332,10 @@ mod tests {
         );
         assert!(!road.ps4);
         assert!(
-            kind_of(&named(
-                "x/materials/fc16_phong_alpha_normal_specpow.rcsmaterial"
-            ))
+            kind_of(
+                &named("x/materials/fc16_phong_alpha_normal_specpow.rcsmaterial"),
+                false
+            )
             .is_none(),
             "the sibling without an emissive map adds nothing"
         );
@@ -331,14 +343,21 @@ mod tests {
 
     #[test]
     fn omega_takes_the_plain_member_only() {
-        let plain = |n: &str| kind_of(&named(n)).map(|k| (k.mask, k.ps4));
+        let plain = |n: &str| kind_of(&named(n), false).map(|k| (k.mask, k.ps4));
+        let omega = |n: &str| kind_of(&named(n), true).map(|k| (k.mask, k.program, k.ps4));
         assert_eq!(
             plain("x/materials/diffuse_normal_specular_emmissive.rcsmaterial"),
             Some((Some("Texture2"), true))
         );
         assert_eq!(
             plain("x/materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial"),
-            Some((Some("Texture2Alpha"), false))
+            Some((Some("Texture2"), true)),
+            "a Vita `_alpha` file that names no `Texture2Alpha` (the Detonator pad) is read like Omega's"
+        );
+        assert_eq!(
+            omega("x/materials/diffuse_normal_specular_emmissive_alpha.rcsmaterial"),
+            Some((Some("Texture2"), PROGRAM_EMISSIVE_ALPHA_MASK, true)),
+            "Omega's pad program masks by the unsquared `_ne` alpha"
         );
         assert_eq!(
             plain("x/materials/diffuse_normal_specular.rcsmaterial"),

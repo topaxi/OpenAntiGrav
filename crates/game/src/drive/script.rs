@@ -18,6 +18,8 @@
 //! key                              a key no button is bound to went down
 //! mouse 640 360                    the mouse moved to this window pixel
 //! click                            the primary mouse button went down and up
+//! wheel -5                         the mouse wheel turned this many detents (positive toward the player)
+//! drag 120 -40                     the primary button held down, moved this far in window pixels from where the mouse is, and let go
 //! click hint <button>              click the key or button hint on screen that presses this button, or `escape` (the footer's `(O) Help`)
 //! draw                             draw the next frame, so `hints` reports what it shows (a drive draws only the frames it is asked for)
 //! ticks 120                        let this many ticks pass
@@ -172,6 +174,10 @@ pub enum Step {
     Mouse { x: f32, y: f32 },
     /// The primary mouse button went down and up.
     Click,
+    /// The wheel turned this many detents, positive toward the player.
+    Wheel(i32),
+    /// The primary button held, moved this far in window pixels from the pointer, and released.
+    Drag { dx: f32, dy: f32 },
     /// The same click, on the middle of the hint on screen that depicts this button.
     ClickHint(oag_ui::hints::Press),
     /// Fingers on the screen: a tap, a drag, a pinch or a twist (`touch ...`).
@@ -215,6 +221,8 @@ impl std::fmt::Display for Step {
             Self::Key => f.write_str("key"),
             Self::Mouse { x, y } => write!(f, "mouse {x} {y}"),
             Self::Click => f.write_str("click"),
+            Self::Wheel(detents) => write!(f, "wheel {detents}"),
+            Self::Drag { dx, dy } => write!(f, "drag {dx} {dy}"),
             Self::Touch(t) => match t {
                 Touch::Tap { x, y } => write!(f, "touch tap {x} {y}"),
                 Touch::Drag { from, to, ticks } => write!(
@@ -516,6 +524,20 @@ impl Script {
                     y: y.parse().map_err(|_| format!("{y:?} is not a pixel"))?,
                 },
                 _ => return Err("mouse takes an x and a y".into()),
+            },
+            "wheel" => match words.as_slice() {
+                [n] => Step::Wheel(
+                    n.parse()
+                        .map_err(|_| format!("{n:?} is not a number of detents"))?,
+                ),
+                _ => return Err("wheel takes a number of detents".into()),
+            },
+            "drag" => match words.as_slice() {
+                [dx, dy] => Step::Drag {
+                    dx: dx.parse().map_err(|_| format!("{dx:?} is not a pixel"))?,
+                    dy: dy.parse().map_err(|_| format!("{dy:?} is not a pixel"))?,
+                },
+                _ => return Err("drag takes an x and a y distance".into()),
             },
             "touch" => Step::Touch(parse_touch(&words)?),
             "quit" => Step::Quit,

@@ -45,6 +45,28 @@ pub struct DetonatorModels {
     pub pads: Vec<Mat4>,
 }
 
+/// Each pad matrix raised by the depth of the pad model below its own origin, so the model's
+/// slab rests on the pad's plane. **Chosen, not measured:** the original's loop that binds the
+/// model to a pad's transform is unread (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`,
+/// "EMP pad"); drawn at the transform alone the slab's white walls (0.76 deep) sink under the
+/// road, where the original's frame shows them standing above it (the `pad` pair, "Render
+/// accuracy" row 5 of the Detonator thread). The depth is read off the loaded model, not typed.
+pub(crate) fn rest_pads_on_their_plane(pad: Option<&Model>, pads: Vec<Mat4>) -> Vec<Mat4> {
+    let Some(pad) = pad else {
+        return pads;
+    };
+    let lowest = pad
+        .vertices
+        .iter()
+        .map(|vertex| vertex.position[1])
+        .fold(f32::INFINITY, f32::min);
+    if !lowest.is_finite() || lowest >= 0.0 {
+        return pads;
+    }
+    let lift = Mat4::from_translation(Vec3::new(0.0, -lowest, 0.0));
+    pads.into_iter().map(|pad| pad * lift).collect()
+}
+
 /// The drawable pools [`Scene`] builds from a [`DetonatorModels`].
 #[derive(Debug, Default)]
 pub(crate) struct DetonatorDrawables {

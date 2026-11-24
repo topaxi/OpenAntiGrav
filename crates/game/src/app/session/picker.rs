@@ -648,6 +648,9 @@ impl Session {
             .set_help_available(picker.layout.help.is_some());
         picker.refresh_info();
         picker.poll_preview(&self.gpu);
+        // The craft's own controls: the pad's right stick, zoom button and left stick, read
+        // before the list does so a held zoom button keeps the left stick from stepping it.
+        picker.read_craft_pad(&mut self.controls);
         // A split-screen seat's screen reads its own device and no other.
         let mut events = match picker.seat {
             Some((seat, _)) => picker.model.update(&mut seat::input(

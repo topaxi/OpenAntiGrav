@@ -84,6 +84,13 @@ pub(super) fn is_light_bar_material(name: &str) -> bool {
     name.rsplit('/').next().unwrap_or(name) == "diffuse_normal_specular_emmissive.rcsmaterial"
 }
 
+/// Whether a material file is `diffuse_normal_specular_emmissive_alpha`: the Detonator pad's
+/// own material (`Data\New_Mode_Pads\Detonator_Pad`), whose `_ne` mask [`super::pad_ne::pad_ne`]
+/// binds once the program match accepts it.
+pub(super) fn is_light_bar_alpha_material(name: &str) -> bool {
+    name.rsplit('/').next().unwrap_or(name) == "diffuse_normal_specular_emmissive_alpha.rcsmaterial"
+}
+
 /// Every chunk hash the world-space pass leaves to a node: the ones a `Mesh`
 /// node names ([`super::referenced`]) and the ones either pad class names.
 ///
@@ -333,6 +340,7 @@ pub(super) fn build_pad_class(
         material_glow,
         material_variants,
         emissive,
+        mag_emissive,
         alpha_test_ref,
         material_anim,
         anim_tracks,
@@ -353,6 +361,13 @@ pub(super) fn build_pad_class(
     out.emissive = emissive;
     out.material_glow = material_glow;
     // The `_ne` mask, third beside the lightmap - see `pad_ne`.
+    // `material_setup` already bound the `_alpha` pad material's mask; the rest are bound here.
+    let alpha: Vec<bool> = model
+        .materials
+        .iter()
+        .map(|m| is_light_bar_alpha_material(&m.name))
+        .collect();
+    let rest: Vec<bool> = alpha.iter().map(|a| !a).collect();
     out.pad_masks = pad_ne::pad_ne(
         &model,
         &material_variants,
@@ -360,9 +375,15 @@ pub(super) fn build_pad_class(
         &mut out.material_slots,
         &mut out.emissive,
         &mut out.material_glow,
-        None,
+        Some(&rest),
         &mut report,
     );
+    for (slot, _) in alpha.iter().enumerate().filter(|(_, a)| **a) {
+        if let Some(texture) = mag_emissive.get(slot).cloned().flatten() {
+            out.pad_masks.resize(model.materials.len(), None);
+            out.pad_masks[slot] = Some(texture);
+        }
+    }
     out.material_specular_exponent = material_specular_exponent;
     out.glow_from_program = true;
     out.material_variants = material_variants;

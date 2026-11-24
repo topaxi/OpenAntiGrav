@@ -1202,3 +1202,52 @@ fn an_event_launched_from_omegas_2048_map_starts_a_race() {
         "{race}"
     );
 }
+
+/// On HD's Ship Select a wheel turned toward the screen over the craft's frame zooms the craft
+/// and leaves the team alone; turned anywhere else it steps the team as it always did. With the
+/// craft zoomed the d-pad is the pan's and does not also step the team.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_wheel_over_the_craft_zooms_it_and_elsewhere_steps_the_team() {
+    let Some(image) = hd() else {
+        return;
+    };
+    let to_ship_select = "boot; select racebox; press cross; until page=race; \
+         select launch_race; press cross; until screen=picker; press cross; \
+         until screen.id=ship-select; ticks 120";
+    let read = |tag: &str, tail: &str| {
+        let run = drive(
+            &image,
+            tag,
+            &format!("{to_ship_select}; {tail}; ticks 30"),
+            None,
+        );
+        assert!(run.output.status.success(), "{}", run.why_not_success());
+        let focus = text(run.last(), &["screen", "focus", "id"]).map(str::to_owned);
+        let zoom = text(run.last(), &["screen", "craft_zoom"]).and_then(|z| z.parse::<f32>().ok());
+        (focus, zoom)
+    };
+    let (before, rest_zoom) = read("hd-wheel-before", "ticks 1");
+    assert!(before.is_some());
+    assert_eq!(rest_zoom, Some(0.0), "the craft starts unzoomed");
+    let (focus, zoom) = read("hd-wheel-craft", "mouse 900 380; wheel -5");
+    assert_eq!(
+        focus, before,
+        "over the craft the wheel does not step the team"
+    );
+    assert!(
+        zoom.is_some_and(|z| z > 20.0),
+        "it zooms the craft: {zoom:?}"
+    );
+    let (focus, zoom) = read("hd-wheel-away", "mouse 150 780; wheel 1");
+    assert_ne!(focus, before, "off the craft it steps the team");
+    assert_eq!(zoom, Some(0.0));
+    let (focus, _) = read(
+        "hd-wheel-dpad",
+        "mouse 900 380; wheel -5; ticks 30; press right",
+    );
+    assert_eq!(
+        focus, before,
+        "zoomed, the d-pad pans and does not step the team"
+    );
+}

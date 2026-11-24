@@ -268,3 +268,21 @@ fn config_takes_every_value_of_the_settings_it_applies_and_no_other() {
         assert_eq!(&named[..], *values);
     }
 }
+
+/// The pointer steps that reach a craft's wheel zoom and drag turn.
+#[test]
+fn a_wheel_and_a_drag_parse_and_print_back() {
+    let script = Script::parse("wheel -5; drag 120 -40").unwrap();
+    assert_eq!(script.steps[0].1, Step::Wheel(-5));
+    assert_eq!(
+        script.steps[1].1,
+        Step::Drag {
+            dx: 120.0,
+            dy: -40.0
+        }
+    );
+    assert!(Script::parse("wheel x").is_err() && Script::parse("drag 1").is_err());
+    for (_, step) in &script.steps {
+        assert_eq!(&Script::parse(&step.to_string()).unwrap().steps[0].1, step);
+    }
+}
