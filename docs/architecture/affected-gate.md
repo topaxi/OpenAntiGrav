@@ -4,8 +4,10 @@ A drive member gates its branch with `just gate-affected` and
 `just test-data-affected`. Both run every check in full and only the tests
 `scripts/affected.py` selects. This page records what was measured on
 2026-11-10, the rules the selector follows, the case each rule could miss, and
-what is still expensive. The lead's full `just` and `just test-data` per merge
-batch run every test there is and are the safety net for every miss named here
+what is still expensive (what the gate lock is held for, and how it is
+prebuilt while it waits: [`gate-wall-time.md`](gate-wall-time.md)). The lead's
+full `just` and `just test-data` per merge batch run every test there is and
+are the safety net for every miss named here
 ([`workspace-layout.md`](workspace-layout.md), "Test-data suite measurements",
 has the suite's own history).
 
