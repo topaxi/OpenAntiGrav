@@ -66,55 +66,40 @@ pub fn contact(
     let body = &state.body;
 
     // The swept ray first: it catches a ship dropping through a volume's face between frames.
+    // Every ray is cast in one batch and the first that found something, in this order, wins.
+    let mut rays = [Ray::new(Vec3::ZERO, Vec3::ZERO, 0.0); 1 + wall::HULL_PROBES];
+    let mut directions = [Vec3::ZERO; 1 + wall::HULL_PROBES];
+    let mut count = 0;
     let displacement = body.position - previous_position;
     let travelled = displacement.length();
     let moved = travelled > MIN_HULL_EXTENT;
     if moved {
         let direction = displacement / travelled;
-        if let Some(found) = nearest_reset(
-            world,
-            Ray::new(previous_position, direction, travelled),
-            env.self_collider,
-            direction,
-        ) {
-            return Some(ResetContact {
-                swept: true,
-                ..found
-            });
-        }
+        rays[count] = Ray::new(previous_position, direction, travelled);
+        directions[count] = direction;
+        count += 1;
     }
-
     for (origin, direction, reach) in wall::hull_probes(body, handling) {
         let probeable = reach > MIN_HULL_EXTENT;
         if !probeable {
             continue;
         }
-        if let Some(found) = nearest_reset(
-            world,
-            Ray::new(origin, direction, reach),
-            env.self_collider,
-            direction,
-        ) {
-            return Some(found);
-        }
+        rays[count] = Ray::new(origin, direction, reach);
+        directions[count] = direction;
+        count += 1;
     }
 
-    None
-}
-
-/// The nearest `Reset` hit along one ray, ignoring every other class.
-fn nearest_reset(
-    world: &CollisionWorld,
-    ray: Ray,
-    skip: Option<u32>,
-    direction: Vec3,
-) -> Option<ResetContact> {
-    let hit = world.nearest_reset(ray, skip)?;
+    let mut hits = [None; 1 + wall::HULL_PROBES];
+    world.nearest_reset_each(&rays[..count], env.self_collider, &mut hits[..count]);
+    let (index, hit) = hits[..count]
+        .iter()
+        .enumerate()
+        .find_map(|(index, hit)| hit.map(|hit| (index, hit)))?;
     Some(ResetContact {
         point: hit.point,
-        normal: wall::facing(hit.normal, direction),
+        normal: wall::facing(hit.normal, directions[index]),
         collider: hit.collider,
-        swept: false,
+        swept: moved && index == 0,
     })
 }
 

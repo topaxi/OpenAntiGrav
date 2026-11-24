@@ -489,9 +489,10 @@ fn the_folded_nearest_hit_is_the_ascending_scans() {
 
 /// The reset colliders' one tree answers as asking each reset collider in turn did: the same
 /// nearest hit, ties across colliders to the lower one, on a world whose ordinary colliders
-/// sit in front of the reset ones and with a reset collider skipped.
+/// sit in front of the reset ones and with a reset collider skipped, one ray or twelve at once.
 #[test]
 fn the_reset_tree_answers_as_each_reset_collider_in_turn() {
+    let mut batched = 0;
     let mut rng = oag_core::rng::Rng::new(29);
     let mut at = |scale: f32| (rng.next_f32() - 0.5) * scale;
     let mut cells = Vec::new();
@@ -545,8 +546,26 @@ fn the_reset_tree_answers_as_each_reset_collider_in_turn() {
         let want = world.nearest_reset_ascending(ray, skip);
         assert_eq!(world.nearest_reset(ray, skip), want, "case {case}");
         hits += usize::from(want.is_some());
+
+        // The same ray in a batch with eleven more from near its origin, as a hull's are.
+        let mut rays = vec![ray];
+        for _ in 0..11 {
+            let direction = Vec3::new(at(2.0), at(2.0), at(2.0)).normalize_or_zero();
+            rays.push(Ray::new(origin, direction, at(2.0).abs() * 4.0));
+        }
+        let mut together = vec![None; rays.len()];
+        world.nearest_reset_each(&rays, skip, &mut together);
+        for (ray, got) in rays.iter().zip(&together) {
+            assert_eq!(
+                got,
+                &world.nearest_reset_ascending(*ray, skip),
+                "case {case}"
+            );
+            batched += usize::from(got.is_some());
+        }
     }
     assert!(hits > 1000, "only {hits} hits compared");
+    assert!(batched > 5000, "only {batched} batched hits compared");
 }
 
 /// Rays cast together answer as each cast alone: probes from one point a few units apart, as a

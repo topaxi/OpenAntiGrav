@@ -714,43 +714,83 @@ impl CollisionWorld {
     /// removes no candidate the walk would hand out.
     #[must_use]
     pub fn nearest_reset(&self, ray: Ray, skip: Option<u32>) -> Option<RaycastHit> {
-        if !(ray.length >= 0.0 && ray.length.is_finite()) {
-            return self.nearest_reset_ascending(ray, skip);
+        let mut out = [None];
+        self.nearest_reset_each(&[ray], skip, &mut out);
+        out[0]
+    }
+
+    /// [`Self::nearest_reset`] of each ray in `rays`, into the matching slot of `out`, from one
+    /// walk over the union of their boxes: a candidate is folded into each ray whose own box
+    /// overlaps it, the candidates that ray's own walk would visit.
+    pub fn nearest_reset_each(
+        &self,
+        rays: &[Ray],
+        skip: Option<u32>,
+        out: &mut [Option<RaycastHit>],
+    ) {
+        const MOST: usize = 12;
+        let rays = &rays[..rays.len().min(out.len())];
+        let foldable = rays
+            .iter()
+            .all(|ray| ray.length >= 0.0 && ray.length.is_finite());
+        if rays.len() > MOST || !foldable {
+            for (ray, slot) in rays.iter().zip(out) {
+                *slot = self.nearest_reset_ascending(*ray, skip);
+            }
+            return;
         }
-        let p0 = ray.origin;
-        let p1 = ray.end();
-        let segment = Aabb::from_segment(p0, p1);
+        let mut ends = [(Vec3::ZERO, Vec3::ZERO); MOST];
+        let mut segments = [Aabb::EMPTY; MOST];
+        let mut union = Aabb::EMPTY;
+        for (index, ray) in rays.iter().enumerate() {
+            ends[index] = (ray.origin, ray.end());
+            segments[index] = Aabb::from_segment(ray.origin, ray.end());
+            union.expand(segments[index].min);
+            union.expand(segments[index].max);
+        }
         let flat = self.flat();
-        let mut nearest: Option<Nearest> = None;
-        let mut unordered = false;
-        flat.reset_tree.visit(&segment, |item| {
+        let boxes = flat.reset_tree.boxes();
+        let mut nearest: [Option<Nearest>; MOST] = [None; MOST];
+        let mut unordered = [false; MOST];
+        flat.reset_tree.visit(&union, |item| {
             let (collider, triangle) = flat.reset_items[item as usize];
             let soup = &self.colliders[collider as usize];
             if skip == Some(soup.collider) {
                 return;
             }
-            let [a, b, c] = soup.corners(triangle);
-            let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
-                return;
-            };
-            if hit.t.is_nan() {
-                unordered = true;
-                return;
-            }
-            let candidate = Nearest {
-                distance: hit.t * ray.length,
-                collider: collider as usize,
-                t: hit.t,
-                triangle,
-            };
-            if nearest.is_none_or(|best| candidate.before(&best)) {
-                nearest = Some(candidate);
+            let item_box = &boxes[item as usize];
+            let mut corners = None;
+            for (index, ray) in rays.iter().enumerate() {
+                if !segments[index].overlaps(item_box) {
+                    continue;
+                }
+                let [a, b, c] = *corners.get_or_insert_with(|| soup.corners(triangle));
+                let (p0, p1) = ends[index];
+                let Some(hit) = segment_triangle(p0, p1, a, b, c) else {
+                    continue;
+                };
+                if hit.t.is_nan() {
+                    unordered[index] = true;
+                    continue;
+                }
+                let candidate = Nearest {
+                    distance: hit.t * ray.length,
+                    collider: collider as usize,
+                    t: hit.t,
+                    triangle,
+                };
+                if nearest[index].is_none_or(|best| candidate.before(&best)) {
+                    nearest[index] = Some(candidate);
+                }
             }
         });
-        if unordered {
-            return self.nearest_reset_ascending(ray, skip);
+        for (index, (ray, slot)) in rays.iter().zip(out).enumerate() {
+            *slot = if unordered[index] {
+                self.nearest_reset_ascending(*ray, skip)
+            } else {
+                nearest[index].map(|best| self.colliders[best.collider].hit(*ray, best.triangle))
+            };
         }
-        nearest.map(|best| self.colliders[best.collider].hit(ray, best.triangle))
     }
 
     /// [`Self::nearest_reset`] as the scan asks it: each reset collider in ascending order,
