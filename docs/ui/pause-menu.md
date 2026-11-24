@@ -90,17 +90,19 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
 - **A campaign race pauses** now: ESCAPE used to leave it straight for `Cell Selection`.
 - **Rows left out**, named in the load report at `debug`: `IG_PAUSE_GMAN` (the game manual),
   `IG_PAUSE_ENDSES` (ending a Speed Lap session), `IG_PAUSE_SKIP` (a tournament leg).
-- **Not built: the `MusicList`.** The original shows the playing track at the foot
-  (`Fenix Funk 5 (Wipeout Edit)`) and changes it with LEFT and RIGHT; ours draws nothing there.
-  Open. **Partly read (PSP USA `BOOT.BIN`, static, confidence 60):** `MusicList` is registered by
-  `0x088bb4a0` (vtable `0x08acdc6c`) as a `List` subclass; its update override `0x088bb264` rebuilds
-  the entries when the music set changed (`0x088bb358`: one entry per music node, the selection set
-  to the music player's `+0x48` song index clamped to the entry count) and then runs the shared list
-  update `0x088aaae4`, where LEFT and RIGHT call the list step `0x08890874` (+1/-1, **no wrap read**
-  and not tied to either end) and play the `LEFTRIGHT` cue. **Unread:** what a changed selection
-  writes to the music player (the pick at `+0x3c0`, an audition while paused, a restart position),
-  the draw (font, colour, arrows) and the PS2. A live capture before and after a RIGHT press is
-  still needed.
+- **The `MusicList`** (read 2026-11-24, PSP USA `BOOT.BIN` and PPSSPP, confidence 90 unless named;
+  [music-list.md](../ghidra/functions/psp-pulse-usa/music-list.md)). The row at `y = 220` shows the
+  selected song's **name** (no artist) in the `small` face and `TextColor`, after a two-half arrow pill
+  (`pulse_assets.mip`, UV 282/306, at the text's x - 32 and - 20); the left half is dark at the first song,
+  the right half at the last. It starts on the playing song. **LEFT and RIGHT step it whichever row the
+  cursor is on** (`workWhenNotFocus`), one step a press, **no wrap**: a step plays `UPDOWN`, a press at
+  an end plays `DECLINE` and changes nothing. The cursor never lands on it. **Nothing plays while
+  paused**; leaving the screen by resuming (CONTINUE, START) starts the picked song **from its start**
+  when it is not the one that was playing (the now-playing marquee then shows it), and the next race
+  goes on from it. Picking the playing song again resumes it where it was (85). Leaving by GAME OPTIONS
+  drops the pick (measured: back on the screen the row shows the playing song again); RESTART RACE and
+  QUIT RACE drop it too (static, 70). This **corrects** the first reading (2026-11-23), which had LEFT/RIGHT
+  on the focus step with `LEFTRIGHT`: those are UP/DOWN.
 
 Tests: the disc's lists per screen and the default, both pressings and PS2
 (`main_menu_ground_truth::pulses_*_pause_screens_*`); the mode-to-screen table
