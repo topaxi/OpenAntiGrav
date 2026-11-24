@@ -6,7 +6,7 @@ images from the app's files directory. It has been built, linked, packaged, run 
 with touch. It has run on a phone: a Galaxy S24 (EU) took the install, the
 reinstall with kept data and the audio fallback ("Install on a phone" and
 "Startup on a phone" below), and the maintainer reports it running well there
-(Xclipse 940, 2026-10-14). Touch layout tuning and rotation are not measured yet. Lifecycle polish is open; "Known gaps" lists it.
+(Xclipse 940, 2026-10-14), and a Galaxy S21 (Mali-G78) has been measured through whole races ("Performance on the Galaxy S21" below). Touch layout tuning and rotation are not measured yet. Lifecycle polish is open; "Known gaps" lists it.
 
 ## Build
 
@@ -73,7 +73,7 @@ offered.
 
 `just launch-android` starts the app and follows `adb logcat -s oag` (cleared first, so only this run's lines); `--stop` forces a cold start, `--no-logs` only launches.
 
-**A run without touch: the launch file.** Android hands a NativeActivity no command
+**A run without touch: the launch file.** (Since the build of 2026-11-24 `--race` in it crashes at once, see "Performance on the Galaxy S21", "Reaching a race"; the other arguments work.) Android hands a NativeActivity no command
 line, so the app reads one from `files/oag-args.txt` at launch and deletes it
 (`oag_mobile::android::take_launch_args`). One argument a line; a line
 `OAG_NAME=value` sets that environment variable instead (`OAG_SPLIT_FINISH=0`). It is
@@ -579,6 +579,160 @@ and the Vulkan backend (the host's RADV; the GLES fallback was not exercised). A
 `settings.toml` the app cannot read (mode 000, as a reinstall that restores files under
 another owner leaves it) logs one warning and runs on defaults.
 
+## Performance on the Galaxy S21
+
+Measured 2026-11-24 on a Galaxy S21 (SM-G991B: Exynos 2100 with one X1, three A78 and four A55
+cores; Mali-G78 MP14, driver r38p0; 7 GiB; Android 14; 1080x2400 panel, which the game draws at
+2320x1080 in landscape), on USB with the battery at 97 to 100 %, with a release (`dist`) build of main
+`d5bfef6` made by `OAG_APK_DEV_CLI=1 OAG_APK_PROFILEABLE=1 just apk` (`--no-audio`, a fresh profile). The race
+is the **Racebox single race, 8 ships, weapons on, 4 laps, `--autopilot --seed 1`**, reached through the
+menus (see "Reaching a race" below); Pulse is the PSP EU image on Talon's Junction (default circuit), HD/Fury is the
+decrypted PS3 EU image on Vineta K. **Defaults** are what a fresh profile writes (render scale 100, which on
+this panel is a 1906x1080 scene under the pillarbox; vsync off, frame limit 240, no dynamic resolution,
+motion blur and MSAA off, shadows `original`). **Low** is one lower preset chosen here: `render_scale = 50` in the
+title's `[render_profiles]` table and nothing else (953x540 scene). The game has no quality tiers to name.
+Every run began after waiting for the AP temperature to read 38 degrees C or less (40 for the HD A/B runs; 30 to 260 s of waiting).
+
+| | Pulse defaults | Pulse low | HD defaults | HD low |
+| --- | ---: | ---: | ---: | ---: |
+| Frame time over about two laps (75 s from 7 s after GO), median / p95 / p99 / worst, ms | 14.7 / 20.1 / 24.4 / 36.9 | 14.2 / 19.5 / 23.2 / 41.3 | 175.8 / 236.5 / 292.6 / 399.3 | 91.6 / 127.2 / 254.9 / 580.4 |
+| fps in that window | 66.4 | 69.0 | 5.6 | 10.5 |
+| fps over the first 60 s of racing, median of the per-second log | 68.0 | 68.4 | 5.5 | 10.6 |
+| **Settled rate**, last 5 of a 10 minute run, median fps (mean frame / mean p99, ms) | **59.9** (16.7 / 23.9) | **65.8** (15.3 / 21.7) | **6.0** (167 / 246) | **11.7** (86 / 130) |
+| Scene pass on the GPU (`gpu_ms` of `--frame-log`), settled | 4.6 to 5.4 ms | 2.1 | 103 to 114 | 35 to 41 |
+| Race load, confirm to first race frame (`--measure-race-load`, cold / second run) | 12.8 s / 13.4 s | not measured | 71.6 s (cold) | not measured |
+| Peak PSS (`dumpsys meminfo`) | 309 MB | 293 MB | 1,228 MB | 1,354 MB |
+| GPU memory of the process (Perfetto `android.gpu.memory`) | 468 MB | 447 MB | 2,961 MB | 2,928 MB |
+| App CPU, share of one core (frame thread; Mali's `mali-cmar-backe` thread), 75 s trace | 59 %; 28 % | 69 %; 34 % | 19 %; 14 % | 33 %; 17 % |
+| GPU busy, settled (`/sys/kernel/gpu/gpu_busy`) at a clock of | 77 % at 345 MHz | 73 % at 318 MHz | 95 % at 398 MHz | 91 % at 399 MHz |
+
+How the frame time is taken: the app's `BufferTX` counter in a Perfetto trace gives every queued buffer, so
+the percentiles are over every frame (4,972, 5,158, 418 and 781), not over `--frame-log`'s once-a-second
+means. The window is 75 s from 7 s after GO (about two Pulse laps at the 31.6 s best lap its HUD showed; HD's
+game-time lap was not read). The settled rate is the median of the per-second `fps` in `--frame-log` over the last
+300 s of each run, which restarts the race when it ends (Pulse: three races, about 8 racing minutes
+of the 10; HD: one race), so each is a race at one load level and not one lap.
+
+**Run to run, the Pulse defaults read 68.0, 60.6 and 61.0 fps over their first minute of racing** (the first is
+the 10 minute run above; the other two are the two attempts at pinning the thread, under "Reaching a race", same build,
+same cool start), so the 6 fps between Pulse defaults and low is about the spread: the low preset halves the scene
+pass on the GPU (4.6 to 2.1 ms) and moves the frame by 1 to 2 ms at most.
+
+### The shape of the frame
+
+- **Pulse is bound by the frame thread, not the pixels.** `frame-phases` (ms per frame, defaults, settled): ticks 1.1,
+  scene record 4.4, submit 3.9, present 6.5 (the wait for a buffer; the GPU's scene pass is 4.6 ms of it).
+  The low preset cuts the pixels by 4 and leaves `scene` 4.3 and `submit` 4.1 where they were.
+  The thread ran 46 to 54 % of the trace on the A78 cores and 4 to 22 % on the X1; the other 28 to 34 % of a core is Mali's
+  command-stream backend thread.
+- **HD is bound by the GPU, then by a CPU floor.** Defaults: scene pass 103 to 114 ms at 400 MHz and 95 % busy, and the
+  frame thread waits 130 ms a frame in present. A/B on the same race from a cold start (race seconds 20 to 80, mean of the
+  per-second lines):
+
+  | HD variant | fps | frame ms | scene GPU ms |
+  | --- | ---: | ---: | ---: |
+  | defaults | 5.5 | 183 | 114 |
+  | anisotropy `off` | 6.0 | 176 | 103 |
+  | shadows `off` | 6.1 | 176 | 125 |
+  | render scale 50 | 10.6 | 97 | 41 |
+  | render scale 25 (476x270) | 16.1 | 64 | 14 |
+
+  Anisotropy and the shadow passes cost nothing worth the picture (both inside the spread). Render scale 25 leaves a
+  frame of 64 ms of which the frame thread's own phases are 28 ms (ticks 6.6, scene 9.1, submit 11.5) and the
+  rest is the GPU passes outside the scene pass. HD's tick is 7 to 13 ms of a slow frame because the fixed-step loop catches
+  up with several ticks per frame.
+- **Memory.** HD holds 2.96 GB of GPU memory against Pulse's 0.47 GB, on a 7 GiB phone, while `dumpsys meminfo` shows
+  1.2 GB PSS (the GPU's share is in neither the PSS nor the `Graphics` row, which read 21.5 to 51.6 MB). Mali has no
+  `TEXTURE_COMPRESSION_BC`, so HD's DXT textures are decoded back to RGBA8 on upload
+  (`oag_mesh::mesh_render::texture::upload`, whose own comment prices block-compressed binding at about 250 MiB in a race on a
+  desktop). That is the likely source and was not isolated.
+
+### Thermal throttling (Pulse defaults, the one run that started cold: AP 37.5 C, thermal status 0)
+
+Times are wall seconds from the first race frame (the sampler's loop is about 1.1 s an iteration, scaled to the run's wall time).
+
+| Race seconds | A78 cap (MHz) | GPU cap (MHz) | AP (C) | skin (C) | fps (median of the log) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| before GO (menus and the 13 s load) | 2808, down to 1872 at 23 s before | 858 | 37.5, then 45 | 36 | |
+| 0 to 60 | 1872 | 858 | 45 to 46.5 | 37 to 38 | 68 |
+| 90 to 120 | 1560 | 767 | 47 | 38.4 | 62 |
+| 120 to 180 | 1352 | 676 to 585 | 47 | 38.7 | 59 to 61 |
+| 300 on | 1352 | 403 | 46.5 to 47 | 39 to 39.6 | 56 to 67 (the track's stretches differ) |
+
+The phone throttled its CPU during the load, before the first race frame (the A78 cap fell to 1872 MHz 23 s earlier); the GPU's cap
+held at 858 MHz until 91 s of racing and then stepped down to 403 MHz over about 3 minutes. The system's thermal status first read 1
+(light) at 84 s and 2 (moderate) at 395 s. The rate falls from 68 to 59 fps between the first minute and the third and then sits at
+a median of 59.9 over the last five minutes; the AP sensor holds 46 to 47 C from the start, so the controller is holding a temperature and
+the rate is what that temperature allows. The other three runs started with the skin sensor at status 1 already (the phone charges over USB,
+battery 35 to 36 C) and show their caps from the first second, so they carry no onset. HD's GPU sat at its 403 MHz cap for the whole race.
+
+### Top three costs
+
+**CPU** (`simpleperf record --app org.openantigrav.game -e cpu-clock -f 1500 -g --duration 20`, Pulse defaults, 30 s after
+GO; 28,662 samples; the frame thread is 63 % of all app samples and Mali's backend thread 32 %; the shares below are inclusive and
+overlap each other):
+
+1. **`Scene::prepare_view` 36 %** (6.6 % itself): node animation sampling 6.1 % (`write_node_anims_started`, `AnimTransform::sample` 4.9 %),
+   `wgpu::Queue::write_buffer` 9.9 %, collision raycasts 4.0 %.
+2. **wgpu command encoding at finish, 22 %** (`CommandEncoder::finish` to `encode_render_pass`): wgpu-core replays and validates every pass's
+   commands on the frame thread.
+3. **`wgpu::Queue::submit` 15 %**, of which `vkQueueSubmit` into Mali's driver is 8.5 %; the Mali backend thread runs
+   `draw_build_command` and `cmarp_*` for the draws (the 32 %).
+
+Next: `tick` 8.4 %, `present` 5.9 %, `memcpy` 6 % (4 % itself).
+
+**GPU**: Perfetto on this phone offers `android.gpu.memory`, `android.power`, `android.surfaceflinger.frametimeline`,
+`linux.sysfs_power` and `linux.ftrace`, **no `gpu.counters` and no `gpu.renderstages`**, so the only GPU timing is the game's own
+scene-pass timestamp. The costs of HD's GPU are the A/B table above: the pixels (scene pass 114 ms at 1906x1080 to 14 ms at 476x270),
+and a floor that does not fall with them.
+
+### Driver messages (full `logcat`, 10 minute runs)
+
+- `gralloc4: Format allocation info not found for format: 38` and `3b`, `AHardwareBuffer: GraphicBuffer(w=4, h=4) failed`, and `Gralloc4: isSupported(1, 1, 56 / 59) failed`:
+  12 lines a launch, the Mali driver probing two 4x4 formats while the adapter opens. Harmless, no effect seen.
+- `wgpu_core::instance: Missing downlevel flags: DownlevelFlags(SURFACE_VIEW_FORMATS)` once a launch.
+- No Mali, Vulkan or `ANR` line in any race, no crash in the menu route. `OAG_WGPU_DEBUG=1` added only debug labels: the APK carries no
+  Vulkan validation layer, so a run with it printing nothing does not show validation clean.
+- `audio: ... voice(s) refused` under `--no-audio` (a count, not a fault).
+
+### Reaching a race, and what does not work
+
+- **The launch file's `--race` crashes on this build.** `android_main` runs on a 2 MiB thread (`android-activity` spawns it with `std::thread::spawn`),
+  and the `--race` path stacks `app::run` (481 KB frame), `headless::run_race` (545 KB), `App::open_with` (385 KB), `Stage::race` (315 KB),
+  `Scene::new` (172 KB) and winit's closure (160 KB): 2.07 MB, and naga's WGSL parser overflows the stack in `create_shader_module` (SIGSEGV, `SEGV_MAPERR` in `android_main`;
+  Pulse and HD alike). `scripts/android-race-phases.sh` uses `--race` and fails the same way. The menu route has no `run_race` frame and runs.
+  A `llvm-addr2line` over the unstripped library names the frames; the sizes are the `sub sp` of each prologue.
+- **The menu route, scripted.** The launch file takes the image and `--no-audio --frame-log --autopilot --seed 1 --no-intro`; `files/config/oag/settings.toml` skips the
+  prompts (top-level `language = "English"`, `[player] name` and `tag`) and holds `[race] mode = "single_race"`; then `adb shell input tap` on the 2400x1080 frame:
+  Pulse after 12 s: tap (1200, 540) for PRESS START, (660, 292) RACEBOX, (576, 634) START, (1704, 1032) twice for the track and the ship;
+  HD after 16 s: (942, 194) twice for RACEBOX, (598, 508) START, (828, 360) to land on Vineta K, then `input keyevent 96` (pad A) twice. A tap on an HD track select hex
+  moves the cursor and does not confirm. The in-game name entry also opens the phone's keyboard over it.
+- Pinning the frame thread with `adb shell taskset -p` is refused (`Permission denied`) for a release app's thread, so the X1 placement below is not measured.
+- `simpleperf` attaches to a release build only with `--app` and the build marked `<profileable android:shell="true"/>`: `OAG_APK_PROFILEABLE=1 just apk` (`scripts/build-apk.sh`).
+
+### Reproducing it
+
+```sh
+adb push scripts/android-perf-poll.sh /data/local/tmp/       # GPU busy and clock, CPU clocks, thermal HAL, meminfo, per second
+adb shell "nohup sh /data/local/tmp/android-perf-poll.sh /data/local/tmp/poll.txt 700 >/dev/null 2>&1 &"
+adb shell 'perfetto -c - --txt -o /data/misc/perfetto-traces/oag.pftrace' < scripts/android-perf-trace.cfg   # edit duration_ms
+uv run --with perfetto python3 -I scripts/android-perf-trace.py oag.pftrace
+adb shell /data/local/tmp/simpleperf record --app org.openantigrav.game -e cpu-clock -f 1500 -g --duration 20 -o /data/local/tmp/perf.data
+```
+
+`simpleperf` is `$ANDROID_HOME/ndk/<ver>/simpleperf/bin/android/arm64/simpleperf`; `report --symfs` over a directory holding the unstripped
+`target/aarch64-linux-android/dist/examples/liboag_android.so` at the on-device path names the Rust frames.
+The `--frame-log` lines reach logcat as tag `oag`; `--measure-race-load`'s lines come out under `RustStdoutStderr`.
+
+### Against the S24
+
+This page held no S24 frame-time table before this one. What exists is [`frame-thread-cpu.md`](../rendering/frame-thread-cpu.md)
+("The reported phone regression"): the S24 on HD Vineta K with the maintainer's profile (FSR1, motion blur medium at half resolution,
+render scale 200, `target_fps` 60), a flyby and 40 s of racing, GPU-bound at 50 to 57 fps, a per-second p99 median of 18.5 to 19.4 ms and a CPU row of 8 to 10 ms.
+The S21 at the defaults above is at 6 fps on the same circuit, and its frame thread's CPU alone (28 ms at render scale 25) would cap it at about 35 fps.
+The two phones' GPUs are not comparable on these numbers (different settings, a different build); the S21's HD scene pass is about 20 times a desktop iGPU's 1080p race pass
+([`hd-gpu-cost.md`](../rendering/hd-gpu-cost.md): 3.3 ms).
+
 ## Known gaps
 
 - **Touch controls are a second version.** Sizes and positions are chosen and untested
@@ -587,6 +741,7 @@ another owner leaves it) logs one warning and runs on defaults.
   user-adjustable layout, no per-player scheme (a stick or zones, left- or
   right-handed). A gamepad's analog triggers, right stick and hat are not reachable
   through winit (see "Bluetooth and USB gamepads").
+- **`--race` from the launch file overflows the `android_main` thread's 2 MiB stack** (frames of 160 to 545 KB on that path); `scripts/android-race-phases.sh` fails with it. Fix: shrink those frames or run the loop on a thread with a bigger stack. Details in "Performance on the Galaxy S21".
 - **Xclipse 940 (the S24's EU GPU, Samsung's Vulkan driver) is untested.** Expect
   surprises in present modes, `PRIMARY` backend adapter selection and the temporal
   upscaler's capability probe.
