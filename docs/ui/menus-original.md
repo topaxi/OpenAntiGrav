@@ -911,5 +911,7 @@ a regression there; not measured on the PS2). Share over 40 grey on the four sto
 `theirs.png`: Cell 0.40 % to 0.04 %, Track Select 0.53 % to 0.13 %, Grid 1.41 % to 1.13 %, Team 1.38 % to 0.96 %. Test: `render::tests::a_bearing_pen_starts_the_first_ink_at_x_and_steps_by_bearing`
 (fails with the pen law off), `title_behaviour_data::only_pulse_lays_its_front_end_pens_out_by_bearing`.
 
+Every measure of a drawn text takes the same pen (`oag_ui::font::Pens`: advance, bearing, snapped): the renderer's alignment and wrap, the hint scan and the wrapped legend's tap rectangles (`hints::placed`, `segments`, `piece_ink`), the footer prompts' widths (the `small` ones in `Pulse_14`'s atlas) and the reset prompt's tap rect, the description wrap, the ticker, marquee and wrapped-name measures and the pointer regions. Help paragraphs drawn in the glyph-slot face are measured in it (`cell_help_draw`'s `HelpFace`), or they stack on one another. Tests: `hints::tests::a_bearing_legend_rect_covers_its_drawn_ink`, `boot::tests::a_small_prompt_is_measured_in_the_small_face_on_the_drawn_pen`, `paragraphs_in_a_glyph_slot_face_flow_too`.
+
 **Cross-title: HD, Omega, 2048 checked, not measured.** `Font_MeasureString` is the same bearing arithmetic on HD (`font::ink_width`); whether HD's *draw* uses it has no
 capture here, so those three keep the advance-only pen (all their menu pairs re-render byte-identical with the field off). Pure: its own measured law above.
