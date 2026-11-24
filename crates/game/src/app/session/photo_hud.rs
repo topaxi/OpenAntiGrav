@@ -65,7 +65,7 @@ impl Session {
         {
             out[..row as usize].copy_from_slice(line);
             if swap {
-                for pixel in out[..row as usize].chunks_exact_mut(4) {
+                for pixel in out[..row as usize].as_chunks_mut::<4>().0 {
                     pixel.swap(0, 2);
                 }
             }
