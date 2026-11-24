@@ -571,3 +571,120 @@ fn zone_bands_take_sixteen_levels_and_conflict_with_the_ramp() {
         clap::error::ErrorKind::MissingRequiredArgument
     );
 }
+
+const HUD_PINS: [&[&str]; 6] = [
+    &["--hud-state", "5,2,29.4,39.3,562.9,99.4,56.34"],
+    &["--hud-state", "1,1,0,0", "--hud-boost-phase", "0.5"],
+    &["--hud-state", "1,1,0,0", "--hud-autopilot", "5"],
+    &["--hud-state", "1,1,0,0", "--hud-pickup", "Turbo"],
+    &["--hud-state", "1,1,0,0", "--hud-song", "Title"],
+    &["--hud-state", "1,1,0,0", "--hud-head-to-head", "150,lead"],
+];
+
+const CERT_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Every route that is a race a person plays or joins: a menu launch, `--race`, `--drive`,
+/// `--connect` and `--online`. None passes `--screenshot`.
+fn live_routes() -> Vec<Vec<&'static str>> {
+    vec![
+        vec![],
+        vec!["--race"],
+        vec!["--drive", "down"],
+        vec!["--connect", "host:1", "--cert-hash", CERT_HASH],
+        vec!["--online", "host", "--lobby-hash", CERT_HASH],
+    ]
+}
+
+#[test]
+fn a_hud_pin_without_a_capture_is_refused_on_every_live_route() {
+    for route in live_routes() {
+        for pin in HUD_PINS {
+            let args = std::iter::once("oag-game")
+                .chain(route.iter().copied())
+                .chain(pin.iter().copied());
+            let error = Cli::try_parse_from(args)
+                .map(|_| ())
+                .expect_err(&format!("{route:?} with {pin:?} must not parse"));
+            let text = error.to_string();
+            let (kind, named) = match route.first() {
+                None | Some(&"--race") => (
+                    clap::error::ErrorKind::MissingRequiredArgument,
+                    "--screenshot",
+                ),
+                Some(flag) => (clap::error::ErrorKind::ArgumentConflict, *flag),
+            };
+            assert_eq!(error.kind(), kind, "{route:?} with {pin:?}: {text}");
+            assert!(
+                text.contains(named),
+                "{route:?} with {pin:?} was refused for another reason: {text}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_hud_pin_is_refused_on_a_captured_network_race() {
+    for route in [
+        ["--connect", "host:1", "--cert-hash", CERT_HASH],
+        ["--online", "host", "--lobby-hash", CERT_HASH],
+    ] {
+        let error = Cli::try_parse_from(
+            [
+                "oag-game",
+                "--screenshot",
+                "out.png",
+                "--hud-state",
+                "1,1,0,0",
+            ]
+            .into_iter()
+            .chain(route),
+        )
+        .map(|_| ())
+        .expect_err("a network race is never pinned");
+        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        assert!(error.to_string().contains(route[0]), "{error}");
+    }
+}
+
+/// `psp-pulse-pair.py`'s argv shape for a posed race shot: the pins reach `race::Options`.
+#[test]
+fn a_pair_scripts_capture_still_pins_the_hud() {
+    let cli = Cli::try_parse_from([
+        "oag-game",
+        "disc.chd",
+        "--race",
+        "--track",
+        r"Data\Environments\16_Track\track.vex",
+        "--pose-from",
+        "pose.csv",
+        "--pose-tick",
+        "0",
+        "--hud-state",
+        "5,2,29.4,39.3,562.9,99.4,56.34",
+        "--hud-pickup",
+        "Turbo",
+        "--hud-boost-phase",
+        "0.457",
+        "--hud-head-to-head",
+        "150,trail",
+        "--ticks",
+        "0",
+        "--screenshot",
+        "ours.png",
+    ])
+    .expect("a pair script's capture parses");
+    let hud = capture_hud(&cli)
+        .expect("the pins are valid")
+        .expect("a capture with --hud-state pins the HUD");
+    assert_eq!((hud.place, hud.lap), (5, 2));
+    assert_eq!(hud.boost_phase, Some(0.457));
+    assert!(hud.held_pickup.is_some());
+    assert!(hud.head_to_head.is_some_and(|pin| !pin.player_leads));
+}
+
+#[test]
+fn a_run_without_the_pins_has_no_pinned_hud() {
+    let cli = Cli::try_parse_from(["oag-game", "--race", "--screenshot", "out.png"])
+        .expect("an ordinary capture parses");
+    assert!(capture_hud(&cli).expect("nothing to parse").is_none());
+}
