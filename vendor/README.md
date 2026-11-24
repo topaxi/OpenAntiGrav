@@ -27,7 +27,8 @@ once a release decodes everything `crates/music/tests/atrac9_ground_truth.rs`
 and `omega_wem_ground_truth.rs` read, sample-identical to LibAtrac9.
 
 **`wgpu-hal/`** (30.0.2, MIT OR Apache-2.0, licence files kept). The Vulkan
-backend keeps each pipeline stage's SPIR-V per device, so pipelines built from one
+backend keeps each pipeline stage's SPIR-V per device (the Vulkan counterpart of
+upstream's D3D12 shader cache, gfx-rs/wgpu#7729), so pipelines built from one
 module with override constants stop re-resolving and re-writing identical stages: a
 race launch's user instructions fall by about 21 %. `NOTICE.md` lists the changed
 files; why, how it is tested and when to drop it are in

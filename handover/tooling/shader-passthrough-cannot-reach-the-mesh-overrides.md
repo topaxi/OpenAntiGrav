@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-24
-summary: "Design 4 landed (vendored wgpu-hal stage memo, race launch -21 %); left: native device-lost handler, upstream PR, presenting-GPU wall clock"
+summary: "Design 4 landed (vendored wgpu-hal stage cache, upstream #7729 shape, launch -21 %); left: device-lost handler, upstream PR, GPU wall clock"
 size: L (40)
 difficulty: hard (45)
 ---
@@ -19,9 +19,9 @@ reach 1.6 %.
 
 ## Open
 
-- **Landed: design 4**, a per-device SPIR-V memo in a vendored `wgpu-hal`'s Vulkan
+- **Landed: design 4**, a per-device SPIR-V cache (shaped like upstream's D3D12 cache, gfx-rs/wgpu#7729) in a vendored `wgpu-hal`'s Vulkan
   `compile_stage` (`docs/architecture/vendored-wgpu-hal.md`; `load-time.md`, "Seventh
-  round"): race walk -14.9 %, bare race launch -21.3 %, `bomb_orbit_ground_truth` -37.4 %
+  round"): race walk -14.7 %, bare race launch -21.2 %, `bomb_orbit_ground_truth` -37.4 %
   user instructions, frames pixel-identical. Designs 1 to 3 are no longer needed for the
   launch; design 2 (a disk cache of the words) is the only one that would still take the
   remaining 11 % of `compile_stage` (first writes), and it breaks the build-time invariant.
@@ -44,6 +44,6 @@ reach 1.6 %.
   `process_overrides` overrides-arena report, or decide not to.
 - Measure the player's load on a presenting GPU: release build,
   `oag-game data/images/pulse-psp-eu.chd --no-audio --measure-race-load 2`, base
-  (`[patch.crates-io]` line for `wgpu-hal` removed) against the memo, interleaved.
+  (`[patch.crates-io]` line for `wgpu-hal` removed) against the cache, interleaved.
 - Independently, a lane for the native device-lost callback: log at `error`,
   tell the player to relaunch, keep the process from dying silently.
