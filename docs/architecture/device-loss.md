@@ -11,15 +11,16 @@ wgpu offers two hooks and the game installs both on the one device it makes (`Gp
 
 | Hook | What it does here |
 | --- | --- |
-| `Device::set_device_lost_callback` | Records the reason and message in a flag shared with the frame thread. It runs on whatever thread wgpu was on, from inside `submit` or `poll`, so it does nothing else. |
-| `Device::on_uncaptured_error` | Before a loss it keeps wgpu's own rule (a panic: a validation error on a live device is a bug we want to see). An error whose text names a lost device counts as the loss itself, for the case where it arrives before the callback. After a loss it swallows what the dead device keeps reporting. |
+| `Device::set_device_lost_callback` | **The one source of truth.** Records the reason and message in a flag shared with the frame thread. It runs on whatever thread wgpu was on, from inside `submit` or `poll`, so it does nothing else. |
+| `Device::on_uncaptured_error` | Keeps wgpu's own rule for every error on a live device (a panic: a validation error is a bug we want to see). Once the flag is set it swallows what the dead device's other users keep reporting. |
 
-wgpu has no typed "device lost" error: the lost state reaches a caller as a validation error
-carrying wgpu-core's `DeviceError::Lost` text, "Parent device is lost", so the second hook reads
-that text. The game never destroys its own device, so a `Destroyed` reason is a loss here too
-(unlike the web build, where it is the game's own teardown). `Device::destroy()` is how a test
-or the `lose-device` script step causes one on purpose: wgpu fires the callback with `Destroyed`
-once the device is polled.
+wgpu-core 30.0.2 drops a lost device's own error before the uncaptured-error handler
+(`ErrorType::DeviceLost => return, // will be surfaced via callback`), so an error is **never**
+read as the loss by its text: a validation error that says "device is lost" stays fatal and does
+not restart the game. The game never destroys its own device, so a `Destroyed` reason is a loss
+here too (unlike the web build, where it is the game's own teardown). `Device::destroy()` is how a
+test or the `lose-device` script step causes one on purpose: wgpu fires the callback with
+`Destroyed` once the device is polled.
 
 ## What the frame loop does
 
@@ -28,31 +29,52 @@ the acquire for ever, and the loop that reconfigures on that never draws again (
 window). On a loss it:
 
 1. logs one `error` line with the reason;
-2. winds the session down (`Session::wind_down`, the same call every exit makes): the campaign
-   position, the replays of the race on screen and of one parked behind the menus (a race of
-   300 ticks or more, `race_stage::auto_replay`), the records, the playlist's place, rumble off;
-3. writes `<config dir>/oag/device-lost.txt`, the note the next run reads;
-4. retitles the window, the one place a message can go with no GPU: the title says the device
-   was lost, progress is saved, close the window and start again;
-5. sets `quit`. The event loop leaves at the next `about_to_wait`.
+2. captures the race on screen into the records and the ghost as leaving it would
+   (`Session::capture_race_result`: a Speed Lap or Zone best lap, an abandoned Time Trial; guarded
+   by `result_saved`);
+3. winds the session down (`Session::wind_down`, the call every exit makes): the campaign
+   position, the replays of the race on screen and of one parked behind the menus (a race of 300
+   ticks or more, `race_stage::auto_replay`; **photo mode's rewind is left first**, since it takes
+   the recording out of the race and only leaving puts it back), the records, the playlist's
+   place, rumble off. `wind_down` runs once per session, whichever of the loss and the exit gets
+   there first;
+4. writes `<config dir>/oag/device-lost.txt`, the note the next run reads;
+5. retitles the window, the one place a message can go with no GPU.
 
-`wind_down` runs once per session, whichever of the loss and the exit gets there first.
+From then on every frame returns at the top: nothing ticks and nothing draws against the dead
+device, and the event loop idles (`ControlFlow::Wait`) rather than spinning.
 
 ## What the player sees
 
-- **On a desktop** the game starts itself again, from whatever stage it was on: the session has
-  saved, so `device_loss::relaunch` spawns the same executable (`$APPIMAGE` inside an AppImage,
-  whose mount goes away with the old process) with the same arguments and
-  `OAG_RELAUNCHED_AFTER_DEVICE_LOSS=1`, and the old process leaves. The new run brings up a fresh
-  device and shows the main menu with a line over it, "THE GRAPHICS DRIVER STOPPED LAST TIME. YOUR
-  PROGRESS IS SAVED" (the existing `Session::notice` band, strings `OAG_DEVICE_LOST_*`). A race
-  in progress is over; its replay is in the REPLAYS page.
-- **Not restarted:** a run that carries the variable (a driver that loses the device again on a
-  fresh start ends the run, so a bad driver does not loop), a run started with `--race` (the new
-  process would open that race again), a phone or the web (no second process to start), and a
-  `--drive` run (no window; it ends with an error naming the loss and the last state, exit
-  status 1). In these the window closes and the next launch, by hand, shows the same line over
-  the main menu from the note in step 3 above.
+`App::after_loss` decides, after the frame:
+
+- **On a desktop the game starts itself again**, from whatever stage it was on: the session has
+  saved, so `device_loss::restart_once` spawns the same executable (`$APPIMAGE` inside an
+  AppImage, whose mount goes away with the old process) with the same arguments and
+  `OAG_RELAUNCHED_AFTER_DEVICE_LOSS=1`, and this process leaves. One loss starts at most one
+  process, however many frames see the flag. The new run brings up a fresh device and shows the
+  main menu with a line over it, "THE GRAPHICS DRIVER STOPPED LAST TIME. YOUR PROGRESS IS SAVED"
+  (the existing `Session::notice` band, strings `OAG_DEVICE_LOST_*`). A race in progress is over;
+  its replay is in the REPLAYS page.
+- **The restart is refused**, and the window stays up as it is with its new title until the
+  player closes it, when:
+  - the run carries the variable (a driver that loses the device again on a fresh start ends the
+    run, so a bad driver does not loop);
+  - an argument is not on the allowlist (`device_loss::restartable_args`): a player's own launch
+    is a disc image or other positional path, `--source`, `--dlc`, `--launcher`, `--no-audio`,
+    `--no-intro`, `--no-video`, `--original-menu`, `--pick-language` and `--script`. Anything
+    else would run twice: `--race`, `--connect` and `--online` reopen a race or a lobby;
+    `--dump-audio`, `--tap-audio` and `--screenshot` overwrite their file.
+- **A phone** has no title bar to read and no second process to start: the run ends. What the
+  player gets is the note: the next launch shows the line over the main menu. There is no toast:
+  the Android glue (`crates/mobile`) has JNI only for launch arguments, and a toast built blind
+  would be untested code on the device path.
+- **The web** has its own handler and is unchanged.
+- **A `--drive` run** (no window) ends with an error naming the loss and the last state, exit
+  status 1; **a wallpaper** leaves its loop and winds down.
+
+The note is removed when the menu puts the line up, not when the run opens: a run that never
+reaches the menu (a `--race` run, a closed window) leaves it for the run that does.
 
 A restart is a process restart, not a rebuilt device inside the process: every renderer, texture
 and pipeline of the old session holds the dead device, and rebuilding each is the whole game's
@@ -60,9 +82,8 @@ start-up. That is what the front end already does on a fresh launch.
 
 ## What stays unrecoverable
 
-- A loss **inside a race** loses the race itself: the replay up to the loss is kept (what the
-  auto-replay ring holds), the race is not resumable. A Speed Lap or Zone best lap set since the
-  last exit from the race is kept by `wind_down` like any exit.
+- A loss **inside a race** loses the race itself: the replay up to the loss and the result as
+  leaving it would are kept, the race is not resumable.
 - **A hard kill of the process** (the driver taking the process down, the OOM killer) skips all of
   it. Nothing here writes on a timer ([`persistence.md`](persistence.md)).
 - **wgpu issues the game cannot catch:**
@@ -70,9 +91,9 @@ start-up. That is what the front end already does on a fresh launch.
   submit, wgpu-hal drops resources the driver may still hold, which is wgpu's to fix;
   [#6279](https://github.com/gfx-rs/wgpu/issues/6279) and
   [#3043](https://github.com/gfx-rs/wgpu/issues/3043): "Parent device is lost" panics from
-  `Queue::submit` on another thread are what the uncaptured-error handler turns into a flag, but a
-  panic raised inside wgpu or a driver before it reaches the handler is not caught (the game's
-  panic hook logs it and flushes, `oag_log::install_panic_hook`);
+  `Queue::submit` on another thread reach the device-lost callback in wgpu 30.0.2, but a panic
+  raised inside wgpu or a driver before it reaches either hook is not caught (the game's panic
+  hook logs it and flushes, `oag_log::install_panic_hook`);
   [#10244](https://github.com/gfx-rs/wgpu/issues/10244): `request_device` answering `Lost` at
   start-up fails the bring-up (`Gpu::bring_up`'s "requesting the device" error), the same path as
   an adapter that will not serve, so a named adapter falls back to the default and the default
@@ -92,6 +113,10 @@ oag-game <image> --no-audio --drive "boot; select racebox; press cross; until pa
 oag-game <image> --no-audio --script "45:lose-device"
 ```
 
-Tests: `app::device_loss::tests` (the flag, the verdict on an error, a real device destroyed with
-its later errors swallowed, the note), and `drive_ground_truth::a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic`
-(`just test-data`; fails on a build whose frame loop does not ask).
+Tests: `app::device_loss::tests` (the flag, an error is never the loss, a real device destroyed
+with its later errors swallowed and failing under `OAG_REQUIRE_GPU` when there is no adapter, the
+note, the argument allowlist both ways), and, under `just test-data`,
+`drive_ground_truth::a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic` (replay,
+records row and note written, no panic) and
+`photo_mode_ground_truth::a_device_lost_during_a_rewind_still_keeps_the_replay`. Each fails on a
+build without the part it names.

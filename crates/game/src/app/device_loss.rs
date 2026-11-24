@@ -1,18 +1,17 @@
 //! A lost GPU device on a native build: what wgpu tells us, and the one place the game reads it.
 //!
-//! A driver reset, a GPU hang or an unplugged eGPU makes wgpu mark the device lost. From then on
-//! every call into it fails, and wgpu reports each failure as a validation error ("Parent device
-//! is lost") to the uncaptured-error handler, whose default is to panic. Two hooks turn that
-//! into a flag the frame loop reads:
+//! A driver reset, a GPU hang or an unplugged eGPU makes wgpu mark the device lost. wgpu-core
+//! 30.0.2 reports that to the **device-lost callback** (`Device::set_device_lost_callback`) and
+//! drops the matching error before the uncaptured-error handler (`ErrorType::DeviceLost`, "will be
+//! surfaced via callback"), so the callback is the one source of truth here: it runs on any thread
+//! and from inside `submit` or `poll`, and does nothing but record the reason in a flag the frame
+//! loop reads (`Session::frame`, `App::after_loss`).
 //!
-//! - **The device-lost callback** (`Device::set_device_lost_callback`) records why the device
-//!   went. It may run on any thread and from inside `submit` or `poll`, so it does nothing but
-//!   set the flag; saving and rebuilding happen on the frame thread
-//!   (`Session::frame`, `App::recover_device`).
-//! - **The uncaptured-error handler** keeps wgpu's own rule for every error before a loss (a
-//!   panic: a validation error is a bug we want to see), and swallows what a lost device keeps
-//!   reporting afterwards. An error whose text names a lost device counts as the loss itself,
-//!   for the case where it reaches us before the callback has run.
+//! The **uncaptured-error handler** keeps wgpu's own rule for every error on a live device (a
+//! panic: a validation error is a bug we want to see) and swallows what a lost device's other
+//! users (a worker, the old session's drop) keep reporting once the flag is set. An error is never
+//! read as the loss by its text: a validation error that happens to say "device is lost" is still
+//! fatal.
 //!
 //! The game never destroys its own device, so unlike the web build (`web_fault::device_lost`) a
 //! `Destroyed` reason is a loss here too: it is what a test or the `lose-device` script step
@@ -48,8 +47,6 @@ struct Seen {
 /// What the uncaptured-error handler does with an error.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Verdict {
-    /// The device is gone, or this error says so: record it and carry on.
-    Lost,
     /// A lost device keeps reporting its own loss; nothing to add.
     Swallow,
     /// An error on a live device: wgpu's default, a panic.
@@ -66,9 +63,6 @@ impl DeviceLoss {
         let on_error = loss.clone();
         device.on_uncaptured_error(Arc::new(move |error: wgpu::Error| {
             match on_error.judge(&error) {
-                Verdict::Lost => {
-                    on_error.record(wgpu::DeviceLostReason::Unknown, error.to_string())
-                }
                 Verdict::Swallow => log::trace!("wgpu: after the device was lost: {error}"),
                 Verdict::Fatal => {
                     log::error!("Handling wgpu errors as fatal by default");
@@ -91,9 +85,8 @@ impl DeviceLoss {
 
     /// What to do with `error` given what is known so far.
     pub(crate) fn judge(&self, error: &wgpu::Error) -> Verdict {
-        if names_a_lost_device(error) {
-            Verdict::Lost
-        } else if self.is_lost() {
+        let _ = error;
+        if self.is_lost() {
             Verdict::Swallow
         } else {
             Verdict::Fatal
@@ -120,17 +113,6 @@ impl DeviceLoss {
     }
 }
 
-/// Whether wgpu's text for `error` is its "device is lost" one. wgpu has no typed error for it:
-/// the lost state reaches a caller as a validation error carrying wgpu-core's
-/// `DeviceError::Lost` text, "Parent device is lost".
-fn names_a_lost_device(error: &wgpu::Error) -> bool {
-    matches!(error, wgpu::Error::Validation { .. })
-        && error
-            .to_string()
-            .to_ascii_lowercase()
-            .contains("device is lost")
-}
-
 /// The environment variable a relaunched game carries: set, the run was started by a game that
 /// lost its device, and a second loss ends the run instead of starting another.
 pub(crate) const RELAUNCHED_ENV: &str = "OAG_RELAUNCHED_AFTER_DEVICE_LOSS";
@@ -142,7 +124,7 @@ fn profile_dir() -> Option<std::path::PathBuf> {
 
 const MARKER: &str = "device-lost.txt";
 
-/// Leaves the note a next run reads ([`take_marker`]), for the player who starts the game again
+/// Leaves the note a next run reads ([`marker_present`]), for the player who starts the game again
 /// by hand. A failed write is logged and does not stop the rest of the wind-down.
 pub(crate) fn leave_marker(lost: &Lost) {
     if let Some(dir) = profile_dir() {
@@ -150,10 +132,16 @@ pub(crate) fn leave_marker(lost: &Lost) {
     }
 }
 
-/// Reads and removes the note [`leave_marker`] left: whether the previous run ended on a lost
-/// device.
-pub(crate) fn take_marker() -> bool {
-    profile_dir().is_some_and(|dir| take_marker_in(&dir))
+/// Whether the previous run ended on a lost device and no run has shown the note since.
+pub(crate) fn marker_present() -> bool {
+    profile_dir().is_some_and(|dir| marker_present_in(&dir))
+}
+
+/// Removes the note: called once the line it asks for is on its way to the screen.
+pub(crate) fn clear_marker() {
+    if let Some(dir) = profile_dir() {
+        clear_marker_in(&dir);
+    }
 }
 
 fn leave_marker_in(dir: &std::path::Path, lost: &Lost) {
@@ -168,15 +156,82 @@ fn leave_marker_in(dir: &std::path::Path, lost: &Lost) {
     }
 }
 
-fn take_marker_in(dir: &std::path::Path) -> bool {
+fn marker_present_in(dir: &std::path::Path) -> bool {
+    crate::profile::read_to_string(dir.join(MARKER)).is_ok()
+}
+
+fn clear_marker_in(dir: &std::path::Path) {
     let path = dir.join(MARKER);
-    if crate::profile::read_to_string(&path).is_err() {
-        return false;
-    }
     if let Err(e) = std::fs::remove_file(&path) {
         log::warn!("could not remove {}: {e}", path.display());
     }
+}
+
+/// The arguments a restarted game may be given again: what a player launches with. A disc image
+/// or any positional path, `--source`, `--dlc`, `--launcher`, the language and intro switches,
+/// `--no-audio`, and `--script` (a timed button script that only presses buttons). Anything else
+/// can do something a second time that must not happen twice: reopen a race (`--race`,
+/// `--connect`, `--online`), overwrite a file (`--dump-audio`, `--tap-audio`, `--screenshot`), or
+/// run a measurement. One such argument and the game does not restart.
+pub(crate) fn restartable_args(args: &[std::ffi::OsString]) -> bool {
+    const BARE: [&str; 6] = [
+        "--launcher",
+        "--no-audio",
+        "--no-intro",
+        "--no-video",
+        "--original-menu",
+        "--pick-language",
+    ];
+    const VALUED: [&str; 3] = ["--source", "--dlc", "--script"];
+    let mut args = args.iter().map(|arg| arg.to_string_lossy());
+    while let Some(arg) = args.next() {
+        if !arg.starts_with('-') || BARE.contains(&&*arg) {
+            continue;
+        }
+        let (name, joined) = arg
+            .split_once('=')
+            .map_or((&*arg, false), |(n, _)| (n, true));
+        if !VALUED.contains(&name) || (!joined && args.next().is_none()) {
+            return false;
+        }
+    }
     true
+}
+
+/// Set once a restart has been started, so one loss starts one process however many frames see
+/// it.
+static RESTARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Starts this game again if it may be, once. Returns whether a restart has been started (now or
+/// before). Not from a run that is itself a restart (a driver that loses the device again on a
+/// fresh start ends the run), nor with arguments [`restartable_args`] refuses.
+#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+pub(crate) fn restart_once() -> bool {
+    use std::sync::atomic::Ordering;
+    if RESTARTED.load(Ordering::Acquire) {
+        return true;
+    }
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    if std::env::var_os(RELAUNCHED_ENV).is_some() || !restartable_args(&args) {
+        return false;
+    }
+    if RESTARTED.swap(true, Ordering::AcqRel) {
+        return true;
+    }
+    match relaunch(&args) {
+        Ok(child) => {
+            log::info!(
+                "restarting on a fresh graphics device (process {})",
+                child.id()
+            );
+            true
+        }
+        Err(e) => {
+            log::error!("could not start the game again: {e}");
+            RESTARTED.store(false, Ordering::Release);
+            false
+        }
+    }
 }
 
 /// Starts this game again with the arguments it was given, marked as a relaunch. The caller
@@ -189,13 +244,13 @@ fn take_marker_in(dir: &std::path::Path) -> bool {
 ///
 /// The executable cannot be found or started.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-pub(crate) fn relaunch() -> std::io::Result<std::process::Child> {
+fn relaunch(args: &[std::ffi::OsString]) -> std::io::Result<std::process::Child> {
     let exe = match std::env::var_os("APPIMAGE") {
         Some(file) if !file.is_empty() => file.into(),
         _ => std::env::current_exe()?,
     };
     std::process::Command::new(exe)
-        .args(std::env::args_os().skip(1))
+        .args(args)
         .env(RELAUNCHED_ENV, "1")
         .spawn()
 }

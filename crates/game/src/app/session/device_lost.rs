@@ -17,16 +17,25 @@ mod words {
 }
 
 impl Session {
-    /// The top of a frame: the last run's note once the menu is up, then whether the device went since the last frame. If it did, everything that
-    /// can be kept is kept (the campaign position, the replays, the records, the playlist), a
-    /// note is left for the next run, the window says what happened in the one place that needs
-    /// no GPU, and the run is told to end. Returns whether it did, and the frame draws nothing.
+    /// The top of a frame: the last run's note once the menu is up, then whether the device is
+    /// lost. If it just was, everything that can be kept is kept (a race's result and best lap as
+    /// leaving it would, the replays, the campaign position, the records, the playlist), a note is
+    /// left for the next run, and the window says what happened in the one place that needs no
+    /// GPU. From then on the frame draws nothing and ticks nothing: the caller (`App::after_loss`)
+    /// restarts the game, leaves the window up as it is, or ends the run. Returns whether the
+    /// device is lost.
     pub(crate) fn device_check(&mut self) -> bool {
         if self.last_run_lost && matches!(self.stage, Stage::Menu(_)) {
             self.last_run_lost = false;
             self.notice = Some(super::shot_open::Notice::new(
                 self.project_word(words::LAST_RUN),
             ));
+            // Cleared as the line goes up, not when the run opened: a run that never reaches the
+            // menu (a race, a closed window) leaves the note for the one that does.
+            device_loss::clear_marker();
+        }
+        if self.lost.is_some() {
+            return true;
         }
         let Some(lost) = self.gpu.loss.take() else {
             return false;
@@ -40,12 +49,12 @@ impl Session {
                 format!(": {}", lost.message)
             }
         );
+        self.capture_race_result();
         self.wind_down();
         device_loss::leave_marker(&lost);
         let title = self.project_word(words::TITLE);
         self.gpu.output.window.set_title(&title);
         self.lost = Some(lost);
-        self.quit = true;
         true
     }
 

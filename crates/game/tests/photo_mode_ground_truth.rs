@@ -341,6 +341,44 @@ fn a_visit_that_rewinds_leaves_every_live_tick_as_it_was(image: &Path, shots: &P
     }
 }
 
+/// A device lost while photo mode has the race rewound still keeps the race's replay: the rewind
+/// takes the recording out of the race, and only leaving the mode puts it back. Fails on a build
+/// whose loss path writes the replays without leaving the mode first.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_device_lost_during_a_rewind_still_keeps_the_replay() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-device-lost-shots");
+    let run = drive_unmodded(
+        &image,
+        "device-lost-rewind",
+        &format!(
+            "{TO_THE_TIME_TRIAL} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; press start; \
+             hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; hold down 1; ticks 2; \
+             hold left 90; ticks 5; lose-device; ticks 30"
+        ),
+        &shots,
+        &["--autopilot"],
+    );
+    assert!(!run.status.success(), "the script must not finish");
+    assert!(
+        run.stderr.contains("the graphics device was lost") && !run.stderr.contains("panicked"),
+        "{}",
+        run.stderr
+    );
+    let rewound = ticks(&run)
+        .iter()
+        .any(|(tick, _, lens)| lens != "none" && *tick < 390);
+    assert!(rewound, "the mode never rewound, so this proves nothing");
+    let kept = std::fs::read_dir(run.dir.join("data/oag/replays/auto"))
+        .map(|dir| dir.count())
+        .unwrap_or(0);
+    assert!(kept > 0, "the rewound race's replay was lost");
+}
+
 /// A pickup `--give` hands out enters the race through the recording (ADR-0087, decision 7): the
 /// throttle held, the pickup fired twice after GO (each time the slot is empty `--give` tops it up
 /// again), then a visit to photo mode that rewinds into the first second and goes forward. Every

@@ -200,7 +200,7 @@ impl App {
         )?;
         let mut session = self.open_with(gpu)?;
         // The run before this one ended on a lost device: said once, over the first screen.
-        if device_loss::take_marker()
+        if device_loss::marker_present()
             && let Some(session) = session.as_mut()
         {
             session.last_run_lost_its_device();
@@ -1091,7 +1091,7 @@ impl ApplicationHandler for App {
                     error!("frame error: {e:#}");
                     event_loop.exit();
                 } else if session.lost.is_some() {
-                    restart_after_loss();
+                    after_loss(event_loop);
                 }
             }
 
@@ -1160,6 +1160,11 @@ impl ApplicationHandler for App {
         let Some(session) = &self.state else {
             return;
         };
+        // A lost device draws nothing more: the window waits to be closed.
+        if session.lost.is_some() {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
         if self.suspended {
             event_loop.set_control_flow(ControlFlow::Wait);
             return;
@@ -1195,27 +1200,18 @@ impl ApplicationHandler for App {
     }
 }
 
-/// The session has saved and stopped after a lost device, from whatever stage it was on: the
-/// game starts itself over on a fresh device and the new run shows the note the old one left. Not
-/// from a run that is itself such a restart (a driver that loses the device again on a fresh
-/// start ends the run), nor from one told to open a race on the command line (`--race`), which
-/// the new process would open again.
-#[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-fn restart_after_loss() {
-    if std::env::var_os(device_loss::RELAUNCHED_ENV).is_some()
-        || std::env::args_os().any(|arg| arg == "--race")
-    {
-        return;
+/// The session has saved and stopped after a lost device. On a desktop the game starts itself
+/// over on a fresh device when it may (`device_loss::restart_once`) and this process leaves; the
+/// new run shows the note the old one left. When it may not, the window stays up as it is, its
+/// title saying what happened, until the player closes it. A phone has no title to read and no
+/// second process to start: the run ends, and the next launch says why.
+fn after_loss(event_loop: &ActiveEventLoop) {
+    #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
+    if device_loss::restart_once() {
+        event_loop.exit();
     }
-    match device_loss::relaunch() {
-        Ok(child) => info!(
-            "restarting on a fresh graphics device (process {})",
-            child.id()
-        ),
-        Err(e) => error!("could not start the game again: {e}"),
-    }
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    event_loop.exit();
+    #[cfg(target_arch = "wasm32")]
+    let _ = event_loop;
 }
-
-/// A phone or the web has no second process to start: the run ends and the player starts it.
-#[cfg(any(target_arch = "wasm32", target_os = "android", target_os = "ios"))]
-fn restart_after_loss() {}

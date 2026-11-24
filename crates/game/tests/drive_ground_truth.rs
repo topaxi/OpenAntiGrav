@@ -531,6 +531,12 @@ fn a_device_lost_mid_race_saves_the_replay_and_ends_without_a_panic() {
         scratch.join("config/oag/device-lost.txt").is_file(),
         "no note for the next run"
     );
+    let records =
+        std::fs::read_to_string(scratch.join("config/oag/records.toml")).expect("the records file");
+    assert!(
+        !records.contains("records = []"),
+        "the race's result was not written to the records, as leaving it would:\n{records}"
+    );
     let replays = scratch.join("data/oag/replays/auto");
     let kept = std::fs::read_dir(&replays)
         .map(|dir| dir.count())
