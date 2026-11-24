@@ -12,6 +12,8 @@ impl Drawable {
             [
                 oag_mesh::mesh::PROGRAM_MINE_RIM,
                 oag_mesh::mesh::PROGRAM_BOMB_TINT,
+                oag_mesh::mesh::PROGRAM_ELECTRICITY,
+                oag_mesh::mesh::PROGRAM_ELECTRICITY_AUDIO,
             ]
             .contains(&entry.program[0])
         })
@@ -42,5 +44,39 @@ impl Drawable {
                 bytemuck::bytes_of(&[tint[0], tint[1], tint[2], offset]),
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model_with(programs: &[f32]) -> Model {
+        let mut model =
+            Model::from_draws("test", Vec::new(), Vec::new(), Vec::new(), [0.0; 3], 1.0, 0);
+        model.emissive = programs
+            .iter()
+            .map(|&program| oag_mesh::mesh::Emissive {
+                tint: [0.0; 3],
+                offset: 0.0,
+                scale: 0.0,
+                rate: 0.0,
+                program: [program, 0.0],
+            })
+            .collect();
+        model
+    }
+
+    /// Every laid mine's visualiser needs a glow table of its own, or the last mine's constants
+    /// reach every ring.
+    #[test]
+    fn the_visualiser_ring_gets_a_glow_table_per_instance() {
+        let electricity = oag_mesh::mesh::PROGRAM_ELECTRICITY;
+        let audio = oag_mesh::mesh::PROGRAM_ELECTRICITY_AUDIO;
+        assert!(Drawable::carries_per_instance_program(&model_with(&[
+            electricity,
+            audio
+        ])));
+        assert!(!Drawable::carries_per_instance_program(&model_with(&[])));
     }
 }

@@ -486,13 +486,7 @@ pub(super) fn load_detonator_objects(
     } else {
         part(objects.pad, "a Detonator pad")
     };
-    if objects.mine_visualiser.is_none() {
-        report.push(
-            "Detonator mine: electric_visualiser's program is unread on this title and the ring \
-             is not drawn"
-                .to_string(),
-        );
-    }
+    report.extend(unread_ring_line(objects));
     report.push(format!(
         "Detonator pads: {} pad(s) carry the Detonator pad model",
         if pad.is_some() { pads.len() } else { 0 }
@@ -507,6 +501,15 @@ pub(super) fn load_detonator_objects(
         pad,
         pads,
     }
+}
+
+/// The loader line for a title that names no visualiser.
+pub(super) fn unread_ring_line(objects: &oag_title::DetonatorObjects) -> Option<String> {
+    objects.mine_visualiser.is_none().then(|| {
+        "Detonator mine: electric_visualiser's program is unread on this title and the ring is \
+         not drawn"
+            .to_string()
+    })
 }
 
 /// `models` with a Detonator race's mine and bomb in place of the ordinary ones: the first part
@@ -569,4 +572,20 @@ pub(super) fn load_cockpit_hit(
         return None;
     }
     Some(texture)
+}
+
+#[cfg(test)]
+mod ring_tests {
+    use super::unread_ring_line;
+
+    /// HD names the ring and says nothing; 2048 and Omega name none and the loader says so.
+    #[test]
+    fn a_title_that_names_no_visualiser_says_so_in_the_loader_report() {
+        assert_eq!(unread_ring_line(&oag_hd::race::DETONATOR_OBJECTS), None);
+        for objects in [&oag_2048::race::DETONATOR_OBJECTS] {
+            assert!(objects.mine_visualiser.is_none());
+            let line = unread_ring_line(objects).expect("a report line");
+            assert!(line.contains("electric_visualiser") && line.contains("not drawn"));
+        }
+    }
 }

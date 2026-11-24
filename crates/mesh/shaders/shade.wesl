@@ -2294,7 +2294,7 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     let electric_entry_on = row_scale.z > 24.5 && row_scale.z < 25.5;
     if electric_entry_on {
         let audio = emissive_tint(((in.slots >> 24u) & 63u) + 1u);
-        let alpha_v = in.sun_mask;
+        let alpha_v = sun_mask;
         let n0 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.lightmap_texcoord.z, in.lightmap_texcoord.w - audio.y)).x;
         let n1 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y - audio.z)).w;
         let s = in.lightmap_texcoord.y + scene.time.x + n0 + n1;

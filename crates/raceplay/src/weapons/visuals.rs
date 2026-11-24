@@ -324,11 +324,7 @@ impl Race {
                 let football = sizes
                     .get(&(placed.entry, placed.lane))
                     .map_or(1.0, |&(football, _)| football);
-                let size = if placed.live {
-                    1.0 + VISUALISER_GROWTH * (football - 1.0)
-                } else {
-                    DARK_VISUALISER_SCALE
-                };
+                let size = visualiser_scale(placed.live, football);
                 Some(camera_facing_matrix(position, up, eye) * Mat4::from_scale(Vec3::splat(size)))
             })
             .collect()
@@ -561,6 +557,15 @@ const VISUALISER_GROWTH: f32 = 0.4;
 
 /// A dark mine's visualiser size.
 const DARK_VISUALISER_SCALE: f32 = 0.9;
+
+/// The visualiser's size: `1 + 0.4 (football - 1)` while live, `0.9` dark.
+pub(crate) fn visualiser_scale(live: bool, football: f32) -> f32 {
+    if live {
+        1.0 + VISUALISER_GROWTH * (football - 1.0)
+    } else {
+        DARK_VISUALISER_SCALE
+    }
+}
 
 /// A basis at `position` whose Z points at `eye` and whose Y is as near `up` as that allows.
 fn camera_facing_matrix(position: Vec3, up: Vec3, eye: Vec3) -> Mat4 {
@@ -1383,5 +1388,19 @@ impl RaceView {
             };
             self.stage.play(&effect, projectile.position, 1.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod ring_tests {
+    use super::visualiser_scale;
+
+    /// A dark mine's ring is `0.9` whatever the football's size, a live one `1 + 0.4 (football - 1)`.
+    #[test]
+    fn a_dark_mines_visualiser_is_nine_tenths_and_a_live_ones_follows_the_football() {
+        assert_eq!(visualiser_scale(false, 2.3), 0.9);
+        assert_eq!(visualiser_scale(false, 1.0), 0.9);
+        assert!((visualiser_scale(true, 2.3) - 1.52).abs() < 1e-6);
+        assert_eq!(visualiser_scale(true, 1.0), 1.0);
     }
 }
