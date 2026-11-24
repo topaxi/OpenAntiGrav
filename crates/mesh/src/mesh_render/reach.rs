@@ -132,7 +132,7 @@ impl Stamped {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mesh_render::pipeline_cache::tests::{build_once, device, triangle_model};
+    use crate::mesh_render::pipeline_cache::tests::{device, triangle_model};
     use oag_vex::vex::BlendClass;
 
     fn draw(blend: Option<BlendClass>, culled: bool) -> DrawCall {
