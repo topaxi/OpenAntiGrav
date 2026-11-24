@@ -77,7 +77,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 
 1. ~~HD/Fury: read `Ship_SetState`'s destroy states~~ Read 2026-11-22
    (`ship-destroy.md`). Still open there: the death kick's formula, the wreck collider's child
-   shapes, ~~camera mode 8's view against Pulse's mode 5~~ (read 2026-11-23, `destroy-camera.md`), the `+0x7e40` call on the 4 -> 5 edge,
+   shapes, ~~camera mode 8's view against Pulse's mode 5~~ (read 2026-11-23, `destroy-camera.md`), ~~the `+0x7e40` call on the 4 -> 5 edge~~ (read and wired 2026-11-24, `ship-destroy.md`, "The debris throw"; open there: the nitro variant `0x00105450` (32 pieces), `Debris_Update`'s body-state branches, the torque's size, how gravity is applied, 2048 and Omega's piece paths),
    and a live run of the state timings.
 2. ~~2048 and Omega wired~~. Their second ship family (`WO_SHIP_EXPLOSION_PLAYER`,
    2048 `0x812c7e2c`, Omega `0x0176fe30`) is unread.

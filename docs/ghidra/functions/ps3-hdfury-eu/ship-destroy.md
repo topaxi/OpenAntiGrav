@@ -400,9 +400,51 @@ appears there. Whether Omega's HD-layout path is reached for HD's ship explosion
 `WO_SHIP_FXNODE_EXPLO` and `WO_SHIP_DEATH_SPARKS` at every wreck locator then, and
 `WO_SHIP_EXPLOSION` 1.5 s later at state 6 ([ship-wreck-model.md](../psp-pulse-usa/ship-wreck-model.md)).
 HD has neither node effect string, so **HD's wreck sequence is one blast at the
-swap**, then the death plume, then nothing until the wreck is taken out of the
+swap**, then the death plume and the 19-piece debris throw ("The debris throw"), then nothing until the wreck is taken out of the
 world. HD's states do not map onto `CraftState::Eliminated` as Pulse's do: on HD
 the wreck is live from state 4.
+
+## The debris throw (2026-11-24, `hd-death-debris`, static, confidence per line)
+
+`Ship_UpdateExploding` (`0x000e3d18`), on the 4 -> 5 edge and outside the `0x206040` modes (Zone, Detonator
+and modes 13 and 21), calls `DebrisManager_SpawnShipDebris(mgr = ship+0x7e40, matrix = body+0x1d0,
+velocity = body+0x190)` (`0x000e3e18`, `lvx v2` of the body's `+0x190`), or `DebrisManager_SpawnNitroDebris`
+(`0x00105450`) when the craft's `+0x6298` entry names `"nitro"` (`0x000e3ef0`). It runs in the Eliminator too.
+Read from the disassembly (Ghidra truncates `Debris_Launch` at its `bl 0x00327500`, so every address below is
+an instruction address).
+
+| Part | Law | Address | Conf. |
+| --- | --- | --- | ---: |
+| Source | one model per piece: `Data/Ships/Ship_Damage/Part_%d.vex` (+ `.rcsmodel`), `%d` = 1..19 (nitro: `Ship_Damage_Nitro`, part `i/4+1`, 8 parts); the manager loads them in `DebrisManager_Construct` | `0x00105ba8`-`0x00105e18`, strings `0x00782e20`, `0x00782e58` | 85 |
+| Count | 19 (`cmpdi r25, 0x13`); the previous set is released first (`0x0010c1f8` per piece) | `0x001050e4`, `0x00105014` | 90 |
+| Refusal | the manager built for Zone (`mgr+0x30c`) prints `"Ship has only zone debris to spawn"` and returns | `0x00104fe0` | 85 |
+| Spawn point | `matrix.row3 + 0 * ...`: the vector at `0x00992d10` (written once by the static init `0x00104760` from `0x00782d20`) is `(0, 0, -5, 0)`, so `p = position - 5 * row2`; our body's forward is `-Z`, so **5 units ahead of the craft** | `0x00105118`-`0x00105148`, `0x0010479c` | 85 |
+| Orientation | the piece's node takes the body matrix rows (unit) with `p` as translation; the part vertices are in their own space | `0x00105348`, `0x0010cb08`-`0x0010cb60` | 75 |
+| Velocity | `v = body_velocity * 1.0 + S * D`, `D = 25 * (A * row0 + B * row1 - row2)` (tuning `0x008c17d0 +0x24 = 25.0`, `+0x1c`, `+0x20 = 1.0`), `A`, `B` = `rand30 * 2^-29 - 1` in `[-1, 1)` (`Libc_Rand` `0x0043c280` returns the low 30 bits, `rldicl r3,r0,0,0x22`), `S = 1 + 0.95 * C` (`+0x08 = 0.95`, `C` the third draw). Our rows: `row0` right, `row1` up, `-row2` forward | `0x0010514c`-`0x0010527c` | 85 |
+| Torque | `cross(row1, v) * 100` (`+0x0c = 100.0`), stored at record `+0x20`, which `Debris_Launch` copies to `body+0x1c0` (the torque slot of a body laid out velocity `0x190`, spin `0x1a0`, force `0x1b0`, torque `0x1c0`, matrix `0x1d0`). Whether it is an impulse or an accumulator, and the piece's inertia (`Body_SetBoxInertia(1, r, r, r)` with `r = 0.5 * lane 3 of 0x00677968(node+0x204c)`), are unread | `0x001052a4`-`0x00105304`, `0x0010c9ec`-`0x0010ca08` | 70 (the size: unread) |
+| Gravity | record `+0x40` = `(0, -9.81, 0, 0) * 2.0` (`0x00782d60`, tuning `+0x10`), copied to the object at `+0x60` (`0x0010ca5c`); how the update applies it is not decoded | `0x001052a0`, `0x0010ca60`-`0x0010ca70` | 50 |
+| Fire | pieces with index `> 16` (tuning word `0x10`, `cmplw r0, r24; blt`): zero-based 17 and 18, the last two, set the record's `+0x58` byte, and `Debris_Launch` attaches `WO_DEBRIS_FIRE` to the node (`0x0010cba0`-`0x0010ccb4`, fourcc `0x46424544`) | `0x00105310`-`0x00105354` | 82 |
+| Life | `Debris_Update` (`0x0010d580`, per piece from `DebrisManager_Update` `0x001046b0`, vtable slot 2 of `0x00875238`): `+0x104 += dt`; a piece with `+0x10e == 0` (the ship's `r5 = 0`) is hidden (node `+0x34 &= ~4`) and its body removed from the world once `+0x104` exceeds tuning `0x008c1810 + 0xc` = **10.0 s**. The branches on body state `+0x210` (2, 3, 4) and the settled test (`speed^2 < 0.5`) are not decoded | `0x0010d7b0`-`0x0010d878` | 62 |
+| Collision | `Debris_Launch` makes a type-7 body and adds it to the physics and collision worlds (`+0x70 = 1`), so a piece lands on the track | `0x0010c9a0`, `0x0010ca38`, `0x0010ca94` | 72 |
+
+**Nitro** (`0x00105450`): 32 pieces, spawn offset `(0, 1, 0)` (`0x00992d10 + 0x10`), `D = 25 * (A * row0 + B * row1 + C * row2)`
+with its own draws, the fade flag `+0x10f = 1` and no fire (`stb 0, 0x208`): read for shape only, **not wired**.
+
+**Ours** (`oag_title::destroyed::ShipDebris::HD`, `oag_raceplay::ship_debris`, `oag_livery::ship_debris`): the
+count, the source, the spawn point, the velocity law, the torque's direction, the fire and the 10 s life are the
+reading above. **Chosen, not measured:** the pull `19.62` along world down (the record's vector, applied as a
+plain acceleration), the floor plane the pieces rest on under the craft, the spin rate `6` rad/s (the torque's
+size needs the inertia), and that a piece collides with nothing but that plane. At most four throws are in the
+air at once (the oldest is reused). Test: `raceplay::tests::ship_debris` (19 pieces on the 4 -> 5 edge and not
+before, two burning, gone at 10 s, none on Pulse, all forward). Our frames: `--race --opponents --force-wreck
+40:1` on HD, the debris thrown at tick 58 (0.3 s after the blast), pieces lying on the track at 1.5 s with one
+still burning.
+
+**2048 and Omega: not checkable here.** Both inherit `DestroyedCraft::HD`, so they ask for
+`Data\Ships\Ship_Damage\Part_N` and say in the loader report which piece is missing; their own layout is
+unread. Neither package opens on this machine: the `.pkg`'s PFS layer needs a console-derived key
+(`docs/formats/vita-package.md`), and `pkg2zip` leaves `data.psarc` encrypted. `FUN_811a468a` and
+`FUN_012cf870` (`zone-destroy.md`) are their `SpawnZoneDebris`; the ship variant was not looked up.
 
 ## Functions
 
@@ -415,6 +457,11 @@ the wreck is live from state 4.
 | `0x002a39c8` | `Colour_PackFloat4` | 85 | clamps a float4 to `[0, 1]`, times `255.0` (`*0x0079bf70`), packs `x<<24 \| y<<16 \| z<<8 \| w` |
 | `0x000d96c8` | `Ship_PlayDestroyExplosion` | 82 | the only function naming `~SHIP_DESTROYED`; `EXPLBIG_PC`/`EXPLBIG`; `WO_SHIP_EXPLOSION`/`WO_NITRO_SHIP_DEATH` (strings through its own TOC); the 2048 and Omega twins name the same set |
 | `0x000d44d0` | `Ship_ApplyDeathKick_q` | 60 | random draws (`0x0028c660`, `Libc_Rand`) over tuning `+0x18..+0x34`, then `0x000f6348` with the live model's node position and `0x000f5dd8` on the body; formula not decoded |
+| `0x00104f18` | `DebrisManager_SpawnShipDebris` | 85 | "The debris throw": 19 `Part_N` pieces, the velocity, torque and fire law; the Zone refusal string |
+| `0x00105450` | `DebrisManager_SpawnNitroDebris` | 75 | its twin for a craft whose entry names `"nitro"`: 32 pieces, `(0, 1, 0)` spawn offset, no fire, fade flag |
+| `0x0010c958` | `Debris_Launch` | 78 | body type 7, velocity into `body+0x190`, torque into `body+0x1c0`, the physics and collision worlds, `WO_DEBRIS_FIRE` when the record's `+0x58` is set |
+| `0x0010d580` | `Debris_Update` | 70 | per piece: `+0x104 += dt`, hidden and removed from the world past tuning `+0xc` (10.0 s); the body-state branches are not decoded |
+| `0x001046b0` | `DebrisManager_Update` | 74 | vtable slot 2 of `0x00875238`: `Debris_Update(piece, dt)` for each of `mgr+0x310` pieces at `mgr+0x314` |
 | `0x000e3d18` | `Ship_UpdateExploding` | 82 | state-4 arm of the per-tick dispatcher; `+0x6a78 -= dt`, `Ship_SetState(5)` at `<= 0` |
 | `0x000e3768` | `Ship_UpdateWrecked` | 78 | state-5 arm; the settle and timeout rule, `Ship_SetState(6)`/`(8)` |
 | `0x000e2f48` | `Ship_UpdateResetting` | 78 | state-8 arm; `RESET`, `Ship_SyncActiveModelPointer`, `Ship_SetState(1)` |
@@ -476,7 +523,7 @@ the live model still `wreck`.
    `0x00039c90`); count and placement unread.
 3. ~~**Camera mode 8's view** (HD) against Pulse's mode 5 law~~ Read 2026-11-23:
    [destroy-camera.md](destroy-camera.md) (enter entry 8 at `0x000abd14` writes the field `35.0`).
-4. **The `+0x7e40` call on the 4 -> 5 edge** (`0x00104f18`, `0x00105450`). Pointer (2026-11-23,
+4. ~~The `+0x7e40` call on the 4 -> 5 edge~~ Read 2026-11-24, "The debris throw" above (nitro variant, the body-state branches of `Debris_Update`, the torque's size and the gravity's application stay open). Earlier pointer: (`0x00104f18`, `0x00105450`). Pointer (2026-11-23,
    [zone-destroy.md](zone-destroy.md), "Functions"): `+0x7e40` is the debris manager and `0x00104f18` is
    `DebrisManager_SpawnShipDebris`, which throws **19 `Ship_Damage%d` pieces** at the body matrix with
    random velocities, those past a tuning count with `WO_DEBRIS_FIRE`; `0x00105450` is its nitro

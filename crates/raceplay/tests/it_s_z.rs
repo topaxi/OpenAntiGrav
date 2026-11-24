@@ -26,6 +26,7 @@ mod sh_probes_ground_truth;
 mod shadow_ground_truth;
 mod shadow_stability_ground_truth;
 mod shield_difficulty_ground_truth;
+mod ship_debris_ground_truth;
 mod ship_spawn_ground_truth;
 mod shuriken_ground_truth;
 mod slipstream_energy_turbo_ground_truth;

@@ -132,6 +132,7 @@ mod shared_half;
 mod shield_flash;
 mod shield_hits;
 mod shine_writes;
+mod ship_debris;
 mod slot_hud;
 mod spawn;
 mod spectator_press;
@@ -440,6 +441,8 @@ pub(crate) fn fixture_view() -> ViewSetup {
         cockpit_hit_noise: None,
         wreck_anchors: Vec::new(),
         zone_end: None,
+        ship_debris: None,
+        ship_debris_spec: None,
         wreck_shockwave: true,
         magstrip_wake: None,
         magstrip_pob: false,

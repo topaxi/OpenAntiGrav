@@ -86,6 +86,18 @@ impl RaceView {
             .sum()
     }
 
+    /// Each flying piece's launch speed along `axis`, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn ship_debris_launch_speeds_for_tests(&self, axis: Vec3) -> Vec<f32> {
+        self.ship_debris
+            .copies
+            .iter()
+            .flatten()
+            .flat_map(|thrown| thrown.pieces.iter().map(|piece| piece.velocity.dot(axis)))
+            .collect()
+    }
+
     /// How many fires are riding a piece, for tests.
     #[doc(hidden)]
     #[must_use]
