@@ -73,5 +73,48 @@ mean grey 14.53, 13.47, 13.75, 10.65, 7.49 at ticks 330, 345, 360, 375, 390 and 
 re-captured with the clock read 9.32 -> 4.31 (Karbonis), 12.09 -> 6.86 (Mandrashee), 13.75 -> 6.36 (Manor Top) and
 9.12 -> 9.04 (Sagarmartha, whose remainder is the hull's 4 px shift); the original's world clock reads 10.04 s at
 race-clock zero in all four (`original.world_clock_offset_s`). Confidence 85 that the phase was the cause (the
-re-captures move the score by the amount the tick sweep predicted). The other eight Pure race pairs are unchanged
-and need the same re-capture (`docs/tools/compare-page.md`, "The Classic hull").
+re-captures move the score by the amount the tick sweep predicted). The other eight Pure race pairs follow below
+(`docs/tools/compare-page.md`, "The Classic hull").
+
+## The other Pure race pairs, re-captured with the clock
+
+Seven Beta, Alpha and Sol 2 pairs, re-captured from their saved states with `scripts/psp-pure-pair.py` (the pair's own stored `argv`, a private
+PPSSPP, USA image) and their `ours` re-rendered. **Control:** the same binary on the same `theirs.png` without
+`--world-clock-offset` reproduces every stored mean grey to the digit, and the re-captured `theirs.png` is byte-identical to
+the stored one (RMSE 0 on all seven), so the whole difference below is ours' scenery clock. Mean grey, stored (no clock) to re-captured:
+
+| Pair | Before | After | `original.world_clock_offset_s` | Ours' offset, tick |
+| --- | ---: | ---: | ---: | --- |
+| `sebenco-climb` | 15.56 | 13.99 | 10.041 | 5.508 s, 320 |
+| `sinucit` | 15.43 | 14.74 | 10.042 | 5.510 s, 398 |
+| `sol-2` | 10.27 | 9.37 | 10.041 | 5.510 s, 380 |
+| `citta-nuova` | 8.77 | 7.12 | 10.041 | 5.511 s, 444 |
+| `chenghou` | 7.63 | 6.63 | 10.041 | 5.514 s, 664 |
+| `vineta` | 7.37 | 6.33 | 616.021 | 611.488 s, 1271 |
+| `blue-ridge` | 7.23 | 6.56 | 10.041 | 5.514 s, 676 |
+
+The gain is 0.7 to 1.7 grey, against 3 to 7 on the Classic pairs: the Classic scenery animates more of the frame.
+Every hull sat at the original's px offset (0, 0), but Blue Ridge at (-1, 0). Two loads of each state on one boot give bit-identical
+`theirs.png`, `ours.png` and world-clock read (one boot: confidence 60 on the number, 85 that the clock is the cause, from the control).
+
+- **Vineta's state holds 616.02 s** against 10.04 s on the other six: it was saved in a long session, not at a fresh load.
+  The read survived a sweep of ours' offset (6.77 at 5.51 s; 6.87, 6.75, 6.57, **6.32**, 6.51, 6.68, 6.75 from 610.74 to 612.24 s
+  in 0.25 s steps; 7.21 at 616.5 s): the minimum sits at the value read, 611.487 s.
+- **The weather is not on this clock.** `Race::world_clock_seconds` feeds the world meshes' animation, mod shaders and ribbons. The mist
+  layers (`oag_fx::mist::Layers`, stepped per tick from the camera's motion, their random UV offsets from ours' seeded `Rng`) and the rain
+  and snow emitters on Sinucit and Sebenco Climb are not. The original re-rolls the layers with `Psys_RandFloatRange`
+  (`docs/rendering/pure-weather.md`), so a clock read cannot place them. On the two weather pairs the residual is mostly low frequency (below), the shape of
+  an unclocked mist; Sebenco still gained 1.57 from the clock, Sinucit 0.69.
+
+### Where the rest is, the worst three
+
+Regions on the 480x272 frame, each pasted from the original over ours with the mean grey recomputed (the HD page's method), disjoint
+(HUD glyph boxes, named features, hull box `188,172 to 300,272`, road rows 150 and below, then the upper scene):
+
+| Pair | Largest region | Share of error, of area | Cause |
+| --- | --- | ---: | --- |
+| `sinucit` (14.74) | upper scene, sky and buildings | 38.9 %, of 43.7 % | low frequency: a flat lift, ours darker by +11 grey (blurred difference 12.6 of 13.9); the weather mist and rain, unclocked. Ours' upper scene reads 78.2 at tick 2 and 75.4 at tick 398 on the same scenery phase, so ours' mist also thins under cover over the run (a lead: the original's opacity is not read). Advert screens above the road: 4.9 % on 3.2 % of the frame (23 billboard-slot draws suppressed, `pure-weather.md`) |
+| `sebenco-climb` (13.99) | upper scene | 36.8 %, of 46.9 % | low frequency 8.8 of 10.9, signed +4.8: the snow mist again. The densest box is the bottom-left HUD line (12.4 % on 5.3 %: the original prints `COSMOS KINECTION`, ours `COLD STORAGE`), out of scope; then the hull box (12.9 % on 8.6 %, original brighter by +15, the known hull lead) |
+| `sol-2` (9.37) | steam plume, `270,50 to 480,150` | 29.6 %, of 16.1 % | the original's cloud is denser and larger, covering the Harimau sign; ours' is thinner and sits lower. A particle phase, no world clock reaches it |
+
+No code changed: none of the three regions is a disc value ours reads wrong that a test can prove.
