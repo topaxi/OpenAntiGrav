@@ -80,7 +80,7 @@ art and angles are unmeasured) and the widescreen scale path (`DAT_0027e7e8/ec`)
 The PS2 disc authors the same circuit nodes as the PSP (circuit 1: three
 `WO_BLUE_WELDER` and eight `Camera` nodes on both; census in
 `crates/raceplay/tests/ps2_hud_sights_ground_truth.rs`), so the loader's
-`circuit_effects` rule (`oag_title::Looks`) now applies to both pressings: the
+`circuit_effects` and `circuit_weather` rules (`oag_title::Looks`) now apply to both pressings: the
 circuit's placed `ParticleSystem` nodes, its `<Weather>` and the destroy camera's
 stations. The `hull_wreck` rule applies to both too, the PS2 wreck taking its
 texture set from the entry before it. **Checked, applies, wired**: the PSP's

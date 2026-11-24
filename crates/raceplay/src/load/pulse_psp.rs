@@ -28,7 +28,7 @@ pub(super) fn is_pulse_psp(title: &oag_title::Title, archives: &oag_assets::Arch
 /// ripple and hull lights follow their own rules, which the PS2 shares.
 pub(super) fn finish(
     loaded: &mut Loaded,
-    (circuit_fx, road_ripple, hull_lights): (bool, bool, bool),
+    (circuit_fx, circuit_weather, road_ripple, hull_lights): (bool, bool, bool, bool),
     psp_glow_mask: bool,
     track_shine: bool,
     track_blob: &[u8],
@@ -37,7 +37,9 @@ pub(super) fn finish(
     let nodes = oag_vex::vex::nodes(track_blob).unwrap_or_default();
     if circuit_fx {
         place_scenery_fx(loaded, track_blob, &nodes);
-        place_weather(loaded, track_blob, &nodes, archives, track);
+    }
+    if circuit_weather {
+        place_weather(loaded, track_blob, &nodes, (archives, track), title);
     }
     if road_ripple {
         loaded.ripples = super::ripple::build(
@@ -163,9 +165,10 @@ fn place_scenery_fx(loaded: &mut Loaded, track_blob: &[u8], nodes: &[oag_vex::ve
 
 #[cfg(feature = "view")]
 /// The circuit's `<Weather>` element and the `weatherPos` anchors it is
-/// played against, as `race::scenery_fx::weather` describes. Pulse PSP only:
-/// `Weather_Update` was read there, and the PS2 disc's three circuits that
-/// author the element are not played by extension.
+/// played against, as `race::scenery_fx::weather` describes. Where the title's
+/// `circuit_weather` rule applies: `Weather_Update` was read on Pulse's PSP and the
+/// law is inherited by Pulse's PS2 pressing and by Pure's PSP disc
+/// (`docs/rendering/pure-weather.md`).
 ///
 /// Nothing in Zone: `TrackStartup_Parse` does not build the weather there.
 ///
@@ -176,8 +179,8 @@ fn place_weather(
     loaded: &mut Loaded,
     track_blob: &[u8],
     nodes: &[oag_vex::vex::Node],
-    archives: &mut oag_assets::Archives,
-    track: &str,
+    (archives, track): (&mut oag_assets::Archives, &str),
+    title: &oag_title::Title,
 ) {
     let Some(config) =
         oag_sound::sfx::circuit_manifest(archives, track).and_then(|manifest| manifest.weather)
@@ -211,6 +214,7 @@ fn place_weather(
         mist_texture,
         splash_cell,
         driven: false,
+        offered: title.weather.is_played(),
     });
 }
 
@@ -254,6 +258,7 @@ pub(super) fn place_driven_weather(
         mist_texture,
         splash_cell,
         driven: true,
+        offered: title.weather.is_played(),
     });
 }
 

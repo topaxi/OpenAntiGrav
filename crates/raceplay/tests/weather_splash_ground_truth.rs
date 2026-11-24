@@ -355,7 +355,7 @@ fn splash_cost_sweep() {
     }
 }
 
-/// The PS2 pressing plays the same circuit's weather (`circuit_effects`), so it
+/// The PS2 pressing plays the same circuit's weather (`circuit_weather`), so it
 /// loads the splash art too and inherits the setting from the PSP.
 #[test]
 #[ignore = "needs data/images/pulse-ps2-eu.chd"]

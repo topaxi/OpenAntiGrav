@@ -16,6 +16,8 @@
 - Track geometry: the driveable ribbon **and** the textured art meshes both
   render. The art meshes are behind `--art` rather than being the default, for a
   reason that is [about verification, not rendering](../overview/roadmap.md#m5---full-race)
+- Pure's **weather** (Sinucit's rain, Sebenco Climb's snow, and the screen mist both author): **done**, Pulse's law
+  on Pure's data, see [`pure-weather.md`](pure-weather.md)
 - Pure's **sun lens flare**: law measured, not drawn; ten additive quads on a 2x2 atlas, see
   [`lens-flare.md`](lens-flare.md)
 - Ship rendering, including team liveries - **done** for the eight teams whose

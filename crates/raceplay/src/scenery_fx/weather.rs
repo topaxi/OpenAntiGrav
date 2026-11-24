@@ -139,6 +139,9 @@ pub struct Setup {
     /// with the enhanced effects whatever the player's setting. `false` for a
     /// circuit's authored weather, which plays from the first frame as it always did.
     pub driven: bool,
+    /// Whether the title offers the enhanced weather (`oag_title::weather::Weather::is_played`).
+    /// A title that does not never takes the setting's extras, whatever its profile says.
+    pub offered: bool,
 }
 
 /// The weather of a race: inert unless the circuit authors one.
@@ -226,6 +229,12 @@ impl Weather {
         }
     }
 
+    /// Whether the title offers the enhanced weather's setting; `false` with no weather.
+    #[must_use]
+    pub fn is_offered(&self) -> bool {
+        self.setup.as_ref().is_some_and(|s| s.offered)
+    }
+
     /// Whether a track module drives this weather rather than the circuit.
     #[must_use]
     pub fn is_driven(&self) -> bool {
@@ -262,6 +271,12 @@ impl Weather {
     #[must_use]
     pub fn is_authored(&self) -> bool {
         self.setup.is_some()
+    }
+
+    /// The env effect (the rain or the snow) as loaded, once the first step has resolved it.
+    #[must_use]
+    pub fn env_effect(&self) -> Option<&Effect> {
+        self.effect.as_deref()
     }
 
     /// Whether the env effect loaded and is playing.

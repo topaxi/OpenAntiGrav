@@ -177,6 +177,12 @@ impl Lens {
         self.gain
     }
 
+    /// The droplet effect as loaded.
+    #[must_use]
+    pub fn effect(&self) -> Option<&Effect> {
+        self.effect.as_ref()
+    }
+
     /// Whether the lens loaded.
     #[must_use]
     pub fn is_loaded(&self) -> bool {

@@ -221,6 +221,13 @@ pub const LOOKS: &Looks = &Looks {
         on: Platforms::Only(&[oag_title::Platform::Psp]),
         origin: Origin::Measured,
     },
+    // The circuit's `<Weather>`: Pure's executable carries the same element's attribute
+    // names and `FxWeather`/`FxScreenMist` (`docs/rendering/pure-weather.md`), and
+    // Sinucit's and Sebenco Climb's `TrackStartup.xml` author it. Played with Pulse's law.
+    circuit_weather: Rule {
+        on: Platforms::Only(&[oag_title::Platform::Psp]),
+        origin: Origin::InheritedFrom("Wipeout Pulse"),
+    },
     // The sun's lens flare, read off `FxLensflare` and measured live on PPSSPP
     // (`docs/rendering/lens-flare.md`): drawn where the circuit authors a node.
     lens_flare: Rule {
