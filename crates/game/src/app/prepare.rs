@@ -293,6 +293,7 @@ impl Pending {
             world_clock_offset: self.cli.world_clock_offset.unwrap_or(0.0),
             gantry_seconds: self.cli.gantry_seconds,
             camera: self.camera,
+            fov_override: self.cli.camera_fov.filter(|_| self.camera.is_none()),
             demo: false,
         };
         // A track file that borrows from another title's disc races as a two-title race

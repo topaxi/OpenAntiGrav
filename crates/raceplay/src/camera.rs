@@ -878,6 +878,7 @@ impl RaceView {
             .camera_override
             .as_ref()
             .and_then(|over| over.fov_deg)
+            .or(self.fov_override)
             .unwrap_or(view_fov);
         // The original's speed widen, added to the authored degrees before
         // anything else - which is where `Ship_UpdateCameraRigs` adds it, and it

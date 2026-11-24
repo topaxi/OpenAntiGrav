@@ -136,6 +136,7 @@ impl Race {
             world_clock_offset,
             gantry_seconds,
             camera_override,
+            fov_override,
             hd_trail,
             ps2_trail,
             shield_palette,
@@ -886,6 +887,7 @@ impl Race {
                         super::intro_camera::IntroCamera::new(grid, rule).with_voice(intro_voice)
                     }),
                 camera_override,
+                fov_override,
                 capture_hud,
                 hud_waits_for_go,
                 now_playing,

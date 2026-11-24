@@ -89,6 +89,9 @@ pub struct RaceView {
     pub(super) floor_sparks: super::floor_sparks::FloorSparks,
     /// Render from this pose instead of [`Self::camera`]. See [`CameraOverride`].
     pub(super) camera_override: Option<CameraOverride>,
+    /// The authored field of view a capture imposes with the chase camera kept. See
+    /// [`crate::Options::fov_override`].
+    pub(super) fov_override: Option<f32>,
     /// The HUD's race state imposed on the primary readout. See [`crate::CaptureHud`].
     pub(super) capture_hud: Option<crate::CaptureHud>,
     /// Whether the HUD stays hidden until the race is released
