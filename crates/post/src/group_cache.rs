@@ -1,4 +1,4 @@
-//! A bind group that is rebuilt only when the texture view it reads changes.
+//! A bind group that is rebuilt only when the texture views it reads change.
 //!
 //! A post pass that samples the frame's scene target used to create its group on
 //! every call. The scene target is the same texture frame after frame, so the group
@@ -14,10 +14,10 @@
 
 use std::cell::{Cell, RefCell};
 
-/// One cached group keyed on one texture view.
+/// One cached group keyed on the texture views it reads.
 #[derive(Debug, Default)]
 pub(crate) struct ViewGroup {
-    slot: RefCell<Option<(wgpu::TextureView, wgpu::BindGroup)>>,
+    slot: RefCell<Option<(Vec<wgpu::TextureView>, wgpu::BindGroup)>>,
     builds: Cell<u64>,
 }
 
@@ -29,15 +29,26 @@ impl ViewGroup {
         view: &wgpu::TextureView,
         build: impl FnOnce() -> wgpu::BindGroup,
     ) -> wgpu::BindGroup {
+        self.get_all(&[view], build)
+    }
+
+    /// The group for `views`, from `build` only when any of them differs from the one the held
+    /// group was built for.
+    pub(crate) fn get_all(
+        &self,
+        views: &[&wgpu::TextureView],
+        build: impl FnOnce() -> wgpu::BindGroup,
+    ) -> wgpu::BindGroup {
         let mut slot = self.slot.borrow_mut();
         if let Some((held, group)) = slot.as_ref()
-            && held == view
+            && held.len() == views.len()
+            && held.iter().zip(views).all(|(held, view)| held == *view)
         {
             return group.clone();
         }
         let group = build();
         self.builds.set(self.builds.get() + 1);
-        *slot = Some((view.clone(), group.clone()));
+        *slot = Some((views.iter().map(|v| (*v).clone()).collect(), group.clone()));
         group
     }
 

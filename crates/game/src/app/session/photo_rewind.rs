@@ -11,7 +11,7 @@ use log::{debug, warn};
 use oag_gameplay::input::InputSnapshot;
 use oag_raceplay::photo::effects;
 use oag_raceplay::photo::rewind::Rewind;
-use oag_raceplay::photo::shot::{Mover, Plan, Shot};
+use oag_raceplay::photo::shot::{Mover, Shot};
 use oag_ui::pointer::Pointer;
 
 use super::photo::Origin;
@@ -256,6 +256,9 @@ impl super::Session {
         path: &std::path::Path,
         pending: Option<super::photo_meta::Pending>,
     ) -> Result<(), Option<super::photo_meta::Pending>> {
+        // The field the frames are drawn with, which the lens ring is sized in.
+        let rect = oag_display::display::viewport(self.gpu.output.size(), self.aspect());
+        let (aspect, setting) = (rect.2 / rect.3, self.settings.graphics.fov);
         let (Stage::Race(stage), Some(open)) = (&mut self.stage, self.photo.as_mut()) else {
             return Err(pending);
         };
@@ -270,10 +273,7 @@ impl super::Session {
         }
         let resimulates = open.rewind.as_ref().is_some_and(Rewind::resimulates);
         let tick = stage.race.core.sim.world.tick;
-        let Some(photo) = stage.race.photo() else {
-            return Err(pending);
-        };
-        let Some(plan) = Plan::new(photo, tick, resimulates) else {
+        let Some(plan) = stage.race.photo_plan(tick, resimulates, aspect, setting) else {
             return Err(pending);
         };
         debug!(

@@ -609,6 +609,16 @@ impl Race {
         }
     }
 
+    /// The vertical field in degrees the picture is drawn with at `aspect` and the player's
+    /// `setting`: the lens's own field with the speed widen, the setting and the window's fit
+    /// ([`crate::RaceView::vertical_fov`]).
+    #[must_use]
+    pub fn drawn_fov_degrees(&self, aspect: f32, setting: oag_display::display::Fov) -> f32 {
+        self.view
+            .vertical_fov(&self.core, aspect, setting)
+            .to_degrees()
+    }
+
     /// The original's `g_camera_fov_degrees` for this view: the authored field plus the speed
     /// widen, before the player's setting and the window's fit. `ViewCull_ViewDepth` multiplies
     /// every list-B depth by this over 65 (`docs/ghidra/functions/psp-pulse-usa/mesh-draw.md`,

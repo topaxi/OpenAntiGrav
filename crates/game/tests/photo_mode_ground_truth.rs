@@ -936,6 +936,19 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         over(&grey, ALL, chroma) < 0.1 * over(&neutral, ALL, chroma).max(1.0),
         "saturation 0 left colour in the picture"
     );
+    // And no pixel of it: Pulse's glow is added over the HUD in the original's order, and the
+    // control still covers it (`docs/ui/photo-mode.md`, "Picture controls").
+    let worst = grey
+        .2
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|pixel| chroma(pixel))
+        .fold(0.0_f32, f32::max);
+    assert!(
+        worst <= 2.0,
+        "saturation 0 left a pixel with a chroma of {worst} (the glow escaped the control)"
+    );
     // Speed blur lands at the edge of the picture and leaves the middle alone.
     assert!(
         difference(&neutral, &speed, EDGE) > 2.0,
@@ -953,6 +966,72 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         "the craft in focus changed: {}",
         difference(&neutral, &dof, CRAFT)
     );
+}
+
+/// Saturation 0 leaves no colour in the saved shot under `args`, and the game runs clean: the
+/// glow of Pulse is added to the frame ahead of the controls whatever resolves the frame after
+/// them. A neutral shot of the same run proves there is colour to lose.
+fn grey_under(tag: &str, args: &[&str]) {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("photo-grey-{tag}"));
+    let _ = std::fs::remove_dir_all(&shots);
+    let run = drive_with(
+        &image,
+        tag,
+        &format!(
+            "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+             until photo=free within 200; press select select; ticks 20; press cross; ticks 2; screenshot SHOTS/frame-1.png; ticks 2; \
+             press start; hold down 1; ticks 2; hold left 69; ticks 3; press cross; ticks 2; screenshot SHOTS/frame-2.png; ticks 2; \
+             press circle; until photo=none within 50"
+        ),
+        &shots,
+        args,
+    );
+    assert!(run.status.success(), "{}", run.stderr);
+    for bad in ["wgpu error", "Validation Error", "panicked"] {
+        assert!(!run.stderr.contains(bad), "{tag}: {bad} in\n{}", run.stderr);
+    }
+    let photos = the_photos(&run);
+    assert_eq!(photos.len(), 2, "{photos:?}");
+    let worst = |picture: &(u32, u32, Vec<u8>)| {
+        picture
+            .2
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| chroma(pixel))
+            .fold(0.0_f32, f32::max)
+    };
+    let (neutral, grey) = (decode(&photos[0]), decode(&photos[1]));
+    assert!(worst(&neutral) > 20.0, "{tag}: no colour to lose");
+    assert!(
+        worst(&grey) <= 2.0,
+        "{tag}: saturation 0 left a pixel with a chroma of {}",
+        worst(&grey)
+    );
+}
+
+/// Saturation 0 is grey with FSR 3 resolving the frame.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn saturation_zero_is_grey_under_fsr3() {
+    grey_under("fsr3", &["--reconstruction", "fsr3"]);
+}
+
+/// Saturation 0 is grey with the game rendered at half the displayed size.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn saturation_zero_is_grey_at_render_scale_50() {
+    grey_under("scale50", &["--render-scale", "50"]);
+}
+
+/// Saturation 0 is grey with four samples a pixel.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn saturation_zero_is_grey_under_msaa() {
+    grey_under("msaa", &["--msaa", "4x"]);
 }
 
 /// The game's own motion blur is a setting the mode overrides: a saved shot is the same file

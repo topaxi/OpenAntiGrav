@@ -599,12 +599,7 @@ fn camera_of(photo: &Photo, craft: &Subject) -> Free {
 /// Choosing the free lens from another starts on the picture that lens drew, its field included.
 /// Fails while the seed is held to the close lens's field: the track lens zooms to 3 degrees.
 #[test]
-#[ignore = "photo-fx-review finding 10"]
 fn the_free_lens_seeded_from_a_zoomed_track_lens_keeps_its_field() {
-    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
     let craft = craft(0);
     let mut photo = Photo::new(0, true, None);
     photo.cycle_lens();
@@ -625,18 +620,19 @@ fn the_free_lens_seeded_from_a_zoomed_track_lens_keeps_its_field() {
         on_screen.fov_deg,
         "the picture jumped: the free lens opened on another field"
     );
+    photo.step(Pad::default(), &[0]);
+    assert_eq!(
+        photo.fov(),
+        TRACK_FOV.0,
+        "the next tick pulled the field in with nothing held"
+    );
 }
 
 /// The free lens stands where it was seeded until it is moved. Fails while the range is applied
-/// by every tick of the lens and not by the seed: a seed further than `FREE_RANGE` from the
-/// craft is drawn once where it was and then pulled in with nothing held.
+/// by every tick of the lens and not widened to the seed: a seed further than `FREE_RANGE` from
+/// the craft is drawn once where it was and then pulled in with nothing held.
 #[test]
-#[ignore = "photo-fx-review finding 10"]
 fn the_free_lens_seeded_beyond_its_range_does_not_move_with_nothing_held() {
-    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
     let craft = craft(0);
     let far = pose_at(craft.position + Vec3::new(450.0, 20.0, 0.0), 0.0, 0.0, 0.0);
     let mut photo = Photo::new(0, true, None).opening_on(far, craft.position);
@@ -652,6 +648,36 @@ fn the_free_lens_seeded_beyond_its_range_does_not_move_with_nothing_held() {
         "the eye moved {} units with nothing held",
         (after - seeded).length()
     );
+}
+
+/// The free lens seeded from a camera pitched past what its own rig holds (the `close` lens
+/// reaches nearly straight up) draws that camera until it is turned: the seed is not clamped on
+/// the first frame. Fails while the pose is always rebuilt from the rig's clamped angles.
+#[test]
+fn the_free_lens_seeded_from_a_steep_pitch_keeps_it_until_it_is_turned() {
+    let craft = craft(0);
+    let steep = CameraOverride {
+        fov_deg: Some(70.0),
+        ..pose_at(craft.position + Vec3::new(3.0, 5.0, 20.0), 0.7, 1.56, 0.0)
+    };
+    let mut photo = Photo::new(0, true, None).opening_on(steep, craft.position);
+    let apart = |photo: &Photo| {
+        let pose = photo.pose(&craft, None);
+        (pose.orientation * Vec3::NEG_Z).angle_between(steep.orientation * Vec3::NEG_Z)
+    };
+    assert!(
+        apart(&photo) < 1e-3,
+        "the first frame turned {}",
+        apart(&photo)
+    );
+    photo.step(stick(0.0, 1.0), &[0]);
+    assert!(apart(&photo) < 1e-3, "walking turned it {}", apart(&photo));
+    let look = Pad {
+        right: (1.0, 0.0),
+        ..Pad::default()
+    };
+    photo.step(look, &[0]);
+    assert!(apart(&photo) > 1e-3, "turning left it pinned");
 }
 
 #[test]

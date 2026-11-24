@@ -588,21 +588,57 @@ fn a_blurred_near_edge_thins_out_over_the_sharp_surface_behind_it() {
 }
 
 /// A rectangle that starts at or past the target's last column asks for nothing and does not
-/// stop the frame. Fails while the last pixel is clamped between the first and the target's
-/// edge with the first already past it, which `clamp` refuses.
+/// stop the frame: the constants stay inside the target, and `covers` says there is nothing
+/// to draw.
 #[test]
-#[ignore = "photo-fx-review finding 12"]
 fn a_rectangle_past_the_target_is_empty_and_does_not_panic() {
-    // An open finding's proving test: `test-data` runs ignored tests, so it runs only when asked.
-    if std::env::var_os("OAG_REVIEW_FINDINGS").is_none() {
-        return;
-    }
     let none = Params {
         grade: None,
         dof: None,
         near: 1.0,
         far: 1000.0,
     };
-    let c = Constants::new((64.0, 0.0, 8.0, 8.0), (64, 64), &none);
-    assert!(c.rect[0] <= 63, "{:?}", c.rect);
+    for viewport in [
+        (64.0, 0.0, 8.0, 8.0),
+        (0.0, 64.0, 8.0, 8.0),
+        (90.0, 90.0, 4.0, 4.0),
+    ] {
+        let c = Constants::new(viewport, (64, 64), &none);
+        assert!(
+            c.rect[0] <= 63 && c.rect[1] <= 63,
+            "{viewport:?}: {:?}",
+            c.rect
+        );
+        assert!(!Constants::covers(viewport, (64, 64)), "{viewport:?}");
+    }
+    assert!(Constants::covers((0.0, 0.0, 64.0, 64.0), (64, 64)));
+    assert!(Constants::covers((63.0, 0.0, 8.0, 8.0), (64, 64)));
+}
+
+/// A frame on the same scene and depth views builds no bind group: the main pass's and the tile
+/// pass's are kept, and rebuilt only for other views. Fails while `render` builds both every
+/// call.
+#[test]
+fn a_frame_on_the_same_views_builds_no_bind_group() {
+    let Some(d) = device() else { return };
+    let f = fixture(&d, 5.0, 400.0);
+    let mut fx = PhotoFx::new(&d.device, wgpu::TextureFormat::Rgba8Unorm).expect("pipelines");
+    let blur = params(
+        Some(Dof {
+            focus: 0.2,
+            aperture: 0.4,
+        }),
+        None,
+    );
+    for _ in 0..4 {
+        assert!(run(&d, &mut fx, &f, blur).0);
+    }
+    assert_eq!(fx.group_builds(), (1, 1), "four frames on one set of views");
+    let other = fixture(&d, 5.0, 400.0);
+    assert!(run(&d, &mut fx, &other, blur).0);
+    assert_eq!(
+        fx.group_builds(),
+        (2, 2),
+        "other views get their own groups"
+    );
 }
