@@ -226,11 +226,29 @@ fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
     let setup_pad = &loaded.setup.speedup_pads[0];
     let plain = oag_core::math::Mat4::from_cols_array(&setup_pad.to_world);
     let lifted = parts.pads[0];
-    let rise = (lifted.w_axis.truncate() - plain.w_axis.truncate()).length();
+    // Raised along the pad's own up axis, by the depth of the walls below the model origin.
+    let expected = plain.w_axis.truncate() + plain.y_axis.truncate() * -lowest;
     assert!(
-        (rise - -lowest).abs() < 1e-3,
-        "the pad rests on its plane: raised {rise}, walls {lowest}"
+        (lifted.w_axis.truncate() - expected).length() < 1e-3,
+        "the pad rests on its plane: {:?} against {expected:?}",
+        lifted.w_axis
     );
+    // The mask is the pad program's own, not a hull's normal map: `hull_normal` skips a slot a pad
+    // family already bound, so no material of the pad carries a tangent frame.
+    assert!(
+        pad.material_tangent
+            .iter()
+            .all(|frame| *frame == oag_mesh::mesh::TangentFrame::Absent),
+        "the slab is read as a pad, not a hull: {:?}",
+        pad.material_tangent
+    );
+    assert!(
+        pad.pad_masks.iter().any(|mask| mask
+            .as_ref()
+            .is_some_and(|mask| mask.label.to_ascii_lowercase().contains("ds_weaponup_ne"))),
+        "the _ne mask is bound as the pad's third texture"
+    );
+
     assert!(
         loaded.pad_model.is_none() && loaded.weapon_pad_model.is_none(),
         "the circuit's own pads are not drawn under the Detonator pad"

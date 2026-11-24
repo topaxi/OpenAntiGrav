@@ -340,6 +340,7 @@ pub(super) fn build_pad_class(
         material_glow,
         material_variants,
         emissive,
+        mag_emissive,
         alpha_test_ref,
         material_anim,
         anim_tracks,
@@ -360,6 +361,13 @@ pub(super) fn build_pad_class(
     out.emissive = emissive;
     out.material_glow = material_glow;
     // The `_ne` mask, third beside the lightmap - see `pad_ne`.
+    // `material_setup` already bound the `_alpha` pad material's mask; the rest are bound here.
+    let alpha: Vec<bool> = model
+        .materials
+        .iter()
+        .map(|m| is_light_bar_alpha_material(&m.name))
+        .collect();
+    let rest: Vec<bool> = alpha.iter().map(|a| !a).collect();
     out.pad_masks = pad_ne::pad_ne(
         &model,
         &material_variants,
@@ -367,9 +375,15 @@ pub(super) fn build_pad_class(
         &mut out.material_slots,
         &mut out.emissive,
         &mut out.material_glow,
-        None,
+        Some(&rest),
         &mut report,
     );
+    for (slot, _) in alpha.iter().enumerate().filter(|(_, a)| **a) {
+        if let Some(texture) = mag_emissive.get(slot).cloned().flatten() {
+            out.pad_masks.resize(model.materials.len(), None);
+            out.pad_masks[slot] = Some(texture);
+        }
+    }
     out.material_specular_exponent = material_specular_exponent;
     out.glow_from_program = true;
     out.material_variants = material_variants;
