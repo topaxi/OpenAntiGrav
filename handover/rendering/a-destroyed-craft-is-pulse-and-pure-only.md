@@ -1,7 +1,7 @@
 ---
 status: ready-to-wire
 titles: [hd, 2048, omega, pulse]
-updated: 2026-11-23
+updated: 2026-11-24
 summary: "Destroyed craft wired on all titles; Zone end wired on HD, 2048, Omega; open: camera wiring, collider, Pure diffs, Zone look and velocity, Omega sound"
 ---
 
@@ -56,6 +56,7 @@ craft (wreck model, explosion, smoke, the states a wreck goes through), as Pulse
 - **The Zone end's debris fills the screen** (ours, HD, `--force-wreck 400:0`, frames 2026-11-23): the Zone end's camera is wired (the close orbit, `destroy-camera.md` Z2a to Z2f) and the throw velocity is chosen, so at 2.5 s the 112
   `zoneship_dead.vex` pieces cover the whole frame around the camera. Wire Z2's orbit and read Z11's throw speed
   before judging the picture against the original.
+  **Update 2026-11-24 (`zone-orbit-clip`):** the orbit's start distance was wrong (0.5 off the craft, inside the hull); it now starts at the chase eye's distance and eases in (`destroy-camera.md`, "Measured on RPCS3: the Zone end orbit"). The orbit object's fields were then read live (law confirmed); still open: the debris's throw speed (Z11), the white shell's wire showing from the first frame where the original shows it from about 1 s, and the code behind the eye's ease (fitted at 0.01 a frame).
 
 - **The HD blast frame reads as a soft black ball with sparks and no fire** (ours, `--force-wreck 60:7` on
   Talon's Junction, 2026-11-22, `hd-wreck-wire`). **Cause found 2026-11-23 (`hd-black-blast`, `ship-destroy.md`,
