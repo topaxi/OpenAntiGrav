@@ -333,7 +333,7 @@ median of three):
 | Pulse PSP, race to 400 ticks, pause, GAME OPTIONS, two presses | 43.6 G | 26.7 G | 307 / 316 MiB |
 | Pulse PS2, the same race walk | 80.5 G | 62.7 G | 457 / 470 MiB |
 
-The pool costs 8 to 13 MiB of idle handles (a decoded hunk map each).
+The pool costs 8 to 13 MiB of idle handles (a decoded hunk map each; measured with up to twelve kept per path, now sixteen in all).
 
 Where a launch's CPU went before (`perf record -e cpu-clock:u --call-graph fp`
 on the frame-pointer build, share of the launch's samples; the shares of
@@ -364,11 +364,15 @@ threads add up, the process has about fifteen):
 ### Idle CHD handles are reused (`oag_disc::chd_source`)
 
 A dropped `ChdSource` hands its opened handle (the decoded map, its buffers and
-the hunk it last read) to a pool keyed by path, length and modification time;
-the next `ChdSource::open` of the same file takes one back instead of decoding
-the map again. A handle belongs to one source at a time, so no two threads
-share a read position, up to twelve are kept per file, and the web build, which
-opens a registered blob, does not pool. Bytes are the same: `a_reopened_chd_reads_the_bytes_a_new_handle_does`
+the hunk it last read) to a pool; the next `ChdSource::open` of the same file
+takes one back instead of decoding the map again. "The same file" is read from
+the open handle, never from the path before the open: on Unix its device, inode,
+size, modification and change times (two spellings of one image share a handle,
+a file replaced under its path does not), elsewhere its resolved path, size and
+modification time. A handle belongs to one source at a time, so no two threads
+share a read position; sixteen are kept in all, the one returned longest ago
+dropped first (`chd_source/pool.rs`); the web build, which opens a registered
+blob, does not pool. Bytes are the same: `a_reopened_chd_reads_the_bytes_a_new_handle_does`
 and the split-read test pass, as do the disc crate's 100 tests. Menu launch
 21.05 G -> 10.6 G user instructions, race walk 43.6 G -> 27.8 G (the pool alone).
 
