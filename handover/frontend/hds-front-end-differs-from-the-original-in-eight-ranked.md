@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-24
-summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow wired; hex ring pulse, lattice slide, step deferral wired on Team Selection (HD and Omega); Track Select slide open"
+summary: "HD front end: Ship Select matches RAM; page-entry wipes, footer flow, hex ring and slide wired; Track Select slide and ring-pulse zero point open"
 difficulty: medium (30)
 ---
 
