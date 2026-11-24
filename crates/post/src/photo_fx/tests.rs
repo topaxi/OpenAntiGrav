@@ -510,7 +510,7 @@ fn the_middle_row_at_1080(
 /// What is left of one-pixel stripes at `distance` with the focus at `d = 3`, well clear of the
 /// frame's edges: the spread between the brightest and the darkest pixel.
 fn stripes_left_at(d: &Device, distance: f32) -> u8 {
-    let stripes = |x: u32| if x % 2 == 0 { 255 } else { 0 };
+    let stripes = |x: u32| if x.is_multiple_of(2) { 255 } else { 0 };
     let row = the_middle_row_at_1080(d, 0.0, stripes, |_| distance);
     let inner = &row[64..(TALL.0 - 64) as usize];
     inner.iter().max().unwrap() - inner.iter().min().unwrap()
