@@ -70,6 +70,7 @@ pub const MENU_SKIN: MenuSkin = MenuSkin {
     selected_pulse_period_secs: None,
     selector_origin: None,
     pulse_text_glow: true,
+    glow_by_texel: false,
     transition_secs: 0.5,
     strip: None,
     blocks: None,

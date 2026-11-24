@@ -88,6 +88,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     selected_pulse_period_secs: None,
     selector_origin: None,
     pulse_text_glow: true,
+    glow_by_texel: false,
     // Not independently re-measured this lane - carried at HD's own
     // confidence-70 figure since Omega's own front end spreads transitions
     // the same wide way HD's does (`0.4`, `0.5` and others all appear in the

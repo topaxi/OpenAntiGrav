@@ -91,14 +91,7 @@ pub fn grid_draw_list(
         };
         if image.name.as_deref() == Some("Selector") {
             if let Some(hex) = hex_rect(screen, slot, 0, sprites) {
-                push_selector(
-                    &mut out,
-                    image,
-                    placed,
-                    hex,
-                    model.pulse(),
-                    skin.selector_origin(),
-                );
+                push_selector(&mut out, image, placed, hex, model.pulse(), skin);
             }
             continue;
         }
@@ -253,14 +246,7 @@ pub fn cell_draw_list(
             && let Some((sx, sy)) = selected_coords
             && let Some(hex) = hex_rect(screen, sx as usize, sy as usize, sprites)
         {
-            push_selector(
-                &mut out,
-                image,
-                placed,
-                hex,
-                model.pulse(),
-                skin.selector_origin(),
-            );
+            push_selector(&mut out, image, placed, hex, model.pulse(), skin);
             continue;
         }
         if let Some((x, y)) = image.name.as_deref().and_then(|n| hex_slot_xy(n, "Medal_")) {
@@ -753,9 +739,11 @@ pub(super) fn push_text(
     }
 }
 
-/// `Selector`'s draw and, after it, the glow-mask stamp its quad writes: the whole 42x43 rectangle,
-/// transparent texels included (alpha test off at the original's draw), at
-/// [`super::pulse::SelectorPulse::stamp`]. The title gates whether the frame blooms; see
+/// `Selector`'s draw and, after it, the glow-mask stamp its quad writes. On Pulse PSP that is the
+/// whole 42x43 rectangle, transparent texels included (alpha test off at the original's draw), at
+/// [`super::pulse::SelectorPulse::stamp`]; where the skin's mask is the PS2's
+/// ([`Skin::glow_by_texel`]) it is the quad's own texel alpha instead, and the pulse's stamp value
+/// never reaches the mask. The title gates whether the frame blooms; see
 /// `oag_title::Campaign::frontend_glow`.
 pub(super) fn push_selector(
     out: &mut Vec<Draw>,
@@ -763,13 +751,20 @@ pub(super) fn push_selector(
     placed: Placed,
     hex: [f32; 4],
     pulse: &super::pulse::SelectorPulse,
-    origin: Option<(f32, f32)>,
+    skin: &Skin,
 ) {
-    let draw = selector_tinted_draw(image, placed, hex, pulse.tint(), origin);
+    let draw = selector_tinted_draw(image, placed, hex, pulse.tint(), skin.selector_origin());
     if let Draw::Sprite { rect, .. } = &draw {
-        let value = pulse.stamp();
+        let stamp = if skin.glow_by_texel() {
+            Draw::GlowTexel
+        } else {
+            Draw::GlowStamp {
+                rect: *rect,
+                value: pulse.stamp(),
+            }
+        };
         out.push(draw.clone());
-        out.push(Draw::GlowStamp { rect: *rect, value });
+        out.push(stamp);
     } else {
         out.push(draw);
     }

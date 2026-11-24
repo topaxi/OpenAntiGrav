@@ -174,6 +174,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     selected_pulse_period_secs: None,
     selector_origin: None,
     pulse_text_glow: true,
+    glow_by_texel: false,
     // The dominant `<LeftLayer transition=>` across HD's own GUI files, which is
     // the weakest number here: confidence **70**, because HD spreads transitions
     // across eleven distinct values where Pulse uses four, so "dominant" carries

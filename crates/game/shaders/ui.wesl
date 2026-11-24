@@ -347,8 +347,11 @@ fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
 }
 
 // Writes only the alpha channel (the pipeline masks the rest): the front end's glow mask,
-// `Draw::GlowStamp`. The stamp's value rides in the instance colour's alpha.
+// `Draw::GlowStamp`. The stamp's value rides in the instance colour's alpha. A sheet quad
+// (`Draw::GlowTexel`, Pulse PS2's `Selector`) writes its texel's alpha times the colour's instead.
 @fragment
 fn fs_stamp(in: VertexOut) -> @location(0) vec4<f32> {
-    return vec4<f32>(0.0, 0.0, 0.0, in.color.a);
+    let sprite = textureSample(sprite_texture, sprite_sampler, in.uv);
+    let is_sheet = in.mode > 0.5 && in.mode < 2.5;
+    return vec4<f32>(0.0, 0.0, 0.0, select(in.color.a, sprite.a * in.color.a, is_sheet));
 }
