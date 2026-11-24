@@ -136,7 +136,7 @@ impl Scene {
         }
     }
 
-    fn composite_bloom_now(
+    pub(super) fn composite_bloom_now(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,

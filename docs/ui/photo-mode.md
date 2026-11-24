@@ -222,7 +222,7 @@ number it is not: single frames spread 3.7 to 12.6 ms).
 | --- | --- |
 | left stick, arrow keys, d-pad | orbit `close` (yaw and pitch, each free, wrapped at +-2 pi, 0.05 rad a tick: HD's law); zoom and tilt `track`; walk `free` (forward and back, strafe) |
 | right stick (`free`) | look: yaw and pitch, 0.05 rad a tick |
-| SELECT held + stick (`free`) | up and down zoom (field 10 to 100), left and right roll |
+| SELECT held + stick (`free`) | up and down zoom (field 10 to 100, or down to the seed's own field when the lens opened from a zoomed `track`), left and right roll |
 | SQUARE held + stick (`free`) | slide (left and right) and lift (up and down) along the camera's own axes |
 | drag (mouse button held, or a finger), wheel (`free`) | drag looks, or moves with the DRAG chip set to MOVE; the wheel dollies forward and back |
 | right stick (a pad) | `close` and `track`: up and down zoom, left and right tilt (HD's right stick is zoom; the tilt on its X axis is chosen) |
@@ -296,7 +296,7 @@ forward, right and up). **Chosen, not measured**, all of it:
   presentation state in `Photo`, never `World`; the hash test drives the free lens
   (`a_race_taken_through_photo_mode_hashes_as_one_that_was_not`, and the ground truth that hashes
   every tick of a visit).
-- **Bounds.** The eye stays within `FREE_RANGE` = 400 units of the craft (a sphere, no collision with the
+- **Bounds.** The eye stays within `FREE_RANGE` = 400 units of the craft, or the seed's own distance when the lens it was seeded from stood further out (a sphere, no collision with the
   road or the scenery, like every lens: "A port needs no collision to be faithful"). Pitch is clamped to
   +-1.5 rad (`oag_mesh::orbit::PITCH_LIMIT`), roll and yaw are free.
 - **Speeds.** Walking: 0.4 units a tick at full stick (24 a second), ramping to four times that over 90 ticks
@@ -373,7 +373,7 @@ laws on every title (`docs/ghidra/functions/ps3-hdfury-eu/photo-mode.md`, "`Phot
 **The game's own motion blur is off while the mode is open, whatever the setting says**, on every
 title (it smeared a frozen race whenever the camera moved); leaving puts the player's setting back, and
 `the_games_motion_blur_never_reaches_a_photo` checks a shot is the same file with it `high` as `off`. The pass
-runs on the finished frame (after the glow of HD, 2048 and Omega, before the HUD), so a shot and the screen show the same picture. **A control at its opening value is not
+runs on the finished frame (after the glow of HD, 2048 and Omega, before the HUD), so a shot and the screen show the same picture. The glow Pulse, the PS2 and Pure add over or under the HUD is brought forward while a control is on and added ahead of the pass, so the controls cover it as they cover HD's. **A control at its opening value is not
 applied at all, and a pass that is not asked for builds nothing:** the shot with every control at its
 opening is the one the mode saved before anything was touched, byte for byte
 (`photo_mode_ground_truth::each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unprocessed_one`,
@@ -407,9 +407,12 @@ pixels (503,404 across a visit, on the previous build and this one alike). Measu
 - **the ring lives under its own tick** while the mode is open: the race does not step, so the history draw
   steps once per mode tick.
 
-Where the pass is not run: the glow Pulse and Pure add **over the HUD** (their composite is after the HUD,
-`bloom.md`) is outside it, so the exposure does not scale and the depth of field does not blur that glow.
-GL is not built or run here (the WebGPU and Vulkan backends are). `cargo check -p oag-raceplay --target
+**The glow of Pulse, the PS2 and Pure is inside the pass** while a control is on. Their composite is
+after the HUD in the original's order (`bloom.md`); with a control moved it is added to the frame ahead of the
+pass instead (`Scene::finish_view`), so saturation 0 is grey everywhere (the ground truth checks that no pixel
+keeps a chroma above 2: before, 9.25 percent of a Pulse start-gate shot kept colour, up to 92 levels), the
+exposure scales it and the depth of field blurs it, as on HD. With every control at its opening the order is
+the original's and the picture is the one the mode saved before. GL is not built or run here (the WebGPU and Vulkan backends are). `cargo check -p oag-raceplay --target
 wasm32-unknown-unknown` builds with the pass.
 
 ## What a saved shot carries
@@ -432,9 +435,15 @@ code: `oag_raceplay::photo::{rewind, shot}`, `oag_raceplay::timeline::Keeper`, `
 
 **Rows.** In the effects panel: MOTION BLUR (off, track, ship), SHUTTER (shown with a blur chosen,
 0 to 100, opens on 20) and REWIND (the race's clock at the moment on screen, `M:SS.s`) and PLAY (on or off). The first two
-are on offer where the title's `photo_shot` is set, the last two in a race that has keyframes and was
+are on offer where the title's `photo_shot` is set **and the race records** (a blur plays the ticks between keyframes
+from the recording: `a_race_with_no_recording_is_not_offered_a_motion_blur`), the last two in a race that has keyframes and was
 entered from the pause menu (not from `Race End Photo`, which keeps its board), or over the replay
 viewer. A click on the row's arrows moves them as the stick does.
+
+The lens ring of an accumulated depth of field is sized in the vertical field the frame is drawn with (the lens's
+own plus the craft's speed widen, the player's setting and the window's fit, `Race::drawn_fov_degrees`), so a ring
+sample moves the far field the same share of the picture at rest and at speed
+(`the_lens_rings_reach_is_the_same_share_of_the_picture_in_the_field_it_is_drawn_with`).
 
 **PLAY** plays the race's recording on from the moment REWIND shows, a tick a frame and silent, and
 turns itself off at the live tick (or the end of the recording). Over a live race it steps the same

@@ -287,6 +287,14 @@ impl Scene {
         );
         // Photo mode's picture controls, last of all: they grade and blur the finished frame.
         if whole {
+            // The glow of Pulse, the PS2 and Pure is added after the HUD, past the controls. While
+            // a control is on it is added here instead, so the controls cover it as they cover
+            // HD's, which is composited before them (`docs/ui/photo-mode.md`, "Picture controls").
+            if self.bloom_pending.get()
+                && race.photo_fx(crate::camera::NEAR_PLANE, self.far).is_some()
+            {
+                self.composite_bloom_now(encoder, view, viewport);
+            }
             self.run_photo_fx(device, queue, encoder, view, viewport, race);
         }
         oag_gpu::perfprobe::mark("post-chain");

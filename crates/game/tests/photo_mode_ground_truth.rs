@@ -936,6 +936,13 @@ fn each_picture_control_changes_the_saved_shot_and_at_neutral_it_is_the_unproces
         over(&grey, ALL, chroma) < 0.1 * over(&neutral, ALL, chroma).max(1.0),
         "saturation 0 left colour in the picture"
     );
+    // And no pixel of it: Pulse's glow is added over the HUD in the original's order, and the
+    // control still covers it (`docs/ui/photo-mode.md`, "Picture controls").
+    let worst = grey.2.chunks_exact(4).map(chroma).fold(0.0_f32, f32::max);
+    assert!(
+        worst <= 2.0,
+        "saturation 0 left a pixel with a chroma of {worst} (the glow escaped the control)"
+    );
     // Speed blur lands at the edge of the picture and leaves the middle alone.
     assert!(
         difference(&neutral, &speed, EDGE) > 2.0,
