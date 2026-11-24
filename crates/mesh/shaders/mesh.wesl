@@ -8,7 +8,7 @@
 import package::alpha_test::{alpha_test_ref};
 import package::bindings::{anims, emissive_scale, emissive_tint, node_anims, scene, uniforms};
 import package::depth_bias::{biased_clip};
-import package::fog::{fogged};
+import package::fog::{fogged, plus_after_fog};
 import package::glow::{stamp_discards, stamp_value, stamped_alpha};
 import package::quake::{quake_lifted};
 import package::refraction::{opaque_colour};
@@ -175,7 +175,7 @@ fn fs_main_blend(in: VertexOutput) -> @location(0) vec4<f32> {
     let lit = lit_texel(in);
     let shaded = lit.colour;
     return vec4<f32>(
-        target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth) + lit.after_fog),
+        target_out(plus_after_fog(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth), lit.after_fog)),
         shaded.a
     );
 }
@@ -190,7 +190,7 @@ fn fs_main_blend_velocity(in: VertexOutput) -> BlendMrtOutput {
     let shaded = lit.colour;
     return BlendMrtOutput(
         vec4<f32>(
-            target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth) + lit.after_fog),
+            target_out(plus_after_fog(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth), lit.after_fog)),
             shaded.a
         ),
         vec4<f32>(velocity_of(in), 0.0, shaded.a),
@@ -231,7 +231,7 @@ fn fs_main_alpha_test(in: VertexOutput) -> @location(0) vec4<f32> {
         discard;
     }
     return vec4<f32>(
-        target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth) + lit.after_fog),
+        target_out(plus_after_fog(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth), lit.after_fog)),
         stamped_alpha(in, shaded.a)
     );
 }
@@ -282,7 +282,7 @@ fn fs_main_alpha_test_velocity(in: VertexOutput) -> MrtOutput {
     }
     return MrtOutput(
         vec4<f32>(
-            target_out(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth) + lit.after_fog),
+            target_out(plus_after_fog(fogged(shadowed(shaded.rgb, lit.sun, in.world), in.world, in.view_depth), lit.after_fog)),
             stamped_alpha(in, shaded.a)
         ),
         velocity_of(in),
