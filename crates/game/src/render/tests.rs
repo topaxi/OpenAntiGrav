@@ -775,8 +775,7 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
 
     // `font::snapped_run`, which every layout of a snapped face reads, is the extent the draw
     // makes: from the left edge, the last glyph's ink ends where `ink_right` says; a
-    // right-aligned string puts that ink edge on the anchor, a centred one starts where `end`
-    // says.
+    // right-aligned string puts that ink edge on the anchor.
     let atlas = Atlas::from_font(&font);
     let run = oag_ui::font::snapped_run(&atlas, "aaa", 0.8);
     let drawn = |renderer: &mut Renderer, align: Align| -> (f32, f32) {
@@ -803,8 +802,13 @@ fn a_snapped_pen_draws_each_glyph_at_a_whole_unit() {
     let (right_first, right_end) = drawn(&mut renderer, Align::Right);
     assert_eq!(right_first, (249.0 - run.ink_right).ceil());
     assert!((right_end - 249.0).abs() < 1.0, "ink ends at {right_end}");
+    // Centred, the pen starts where the original's measure puts it (`snapped_centre_pen`), and
+    // not at half the pen end the way a right-aligned or plain string is measured.
     let (centre_first, _) = drawn(&mut renderer, Align::Centre);
-    assert_eq!(centre_first, (249.0 - run.end / 2.0).ceil());
+    let centre_pen = oag_ui::font::snapped_centre_pen(&atlas, "aaa", 0.8, 249.0);
+    assert_eq!(centre_first, centre_pen.ceil());
+    // `aaa` measures 18.4 (the pen end, 23.4, is not it): 249 less 9.2 less the bearing is 239.
+    assert_eq!(centre_first, 239.0);
 }
 
 /// `MenuSkin::bearing_pens`: the first glyph's ink starts at x and each later glyph's ink sits its

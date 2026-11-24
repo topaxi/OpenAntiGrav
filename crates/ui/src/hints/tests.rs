@@ -407,3 +407,92 @@ fn a_snapped_right_aligned_line_ends_on_its_anchor() {
     );
     assert_eq!(hints[0].rect[0], (200.0 - run.ink_right).ceil());
 }
+
+/// A centred line on a snapped face starts where the original's measure puts it
+/// (`oag_ui::font::snapped_centre_pen`), not at half its pen end: with glyphs 9 units advance and 7 of
+/// ink, `X aa` measures 34 (the pen end is 36), so its rectangle starts at 183 and not at 182.
+#[test]
+fn a_snapped_centred_line_starts_at_half_its_measure() {
+    use oag_texture::fnt::{Font, Glyph};
+    let glyph = |ch: u8| Glyph {
+        codepoint: u16::from(ch),
+        width: 7,
+        height: 4,
+        u0: 0,
+        u1: 7,
+        v0: 0,
+        v1: 4,
+        advance: 9,
+        bearing: 0,
+    };
+    let atlas = Atlas::from_font(&Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 64],
+        glyphs: vec![glyph(b' '), glyph(b'a'), glyph(b'X')],
+    });
+    let list = [text(Some("Stats"), 200.0, 0.0, Align::Centre, "X aa")];
+    let hints = scan(&list, None, &Substitution::reading(&TABLE), &|_| {
+        Some(Face {
+            atlas: &atlas,
+            buttons: false,
+            pens: crate::font::Pens::Snapped,
+        })
+    });
+    let run = crate::font::snapped_run(&atlas, "X aa", 1.0);
+    assert_eq!(run.end, 36.0, "the pen end is not the measure");
+    assert_eq!(hints[0].rect[0], 183.0);
+}
+
+/// A centred snapped line whose first glyph has a bearing keeps its pen unrounded, as the draw
+/// does: `X O` at 0.75 starts at 233.25, the `X` steps to 234 and the `O` quad sits at 243, where
+/// a pen rounded first (234, then 235) would put it at 244.
+#[test]
+fn a_centred_snapped_line_with_a_leading_bearing_follows_the_draw() {
+    use oag_texture::fnt::{Font, Glyph};
+    let glyph = |ch: u8, advance: u8, width: u8, bearing: i8| Glyph {
+        codepoint: u16::from(ch),
+        width,
+        height: 4,
+        u0: 0,
+        u1: u16::from(width),
+        v0: 0,
+        v1: 4,
+        advance,
+        bearing,
+    };
+    let atlas = Atlas::from_font(&Font {
+        line_height: 8,
+        unknown: 0,
+        width: 16,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 128],
+        glyphs: vec![
+            glyph(b' ', 4, 1, 0),
+            glyph(b'O', 8, 4, 0),
+            glyph(b'X', 9, 7, 1),
+        ],
+    });
+    let mut list = [text(Some("Stats"), 240.0, 0.0, Align::Centre, "X O")];
+    if let Draw::FacedText { scale, .. } = &mut list[0] {
+        *scale = 0.75;
+    }
+    let hints = scan(&list, None, &Substitution::reading(&TABLE), &|_| {
+        Some(Face {
+            atlas: &atlas,
+            buttons: false,
+            pens: crate::font::Pens::Snapped,
+        })
+    });
+    assert_eq!(
+        crate::font::snapped_centre_pen(&atlas, "X O", 0.75, 240.0),
+        233.25
+    );
+    assert_eq!(hints[0].rect[0], 234.0);
+    let right = hints[0].rect[0] + hints[0].rect[2];
+    assert_eq!(right, 246.0, "the O's quad ends at 246, not 247");
+}
