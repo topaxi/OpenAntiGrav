@@ -857,6 +857,7 @@ pub const GRID_FLAP_LEVEL: f32 = 100.0;
 /// What the grid does to the drawn flaps at a race tick: [`Grid`](Self::Grid) holds them out, the
 /// [`Fold`](Self::Fold) after GO takes them down at the hull's `down_speed`, and in the
 /// [`Race`](Self::Race) after it they follow the airbrakes. See [`RaceView::settle_flaps`].
+#[cfg(feature = "view")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FlapPhase {
     Grid,
