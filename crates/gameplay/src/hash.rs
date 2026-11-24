@@ -1062,7 +1062,7 @@ mod tests {
             hi: 8,
             min_distance: 0.25,
             max_distance: 2.0,
-            wave_time: 1.0,
+            speed: 1,
             lane_width: 3.5,
             scoring: oag_tables::detonator_layout::Scoring::default(),
         };

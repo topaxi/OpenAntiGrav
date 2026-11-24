@@ -217,12 +217,26 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
             }
         }
         race.view.advance_emp_visual(&race.core);
-        anchors.push(
-            race.view
-                .emp_effect
-                .and_then(|p| race.view.stage.anchor_of(p)),
-        );
+        let anchor = race
+            .view
+            .emp_effect
+            .and_then(|p| race.view.stage.anchor_of(p));
+        let lights = race.detonator_cannon_lights(&no_rounds);
+        if let Some(at) = anchor {
+            assert!(
+                lights
+                    .iter()
+                    .any(|l| l.colour == [0.0, 5.0, 10.0, 50.0]
+                        && l.position == [at.x, at.y, at.z, 1.0]),
+                "the wave lights its centre: {lights:?}"
+            );
+            lit += 1;
+        } else {
+            assert!(lights.is_empty(), "no light once the wave ends");
+        }
+        anchors.push(anchor);
     }
+    assert!(lit >= 10, "the wave was lit for {lit} ticks");
     let live: Vec<Vec3> = anchors.iter().flatten().copied().collect();
     assert!(live.len() >= 10, "the effect rides the wave: {anchors:?}");
     assert!(

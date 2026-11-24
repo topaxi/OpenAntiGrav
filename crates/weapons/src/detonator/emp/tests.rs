@@ -191,7 +191,7 @@ fn the_wave_clears_what_lies_ahead_and_scores_the_emp_values() {
 }
 
 #[test]
-fn the_wave_runs_over_wave_time_not_at_once() {
+fn the_wave_runs_over_its_lifetime_not_at_once() {
     let survey = lap(200);
     let mut field = Field::new();
     field.mines[0] = mine(80, false);
