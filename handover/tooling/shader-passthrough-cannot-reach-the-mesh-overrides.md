@@ -2,7 +2,7 @@
 status: blocked-maintainer
 titles: [all]
 updated: 2026-11-24
-summary: "Build-time SPIR-V reaches 1.6 % of a race launch (mesh overrides are runtime data); a run-time memo or disk cache needs a new approval"
+summary: "Build-time SPIR-V reaches 1.6 %; resolve-once measured 6.2 % (safe, unlanded); a wgpu-hal stage cache (about 19 %) needs a decision"
 size: L (40)
 difficulty: hard (45)
 ---
@@ -28,9 +28,17 @@ reach 1.6 %.
   2. A disk cache of those blobs keyed on naga's version, shader text, entry
      point, constants, layout and the device's writer options. Ceiling about
      31 % on a warm launch.
-  3. Unmeasured, safe: resolve overrides once per distinct key and hand wgpu the
-     IR (`ShaderSource::Naga`, `naga-ir` feature); recovers some of
-     `process_overrides`' 15.4 %, no `unsafe` (the Fifth round, item 3).
+  3. Measured, safe, not landed (`load-time.md`, "Sixth round"): resolve overrides once
+     per distinct stage and hand `wgpu` the IR (`ShaderSource::Naga`, `naga-ir` on
+     `oag-mesh`, no `unsafe`). Race walk 22.01 -> 20.63 G user instructions (-6.2 %),
+     bare race launch 12.03 -> 11.00 G (-8.6 %), the one frame compared byte-identical.
+     Under the 10 % bar, so it stayed a prototype (about 150 lines in `oag-mesh`'s
+     `pipeline_cache`). It needs `module.overrides` cleared by hand after naga's
+     `process_overrides`, which leaves it filled against its own documentation.
+  4. A stage cache inside `wgpu-hal`'s `compile_stage` (vendored or upstream), keyed on
+     module, entry point, constants and binding map: 44 compiles instead of 202, about
+     19 % of a race launch, SPIR-V write included. Not built; vendoring `wgpu` needs the
+     lead's word.
   Designs 1 and 2 must mirror `wgpu-hal`'s private, device-derived writer options and its
   per-layout binding renumbering, and must never pass a module with overrides
   through (constants are dropped silently). The traps, with `path:line`, are in
@@ -44,6 +52,8 @@ reach 1.6 %.
 
 ## Next Steps
 
+- Decide between landing design 3 as measured (6 to 9 %, safe, needs its tests and the
+  HD and menu frame comparisons), the `wgpu-hal` stage cache (design 4), and designs 1 or 2.
 - Ask the maintainer whether design 1 or 2 may go ahead (Opus, with the recovery
   step of the original brief as a precondition).
 - Independently, a lane for the native device-lost callback: log at `error`,
