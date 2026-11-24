@@ -188,3 +188,15 @@ fn the_picture_flag_round_trips_and_a_bad_one_is_refused() {
     assert!(flags(&race, None, None, Some(&picture), (2, 2)).contains(&"--picture".to_string()));
     assert!(!flags(&race, None, None, None, (2, 2)).contains(&"--picture".to_string()));
 }
+
+#[test]
+fn a_picture_section_that_leaves_controls_out_has_them_at_their_opening_values() {
+    let meta = Meta::from_text("[picture]\nspeed_blur = 50\n").expect("parses");
+    let picture = meta.picture.expect("the section");
+    assert_eq!(picture.speed_blur, 50);
+    assert_eq!(picture.exposure, Effects::EXPOSURE_OPENS);
+    assert_eq!(picture.saturation, Effects::SATURATION_OPENS);
+    let effects = picture.effects();
+    assert_eq!(effects.value(Row::Exposure), Effects::EXPOSURE_OPENS);
+    assert_eq!(effects.value(Row::Saturation), Effects::SATURATION_OPENS);
+}

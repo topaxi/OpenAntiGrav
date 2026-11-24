@@ -227,16 +227,47 @@ pub struct Mover<'a> {
 pub struct Shot {
     plan: Plan,
     next: u32,
-    /// The song line as the race on screen has it: the ticks a blur plays step it on, and the
-    /// HUD drawn over the shot shows the moment the shot is of.
+    /// The HUD's own state at the shot's tick: the ticks a blur replays step it on, and the HUD
+    /// drawn over the shot shows the moment the shot is of.
+    hud: Option<HudMemory>,
+}
+
+/// The state the HUD keeps between ticks, as the race on screen has it: every slot's bars,
+/// messages and banners, the lap gap popup, the warnings waiting for the next advance and the
+/// song line.
+#[derive(Debug)]
+struct HudMemory {
+    huds: [crate::slot_hud::SlotHud; oag_gameplay::MAX_SHIPS],
+    split_gap: Option<crate::split_gap::SplitGap>,
+    incoming_raises: Vec<oag_hud::incoming::Look>,
     marquee: Option<oag_hud::now_playing::Display>,
+}
+
+impl HudMemory {
+    fn of(race: &Race) -> Self {
+        Self {
+            huds: race.view.huds.clone(),
+            split_gap: race.view.split_gap.clone(),
+            incoming_raises: race.view.incoming_raises.clone(),
+            marquee: race.marquee_state(),
+        }
+    }
+
+    fn put_back(self, race: &mut Race) {
+        race.view.huds = self.huds;
+        race.view.split_gap = self.split_gap;
+        race.view.incoming_raises = self.incoming_raises;
+        if let Some(marquee) = self.marquee {
+            race.set_marquee_state(marquee);
+        }
+    }
 }
 
 impl Shot {
     /// Begins `plan` on the race `rewind` is moving: stands it at the shot's tick, and for a ship
     /// blur takes the camera there to hold.
     pub fn start(plan: Plan, mover: Option<Mover<'_>>, race: &mut Race) -> Self {
-        let marquee = race.marquee_state().filter(|_| plan.blur.is_some());
+        let hud = plan.blur.is_some().then(|| HudMemory::of(race));
         if let Some(Mover { rewind, keeper }) = mover
             && plan.blur.is_some()
         {
@@ -252,11 +283,7 @@ impl Shot {
                 rewind.seek(keeper, race, plan.tick);
             }
         }
-        Self {
-            plan,
-            next: 0,
-            marquee,
-        }
+        Self { plan, next: 0, hud }
     }
 
     /// The plan the shot follows.
@@ -313,8 +340,8 @@ impl Shot {
             rewind.follow = true;
             rewind.seek(keeper, race, self.plan.tick);
         }
-        if let Some(marquee) = self.marquee {
-            race.set_marquee_state(marquee);
+        if let Some(hud) = self.hud {
+            hud.put_back(race);
         }
         race.photo_set_shift(None);
         race.photo_repose();

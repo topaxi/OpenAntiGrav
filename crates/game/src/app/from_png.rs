@@ -20,6 +20,16 @@ fn read(path: &Path) -> Result<shot_meta::Found> {
     shot_meta::read(&bytes).with_context(|| format!("reading {}", path.display()))
 }
 
+/// What photo mode does to a frame whatever the settings say: it draws every section the
+/// circuit's visibility sets would cull, and none of the game's own motion blur (a flag the
+/// person gave stands).
+fn draw_as_photo_mode(cli: &mut Cli) {
+    cli.pvs = Some(false);
+    cli.blur
+        .motion_blur
+        .get_or_insert(oag_display::display::MotionBlur::Off);
+}
+
 /// What the re-render does about the picture controls the shot was made with, and points `cli`
 /// at them. One line for each thing the reader could take for granted that is not so.
 fn picture_lines(meta: &shot_meta::Meta, cli: &mut Cli) -> Vec<String> {
@@ -98,9 +108,8 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
             .map_or_else(|| "shot".into(), |s| s.to_string_lossy().into_owned());
         cli.screenshot = Some(format!("{stem}-rerender.png").into());
     }
-    // Photo mode draws every section whatever the circuit's visibility sets say.
     if meta.shot.source == "photo mode" {
-        cli.pvs = Some(false);
+        draw_as_photo_mode(cli);
     }
     if meta.shot.width > 0 && meta.shot.height > 0 {
         cli.size = format!("{}x{}", meta.shot.width, meta.shot.height);
@@ -140,6 +149,23 @@ mod tests {
             picture,
             ..shot_meta::Meta::default()
         }
+    }
+
+    #[test]
+    fn a_photo_is_drawn_again_without_the_games_motion_blur_unless_asked_for() {
+        let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
+        draw_as_photo_mode(&mut cli);
+        assert_eq!(cli.pvs, Some(false));
+        assert_eq!(
+            cli.blur.motion_blur,
+            Some(oag_display::display::MotionBlur::Off)
+        );
+        let mut asked = Cli::try_parse_from(["oag-game", "--motion-blur", "high"]).expect("parses");
+        draw_as_photo_mode(&mut asked);
+        assert_eq!(
+            asked.blur.motion_blur,
+            Some(oag_display::display::MotionBlur::High)
+        );
     }
 
     #[test]

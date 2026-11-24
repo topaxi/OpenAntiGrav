@@ -284,8 +284,10 @@ impl super::Session {
         let clicked = pointer.clicked && (!finger || frame.tap.is_some());
         // A shot of several frames under way owns the mode: any input abandons it, and the
         // controls stand still while it runs.
-        if self.photo_job_running() {
-            if Self::photo_input_abandons(&pad, pointer, input, &view) {
+        // The frame that puts the HUD over a finished shot is part of it: the race stands where
+        // it was taken until that frame is drawn, and no input moves it.
+        if self.photo_wants_frames() {
+            if self.photo_job_running() && Self::photo_input_abandons(&pad, pointer, input, &view) {
                 self.photo_job_cancel();
             }
             return;

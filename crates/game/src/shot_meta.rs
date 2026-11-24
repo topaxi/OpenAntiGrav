@@ -130,7 +130,7 @@ pub struct Camera {
 
 /// Photo mode's picture controls as the panel shows them (`oag_raceplay::photo::effects`), so
 /// the frame can be made again: a shot of a graded or blurred picture is not the race as drawn.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Picture {
     /// Exposure, `0..=100`.
@@ -257,6 +257,23 @@ impl Meta {
     }
 }
 
+/// A control the text leaves out is at the value the panel opens on, not at zero.
+impl Default for Picture {
+    fn default() -> Self {
+        Self {
+            exposure: Effects::EXPOSURE_OPENS,
+            saturation: Effects::SATURATION_OPENS,
+            speed_blur: 0,
+            depth_of_field: false,
+            aperture: None,
+            focus: None,
+            motion_blur: String::new(),
+            shutter: None,
+            frames: 0,
+        }
+    }
+}
+
 impl Picture {
     /// The controls of `effects` as a shot of `plan` kept them (`None`: the one frame on
     /// screen).
@@ -330,11 +347,7 @@ impl Picture {
     ///
     /// A pair that is not `key=value`, an unknown key or a value that is not a whole number.
     pub fn from_flag(text: &str) -> Result<Self, String> {
-        let mut picture = Self {
-            exposure: Effects::EXPOSURE_OPENS,
-            saturation: Effects::SATURATION_OPENS,
-            ..Self::default()
-        };
+        let mut picture = Self::default();
         for pair in text.split(',').filter(|pair| !pair.is_empty()) {
             let (key, value) = pair
                 .split_once('=')
