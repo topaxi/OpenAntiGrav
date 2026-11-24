@@ -120,6 +120,38 @@ impl Session {
         true
     }
 
+    /// The pause screen's music list over the race playlist, on the song playing, where the title
+    /// authors one (`docs/ui/pause-menu.md`, "Pulse").
+    pub(crate) fn pause_music_list(
+        &self,
+        shell: &super::Shell,
+    ) -> Option<oag_ui::menu::music_list::MusicList> {
+        let spec = shell.title.pause_menu?.music_list_for(shell.platform)?;
+        let playlist = self.audio.race_playlist(&self.music_discs)?;
+        Some(oag_ui::menu::music_list::MusicList::new(
+            playlist.titles,
+            playlist.playing,
+            spec.wraps,
+        ))
+    }
+
+    /// The song the pause screen's music list was left on when the race resumes: the race music
+    /// starts it from its beginning (`docs/ui/pause-menu.md`, "Pulse").
+    pub(crate) fn take_pause_music_pick(&mut self) {
+        let pick = match &self.stage {
+            Stage::Menu(stage) => stage
+                .menu
+                .music_list()
+                .and_then(oag_ui::menu::music_list::MusicList::pick),
+            _ => None,
+        };
+        if let Some(index) = pick
+            && self.audio.pick_race_song(index)
+        {
+            debug!("pause music list: the race resumes on playlist song {index}");
+        }
+    }
+
     /// A setting the pause screen's own lists changed (PILOT ASSIST, GHOST) reaches the parked
     /// race now rather than at the next one. Ghost visibility is set on it at once and read
     /// again every frame from the settings; Pilot Assist is the level the race flies with, and a mid-race change is

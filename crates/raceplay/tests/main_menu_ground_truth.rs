@@ -482,6 +482,62 @@ fn pulses_ps2_pause_screens_are_the_psps_without_photo_and_the_manual() {
     );
 }
 
+/// Every pause screen authors the one `MusicList` `oag_pulse`'s table draws, with the values it
+/// reads: the PSP's `y="220"` and `small` face, the PS2's `y="270"` and `menu` face in its own grid,
+/// and on both no `Wrap` or `AutoRepeat`, so a step stops at either end and a held key steps once
+/// (`docs/ghidra/functions/psp-pulse-usa/music-list.md`). The PS2's behaviour is inherited from the
+/// PSP's.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn pulses_pause_screens_author_the_music_list_the_table_draws() {
+    fn find<'a>(node: &'a Node, screen: &str) -> Option<&'a Node> {
+        if node.name.eq_ignore_ascii_case("Screen") && node.attr("name") == Some(screen) {
+            return Some(node);
+        }
+        node.children.iter().find_map(|child| find(child, screen))
+    }
+    let pause = oag_pulse::TITLE
+        .pause_menu
+        .expect("Pulse authors pause screens");
+    for (name, platform) in [
+        ("pulse-psp-eu.chd", oag_title::Platform::Psp),
+        ("pulse-psp-usa.chd", oag_title::Platform::Psp),
+        ("pulse-ps2-eu.chd", oag_title::Platform::Ps2),
+    ] {
+        let spec = pause
+            .music_list_for(platform)
+            .expect("Pulse draws a music list");
+        let Some(image) = image(name) else { continue };
+        let mut archives = oag_pulse::open(&image.display().to_string()).expect("opening the disc");
+        let root = read(&mut archives, PULSE_INGAME);
+        for screen in pause.screens {
+            let node = find(&root, screen.name).unwrap_or_else(|| panic!("no screen {screen:?}"));
+            let lists: Vec<&Node> = node
+                .children
+                .iter()
+                .filter(|child| child.name.eq_ignore_ascii_case("MusicList"))
+                .collect();
+            assert_eq!(
+                lists.len(),
+                1,
+                "{name}: {:?} has one MusicList",
+                screen.name
+            );
+            let values = lists[0]
+                .children
+                .iter()
+                .find(|child| child.name.eq_ignore_ascii_case("Values"))
+                .expect("its Values");
+            let attr = |key: &str| values.attr(key);
+            assert_eq!(attr("y"), Some(format!("{}", spec.y).as_str()), "{name}: y");
+            assert_eq!(attr("font"), Some(spec.font), "{name}: font");
+            assert_eq!(attr("x"), Some("FEGlobals->MenuXOffset"), "{name}: x");
+            assert_eq!(attr("Wrap").is_some(), spec.wraps, "{name}: Wrap");
+            assert_eq!(attr("AutoRepeat"), None, "{name}: AutoRepeat");
+        }
+    }
+}
+
 /// The `(item, equals, goto)` of every `Entry` of `screen`'s redirect named `redirect`, and its
 /// `Default`'s `goto`.
 fn redirect_rows(

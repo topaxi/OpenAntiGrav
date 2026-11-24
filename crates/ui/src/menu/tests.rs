@@ -15,6 +15,7 @@ mod frame;
 mod hide;
 mod jump;
 mod launch;
+mod music_list;
 mod nav;
 mod navigation;
 mod pause;

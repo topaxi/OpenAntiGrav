@@ -71,6 +71,12 @@ pub enum Part {
     /// The reset mark on the selected row: put its value back on the default. Only laid
     /// out on a row that is off its default, so a tap on it always does something.
     Reset,
+    /// The pause screen's music list's back arrow ([`super::music_list`]).
+    MusicBack,
+    /// Its forward arrow.
+    MusicForward,
+    /// Its title: a step forward.
+    MusicRow,
 }
 
 /// One rect a pointer can land on, and the row and part it belongs to.
@@ -101,6 +107,9 @@ pub fn regions(
         Some(strip) => strip::regions(menu, skin, strip, measure, frame),
         None => super::rows::regions(menu, skin, frame),
     };
+    if let Some(art) = &frame.music_list {
+        out.extend(super::music_list::regions(menu, skin, art, measure));
+    }
     // The footer's reset prompt, drawn by whoever draws the footer, while the row is off default.
     if let Some(rect) = menu.reset_rect.filter(|_| menu.reset_offered().is_some()) {
         out.push(Region {
@@ -124,7 +133,12 @@ pub fn hit(regions: &[Region], at: (f32, f32)) -> Option<Region> {
         .filter(|region| contains(region.rect, at))
         .max_by_key(|region| match region.part {
             Part::Row => 0,
-            Part::StepBack | Part::StepForward | Part::Reset => 1,
+            Part::StepBack
+            | Part::StepForward
+            | Part::Reset
+            | Part::MusicBack
+            | Part::MusicForward
+            | Part::MusicRow => 1,
         })
 }
 
@@ -196,6 +210,12 @@ impl Menu {
                 Part::StepBack => out.extend(self.adjust(-1)),
                 Part::StepForward => out.extend(self.adjust(1)),
                 Part::Reset => out.extend(self.reset()),
+                Part::MusicBack => {
+                    self.step_music(-1);
+                }
+                Part::MusicForward | Part::MusicRow => {
+                    self.step_music(1);
+                }
             }
         }
 

@@ -121,6 +121,9 @@ pub struct Frame {
     /// The screen's `ArrowScrollUp` and `ArrowScrollDown`, where authored: drawn by a list
     /// that scrolls ([`Self::scroll_arrows_for`]), never as fixed marks.
     pub scroll_arrows: [Option<Draw>; 2],
+    /// The pause screen's music list's art, for a title that authors one
+    /// ([`super::music_list`]).
+    pub music_list: Option<super::music_list::Art>,
 }
 
 impl Frame {
@@ -523,5 +526,6 @@ pub fn read(
         settings: None,
         select_arrow,
         scroll_arrows,
+        music_list: None,
     }
 }
