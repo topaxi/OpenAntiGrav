@@ -9,8 +9,9 @@
 //! every weapon tuple from `load` to `Scene::new` is not worth a new argument.
 //!
 //! Evidence: `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The Detonator objects'
-//! models". The mine's `Electric_Visualiser` is music-driven (`MasterVolume`, `BassHit`,
-//! `Tempo` ...) and is not loaded or drawn.
+//! models". The mine's `Electric_Visualiser` is a camera-facing ring, posed per frame
+//! ([`crate::Race::mine_visualiser_matrices`]) and drawn with the music-driven lightning
+//! program of `electricity.rcsmaterial`.
 
 use super::*;
 
@@ -28,6 +29,8 @@ pub(crate) const MINE_POOL: usize =
 pub struct DetonatorModels {
     /// `mine_rita_spikes`, on every laid mine.
     pub mine_spikes: Option<Model>,
+    /// `electric_visualiser`, the ring facing the camera on every laid mine.
+    pub mine_visualiser: Option<Model>,
     /// `detonator_bomb_final_equalisers`, on every laid bomb.
     pub bomb_equalisers: Option<Model>,
     /// `detonator_bomb_glowedges`, on every laid bomb.
@@ -46,6 +49,7 @@ pub struct DetonatorModels {
 #[derive(Debug, Default)]
 pub(crate) struct DetonatorDrawables {
     pub(crate) mine_spikes: Vec<Drawable>,
+    pub(crate) mine_visualiser: Vec<Drawable>,
     pub(crate) bomb_equalisers: Vec<Drawable>,
     pub(crate) bomb_glow_edges: Vec<Drawable>,
     pub(crate) cannon_bolt: Vec<Drawable>,
@@ -65,6 +69,7 @@ impl DetonatorDrawables {
         let pad_slots = models.pads.len();
         Ok(Self {
             mine_spikes: build(models.mine_spikes, MINE_POOL)?,
+            mine_visualiser: build(models.mine_visualiser, oag_weapons::detonator::MAX_MINES)?,
             bomb_equalisers: build(
                 models.bomb_equalisers,
                 oag_weapons::projectile::MAX_PROJECTILES,
@@ -86,9 +91,10 @@ impl DetonatorDrawables {
     }
 
     /// Every pool, for the passes that treat the weapon pools alike.
-    pub(crate) fn pools_mut(&mut self) -> [&mut Vec<Drawable>; 6] {
+    pub(crate) fn pools_mut(&mut self) -> [&mut Vec<Drawable>; 7] {
         [
             &mut self.mine_spikes,
+            &mut self.mine_visualiser,
             &mut self.bomb_equalisers,
             &mut self.bomb_glow_edges,
             &mut self.cannon_bolt,

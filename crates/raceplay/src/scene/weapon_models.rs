@@ -292,8 +292,10 @@ impl super::Scene {
         );
         // A round or a flash has no pose to blur against: drawn without a previous one.
         let none: Vec<Mat4> = Vec::new();
+        let rings = race.mine_visualiser_matrices(race.view.camera_position(&race.core));
         for (pool, matrices, previous) in [
             (&parts.mine_spikes, mines, &prev.mine_spikes),
+            (&parts.mine_visualiser, &rings[..], &none),
             (&parts.bomb_equalisers, bombs, &prev.bombs),
             (&parts.bomb_glow_edges, bombs, &prev.bombs),
             (&parts.cannon_bolt, &rounds[..], &none),
@@ -323,6 +325,12 @@ impl super::Scene {
     ) {
         let parts = &self.bomb_blast.detonator;
         for drawable in parts.mine_spikes.iter().take(mines) {
+            list.mesh(drawable);
+        }
+        let rings = race
+            .mine_visualiser_matrices(race.view.camera_position(&race.core))
+            .len();
+        for drawable in parts.mine_visualiser.iter().take(rings) {
             list.mesh(drawable);
         }
         for pool in [&parts.bomb_equalisers, &parts.bomb_glow_edges] {

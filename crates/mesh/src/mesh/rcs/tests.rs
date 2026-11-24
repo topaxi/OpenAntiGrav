@@ -125,6 +125,8 @@ fn the_report_names_both_kinds_of_absence() {
         alpha_emissive_unread: 0,
         alpha_emissive_specular_maps: 0,
         mine_rim_bound: 0,
+        electricity_bound: 0,
+        electricity_unread: 0,
         bomb_tint_bound: 0,
         mag_wave_bound: 0,
         mag_wave_unread: 0,

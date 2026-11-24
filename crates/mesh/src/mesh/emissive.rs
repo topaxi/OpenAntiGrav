@@ -191,6 +191,17 @@ pub const PROGRAM_MINE_RIM: f32 = 23.0;
 /// tint and offset are rewritten per instance each frame. See `super::rcs::bomb_tint`.
 pub const PROGRAM_BOMB_TINT: f32 = 24.0;
 
+/// [`Emissive::program`]'s mode for HD's `electricity.rcsmaterial` (the Detonator mine's
+/// `Electric_Visualiser`): music-driven lightning on a camera-facing ring. The entry's tint is
+/// `ElectricityColour`, its offset `MasterVolume`, its scale `Tempo` and its second lane the
+/// facing exponent; the entry after it ([`PROGRAM_ELECTRICITY_AUDIO`]) holds the rest. Both are
+/// rewritten per instance each frame. See `super::rcs::electricity`.
+pub const PROGRAM_ELECTRICITY: f32 = 25.0;
+
+/// The second entry of an [`PROGRAM_ELECTRICITY`] material: tint `(PitchVolume, BassHit,
+/// TrebleHit)`, offset `PitchOffset`.
+pub const PROGRAM_ELECTRICITY_AUDIO: f32 = 26.0;
+
 /// [`Emissive::program`]'s mode for a PSP hull's alpha-weighted extra pass: the
 /// picture (the environment map) multiplied by the **second** texture's alpha at
 /// the second coordinate set, which carry the batch's own texture and its

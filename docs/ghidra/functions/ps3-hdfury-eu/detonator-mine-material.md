@@ -303,7 +303,8 @@ frame's bands with no history, so a pair's mine is the original's size only if i
 
 **Not wired:** the equalisers' rays (`Colour`, `Brightness`) and the glow edges (`RainbowColour`,
 `Brightness`) keep their authored values (their names are shared with other families and their
-programs are unread); the visualiser (`Electric_Visualiser`) is still not loaded.
+programs are unread); the visualiser (`Electric_Visualiser`) is drawn since `det-mine-visualiser`
+([detonator-mine-draw.md](detonator-mine-draw.md), "The visualiser, wired").
 
 ## What the port needs
 

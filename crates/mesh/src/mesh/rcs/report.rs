@@ -255,6 +255,11 @@ pub struct Report {
     /// Detonator mine materials drawn as their program's own rim glow, `MineColour` and
     /// `MineBrightness` riding the glow-table entry - see `super::mine_rim`.
     pub mine_rim_bound: usize,
+    /// Electricity materials (the Detonator mine's visualiser ring) drawn as their program's
+    /// lightning - see `super::electricity`.
+    pub electricity_bound: usize,
+    /// Electricity materials whose pictures or authored values could not be read (drawn without).
+    pub electricity_unread: usize,
     /// Detonator bomb materials drawn as their colour times their brightness - see
     /// `super::bomb_tint`.
     pub bomb_tint_bound: usize,
@@ -550,6 +555,12 @@ impl Report {
         } + &match self.mine_rim_bound {
             0 => String::new(),
             n => format!(", {n} Detonator mine material(s) drawn as their rim glow"),
+        } + &match self.electricity_bound {
+            0 => String::new(),
+            n => format!(", {n} electricity material(s) drawn as their program's lightning"),
+        } + &match self.electricity_unread {
+            0 => String::new(),
+            n => format!(", {n} electricity material(s) that could not be read (drawn without)"),
         } + &match self.bomb_tint_bound {
             0 => String::new(),
             n => format!(

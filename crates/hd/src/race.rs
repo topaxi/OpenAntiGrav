@@ -498,13 +498,13 @@ pub const DETONATOR: &oag_title::Detonator = &oag_title::Detonator {
 
 /// HD's Detonator object models (`DetonatorMine_Construct` `0x0013a7d8`,
 /// `DetonatorBomb_Construct` `0x00135328`, `WorldManager_Construct` `0x000b8590`;
-/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, 82; the pad 70). The mine's
-/// `Electric_Visualiser` is music-driven and is not drawn.
+/// `docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, 82; the pad 70).
 pub const DETONATOR_OBJECTS: oag_title::DetonatorObjects = oag_title::DetonatorObjects {
     mine: [
         r"Data\Weapons\mine_rita_football.vex",
         r"Data\Weapons\mine_rita_spikes.vex",
     ],
+    mine_visualiser: Some(r"Data\Weapons\electric_visualiser.vex"),
     bomb: [
         r"Data\Weapons\detonator_bomb_final.vex",
         r"Data\Weapons\detonator_bomb_final_equalisers.vex",

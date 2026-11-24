@@ -2283,6 +2283,37 @@ fn lit_colour(raw: VertexOutput, sun: ptr<function, SunTerms>) -> vec4<f32> {
     // **Chosen, not measured: a divisor at or below zero** (a dark mine's literal `2` makes
     // `1 - 0.9 C` negative) **draws black**: the program's negative colour is what the RSX target
     // does with it, unread.
+    // **HD's `electricity` ring** (`Emissive::program` mode 25, `oag_mesh::mesh::rcs::electricity`):
+    // the Detonator mine's visualiser, music-driven lightning scrolled through three pictures.
+    // `n0` and `n1` are the bass and treble tap of unit 0, `d` the distortion taps of unit 2 and
+    // `m` the pitch tap of unit 1 (`Tempo` is the entry's scale, `P` its second lane); the entry
+    // after it carries `(PitchVolume, BassHit, TrebleHit)` and `PitchOffset`. The colour is the
+    // overlay blend of the lightning against `ElectricityColour`, times `|N.V|^P`. The colour tap
+    // is decoded (chosen, not measured: the unit's gamma nibble is unread). See the module's doc
+    // for the program's instructions.
+    let electric_entry_on = row_scale.z > 24.5 && row_scale.z < 25.5;
+    if electric_entry_on {
+        let audio = emissive_tint(((in.slots >> 24u) & 63u) + 1u);
+        let alpha_v = in.sun_mask;
+        let n0 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.lightmap_texcoord.z, in.lightmap_texcoord.w - audio.y)).x;
+        let n1 = material_sample(MATERIAL_ALBEDO, vec2<f32>(in.texcoord.x, in.texcoord.y - audio.z)).w;
+        let s = in.lightmap_texcoord.y + scene.time.x + n0 + n1;
+        let d = material_sample(MATERIAL_PAD_MASK, vec2<f32>(in.lightmap_texcoord.x, row_scale.x * s)).w - n0 - n1;
+        let pitch = material_sample(MATERIAL_LIGHTMAP, vec2<f32>(in.lightmap_texcoord.x, audio.w)).x;
+        let m = (pitch * audio.x + d) * row_tint.w;
+        let lightning = decode(material_sample(
+            MATERIAL_PAD_MASK,
+            vec2<f32>(in.lightmap_texcoord.x, in.lightmap_texcoord.y + 0.3 * m),
+        ).rgb) * alpha_v;
+        let colour = row_tint.rgb;
+        let over = select(
+            vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - lightning) * (vec3<f32>(1.0) - colour),
+            2.0 * lightning * colour,
+            lightning < vec3<f32>(0.5),
+        );
+        let facing = pow(max(abs(dot(to_eye, n)), 1.0e-6), row_scale.w);
+        return vec4<f32>(min(scene.light.output_scale * over * facing, vec3<f32>(HALF_MAX)), alpha_v * facing);
+    }
     let mine_rim_on = glow_program > 22.5 && glow_program < 23.5;
     var mine_normal = n;
     var mine_alpha = 1.0;

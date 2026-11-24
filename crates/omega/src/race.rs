@@ -174,6 +174,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
                 r"Data\Weapons\mine_rita_football.vex",
                 r"Data\Weapons\mine_rita_spikes.vex",
             ],
+            mine_visualiser: None,
             bomb: [
                 r"Data\Weapons\detonator_bomb_final.vex",
                 r"Data\Weapons\detonator_bomb_final_equalisers.vex",

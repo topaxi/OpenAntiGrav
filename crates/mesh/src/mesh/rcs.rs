@@ -172,6 +172,7 @@ mod bomb_tint;
 mod chevron_pulse;
 mod cutout;
 mod damage_lights;
+mod electricity;
 mod holo_billboard;
 mod hull_normal;
 mod isolate;
@@ -969,6 +970,19 @@ fn build_with_options(
                     (mesh, model_blob, submesh, stride),
                     (texcoords, lightmap_texcoords, texcoords2),
                 );
+                // The electricity ring's vertex program reads three coordinate pairs and the
+                // colour's alpha off an undeclared vertex.
+                let electric = electricity::route(
+                    surface.roles,
+                    &out.emissive,
+                    (mesh, model_blob, submesh, stride),
+                );
+                let (texcoords, lightmap_texcoords, texcoords2, vertex_light) = match electric {
+                    Some((pair, uv1, uv2, light)) => {
+                        (Some(pair), Some(uv1), Some(uv2), Some(light))
+                    }
+                    None => (texcoords, lightmap_texcoords, texcoords2, vertex_light),
+                };
                 let tangents = if surface.tangent.carried() {
                     mesh.tangents(model_blob, submesh, stride).ok().flatten()
                 } else {

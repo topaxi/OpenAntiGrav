@@ -96,6 +96,7 @@ use oag_bytes::ByteOrder;
 
 mod coverage;
 mod inline_uv;
+pub use inline_uv::{ELECTRICITY_STRIDE, InlineElectricity};
 pub mod material;
 pub mod psp2;
 mod render_block;

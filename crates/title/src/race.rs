@@ -651,14 +651,17 @@ pub struct DetonatorVoices {
 /// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-hull.md`, "The Detonator objects' models").
 ///
 /// `DetonatorMine_Construct` loads `mine_rita_football`, `mine_rita_spikes` and
-/// `Electric_Visualiser`; the visualiser's electricity is music-driven, so it is named by neither
-/// field and is not drawn. `DetonatorBomb_Construct` loads three bomb parts, and
+/// `Electric_Visualiser`. `DetonatorBomb_Construct` loads three bomb parts, and
 /// `WorldManager_Construct` a `Detonator_Pad` for every speed pad and weapon pad;
 /// `PulseBullet_Construct` the pulse cannon's round and muzzle flash.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DetonatorObjects {
     /// A laid mine's two parts, `[mine_rita_football, mine_rita_spikes]`: the shell and its spikes.
     pub mine: [&'static str; 2],
+    /// The mine's `Electric_Visualiser`: a camera-facing ring of music-driven lightning around the
+    /// shell. `None` where the title's own electricity program is unread, so the ring is not
+    /// drawn rather than drawn as a stand-in.
+    pub mine_visualiser: Option<&'static str>,
     /// A laid bomb's three parts, `[detonator_bomb_final, _final_equalisers, _glowedges]`.
     pub bomb: [&'static str; 3],
     /// The model carried by every speed pad and every weapon pad.

@@ -179,6 +179,65 @@ pub(crate) fn mine_constants(
     }
 }
 
+/// `ElectricityColour` is the stage's colour times this while a mine is live
+/// (`DetonatorMine_AnimateToMusic`, `K[0x14]`).
+pub(crate) const ELECTRICITY_GAIN: f32 = 1.5;
+/// A dark mine's `ElectricityColour`, `(2, 2, 2)` (`K[0x54]`).
+pub(crate) const DARK_ELECTRICITY: [f32; 3] = [2.0; 3];
+/// `BassHit = clamp(0.25 s, 0, 0.25)`.
+pub(crate) const BASS_HIT_GAIN: f32 = 0.25;
+/// `MasterVolume = clamp01(5 L0)`.
+pub(crate) const MASTER_VOLUME_GAIN: f32 = 5.0;
+/// `PitchVolume = clamp(L1, 0, 0.4)`.
+pub(crate) const PITCH_VOLUME_CEILING: f32 = 0.4;
+
+/// The values the visualiser's `electricity` material is drawn with for a frame
+/// (`oag_mesh::mesh::rcs::electricity`): the mine's `ElectricityColour`, `MasterVolume`,
+/// `PitchVolume`, `PitchOffset`, `BassHit` and `TrebleHit`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct VisualiserConstants {
+    pub(crate) colour: [f32; 3],
+    pub(crate) master_volume: f32,
+    pub(crate) pitch_volume: f32,
+    pub(crate) pitch_offset: f32,
+    pub(crate) bass_hit: f32,
+    pub(crate) treble_hit: f32,
+}
+
+/// The visualiser's constants: a live mine takes the stage's electricity colour times `1.5` and
+/// the music's levels, a dark one the literals `DetonatorMine_AnimateToMusic` stores
+/// (`detonator-mine-material.md`).
+///
+/// **`MasterVolume` and `PitchVolume` read band 0 and band 1, chosen, not measured**: the
+/// original's two level readers (`0x304cc8`) are unread. `PitchOffset` (an accumulator whose
+/// step is unread) and `TrebleHit` (a `.bss` word whose writer is unread) stay `0`.
+#[must_use]
+pub(crate) fn visualiser_constants(
+    live: bool,
+    stage: &DetonatorColours,
+    envelope: &MineEnvelope,
+    levels: &[f32],
+) -> VisualiserConstants {
+    if !live {
+        return VisualiserConstants {
+            colour: DARK_ELECTRICITY,
+            master_volume: 0.0,
+            pitch_volume: 0.0,
+            pitch_offset: 0.0,
+            bass_hit: 0.0,
+            treble_hit: 0.0,
+        };
+    }
+    VisualiserConstants {
+        colour: stage.mine_electricity.map(|c| c * ELECTRICITY_GAIN),
+        master_volume: (MASTER_VOLUME_GAIN * band_level(levels, 0)).clamp(0.0, 1.0),
+        pitch_volume: band_level(levels, 1).clamp(0.0, PITCH_VOLUME_CEILING),
+        pitch_offset: 0.0,
+        bass_hit: (envelope.football * BASS_HIT_GAIN).clamp(0.0, BASS_HIT_GAIN),
+        treble_hit: 0.0,
+    }
+}
+
 /// What a bomb's three models are drawn with for a flash value `f`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct BombConstants {
