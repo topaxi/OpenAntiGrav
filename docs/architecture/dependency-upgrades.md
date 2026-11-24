@@ -266,7 +266,8 @@ changelog or release page, read for the direct dependencies below):
 | `zrip` family, `zstd` 0.14.4, `zstd-safe` 8.3.0 | 0.8.16 and the like | 0.8.25 and the like | CHD's zstd decoder: 0.8.25 stops a 14-byte header reserving 256 MiB of history ([`CHANGELOG.md`](https://github.com/paddor/zrip)); `zstd` 0.14.4 adds a `rust-backend` feature |
 | `rubato` | 5.0.1 | 5.1.0 | public sinc interpolators; `hrtf` 0.10's resampler, nothing of ours calls it |
 | `web-transport-trait` | 0.5.2 | 0.5.3 | patch |
-| other transitive | | | `ahash`, `anyhow` 1.0.105, `bumpalo`, `bytes`, `cc`, `crc32fast` 1.5.6, `errno`, `glib` family 0.22.11 (optional `native-video`), `hashbrown`, `mio`, `pin-project` 1.2.0, `postcard` 1.2.0, `rand` 0.10.4, `regex` 1.13.2, `smallvec` 1.16.6, `uuid`, `walkdir`, `zerocopy` 0.8.64, `zeroize` |
+| `anyhow` (direct) | 1.0.104 | 1.0.105 | `ensure!` refers to `Err` by absolute path, reallocated boxed errors are downcastable ([release notes](https://github.com/dtolnay/anyhow/releases/tag/1.0.105)); no call of ours changes |
+| other transitive | | | `ahash`, `bumpalo`, `bytes`, `cc`, `crc32fast` 1.5.6, `errno`, `glib` family 0.22.11 (optional `native-video`), `hashbrown`, `mio`, `pin-project` 1.2.0, `postcard` 1.2.0, `rand` 0.10.4, `regex` 1.13.2, `smallvec` 1.16.6, `uuid`, `walkdir`, `zerocopy` 0.8.64, `zeroize` |
 
 Removed from the tree: `getrandom` 0.3.4, `r-efi` 5.3.0, `wasip2`,
 `wit-bindgen`. The list of crates locked at more than one version is one shorter than
@@ -336,8 +337,9 @@ from `Mat4` are not called), `naga` 30.0.2, `rustls-webpki` 0.103.17.
 
 ## Latest release of the big dependencies
 
-What the newest release of each added, for the nine the brief names, where we are
-already current. Sources are the changelog files and release pages named in each
+What the newest release of each added, for the twelve the brief names (`wgpu`,
+`naga`, `winit`, `cpal`, `wasmtime`, `glam`, `image`, `zip`, `clap`, `toml`,
+`serde`, `log`), where we are already current. Sources are the changelog files and release pages named in each
 row; "unreleased" is the dependency's default branch only.
 
 | Dependency | We have | Newest | What the newest release added |
