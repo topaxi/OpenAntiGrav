@@ -26,7 +26,7 @@ import re
 import bpy
 from mathutils import Matrix, Vector
 
-from . import derive, f32, racing_line, scene_art, trackfile
+from . import derive, f32, images, racing_line, scene_art, trackfile
 from .model import (
     COLLISION_KINDS,
     HEADER_WORD,
@@ -738,8 +738,9 @@ def make_collision_object(scene, kind, mesh, node, n, m, multi):
     return _link(scene, obj)
 
 
-def populate(context, track, manifest_dir="."):
-    """Creates the objects and scene properties for `track` (the importer)."""
+def populate(context, track, manifest_dir=".", host_folder=""):
+    """Creates the objects and scene properties for `track` (the importer). `host_folder`:
+    where the host textures were exported to, to link them (`images.link_host_images`)."""
     scene = context.scene
     scene.oag_track_id = track.id
     scene.oag_track_title = track.title
@@ -774,6 +775,8 @@ def populate(context, track, manifest_dir="."):
             make_collision_object(scene, node.kind, mesh, node, n, m, len(node.meshes) > 1)
     if track.art is not None:
         scene_art.populate(context, track.art, manifest_dir)
+        if host_folder and track.host:
+            images.link_host_images(host_folder, track.host)
     context.view_layer.update()
 
 

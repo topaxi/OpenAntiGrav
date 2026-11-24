@@ -6,6 +6,8 @@
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- line <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- channels <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- textures <out-dir>
+    blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- host <out-dir>
+    blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- hostreal <track.toml> <host-folder> <out-dir>
 
 `loop` builds a track from scratch (8 control points, floor, walls, start, one pad
 of each kind, and art: a canopy over the line textured with a generated checker,
@@ -641,6 +643,124 @@ def texture_checks(out_dir):
     print("own textures: file, packed, generated, float, data, JPG, TGA, painted, collision, reused, missing: ok")
 
 
+HOST_SLUG = "wipeout-pulse"
+HOST_ENTRY = "Data\\Environments\\03_Track\\track.vex"
+HOST_PATH = (
+    "wipeout-pulse/data/environments/03_track/track.vex/data/environments/generictracktextures/_wall6_1.png"
+)  # the same literal as `host_export::tests` in oag-raceplay
+
+
+def host_image(name):
+    """A host reference as an import makes it: an 8 x 8 placeholder carrying its two properties."""
+    image = bpy.data.images.new(name.rsplit("\\", 1)[-1], 8, 8)
+    image["oag_host_entry"], image["oag_host_name"] = HOST_ENTRY, name
+    return image
+
+
+def host_checks(out_dir, manifest=None, folder=None):
+    """Host textures linked from a folder, never packed (docs/tools/blender.md, "Host textures").
+    With no `manifest` it runs on generated pictures standing in for an export of a disc;
+    with one (a track file and the folder `just export-host-textures` wrote) it imports that."""
+    import shutil
+
+    from oag_track import images
+
+    work = os.path.join(out_dir, "host")
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(work)
+    names = {
+        "wall": "Data\\Environments\\GenericTrackTextures\\_wall6_1.tga",
+        "grass": "Data\\Environments\\03_Track\\Textures\\Grass.tga",
+        "absent": "Data\\Environments\\03_Track\\Textures\\NotExported.tga",
+    }
+    assert os.path.relpath(images.host_file(work, HOST_SLUG, HOST_ENTRY, names["wall"]), work) == HOST_PATH
+    if manifest is None:
+        folder = os.path.join(work, "exported")
+        colours = {"wall": (250, 10, 10, 255), "grass": (10, 250, 10, 255)}
+        for key, rgba in colours.items():
+            at = images.host_file(folder, HOST_SLUG, HOST_ENTRY, names[key])
+            os.makedirs(os.path.dirname(at), exist_ok=True)
+            solid_png(at, rgba)
+        ctx = author_loop(work)
+        for o in [o for o in bpy.data.objects if o.type == "MESH" and o.get("oag_kind") is None]:
+            bpy.data.objects.remove(o)
+        ctx.scene.oag_lensflare = False
+        ctx.scene.oag_skybox = False
+        ctx.scene.oag_track_host = HOST_SLUG
+        for n, key in enumerate(names):
+            quad_with(ctx, f"h{n}", host_image(names[key]), 100.0 + 60.0 * n)
+        manifest = os.path.join(work, "host.track.toml")
+        before = scene.write_track(ctx, manifest)
+        assert [t.host for t in before.art.textures] == [(HOST_ENTRY, n) for n in names.values()]
+        assert not [f for f in os.listdir(work) if f.endswith(".png") and f != "blender_checker.png"], "a host image was written as a file"
+    else:
+        colours = None
+    track = trackfile.read(manifest)
+    fresh()
+    scene.populate(bpy.context, track, os.path.dirname(manifest))
+    assert all(i.source != "FILE" for i in bpy.data.images if i.get("oag_host_entry")), "linked with no folder set"
+    try:
+        bpy.ops.oag.link_host_textures(folder="")
+    except RuntimeError as e:
+        assert "Host texture folder" in str(e), str(e)
+    else:
+        raise AssertionError("linked with no folder at all")
+    assert bpy.ops.oag.link_host_textures(folder=folder) == {"FINISHED"}
+    first = sorted(i.filepath for i in bpy.data.images if i.source == "FILE" and i.get("oag_host_entry"))
+    fresh()
+    scene.populate(bpy.context, track, os.path.dirname(manifest), folder)
+    assert first == sorted(i.filepath for i in bpy.data.images if i.source == "FILE" and i.get("oag_host_entry")), (
+        "the panel's link and an import's link differ"
+    )
+    host = [i for i in bpy.data.images if i.get("oag_host_entry")]
+    assert host and all(i.packed_file is None for i in host), "an import packed a host image"
+    linked = [i for i in host if i.source == "FILE"]
+    unlinked = [i.get("oag_host_name") for i in host if i.source != "FILE"]
+    print(f"host import: {len(linked)} of {len(host)} host image(s) linked, not linked: {unlinked}")
+    for i in linked:
+        assert i.filepath and os.path.isfile(bpy.path.abspath(i.filepath)), i.filepath
+        assert os.path.abspath(bpy.path.abspath(i.filepath)).startswith(os.path.abspath(folder)), i.filepath
+        assert colours is None or tuple(i.size) == (4, 4), f"a linked image is still the placeholder: {tuple(i.size)}"
+    if colours is not None:
+        assert unlinked == [names["absent"]], unlinked
+        by_name = {i["oag_host_name"]: i for i in host}
+        for key, rgba in colours.items():
+            img = by_name[names[key]]
+            assert tuple(int(v * 255 + 0.5) for v in img.pixels[:4]) == rgba, (key, tuple(img.pixels[:4]))
+            assert tuple(img.size) == (4, 4)
+        assert tuple(by_name[names["absent"]].size) == (8, 8), "a texture with no file lost its placeholder"
+    else:
+        assert not unlinked, f"host textures with no exported file: {unlinked}"
+
+    solid_png(os.path.join(work, "own_file.png"), (30, 60, 90, 255))
+    own = bpy.data.images.load(os.path.join(work, "own_file.png"))
+    own.name = "own_painted"
+    own.use_fake_user = True
+    # What a player can do: pack everything, and switch Automatically Pack on.
+    bpy.data.use_autopack = True
+    bpy.ops.file.pack_all()
+    blend = os.path.join(work, "host.blend")
+    bpy.ops.wm.save_as_mainfile(filepath=blend)
+    assert bpy.data.use_autopack, "the save left Automatically Pack off"
+    bpy.ops.wm.open_mainfile(filepath=blend)
+    host = [i for i in bpy.data.images if i.get("oag_host_entry")]
+    assert host and all(i.packed_file is None for i in host), "a host image was saved packed"
+    assert bpy.data.images["own_painted"].packed_file is not None, "an own image lost its autopack"
+    raw = open(blend, "rb").read()
+    for i in host:
+        if i.source == "FILE":
+            with open(bpy.path.abspath(i.filepath), "rb") as f:
+                assert f.read() not in raw, f"{i.name}'s pixels are inside the .blend"
+    print("host textures: linked from the folder, never packed (pack all, autopack, save, reload): ok")
+
+    again = os.path.join(work, "again.track.toml")
+    scene.write_track(bpy.context, again)
+    assert trackfile.read(again).art.textures == track.art.textures, "the host references changed on export"
+    if colours is not None:
+        assert not [f for f in os.listdir(work) if f.endswith(".png") and f not in ("blender_checker.png", "own_file.png")], "a host image was exported as a file"
+    print("host textures: export writes the unchanged host reference: ok")
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1 :]
     if args[:1] == ["loop"]:
@@ -655,6 +775,10 @@ def main():
         props_checks(args[1])
     elif args[:1] == ["channels"]:
         channel_checks(args[1])
+    elif args[:1] == ["host"]:
+        host_checks(args[1])
+    elif args[:1] == ["hostreal"]:
+        host_checks(args[3], args[1], args[2])
     elif args[:1] == ["textures"]:
         texture_checks(args[1])
     elif args[:1] == ["reexport"]:

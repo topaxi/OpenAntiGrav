@@ -10,6 +10,11 @@ whatever Blender holds it as:
 - anything else (generated, painted, a JPG, TGA or EXR, or a PNG edited since it
   loaded): its pixels, encoded here, in the colour space a PNG is read in (sRGB).
 
+**A host image is never packed.** With a "Host texture folder" set, an import links each host
+image to the PNG `export_host_textures` wrote from the user's own disc, as an external file;
+`unpack_host_images` keeps those pixels out of every saved .blend (a packed disc texture would
+travel with the file into a mod or a bug report).
+
 Two images that would take one file name get distinct names (the first keeps it); one
 image used twice is one row. An image whose file is gone is refused by name.
 """
@@ -18,6 +23,7 @@ import os
 import re
 
 import bpy
+from bpy.app.handlers import persistent
 
 from . import pngwrite
 from .artfile import ArtError
@@ -119,3 +125,64 @@ class TextureTable:
         if row not in self.rows:
             self.rows.append(row)
         return self.rows.index(row)
+
+
+def host_file(folder, slug, entry, name):
+    """Where `export_host_textures` put a host texture:
+    `<folder>/<title slug>/<circuit entry>/<texture name>.png`, lowercase, `\\` a
+    directory separator (`oag_raceplay::foreign::art::host_export::texture_file`)."""
+    parts = [p.lower() for p in re.split(r"[\\/]", f"{entry}\\{name}") if p]
+    parts[-1] = os.path.splitext(parts[-1])[0] + ".png"
+    return os.path.join(bpy.path.abspath(folder), slug.lower(), *parts)
+
+
+def link_host_images(folder, slug):
+    """Links every host image to its exported PNG under `folder` as an external file, never
+    packed. Returns (linked, missing): the count linked and the names with no file, which
+    keep whatever they showed (an 8 x 8 placeholder after an import)."""
+    linked, missing = 0, []
+    if not folder:
+        return linked, missing
+    for image in bpy.data.images:
+        if not is_host(image):
+            continue
+        entry, name = image.get(HOST_ENTRY), image.get(HOST_NAME)
+        if not (entry and name):
+            continue
+        path = host_file(folder, slug, str(entry), str(name))
+        if not os.path.isfile(path):
+            missing.append(str(name))
+            continue
+        if image.packed_file is not None:
+            image.unpack(method="REMOVE")
+        image.source = "FILE"
+        image.filepath = path
+        image.reload()
+        linked += 1
+    return linked, missing
+
+
+_autopack = {}
+
+
+@persistent
+def unpack_host_images(*_):
+    """`save_pre`: no host image goes into a .blend packed. Blender's *Automatically Pack
+    Resources* packs after this handler runs, so the save is made with it off (the other
+    images are packed here as it would have, and the switch comes back in `restore_autopack`)."""
+    data = bpy.data
+    if not any(is_host(i) for i in data.images):
+        return
+    if data.use_autopack:
+        bpy.ops.file.pack_all()
+        _autopack["was"] = True
+        data.use_autopack = False
+    for image in data.images:
+        if is_host(image) and image.packed_file is not None:
+            image.unpack(method="REMOVE")
+
+
+@persistent
+def restore_autopack(*_):
+    if _autopack.pop("was", False):
+        bpy.data.use_autopack = True

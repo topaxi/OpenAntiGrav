@@ -15,15 +15,36 @@ from bpy.props import (
     PointerProperty,
     StringProperty,
 )
-from bpy.types import Operator, Panel
+from bpy.types import AddonPreferences, Operator, Panel
 from bpy_extras.io_utils import ExportHelper, ImportHelper
 
-from . import artfile, derive, effectfile, model, scene, scene_art, trackfile
+from . import artfile, derive, effectfile, images, model, scene, scene_art, trackfile
 
 ERRORS = (trackfile.TrackFileError, derive.AuthoringError, artfile.ArtError)
 
 PANEL_CATEGORY = "OAG"
 KIND_ITEMS = [(k, k, "") for k in scene.KINDS]
+
+
+class OAG_Preferences(AddonPreferences):
+    bl_idname = __package__
+
+    host_texture_folder: StringProperty(
+        name="Host texture folder",
+        description="Where `just export-host-textures` wrote the PNGs of your own disc image. An import "
+        "links each host texture to its file here, as an external image that is never packed into a .blend",
+        subtype="DIR_PATH",
+    )
+
+    def draw(self, context):
+        self.layout.prop(self, "host_texture_folder")
+        self.layout.label(text="Export them from your own disc: just export-host-textures <image> <track or circuit> <folder>")
+
+
+def host_folder(context):
+    """The preference's folder, empty when unset (or when the add-on is registered from a path)."""
+    addon = context.preferences.addons.get(__package__)
+    return "" if addon is None else addon.preferences.host_texture_folder
 
 
 class OAG_OT_tag(Operator):
@@ -193,6 +214,34 @@ class OAG_OT_host_texture(Operator):
         return {"FINISHED"}
 
 
+class OAG_OT_link_host_textures(Operator):
+    bl_idname = "oag.link_host_textures"
+    bl_label = "Link Host Textures"
+    bl_description = (
+        "Link every host texture to its PNG in the Host texture folder (add-on preferences), as an "
+        "external file; they are never packed into the .blend"
+    )
+    bl_options = {"REGISTER", "UNDO"}
+
+    folder: StringProperty(name="Folder", description="Empty: the Host texture folder preference", subtype="DIR_PATH")
+
+    def execute(self, context):
+        folder = self.folder or host_folder(context)
+        slug = context.scene.oag_track_host
+        if not folder:
+            self.report({"ERROR"}, "set the Host texture folder in the add-on preferences first")
+            return {"CANCELLED"}
+        if slug == "none":
+            self.report({"ERROR"}, "set Runs on to the title the textures come from first")
+            return {"CANCELLED"}
+        linked, missing = images.link_host_images(folder, slug)
+        self.report(
+            {"WARNING" if missing else "INFO"},
+            f"{linked} host texture(s) linked" + (f", {len(missing)} have no file: {missing[0]} ..." if missing else ""),
+        )
+        return {"FINISHED"}
+
+
 class OAG_OT_export(Operator, ExportHelper):
     bl_idname = "oag.export_track"
     bl_label = "Export OAG Track"
@@ -231,7 +280,7 @@ class OAG_OT_import(Operator, ImportHelper):
     def execute(self, context):
         try:
             track = trackfile.read(self.filepath)
-            scene.populate(context, track, os.path.dirname(self.filepath))
+            scene.populate(context, track, os.path.dirname(self.filepath), host_folder(context))
         except (*ERRORS, OSError, KeyError, ValueError) as e:
             self.report({"ERROR"}, f"{self.filepath}: {e}")
             return {"CANCELLED"}
@@ -411,6 +460,7 @@ class OAG_PT_art(Panel):
         sc = context.scene
         layout.prop(sc, "oag_sun")
         layout.prop(sc, "oag_sky")
+        layout.operator("oag.link_host_textures")
         layout.prop(sc, "oag_draw_collision")
         layout.prop(sc, "oag_skybox")
         if sc.oag_skybox:
@@ -428,6 +478,7 @@ class OAG_PT_art(Panel):
 
 
 CLASSES = (
+    OAG_Preferences,
     OAG_OT_tag,
     OAG_OT_untag,
     OAG_OT_build_ribbon,
@@ -436,6 +487,7 @@ CLASSES = (
     OAG_OT_add_pad,
     OAG_OT_add_pad_plates,
     OAG_OT_host_texture,
+    OAG_OT_link_host_textures,
     OAG_OT_export,
     OAG_OT_import,
     OAG_OT_preview_effect,
@@ -617,9 +669,17 @@ def register():
     _props()
     for cls in CLASSES:
         bpy.utils.register_class(cls)
+    bpy.app.handlers.save_pre.append(images.unpack_host_images)
+    bpy.app.handlers.save_post.append(images.restore_autopack)
 
 
 def unregister():
+    for handlers, fn in (
+        (bpy.app.handlers.save_pre, images.unpack_host_images),
+        (bpy.app.handlers.save_post, images.restore_autopack),
+    ):
+        if fn in handlers:
+            handlers.remove(fn)
     for cls in reversed(CLASSES):
         bpy.utils.unregister_class(cls)
     _unprops()
