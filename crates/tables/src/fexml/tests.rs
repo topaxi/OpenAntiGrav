@@ -5,6 +5,8 @@
 
 use super::*;
 
+mod robustness;
+
 const SAMPLE: &str = concat!(
     r#"<code as="Values" bs="Screen" ds="name" es="Model" ls="Src"></code>"#,
     "\n",

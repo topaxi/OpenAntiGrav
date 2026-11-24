@@ -64,8 +64,11 @@ pub fn is_fexml(data: &[u8]) -> bool {
 /// Reads the `<code>` dictionary, mapping short names to full ones.
 pub fn dictionary(xml: &str) -> Result<HashMap<String, String>> {
     let start = xml.find("<code").ok_or(Error::NoDictionary)?;
-    let end = tag_end(&xml[start..]).ok_or(Error::NoDictionary)? + start;
-    let body = &xml[start + 5..end];
+    let rest = &xml[start..];
+    let close = tag_end(rest).ok_or(Error::NoDictionary)?;
+    // `<code` is 5 bytes, 4 of them past the `<` that `tag_inner` drops. A tag the
+    // implied end cut short (`<code<`) is shorter than that: no attributes.
+    let body = tag_inner(rest, close).get(4..).unwrap_or("");
 
     let mut map = HashMap::new();
     for (key, value) in attributes(body) {
@@ -191,9 +194,22 @@ pub(crate) fn tag_end(rest: &str) -> Option<usize> {
     None
 }
 
+/// The text between a tag's `<` and its end, `close` being what [`tag_end`] returned.
+///
+/// For a real `>` that is `rest[1..close]`. For an implied end after a multi-byte
+/// character, `close` is that character's last byte, which no slice may stop at:
+/// the whole character is dropped, as the one-byte case drops its character.
+pub(crate) fn tag_inner(rest: &str, close: usize) -> &str {
+    let mut end = close.min(rest.len());
+    while !rest.is_char_boundary(end) {
+        end -= 1;
+    }
+    rest.get(1..end).unwrap_or("")
+}
+
 /// Rewrites one `<...>` tag through the dictionary.
 fn expand_tag(tag: &str, map: &HashMap<String, String>) -> String {
-    let inner = &tag[1..tag.len() - 1];
+    let inner = tag_inner(tag, tag.len() - 1);
 
     // Comments, declarations and processing instructions carry no names.
     if inner.starts_with('!') || inner.starts_with('?') {
@@ -288,13 +304,18 @@ impl Node {
     }
 }
 
+/// Deepest element nesting [`parse`] builds before treating the rest of the
+/// document as unterminated.
+const MAX_DEPTH: usize = 256;
+
 /// Parses expanded front-end XML into a synthetic `"#document"` root (the files
 /// have several top-level elements).
 ///
 /// Deliberately forgiving: an unterminated document yields everything it opened
 /// and a stray close tag is ignored. The schema on top decides what is broken;
 /// see [`handling::parse`](crate::handling::parse), which errors on a missing
-/// attribute because a silent zero would look like a tuning problem.
+/// attribute because a silent zero would look like a tuning problem. Nesting
+/// deeper than [`MAX_DEPTH`] ends the document there.
 #[must_use]
 pub fn parse(xml: &str) -> Node {
     let mut stack = vec![Node {
@@ -312,7 +333,7 @@ pub fn parse(xml: &str) -> Node {
         };
         at = close + 1;
 
-        let inner = &xml[open + 1..close];
+        let inner = tag_inner(&xml[open..], close - open);
         // Comments, declarations and processing instructions carry no structure.
         if inner.starts_with('!') || inner.starts_with('?') {
             continue;
@@ -347,6 +368,10 @@ pub fn parse(xml: &str) -> Node {
             if let Some(parent) = stack.last_mut() {
                 parent.children.push(node);
             }
+        } else if stack.len() > MAX_DEPTH {
+            // Dropping a tree this deep would overflow the stack, and no shipped
+            // file is within an order of magnitude of it: treat it as unterminated.
+            break;
         } else {
             stack.push(node);
         }
@@ -427,7 +452,7 @@ pub fn asset_paths(expanded: &str) -> Vec<String> {
 
         // Skip the element name: the attribute scanner stops at the first
         // non-`name="value"` token.
-        let inner = rest[1..close].trim_start_matches('/');
+        let inner = tag_inner(rest, close).trim_start_matches('/');
         let name_end = inner
             .find(|c: char| c.is_whitespace())
             .unwrap_or(inner.len());
