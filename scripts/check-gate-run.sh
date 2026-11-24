@@ -30,6 +30,7 @@ wait_file() {
 echo "$* hash=$OAG_GIT_HASH data=${OAG_REQUIRE_GAME_DATA:-unset}" >>"$FAKE_LOG"
 case "$1" in
     gate-prep)
+        echo $$ >"$FAKE_DIR/prep.pid"
         if [ "${PREP_MODE:-}" = grandchild ]; then
             # The leader dies at once; a child of it is slow to notice TERM.
             (trap 'echo grandchild-term >>"$FAKE_LOG"; wait_file "$FAKE_DIR/let-grandchild-die"
@@ -102,6 +103,14 @@ finish_run() {
 }
 run() { "$gate_run" "$@" >"$tmp/out" 2>&1; }
 no_prep_left() { ! pgrep -f -- "$tmp/bin/just gate-prep" >/dev/null; }
+# What gate-run.sh calls a live group: a member that is not a zombie. A process that has
+# logged its last line is still alive until the kernel has torn it down, which a prebuild
+# at idle priority on a loaded host can take a while to get to.
+group_alive() {
+    ps -eo pgid=,stat= | awk -v g="$1" '$1 == g && $2 !~ /^Z/ { f = 1 } END { exit !f }'
+}
+prep_group_gone() { ! group_alive "$(cat "$tmp/prep.pid")"; }
+gone() { local p; for p in "$@"; do ! kill -0 "$p" 2>/dev/null || return 1; done; }
 
 run gate-affected || fail "a free lock failed"
 grep -q '^gate-affected hash=test-data data=unset$' "$FAKE_LOG" || fail "free lock: wrong environment"
@@ -121,7 +130,7 @@ case "$(col 2 6)" in stopped@*) ;; *) fail "busy lock: prebuild state $(col 2 6)
 # A busy lock with a prebuild that is done before the lock comes: it is left alone.
 hold_lock
 PREP_SLEEP=0 start_run test-data-affected
-wait_for "the short prebuild to finish" 'logged prep-finished && no_prep_left'
+wait_for "the short prebuild to finish" 'logged prep-finished && prep_group_gone'
 release
 finish_run || fail "busy lock, short prebuild failed"
 grep -q '^test-data-affected hash=test-data data=1$' "$FAKE_LOG" || fail "test-data-affected: wrong environment"
@@ -156,8 +165,7 @@ finish_run; [ $? -eq 130 ] || fail "an interrupted waiting gate did not exit 130
 logged prep-stopped || fail "an interrupted gate left its prebuild running"
 no_prep_left || fail "an interrupted gate left prebuild processes"
 release
-wait_for "the interrupted gate's wait to be gone" \
-    'for w in $waiters; do ! kill -0 "$w" 2>/dev/null || exit 1; done'
+wait_for "the interrupted gate's wait to be gone" 'gone $waiters'
 lock_free || fail "the lock is held after the interrupted gate"
 logged '^gate-affected' && fail "an interrupted gate still ran"
 
@@ -174,6 +182,7 @@ lock_free && fail "an interrupted gate freed the lock before its recipe was dead
 : >"$tmp/let-hold-die"
 finish_run; [ $? -eq 130 ] || fail "an interrupted gate did not exit 130"
 logged hold-dead || fail "an interrupted gate left its recipe running"
+[ "$(tail -n 1 "$OAG_GATE_TIMES" | cut -f7)" = 130 ] || fail "an interrupted recipe's row does not say 130"
 lock_free || fail "the lock is still held after the interrupted gate"
 
 # A prebuild whose child outlives its leader is gone before the recipe starts.
