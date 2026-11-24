@@ -846,3 +846,20 @@ fn the_free_eye_keeps_its_offset_when_the_craft_moves_or_changes() {
     assert!((b.eye - a.eye - Vec3::new(40.0, 0.0, 0.0)).length() < 1e-4);
     assert!((a.orientation * Vec3::NEG_Z - b.orientation * Vec3::NEG_Z).length() < 1e-6);
 }
+
+#[test]
+fn a_control_is_set_outright_and_stops_where_the_panel_stops() {
+    use effects::{Effects, Row};
+    let mut effects = Effects::new();
+    effects.set(Row::Exposure, 250);
+    effects.set(Row::Saturation, -4);
+    effects.set(Row::SpeedBlur, 33);
+    effects.set(Row::DepthOfField, 1);
+    effects.set(Row::MotionBlur, 9);
+    assert_eq!(effects.value(Row::Exposure), 100);
+    assert_eq!(effects.value(Row::Saturation), 0);
+    assert_eq!(effects.value(Row::SpeedBlur), 30, "a step of five rounds down");
+    assert!(effects.depth_of_field().is_some());
+    assert_eq!(effects.value(Row::MotionBlur), 2);
+    assert!(!effects.is_neutral());
+}

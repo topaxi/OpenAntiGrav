@@ -125,3 +125,52 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
     );
     Ok(Arc::new(record))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser as _;
+
+    fn meta(source: &str, picture: Option<shot_meta::Picture>) -> shot_meta::Meta {
+        shot_meta::Meta {
+            shot: shot_meta::Shot {
+                source: source.to_string(),
+                ..shot_meta::Shot::default()
+            },
+            picture,
+            ..shot_meta::Meta::default()
+        }
+    }
+
+    #[test]
+    fn the_recorded_controls_are_drawn_again_and_a_blur_is_said_not_to_be() {
+        let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
+        let picture = shot_meta::Picture {
+            exposure: 60,
+            saturation: 20,
+            motion_blur: "track".to_string(),
+            shutter: Some(40),
+            frames: 120,
+            ..shot_meta::Picture::default()
+        };
+        let lines = picture_lines(&meta("photo mode", Some(picture)), &mut cli);
+        assert_eq!(
+            cli.picture.as_deref(),
+            Some("exposure=60,saturation=20,speed_blur=0")
+        );
+        assert!(lines[0].starts_with("picture controls applied"), "{lines:?}");
+        assert!(
+            lines.iter().any(|line| line.contains("track motion blur")),
+            "{lines:?}"
+        );
+    }
+
+    #[test]
+    fn a_photo_without_the_keys_says_so_and_another_source_says_nothing() {
+        let mut cli = Cli::try_parse_from(["oag-game"]).expect("parses");
+        let lines = picture_lines(&meta("photo mode", None), &mut cli);
+        assert!(lines[0].contains("no picture controls recorded"), "{lines:?}");
+        assert_eq!(cli.picture, None);
+        assert!(picture_lines(&meta("screenshot", None), &mut cli).is_empty());
+    }
+}
