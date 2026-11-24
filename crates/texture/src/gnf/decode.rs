@@ -146,34 +146,57 @@ fn untile_level(
         return untile_level_by_block(texture, blob, offset, grid, block_bytes);
     }
 
-    // Where each of a tile's 64 stored blocks belongs inside it, as (x, y).
-    let place: [(usize, usize); 64] = std::array::from_fn(|slot| {
+    let bc7 = texture.surface_format == SurfaceFormat::Bc7;
+    let tiles = (tiles_y, wb.div_ceil(8), tiles_x as usize);
+    let (out, corrupt) = match block_bytes {
+        8 => untile_tiles::<8>(blob, base, tiles, (wb, hb), bc7),
+        16 => untile_tiles::<16>(blob, base, tiles, (wb, hb), bc7),
+        _ => return untile_level_by_block(texture, blob, offset, grid, block_bytes),
+    };
+    Ok((out, corrupt))
+}
+
+/// Where each of a tile's 64 stored blocks belongs inside it, as (x, y).
+fn tile_places() -> [(usize, usize); 64] {
+    std::array::from_fn(|slot| {
         let bit = |n: usize| (slot >> n) & 1;
         (
             bit(0) | (bit(2) << 1) | (bit(4) << 2),
             bit(1) | (bit(3) << 1) | (bit(5) << 2),
         )
-    });
-    let bc7 = texture.surface_format == SurfaceFormat::Bc7;
-    let mut out = vec![0u8; wb * hb * block_bytes];
+    })
+}
+
+/// [`untile_level`]'s walk for a block of `B` bytes, so each block moves as one fixed-size copy
+/// and not a call to `memcpy` with a length known only at run time. `tiles` is
+/// `(tile rows, tile columns used, tile columns stored)`, `blocks` is `(width, height)` in blocks.
+fn untile_tiles<const B: usize>(
+    blob: &[u8],
+    base: usize,
+    (tiles_y, tiles_used, tiles_stored): (usize, usize, usize),
+    (wb, hb): (usize, usize),
+    bc7: bool,
+) -> (Vec<u8>, usize) {
+    let place = tile_places();
+    let mut out = vec![0u8; wb * hb * B];
+    let blocks_out = out.as_chunks_mut::<B>().0;
     let mut corrupt = 0usize;
     for tile_y in 0..tiles_y {
-        for tile_x in 0..wb.div_ceil(8) {
-            let start = base + (tile_y * tiles_x as usize + tile_x) * tile_bytes;
-            let tile = &blob[start..start + tile_bytes];
-            for (slot, block) in tile.chunks_exact(block_bytes).enumerate() {
+        for tile_x in 0..tiles_used {
+            let start = base + (tile_y * tiles_stored + tile_x) * 64 * B;
+            let tile = blob[start..start + 64 * B].as_chunks::<B>().0;
+            for (slot, block) in tile.iter().enumerate() {
                 let (x, y) = place[slot];
                 let (bx, by) = (tile_x * 8 + x, tile_y * 8 + y);
                 if bx >= wb || by >= hb {
                     continue;
                 }
                 corrupt += usize::from(bc7 && !has_valid_bc7_mode(block[0]));
-                let at = (by * wb + bx) * block_bytes;
-                out[at..at + block_bytes].copy_from_slice(block);
+                blocks_out[by * wb + bx] = *block;
             }
         }
     }
-    Ok((out, corrupt))
+    (out, corrupt)
 }
 
 /// [`untile_level`] one block at a time in row-major order, which is the order
