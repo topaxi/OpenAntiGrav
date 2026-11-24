@@ -1059,6 +1059,7 @@ impl Race {
                 boost_fov_kick: oag_display::display::BoostFovKick::DEFAULT,
                 flaps: [[crate::GRID_FLAP_LEVEL; 2]; MAX_SHIPS],
                 grid_flaps: true,
+                flap_phase: crate::FlapPhase::Grid,
                 flap_graphics: airbrake_graphics,
             }),
             #[cfg(feature = "view")]

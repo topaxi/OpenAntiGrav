@@ -484,6 +484,9 @@ pub struct RaceView {
     /// Whether the grid state forces the flaps out. Always on in play; a capture of a craft posed
     /// past the grid, or of the flaps alone, switches it off ([`Race::stow_grid_flaps`]).
     pub(super) grid_flaps: bool,
+    /// The phase the flaps were last put in, so a restore from inside the grid or the fold to a
+    /// tick past it knows to move them.
+    pub(super) flap_phase: crate::FlapPhase,
     /// The authored deflection and the two rates, from `<AirbrakeGraphics>`.
     ///
     /// `amount` is already radians here: `oag_gameplay::airbrake_graphics_for`

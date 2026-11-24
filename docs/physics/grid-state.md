@@ -198,7 +198,10 @@ is not touched here.
 **Ours**: while the countdown holds (`RaceState::thrust_gated`, the clock `ShipState::on_grid` follows) every slot's flaps are
 written to `GRID_FLAP_LEVEL` (`100`), player and AI, from the race's load; after it the existing chase folds them at the hull's
 `down_speed` toward the craft's airbrake level (zero with no input). A restart rebuilds the race and so re-arms it; a respawn
-after the start does not, because the original's respawn enters state 3, never state 0 (above). Replays re-run the race and show
+after the start does not, because the original's respawn enters state 3, never state 0 (above). Wherever the simulation is put back without the ticks between (a replay seek, a pose view, a photo rewind, a client's catch-up and snap),
+`RaceView::settle_flaps` draws what the restored tick has: full before GO, partway down the fold in the ticks after, and the airbrakes'
+level past it (nothing moves from inside the race to inside the race, so a correction that rewinds a few ticks does not snap them).
+Replays re-run the race and show
 it; a ghost borrows the hull of the slot flying its team, so it shows that slot's flaps on the same clock.
 
 **Pulse PSP, measured** (confidence **85**): `craft+0x2d8`/`+0x2dc` read `100` through state 0 and run `100` to `0` linearly over

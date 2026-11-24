@@ -9,7 +9,9 @@ use oag_render::camera::chase::Chase;
 use oag_weapons::projectile::MAX_PROJECTILES;
 
 use crate::player_step::PlayerStep;
-use crate::{BOOST_FOV_CLOSE_RATE, BOOST_FOV_OPEN_RATE, GRID_FLAP_LEVEL, RaceView, SimRace};
+use crate::{
+    BOOST_FOV_CLOSE_RATE, BOOST_FOV_OPEN_RATE, FlapPhase, GRID_FLAP_LEVEL, RaceView, SimRace,
+};
 use oag_physics::Evaluated;
 
 /// What the drawn bounce and blast read off the projectile pool before
@@ -145,12 +147,9 @@ impl RaceView {
         // two milliseconds and the parameter would not be worth authoring.
         // It is also the convention `<Airbrake gain/falloff>` already uses on
         // the same scale, one element away.
-        let grid = oag_race::RaceState::thrust_gated(core.sim.world.tick);
+        let phase = self.flap_phase_at(core, core.sim.world.tick);
+        self.flap_phase = phase;
         for slot in 0..MAX_SHIPS {
-            // A craft nobody flies folds its flaps back, so a seat handed to the AI
-            // does not keep its last deflection.
-            let flown = core.sim.world.person_flown(slot);
-            let ship = &core.sim.world.ships[slot].physics;
             // The grid state forces both flaps fully out, every craft, whoever flies it
             // (`docs/physics/grid-state.md`, "The flaps on the grid"). Written, not chased, so
             // the first tick already draws them full; once the state ends the chase below
@@ -158,16 +157,12 @@ impl RaceView {
             // `ShipState::on_grid` is (`Race::tick` writes it from `tick + 1` before the tick
             // that has since advanced `world.tick`), so a craft rebuilt mid-countdown by a
             // rescue keeps them out.
-            if grid && self.grid_flaps {
+            if phase == FlapPhase::Grid {
                 self.flaps[slot] = [GRID_FLAP_LEVEL; 2];
                 continue;
             }
-            for (flap, level) in self.flaps[slot]
-                .iter_mut()
-                .zip([ship.airbrake_left, ship.airbrake_right])
-            {
-                let level = if flown { level } else { 0.0 };
-                let target = level.clamp(0.0, 100.0);
+            let targets = Self::flap_targets(core, slot);
+            for (flap, target) in self.flaps[slot].iter_mut().zip(targets) {
                 let (rate, rising) = if target > *flap {
                     (self.flap_graphics.up_speed, true)
                 } else {
@@ -180,6 +175,60 @@ impl RaceView {
                     (*flap - step).max(target)
                 };
             }
+        }
+    }
+
+    /// The levels `slot`'s flaps chase, `0..=100`: its airbrakes for a craft a person flies, zero
+    /// for every other, so a seat handed to the AI does not keep its last deflection.
+    fn flap_targets(core: &SimRace, slot: usize) -> [f32; 2] {
+        let ship = &core.sim.world.ships[slot].physics;
+        let flown = core.sim.world.person_flown(slot);
+        [ship.airbrake_left, ship.airbrake_right]
+            .map(|level| if flown { level } else { 0.0 }.clamp(0.0, 100.0))
+    }
+
+    /// What the grid's flaps are doing at race tick `tick` (a `World::tick`): held out, folding
+    /// from GO at the hull's `down_speed`, or done (always, with the grid's force pinned off).
+    fn flap_phase_at(&self, core: &SimRace, tick: u64) -> FlapPhase {
+        if !self.grid_flaps {
+            return FlapPhase::Race;
+        }
+        if oag_race::RaceState::thrust_gated(tick) {
+            return FlapPhase::Grid;
+        }
+        let step = self.flap_graphics.down_speed * core.sim.dt;
+        let since_go = tick - (oag_race::COUNTDOWN_TICKS - 1);
+        if step > 0.0 && (since_go as f32) * step < GRID_FLAP_LEVEL {
+            FlapPhase::Fold
+        } else {
+            FlapPhase::Race
+        }
+    }
+
+    /// Puts every craft's drawn flaps where race tick `tick` has them, for a restored or posed
+    /// state that no tick of this view led to: full on the grid, partway down the fold in the
+    /// ticks after GO, and, from the first tick past the fold, the level the craft's airbrakes
+    /// give. Past the fold from a view that was already past it, nothing moves: the flaps follow
+    /// the airbrakes there, and a correction that rewinds a few ticks must not snap them.
+    pub(crate) fn settle_flaps(&mut self, core: &SimRace, tick: u64) {
+        let phase = self.flap_phase_at(core, tick);
+        let was = std::mem::replace(&mut self.flap_phase, phase);
+        if phase == FlapPhase::Race && was == FlapPhase::Race {
+            return;
+        }
+        let step = self.flap_graphics.down_speed * core.sim.dt;
+        let since_go = tick.saturating_sub(oag_race::COUNTDOWN_TICKS - 1) as f32;
+        for slot in 0..MAX_SHIPS {
+            let targets = Self::flap_targets(core, slot);
+            let levels = match phase {
+                FlapPhase::Grid => [GRID_FLAP_LEVEL; 2],
+                FlapPhase::Fold => {
+                    let folding = (GRID_FLAP_LEVEL - step * since_go).max(0.0);
+                    targets.map(|target| target.max(folding))
+                }
+                FlapPhase::Race => targets,
+            };
+            self.put_flaps(slot, levels);
         }
     }
 

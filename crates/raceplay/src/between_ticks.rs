@@ -256,6 +256,17 @@ fn between(previous: Mat4, current: Mat4, alpha: f32) -> Option<Mat4> {
     ))
 }
 
+impl RaceView {
+    /// `slot`'s drawn flaps at `levels` on this tick and on the previous one, so a draw between
+    /// ticks shows them as given.
+    pub(super) fn put_flaps(&mut self, slot: usize, levels: [f32; 2]) {
+        self.flaps[slot] = levels;
+        if let Some(previous) = self.poses.previous.as_mut() {
+            previous.ships[slot].flaps = levels;
+        }
+    }
+}
+
 impl Race {
     /// Sets how far between the previous tick and this one the next reads of
     /// [`Self::view`], [`crate::RaceView::vertical_fov`] and [`crate::RaceView::ship_model_matrix_of`]
@@ -386,11 +397,8 @@ impl Race {
     /// For a still posed at a captured craft's own flap values (`--pose-flaps`), which runs
     /// no tick that would swing them there.
     pub fn force_flaps(&mut self, slot: usize, levels: [f32; 2]) {
-        let levels = levels.map(|level| level.clamp(0.0, 100.0));
-        self.view.flaps[slot] = levels;
-        if let Some(previous) = self.view.poses.previous.as_mut() {
-            previous.ships[slot].flaps = levels;
-        }
+        self.view
+            .put_flaps(slot, levels.map(|level| level.clamp(0.0, 100.0)));
     }
 
     /// Keeps every craft's flaps stowed through the grid state, from this call on.
