@@ -5,9 +5,9 @@
 //! renumbers bindings, override constants are baked in, and a destroyed
 //! module's entries must not answer for a new one.
 //!
-//! Only a module with an `override` reaches the memo (without one, `wgpu-hal`
+//! Only a module with an `override` reaches the cache (without one, `wgpu-hal`
 //! writes SPIR-V when the module is created), so every shader here has one.
-//! The memo is Vulkan's; the tests run on every adapter and assert the same
+//! The cache is Vulkan's; the tests run on every adapter and assert the same
 //! results everywhere.
 
 const SHADER: &str = "
@@ -45,13 +45,13 @@ fn layout(gpu: &Gpu, bindings: &[u32]) -> (wgpu::BindGroupLayout, wgpu::Pipeline
     let group = gpu
         .device
         .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("stage memo test"),
+            label: Some("shader cache test"),
             entries: &entries,
         });
     let pipeline = gpu
         .device
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("stage memo test"),
+            label: Some("shader cache test"),
             bind_group_layouts: &[Some(&group)],
             immediate_size: 0,
         });
@@ -66,7 +66,7 @@ fn pipeline(
 ) -> wgpu::ComputePipeline {
     gpu.device
         .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("stage memo test"),
+            label: Some("shader cache test"),
             layout: Some(layout),
             module,
             entry_point: Some("main"),
@@ -92,7 +92,7 @@ fn run(
         .map(|_| {
             gpu.device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("stage memo test"),
+                    label: Some("shader cache test"),
                     contents: &[0; 4],
                     usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
                 })
@@ -107,12 +107,12 @@ fn run(
         })
         .collect();
     let group = gpu.device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("stage memo test"),
+        label: Some("shader cache test"),
         layout: group_layout,
         entries: &entries,
     });
     let readback = gpu.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("stage memo test"),
+        label: Some("shader cache test"),
         size: 4 * buffers.len() as u64,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
@@ -158,7 +158,7 @@ fn devices() -> Vec<(String, Gpu)> {
             let info = adapter.get_info();
             let (device, queue) =
                 pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-                    label: Some("stage memo test"),
+                    label: Some("shader cache test"),
                     ..Default::default()
                 }))
                 .ok()?;
@@ -174,14 +174,14 @@ fn devices() -> Vec<(String, Gpu)> {
 fn module(gpu: &Gpu, offset: u32) -> wgpu::ShaderModule {
     gpu.device
         .create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("stage memo test"),
+            label: Some("shader cache test"),
             source: wgpu::ShaderSource::Wgsl(shader(offset).into()),
         })
 }
 
 /// Same module, same entry point and constants, two layouts that put the
 /// shader's binding 1 at different Vulkan bindings: each pipeline writes the
-/// buffer its own layout names. A memo keyed without the binding map would
+/// buffer its own layout names. A cache keyed without the binding map would
 /// hand the second pipeline the first one's SPIR-V, which writes the decoy at
 /// binding 0.
 #[test]

@@ -793,13 +793,18 @@ impl super::Device {
             super::ShaderModule::Intermediate {
                 ref naga_shader,
                 runtime_checks,
-                memo_id,
+                cache_id,
             } => {
                 // Pipelines built from one module often repeat a stage exactly;
-                // the memo writes its SPIR-V once (see `stage_memo`).
-                let memo_key =
-                    super::stage_memo::StageKey::new(memo_id, stage, naga_stage, binding_map);
-                let spv = match self.stage_memo.get(&memo_key) {
+                // the cache writes its SPIR-V once (see `shader_cache`).
+                let key = super::shader_cache::ShaderCacheKey::new(
+                    cache_id,
+                    stage,
+                    naga_stage,
+                    binding_map,
+                );
+                let cached = self.shader_cache.lock().get(&key);
+                let spv = match cached {
                     Some(spv) => spv,
                     None => {
                         let spv: Arc<[u32]> = self
@@ -811,7 +816,7 @@ impl super::Device {
                                 binding_map,
                             )?
                             .into();
-                        self.stage_memo.insert(memo_key, Arc::clone(&spv));
+                        self.shader_cache.lock().insert(key, Arc::clone(&spv));
                         spv
                     }
                 };
@@ -1901,7 +1906,7 @@ impl crate::Device for super::Device {
                 super::ShaderModule::Intermediate {
                     naga_shader,
                     runtime_checks: desc.runtime_checks,
-                    memo_id: self.stage_memo.next_module_id(),
+                    cache_id: self.shader_cache.lock().next_module_id(),
                 }
             }
             crate::ShaderInput::Naga(naga_shader) => {
@@ -1952,8 +1957,8 @@ impl crate::Device for super::Device {
             super::ShaderModule::Raw(raw) => {
                 unsafe { self.shared.raw.destroy_shader_module(raw, None) };
             }
-            super::ShaderModule::Intermediate { memo_id, .. } => {
-                self.stage_memo.forget_module(memo_id);
+            super::ShaderModule::Intermediate { cache_id, .. } => {
+                self.shader_cache.lock().forget_module(cache_id);
             }
         }
 
