@@ -300,6 +300,7 @@ imprecise_flops = "allow"      # would suggest ln_1p, exp_m1 and hypot, which ar
 # release decodes every file `crates/music/tests/atrac9_ground_truth.rs` reads.
 [patch.crates-io]
 atrac9dec = { path = "vendor/atrac9dec" }
+wgpu-hal = { path = "vendor/wgpu-hal" }
 
 [profile.release]
 debug = 1
