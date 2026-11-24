@@ -14,8 +14,17 @@
 //! eye    = focus + dir * dist,  dir = the craft's rotation . Ry(yaw) . Rx(-0.7 + pitch) . back
 //! ```
 //!
+//! The distance starts at the chase eye's own distance from the craft (the cut keeps the eye where it
+//! was), not at the `0.5` the resume branch of Z2a writes: RPCS3 read the first-entry eye 13.88 units
+//! from the craft at the blast, then 9.12, 8.91 and 6.96 at 1.37, 1.55 and 2.5 s, which is
+//! `5 + 8.88 x 0.98^n` at the emulator's 26 to 30 frames a second
+//! (`docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`, "Measured on RPCS3"). The craft is drawn
+//! for the first 2.5 s only, and the eye never comes inside its box.
+//!
 //! # Chosen, not measured
 //!
+//! - The start distance is the chase eye's distance (the live read is one circuit, one speed, and the
+//!   first-entry branch `0x000a97f0` that sets it is unread).
 //! - The spin direction (`+0x3ac`, set by the first-entry branch `0x000a97f0`, unread) is fixed
 //!   positive; Omega's enter picks it from the track's direction at the craft, or at random.
 //! - Which row of the composed matrix is the eye direction (Z2d, confidence 55): the image of the
@@ -39,8 +48,6 @@ pub const PITCH_RATE: f32 = 0.35;
 pub const PITCH_OFFSET: f32 = -0.7;
 /// How much of the way the focus closes on the craft per frame (block `+0x24`).
 pub const FOCUS_RATE: f32 = 0.6;
-/// The distance the orbit starts at, and the target it eases to first (enter).
-pub const START_DIST: f32 = 0.5;
 /// The field the orbit starts at, in degrees (enter).
 pub const START_FOV: f32 = 65.0;
 /// The distance target in the fast phase, then after it (block `+0x2c`, `+0x3c`).
@@ -70,14 +77,14 @@ pub struct Orbit {
 }
 
 impl Orbit {
-    /// The frame the camera takes over a craft at `craft`.
+    /// The frame the camera takes over a craft at `craft`, from the chase camera's `eye`.
     #[must_use]
-    pub fn start(craft: Vec3) -> Self {
+    pub fn start(craft: Vec3, eye: Vec3) -> Self {
         Self {
             t: 0.0,
             yaw: 0.0,
             pitch: 0.0,
-            dist: START_DIST,
+            dist: eye.distance(craft),
             fov: START_FOV,
             focus: craft,
         }
@@ -132,8 +139,15 @@ mod tests {
 
     const FRAME: f32 = 1.0 / 60.0;
 
+    /// The chase eye RPCS3 read at the blast, 13.88 units from the craft.
+    const CHASE: Vec3 = Vec3::new(0.0, 8.0, 11.34);
+
+    fn start() -> Orbit {
+        Orbit::start(Vec3::ZERO, CHASE)
+    }
+
     fn run_to(seconds: f32) -> Orbit {
-        let mut orbit = Orbit::start(Vec3::ZERO);
+        let mut orbit = start();
         while orbit.t < seconds {
             orbit.advance(FRAME, Vec3::ZERO);
         }
@@ -142,7 +156,7 @@ mod tests {
 
     #[test]
     fn the_yaw_rate_climbs_from_a_tenth_to_2_35_then_drops_to_0_05() {
-        let mut orbit = Orbit::start(Vec3::ZERO);
+        let mut orbit = start();
         orbit.advance(FRAME, Vec3::ZERO);
         let first = orbit.yaw / FRAME;
         assert!((first - 0.1 * (9.0 * FRAME + 1.0)).abs() < 1e-3, "{first}");
@@ -186,10 +200,15 @@ mod tests {
         assert!(later.fov > 55.0 && later.fov < 65.0, "{}", later.fov);
     }
 
+    /// The measured shape: the eye starts at the chase distance, comes in toward 5 (`5 + 8.88 x
+    /// 0.98^n`), and after 2.5 s settles toward 3.
     #[test]
-    fn the_distance_goes_out_to_five_and_settles_toward_three() {
+    fn the_distance_comes_in_from_the_chase_eye_to_five_and_settles_toward_three() {
+        assert!((start().dist - 13.88).abs() < 0.01);
         let at = run_to(FAST_SECS);
-        assert!(at.dist > 3.0 && at.dist < DIST_TARGETS.0, "{}", at.dist);
+        let expect = 5.0 + (13.88 - 5.0) * 0.98_f32.powi(150);
+        assert!((at.dist - expect).abs() < 0.1, "{} vs {expect}", at.dist);
+        assert!(at.dist > DIST_TARGETS.1, "{}", at.dist);
         let mut later = at;
         for _ in 0..600 {
             later.advance(FRAME, Vec3::ZERO);
@@ -199,9 +218,9 @@ mod tests {
 
     #[test]
     fn the_eye_is_behind_and_above_the_craft_at_the_start_and_looks_at_it() {
-        let pose = Orbit::start(Vec3::new(1.0, 2.0, 3.0)).pose(Quat::IDENTITY);
+        let pose = Orbit::start(Vec3::new(1.0, 2.0, 3.0), Vec3::new(1.0, 10.0, 14.0)).pose(Quat::IDENTITY);
         let off = pose.eye - pose.focus;
-        assert!((off.length() - START_DIST).abs() < 1e-5);
+        assert!((off.length() - 185.0_f32.sqrt()).abs() < 1e-4, "the eye starts as far as the chase eye");
         assert!(off.z > 0.0 && off.y > 0.0, "{off:?}");
         let at_the_craft = pose.view().transform_point3(pose.focus);
         assert!(at_the_craft.z < 0.0);
@@ -210,16 +229,16 @@ mod tests {
     #[test]
     fn the_orbit_turns_with_the_craft() {
         let orientation = Quat::from_rotation_z(1.2);
-        let pose = Orbit::start(Vec3::ZERO).pose(orientation);
+        let pose = start().pose(orientation);
         assert!((pose.up - orientation * Vec3::Y).length() < 1e-5);
-        let plain = Orbit::start(Vec3::ZERO).pose(Quat::IDENTITY);
+        let plain = start().pose(Quat::IDENTITY);
         assert!(((pose.eye).length() - plain.eye.length()).abs() < 1e-5);
         assert!((pose.eye - plain.eye).length() > 0.1);
     }
 
     #[test]
     fn the_focus_closes_six_tenths_of_the_way_a_frame() {
-        let mut orbit = Orbit::start(Vec3::ZERO);
+        let mut orbit = start();
         orbit.advance(FRAME, Vec3::new(10.0, 0.0, 0.0));
         assert!((orbit.focus.x - 6.0).abs() < 1e-5);
     }

@@ -199,29 +199,74 @@ fn omega_holds_like_vita() {
     );
 }
 
-/// HD's Zone end takes the orbit, not a station, and the craft is within a few units of the eye.
+/// HD's Zone end takes the orbit, not a station: the eye starts where the chase camera was and
+/// comes in toward 5 units, and the field narrows to about 30 degrees at 2.5 s.
 #[test]
-fn hd_zone_end_is_the_close_orbit() {
+fn hd_zone_end_is_the_orbit_coming_in_from_the_chase_eye() {
     let mut race = super::zone_end::zone_race(DestroyedCraft::HD);
     race.view.destroy_camera = DestroyCamera::new(vec![near_station()], 0.4);
+    let chase = eye(&race);
     set_player(&mut race, CraftState::Destroyed);
     let craft = race.core.sim.world.ships[0].physics.body.position;
     let camera = race.view.destroy_camera_now().expect("the orbit");
     assert_eq!(camera.basis, Basis::LookAt);
-    assert!(camera.eye.distance(craft) < 1.0, "starts 0.5 off the craft");
-    let mut widest = 0.0_f32;
+    let start = camera.eye.distance(craft);
+    assert!(
+        (start - chase.distance(craft)).abs() < 0.5,
+        "starts {start} off the craft, the chase eye was {}",
+        chase.distance(craft)
+    );
+    let mut nearest = start;
     for _ in 0..150 {
         race.view.advance_destroy_camera(&race.core);
         let camera = race.view.destroy_camera_now().expect("the orbit");
-        widest = widest.max(camera.eye.distance(craft));
+        nearest = nearest.min(camera.eye.distance(craft));
     }
-    assert!((2.0..5.5).contains(&widest), "swung out to {widest}");
+    assert!(
+        nearest > start.min(5.0) - 0.1,
+        "started {start} out and came in to {nearest}, past its target of 5"
+    );
     let camera = race.view.destroy_camera_now().expect("the orbit");
     assert!(
         (camera.fov - 30.0).abs() < 1.5,
         "field {} at 2.5 s",
         camera.fov
     );
+}
+
+/// The craft is drawn for the first 2.5 s of the orbit (the shell, state 5): the eye is never inside
+/// its box then. RPCS3 read the eye 13.9, 9.1, 8.9 and 7.0 units from the craft at the blast, 1.4, 1.6
+/// and 2.5 s, and the frames show the whole craft from outside; ours sat 0.5 off the craft at the cut
+/// and about 2.5 at 0.5 s, inside a hull that is 13 long (`destroy-camera.md`, "Measured on RPCS3").
+#[test]
+fn hd_zone_end_orbit_never_puts_the_eye_inside_the_hull() {
+    let mut race = super::zone_end::zone_race(DestroyedCraft::HD);
+    race.view.destroy_camera = DestroyCamera::new(vec![near_station()], 0.4);
+    race.core.sim.world.ships[0].handling.dimensions = oag_physics::params::Dimensions {
+        width: 5.5,
+        height: 3.5,
+        length: 13.0,
+        ..Default::default()
+    };
+    // Put the chase eye where a Zone chase rig sits: behind and above, 14 units out.
+    race.view.camera_override = Some(crate::options::CameraOverride {
+        eye: race.core.sim.world.ships[0].physics.body.position + Vec3::new(-11.0, 8.0, 0.0),
+        orientation: Quat::IDENTITY,
+        fov_deg: None,
+    });
+    set_player(&mut race, CraftState::Destroyed);
+    race.view.camera_override = None;
+    let half = oag_physics::pair::half_extents(&race.core.sim.world.ships[0].handling.dimensions);
+    for tick in 0..150 {
+        let ship = &race.core.sim.world.ships[0].physics.body;
+        let camera = race.view.destroy_camera_now().expect("the orbit");
+        let local = ship.orientation.inverse() * (camera.eye - ship.position);
+        assert!(
+            local.x.abs() > half.x || local.y.abs() > half.y || local.z.abs() > half.z,
+            "tick {tick}: the eye is inside the hull's box, {local:?} within {half:?}"
+        );
+        race.view.advance_destroy_camera(&race.core);
+    }
 }
 
 /// A title whose Zone craft is a wreck (Pulse) keeps its station view there.

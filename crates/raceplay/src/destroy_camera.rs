@@ -31,7 +31,8 @@
 //! the cut, the hand-back to the chase camera on the camera's own 8 s clock, and on 2048 and
 //! Omega the hold view after it. Their stations are the `Camera` nodes of the circuit's
 //! `track.vex`, read whether or not the title draws the circuit's effects. A Zone end whose
-//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the close orbit instead.
+//! [`oag_title::destroyed::ZoneEnd::orbit_camera`] is set is the orbit round the craft instead, from the
+//! chase eye in.
 //!
 //! **Chosen, not measured:**
 //!
@@ -171,6 +172,8 @@ impl RaceView {
             oag_physics::CraftState::Destroyed | oag_physics::CraftState::Eliminated
         );
         let mut cuts = 0;
+        let orbit_cut_from = (out && orbits && self.destroy_camera.orbit.is_none())
+            .then(|| self.tick_view_unshaken(core).inverse().w_axis.truncate());
         let camera = &mut self.destroy_camera;
         camera.clock += dt;
         let handback_due = law
@@ -191,14 +194,15 @@ impl RaceView {
             return;
         }
         if orbits {
-            let orbit = match &mut camera.orbit {
-                Some(orbit) => {
+            let orbit = match (&mut camera.orbit, orbit_cut_from) {
+                (Some(orbit), _) => {
                     orbit.advance(dt, subject);
                     *orbit
                 }
-                None => {
+                (None, chase) => {
                     cuts += 1;
-                    *camera.orbit.insert(Orbit::start(subject))
+                    let chase = chase.unwrap_or(subject);
+                    *camera.orbit.insert(Orbit::start(subject, chase))
                 }
             };
             camera.active = Some(orbit.pose(ship.physics.body.orientation));
