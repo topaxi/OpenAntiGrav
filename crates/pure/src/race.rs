@@ -305,7 +305,8 @@ pub mod ships {
     /// "What selects the VR hull"). The `VR` prefix names the Classic presentation set across the
     /// disc - `Data\Weapons\vr_bomb.vex`, `vr_mine.vex`, `vr_shield.vex`, `Data\Tex\vr_env.tga` -
     /// but those other members are switched by a separate flag, the circuit's own
-    /// `TrackStartup.xml` `<VrFx>`, and are not wired here.
+    /// `TrackStartup.xml` `<VrFx>`: [`SOUND_BANKS`]'s `vr` wires its two sound banks, the rest
+    /// is not wired.
     pub const VR_HULL: &str = r"VR\Ship";
 
     /// `%s\VR\Phantom.vex` at `0x08a7cb64`.
@@ -361,6 +362,13 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     },
     crossfade: None,
     wwise: None,
+    // The four Classic circuits author `<VrFx Type="1"/>`; both files hash to real entries on
+    // both pressings (`crates/raceplay/tests/pure_race_ground_truth.rs`).
+    vr: Some(oag_title::VrBanks {
+        ship: r"Data\Sound\ship_classic.bnk",
+        weapons: r"Data\Sound\weapons_classic.bnk",
+        origin: oag_title::Origin::Measured,
+    }),
 };
 
 /// The circuit a Zone race loads when the caller names none.

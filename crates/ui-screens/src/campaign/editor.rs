@@ -245,14 +245,7 @@ pub fn draw_list(
                 })
                 .flatten()
             {
-                push_selector(
-                    &mut out,
-                    image,
-                    placed,
-                    hex,
-                    view.pulse,
-                    skin.selector_origin(),
-                );
+                push_selector(&mut out, image, placed, hex, view.pulse, skin);
             }
             continue;
         }

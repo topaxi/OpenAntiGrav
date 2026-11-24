@@ -1069,46 +1069,6 @@ pub fn pen_step(cell: &Cell, scale: f32, x: f32, snap: bool) -> (f32, f32) {
     )
 }
 
-/// How far, in atlas texels, the texture coordinates of a glyph on Pure's snapped pen start before
-/// its box: the original samples each glyph half a texel to the left of where the box begins
-/// (`docs/ui/menus-original.md`, "Pure's glyph quads are whole pixels"). Horizontal only.
-pub const SNAPPED_UV_SHIFT: f32 = 0.5;
-
-/// The quad of one glyph on Pure's snapped pen, in screen units: whole pixels, as a PSP sprite
-/// is.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SnappedQuad {
-    /// The pen rounded up (the quad starts at the pen, not at the ink: the box's bearing is in
-    /// the texture).
-    pub left: f32,
-    /// The box's width at `scale`, rounded down, at least one pixel for a box with ink.
-    pub width: f32,
-    /// The box's height at `scale`, rounded down.
-    pub height: f32,
-}
-
-/// [`SnappedQuad`] of `cell` with the pen before it at `pen` and `scale` screen units per atlas
-/// texel. Measured on every Pure face (`docs/ui/menus-original.md`, "Pure's glyph quads are whole
-/// pixels"); not read from the executable.
-#[must_use]
-pub fn snapped_quad(cell: &Cell, scale: f32, pen: f32) -> SnappedQuad {
-    // A box with ink is at least one pixel: a one-texel glyph at a scale under 1 would vanish.
-    // No glyph of Pure's two faces is under two texels, so the floor alone decides on every
-    // measured glyph.
-    let whole = |texels: u32| {
-        if texels == 0 {
-            0.0
-        } else {
-            (texels as f32 * scale).floor().max(1.0)
-        }
-    };
-    SnappedQuad {
-        left: pen.ceil(),
-        width: whole(cell.width),
-        height: whole(cell.height),
-    }
-}
-
 /// Where a line of text ends when it is drawn on the snapped pen ([`pen_step`]) from a whole-unit
 /// origin: the single measure every layout of Pure's front end (wrap, alignment, hit rectangles)
 /// reads, so that none of them disagrees with the draw.
@@ -1219,10 +1179,12 @@ fn solid_patch(coverage: &mut [u8], width: u32, x: u32, y: u32) -> Cell {
 mod border;
 mod centre;
 mod pens;
+mod quad;
 mod reduce;
 
 pub use centre::snapped_centre_pen;
 pub use pens::Pens;
+pub use quad::{SNAPPED_UV_SHIFT, SnappedQuad, snapped_quad};
 
 #[cfg(test)]
 mod tests {

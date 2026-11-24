@@ -410,6 +410,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     },
     crossfade: None,
     wwise: Some(&WWISE_CUES),
+    vr: None,
 };
 
 /// The bank slot `Weapons_NGP` (patch `DAT_021aaa4c`).

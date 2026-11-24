@@ -653,6 +653,7 @@ pub const SOUND_BANKS: &oag_title::SoundBanks = &oag_title::SoundBanks {
     },
     crossfade: None,
     wwise: None,
+    vr: None,
 };
 
 /// The ship directory a Zone race flies out of.

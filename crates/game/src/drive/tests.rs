@@ -36,7 +36,7 @@ fn screen(focus: usize, step: Option<(&'static str, &'static str)>, rows: Vec<Ro
 #[test]
 fn a_script_parses_every_step_with_its_line() {
     let script = Script::parse(
-        "until stage=menu within 99  # boot\nselect \"LAUNCH RACE\"; press cross down\nset race.mode=time_trial\nticks 5\nscreenshot a.png\ndrop \"a b.png\"\nexpect page!=race\nquit",
+        "until stage=menu within 99  # boot\nselect \"LAUNCH RACE\"; press cross down\nset race.mode=time_trial\nticks 5\nscreenshot a.png\ndrop \"a b.png\"\nexpect page!=race\nconfig controls.menu_back=circle\nquit",
     )
     .unwrap();
     let kinds: Vec<String> = script
@@ -44,7 +44,8 @@ fn a_script_parses_every_step_with_its_line() {
         .iter()
         .map(|(n, s)| format!("{n}:{s}"))
         .collect();
-    assert_eq!(kinds.len(), 9);
+    assert_eq!(kinds.len(), 10);
+    assert_eq!(kinds[8], "8:config controls.menu_back=circle");
     assert_eq!(kinds[6], "6:drop a b.png");
     assert_eq!(kinds[0], "1:until stage=menu within 99");
     assert_eq!(kinds[1], "2:select \"LAUNCH RACE\" within 1800");
@@ -61,6 +62,14 @@ fn a_bad_script_names_its_line_and_the_fault() {
         ("until nonsense=1", "not a state key"),
         ("press wibble", "not a button"),
         ("select a b", "one row"),
+        ("config controls.menu_back", "not setting=value"),
+        ("config a=b c=d", "one setting=value"),
+        ("config graphics.renderer=vulkan", "does not apply"),
+        ("config display.window_mode=borderless", "does not apply"),
+        (
+            "config controls.menu_back=bad",
+            "takes original, circle, triangle",
+        ),
         ("until stage=menu within soon", "not a number"),
         ("select \"open", "never closed"),
     ] {
@@ -245,5 +254,17 @@ fn touch_steps_parse_and_name_what_is_wrong() {
     for (_, step) in &script.steps {
         let again = Script::parse(&step.to_string()).unwrap();
         assert_eq!(&again.steps[0].1, step);
+    }
+}
+
+#[test]
+fn config_takes_every_value_of_the_settings_it_applies_and_no_other() {
+    for (setting, values) in crate::drive::script::CONFIG_SETTINGS {
+        assert_eq!(*setting, "controls.menu_back");
+        let named: Vec<&str> = oag_title::prompts::MenuBack::ALL
+            .iter()
+            .map(|choice| choice.name())
+            .collect();
+        assert_eq!(&named[..], *values);
     }
 }

@@ -200,6 +200,16 @@ immediates in code. A clean miss on a data table says nothing; finding the
 routine needs Ghidra on the PS2 ELF, starting from the GIF packet it builds
 (`ALPHA` `0x4000000068`, UV `5120`/`3584`).
 
+## The front end's bloom (2026-11-24, `ps2-selector-halo`, confidence 85)
+
+**Menus do not skip it.** A GS dump of settled Grid and Cell Selection lists the race's five passes after the page: the 320 x 224
+downsample (`ALPHA 0x88`), the two 896-triangle tap passes (vertex colours `16 32 32 64 32 32 16`), and the composite (`ALPHA
+0x4000000068`) on a **640 x 448** quad at `(-5, -5)` (the frame is 640 wide, FBW 10, where a race's is 512 x 512: the shift is
+`5/640` and `5/448` of the picture). The mask is the same kind as the race's: cleared to 0, written only by the groups with `FBMSK` 0,
+which on these screens are the `Selector`'s 56 x 56 quad alone, at its texel alpha. Ours builds the chain with `Ps2Bloom::with_frame(640, 448)`
+for it; full account in `docs/ui/campaign-screens.md`, "The selector's halo on Pulse PS2 is the ring's own texels through the PS2 chain".
+Closes "whether any mode (menus, replay) skips it" for the menus; replays are not read.
+
 ## Still needed
 
 - ~~Read the frame's alpha channel out~~ Done, above.
@@ -214,4 +224,4 @@ routine needs Ghidra on the PS2 ELF, starting from the GIF packet it builds
   HUD"), not measured on the PS2.** The register reading above, with the HUD
   groups before the downsample, points the same way; a GS-dump check of
   groups 262-289 against the composite is what would measure it.
-- The routine in the ELF, and whether any mode (menus, replay) skips it.
+- The routine in the ELF, and whether replays skip it (the menus do not, above).

@@ -9,6 +9,7 @@
 //! expect page=race                 the state must hold right now
 //! select <row>                     move focus to a row by id, setting key, label or #index
 //! set race.mode=time_trial         select that row, then step its value until it reads so
+//! config controls.menu_back=circle apply that setting now, from any screen, as the menu applies a changed row; only `CONFIG_SETTINGS` are taken
 //! press cross down                 tap each button in turn
 //! hold select left 40              hold every button down together for this many ticks
 //! rstick 1 0 30                    a pad's right stick (x y), held for this many ticks; `lstick` is the left, which flies and steers
@@ -36,6 +37,15 @@ use oag_gameplay::input::Button;
 /// Ticks spent on a loading screen do not count - those are bounded by the wall clock - so a
 /// slow disc read cannot spend a step's budget while the game is doing exactly what it should.
 pub const DEFAULT_WITHIN: u32 = 1800;
+
+/// What `config` applies, each setting with the values it takes: the settings that act the moment
+/// they are applied and need no window. Another is refused by name when the script is read, not
+/// ignored with a warning: a boot-only one (`graphics.renderer`), one that waits for the next
+/// race (`graphics.msaa`, `controls.scheme`, `controls.pilot_assist`) and the window's
+/// (`display.window_mode`, `display.monitor`: a drive has no window) would pass a script that
+/// changed nothing.
+pub const CONFIG_SETTINGS: &[(&str, &[&str])] =
+    &[("controls.menu_back", &["original", "circle", "triangle"])];
 
 /// One `key=value` (or `key!=value`) test on the reported state. See [`State::get`](crate::drive::State::get).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +151,9 @@ pub enum Step {
         value: String,
         within: u32,
     },
+    /// Apply a setting the way a changed menu row does (`Session::apply_setting`), without
+    /// the row: from any screen, a race's pause included.
+    Config { setting: String, value: String },
     /// Tap each button in turn.
     Press(Vec<Button>),
     /// Hold every button down together for this many ticks, then let go.
@@ -194,6 +207,7 @@ impl std::fmt::Display for Step {
                 value,
                 within,
             } => write!(f, "set {setting}={value} within {within}"),
+            Self::Config { setting, value } => write!(f, "config {setting}={value}"),
             Self::Press(buttons) => write!(f, "press {buttons:?}"),
             Self::Hold { buttons, ticks } => write!(f, "hold {buttons:?} {ticks}"),
             Self::Pad { pad, ticks } => write!(f, "pad {pad:?} {ticks}"),
@@ -355,6 +369,36 @@ impl Script {
                     setting: key,
                     value,
                     within,
+                }
+            }
+            "config" => {
+                let [pair] = words.as_slice() else {
+                    return Err("config takes one setting=value".into());
+                };
+                let Some((key, value)) = pair.split_once('=').filter(|(key, _)| !key.is_empty())
+                else {
+                    return Err(format!("{pair:?} is not setting=value"));
+                };
+                let Some((_, values)) = CONFIG_SETTINGS.iter().find(|(setting, _)| *setting == key)
+                else {
+                    let takes: Vec<&str> = CONFIG_SETTINGS
+                        .iter()
+                        .map(|(setting, _)| *setting)
+                        .collect();
+                    return Err(format!(
+                        "config does not apply {key:?} live in a drive; it takes {}",
+                        takes.join(", ")
+                    ));
+                };
+                if !values.contains(&value) {
+                    return Err(format!(
+                        "config {key} takes {}, not {value:?}",
+                        values.join(", ")
+                    ));
+                }
+                Step::Config {
+                    setting: key.to_string(),
+                    value: value.to_string(),
                 }
             }
             "press" => {

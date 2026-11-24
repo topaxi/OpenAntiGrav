@@ -522,7 +522,8 @@ What *selects* `Phantom` is unread (a network-session flag).
 `PI_Track` `type="Classic"` for every craft, read and matched against the original's frames
 ([ship-models.md](../ghidra/functions/psp-pure-usa/ship-models.md), "What selects the VR hull",
 confidence 90). `VR` also names a presentation set (`vr_bomb.vex`, `vr_env.tga`,
-`vr_engine_noise.mip`, `ship_classic.bnk`) that a separate `TrackStartup.xml` `<VrFx>` flag switches.
+`vr_engine_noise.mip`, `ship_classic.bnk`) that a separate `TrackStartup.xml` `<VrFx>` flag switches; the two
+sound banks are wired off it, the rest is not (`ship-models.md`, "What selects the VR hull").
 
 **Pure ships no boost-plume asset at all**, which retires the last entry name
 this page listed as unrecovered. Pulse composes its plume from `%s\%sboost.vex`

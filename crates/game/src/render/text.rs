@@ -280,7 +280,13 @@ impl Renderer {
                 // A PSP sprite: whole pixels from the pen, the texture started half a texel early.
                 let quad = font::snapped_quad(&cell, scale * texel, pen);
                 (rect[0], rect[2], rect[3]) = (quad.left, quad.width, quad.height);
-                uv[0] = (uv[0] - font::SNAPPED_UV_SHIFT).max(0.0);
+                // Both axes start half a texel early and span the original's `texels + 1`; a glyph
+                // at the atlas edge has no texel before it and keeps its far edge.
+                for (at, span) in [(0, quad.u_span), (1, quad.v_span)] {
+                    let start = uv[at] - font::SNAPPED_UV_SHIFT;
+                    uv[at] = start.max(0.0);
+                    uv[at + 2] = start + span - uv[at];
+                }
             }
             if self.hud.whole_advances || half_unit {
                 // The PSP's glyph rect is the box grown half a pixel each side with the uv grown

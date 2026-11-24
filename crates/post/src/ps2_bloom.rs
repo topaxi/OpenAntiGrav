@@ -46,10 +46,11 @@ pub const BLOOM_HEIGHT: u32 = 224;
 pub const BLUR_WEIGHTS: [u8; 7] = [16, 32, 32, 64, 32, 32, 16];
 
 /// The composite quad's destination offset from the frame's corner, in pixels
-/// of the 512 x 512 frame the original draws into.
+/// of the frame the original draws into: a race's 512 x 512, or the front end's 640 x 448
+/// ([`Ps2Bloom::with_frame`]).
 pub const COMPOSITE_OFFSET: f32 = 5.0;
 
-/// The frame the offset is measured in, per axis.
+/// The race's frame the offset is measured in, per axis.
 pub const FRAME_SIZE: f32 = 512.0;
 
 /// `FIX` of the composite's `ALPHA 0x4000000068`, over 128.
@@ -90,6 +91,9 @@ struct Lane {
     #[expect(dead_code, reason = "held so the groups' bindings stay valid")]
     fixed: [wgpu::Buffer; 3],
     written: std::cell::Cell<Option<Constants>>,
+    /// The downsample's group over the scene view it last read; the lane owns `constants_down`,
+    /// so the scene view is the only thing that can change under it.
+    down_group: super::group_cache::ViewGroup,
 }
 
 /// The three passes and their lanes of two buffers.
@@ -101,6 +105,9 @@ pub struct Ps2Bloom {
     layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
     format: wgpu::TextureFormat,
+    /// The composite's shift as a fraction of the viewport, per axis: [`COMPOSITE_OFFSET`] over
+    /// the frame the original draws into.
+    shift: [f32; 2],
     /// The whole picture's.
     base: Lane,
     /// A split screen's, one per view.
@@ -114,6 +121,7 @@ impl Lane {
         layout: &wgpu::BindGroupLayout,
         sampler: &wgpu::Sampler,
         extent: (u32, u32),
+        shift: [f32; 2],
     ) -> Result<Self> {
         let a = Target::new(device, "ps2 bloom a", format, extent)?;
         let b = Target::new(device, "ps2 bloom b", format, extent)?;
@@ -122,7 +130,7 @@ impl Lane {
             uv_scale: [1.0, 1.0],
             uv_max: [1.0, 1.0],
             direction: [0.0, 0.0],
-            shift: [COMPOSITE_OFFSET / FRAME_SIZE; 2],
+            shift,
             uv_offset: [0.0, 0.0],
         };
         let buffer = |label: &str, c: Constants, usage: wgpu::BufferUsages| {
@@ -173,17 +181,36 @@ impl Lane {
             constants_down,
             fixed: [constants_x, constants_y, constants_composite],
             written: std::cell::Cell::new(Some(whole)),
+            down_group: super::group_cache::ViewGroup::default(),
         })
     }
 }
 
 impl Ps2Bloom {
-    /// Builds the pipelines and both buffers. `format` is the scene target's.
+    /// Builds the pipelines and both buffers for a race's 512 x 512 frame. `format` is the scene
+    /// target's.
     ///
     /// # Errors
     ///
     /// Propagates a buffer that will not allocate.
     pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Result<Self> {
+        Self::with_frame(device, format, (FRAME_SIZE, FRAME_SIZE))
+    }
+
+    /// [`Ps2Bloom::new`] for a frame of `frame` pixels, which sets the composite's shift
+    /// ([`COMPOSITE_OFFSET`] of it per axis). Pulse PS2's front end draws into 640 x 448: a GS
+    /// dump of Grid and Cell Selection puts the composite quad at `-5, -5` on that frame
+    /// (`docs/rendering/ps2-bloom.md`, "The front end's bloom").
+    ///
+    /// # Errors
+    ///
+    /// Propagates a buffer that will not allocate.
+    pub fn with_frame(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        frame: (f32, f32),
+    ) -> Result<Self> {
+        let shift = [COMPOSITE_OFFSET / frame.0, COMPOSITE_OFFSET / frame.1];
         let format = format.remove_srgb_suffix();
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("ps2 bloom"),
@@ -283,6 +310,7 @@ impl Ps2Bloom {
             &layout,
             &sampler,
             (BLOOM_WIDTH, BLOOM_HEIGHT),
+            shift,
         )?;
         Ok(Self {
             down,
@@ -291,6 +319,7 @@ impl Ps2Bloom {
             layout,
             sampler,
             format,
+            shift,
             base,
             views: std::cell::RefCell::new(Vec::new()),
         })
@@ -354,7 +383,16 @@ impl Ps2Bloom {
             view,
             extent,
             |lane| lane.extent,
-            || Lane::new(device, self.format, &self.layout, &self.sampler, extent),
+            || {
+                Lane::new(
+                    device,
+                    self.format,
+                    &self.layout,
+                    &self.sampler,
+                    extent,
+                    self.shift,
+                )
+            },
         )?;
         self.prepare_in(&self.views.borrow()[view], device, queue, encoder, frame);
         Ok(())
@@ -374,21 +412,23 @@ impl Ps2Bloom {
             uv_scale,
             uv_max,
             direction: [0.0, 0.0],
-            shift: [COMPOSITE_OFFSET / FRAME_SIZE; 2],
+            shift: self.shift,
             uv_offset,
         };
         if lane.written.get() != Some(wanted) {
             queue.write_buffer(&lane.constants_down, 0, bytemuck::bytes_of(&wanted));
             lane.written.set(Some(wanted));
         }
-        let down_group = scene_group(
-            device,
-            &self.layout,
-            &self.sampler,
-            "ps2 bloom down",
-            scene,
-            &lane.constants_down,
-        );
+        let down_group = lane.down_group.get(scene, || {
+            scene_group(
+                device,
+                &self.layout,
+                &self.sampler,
+                "ps2 bloom down",
+                scene,
+                &lane.constants_down,
+            )
+        });
         let mut pass = |label: &'static str,
                         pipeline: &wgpu::RenderPipeline,
                         group: &wgpu::BindGroup,

@@ -165,6 +165,21 @@ out of it (a pool of opened CHD handles, a faster PSARC path digest: user CPU
 of a campaign-cursor run 243 s -> 171 s) are in
 `docs/architecture/load-time.md`, "A scripted launch".
 
+### Third round
+
+Three more changes to the launch (`docs/architecture/load-time.md`, "Third round"),
+by user instructions of the whole module at the gate's profile:
+
+- The parsed PSARC manifests are shared by every open of the same bytes: a menu
+  launch 4.85 G -> 3.24 G, a race launch 20.5 G -> 18.9 G.
+- The drive's `config` step switches `controls.menu_back` from any screen, so
+  `campaign_cursor_ground_truth` (1,753 G -> 1,141 G, wall 60 to 70 s -> 42 s) and
+  four `footer_hint_ground_truth` tests (671 G -> 545 G) launch once, not once
+  per choice.
+- Measured and not changed: the race build's pipeline compile (a disk pipeline
+  cache adds about 1 % over mesa's own shader cache, which already takes a racing
+  launch from 65.7 G to 24.0 G instructions, and naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.
+
 ## Still open
 
 - `lead-test-data` builds under slice 1's lock when `gate-run.sh check` was not

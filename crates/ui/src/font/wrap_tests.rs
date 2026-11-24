@@ -67,7 +67,9 @@ fn a_snapped_glyph_is_a_whole_pixel_quad_from_the_pen_and_the_run_ends_at_its_ri
         SnappedQuad {
             left: 249.0,
             width: 5.0,
-            height: 11.0
+            height: 11.0,
+            u_span: 8.0 * 5.0 / 5.6,
+            v_span: 15.0 * 11.0 / 11.2,
         }
     );
     assert_eq!(snapped_quad(&cell, 0.8, 256.4).left, 257.0);
@@ -93,4 +95,23 @@ fn a_one_texel_glyph_keeps_a_pixel_and_an_empty_box_none() {
     assert_eq!((quad.width, quad.height), (1.0, 1.0));
     let none = Cell { width: 0, ..one };
     assert_eq!(snapped_quad(&none, 0.8, 10.0).width, 0.0);
+}
+
+/// The sprite samples `texels + 1` texels over the fractional size it was built with and keeps
+/// whole pixels of it: at 1.5 the menu face's 12 by 15 box is 18 by 22 pixels (22.5 high) and
+/// samples 13 by 16 texels spread over 18 by 22.5, so the vertical slope is 16 / 22.5 a pixel.
+#[test]
+fn a_snapped_quad_samples_one_texel_more_than_its_box_over_the_fractional_size() {
+    let atlas = Atlas::build();
+    let cell = Cell {
+        width: 12,
+        height: 15,
+        ..atlas.cell('A').expect("a glyph")
+    };
+    let quad = snapped_quad(&cell, 1.5, 100.0);
+    assert_eq!((quad.width, quad.height), (18.0, 22.0));
+    assert_eq!(quad.u_span, 13.0);
+    assert!((quad.v_span - 16.0 * 22.0 / 22.5).abs() < 1e-5);
+    let none = Cell { width: 0, ..cell };
+    assert_eq!(snapped_quad(&none, 1.5, 100.0).u_span, 0.0);
 }

@@ -96,11 +96,10 @@ fn blur(src: &[u32], vertical: bool) -> Vec<u32> {
 }
 
 /// What the composite adds at a scene pixel, one channel, from the blurred
-/// buffer: bilinear at the pixel shifted five frame pixels down and right.
-fn added(buffer: &[u32], x: u32, y: u32) -> f32 {
-    let shift = COMPOSITE_OFFSET / FRAME_SIZE;
-    let u = (x as f32 + 0.5) / W as f32 + shift;
-    let v = (y as f32 + 0.5) / H as f32 + shift;
+/// buffer: bilinear at the pixel shifted five frame pixels down and right, in a `frame` of pixels.
+fn added(buffer: &[u32], x: u32, y: u32, frame: (f32, f32)) -> f32 {
+    let u = (x as f32 + 0.5) / W as f32 + COMPOSITE_OFFSET / frame.0;
+    let v = (y as f32 + 0.5) / H as f32 + COMPOSITE_OFFSET / frame.1;
     if u >= 1.0 || v >= 1.0 {
         return 0.0;
     }
@@ -119,9 +118,24 @@ fn added(buffer: &[u32], x: u32, y: u32) -> f32 {
     (cs * f32::from(COMPOSITE_FIX) / 128.0).floor()
 }
 
+/// A race's frame, the default of [`Ps2Bloom::new`].
 #[test]
 #[ignore = "needs a GPU adapter"]
 fn the_ps2_bloom_adds_what_the_gs_arithmetic_says_it_adds() {
+    check((FRAME_SIZE, FRAME_SIZE), None);
+}
+
+/// The front end's 640 x 448 frame ([`Ps2Bloom::with_frame`]): the same five pixels are a
+/// different fraction of each axis.
+#[test]
+#[ignore = "needs a GPU adapter"]
+fn the_front_end_frame_shifts_the_composite_by_its_own_fractions() {
+    check((640.0, 448.0), Some((640.0, 448.0)));
+}
+
+/// Runs the bloom built for `built` (`None` is [`Ps2Bloom::new`]) and holds it to the GS arithmetic
+/// over a `frame` of pixels.
+fn check(frame: (f32, f32), built: Option<(f32, f32)>) {
     let instance = wgpu::Instance::default();
     let adapter = oag_gpu::test_adapter::request(&instance).expect("no GPU adapter available");
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
@@ -165,7 +179,11 @@ fn the_ps2_bloom_adds_what_the_gs_arithmetic_says_it_adds() {
     );
     let view = scene.create_view(&wgpu::TextureViewDescriptor::default());
 
-    let bloom = Ps2Bloom::new(&device, FORMAT).expect("bloom builds");
+    let bloom = match built {
+        Some(frame) => Ps2Bloom::with_frame(&device, FORMAT, frame),
+        None => Ps2Bloom::new(&device, FORMAT),
+    }
+    .expect("bloom builds");
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     bloom.render(
         &device,
@@ -233,7 +251,7 @@ fn the_ps2_bloom_adds_what_the_gs_arithmetic_says_it_adds() {
             let base = f32::from(pixels[((y * W + x) * 4) as usize + channel]);
             let got = f32::from(data[at]) - base;
             // The target saturates: a channel already near white cannot take it.
-            let want = (base + added(&blurred, x, y)).min(255.0) - base;
+            let want = (base + added(&blurred, x, y, frame)).min(255.0) - base;
             println!(
                 "x {x:3} y {y:3} ch {channel}: added {got:5.1}, GS arithmetic says {want:5.1}"
             );

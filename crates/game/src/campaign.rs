@@ -293,6 +293,7 @@ pub fn gate_glow(frontend_glow: bool, mut layers: oag_ui::menu::Layers) -> oag_u
                     draw,
                     oag_ui::frontend::Draw::GlowStamp { .. }
                         | oag_ui::frontend::Draw::GlowText { .. }
+                        | oag_ui::frontend::Draw::GlowTexel
                 )
             });
         }

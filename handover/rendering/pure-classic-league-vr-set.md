@@ -1,8 +1,8 @@
 ---
 status: ready-to-wire
 titles: [pure]
-updated: 2026-11-16
-summary: "Pure's Classic hull is wired; the VrFx flag's other consumers (sound banks, vr_ weapons), Classic lighting and shadow shape are not"
+updated: 2026-11-24
+summary: "Pure's Classic hull and sound banks are wired off their flags; vr_ weapons, the hull box's brightness and 8 pairs' world clock are not"
 categories: [rendering, audio]
 size: M (50)
 difficulty: medium (40)
@@ -17,14 +17,15 @@ What is left is read but not wired.
 
 ## Open
 
-- **The `<VrFx Type="1"/>` flag** (`TrackStartup.xml` of the four `Data\ClassicsNS` circuits; byte `0x08a8f604`, written by `FUN_08848bf8`). Its consumers read so far: `Data\Sound\ship_classic.bnk` and `weapons_classic.bnk` in place of `ship.bnk` and `weapons.bnk` (`FUN_08847a54`, branch on the byte), `WO_QUAKE_VR` and the dropped lift in the quake (`quake.md`), `vr_Mine.vex` (`weapons-gfx.md`), and the other `vr_` weapon models and `Data\Tex\vr_env.tga` by name, selector unread. Check each consumer's own read before wiring it; the hull flag is a different byte.
-- **Classic worlds render darker than the original's** (`docs/tools/compare-page.md`, "The Classic hull"): whole-frame mean grey difference 17 to 39 on the four pairs against 9 to 27 on Beta. Lighting, not geometry; unmeasured per region.
+- **The `<VrFx Type="1"/>` flag** (`TrackStartup.xml` of the four `Data\ClassicsNS` circuits and the four Zone circuits; byte `0x08a8f604`, written by `FUN_08848bf8`). **Wired: the sound banks** (`ship_classic.bnk` and `weapons_classic.bnk` in place of `ship.bnk` and `weapons.bnk` on a non-Zone race; test `pure_race_ground_truth::a_circuit_that_authors_vrfx_loads_the_classic_sound_banks_and_no_other_does`; `ship-models.md`, "What selects the VR hull"). Not wired: `WO_QUAKE_VR` and the dropped lift in the quake (`quake.md`), `vr_Mine.vex` and the other `vr_` weapon models (`vr_Bomb`, `vr_shield`, `vr_shield_cockpit`; `weapons-gfx.md`), `vr_engine_noise.mip` (`0x08a4a094`) and `vr_fxgrid1.mip` (`0x08a7ae04`); each has its own read to check before wiring, the hull flag is a different byte. `Data\Tex\vr_env.tga` is embedded in each team's `VR\Ship.vex` (no selector, no `Data.wad` entry, no load-report miss); `FUN_08848bf8` walks `LevelFx` only while the byte `*(_DAT_0028a960 + 0x5ded)` is zero, unread.
+- **The Classic pairs' remaining grey** (`docs/tools/compare-page.md`, "The Classic hull"): there is no whole-frame darkness left (signed -1.2 to +1.9). The background was the scenery's animation phase; re-captured with the world clock the four pairs read 4.31, 6.86, 6.36, 9.04. What is left: the hull box (the original 2 to 6 grey brighter on all four), the HUD, Sagarmartha's hull at -4 px.
+- **The other eight Pure race pairs have no world clock** (`original.world_clock_offset_s` null): re-capture each state with `psp-pure-pair.py` as the four Classic pairs were.
 - **The ground shadow under the Classic craft** is not the original's shape (a flat trapezoid in the original). `shadow::hulls` and `shadow::silhouettes` still read the plain `Ship.vex`; pointing them at the circuit's stem changed no pixel on the four pairs, so it is not the cause, and was left out.
-- **Sagarmartha's hull correlation peaks at a 4 px shift** (0.28 at 0, 0.78 at +4): pose or the VR hull's origin, unmeasured.
+- **Sagarmartha's hull sits 4 px left of ours** (0.481 at (-4, 0), 0.093 at (0, 0); pose and camera identical, the other three Classic pairs at (0, 0)): pose or the VR hull's origin on that circuit, unmeasured.
 - **The Classic craft draws no wreck model** (`Ship_LoadModel` zeroes the second instance on flag 2); Pure draws none today either, so nothing to do until Pure's wreck lands.
 
 ## Next Steps
 
-1. Wire the Classic sound banks off the `<VrFx>` flag (read the flag once per circuit in `oag_raceplay::load`, a `Title` axis for the bank pair); verify with the load report, not by ear.
-2. Re-make the four Classic compare pairs with the VR-hull caveat dropped from `psp-pure-pair.py --hull-differs` and check the hull offset gate (needs PPSSPP).
-3. Measure the darkness per region on the four pairs (hull box, road, sky) before touching lighting.
+1. Re-capture the other eight Pure race pairs with the world clock read; the lead adopts the four Classic pairs already made.
+2. Trace the hull box's brightness (the original 2 to 6 grey brighter on all four Classic pairs): the VR hull is the right model and its env map loads, so read its material flags (shine, blend) against the original's draw.
+3. Wire the remaining `<VrFx>` consumers one at a time, each against its own read.

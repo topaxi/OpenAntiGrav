@@ -185,6 +185,13 @@ pub enum Draw {
         /// The stencil reference, `0..=255`.
         value: u8,
     },
+    /// The quads of the [`Self::Sprite`] just before it, written into the glow mask at their own
+    /// texel alpha times their colour's alpha, and a list holding one blooms through the PS2's
+    /// chain over a mask that is `0` everywhere else: Pulse PS2's `Selector` is the only draw of
+    /// the frame that writes the framebuffer's alpha (`oag_title::MenuSkin::glow_by_texel`). Draws
+    /// nothing; stamps nothing after a draw that is not a sprite. A list holding one drops its
+    /// [`Self::GlowStamp`]s and [`Self::GlowText`]s: the PS2's mask has no stencil references.
+    GlowTexel,
     /// One of the front end's own images, from the sprite sheet.
     Sprite {
         /// Where it goes on the 480x272 screen: `[x, y, width, height]`.
