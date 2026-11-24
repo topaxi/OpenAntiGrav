@@ -299,7 +299,7 @@ Checked against the add-on with a copy of Hillside whose 15 host rows were point
 and Omega names (headless Blender 5.3, `roundtrip.py hostreal`): 15 of 15 host images linked on
 each, never packed. **2048 and Omega: ported** (the same `psp2` path, each with its own test).
 Not exported: HD, 2048 and Omega **skies** (HD's is a cubemap `.gtf` the circuit's materials do
-not name); see `handover/tooling/track-art-next-blender-sun-bake-motion.md`.
+not name); an open item of the track-art thread.
 
 ### Hillside, the worked example (2026-10-29)
 
