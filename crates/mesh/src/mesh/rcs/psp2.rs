@@ -179,12 +179,16 @@ pub fn build(
     animation: Option<&Animation>,
     textures: Textures<'_>,
 ) -> Result<(Model, Report)> {
-    build_circuit(label, model_blob, animation, textures, Water::Off)
+    build_circuit(label, model_blob, animation, textures, Water::Off, false)
 }
 
 /// [`build`] for a race's circuit, under the player's water setting. 2048's own seas
 /// (`psp2::water`) draw their scrolled normal map under `original` and stay the flat colour
 /// under any other value.
+///
+/// `hide_pads` leaves out every submesh on a pad material (`weapon_pads`, `speed_pads`,
+/// `speedup_material`), for a race that draws its own pad model in their place
+/// ([`is_circuit_pad_material`]); a hidden submesh keeps its empty draw.
 ///
 /// # Errors
 ///
@@ -195,6 +199,7 @@ pub fn build_circuit(
     animation: Option<&Animation>,
     textures: Textures<'_>,
     water: Water,
+    hide_pads: bool,
 ) -> Result<(Model, Report)> {
     build_planned(
         label,
@@ -202,8 +207,16 @@ pub fn build_circuit(
         &|scene| placement::plan(scene, animation),
         None,
         textures,
-        water,
+        (water, hide_pads),
     )
+}
+
+/// Whether a material file is one of the circuit's own pads: HD's two pad programs
+/// (`super::pads::is_pad_material`) and 2048's `speed_pads`.
+#[must_use]
+pub fn is_circuit_pad_material(name: &str) -> bool {
+    super::pads::is_pad_material(name)
+        || name.rsplit('/').next().unwrap_or(name) == "speed_pads.rcsmaterial"
 }
 
 /// [`build`], with the motion taken from the `.vex` the model was exported
@@ -225,7 +238,7 @@ pub fn build_with_vex(
         &|scene| placement::plan_from_vex(scene, vex_blob),
         None,
         textures,
-        Water::Off,
+        (Water::Off, false),
     )
 }
 
@@ -251,7 +264,7 @@ pub fn build_billboard(
         &|scene| placement::plan_from_vex(scene, vex_blob),
         Some(vex_blob),
         textures,
-        Water::Off,
+        (Water::Off, false),
     )
 }
 
@@ -276,13 +289,20 @@ fn build_planned(
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
     billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
-    water: Water,
+    (water, hide_pads): (Water, bool),
 ) -> Result<(Model, Report)> {
     // The planners below each read a PS4 material file's programs; decode each file once.
     // And they share their pictures: a texture two planners bind is read and decoded once.
     oag_rcs::gcn::memoised(|| {
         picture_memo::scoped(|| {
-            build_scanned(label, model_blob, planner, billboard_vex, textures, water)
+            build_scanned(
+                label,
+                model_blob,
+                planner,
+                billboard_vex,
+                textures,
+                (water, hide_pads),
+            )
         })
     })
 }
@@ -293,7 +313,7 @@ fn build_scanned(
     planner: &dyn Fn(&psp2::nodes::Scene) -> placement::Plan,
     billboard_vex: Option<&[u8]>,
     textures: Textures<'_>,
-    water: Water,
+    (water, hide_pads): (Water, bool),
 ) -> Result<(Model, Report)> {
     let mut decoded = psp2::parse(model_blob)
         .map_err(|e| anyhow::anyhow!("{label}: the .rcsmodel beside it: {e}"))?;
@@ -465,7 +485,12 @@ fn build_scanned(
                 .mesh
                 .and_then(|m| decoded.scene.meshes.get(m))
                 .is_some_and(|m| m.is_crowd_entity());
-        place.hidden |= filtered || crowd_entity;
+        let circuit_pad = hide_pads
+            && submesh
+                .material
+                .and_then(|m| decoded.materials.get(m))
+                .is_some_and(|m| is_circuit_pad_material(&m.name));
+        place.hidden |= filtered || crowd_entity || circuit_pad;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);
         report.crowd_entities += usize::from(crowd_entity && !filtered);

@@ -192,6 +192,7 @@ pub const DEFAULTS: &oag_title::RaceDefaults = &oag_title::RaceDefaults {
         pads: oag_title::DetonatorPads {
             speed_pad_charges: oag_title::pre_race::Sourced::measured(true),
             weapon_pad_charges: oag_title::pre_race::Sourced::inherited(true, "Wipeout HD"),
+            replaces_circuit_pads: oag_title::pre_race::Sourced::measured(true),
         },
         // Omega plays Wwise events in place of named cues; the EMP's are not located.
         voices: None,

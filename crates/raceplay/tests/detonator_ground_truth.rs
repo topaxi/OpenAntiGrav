@@ -354,6 +354,14 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
 /// entry is the unsquared-alpha program with the material's own red (`0x7611a2d8`), the squares the
 /// original's pad shows; the slab is raised by the depth of its walls so it stands on the road.
 fn assert_the_pad_is_red_squares_on_a_slab_that_rests(loaded: &race::Loaded) {
+    assert!(
+        loaded.report.iter().any(|l| l.contains(
+            "detonator: the circuit's own speed and weapon pads are not drawn under the \
+             Detonator pad"
+        )),
+        "the circuit's own pads are dropped under the Detonator pad: {:#?}",
+        loaded.report
+    );
     let parts = &loaded.bomb_blast_models.detonator;
     let pad = parts.pad.as_ref().expect("the pad model loaded");
     assert!(
