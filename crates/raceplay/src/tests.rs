@@ -521,6 +521,7 @@ pub(crate) fn fixture_view() -> ViewSetup {
         world_clock_offset: 0.0,
         gantry_seconds: None,
         camera_override: None,
+        fov_override: None,
         sight: Sighting::default(),
         track_sections: None,
     }

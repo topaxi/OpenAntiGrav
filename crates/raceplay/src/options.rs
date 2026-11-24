@@ -475,6 +475,12 @@ pub struct Options {
     /// the original showed, and only a replicated camera replicates *how it was
     /// framed*. `None` uses the chase camera as always.
     pub camera: Option<CameraOverride>,
+    /// Replace the authored field of view with this, in vertical degrees, while the chase
+    /// camera stays: [`CameraOverride::fov_deg`] for a capture that keeps its own camera rig.
+    /// A posed craft has no velocity to widen the field with, so a comparison against a frame
+    /// taken at speed passes the frame's field here. Ignored when [`Self::camera`] is set,
+    /// whose own `fov_deg` stands in for it. `None` is every race.
+    pub fov_override: Option<f32>,
     /// The race is an attract demo: nobody in it. The title's demo screen is read for it
     /// ([`Loaded::demo_overlay`]).
     pub demo: bool,

@@ -76,6 +76,7 @@ impl Default for Options {
             world_clock_offset: 0.0,
             gantry_seconds: None,
             camera: None,
+            fov_override: None,
             demo: false,
         }
     }

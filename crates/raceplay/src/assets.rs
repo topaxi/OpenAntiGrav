@@ -756,8 +756,8 @@ pub(super) fn zone_handling_note(mode: Mode, team: &str) -> Option<String> {
     }
     Some(format!(
         "zone: flying {team}'s handling. This title ships a ZoneMode handling \
-         block of its own and nothing reads it - it authors no <Class>, which \
-         is what this engine's per-class conversion needs. See \
+         block of its own and its physics are not read - it authors no <Class>, \
+         which is what this engine's per-class conversion needs. See \
          oag_title::ZoneCraft and docs/gameplay/race-modes.md"
     ))
 }
