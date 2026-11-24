@@ -79,11 +79,13 @@ race driven to the tick before the first frame and each frame drawn as the race 
 frames are averaged in 16 bits a channel and the HUD is drawn once over the average, as the session does (`oag-game`'s `photo::average`). The output says
 `from-png: the shot is a track motion blur (...); drawing its frames` and `drew N frames from tick A to tick B`; a title whose photo mode
 does not accumulate, a split screen or a track blur with no mount draws the one frame and says so. **A speed blur's ring has the history the paused mode
-had**: the ring is drawn for 40 ticks of its own at the shot's moment before the frame is kept (its history weighs at most `0.25` a frame, so it has settled). Measured on HD (Anulpha Pass, tick 702, 1440x816, mean absolute difference
-of the redraw from the saved shot over the whole picture, HUD on in both): a track blur 0.75 from its frames (11.2 from the one frame it used to be), a
-ship blur 0.75 (2.05); the floor, a plain shot against its redraw, is 0.75 to 1.1 (the HUD's own state). A speed blur at 100, along the two sides where the streak
-lands (0.25 to 0.70 of the height): 1.10 and 1.38 against 2.11 and 4.10 with no history, for a shot taken after another in the visit.
-**The first shot of a visit to the mode carries a history the settled ring does not reproduce** (its streak is stronger; the redraw is 4.2 and 7.4 from it, 3.4 and 9.2 before): two shots of one scene in one visit
+had**: the ring is drawn for 40 ticks of its own at the shot's moment before the frame is kept (its history weighs at most `0.25` a frame, so it has settled). Measured on HD (Anulpha Pass, tick 702, 1440x816, the redraw against the saved shot with its HUD on, outside the HUD's footprint: the pixels the HUD row changes, grown by 3):
+a track blur 0.08 mean and 0.7 at the 99th percentile of the difference from its frames (11.5 and 75 from the one frame it used to be), a ship blur 0.45 and 2.0
+(0.73 and 6.0); the craft a track blur's camera rides keeps 0.90 of its detail against the saved shot's 0.87 and the scenery 0.44 against 0.39 (a plain shot's redraw
+differs from it by the HUD's own state alone). A speed blur at 100, mean difference along the two sides where the streak
+lands (0.25 to 0.70 of the height): 1.10 and 1.38 against 2.11 and 4.10 with no history, for a shot taken after another in the visit, 1.05 and 1.81 for the first speed blur shot of a visit that
+had a plain shot before it. Measured on HD only: the ring is HD's on every title, so the settled history applies to a speed blur redraw on any title and was not measured on another.
+**The first shot of a visit to the mode carries a history the settled ring does not reproduce** (its streak is stronger; the redraw is 4.2 and 7.4 from it, 3.4 and 9.2 before; not a speed blur effect, the first shot being a plain one moves it to the shot after): two shots of one scene in one visit
 differ by 3.5 on average, and the cause (what the preview frames left in the ring's history before the first shot) was not found.
 The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs

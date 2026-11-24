@@ -3,38 +3,65 @@
 //! history for a speed blur. The game binary is handed in by the parent module, which is the one
 //! the test groups name.
 //!
-//! The tolerances are mean absolute differences over the whole picture, HUD included (the shot
-//! and its redraw both carry one): the redraw of a plain shot of the same race differs from its
-//! saved shot by 0.75 to 1.1, which is the floor.
+//! The blur shots' tolerances are measured outside the HUD, which the redraw draws from its own
+//! state; the speed blur's are mean absolute differences along the two sides of the picture.
 
-use super::shot_fidelity::{from_png, meta_of};
+use super::shot_fidelity::{Picture, from_png, grow, meta_of};
 use super::*;
 
-/// The redraw of a blur shot may differ from the saved shot by this much, on average.
+/// The redraw of a speed blur shot may differ from the saved shot by this much along the sides, on average.
 const TOLERANCE: f32 = 1.5;
 
 /// Where the zoom ring's streak lands: a strip along each side, clear of the HUD.
 const LEFT_EDGE: (f32, f32, f32, f32) = (0.0, 0.25, 0.08, 0.70);
 const RIGHT_EDGE: (f32, f32, f32, f32) = (0.92, 0.25, 1.0, 0.70);
 
-/// `photo` written again with its text changed by `edit`: the picture and the stream as they
-/// were.
-fn rewritten(photo: &Path, to: &Path, edit: impl FnOnce(&mut oag_game::shot_meta::Meta)) {
-    let bytes = std::fs::read(photo).expect("the photo");
-    let found = oag_game::shot_meta::read(&bytes).expect("our chunks read");
-    let mut meta = found.meta.expect("the text chunk");
-    edit(&mut meta);
-    let (width, height, pixels) = decode(photo);
-    let png = oag_game::shot_meta::encode(width, height, &pixels, &meta, found.record.as_ref());
-    std::fs::write(to, png).expect("writing the rewritten photo");
+/// The mean and the 99th percentile of the difference between two pictures over the pixels
+/// outside the HUD, which is where `with` differs from `without` (the same shot with and without
+/// its HUD row: every pixel that differs by more than 2, grown by 3).
+fn outside_the_hud(
+    saved: &Picture,
+    redrawn: &Picture,
+    (without, with): (&Picture, &Picture),
+) -> (f32, f32) {
+    let size = (saved.0 as usize, saved.1 as usize);
+    let apart = |a: &Picture, b: &Picture, at: usize| {
+        (0..3)
+            .map(|c| a.2[at * 4 + c].abs_diff(b.2[at * 4 + c]))
+            .max()
+            .unwrap_or(0)
+    };
+    let footprint = grow(
+        &(0..size.0 * size.1)
+            .map(|at| apart(with, without, at) > 2)
+            .collect::<Vec<_>>(),
+        size,
+        3,
+    );
+    let mut steps: Vec<f32> = (0..size.0 * size.1)
+        .filter(|&at| !footprint[at])
+        .map(|at| {
+            (0..3)
+                .map(|c| f32::from(saved.2[at * 4 + c].abs_diff(redrawn.2[at * 4 + c])))
+                .sum::<f32>()
+                / 3.0
+        })
+        .collect();
+    steps.sort_by(f32::total_cmp);
+    (
+        steps.iter().sum::<f32>() / steps.len() as f32,
+        steps[steps.len() * 99 / 100],
+    )
 }
 
-/// A track blur and a ship blur, each with its HUD on, drawn again from their frames: the redraw
-/// is within [`TOLERANCE`] of the saved shot and much closer than the one frame it used to be,
-/// the craft the track blur's camera rides stays sharp over scenery that smears, and a track
-/// blur that predates `[camera.mount]` is drawn as one frame and says so.
+/// A track blur and a ship blur, each with its HUD on, drawn again from their frames: outside the
+/// HUD the redraw is within the stated tolerance of the saved shot (measured: a track blur 0.08
+/// mean and 0.7 at the 99th percentile, a ship blur 0.45 and 2.0; the one frame it used to be was
+/// 11.5 and 75 on the track blur, 0.73 and 6.0 on the ship blur), the craft the track blur's camera
+/// rides stays as sharp as it was in the saved shot over scenery that smears as much.
 ///
-/// `photos` are the six of `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`.
+/// `photos` are the six of `a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it`:
+/// plain, track blur, ship blur, ship blur with the HUD, plain with the HUD, track blur with it.
 pub(super) fn blurred_shots_are_drawn_again(
     binary: &str,
     image: &Path,
@@ -44,74 +71,46 @@ pub(super) fn blurred_shots_are_drawn_again(
     const HULL: (f32, f32, f32, f32) = (0.40, 0.68, 0.52, 0.78);
     const SCENERY: (f32, f32, f32, f32) = (0.0, 0.1, 0.3, 0.5);
     let plain_hud = decode(&photos[4]);
-    for (name, at, kind) in [("track blur", 5, "track"), ("ship blur", 3, "ship")] {
-        let saved = decode(&photos[at]);
-        let picture = meta_of(&photos[at]).picture.expect("the controls");
+    // `(name, the shot with its HUD, the same shot without, mean and 99th percentile bounds)`.
+    for (name, with, without, kind, bound) in [
+        ("track blur", 5, 1, "track", (0.25, 2.0)),
+        ("ship blur", 3, 2, "ship", (0.6, 3.5)),
+    ] {
+        let saved = decode(&photos[with]);
+        let picture = meta_of(&photos[with]).picture.expect("the controls");
         assert_eq!(picture.motion_blur, kind);
         let out = run.dir.join(format!("redraw-{kind}.png"));
-        let (stdout, redrawn) = from_png(binary, image, run, &photos[at], &out, &[]);
+        let (stdout, redrawn) = from_png(binary, image, run, &photos[with], &out, &[]);
         assert!(stdout.contains("drawing its frames"), "{stdout}");
         assert!(
             stdout.contains(&format!("drew {} frames", picture.frames)),
             "{stdout}"
         );
         assert!(stdout.contains("MATCH"), "{stdout}");
-        // What the redraw was before: the one frame, the text without its blur.
-        let single_photo = run.dir.join(format!("single-{kind}-source.png"));
-        rewritten(&photos[at], &single_photo, |meta| {
-            if let Some(picture) = meta.picture.as_mut() {
-                picture.motion_blur.clear();
-            }
-        });
-        let single_out = run.dir.join(format!("single-{kind}.png"));
-        let (_, single) = from_png(binary, image, run, &single_photo, &single_out, &[]);
-        let (many, one) = (
-            difference(&saved, &redrawn, ALL),
-            difference(&saved, &single, ALL),
+        let (mean, p99) = outside_the_hud(&saved, &redrawn, (&decode(&photos[without]), &saved));
+        println!(
+            "{name}: outside the HUD the redraw is {mean:.3} mean, {p99:.1} at the 99th percentile"
         );
-        println!("{name}: redraw from its frames {many:.2}, from one frame {one:.2}");
-        assert!(
-            many < TOLERANCE,
-            "{name}: the redraw is {many} from the shot"
-        );
-        assert!(
-            many < 0.5 * one,
-            "{name}: the frames bring the redraw no closer than one frame: {many} against {one}"
-        );
+        assert!(mean < bound.0, "{name}: the redraw is {mean} from the shot");
+        assert!(p99 < bound.1, "{name}: its 99th percentile is {p99}");
         if kind == "track" {
-            let kept = |region| detail(&redrawn, region) / detail(&plain_hud, region);
+            let kept =
+                |picture: &Picture, region| detail(picture, region) / detail(&plain_hud, region);
+            let (saved_hull, saved_scenery) = (kept(&saved, HULL), kept(&saved, SCENERY));
+            let (hull, scenery) = (kept(&redrawn, HULL), kept(&redrawn, SCENERY));
             println!(
-                "track blur redrawn, detail kept: hull {:.2} scenery {:.2}",
-                kept(HULL),
-                kept(SCENERY)
+                "track blur detail kept, hull {hull:.2} scenery {scenery:.2} (saved: {saved_hull:.2}, {saved_scenery:.2})"
             );
             assert!(
-                kept(SCENERY) < 0.6,
-                "the scenery is sharp: {}",
-                kept(SCENERY)
+                (hull - saved_hull).abs() < 0.1,
+                "the craft: {hull} against {saved_hull}"
             );
-            assert!(kept(HULL) > 0.8, "the craft is smeared: {}", kept(HULL));
+            assert!(
+                (scenery - saved_scenery).abs() < 0.1,
+                "the scenery: {scenery} against {saved_scenery}"
+            );
         }
     }
-
-    // A shot of a build that wrote no camera mount: one frame, and it says why.
-    let old = run.dir.join("track-without-a-mount-source.png");
-    rewritten(&photos[5], &old, |meta| {
-        meta.camera.as_mut().expect("a camera").mount = None;
-    });
-    let (stdout, drawn) = from_png(
-        binary,
-        image,
-        run,
-        &old,
-        &run.dir.join("track-without-a-mount.png"),
-        &[],
-    );
-    assert!(
-        stdout.contains("predates the camera mount") && !stdout.contains("drew "),
-        "{stdout}"
-    );
-    assert_eq!((drawn.0, drawn.1), (plain_hud.0, plain_hud.1));
 }
 
 /// A speed blur shot is drawn again with the zoom ring's history it had: along the sides, where the

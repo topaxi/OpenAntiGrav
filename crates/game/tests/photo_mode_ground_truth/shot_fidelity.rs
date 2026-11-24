@@ -114,7 +114,7 @@ pub(super) fn grow(mask: &[bool], (width, height): (usize, usize), radius: usize
     grown
 }
 
-type Picture = (u32, u32, Vec<u8>);
+pub(super) type Picture = (u32, u32, Vec<u8>);
 
 /// The HUD on a shot of several frames is the HUD of the shot's own tick, drawn once. `plain`
 /// and `plain_hud` are the one frame without and with the HUD, `blurred` and `blurred_hud` the

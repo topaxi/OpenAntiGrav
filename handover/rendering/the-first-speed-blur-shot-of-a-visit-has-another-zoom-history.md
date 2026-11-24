@@ -14,7 +14,8 @@ difficulty: medium (45)
 moment, `race_capture/accumulate.rs`). On HD (Anulpha Pass, tick 702) that matches a shot taken after another in the
 same visit to the mode (left and right edge strips 1.10 and 1.38 of mean absolute difference, against 2.11 and 4.10 with no
 history; `a_speed_blur_shot_is_drawn_again_with_its_zoom_history`), but not the first shot of the visit (4.22 and 7.43, against
-3.35 and 9.15 with no history). Two shots of one scene in one visit differ by 3.5 on average, with the first the stronger streak.
+3.35 and 9.15 with no history). Two shots of one scene in one visit differ by 3.5 on average, with the first the stronger streak. With a plain shot first, the speed blur shot after it
+matches the settled redraw (1.05 and 1.81): it is what a visit's first shot does, not speed blur itself.
 
 ## Open
 
