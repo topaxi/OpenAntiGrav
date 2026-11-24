@@ -98,6 +98,15 @@ impl RaceView {
             .collect()
     }
 
+    /// The pieces carrying a fire, ascending, for tests.
+    #[doc(hidden)]
+    #[must_use]
+    pub fn ship_debris_burning_pieces_for_tests(&self) -> Vec<usize> {
+        let mut pieces: Vec<usize> = self.ship_debris.burning.iter().map(|f| f.piece).collect();
+        pieces.sort_unstable();
+        pieces
+    }
+
     /// How many fires are riding a piece, for tests.
     #[doc(hidden)]
     #[must_use]

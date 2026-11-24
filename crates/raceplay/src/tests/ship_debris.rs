@@ -62,6 +62,7 @@ fn an_hd_craft_throws_19_pieces_on_the_edge_to_state_5() {
     assert_eq!(race.view.ship_debris_counts_for_tests(), (1, 19));
     assert_eq!(race.view.ship_debris_flying_for_tests(), 19);
     assert_eq!(race.view.ship_debris_burning_for_tests(), 2);
+    assert_eq!(race.view.ship_debris_burning_pieces_for_tests(), [17, 18]);
     at(&mut race, CraftState::Eliminated);
     assert_eq!(
         race.view.ship_debris_counts_for_tests(),
@@ -78,10 +79,15 @@ fn the_pieces_and_their_fires_go_after_10_s() {
     at(&mut race, CraftState::Eliminated);
     let dt = race.core.sim.dt;
     let ticks = |secs: f32| (secs / dt) as usize;
-    for _ in 0..ticks(9.5) {
+    for _ in 0..ticks(4.0) {
+        at(&mut race, CraftState::Eliminated);
+    }
+    assert_eq!(race.view.ship_debris_burning_for_tests(), 2, "at 4 s");
+    for _ in 0..ticks(5.5) {
         at(&mut race, CraftState::Eliminated);
     }
     assert_eq!(race.view.ship_debris_flying_for_tests(), 19);
+    assert_eq!(race.view.ship_debris_burning_for_tests(), 2, "at 9.5 s");
     for _ in 0..ticks(1.0) {
         at(&mut race, CraftState::Eliminated);
     }
@@ -102,12 +108,13 @@ fn pulse_throws_no_debris() {
 #[test]
 fn every_piece_leaves_forward_of_the_craft() {
     let mut race = race(DestroyedCraft::HD);
+    let forward = race.core.sim.world.ships[3].physics.body.forward();
+    race.core.sim.world.ships[3].physics.body.linear_velocity = forward * 100.0;
     at(&mut race, CraftState::Destroyed);
     at(&mut race, CraftState::Eliminated);
-    let body = &race.core.sim.world.ships[3].physics.body;
-    let forward = body.forward();
-    let own = body.linear_velocity.dot(forward);
-    for speed in race.view.ship_debris_launch_speeds_for_tests(forward) {
-        assert!(speed >= own, "{speed} against the craft's {own}");
+    let speeds = race.view.ship_debris_launch_speeds_for_tests(forward);
+    assert_eq!(speeds.len(), 19);
+    for speed in speeds {
+        assert!(speed >= 100.0, "{speed} against the craft's 100");
     }
 }

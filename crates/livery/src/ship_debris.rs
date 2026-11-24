@@ -33,9 +33,13 @@ pub fn load(
         let stem = format!("{}{number}", spec.model_stem);
         let name = oag_title::race::entry_name_in(ships.dir, spec.directory, &stem);
         match zone_end::model(archives, &name, store, &mut textures) {
-            Ok((model, _)) if !model.vertices.is_empty() => parts.push(model),
+            Ok((model, _)) if !model.vertices.is_empty() && !model.indices.is_empty() => {
+                parts.push(model);
+            }
             Ok(_) => {
-                report.push(format!("{name}: no geometry - the craft throws no debris"));
+                report.push(format!(
+                    "{name}: no vertices or no triangles - the craft throws no debris"
+                ));
                 return None;
             }
             Err(line) => {
