@@ -702,10 +702,11 @@ pub struct FrontEnd {
     /// the selected one, or `None` where it is drawn flat (a title whose fade is unread). See
     /// [`HexFade`].
     pub team_hex_fade: Option<HexFade>,
-    /// The tint (RGBA, `0..=1`) of the `Team Selection` honeycomb's cursor ring where the title's
-    /// own differs from the Fury style's pale pink, or `None` for that one. Omega runs the HD
-    /// style only, whose ring is red.
-    pub team_hex_ring: Option<[f32; 4]>,
+    /// The colour (ARGB) the `Team Selection` honeycomb's cursor ring pulses through between white
+    /// and black, where the title computes its own, or `None` for `HD_Blue` of the front end's
+    /// style. Omega's update carries the red inline
+    /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-select-ring.md`, "Omega").
+    pub team_hex_ring_peak: Option<u32>,
 }
 
 /// How a front-end hexagon grid fades its fill (`HexCol`) toward `HexColFade` with the
