@@ -190,7 +190,7 @@ plume glow (386 px, 8 %) and ground, road and background (6,500 px, 41 %). Pairs
 Ten of the twelve race pairs' hulls improve; Sagarmartha's hull is the 4 px shifted one (`compare-page.md`) and moves by +0.22. The
 Zone pairs read 52 to 64 grey (the camera and palette gap of `pures-render-what-the-pairs-do-not-show.md`, item 9) and move by +0.1 to
 +0.2 on the frame, not attributed to the level rule; z8's track band is the one sky or track reading that moves by more than 0.3 (+0.31). Two Pulse PSP pairs (Amphiseum White, De Konstruct Black) re-render
-pixel-identical. Pulse's own version-4 textures (13 nodes, the Zone wreck set) take the slope rule now, unmeasured.
+pixel-identical. Pulse's own version-4 textures (13 nodes, the Zone wreck set) take the slope rule now: their flags byte `0x61` is the one every Pure texture of the frame carries (Feisar's five, Modesto's 156) and the builder is the twin (confidence 75; no Pulse wreck frame was read).
 
 **Open.**
 

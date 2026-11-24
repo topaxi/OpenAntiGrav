@@ -183,12 +183,23 @@ fn a_material_reads_flags_and_both_texture_indices() {
 /// given version: `class` is that version's `Texture` id (`0x3c1` at 6, `0x373`
 /// at 4).
 fn flagged_file(version: u32, class: u32, texels: &[u8]) -> Vec<u8> {
+    texture_file(version, class, (64, 16, 4, 2, 0xe5), texels)
+}
+
+/// One texture node with `(width, height, bits per pixel, mip count, flags)` and
+/// 16 palette entries, as a file of the given version.
+fn texture_file(
+    version: u32,
+    class: u32,
+    (width, height, bpp, mips, flags): (u16, u16, u8, u8, u8),
+    texels: &[u8],
+) -> Vec<u8> {
     let mut payload = vec![0u8; 0x10];
-    payload[0..2].copy_from_slice(&64u16.to_le_bytes());
-    payload[2..4].copy_from_slice(&16u16.to_le_bytes());
-    payload[4] = 4; // bits per pixel
-    payload[5] = 2; // mip count
-    payload[6] = 0xe5; // flags: bit 0, already swizzled
+    payload[0..2].copy_from_slice(&width.to_le_bytes());
+    payload[2..4].copy_from_slice(&height.to_le_bytes());
+    payload[4] = bpp;
+    payload[5] = mips;
+    payload[6] = flags;
     payload[8..12].copy_from_slice(&64u32.to_le_bytes()); // 16 palette entries
     payload[12..16].copy_from_slice(&(texels.len() as u32).to_le_bytes());
     let mut tree: Vec<u8> = Vec::new();
@@ -209,11 +220,95 @@ fn flagged_file(version: u32, class: u32, texels: &[u8]) -> Vec<u8> {
     data
 }
 
-/// A flagged texture is unswizzled on every version, but only version 5 and later
-/// hands on its authored levels: version 4 (Pure, Pulse's wrecks) keeps its
-/// renderer-synthesised chain.
+fn only_texture(file: &[u8]) -> EmbeddedTexture {
+    textures(file).expect("reads").remove(0).expect("decodes")
+}
+
+/// A header's mip count is a byte: 255 levels of a 64x16 texture read to the 1x1 level
+/// and stop, flagged or not, without shifting a `u16` out of range.
 #[test]
-fn a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels() {
+fn a_hostile_mip_count_reads_to_the_1x1_level_and_no_further() {
+    let texels = vec![0x11u8; 16 * 1024];
+    for flags in [0xe5, 0xe4] {
+        let t = only_texture(&texture_file(4, 0x373, (64, 16, 4, 255, flags), &texels));
+        let sizes: Vec<usize> = t.levels.iter().map(Vec::len).collect();
+        assert!(sizes.len() <= 6, "flags {flags:#x}: {sizes:?}");
+        assert!(sizes.iter().all(|&n| n >= 1), "{sizes:?}");
+        assert!(sizes.windows(2).all(|w| w[1] <= w[0]), "{sizes:?}");
+    }
+    // 17 or more halvings of a 1x1 texture: nothing follows the base.
+    let t = only_texture(&texture_file(4, 0x373, (1, 1, 8, 40, 0xe5), &texels));
+    assert!(t.levels.is_empty(), "{:?}", t.levels.len());
+}
+
+/// A zero dimension has no levels to author, and no fabricated ones.
+#[test]
+fn a_zero_dimension_authors_no_levels() {
+    let texels = vec![0x11u8; 256];
+    for flags in [0xe5, 0xe4] {
+        for (w, h) in [(0, 16), (16, 0), (0, 0)] {
+            let t = only_texture(&texture_file(4, 0x373, (w, h, 4, 3, flags), &texels));
+            assert!(t.levels.is_empty(), "{w}x{h} flags {flags:#x}");
+            assert!(t.indices.is_empty(), "{w}x{h} flags {flags:#x}");
+        }
+    }
+}
+
+/// Texel `(level, y, x)` of the odd-width test's pattern; the padding nibble of a row is `0xf`
+/// and never a texel of it (the pattern stays under 15).
+fn pattern(level: usize, y: usize, x: usize) -> u8 {
+    ((level * 7 + y * 5 + x * 3) % 15) as u8
+}
+
+/// A 4-bit level of odd width unpacks exactly its width: the last byte of a row carries a
+/// padding nibble that is not the next row's first texel. 3x8 has levels 1x4, 1x2 and 1x1.
+#[test]
+fn a_four_bit_level_of_odd_width_unpacks_exactly_its_width() {
+    let mut texels = Vec::new();
+    for (level, (w, h)) in [(3usize, 8usize), (1, 4), (1, 2), (1, 1)]
+        .into_iter()
+        .enumerate()
+    {
+        for y in 0..h {
+            let mut row = vec![0u8; 16];
+            for x in 0..w.div_ceil(2) * 2 {
+                let n = if x < w { pattern(level, y, x) } else { 0xf };
+                row[x / 2] |= n << (4 * (x % 2));
+            }
+            texels.extend(row);
+        }
+    }
+    let t = only_texture(&texture_file(4, 0x373, (3, 8, 4, 4, 0xe4), &texels));
+    let want = |level: usize, w: usize, h: usize| -> Vec<u8> {
+        (0..h)
+            .flat_map(|y| (0..w).map(move |x| pattern(level, y, x)))
+            .collect()
+    };
+    assert_eq!(t.indices, want(0, 3, 8), "the base level");
+    assert_eq!(
+        t.levels,
+        vec![want(1, 1, 4), want(2, 1, 2), want(3, 1, 1)],
+        "the levels below it"
+    );
+}
+
+/// A flagged texture whose block is shorter than its base level unswizzles the blocks it has,
+/// as a file without levels does, rather than reading the raw swizzled bytes.
+#[test]
+fn a_flagged_block_shorter_than_its_base_level_still_unswizzles_what_it_holds() {
+    // 64x16 at stride 32 is 4 blocks of 128 bytes; give two of them.
+    let block: Vec<u8> = (0..256u32).map(|i| (i * 11 % 251) as u8).collect();
+    let t = only_texture(&texture_file(4, 0x373, (64, 16, 4, 2, 0xe5), &block));
+    let rows = oag_formats::swizzle::unswizzle(&block, 32, 16);
+    let want: Vec<u8> = rows[..32].iter().flat_map(|v| [v & 15, v >> 4]).collect();
+    assert_eq!(t.indices[..64], want[..], "row 0 is the unswizzled one");
+    assert_eq!(t.indices.len(), 64 * 16);
+    assert!(t.levels.is_empty());
+}
+
+/// A flagged texture is unswizzled, and hands on its authored levels, on every version.
+#[test]
+fn a_flagged_texture_is_unswizzled_and_every_version_keeps_its_levels() {
     // Level 0: 64x16 at stride 32 (2 block columns, 2 block rows), level 1:
     // 32x8 at stride 16 (one block, so it is its own swizzle).
     let linear0: Vec<u8> = (0..32 * 16).map(|i| (i % 251) as u8).collect();

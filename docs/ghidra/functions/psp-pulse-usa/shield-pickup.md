@@ -717,12 +717,18 @@ brightness and banding gap is these two defects.
 base): each decoded level is compared against a 2x box-downsample of the decoded level
 above it, and against the linear reading of the same bytes. The unswizzled level matches
 at least as well on **236 of 236** (mean absolute RGB difference 3.5 against 8.1). The 13
-version-4 nodes (Pulse's Zone shipwrecks, flags `0x61`) and Pure's 1,806 already took
-the swizzled branch before 2026-10-01, with level 0 unswizzled as one block and no
-authored levels (the renderer synthesises their chain, as `frame-audit.md` records for
-Pure). **That is kept exactly**: `vex::textures` hands on authored levels only from
-version 5, because handing Pure's on would switch it onto the slope level rule, which
-nothing measured. A unit test pins both (`a_flagged_texture_is_unswizzled_and_only_version_six_keeps_its_levels`).
+version-4 nodes (Pulse's Zone shipwrecks, flags `0x61`) and Pure's 1,806 took the
+swizzled branch with level 0 unswizzled as one block and no authored levels until
+2026-11-24 (`pure-modesto-hull`): `vex::textures` now hands on every version's
+authored levels, which turns the slope level rule on for them
+([`hull-shine.md`](../psp-pure-usa/hull-shine.md), "The hull's texture level").
+Pure measured it: all 430 PRIMs of a Modesto frame read `TEXLEVEL` mode 2 and
+`TEXLODSLOPE` `1/256`, on textures whose flags byte is `0x61` (Feisar's five, Modesto's
+156) - the byte Pulse's wrecks carry, through the twin `Texture_BuildBindList`. A Pulse
+wreck frame was not read (confidence 75 that they run the slope rule too; two Pulse PSP
+pairs, which draw no wreck, re-render pixel-identical). Unit tests pin it
+(`a_flagged_texture_is_unswizzled_and_every_version_keeps_its_levels` and the
+hostile-header, odd-width and short-block tests beside it).
 
 Base-level coherence of every flagged node, decoded reading against the linear one
 (neighbour difference of palette luminance): Pulse USA and EU, 88 nodes, **69 smoother
