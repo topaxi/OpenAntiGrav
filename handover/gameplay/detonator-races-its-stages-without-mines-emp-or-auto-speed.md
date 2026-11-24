@@ -620,6 +620,8 @@ tooling: render ours from the picture's camera, moving `--camera-pose` and `--po
 is older than the push buffer's camera"); likely moves every HD pair with near scenery; (2) draw the visualiser billboard; (3) carry `s`/`t` per
 mine (above). Superseded: Next (1) of the paragraph above.
 
+**Row (1) is wired for Detonator (2026-11-24, `det-pair-lag`; `compare-page.md`, "The presented lag of a Detonator grab").** Reconciled: the picture is 6.0 ticks behind RAM on 15 grabs (85), which is 2 or 4 behind the push buffer as the hull's skew is 4 or 2; `hd-pair-lag-scan.py`'s 0 to 3 was a race-mode whole-frame score. `rpcs3-hd-pair.py --detonator` fits `k` per grab from the mines (`hd_picture_lag.py`) and moves ours back; mean grey 25.3 to 17.5, 20.3 to 17.2, 23.5 to 17.1 on three pairs, unchanged where no mine is 8 to 50 units ahead (`pad`, `cannon-volley` at 2.2 s). **Next:** grab `pad` and `cannon-volley` at 2.6 to 2.7 s so a fit exists; a stop within 8 ticks of the previous one reads 4.5 to 5.5 and fits worse (50, mechanism unknown); race-mode lag is unmeasured, so `--field` stays uncorrected; the heading check refuses most fresh Detonator pairs at 1.0 to 1.7 degrees (open pitch).
+
 ## Zone Battle (HD mode `0xd`, Omega also `0x15`; 2048) is unread
 
 The brief's second priority. Nothing in `docs/` recovers its rules: the stage source
