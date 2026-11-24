@@ -141,8 +141,10 @@ fn run(
         .get_mapped_range()
         .expect("reading the readback");
     words
-        .chunks_exact(4)
-        .map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|w| u32::from_le_bytes(*w))
         .collect()
 }
 
