@@ -816,7 +816,8 @@ install-desktop-file *ARGS:
 # No REV builds this checkout; a git rev builds in a temporary worktree (removed after, artifact kept in data/deploy-builds);
 # an .apk / .AppImage is deployed as is. Android installs with `adb install -r -d`
 # (a downgrade keeps the app's data); deck copies the portable AppImage over ssh
-# (`user@host` as an argument). No game data - that is `just push-data`. See
+# (`user@host` as an argument; `--fast` for a quick thin-LTO + mold dev build, never a release).
+# No game data - that is `just push-data`. See
 # scripts/deploy.sh, docs/tools/android.md and docs/tools/packaging.md#steam-deck
 deploy TARGET *ARGS:
     ./scripts/deploy.sh {{TARGET}} {{ARGS}}
