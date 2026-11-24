@@ -133,17 +133,13 @@ fn check(source: &Path, tag: &str, mode: &str) {
     });
     let (left, right, centre) = columns(&brake, &rest);
     println!("{tag} {mode}: left {left}, right {right}, centre band {centre}");
-    // Zone's one shared hull is small and white, so its flaps move fewer
-    // pixels than a native craft's: 2048 measures 94 left and 167 right
-    // in the lower half (it was over 200 each on the player's own craft). 2048's
-    // single race measures 880 left, 1,119 right and 53 in the centre band. A flap off its hinge puts almost
-    // nothing on the sides, so 100 still catches the defect; the
-    // mid-hull check below is the one that names it. HD's Zone skips the brakes as
-    // the original does (`Craft_Update`, `0x000f27c8`), so holding both airbrakes
-    // no longer slows the craft and only the flaps change: 390 left and 100 right
-    // (x 286-310 and 409-430, the same rows; the right flap is white on white),
-    // centre band 0. Before, the brake's slowdown moved the whole scene
-    // (8,341 / 15,084 / centre 1,292) and the floor measured that, not the flaps.
+    // Zone's one shared hull is small and white, so its flaps move fewer pixels than a native
+    // craft's. Measured with the grid's flaps against the stowed frame, 240 ticks, lower half:
+    // HD zone 391 left and 389 right, HD single race 2,364 and 2,385, Pulse zone 400 and 518,
+    // Pulse single race 702 and 604, 2048 single race 921 and 1,174 (85 in the centre band), and
+    // 2048 zone 58 and 75, which clears the floor of 50 by a thin margin. A flap off its hinge puts
+    // almost nothing on the sides, so the floor still catches the defect; the mid-hull check below
+    // is the one that names it.
     let floor = if mode == "zone" { 50 } else { 200 };
     assert!(
         left > floor && right > floor,
