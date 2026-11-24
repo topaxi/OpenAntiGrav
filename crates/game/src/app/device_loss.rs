@@ -182,12 +182,19 @@ fn take_marker_in(dir: &std::path::Path) -> bool {
 /// Starts this game again with the arguments it was given, marked as a relaunch. The caller
 /// leaves the event loop afterwards: the new process opens its own window on a fresh device.
 ///
+/// Inside an AppImage the running executable lives in a mount that goes away with this process,
+/// so the file itself (`$APPIMAGE`) is started instead.
+///
 /// # Errors
 ///
 /// The executable cannot be found or started.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
 pub(crate) fn relaunch() -> std::io::Result<std::process::Child> {
-    std::process::Command::new(std::env::current_exe()?)
+    let exe = match std::env::var_os("APPIMAGE") {
+        Some(file) if !file.is_empty() => file.into(),
+        _ => std::env::current_exe()?,
+    };
+    std::process::Command::new(exe)
         .args(std::env::args_os().skip(1))
         .env(RELAUNCHED_ENV, "1")
         .spawn()

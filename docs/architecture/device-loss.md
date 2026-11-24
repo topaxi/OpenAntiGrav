@@ -40,18 +40,19 @@ window). On a loss it:
 
 ## What the player sees
 
-- **On the front end** (boot sequence, menus, the disc chooser, with no race parked and no
-  network race) the game starts itself again, once: `device_loss::relaunch` spawns the same
-  executable with the same arguments and `OAG_RELAUNCHED_AFTER_DEVICE_LOSS=1`, and the old
-  process leaves. The new run brings up a fresh device and shows the main menu with a line
-  over it, "THE GRAPHICS DRIVER STOPPED LAST TIME. YOUR PROGRESS IS SAVED" (the existing
-  `Session::notice` band, strings `OAG_DEVICE_LOST_*`). A run that carries the variable does not
-  restart a second time: a driver that loses the device again on a fresh start ends the run.
-- **In a race**, or on a phone or the web (no second process to start), the run ends. The window
-  stays up with its new title until the player closes it. The next launch, by hand, shows the
-  same line over the main menu, from the note in step 3.
-- **A `--drive` run** (no window) ends with an error naming the loss and the last state, exit
-  status 1.
+- **On a desktop** the game starts itself again, from whatever stage it was on: the session has
+  saved, so `device_loss::relaunch` spawns the same executable (`$APPIMAGE` inside an AppImage,
+  whose mount goes away with the old process) with the same arguments and
+  `OAG_RELAUNCHED_AFTER_DEVICE_LOSS=1`, and the old process leaves. The new run brings up a fresh
+  device and shows the main menu with a line over it, "THE GRAPHICS DRIVER STOPPED LAST TIME. YOUR
+  PROGRESS IS SAVED" (the existing `Session::notice` band, strings `OAG_DEVICE_LOST_*`). A race
+  in progress is over; its replay is in the REPLAYS page.
+- **Not restarted:** a run that carries the variable (a driver that loses the device again on a
+  fresh start ends the run, so a bad driver does not loop), a run started with `--race` (the new
+  process would open that race again), a phone or the web (no second process to start), and a
+  `--drive` run (no window; it ends with an error naming the loss and the last state, exit
+  status 1). In these the window closes and the next launch, by hand, shows the same line over
+  the main menu from the note in step 3 above.
 
 A restart is a process restart, not a rebuilt device inside the process: every renderer, texture
 and pipeline of the old session holds the dead device, and rebuilding each is the whole game's
@@ -76,7 +77,6 @@ start-up. That is what the front end already does on a fresh launch.
   start-up fails the bring-up (`Gpu::bring_up`'s "requesting the device" error), the same path as
   an adapter that will not serve, so a named adapter falls back to the default and the default
   ends the run with that message.
-- **A second loss in a restarted run** ends it; see above.
 
 ## Reproducing
 

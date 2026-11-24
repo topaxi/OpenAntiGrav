@@ -1091,7 +1091,7 @@ impl ApplicationHandler for App {
                     error!("frame error: {e:#}");
                     event_loop.exit();
                 } else if session.lost.is_some() {
-                    restart_after_loss(session);
+                    restart_after_loss();
                 }
             }
 
@@ -1195,13 +1195,16 @@ impl ApplicationHandler for App {
     }
 }
 
-/// The session has saved and stopped after a lost device. On the front end, with nothing else to
-/// run again and no earlier loss in this lineage, the game starts itself over on a fresh device;
-/// the new run shows the note the old one left. Anywhere else, or if that fails, the run ends and
-/// the player starts the game again.
+/// The session has saved and stopped after a lost device, from whatever stage it was on: the
+/// game starts itself over on a fresh device and the new run shows the note the old one left. Not
+/// from a run that is itself such a restart (a driver that loses the device again on a fresh
+/// start ends the run), nor from one told to open a race on the command line (`--race`), which
+/// the new process would open again.
 #[cfg(not(any(target_arch = "wasm32", target_os = "android", target_os = "ios")))]
-fn restart_after_loss(session: &Session) {
-    if !session.restartable() || std::env::var_os(device_loss::RELAUNCHED_ENV).is_some() {
+fn restart_after_loss() {
+    if std::env::var_os(device_loss::RELAUNCHED_ENV).is_some()
+        || std::env::args_os().any(|arg| arg == "--race")
+    {
         return;
     }
     match device_loss::relaunch() {
@@ -1215,4 +1218,4 @@ fn restart_after_loss(session: &Session) {
 
 /// A phone or the web has no second process to start: the run ends and the player starts it.
 #[cfg(any(target_arch = "wasm32", target_os = "android", target_os = "ios"))]
-fn restart_after_loss(_session: &Session) {}
+fn restart_after_loss() {}

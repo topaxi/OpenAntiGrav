@@ -55,14 +55,4 @@ impl Session {
     pub(crate) fn last_run_lost_its_device(&mut self) {
         self.last_run_lost = true;
     }
-
-    /// Whether a game that lost its device may start itself again: on the front end, with
-    /// nothing that would run twice. A race has been saved and ends.
-    pub(crate) fn restartable(&self) -> bool {
-        matches!(
-            self.stage,
-            Stage::Menu(_) | Stage::Frontend(_) | Stage::Launcher(_)
-        ) && self.suspended_race.is_none()
-            && self.net.is_none()
-    }
 }
