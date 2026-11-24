@@ -186,9 +186,8 @@ pub fn build(
 /// (`psp2::water`) draw their scrolled normal map under `original` and stay the flat colour
 /// under any other value.
 ///
-/// `hide_pads` leaves out every submesh on a pad material (`weapon_pads`, `speed_pads`,
-/// `speedup_material`), for a race that draws its own pad model in their place
-/// ([`is_circuit_pad_material`]); a hidden submesh keeps its empty draw.
+/// `hide_pads` leaves out every pad submesh ([`is_circuit_pad`]), for a race that draws its own
+/// pad model in their place; a hidden submesh keeps its empty draw.
 ///
 /// # Errors
 ///
@@ -213,10 +212,29 @@ pub fn build_circuit(
 
 /// Whether a material file is one of the circuit's own pads: HD's two pad programs
 /// (`super::pads::is_pad_material`) and 2048's `speed_pads`.
-#[must_use]
-pub fn is_circuit_pad_material(name: &str) -> bool {
+fn is_circuit_pad_material(name: &str) -> bool {
     super::pads::is_pad_material(name)
         || name.rsplit('/').next().unwrap_or(name) == "speed_pads.rcsmaterial"
+}
+
+/// Whether a submesh is one of the circuit's own pads: on a pad material
+/// ([`is_circuit_pad_material`]), or a shape the artists named `speedup_pad` or `weapon_pad`
+/// (Omega's HD-lineage circuits draw a speed pad on `diffuse_normal_specular_emmissive`, the
+/// start-line material, under a shape of that name).
+#[must_use]
+pub fn is_circuit_pad(decoded: &psp2::Model, submesh: &psp2::SubMesh) -> bool {
+    let on_pad_material = submesh
+        .material
+        .and_then(|m| decoded.materials.get(m))
+        .is_some_and(|m| is_circuit_pad_material(&m.name));
+    let pad_shape = submesh
+        .mesh
+        .and_then(|m| decoded.scene.meshes.get(m))
+        .is_some_and(|m| {
+            let name = m.name.to_ascii_lowercase();
+            name.contains("speedup_pad") || name.contains("weapon_pad")
+        });
+    on_pad_material || pad_shape
 }
 
 /// [`build`], with the motion taken from the `.vex` the model was exported
@@ -485,11 +503,7 @@ fn build_scanned(
                 .mesh
                 .and_then(|m| decoded.scene.meshes.get(m))
                 .is_some_and(|m| m.is_crowd_entity());
-        let circuit_pad = hide_pads
-            && submesh
-                .material
-                .and_then(|m| decoded.materials.get(m))
-                .is_some_and(|m| is_circuit_pad_material(&m.name));
+        let circuit_pad = hide_pads && is_circuit_pad(&decoded, submesh);
         place.hidden |= filtered || crowd_entity || circuit_pad;
         report.node_bound += usize::from(submesh.node.is_some());
         report.moving += usize::from(place.xform != 0);

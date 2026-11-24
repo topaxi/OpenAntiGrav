@@ -1,5 +1,5 @@
 //! `psp2::build_circuit`'s `hide_pads` leaves a circuit's own pad submeshes out, and only those:
-//! the triangles drawn fall by exactly the triangles on a `weapon_pads` or `speed_pads` material,
+//! the triangles drawn fall by exactly the triangles on a pad material or a `speedup_pad`/`weapon_pad` shape,
 //! and a build without it is unchanged.
 //!
 //! **`#[ignore]`d and never run in CI.** It needs game content; run with `just test-data`.
@@ -29,11 +29,7 @@ fn pad_triangles(decoded: &file::Model) -> usize {
     decoded
         .submeshes
         .iter()
-        .filter(|s| {
-            s.material
-                .and_then(|m| decoded.materials.get(m))
-                .is_some_and(|m| psp2::is_circuit_pad_material(&m.name))
-        })
+        .filter(|s| psp2::is_circuit_pad(decoded, s))
         .map(file::SubMesh::triangle_count)
         .sum()
 }

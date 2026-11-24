@@ -54,7 +54,8 @@ clears the mines ahead (wave reach chosen).
 
 Open from 8b: no wreck or death shell (HD's PS3 hull branch loads no wreck in any mode; the
 Detonator `shipwreck.vex` is an outline placeholder); the circuit's own pad is hidden under the
-Detonator pad (live frames, 60; `detonator-emp.md`); the model's origin at the pad transform is
+Detonator pad on HD, Omega and 2048 (`DetonatorPads::replaces_circuit_pads`; HD 80 from a live frame,
+Omega and 2048 65 from the same code shape, no original frame of either: `detonator-emp.md`, "Do the circuit's own pads still draw?"); the model's origin at the pad transform is
 chosen; 2048 reads the object models from HD's `Data\Weapons` prefix (its loaders' prefix unread).
 
 ## Working rules learned the hard way
