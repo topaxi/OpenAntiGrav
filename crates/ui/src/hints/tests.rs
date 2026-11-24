@@ -407,3 +407,42 @@ fn a_snapped_right_aligned_line_ends_on_its_anchor() {
     );
     assert_eq!(hints[0].rect[0], (200.0 - run.ink_right).ceil());
 }
+
+/// A centred line on a snapped face starts where the original's measure puts it
+/// (`oag_ui::font::snapped_centre_pen`), not at half its pen end: with glyphs 9 units advance and 7 of
+/// ink, `X aa` measures 34 (the pen end is 36), so its rectangle starts at 183 and not at 182.
+#[test]
+fn a_snapped_centred_line_starts_at_half_its_measure() {
+    use oag_texture::fnt::{Font, Glyph};
+    let glyph = |ch: u8| Glyph {
+        codepoint: u16::from(ch),
+        width: 7,
+        height: 4,
+        u0: 0,
+        u1: 7,
+        v0: 0,
+        v1: 4,
+        advance: 9,
+        bearing: 0,
+    };
+    let atlas = Atlas::from_font(&Font {
+        line_height: 8,
+        unknown: 0,
+        width: 8,
+        height: 8,
+        palette: vec![[255, 255, 255, 255]; 16],
+        indices: vec![1; 64],
+        glyphs: vec![glyph(b' '), glyph(b'a'), glyph(b'X')],
+    });
+    let list = [text(Some("Stats"), 200.0, 0.0, Align::Centre, "X aa")];
+    let hints = scan(&list, None, &Substitution::reading(&TABLE), &|_| {
+        Some(Face {
+            atlas: &atlas,
+            buttons: false,
+            pens: crate::font::Pens::Snapped,
+        })
+    });
+    let run = crate::font::snapped_run(&atlas, "X aa", 1.0);
+    assert_eq!(run.end, 36.0, "the pen end is not the measure");
+    assert_eq!(hints[0].rect[0], 183.0);
+}

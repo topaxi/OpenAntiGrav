@@ -4,12 +4,14 @@ Where Pure's front end places a centred string, read off the executable and fitt
 
 ## Functions
 
+Data addresses: this import leaves code immediates unrelocated and rebases the data listing, so Ghidra's decompile shows the flag as `DAT_002b059c` and the layout's state (x, y, alignment, scales, face) as `_DAT_0009a570` to `_DAT_0009a588`; the data sits at the immediate plus `0x08804000` (`0x08ab459c` for the flag, where the cross-references resolve; `docs/ghidra/functions/psp-pure-eu/string-anchors.md`). Scores follow `docs/reverse-engineering/confidence-rubric.md`: decompile and disassembly only, no runtime trace, so the layout and the widget stay under 85; `Math_Ceilf` (the same code as Pulse's libm routine, a second binary) and the measure (the fit below needs it exactly) are 90 and 85.
+
 | Address | Name | Confidence | What |
 | --- | --- | --- | --- |
 | `0x088d3000` | `Text_Draw` | 75 | The text widget's draw: origin `(int)(x + offset)`, alignment from widget `+0x1f0` (vertical `+0x1f4`), scale from `+0x1dc`/`+0x1e0`, writes the snap flag from widget byte `+0x227`, calls `Text_BuildGlyphQuads` through `0x08947a48`, then leaves the flag at 1 |
 | `0x08947ae0` | `Text_BuildGlyphQuads` | 80 | Lays a string out as sprites: the centred start, the per-glyph ceil, the quad edges |
 | `0x08947868` | `Text_MeasureString` | 85 | The string's width, used by every alignment; steps each pen up to a whole unit when the flag is set |
-| `0x088da5e0` | `Math_Ceilf` | 95 | Byte for byte the libm `ceilf` (the `1.0e30` inexact trick, mantissa mask by exponent); the same code as Pulse `0x0897df24` |
+| `0x088da5e0` | `Math_Ceilf` | 90 | Byte for byte the libm `ceilf` (the `1.0e30` inexact trick, mantissa mask by exponent); the same code as Pulse `0x0897df24` |
 | `0x0894722c` | `Font_FindGlyph` | 80 | Glyph record by codepoint (sorted table, first record for a miss) |
 | `0x0894728c` | `Font_GetKerning` | 80 | Kerning of a glyph against the previous one: a `(previous codepoint, s16)` list at record `+0x0e`, ended by `0xffff` |
 | `0x08ab459c` | `g_text_snap_pens` | 80 | The flag the measure, the layout and the anchor function read; written only by `Text_Draw` (widget byte `+0x227` while it draws, 1 after) |
