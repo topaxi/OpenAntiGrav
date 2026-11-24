@@ -491,6 +491,8 @@ impl MenuStage {
         // attachment, the same reason `RaceStage::draw_hud` takes it.
         target_size: (u32, u32),
     ) -> Result<()> {
+        // A page over a parked race ends its frame in the front end's bloom like any other.
+        self.renderer.set_glow_over_scene(frozen_race);
         let shown = match (&mut self.backdrop, feed) {
             (Some(backdrop), Some(feed)) => {
                 // Surfaced before the frame it would have been, and once: the

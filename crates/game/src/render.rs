@@ -227,6 +227,9 @@ pub struct Renderer {
     hud: HudStretch,
     /// The frame-end bloom, built the first time a list carries a [`Draw::GlowStamp`].
     glow: Option<glow::Glow>,
+    /// Whether a list drawn over what the target already holds (`LoadOp::Load`) blooms its stamps
+    /// too; see [`Self::set_glow_over_scene`].
+    glow_over_scene: bool,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -246,6 +249,15 @@ impl Renderer {
     /// screen or the menus, whose rects this project authors at 480x272.
     pub fn set_space(&mut self, space: Space) {
         self.space = space;
+    }
+
+    /// Lets a list drawn over the target's existing picture bloom its [`Draw::GlowStamp`]s, as one
+    /// drawn on a cleared target does. Off by default: only a front-end page over a parked race
+    /// is known to end its frame in the front end's `Bloom_Draw` (`docs/ui/pause-menu.md`,
+    /// "Pulse's pause rows bloom"); the overlays, the results table's stamp and the track panel
+    /// also draw with `Load` and stay unbloomed.
+    pub fn set_glow_over_scene(&mut self, on: bool) {
+        self.glow_over_scene = on;
     }
 
     /// Draws every widget of the lists it is given at `scale` about the grid's centre; the
@@ -491,6 +503,7 @@ impl Renderer {
             inset: 1.0,
             hud: HudStretch::default(),
             glow: None,
+            glow_over_scene: false,
         })
     }
 
@@ -1046,7 +1059,7 @@ impl Renderer {
         let ps2_mask = glow::is_ps2_mask(&stamps);
         let glowing = !stamps.is_empty()
             && segments.is_empty()
-            && matches!(load, wgpu::LoadOp::Clear(_))
+            && (self.glow_over_scene || matches!(load, wgpu::LoadOp::Clear(_)))
             && self.ensure_glow(device)
             && (!ps2_mask || self.ensure_ps2_glow(device));
         if glowing {

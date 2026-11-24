@@ -89,6 +89,27 @@ fn boot_legal_wraps_to_two_lines_that_clear_the_screen() {
         .unwrap_or_else(|e| panic!("{font_name}: {e}"));
     let atlas = Atlas::from_font(&real_font);
 
+    // `Show Logo` draws `BOOT_LEGAL` in the third slot's `Title` face and wraps it over the
+    // `Viewport`'s width less the widget's own `x` (`Frontend::draw_screen_over`): the original
+    // breaks the line after "A" where the 400 wide reading would carry on to "registered".
+    let skin = oag_pulse::FRONT_END.menu.expect("Pulse's menu skin");
+    assert_eq!(skin.small_font, Some(roles::TITLE));
+    assert!(skin.menu_face_in_boot && skin.wrap_from_text_x);
+    for language in &languages {
+        assert_eq!(
+            language.font(roles::SMALL),
+            language.font(roles::TITLE),
+            "{}: the `small` face is the `Title` slot's file",
+            language.name
+        );
+    }
+    let narrow = oag_ui::font::wrap(&atlas, text, legal.scale, 400.0 - legal.x);
+    assert_eq!(
+        narrow.first().map(|line| line.ends_with("is a")),
+        Some(true),
+        "the first line ends at `is a`: {narrow:#?}"
+    );
+
     let width = legal.wrap_width.unwrap();
     let lines = oag_ui::font::wrap(&atlas, text, legal.scale, width);
     assert_eq!(

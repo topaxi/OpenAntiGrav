@@ -451,6 +451,25 @@ pub fn install_faces(
     renderer.set_bearing_pens(skin.bearing_pens);
 }
 
+/// Puts the menu face into the second glyph slot of a boot-sequence renderer, for a title whose
+/// sequence draws `font="menu"` texts in it ([`oag_title::MenuSkin::menu_face_in_boot`]).
+///
+/// The sequence's primary atlas is `Default`, so the second slot's `Default` copy
+/// ([`face_atlas_slot`]) adds nothing there and the menu face takes its place, under the role
+/// the skin names. A menu stage keeps the other arrangement (menu primary, `Default` beside it).
+/// A no-op for a title that does not draw the sequence this way, or whose menu face did not load.
+pub fn install_boot_menu_face(
+    renderer: &mut crate::render::Renderer,
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    skin: &oag_title::MenuSkin,
+    menu_font: Option<&oag_ui::font::Atlas>,
+) {
+    if let (true, Some(role), Some(face)) = (skin.menu_face_in_boot, skin.menu_font, menu_font) {
+        renderer.set_face_atlas(device, queue, Some(face.clone()), Some(role));
+    }
+}
+
 /// Reads the PlayStation button-glyph face
 /// ([`oag_ui::language::roles::BUTTONS`]), when this source's language
 /// plugins name one.

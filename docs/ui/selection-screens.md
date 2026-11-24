@@ -293,7 +293,12 @@ z -15` alone places it, with the grid's own aspect `640/448`
 that frame, box (60,150)-(640,560) at 1280x720, the best of twelve sway phases of ours: mean
 abs grey diff 24.36 before (the 12 s orbit) to 8.16 after (original box mean grey 19.81, ours
 18.87); the sway phase is matched by scan (`--model-seconds 3.0`), the PS2's node clock has no
-recovered address. `orbit_for`'s craft orbit is only the fallback for a craft whose own
+recovered address. **The PS2 pair fits it (2026-11-24, `fe-worst-residuals`):** `scripts/pcsx2-menu-pair.py` renders ours at phases a quarter second apart
+over the 5.983 s loop, then the neighbours of the best, and keeps the phase whose hull box `(100,200,500,320)` is closest to the frame
+(`original.ship_sway_fitted`; a fit, not a read). On `pulse-ps2/menu-team` the phase 0.575 s takes the hull box from 14.74 to 1.99 mean grey and the whole frame
+from 4.60 to 2.35; the neighbours score 3.47 (0.55 s) and 2.32 (0.6 s), so a phase is good to about 25 ms. The pair had been made with no
+`--model-seconds`, the one pin the script already carried. PSP: `psp-menu-pair.py` reads the clock (`ship_t`), so the PSP team pair needed no fit.
+`orbit_for`'s craft orbit is only the fallback for a craft whose own
 `screen.xml` authors no `Mode3D`.
 
 **Track Select's stills step every 2 s and cross-fade over 0.70 s

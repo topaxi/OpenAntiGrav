@@ -29,6 +29,7 @@ fn the_boot_sequences_renderer_installs_the_titles_faces() {
             font: &font,
             sprites: &oag_hud::sprite::Sheet::default(),
             skin,
+            menu_font: None,
             title_font: None,
             buttons_font: Some(&font),
         },
@@ -39,5 +40,55 @@ fn the_boot_sequences_renderer_installs_the_titles_faces() {
         renderer.third_slot_role(),
         skin.stats_font,
         "the third slot holds Pure's Stats face"
+    );
+}
+
+/// Pulse's boot sequence draws `font="Menu"` texts in the menu face, which the renderer holds in
+/// its second slot (the primary atlas is `Default`); a title that does not draw the sequence
+/// that way keeps what its skin names there.
+///
+/// **Skips with no adapter.**
+#[test]
+fn the_boot_sequences_second_slot_holds_the_menu_face_where_the_skin_draws_it() {
+    let instance = wgpu::Instance::default();
+    let Some(adapter) = oag_gpu::test_adapter::request(&instance) else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+    else {
+        eprintln!("no GPU adapter: skipping");
+        return;
+    };
+    let font = oag_ui::font::Atlas::build();
+    let slot = |skin: &'static oag_title::MenuSkin| {
+        frontend_renderer(
+            &device,
+            &queue,
+            wgpu::TextureFormat::Rgba8Unorm,
+            None,
+            &FrontendFaces {
+                font: &font,
+                sprites: &oag_hud::sprite::Sheet::default(),
+                skin,
+                menu_font: Some(&font),
+                title_font: None,
+                buttons_font: None,
+            },
+        )
+        .expect("the ui pipeline")
+        .face_slot_role()
+    };
+    let pulse = oag_pulse::frontend::MENU_SKIN;
+    assert!(pulse.menu_face_in_boot);
+    assert_eq!(
+        slot(pulse),
+        pulse.menu_font,
+        "Pulse's second slot is the menu face"
+    );
+    assert_eq!(
+        slot(oag_pure::frontend::MENU_SKIN),
+        None,
+        "Pure's second slot is its title face, not loaded here"
     );
 }

@@ -718,12 +718,20 @@ impl Frontend {
             };
             let align = Align::parse(&text.align);
             let body = self.strings.get_or_id(id).to_string();
-            // A `font="Stats"` (or `Scroll`) widget draws in the title's own small face where it
-            // has one (`oag_title::MenuSkin::stats_font`), at its authored scale: the face's own
-            // size, so no ratio against the `Default` atlas applies.
-            if self.stats_face_named(&text.font) {
+            // Where the skin says so ([`oag_title::MenuSkin::wrap_from_text_x`]) a `widthlimited` text
+            // wraps where the line from its own `x` is the `Viewport`'s width long, not at that width
+            // from the screen's edge
+            // (`docs/architecture/frontend-boot.md`, "Show Logo's faces and its legal line's wrap").
+            let from_x = self.menu_skin.is_some_and(|skin| skin.wrap_from_text_x);
+            let wrap_width = text
+                .wrap_width
+                .map(|width| if from_x { width - text.x } else { width });
+            // A widget in a role the title holds a face for draws in that face at its authored
+            // scale (`Frontend::faced_role`); every other is the `Default` atlas, corrected by the
+            // role's ratio.
+            if let Some(role) = self.faced_role(&text.font) {
                 out.push(Draw::FacedText {
-                    role: crate::language::roles::STATS,
+                    role,
                     x: text.x,
                     y,
                     scale: text.scale,
@@ -731,7 +739,7 @@ impl Frontend {
                     border: None,
                     align,
                     text: body,
-                    wrap_width: text.wrap_width,
+                    wrap_width,
                 });
             } else {
                 out.push(Draw::Text {
@@ -742,7 +750,7 @@ impl Frontend {
                     border: None,
                     align,
                     text: body,
-                    wrap_width: text.wrap_width,
+                    wrap_width,
                 });
             }
             // A title whose menu skin carries a glow blooms its front end: Pulse's.

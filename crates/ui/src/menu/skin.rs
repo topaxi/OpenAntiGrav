@@ -1005,6 +1005,8 @@ mod tests {
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
+        menu_face_in_boot: false,
+        wrap_from_text_x: false,
         text: Some(0xFF33_A6B9),
         title: Some(0xFF00_0000),
         background: None,

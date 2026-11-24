@@ -2936,3 +2936,29 @@ extend `hd-pair-lag-scan.py` with a score on static objects (the near mines in D
 existing `original.presented_lag` block, and have `rpcs3-hd-pair.py` move `--camera-pose`'s eye and `--pose` back by `k` ticks of the
 original craft's velocity. Every HD pair takes its camera from
 the push buffer, so this likely moves every HD pair with near scenery, not only Detonator's.
+
+## The four worst front-end pairs, split by region (2026-11-24, `fe-worst-residuals`)
+
+Claim: for each of `pure-psp/menu-pause` (5.06), `pulse-ps2/menu-team` (4.60), `pulse-psp/menu-title` (4.54) and `pulse-psp/menu-pause` (4.51), the largest
+residual region is named with its cause, and where the cause is a law the disc or executable authors it is wired and the region and the frame drop by more than the 0.3
+grey of re-capture noise. **True for three, and the fourth is not a front-end law.** Boxes are 480 x 272 (PSP) or 1280 x 720 (PS2) pixels; every number is
+`compare_env.overlap_score`'s mean grey over the box (`magick ... -colorspace Gray -compose difference`), ours re-rendered by the same recipe (`compare-rerender-ours.py`'s
+`rerender`) with main's tree ("before") and this lane's ("after"), against the stored `theirs.png`.
+
+| Pair | Largest region and cause | Box, before to after | Whole frame, before to after | Kind |
+| --- | --- | --- | --- | --- |
+| `pulse-psp/menu-pause` | the rows' halo: the pause draws over a parked race (`LoadOp::Load`) and the bloom ran only on a clear | rows `(40,20,150,120)` 11.84 to 5.75 | 4.01 to 2.70 (the page's 4.51 predates the music line, main's tree is 4.01) | law, wired (`docs/ui/pause-menu.md`) |
+| `pulse-psp/menu-title` | `BOOT_PRESS_START` and `BOOT_LEGAL` in `Default`, the original in `Pulse_20`/`Pulse_14`; the legal line's wrap width | press `(235,212,240,32)` 28.66 to 7.81; legal `(0,244,420,28)` 17.07 to 17.88 (wrap right, glyph pitch open) | 4.54 to 3.37 | law, wired (`docs/architecture/frontend-boot.md`) |
+| `pulse-ps2/menu-team` | the craft's `Anim Transform` phase (PS2 node clock unrecovered): ours drew the loop's start | hull `(100,200,500,320)` 14.74 to 1.99 | 4.60 to 2.35 | capture phase, fitted in `pcsx2-menu-pair.py` (`fit_sway`) |
+| `pure-psp/menu-pause` | the race under the scrim and its HUD, not the pause: HUD corners 11.41 and 12.54, lap counter 16.75, craft 8.63, band 2.70 | unchanged | 5.06 to 5.06 | not a front-end law: `pure-psp/vineta` scores 10.93, 13.21, 16.79 on the same boxes |
+
+**Shared cause between the two pause pairs: false.** Pulse's is the front end's bloom; Pure's skin carries no `MenuGlow` and its band already matched to the pixel row.
+
+**Same-family pairs, before to after** (mean grey; the ones with no move are byte for byte equal in `ours.png`): `pure-psp/menu-title` 0.08 and `menu-team` 0.26, `2048/menu-title` 3.80
+and `menu-team` 27.31, `pulse-psp/menu-team` 2.48: unchanged. Every other `menu-*` pair of Pulse PSP (7), Pulse PS2 (2 besides the team pair), Pure (7), HD (5), Omega (5) and 2048
+(5) re-renders byte for byte equal. No pause pair exists for HD, Omega, 2048 or PS2; 2048 and Omega: checked, not applicable (neither skin carries `MenuGlow`, `small_font` or `menu_face_in_boot`).
+**Pulse PS2 inherits** the boot-face rule (`menu_face_in_boot`) and the pause bloom from the PSP, unmeasured on the PS2 (no PS2 title or pause frame).
+
+**Re-make the pairs** (the lead adopts the lane's re-made pairs):
+`pulse-psp/menu-pause` and `menu-title` and `pure-psp/menu-pause` are `compare-rerender-ours.py --only <pair>` from a tree with this lane; `pulse-ps2/menu-team`
+needs `--menu-model-seconds 0.575` in its recorded flags (and `original.ship_sway_fitted`; a fresh PCSX2 capture fits it itself).
