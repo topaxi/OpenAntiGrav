@@ -71,6 +71,26 @@ fn an_hd_detonator_craft_flies_the_detonator_hull_in_its_teams_livery() {
         livery.hull.label
     );
     assert!(!livery.hull.indices.is_empty(), "the hull draws");
+    // The cockpit glass (`emissive_constant`, picture `detonator_glass`) is drawn unlit: lit in
+    // Detonator's near-black rig it contributes nothing, where the original shows a blue dome.
+    let glass = livery
+        .hull
+        .textures
+        .iter()
+        .position(|texture| {
+            texture.as_ref().is_some_and(|texture| {
+                texture
+                    .label
+                    .to_ascii_lowercase()
+                    .contains("detonator_glass")
+            })
+        })
+        .expect("the hull binds detonator_glass");
+    assert_eq!(
+        livery.hull.material_slots[glass] & oag_mesh::mesh::slots::EMISSIVE,
+        oag_mesh::mesh::slots::EMISSIVE,
+        "the glass is drawn unlit"
+    );
     assert!(
         loaded.cannon_muzzles(0).iter().all(Option::is_some),
         "the Detonator folder's locators.vex authors both cannon_flash nodes"
@@ -170,6 +190,47 @@ fn an_hd_detonator_race_draws_its_own_mine_bomb_and_pad_models() {
         "a pad model on every speed pad and every weapon pad"
     );
     assert!(!parts.pads.is_empty(), "the circuit has pads");
+    // The pad's `_ne` mask is bound as normal and light bars, with the material's own red
+    // (`0x7611a2d8` = 0.59568) as its colour: a plain slab with red squares, not the `_ne`
+    // picture added as a glow. The walls' depth below the model origin is lifted out of the road.
+    let pad = parts.pad.as_ref().expect("the pad model loaded");
+    let bound: Vec<u32> = pad
+        .vertices
+        .iter()
+        .filter(|v| v.slots & oag_mesh::mesh::slots::PAD_NE != 0)
+        .map(|v| oag_mesh::mesh::slots::material_index(v.slots))
+        .collect();
+    assert!(!bound.is_empty(), "the pad's slab binds its _ne mask");
+    for index in bound {
+        let tint = pad.emissive[index as usize - 1].tint;
+        assert!(
+            (tint[0] - 0.59568).abs() < 1e-4 && tint[1] == 0.0 && tint[2] == 0.0,
+            "the light bars are the material's own red: {tint:?}"
+        );
+    }
+    assert!(
+        pad.vertices
+            .iter()
+            .all(|v| v.slots & oag_mesh::mesh::slots::ADD_SECOND == 0),
+        "no vertex of the pad adds its _ne picture as a glow"
+    );
+    let lowest = pad
+        .vertices
+        .iter()
+        .map(|v| v.position[1])
+        .fold(f32::MAX, f32::min);
+    assert!(
+        lowest < -0.5,
+        "the model's walls lie below its origin: {lowest}"
+    );
+    let setup_pad = &loaded.setup.speedup_pads[0];
+    let plain = oag_core::math::Mat4::from_cols_array(&setup_pad.to_world);
+    let lifted = parts.pads[0];
+    let rise = (lifted.w_axis.truncate() - plain.w_axis.truncate()).length();
+    assert!(
+        (rise - -lowest).abs() < 1e-3,
+        "the pad rests on its plane: raised {rise}, walls {lowest}"
+    );
     assert!(
         loaded.pad_model.is_none() && loaded.weapon_pad_model.is_none(),
         "the circuit's own pads are not drawn under the Detonator pad"
