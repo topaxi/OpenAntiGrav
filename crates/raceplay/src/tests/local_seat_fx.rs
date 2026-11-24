@@ -214,11 +214,20 @@ fn a_local_seats_boost_pulse_draws_in_its_view_alone() {
     }
 }
 
+/// Runs `race` past the grid, where every craft's flaps stand out, and until they have folded.
+fn past_the_grid(race: &mut Race) {
+    let fold = (100.0 / (race.view.flap_graphics.down_speed * race.core.sim.dt)).ceil() as u64;
+    for _ in 0..oag_race::COUNTDOWN_TICKS + fold {
+        race.tick(&PlayerInputs::none());
+    }
+}
+
 #[test]
 fn a_local_seats_airbrake_swings_its_own_flaps() {
     for views in VIEWS {
         for seat in 1..views {
             let mut race = local_people(views, false);
+            past_the_grid(&mut race);
             race.core.sim.world.ships[seat].physics.airbrake_left = 100.0;
             race.tick(&PlayerInputs::none());
             for slot in 0..4 {
@@ -264,6 +273,7 @@ fn the_players_screen_wash_does_not_cover_another_seats_view() {
 #[test]
 fn a_seat_given_back_to_the_ai_folds_its_flaps() {
     let mut race = local_people(2, false);
+    past_the_grid(&mut race);
     race.core.sim.world.ships[1].physics.airbrake_left = 100.0;
     race.tick(&PlayerInputs::none());
     assert!(race.airbrake_flaps_of(1)[0] > 0.0);

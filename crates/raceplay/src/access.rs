@@ -62,8 +62,8 @@ impl Race {
     }
 
     #[cfg(feature = "view")]
-    /// [`Self::airbrake_flaps`] for the craft in `slot`: swung for a craft a person flies,
-    /// zero for every other.
+    /// [`Self::airbrake_flaps`] for the craft in `slot`: fully out on the grid for every craft,
+    /// then swung for a craft a person flies and zero for every other.
     #[must_use]
     pub fn airbrake_flaps_of(&self, slot: usize) -> [f32; 2] {
         self.flaps_between(slot)

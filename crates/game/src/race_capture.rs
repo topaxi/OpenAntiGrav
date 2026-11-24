@@ -264,6 +264,10 @@ pub struct CaptureOptions {
     pub pose_lean: Option<pose_lean::PoseLean>,
     /// `--pose-flaps`: ship 0's air brake levels from the pose's trace row, after the ticks. See [`pose_flaps`].
     pub pose_flaps: Option<pose_flaps::PoseFlaps>,
+    /// `--no-grid-flaps`, or a posed capture (`--pose-from`, `--field-from`, `--pose`), which stands
+    /// for a craft off the grid: the grid state does not force the flaps out. See
+    /// [`oag_raceplay::Race::stow_grid_flaps`].
+    pub stow_grid_flaps: bool,
     /// `--field-from`'s `steer_lean` / `roll_phase` columns: the opponents' drawn lean and roll phase
     /// as the original's RAM held them, slots 1.. in order; `None` for a craft whose row has no columns.
     pub field_lean: Vec<Option<pose_lean::PoseLean>>,
@@ -474,6 +478,9 @@ pub fn capture(
     // Read before `Race::start` takes `setup`; `difficulty` is `--autopilot-skill`'s fallback.
     let (weapons_on, difficulty) = (setup.weapons_on(), setup.difficulty);
     let mut race = Race::start(setup, view, modules);
+    if options.stow_grid_flaps {
+        race.stow_grid_flaps();
+    }
     let start_pose = options.pose_hold.start(&race);
     // With a field warm-up and no ticks to run, the player's boost is armed inside the warm-up so it rides the
     // warmed trail; `force_boost_state` would clear that trail for a straight one (`Race::warm_up_field`).

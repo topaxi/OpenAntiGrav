@@ -702,3 +702,36 @@ fn the_lens_ring_is_half_the_previews_blur_in_the_field_the_frame_is_drawn_with(
         moved / wanted
     );
 }
+
+/// Fails if a rewind into the grid draws the flaps of the live tick it left, or if leaving the
+/// rewind carries the grid's flaps back into the live race.
+#[test]
+fn a_rewind_draws_the_flaps_of_the_tick_it_shows_and_puts_the_live_ones_back() {
+    let (mut race, mut keeper, _) = driven();
+    let step = race.view.flap_graphics.down_speed * race.core.sim.dt;
+    let level = |tick: u64| -> f32 {
+        if tick < oag_race::COUNTDOWN_TICKS {
+            100.0
+        } else {
+            (100.0 - step * (tick - (oag_race::COUNTDOWN_TICKS - 1)) as f32).max(0.0)
+        }
+    };
+    let live = race.view.flaps[0];
+    assert!(
+        (live[0] - level(LIVE)).abs() < 1e-3,
+        "the live race is in the fold"
+    );
+    open(&mut race);
+    let mut rewind = Rewind::begin(&mut keeper, &mut race).expect("a race that is running");
+    for target in [0, 120, 271, 299, 150] {
+        rewind.seek(&mut keeper, &mut race, target);
+        let drawn = race.view.flaps[0];
+        assert!(
+            (drawn[0] - level(target)).abs() < 1e-3,
+            "tick {target}: draws {drawn:?}, not {}",
+            level(target)
+        );
+    }
+    rewind.end(&mut keeper, &mut race);
+    assert_eq!(race.view.flaps[0], live, "the live flaps were not put back");
+}

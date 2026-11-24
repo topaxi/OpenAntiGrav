@@ -16,9 +16,9 @@
 //! flaps are small, so a brake that raised a blob mid-hull read as "the flaps
 //! do not move".
 //!
-//! Two frames of the same race at the same tick, one with the airbrakes held:
-//! everything the brake changes is the flaps, so where the changed pixels sit is
-//! where the flaps are drawn. A hull is symmetric about the screen's centre
+//! Two frames of the same race at the same tick, the craft parked on the grid, one with the grid's
+//! flaps fully out and one with `--no-grid-flaps`: everything that differs is the flaps, so where the
+//! changed pixels sit is where the flaps are drawn. A hull is symmetric about the screen's centre
 //! column from the chase camera, and its flaps hang on either side of it.
 
 use std::path::Path;
@@ -59,7 +59,7 @@ fn decode(png: &[u8]) -> Vec<u8> {
         .collect()
 }
 
-fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, hold: &str) -> Vec<u8> {
+fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, stowed: bool) -> Vec<u8> {
     let out = scratch.join(format!("{name}.png"));
     let run = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(source)
@@ -67,7 +67,8 @@ fn frame(source: &Path, scratch: &Path, name: &str, mode: &str, hold: &str) -> V
         .args(["--render-scale", "100", "--msaa", "off"])
         .args(["--screen-filter", "off", "--anisotropy", "off"])
         .args(["--motion-blur", "off", "--scheme", "novice"])
-        .args(["--mode", mode, "--hold", hold, "--ticks", "240"])
+        .args(["--mode", mode, "--ticks", "240"])
+        .args(stowed.then_some("--no-grid-flaps"))
         .arg("--screenshot")
         .arg(&out)
         .env("XDG_CONFIG_HOME", scratch.join(format!("{name}-config")))
@@ -126,29 +127,19 @@ fn check(source: &Path, tag: &str, mode: &str) {
     // Each has its own profile directories: two processes sharing one settings
     // file read and rewrite it under each other.
     let (rest, brake) = std::thread::scope(|scope| {
-        let rest = scope.spawn(|| frame(source, &scratch, &format!("{mode}-rest"), mode, "cross"));
-        let brake = frame(
-            source,
-            &scratch,
-            &format!("{mode}-brake"),
-            mode,
-            "cross,l,r",
-        );
+        let rest = scope.spawn(|| frame(source, &scratch, &format!("{mode}-rest"), mode, true));
+        let brake = frame(source, &scratch, &format!("{mode}-brake"), mode, false);
         (rest.join().expect("the rest frame"), brake)
     });
     let (left, right, centre) = columns(&brake, &rest);
     println!("{tag} {mode}: left {left}, right {right}, centre band {centre}");
-    // Zone's one shared hull is small and white, so its flaps move fewer
-    // pixels than a native craft's: 2048 measures 94 left and 167 right
-    // in the lower half (it was over 200 each on the player's own craft). 2048's
-    // single race measures 880 left, 1,119 right and 53 in the centre band. A flap off its hinge puts almost
-    // nothing on the sides, so 100 still catches the defect; the
-    // mid-hull check below is the one that names it. HD's Zone skips the brakes as
-    // the original does (`Craft_Update`, `0x000f27c8`), so holding both airbrakes
-    // no longer slows the craft and only the flaps change: 390 left and 100 right
-    // (x 286-310 and 409-430, the same rows; the right flap is white on white),
-    // centre band 0. Before, the brake's slowdown moved the whole scene
-    // (8,341 / 15,084 / centre 1,292) and the floor measured that, not the flaps.
+    // Zone's one shared hull is small and white, so its flaps move fewer pixels than a native
+    // craft's. Measured with the grid's flaps against the stowed frame, 240 ticks, lower half:
+    // HD zone 391 left and 389 right, HD single race 2,364 and 2,385, Pulse zone 400 and 518,
+    // Pulse single race 702 and 604, 2048 single race 921 and 1,174 (85 in the centre band), and
+    // 2048 zone 58 and 75, which clears the floor of 50 by a thin margin. A flap off its hinge puts
+    // almost nothing on the sides, so the floor still catches the defect; the mid-hull check below
+    // is the one that names it.
     let floor = if mode == "zone" { 50 } else { 200 };
     assert!(
         left > floor && right > floor,

@@ -571,6 +571,7 @@ pub fn run(
                 pose_hold: crate::race_capture::pose_hold::Hold::Off,
                 pose_lean: None,
                 pose_flaps: None,
+                stow_grid_flaps: false,
                 field_lean: Vec::new(),
                 field_warmup: None,
                 detonator_mines: None,
