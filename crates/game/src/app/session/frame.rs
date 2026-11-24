@@ -711,6 +711,9 @@ impl Session {
                     if stage.picker.is_some() {
                         self.tick_picker(&grid);
                         if !matches!(self.stage, Stage::Menu(_)) {
+                            // The craft's drag is Ship Select's alone: the race a confirm
+                            // starts clicks on the press again.
+                            self.pointer.set_mouse_pans(false);
                             break;
                         }
                         continue;

@@ -239,3 +239,64 @@ fn a_drag_is_spent_by_the_first_frame_of_its_tick() {
     );
     assert_eq!(once.accumulated, single.accumulated);
 }
+
+fn zoomed_in_by_the_wheel() -> CraftControl {
+    let mut control = CraftControl::default();
+    run(
+        &mut control,
+        &CraftInput {
+            wheel: -5,
+            ..CraftInput::default()
+        },
+        1,
+    );
+    run(&mut control, &CraftInput::default(), 40);
+    control
+}
+
+/// A pointer's pan is the zoomed craft's: zooming back out brings the craft back to the middle.
+#[test]
+fn a_dragged_pan_lets_go_as_the_zoom_does() {
+    let mut control = zoomed_in_by_the_wheel();
+    let drag = CraftInput {
+        drag: Some((200.0, 0.0)),
+        ..CraftInput::default()
+    };
+    run(&mut control, &drag, 1);
+    run(&mut control, &CraftInput::default(), 40);
+    assert!(control.pose().pan[0].abs() > 0.5, "{:?}", control.pose());
+    run(
+        &mut control,
+        &CraftInput {
+            wheel: 5,
+            ..CraftInput::default()
+        },
+        1,
+    );
+    run(&mut control, &CraftInput::default(), 80);
+    let pose = control.pose();
+    assert!(
+        pose.zoom.abs() < 0.01 && pose.pan[0].abs() < 0.02,
+        "{pose:?}"
+    );
+}
+
+/// Panning with the left stick while the wheel holds the zoom is the player at work: the idle
+/// return does not unzoom the craft mid-pan.
+#[test]
+fn a_stick_pan_under_a_wheel_zoom_holds_the_idle_count_off() {
+    let mut control = zoomed_in_by_the_wheel();
+    run(&mut control, &pushed((0.0, 0.0), (1.0, 0.0), 0.0), 400);
+    assert!(control.pose().zoom > 0.4, "{:?}", control.pose());
+    assert!(control.zoomed(&LAW));
+}
+
+/// Drift inside the dead band is not a touch: a turned craft still returns to rest under it.
+#[test]
+fn stick_drift_inside_the_dead_band_does_not_hold_the_return_off() {
+    let mut control = CraftControl::default();
+    run(&mut control, &pushed((1.0, 0.0), (0.0, 0.0), 0.0), 40);
+    assert!(control.pose().turn[1].abs() > 0.5);
+    run(&mut control, &pushed((0.15, -0.15), (0.0, 0.0), 0.0), 400);
+    assert!(control.pose().turn[1].abs() < 0.07, "{:?}", control.pose());
+}

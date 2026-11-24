@@ -481,3 +481,24 @@ fn the_craft_terms_change_the_picture_and_zero_leaves_it() {
     );
     assert_ne!(authored.1, turned_widget.1);
 }
+
+/// Omega's pose draws at its own scale and depth: a full pan at a full pull keeps the craft's
+/// origin inside the screen rather than flinging it off.
+#[test]
+fn omegas_full_pan_stays_on_screen() {
+    let law = oag_omega::frontend::SHIP_CONTROL;
+    let mut posed = widget([960.0, 540.0]);
+    posed.position = [0.4, 0.1];
+    posed.z = -2.05;
+    posed.scale = 0.1;
+    posed.fov_degrees = 100.0;
+    posed.zoom = 2.5;
+    let craft = Craft {
+        pan: [law.pan_scale[0], law.pan_scale[1]],
+        fov_delta: -30.0,
+        ..Craft::default()
+    };
+    let (view_projection, model) = matrices(&posed, &craft, Space::HD, 1.0);
+    let at = (view_projection * model).project_point3(Vec3::ZERO);
+    assert!(at.x.abs() < 1.0 && at.y.abs() < 1.0, "{at:?}");
+}

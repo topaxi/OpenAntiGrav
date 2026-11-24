@@ -253,7 +253,10 @@ pub const SHIP_CONTROL: oag_title::ShipControl = oag_title::ShipControl {
     zoom_ease: 0.25,
     zoom_active: 0.1,
     fov_per_zoom: -60.0,
-    pan_scale: [2.0, 1.0],
+    // HD's reach (`[2.0, 1.0]`) scaled by the visible half-height at Omega's rest pose over HD's
+    // (about 0.98 over 6.5 model units): the pose's units are ours, so the update's own
+    // reach would fling the craft off the frame. **Chosen, not measured.**
+    pan_scale: [0.3, 0.15],
     pan_ease: 0.125,
     push_decay: 0.875,
     push_scale: 3.5,

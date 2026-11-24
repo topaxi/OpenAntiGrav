@@ -28,10 +28,9 @@ const PAN_SIGN: [f32; 2] = [1.0, 1.0];
 /// the craft's own width (about 500 units) is about a third of a turn.
 pub const DRAG_TURN: f32 = 0.004;
 
-/// Model units of pan one grid unit of pointer travel makes while the craft is zoomed. **Chosen,
-/// not measured**: the craft follows the pointer at the lens a full zoom leaves (a grid unit is
-/// about 0.0054 model units there).
-pub const DRAG_PAN: f32 = 0.006;
+/// Grid units of pointer travel that carry the craft the stick's whole reach while it is
+/// zoomed. **Chosen, not measured**: about the craft frame's half width.
+pub const DRAG_REACH: f32 = 330.0;
 
 /// How much of a full zoom pull one wheel detent is. **Chosen, not measured**: five detents.
 pub const WHEEL_PULL: f32 = 0.2;
@@ -119,6 +118,13 @@ pub struct CraftControl {
 }
 
 impl CraftControl {
+    /// Whether the craft is zoomed, by the button or by the wheel: the left stick and the d-pad
+    /// are then the pan's and not the list's.
+    #[must_use]
+    pub fn zoomed(&self, law: &ShipControl) -> bool {
+        self.wheel_pull > 0.0 || self.pose.zoom > law.zoom_active
+    }
+
     /// The terms as they stand.
     #[must_use]
     pub fn pose(&self) -> CraftPose {
@@ -178,7 +184,7 @@ impl CraftControl {
                 && (across != 0.0 || down != 0.0)
             {
                 if self.pose.zoom > law.zoom_active {
-                    self.grab_pan(across, down);
+                    self.grab_pan(law, across, down);
                 } else {
                     turn_push[0] += TURN_SIGN[0] * -down * DRAG_TURN;
                     turn_push[1] += TURN_SIGN[1] * across * DRAG_TURN;
@@ -194,6 +200,10 @@ impl CraftControl {
         // Only the button holds the idle count off: a wheel's pull is a touch once, and is then
         // let go on the idle count like the turn.
         if input.zoom.clamp(0.0, 1.0) * law.zoom_scale > law.zoom_active {
+            touched = true;
+        }
+        // A pan with the stick while the wheel holds the zoom is the player at work too.
+        if self.wheel_pull > 0.0 && input.left != (0.0, 0.0) {
             touched = true;
         }
         if touched {
@@ -219,7 +229,9 @@ impl CraftControl {
             PAN_SIGN[1] * input.left.1 * pull * law.pan_scale[1],
         ];
         for axis in 0..2 {
-            let aim = stick[axis] + self.grabbed_pan[axis];
+            // A pointer's pan is the zoomed craft's: it lets go as the zoom does.
+            let zoomed = (self.pose.zoom / law.zoom_scale).clamp(0.0, 1.0);
+            let aim = stick[axis] + self.grabbed_pan[axis] * zoomed;
             self.pose.pan[axis] += (aim - self.pose.pan[axis]) * law.pan_ease;
         }
 
@@ -236,12 +248,14 @@ impl CraftControl {
         }
     }
 
-    /// Holds the craft `across` and `down` grid units further along, within the stick's own reach.
-    fn grab_pan(&mut self, across: f32, down: f32) {
-        self.grabbed_pan[0] =
-            (self.grabbed_pan[0] + PAN_SIGN[0] * across * DRAG_PAN).clamp(-2.0, 2.0);
-        self.grabbed_pan[1] =
-            (self.grabbed_pan[1] - PAN_SIGN[1] * down * DRAG_PAN).clamp(-1.0, 1.0);
+    /// Holds the craft `across` and `down` grid units further along, within the stick's own
+    /// reach `law.pan_scale`: [`DRAG_REACH`] grid units of travel is all of it.
+    fn grab_pan(&mut self, law: &ShipControl, across: f32, down: f32) {
+        let reach = law.pan_scale;
+        self.grabbed_pan[0] = (self.grabbed_pan[0] + PAN_SIGN[0] * across * reach[0] / DRAG_REACH)
+            .clamp(-reach[0], reach[0]);
+        self.grabbed_pan[1] = (self.grabbed_pan[1] - PAN_SIGN[1] * down * reach[1] / DRAG_REACH)
+            .clamp(-reach[1], reach[1]);
     }
 }
 

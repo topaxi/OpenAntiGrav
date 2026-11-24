@@ -229,4 +229,5 @@ fn omega_lets_the_player_turn_zoom_and_pan_its_craft() {
         .expect("the update's control law");
     assert_eq!((law.idle_frames, law.push_scale), (181, 3.5));
     assert_eq!(law.fov_per_zoom, -60.0);
+    assert!(law.pan_scale[0] < 1.0, "Omega's pan stays inside its frame");
 }

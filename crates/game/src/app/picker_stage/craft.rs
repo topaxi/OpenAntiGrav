@@ -19,6 +19,11 @@ impl PickerStage {
         self.previews.front_end?.ship_control
     }
 
+    /// Whether a modal has the screen: the Help overlay, or a screen that takes no input.
+    fn craft_blocked(&self) -> bool {
+        self.model.help_open() || self.model.is_locked()
+    }
+
     /// Whether the player can turn, zoom and pan the craft here: what asks the window to give a
     /// held mouse button's travel to the screen.
     pub(crate) fn has_craft_control(&self) -> bool {
@@ -29,7 +34,7 @@ impl PickerStage {
     /// makes of the left stick, so a pan does not also step the team. A split-screen seat reads
     /// its own device, which is not the pad read here.
     pub(crate) fn read_craft_pad(&mut self, controls: &mut Controls) {
-        let held = self.craft_law().is_some() && self.seat.is_none();
+        let held = self.craft_law().is_some() && self.seat.is_none() && !self.craft_blocked();
         if !held {
             return;
         }
@@ -38,7 +43,12 @@ impl PickerStage {
         self.craft_input.right = view.right_raw;
         self.craft_input.left = view.left;
         self.craft_input.zoom = zoom;
-        if zoom > 0.0 {
+        if zoom > 0.0
+            || self
+                .ship_player
+                .as_ref()
+                .is_some_and(|player| player.zoomed())
+        {
             for button in [Button::Left, Button::Right, Button::Up, Button::Down] {
                 controls.buttons_mut().consume_press(button);
             }
@@ -49,7 +59,7 @@ impl PickerStage {
     /// zooms instead of stepping the list, and a drag that began on the frame turns (or, zoomed,
     /// pans) it instead of the grid beneath.
     pub(crate) fn take_craft_pointer(&mut self, pointer: &mut Pointer) {
-        if self.craft_law().is_none() {
+        if self.craft_law().is_none() || self.craft_blocked() {
             return;
         }
         let frame = self.layout.preview;
@@ -89,6 +99,16 @@ impl PickerStage {
                 &input,
                 dt,
             );
+    }
+
+    /// The zoom and turn terms as text, for a drive script to read.
+    pub(crate) fn craft_report(&self) -> Option<(String, String)> {
+        let player = self.ship_player.as_ref()?;
+        let craft = player.craft();
+        Some((
+            format!("{:.2}", -craft.fov_delta),
+            format!("{:.2},{:.2}", craft.turn[0], craft.turn[1]),
+        ))
     }
 
     /// What the player has done to the craft, for the draw.

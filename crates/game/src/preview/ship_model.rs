@@ -304,6 +304,14 @@ impl ShipPlayer {
         self.motion.map(|motion| motion.framing())
     }
 
+    /// Whether the craft is zoomed now, whichever input holds it.
+    #[must_use]
+    pub fn zoomed(&self) -> bool {
+        self.law
+            .as_ref()
+            .is_some_and(|law| self.control.zoomed(law))
+    }
+
     /// What the player has done to the craft now.
     #[must_use]
     pub fn craft(&self) -> Craft {

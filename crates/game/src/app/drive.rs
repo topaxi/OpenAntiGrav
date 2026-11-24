@@ -665,7 +665,12 @@ fn screen(stage: &MenuStage) -> Screen {
         };
     }
     if let Some(picker) = &stage.picker {
-        return picker_screen(&picker.model);
+        let mut screen = picker_screen(&picker.model);
+        if let Some((zoom, turn)) = picker.craft_report() {
+            screen.craft_zoom = Some(zoom);
+            screen.craft_turn = Some(turn);
+        }
+        return screen;
     }
     if let Some(campaign) = &stage.campaign {
         return campaign_screen(campaign);
@@ -763,6 +768,8 @@ fn picker_screen(picker: &oag_ui_screens::picker::Picker) -> Screen {
             .has_help()
             .then(|| if picker.help_open() { "open" } else { "closed" }),
         help_text: picker.help_text().map(str::to_string),
+        craft_zoom: None,
+        craft_turn: None,
     }
 }
 
@@ -842,5 +849,7 @@ fn page_screen(stage: &MenuStage) -> Screen {
         pulse_ms: None,
         help: None,
         help_text: None,
+        craft_zoom: None,
+        craft_turn: None,
     }
 }
