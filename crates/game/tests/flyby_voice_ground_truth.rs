@@ -73,9 +73,13 @@ fn the_voice_over_sounds_from_the_counters_zero_until_the_flyby_ends() {
         return;
     };
     assert!(sounding[..lock].iter().all(|&on| !on), "before zero");
+    // The clip sounds from the counter's zero until it ends by itself or the flyby stops it,
+    // whichever is first, and never again (16_Track's clip ends before its flyby does).
+    let heard = sounding[lock..].iter().take_while(|&&on| on).count();
+    assert!(heard > 0, "from the counter's zero");
     assert!(
-        sounding[lock..sounding.len() - 1].iter().all(|&on| on),
-        "from the counter's zero until the end"
+        sounding[lock + heard..].iter().all(|&on| !on),
+        "until it ends, and not again"
     );
     assert!(!sounding[sounding.len() - 1], "stopped on the ending tick");
     assert!(!song, "the held race song is still parked");

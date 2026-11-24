@@ -304,14 +304,14 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
         );
         return;
     }
-    let loaded = race::load(&race::Options {
+    let options = race::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,
         track: Some(r"data\art\published\DLC1\environments\zone_1\track.vex".to_string()),
         ..race::Options::default()
-    })
-    .expect("loading a 2048 Detonator race");
+    };
+    let loaded = race::load(&options).expect("loading a 2048 Detonator race");
     assert_eq!(
         race::Race::start(
             loaded.setup.clone(),
@@ -348,12 +348,39 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, false);
     assert_the_pad_is_red_squares_on_a_slab_that_rests(&loaded);
+    assert_the_circuits_own_pads_are_left_out(&options, &loaded);
+}
+
+/// The same circuit in a single race draws the circuit's own pads; the Detonator race's track
+/// model holds fewer triangles (`psp2::build_circuit`'s `hide_pads`).
+fn assert_the_circuits_own_pads_are_left_out(options: &race::Options, loaded: &race::Loaded) {
+    let plain = race::load(&race::Options {
+        mode: oag_race::Mode::SingleRace,
+        ..options.clone()
+    })
+    .expect("loading the same circuit in a single race");
+    let (with, without) = (
+        plain.track_model.indices.len() / 3,
+        loaded.track_model.indices.len() / 3,
+    );
+    assert!(
+        with > without,
+        "the Detonator race's track holds {without} triangles against {with} in a single race"
+    );
 }
 
 /// The Detonator pad on the 2048 lineage: the `_ne` mask rides the third binding and the glow
 /// entry is the unsquared-alpha program with the material's own red (`0x7611a2d8`), the squares the
 /// original's pad shows; the slab is raised by the depth of its walls so it stands on the road.
 fn assert_the_pad_is_red_squares_on_a_slab_that_rests(loaded: &race::Loaded) {
+    assert!(
+        loaded.report.iter().any(|l| l.contains(
+            "detonator: the circuit's own speed and weapon pads are not drawn under the \
+             Detonator pad"
+        )),
+        "the circuit's own pads are dropped under the Detonator pad: {:#?}",
+        loaded.report
+    );
     let parts = &loaded.bomb_blast_models.detonator;
     let pad = parts.pad.as_ref().expect("the pad model loaded");
     assert!(
@@ -399,13 +426,13 @@ fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
     let Some(path) = oag_testdata::image("data/images/omega-ps4-eu.pkg") else {
         return;
     };
-    let loaded = race::load(&race::Options {
+    let options = race::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Detonator,
         ..race::Options::default()
-    })
-    .expect("loading an Omega Detonator race");
+    };
+    let loaded = race::load(&options).expect("loading an Omega Detonator race");
     assert_eq!(
         race::Race::start(
             loaded.setup.clone(),
@@ -438,6 +465,7 @@ fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, true);
     assert_the_pad_is_red_squares_on_a_slab_that_rests(&loaded);
+    assert_the_circuits_own_pads_are_left_out(&options, &loaded);
 }
 
 /// Omega's `Environments2048` circuits take the loader's primary branch (their own

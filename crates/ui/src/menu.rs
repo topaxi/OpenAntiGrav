@@ -653,6 +653,8 @@ pub struct Menu {
     pause_screen: bool,
     /// The button that backs out of a page. See [`Self::set_roles`].
     roles: crate::roles::Roles,
+    /// The pause screen's music list. See [`Self::set_music_list`].
+    music: Option<music_list::MusicList>,
 }
 
 /// How many rows a page shows before the caller says otherwise.
@@ -710,6 +712,7 @@ impl Menu {
             square_actions: Vec::new(),
             pause_screen: false,
             roles: crate::roles::Roles::default(),
+            music: None,
         };
         // A row that is on a page only while the host offers it starts off the page.
         menu.offer(Action::PhotoMode, false);
@@ -1054,6 +1057,7 @@ impl Menu {
         }
         let mut out = Vec::new();
         let rows = self.page().entries.len();
+        self.settle_music_list();
 
         let page = self.current();
         let mut moved = None;
@@ -1103,6 +1107,8 @@ impl Menu {
             };
             self.nav
                 .when((left || right) && rows > 1, nav::Nav::Moved(Some(dir)));
+        } else if (right || left) && self.step_music(if right { 1 } else { -1 }) {
+            // The music list takes LEFT and RIGHT whichever row the cursor is on.
         } else if (right || left)
             && let Some(event) = self.adjust(if right { 1 } else { -1 })
         {
@@ -1238,6 +1244,7 @@ mod pin;
 mod unavailable;
 pub use pin::Pin;
 mod layers;
+pub mod music_list;
 pub mod pointer;
 mod rows;
 mod skin;
@@ -1357,6 +1364,9 @@ pub fn draw_list(
         Some(strip) => strip::draw(menu, skin, strip, measure, frame),
         None => rows::draw(menu, skin, bindings, frame),
     };
+    if let Some(art) = &frame.music_list {
+        music_list::draw(menu, skin, art, &mut layers.body);
+    }
     layers.body.extend(frame.scroll_arrows_for(
         menu.scroll(),
         menu.visible_rows(),

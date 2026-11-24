@@ -34,6 +34,8 @@ const SCREENS: &PauseMenu = &PauseMenu {
     hud_under_scrim: false,
     song_line_under_scrim: true,
     offers_photo: true,
+    music_list: None,
+    music_list_ps2: None,
     origin: Origin::Chosen,
 };
 
@@ -375,6 +377,8 @@ fn an_audio_row_opens_the_audio_page_and_the_pause_page_is_a_column_not_a_strip(
         hud_under_scrim: false,
         song_line_under_scrim: true,
         offers_photo: false,
+        music_list: None,
+        music_list_ps2: None,
         origin: Origin::Chosen,
     };
     let words = crate::language::StringTable::from_xml(

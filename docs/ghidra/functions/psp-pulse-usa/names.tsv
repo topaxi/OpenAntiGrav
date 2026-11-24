@@ -1521,3 +1521,17 @@
 0x0881be58	function	MpTagHud_BindPlayerStatus	70	hud-game-options.md
 0x0888e6e8	function	Unlock_ContextMet	84	race-box-screens.md
 0x088a9f3c	function	ListWidget_ReadElement	75	race-box-screens.md
+0x088bb4a0	function	MusicList_RegisterClass	85	music-list.md
+0x088bb0d4	function	MusicList_Construct	80	music-list.md
+0x088bb264	function	MusicList_Update	80	music-list.md
+0x088bb358	function	MusicList_RebuildEntries	85	music-list.md
+0x088bb2c0	function	MusicList_Enter	80	music-list.md
+0x088bb2f4	function	MusicList_Leave	90	music-list.md
+0x088a9520	function	ListWidget_Construct	80	music-list.md
+0x088aa580	function	ListWidget_Enter	75	music-list.md
+0x088aaae4	function	ListWidget_Update	80	music-list.md
+0x088a9db4	function	ListWidget_StepBack	90	music-list.md
+0x088a9e7c	function	ListWidget_StepForward	90	music-list.md
+0x088b528c	function	MenuWidget_StepCursor	85	music-list.md
+0x08ab0628	data	g_game_paused	85	music-list.md
+0x088a9ba4	function	ListWidget_ShadeArrows	85	music-list.md

@@ -92,6 +92,8 @@ impl Menu {
         let rows = self.definition.pages[page].entries.len();
         self.focus[page] = (0..rows).map(|row| self.focus_target(page, row)).collect();
         self.arrival = Some(0);
+        // Every page change comes through here: leaving the pause page drops a music pick.
+        self.settle_music_list();
     }
 }
 

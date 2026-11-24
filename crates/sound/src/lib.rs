@@ -23,9 +23,8 @@
 //! fixed-timestep loop (`oag_raceplay::Race::tick`), so a headless
 //! `--dump-audio` capture matches a window's samples at the same tick count
 //! (`docs/architecture/determinism.md`). There is deliberately **no** per-frame
-//! call: with a device `cpal` drains the mixer from its own thread, and with
-//! none [`oag_audio::Output::render_tick`] is the only reader. See
-//! [`Audio::tick`].
+//! call: with a device `cpal` drains the mixer from its own thread, and with none
+//! [`oag_audio::Output::render_tick`] does, into the dump or nothing. See [`Audio::tick`].
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -53,10 +52,12 @@ mod listings;
 mod menu_music;
 mod music_line;
 mod now_playing;
+mod pause_pick;
 pub mod pool;
 mod pre_race_voice;
 mod song_control;
 pub use now_playing::NowPlaying;
+pub use pause_pick::RacePlaylist;
 pub mod probe;
 mod race_music;
 mod race_order;
@@ -422,8 +423,8 @@ impl MusicDiscs {
     /// the PS2's and the reverse. Never any other release (they have one).
     fn counterpart(&self, platform: Platform) -> Option<(&str, Platform)> {
         match platform {
-            Platform::Psp => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
-            Platform::Ps2 => self.psp.as_deref().map(|at| (at, Platform::Psp)),
+            Platform::Psp => self.settled().ps2.as_deref().map(|at| (at, Platform::Ps2)),
+            Platform::Ps2 => self.settled().psp.as_deref().map(|at| (at, Platform::Psp)),
             _ => None,
         }
     }
@@ -1066,8 +1067,8 @@ impl Audio {
     /// Advances the mixer by one simulation tick.
     ///
     /// Called from inside the fixed-timestep loop, never per frame, so a capture
-    /// of `ticks * sample_rate / 60` frames reproduces exactly. Does nothing with
-    /// a device attached: `cpal`'s callback is already draining the mixer.
+    /// of `ticks * sample_rate / 60` frames reproduces exactly. With no device the tick is rendered
+    /// and dropped, so a voice ends and frees its slot (`docs/ui/pause-menu.md`, "Pulse").
     pub fn tick(&mut self) {
         // Before the race-boundary check: a switch landing this tick may have
         // just replaced `race_voice`, and polling first keeps the two from
@@ -1090,6 +1091,8 @@ impl Audio {
         }
         if let Some(dump) = &mut self.dump {
             self.output.render_tick(TICK_HZ, &mut dump.samples);
+        } else if !self.output.is_streaming() {
+            self.output.render_tick(TICK_HZ, &mut Vec::new());
         }
     }
 
