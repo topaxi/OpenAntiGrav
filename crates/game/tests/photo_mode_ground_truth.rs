@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+mod native_shot;
 mod shot_fidelity;
 
 /// A race on `image` as far as `race_prefix` goes, then `script`, in a profile of its own.

@@ -4,7 +4,7 @@
 
 use super::*;
 
-fn meta_of(photo: &Path) -> oag_game::shot_meta::Meta {
+pub(super) fn meta_of(photo: &Path) -> oag_game::shot_meta::Meta {
     let bytes = std::fs::read(photo).expect("the photo");
     oag_game::shot_meta::read(&bytes)
         .expect("our chunks read")
@@ -14,12 +14,13 @@ fn meta_of(photo: &Path) -> oag_game::shot_meta::Meta {
 
 /// `oag-game --from-png` on `photo` in the profile `run` made it in: its stdout and the picture
 /// it drew.
-fn from_png(
+pub(super) fn from_png(
     binary: &str,
     image: &Path,
     run: &Run,
     photo: &Path,
     out: &Path,
+    flags: &[&str],
 ) -> (String, (u32, u32, Vec<u8>)) {
     let output = std::process::Command::new(binary)
         .arg("--from-png")
@@ -28,6 +29,7 @@ fn from_png(
         .arg(out)
         .arg(image)
         .arg("--no-audio")
+        .args(flags)
         .env("XDG_CONFIG_HOME", run.dir.join("config"))
         .env("XDG_DATA_HOME", run.dir.join("data"))
         .env("XDG_STATE_HOME", run.dir.join("state"))
@@ -77,7 +79,7 @@ pub(super) fn controls_are_recorded_and_drawn_again(
     assert!(dof.depth_of_field && dof.aperture.is_some() && dof.focus.is_some());
 
     let out = run.dir.join("rerender-bright.png");
-    let (stdout, again) = from_png(binary, image, run, &photos[1], &out);
+    let (stdout, again) = from_png(binary, image, run, &photos[1], &out, &[]);
     assert!(stdout.contains("MATCH"), "{stdout}");
     assert!(stdout.contains("picture controls applied"), "{stdout}");
     let (neutral, bright) = (decode(&photos[0]), decode(&photos[1]));
@@ -94,7 +96,7 @@ pub(super) fn controls_are_recorded_and_drawn_again(
 }
 
 /// `mask` grown by `radius` pixels in each direction.
-fn grow(mask: &[bool], (width, height): (usize, usize), radius: usize) -> Vec<bool> {
+pub(super) fn grow(mask: &[bool], (width, height): (usize, usize), radius: usize) -> Vec<bool> {
     let mut across = vec![false; mask.len()];
     for y in 0..height {
         for x in 0..width {
