@@ -148,6 +148,63 @@ fn a_pulsing_title_stamps_its_glyph_quads_after_its_text() {
     assert_eq!(stamp_at(&model), 70);
 }
 
+/// Pulse PS2's card title draws no halo (`MenuSkin::pulse_text_glow`), on Grid Selection and on
+/// Cell Selection, while the same layouts drawn with the PSP skin stamp it. Dropping the skin
+/// field, or reading it nowhere, brings the PS2 halo back.
+#[test]
+fn the_ps2_card_title_stamps_no_glow_where_the_psp_one_does() {
+    let grid = GridSelection::new(vec![GridSummary {
+        name: "grid0".to_string(),
+        cell_count: 8,
+        max_points: 24,
+        required_points: 12,
+        gold_medals: 0,
+        points_earned: 0,
+        locked: false,
+        flyer_name: None,
+    }]);
+    let cell = CellSelection::new(vec![race_cell("grid0_0_0", "16_Track")]);
+    let ps2 = Skin::new(
+        oag_pulse::FRONT_END.menu_ps2.unwrap(),
+        oag_display::space::Space::PS2,
+        22.0,
+    );
+    let stamps = |skin: &Skin| {
+        let count = |layers: Layers| {
+            layers
+                .body
+                .iter()
+                .filter(|draw| matches!(draw, Draw::GlowText { .. }))
+                .count()
+        };
+        let grid_layers = grid_draw_list(
+            &grid,
+            &grid_layout(),
+            skin,
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        let cell_layers = cell_draw_list(
+            &cell,
+            &cell_layout(),
+            skin,
+            &Frame::default(),
+            &strings(),
+            None,
+            false,
+            &|_| placed32(),
+            &[],
+        );
+        (count(grid_layers), count(cell_layers))
+    };
+    assert_eq!(stamps(&skin()), (1, 1), "PSP: the title stamps");
+    assert_eq!(stamps(&ps2), (0, 0), "PS2: the title stamps nothing");
+}
+
 /// `Outline_x_y` draws `TIER_OUTLINE_TINT` on `Grid Selection` - both the
 /// unlocked hex (`Outline_0_0`) and the locked one behind it
 /// (`Outline_1_0`) get the same dim cyan-teal tile colour
