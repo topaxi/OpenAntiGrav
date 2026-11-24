@@ -86,7 +86,7 @@ differs from it by the HUD's own state alone). A speed blur at 100, mean differe
 lands (0.25 to 0.70 of the height): 1.10 and 1.38 against 2.11 and 4.10 with no history, for a shot taken after another in the visit, 1.05 and 1.81 for the first speed blur shot of a visit that
 had a plain shot before it. Measured on HD only: the ring is HD's on every title, so the settled history applies to a speed blur redraw on any title and was not measured on another.
 **The first shot of a visit to the mode carries a history the settled ring does not reproduce** (its streak is stronger; the redraw is 4.2 and 7.4 from it, 3.4 and 9.2 before; not a speed blur effect, the first shot being a plain one moves it to the shot after): two shots of one scene in one visit
-differ by 3.5 on average, and the cause was not found (a photo mode defect: `handover/rendering/the-first-speed-blur-shot-of-a-visit-has-another-zoom-history.md`).
+differ by 3.5 on average, and the cause was not found (a photo mode defect, open).
 The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
 there. A photo's re-render turns the visibility sets off, as photo mode does, and draws with the render scale and anti-aliasing of the photo's `[render]` section (at least 100 % and no upscaler) whatever the run's render flags (`docs/ui/photo-mode.md`, "A shot is drawn at the output's size"). **Default mods**: the

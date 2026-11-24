@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd, 2048]
 updated: 2026-11-24
-summary: "Photo mode defect: the first speed blur shot of a visit has a stronger zoom-ring streak than later shots of the same frozen scene; later shots are the reference."
+summary: "Photo mode defect: the first speed blur shot of a visit has a stronger zoom streak than later shots of one frozen scene; later ones are the reference."
 categories: [tooling]
 size: S (35)
 difficulty: medium (45)
