@@ -66,6 +66,12 @@ pub const EFFECTS: &Effects = &{
             Trigger::WreckPlume,
             EffectSpec::new(engine_effects::DEATH_PLUME_EFFECT, Origin::Measured),
         )
+        // `Debris_Launch` (`0x0010c958`) attaches it to a piece whose record byte `+0x58` is set;
+        // `ship-destroy.md`, "The debris throw".
+        .with(
+            Trigger::DebrisFire,
+            EffectSpec::new(engine_effects::DEBRIS_FIRE_EFFECT, Origin::Measured),
+        )
         // `0x000e7760` sets `+0x260` on a LeachBeam hit and `0x002a06e0` spawns
         // it attached; `particle-triggers.md`, "The LeachBeam hit spark".
         .with(

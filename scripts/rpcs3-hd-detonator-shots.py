@@ -41,6 +41,8 @@ import rpcs3_place as place  # noqa: E402
 from rpcs3_debugger import Debugger  # noqa: E402
 
 CLOCK = 0x7014
+#: The craft's camera rig eye (`hd-frame-skew.py`: 11.6 to 11.8 units from the body, 0.13 from the push-buffer eye once the skew is taken out).
+RIG_EYE = 0x69A0
 #: `*(STAGE_POINTER)` is the Environment stage block (`0x00c7dfb0`); at `+0x32b8` sixteen raw band floats
 #: (`SoundSystem_GetBandLevel(b) * gain`) and at `+0x32f8` the sixteen held ones the floor's `zoneTexVis` reads
 #: (`docs/ghidra/functions/ps3-hdfury-eu/zone-equaliser.md`).
@@ -83,6 +85,9 @@ def observe(session, gdb, ship, body, out, stem, flush):
     shot, grab_clock = drive.grab_with_clock(out / ("%s.png" % stem), trim=True)
     pose = place.read_pose(gdb, body)
     pose["race_clock_s"] = race_clock(gdb, ship)
+    # The camera rig's eye in RAM (`ship+0x69a0`): the push buffer's eye is the same rig `skew` ticks earlier, so the difference
+    # over the skew is the camera's own velocity, which is not the craft's (the camera's height follows the track, not the body).
+    pose["rig_eye"] = list(struct.unpack(">3f", gdb.read(ship + RIG_EYE, 12)))
     pose["zone_bands"] = read_bands(gdb)
     try:
         pose["scene_width"] = __import__("hd_scene_width").live(gdb.read)

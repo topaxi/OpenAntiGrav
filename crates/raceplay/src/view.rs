@@ -196,6 +196,8 @@ pub struct RaceView {
     pub(super) craft_flashes: super::craft_flash::CraftFlashes,
     /// A Zone craft's end: the death shell and the debris - see `race::zone_end`.
     pub(super) zone_end: super::zone_end::ZoneEndFx,
+    /// The pieces an ordinary craft breaks into - see `race::ship_debris`.
+    pub(super) ship_debris: super::ship_debris::ShipDebrisFx,
     /// The explosion and sparks a craft throws as it goes out - see
     /// `race::wreck_fx`.
     pub(super) wreck_fx: super::wreck_fx::WreckFx,

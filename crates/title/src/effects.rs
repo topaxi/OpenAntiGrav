@@ -170,6 +170,9 @@ pub enum Trigger {
     WreckSmoke,
     /// HD's death plume, thrown at the flare anchor as a craft goes out of the race.
     WreckPlume,
+    /// The fire on the last two pieces a destroyed craft throws, riding each piece
+    /// (`DebrisManager_SpawnShipDebris`, `Debris_Launch`).
+    DebrisFire,
     /// HD's damage smoke while a struck craft's shield is above its first
     /// threshold.
     DamageMild,
@@ -186,7 +189,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 55] = [
+    pub const ALL: [Self; 56] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -237,6 +240,7 @@ impl Trigger {
         Self::WreckDebris,
         Self::WreckSmoke,
         Self::WreckPlume,
+        Self::DebrisFire,
         Self::DamageMild,
         Self::DamageModerate,
         Self::DamageCritical,

@@ -822,6 +822,10 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         cockpit_hit_noise,
         wreck_anchors: super::wreck_fx::anchors(craft_title, &liveries),
         zone_end: liveries.first().and_then(|livery| livery.zone_end.clone()),
+        ship_debris: liveries
+            .first()
+            .and_then(|livery| livery.ship_debris.clone()),
+        ship_debris_spec: craft_title.destroyed.value.ship_debris,
         // Pulse's ship shockwave goes with its blast; HD's is thrown on a different edge and its
         // shockwave is unread.
         wreck_shockwave: craft_title

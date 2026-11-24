@@ -120,6 +120,54 @@ impl ZoneEnd {
     };
 }
 
+/// The pieces an ordinary craft breaks into as its blast ends, thrown by
+/// `DebrisManager_SpawnShipDebris` on `Ship_UpdateExploding`'s 4 -> 5 edge
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, "The debris throw").
+///
+/// Every number is the executable's own (tuning `0x008c17d0`, `0x008c1810` and the code's
+/// literals); what the original's physics world then does to a piece is not read, so
+/// [`Self::gravity`] and the floor are this engine's.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ShipDebris {
+    /// The directory under the ships root holding the pieces, one `.vex` each.
+    pub directory: &'static str,
+    /// A piece's model: this stem followed by its number from `1`.
+    pub model_stem: &'static str,
+    /// How many pieces are thrown (`0x13`).
+    pub pieces: usize,
+    /// Pieces numbered after this carry `WO_DEBRIS_FIRE` (tuning word `0x10`, compared `<`
+    /// against the zero-based index).
+    pub fire_after: usize,
+    /// Where a piece starts: this far along the craft's forward from its position (`0x00992d10`
+    /// holds `(0, 0, -5)` in the body's own rows, and forward is `-Z`).
+    pub spawn_ahead: f32,
+    /// The scatter speed: `(A * right + B * up + forward) * spread`, `A` and `B` drawn in
+    /// `[-1, 1)` (tuning `+0x24`, `25.0`).
+    pub spread: f32,
+    /// The draw `1 + jitter * C` scaling that scatter, `C` in `[-1, 1)` (tuning `+0x08`).
+    pub jitter: f32,
+    /// Seconds after the throw a piece is hidden (tuning `0x008c1810 + 0xc`).
+    pub lifetime_secs: f32,
+    /// The pull on a piece, units a second squared, along world down: the vector `(0, -9.81,
+    /// 0) * 2` the throw's record carries.
+    pub gravity: f32,
+}
+
+impl ShipDebris {
+    /// HD/Fury's `DebrisManager_SpawnShipDebris` (`0x00104f18`).
+    pub const HD: Self = Self {
+        directory: "Ship_Damage",
+        model_stem: "Part_",
+        pieces: 19,
+        fire_after: 16,
+        spawn_ahead: 5.0,
+        spread: 25.0,
+        jitter: 0.95,
+        lifetime_secs: 10.0,
+        gravity: 19.62,
+    };
+}
+
 /// How a title's destroy camera moves between cutting to a wreck and letting go of it
 /// (`docs/ghidra/functions/ps3-hdfury-eu/destroy-camera.md`, rows D3 to D6, H1 and W8).
 ///
@@ -230,6 +278,8 @@ pub struct DestroyedCraft {
     /// blast (`ShipGaseousFlash_Construct`, rows 8 and 21), as an archive path. `None` where
     /// the title throws no such object.
     pub gaseous_flash: Option<&'static str>,
+    /// The pieces the craft breaks into at the 4 -> 5 edge, `None` where it throws none.
+    pub ship_debris: Option<ShipDebris>,
 }
 
 impl DestroyedCraft {
@@ -247,6 +297,7 @@ impl DestroyedCraft {
         camera: DestroyCamera::PULSE,
         wreck_hidden_at_blast: true,
         gaseous_flash: None,
+        ship_debris: None,
     };
 
     /// Pure's `Ship_SetState` states 4 to 6 (`ship-destroy.md`): Pulse's timers and edges, the
@@ -277,6 +328,7 @@ impl DestroyedCraft {
         camera: DestroyCamera::HD,
         wreck_hidden_at_blast: false,
         gaseous_flash: None,
+        ship_debris: Some(ShipDebris::HD),
     };
 
     /// HD's sequence on a title whose destroy cues are not wired: it keeps `~BLOWUP`

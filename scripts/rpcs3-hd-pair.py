@@ -49,6 +49,7 @@ HUD_LAG_TICKS = 3
 # The RSX presents the frames it was handed after the game is paused, so a grab taken at once is older than the
 # memory read (the HUD's lap clock lagged RAM's by 0.1 to 0.3 s); 3 s lets it catch up (`rpcs3-drive.py capture`).
 os.environ.setdefault("OAG_CAPTURE_FLUSH", "3")
+import hd_picture_lag  # noqa: E402
 import ps3_pose  # noqa: E402
 import rpcs3_place  # noqa: E402
 
@@ -152,6 +153,34 @@ def frame_pose(pair, ship):
            "ram_body": ship["pos"], "craft_basis": "push-buffer hull world matrix against the RAM body, one pause"}
     rows = [[v / math.dist(r, (0, 0, 0)) for v in r] for r in hull["rows"]]
     return list(hull["translation"]), rows, lag
+
+
+def picture_lag(pair, camera, ship, theirs, skew, pos):
+    """`(pos, eye)` ours is fed: the push buffer's hull and camera moved back the ticks the picture is older than that frame.
+
+    The picture RPCS3 shows is older than the push buffer's frame, which is itself `skew` ticks behind RAM (`frame_pose`). The mines
+    in the frame give how much older (`hd_picture_lag.fit`, `docs/tools/compare-page.md`, "The presented lag of a Detonator grab"):
+    the camera and the hull move back that many ticks of the camera's own velocity (read off the rig eye in RAM), the hull
+    with the camera so its place in the frame is kept. A frame with no fit is left at the push buffer's frame and says so."""
+    fit = hd_picture_lag.fit(camera, ship, theirs, skew)
+    lag = pair.rec["original"]["presented_lag"]
+    lag["picture_fit"] = fit
+    lag["picture_ticks"] = fit["ticks"]
+    if fit["ticks"] is None:
+        lag["picture"] = "not corrected: " + fit["reason"]
+        pair.caveat("the picture's lag behind the push buffer's frame was not fitted (%s): ours is drawn at the push buffer's frame, which is "
+                    "2 to 4 ticks newer than the picture on the Detonator grabs measured" % fit["reason"])
+        return pos, list(camera["eye"])
+    k = fit["ticks"]
+    velocity = fit["camera_velocity"]
+    shift = [v * k for v in velocity]
+    lag["picture_total_ticks"] = skew + k
+    lag["picture"] = ("fitted: the picture is %.2f ticks older than the push buffer's camera (%d mines, %.1f px rms) and %.2f older than RAM; ours' camera "
+                      "and craft are moved back that far along the camera's velocity" % (k, fit["mines"], fit["rms_px"], skew + k))
+    pair.check("the picture's lag was fitted from the mines", True, "%.2f ticks behind the push buffer, %d mines, %.1f px rms" % (k, fit["mines"], fit["rms_px"]))
+    pair.caveat("the picture is %.2f ticks older than the push buffer's frame (fitted from %d mines, not a constant: 2 to 4 ticks on the grabs measured); "
+                "ours' camera and craft are moved back that far, the mines' own bands and the gantry clock are RAM's" % (k, fit["mines"]))
+    return [a - b for a, b in zip(pos, shift)], [a - b for a, b in zip(camera["eye"], shift)]
 
 
 def zone_band_flags(pair, ship):
@@ -264,6 +293,10 @@ def main():
                          "clock from the grid in `--mode detonator` (its auto-speed, its own mines laid at ITS placement, the original's "
                          "Libc_Rand layout not carried), holds the cannon over the same lap-clock window the original's button was held "
                          "(`ship.fire`), and the craft is put back on the original's pose for the frame (`--pose-hold`)")
+    ap.add_argument("--picture-lag", choices=("fit", "off"), default="fit",
+                    help="with --detonator: `fit` moves ours' camera and craft back the ticks the picture is older than the push buffer's "
+                         "camera, fitted from the mines in the frame (`hd_picture_lag.py`); a frame whose mines fit no value is left "
+                         "uncorrected and says so. `off` leaves ours at the push buffer's frame")
     ap.add_argument("--press", default="none",
                     help="the button held while the two frames are taken; `cross` is throttle")
     args = ap.parse_args()
@@ -369,6 +402,9 @@ def main():
                    % (clock, (args.ours_ticks - GO_TICK) / 60, args.ours_ticks, GO_TICK))
     shutil_copy(record["screenshot"], out / "theirs.png")
     pair.check_size("original", out / "theirs.png")
+    camera_eye = list(camera["eye"])
+    if args.detonator and args.picture_lag == "fit":
+        pos, camera_eye = picture_lag(pair, camera, ship, out / "theirs.png", frame_lag["craft_ticks"], pos)
     # The width the frame's scene was drawn at (1300 to 1920 on the 1080p path), read off the frame, with the
     # level the game held in the capture's pause beside it (`hd_scene_width`).
     import hd_scene_width
@@ -388,7 +424,7 @@ def main():
         math.dist(theirs_up, (0, 0, 0)) * math.dist(our_up, (0, 0, 0)))
     tilt = math.degrees(math.acos(max(-1.0, min(1.0, dot))))
     pair.rec["ours"]["uncarried_tilt_deg"] = tilt
-    cam = [camera["eye"], camera["forward"], camera["up"]]
+    cam = [camera_eye, camera["forward"], camera["up"]]
     numbers = ",".join("%.6f" % v for part in cam for v in part)
     pose = "%.4f,%.4f,%.4f,%.4f" % (pos[0], pos[1], pos[2], yaw)
     flags = ce.ours_flags(plat)

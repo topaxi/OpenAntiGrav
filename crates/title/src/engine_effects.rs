@@ -491,6 +491,10 @@ pub const EXPLOSION_EFFECT: &str = "WO_SHIP_EXPLOSION";
 /// (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, row 10).
 pub const DEATH_PLUME_EFFECT: &str = "WO_SHIP_DEATH_DAMAGE_PLUME";
 
+/// The fire on a thrown piece of a destroyed HD craft
+/// (`docs/ghidra/functions/ps3-hdfury-eu/ship-destroy.md`, "The debris throw").
+pub const DEBRIS_FIRE_EFFECT: &str = "WO_DEBRIS_FIRE";
+
 /// Pure's big blast at each wreck node.
 pub const BIG_EXPLO_EFFECT: &str = "WO_SHIP_FXNODE_BIGEXPLO";
 

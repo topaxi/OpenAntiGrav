@@ -58,6 +58,7 @@ pub(super) fn triangle() -> Model {
 pub(super) fn livery() -> Livery {
     Livery {
         zone_end: None,
+        ship_debris: None,
         team: "Test".to_string(),
         hull: triangle(),
         nozzle: None,
