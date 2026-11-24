@@ -178,8 +178,8 @@ The ordinary pass's lights are the circuit's nodes times `249/255` on all four g
 ambient `(70, 76, 82)` against the nodes' `(72, 78, 84)`, its first directional `249` against
 `255`; Blue Ridge `(110, 133, 166)` against `(113, 137, 171)`; Chenghou's directionals
 `(249, 231, 178)` and `(249, 204, 174)` against `(255, 237, 183)` and `(255, 209, 179)`. Modesto's
-list also carries a second directional, `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised,
-which ours does not draw (all four light types read directional).
+list also carries a second light, `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised: a `wopoint`, see
+"Modesto's second light" below (all four light types read directional in a GE list).
 
 `249` is `(255 * 250) >> 8` and reproduces every channel: ambient `72 -> 70`, `78 -> 76`, `84 -> 82`,
 `113 -> 110`, `137 -> 133`, `171 -> 166`. So each grid's scale is `250`, Pulse's own live grid value
@@ -200,4 +200,25 @@ grey MAD, before -> after: Vineta 12.200 unchanged, Chenghou 10.512 -> 10.487, B
 5.751 -> 5.738: a one-byte scale is below what a frame shows. Pure and Pulse only: HD, 2048 and Omega light their hulls
 by another path (`ship-sun-occlusion.md`). Test:
 `oag-raceplay::it_h_l hull_light_scale_ground_truth::a_pure_grid_craft_reads_the_original_s_250_not_a_full_255`.
-Modesto's second directional is not wired.
+Modesto's second light is wired: see the next section.
+
+## Modesto's second light
+
+It is `wopointShape2` of `03_Modesto_Heights\track.vex`, at `(-329.143, 205.185, -428.569)`: colour `(0.84, 0.192, 0.011)`,
+full strength inside 22.398 units, none beyond 33.779. The grid craft at `(-309.904, 197.997, -429.991)` is 20.59 units
+away, so the builder (`SceneLight_BuildLightingList`, `0x08841648`, Pulse's point branch: [`scene-light.md`](../psp-pulse-usa/scene-light.md),
+"Selection and colour") fills a free slot with it as a type-0 light at the unnormalised vector `light - craft` =
+`(-19.240, 7.188, 1.421)`, which is why the GE list shows a directional. Its colour byte is `trunc(0.84 * 255) = 214`, times the
+grid's scale `250 >> 8`: `214 * 250 >> 8 = 208`; green `0.1922 * 255 = 49 -> 47`, blue `0.0109 * 255 = 2 -> 1`. The twin
+`wopointShape3` is 47.64 units away and reaches nothing, so the second point slot is empty. Modesto authors one
+directional, which leaves three free slots; ours caps the hull at two point or spot slots (`HULL_POINT_SLOTS`), which
+this list does not exceed. Confidence **90**: colour bytes to the byte and the vector to four decimals from the disc's
+own nodes, the builder's point branch read statically.
+
+**Already wired.** `pure-render-fidelity` (2026-10-26) put Pure's `wopoint`/`wospot` nodes through the same slots, and the
+stored Modesto pair already drew it; the earlier line "ours does not draw it" was a misreading. Taking it out
+(`HullPointLights` left empty) moves the pair's hull box (190..290, 175..272) grey MAD from 5.83 to 7.69 and the track
+band (0..480, 140..240) from 4.96 to 5.26; sky is unchanged at 3.76. Test:
+`oag-raceplay::it_h_l hull_light_scale_ground_truth::modestos_grid_hull_takes_the_second_light_the_ge_list_carries`
+(through Pure's own load; red with the loader's `hull_points` assignment removed). Open: the remaining hull MAD of 5.83
+on this pair is not this light.

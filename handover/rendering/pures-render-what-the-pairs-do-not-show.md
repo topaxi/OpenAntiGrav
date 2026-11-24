@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pure, pulse]
 updated: 2026-11-24
-summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass, bloom and weather closed; Modesto light, Sinucit adverts and strip, HUD open"
+summary: "Pure render: canopy, sky, effect names, flare, chrome-map pass, bloom and weather closed; Sinucit adverts and strip, HUD open"
 difficulty: medium (30)
 ---
 
@@ -44,9 +44,8 @@ Ranked by what a player notices: hull and plume, then effects, then track and li
    and `Course::light_scale_at` now runs the original's integer blend at the craft's parameter (Pure grids now `250, 249, 250, 250`
    against the original's `250` on all four; hull box MAD moves by 0.00 to 0.03 grey on Pure, below what a frame shows;
    `psp-pure-usa/hull-shine.md`, "Light scale"). Open: the craft's own spline parameter (the original's is not the nearest
-   point to its pose; De Konstruct's live list fixes it at `t` 0.578, `psp-pulse-usa/scene-light.md`); and Modesto's list also carries a second directional
-   `(208, 47, 1)` along `(-19.24, 7.19, 1.42)`, unnormalised; ours draws no second light there. Which wopoint
-   it is, and why it is a directional, is unread (Pure's builder `0x08841648`).
+   point to its pose; De Konstruct's live list fixes it at `t` 0.578, `psp-pulse-usa/scene-light.md`); and Modesto's second light (`(208, 47, 1)` along `(-19.24, 7.19, 1.42)`) is closed: it is `wopointShape2`, a point light the builder hands the GE as a
+   type-0 light, and ours already drew it (`hull-shine.md`, "Modesto's second light"; pair hull box MAD 7.69 without it, 5.83 with it).
 3. **Effects Pure ships that ours never loads.** Pure's executable names 24 `WO_*` effects (25 strings,
    one of them `WO_Game`; `search_strings` over `/pure/BOOT-psp-pure-usa.BIN`, `0x08a47f50`..`0x08a7a49c`).
    Not loaded:
