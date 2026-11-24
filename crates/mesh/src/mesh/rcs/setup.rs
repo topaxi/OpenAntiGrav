@@ -101,7 +101,7 @@ pub(super) fn material_setup(
         packed: mut material_slots,
         specular_exponent: material_specular_exponent,
         colour_factor: material_colour_factor,
-        glow: material_glow,
+        glow: mut material_glow,
     } = roles(
         model,
         &material_variants,
@@ -180,6 +180,30 @@ pub(super) fn material_setup(
     );
     super::mag_wave::merge(&mut mag_emissive, specular_maps);
     super::mag_wave::merge(&mut mag_emissive, cell_blues);
+    // The `_alpha` pad material of an object model (the Detonator pad) binds its `_ne` mask
+    // before a hull's normal-map reading can take the third binding.
+    let alpha_pads: Vec<bool> = model
+        .materials
+        .iter()
+        .map(|m| super::pads::is_light_bar_alpha_material(&m.name))
+        .collect();
+    super::mag_wave::merge(
+        &mut mag_emissive,
+        if alpha_pads.contains(&true) {
+            super::pad_ne::pad_ne(
+                model,
+                &material_variants,
+                textures,
+                &mut material_slots,
+                &mut emissive,
+                &mut material_glow,
+                Some(&alpha_pads),
+                report,
+            )
+        } else {
+            vec![None; model.materials.len()]
+        },
+    );
     super::mag_wave::merge(&mut wave_maps, cell_masks);
     // The light cone's own combine claims its slots after the glow table is
     // final, for the same reason: it writes an entry into it.

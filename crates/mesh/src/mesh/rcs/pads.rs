@@ -84,6 +84,13 @@ pub(super) fn is_light_bar_material(name: &str) -> bool {
     name.rsplit('/').next().unwrap_or(name) == "diffuse_normal_specular_emmissive.rcsmaterial"
 }
 
+/// Whether a material file is `diffuse_normal_specular_emmissive_alpha`: the Detonator pad's
+/// own material (`Data\New_Mode_Pads\Detonator_Pad`), whose `_ne` mask [`super::pad_ne::pad_ne`]
+/// binds once the program match accepts it.
+pub(super) fn is_light_bar_alpha_material(name: &str) -> bool {
+    name.rsplit('/').next().unwrap_or(name) == "diffuse_normal_specular_emmissive_alpha.rcsmaterial"
+}
+
 /// Every chunk hash the world-space pass leaves to a node: the ones a `Mesh`
 /// node names ([`super::referenced`]) and the ones either pad class names.
 ///
