@@ -575,7 +575,11 @@ fn a_blooming_titles_press_start_stamps_its_glyph_quads_on_the_pulse_ladder() {
             .filter_map(|(at, draw)| match draw {
                 Draw::GlowText { value } => {
                     assert!(
-                        matches!(&draws[at - 1], Draw::Text { text, .. } if text == "BOOT_PRESS_START"),
+                        matches!(
+                            &draws[at - 1],
+                            Draw::Text { text, .. } | Draw::FacedText { text, .. }
+                                if text == "BOOT_PRESS_START"
+                        ),
                         "a text stamp follows the text it stamps"
                     );
                     Some(*value)
