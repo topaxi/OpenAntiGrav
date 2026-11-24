@@ -420,12 +420,16 @@ the content of the table of contents and the stored manifest (lengths and two
 first on the archive's own lock. The reads are unchanged (the same ranges are
 read and recorded), only what is derived from them is not repeated.
 
-| Launch (Pulse PSP, release build) | Before | After |
-| --- | ---: | ---: |
-| Menu to RACE page, `ticks 30` | 4.85 G | 3.24 G (-33 %) |
-| Race, 400 ticks | 20.5 G | 18.9 G (-8 %) |
+| Launch (Pulse PSP, release build) | Before | After | Peak RSS before / after |
+| --- | ---: | ---: | ---: |
+| Menu to RACE page, `ticks 30` | 4.85 G (4.34 to 4.85) | 3.24 G (3.24 to 3.25), -33 % | 194 / 223 MiB |
+| Race, 400 ticks | 20.5 G (20.49 to 20.52) | 18.9 G (18.88 to 18.89), -8 % | 319 / 332 MiB |
 
-(Eight and five interleaved pairs; the spread of either side was under 1 %.)
+(Instructions: median and range of eight, then five interleaved pairs; the menu
+launch's before side has an occasional run that is cut short at 4.34 G, the after
+side none. RSS: median of three, `/usr/bin/time -f %M`, the before side's range
+179 to 224 and 309 to 330 MB overlapping the after side's; the shelf keeps every
+surveyed archive's paths and index for the life of the process, about 10 to 30 MB.)
 
 **The race build's pipeline compile, measured and left alone.** 158 distinct
 pipelines are built for a Pulse PSP race (the scope's cache already turns about
@@ -438,7 +442,7 @@ SPIR-V write 12 %); the driver's own compile is under 1 % because RADV links
 lazily.
 
 - **A disk pipeline cache is not available**: `Device::create_pipeline_cache` is
-  `unsafe` in wgpu 30.0.1 (`docs/architecture/dependency-upgrades.md`, "wgpu 30"),
+  `unsafe` in wgpu 30.0.1 (`docs/architecture/dependency-upgrades.md`, "Direct dependencies already at their newest release", the `PipelineCache` bullet),
   which the workspace's `unsafe_code = "deny"` and the rule against wgpu's
   unsafe escape hatches both refuse. Nothing safe replaces it on this backend.
 - **One module per stage did not pay.** `mesh.wesl` as a 10 KB vertex module
