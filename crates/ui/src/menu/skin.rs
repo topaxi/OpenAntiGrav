@@ -374,6 +374,17 @@ impl Skin {
         self.pulse_elapsed += dt.max(0.0);
     }
 
+    /// Puts [`Self::selected`]'s pulse where its colour is `level` of the way from the unselected
+    /// ink to the peak (`0` to `1`), on the rising half of the cycle: what a still stands at to
+    /// match a frame that caught the pulse mid-cycle. A skin with no measured pulse is unchanged.
+    pub fn pin_pulse_level(&mut self, level: f32) {
+        if let Some(period) = self.skin.selected_pulse_period_secs.filter(|p| *p > 0.0) {
+            let t = level.clamp(0.0, 1.0);
+            let phase = (1.0 - 2.0 * t).acos() / std::f32::consts::TAU;
+            self.pulse_elapsed = phase * period;
+        }
+    }
+
     /// The grid these numbers are in, for whoever has to set a `screen` uniform
     /// from it.
     #[must_use]
@@ -1004,6 +1015,25 @@ mod tests {
                 (peak[channel] - white[channel]).abs() < 1e-5,
                 "{peak:?} should be white at the measured half-period"
             );
+        }
+    }
+
+    /// A pinned level puts the ink that far from the trough to the peak: what a still stands at to
+    /// match a frame that caught the pulse mid-cycle.
+    #[test]
+    fn a_pinned_level_puts_the_ink_that_far_along() {
+        let (normal, white) = (skin().normal(), argb(0xFFFF_FFFF));
+        for level in [0.0_f32, 0.25, 0.5, 0.9, 1.0] {
+            let mut skin = skin();
+            skin.pin_pulse_level(level);
+            let ink = skin.selected();
+            for channel in 0..3 {
+                let want = normal[channel] + (white[channel] - normal[channel]) * level;
+                assert!(
+                    (ink[channel] - want).abs() < 1e-3,
+                    "level {level}: {ink:?} against {want}"
+                );
+            }
         }
     }
 

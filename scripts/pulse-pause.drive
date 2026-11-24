@@ -1,0 +1,17 @@
+# Wipeout Pulse's pause screen over a Time Trial on Moa Therma White (Venom), played through our own menus: RACEBOX, the race page's
+# TIME TRIAL, Track Select, Ship Select. START pauses the race and opens the disc's own `InGame Pause SP Time Trial`. `@OUT@` is the
+# screenshot path and `@TICKS@` the race ticks to play, which `compare_menu.drive_command` and `psp-menu-pair.py` fill in. Run with
+# `--original-menu` and `--no-intro`.
+boot
+select racebox; press cross; until page=race
+set race.mode=time_trial
+select launch_race; press cross
+until screen=picker; select 03_Track; press cross
+until screen.id=ship-select; press cross
+until stage=race within 6000
+ticks @TICKS@
+press start
+ticks 120
+draw
+screenshot @OUT@
+quit

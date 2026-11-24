@@ -405,6 +405,25 @@ pub struct DeclaredTracks {
     pub file: &'static str,
 }
 
+/// One of the disc's list screens (a title, a column of rows or lists, a footer) that a comparison with the
+/// original's frame draws as a page of the menu model, read off the screen's own XML. The live pages stay
+/// the menu tree's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListScreen {
+    /// The `--menu-page` name that asks for it.
+    pub page: &'static str,
+    /// The archive entry that authors it.
+    pub file: &'static str,
+    /// The screen's own `name` attribute.
+    pub screen: &'static str,
+    /// The header's string id where the screen authors no title `Text`: Pulse's Racebox screens are
+    /// headed by their `AreaController`'s area, whose text the executable draws. **Chosen, not
+    /// measured**: the id of the Main Menu row that names the area, which the frames read.
+    pub title_id: Option<&'static str>,
+    /// Whether the screen has a way back, so the footer legend draws `Back`.
+    pub back: bool,
+}
+
 /// One title's front end: how it lays menus out, and how it boots into them.
 ///
 /// # Why the two are one field
@@ -591,6 +610,10 @@ pub struct FrontEnd {
     /// `Eliminations` list, the kill targets the `KILLS` row offers
     /// (`oag_game::boot::kill_targets`). `None` where unread: no kill target to pick.
     pub race_setup: Option<&'static str>,
+    /// The list screens a compare still draws as pages of the menu model: Pulse's `Main Menu`,
+    /// `Racebox`, `Single Player` and `Additional`. Empty where this build draws none of the
+    /// disc's list screens that way. See [`ListScreen`].
+    pub list_screens: &'static [ListScreen],
     /// Text widgets of the track screen whose string the screen's class sets in
     /// code in place of the one its XML authors: `(widget name, string id)` pairs,
     /// empty where the class takes the XML's own. Pulse's

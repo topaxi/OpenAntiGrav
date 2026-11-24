@@ -40,6 +40,21 @@ EU disc, original beside ours: Time Trial, Speed Lap and Single Race, read side 
 `Confirm` legend and the heavy tint match; ours leaves out GAME MANUAL, END SESSION and the
 `MusicList`.
 
+**The HUD, the footer and the header (2026-11-23, `pulse-gap-pairs`, confidence 90).** A fresh capture of a Time Trial on Moa Therma White
+(the `time-trial-moa-therma-white-venom-grid` state, START, 4 s) against ours played to the same race clock
+(`scripts/pulse-pause.drive`, `docs/tools/compare-page.md`, "Pulse list screens and the pause menu"):
+the HUD (record time, lap hexagon, `current` clock) stays on screen under the tint, dimmed with the scene (the clock box
+peaks at luma 23 on both sides, a ninth of white), so `PauseMenu::hud_under_scrim` is **on for Pulse** (it was off as "unmeasured";
+`Session::draw` reads the table for a title whose pause page has no disc layout too); the footer is `Confirm` alone and **no player tag**
+(ours drew `AAA` there; the tag belongs to the frame bar the pause screen does not draw, so `MenuStage::nav_legend_overlay` leaves it
+off a pause page); the tint is the authored `0xe8000000` (a least-squares fit of the paused frame on the frame before it reads 0.077
+against the authored 0.090 of white, correlation 0.93). **The header bar slides in**: `InGame Pause SP`'s `<Animation delay="1">` runs
+its `<Key>`s `Y -24` to `0` over one second after a one second delay, and a frame grabbed 2 s after START caught the bar 7 px
+above its rest (a shift fit of the header rows, 8.9 grey against 72 unshifted), which was 64 % of the pair's differing pixels (3,440 of
+5,353). Ours draws the bar at rest, so the pair is grabbed 4 s after START, once the slide has ended; **the slide itself is not
+wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn by `--original-menu` only
+(`Definition::open_on_pause_screen_as_authored`: a row that opens nothing), as a compare shot lists what the original lists.
+
 - **Rows.** `oag_title::Title::pause_menu` (`oag_pulse::pause_menu`): each screen's rows by
   `idstring` in the disc's order, and what each does here (`PauseAction`). Worded off the
   disc's own string table (the English "Continue" and so on, drawn in capitals by the menu
@@ -175,7 +190,7 @@ keeps the front end's list, said in the boot report.
 - **END SESSION** (Speed Lap) leaves the race the way QUIT RACE does: **chosen, not measured**. The original
   goes to `Race End Photo` (CONTINUE, PHOTO MODE), `EndRace Results` and `EndRace Menu`: it **finishes**
   the race. This build's Speed Lap never finishes, so there is nothing to finish.
-- **The HUD under the tint**: `PauseMenu::hud_under_scrim`, on for HD only (Pulse's is unmeasured). The parked
+- **The HUD under the tint**: `PauseMenu::hud_under_scrim`, on for HD, Pulse (measured 2026-11-23, above) and Pure; off for Omega. The parked
   race draws its HUD (not the track panel or end screens, `RaceStage::draw_view_hud`) before the menu's tint.
   It stays behind this build's OPTIONS and AUDIO pages too; whether the original keeps it behind its own
   `InGame Settings` is not measured.

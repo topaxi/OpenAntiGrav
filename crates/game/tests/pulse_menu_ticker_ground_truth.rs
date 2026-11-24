@@ -474,16 +474,27 @@ fn the_campaign_pages_draw_the_pinned_ticker_and_the_tag() {
     }
 }
 
-/// `--menu-page cell-select` on `image` at the PSP's own 480x272, with `args` after the page and `tag` stored as the
-/// player's footer tag (`None` stores none), as the PNG's RGBA bytes.
+/// `--menu-page cell-select` on `image`: [`menu_page_still`] of that page.
 fn cell_select_still(
     image: &std::path::Path,
     args: &[&str],
     tag: Option<&str>,
     label: &str,
 ) -> Vec<u8> {
+    menu_page_still(image, "cell-select", args, tag, label)
+}
+
+/// `--menu-page PAGE` on `image` at the PSP's own 480x272, with `args` after the page and `tag` stored as the
+/// player's footer tag (`None` stores none), as the PNG's RGBA bytes.
+fn menu_page_still(
+    image: &std::path::Path,
+    page: &str,
+    args: &[&str],
+    tag: Option<&str>,
+    label: &str,
+) -> Vec<u8> {
     let dir = std::env::temp_dir().join(format!(
-        "oag-pulse-cell-footer-{}-{label}",
+        "oag-pulse-menu-still-{}-{label}",
         std::process::id()
     ));
     let _ = std::fs::remove_dir_all(&dir);
@@ -500,13 +511,7 @@ fn cell_select_still(
     let out = dir.join("still.png");
     let status = std::process::Command::new(env!("CARGO_BIN_EXE_oag-game"))
         .arg(image)
-        .args([
-            "--no-audio",
-            "--size",
-            "480x272",
-            "--menu-page",
-            "cell-select",
-        ])
+        .args(["--no-audio", "--size", "480x272", "--menu-page", page])
         .args(args)
         .arg("--screenshot")
         .arg(&out)
@@ -519,7 +524,7 @@ fn cell_select_still(
         .env_remove("DISPLAY")
         .status()
         .expect("running oag-game");
-    assert!(status.success(), "oag-game --menu-page cell-select");
+    assert!(status.success(), "oag-game --menu-page {page}");
     let rgba = oag_texture::replacer::decode_png(&std::fs::read(&out).expect("the screenshot"))
         .expect("a PNG")
         .rgba;
@@ -619,5 +624,87 @@ fn cell_selects_footer_takes_the_ticker_pin_and_the_tag_and_its_title_the_glow_p
         differing_in(&high, &low, selector),
         0,
         "{label}: the title's glow phase moved the Selector's box"
+    );
+}
+
+/// **The disc's own list screens draw as compare-only pages** (`--menu-page pulse-main`, `pulse-options`): the
+/// header, the rows and the help line are the screen's, where the live `main` and `options` pages are
+/// `menu.toml`'s. Main Menu's fourth row (`WIPEOUT-GAME.COM`) and its header (`MAIN MENU`) are not on the live page;
+/// Additional's second row is `CONTROLS` where the live page lists `GRAPHICS`.
+#[test]
+#[ignore = "needs a Pulse PSP disc image in data/images and a GPU adapter"]
+fn the_discs_list_screens_draw_their_own_rows_and_header() {
+    let images = images();
+    assert!(
+        std::env::var_os("OAG_REQUIRE_GAME_DATA").is_none() || !images.is_empty(),
+        "OAG_REQUIRE_GAME_DATA is set but neither Pulse PSP image is present"
+    );
+    let Some((label, image)) = images.into_iter().next() else {
+        return;
+    };
+    let header = (30, 0, 200, 20);
+    let fourth_row = (50, 120, 260, 18);
+    let second_row = (50, 64, 200, 18);
+
+    let live_main = menu_page_still(&image, "main", &[], None, "live-main");
+    let disc_main = menu_page_still(&image, "pulse-main", &[], None, "disc-main");
+    assert!(
+        differing_in(&live_main, &disc_main, header) > 60,
+        "{label}: pulse-main is not headed MAIN MENU"
+    );
+    assert!(
+        differing_in(&live_main, &disc_main, fourth_row) > 150,
+        "{label}: pulse-main draws no WIPEOUT-GAME.COM row"
+    );
+
+    let live_options = menu_page_still(&image, "options", &[], None, "live-options");
+    let disc_options = menu_page_still(&image, "pulse-options", &[], None, "disc-options");
+    assert!(
+        differing_in(&live_options, &disc_options, second_row) > 100,
+        "{label}: pulse-options does not list the disc's own rows"
+    );
+
+    // The focused row rides a colour pulse a still rests at the trough of; `--menu-focus-level` puts it
+    // where a frame caught it, and only the focused row (`GAME OPTIONS`, the first) moves.
+    let first_row = (50, 38, 200, 14);
+    let peak = menu_page_still(
+        &image,
+        "pulse-options",
+        &["--menu-focus-level", "1"],
+        None,
+        "peak",
+    );
+    assert!(
+        differing_in(&disc_options, &peak, first_row) > 100,
+        "{label}: --menu-focus-level does not move the focused row's ink"
+    );
+    assert_eq!(
+        differing_in(&disc_options, &peak, second_row),
+        0,
+        "{label}: --menu-focus-level moved a row that is not focused"
+    );
+
+    // Single Player's focused value blooms (the haze over the strip just above `SINGLE RACE`), the next row's does not.
+    let single = menu_page_still(
+        &image,
+        "pulse-single",
+        &["--menu-focus-level", "1"],
+        None,
+        "single",
+    );
+    let strip_mean = |top: usize| -> f32 {
+        let at = |x: usize, y: usize| {
+            let px = (y * 480 + x) * 4;
+            (single[px] as f32 + single[px + 1] as f32 + single[px + 2] as f32) / 3.0
+        };
+        let cells: Vec<f32> = (top..top + 4)
+            .flat_map(|y| (252..330).map(move |x| (x, y)))
+            .map(|(x, y)| at(x, y))
+            .collect();
+        cells.iter().sum::<f32>() / cells.len() as f32
+    };
+    assert!(
+        strip_mean(36) > strip_mean(59) + 30.0,
+        "{label}: the focused value of Single Player has no glow haze"
     );
 }

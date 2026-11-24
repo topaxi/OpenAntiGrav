@@ -455,6 +455,7 @@ pub const FRONT_END: &oag_title::FrontEnd = &oag_title::FrontEnd {
     track_select: None,
     news: None,
     race_setup: None,
+    list_screens: &[],
     track_label_overrides: &[],
     card_track_aliases: &[],
     track_record_empty: "-",

@@ -149,6 +149,49 @@ fn a_page_in_the_list_draws_rules_columns_and_arrows() {
     assert_eq!(halo, 2, "the focused row's arrows glow, no other row's");
 }
 
+/// The focused value of a settings page blooms (Pulse's glow stamp rides its glyphs), and a value the row cannot use
+/// (dimmed, with its reason) does not.
+#[test]
+fn only_a_usable_focused_value_blooms() {
+    let definition = Definition::parse(
+        r#"
+        toml-schema = { location = "https://oag.topaxi.com/mods/schemas/v1/menu.tosd", version = "1.0.0" }
+        root = "race"
+        [[page]]
+        id = "race"
+        title = "RACE"
+        [[page.entry]]
+        kind = "choice"
+        label = "TRACK"
+        setting = "race.track"
+        values_from = "tracks"
+        "#,
+        &crate::language::StringTable::default(),
+    )
+    .expect("parses");
+    let mut menu = Menu::new(definition);
+    menu.supply(
+        ValueSource::Tracks,
+        &[
+            Choice::labelled("good", "GOOD"),
+            Choice::labelled("bad", "BAD").unusable("no lap loop"),
+        ],
+    );
+    let glow_text = |menu: &Menu| {
+        draw(menu, &frame())
+            .iter()
+            .filter(|d| matches!(d, Draw::GlowText { .. }))
+            .count()
+    };
+    assert_eq!(glow_text(&menu), 1, "the focused, usable value blooms");
+    press(&mut menu, &[Button::Right]);
+    assert_eq!(
+        glow_text(&menu),
+        0,
+        "an unavailable value is dimmed and does not bloom"
+    );
+}
+
 #[test]
 fn dropping_the_layout_gives_back_the_plain_column() {
     let menu = race_menu();
