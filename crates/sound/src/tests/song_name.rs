@@ -381,3 +381,51 @@ fn a_parked_swap_lands_the_new_pressings_name_at_the_release() {
     assert_eq!(playing.name, Some(ps2.name));
     assert_eq!((playing.serial, playing.started), (1, 1));
 }
+
+/// A song picked on a pause screen starts as a new song when the race resumes, so the now-playing
+/// display shows it (`docs/ghidra/functions/psp-pulse-usa/music-list.md`, "Resume starts the pick");
+/// the playing song picked again resumes where it was and is not shown again.
+#[test]
+fn a_paused_pick_resumes_as_a_new_song_and_the_playing_song_does_not() {
+    let (mut audio, _, race_sound) = psp_boot_fixture();
+    let first = song("A", "First", Some("Wipeout Pulse"));
+    let second = song("B", "Second", Some("Wipeout Pulse"));
+    let discs = MusicDiscs {
+        psp: Some("psp.chd".into()),
+        booted: Some(Platform::Psp),
+        ..MusicDiscs::default()
+    };
+    audio.start_race_voice(
+        0,
+        loaded(race_sound, Some(Platform::Psp), Some(first)),
+        None,
+    );
+    audio.race_index = Some(0);
+    let started = |audio: &Audio| {
+        let playing = audio.now_playing().expect("a song");
+        (playing.serial, playing.started)
+    };
+    assert_eq!(started(&audio), (1, 1));
+
+    // Paused part way in, the playing song picked again: it resumes, not a new song.
+    audio.hold_race_music();
+    audio.race_position = 30.0;
+    assert!(!audio.pick_race_song(0));
+    audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+    assert!(audio.race_voice.is_some());
+    assert_eq!(started(&audio), (1, 1));
+
+    // Paused again, another song picked: it starts from its beginning as a new song.
+    audio.hold_race_music();
+    audio.race_position = 30.0;
+    assert!(audio.pick_race_song(1));
+    audio.race_cache = Some((
+        Platform::Psp,
+        1,
+        silence(180.0, 2, 44_100),
+        Some(second.clone()),
+    ));
+    audio.start_race_music(&discs, MusicSource::Auto, Path::new("unused"));
+    assert_eq!(started(&audio), (2, 2));
+    assert_eq!(audio.now_playing().expect("a song").name, Some(second.name));
+}
