@@ -162,8 +162,9 @@ pub fn scan<'a>(
             Align::Right if face.pens == crate::font::Pens::Snapped => x - ink_right,
             Align::Right => x - width,
         };
-        // A snapped line starts on a whole pixel, as the draw's does.
-        let left = if face.pens == crate::font::Pens::Snapped {
+        // A snapped line starts on a whole pixel, as the draw's does; a centred one stays
+        // unrounded for the first glyph's step to round, as `Renderer::push_text` leaves it.
+        let left = if face.pens == crate::font::Pens::Snapped && align != Align::Centre {
             left.ceil()
         } else {
             left
