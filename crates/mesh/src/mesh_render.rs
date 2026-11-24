@@ -1088,7 +1088,7 @@ pub fn build_with(
                 cull,
             )
         },
-        &blend_stand_in,
+        blend_stand_in,
     );
     crate::not_exiting()?;
     let unblended_pipeline = main_reach.unblended.pair(
@@ -1103,7 +1103,7 @@ pub fn build_with(
                 cull,
             )
         },
-        &blend_stand_in,
+        blend_stand_in,
     );
     crate::not_exiting()?;
     // One pair per *distinct* state the model's transparent draws name, in
@@ -1135,7 +1135,7 @@ pub fn build_with(
             key,
             main_reach.authored(key).pair(
                 |cull| make_pipeline_with(&label, Some(state), cull, depth),
-                &blend_stand_in,
+                blend_stand_in,
             ),
         ));
     }
