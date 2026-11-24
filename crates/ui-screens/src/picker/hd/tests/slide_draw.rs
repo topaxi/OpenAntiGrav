@@ -133,3 +133,23 @@ fn a_wrap_on_an_odd_roster_keeps_the_columns_continuous() {
         "team B keeps its height through the snap"
     );
 }
+
+/// A drag already showed the columns moving, so folding it into a step slides nothing further and
+/// draws only the columns the pan draws, all of them at the pan's own fade.
+#[test]
+fn a_drag_that_folds_into_a_step_does_not_slide_on_top_of_the_pan() {
+    let grid = grid();
+    let mut picker = picker_of(&["A", "B", "C", "D", "E", "F"], "C");
+    frame(&mut picker, None);
+    let found = pan_targets(&picker);
+    picker.pointer(&drag_by(PITCH_X * 0.65), &found);
+    assert_eq!(picker.index(), 1, "the drag folded a column");
+    frame(&mut picker, None);
+    assert!(!picker.slide().moving());
+    assert_eq!(picker.slide().shown(), picker.index());
+    let cells = grid.cells_at(picker.index(), 6, picker.pan(), Some(picker.slide()));
+    assert!(
+        cells.len() <= 6 * 7,
+        "no extra slide column on top of the pan"
+    );
+}
