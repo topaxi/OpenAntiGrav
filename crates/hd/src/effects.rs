@@ -129,6 +129,11 @@ pub const EFFECTS: &Effects = &{
                 Origin::Measured,
             ),
         )
+        // The EMP's wave, `EMP_SpawnLaunchEffect`; `detonator-emp.md`, "What HD draws".
+        .with(
+            Trigger::DetonatorEmp,
+            EffectSpec::new(engine_effects::DETONATOR_EMP_EFFECT, Origin::Measured),
+        )
         // The disc ships `wo_plasma_flash.pob` and the executable never names it: the
         // detonation is `WO_PLASMA_LIGHTNING_EXPAND` (same section).
         .without(Trigger::PlasmaBlast)

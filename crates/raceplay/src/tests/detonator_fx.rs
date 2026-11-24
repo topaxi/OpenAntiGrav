@@ -33,6 +33,16 @@ fn each_event_plays_the_effect_the_original_spawns_for_it() {
         (EventKind::BombShot, Some(Trigger::DetonatorBombExplo)),
         (EventKind::BombReplaced, Some(Trigger::DetonatorBombExplo)),
         (
+            EventKind::MineEmped { live: true },
+            Some(Trigger::DetonatorMineExplo),
+        ),
+        (
+            EventKind::MineEmped { live: false },
+            Some(Trigger::DetonatorMineExploDead),
+        ),
+        (EventKind::BombEmped, Some(Trigger::DetonatorBombExplo)),
+        (EventKind::EmpLaunch, None),
+        (
             EventKind::RoundWall { normal: Vec3::Y },
             Some(Trigger::DetonatorCannonSparks),
         ),
@@ -147,5 +157,77 @@ fn an_hd_detonator_race_plays_the_discs_effects_for_each_event() {
         race.view.stage.playing_count(),
         playing,
         "a volley plays no effect of its own"
+    );
+}
+
+/// **The EMP's wave draws the disc's `WO_QUAKE_DETONATOR` on its front and nothing once it ends.**
+/// An HD Detonator race resolves [`Trigger::DetonatorEmp`]; a wave fired from a stand puts one
+/// instance on the stage that follows the front down the track, sits within the track's edges
+/// there, and is released on the tick the wave ends.
+#[test]
+#[ignore = "needs data/images/hdfury-ps3-eu-dec.iso"]
+fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
+    let Some(image) = oag_testdata::image("hdfury-ps3-eu-dec.iso") else {
+        return;
+    };
+    let loaded = crate::load(&crate::Options {
+        source: image.display().to_string(),
+        class: "VENOM".to_string(),
+        mode: Mode::Detonator,
+        ..crate::Options::default()
+    })
+    .expect("loading an HD Detonator race");
+    let mut race = Race::start(loaded.setup, loaded.view, loaded.modules);
+    assert!(
+        race.view.handles.get(Trigger::DetonatorEmp).is_some(),
+        "WO_QUAKE_DETONATOR resolves to a loaded effect"
+    );
+    let survey = race
+        .core
+        .sim
+        .detonator
+        .as_ref()
+        .expect("a Detonator race")
+        .survey
+        .clone();
+    let wave = &mut race.core.sim.world.detonator.emp.wave;
+    *wave = oag_weapons::detonator::emp::Wave {
+        live: true,
+        from: 10,
+        front: 0,
+        lifetime: 0.25,
+        age: 0.0,
+    };
+    let mut anchors = Vec::new();
+    for _ in 0..30 {
+        if race.core.sim.world.detonator.emp.wave.live {
+            race.core.sim.world.detonator.emp.wave.front += 1;
+            race.core.sim.world.detonator.emp.wave.age += 1.0 / 60.0;
+            if race.core.sim.world.detonator.emp.wave.age >= 0.25 {
+                race.core.sim.world.detonator.emp.wave.live = false;
+            }
+        }
+        race.view.advance_emp_visual(&race.core);
+        anchors.push(
+            race.view
+                .emp_effect
+                .and_then(|p| race.view.stage.anchor_of(p)),
+        );
+    }
+    let live: Vec<Vec3> = anchors.iter().flatten().copied().collect();
+    assert!(live.len() >= 10, "the effect rides the wave: {anchors:?}");
+    assert!(
+        anchors[20..].iter().all(Option::is_none),
+        "released once the wave ends"
+    );
+    let first = survey.entries[11].centre;
+    assert!(
+        (live[0] - first).length() < 20.0,
+        "the effect starts on the front's entry: {:?} against {first:?}",
+        live[0]
+    );
+    assert!(
+        (live[live.len() - 1] - live[0]).length() > 20.0,
+        "and moves down the track with it"
     );
 }

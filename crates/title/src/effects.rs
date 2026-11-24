@@ -131,6 +131,8 @@ pub enum Trigger {
     DetonatorBombExplo,
     /// Detonator's pulse cannon round dying on a wall.
     DetonatorCannonSparks,
+    /// Detonator's EMP wave, riding its front.
+    DetonatorEmp,
     /// A craft's engine flare.
     EngineFlare,
     /// A craft flying through an engine trail (HD).
@@ -189,7 +191,7 @@ pub enum Trigger {
 
 impl Trigger {
     /// Every trigger, in load order.
-    pub const ALL: [Self; 56] = [
+    pub const ALL: [Self; 57] = [
         Self::CollisionSpark,
         Self::CollisionSparkNoDamage,
         Self::HitSpark,
@@ -221,6 +223,7 @@ impl Trigger {
         Self::DetonatorMineExplo,
         Self::DetonatorBombExplo,
         Self::DetonatorCannonSparks,
+        Self::DetonatorEmp,
         Self::EngineFlare,
         Self::TrailHitship,
         Self::TrailHitshipRed,

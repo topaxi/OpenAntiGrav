@@ -6,28 +6,31 @@
 //! `Detonator_UpdateRace` does (one charge, the gauge, the two announcer edges); [`fire`] is the
 //! EMP arm of `Ship_UpdateCannonTrigger`; [`step_wave`] is the wave's kill.
 //!
+//! # The wave
+//!
+//! `EMP_Update` (`0x0013c320`) adds the frame's `dt` to the wave's age, steps its AI-track
+//! cursor `speed` points forward (the table's `speed`, `1` on the disc) and ends once the age
+//! reaches `extent = minDistance + (maxDistance - minDistance) * gauge`: `extent` is a lifetime
+//! in seconds, `0.25` to `2.0` (`detonator-emp.md`, "The wave: a Repulser wave that clears
+//! mines"). At HD's 60 frames a second a full EMP sweeps about 120 points. Here a point is a
+//! survey entry, one per control point, which is what the original's placement records key on.
+//!
 //! # What is ours
 //!
-//! - **The wave's reach and speed** are unread (`detonator-emp.md`, "The wave's kill": how
-//!   `EMP_SweepSections`' caller turns `emp+0x54` into a section count). Here the wave runs
-//!   forward from the craft's survey entry over [`SECTIONS_PER_EXTENT`] `* extent` entries,
-//!   linearly over the table's `wave_time`. **Chosen, not measured**; recipe on the page (an
-//!   RPCS3 breakpoint on `MineManager_DestroyAtLane`, `0x0011a590`, after a fire, logging the
-//!   section against `ship+0x6284`). Live the original cleared 12 mines over 1.8 s ahead of the
-//!   craft at gauge `1`.
+//! - **Which entries a tick clears**: the entry the front stands on and those it steps over, the
+//!   start entry on the launch tick. The original kills the lanes of the point its cursor reaches
+//!   (`EMP_SweepSections`); with `speed = 1` the two agree on every entry but, perhaps, the first.
+//!   **Chosen** for that first entry.
 //! - **The gauge's divide is `f32`**; the original divides in double and rounds to `f32`. Both
 //!   operands are small integers, exact in `f32`, so the two agree on every `n` the HUD can
 //!   reach (the page's live table, `0..39`).
 //! - A bomb the wave takes sets nothing off: `BombManager_DestroyAtLane`'s chain is unread.
+//! - No fork: the survey is one route, so the wave never splits where the original's would
+//!   (`EMP_SweepSections`' `REP2` branch).
 
 use oag_tables::detonator_layout::Scoring;
 
 use super::{Event, EventKind, Field, Survey};
-
-/// Survey entries the wave sweeps per unit of `extent` (`0.25 .. 2.0`). **Chosen, not
-/// measured** (see the module): at gauge `1` the wave reaches eighty sections ahead, a few
-/// hundred metres on an HD circuit, which is the order of the live run's 1.8 s of kills.
-pub const SECTIONS_PER_EXTENT: f32 = 40.0;
 
 /// The `1 / 1.3` the auto-speed ramp climbs by per second (`0x3f44ec4f`,
 /// `docs/ghidra/functions/ps3-hdfury-eu/detonator-speed.md`, "The ramp and the rescue").
@@ -48,8 +51,9 @@ pub struct Config {
     pub min_distance: f32,
     /// `maxDistance`: at gauge `1`.
     pub max_distance: f32,
-    /// `wave_time`: seconds the wave takes to run its reach (chosen use, see the module).
-    pub wave_time: f32,
+    /// `speed`: survey entries the wave steps a tick (`slot+0x1f8`, `EMPManager_Fire`; the
+    /// sweep's step count, `EMP_Update`).
+    pub speed: u32,
     /// `DistanceOffsetBetweenMines`, to place a laid object.
     pub lane_width: f32,
     /// `DetonatorScoring.xml`'s `<Emp>` values.
@@ -72,7 +76,7 @@ impl Config {
             hi: count(emp.max_num_pads_to_collect?),
             min_distance: emp.min_distance.unwrap_or(0.0),
             max_distance: emp.max_distance.unwrap_or(0.0),
-            wave_time: emp.wave_time.unwrap_or(1.0),
+            speed: emp.speed.map_or(1, count),
             lane_width,
             scoring,
         })
@@ -86,11 +90,11 @@ pub struct Wave {
     pub live: bool,
     /// The survey entry it started from.
     pub from: u16,
-    /// Survey entries it sweeps in all.
-    pub reach: f32,
-    /// Entries swept so far.
-    pub swept: f32,
-    /// Seconds since launch.
+    /// Entries the front has stepped so far; it stands on `from + front`.
+    pub front: u16,
+    /// Seconds it lives, the launch's `extent` (`emp+0x54`).
+    pub lifetime: f32,
+    /// Seconds since launch (`emp+0x158`).
     pub age: f32,
 }
 
@@ -130,8 +134,8 @@ impl Emp {
             wave: Wave {
                 live: false,
                 from: 0,
-                reach: 0.0,
-                swept: 0.0,
+                front: 0,
+                lifetime: 0.0,
                 age: 0.0,
             },
         }
@@ -219,8 +223,8 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
         emp.wave = Wave {
             live: true,
             from,
-            reach: extent * SECTIONS_PER_EXTENT,
-            swept: 0.0,
+            front: 0,
+            lifetime: extent,
             age: 0.0,
         };
     }
@@ -236,9 +240,11 @@ pub fn fire(field: &mut Field, survey: &Survey, config: &Config, from: u16) -> V
     }]
 }
 
-/// One tick of the wave: every mine and bomb on an entry the front passes this tick goes,
-/// scored with `<Emp>` (a mine laid this stage `new_mine_score`, a dark one `old_mine_score`, a
-/// bomb `bomb_score`); the mines count into the destroyed count.
+/// One tick of the wave (`EMP_Update`, `0x0013c320`): the age grows by `dt`, the front clears
+/// the entry it stands on and steps `speed` entries on, and the wave ends once the age has
+/// reached its lifetime. Every mine and bomb on a cleared entry goes, scored with `<Emp>` (a mine
+/// laid this stage `new_mine_score`, a dark one `old_mine_score`, a bomb `bomb_score`); the mines
+/// count into the destroyed count.
 pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -> Vec<Event> {
     let mut events = Vec::new();
     let total = survey.entries.len();
@@ -247,23 +253,24 @@ pub fn step_wave(field: &mut Field, survey: &Survey, config: &Config, dt: f32) -
         return events;
     }
     wave.age += dt;
-    let share = if config.wave_time > 0.0 {
-        (wave.age / config.wave_time).min(1.0)
-    } else {
-        1.0
-    };
-    let front = wave.reach * share;
-    let (first, last) = (wave.swept as usize, front as usize);
     let from = usize::from(wave.from);
-    wave.swept = front;
-    if share >= 1.0 {
+    let first = usize::from(wave.front);
+    let steps = config.speed.max(1) as usize;
+    wave.front = wave.front.saturating_add(steps as u16);
+    if wave.age >= wave.lifetime {
         wave.live = false;
     }
-    for step in first..last.min(first + total) {
-        let entry = (from + step) % total;
-        clear_entry(field, survey, config, entry, &mut events);
+    for step in first..(first + steps).min(total) {
+        clear_entry(field, survey, config, (from + step) % total, &mut events);
     }
     events
+}
+
+/// The survey entry the wave's front stands on, or `None` with no wave in flight.
+#[must_use]
+pub fn front_entry(wave: &Wave, survey: &Survey) -> Option<usize> {
+    let total = survey.entries.len();
+    (wave.live && total > 0).then(|| (usize::from(wave.from) + usize::from(wave.front)) % total)
 }
 
 fn clear_entry(

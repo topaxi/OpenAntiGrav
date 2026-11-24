@@ -183,14 +183,14 @@ fn write_emp(hasher: &mut StateHasher, emp: &oag_weapons::detonator::emp::Emp) {
     let oag_weapons::detonator::emp::Wave {
         live,
         from,
-        reach,
-        swept,
+        front,
+        lifetime,
         age,
     } = wave;
     if *live {
         hasher.write_u32(u32::from(*from));
-        hasher.write_f32(*reach);
-        hasher.write_f32(*swept);
+        hasher.write_u32(u32::from(*front));
+        hasher.write_f32(*lifetime);
         hasher.write_f32(*age);
     }
 }

@@ -346,6 +346,9 @@ pub struct RaceView {
     /// the same shape [`oag_gameplay::World::quake`] itself takes - see that
     /// field's own doc comment for why.
     pub(super) quake_effect: Option<psys::Playing>,
+    /// The [`Trigger::DetonatorEmp`] instance riding the EMP wave's front, or `None` with no
+    /// wave in flight. See `RaceView::advance_emp_visual`.
+    pub(super) emp_effect: Option<psys::Playing>,
     /// Per [`oag_gameplay::World::repulsers`] slot, the four instances a live
     /// Repulser carries: its blast, its forward and backward wave, then its
     /// fork wave. See `RaceView::advance_repulser_visual`.

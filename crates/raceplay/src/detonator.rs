@@ -284,13 +284,19 @@ impl crate::sim::RaceSim {
                     self.cues
                         .push(CueEvent::at_point(Cue::CannonHitWall, event.at));
                 }
+                // An EMP'd mine and bomb go off through the same `DetonatorMine_Explode` and bomb
+                // update as a shot one (`detonator-mine.md`, `detonator-bomb.md`).
                 EventKind::MineTouched
                 | EventKind::MineShot { .. }
-                | EventKind::MineChained { .. } => {
+                | EventKind::MineChained { .. }
+                | EventKind::MineEmped { .. } => {
                     self.cues
                         .push(CueEvent::at_point(Cue::MineExplosion, event.at));
                 }
-                EventKind::BombTouched | EventKind::BombShot | EventKind::BombReplaced => {
+                EventKind::BombTouched
+                | EventKind::BombShot
+                | EventKind::BombReplaced
+                | EventKind::BombEmped => {
                     self.cues
                         .push(CueEvent::at_point(Cue::BombExplosion, event.at));
                 }
@@ -298,8 +304,6 @@ impl crate::sim::RaceSim {
                 EventKind::EmpFull => self.cues.push(CueEvent::new(Cue::EmpFull, 0)),
                 // `EMP_Launch` plays `QUAKELAUNCH` on the firing ship's emitter.
                 EventKind::EmpLaunch => self.cues.push(CueEvent::new(Cue::QuakeLaunch, 0)),
-                // The kill's sound is unread (`detonator-emp.md`, "Open").
-                EventKind::MineEmped { .. } | EventKind::BombEmped => {}
             }
         }
     }
