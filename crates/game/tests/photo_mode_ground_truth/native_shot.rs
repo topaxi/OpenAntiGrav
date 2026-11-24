@@ -119,7 +119,6 @@ fn same_shots(
 /// What `--from-png` draws of shot `at` of `shots` is that shot again, whatever the profile it
 /// runs in, outside `skip`: the HUD, which the re-render draws from the race as it stands.
 fn drawn_again(tag: &str, image: &Path, shots: &[Made; 3], at: usize, skip: &[bool]) {
-    let binary = env!("CARGO_BIN_EXE_oag-game");
     let shot = decode(&shots[0].photos[at]);
     for (name, flags, one) in [
         ("half+fsr3", &HALF_FSR3[..], &shots[0]),
@@ -128,7 +127,7 @@ fn drawn_again(tag: &str, image: &Path, shots: &[Made; 3], at: usize, skip: &[bo
     ] {
         let out = one.run.dir.join(format!("rerender-{tag}.png"));
         let (stdout, again) =
-            shot_fidelity::from_png(binary, image, &one.run, &one.photos[at], &out, flags);
+            shot_fidelity::from_png(GAME, image, &one.run, &one.photos[at], &out, flags);
         assert!(stdout.contains("MATCH"), "{tag} {name}: {stdout}");
         let outside: Vec<usize> = (0..skip.len()).filter(|&pixel| !skip[pixel]).collect();
         let apart = |pixel: usize| {
