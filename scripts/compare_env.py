@@ -842,3 +842,16 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+#: `PlayerStatus_Update`'s held id (`record+0x1bc`) to the weapon's `type`
+#: (`docs/ghidra/functions/psp-pulse-usa/pickup-colour.md`, "The 13 values"); -1 is empty.
+PULSE_HELD_ID_TYPES = ["Rocket", "Missile", "Quake", "Cannon", "Turbo", "Shield", "Autopilot", "Plasma", "Mine", "Bomb",
+                       "LeachBeam", "Repulser", "Shuriken"]
+
+
+def held_pickup_flags(held_word):
+    """`["--hud-pickup", TYPE]` for a Pulse PSP held id, or `[]` when the slot is empty or the id is not a weapon's."""
+    if held_word is None or not 0 <= held_word < len(PULSE_HELD_ID_TYPES):
+        return []
+    return ["--hud-pickup", PULSE_HELD_ID_TYPES[held_word]]

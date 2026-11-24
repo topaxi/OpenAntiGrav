@@ -108,8 +108,16 @@ in the original (the word's 0.5 times the sheet's own alpha, which was not read 
 in a control region off the row; ours' wings read a little lighter (green about 225 against 202). On `talons-alongside` the same regression is
 not usable (the pad and the rocket behind the hexagon make the per-channel slopes 0.17 to 0.55 for ours and 0.29 to 0.51 for the original),
 but both frames show the scene through the hexagon and the wings differ by 8 grey in red and 4 in green and blue. What still differs in the
-pickup box is the icon and the `5.00` glyphs. `talons-uturn-airbrakes` is a scenery pair (`--ticks 10829`, no `--hud-state`): its original frame shows a Turbo
-hexagon with chevrons, 165 km/h and 99 shield, where ours draws no pickup row, 0 km/h and 100, so no hexagon is drawn at all. The HD race pair (`hd-race/talons-pack`) and the
+pickup box is the icon and the `5.00` glyphs. `talons-uturn-airbrakes` is a scenery pair (`--ticks 10829`, a Time Trial frame): it carried no `--hud-state`, so ours drew speed 0,
+a full shield and no pickup row where the original showed 160 km/h and a held Turbo (the hexagon with chevrons). `psp-pulse-pair.py
+--hud-readout` now reads the readout at the stop (the player's field row: place, lap, lap time, shield, the HUD block's speed; the held id
+`record+0x1bc`, read **4**, Turbo in `pickup-colour.md`'s table, with the fire word `0` and no timer) and passes `--hud-state` and
+`--hud-pickup Turbo` (a `CaptureHud` field, readout alone, requiring `--hud-state` like `--hud-autopilot`). `compare-rerender-ours.py` adds
+`--hud-pickup` to a stored Pulse PSP pair whose record names a held id other than the running Autopilot, and a re-render from the record alone
+is pixel-identical to the capture. Re-made from the stored state (`airbrake-uturn-c.ppst`): `theirs.png` pixel-identical to the stored
+one, ours now draws the hexagon and the readout, the hexagon box (205, 0, 76x64) over 40 grey 48.2 % -> 5.8 % of its pixels, the whole frame
+16.5 % -> 6.5 %. What is left on that frame is the bottom bar (ours is cyan where the original's is red, a different gap) and the
+hull. The HD race pair (`hd-race/talons-pack`) and the
 Zone pairs are unchanged (the flag is Pulse PSP's, from `restore_autopilot_timer`'s own pair types; the Zone pair's frame
 shows the same row and has not been given it).
 

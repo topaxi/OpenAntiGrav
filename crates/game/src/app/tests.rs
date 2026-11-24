@@ -152,6 +152,7 @@ fn a_hud_state_is_place_lap_and_two_clocks_in_ticks() {
             best_lap_centiseconds: None,
             boost_phase: None,
             autopilot_seconds: None,
+            held_pickup: None,
             song: None,
             head_to_head: None,
             zone: None,

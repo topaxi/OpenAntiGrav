@@ -1103,6 +1103,12 @@ pub(crate) struct Cli {
     #[arg(long, value_name = "SECONDS", requires = "hud_state")]
     pub(crate) hud_autopilot: Option<f32>,
 
+    /// With `--hud-state`: the pickup the player holds (a weapon's `type`, such as `Turbo`; Pulse PSP `record+0x1bc`),
+    /// whose backdrop and icon the HUD draws, settled and with no countdown. Drawn on the HUD alone, so the craft
+    /// holds nothing. A posed capture runs no tick, and `--give` acts inside one.
+    #[arg(long, value_name = "TYPE", requires = "hud_state")]
+    pub(crate) hud_pickup: Option<String>,
+
     /// With `--hud-state`: holds the now-playing marquee on this song title (Pulse draws one; a title without
     /// one draws nothing). A capture runs no music, so no song starts and the bar and scrolling text never appear.
     /// **A capture aid**: the display is stepped `--hud-song-ticks` times and frozen there.

@@ -62,6 +62,11 @@ pub struct CaptureHud {
     /// (`oag_hud::SubWeapon::Autopilot`). Drawn on the readout alone, the simulation's own
     /// timer untouched, so a posed capture's craft is not handed to the driver.
     pub autopilot_seconds: Option<f32>,
+    /// The pickup the player holds, when the capture read one (`record+0x1bc` on Pulse PSP): the HUD
+    /// draws its backdrop and icon, settled, with no countdown. Drawn on the readout alone, so a
+    /// posed capture's craft holds nothing and fires nothing. A running Autopilot
+    /// ([`Self::autopilot_seconds`]) is its own pickup row and takes the icon when none is held.
+    pub held_pickup: Option<oag_tables::weapons::Weapon>,
     /// A song the now-playing marquee is held on, when the capture pins one. See [`CaptureSong`].
     pub song: Option<CaptureSong>,
     /// A Head to Head readout drawn on the HUD alone, when the capture pins one. See

@@ -424,6 +424,14 @@ fn run(mut cli: Cli) -> Result<()> {
     if let Some(hud) = hud_state.as_mut() {
         hud.boost_phase = cli.hud_boost_phase;
         hud.autopilot_seconds = cli.hud_autopilot;
+        hud.held_pickup = cli
+            .hud_pickup
+            .as_deref()
+            .map(|name| {
+                oag_tables::weapons::Weapon::from_type(name)
+                    .with_context(|| format!("--hud-pickup {name:?} is not a weapon's type"))
+            })
+            .transpose()?;
         hud.song = cli.hud_song.clone().map(|title| race::CaptureSong {
             artist: cli.hud_song_artist.clone(),
             title,

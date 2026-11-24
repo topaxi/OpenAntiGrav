@@ -41,6 +41,7 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
         best_lap_centiseconds: None,
         boost_phase: None,
         autopilot_seconds: Some(5.0),
+        held_pickup: None,
         song: None,
         head_to_head: None,
         zone: None,
@@ -90,6 +91,52 @@ fn a_captured_field_and_hud_state_are_what_the_race_starts_with() {
         "a pose alone drops the grid"
     );
     assert_ne!(alone.readout().race_ticks, 2_333);
+}
+
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn a_held_pickup_pin_puts_the_pickup_row_on_the_readout_alone() {
+    use oag_tables::weapons::Weapon;
+    let Some(image) = oag_testdata::image("data/images/pulse-psp-eu.chd") else {
+        return;
+    };
+    let start = |held_pickup: Option<Weapon>| {
+        let loaded = race::load(&race::Options {
+            source: image.display().to_string(),
+            class: "VENOM".to_string(),
+            mode: oag_race::Mode::TimeTrial,
+            pose: Some(race::PoseRequest::Exact(pose_at(-100.0, -170.0))),
+            hud: Some(race::CaptureHud {
+                place: 1,
+                lap: 1,
+                lap_ticks: 10_554,
+                race_ticks: 10_554,
+                speed_kmh: Some(165.0),
+                shield_percent: Some(99.0),
+                best_lap_ticks: None,
+                best_lap_centiseconds: None,
+                boost_phase: None,
+                autopilot_seconds: None,
+                held_pickup,
+                song: None,
+                head_to_head: None,
+                zone: None,
+            }),
+            ..race::Options::default()
+        })
+        .expect("loading the race");
+        race::Race::start(loaded.setup, loaded.view, loaded.modules)
+    };
+    let held = start(Some(Weapon::Turbo));
+    let readout = held.readout();
+    assert_eq!(readout.pickup, Some(Weapon::Turbo));
+    assert_eq!(readout.sub_weapon, None, "a held pickup shows no countdown");
+    assert!((readout.speed_kmh - 165.0).abs() < 1e-3);
+    assert_eq!(
+        held.core.sim.world.ships[0].autopilot_timer, 0.0,
+        "the craft holds nothing: the pin is the readout's alone"
+    );
+    assert_eq!(start(None).readout().pickup, None, "no pin, no pickup row");
 }
 
 #[test]

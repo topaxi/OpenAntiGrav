@@ -212,6 +212,23 @@ def autopilot_hud_flags(pair):
     return ["--hud-autopilot", "%.4f" % pair.rec["original"]["autopilot_timer_at_stop_s"]]
 
 
+def held_pickup_hud_flags(pair):
+    """`--hud-pickup TYPE` for the frame: the backdrop and icon the HUD draws for the pickup the player holds
+    (`record+0x1bc`). The running Autopilot is the other pickup row (`autopilot_hud_flags`) and is not repeated here.
+    Empty when the slot is empty or the id is not a weapon's."""
+    return ce.held_pickup_flags((pair.rec["original"].get("held_pickup") or {}).get("held_word"))
+
+
+def hud_readout_flags(pair, clock):
+    """`--hud-state` and the held pickup for a frame ours renders by running ticks (a scenery pair), where the posed
+    craft is at rest and ours' readout would read speed 0, a full shield and no pickup. The values are the original's
+    own, read at the frame's stop (`hud_at_freeze`, `original.hud`), the same as a race shot's."""
+    h = pair.rec["original"]["hud"]
+    return ["--hud-state", "%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f" % (
+        h["place"], h["lap_number"], h["lap_time_s"], clock, h["speed_kmh"],
+        100.0 * h["shield"] / h["shield_max"], h["best_lap_s"])] + held_pickup_hud_flags(pair) + autopilot_hud_flags(pair)
+
+
 def run_to_clock(port, target):
     """Run the stopped original on to the first player tick whose race clock reaches `target` (a stored pair's own
     moment), in ONE resume: a breakpoint on `Ship_UpdateCraft` conditional on the player's craft and on the clock's float
@@ -529,6 +546,10 @@ def main():
                     help="the state is somewhere on the circuit, not on the grid: --layout forward|reversed is required, the "
                          "layout probe and the start-line distance check (grid states only) are skipped, and the pose "
                          "check at the rendered tick is what proves ours stands where the original does")
+    ap.add_argument("--hud-readout", action="store_true",
+                    help="a scenery shot whose HUD shows the race's own state (speed, shield, a held pickup): read the readout "
+                         "from the player's record at the stop and pass ours `--hud-state` and `--hud-pickup`, so a posed craft "
+                         "at rest does not print speed 0, a full shield and no pickup row")
     ap.add_argument("--meta", default="", help="JSON object for the manifest: id, title, track, craft, state, note")
     cp.add_arguments(ap)
     args = ap.parse_args()
@@ -578,7 +599,7 @@ def main():
                    "stopped at %.4f for a target of %.4f" % (reached, args.target_clock))
     elif args.run_ticks > 0:
         run(uv + [HERE / "psp-trace.py", "--port", args.port, "--ticks", args.run_ticks], stdout=subprocess.DEVNULL)
-    if args.field or args.zone:
+    if args.field or args.zone or args.hud_readout:
         # After the run to the frame's moment: the timer is written at the stop the frame is taken at (CPU not run
         # after it), so the HUD prints the pickup's own `5.00`, not a countdown the run itself already spent.
         restore_autopilot_timer(args.port, pair)
@@ -587,6 +608,18 @@ def main():
     if not 0.0 <= clock <= 3600.0:
         sys.exit("the race clock at %#x reads %r: not a clock, the address is wrong for this state" % (CLOCK_ADDRESS, clock))
     pair.rec["original"]["race_clock_s"] = clock
+    if args.hud_readout:
+        # The stop is the frame's own, before the trace run below moves the CPU: the HUD block's speed here is the
+        # one the frame prints (see `field_pair`'s note on the HUD text being a tick older than the 3D).
+        fr = [r for r in race_field_module().Field(Debugger(args.port)).rows() if r["player"]][0]
+        pair.rec["original"]["hud"] = {
+            "place": fr["place"], "lap_number": fr["lap"] - 1, "lap_time_s": fr["lap_time"], "race_clock_s": clock,
+            "shield": fr["shield"], "shield_max": fr["shield_max"], "best_lap_s": fr["best_lap_cs"] / 100,
+            "speed_kmh": fr.get("hud_kmh"), "source": "the player's field row at the stop (psp-race-field.py)"}
+        pair.check("the HUD's own speed readout (PLAYER_HUD+0) was found in the registry", fr.get("hud_kmh") is not None,
+                   "the block whose lap time (+0x24) is the player's")
+        if fr.get("hud_kmh") is None:
+            pair.finish()
     pair.rec["original"]["presented_lag_ticks"] = PRESENTED_LAG
     cp.build(pair, args, "zone" if args.zone else "race" if args.field else "scenery", "savestate_restore", args.state,
              {"value": PRESENTED_LAG, "unit": "ticks", "basis": "measured", "what": "picture, psp-presented-lag.py"})
@@ -711,6 +744,8 @@ def main():
     pair.rec["original"]["layout"] = layout
     entry = "Data\\Environments\\%s\\track%s.vex" % (args.track, "_reversed" if layout == "reversed" else "")
     base = [args.oag_game, image, "--race", "--track", entry, "--pose-from", csv, "--pose-tick", 0] + flags
+    if args.hud_readout:
+        base += hud_readout_flags(pair, clock)
     if args.air_brakes:
         base += ["--pose-flaps"] + lean_and_boost_flags(pair, theirs_row)
         pair.rec["ours"]["air_brakes"] = "ours --pose-flaps: the flaps drawn at the pose row's airbrake_l/airbrake_r"
