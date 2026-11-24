@@ -207,7 +207,7 @@ fn a_racebox_eliminator_is_scored_to_the_slider_target() {
 #[ignore = "needs a disc image in data/images/"]
 fn an_opponents_first_lap_pays_through_the_tick() {
     let Some(image) = image() else { return };
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::Eliminator,
@@ -218,7 +218,11 @@ fn an_opponents_first_lap_pays_through_the_tick() {
     .expect("loading an HD Eliminator");
     let law = loaded.setup.score_law.expect("HD's Eliminator is scored");
     let pay = law.lap * law.opponent_scale;
-    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     let snapshot = |race: &oag_raceplay::Race| {
         let world = &race.core.sim.world;
         std::array::from_fn::<_, 8, _>(|slot| {
@@ -260,9 +264,9 @@ fn a_score_race_ignores_a_stored_kill_pick() {
         ribbon: true,
         ..oag_raceplay::Options::default()
     };
-    let picked = oag_raceplay::load(&options).expect("loading an HD Eliminator");
+    let picked = oag_raceplay::load_sim(&options).expect("loading an HD Eliminator");
     assert_eq!(picked.setup.eliminator_kill_target, Some(200));
-    let cell = oag_raceplay::load(&oag_raceplay::Options {
+    let cell = oag_raceplay::load_sim(&oag_raceplay::Options {
         eliminator_score_target: Some(260),
         ..options
     })
