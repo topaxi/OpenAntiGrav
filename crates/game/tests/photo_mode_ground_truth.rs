@@ -1026,7 +1026,7 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
              hold left 2; ticks 3; hold left 2; ticks 3; press cross; ticks 3; \
              screenshot SHOTS/plain-hud.png; ticks 3; \
              hold right 2; ticks 3; press cross; ticks 3; until photo_job=hud within 800; \
-             press square; until photo_job=none within 800; ticks 3"
+             press circle; until photo_job=none within 800; ticks 3"
         ),
         &shots,
     );
@@ -1040,7 +1040,8 @@ fn a_motion_blur_shot_smears_what_it_should_and_any_input_abandons_it() {
     let [plain, track, ship, ship_hud, plain_hud, track_hud] =
         [0, 1, 2, 3, 4, 5].map(|i| decode(&photos[i]));
     shot_fidelity::the_hud_is_drawn_once(&plain, &plain_hud, &ship, &ship_hud);
-    // SQUARE pressed on the frame that puts the HUD over the finished shot does not take it off.
+    // CIRCLE pressed on the frame that puts the HUD over the finished shot does not leave the mode
+    // and lose the shot.
     shot_fidelity::the_hud_is_drawn_once(&plain, &plain_hud, &track, &track_hud);
     assert_eq!((plain.0, plain.1), (track.0, track.1));
     // Where the craft's hull sits in the close lens turned by `hold left 8`, and a stretch of
