@@ -99,7 +99,10 @@ else
     out="$project_root/data/deploy-builds/OpenAntiGrav-x86_64-portable-$hash.AppImage"
     # A detached worktree has no submodules; the build refuses to ship without the official mods.
     git -C "$wt" submodule update --init assets/mods/official
-    "$wt/scripts/build-appimage.sh" --container --out "$out"
+    fast_arg=()
+    for a in "${pass[@]}"; do [[ $a == --fast ]] && fast_arg=(--fast); done
+    (( ${#fast_arg[@]} )) && out="${out%.AppImage}-fast.AppImage"
+    "$wt/scripts/build-appimage.sh" --container "${fast_arg[@]}" --out "$out"
     cleanup
     "$script" "${pass[@]}" --appimage "$out"
 fi

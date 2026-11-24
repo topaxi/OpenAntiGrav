@@ -1,0 +1,14 @@
+# The portable build image plus the mold linker, for `scripts/build-appimage.sh
+# --fast` only: a local edit-deploy loop to a Steam Deck. Release builds
+# (release.yml) and the default deploy use `Containerfile` alone and link with
+# GNU ld, so nothing they produce depends on this file.
+#
+# Bookworm's mold (1.10) is new enough for gcc 12's `-fuse-ld=mold`. It links the
+# same objects against the same glibc 2.36, so the portability floor is unchanged.
+
+ARG BASE=oag-appimage-build:bookworm
+FROM ${BASE}
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends mold \
+    && rm -rf /var/lib/apt/lists/*

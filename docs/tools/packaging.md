@@ -143,6 +143,40 @@ which [determinism](../architecture/determinism.md) already forbids there.
 The gain is small because the CPU is rarely the limit: on an integrated GPU
 the frame is GPU-bound twenty times over.
 
+## A fast local build
+
+`just deploy deck --fast` (or `scripts/build-appimage.sh --container --fast`) is
+for the edit-deploy loop to a Steam Deck, never for a release or a performance
+measurement. It builds the same `dist` profile with cargo's per-profile
+environment overrides instead of a change to `Cargo.toml`: thin LTO, 16 codegen
+units, incremental, no debug info (the AppImage strips it anyway), linked with
+mold. The container build gets mold from a second image,
+`packaging/appimage/Containerfile.fast` (`oag-appimage-build:bookworm-mold`,
+layered on the release image), so the glibc floor is unchanged and the release
+image never carries it.
+
+It keeps its own target directory (`data/appimage/container/target-fast`) and
+writes `OpenAntiGrav-x86_64-portable-fast.AppImage`, which lands on the Deck's
+Desktop beside the release one rather than over it. `release.yml`, `just
+appimage-portable`, `just appimage-deck` and a plain `just deploy deck` are
+untouched: they still build fat LTO with one codegen unit and link with GNU ld.
+
+Why the profile and not only the linker: in `dist` the time goes to whole-program
+LTO, which rustc runs on one core before the linker starts, so mold alone shortens
+only the last step.
+
+Measured 2026-11-24 on om (Ryzen 9, 24 threads) at load 30 to 37, each build of
+`oag-game` in the container, AppImage assembly included, one-line change in
+`crates/game/src/app/session/frame.rs` for the warm rows:
+
+| | default (`dist`, GNU ld) | `--fast` (thin LTO, mold) |
+| --- | --- | --- |
+| cold, empty target directory | 494 s | 108 s |
+| warm, one-line change | 381 s | 45 s |
+
+The `--fast` binary's `.comment` names `mold 1.10.1`, and its glibc floor is the
+same 2.35.
+
 ## Why AppImage, and not Flatpak
 
 Decided 2026-07. **AppImage now, Flatpak later if the project ever wants to be
@@ -559,6 +593,7 @@ just deploy deck                    # deck@steamdeck, or $OAG_DECK_HOST
 just deploy deck user@host          # a different target
 just deploy deck --dry-run          # show the plan, change nothing
 just deploy deck --skip-build       # sync an AppImage already built
+just deploy deck --fast             # thin LTO + mold, a quick dev loop ("A fast local build")
 just push-data deck                 # pick game data, see what is there
 just push-data deck user@host 'images/pulse-*' 'dlc/*'   # no picker
 just push-data deck --dry-run       # pick, then only list what would go

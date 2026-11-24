@@ -16,7 +16,7 @@
 # Usage:
 #   scripts/build-appimage.sh [--out <file>] [--container] [--skip-build]
 #                             [--binary <path>] [--no-strip]
-#                             [--target-cpu <cpu>]
+#                             [--target-cpu <cpu>] [--fast]
 #
 #   --container  Build inside Debian bookworm (glibc 2.36) instead of natively,
 #                so the AppImage also loads on a distribution older than this
@@ -27,6 +27,14 @@
 #                Deck's core, which `just appimage-deck` passes; the binary then
 #                refuses to start on a CPU without AVX2/FMA/BMI2. See
 #                docs/tools/packaging.md, "A CPU-tier build".
+#   --fast       A local edit-deploy loop, never a release: the dist profile with
+#                thin LTO, 16 codegen units, incremental and no debug info
+#                instead of fat LTO and one unit, linked with mold (a --container
+#                build uses an image with mold added, Containerfile.fast). Its own
+#                target directory and an AppImage named `-fast`, so it never
+#                touches the release build's state. Runs slower than a release
+#                build; do not measure performance with it. See
+#                docs/tools/packaging.md, "A fast local build".
 #   --binary     Package a binary built elsewhere. Implies --skip-build. Must
 #                run on this host: the icon step below invokes it directly
 #                (--write-icon), so a binary for another OS/arch needs its
@@ -59,12 +67,15 @@ PORTABLE_FLOOR="2.36"
 
 # Tag of the image built from packaging/appimage/Containerfile.
 CONTAINER_IMAGE="oag-appimage-build:bookworm"
+# The same image with mold added (packaging/appimage/Containerfile.fast), for --fast.
+FAST_IMAGE="oag-appimage-build:bookworm-mold"
 
 skip_build=0
 strip_binary=1
 container=0
 binary=""
 target_cpu=""
+fast=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -74,6 +85,7 @@ while [[ $# -gt 0 ]]; do
         --skip-build) skip_build=1; shift ;;
         --no-strip)   strip_binary=0; shift ;;
         --target-cpu) target_cpu="${2:?--target-cpu needs a value}"; shift 2 ;;
+        --fast)       fast=1; shift ;;
         # Print the header comment block, however long it happens to be.
         -h|--help) awk 'NR>2 && /^#/ {sub(/^# ?/,""); print; next} NR>2 {exit}' \
                        "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -85,13 +97,23 @@ die() { echo "error: $*" >&2; exit 1; }
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 
-step "Building oag-game (dist${target_cpu:+, target-cpu=$target_cpu})"
+step "Building oag-game (dist${target_cpu:+, target-cpu=$target_cpu}$( (( fast )) && echo ', fast: thin LTO, mold, not for release' ))"
 
 # Both build paths below read these. Empty for a baseline build, so nothing
 # about one changes; a tier build gets its own target directory so the two
 # never invalidate each other's incremental state.
 rustflags="${target_cpu:+-C target-cpu=$target_cpu}"
 target_suffix="${target_cpu:+-$target_cpu}"
+# --fast: cargo's per-profile environment overrides, so Cargo.toml's dist profile
+# stays what release.yml builds; a target directory of its own keeps the two
+# builds from invalidating each other.
+fast_env=()
+if (( fast )); then
+    fast_env=(CARGO_PROFILE_DIST_LTO=thin CARGO_PROFILE_DIST_CODEGEN_UNITS=16
+              CARGO_PROFILE_DIST_INCREMENTAL=true CARGO_PROFILE_DIST_DEBUG=false)
+    rustflags="${rustflags:+$rustflags }-C link-arg=-fuse-ld=mold"
+    target_suffix="$target_suffix-fast"
+fi
 
 if [[ -n $binary ]]; then
     echo "using $binary"
@@ -117,6 +139,13 @@ Build natively instead and mind the glibc floor this script prints."
     "$engine" build -t "$CONTAINER_IMAGE" \
         -f "$project_root/packaging/appimage/Containerfile" \
         "$project_root/packaging/appimage"
+    image="$CONTAINER_IMAGE"
+    if (( fast )); then
+        "$engine" build -t "$FAST_IMAGE" --build-arg "BASE=$CONTAINER_IMAGE" \
+            -f "$project_root/packaging/appimage/Containerfile.fast" \
+            "$project_root/packaging/appimage"
+        image="$FAST_IMAGE"
+    fi
 
     # A separate CARGO_HOME and target directory, both under the gitignored
     # data/, so a container build neither shares nor invalidates the host's
@@ -143,12 +172,13 @@ Build natively instead and mind the glibc floor this script prints."
     # a host-only `.cargo/config.toml` in the mounted checkout (a mold linker
     # the image does not have) cannot reach the container build.
     engine_args+=(-e "RUSTFLAGS=$rustflags")
+    for kv in "${fast_env[@]}"; do engine_args+=(-e "$kv"); done
     [[ $engine == docker ]] && engine_args+=(--user "$(id -u):$(id -g)")
     # The icon step below runs the built binary in the same image.
     icon_args=(--rm -v "$project_root:/src" -w /src)
     [[ $engine == docker ]] && icon_args+=(--user "$(id -u):$(id -g)")
 
-    "$engine" run "${engine_args[@]}" "$CONTAINER_IMAGE" \
+    "$engine" run "${engine_args[@]}" "$image" \
         bash -c 'ldd --version | head -1 && cargo build --profile dist -p oag-game --no-default-features --features extensions'
     binary="$container_target/dist/oag-game"
 elif (( skip_build )); then
@@ -159,7 +189,9 @@ else
     # `target/cpu-<cpu>`, the directory `just build-cpu` uses; the two keep
     # separate `release` and `dist` outputs there.
     native_target="$project_root/target${target_cpu:+/cpu-$target_cpu}"
-    CARGO_TARGET_DIR="$native_target" RUSTFLAGS="$rustflags" \
+    (( fast )) && { command -v mold >/dev/null || die "--fast links with mold, which is not installed here"; }
+    (( fast )) && native_target="$project_root/target/appimage-fast$target_suffix"
+    env "${fast_env[@]}" CARGO_TARGET_DIR="$native_target" RUSTFLAGS="$rustflags" \
         cargo build --profile dist -p oag-game --no-default-features --features extensions --manifest-path "$project_root/Cargo.toml"
     binary="$native_target/dist/oag-game"
 fi
