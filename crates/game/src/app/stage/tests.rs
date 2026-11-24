@@ -29,6 +29,7 @@ fn the_boot_sequences_renderer_installs_the_titles_faces() {
             font: &font,
             sprites: &oag_hud::sprite::Sheet::default(),
             skin,
+            menu_font: None,
             title_font: None,
             buttons_font: Some(&font),
         },

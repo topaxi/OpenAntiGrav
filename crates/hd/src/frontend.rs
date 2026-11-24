@@ -134,6 +134,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // naming a slot no plugin declares - what the engine does with that needs
     // the executable.
     menu_font: None,
+    menu_face_in_boot: false,
     // `FEGlobals->TextColor`. White, against Pulse's cyan - and **one of the
     // globals that does not move between the archives**, which is worth saying
     // here because half the palette does. See `selected` below.

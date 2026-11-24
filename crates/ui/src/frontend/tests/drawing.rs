@@ -687,3 +687,73 @@ fn a_stats_text_draws_in_the_stats_face_where_the_skin_has_one() {
         other => panic!("not drawn in the Stats face: {other:?}"),
     }
 }
+
+const SHOW_LOGO_XML: &str = r#"
+<Screen>
+  <Screen type="FEMain" name="Top FE Screen">
+    <Screen name="FE Screen">
+      <Screen name="Show Logo">
+        <Text delay="1" transition="0">
+          <Values align="right" idstring="BOOT_PRESS_START" font="Menu" x="460" y="220"></Values>
+        </Text>
+        <Viewport>
+          <Values x="40" y="0" height="480" width="400"></Values>
+          <Text name="USLegalText" delay="0" transition="0">
+            <Values align="left" idstring="BOOT_LEGAL" font="small" scale="0.7" x="40" y="250" widthlimited="true"></Values>
+          </Text>
+        </Viewport>
+      </Screen>
+    </Screen>
+  </Screen>
+</Screen>
+"#;
+
+/// Pulse's `Show Logo` draws `BOOT_PRESS_START` in the menu face and `BOOT_LEGAL` in the `small`
+/// face (`Pulse_14.fnt`, the third slot's `Title`), each at its authored scale; a skin that holds
+/// neither face draws both in the `Default` atlas as before. The legal line wraps over the width
+/// left from its own `x` (360), where the `Viewport` is 400 wide.
+#[test]
+fn show_logo_draws_its_texts_in_their_authored_faces_where_the_skin_holds_them() {
+    static HELD: oag_title::MenuSkin = oag_title::MenuSkin {
+        small_font: Some("Title"),
+        menu_font: Some("menu"),
+        menu_face_in_boot: true,
+        ..crate::placeholder::MENU_SKIN
+    };
+    let mut frontend = Frontend::new(
+        Screens::from_xml(SHOW_LOGO_XML),
+        StringTable::default(),
+        Vec::new(),
+        Vec::new(),
+        0,
+        false,
+    );
+    let find = |draws: &[Draw], id: &str| {
+        draws
+            .iter()
+            .find(|d| matches!(d, Draw::Text { text, .. } | Draw::FacedText { text, .. } if text == id))
+            .cloned()
+            .unwrap_or_else(|| panic!("{id} is drawn"))
+    };
+
+    let plain = frontend.draw_screen("Show Logo");
+    assert!(matches!(
+        find(&plain, "BOOT_PRESS_START"),
+        Draw::Text { .. }
+    ));
+    assert!(matches!(
+        find(&plain, "BOOT_LEGAL"),
+        Draw::Text { wrap_width: Some(w), .. } if w == 360.0
+    ));
+
+    frontend.set_menu_skin(&HELD);
+    let held = frontend.draw_screen("Show Logo");
+    assert!(matches!(
+        find(&held, "BOOT_PRESS_START"),
+        Draw::FacedText { role: "menu", scale, .. } if scale == 1.0
+    ));
+    assert!(matches!(
+        find(&held, "BOOT_LEGAL"),
+        Draw::FacedText { role: "Title", scale, wrap_width: Some(w), .. } if scale == 0.7 && w == 360.0
+    ));
+}

@@ -1308,6 +1308,15 @@ pub fn run(
         title_font.clone(),
         buttons_font,
     );
+    if options.menu_page.is_none() {
+        crate::boot::fonts::install_boot_menu_face(
+            &mut renderer,
+            &device,
+            &queue,
+            menu_skin,
+            menu_font.as_ref(),
+        );
+    }
     crate::prompts::install(&mut renderer, title, platform, &options.settings);
 
     if let Some((format, picture)) = &fly_by_still {

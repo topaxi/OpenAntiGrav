@@ -175,6 +175,7 @@ pub const MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     // came off and why the authored `gap` is not it.
     row_extra_leading: Some(6.0),
     menu_font: Some("menu"),
+    menu_face_in_boot: true,
     text: Some(0xFF33_A6B9),
     title: Some(0xFF00_0000),
     // `FE Screen` opens with its own full-screen black `<Image>`, so
@@ -326,6 +327,7 @@ pub const PS2_MENU_SKIN: &oag_title::MenuSkin = &oag_title::MenuSkin {
     first_row_y: Some(53.0),
     row_extra_leading: Some(17.0),
     menu_font: Some("menu"),
+    menu_face_in_boot: true,
     text: Some(0xFF33_A6B9),
     title: Some(0xFF00_0000),
     background: None,

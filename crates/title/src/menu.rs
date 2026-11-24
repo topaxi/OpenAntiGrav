@@ -216,6 +216,13 @@ pub struct MenuSkin {
     /// definitions were read and name no separate role (Pure,
     /// `oag_pure::frontend::MENU_SKIN`). The caller does the same either way.
     pub menu_font: Option<&'static str>,
+    /// Whether a `font="menu"` text of the boot sequence (the title's `PRESS START BUTTON`) draws
+    /// in the [`Self::menu_font`] face, held in the boot renderer's second glyph slot beside the
+    /// `Default` primary, instead of in `Default` at the authored size. The original draws it in
+    /// `Pulse_20.fnt`: uppercase and wider than `pulse_text.fnt`
+    /// (`docs/ui/campaign-screens.md`, "The title's faces"). `false` keeps every text of the
+    /// sequence in the `Default` atlas.
+    pub menu_face_in_boot: bool,
     /// Unselected row text, as this title's own menu screens draw it.
     ///
     /// `FEGlobals->TextColor` on both PSP titles. HD is why the wording is "as its
@@ -604,6 +611,7 @@ mod tests {
         first_row_y: Some(32.0),
         row_extra_leading: Some(6.0),
         menu_font: Some("menu"),
+        menu_face_in_boot: false,
         text: Some(0xFF33_A6B9),
         title: Some(0xFF00_0000),
         background: None,

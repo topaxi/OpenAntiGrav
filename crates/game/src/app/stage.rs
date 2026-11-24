@@ -299,6 +299,7 @@ impl Stage {
                 font: &loaded.font,
                 sprites: &loaded.sprites,
                 skin: loaded.menu_skin,
+                menu_font: loaded.menu_font.as_ref(),
                 title_font: loaded.title_font.as_ref(),
                 buttons_font: loaded.buttons_font.as_ref(),
             },
@@ -877,6 +878,7 @@ pub(crate) struct FrontendFaces<'a> {
     pub(crate) font: &'a oag_ui::font::Atlas,
     pub(crate) sprites: &'a oag_hud::sprite::Sheet,
     pub(crate) skin: &'static oag_title::MenuSkin,
+    pub(crate) menu_font: Option<&'a oag_ui::font::Atlas>,
     pub(crate) title_font: Option<&'a oag_ui::font::Atlas>,
     pub(crate) buttons_font: Option<&'a oag_ui::font::Atlas>,
 }
@@ -908,6 +910,7 @@ pub(crate) fn frontend_renderer(
         faces.title_font.cloned(),
         faces.buttons_font.cloned(),
     );
+    boot::fonts::install_boot_menu_face(&mut renderer, device, queue, faces.skin, faces.menu_font);
     Ok(renderer)
 }
 

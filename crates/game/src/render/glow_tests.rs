@@ -159,7 +159,11 @@ fn a_load_pass_blooms_its_stamps_only_when_the_renderer_is_told_to() {
         eprintln!("no GPU adapter: skipping");
         return;
     };
-    assert_eq!(red(&off, 194, 120), 0, "a Load pass keeps its stamps unbloomed");
+    assert_eq!(
+        red(&off, 194, 120),
+        0,
+        "a Load pass keeps its stamps unbloomed"
+    );
     assert!(
         red(&on, 194, 120) > 8,
         "told so, a Load pass blooms past the square's edge, got {}",
