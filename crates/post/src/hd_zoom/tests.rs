@@ -123,6 +123,7 @@ fn the_ring_is_the_live_cpu_mesh() {
         damage: 0.0,
         size: [1.0, 1.0],
         tick: 1,
+        settle: 0,
     };
     let mesh = ring(&tuning(), &frame);
     assert_eq!(mesh.len(), 96);
@@ -151,6 +152,7 @@ fn the_damage_tint_is_the_live_one() {
             damage: p,
             size: [1.0; 2],
             tick: 1,
+            settle: 0,
         };
         let outer = ring(&tuning(), &frame)[1].colour;
         for k in 0..3 {
@@ -302,6 +304,7 @@ fn a_boost_brightens_the_rim_and_not_the_centre() {
         damage: 0.0,
         size: [1.0, 1.0],
         tick: 1,
+        settle: 0,
     };
     let quiet = Frame {
         boost: 0.0,
@@ -330,10 +333,51 @@ fn a_quiet_pulse_changes_nothing() {
         damage: 0.0,
         size: [1.0, 1.0],
         tick: 1,
+        settle: 0,
     };
     let (Some(off), Some(on)) = (resolve(&[None]), resolve(&[Some(quiet)])) else {
         eprintln!("no GPU adapter: skipping");
         return;
     };
     assert_eq!(off, on);
+}
+
+/// A settling frame costs one history draw on each tick a preview draws, the draws it missed when
+/// ticks passed with none, and the whole settle only on a new ring or after a long gap; a frame
+/// that does not settle (every race's) makes one.
+#[test]
+fn a_settling_frame_draws_one_history_a_tick_while_ticks_are_drawn() {
+    let frame = |tick, settle| Frame {
+        boost: 1.0,
+        damage: 0.0,
+        size: [1.0, 1.0],
+        tick,
+        settle,
+    };
+    let base = u64::MAX / 2;
+    assert_eq!(passes(None, &frame(base, SETTLE_PASSES)), SETTLE_PASSES);
+    let mut last = None;
+    let mut per_tick = Vec::new();
+    for tick in base..base + 60 {
+        per_tick.push(passes(last, &frame(tick, SETTLE_PASSES)));
+        last = Some(tick);
+    }
+    assert_eq!(per_tick[0], SETTLE_PASSES, "a new ring settles");
+    assert!(per_tick[1..].iter().all(|&n| n == 1), "{per_tick:?}");
+    assert_eq!(
+        passes(last, &frame(base + 62, SETTLE_PASSES)),
+        3,
+        "two ticks missed"
+    );
+    assert_eq!(
+        passes(Some(702), &frame(base + 300, SETTLE_PASSES)),
+        SETTLE_PASSES,
+        "the race's tick to the mode's"
+    );
+    assert_eq!(
+        passes(last, &frame(base + 500, SETTLE_PASSES)),
+        SETTLE_PASSES
+    );
+    assert_eq!(passes(last, &frame(base + 61, 0)), 1);
+    assert_eq!(passes(None, &frame(base, 0)), 1);
 }

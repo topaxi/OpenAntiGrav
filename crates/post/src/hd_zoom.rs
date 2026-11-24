@@ -92,6 +92,26 @@ pub struct Tuning {
     pub jitter_range: u32,
 }
 
+/// History draws that settle a ring over a scene that stands still ([`Frame::settle`]): the
+/// history blends at a weight of at most `0.25` a draw, so the zeros or the stale picture it
+/// started from are gone to below a texel's 16 bits by then.
+pub const SETTLE_PASSES: u32 = 16;
+
+/// History draws the pass makes for `frame` when the last one ran at `last` (`None`: the ring is
+/// new). One unless the frame settles: then a draw for each tick that passed without one, at most
+/// `frame.settle`, and `frame.settle` on a new ring.
+#[must_use]
+pub fn passes(last: Option<u64>, frame: &Frame) -> u32 {
+    if frame.settle == 0 {
+        return 1;
+    }
+    let Some(last) = last else {
+        return frame.settle;
+    };
+    let missed = frame.tick.saturating_sub(last).max(1);
+    u32::try_from(missed).map_or(frame.settle, |missed| missed.min(frame.settle))
+}
+
 /// One tick's worth of the pulses, as the pass reads them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame {
@@ -104,6 +124,12 @@ pub struct Frame {
     /// The simulation tick this was stepped for. The history draw runs once
     /// per tick, so two frames of one tick share a history.
     pub tick: u64,
+    /// The most history draws a tick's draw may make: `0` is the one a tick makes. For a scene
+    /// that stands still (photo mode's speed blur), a draw makes one for each tick since the
+    /// last, as if the ring had been drawn on each, and all of them on a ring just built
+    /// ([`passes`]), so a frame drawn after few of them has the history one drawn on every tick
+    /// has.
+    pub settle: u32,
 }
 
 impl Frame {
@@ -202,6 +228,7 @@ impl Pulse {
             damage: self.damage,
             size: [1.0 + self.jitter[0], 1.0 + self.jitter[1]],
             tick: self.tick,
+            settle: 0,
         }
     }
 
@@ -666,8 +693,8 @@ impl Zoom {
         scene: &wgpu::TextureView,
         source: SourceMap,
     ) {
-        let next = 1 - self.current.get();
-        let group = self.scene_groups[next].get(scene, || self.group_for(device, scene, next));
+        let groups = [0, 1]
+            .map(|next| self.scene_groups[next].get(scene, || self.group_for(device, scene, next)));
         self.history_pass(
             queue,
             encoder,
@@ -675,7 +702,7 @@ impl Zoom {
             self.quarter,
             ([1.0; 2], [1.0; 2]),
             source,
-            Some(group),
+            Some(&groups),
         );
     }
 
@@ -718,23 +745,39 @@ impl Zoom {
         rect: (u32, u32),
         mapping: ([f32; 2], [f32; 2]),
         source: SourceMap,
-        group: Option<wgpu::BindGroup>,
+        groups: Option<&[wgpu::BindGroup; 2]>,
     ) {
-        let first = self.last_tick.get().is_none();
-        if self.last_tick.get() == Some(frame.tick) {
+        let last = self.last_tick.get();
+        let first = last.is_none();
+        if last == Some(frame.tick) {
             return;
         }
         self.last_tick.set(Some(frame.tick));
-        let next = 1 - self.current.get();
-        self.current.set(next);
         let (mut weight, crop) = history(&self.tuning, frame.boost);
         // The very first history draw has no previous frame to blend: its other
         // buffer is the allocation's zeros. Weight 0 makes it the plain scene
-        // copy, as `hd_bloom`'s adapt_jump does for its own first frame.
-        if first {
+        // copy, as `hd_bloom`'s adapt_jump does for its own first frame. A settling
+        // draw repeats one set of constants (a queue write lands before the whole
+        // encoder runs), so it blends the zeros in at the weight and they decay away.
+        if first && frame.settle == 0 {
             weight = 0.0;
         }
         self.write_constants(queue, 0, mapping, source, weight, crop);
+        for _ in 0..passes(last, frame) {
+            let next = 1 - self.current.get();
+            self.current.set(next);
+            let bound = groups.map_or_else(|| &self.history_groups[next], |groups| &groups[next]);
+            self.history_draw(encoder, rect, next, bound);
+        }
+    }
+
+    fn history_draw(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        rect: (u32, u32),
+        next: usize,
+        bound: &wgpu::BindGroup,
+    ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("hd zoom history"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -754,7 +797,6 @@ impl Zoom {
         oag_gpu::perfprobe::marks::mark(&mut pass, "hd zoom history");
         pass.set_pipeline(&self.history_pipeline);
         pass.set_viewport(0.0, 0.0, rect.0 as f32, rect.1 as f32, 0.0, 1.0);
-        let bound = group.as_ref().unwrap_or_else(|| &self.history_groups[next]);
         pass.set_bind_group(0, bound, &[]);
         pass.draw(0..3, 0..1);
         oag_gpu::perfprobe::marks::close(&mut pass);
