@@ -145,3 +145,47 @@ fn a_pure_grid_craft_reads_the_original_s_250_not_a_full_255() {
         );
     }
 }
+
+/// Modesto Heights' grid hull takes the second light the original's GE list carries: `(208, 47, 1)` along
+/// `(-19.24, 7.19, 1.42)` (`docs/ghidra/functions/psp-pure-usa/hull-shine.md`, "Light scale"). It is `wopointShape2`
+/// (colour `(0.84, 0.192, 0.011)`, full strength inside 22.398 units, none beyond 33.779), 20.59 units from the grid
+/// craft, so the builder hands it to the GE as a type-0 light at `light - craft`; its twin `wopointShape3` is 47.64
+/// units away and reaches nothing, which leaves the second point slot empty. The colour byte is
+/// `trunc(0.84 * 255) = 214`, scaled by the grid's `250`: `214 * 250 >> 8 = 208`.
+///
+/// Goes through Pure's own load, so it fails when the loader stops giving the hull the circuit's point lights.
+#[test]
+#[ignore = "needs the Pure PSP disc in data/images/"]
+fn modestos_grid_hull_takes_the_second_light_the_ge_list_carries() {
+    let Some(image) = oag_testdata::image("data/images/pure-psp-usa.chd") else {
+        return;
+    };
+    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+        source: image.display().to_string(),
+        track: Some(r"Data\Environments\03_Modesto_Heights\track.vex".to_string()),
+        class: "VENOM".to_string(),
+        ..oag_raceplay::Options::default()
+    })
+    .expect("loading Modesto Heights");
+    let points = &loaded.view.hull_points;
+    assert_eq!(points.len(), 130, "Modesto authors 130 `wopoint`s");
+
+    let grid = PURE_GRIDS[3].1;
+    let slots = points.at(grid, 0.0, [250, 250]);
+    let packed = slots[0][3] as u32;
+    assert_eq!(
+        [packed & 0xff, (packed >> 8) & 0xff, packed >> 16],
+        [208, 47, 1],
+        "slot 0 carries the original's colour bytes"
+    );
+    let want = Vec3::new(-19.24, 7.19, 1.42).normalize();
+    let got = Vec3::new(slots[0][0], slots[0][1], slots[0][2]);
+    assert!(
+        (got - want).length() < 1e-3,
+        "slot 0 points along the original's vector: {got:?} against {want:?}"
+    );
+    assert_eq!(
+        slots[1], [0.0; 4],
+        "the twin is out of range, slot 1 is empty"
+    );
+}
