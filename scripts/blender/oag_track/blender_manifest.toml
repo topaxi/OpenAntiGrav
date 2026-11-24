@@ -14,4 +14,4 @@ license = ["SPDX:MIT"]
 tags = ["Import-Export"]
 
 [permissions]
-files = "Read and write the track file (.track.toml and .glb) you pick"
+files = "Read and write track files and images; read the host texture dir"

@@ -25,6 +25,7 @@ use oag_trackfile::art::{
 use oag_vex::vex::{self, BlendClass};
 
 pub mod colour;
+pub mod host_export;
 pub mod motion;
 
 /// What of a track file's art is drawn beside its track model.

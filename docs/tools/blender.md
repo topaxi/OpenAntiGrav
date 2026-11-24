@@ -160,8 +160,8 @@ A scene with no art mesh, no Sun lamp and no sky writes no art section: the file
 | An untagged Mesh object that renders | one `oag/art/<n>` draw per material slot it uses, vertices split per face corner, transforms baked, in natural name order |
 | The active colour attribute, read as `.color` (Blender keeps it **linear**; never `.color_srgb`), either domain | `COLOR_0`, the baked light; white without one |
 | The active UV map | `TEXCOORD_0`, `v` flipped to the disc's v-down |
-| The material's first Image Texture node: an image with custom properties `oag_host_entry` and `oag_host_name` (or **Make Host Texture** in the panel) | `[[art.texture]] host = { entry, name }`: a `Texture` node of a circuit on the host title's disc, by its full asset path. No pixels are exported |
-| Any other image (a PNG file on disk) | `[[art.texture]] image = "<file>.png"`, the file copied beside the manifest |
+| The material's first Image Texture node: an image with custom properties `oag_host_entry` and `oag_host_name` (or **Make Host Texture** in the panel) | `[[art.texture]] host = { entry, name }`: a `Texture` node of a circuit on the host title's disc, by its full asset path. No pixels are exported; with a **Host texture folder** set the image shows the disc's picture, linked and never packed ([Host textures](#host-textures-showing-the-discs-pictures)) |
+| Any other image | `[[art.texture]] image = "<file>.png"`, a PNG beside the manifest in every case ([Own textures](#own-textures-one-png-each)) |
 | Material *Blend* (`oag_blend`), or from Blender when *auto*: alpha clip is `cutout`, *Blend* is `alpha`, else `opaque` | `oag_blend` |
 | Alpha clip: a Math node set to **Greater Than** feeding the Principled BSDF's Alpha (Blender 4.2+), or the *Alpha Clip* blend mode on older versions | `oag_alpha_ref` = threshold x 255. Blender 5.2 silently turns `blend_method = 'CLIP'` into Hashed, so the node is the way |
 | Material backface culling | `oag_culled` |
@@ -190,8 +190,8 @@ keeps its bytes.
 **Baking light into `COLOR_0`.** The format stores the result, never the method (ADR-0076
 decision 9); the add-on has no Bake operator yet, so a builder script does it with Cycles,
 headless: give each art mesh a `FLOAT_COLOR` colour attribute and make it active, swap each
-material for a plain diffuse one of roughly the texture's albedo (the host textures have no pixels
-in Blender), hide the tagged collision from render (the floor lies in the road's plane and would
+material for a plain diffuse one of roughly the texture's albedo (a host texture has no pixels in
+Blender unless the Host texture folder links them), hide the tagged collision from render (the floor lies in the road's plane and would
 shadow it), then `bpy.ops.object.bake(type='DIFFUSE', pass_filter={'DIRECT', 'INDIRECT'},
 target='VERTEX_COLORS')` with `scene.render.bake.target = 'VERTEX_COLORS'`. Diffuse without the
 colour pass is the light alone; a Combined bake would bake the albedo in and the texture would
@@ -202,6 +202,75 @@ attributes (`oag_normal`, and `oag_texcoord` as a 3-vector, because Blender take
 corner attribute for a UV map) and each lamp's direction and colour, and writes them back
 verbatim while what Blender holds still matches, as pads do. A lens flare's colour and direction
 overrides travel as the scene properties `oag_lensflare_colour`/`oag_lensflare_direction`.
+
+### Own textures: one PNG each
+
+`scripts/blender/oag_track/images.py` names and writes every own image once per export, whatever
+Blender holds it as; the texture row and the file come from the same pass, so they cannot
+disagree. Each case is asserted by `just blender-fixtures` (`roundtrip.py textures`):
+
+| The image is | The file beside the manifest |
+| --- | --- |
+| a PNG file on disk, unchanged | the file, byte for byte |
+| a PNG packed in the .blend (the file may be gone) | the packed bytes |
+| generated, painted, or a PNG edited since it loaded (`is_dirty`) | its pixels, encoded by `pngwrite.py` (the same bytes on every Blender version; `Image.save` is not) |
+| a JPG, TGA, EXR or any other format | its pixels as an sRGB PNG: a byte image keeps the values it stores, a float image holds scene-linear light and is encoded to sRGB, an image whose colour space is Non-Color or Raw is written as it is. A premultiplied image (an EXR loads so) is un-premultiplied first, so alpha is straight; rows are flipped to top first |
+| two images that would share a name | the first keeps `rock.png`, the next is `rock-2.png`; one image used by several meshes is one row |
+| a file image with no file and nothing packed | refused, naming the image and the path; no manifest is written |
+
+### Host textures: showing the disc's pictures
+
+A host reference ships no pixels, so an imported track's host images start as 8 x 8
+placeholders. To see the real pictures, export them from **your own disc image** and point the
+add-on at them:
+
+```sh
+just export-host-textures data/images/pulse-psp-eu.chd path/to/hillside.track.toml data/host-textures
+# or every texture of one circuit:
+just export-host-textures data/images/pulse-psp-eu.chd 'Data\Environments\03_Track\track.vex' data/host-textures
+```
+
+(`cargo run -p oag-raceplay --example export_host_textures`; it reads a texture by the lookup a
+race uses and names every one it cannot decode instead of standing one in. A track file's sky
+circuit is exported whole, which is where the sky's six faces are.) The files land at
+`<folder>/<title slug>/<circuit entry>/<texture name>.png`, lowercase with `\` a directory
+separator (`foreign::art::host_export::texture_file`; the add-on's `images.host_file` spells the
+same rule, and each side has a test pinning the same literal path). Then set **Host texture
+folder** in the add-on's preferences. An import links each host image to its PNG as an external
+file, and the Art panel's **Link Host Textures** does the same for a scene already open (a
+`.blend` imported before the folder existed). A texture with no exported file keeps its
+placeholder and the operator names it.
+
+**Disc pixels never enter a .blend or a mod.** The images are linked, not packed, and three
+guards keep it so (`images.py`):
+
+- *A packed host image does not stay packed.* A one-second timer and every dependency graph
+  update unpack any host image someone packed (*File > External Data > Pack Resources*, an
+  image's **Pack**), because Blender's autosave and `quit.blend` write the session with no
+  `save_pre`, so a recovery file would otherwise carry the disc's pixels. The window is the
+  timer's second; the Pack operators themselves are not overridden.
+- *A save made with Automatically Pack on does not pack them.* Blender runs the autopack after
+  the save handlers, so `save_pre` switches it off for a save that holds a host image, unpacks
+  the host images first, then packs the other images one by one as autopack would (an image
+  whose file is missing is skipped, it cannot stop the protection). The file stores the switch
+  as it was at the write, i.e. **off**; the user's setting is kept as the scene property
+  `oag_autopack` (written into the file) and restored in the session after the save and on
+  load. A save that fails leaves the switch off until the next save starts, which restores it.
+  Opening such a file without the add-on shows Automatically Pack off.
+- *A host image is recognised without its properties.* It is a host image while it carries
+  `oag_host_entry` or `oag_host_name` (emptied too), or its file is under the host texture
+  folder (the preference, or a folder linked this session). Deleting the properties does not turn
+  it into an own texture: export refuses it by name, and the packing guards cover it.
+
+Names are not trusted either: a host `entry` or `name` with a `..` or `.` part, a `:` (a drive
+or stream), a NUL, or no part at all has no file on either side
+(`images.host_file` returns None and the image counts as missing; Rust's `texture_file` returns
+`None` and `export_host_textures` names it as skipped), so neither the link nor the export can
+reach outside its folder. Export writes the same `host = { entry, name }` rows as before. Keep
+the exported folder under `data/` (never committed) and out of a mod folder.
+Checked on Pulse PSP EU and PS2 EU (a PS2 circuit exports its external texture set too). Pure,
+HD, 2048 and Omega are untried: HD's `03_Track.vex` entry reads and every texture of it comes
+back "not decodable" (named, nothing written), and a Pure circuit has not been exported.
 
 ### Hillside, the worked example (2026-10-29)
 
@@ -334,6 +403,8 @@ physics, and draws flat-shaded collision unless the file has an art section. A f
 | Racing line (2026-10-29), AI speed plan lap on Pulse EU, `--race --opponents`, centre then computed | `blender_loop` 2,383 -> 2,373 ticks (-0.4 %); the same loop at 0.35 scale 845 -> 835 (-1.2 %), at 0.2 scale 501 -> 506 (+1.0 %, slower); Hillside's shape (12 control points, rises to 90, half width 28, 160 points, no art) 3,447 -> 3,424 (-0.7 %): small, and not always faster (every plan verified clean) |
 | Pad plates (2026-10-29): *Place Pad Plates* on the loop's two pads (`blender_loop.*`) | each plate tagged with its pad's kind, 0.3 above the pad over its box (`blender.rs`); raced to the weapon pad with `--autopilot --ticks 2375`, the amber plate draws in `--mode single_race` and not in `--mode time_trial` |
 | Motion (2026-10-29): the loop plus an airship box (two material slots) flying over the first straight and spinning, looping, and a sun turning 30 degrees and holding (`blender_motion.*`) | sampled at 30 fps, read back as keyed (`blender.rs`, `motion_authored_in_blender_reads_back_as_keyed`); imported and exported again, every key time equal and every value within 1e-6 (`blender_motion.reexport.*`); raced with `--autopilot --ticks 480` at `--anim-seconds` 0, 0.8 and 1.6 the airship is ahead, a quarter turn round, then half a turn round and farther along |
+| Own textures (2026-11-24): an export of each case in the table above, `roundtrip.py textures` | file, packed, generated, float, data (Non-Color), JPG, TGA, painted-since-load, a name collision, one image used twice and a missing file each come out as asserted (a float 0.214 is byte 127 or 128, never 55; the second `rock.png` is `rock-2.png` with its own pixels) |
+| Host textures (2026-11-24): generated stand-ins, then Hillside on Pulse PSP EU | stand-ins: import links 2 of 3 (the third has no file and keeps its placeholder), the panel's operator links the same files, with *Automatically Pack* on a save (an own image's file deleted) and reload leaves no packed host image (read back from the saved file; the .blend is compressed, so bytes cannot be searched), the own image is packed by the save and the user's setting survives, a host image packed by hand is unpacked before an autosave-style write (and is written when the guard is removed), deleting or emptying the host properties does not make it exportable, a `..`/drive/separator-only name is neither linked nor exported, export writes the unchanged `host` rows and no file for them. Hillside's 15 host textures: 159 PNGs exported from the disc (`crates/raceplay/tests/host_export_ground_truth.rs`), an import with the preference set (the add-on installed as an extension) links 15 of 15, none packed |
 | Art (2026-10-29): the loop's canopy, checker, sun, fill light, ambient, sky and flare (`blender_loop.*`, `blender_checker.png`) | every mapping read back as authored (`blender.rs`); the loop imported and exported again is byte-identical (`blender_loop.reexport.*`); on Pulse PSP the art resolves with no miss in the loader report (`trackfile_ground_truth`) |
 
 The Blender-driven part cannot run in CI (no Blender), so it is a local recipe whose output is
