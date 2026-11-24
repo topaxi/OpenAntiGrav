@@ -402,6 +402,79 @@ bound by its longest tests as well; in the gate, with the cores shared by the
 other 17 tests of a slice, CPU is the larger part of a launch's seconds
 (the module summed 210 s there against 116 s alone).
 
+### Third round (2026-11-24): archive manifests, pipelines, MENU BACK launches
+
+Same machine and method (frame-pointer release build, `perf stat -e instructions:u`
+and `perf record -e cpu-clock:u --call-graph fp`), before and after interleaved,
+load 29 to 66 throughout (other lanes' gates); the instruction counts repeated to
+under 1 % between runs of one binary on the menu launch.
+
+**A PSARC archive's parsed manifest is shared by every open of the same bytes**
+(`oag_assets::psarc::Archive::from_source`, `psarc/parsed.rs`). A Pulse launch
+opens each 2048, HD and Omega archive on the disk three to five times (the
+soundtrack scan, the title's source, the launcher's survey: 153 opens of about
+45 archives, 110 ms of `match_paths_to_entries` alone), and each open inflated
+the manifest, MD5-hashed every path and built the path index. The parse is kept by
+the content of the table of contents and the stored manifest (lengths and two
+64-bit digests), 128 archives, oldest out first; a second opener waits for the
+first on the archive's own lock. The reads are unchanged (the same ranges are
+read and recorded), only what is derived from them is not repeated.
+
+| Launch (Pulse PSP, release build) | Before | After |
+| --- | ---: | ---: |
+| Menu to RACE page, `ticks 30` | 4.85 G | 3.24 G (-33 %) |
+| Race, 400 ticks | 20.5 G | 18.9 G (-8 %) |
+
+(Eight and five interleaved pairs; the spread of either side was under 1 %.)
+
+**The race build's pipeline compile, measured and left alone.** 158 distinct
+pipelines are built for a Pulse PSP race (the scope's cache already turns about
+9,800 requests into them), 1.0 s of wall clock on the `race-build` thread at load
+40: `fs_main_blend` 66 (0.44 s), `fs_main_alpha_test_velocity` 28, `fs_main_velocity`
+19, `fs_main_stamp_velocity` 16, `fs_main_blend_velocity` 16, the rest 13. `race-build`
+is 42 to 45 % of a racing launch's CPU, 35 % of it `compile_stage` (naga's
+`process_overrides` 21 %, of which `revalidate` 9 % and the module clone 5 %, then the
+SPIR-V write 12 %); the driver's own compile is under 1 % because RADV links
+lazily.
+
+- **A disk pipeline cache is not available**: `Device::create_pipeline_cache` is
+  `unsafe` in wgpu 30.0.1 (`docs/architecture/dependency-upgrades.md`, "wgpu 30"),
+  which the workspace's `unsafe_code = "deny"` and the rule against wgpu's
+  unsafe escape hatches both refuse. Nothing safe replaces it on this backend.
+- **One module per stage did not pay.** `mesh.wesl` as a 10 KB vertex module
+  (no entry point but `vs_main`, two overrides) and a 90 KB fragment module cut
+  `process_overrides` on the vertex stage to a clone of 10 KB: 18.9 -> 18.5 G on
+  a race launch (1.5 to 2 %, six interleaved pairs at load 15 to 62), because the
+  fragment stage is where naga's time goes. Dropped, not committed.
+- **Not tried, with its estimate.** 32 of the 158 are the unblended pair of every
+  distinct override set (`unblended_pipeline`, and the plain circuit's), selected
+  only by a transparent draw of `BlendClass::None`; not building it where no draw selects it is about 7 % of a racing launch and
+  needs a rule for a model whose draws change after the build
+  (`Model::transparent_draws` is pushed to by `oag-livery` before it, never after).
+  The additive pair is also drawn by `Drawable::draw_additive` and the alpha-over
+  pair by the absorb overlay and the track shine, so those are not candidates.
+  Building lazily on first draw would put the compile on the frame thread.
+
+**A launch per MENU BACK choice became one.** The drive's new `config <setting>=<value>`
+step applies a setting as a changed menu row does, from any screen
+(`docs/tools/oag-game.md`). `campaign_cursor_ground_truth`'s
+`leaves_on_the_resolved_button` and `help_opens_on_the_displaced_button` (14 tests)
+and four tests of `footer_hint_ground_truth` run the three choices in one launch,
+every `expect` kept, going back onto the screen with the last forward steps of its
+path. Whole modules at the gate's profile (`target/debug`, nextest, user instructions
+of the `cargo nextest run`, two interleaved rounds, load 50 to 80):
+
+| Module | Before | After |
+| --- | ---: | ---: |
+| `campaign_cursor_ground_truth` (33 tests) | 1,753 G, 1,755 G; 60.5 s, 70.3 s wall | 1,141 G, 1,159 G; 42.1 s, 42.1 s wall (-35 % instructions) |
+| `footer_hint_ground_truth` (14 tests) | 671 G, 677 G | 545 G, 552 G (-19 %) |
+
+**PS2 music under `--no-audio`, read and not changed.** The 36 % of a PS2 launch
+is the CHD's LZMA hunks of `PS2MUSIC.WAD`, read to build a `Sound` whose length
+the null mixer still advances a song by (the marquee shows each race song once).
+Skipping the read means a length-only `Sound` from the WAD's index, an audio
+change, not a quiet one.
+
 ## Reproducing
 
 The scripts that produced every table are under the lane's scratch directory

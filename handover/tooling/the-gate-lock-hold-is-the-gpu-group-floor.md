@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-24
-summary: "The gpu-vram group is the gate hold floor; launch CPU is the lever (module -29 % CPU); race-build pipeline compile is next"
+summary: "The gpu-vram group is the gate hold floor; launch CPU is the lever (modules -29 %, -35 %); race-build pipelines and more folds are next"
 size: M (45)
 difficulty: medium (40)
 ---
@@ -44,36 +44,44 @@ threads).
   copying: a menu launch 21.05 G -> 9.4 G user instructions, the
   `campaign_cursor_ground_truth` run 243 s -> 171 s of user CPU, its wall clock
   37.3 s -> 32.4 s (median of six interleaved pairs).
+- A PSARC archive's parsed manifest is shared by every open of the same bytes
+  (`oag_assets::psarc::parsed`): a menu launch 4.85 G -> 3.24 G user instructions,
+  a race launch 20.5 G -> 18.9 G (`docs/architecture/load-time.md`, "Third round").
+- The drive's `config <setting>=<value>` step switches `controls.menu_back` from any
+  screen; `campaign_cursor_ground_truth` (14 tests) and four `footer_hint_ground_truth`
+  tests launch once for the three choices: the modules' user instructions -35 % and
+  -19 %.
+- Measured and not changed: a disk pipeline cache is `unsafe` in wgpu 30, one shader
+  module per stage gains 1.5 to 2 % of a race launch.
 
 ## Next Steps
 
-1. **`race-build` pipeline compile is 31 to 35 % of a racing launch**
-   (`create_render_pipeline` -> naga `process_overrides` 20 %, SPIR-V write 10 %).
-   The scene already shares modules and pipelines across drawables; what is left
-   is naga's per-distinct-override-set cost. Measure with the frame-pointer build
-   (`docs/architecture/load-time.md`, "Method") and
-   `perf report --children --comm race-build`. Candidates: fewer distinct
-   override sets, or a pipeline cache (wgpu `PIPELINE_CACHE`, the thread
-   `dependency-upgrade-benefits-not-yet-applied.md`).
-2. **One launch per MENU BACK choice**: `leaves_on_the_resolved_button` and
-   `help_opens_on_the_displaced_button` in `campaign_cursor_ground_truth.rs`
-   (14 tests) and the loops in `footer_hint_ground_truth.rs` launch the game
-   three times per test, once per `controls.menu_back` value read from
-   `settings.toml` at boot. `controls.menu_back` applies live, but the drive
-   `set` step only turns a row of the page on screen, so one launch cannot switch
-   the choice from inside a pause menu or a picker. A drive verb that applies a
-   setting (`config controls.menu_back=circle`) would fold each test to one
-   launch with every `expect` kept (28 launches fewer in that module). Tried: the
-   `set` step fails with `no row "controls.menu_back"`.
+1. **The race build's pipelines are 42 to 45 % of a racing launch**
+   (158 distinct for Pulse PSP, `docs/architecture/load-time.md`, "Third round").
+   No safe disk cache exists. What is left: do not build the unblended pair
+   where no transparent draw of `BlendClass::None` selects it (32 of the 158, about
+   7 % of a racing launch; a placeholder pair needs a rule for draws added after
+   the build), or one fragment module per entry point (not measured). Measure
+   with `perf record -e cpu-clock:u --call-graph fp` on the frame-pointer build
+   and `perf report --children --comm race-build`.
+2. **More MENU BACK launches to fold with `config`**: the cell-selection and
+   photo-mode tests of `footer_hint_ground_truth` and the photo/viewer tests of
+   `campaign_cursor_ground_truth` keep a launch per choice (a campaign cursor is
+   what their script reads; a photo test ends mid-race). Any other module that
+   loops a launch over one setting is the same shape: `rg 'for choice in'
+   crates/game/tests`.
 3. **The other archives' identify work** (`oag_sound::identify`, `menu_source`'s
-   job, `launcher::examine`) opens the 2048, HD and Omega archives again on every
-   thread: 19 % of a menu launch is still `match_paths_to_entries` after the
-   faster digest. Reading each archive's manifest once per process would remove
-   most of it; check `oag_assets::psarc::Archive::from_source` callers first.
-4. **PS2 music decode under `--no-audio`** is 36 % of a PS2 launch (LZMA hunks on
-   `menu-music` and `race-music`). The null mixer keeps the song selection (the
-   marquee), so skipping the decode changes what is drawn: a decision for the
-   audio owner, not a quiet change.
+   job, `launcher::examine`) still opens each archive's table once per process
+   (45 archives, `match_paths_to_entries` 12 % of a menu launch after the
+   shared parse) and the CHD handle of every disc in `data/images/`
+   (`Chd::open`'s map CRC 11 %, the disc identify's LZMA hunks 16 %). A cache of
+   the survey on disk, keyed by file identity, would remove them from every launch;
+   it needs an invalidation story.
+4. **PS2 music decode under `--no-audio`** is 36 % of a PS2 launch (the CHD's LZMA
+   hunks of `PS2MUSIC.WAD`, on `menu-music` and `race-music`). The null mixer keeps
+   the song selection (the marquee) and advances a song by the `Sound`'s length, so
+   skipping the read changes what is drawn unless a length-only `Sound` comes from
+   the WAD's index: a decision for the audio owner, not a quiet change.
 5. A larger cap is the maintainer's call (8 GiB card, 0.5 to 1.05 GiB per
    game); measure the peak with the cap raised before proposing it.
 
