@@ -35,7 +35,7 @@ fn started(track: &str) -> Option<Race> {
 
 fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
     let image = oag_testdata::image(IMAGE)?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -48,7 +48,11 @@ fn started_seeded(track: &str, seed: Option<u64>) -> Option<Race> {
         ..race::Options::default()
     })
     .expect("loading the race");
-    Some(Race::start(loaded.setup, loaded.view, loaded.modules))
+    Some(Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    ))
 }
 
 /// Every opponent carries HD's laws from seating, which is when its speed plan was built, and

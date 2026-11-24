@@ -377,7 +377,7 @@ struct Solo {
 /// one chaotic run.
 fn solos_on(track: &str, class: &str, offset: f32) -> Option<Vec<Solo>> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,

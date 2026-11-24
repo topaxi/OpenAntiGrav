@@ -19,7 +19,7 @@ fn image() -> Option<std::path::PathBuf> {
 
 fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
     let image = image()?;
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -30,7 +30,8 @@ fn race(level: usize, skill: f32) -> Option<oag_raceplay::Race> {
     .expect("loading Talon's Junction");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
+    let mut race =
+        oag_raceplay::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     assert!(
         race.core.sim.use_original_ai(Some(skill), level),
         "HD flies the original driver"
@@ -219,7 +220,7 @@ fn the_original_field_gets_round_talons_junction_on_hd() {
 /// halves (`Ai_Construct`'s two flags, `0x000fee30`).
 fn ubermall(class: &str) -> Option<Option<(f32, f32)>> {
     let image = image()?;
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -230,7 +231,8 @@ fn ubermall(class: &str) -> Option<Option<(f32, f32)>> {
     .expect("loading Ubermall");
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = oag_raceplay::Race::start(setup, loaded.view, loaded.modules);
+    let mut race =
+        oag_raceplay::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     assert!(race.core.sim.use_original_ai(Some(2.0), 1));
     Some(race.core.sim.original_ai_field()?.laws().halved_lookahead)
 }

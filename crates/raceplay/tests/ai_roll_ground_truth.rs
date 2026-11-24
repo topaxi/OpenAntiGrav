@@ -99,7 +99,7 @@ struct Rolls {
 /// draft of `no_tier_rolls_itself_down_to_nothing` did.
 fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>) -> Option<Rolls> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -108,7 +108,11 @@ fn rolls_on(level: oag_ai::Difficulty, track: &str, pilot: Option<oag_ai::Pilot>
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     if let Some(pilot) = pilot {
         // Tempered here rather than in the caller, so a sweep across tiers is
         // asking about the same character at four levels.
@@ -218,7 +222,7 @@ fn rolls_everywhere(
 /// [`every_higher_tier_rolls_no_less`] for why that axis had to exist.
 fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Vec<Rolls>> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -228,7 +232,11 @@ fn grid_rolls_on(level: oag_ai::Difficulty, track: &str, seed: u64) -> Option<Ve
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     let opponents: Vec<usize> = (1..usize::from(race.core.sim.ship_count())).collect();
     measure_grid(&mut race, &opponents)
 }
@@ -255,7 +263,7 @@ fn grid_rolls_mixed_on(
     tiers: &[oag_ai::Difficulty],
 ) -> Option<Vec<(oag_ai::Difficulty, Rolls)>> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -264,7 +272,11 @@ fn grid_rolls_mixed_on(
         ..race::Options::default()
     })
     .ok()?;
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     let opponents: Vec<usize> = (1..usize::from(race.core.sim.ship_count())).collect();
     for (slot, &tier) in opponents.iter().zip(tiers.iter()) {
         race.core

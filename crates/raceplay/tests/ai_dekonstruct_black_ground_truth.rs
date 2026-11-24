@@ -48,7 +48,7 @@ fn destroyed(class: &str, seed: u64, reversed: bool) -> Option<u32> {
 fn run(class: &str, seed: u64, reversed: bool) -> Option<(u32, f32)> {
     let entry = entry(reversed)?;
     let image = oag_testdata::image("data/images/pulse-psp-usa.chd")?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -60,7 +60,7 @@ fn run(class: &str, seed: u64, reversed: bool) -> Option<(u32, f32)> {
     .unwrap_or_else(|error| panic!("loading 05_Track at {class}: {error}"));
     let mut setup = loaded.setup;
     crate::perturb::apply(&mut setup, 0.0);
-    let mut race = race::Race::start(setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(setup, oag_raceplay::ViewSetup::headless(), loaded.modules);
     race.core.sim.world.ships[0].active = false;
     let count = race.core.sim.ship_count() as usize;
     let mut dead = vec![false; count];

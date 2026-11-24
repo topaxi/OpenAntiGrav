@@ -59,7 +59,7 @@ fn slice(class: &str, reversed: bool) {
     };
     let mut wrong = Vec::new();
     for (id, entry) in layouts(reversed) {
-        let loaded = race::load(&race::Options {
+        let loaded = race::load_sim(&race::Options {
             source: image.display().to_string(),
             class: class.to_string(),
             mode: oag_race::Mode::SingleRace,
@@ -152,7 +152,7 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
         .into_iter()
         .find(|(id, _)| id == "07_Track")
         .expect("07_Track is on the disc");
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "RAPIER".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -162,10 +162,14 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
     .expect("loading 07_Track");
     let mut lazy = race::Race::start(
         loaded.setup.clone(),
-        loaded.view.clone(),
+        oag_raceplay::ViewSetup::headless(),
         loaded.modules.clone(),
     );
-    let mut ahead = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut ahead = race::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     assert!(
         lazy.core.sim.use_original_ai(None, 1) && ahead.core.sim.use_original_ai(None, 1),
         "the original driver flies, so only the fork asks for plans"
@@ -219,7 +223,7 @@ fn plans_learned_ahead_are_the_plans_the_first_tick_learns() {
 /// Whether the ring plan of `track` on `source` verifies clean at `class`:
 /// the majority of the [`perturb::GATE`] builds, as [`slice`] judges a layout.
 fn ring_plan_verifies(source: &std::path::Path, track: &str, class: &str) -> bool {
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: source.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
