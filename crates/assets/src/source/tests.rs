@@ -87,6 +87,7 @@ const TITLE: &Title = &Title {
             },
             crossfade: None,
             wwise: None,
+            vr: None,
         },
         // Unread here too: nothing in this crate reads the Zone ladder.
         zone_announcer: None,

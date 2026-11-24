@@ -78,6 +78,43 @@ pub struct SoundBanks {
     /// 32-byte stub banks, and its executable posts `<cue>[_PC]__<bank>`
     /// (`docs/ghidra/functions/ps4-omega-eu/wwise-cues.md`).
     pub wwise: Option<&'static WwiseCues>,
+    /// The ship and weapon banks a circuit that asks for the title's VR presentation set
+    /// (`TrackStartup.xml`'s `<VrFx>`) loads in place of [`Self::ship`] and [`Self::weapons`], or
+    /// [`None`] where the title has no such set. See [`VrBanks`] and [`Self::for_circuit`].
+    pub vr: Option<VrBanks>,
+}
+
+impl SoundBanks {
+    /// The banks a race on a circuit loads: these, or with [`Self::vr`]'s pair swapped in when
+    /// the circuit's own `<VrFx>` flag is on (`oag_tables::trackstartup::TrackStartup::vr_fx_on`).
+    /// A title with no [`Self::vr`] keeps its own banks whatever the circuit asks.
+    #[must_use]
+    pub fn for_circuit(&self, vr_fx: bool) -> Self {
+        match self.vr {
+            Some(vr) if vr_fx => Self {
+                ship: vr.ship,
+                weapons: vr.weapons,
+                ..*self
+            },
+            _ => *self,
+        }
+    }
+}
+
+/// The bank pair a circuit's VR flag swaps in. Pure's Classic circuits author
+/// `<VrFx Type="1"/>` and the executable then reads `ship_classic.bnk` and
+/// `weapons_classic.bnk` where it would read `ship.bnk` and `weapons.bnk`
+/// (`docs/ghidra/functions/psp-pure-usa/ship-models.md`, "What selects the VR hull").
+///
+/// The Zone ship bank is not swapped: no Zone circuit authors the flag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VrBanks {
+    /// In place of [`SoundBanks::ship`].
+    pub ship: &'static str,
+    /// In place of [`SoundBanks::weapons`].
+    pub weapons: &'static str,
+    /// Where this came from: ADR-0058's per-entry provenance.
+    pub origin: crate::Origin,
 }
 
 /// The race cues a title plays as Wwise events: which bank each slot loads and

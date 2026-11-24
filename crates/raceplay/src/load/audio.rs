@@ -10,10 +10,9 @@ use super::*;
 /// fails, an empty result costs nothing to carry" terms.
 pub(super) fn banks_and_announcers(
     archives: &mut oag_assets::Archives,
-    race: &'static oag_title::RaceDefaults,
-    lap_hud: Option<oag_title::lap_hud::LapHud>,
+    title: &oag_title::Title,
     mode: Mode,
-    destroyed: oag_title::destroyed::DestroyedCraft,
+    vr_fx: bool,
     slot_teams: &[String],
     report: &mut Vec<String>,
 ) -> (
@@ -21,13 +20,29 @@ pub(super) fn banks_and_announcers(
     oag_sound::sfx::Announcer,
     oag_sound::sfx::ClassAnnouncer,
 ) {
+    let (race, lap_hud, destroyed) = (title.race, title.hud_art.lap_hud, title.destroyed.value);
     // Adding a cue is adding its name and its trigger, never a loader. Zone
     // races read `ship_zone.bnk` instead of `ship.bnk` - a different bank
     // with the same cue names.
     let tick = race
         .zone_announcer
         .map_or(oag_title::SequenceTick::Unknown, |z| z.tick);
-    let mut sounds = oag_sound::sfx::Banks::load(archives, race.sounds, mode == Mode::Zone, tick);
+    // A Zone race takes `FUN_08847a54`'s own branch (`ship_zone.bnk`, no weapons bank) and never
+    // reads the flag, though `Data\Zone\01_Zone` authors it.
+    let vr_fx = vr_fx && mode != Mode::Zone;
+    let banks = race.sounds.for_circuit(vr_fx);
+    match (vr_fx, race.sounds.vr) {
+        (true, Some(vr)) => report.push(format!(
+            "sfx: the circuit's <VrFx> is on: {} and {} in place of {} and {}",
+            vr.ship, vr.weapons, race.sounds.ship, race.sounds.weapons
+        )),
+        (true, None) => report.push(
+            "sfx: the circuit's <VrFx> is on and this title names no VR sound banks; keeping its own"
+                .to_string(),
+        ),
+        (false, _) => {}
+    }
+    let mut sounds = oag_sound::sfx::Banks::load(archives, &banks, mode == Mode::Zone, tick);
     // A Zone craft's end plays `shipdestroy` out of the environment bank
     // (`oag_title::destroyed::ZoneEnd::cue`).
     if let (Mode::Zone, Some(cue)) = (mode, destroyed.zone_end.and_then(|end| end.cue)) {
@@ -42,9 +57,9 @@ pub(super) fn banks_and_announcers(
     // Pure's `EXPLSMALL` and `EXPLBIG` out of its ship bank, for every craft.
     if destroyed.sound == oag_title::destroyed::DestroyedSound::BlowupAndBlasts {
         let bank = if mode == Mode::Zone {
-            race.sounds.ship_zone
+            banks.ship_zone
         } else {
-            race.sounds.ship
+            banks.ship
         };
         sounds.load_named(
             archives,
@@ -112,11 +127,7 @@ pub(super) fn banks_and_announcers(
             infix: c.zone_infix.filter(|_| zone).unwrap_or(""),
         },
         None => oag_sound::sfx::XfadeSource {
-            bank: if zone {
-                race.sounds.ship_zone
-            } else {
-                race.sounds.ship
-            },
+            bank: if zone { banks.ship_zone } else { banks.ship },
             infix: "",
         },
     };

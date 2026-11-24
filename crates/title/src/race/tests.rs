@@ -351,6 +351,7 @@ const SOUNDS: SoundBanks = SoundBanks {
     },
     crossfade: None,
     wwise: None,
+    vr: None,
 };
 
 /// A fixture with both a native `team_variants` table and a `guest_roster` -

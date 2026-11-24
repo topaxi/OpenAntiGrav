@@ -191,6 +191,10 @@ pub struct TrackStartup {
     pub underwater_sound: Option<u32>,
     /// `<LevelFx><WindSound type="N">`.
     pub wind_sound: Option<u32>,
+    /// `<LevelFx><VrFx Type="N">`: Pure's Classic circuits author `1`. Read `Type` as an integer
+    /// like the original (`FUN_08848bf8` sets the VR flag byte `0x08a8f604` when it is non-zero,
+    /// `docs/ghidra/functions/psp-pure-usa/ship-models.md`, "What selects the VR hull").
+    pub vr_fx: Option<u32>,
     /// `<LevelFx><Weather>`, on the two circuits that author one.
     pub weather: Option<Weather>,
     /// Every `<Billboard>`, in document order.
@@ -221,6 +225,7 @@ impl TrackStartup {
                 }
                 "underwatersound" => out.underwater_sound = element.attr("type").and_then(number),
                 "windsound" => out.wind_sound = element.attr("type").and_then(number),
+                "vrfx" => out.vr_fx = element.attr("type").and_then(number),
                 "weather" => out.weather = Some(Weather::from_element(element)),
                 "billboard" => {
                     let Some(num) = element.attr("num").and_then(number) else {
@@ -244,6 +249,12 @@ impl TrackStartup {
             }
         }
         out
+    }
+
+    /// Whether the circuit asks for Pure's VR presentation set (`<VrFx>` with a non-zero `Type`).
+    #[must_use]
+    pub fn vr_fx_on(&self) -> bool {
+        self.vr_fx.is_some_and(|kind| kind != 0)
     }
 
     /// The billboard with this `num`, if the file names one.

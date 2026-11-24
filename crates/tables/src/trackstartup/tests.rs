@@ -211,3 +211,20 @@ fn a_weather_element_reads_every_attribute_as_authored() {
 fn a_manifest_without_weather_has_none() {
     assert_eq!(TrackStartup::parse(SAMPLE).weather, None);
 }
+
+#[test]
+fn vrfx_reads_its_type_as_the_original_does() {
+    let flag = |xml: &str| {
+        let m = TrackStartup::parse(xml);
+        (m.vr_fx, m.vr_fx_on())
+    };
+    assert_eq!(
+        flag(r#"<TrackStartup><LevelFx><VrFx Type="1"/></LevelFx></TrackStartup>"#),
+        (Some(1), true)
+    );
+    assert_eq!(
+        flag(r#"<TrackStartup><LevelFx><VrFx Type="0"/></LevelFx></TrackStartup>"#),
+        (Some(0), false)
+    );
+    assert_eq!(flag(SAMPLE), (None, false));
+}

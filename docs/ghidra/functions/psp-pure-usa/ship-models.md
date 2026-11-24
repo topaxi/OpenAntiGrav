@@ -276,14 +276,30 @@ flag 4.
 race flies the VR hull's embedded paint.
 
 **A second, separate consumer of "VR": the circuit's `TrackStartup.xml`.** `FUN_08848bf8` (the
-circuit's startup-file reader, called from `FUN_08847a54`) sets the byte at `0x08a8f604` when
-`<LevelFx><VrFx Type="1"/>` is present (`VrFx` and `Type` are the strings at `0x08a47848` and
-`0x08a47850`). All four Classic circuits author it (`Karbonis`, `Manor Top` read), no `Race`
-circuit does. That byte switches `Data\Sound\ship_classic.bnk` / `weapons_classic.bnk` in place of
-`ship.bnk` / `weapons.bnk` (`FUN_08847a54`, branch on `DAT_0028b604`), `WO_QUAKE_VR` and
-`vr_Mine.vex` (`weapons-gfx.md`, `quake.md`). It is an **independent flag** that the Classic
-circuits happen to set together with the type: not wired here, named in the thread
-`pure-classic-league-vr-set`.
+circuit's startup-file reader, called from `FUN_08847a54`) reads the `Type` attribute of
+`<LevelFx><VrFx Type="N"/>` as an integer and, when it is non-zero, sets the byte at `0x08a8f604`
+(`DAT_0028b604 = 1`; `VrFx` and `Type` are the strings at `0x08a47848` and `0x08a47850`).
+**The four Classic circuits and all four Zone circuits author it, no `Race` circuit does** (all 16
+`PI_Track` entries read, `pure_race_ground_truth::a_circuit_that_authors_vrfx_loads_the_classic_sound_banks_and_no_other_does`).
+`FUN_08847a54` then picks the race's sound banks in three branches: game mode 6 (Zone,
+`_DAT_00053534 == 6`) loads `Data\Sound\ship_zone.bnk` (`0x08a476b0`) and never tests the byte; any
+other mode with the byte clear loads `ship.bnk` (`0x08a47778`) and `weapons.bnk` (`0x08a4778c`); with
+it set, `ship_classic.bnk` (`0x08a47708`) and `weapons_classic.bnk` (`0x08a47724`). Confidence 90
+(decompiled, the strings read; no live trace of the bank load). **Wired for the banks** (`oag_title::SoundBanks::vr`,
+`for_circuit`; `oag_raceplay::load`, one read of the circuit's manifest; a Zone race keeps the
+Zone banks). The byte also switches `WO_QUAKE_VR` and `vr_Mine.vex` (`weapons-gfx.md`, `quake.md`),
+not wired. It is an **independent flag** that the Classic circuits happen to set together with the
+type. **`FUN_08848bf8` only walks the `LevelFx` element when `*(char *)(_DAT_0028a960 + 0x5ded) == 0`**
+(the decompile's own guard; what that byte is, a mode or replay flag, is unread), so a state that
+sets it would leave the VR byte clear whatever the manifest says. `Data\Tex\vr_env.tga` is not a
+selector's file: `BOOT.BIN` has no string for it (the `vr_` strings it does carry are `vr_bomb`,
+`vr_mine`, `vr_Bomb`, `vr_Mine`, `vr_shield`, `vr_shield_cockpit`, `vr_engine_noise.mip` and
+`vr_fxgrid1.mip`), and no `Data\Tex\vr_env.tga` entry is in `Data.wad` (name hash `c99d94ff`).
+The name is **embedded in each team's `VR\Ship.vex`**: `Z:\Data\Tex\vr_env.tga` appears twice in
+Feisar's, Piranha's and AG Systems' hulls (once in the texture block ahead of a 64x64 texture, once
+in the material), so the hull loads it with the model and our race load report names no miss for
+it. Confidence 85 (three of the eleven hulls read, strings and one texture header).
+The thread `pure-classic-league-vr-set` carries what is left.
 
 **Cross-title check (CLAUDE.md, "A 2048 finding is checked against Omega"):** *checked, differs*.
 `PI_Track` `type` census over the plugin definitions the source reads: Pulse 24 `Race`; HD 28

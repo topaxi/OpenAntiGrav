@@ -149,7 +149,17 @@ fn every_cue_names_a_bank_and_a_string() {
         front.results = None;
         front.voices = None;
     }
-    assert_eq!(*oag_pure::race::SOUND_BANKS, pulse_without_results);
+    // The VR pair is Pure's alone: Pulse has no Classic league.
+    let mut pure = *oag_pure::race::SOUND_BANKS;
+    let vr = pure.vr.take().expect("Pure names its VR bank pair");
+    assert_eq!(
+        (vr.ship, vr.weapons),
+        (
+            r"Data\Sound\ship_classic.bnk",
+            r"Data\Sound\weapons_classic.bnk"
+        )
+    );
+    assert_eq!(pure, pulse_without_results);
     // The cues this port holds a handle to, and only those: a held cue must not
     // also fire as a one-shot from the drain loop. The original keeps `~ENGINE`
     // at `flare+0x7c`, `~SHIELD` at `entity+0x54`, `~BLOWUP` at `craft+0xcac`.
