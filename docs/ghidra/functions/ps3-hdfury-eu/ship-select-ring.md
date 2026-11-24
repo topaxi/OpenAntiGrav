@@ -114,8 +114,20 @@ at 1/3 s, through dark red to black at 2/3 s, then a hard cut back to white. Not
 (not `_Step`, not `_Build`; `_Construct` zeroes it), so **the phase runs free from the widget's
 construction and a step does not restart it**. The 20 ring grabs (white at 19, 41, 69; dark red at 21;
 "absent" at 11 to 17 and 23) come from different steps at unrelated phases, so they neither confirm nor
-refute the period; they fit the colours (pink and dark red are the two ramps, "absent" is the black end
-on a dark cell). Confidence 85 (law), 60 (that "absent" is black, from the grabs).
+refute the period. The colours they do test. The ring's pale band in the settled frame
+([campaign-screens.md](../../../ui/campaign-screens.md), "The cursor ring") reads (200, 92, 102) on the
+sides: on the line `lerp(white, (172, 7, 23), t)` that is t = 0.663, 0.657, 0.659 from R, G and B, one t
+for all three channels; the flats (193, 81, 91) give 0.75, 0.70, 0.71, and `Track Creation`'s band
+(223, 169, 174) 0.39, 0.35, 0.35. An additive ring over the cell's (149, 6, 20) would need (51, 86, 82),
+green above red, which is off that line: the ring replaces the pixels it covers, so the black end of the
+ramp is an opaque black band, the grabs' "absent" on a dark cell. Confidence 85 (law; the code plus a
+three-channel fit), 75 (that "absent" is black).
+
+The update is gated on `+0x10c` (set by `_Build`), so the phase advances only while the widget is
+built, from 0. Nothing else in `TeamSelectionScreen_Update` (`0x00254348..0x002570a0`) or
+`TrackHexSelection_Update` stores to the hex object's `+0xe0`, `+0xb4` or `+0xec` (the three stores
+at those displacements in the screen update are on other widgets: `0x00254730` a pose block,
+`0x00254f7c` the object at `st+0x188`, `0x0025578c` the `Logo` image).
 
 ### The ring's position (`0x001b1110..0x001b1188`)
 
@@ -149,8 +161,12 @@ target   = (cc * 72, row * 83 + 42 * ((cc odd) XOR parity))
 
 (`old == 0 and new == n-1` is backward; `new == old` returns early.) The screen arms a refill flag
 `st[0x103c] = 1` at `0x00254fb0`, and only when the timer is 0 (`0x00254f90..0x00254f9c`: a new selection
-while `+0xec > 0` takes the other path), so a press during a slide is not taken as a step there (70: the
-branch's other side is not read through).
+while `+0xec > 0` returns through `0x00254d20` without stepping). **A press during a slide is deferred,
+not dropped**: the new selection (`r20`) is recomputed every frame from the focused entry
+(`0x00254e9c..0x00254ee0`), and `st[0xf4]`, the selection it is compared against, is written only after
+a step (`0x002554d0`). So the comparison retries each frame and the step fires on the first frame after
+the timer reaches 0: a held direction steps at most once per 0.1 s (plus the input repeat). Confidence 70.
+The `timer == 0` guard on the parity flip in `_Step` is therefore never false on Team Selection.
 
 ### The update (`0x001b1250..0x001b1580`)
 
@@ -196,7 +212,8 @@ hex box on k04, k06, k08, k10 at 16.8, 21.5, 22.6, 14.1 against a floor near 4).
 | Lattice slide | forward step: every column `x -= 72 * (1 - 10 t)`, `t` from 0.1 s to 0 linear, backward `+=`; then snap to the slot with parity flipped and the new window's content | holds the old phase `PHASE_HOLD_SECONDS` (4 frames), then cuts to the new | 85 |
 | Spare column | one extra column enters from the side the lattice moves away from (forward: from `x = 360` to `288`; backward: `-72` to `0`), showing the incoming team, y `42 * parity` | none | 80 |
 | Content during the slide | the old window; refill after the timer hits 0 | new window at once | 75 |
-| Ring pulse | colour sawtooth, period 2/3 s: white to `HD_Blue` (Fury `0xffac0717`, HD style `0xff8ac0ca`) over 1/3 s, to black over 1/3 s, cut to white; phase from the widget's construction (page entry), never reset on a step | fixed pale pink `193/81/91` | 85 |
+| Ring pulse | colour sawtooth, period 2/3 s: white to `HD_Blue` (Fury `0xffac0717`, HD style `0xff8ac0ca`) over 1/3 s, to black over 1/3 s, cut to white, drawn opaque (replacing, not adding); phase 0 when the widget is built, never reset on a step (the build's offset from the page entry is unread: a wire lane's choice) | fixed pale pink `193/81/91` | 85 |
+| Step during a slide | deferred to the slide's end, not dropped | steps at once | 70 |
 | Ring art | one quad of `Hexagon_HD_THICK_OUT.gtf`, 92 x 80 units, UV 74 x 64 texels, at the cell's own rect | six inset copies of `Hexagon_HD_OUTLINE.gtf` | 85 |
 | Ring position | x fixed at the centre column; y eases `y += (target - y) / 2` per frame to `row * 83 + 42 * odd` after a step | fixed on the cell | 80 |
 | Selected fill | `HD_Blue`, not `SelectedColumnCol` (not a parsed key) | `SelectedColumnCol` twice | 85 |
@@ -210,8 +227,9 @@ cells' fade toward the edges (`_SetCell`: per-vertex lerp `HexColFade` to `HexCo
 ## Omega
 
 **Checked, applies, not wired (slide, step, ease); checked, differs (ring colour).** Read in
-`/omega/eboot-ps4-omega-eu.bin` (the base `eboot.bin` in the shared Ghidra project; the Omega pages that
-cite `v107` addresses read another build): `HexSelection` registers at `FUN_0142ea90` with vtable
+`/omega/eboot-ps4-omega-eu.bin` (the `eboot.bin` in the shared Ghidra project; addresses are this build's:
+`0x015a3b80`, the Team Selection fit that [../ps4-omega-eu/team-selection-pose.md](../ps4-omega-eu/team-selection-pose.md)
+cites for `v107`, does not start a function here, it falls inside `FUN_015a3810`): `HexSelection` registers at `FUN_0142ea90` with vtable
 `0x0191b5b0`; slot 3 is `FUN_0142caa0`, the same update: ring ease 0.5 per call, pulse `p += dt * 3`
 wrapped at 2, slide `(i + dir (1 - 10 t)) * pitch` with the same spare column. The step is
 `FUN_0142f0a0` (found by the store of `0x3dcccccd` to `+0x160`): the same 0.1 s timer, the same direction
@@ -221,6 +239,15 @@ inline, white to (238, 7, 7) for `p < 1` (`R = 255 - 17 p`, `G = B = 255 - 248 p
 for `p >= 1`, not a lookup of `HD_Blue`. The `Hexagon_HD_THICK_OUT.gtf` string is referenced by
 Omega's build (`FUN_0142cf20`). Omega's grid authors `Scale="0.8"`; whether the update's 72-unit pitch
 scales with it is unread. Omega functions are not renamed here (no Omega page for this class).
+
+## 2048
+
+**Checked, class ships, law not read.** `/2048/eboot-vita-2048-eu-v104.elf` carries `HexSelection`
+(`0x8143a9b0`, referenced from `0x8109a0ec`), `TrackHexSelection`, `SelectedLockColFade` and
+`Data\FE\Images\Hexagon_HD_THICK_OUT.gtf`, so the widget is in 2048's front end; its update was not
+followed (ARM vtable not walked). 2048's Team Selection is drawn by 2048's own path in this engine
+([team-selection-model.md](team-selection-model.md), "Omega and 2048"), so nothing is wired for it here.
+Next: the registration that uses `0x8109a0ec`, its vtable's slot 3, and the constants 3.0, 2.0, 10.0, 0.1.
 
 ## Still unread, with the next step
 

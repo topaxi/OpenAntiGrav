@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [hd]
 updated: 2026-11-24
-summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow wired"
+summary: "HD front end: Ship Select matches RAM; page-entry wipes wired; footer legend flow wired; hex ring pulse and lattice slide read, ready to wire"
 difficulty: medium (30)
 ---
 
