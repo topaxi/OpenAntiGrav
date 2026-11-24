@@ -204,8 +204,12 @@ recursion: gfx-rs/wgpu#9497, #9456 and #5759.
   function's frame off the unstripped library and `scripts/build-apk.sh` runs it:
   `android_main`, `run_window`, the winit callback and `Stage::race` must each stay
   under 64 KiB, and must still exist under that name (a rename cannot leave one
-  unchecked). It reads prologues, not call depth: a margin, not a proof.
-  `--all` checks every function; `--top N` lists the largest.
+  unchecked, and a resident function with no prologue found fails too). It follows the
+  stack pointer through each function's first 300 instructions (probed frames, a
+  prologue after an early exit) and refuses a stripped library. It reads prologues, not
+  call depth: a margin, not a proof. `--all` checks every function; `--top N` lists the
+  largest; `--selftest` (`just check-android-stack-script`, in the gate) runs the reader
+  on disassembly snippets.
 
 Frames in the `dist` build (`cargo ndk -t arm64-v8a -P 26 build -p oag-game --example
 oag_android --no-default-features --features android,extensions --profile dist`,
