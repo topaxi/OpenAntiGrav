@@ -116,7 +116,7 @@ impl Session {
         });
         let picture = race
             .photo()
-            .and_then(|photo| shot_meta::Picture::of(photo.effects(), None));
+            .map(|photo| shot_meta::Picture::of(photo.effects(), None));
         let render = self
             .settings
             .render_profiles

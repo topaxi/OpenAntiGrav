@@ -279,7 +279,7 @@ impl super::Session {
         };
         // The controls the shot kept: a blur the race cannot draw is not one of them.
         if let Some(pending) = pending.as_mut() {
-            pending.meta.picture = shot_meta::Picture::of(photo.effects(), Some(&plan));
+            pending.meta.picture = Some(shot_meta::Picture::of(photo.effects(), Some(&plan)));
         }
         debug!(
             "photo mode: a shot of {} frames at tick {tick} (blur {:?}, lens {})",

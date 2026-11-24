@@ -39,7 +39,8 @@ pub struct Meta {
     /// The camera the frame was drawn from.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub camera: Option<Camera>,
-    /// The picture controls the frame was made with, when any is off its opening value.
+    /// The picture controls a photo mode frame was made with, opening values included: a photo
+    /// without the section predates the keys.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub picture: Option<Picture>,
     /// The player's craft in the frame.
@@ -258,15 +259,12 @@ impl Meta {
 
 impl Picture {
     /// The controls of `effects` as a shot of `plan` kept them (`None`: the one frame on
-    /// screen), or `None` when the picture is as the camera drew it.
+    /// screen).
     #[must_use]
-    pub fn of(effects: &Effects, plan: Option<&Plan>) -> Option<Self> {
+    pub fn of(effects: &Effects, plan: Option<&Plan>) -> Self {
         let blur = plan.and_then(Plan::blur);
-        if effects.is_neutral() && blur.is_none() {
-            return None;
-        }
         let dof = effects.depth_of_field().is_some();
-        Some(Self {
+        Self {
             exposure: effects.value(Row::Exposure),
             saturation: effects.value(Row::Saturation),
             speed_blur: effects.value(Row::SpeedBlur),
@@ -282,7 +280,7 @@ impl Picture {
                 .to_string(),
             shutter: blur.map(|_| effects.shutter()),
             frames: plan.map_or(0, Plan::frames),
-        })
+        }
     }
 
     /// The controls a frame is drawn with: the single frame the panel previews. A motion blur

@@ -146,16 +146,20 @@ fn graded() -> Effects {
 }
 
 #[test]
-fn a_picture_at_neutral_records_nothing() {
-    assert_eq!(Picture::of(&Effects::new(), None), None);
-    let mut touched = Effects::new();
-    touched.set(Row::Exposure, 34);
-    assert!(Picture::of(&touched, None).is_some());
+fn a_picture_at_its_opening_values_is_recorded_as_them() {
+    let picture = Picture::of(&Effects::new(), None);
+    assert_eq!(picture.exposure, Effects::EXPOSURE_OPENS);
+    assert_eq!(picture.saturation, Effects::SATURATION_OPENS);
+    assert!(!picture.depth_of_field && picture.motion_blur.is_empty());
+    assert!(picture.effects().is_neutral());
+    let mut meta = meta();
+    meta.picture = Some(picture);
+    assert!(meta.to_text().contains("[picture]"));
 }
 
 #[test]
 fn the_picture_controls_survive_the_text_and_draw_the_same_effects() {
-    let picture = Picture::of(&graded(), None).expect("controls off their opening values");
+    let picture = Picture::of(&graded(), None);
     let mut meta = meta();
     meta.picture = Some(picture.clone());
     let read = Meta::from_text(&meta.to_text()).expect("parses");
@@ -167,7 +171,7 @@ fn the_picture_controls_survive_the_text_and_draw_the_same_effects() {
 
 #[test]
 fn the_picture_flag_round_trips_and_a_bad_one_is_refused() {
-    let picture = Picture::of(&graded(), None).expect("controls");
+    let picture = Picture::of(&graded(), None);
     let flag = picture.to_flag();
     assert_eq!(
         flag,

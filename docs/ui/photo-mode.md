@@ -420,7 +420,7 @@ build and the flags that draw it again) and the private chunk `oaGs` (the person
 tick, the seed and the state hash there). A rewound shot carries the stream to the tick on screen.
 The picture controls the shot used (exposure, saturation, speed blur, depth of field with its
 aperture and focus, and for a shot of several frames the motion blur, its shutter and the frame
-count) are a `[picture]` section, written only when a control is off its opening value.
+count) are a `[picture]` section, written on every photo mode shot with the opening values as they are: a photo without it predates the keys.
 `oag-game --png-info FILE` prints the text; `--from-png FILE` re-simulates, checks the hash and draws
 the frame with those controls (one frame: a motion blur needs the race's past, and the output says
 so), and says when a photo has no such section. Layout, privacy and evidence: [the format page](../formats/shot-png.md). It is for

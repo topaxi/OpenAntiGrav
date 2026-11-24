@@ -136,8 +136,8 @@ A sheared (off-axis) projection holds the plane exactly; the rotation is the che
 
 **Fixed** in `739f9d926`. The text has a `[picture]` section (exposure, saturation, speed blur,
 depth of field with aperture and focus, and for a shot of several frames the motion blur, shutter
-and frame count), written only when a control is off its opening value, so a default shot's text is
-unchanged. `--from-png` applies the controls through the preview's own pass (`--picture`, also in
+and frame count), written on every photo mode shot with the opening values as they are, so a photo without it
+is known to predate the keys. `--from-png` applies the controls through the preview's own pass (`--picture`, also in
 `reproduce.flags`) and prints `picture controls applied: ...`, or `no picture controls recorded`
 for a photo without the section; a motion blur is not redrawn and the output says so. Checked on
 Pulse: for an exposure-raised shot (mean luma 115.1 against 97.8 at neutral) the re-render reads

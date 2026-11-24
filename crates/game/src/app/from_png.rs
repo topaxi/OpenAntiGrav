@@ -26,7 +26,7 @@ fn picture_lines(meta: &shot_meta::Meta, cli: &mut Cli) -> Vec<String> {
     let Some(picture) = &meta.picture else {
         return if meta.shot.source == "photo mode" {
             vec![
-                "no picture controls recorded: they were all at their opening values, or the shot predates the keys"
+                "no picture controls recorded: the shot predates them, so it is drawn without any"
                     .to_string(),
             ]
         } else {

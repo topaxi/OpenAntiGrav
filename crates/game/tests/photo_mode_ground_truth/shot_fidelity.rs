@@ -68,9 +68,9 @@ pub(super) fn controls_are_recorded_and_drawn_again(
     }
     let bright = picture(1).expect("exposure up is recorded");
     assert!(bright.exposure > 33 && bright.saturation == 20 && !bright.depth_of_field);
-    assert_eq!(picture(3).expect("saturation 0").saturation, 0);
-    assert!(picture(5).expect("speed blur").speed_blur > 0);
-    let dof = picture(7).expect("depth of field");
+    assert_eq!(picture(3).saturation, 0);
+    assert!(picture(5).speed_blur > 0);
+    let dof = picture(7);
     assert!(dof.depth_of_field && dof.aperture.is_some() && dof.focus.is_some());
 
     let out = run.dir.join("rerender-bright.png");
