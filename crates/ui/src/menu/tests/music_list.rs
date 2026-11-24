@@ -191,3 +191,17 @@ fn a_click_on_an_arrow_or_the_title_steps_the_list() {
     assert_eq!(shown(&menu), Some(TITLES[1]));
     assert_eq!(menu.selected(), row, "the cursor does not move");
 }
+
+/// A page opened and left again before the menu next updates (ESCAPE is handled out of band)
+/// still drops the pick.
+#[test]
+fn a_page_left_before_the_next_update_drops_the_pick() {
+    let mut menu = paused(0);
+    press(&mut menu, &[Button::Right]);
+    press(&mut menu, &[Button::Down]);
+    press(&mut menu, &[Button::Cross]);
+    assert_eq!(menu.page().id, "options");
+    let _ = menu.back();
+    assert_eq!(menu.page().id, PAUSE_PAGE);
+    assert_eq!(menu.music_list().and_then(MusicList::pick), None);
+}

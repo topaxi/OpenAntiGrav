@@ -423,8 +423,8 @@ impl MusicDiscs {
     /// the PS2's and the reverse. Never any other release (they have one).
     fn counterpart(&self, platform: Platform) -> Option<(&str, Platform)> {
         match platform {
-            Platform::Psp => self.ps2.as_deref().map(|at| (at, Platform::Ps2)),
-            Platform::Ps2 => self.psp.as_deref().map(|at| (at, Platform::Psp)),
+            Platform::Psp => self.settled().ps2.as_deref().map(|at| (at, Platform::Ps2)),
+            Platform::Ps2 => self.settled().psp.as_deref().map(|at| (at, Platform::Psp)),
             _ => None,
         }
     }

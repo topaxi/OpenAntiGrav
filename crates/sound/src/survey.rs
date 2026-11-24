@@ -25,6 +25,14 @@ impl Later {
     pub(crate) fn is_running(&self) -> bool {
         self.0.as_ref().is_some_and(|cell| cell.get().is_none())
     }
+
+    /// A background survey that has answered `discs`, for a test.
+    #[cfg(test)]
+    pub(crate) fn answered(discs: MusicDiscs) -> Self {
+        let cell = OnceLock::new();
+        let _ = cell.set(discs);
+        Self(Some(Arc::new(cell)))
+    }
 }
 
 impl MusicDiscs {

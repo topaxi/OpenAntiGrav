@@ -107,8 +107,10 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   numbers; `oag_ui::menu::music_list` is the widget (state, step, draw, pointer) on the pause page's root; the
   session gives it the race playlist (`oag_sound::Audio::race_playlist`, each song's title, the booted disc's
   order then the other enabled sources, a folder file by its file name: **chosen**) and, on resuming, hands the
-  pick to `Audio::pick_race_song`, which starts it from its beginning as a new song; the same song picked again
-  resumes where it was. The step is `Nav::Moved` (`UPDOWN`), an end `Nav::Decline`. **Pointer** (chosen, the
+  pick to `Audio::pick_race_song`, which starts it from its beginning as a new song (and drops a track fetch in
+  flight, which would land on the old song); the same song picked again resumes where it was. Only a resume plays the
+  pick: PHOTO MODE (which leaves the race frozen) and any other page drop it, the latter on every page change, ESCAPE's
+  out-of-band back included. The step is `Nav::Moved` (`UPDOWN`), an end `Nav::Decline`. **Pointer** (chosen, the
   original has none): a click on the back or forward half of the pill steps that way with the pad's sounds, a
   click on the title steps forward; neither moves the row cursor. The pill's y offset (- 4) is measured off the frames;
   a half at its end keeps half its alpha (`ListWidget_ShadeArrows`, read on both binaries; it reads 0.56 of the lit
@@ -139,9 +141,10 @@ wired** (the header is the front end's frame bar, static). GAME MANUAL is drawn 
   `List` constructor, step functions, arrow cuts and shade, 8 bytes further on), so only the authoring differs. **Seen on PCSX2** (2026-11-24, `data/saves/pulse-ps2/amphiseum-black.p2s`, START, 4 s): the screen
   lists four rows (CONTINUE, GAME OPTIONS, RESTART RACE, QUIT RACE) and the music row stands well below them at
   about y 285 of 448, `FENIX FUNK 5 (WIPEOUT EDIT)` in the rows' face after a smaller pill; ours on PS2 (no
-  `--original-menu`) puts the row at about y 284. Two differences stay: ours names the PS2's songs `TRACK N` where
-  the original names them, because ours names a PS2 song through the PSP pressing and this boot paired none (the
-  now-playing line shares it); and the `--original-menu` still draws the PSP's six rows on PS2 (GAME MANUAL, PHOTO
+  `--original-menu`) puts the row at about y 284. Ours named the PS2's songs `TRACK N` at first: the PSP pressing that names them was
+  looked up on the boot's unsurveyed fields, not its background survey's answer (`MusicDiscs::counterpart`, shared with
+  the now-playing line); now ours shows `BREAK YA SELF (WIPEOUT REMIX)` after RIGHT (the EU disc's song 1). One
+  difference stays: the `--original-menu` still draws the PSP's six rows on PS2 (GAME MANUAL, PHOTO
   MODE), whose QUIT RACE then sits on the music row (the pause table is the PSP's, `pulses_ps2_pause_screens_*`). **Pure: checked, differs.** Its executable has no `MusicList` class (no string) and its `InGame
   Pause` screen authors no music widget; `oag_pure`'s table has none.
 

@@ -82,8 +82,10 @@ impl Audio {
         }
         self.set_race_index(index);
         self.race_position = 0.0;
-        // Fetched ahead for the song after the one that was playing.
+        // Fetched for the song that was playing or the one after it: landing, either would
+        // move the playlist off the pick.
         self.race_prefetch = None;
+        self.race_job = None;
         true
     }
 }

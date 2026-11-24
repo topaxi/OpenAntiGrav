@@ -126,7 +126,7 @@ impl Session {
         &self,
         shell: &super::Shell,
     ) -> Option<oag_ui::menu::music_list::MusicList> {
-        let spec = shell.title.pause_menu?.music_list?;
+        let spec = shell.title.pause_menu?.music_list_for(shell.platform)?;
         let playlist = self.audio.race_playlist(&self.music_discs)?;
         Some(oag_ui::menu::music_list::MusicList::new(
             playlist.titles,

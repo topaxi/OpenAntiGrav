@@ -90,3 +90,76 @@ fn picking_the_playing_song_keeps_its_place() {
     );
     assert!((audio.race_position - 42.0).abs() < f64::EPSILON);
 }
+
+/// A pick made while a fetch is in flight (a pause opened while the next track was being read)
+/// drops that fetch: landing, it would move the playlist off the pick.
+#[test]
+fn a_pick_drops_a_fetch_in_flight() {
+    let mut audio = audio();
+    audio.race_index = Some(0);
+    audio.race_job = Some(MusicFetchWorker::spawn(
+        MusicDiscs::default(),
+        MusicSource::Auto,
+        std::path::PathBuf::from("unused"),
+        RacePick::exact(0),
+        "test-fetch",
+    ));
+    assert!(audio.pick_race_song(1));
+    assert!(audio.race_job.is_none(), "the old fetch is gone");
+    assert_eq!(audio.race_music_pick(), RacePick::exact(1));
+}
+
+/// A boot surveyed in the background (every live boot) names a PS2 song through the PSP
+/// pressing the survey found, not through the value's own unsurveyed fields.
+#[test]
+fn a_background_surveyed_ps2_boot_names_its_songs_through_the_psp_pressing() {
+    let listings = crate::Listings::default();
+    let seconds = [200.0, 210.0];
+    let soundtrack = |names: Vec<Option<SongName>>| crate::Soundtrack {
+        tracks: seconds
+            .iter()
+            .enumerate()
+            .map(|(at, seconds)| Track {
+                at: at as u32,
+                seconds: *seconds,
+            })
+            .collect(),
+        names,
+    };
+    listings.seed("ps2.chd", Platform::Ps2, soundtrack(Vec::new()));
+    listings.seed(
+        "psp.chd",
+        Platform::Psp,
+        soundtrack(vec![
+            Some(SongName {
+                artist: None,
+                title: "Fenix Funk 5 (Wipeout Edit)".to_string(),
+            }),
+            Some(SongName {
+                artist: None,
+                title: "Steady Rush".to_string(),
+            }),
+        ]),
+    );
+    let surveyed = MusicDiscs {
+        booted: Some(Platform::Ps2),
+        ps2: Some("ps2.chd".into()),
+        psp: Some("psp.chd".into()),
+        listings: listings.clone(),
+        ..MusicDiscs::default()
+    };
+    let discs = MusicDiscs {
+        listings,
+        later: crate::survey::Later::answered(surveyed),
+        ..MusicDiscs::default()
+    };
+    let mut audio = audio();
+    audio.race_index = Some(0);
+    assert_eq!(
+        audio.race_playlist(&discs).map(|list| list.titles),
+        Some(vec![
+            "Fenix Funk 5 (Wipeout Edit)".to_string(),
+            "Steady Rush".to_string()
+        ])
+    );
+}

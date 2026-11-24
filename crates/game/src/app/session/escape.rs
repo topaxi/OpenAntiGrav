@@ -62,10 +62,6 @@ impl Session {
     /// `handle_menu`'s own guard but is cheap to make true unconditionally
     /// rather than only where it is currently checked.
     pub(crate) fn resume_race(&mut self) {
-        if self.suspended_race.is_none() {
-            return;
-        }
-        self.take_pause_music_pick();
         let Some(mut stage) = self.suspended_race.take() else {
             return;
         };

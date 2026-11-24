@@ -627,6 +627,9 @@ impl Session {
             // mean the desktop is behind the root page, exactly as before.
             menu::MenuEvent::Closed => {
                 if self.suspended_race.is_some() {
+                    // The pause screen's music pick plays on a resume, not on PHOTO MODE, which
+                    // leaves the race frozen (`docs/ui/pause-menu.md`, "Pulse").
+                    self.take_pause_music_pick();
                     self.resume_race();
                 } else {
                     self.quit = true;
