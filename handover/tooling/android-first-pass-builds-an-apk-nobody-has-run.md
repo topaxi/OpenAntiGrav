@@ -82,6 +82,14 @@ manifest and `cache/<image>` rows in `just push-data`.
 - **GameActivity** if on-screen keyboard text entry matters.
 - **Omega and 2048 check.** Nothing title-specific moved; the packaging is title-agnostic
   (checked, applies to every title, no per-title wiring).
+- **The `--race` stack overflow** (`docs/tools/android.md`, "The stack"): the scene
+  builds on a 16 MiB thread and the launch frames end before the loop; verified on the
+  host with a 2 MiB main stack, on the S21 per the doc. Still open: `App::open_with`
+  (356 KiB) builds the `Session` literal in its own frame before boxing it, and
+  `Session` holds a 57 KB and a 43 KB overlay by value. Boxing those and building the
+  `Session` in place would put every frame on the `android_main` thread under 64 KiB.
+  Measure with `python3 scripts/check-android-stack.py <unstripped liboag_android.so>
+  --all --top 20`.
 
 ## Next Steps
 
