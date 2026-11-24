@@ -8,9 +8,10 @@ the pose, camera, field and clock in those flags were read out of the original's
 Since `theirs.png` is kept, those recorded values are still the ones that match it, so this is the one place a stored
 pose is reused (`compare-rerender` re-reads it because it re-captures the original too).
 
-Per pair: a recorded path under a lane's scratch directory (`{scratch}/.../trace.csv`) or a reaped worktree is
-resolved to the file of the same name in the pair directory; a pair whose input cannot be resolved is skipped and
-named. The current `oag-game` (built first, the dev profile the pair scripts use) renders into a temporary file with
+Per pair: every input file (`--pose-from`, `--field-from`, `--input-script`) and every recorded path under a lane's
+scratch directory (`{scratch}/.../trace.csv`) or a reaped worktree is read from the file of the same name in the pair
+directory (`compare_env.resolve_input_flags`, the rule `check-pair-provenance` applies); a pair whose input is not there is
+skipped and named. The current `oag-game` (built first, the dev profile the pair scripts use) renders into a temporary file with
 a private settings directory written from the pair's profile; on success `ours.png`, `side.png`, `ours.binary`,
 `ours.rendered_at`, `overlap` and the environment are replaced, and the old overlap is kept as `previous_ours`. The
 original's fields, provenance and checks are not touched. Then the page manifests are rewritten from the pairs they
@@ -42,23 +43,6 @@ import compare_menu as cm  # noqa: E402
 import pcsx2_state  # noqa: E402
 
 BINARY = ROOT / "target/debug/oag-game"
-#: A recorded path that no longer exists: a lane's scratch directory or a reaped worktree.
-STALE = re.compile(r"\{scratch\}/|OpenAntiGrav-worktrees/|/data/scratch/")
-
-
-def resolve_flags(flags, pair_dir):
-    """`(flags, problems)`: every stale path replaced by the pair directory's file of the same name."""
-    out, problems = [], []
-    for f in flags:
-        f = str(f)
-        if STALE.search(f):
-            local = pair_dir / Path(f).name
-            if local.exists():
-                f = str(local)
-            else:
-                problems.append("%s: no %s in the pair directory" % (f, Path(f).name))
-        out.append(f)
-    return out, problems
 
 
 def ps2_world_clock_flags(rec, flags):
@@ -89,18 +73,7 @@ def rerender(pj, binary):
     while "--screenshot" in flags:
         at = flags.index("--screenshot")
         del flags[at:at + 2]
-    flags, problems = resolve_flags(flags, pair_dir)
-    # A Detonator pair's recorded `--input-script` names its place in `data/reference`; a copy of the pair elsewhere
-    # (a lane's scratch) runs on the copy's own script, which `ensure_detonator_inputs` made above.
-    if "--input-script" in flags:
-        at = flags.index("--input-script") + 1
-        if not (ROOT / flags[at]).exists() and (pair_dir / "ours.inputs").exists():
-            flags[at] = str(pair_dir / "ours.inputs")
-    # The same for a Detonator pair's pose file (`ours.pose_row`, made again by `ensure_detonator_inputs`).
-    if "--field-from" in flags and rec["ours"].get("pose_row"):
-        at = flags.index("--field-from") + 1
-        if not (ROOT / flags[at]).exists() and (pair_dir / "field.csv").exists():
-            flags[at] = str(pair_dir / "field.csv")
+    flags, problems = ce.resolve_input_flags(rec, flags, pair_dir)
     # The HD and PS2 pair scripts record the run length beside the flags (`ours.ticks`), not in them; without it the
     # frame is tick 0 (a clock of 0.00.0, no GO board).
     if "--ticks" not in flags and rec["ours"].get("ticks") is not None:

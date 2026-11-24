@@ -4,7 +4,9 @@
     compare_provenance.py selftest                 # one constructed bad record per refusal rule; needs no data
     compare_provenance.py scan [DIR] [--strict]    # every pair.json under DIR (default data/reference/compare-page,
                                                    #   or $OAG_PAIR_DIR) carries provenance and names no worktree or
-                                                   #   scratch path; --strict also fails a broken rule; skipped loudly
+                                                   #   scratch path, and every file ours' recorded flags read (pose rows, field
+                                                   #   rows, input script) is in the pair's own directory; --strict also fails
+                                                   #   a broken rule; skipped loudly
                                                    #   when DIR is absent
     compare_provenance.py backfill SRC DST         # copy SRC (pair dirs, `cp -rL`) to DST and fill what can be read
     compare_provenance.py table DIR                # markdown table of every pair's provenance and its refusals
@@ -111,6 +113,16 @@ def path_offenders(obj, where=""):
     elif isinstance(obj, str) and OFFENDER.search(obj):
         found.append((where.lstrip("."), obj))
     return found
+
+
+def input_problems(rec, pair_dir):
+    """What keeps `compare-rerender-ours.py` from re-rendering the pair: an input file its recorded flags read that is not
+    in the pair's own directory. A refused pair is not re-rendered, so it has none to name."""
+    if rec.get("refused"):
+        return []
+    sys.path.insert(0, str(HERE))
+    import compare_env as ce
+    return ce.resolve_input_flags(rec, (rec.get("ours") or {}).get("flags") or [], pair_dir)[1]
 
 
 def portable_text(s):
@@ -355,6 +367,9 @@ def scan(d, strict=False):
             print("PATH   %s %s = %s" % (f, where, s[:90]))
             bad += 1
         pair_id = str(f.parent.relative_to(d))
+        for problem in input_problems(rec, f.parent):
+            print("INPUT  %s: %s" % (pair_id, problem))
+            bad += 1
         problem = world_clock_problem(rec)
         if problem and pair_id not in HD_CLOCK_BASELINE:
             print("CLOCK  %s: %s" % (pair_id, problem))
@@ -450,6 +465,17 @@ def selftest():
         assert finished("pulse-psp", "race", "savestate_restore", "timer")[0] == 3, "a huge Autopilot timer refuses"
         code, rec = finished("pulse-psp", "race", "savestate_restore", "timer", ["autopilot_timer=looked at, state predates the flag"])
         assert code == 0 and rec["original"]["provenance"]["overrides"][0]["rule"] == "autopilot_timer", "the override is recorded in the pair"
+    with tempfile.TemporaryDirectory() as tmp:
+        rec = {"ours": {"flags": ["--race", "--pose-from", "{scratch}/pairs/a2/trace.csv", "--field-from", "data/x/field.csv"]}}
+        assert len(input_problems(rec, tmp)) == 2, "inputs recorded outside the pair directory and absent from it"
+        (Path(tmp) / "trace.csv").write_text("")
+        problems = input_problems(rec, tmp)
+        assert len(problems) == 1 and "field.csv" in problems[0], "only the missing input is named"
+        (Path(tmp) / "field.csv").write_text("")
+        assert input_problems(rec, tmp) == [], "inputs stored beside the pair.json pass"
+        assert input_problems(dict(rec, refused=True), Path(tmp) / "none") == [], "a refused pair is not re-rendered"
+        det = {"original": {"detonator": {"fire": []}}, "ours": {"flags": ["--input-script", "data/y/ours.inputs"]}}
+        assert input_problems(det, Path(tmp) / "none") == [], "a Detonator pair's script is made again on a re-render"
     hd = {"profile": "hd-fury", "original": {"provenance": {"pair_kind": "scenery"}}}
     assert world_clock_problem(hd), "an HD scenery pair with no clock must be refused"
     assert world_clock_problem(dict(hd, original={"world_clock_offset_s": None, "provenance": {"pair_kind": "race"}})), "a null clock is no clock"
@@ -459,7 +485,7 @@ def selftest():
     assert world_clock_problem(dict(hd, profile="pulse-psp")) is None, "the rule is HD's alone"
     over = {"profile": "hd-fury", "original": {"provenance": {"pair_kind": "scenery", "overrides": [{"rule": "hd_world_clock", "reason": "x"}]}}}
     assert world_clock_problem(over) is None
-    print("selftest ok: 4 refusal rules, the exception, the override and the path rule")
+    print("selftest ok: 4 refusal rules, the exception, the override, the path rule and the input rule")
     return 0
 
 
