@@ -215,9 +215,18 @@ ticks of `100 / 60` a tick: the same line to within one frame
 | 2048 | measured by picture | Vita3K, grid before GO (`2048-vita/*`, tick 175 to 187 of ours): the original's craft has both flaps out at the rear; ours drew them stowed |
 | Omega | measured by picture | shadPS4, single race at tick 100 (`omega/*`): the original's craft has both flaps out, large, one each side; ours drew them stowed |
 
-No title measured keeps the flaps stowed on the grid, so there is no per-title switch. **Capture-only**: a posed capture
+No title measured keeps the flaps stowed on the grid, so no title pins them stowed. **Capture-only**: a posed capture
 (`--pose-from`, `--field-from`, `--pose`) stands for a craft off the grid and calls `Race::stow_grid_flaps`, so every pair posed
-from a row read after GO draws as before (`--pose-flaps` still puts a trace row's levels on top).
+from a row read after GO draws as before, pixel for pixel (12 posed pairs on Pulse PSP and PS2, Pure and HD re-rendered with
+the old and the new binary); `--pose-flaps` still puts a trace row's levels on top. `--no-grid-flaps` is the same switch on
+an unposed run, for a frame of the flaps alone (`zone_airbrake_flaps_ground_truth` takes its stowed reference with it) or
+for a title whose original is found to stow them.
+
+**Pairs, before to after** (mean absolute grey against the original inside the player's flap region; whole-frame mean grey in
+brackets): Omega `sol-2` 48.5 to 40.2 (31.40 to 30.81), `anulpha-pass` 41.1 to 31.0 (20.94 to 20.30), `vineta-k` 28.0 to 24.4,
+`talons-junction` 46.3 to 42.9, `metropia` 34.4 to 30.8; 2048 `mall` 47.3 to 32.0 (23.84 to 23.42), `sol-2` 34.2 to 28.4,
+`metropia` 21.0 to 19.9, `talons-junction` 33.3 to 32.5, `empire-climb` 45.0 to 45.9 (its pose and camera are not matched, see
+its note). The original's flap is larger than ours at the grid on both titles (camera not matched); the angle and side are right.
 
 ## Zone: the grid state gates the auto-speed, and `on_grid` is on (2026-10-02)
 
