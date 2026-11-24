@@ -588,6 +588,45 @@ Tests: `crates/weapons/src/detonator/cannon/tests.rs`, the hash test in `oag-gam
   re-placed at the firing craft's locator, carried by the live pose, for the round's first `0.1 s`.
   **Chosen, not measured:** the round's draw `0x00121e68` is unread; the placement and the `0.1 s`
   window are HD's ordinary Cannon's (`cannon.md`). The flash model is unscaled and un-rolled.
+
+  **The flash against the original, read 2026-11-24 (RPCS3, Talon's Junction, Feisar; grabs at lap
+  clock 2.000, 2.017, 2.033, 2.050, the clip 15 to 14 at the first).** The original's flash is not one
+  fixed shape: two jagged blue-white bursts at the wing tips that change size and outline every tick
+  and differ between the two sides on the same tick (crop mean grey over 800,640,1120,770 at 1920x1080:
+  60.3, 79.4, 55.4, 54.9, mean 62.5; pixels with grey over 150 are 11 to 22 % of the crop and average
+  about (205, 231, 243)), and the scene around the craft is tinted blue while it lasts. Ours holds one
+  identical frame for its five ticks, both sides alike: grey 76.7 every tick, 22.9 %, bright pixels
+  about (232, 245, 250), a blown-out white core. That is the original's largest tick (79.4) held for the
+  whole window. Confidence **85** for the difference (four grabbed frames against five rendered ticks).
+
+  **What the disc says, and what it does not** (`PulseBullet` render queue `0x00122098`, vtable `+0x14`,
+  confidence 70):
+  - The flash branch (`+0x1a8` under a constant, `0x001223b0` to `0x00122468`) builds the muzzle matrix
+    (`0x00121ba0`) and places the flash model (`+0x1a4`) with **the model node's own three rotation rows
+    and the muzzle's translation** (`0x00323760`, `0x00327500`). It makes no call to the float-range
+    roll (`0x0028c660`) and applies no scale, so the size roll `CannonBullet_Update` does (`cannon.md`,
+    0.25 to 1.0 on all axes, 0.7 to 1.3 on Z) is **not** read for this round: it must not be wired from
+    the ordinary Cannon.
+  - The same function calls `0x006778c8` with a vector and floats once in the flash branch and once for
+    the bolt (`0x001225b4`, `0x001225e8`), as `cannon.md` records for the ordinary Cannon. The blue tint
+    on the flash ticks supports the hypothesis there (a light the round adds); it stays unpinned
+    (below 50) because `0x006778c8` is unread.
+  - The flash material is `hd_muzzleflash.rcsmaterial`, a blended emissive with `V_Offset`
+    (`0x336d2dcc`) authored `(0,0,0,0)`, and its texture `pulse_muzzleflash_blue_glow.gtf` is a
+    128x512 strip of **eight** flash frames. Ours draws frame 0 on every tick. That a per-draw
+    `V_Offset` picks the frame (the changing outline) is a hypothesis, 55: no writer of it was found
+    (the executable's two `"V_Offset"` strings are only reached from a debug-print table).
+  - The model's own node animation is one degenerate key, so it does not animate the size.
+
+  **Not wired, because the law is unread.** To read it: set a write watchpoint
+  (`just build-rpcs3-watchpoints`) on the flash model's material `V_Offset` and on its node matrix during
+  a held-fire grab (`scripts/rpcs3-hd-detonator-shots.py --fire-clock 1.85 --fire-hold 0.25`, shots at
+  1.95 to 2.10; the clip drops about 5 ticks after the press), decompile what writes them, and read
+  `0x006778c8`'s body for the light's colour, radius and fall-off. Until then a random or stepped frame
+  pick, a size roll or a light would be an invented look.
+  **2048 and Omega: not checked.** Both ship the same `hd_muzzleflash_detonator` file
+  (`detonator-hull.md` on each); their `PulseBullet` render queues are unread, and the frame strip and
+  `V_Offset` are the same data in the same file, so the open question carries over unchanged.
 - **The wall death.** `WO_CANNON_SPARKS_DETONATOR` at the hit point on a round's second wall hit
   (72). The original spawns it only when the round is in some view's potentially-visible set; here
   every one plays (**chosen**).

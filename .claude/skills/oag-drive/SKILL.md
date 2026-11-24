@@ -147,7 +147,7 @@ Pick by the lane's **main output**, not its subject (mostly wiring with one smal
 
 Members inherit none of your context. `member-rules.md` carries the shared rules, so the brief carries only:
 
-0. **One claim and its acceptance evidence** (maintainer, 2026-10-21). The claim is one sentence that is true or false at the end ("Tech de Ra's hexagon panels render within 10 grey of the clean original in box (x,y,w,h)"). The evidence is the exact pair id and region whose metric must move, or the exact test going red to green; a whole-frame delta of 0.3-1.0 grey is inside re-capture noise and is not acceptance. Say whether it is a **measure** lane (ends with a number, a confidence, a doc page and a thread marked ready to wire; "one value unread, here is its address and read recipe" is a success) or a **wire** lane (starts from a ready-to-wire thread, ends with a test and a pair). Never both. If you cannot write the claim, spawn a scout lane.
+0. **One claim and its acceptance evidence** (maintainer, 2026-10-21). The claim is one sentence that is true or false at the end ("Tech de Ra's hexagon panels render within 10 grey of the clean original in box (x,y,w,h)"). The evidence is the exact pair id and region whose metric must move, or the exact test going red to green; a whole-frame delta of 0.3-1.0 grey is inside re-capture noise and is not acceptance. Say whether it is a **measure** lane (ends with a number, a confidence, a doc page and a thread marked ready to wire; "one value unread, here is its address and read recipe" is a success) or a **wire** lane (starts from a ready-to-wire thread, ends with a test and a pair). Never both. If you cannot write the claim, spawn a scout lane. For a maintainer-raised visible problem, do not write "stop at the measurement" as the only ending; write "if the cause is unread and the read recipe fits your tools (name them), ask the lead whether to run it before reporting".
 1. **The lane-specific values**: `<lane>` name, the member's Xvfb `:9N`, emulator ports, and which displays and ports other members hold.
 2. **The lane**, in priority order, and who owns the lanes it may not touch, by crate and Ghidra function set.
 3. **What is already established**, marked "do not re-derive", citing scratch reports and doc pages by path.
@@ -171,10 +171,17 @@ The rest is in `member-rules.md` and CLAUDE.md (golden hashes, `_q` naming, judg
 ## Judging a report
 
 - **A negative result reported honestly is a good outcome**; so is "I could not determine X, here is its address".
+- **A report that ends "unread, here is the recipe" is not the end of the question.** Before reaping, decide one of:
+  - **send it back** to run the recipe, when the recipe fits the lane's tools and its emulator, worktree or context is still warm;
+  - **queue the follow-up as the next lane on that track**, with its kind and estimate.
+
+  **Judge the model with it.** If the member stopped because the read needs deeper reverse-engineering than it managed (a decompile it could not follow, a writer it could not find, two attempts on the same question), the follow-up runs on a more capable model than the lane that stopped: sonnet goes to opus. Fable needs the maintainer's approval (CLAUDE.md), so recommend it with the reason and wait. If the recipe is mechanical (a watchpoint, a capture, a census), keep the model.
+
+  Say the decision, the model and the follow-up's place in the order in the report to the maintainer. If the slot it needs is taken, ask which runs first. Never reap first and decide later: reaping loses the warm worktree and emulator. A follow-up added to the end of the queue without a word is the failure this rule exists for (`det-muzzle-flash`).
 - **Be suspicious of a green claim you did not see**: ask whether the member watched the gate finish (three were misled by builds that died on disk or LLVM errors and read as flaky).
 - **Check the diff against the claim.**
 - **Verify visual claims yourself** with Read on the screenshot.
 
 ## When the user reports something from play
 
-Treat it as a reliable oracle (their observations repeatedly beat static analysis). Turn it into a *measurement* for a member with the discriminating question and what would falsify it. Do not have members tune to match a memory (one "concrete wave" report was an accurate memory of a **different title**).
+Treat it as a reliable oracle (their observations repeatedly beat static analysis). Turn it into a *measurement* for a member with the discriminating question and what would falsify it. Do not have members tune to match a memory (one "concrete wave" report was an accurate memory of a **different title**). The observation stays open until a player would no longer notice it, or the maintainer accepts a stop. Keep it in the queue as a chain (measure, follow-up, wire), and every report on it says what is next for it.

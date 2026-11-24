@@ -10,14 +10,15 @@
 //! `crates/raceplay/src/lib.rs`, which owns the spline, scored there as the low-confidence guess
 //! it is. Keeping the split here means this module cannot quietly acquire an invented constant.
 //!
-//! # Why this does not go through [`Raycaster`]
+//! # Why this does not go through [`Raycaster`](crate::collide::Raycaster)
 //!
-//! [`Raycaster::raycast`] returns the **nearest** hit across every collider, and `include_reset`
+//! [`Raycaster::raycast`](crate::collide::Raycaster::raycast) returns the **nearest** hit across every collider, and `include_reset`
 //! only makes `Reset` a *candidate*. A reset volume is usually below or outside the track, so a
 //! probe at one passes through the floor first and the floor wins: a trigger that essentially
-//! never fires. So this walks [`CollisionWorld::colliders`] and queries only the `Reset` ones
-//! (each [`TriangleSoup`] is a [`Raycaster`], so the narrowphase is shared), in an ordered `Vec`
-//! as `docs/architecture/determinism.md` requires.
+//! never fires. So this asks only the `Reset` colliders ([`CollisionWorld::nearest_reset`]: their
+//! triangles in a tree of their own, the narrowphase shared, and the answer each collider's
+//! nearest hit in ascending collider order would give, as `docs/architecture/determinism.md`
+//! requires).
 //!
 //! # The probes are the hull's
 //!
@@ -28,7 +29,7 @@
 
 use oag_core::math::Vec3;
 
-use crate::collide::{CollisionWorld, Ray, Raycaster};
+use crate::collide::{CollisionWorld, Ray};
 use crate::forces::Environment;
 use crate::params::Handling;
 use crate::ship::ShipState;
@@ -65,71 +66,41 @@ pub fn contact(
     let body = &state.body;
 
     // The swept ray first: it catches a ship dropping through a volume's face between frames.
+    // Every ray is cast in one batch and the first that found something, in this order, wins.
+    let mut rays = [Ray::new(Vec3::ZERO, Vec3::ZERO, 0.0); 1 + wall::HULL_PROBES];
+    let mut directions = [Vec3::ZERO; 1 + wall::HULL_PROBES];
+    let mut count = 0;
     let displacement = body.position - previous_position;
     let travelled = displacement.length();
     let moved = travelled > MIN_HULL_EXTENT;
     if moved {
         let direction = displacement / travelled;
-        if let Some(found) = nearest_reset(
-            world,
-            Ray::new(previous_position, direction, travelled),
-            env.self_collider,
-            direction,
-        ) {
-            return Some(ResetContact {
-                swept: true,
-                ..found
-            });
-        }
+        rays[count] = Ray::new(previous_position, direction, travelled);
+        directions[count] = direction;
+        count += 1;
     }
-
     for (origin, direction, reach) in wall::hull_probes(body, handling) {
         let probeable = reach > MIN_HULL_EXTENT;
         if !probeable {
             continue;
         }
-        if let Some(found) = nearest_reset(
-            world,
-            Ray::new(origin, direction, reach),
-            env.self_collider,
-            direction,
-        ) {
-            return Some(found);
-        }
+        rays[count] = Ray::new(origin, direction, reach);
+        directions[count] = direction;
+        count += 1;
     }
 
-    None
-}
-
-/// The nearest `Reset` hit along one ray, ignoring every other class.
-fn nearest_reset(
-    world: &CollisionWorld,
-    ray: Ray,
-    skip: Option<u32>,
-    direction: Vec3,
-) -> Option<ResetContact> {
-    let mut nearest: Option<(f32, ResetContact)> = None;
-
-    for collider in world.reset_colliders() {
-        // `include_reset` is set because the collider would otherwise skip itself.
-        let Some(hit) = collider.raycast(ray, skip, true) else {
-            continue;
-        };
-        let nearer = nearest.is_none_or(|(best, _)| hit.distance < best);
-        if nearer {
-            nearest = Some((
-                hit.distance,
-                ResetContact {
-                    point: hit.point,
-                    normal: wall::facing(hit.normal, direction),
-                    collider: hit.collider,
-                    swept: false,
-                },
-            ));
-        }
-    }
-
-    nearest.map(|(_, contact)| contact)
+    let mut hits = [None; 1 + wall::HULL_PROBES];
+    world.nearest_reset_each(&rays[..count], env.self_collider, &mut hits[..count]);
+    let (index, hit) = hits[..count]
+        .iter()
+        .enumerate()
+        .find_map(|(index, hit)| hit.map(|hit| (index, hit)))?;
+    Some(ResetContact {
+        point: hit.point,
+        normal: wall::facing(hit.normal, directions[index]),
+        collider: hit.collider,
+        swept: moved && index == 0,
+    })
 }
 
 #[cfg(test)]

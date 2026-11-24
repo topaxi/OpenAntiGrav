@@ -399,6 +399,37 @@ pub fn probe<R: Raycaster + ?Sized>(
     probe_from_hit(state, handling, point, &hit, target_height)
 }
 
+/// [`probe`] at each of `offsets`, into the matching slot of `probes`, the rays cast together
+/// ([`Raycaster::raycast_each`]) so a world walks once for all of them. Each ray is the one
+/// [`probe`] casts from the same state, so each probe is the one [`probe`] returns.
+fn probes_together<R: Raycaster + ?Sized>(
+    state: &ShipState,
+    handling: &Handling,
+    env: &Environment,
+    raycaster: &R,
+    offsets: &[Vec3],
+    target_height: f32,
+    probes: &mut [HoverProbe],
+) {
+    let body = &state.body;
+    let up = body.up();
+    let mut points = [Vec3::ZERO; MAX_PROBES];
+    let mut rays = [Ray::new(Vec3::ZERO, Vec3::ZERO, 0.0); MAX_PROBES];
+    let count = offsets.len().min(probes.len()).min(MAX_PROBES);
+    for (index, offset) in offsets[..count].iter().enumerate() {
+        points[index] = body.position + body.orientation * *offset;
+        rays[index] = Ray::new(points[index], -up, target_height);
+    }
+    let mut hits = [None; MAX_PROBES];
+    raycaster.raycast_each(&rays[..count], env.self_collider, false, &mut hits[..count]);
+    for (index, slot) in probes[..count].iter_mut().enumerate() {
+        *slot = match &hits[index] {
+            Some(hit) => probe_from_hit(state, handling, points[index], hit, target_height),
+            None => HoverProbe::miss(points[index]),
+        };
+    }
+}
+
 /// The half of [`probe`] that turns a hit into a force, without casting. Split out for
 /// [`derived_hit`], which above [`FAST_PROBE_SPEED`] builds the rear hit arithmetically.
 #[must_use]
@@ -574,10 +605,17 @@ fn probe_pair<R: Raycaster + ?Sized>(
     let body = &state.body;
     let speed = body.linear_velocity.dot(body.forward()).abs();
     if speed <= FAST_PROBE_SPEED {
-        return [
-            probe(state, handling, env, raycaster, offsets[0], target_height),
-            probe(state, handling, env, raycaster, offsets[1], target_height),
-        ];
+        let mut pair = [HoverProbe::miss(body.position); 2];
+        probes_together(
+            state,
+            handling,
+            env,
+            raycaster,
+            &offsets,
+            target_height,
+            &mut pair,
+        );
+        return pair;
     }
 
     let up = body.up();
@@ -698,9 +736,15 @@ pub fn evaluate<R: Raycaster + ?Sized>(
         probes[..2].copy_from_slice(&pair);
     } else {
         // HD's `Craft_IntegrateHull` marches every probe every frame, whatever the speed.
-        for (slot, offset) in probes.iter_mut().zip(rig.offsets()) {
-            *slot = probe(state, handling, env, raycaster, *offset, target_height);
-        }
+        probes_together(
+            state,
+            handling,
+            env,
+            raycaster,
+            rig.offsets(),
+            target_height,
+            &mut probes[..count],
+        );
     }
     let active = &probes[..count];
 
