@@ -97,6 +97,21 @@ pub struct Tuning {
 /// started from are gone to below a texel's 16 bits by then.
 pub const SETTLE_PASSES: u32 = 16;
 
+/// History draws the pass makes for `frame` when the last one ran at `last` (`None`: the ring is
+/// new). One unless the frame settles: then a draw for each tick that passed without one, at most
+/// `frame.settle`, and `frame.settle` on a new ring.
+#[must_use]
+pub fn passes(last: Option<u64>, frame: &Frame) -> u32 {
+    if frame.settle == 0 {
+        return 1;
+    }
+    let Some(last) = last else {
+        return frame.settle;
+    };
+    let missed = frame.tick.saturating_sub(last).max(1);
+    u32::try_from(missed).map_or(frame.settle, |missed| missed.min(frame.settle))
+}
+
 /// One tick's worth of the pulses, as the pass reads them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame {
@@ -109,10 +124,11 @@ pub struct Frame {
     /// The simulation tick this was stepped for. The history draw runs once
     /// per tick, so two frames of one tick share a history.
     pub tick: u64,
-    /// History draws to make when a tick's draw runs: `0` is the one a tick makes, and more
-    /// repeat it over the same scene until the history has settled. For a scene that stands
-    /// still (photo mode's speed blur), where the history is what the frames before it left and
-    /// a frame drawn after few of them, or on a ring that was just built, would not have settled.
+    /// The most history draws a tick's draw may make: `0` is the one a tick makes. For a scene
+    /// that stands still (photo mode's speed blur), a draw makes one for each tick since the
+    /// last, as if the ring had been drawn on each, and all of them on a ring just built
+    /// ([`passes`]), so a frame drawn after few of them has the history one drawn on every tick
+    /// has.
     pub settle: u32,
 }
 
@@ -731,8 +747,9 @@ impl Zoom {
         source: SourceMap,
         groups: Option<&[wgpu::BindGroup; 2]>,
     ) {
-        let first = self.last_tick.get().is_none();
-        if self.last_tick.get() == Some(frame.tick) {
+        let last = self.last_tick.get();
+        let first = last.is_none();
+        if last == Some(frame.tick) {
             return;
         }
         self.last_tick.set(Some(frame.tick));
@@ -746,7 +763,7 @@ impl Zoom {
             weight = 0.0;
         }
         self.write_constants(queue, 0, mapping, source, weight, crop);
-        for _ in 0..frame.settle.max(1) {
+        for _ in 0..passes(last, frame) {
             let next = 1 - self.current.get();
             self.current.set(next);
             let bound = groups.map_or_else(|| &self.history_groups[next], |groups| &groups[next]);

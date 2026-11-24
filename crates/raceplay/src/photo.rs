@@ -260,9 +260,9 @@ impl LensShift {
 
 /// The zoom ring's pulse a speed blur of `effects` holds, with the ring's numbers, or `None` with
 /// the row at zero. `age` is the mode's own tick: the ring's history advances once per tick of
-/// it, and the race is not stepping. The scene stands still, so each tick's history draw is
-/// repeated until it has settled (`oag_post::hd_zoom::SETTLE_PASSES`): a shot sees the history
-/// the preview of the same scene has, however few frames the mode drew before it.
+/// it, and the race is not stepping. The scene stands still, so a draw makes the history draws of the ticks it missed, and
+/// all of `oag_post::hd_zoom::SETTLE_PASSES` on a new ring: a shot sees the history the preview
+/// of the same scene has, however few frames the mode drew before it.
 fn speed_blur_pulse(
     effects: &Effects,
     tuning: oag_post::hd_zoom::Tuning,
