@@ -52,6 +52,9 @@ pub(crate) struct Open {
     /// has not begun: the frame that shows its progress bar is drawn first, because the redraw
     /// stalls the frame it is in.
     pub(super) announced: Option<Announced>,
+    /// When the shot began drawing at the output's size, for the log line that says how long
+    /// the redraw stalled.
+    redraw_began: Option<web_time::Instant>,
     /// A shot asked for this tick, read back by `Session::draw` once the frame is drawn.
     shot: Option<(std::path::PathBuf, Option<super::photo_meta::Pending>)>,
     /// The project's words in the player's language and in English, read once when the mode
@@ -79,6 +82,11 @@ impl Open {
     /// Where the mode was opened from.
     pub(super) fn origin(&self) -> Origin {
         self.origin
+    }
+
+    /// A shot of several frames times itself.
+    pub(super) fn clear_redraw_clock(&mut self) {
+        self.redraw_began = None;
     }
 
     /// The project's text for `id`, its English where the language leaves it untranslated.
@@ -225,6 +233,7 @@ impl super::Session {
             origin,
             message: None,
             announced: None,
+            redraw_began: None,
             shot: None,
             own: oag_ui::strings::project_table(language),
             english: oag_ui::strings::project_table(None),
@@ -425,6 +434,7 @@ impl super::Session {
             return;
         }
         if let Some(Announced { path, pending, .. }) = open.announced.take() {
+            open.redraw_began = Some(web_time::Instant::now());
             self.photo_begin(path, pending);
         }
     }
@@ -484,11 +494,7 @@ impl super::Session {
     /// the screen nor (unless its row is on) the HUD is in the file. Called once the frame is
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
-        if let Some(waiting) = self
-            .photo
-            .as_mut()
-            .and_then(|open| open.announced.as_mut())
-        {
+        if let Some(waiting) = self.photo.as_mut().and_then(|open| open.announced.as_mut()) {
             waiting.shown = true;
         }
         // The average a job set aside on an earlier frame is written first: the frame that set
@@ -504,9 +510,20 @@ impl super::Session {
                 Some(pending) => pending.write(&path, width, height, &pixels),
                 None => crate::capture::write_png(&path, width, height, &pixels),
             });
+        let redrawn = self
+            .photo
+            .as_mut()
+            .and_then(|open| open.redraw_began.take())
+            .map(|began| began.elapsed());
         match result {
             Ok(()) => {
-                debug!("photo mode: saved {}", path.display());
+                debug!(
+                    "photo mode: saved {}{}",
+                    path.display(),
+                    redrawn.map_or_else(String::new, |took| format!(
+                        " (drawn at the output's size, {took:?} from the first frame to the file)"
+                    ))
+                );
                 self.photo_message(photo::saved_word(&path));
             }
             Err(why) => {

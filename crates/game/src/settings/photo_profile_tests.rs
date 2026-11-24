@@ -47,7 +47,11 @@ fn supersampling_is_drawn_at_the_output_size_too() {
 
 #[test]
 fn a_profile_that_already_draws_natively_is_not_redrawn() {
-    for reconstruction in [Reconstruction::Off, Reconstruction::Fxaa, Reconstruction::Smaa] {
+    for reconstruction in [
+        Reconstruction::Off,
+        Reconstruction::Fxaa,
+        Reconstruction::Smaa,
+    ] {
         let native = profile(100, reconstruction);
         assert!(!native.photo_differs(RECT, false), "{reconstruction}");
         let photo = native.for_a_photo();

@@ -575,11 +575,50 @@ contour bands; the single plain frame shows them in the same places (a rewound s
 tunnel does), so they are the frame's. Rewind is not offered from `Race End Photo` or in a split
 screen. Omega's blur and 2048's own depth of field law (`(a * 0.01)^2 * 900 + 100`; HD's focus curve
 is used) stand as before. Also left open, as before: split screen, the photo
-counter stat, saving on a page, a share sheet for a shot, HD's real `close` rest offset, and a shot at
-the scene's own pixels (the file is the presentation target, upscaled from the scene drawn at its
-configured render size: the dynamic resolution is held there while the mode is open).
+counter stat, saving on a page, a share sheet for a shot, and HD's real `close` rest offset.
+A shot at the scene's own pixels is closed: [A shot is drawn at the output's size](#a-shot-is-drawn-at-the-outputs-size).
 
 **Checked against the other lineage.** Speed blur's target (HD) is the zoom ring `oag_post::hd_zoom`
 already ports; 2048's `FUN_8112ea02` carries HD's focus formula (the two agree, as above) and Omega's two
 effect lists are what the independent rows follow: ported, the same pass runs on all five (screenshots of
 each on a race of its own).
+
+## A shot is drawn at the output's size
+
+A saved shot is drawn with the scene at the output's size: a render scale of 100 %, no spatial or
+temporal upscaler (FSR 1 and FSR 3 are off for it), and the anti-aliasing the profile asks for (MSAA, and FXAA
+or SMAA where one is the reconstruction). Its pixels do not depend on the render scale or the
+upscaler the player plays with, a supersampling scale above 100 included: it is drawn at 100. The preview is
+the live frame and is unchanged. **Chosen, not measured.**
+
+- **One predicate and one function.** While a shot is being drawn (`Session::photo_draws_natively`:
+  asked, a job running, or its average waiting for the HUD) `Session::render_profile` returns
+  `RenderProfile::for_a_photo` of the player's profile, so the render target, the camera jitter,
+  the upscale pass and the timing all follow it. A profile that already draws that way is drawn as
+  it was, which is why a default shot is the same file as before (decoded pixels identical against
+  `main`, a Pulse single frame and an HD motion blur shot, each with and without the HUD).
+- **A short stall, behind the bar.** The reallocation and the redraw stall one frame (the scene
+  target, its depth, the MSAA target, HD's bloom chain), so the frame that shows the progress bar
+  (`TAKING PHOTO 0 / 1`, any button cancels) is drawn first, and the shot begins on the next. Only a
+  shot that is redrawn takes that frame. The race does not step between the two. Measured on the
+  discrete GPU (`photo mode: saved ... drawn at the output's size, T from the first frame to the file`,
+  a shot asked for at 50 % through FSR 3): Pulse 67 ms at 1080p and 161 ms at 4K, HD 53 ms and
+  167 ms; the frame after puts the preview back, a second reallocation.
+- **The HUD** is drawn once over the result at the output's size, as for an accumulated shot
+  (`photo_hud`).
+- **`--from-png`** on a photo draws it the same way (`Cli::photo_profile`, applied by
+  `apply_render_overrides`), so a re-render does not follow the render scale or the upscaler of the
+  machine it runs on. Outside the HUD (which the re-render draws from the race as it stands, and a
+  now-playing banner) it differs from the shot in 0.5 % of its pixels, the craft's own animation.
+- **Evidence.** `photo_mode_ground_truth::native_shot`: the same race and tick shot at half size through FSR 3,
+  at 75 % through FSR 1 and at the default give files that are identical bit for bit for the two
+  scaled profiles and for a Pulse single frame against the default. HD's differ from the default's
+  by at most 8 of 255 (a mean of 0.6, a motion blur shot 1 and 0.01, a depth of field shot 7 and 0.6):
+  the bloom's exposure adaptation restarts on the reallocation and is seeded from the frame, where the
+  default's has drifted over the frames the preview drew. It is the same difference at every scale
+  (25, 50, 75 and 150 % each give the same picture), and drawing more frames at the output's size
+  before the shot does not change it. Without the profile function the scaled profiles differ from each other by a mean
+  of 2 to 6.
+- **Open.** A 2x supersample for the shot alone is not built: it needs its memory measured at 4K on
+  an 8 GiB GPU and a fall back to the output's size on phones. The CPU governor's lowered shadows or
+  model detail still reach a shot, as they reach the preview.

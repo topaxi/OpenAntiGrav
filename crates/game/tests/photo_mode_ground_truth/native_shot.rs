@@ -59,7 +59,11 @@ fn made(image: &Path, tag: &str, name: &str, script: &str, args: &[&str], count:
     let run = drive_unmodded(image, &format!("native-{tag}-{name}"), script, &shots, args);
     assert!(run.status.success(), "{name}: {}", run.stderr);
     for bad in ["wgpu error", "Validation Error", "panicked"] {
-        assert!(!run.stderr.contains(bad), "{name}: {bad} in\n{}", run.stderr);
+        assert!(
+            !run.stderr.contains(bad),
+            "{name}: {bad} in\n{}",
+            run.stderr
+        );
     }
     let photos = the_photos(&run);
     assert_eq!(photos.len(), count, "{name}: {photos:?}");
@@ -78,11 +82,21 @@ fn same_shots(
 ) -> [Made; 3] {
     let all = [
         made(image, tag, "half-fsr3", script, &HALF_FSR3, count),
-        made(image, tag, "three-quarters-fsr1", script, &THREE_QUARTERS_FSR1, count),
+        made(
+            image,
+            tag,
+            "three-quarters-fsr1",
+            script,
+            &THREE_QUARTERS_FSR1,
+            count,
+        ),
         made(image, tag, "default", script, &[], count),
     ];
     for one in &all {
-        assert!(fx_says(&one.run, needle), "{tag}: the run never read {needle}");
+        assert!(
+            fx_says(&one.run, needle),
+            "{tag}: the run never read {needle}"
+        );
     }
     for at in 0..count {
         let [a, b, default] = [&all[0], &all[1], &all[2]].map(|one| decode(&one.photos[at]));
@@ -125,7 +139,10 @@ fn drawn_again(tag: &str, image: &Path, shots: &[Made; 3], at: usize, skip: &[bo
         };
         let differing = outside.iter().filter(|&&pixel| apart(pixel) > 0).count();
         let share = differing as f32 / outside.len() as f32;
-        let mean = outside.iter().map(|&pixel| f32::from(apart(pixel))).sum::<f32>()
+        let mean = outside
+            .iter()
+            .map(|&pixel| f32::from(apart(pixel)))
+            .sum::<f32>()
             / outside.len() as f32;
         println!(
             "{tag} {name}: re-render against the shot outside the HUD, {differing} pixels differ \
@@ -216,4 +233,29 @@ fn a_depth_of_field_shot_does_not_depend_on_the_render_scale_or_the_upscaler() {
     let shots = same_shots("dof", &image, script, 1, "dof=on", HD_TOLERANCE);
     let picture = meta_of(&shots[0].photos[0]).picture.expect("the controls");
     assert!(picture.depth_of_field, "the shot is not a depth of field");
+}
+
+/// Input in the frame that shows the bar of a shot that is to be redrawn at the output's size
+/// cancels it: nothing is saved. The same keys with a default profile (nothing to redraw) save
+/// the shot on the first press.
+#[test]
+#[ignore = "needs a disc image in data/images/"]
+fn input_before_a_redrawn_shot_begins_cancels_it() {
+    let Some(image) = pulse() else {
+        return;
+    };
+    let script = format!(
+        "{TO_THE_RACE} escape; until stage=menu; select photo_mode; press cross; \
+         until photo=free within 200; press select select; ticks 20; \
+         press cross; press cross; ticks 6; screenshot SHOTS/after.png; ticks 6; \
+         press circle; until photo=none within 50"
+    );
+    let shots = Path::new(env!("CARGO_TARGET_TMPDIR")).join("photo-native-cancel-shots");
+    let _ = std::fs::remove_dir_all(&shots);
+    let scaled = drive_unmodded(&image, "native-cancel-scaled", &script, &shots, &HALF_FSR3);
+    assert!(scaled.status.success(), "{}", scaled.stderr);
+    assert!(the_photos(&scaled).is_empty(), "a cancelled shot was saved");
+    let default = drive_unmodded(&image, "native-cancel-default", &script, &shots, &[]);
+    assert!(default.status.success(), "{}", default.stderr);
+    assert_eq!(the_photos(&default).len(), 1, "the default's shot is saved");
 }
