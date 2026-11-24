@@ -657,7 +657,7 @@ switches as every weapon light. The third is not (no round fires without its bol
 is local and visible: on the hull's upper faces beside each muzzle, cyan; the flash is lit, and the
 hull in the original's crops carries the same cyan.
 
-**The blue tint of the scene is not this light.** Over the original's grabs at lap 1.817 (before the volley)
+**The blue tint of the scene** (first read as not this light; it is the round's light, on the Zone programs' own path: "The blue wash of a volley" below). Over the original's grabs at lap 1.817 (before the volley)
 and 2.000 and 2.033 (lit), the mean RGB of the top-left screen quarter goes from `(9.0, 4.1, 6.8)` to
 `(9.4, 9.5, 33.6)` and `(9.1, 8.0, 27.3)`, the top-right quarter from `(13.5, 4.5, 9.6)` to
 `(10.9, 6.0, 23.4)`: a wash well beyond a `D = 2.7` light's reach and beyond the `D = 70` one's colour of
@@ -667,6 +667,111 @@ Its source is **not read** (below 50), but narrowed (`det-muzzle-flash-re`, seco
 - **It is the flash, not the music.** Four unfired grabs from the same restored state (lap 2.167 to 2.233, held bass bands up to 0.7) leave the top-left quarter at `(7.2..8.0, 2.7..3.1, 3.4..4.5)`; only the fired frames carry the wash. (The fired grab at 2.000 had held bass bands of 0.85 to 0.97, above any unfired one, so a band threshold is not excluded outright; 0.7 gave nothing.)
 - **It is the scenery that lights, not a screen wash.** The difference of two original frames (1.933 against 2.000) shows the overhead girders and side structures going blue, shape by shape, the red track edge strips unchanged; a uniform overlay or a bloom would not follow the geometry.
 - **Not the wired lights in ours.** The only candidate in the visible list with a range past the craft is the round's `D = 70` light, whose colour `(0, 0.003, 0.03)` reaches at most `+8` of 255 in `lit_sum` and the wash is `+27`. Ours with that colour multiplied by ten leaves the quarter at `(13.5, 8.5, 13.2)`: ours' scenery draws (`shade.wesl`, the `spu` term inside the material classes that take it) are not receivers of a weapon light at all. So two things are unread: which scenery materials the original lights through its `SVC1` twins, and the gain between a record's colour and the picture.
+
+### The blue wash of a volley, read 2026-11-24 (`det-flash-wash-re`)
+
+**The cause (confidence 80).** A Detonator frame draws every scenery and track chunk on its material's
+Zone program ([detonator-look.md](detonator-look.md), row 3; [zone-frame.md](zone-frame.md)), and a
+chunk the `LightCulling` job finds a light on runs the `SVC1` twin of that program (bit `0x800`,
+[renderer.md](renderer.md), "The `LightCulling` SPU job is identified"). The Zone `SVC1` twins do not
+add the SPU vertex light where the plain ones do. The plain programs add it to the light before the
+albedo multiply (renderer.md, "The `SVC1` combine is read", 88). The Zone programs add it **last, after
+the fog lerp and outside `light * surface`, inside the closing `/2`**:
+
+```text
+out.rgb = ( lerp(fogColour, light * surface + glow, fog)  +  spu ) / 2
+```
+
+Read on `talons_junction/materials/bluemetal.rcsmaterial` (`scripts/ps3-sho.py variants`,
+`scripts/ps3-microcode.py vp-file` / `fp-file`). Variant 12, `HalfBrightZoneModeAmbientSunSpot0SVC1`,
+has vertex block `0x4ef0` and shares fragment block `0x3bf0` with its `SVC0` twin (variant 9):
+
+```text
+vp 0x4ef0 (SVC1)   attribute 0x868f8229 slot 3          (SpuVertexColours)
+                   MAD R0.w, v[3].w, 255, -128 ; EX2      (the RGBE decode, renderer.md)
+                   MUL o[TC1].xyz, v[3].xyz, R0.w         (the light, into TC1)
+vp 0x1fc0 (SVC0)   MOV o[TC1].xyz, c[208].xxxx = 0
+fp 0x3bf0 @0x02    MOV R1, f[TC1]
+          @0x3b    ADD H1.xyz, R2, H1                     (light: TC0 + ambient + sat(N.L) sun; TC0 is 0 on both)
+          @0x3e    MAD H5.xyz, H1, H7, H0                 (light * surface + glow)
+          @0x48    MAD H0.xyz, fog, H4, (1 - fog) fogColour
+          @0x4b    ADD /2 H0.xyz, R1, H0  END             (+ the SPU light, halved)
+```
+
+`track_surface.rcsmaterial` variant 20 (vp `0x9980`, the light from attribute slot 4 into `TC1`; fp `0x71a0`
+ends `@0x5e ADD /2 H0.xyz, R2, H0` with `@0x40 MOV R2.xyz, f[TC1]`) and `bluemetal` variant 20 (`ZoneTrans`,
+fp `0x6a70`: `@0x70 MOV H0.xyz, f[TC1]; @0x71 ADD /2 H0.xyz, H0, H1`) end the same way.
+
+**Census, Talon's Junction** (all 62 files under `talons_junction/materials/`; every `Zone*SVC1` variant,
+classified by whether the shared fragment program's closing `ADD /2` / `MAD /2` reads the register loaded
+from the `TC` the `SVC1` vertex program writes the light to):
+
+| Family (Static) | added after the fog | other |
+| --- | ---: | ---: |
+| `HalfBrightZoneMode*SunSpot0SVC1` | 117 | 2 |
+| `HalfBrightZoneMode*SunShadowMapSpot0SVC1` | 55 | 2 |
+| `HalfBrightZoneTrans*SunSpot0SVC1` | 81 | 38 |
+| `HalfBrightZoneTrans*SunShadowMapSpot0SVC1` | 44 | 13 |
+| `ShadowToAlphaZoneMode*Spot0SVC1` | 0 | 41 |
+
+The `StaticQuake` and `RigidBody` rows split the same way. The classifier is a text match, and the
+`HalfBright` "other" rows read by hand are the same law under another register: `diffuse_spec_fresnel`
+variant 14 ends `ADD /2 H0.xyz, R2.xzwx, H0`, and `bluemetal` variant 20 is the `ZoneTrans` form above.
+**`ShadowToAlpha` differs.** `cf_startbeam_glow` variant 16 adds the light inside the light term
+(`@0x28 ADD H3.xyz, f[TC1], const`), beside a constant, and ends `MAD /2 H0.xyz, R0.z, H0, R2`. That is
+the shadowed-track redraw ([shadow-track-redraw.md](shadow-track-redraw.md)), which this engine folds into
+one pass (`shadowed`), so it is not wired separately.
+
+**Why only this placement can draw the wash.** Detonator's stage 1 authors `Scene.Texture Colour`,
+`Near Colour` and `Base Colour` as `0 0 0` (detonator-look.md, "What the file says at stage 1"), so a
+scenery chunk's Zone surface is black. A light inside `light * surface` adds nothing there, whatever its
+gain: that is why ours, with the light in the multiply, stayed at `(13.5, 8.5, 13.2)` with the colour
+times ten. Only a term outside the multiply turns black girders blue, and the girders turn the light's
+own hue.
+
+**The gain agrees.** The round's light is `(0, 0.003, 0.03)`, range 70, two rounds a volley. On a girder
+some 20 units off, with `N.L` near 0.5, it leaves about `0.5 * 0.03 * 0.7 * 0.5 * 2 = 0.0105` in linear
+blue. HD's scene target stores the sRGB encode ([zone-frame.md](zone-frame.md), "The Zone surface's
+light"), so that is about 27 of 255 in blue and `0.00105` is about 3.5 in green. The original's
+top-left quarter moves by `+25.3` in blue and `+4.3` in green (below). The flash's own `(0, 30, 40)`
+lights reach 2.7 units and light the hull, not the girders.
+
+**Measured against the original** (top-left and top-right quarter mean RGB at 1920x1080). The original's
+frames are lap 1.833 (`02b`, before the volley) and 2.000 to 2.050 (`03`, `03b`, `04`, `04b`), one boot.
+Ours is the `cannon-volley` pair's camera and inputs at ticks 380 (before), 386 to 390 (the volley) and
+400:
+
+| | TL before | TL in the volley | TR before | TR in the volley |
+| --- | --- | --- | --- | --- |
+| original | `(18.2, 6.8, 7.3)` | `(18.1, 10.8, 31.1)`, `(18.2, 10.9, 32.6)`, `(18.3, 10.4, 28.5)`, `(17.8, 9.2, 23.0)` | `(24.2, 10.5, 12.1)` | `(23.8, 11.5, 21.0)` to `(25.4, 13.1, 26.9)` |
+| ours, light in the multiply | `(18.4, 7.9, 11.9)` | `(18.5, 8.1, 12.1)`, `(18.6, 8.2, 12.2)`, `(18.7, 8.2, 12.2)` | `(21.1, 10.2, 14.9)` | `(21.0, 10.3, 14.9)` to `(21.1, 10.3, 15.0)` |
+| ours, after the fog | `(18.4, 7.9, 11.9)` | `(17.7, 10.5, 29.2)`, `(18.0, 10.4, 26.7)`, `(18.2, 9.9, 24.0)` | `(21.1, 10.2, 14.9)` | `(20.0, 10.5, 20.4)` to `(20.5, 11.5, 24.8)` |
+
+At tick 400, 0.23 s on, ours is back to `(19.3, 8.9, 13.2)`. The picture matches as well: the overhead
+girders and side structures go blue shape by shape, the red edge strips stay red. The pair's own frame
+(`cannon-volley`, 2.63 s, 0.75 s after its volley, the rounds some 375 units away) does not move: whole
+frame 15.00 before and after, top-left `(16.9, 7.5, 10.0)` both (original `(20.3, 10.0, 13.7)`). `pad`
+8.17 and `mines-ahead` 14.65 are unchanged. Neither `zone-vineta-k-z5` nor the plain race pair `talons`
+changes a byte. No HD Rocket or Bomb pair exists. An ordinary race draws plain programs, where ours
+already added the light, so the change cannot reach one.
+
+**Wired.** `shade.wesl`'s `zone_spu_after_fog` gives `Lit` an `after_fog` term, `output_scale * spu`, on a
+chunk on its Zone program where the title's Zone frame is read to be one (`ZoneFrame::lit_by_stage_alone`,
+HD only). `fog.wesl`'s `plus_after_fog` adds it after `fogged`, in linear light. A `zone_plain` chunk runs
+its plain `SVC1` program, which already takes the light in its sum, so it now does in ours too. Test:
+`crates/mesh/tests/zone_recolour.rs`, `a_zone_chunk_adds_the_spu_light_after_its_surface` (black Zone
+surface: blue `88` with the light, `0` without; a white plain chunk `88`, a black one `0`; no marker, `0`).
+It fails with the term removed.
+
+**2048 and Omega.** 2048: checked, differs. It has no SPU light record ([weapons.md](weapons.md)), and
+`Detonator::cannon_lights` is false there. Omega: not checkable. Its programs are PS4 recompiles with no
+SPU stage, and with no memory readout there is no way to see whether a light list feeds them. Neither title sets
+`lit_by_stage_alone`, so nothing changes on either.
+
+**Reproduce.** The census: for each `talons_junction/materials/*.rcsmaterial`, `scripts/ps3-sho.py
+variants <image> <path>` for the `Zone*SVC1` rows, then `scripts/ps3-microcode.py vp-file` and `fp-file`
+on the extracted file (`just psarc cat <image>:PS3_GAME/USRDIR/DATA00.PSARC <path>`). The frames:
+`oag-game` with the `cannon-volley` pair's flags and `--ticks 386`.
 
 **`V_Offset`.** `PulseBullet_Construct` (`0x001235a8`) makes no `Material_BindInstanceParamPointer`
 (`0x00677018`) call and no hash-name call (`0x00676ff8`), so the flash material has no game-side `V_Offset`
@@ -691,7 +796,7 @@ bright share; its mean over ten ticks (56) is a little under the original's four
 largest tick (79.4) ours has not reached in ten. The whole-frame mean grey of the `cannon-volley` pair
 (2.63 s, after the window) is 14.99 stored and 15.00 re-rendered on this branch, with the lights switched
 off 15.00 as well: the change does not move it (the stored figure comes from an earlier binary).
-**Open:** the scene tint above; the `+0x130` alpha word's reader; the `0.3` nudges of the light's position;
+**Open:** the `+0x130` alpha word's reader; the `0.3` nudges of the light's position;
 the third light's live trigger.
 
 - **The wall death.** `WO_CANNON_SPARKS_DETONATOR` at the hit point on a round's second wall hit
