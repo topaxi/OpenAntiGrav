@@ -5,6 +5,7 @@
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- reexport <in.track.toml> <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- line <out-dir>
     blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- channels <out-dir>
+    blender -b --factory-startup --python-exit-code 1 --python roundtrip.py -- textures <out-dir>
 
 `loop` builds a track from scratch (8 control points, floor, walls, start, one pad
 of each kind, and art: a canopy over the line textured with a generated checker,
@@ -28,9 +29,7 @@ to the Blender user directory.
 
 import math
 import os
-import struct
 import sys
-import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -39,7 +38,7 @@ import bpy  # noqa: E402
 from mathutils import Quaternion, Vector  # noqa: E402
 
 import oag_track  # noqa: E402
-from oag_track import racing_line, scene, trackfile  # noqa: E402
+from oag_track import pngwrite, racing_line, scene, scene_art, trackfile  # noqa: E402
 
 # Eight control points of a loop, in Blender's X/Y plane (Z up), world units.
 CONTROL = [
@@ -56,25 +55,15 @@ CONTROL = [
 
 def checker_png(path, size=64, cell=8):
     """A deterministic RGBA checker PNG (two greys, alpha 255 and 0 in the corner cell)."""
-    rows = b""
+    px = bytearray()
     for y in range(size):
-        row = bytearray([0])
         for x in range(size):
             light = ((x // cell) + (y // cell)) % 2 == 0
             v = 200 if light else 60
             a = 0 if (x < cell and y < cell) else 255
-            row += bytes((v, v, v, a))
-        rows += bytes(row)
-
-    def chunk(kind, data):
-        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
-
-    png = b"\x89PNG\r\n\x1a\n"
-    png += chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0))
-    png += chunk(b"IDAT", zlib.compress(rows, 9))
-    png += chunk(b"IEND", b"")
+            px += bytes((v, v, v, a))
     with open(path, "wb") as fh:
-        fh.write(png)
+        fh.write(pngwrite.encode_rgba(size, size, px))
 
 
 def add_art(ctx, out_dir):
@@ -512,6 +501,146 @@ def channel_checks(out_dir):
     print("event channels: trigger oag_emit, animation oag_on, track publishes, export, import, re-export: ok")
 
 
+def quad_with(ctx, name, image, x):
+    """A one-quad art mesh at `x` along the track whose material samples `image`."""
+    mat = bpy.data.materials.new(name)
+    mat.use_nodes = True
+    tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    tex.image = image
+    bsdf = next(n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    me = bpy.data.meshes.new(name)
+    me.from_pydata([(x, -20.0, 30.0), (x + 40.0, -20.0, 30.0), (x + 40.0, 20.0, 30.0), (x, 20.0, 30.0)], [], [(0, 1, 2, 3)])
+    me.uv_layers.new(name="UVMap")
+    me.materials.append(mat)
+    obj = bpy.data.objects.new(name, me)
+    ctx.scene.collection.objects.link(obj)
+    return obj
+
+
+def solid_png(path, rgba, size=4):
+    with open(path, "wb") as fh:
+        fh.write(pngwrite.encode_rgba(size, size, bytes(rgba) * (size * size)))
+
+
+def exported_bytes(path):
+    """The first texel of an exported PNG, as the four bytes a game reads."""
+    img = bpy.data.images.load(path, check_existing=False)
+    px = img.pixels[:4]
+    return tuple(int(v * 255 + 0.5) for v in px)
+
+
+def texture_checks(out_dir):
+    """Every own-image case an export has to survive (docs/tools/blender.md, "Textures"):
+    each fails if the piece that handles it is dropped."""
+    import shutil
+
+    work = os.path.join(out_dir, "textures")
+    shutil.rmtree(work, ignore_errors=True)
+    os.makedirs(os.path.join(work, "a"))
+    os.makedirs(os.path.join(work, "b"))
+    ctx = author_loop(work)
+    for o in [o for o in bpy.data.objects if o.type == "MESH" and o.get("oag_kind") is None]:
+        bpy.data.objects.remove(o)
+    ctx.scene.oag_lensflare = False
+    ctx.scene.oag_skybox = False
+
+    solid_png(os.path.join(work, "a", "rock.png"), (10, 20, 30, 255))
+    solid_png(os.path.join(work, "b", "rock.png"), (200, 150, 100, 255))
+    a = bpy.data.images.load(os.path.join(work, "a", "rock.png"))
+    b = bpy.data.images.load(os.path.join(work, "b", "rock.png"))
+    a.name, b.name = "rock_a", "rock_b"
+
+    packed_src = os.path.join(work, "packed_src.png")
+    solid_png(packed_src, (1, 2, 3, 255))
+    packed_bytes = open(packed_src, "rb").read()
+    packed = bpy.data.images.load(packed_src)
+    packed.name = "packed_in_blend"
+    packed.pack()
+    os.remove(packed_src)  # nothing on disk: only the .blend holds it
+
+    painted = bpy.data.images.new("painted", 4, 2)
+    painted.pixels = [0.5, 0.25, 1.0, 1.0] * 8
+    floaty = bpy.data.images.new("hdr", 2, 2, float_buffer=True)
+    floaty.pixels = [0.214, 0.214, 0.214, 1.0] * 4
+    data = bpy.data.images.new("normals", 2, 2, float_buffer=True)
+    data.colorspace_settings.name = "Non-Color"
+    data.pixels = [0.5, 0.5, 1.0, 1.0] * 4
+
+    jpg_path = os.path.join(work, "photo.jpg")
+    jpg = bpy.data.images.new("photo", 8, 8)
+    jpg.pixels = [200 / 255, 100 / 255, 50 / 255, 1.0] * 64
+    jpg.filepath_raw = jpg_path
+    jpg.file_format = "JPEG"
+    jpg.save()
+    bpy.data.images.remove(jpg)
+    jpg = bpy.data.images.load(jpg_path)
+    jpg.name = "photo"
+    tga_path = os.path.join(work, "skin.tga")
+    tga = bpy.data.images.new("skin", 4, 4)
+    tga.pixels = [0.5, 0.5, 0.5, 1.0] * 16
+    tga.filepath_raw = tga_path
+    tga.file_format = "TARGA"
+    tga.save()
+    bpy.data.images.remove(tga)
+    tga = bpy.data.images.load(tga_path)
+    tga.name = "skin"
+
+    dirty_path = os.path.join(work, "dirty.png")
+    solid_png(dirty_path, (255, 0, 0, 255))
+    dirty = bpy.data.images.load(dirty_path)
+    dirty.name = "dirty"
+    dirty.pixels = [0.0, 1.0, 0.0, 1.0] * 16
+
+    images = [a, b, packed, painted, floaty, data, jpg, tga, dirty, a]
+    for i, image in enumerate(images):
+        quad_with(ctx, f"q{i}", image, 100.0 + 60.0 * i)
+    path = os.path.join(work, "tex.track.toml")
+    track = scene.write_track(ctx, path)
+    rows = [t.image for t in track.art.textures]
+    by_object = {m.name: rows[m.texture] for m in track.art.meshes}
+    name_of = {i.name: by_object[f"q{n}"] for n, i in enumerate(images)}
+    print("texture rows:", name_of)
+
+    assert all(t.host is None for t in track.art.textures)
+    assert name_of["rock_a"] == "rock.png" and name_of["rock_b"] != "rock.png", "a name collision got one name"
+    assert len(set(rows)) == len(rows) == len(images) - 1, f"the image used twice is one row: {rows}"
+    assert by_object["q9"] == by_object["q0"], "one image, two meshes, two rows"
+    f = lambda image: os.path.join(work, name_of[image])
+    assert open(f("rock_a"), "rb").read() == open(os.path.join(work, "a", "rock.png"), "rb").read(), "a file PNG is copied as it is"
+    assert exported_bytes(f("rock_a")) == (10, 20, 30, 255), exported_bytes(f("rock_a"))
+    assert exported_bytes(f("rock_b")) == (200, 150, 100, 255), "the second rock.png lost to the first"
+    assert open(f("packed_in_blend"), "rb").read() == packed_bytes, "a packed PNG is written out as it is"
+    assert exported_bytes(f("painted")) == (128, 64, 255, 255), exported_bytes(f("painted"))
+    assert exported_bytes(f("hdr")) in {(127, 127, 127, 255), (128, 128, 128, 255)}, f"float is linear, a PNG is sRGB: {exported_bytes(f('hdr'))}"
+    assert exported_bytes(f("normals")) in {(127, 127, 255, 255), (128, 128, 255, 255)}, "data is written raw"
+    jr, jg, jb, ja = exported_bytes(f("photo"))
+    assert abs(jr - 200) <= 4 and abs(jg - 100) <= 4 and abs(jb - 50) <= 4, (jr, jg, jb)
+    assert exported_bytes(f("skin")) in {(127, 127, 127, 255), (128, 128, 128, 255)}, "a TGA keeps its stored values"
+    assert all(os.path.splitext(n)[1] == ".png" for n in rows)
+    assert exported_bytes(f("dirty")) == (0, 255, 0, 255), "a PNG painted since it loaded was copied stale"
+    for n in rows:
+        assert pngwrite.is_png(open(os.path.join(work, n), "rb").read(8)), n
+    again = trackfile.read(path)
+    assert [t.image for t in again.art.textures] == rows
+
+    gone = os.path.join(work, "gone.png")
+    solid_png(gone, (9, 9, 9, 255))
+    lost = bpy.data.images.load(gone)
+    lost.name = "lost_image"
+    os.remove(gone)
+    quad_with(ctx, "lost_quad", lost, 900.0)
+    stale = os.path.join(work, "refused.track.toml")
+    try:
+        scene.write_track(ctx, stale)
+    except scene_art.ArtError as e:
+        assert "lost_image" in str(e) and "gone.png" in str(e), str(e)
+    else:
+        raise AssertionError("an image whose file is gone was exported")
+    assert not os.path.exists(stale), "a refused export wrote a manifest"
+    print("own textures: file, packed, generated, float, data, JPG, TGA, painted, collision, reused, missing: ok")
+
+
 def main():
     args = sys.argv[sys.argv.index("--") + 1 :]
     if args[:1] == ["loop"]:
@@ -526,6 +655,8 @@ def main():
         props_checks(args[1])
     elif args[:1] == ["channels"]:
         channel_checks(args[1])
+    elif args[:1] == ["textures"]:
+        texture_checks(args[1])
     elif args[:1] == ["reexport"]:
         reexport(args[1], args[2])
     else:

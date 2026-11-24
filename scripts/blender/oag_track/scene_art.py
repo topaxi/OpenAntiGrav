@@ -10,7 +10,7 @@ colour are its own). What becomes what:
 - Material: the first Image Texture node's image. An image with the custom
   properties `oag_host_entry` and `oag_host_name` is a **host** texture (a `Texture`
   node of a circuit on the host title's disc, by name: no pixels travel); any other
-  image is the author's own PNG file, copied beside the manifest.
+  image is the author's own and becomes a PNG beside the manifest (`images.py`).
 - Blend: the material's `oag_blend`, or from Blender's blend mode when it is
   `auto` (CLIP is `cutout` with `oag_alpha_ref` = alpha threshold x 255, BLEND is
   `alpha`, anything else `opaque`). `oag_culled` is the material's backface culling.
@@ -36,12 +36,12 @@ import shutil
 import bpy
 from mathutils import Matrix, Vector
 
-from . import f32, scene_motion
+from . import f32, images, scene_motion
 from .artfile import ArtError
 from .model import Art, ArtMesh, DirectionalLight, LensFlare, Skybox, Sun, Texture
 
 CACHE_TOLERANCE = 1e-5
-HOST_ENTRY, HOST_NAME = "oag_host_entry", "oag_host_name"
+HOST_ENTRY, HOST_NAME = images.HOST_ENTRY, images.HOST_NAME
 COVER_LIFT = 5.0
 
 
@@ -78,21 +78,6 @@ def _image_node(mat):
         return None
     nodes = [n for n in mat.node_tree.nodes if n.type == "TEX_IMAGE" and n.image is not None]
     return nodes[0].image if nodes else None
-
-
-def texture_of(image):
-    """The `Texture` row an image stands for."""
-    entry, name = image.get(HOST_ENTRY), image.get(HOST_NAME)
-    if entry or name:
-        if not (entry and name):
-            raise ArtError(f"image {image.name}: a host texture needs {HOST_ENTRY} and {HOST_NAME}")
-        return Texture(host=(str(entry), str(name)))
-    path = bpy.path.abspath(image.filepath) if image.filepath else ""
-    if not path or not os.path.isfile(path):
-        raise ArtError(f"image {image.name}: save it as a PNG file first (no file at {path!r})")
-    if not path.lower().endswith(".png"):
-        raise ArtError(f"image {image.name}: {os.path.basename(path)} is not a PNG")
-    return Texture(image=os.path.basename(path))
 
 
 def alpha_clip(mat):
@@ -160,7 +145,7 @@ def _close(a, b):
 
 
 def art_meshes(obj, depsgraph, textures, local=False):
-    """One `ArtMesh` per material slot `obj` draws with. `textures` collects rows.
+    """One `ArtMesh` per material slot `obj` draws with. `textures` (an `images.TextureTable`) collects rows.
 
     `local`: the vertices in the object's own space (a moving object, whose pose is the
     node's), else in the world."""
@@ -221,12 +206,7 @@ def art_meshes(obj, depsgraph, textures, local=False):
         for slot in sorted(draws):
             mat = obj.material_slots[slot].material if slot < len(obj.material_slots) else None
             image = _image_node(mat)
-            texture = None
-            if image is not None:
-                row = texture_of(image)
-                if row not in textures:
-                    textures.append(row)
-                texture = textures.index(row)
+            texture = None if image is None else textures.index_of(image)
             blend, ref = _blend(mat)
             seen, pos, nor, tex, col, idx = {}, [], [], [], [], []
             for tri in draws[slot]:
@@ -343,7 +323,7 @@ def collect(context, depsgraph):
     keep = scene.frame_current
     try:
         moving = scene_motion.sample(scene, objs + ([sun_obj] if sun_obj is not None else []))
-        textures, meshes, groups = [], [], []
+        textures, meshes, groups = images.TextureTable(), [], []
         for o in objs:
             pose = moving.get(o)
             first = len(meshes)
@@ -384,10 +364,7 @@ def collect(context, depsgraph):
     if scene.oag_lensflare:
         atlas = None
         if scene.oag_lensflare_atlas is not None:
-            row = texture_of(scene.oag_lensflare_atlas)
-            if row not in textures:
-                textures.append(row)
-            atlas = textures.index(row)
+            atlas = textures.index_of(scene.oag_lensflare_atlas)
         over = {k: scene.get(f"oag_lensflare_{k}") for k in ("colour", "direction")}
         flare = LensFlare(atlas, *(None if v is None else tuple(float(c) for c in v) for v in over.values()))
     skybox = None
@@ -398,10 +375,7 @@ def collect(context, depsgraph):
             if image is None:
                 faces.append(None)
                 continue
-            row = texture_of(image)
-            if row not in textures:
-                textures.append(row)
-            faces.append(textures.index(row))
+            faces.append(textures.index_of(image))
         gradient = scene.oag_sky_gradient
         skybox = Skybox(
             tuple(faces),
@@ -415,7 +389,8 @@ def collect(context, depsgraph):
         lights.append(DirectionalLight(_lamp_direction(o), _lamp_colour(o), f32.r(o.oag_intensity)))
     return Art(
         meshes=meshes,
-        textures=textures,
+        textures=textures.rows,
+        image_files=textures.files,
         sky=scene.oag_sky or None,
         skybox=skybox,
         sun=sun,
@@ -426,22 +401,6 @@ def collect(context, depsgraph):
         sun_rotation=sun_rotation,
         draw_collision=bool(scene.oag_draw_collision),
     )
-
-
-def copy_images(art, scene, manifest_dir):
-    """Copies each own-image row's file beside the manifest (the reader looks there)."""
-    wanted = {t.image for t in art.textures if t.image is not None}
-    for img in bpy.data.images:
-        if img.get(HOST_ENTRY) or not img.filepath:
-            continue
-        src = bpy.path.abspath(img.filepath)
-        base = os.path.basename(src)
-        if base not in wanted:
-            continue
-        dst = os.path.join(manifest_dir, base)
-        if os.path.abspath(src) != os.path.abspath(dst):
-            shutil.copyfile(src, dst)
-        wanted.discard(base)
 
 
 def cover_light_scale(context, depsgraph, points, cover, sun_dir):

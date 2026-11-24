@@ -531,7 +531,10 @@ def write_track(context, path):
     track = collect(context)
     trackfile.write(track, path)
     if track.art is not None:
-        scene_art.copy_images(track.art, context.scene, os.path.dirname(os.path.abspath(path)))
+        manifest_dir = os.path.dirname(os.path.abspath(path))
+        for name, data in track.art.image_files.items():
+            with open(os.path.join(manifest_dir, name), "wb") as f:
+                f.write(data)
     return track
 
 
