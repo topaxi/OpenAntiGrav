@@ -2,7 +2,7 @@
 status: parked
 titles: [all]
 updated: 2026-11-24
-summary: "Dependency benefits left for lanes: wasmtime 51 and web-transport-quinn 0.14 ready, zip zstd-rs, cpal 0.19, wgpu 31, winit 0.31, HDR, mixer bench"
+summary: "Dependency benefits left for lanes: wasmtime 51, quinn 0.14 follow-ups, zip zstd-rs, cpal 0.19, wgpu 31, winit 0.31, HDR, mixer bench"
 categories: [rendering, audio]
 size: L (40)
 difficulty: medium (40)
@@ -67,15 +67,13 @@ the numbers below is measured unless it says so.
   extension ground truths and the mod hash tests of `oag-modhost`, plus
   `cargo tree -d`; the mod author skill needs a look only if `oag-ext-abi`
   moves. Size M (45), difficulty medium (50).
-- **web-transport-quinn 0.14.0** (2026-11-23) drops its `ring` and `aws-lc-rs`
-  features for `rind`, a pure-Rust crypto provider, adds
-  `rustls-platform-verifier` and `jni` (Android's certificate store), and moves
-  to `web-transport-proto` 0.7; its release notes are empty. `oag-net` selects
-  `features = ["ring"]` (`crates/net/Cargo.toml`) and names `ring` as the
-  provider in `crates/net/src/wt.rs`, so the move is an `oag-net` change, not a
-  lockfile one. Read first: whether a caller can still pick the rustls provider.
-  Measuring command: `cargo nextest run -p oag-net`. Size M (50), difficulty
-  medium (50).
+- **web-transport-quinn 0.14 follow-ups** (the bump itself landed with `rind`
+  as the provider; `docs/architecture/dependency-upgrades.md`, ranked row 6).
+  Unadopted: `with_system_roots` for a CA-signed public server,
+  `with_congestion_control(LowLatency)` (BBR) and `with_transport_config` for
+  the link, response headers on `reject`, and the `qlog` feature. Measuring
+  command for the congestion choice: the `oag-net` loopback tests with a
+  lossy path. Size S (60), difficulty easy (60).
 - **zip's `zstd-rs` feature** (zip 9.8.0,
   [#1329](https://github.com/zip-rs/zip2/pull/1329); `zstd` 0.14.4's
   `rust-backend`) would let the web build read zstd mod entries and drop the C
@@ -113,7 +111,8 @@ the numbers below is measured unless it says so.
 
 1. When the maintainer next has a Deck on the desk, run the headphone mixer
    bench (S) and close that item.
-2. Open the wasmtime 51 and web-transport-quinn 0.14 lanes now; open the winit
+2. Open the wasmtime 51 lane now, and the web-transport-quinn 0.14 follow-ups when a
+   lossy-path measurement is wanted; open the winit
    0.31 lane when it is stable. The `x11rb` 0.13 copy goes with winit and
    `arboard` (`docs/architecture/dependency-upgrades.md`, "Held back" and
    "Benefits ranked").
