@@ -20,7 +20,7 @@ Lanes `pure-render-fidelity` and `pure-render-fidelity-2`, 2026-10-26. Closed so
 
 - **the weather** (`pure-race-worst-two`): Sinucit and Sebenco Climb author a `<Weather>` (rain and lens, snow, and the
   `Mist.mip` screen overlay) that Pure never played. `Looks::circuit_weather` now plays it with Pulse's law: both pairs'
-  whole frame read 23 grey dark, now +8 and +3 (mean grey 26.9 -> 15.7 and 25.7 -> 15.7; the other twelve pairs and a
+  whole frame read 23 grey dark, now +8.5 and +3 (mean grey 26.9 -> 15.4 and 25.7 -> 15.5; the other twelve pairs and a
   Pulse, HD, 2048 and Omega pair unchanged to the pixel; `docs/rendering/pure-weather.md`).
 
 The last three: [`psp-pure-usa/hull-shine.md`](../../docs/ghidra/functions/psp-pure-usa/hull-shine.md).

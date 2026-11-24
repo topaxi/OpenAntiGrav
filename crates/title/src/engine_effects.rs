@@ -438,6 +438,12 @@ pub const RAIN_LENS_EFFECT: &str = "WO_RAIN_LENS";
 /// Outpost 7's snow, its `<Weather EnvPsys>`; same footing as [`RAIN_EFFECT`].
 pub const SNOW_EFFECT: &str = "WO_SNOW";
 
+/// The three effects a circuit's `<Weather>` plays. A title whose `circuit_weather` rule applies
+/// plays them under the Pulse PSP particle laws (extents, bars, frame advance) whether or not its
+/// `particle_laws` rule does: the weather emitters are the same records on Pure's disc
+/// (`docs/rendering/pure-weather.md`, "The particles").
+pub const WEATHER_EFFECTS: [&str; 3] = [RAIN_EFFECT, RAIN_LENS_EFFECT, SNOW_EFFECT];
+
 /// What a craft plays over a magstrip on 2048, outside a Zone.
 ///
 /// **Recovered, confidence 75.** `FUN_812c847a` (the Vita ship's derived

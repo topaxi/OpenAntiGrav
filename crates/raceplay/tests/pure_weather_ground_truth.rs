@@ -151,3 +151,77 @@ fn the_loader_reports_the_weather_and_the_mist() {
         report.join("\n")
     );
 }
+
+/// The weather emitters spread by the extent law Pulse's weather does: the rain's and the snow's
+/// box and the lens's rectangle, not a point at the origin. Pure's three `.pob` files carry the
+/// same emitter records as Pulse's (`docs/rendering/pure-weather.md`, "The particles").
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_weather_emitters_keep_their_spawn_shapes() {
+    use oag_fx::psys::spawn::Spawn;
+    for (circuit, env, lens) in [
+        (r"Environments\08_Sinucit", 50.0, true),
+        (r"Environments\10_Sebenco_Climb", 100.0, false),
+    ] {
+        let Some((mut race, _)) = started(circuit) else {
+            return;
+        };
+        for _ in 0..2 {
+            race.tick(&PlayerInputs::none());
+        }
+        let weather = race.scenery_fx().weather();
+        let root = &weather.env_effect().expect("the env effect").emitters[0];
+        assert_eq!(root.spawn, Spawn::Box { extent: env }, "{circuit}");
+        if lens {
+            let root = &weather.lens().effect().expect("the lens effect").emitters[0];
+            assert_eq!(
+                root.spawn,
+                Spawn::Rect {
+                    extent: 10.0,
+                    depth: 5.625
+                },
+                "{circuit}"
+            );
+        }
+    }
+}
+
+/// Both circuits' `weatherPos` anchors read off Pure's version-4 `.vex`, so the mist fades and the
+/// rain anchors under cover as on Pulse.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_cover_anchors_are_read_on_pure() {
+    let Some(path) = oag_testdata::image(IMAGE) else {
+        return;
+    };
+    let mut archives = oag_pure::open(path.to_str().expect("utf-8 path")).expect("open");
+    let mut held = Vec::new();
+    for circuit in [r"Environments\08_Sinucit", r"Environments\10_Sebenco_Climb"] {
+        let blob = archives
+            .read_name(&format!(r"Data\{circuit}\track.vex"))
+            .expect("track");
+        let nodes = oag_vex::vex::nodes(&blob).expect("nodes");
+        let anchors = oag_vex::weather::anchors(&blob, &nodes);
+        held.push((anchors.len(), oag_vex::weather::covered_mask(&anchors)));
+    }
+    assert_eq!(held, [(12, 1_265_574), (2, 34_359_742_464)]);
+}
+
+/// Pure offers no WEATHER setting, so a profile that says `enhanced` (a hand-edited file or
+/// `--weather enhanced`) does not wet its road or throw splashes: the title's weather is played at
+/// `original` only. Sinucit's rain would reach a full wet road by 2,400 ticks.
+#[test]
+#[ignore = "needs data/images/pure-psp-usa.chd"]
+fn the_enhanced_weather_stays_off_on_a_title_that_does_not_offer_it() {
+    let Some((mut race, _)) = started(r"Environments\08_Sinucit") else {
+        return;
+    };
+    race.set_weather(oag_display::display::Weather::Enhanced);
+    let mut splashes = 0;
+    for _ in 0..2600 {
+        race.tick(&PlayerInputs::none());
+        splashes += race.scenery_fx().weather().splashes().len();
+    }
+    assert_eq!(race.wet_road(), 0.0);
+    assert_eq!(splashes, 0);
+}

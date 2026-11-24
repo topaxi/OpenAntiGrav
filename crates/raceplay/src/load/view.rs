@@ -566,6 +566,11 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
     let absorb_anchors = super::absorb::anchors(absorb_burst, &liveries);
     let mut effects = psys::Library::new();
     let particle_laws = title.looks.particle_laws.applies(archives.layout.platform);
+    let circuit_weather = vex_geometry
+        && title
+            .looks
+            .circuit_weather
+            .applies(archives.layout.platform);
 
     seams.mark(Seam::Effects, &report);
     for name in craft_title.effects.names_on(archives.layout.platform) {
@@ -576,7 +581,8 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
             dir,
             craft_title.effects,
             name,
-            particle_laws,
+            particle_laws
+                || (circuit_weather && oag_title::engine_effects::WEATHER_EFFECTS.contains(&name)),
             walk,
         ) {
             Ok((effect, note)) => {
@@ -725,11 +731,6 @@ pub fn load_view(sim: SimLoad, options: &Options) -> Result<Loaded> {
         && title
             .looks
             .circuit_effects
-            .applies(archives.layout.platform);
-    let circuit_weather = vex_geometry
-        && title
-            .looks
-            .circuit_weather
             .applies(archives.layout.platform);
     let road_ripple = vex_geometry && title.looks.road_ripple.applies(archives.layout.platform);
     let pre_race = intro::rule(title, &archives).filter(|_| !ribbon);

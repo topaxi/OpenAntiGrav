@@ -296,10 +296,12 @@ impl RaceView {
 
     /// Whether the enhanced weather's extras run: the player's setting, or a track
     /// module's rain, which forces them on whatever the setting says. A circuit's own
-    /// authored weather stays under the setting alone.
+    /// authored weather stays under the setting alone, and only on a title that offers it
+    /// (`oag_title::weather::Weather::is_played`).
     #[must_use]
     pub fn enhanced_weather(&self) -> bool {
-        self.weather.is_enhanced() || self.scenery_fx.weather().is_driven_active()
+        (self.weather.is_enhanced() && self.scenery_fx.weather().is_offered())
+            || self.scenery_fx.weather().is_driven_active()
     }
 
     /// The enhanced weather's one step: ages the splashes and throws one

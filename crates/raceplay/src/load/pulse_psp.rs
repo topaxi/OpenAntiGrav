@@ -39,7 +39,7 @@ pub(super) fn finish(
         place_scenery_fx(loaded, track_blob, &nodes);
     }
     if circuit_weather {
-        place_weather(loaded, track_blob, &nodes, archives, track);
+        place_weather(loaded, track_blob, &nodes, (archives, track), title);
     }
     if road_ripple {
         loaded.ripples = super::ripple::build(
@@ -179,8 +179,8 @@ fn place_weather(
     loaded: &mut Loaded,
     track_blob: &[u8],
     nodes: &[oag_vex::vex::Node],
-    archives: &mut oag_assets::Archives,
-    track: &str,
+    (archives, track): (&mut oag_assets::Archives, &str),
+    title: &oag_title::Title,
 ) {
     let Some(config) =
         oag_sound::sfx::circuit_manifest(archives, track).and_then(|manifest| manifest.weather)
@@ -214,6 +214,7 @@ fn place_weather(
         mist_texture,
         splash_cell,
         driven: false,
+        offered: title.weather.is_played(),
     });
 }
 
@@ -257,6 +258,7 @@ pub(super) fn place_driven_weather(
         mist_texture,
         splash_cell,
         driven: true,
+        offered: title.weather.is_played(),
     });
 }
 

@@ -52,6 +52,30 @@ track module's `set-weather` does not borrow Sinucit's `<Weather>`, until the en
 Flipping it later is one line in `crates/pure/src/lib.rs` (`Played { rain_circuit: Some(Sinucit) }`) plus the three menu
 and settings test expectations that name Pure.
 
+## The particles and the cover anchors
+
+Two things the first wiring left out, both found in review and fixed.
+
+- **The particles.** Our loader strips Pulse's PSP particle laws (spawn extents, class-6 bars, frame advance) from a
+  title whose `particle_laws` rule is unread, and Pure's is. Left alone that collapses the rain's and the snow's box and the
+  lens's rectangle to a point at the origin. Pure's `WO_RAIN`, `WO_RAIN_LENS` and `WO_SNOW` carry **the same emitter
+  records as Pulse's**: shape 6 extent 50 (rain, class 6 streaks), shape 2 extent 10 by 5.625 (lens), shape 6 extent 100
+  (snow), the same flags, speeds, cone and elevation, read from both discs. So the three effects (`engine_effects::WEATHER_EFFECTS`)
+  play under Pulse's laws on any title whose `circuit_weather` rule applies, inherited from Pulse, and nothing else of
+  Pure's particles changes (`the_weather_emitters_keep_their_spawn_shapes`; with the list dropped the box reads `Point`).
+  Confidence **75**: identical records, the law itself unread in Pure's executable.
+- **The cover anchors.** `oag_vex::weather::anchors` returned nothing unless the `.vex` was version 6; Pure's are version 4.
+  The class is `0x38c`, `0x3da - 0x4e` (the same shift `lensflare` and `texture` carry), a `weatherPosShape` under a
+  `weatherPos` transform: 12 nodes on Sinucit, 2 on Sebenco Climb, 12 on Vineta K (which authors no weather). `Classes`
+  now carries `weather_pos` (V6 `0x3da`, V4 `0x38c`). Anchored sections: Sinucit 12, covered mask `0x134fa6`;
+  Sebenco Climb 2, mask `0x800001000`. So the mist fades under cover on Sinucit (`MistInside` 0) and
+  the rain holds at its anchor there, as on Pulse (`the_cover_anchors_are_read_on_pure`). Confidence **80**: the node
+  names and the shift; no Pure frame placed under a covered section.
+- **The enhanced weather** (ours: wet road, splashes, spray, lens drift) is not offered on Pure, and now cannot be
+  turned on there either: `--weather enhanced` or a profile `weather = "enhanced"` does nothing on a title whose
+  `weather` is `Unplayed` (`weather::Setup::offered`, `the_enhanced_weather_stays_off_on_a_title_that_does_not_offer_it`).
+  A track module's rain still forces it on where the title has a rain circuit.
+
 ## Result
 
 Mean grey (480 x 272, against the original), the pair as stored against re-rendered by this tree, `3D` being the
@@ -59,8 +83,8 @@ frame with the HUD boxes masked out; signed is the original minus ours (positive
 
 | Pair | Frame mean | Frame `>40` px | 3D mean | 3D `>40` px | 3D signed |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `sinucit` | 26.81 -> 15.64 | 14,698 -> 7,026 | 25.81 -> 14.42 | 8,680 -> 4,355 | +23.8 -> +7.9 |
-| `sebenco-climb` | 25.65 -> 15.72 | 15,326 -> 9,137 | 26.09 -> 15.01 | 12,077 -> 5,969 | +23.3 -> +2.9 |
+| `sinucit` | 26.81 -> 15.33 | 14,698 -> 6,614 | 25.81 -> 14.03 | 8,680 -> 3,946 | +23.8 -> +8.5 |
+| `sebenco-climb` | 25.65 -> 15.46 | 15,326 -> 8,646 | 26.09 -> 14.82 | 12,077 -> 5,639 | +23.3 -> +2.9 |
 
 The other twelve Pure pairs, Zone pairs included, re-render pixel-identical. A Pulse (Fort Gale White, Outpost 7 White),
 an HD (Talons pack), a 2048 (Sebenco Climb) and an Omega (Metro Park) pair re-render pixel-identical to the stored
@@ -73,7 +97,7 @@ Sebenco, so it plays, not only the still.
 
 - **The mist's pattern is random in the original.** `WeatherMist_UpdateLayer` rolls the layers' UV offsets with
   `Psys_RandFloatRange` on every re-roll (`weather.md`, "The mist overlay"), and ours seeds one fixed table. The frame
-  mean is right (signed +7.9 and +2.9 in the 3D region) while the haze sits in different places: on Sebenco's lower left
+  mean is right (signed +8.5 and +2.9 in the 3D region) while the haze sits in different places: on Sebenco's lower left
   ours is now 30 grey brighter than the original there. That is the draw, not the law.
 - Sinucit's advert screens above the road (the original shows an animated cyan and yellow picture, ours three cyan
   strips): `trackstartup.xml` names five billboard slots by colour and the loader draws none of them
@@ -89,8 +113,8 @@ Sebenco, so it plays, not only the still.
   evidence is the two frames: the 3D signed difference falls from +23 to +8 and +3 and the 3D `>40` count roughly halves
   on both, which a wrong blend could not do. Pure's draw function is unread (the `lui`/`addiu` relocation trap on this
   import breaks the string-to-function route, `psp-pure-eu/string-anchors.md`). Confidence **70**.
-- The rain and snow emitters' motion on Pure (wind table, `WrapBox`), and the lens: Pulse's law, no Pure frame of them
-  paired. The enhanced setting (wet road, splashes, spray) is this project's own and was not looked at on Pure.
+- The rain and snow emitters' motion on Pure (wind table, `WrapBox`), and the lens: Pulse's law on identical records, no
+  Pure frame of them paired. The enhanced setting (wet road, splashes, spray) is this project's own and was not looked at on Pure.
 
 ## Cross-title
 
