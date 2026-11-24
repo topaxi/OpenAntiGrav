@@ -76,14 +76,24 @@ def detonator_input_lines(fire, go_tick_):
 
 
 def ensure_detonator_inputs(rec, pair_dir):
-    """Writes `ours.inputs` beside a Detonator pair's `pair.json` when it is missing (the private repository keeps `pair.json`
-    and `theirs.png` only, and the script is made again from the recorded `original.detonator.fire`). Returns whether it wrote."""
+    """Writes `ours.inputs` and `field.csv` beside a Detonator pair's `pair.json` when missing (the private repository keeps `pair.json`
+    and `theirs.png` only; the script is made again from the recorded `original.detonator.fire`, the pose file from `ours.pose_row`).
+    Returns whether it wrote."""
     det = (rec.get("original") or {}).get("detonator")
-    path = Path(pair_dir) / "ours.inputs"
-    if det is None or path.exists():
+    if det is None:
         return False
-    path.write_text("\n".join(detonator_input_lines(det.get("fire"), go_tick())) + "\n")
-    return True
+    wrote = False
+    path = Path(pair_dir) / "ours.inputs"
+    if not path.exists():
+        path.write_text("\n".join(detonator_input_lines(det.get("fire"), go_tick())) + "\n")
+        wrote = True
+    row = (rec.get("ours") or {}).get("pose_row")
+    field = Path(pair_dir) / "field.csv"
+    if row and not field.exists():
+        write_field_csv(field, [{"player": True, "vel": [0.0, 0.0, 0.0], **{k: row[k] for k in ("team", "left", "up", "fwd", "pos")}}],
+                        with_player=True)
+        wrote = True
+    return wrote
 
 
 def go_tick(plat=None):
