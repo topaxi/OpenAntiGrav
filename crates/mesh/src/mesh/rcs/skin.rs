@@ -185,6 +185,17 @@ pub(super) fn skin(
     (skins, seconds)
 }
 
+/// The family of the Detonator hull's cockpit glass (`emissive_constant`, state `0x39`:
+/// `SrcAlpha`/`One`; only that model on the disc ships it). Its program declares the light
+/// inputs and patches an ambient and a sun, but drawn through them in Detonator's near-black stage
+/// rig the dome contributes nothing, where the original's frame shows it a bright translucent
+/// blue (the `pad` pair's dome box, original `(34, 70, 91)`, lit `(6, 0, 6)`, unlit `(25, 56,
+/// 74)`). Drawn **unlit**, the picture at its own alpha. **Chosen from that frame, not read off
+/// the program's instructions** (confidence 55): the program's authored alpha scalar
+/// `0xf8f3ade0` (0.55) is not applied, which may be the remaining 20 % shortfall
+/// (`docs/ghidra/functions/ps3-hdfury-eu/detonator-look.md`, "The pad's paint and the hull's glass").
+const UNLIT_GLASS_FAMILY: &str = "emissive_constant";
+
 /// `~crc32("diffuse")`: the constant colour a `diffuse_*_constant` program
 /// multiplies its light sum by.
 const DIFFUSE: u32 = 0x515e_298e;
@@ -820,6 +831,9 @@ pub(super) fn roles(
         let mut packed = slots::DEFAULT;
         if material.lightmap_entry().is_some() {
             packed |= slots::SECOND_IS_LIGHTMAP;
+        }
+        if super::emissive::family(material) == UNLIT_GLASS_FAMILY {
+            packed |= slots::EMISSIVE;
         }
         let variant = variants.get(slot).copied().flatten();
         let blob = variant.and_then(|_| {

@@ -486,6 +486,7 @@ pub(super) fn load_detonator_objects(
     } else {
         part(objects.pad, "a Detonator pad")
     };
+    let pads = crate::detonator_models::rest_pads_on_their_plane(pad.as_ref(), pads);
     report.extend(unread_ring_line(objects));
     report.push(format!(
         "Detonator pads: {} pad(s) carry the Detonator pad model",
