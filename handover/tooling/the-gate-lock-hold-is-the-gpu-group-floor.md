@@ -2,7 +2,7 @@
 status: measure
 titles: [all]
 updated: 2026-11-24
-summary: "The gpu-vram group is the gate hold floor; launch CPU is the lever (modules -29 %, -35 %); race-build pipelines and more folds are next"
+summary: "gpu-vram group is the gate hold floor; launch CPU is the lever (race launch -12 % from pruned pipelines); foliage and masked sets next"
 size: M (45)
 difficulty: medium (40)
 ---
@@ -51,19 +51,23 @@ threads).
   screen; `campaign_cursor_ground_truth` (14 tests) and four `footer_hint_ground_truth`
   tests launch once for the three choices: the modules' user instructions -35 % and
   -19 %.
+- A model builds only the blended twins, classes and stamp pairs its draws can pick (`mesh_render/reach.rs`): race launch 24.12 -> 21.13 G user instructions (-12.4 %), 158 -> 104 pipelines, `photo_mode_ground_truth` -9 %.
 - Measured and not changed: a disk pipeline cache adds about 1 % over mesa's own shader cache (`docs/architecture/load-time.md`, "Third round"), one shader
   module per stage gains 1.5 to 2 % of a race launch.
 
 ## Next Steps
 
-1. **The race build's pipelines are 42 to 45 % of a racing launch**
-   (158 distinct for Pulse PSP, `docs/architecture/load-time.md`, "Third round").
-   No safe disk cache exists. What is left: do not build the unblended pair
-   where no transparent draw of `BlendClass::None` selects it (32 of the 158, about
-   7 % of a racing launch; a placeholder pair needs a rule for draws added after
-   the build), or one fragment module per entry point (not measured). Measure
-   with `perf record -e cpu-clock:u --call-graph fp` on the frame-pointer build
-   and `perf report --children --comm race-build`.
+1. **The race build's pipelines are still about 29 % of a racing launch's samples**
+   (104 distinct for Pulse PSP after the fourth round, 158 before,
+   `docs/architecture/load-time.md`, "Fourth round"; 31 are bound in a race that
+   fires no weapon). No safe disk cache exists. What is left needs a role or a
+   rebuild on a setting change: the four `foliage` pipelines (4 % of samples, drawn only
+   under `graphics.scenery_sort = depth`, which changes mid-race), the masked and culled
+   solid sets, and a role for the absorb overlay (alpha-over only) and the shine pass.
+   Measure with `perf record -e cpu-clock:u --call-graph fp` on a frame-pointer build
+   and `perf report --no-inline --children --sort sym -g none`; the count is a
+   counter at `pipeline_cache::cached_pipeline`'s miss and a set filled at each
+   `set_pipeline`.
 2. **More MENU BACK launches to fold with `config`**: the cell-selection and
    photo-mode tests of `footer_hint_ground_truth` and the photo/viewer tests of
    `campaign_cursor_ground_truth` keep a launch per choice (a campaign cursor is

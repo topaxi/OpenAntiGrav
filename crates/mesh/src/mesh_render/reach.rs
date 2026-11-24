@@ -132,7 +132,7 @@ impl Stamped {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mesh_render::pipeline_cache::tests::triangle_model;
+    use crate::mesh_render::pipeline_cache::tests::{build_once, device, triangle_model};
     use oag_vex::vex::BlendClass;
 
     fn draw(blend: Option<BlendClass>, culled: bool) -> DrawCall {
@@ -187,5 +187,41 @@ mod tests {
         assert_eq!(reach.alpha_over, Twins::default());
         assert_eq!(reach.additive, Twins::default());
         assert_eq!(reach.unblended, Twins::default());
+    }
+
+    /// Every draw of a built model is submitted through a pipeline of its own class and
+    /// cull mode: no draw lands on the stand-in a pair no draw picks holds.
+    #[test]
+    fn every_transparent_draw_selects_a_pipeline_built_for_it() {
+        let Some((device, queue)) = device() else {
+            eprintln!("no GPU adapter: skipping");
+            return;
+        };
+        let state = wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING;
+        let mut model = triangle_model();
+        model.transparent_draws = vec![
+            draw(Some(BlendClass::AlphaOver), false),
+            draw(Some(BlendClass::Additive), true),
+            draw(Some(BlendClass::None), false),
+            draw(Some(BlendClass::None), true),
+            DrawCall {
+                blend_state: Some(state),
+                ..draw(None, true)
+            },
+        ];
+        let scope = crate::mesh_render::BuildCacheScope::open();
+        let built = build_once(&device, &queue, &model);
+        drop(scope);
+        let set = built.transparent_set();
+        let picked: Vec<&wgpu::RenderPipeline> = model
+            .transparent_draws
+            .iter()
+            .map(|draw| set.select(draw))
+            .collect();
+        for (at, one) in picked.iter().enumerate() {
+            for other in &picked[at + 1..] {
+                assert_ne!(one, other, "two classes or twins share one pipeline");
+            }
+        }
     }
 }

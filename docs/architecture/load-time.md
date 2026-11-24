@@ -473,7 +473,8 @@ lazily.
   (`Model::transparent_draws` is pushed to by `oag-livery` before it, never after).
   The additive pair is also drawn by `Drawable::draw_additive` and the alpha-over
   pair by the absorb overlay and the track shine, so those are not candidates.
-  Building lazily on first draw would put the compile on the frame thread.
+  Building lazily on first draw would put the compile on the frame thread. (Done in the fourth round,
+  by what the draws can pick rather than by lazy builds.)
 
 **A launch per MENU BACK choice became one.** The drive's new `config <setting>=<value>`
 step applies a setting as a changed menu row does, from any screen
@@ -494,6 +495,72 @@ is the CHD's LZMA hunks of `PS2MUSIC.WAD`, read to build a `Sound` whose length
 the null mixer still advances a song by (the marquee shows each race song once).
 Skipping the read means a length-only `Sound` from the WAD's index, an audio
 change, not a quiet one.
+
+### Fourth round (2026-11-24): a model builds only the pipelines its draws can pick
+
+**What a race binds against what it builds.** Pulse PSP race, 400 ticks and again 3,000
+ticks of autopilot (`oag_mesh::mesh_render::pipeline_cache`'s scope, a counter at each
+`create_render_pipeline` miss and a set of every pipeline passed to `set_pipeline`; the
+instrumentation was not kept): **158 distinct pipelines created, 31 bound**, the same 31 at
+both lengths. The rest are not drawn in a race that fires no weapon, absorbs nothing and
+wrecks nothing, but a weapon, a shield or a wreck can bind them at any time, so none of
+them is built lazily: a first-use compile on the frame thread is a hitch in play. What can
+be dropped with no hitch is a pipeline **no draw of the model can pick**, which is known at
+build because a built `Model` is immutable (`Drawable` holds it in an `Arc`).
+
+Where the 158 came from (`mesh_render::build_with`, per model, before): the alpha-over,
+additive and unblended pairs (two-sided and culled twin of each), a pair per authored
+blend state, the glow stamp's two pairs, the plain-draw copies of all of those on a
+circuit, and the model-level cutout pipeline, for every model whatever its draws name. A
+plasma halo of two blended draws built 6 blended pipelines, a hull with one transparent
+draw built 6 blended and 4 stamp pipelines, and a model with no cutout draw a cutout
+pipeline.
+
+**The change** (`mesh_render/reach.rs`): `build` asks which pipelines its draws can pick and
+builds those.
+
+- The pick is one rule, `blend::Pick::of`, read by `TransparentPipelines::select` and by
+  the build (`Stamp::is_additive` likewise for the stamp), so what is built and what is
+  drawn cannot drift apart. A draw's twin is its own `culled`.
+- The overlay and shine passes index the alpha-over (absorb overlay, track shine) or
+  additive (`draw_additive`) pair by any draw's `culled`, whatever its list, so those two
+  pairs are built for the twins of every list; the unblended pair, each authored pair and
+  the stamp pairs only for the transparent draws that select them (a circuit's plain draws
+  select the plain set, the rest the model-wide one).
+- A twin no draw picks holds the other twin's pipeline; a pair none picks holds the
+  alpha-over pair's two-sided pipeline (the stamp's additive pair, the stamp's alpha-over
+  one). The cutout pipeline a draw with no reference picks is built only where a cutout draw
+  names none; a model with no transparent draw has no stamp pairs.
+- The viewer, the capture and the race draw each `Built` with the model it was built from;
+  every writer of a model's draws (`oag-livery`, `flyer::clip`, the weapon loader's
+  `cull_as_authored`) runs before `build`.
+
+| Pulse PSP, 400 ticks | Before | After |
+| --- | ---: | ---: |
+| Pipelines created (mesh scope, which is about 97 % of the launch's `create_render_pipeline`: `oag-post`, `oag-fx` and `oag-render` together are about 1 %) | 158 | 104 |
+| Race launch, warm Mesa cache, `perf stat -e instructions:u` (`target/debug`), four interleaved pairs, load 35 to 41 | 24.12, 24.12, 24.22, 24.12 G | 21.13, 21.13, 21.13, 21.11 G (-12.4 %) |
+| Headless race load to first frame (`--race --screenshot --ticks 1`), five interleaved pairs, load 30 to 34 | 1.10 to 1.23 s | 0.89 to 0.94 s |
+| `photo_mode_ground_truth` (14 tests, whole races), `cargo nextest run`, two interleaved rounds, load 74 to 97 | 1,036.7 G, 1,025.0 G | 939.5 G, 931.5 G (-9.4 %, -9.1 %) |
+
+Nothing moved onto the frame thread: the pipelines are built where they were, at load.
+Pixels: the PNG's decoded scanlines are identical, base against new, for Pulse PSP
+(400 ticks held cross, 1,500 and 4,000 ticks autopilot), Pulse PS2, Pure PSP, Pulse PSP
+USA, HD/Fury (PS3) and Omega (600 ticks autopilot); the files differ only in the embedded
+command-line metadata (their own output path). None of those frames draws a weapon
+halo, a wreck or the absorb overlay, so the claim for them rests on
+`reach::tests::every_transparent_draw_selects_a_pipeline_built_for_it` (a model mixing all
+four classes and both cull modes picks a different pipeline for each draw), the shared
+rule above, and the frame tests of the gate.
+
+**Measured and left.** After the change a launch's `create_render_pipeline` is still
+about 29 % of its samples, 27 to 28 % of it the mesh scope. The largest piece left is
+`foliage::pipelines` (4 pipelines, 4 % of samples): they are drawn only under
+`graphics.scenery_sort = depth`, but that setting is applied every frame and changes in
+the pause menu, so a race that starts on `original` still needs them the moment it
+changes. Dropping them needs a rebuild on the change. Under the same constraint the
+masked (`Velocity::Gated`) and culled solid sets, the circuit's four cutout-reference sets
+and a role for each overlay build (the absorb overlay never draws additive; a shine pass
+only alpha-over) would cut more.
 
 ## Reproducing
 
