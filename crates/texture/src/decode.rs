@@ -205,7 +205,7 @@ fn gtf(blob: &[u8]) -> Result<Picture, Error> {
         width,
         height,
         bits_per_pixel: u8::try_from(texture.format.unit_len() * 8 / texels).unwrap_or(u8::MAX),
-        rgba: rgba.into_iter().flatten().collect(),
+        rgba: rgba.into_flattened(),
         container: Container::Gtf,
         bottom_up: true,
     })
@@ -221,7 +221,7 @@ fn gxt(blob: &[u8]) -> Result<Picture, Error> {
         width: u32::from(texture.width),
         height: u32::from(texture.height),
         bits_per_pixel: 8,
-        rgba: rgba.into_iter().flatten().collect(),
+        rgba: rgba.into_flattened(),
         container: Container::Gxt,
         bottom_up: false,
     })
@@ -236,7 +236,7 @@ fn gnf(blob: &[u8]) -> Result<Picture, Error> {
         width: texture.width,
         height: texture.height,
         bits_per_pixel: 8,
-        rgba: rgba.into_iter().flatten().collect(),
+        rgba: rgba.into_flattened(),
         container: Container::Gnf,
         bottom_up: false,
     })

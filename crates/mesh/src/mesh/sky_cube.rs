@@ -192,7 +192,7 @@ pub fn build(
             format!("{label}[{face}]"),
             width,
             height,
-            rgba.into_iter().flatten().collect(),
+            rgba.into_flattened(),
             None,
         ))));
     }

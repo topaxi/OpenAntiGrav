@@ -192,7 +192,7 @@ pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<Flar
         return Some(FlareTexture {
             width,
             height,
-            rgba: rgba.into_iter().flatten().collect(),
+            rgba: rgba.into_flattened(),
         });
     }
     let gtf = oag_texture::gtf::Gtf::parse(blob).ok()?;
@@ -202,6 +202,6 @@ pub(crate) fn decode(blob: &[u8], platform: oag_assets::Platform) -> Option<Flar
     Some(FlareTexture {
         width,
         height,
-        rgba: rgba.into_iter().flatten().collect(),
+        rgba: rgba.into_flattened(),
     })
 }

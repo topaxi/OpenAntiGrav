@@ -282,7 +282,7 @@ impl ModelTexture {
         let (width, height) = texture.level_size(0);
         let texels = match Self::gtf_blocks(texture, blob) {
             Some(texels) => texels,
-            None => Texels::Rgba8(texture.to_rgba(blob).ok()?.into_iter().flatten().collect()),
+            None => Texels::Rgba8(texture.to_rgba(blob).ok()?.into_flattened()),
         };
         Some(Self {
             label: label.to_string(),
@@ -310,7 +310,7 @@ impl ModelTexture {
             label.to_string(),
             u32::from(texture.width),
             u32::from(texture.height),
-            rgba.into_iter().flatten().collect(),
+            rgba.into_flattened(),
             None,
         ))
     }
