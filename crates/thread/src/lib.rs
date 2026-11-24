@@ -215,7 +215,7 @@ mod tests {
 
     #[test]
     fn the_big_stack_is_at_least_sixteen_mebibytes() {
-        assert!(BIG_STACK >= 16 << 20);
+        const { assert!(BIG_STACK >= 16 << 20) };
     }
 
     #[test]

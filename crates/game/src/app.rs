@@ -912,7 +912,7 @@ fn run_window(window: Windowed) -> Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     if let Some(script) = drive {
         oag_sound::probe::mark_frame_thread();
-        return crate::app::drive::run(&mut *app, script, state_log.as_deref());
+        return crate::app::drive::run(&mut app, script, state_log.as_deref());
     }
     #[cfg(target_arch = "wasm32")]
     let _ = (drive, state_log);
@@ -920,7 +920,7 @@ fn run_window(window: Windowed) -> Result<()> {
     #[cfg(target_os = "linux")]
     if app.demo == Some(true) {
         oag_sound::probe::mark_frame_thread();
-        if crate::app::wallpaper::run(&mut *app)? {
+        if crate::app::wallpaper::run(&mut app)? {
             app.finish_audio()?;
             app.finish_prefetch();
             return Ok(());
