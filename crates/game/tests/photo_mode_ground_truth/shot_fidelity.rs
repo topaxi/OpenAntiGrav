@@ -54,19 +54,22 @@ pub(super) fn controls_are_recorded_and_drawn_again(
     run: &Run,
     photos: &[PathBuf],
 ) {
-    let picture = |at: usize| meta_of(&photos[at]).picture;
+    let picture = |at: usize| {
+        meta_of(&photos[at])
+            .picture
+            .expect("a photo mode shot records its controls")
+    };
     for (name, at) in [
         ("neutral", 0),
         ("exposure put back", 2),
         ("saturation put back", 4),
     ] {
-        assert_eq!(
-            picture(at),
-            None,
-            "{name}: a shot at neutral records no controls"
+        assert!(
+            picture(at).effects().is_neutral(),
+            "{name}: the opening values are recorded as they are"
         );
     }
-    let bright = picture(1).expect("exposure up is recorded");
+    let bright = picture(1);
     assert!(bright.exposure > 33 && bright.saturation == 20 && !bright.depth_of_field);
     assert_eq!(picture(3).saturation, 0);
     assert!(picture(5).speed_blur > 0);
