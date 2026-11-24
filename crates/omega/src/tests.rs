@@ -218,3 +218,16 @@ fn omega_destroyed_craft_runs_hds_sequence() {
     assert!(TITLE.effect_on(Trigger::WreckNode).is_none());
     assert!(TITLE.effect_on(Trigger::WreckSparks).is_none());
 }
+
+/// Omega's `Team Selection` update carries HD's craft control with the same constants and a push
+/// scale of 3.5; dropping the row leaves the craft fixed.
+#[test]
+fn omega_lets_the_player_turn_zoom_and_pan_its_craft() {
+    let law = TITLE
+        .front_end
+        .and_then(|front_end| front_end.ship_control)
+        .expect("the update's control law");
+    assert_eq!((law.idle_frames, law.push_scale), (181, 3.5));
+    assert_eq!(law.fov_per_zoom, -60.0);
+    assert!(law.pan_scale[0] < 1.0, "Omega's pan stays inside its frame");
+}

@@ -347,6 +347,47 @@ fn a_2048_detonator_race_on_zone_1_takes_the_hd_fury_dlc3_table() {
     assert_the_cannon_fires(&loaded);
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, false);
+    assert_the_pad_is_red_squares_on_a_slab_that_rests(&loaded);
+}
+
+/// The Detonator pad on the 2048 lineage: the `_ne` mask rides the third binding and the glow
+/// entry is the unsquared-alpha program with the material's own red (`0x7611a2d8`), the squares the
+/// original's pad shows; the slab is raised by the depth of its walls so it stands on the road.
+fn assert_the_pad_is_red_squares_on_a_slab_that_rests(loaded: &race::Loaded) {
+    let parts = &loaded.bomb_blast_models.detonator;
+    let pad = parts.pad.as_ref().expect("the pad model loaded");
+    assert!(
+        pad.emissive.iter().any(
+            |e| e.program[0] == oag_mesh::mesh::PROGRAM_EMISSIVE_ALPHA_MASK
+                && (e.tint[0] - 0.5957).abs() < 1e-3
+                && e.tint[1] == 0.0
+                && e.tint[2] == 0.0
+        ),
+        "a red unsquared-alpha entry: {:?}",
+        pad.emissive
+    );
+    assert!(
+        pad.pad_masks.iter().any(Option::is_some),
+        "the _ne mask is bound third"
+    );
+    let lowest = pad
+        .vertices
+        .iter()
+        .map(|v| v.position[1])
+        .fold(f32::MAX, f32::min);
+    assert!(lowest < -0.5, "walls lie below the model origin: {lowest}");
+    let first = loaded
+        .setup
+        .speedup_pads
+        .first()
+        .or(loaded.setup.weapon_pads.first())
+        .expect("a pad");
+    let plain = oag_core::math::Mat4::from_cols_array(&first.to_world);
+    let expected = plain.w_axis.truncate() + plain.y_axis.truncate() * -lowest;
+    assert!(
+        (parts.pads[0].w_axis.truncate() - expected).length() < 1e-3,
+        "raised along the pad's up axis"
+    );
 }
 
 /// Omega runs the mode's rules and grades an HD-lineage circuit (its default, `tech_de_ra`) the
@@ -396,6 +437,7 @@ fn an_omega_detonator_race_runs_fourteen_stages_on_hd_furys_grade() {
     assert_the_cannon_fires(&loaded);
     assert_the_opening_stage_and_the_stage_cap(&loaded);
     assert_auto_speed_and_pads(&loaded, true);
+    assert_the_pad_is_red_squares_on_a_slab_that_rests(&loaded);
 }
 
 /// Omega's `Environments2048` circuits take the loader's primary branch (their own

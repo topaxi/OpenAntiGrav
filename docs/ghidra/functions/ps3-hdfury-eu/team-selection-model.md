@@ -233,8 +233,8 @@ honeycomb.
   (`hull_swap::SETTLE`) and its chosen 1.06 start are removed; `hull_swap` keeps the two timings.
   Captures: `--menu-picker-step-seconds T` plays `round(T * 60)` frames of a step from the entry
   above the selected one (chosen).
-- **Not wired**: the player's own turn, pan and zoom; the Detonator box (the preview does not
-  draw the Detonator hull).
+- **Wired** (`hd-shipselect-controls`): the player's own turn, pan and zoom, below.
+- **Not wired**: the SIXAXIS tilt; the Detonator box (the preview does not draw the Detonator hull).
 
 ### The swap against the 60 fps film
 
@@ -464,3 +464,43 @@ copy), ready to wire (the table there).
   absence of the HD constant run, not proof of no fit), its `<FE>` authors `length` beside
   `firepower` and `description`, and its Team Selection is drawn by this build through 2048's
   own path, which this change does not touch.
+
+## The player's own turn, pan and zoom
+
+Read off `TeamSelectionScreen_Update` (`0x00254348`, `0x00254400..0x00254db4`) and checked
+against Omega's update (`FUN_0157f360`): the same constants, in the same order (3.1459 at
+`0x0180493c`, 1/30 at `0x01804924`, -60 at `0x01804968`, each referenced only from that function),
+with a push scale of 3.5 where HD's is 4.0 (`0x008b1d34`). 2048's executable carries no 3.1459
+(byte search of `eboot-vita-2048-eu-v104.elf`): **checked, differs** (no such control on 2048).
+Constants are TOC slots at `0x008ad4d8 + offset`.
+
+| Term | Law, per frame | Confidence |
+| --- | --- | --- |
+| `st+0xfe0` (about X), `+0xfe4` (about Y) | `+= shaped(axis) / 30`; `shaped` = the axis clamped to +-1, zero inside 0.2, else its distance past 0.2 (`0x4630` 1.0, `0x47e0` 0.2, `0x47e8` 0.0333) | 85 |
+| `+0xfe8`, `+0xfec` (drawn turn) | `+= (accumulator + tilt - drawn) * 0.125` (`0x4858`); accumulators and drawn turn wrap by 6.2918 past +-3.1459 (`0x47fc`, `0x4800`) | 85 |
+| `+0x1024` (zoom) | `+= (0.5 * pull - zoom) * 0.25`; lens `57.3 - 60 * zoom` | 85 |
+| `+0xff4`, `+0xff8` (pan) | `+= (target - pan) * 0.125`, target = left x * 2 * pull across, left y * pull down (HD: `* 4 * 0.5`, `* 2 * 0.5` of the zoom term), dead at pull 0 | 85 |
+| `+0xff0` (push) | `*= 0.875`; **no writer drives it** (the only other store is the zeroing in `FUN_00251860`), so it is always 0 | 80 |
+| `+0xffc` idle | reset by a shaped right-stick value, a tilt past 0.35, or `0.5 * pull > 0.1`; counts to 181 (`0xb5`); from then each frame `fe0`, `fe4` do `if v > 0 { v -= 0.05 }; if v < 0 { v += 0.05 }` on the same frame, so a value inside 0.05 stays where it is (a residue); only the two accumulators return, the rest follow their inputs | 70 (the residue is the decompile's reading of two comparisons; not disassembled) |
+
+The depth fit's projector adds the same `+0xfe8`/`+0xfec` to the rest rotation, so a turned
+craft is refitted through its turn (`FitMotion::frame_turned`). Nothing in the update resets the
+terms on a step: they are zero through a step only because the stick is untouched.
+
+**Which control**: the axis index `i` is `pad + 0x524 + 4i` (`FUN_0033e460`). `0x11` and `0x12`
+are the per-port record's `+0x194` and `+0x198`, the slot pair beside the left stick's steer and
+pitch (`0x13`, `0x14`): the **right stick**, X then Y, confidence 60 (identity by slot order). `0x0b`
+is the button mask's bit `0x800`, the PS3 pad's **R1**: pull as a float, confidence 60. `0x13`/`0x14`
+are the **left stick** (steer, pitch; `player-input.md`), confidence 75. `0x15`, `0x17` come from
+`FUN_005b9408` (the SIXAXIS sensors) with a 1.0 jump filter and a 0.35 dead band, easing `+0x1028`
+and `+0x102c` at 0.0625 into the turn targets: **not wired** (`oag-input` reads no motion sensor).
+The byte-to-float scale and the sign of each axis are unread: **chosen, not measured**: stick right
+turns the craft's nose to the player's right, up tips it up, the left stick moves the craft the way
+it is pushed.
+
+**Ours, chosen, not measured**: R1 is the digital pull 1.0, and while it is held the left stick's
+presses do not step the team (the original's stick would do both). A pointer drag that began on
+the craft's frame turns it (`0.004` rad a grid unit), or pans it while it is zoomed (`0.006` model
+units a grid unit, within the stick's reach), the wheel over the frame pulls the zoom (0.2 of a
+full pull a detent, 5 for the full 0.5), and what the pointer set walks back on the same 181-frame
+idle count. Pad: `--drive` `rstick`, `hold r`; pointer: `wheel`, `drag`.

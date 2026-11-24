@@ -43,8 +43,8 @@ impl Scene {
     ) -> bool {
         let mut slot = self.photo_fx.pass.borrow_mut();
         // The pass holds three pipelines and a target of the render size: it goes with the mode,
-        // and the next visit builds it again.
-        if race.photo().is_none() {
+        // and the next visit builds it again. A fixed picture (a saved shot drawn again) keeps it.
+        if race.photo().is_none() && !race.has_fixed_picture() {
             *slot = None;
             return false;
         }

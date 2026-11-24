@@ -50,6 +50,8 @@ impl ViewRaw {
     pub fn read(self, config: TriggerConfig) -> ViewReading {
         ViewReading {
             right: (deadzone(self.right.0), deadzone(self.right.1)),
+            right_raw: self.right,
+            left: (0.0, 0.0),
             l2: condition(self.l2, config.curve()),
             r2: condition(self.r2, config.curve()),
         }
@@ -61,6 +63,12 @@ impl ViewRaw {
 pub struct ViewReading {
     /// Right stick.
     pub right: (f32, f32),
+    /// The right stick as the pad reported it, for a screen that applies a dead band of its
+    /// own (`Team Selection`'s craft turn): [`Self::right`] has already lost ours.
+    pub right_raw: (f32, f32),
+    /// The left stick, right and up positive, as the snapshot a race is flown from has it
+    /// (keyboard arrows included), for a screen that pans with it.
+    pub left: (f32, f32),
     /// L2, 0 to 1.
     pub l2: f32,
     /// R2, 0 to 1.

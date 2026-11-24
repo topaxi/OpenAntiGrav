@@ -160,6 +160,10 @@ pub(super) fn pad_ne(
             *value = super::glow::texel_glow(super::glow::Source::PadMask, channel, scale);
         }
         if let Some(word) = packed.get_mut(slot) {
+            // An object model's `emissive` reading gave the `_ne` picture an additive-second
+            // entry of its own; the pad's program does not add it, so it goes before the
+            // pad's colour entry takes the index.
+            *word &= slots::ROLE_MASK & !slots::ADD_SECOND;
             *word |= slots::PAD_NE;
             *word |= u32::try_from(index + 1).unwrap_or(0) << slots::MATERIAL_SHIFT;
         }
