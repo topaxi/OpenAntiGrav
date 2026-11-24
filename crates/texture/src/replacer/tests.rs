@@ -212,3 +212,44 @@ fn a_zim_picture_is_read_like_a_png_and_a_corrupt_one_is_left_alone() {
     let pack = Replacements::new("t", &ini(&[format!("{key} = bad.zim")]), files()).unwrap();
     assert!(pack.find(&texture).is_none());
 }
+
+#[test]
+fn every_png_colour_type_expands_to_the_same_rgba_it_names() {
+    let encode = |colour: ::png::ColorType, pixels: &[u8]| {
+        let mut out = Vec::new();
+        let mut encoder = ::png::Encoder::new(&mut out, 2, 1);
+        encoder.set_color(colour);
+        encoder.set_depth(::png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(pixels).unwrap();
+        writer.finish().unwrap();
+        out
+    };
+    let cases: [(::png::ColorType, &[u8], [u8; 8]); 4] = [
+        (
+            ::png::ColorType::Rgba,
+            &[1, 2, 3, 4, 5, 6, 7, 8],
+            [1, 2, 3, 4, 5, 6, 7, 8],
+        ),
+        (
+            ::png::ColorType::Rgb,
+            &[1, 2, 3, 5, 6, 7],
+            [1, 2, 3, 255, 5, 6, 7, 255],
+        ),
+        (
+            ::png::ColorType::GrayscaleAlpha,
+            &[9, 4, 6, 8],
+            [9, 9, 9, 4, 6, 6, 6, 8],
+        ),
+        (
+            ::png::ColorType::Grayscale,
+            &[9, 6],
+            [9, 9, 9, 255, 6, 6, 6, 255],
+        ),
+    ];
+    for (colour, pixels, want) in cases {
+        let image = decode_png(&encode(colour, pixels)).expect("a valid PNG decodes");
+        assert_eq!((image.width, image.height), (2, 1), "{colour:?}");
+        assert_eq!(image.rgba, want, "{colour:?}");
+    }
+}

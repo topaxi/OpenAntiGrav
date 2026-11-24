@@ -346,7 +346,7 @@ fn canvas_pictures(
         ));
         return Vec::new();
     };
-    let rgba: Vec<u8> = rgba.into_iter().flatten().collect();
+    let rgba: Vec<u8> = rgba.into_flattened();
     let (width, height) = (u32::from(width), u32::from(height));
     let image = |src: &str, size: (u32, u32), rgba: Vec<u8>| oag_hud::sprite::DecodedImage {
         src: src.to_string(),

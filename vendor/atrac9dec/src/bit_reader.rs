@@ -146,6 +146,17 @@ pub fn sign_extend32(value: i32, bits: i32) -> i32 {
     (value << shift) >> shift
 }
 
+/// `(value + 0.5).floor() as i32`, the C decoder's `Round`, without the `floor` call: on the
+/// baseline x86-64 target that call is a software routine, and it ran once per output sample.
+/// `as i32` truncates toward zero, saturates and maps NaN to 0, which `floor(..) as i32` does
+/// too, so a truncation that landed above a negative non-integer is the only step down.
+#[inline]
+pub fn round_half_up(value: f64) -> i32 {
+    let x = value + 0.5;
+    let t = x as i32;
+    t.saturating_sub(i32::from(x < f64::from(t)))
+}
+
 /// Clamp a value into the i16 range.
 #[inline]
 pub fn clamp16(value: i32) -> i16 {
@@ -155,6 +166,48 @@ pub fn clamp16(value: i32) -> i16 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn round_half_up_is_the_floor_of_the_value_plus_a_half() {
+        let reference = |v: f64| (v + 0.5).floor() as i32;
+        let mut cases = vec![
+            0.0,
+            -0.0,
+            0.5,
+            -0.5,
+            -0.500_000_000_000_000_1,
+            0.499_999_999_999_999_9,
+            1.5,
+            -1.5,
+            32_767.5,
+            -32_768.5,
+            2_147_483_646.5,
+            2_147_483_647.0,
+            2_147_483_647.5,
+            2_147_483_648.0,
+            -2_147_483_648.0,
+            -2_147_483_648.5,
+            -2_147_483_649.5,
+            1e300,
+            -1e300,
+            f64::MAX,
+            f64::MIN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            f64::MIN_POSITIVE,
+        ];
+        let mut state = 0x9e37_79b9_7f4a_7c15u64;
+        for _ in 0..200_000 {
+            state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+            cases.push(f64::from_bits(state));
+            cases.push((state >> 11) as f64 / (1u64 << 40) as f64 - 4096.0);
+            cases.push(f64::from((state >> 40) as i32) / 64.0 + 0.5);
+        }
+        for v in cases {
+            assert_eq!(round_half_up(v), reference(v), "{v:e}");
+        }
+    }
 
     #[test]
     fn read_simple() {

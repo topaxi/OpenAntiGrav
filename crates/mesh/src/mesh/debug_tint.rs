@@ -164,12 +164,12 @@ fn tree_groups(
 /// are not on the CPU.
 fn whitened_copy(picture: &ModelTexture) -> Option<ModelTexture> {
     fn white(bytes: &[u8]) -> Vec<u8> {
-        bytes
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .flat_map(|texel| [255, 255, 255, texel[3]])
-            .collect()
+        let texels = bytes.as_chunks::<4>().0;
+        let mut out = vec![255; texels.len() * 4];
+        for (dst, src) in out.as_chunks_mut::<4>().0.iter_mut().zip(texels) {
+            dst[3] = src[3];
+        }
+        out
     }
     let texels = match &picture.texels {
         Texels::Rgba8(bytes) => Texels::Rgba8(white(bytes)),

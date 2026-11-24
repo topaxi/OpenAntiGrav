@@ -43,7 +43,7 @@ const SEEDS: [u64; 5] = [0x00C0_FFEE, 1, 7, 12_345, 99];
 /// How far the leading opponent got in one minute, and whether anybody wrecked.
 fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)> {
     let image = image()?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -52,7 +52,11 @@ fn leader_distance(level: oag_ai::Difficulty, seed: u64) -> Option<(f32, usize)>
         ..race::Options::default()
     })
     .expect("loading the race");
-    let mut race = race::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = race::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
 
     for _ in 0..3_600 {
         race.tick_sim_only(&PlayerInputs::none());

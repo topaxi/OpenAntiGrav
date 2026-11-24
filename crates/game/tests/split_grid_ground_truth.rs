@@ -23,7 +23,7 @@ fn back_to_front(race: &race::Race) -> Vec<usize> {
 
 fn grid_of(image: &str, people: u8) -> Option<Vec<usize>> {
     let path = oag_testdata::image(image)?;
-    let loaded = race::load(&race::Options {
+    let loaded = race::load_sim(&race::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -33,7 +33,7 @@ fn grid_of(image: &str, people: u8) -> Option<Vec<usize>> {
     .expect("loading the race");
     Some(back_to_front(&race::Race::start(
         loaded.setup,
-        loaded.view,
+        oag_raceplay::ViewSetup::headless(),
         loaded.modules,
     )))
 }

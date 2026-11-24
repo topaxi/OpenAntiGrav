@@ -36,7 +36,7 @@ fn race(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay:
 
 fn setup(image: &str, track: &str, weapons: Option<bool>) -> Option<oag_raceplay::SimSetup> {
     let image = oag_testdata::image(image)?;
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -273,7 +273,7 @@ fn flies_the_original_autopilot(image: &str) {
     let Some(path) = oag_testdata::exact(image) else {
         return;
     };
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: path.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -281,7 +281,11 @@ fn flies_the_original_autopilot(image: &str) {
         ..oag_raceplay::Options::default()
     })
     .unwrap_or_else(|e| panic!("{image}: {e}"));
-    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     race.core.sim.set_autopilot(true);
     for _ in 0..1_800 {
         race.tick_sim_only(&PlayerInputs::none());
@@ -339,7 +343,7 @@ fn opponent_fork(
     slot: usize,
 ) -> Option<(Leg, Leg, bool)> {
     let image = oag_testdata::image("pulse-psp-usa.chd")?;
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: "VENOM".to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -350,7 +354,11 @@ fn opponent_fork(
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     race.core.sim.set_autopilot(true);
     race.core.sim.set_opponent_autopilot(false);
     for _ in 0..trigger {
@@ -478,7 +486,7 @@ struct WallRun {
 
 fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun> {
     let image = oag_testdata::image(image)?;
-    let loaded = oag_raceplay::load(&oag_raceplay::Options {
+    let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
         source: image.display().to_string(),
         class: class.to_string(),
         mode: oag_race::Mode::SingleRace,
@@ -491,7 +499,11 @@ fn wall_run(image: &str, class: &str, track: &str, ticks: u64) -> Option<WallRun
         ..oag_raceplay::Options::default()
     })
     .expect("loading the track");
-    let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+    let mut race = oag_raceplay::Race::start(
+        loaded.setup,
+        oag_raceplay::ViewSetup::headless(),
+        loaded.modules,
+    );
     assert!(race.core.sim.use_original_ai(None, 1), "the AI tables read");
     race.core.sim.set_autopilot(true);
     let mut out = WallRun::default();
@@ -757,7 +769,7 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
             ("RAPIER", Elite, true),
             ("PHANTOM", Elite, false),
         ] {
-            let loaded = oag_raceplay::load(&oag_raceplay::Options {
+            let loaded = oag_raceplay::load_sim(&oag_raceplay::Options {
                 source: path.display().to_string(),
                 class: class.to_string(),
                 mode: oag_race::Mode::SingleRace,
@@ -771,7 +783,11 @@ fn an_opponent_flies_its_autopilot_by_class_and_difficulty() {
                 ..oag_raceplay::Options::default()
             })
             .expect("loading the track");
-            let mut race = oag_raceplay::Race::start(loaded.setup, loaded.view, loaded.modules);
+            let mut race = oag_raceplay::Race::start(
+                loaded.setup,
+                oag_raceplay::ViewSetup::headless(),
+                loaded.modules,
+            );
             assert_eq!(
                 race.core.sim.engage_opponent_autopilot(1),
                 flies,

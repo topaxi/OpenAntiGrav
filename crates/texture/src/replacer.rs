@@ -223,6 +223,16 @@ fn decode_picture(bytes: &[u8]) -> Option<Image> {
 
 /// A PNG as RGBA8888. `None` for anything the decoder refuses.
 pub fn decode_png(bytes: &[u8]) -> Option<Image> {
+    /// Each whole `N`-byte pixel of `data` as one RGBA pixel, written straight into a sized buffer.
+    fn expand<const N: usize>(data: &[u8], rgba: impl Fn(&[u8; N]) -> [u8; 4]) -> Vec<u8> {
+        let pixels = data.as_chunks::<N>().0;
+        let mut out = vec![0; pixels.len() * 4];
+        for (dst, src) in out.as_chunks_mut::<4>().0.iter_mut().zip(pixels) {
+            *dst = rgba(src);
+        }
+        out
+    }
+
     let mut decoder = ::png::Decoder::new(std::io::Cursor::new(bytes));
     decoder.set_transformations(::png::Transformations::EXPAND | ::png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().ok()?;
@@ -231,19 +241,9 @@ pub fn decode_png(bytes: &[u8]) -> Option<Image> {
     let data = &buffer[..frame.buffer_size()];
     let rgba = match frame.color_type {
         ::png::ColorType::Rgba => data.to_vec(),
-        ::png::ColorType::Rgb => data
-            .as_chunks::<3>()
-            .0
-            .iter()
-            .flat_map(|p| [p[0], p[1], p[2], 255])
-            .collect(),
-        ::png::ColorType::GrayscaleAlpha => data
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .flat_map(|p| [p[0], p[0], p[0], p[1]])
-            .collect(),
-        ::png::ColorType::Grayscale => data.iter().flat_map(|&g| [g, g, g, 255]).collect(),
+        ::png::ColorType::Rgb => expand::<3>(data, |p| [p[0], p[1], p[2], 255]),
+        ::png::ColorType::GrayscaleAlpha => expand::<2>(data, |p| [p[0], p[0], p[0], p[1]]),
+        ::png::ColorType::Grayscale => expand::<1>(data, |p| [p[0], p[0], p[0], 255]),
         ::png::ColorType::Indexed => return None,
     };
     (frame.width > 0 && frame.height > 0).then_some(Image {

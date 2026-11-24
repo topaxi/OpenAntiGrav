@@ -394,7 +394,7 @@ fn upload_with(
         let decoded = levels
             .get(skip)
             .and_then(|level| format.decode_level(level, width, height));
-        let rgba: Vec<u8> = decoded.into_iter().flatten().flatten().collect();
+        let rgba: Vec<u8> = decoded.map(Vec::into_flattened).unwrap_or_default();
         // A chain that decoded to nothing binds a blank rather than sending
         // `mip_chain` off the end of an empty buffer.
         let full = u64::from(width) * u64::from(height) * 4;
