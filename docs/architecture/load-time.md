@@ -562,6 +562,90 @@ masked (`Velocity::Gated`) and culled solid sets, the circuit's four cutout-refe
 and a role for each overlay build (the absorb overlay never draws additive; a shine pass
 only alpha-over) would cut more.
 
+### Fifth round (2026-11-24): build-time SPIR-V cannot reach the mesh pipelines
+
+**Question.** naga runs twice per race launch: `create_shader_module` parses and validates
+the WGSL, and `wgpu-hal`'s Vulkan `compile_stage` (inside every `create_render_pipeline`)
+processes the override constants, revalidates and writes SPIR-V. Would SPIR-V that naga
+writes at build time, handed over with `Device::create_shader_module_passthrough`, remove
+enough of that (a stop bar of about 10 % of the launch)?
+
+**Split** (Pulse PSP race, 400 ticks, warm Mesa cache, `target/debug` built with
+`-Cforce-frame-pointers=yes`; `perf record -e instructions:u -c 5000000 --user-callchains
+--call-graph fp`, two runs, load 70 to 73; children percentages):
+
+| Where | Run 1 | Run 2 |
+| --- | ---: | ---: |
+| `compile_stage` (all of `create_render_pipeline` but 0.1 %) | 25.46 % | 25.36 % |
+| of it `process_overrides` (override substitution, compaction, `revalidate`) | 15.43 % | 15.43 % |
+| of it `spv::write_vec` | 9.35 % | 9.30 % |
+| `create_shader_module` (WGSL parse and validate) | 5.47 % | 5.59 % |
+| Launch total, `perf stat -e instructions:u`, three runs | 21.82, 21.82, 21.82 G | |
+
+By caller (run 1, stacks walked up to the first `oag_` frame): `compile_stage` 25.0 % from
+the mesh scope (`mesh_render::build_with`, `foliage`, `stamp`, `prepass`) and 0.5 % from
+everything else; `create_shader_module` 4.3 % mesh and 1.1 % everything else. An earlier
+`cpu-clock:u` record (load 24) gave the same shape: 29.0 % compile, 28.6 of it mesh.
+
+**Why the mesh share is out of reach.** Every mesh pipeline carries override constants
+that only exist at run time: `slots_present` and `emissive_rows` from the model's
+textures on every pipeline, `alpha_test_ref` from a model's materials, the six `flame_*`
+numbers off the disc, `material_lod_bias` from the title, `aniso_max` from the player's
+setting, and about twenty 0/1 flags decided by the model (`mesh_render::build_with`,
+`texlod::constants`). The build has no disc, and naga 30's SPIR-V writer cannot emit
+specialization constants (`back/spv/block.rs:724` and `writer.rs:2772` return
+`Error::Override`), so there is no build-time blob to hand over for any mesh stage. What
+build-time SPIR-V can reach is the non-mesh 1.6 % (0.5 + 1.1). A race-spawning module
+runs far more frames per compiled pipeline than this 400-tick launch, so its share is
+smaller still. Below the bar: nothing was built.
+
+**Traps recorded for any later passthrough work** (`wgpu-hal` 30.0.2, `wgpu-core` 30.0.2):
+
+- Constants are silently dropped. `wgpu-core` passes each stage's `constants` down
+  (`device/resource.rs:4681`, `:4826`), and `compile_stage`'s `ShaderModule::Raw` branch
+  (`vulkan/device.rs:706-707`) never reads them. A passthrough module with overrides draws
+  with the defaults and reports nothing. Its interface is not validated either
+  (`validation.rs:325`, `ShaderMetaData::Passthrough` has none).
+- Bindings are renumbered per layout. Every bind group layout entry gets a dense Vulkan
+  binding by its position (`vulkan/device.rs` around 1416 to 1455), and the pipeline
+  layout hands that map to naga (around 1611 to 1630). A blob must carry the same numbers
+  and binding-array sizes as the layout it is used with.
+- The writer options depend on the device: SPIR-V version from the device's API version,
+  `Unchecked` against `Restrict` bounds checks from robust buffer and image access,
+  `LABEL_VARYINGS` off on Qualcomm, `DEBUG` from the instance flags (`vulkan/adapter.rs`
+  around 2774 to 2870). These live in a private field (`naga_options`).
+- `SEPARATE_ENTRY_POINTS` is set on every Vulkan device (`vulkan/adapter.rs:2299`), so
+  every module stays naga IR and is compiled again for each pipeline, entry point by
+  entry point.
+
+**Repeated work, measured.** A throwaway line at the mesh scope cache's miss (not kept)
+counted the stages the race compiles: 101 pipelines, 202 stages, **64 distinct**
+(module, entry point, constants) keys (22 vertex, 42 fragment), all on the two mesh
+modules. Blended twins and the plain-draw copies differ in blend, cull or depth state only,
+so two thirds of the stage compiles write SPIR-V that an earlier pipeline already wrote.
+
+**Designs left to the maintainer** (both break the approved invariant, "the blob is
+naga's build-time output", so neither was built):
+
+1. Memoise in process: write each distinct stage once with naga at run time and hand it to
+   later pipelines through passthrough. Ceiling about 2/3 of the mesh `compile_stage`, so
+   about 17 % of the launch, on the first launch and every later one. Needs the device's
+   writer options mirrored by hand (above) and a guard against the binding renumbering.
+2. A SPIR-V disk cache keyed on naga's version, the shader text, entry point, constants,
+   layout and the device's writer options. Ceiling all of naga, about 31 % (25.4 + 5.5),
+   on a warm launch. A cache read from disk is input the driver trusts, so it needs the
+   recovery a passthrough path would need anyway.
+
+Neither has a device-lost fallback to lean on: the native build registers no device-lost
+callback (only the web build does, `oag-game`'s `app/gpu.rs`).
+
+Reproducing: build `oag-game` with `RUSTFLAGS=-Cforce-frame-pointers=yes` into a separate
+`CARGO_TARGET_DIR`, prime `MESA_SHADER_CACHE_DIR` with one run, then run the Pulse PSP
+`--drive` walk of the Fourth round (`boot; select racebox; ...; until stage=race within
+4000; ticks 400;`, `--seed 7 --no-audio --no-intro`, headless, `OAG_MODS` and `XDG_*` on a
+scratch profile) under `perf stat -e instructions:u` and the `perf record` above; split with
+`perf report --children --no-inline --sort sym`.
+
 ## Reproducing
 
 The scripts that produced every table are under the lane's scratch directory
