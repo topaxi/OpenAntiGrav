@@ -69,6 +69,12 @@ WALK = [
     {"id": "team", "title": "Ship Select", "screen": "Team Selection", "page": "ship-select", "state": "team-selection.p2s",
      "xml": "Selection_Definition.xml (Team Selection)",
      "selection": {"original": "Assegai, Classic (first craft)", "ours": "Assegai, Classic (first craft)"}},
+    {"id": "main", "title": "Main Menu", "screen": "Main Menu", "page": "pulse-main", "state": "main-menu.p2s",
+     "xml": "MainMenu_Definition.xml (`Main Menu`: the title, the seven rows, `helptext0`)",
+     "selection": {"original": "RACE CAMPAIGN (first row)", "ours": "RACE CAMPAIGN (first row)"}},
+    {"id": "options", "title": "Options", "screen": "Additional", "page": "pulse-options", "state": "options.p2s",
+     "xml": "Additional_Definition.xml (`Additional`: the rows)",
+     "selection": {"original": "GAME OPTIONS (first row)", "ours": "GAME OPTIONS (first row)"}},
 ]
 #: The WALK ids whose ours is drawn at the original's two pulse counters (`pulse_flags`): the campaign pages that own a `Selector` and a pulse title.
 CLOCKED = ("grid", "cell")

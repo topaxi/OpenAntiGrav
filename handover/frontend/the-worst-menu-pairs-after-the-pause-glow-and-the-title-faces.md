@@ -2,7 +2,7 @@
 status: ready-to-wire
 titles: [pulse, pure]
 updated: 2026-11-24
-summary: "Open after the pause bloom and title faces: PS2 Ship Select heading face, title legal glyph pitch, Pure race HUD lap counter, PS2 pause bloom"
+summary: "Open after the pause bloom and title faces: PS2 Ship Select heading face, title legal glyph pitch, Pure race HUD lap counter, PSP pause focus phase"
 categories: [rendering]
 size: M (55)
 difficulty: medium (50)
@@ -26,8 +26,9 @@ and the legal line wraps at 360, the PS2 team pair fits the craft's sway phase. 
   (`compare-menu-movie-phase.py`).
 - **Pure's race HUD** (`pure-psp/menu-pause` 5.06 and `pure-psp/vineta` 6.04 share it): the lap counter `LAP 1/3` is laid out differently (the original's `1` is narrow with the slash right after it, ours
   wider apart; box `(0,225,60,47)` 16.8 on both), the clock and bronze-time digits differ at their edges (11.4 and 12.5), and the pennants behind them move. A HUD and race lane, not the pause.
-- **Pause bloom on PS2 and the focused row's phase**: the PS2's front end blooms by texel alpha (`MenuSkin::glow_by_texel`); a pause page over a PS2 race now takes the same
-  `set_glow_over_scene` and no PS2 pause frame exists to judge it. The focused row's stamp rides the colour pulse and the pause drive route does not pin it (`--menu-focus-level`).
+- **The focused row's phase (PSP)**: the focused row's stamp rides the colour pulse and the pause drive route does not pin it (`--menu-focus-level`).
+  The PS2 pause is measured and closed: its rows write no alpha, so it blooms nothing (`docs/ui/campaign-screens.md`, "The Selector's sprite is the only alpha writer
+  of Pulse PS2's front end"); no PS2 pause pair exists to score.
 
 ## Next Steps
 

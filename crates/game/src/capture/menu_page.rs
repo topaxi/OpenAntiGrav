@@ -1175,7 +1175,7 @@ pub(super) fn picker_page(
         &|src| sprites.get(src),
         measure,
     );
-    let layers = crate::campaign::gate_glow(title.campaign.frontend_glow.is_some(), layers);
+    let layers = crate::campaign::gate_glow(title.campaign.frontend_glow.is_some(), skin, layers);
     (layers.flatten(), request)
 }
 
