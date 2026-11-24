@@ -36,13 +36,21 @@ fn a_photo_keeps_the_anti_aliasing_the_profile_asks_for() {
 }
 
 #[test]
-fn supersampling_is_drawn_at_the_output_size_too() {
-    assert_eq!(
-        profile(200, Reconstruction::Off)
-            .for_a_photo()
-            .scale_for(RECT, false),
-        Scale::FULL
-    );
+fn the_players_supersampling_stays() {
+    for percent in [125, 150, 200] {
+        let photo = profile(percent, Reconstruction::Off).for_a_photo();
+        assert_eq!(
+            u32::from(photo.scale_for(RECT, false)),
+            percent,
+            "{percent} %"
+        );
+        assert!(!profile(percent, Reconstruction::Off).photo_differs(RECT, false));
+    }
+    let upscaled = profile(150, Reconstruction::Fsr3);
+    assert!(upscaled.photo_differs(RECT, false));
+    let photo = upscaled.for_a_photo();
+    assert_eq!(u32::from(photo.scale_for(RECT, false)), 150);
+    assert_eq!(photo.reconstruction, Reconstruction::Off);
 }
 
 #[test]

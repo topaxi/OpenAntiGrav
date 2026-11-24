@@ -31,6 +31,29 @@ fn draw_as_photo_mode(cli: &mut Cli) {
         .get_or_insert(oag_display::display::MotionBlur::Off);
 }
 
+/// The render scale (supersampling above 100 %) and anti-aliasing the photo was drawn with, from
+/// its `[render]` text: a re-render is the photo, not the profile of the machine it runs on.
+/// A photo without the section is drawn at the output's size with none.
+fn draw_as_the_photo_was(meta: &shot_meta::Meta, cli: &mut Cli) {
+    let Some(render) = &meta.render else {
+        return;
+    };
+    if let Some(percent) = render
+        .get("render_scale")
+        .and_then(toml::Value::as_integer)
+        .and_then(|percent| u32::try_from(percent).ok())
+    {
+        cli.render_scale = Some(percent.max(100));
+    }
+    if let Some(reconstruction) = render
+        .get("reconstruction")
+        .and_then(toml::Value::as_str)
+        .and_then(|text| text.parse().ok())
+    {
+        cli.reconstruction = Some(reconstruction);
+    }
+}
+
 /// What the re-render does about the picture controls the shot was made with, and points `cli`
 /// at them. One line for each thing the reader could take for granted that is not so.
 fn picture_lines(meta: &shot_meta::Meta, cli: &mut Cli) -> Vec<String> {
@@ -111,6 +134,7 @@ pub(crate) fn prepare(cli: &mut Cli, path: &Path) -> Result<Arc<ShotRecord>> {
     }
     if meta.shot.source == "photo mode" {
         draw_as_photo_mode(cli);
+        draw_as_the_photo_was(&meta, cli);
     }
     if meta.shot.width > 0 && meta.shot.height > 0 {
         cli.size = format!("{}x{}", meta.shot.width, meta.shot.height);
@@ -188,6 +212,37 @@ mod tests {
         cli.apply_render_overrides(&mut profile, Some(Scale::HALF));
         assert_eq!(profile.scale_for((1920.0, 1080.0), false), Scale::FULL);
         assert_eq!(profile.reconstruction, Reconstruction::Off);
+    }
+
+    #[test]
+    fn a_photo_is_drawn_again_with_the_render_scale_and_anti_aliasing_it_was_drawn_with() {
+        use oag_display::display::Reconstruction;
+        let text = |scale: i64, reconstruction: &str| shot_meta::Meta {
+            render: Some(toml::toml! {
+                render_scale = scale
+                reconstruction = reconstruction
+            }),
+            ..shot_meta::Meta::default()
+        };
+        let mut cli = Cli::try_parse_from([
+            "oag-game",
+            "--render-scale",
+            "50",
+            "--reconstruction",
+            "fsr3",
+        ])
+        .expect("parses");
+        draw_as_the_photo_was(&text(150, "smaa"), &mut cli);
+        assert_eq!(cli.render_scale, Some(150));
+        assert_eq!(cli.reconstruction, Some(Reconstruction::Smaa));
+        draw_as_the_photo_was(&text(50, "off"), &mut cli);
+        assert_eq!(
+            cli.render_scale,
+            Some(100),
+            "a photo is never drawn below 100"
+        );
+        draw_as_the_photo_was(&shot_meta::Meta::default(), &mut cli);
+        assert_eq!(cli.render_scale, Some(100), "no text, no change");
     }
 
     #[test]

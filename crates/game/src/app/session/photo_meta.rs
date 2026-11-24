@@ -118,7 +118,8 @@ impl Session {
             .photo()
             .map(|photo| shot_meta::Picture::of(photo.effects(), None));
         // A photo is drawn at the output's size with no upscaler (`RenderProfile::for_a_photo`),
-        // so that is what its text says it was drawn with, and `reproduce.flags` re-draw it.
+        // so that is what its `[render]` text says it was drawn with. `--from-png` draws it that way too;
+        // `reproduce.flags` carry no render flags.
         let redrawn = source == "photo mode" && self.photo_redraws();
         let render = self
             .settings

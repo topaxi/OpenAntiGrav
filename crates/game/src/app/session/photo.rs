@@ -55,8 +55,10 @@ pub(crate) struct Open {
     /// When the shot began drawing at the output's size, for the log line that says how long
     /// the redraw stalled.
     redraw_began: Option<web_time::Instant>,
+    /// The frame before was drawn at the profile a photo is drawn with.
+    was_native: bool,
     /// A shot asked for this tick, read back by `Session::draw` once the frame is drawn.
-    shot: Option<(std::path::PathBuf, Option<super::photo_meta::Pending>)>,
+    pub(super) shot: Option<(std::path::PathBuf, Option<super::photo_meta::Pending>)>,
     /// The project's words in the player's language and in English, read once when the mode
     /// opens: the screen is drawn every frame.
     own: StringTable,
@@ -234,6 +236,7 @@ impl super::Session {
             message: None,
             announced: None,
             redraw_began: None,
+            was_native: false,
             shot: None,
             own: oag_ui::strings::project_table(language),
             english: oag_ui::strings::project_table(None),
@@ -311,14 +314,18 @@ impl super::Session {
         // it was taken until that frame is drawn, and no input moves it.
         if self.photo_wants_frames() {
             let abandons = Self::photo_input_abandons(&pad, pointer, input, &view);
+            let announced = self
+                .photo
+                .as_ref()
+                .is_some_and(|open| open.announced.is_some());
             if self.photo_job_running() && abandons {
                 self.photo_job_cancel();
-            } else if abandons {
+            } else if announced && abandons {
                 if let Some(open) = self.photo.as_mut() {
                     open.announced = None;
                 }
                 self.photo_message(strings::CANCELLED);
-            } else {
+            } else if !abandons {
                 self.photo_begin_announced();
             }
             return;
@@ -494,6 +501,14 @@ impl super::Session {
     /// the screen nor (unless its row is on) the HUD is in the file. Called once the frame is
     /// submitted.
     pub(super) fn finish_photo_shot(&mut self) {
+        // A frame at the profile a photo is drawn with, and the one that puts the preview's
+        // back, each reallocate the targets: neither is a frame time.
+        let native = self.photo_draws_natively();
+        if let Some(open) = self.photo.as_mut() {
+            let stalls = native || open.was_native;
+            open.was_native = native;
+            self.stalled |= stalls;
+        }
         if let Some(waiting) = self.photo.as_mut().and_then(|open| open.announced.as_mut()) {
             waiting.shown = true;
         }

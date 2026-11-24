@@ -585,11 +585,13 @@ each on a race of its own).
 
 ## A shot is drawn at the output's size
 
-A saved shot is drawn with the scene at the output's size: a render scale of 100 %, no spatial or
-temporal upscaler (FSR 1 and FSR 3 are off for it), and the anti-aliasing the profile asks for (MSAA, and FXAA
-or SMAA where one is the reconstruction). Its pixels do not depend on the render scale or the
-upscaler the player plays with, a supersampling scale above 100 included: it is drawn at 100. The preview is
-the live frame and is unchanged. **Chosen, not measured.**
+A saved shot is drawn with the scene at no less than the output's size: a render scale below 100 %
+is raised to 100, no spatial or temporal upscaler (FSR 1 and FSR 3 are off for it), and the
+anti-aliasing the profile asks for stays (MSAA, and FXAA or SMAA where one is the reconstruction).
+Its pixels do not depend on the render scale below 100 or on the upscaler the player plays with.
+The player's own **supersampling stays**: 150 % is drawn at 150 % and downsampled to the output by
+the presentation blit, which costs no more than the preview already does. The preview is the live
+frame and is unchanged. **Chosen, not measured.**
 
 - **One predicate and one function.** While a shot is being drawn (`Session::photo_draws_natively`:
   asked, a job running, or its average waiting for the HUD) `Session::render_profile` returns
@@ -603,33 +605,46 @@ the live frame and is unchanged. **Chosen, not measured.**
   shot that is redrawn takes that frame. The race does not step between the two. Measured on the
   discrete GPU (`photo mode: saved ... drawn at the output's size, T from the first frame to the file`,
   a shot asked for at 50 % through FSR 3): Pulse 67 ms at 1080p and 161 ms at 4K, HD 53 ms and
-  167 ms; the frame after puts the preview back, a second reallocation.
+  167 ms; the frame after puts the preview back, a second reallocation. Neither frame is a frame
+  time: both are marked `stalled`, which the frame meters and the resolution controller drop, so the
+  controller does not learn from the redraw.
+- **A shot waiting to be drawn owns the mode**, as an accumulated one does
+  (`photo_wants_frames` and `photo_draws_natively` agree): catch-up ticks or a missed frame do not
+  let the preview's input reach a shot that is about to be read, and a drive draws a single shot
+  with no screenshot asked for.
 - **The HUD** is drawn once over the result at the output's size, as for an accumulated shot
   (`photo_hud`).
-- **`--from-png`** on a photo draws it the same way (`Cli::photo_profile`, applied by
-  `apply_render_overrides`), so a re-render does not follow the render scale or the upscaler of the
-  machine it runs on. Outside the HUD (which the re-render draws from the race as it stands, and a
-  now-playing banner) it differs from the shot in 0.5 % of its pixels, the craft's own animation.
-- **Evidence.** `photo_mode_ground_truth::native_shot`: the same race and tick shot at half size through FSR 3,
-  at 75 % through FSR 1 and at the default give files that are identical bit for bit for the two
-  scaled profiles and for a Pulse single frame against the default. HD's differ from the default's
-  by at most 8 of 255 (a mean of 0.6; a motion blur shot 1 and 0.01, a depth of field shot 7 and 0.6).
-  It is not the render scale: 25, 50, 75 and 150 % each give the same picture to the bit, and
-  drawing 1, 5 or 8 more frames at the output's size before the shot changes nothing. It is the
-  bloom's exposure adaptation. The reallocation restarts it and the first frame seeds it from itself
-  (`hd_bloom`, "rate forced to 1"), where the default's has settled by its lerp over the frames of the
-  preview: the default itself moves by up to 3 of 255 (mean 0.18) between a preview of a few frames
-  and one of 120, and a default settled over 120 or 500 frames still differs from the seeded shot by a
-  mean of 0.43. The seeded value is not where the lerp settles, and why was not found. With no reallocation (100 % and FSR 3 or
-  FSR 1) the difference is 1 of 255 (mean 0.01), probably the frame the redraw adds to that lerp. Without the profile
-  function the scaled profiles differ from each other by a mean of 2 to 6.
-- **The text says what the shot was drawn with.** A redrawn shot's `[render]` section and
-  `reproduce.flags` carry the profile it was drawn with (scale 100, no upscaler, `render_scale_chosen`
-  false), not the player's; the default shot's text differs from `main`'s only in the commit and
-  version (`--png-info` diff).
+- **HD's exposure adaptation is kept across the reallocation.** `hd_bloom::Chain::resize` rebuilt
+  the 1x1 adaptation with its targets and seeded it again from one frame (`adapt_jump`), as the
+  preview was left and as the shot was entered. The Omega tone map and the WO composite keep theirs
+  outside the sized state; the HD chain does now (`Lane::adaptation`). Without it an HD shot drawn
+  after a reallocation differed from the default's by up to 8 of 255 (a mean of 0.6), the same at
+  25, 50, 75 and 150 %, and the preview jumped after every shot.
+- **`--from-png`** on a photo draws what the photo text says it was drawn with: the render scale
+  and reconstruction of its `[render]` section (a photo's are at least 100 and never an upscaler),
+  through the presentation chain and before the grade, with none of the brightness, gamma or screen
+  filter of the machine it runs on, whatever render flags that run was given
+  (`Cli::photo_profile`, `from_png::draw_as_the_photo_was`). A photo without the section is drawn
+  at 100 % with no upscaler. Outside the HUD (which the re-render draws from the race as it stands,
+  and a now-playing banner) it differs from the shot in 0.5 % of its pixels, the craft's own
+  animation. `reproduce.flags` carry no render flags: they are the compare-page shape (race, camera,
+  picture controls, size), and the render is `--from-png`'s.
+- **The text says what the shot was drawn with.** A redrawn shot's `[render]` section carries the
+  profile it was drawn with (scale 100 or the player's supersampling, no upscaler,
+  `render_scale_chosen` false), not the player's; the default shot's text differs from `main`'s only in
+  the commit and version (`--png-info` diff).
+- **Evidence.** `photo_mode_ground_truth::native_shot`, each on the same race and tick: a Pulse
+  single frame (plain and with the HUD), HD's motion blur shot and HD's depth of field shot, in
+  half size through FSR 3, 75 % through FSR 1, 100 % through FSR 3, 100 % through FSR 1 and the
+  default, are the same file to the bit, except that HD's against the default differs by one level
+  of one channel on a few pixels (a mean of 0.01 for the depth of field, 0.0005 for the blur; the
+  frame the redraw adds to the adaptation's lerp, probably). FXAA and SMAA at half size are the shots
+  they are at 100 %, and neither is the shot with none. 150 % and 200 % are the same with or without FSR 3, and
+  neither is the 100 % shot nor the redrawn one. `--from-png` reproduces each, from a run asked for
+  half size through FSR 3. Without the profile function the scaled profiles differ from each other by
+  a mean of 2 to 6.
 - **The preview after a shot** is the preview before it (the live frame at the configured scale
   through the upscaler), with the "PHOTO SAVED" message: no ghost, flash or smear in the frames after
   (three screenshots under half size and FSR 3).
-- **Open.** A 2x supersample for the shot alone is not built: it needs its memory measured at 4K on
-  an 8 GiB GPU and a fall back to the output's size on phones. The CPU governor's lowered shadows or
-  model detail still reach a shot, as they reach the preview.
+- **Open.** A 2x supersample for the shot alone (the player's own is kept) is not built. The CPU
+  governor's lowered shadows or model detail still reach a shot, as they reach the preview.
