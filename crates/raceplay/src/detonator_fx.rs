@@ -110,7 +110,8 @@ impl Race {
 
     /// The Detonator cannon's point lights, as `PulseBullet`'s render queue (`0x00122098`) submits
     /// them to `SpuLight_AddCandidate`: a blue light at each muzzle for the round's first
-    /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight. Empty under the same
+    /// [`FLASH_WINDOW_SECONDS`] and a faint one on each round in flight; and the EMP wave's,
+    /// at its centre while it runs (`EMP_Draw`, `0x0013b300`). Empty under the same
     /// switches that silence every weapon light ([`Self::hd_weapon_lights`]'s).
     #[must_use]
     pub(crate) fn detonator_cannon_lights(&self, draw: &CannonDraw) -> Vec<SpuLight> {
@@ -135,7 +136,12 @@ impl Race {
             .iter()
             .filter(|round| round.live)
             .map(|round| weapon_light::detonator_bolt_record(round.pos));
-        flashes.chain(bolts).collect()
+        let emp = self
+            .view
+            .emp_effect
+            .and_then(|playing| self.view.stage.anchor_of(playing))
+            .map(weapon_light::detonator_emp_record);
+        flashes.chain(bolts).chain(emp).collect()
     }
 }
 
@@ -226,6 +232,11 @@ impl RaceView {
             None => {
                 let effect = self.handles.get(Trigger::DetonatorEmp).cloned();
                 self.emp_effect = effect.and_then(|e| self.stage.attach(&e, mid, 1.0));
+                // `EMP_SpawnLaunchEffect` hands the spawn its matrix by pointer (`li r7,1` at
+                // `0x0013b09c`), so the local-space emitters (flag `0x2`) ride the wave.
+                if let Some(playing) = self.emp_effect {
+                    self.stage.set_rides_frame(playing, true);
+                }
                 self.emp_effect
             }
         };

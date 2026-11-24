@@ -175,7 +175,8 @@ const TEMPLATES: &[&str] = &[
 /// The effects whose `.gtf` sprites HD plays: the Rocket's wall burst, whose
 /// nine emitters name nine entries under `/data/psys/tex/` that all decode
 /// (`docs/ghidra/functions/ps3-hdfury-eu/particle-triggers.md`, "The Rocket's
-/// smoke"), the Quake's wave, and the Missile's two heads, whose red
+/// smoke"), the Quake's wave and the Detonator EMP's (its blue recolour, paired against the
+/// original, `detonator-emp.md`, "What HD draws"), and the Missile's two heads, whose red
 /// filament-ring atlas the colour ramp is authored against (`weapons.md`,
 /// "The Missile's red rings"), the ship explosion, whose root's black colour ramp is a blend
 /// weight, not a colour (`ship-destroy.md`, "`colour_mode` 3 is a blend toward the scene light"),
@@ -187,6 +188,7 @@ const SPRITES: &[&str] = &[
     engine_effects::TRACK_BLAST_EFFECT,
     engine_effects::EXPLOSION_EFFECT,
     engine_effects::QUAKE_EFFECT,
+    engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::MISSILE_FLARE_EFFECT,
     engine_effects::TRAIL_HITSHIP_EFFECT,
     engine_effects::PLASMA_FLARE_EFFECT,
@@ -198,12 +200,14 @@ const SPRITES: &[&str] = &[
 
 /// The effects whose emitters spread by the extent law on HD: the Quake's wave,
 /// which the original draws as a band of fire across the whole road
-/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`), and the Plasma blast's two,
+/// (`docs/ghidra/functions/ps3-hdfury-eu/quake.md`), the Detonator EMP's, a band of blue smoke
+/// across it (`detonator-emp.md`), and the Plasma blast's two,
 /// whose lightning fills the blast instead of bunching at its centre (`plasma.md`,
 /// "The pairs"). Every other HD effect keeps its emitters at their anchors until a
 /// matched capture says otherwise.
 const EXTENTS: &[&str] = &[
     engine_effects::QUAKE_EFFECT,
+    engine_effects::DETONATOR_EMP_EFFECT,
     engine_effects::PLASMA_LIGHTNING_EXPAND_EFFECT,
     engine_effects::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
 ];

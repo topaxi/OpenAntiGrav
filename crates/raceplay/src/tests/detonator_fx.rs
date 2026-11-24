@@ -198,7 +198,16 @@ fn an_hd_emp_wave_carries_the_discs_effect_on_its_front_until_it_ends() {
         lifetime: 0.25,
         age: 0.0,
     };
+    race.view.spu_vertex_lights = true;
+    race.view.hd_trail_active = true;
+    race.view.detonator_cannon_lights = true;
+    race.set_weapon_lights(true);
+    let no_rounds = crate::CannonDraw {
+        look: None,
+        muzzles: Vec::new(),
+    };
     let mut anchors = Vec::new();
+    let mut lit = 0;
     for _ in 0..30 {
         if race.core.sim.world.detonator.emp.wave.live {
             race.core.sim.world.detonator.emp.wave.front += 1;
