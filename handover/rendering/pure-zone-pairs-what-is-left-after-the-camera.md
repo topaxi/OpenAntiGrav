@@ -27,6 +27,7 @@ cameras"; `docs/tools/compare-page.md`, "Why the Pure Zone pairs read 53 and 64"
   carries no animated material in view.
 - **HUD** (-6.4): ours prints the zone clock as 0 and fades the ZONE label differently; Pure's zone, score and zone-seconds RAM addresses are still unlocated.
 - **The Far view** (`<ExternalCameraFar>` `3.8`, `-15`, fov 70) and the cockpit were not read live in Zone.
+- **The pair script's "field of view" check cannot fail**: `psp-pure-pair.py` passes the same fov as both sides of `check_pose` (`ce.pose_of(...), fov, fov`), and ours' trace carries no drawn fov, so it compared the flag with itself while ours drew 60 (cause 2 hid behind it). Needs a drawn-fov readback from `oag-game` (a trace column or a log line).
 - **A second cold boot** of the Zone race: every number here is one boot and two states.
 
 ## Next Steps
