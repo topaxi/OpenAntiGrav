@@ -755,13 +755,32 @@ frame 15.00 before and after, top-left `(16.9, 7.5, 10.0)` both (original `(20.3
 changes a byte. No HD Rocket or Bomb pair exists. An ordinary race draws plain programs, where ours
 already added the light, so the change cannot reach one.
 
-**Wired.** `shade.wesl`'s `zone_spu_after_fog` gives `Lit` an `after_fog` term, `output_scale * spu`, on a
-chunk on its Zone program where the title's Zone frame is read to be one (`ZoneFrame::lit_by_stage_alone`,
-HD only). `fog.wesl`'s `plus_after_fog` adds it after `fogged`, in linear light. A `zone_plain` chunk runs
-its plain `SVC1` program, which already takes the light in its sum, so it now does in ours too. Test:
-`crates/mesh/tests/zone_recolour.rs`, `a_zone_chunk_adds_the_spu_light_after_its_surface` (black Zone
-surface: blue `88` with the light, `0` without; a white plain chunk `88`, a black one `0`; no marker, `0`).
-It fails with the term removed.
+**Wired.** In `shade.wesl`, the generic combine of a chunk on its Zone program records the light
+twice in `SunTerms`. It needs the title's Zone frame to be read as one (`ZoneFrame::lit_by_stage_alone`,
+HD only) and the Zone grade to apply (not a `zone_plain` or `ZONE_EXEMPT_RATE` chunk):
+
+- `after_fog`, `output_scale * spu`;
+- `redraw`, what the `ShadowToAlpha` redraw's `surface * spu` adds.
+
+A pane's clear part takes neither (weighted by its cover). The special combines take neither either
+(light cone, facing-ramp sheen, holo billboard, flame, absorb shell, rims), and neither does a draw off the
+authored rig. `shadow.wesl`'s `shadowed` weights `after_fog` by the craft shadow's `1 - coverage` and adds
+`coverage * redraw`, so under a covered texel only `surface * spu` is left, as the original's blend of its
+redraw gives. `fog.wesl`'s `plus_after_fog` adds it after `fogged`, in linear light. A `zone_plain` chunk
+runs its plain `SVC1` program, which takes the light in its sum. Tests: `crates/mesh/tests/zone_spu_light.rs`,
+on HD's encoded race target:
+
+- With the authored fog on and a grey Zone surface, blue is `fogged + spu / 2` within 2, and the test
+  asserts that the three wrong placements (before the fog, twice, in the encoded domain) are each more
+  than 3 off.
+- Under full coverage it is `fog(surface * (ambient + spu) / 2)`.
+- An exempt chunk is unchanged by the light.
+- A black Zone surface turns the light's blue; a white plain chunk takes it, a black one does not, and
+  without the marker nothing is added.
+
+Shown red: with no add, with the coverage weighting missing (blue 156 against 86), and with the exempt
+gate missing (160 against 71). The volley frames after this: ticks 386, 388 and 390 top-left blue 28.6,
+26.6 and 24.0. The pairs are as above.
 
 **2048 and Omega.** 2048: checked, differs. It has no SPU light record ([weapons.md](weapons.md)), and
 `Detonator::cannon_lights` is false there. Omega: not checkable. Its programs are PS4 recompiles with no
