@@ -24,6 +24,7 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
             oag_title::engine_effects::TRACK_BLAST_EFFECT,
             oag_title::engine_effects::EXPLOSION_EFFECT,
             oag_title::engine_effects::QUAKE_EFFECT,
+            oag_title::engine_effects::DETONATOR_EMP_EFFECT,
             oag_title::engine_effects::MISSILE_FLARE_EFFECT,
             oag_title::engine_effects::TRAIL_HITSHIP_EFFECT,
             oag_title::engine_effects::PLASMA_FLARE_EFFECT,
@@ -41,8 +42,9 @@ fn only_hd_lists_effects_whose_gtf_sprites_play() {
 
 /// Only HD and Pure lift the extent law: both for the Quake's wave, the one effect a
 /// matched capture of the original has shown spreading across the road on each (Pure's
-/// `Quake_Update`, `psp-pure-usa/quake.md`), and HD for the Plasma blast's two lightning
-/// effects besides (`ps3-hdfury-eu/plasma.md`, "The pairs").
+/// `Quake_Update`, `psp-pure-usa/quake.md`), and HD for the Detonator EMP's wave, its blue
+/// recolour (`ps3-hdfury-eu/detonator-emp.md`, "What HD draws for a fired EMP"), and the
+/// Plasma blast's two lightning effects besides (`ps3-hdfury-eu/plasma.md`, "The pairs").
 #[test]
 fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_blast() {
     use oag_title::engine_effects as n;
@@ -54,6 +56,7 @@ fn only_hd_and_pure_lift_the_extent_law_and_only_for_the_quake_and_hds_plasma_bl
         oag_hd::TITLE.effects.extents,
         [
             n::QUAKE_EFFECT,
+            n::DETONATOR_EMP_EFFECT,
             n::PLASMA_LIGHTNING_EXPAND_EFFECT,
             n::PLASMA_LIGHTNING_COLLAPSE_EFFECT,
         ]
