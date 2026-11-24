@@ -176,8 +176,9 @@ by user instructions of the whole module at the gate's profile:
   `campaign_cursor_ground_truth` (1,753 G -> 1,141 G, wall 60 to 70 s -> 42 s) and
   four `footer_hint_ground_truth` tests (671 G -> 545 G) launch once, not once
   per choice.
-- Measured and not changed: the race build's pipeline compile (no safe disk
-  cache; one module per stage 1.5 to 2 %), the PS2 music read.
+- Measured and not changed: the race build's pipeline compile (a disk pipeline
+  cache is capped by the driver's whole share, 1 to 2 % of a racing launch, and
+  naga's work runs before it; one module per stage 1.5 to 2 %), the PS2 music read.
 
 ## Still open
 

@@ -441,10 +441,19 @@ is 42 to 45 % of a racing launch's CPU, 35 % of it `compile_stage` (naga's
 SPIR-V write 12 %); the driver's own compile is under 1 % because RADV links
 lazily.
 
-- **A disk pipeline cache is not available**: `Device::create_pipeline_cache` is
-  `unsafe` in wgpu 30.0.1 (`docs/architecture/dependency-upgrades.md`, "Direct dependencies already at their newest release", the `PipelineCache` bullet),
-  which the workspace's `unsafe_code = "deny"` and the rule against wgpu's
-  unsafe escape hatches both refuse. Nothing safe replaces it on this backend.
+- **A disk pipeline cache cannot pay, so it is not built.** The maintainer
+  allows the one `unsafe` wgpu call (`Device::create_pipeline_cache`,
+  `docs/architecture/dependency-upgrades.md`, the `PipelineCache` bullet) only if
+  the benefit is big, and it is under 2 %. A pipeline cache is handed to
+  `vkCreateGraphicsPipelines` (`wgpu-hal` 30.0.1 `vulkan/device.rs`,
+  `create_render_pipeline`), after `compile_stage` has run naga's override
+  processing, validation and SPIR-V write, so the 35 % above is paid with or
+  without it. What it can skip is the driver's own compile: `perf record -e
+  cpu-clock:u -F 499 --sort dso` of a Pulse PSP race launch (400 ticks, RADV, the
+  mesa disk cache already warm, load 63 to 65) puts `libvulkan_radeon.so` at 1.97 %
+  and 0.97 % of the user samples in two runs (`oag-game` 83 %, `libc` 15 %). The
+  whole driver, not only pipeline creation, is that small, so the cache's ceiling
+  is 1 to 2 % of a racing launch's instructions, against the 10 % bar.
 - **One module per stage did not pay.** `mesh.wesl` as a 10 KB vertex module
   (no entry point but `vs_main`, two overrides) and a 90 KB fragment module cut
   `process_overrides` on the vertex stage to a clone of 10 KB: 18.9 -> 18.5 G on
