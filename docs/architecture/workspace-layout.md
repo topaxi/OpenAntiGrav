@@ -1362,7 +1362,8 @@ Measured on `hd_eliminator_hud_ground_truth::sweep_race_length` with
 Eliminators on HD, 10,858 and 33,664 ticks), a frame-pointer test build (the
 recipe in "What the `speed-plan` pass measured"), `taskset -c 0-5 perf stat -e
 cpu_core/cycles/u`, the two binaries run turn about three times each; repeat
-runs agree to 0.6 %. Load 20 to 30 throughout. Every run printed the same
+runs agree to 0.6 % within a session and up to 1.4 % between sessions, which is
+why each row is read against its own pair. Load 20 to 30 throughout. Every run printed the same
 `(seed, end tick, laps)` lines.
 
 - **Whole sweep**: 18.24 to 14.23 G cycles (-22 %), task-clock 8.15 to 6.35 s.
@@ -1388,8 +1389,7 @@ runs agree to 0.6 %. Load 20 to 30 throughout. Every run printed the same
   the same pairs: at that load the bench cannot see a change of this size.
 
 Measured and dropped: casting `hover::sweep`'s two rays together (fewer
-instructions, +0.6 % cycles: the union of two long parallel segments' boxes
-visits more nodes than the two walks). Not tried again: a node holding its
+instructions, +0.6 % cycles; why was not measured). Not tried again: a node holding its
 children's boxes and a branch-free `Aabb::overlaps` (both measured on
 2026-11-06, above). What is left is the walk itself (`Bvh::visit`, about 30 %
 of the sweep, branch misses on about eighteen nodes a query) and the hull
