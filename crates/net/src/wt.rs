@@ -9,9 +9,12 @@
 //! certificates on a LAN are the maintainer's decision (`docs/networking/README.md`);
 //! a public server would present a CA-signed one instead (not built).
 //!
-//! The crate is `web-transport-quinn` on rustls' `ring` provider, chosen in a
-//! spike against `wtransport` (both worked on this workspace's MSRV;
+//! The crate is `web-transport-quinn`, chosen in a spike against `wtransport`
+//! (both worked on this workspace's MSRV;
 //! [ADR-0070](../../../docs/architecture/adr/0070-the-network-transport-is-webtransport.md)).
+//! Its TLS and QUIC packet cryptography is `rind`, pure Rust, so no `aws-lc` C
+//! build reaches the Android and iOS builds; `ring` stays only to mint the
+//! certificate (`rcgen`) and hash it.
 //! The async half runs on a tokio runtime of its own, two worker threads, shared
 //! by every link in the process; a [`WtLink`] is a set of channels to it.
 
