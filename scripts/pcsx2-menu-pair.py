@@ -15,8 +15,8 @@ CONFIRM, cross), ENTER YOUR TAG (cross, cross, right, cross), the format-memory-
 Selection, cross again for Cell Selection (Single Race, Moa Therma White, AI difficulty Medium), `pcsx2-drive.py state save N` on each.
 
 The screen is read by eye from the frame: PS2 Pulse's front-end state name has no recovered address, so `original.screen_basis` says so.
-The selector pulses between cyan and white on its own clock and a loaded state keeps the state's phase, so ours is drawn at the pulse's
-rest phase; compare placement by gradient (`menu_hex_offsets.py`), never by brightness.
+The selector's pulse and the card title's glow ladder are two counters (`scripts/ps2_pulse.py`): both are read from EE RAM on each side of
+the screenshot, placed at the frame the ticker head fit picks, and passed as `--menu-picker-seconds` and `--menu-title-seconds`.
 """
 
 import argparse
@@ -35,6 +35,7 @@ sys.path.insert(0, str(HERE))
 import compare_env as ce  # noqa: E402
 import compare_menu as cm  # noqa: E402
 import compare_provenance as cp  # noqa: E402
+import ps2_pulse as pp  # noqa: E402
 import ps2_ticker as pt  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("pcsx2_drive", HERE / "pcsx2-drive.py")
@@ -62,6 +63,8 @@ WALK = [
      "xml": "Selection_Definition.xml (Team Selection)",
      "selection": {"original": "Assegai, Classic (first craft)", "ours": "Assegai, Classic (first craft)"}},
 ]
+#: The WALK ids whose ours is drawn at the original's two pulse counters (`pulse_flags`): the campaign pages that own a `Selector` and a pulse title.
+CLOCKED = ("grid", "cell")
 #: `--menu-model-seconds` for ours' hull, per WALK id. PS2 Pulse has no recovered address for the ship node's clock (the PSP's is `node+0x40`),
 #: and a loaded state keeps its phase while the VM runs on, so the hull's sway phase is matched by eye/box against the frame: pass `--model-seconds`.
 
@@ -85,24 +88,27 @@ def wait_lone_message(pine, addrs, entries, timeout=90.0):
     sys.exit("STALLED: no frame with one pinnable ticker message in %.0f s (last read %s)" % (timeout, seen))
 
 
-def shot_in_bracket(pine, keyboard, addrs, dest, timeout=20.0):
+def shot_in_bracket(pine, keyboard, addrs, dest, pulse=(None, None), timeout=20.0):
     """PCSX2's GS screenshot (the F8 hotkey) of the running VM, with the ticker read just before the key and again as the file appears.
 
     A paused VM presents no frame and the shot fails, so the VM runs and the head is only known to lie between the two reads (it moves left 1 a
-    frame). Returns `(before, after)`, the two reads, or `None` when no shot came."""
+    frame). Returns `(before, after, pulse_before, pulse_after)`, the two reads and the pulse counters read beside them, or `None` when no shot
+    came."""
     before_shots = drive.newest_snapshot()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         keyboard.focus()
+        pulse_before = pp.read_state(pine, *pulse)
         before = pt.read_records(pine, addrs)
         keyboard.tap("F8", after=0.0)
         for _ in range(400):
             latest = drive.newest_snapshot()
             if latest and latest != before_shots and os.path.getsize(latest) > 0:
                 after = pt.read_records(pine, addrs)
+                pulse_after = pp.read_state(pine, *pulse)
                 drive._wait_until_written(latest)
                 shutil.move(latest, dest)
-                return before, after
+                return before, after, pulse_before, pulse_after
             time.sleep(0.01)
     return None
 
@@ -122,11 +128,14 @@ def grab(slot, state_file, dest, settle, oag_wad, source):
     if len(addrs) != 2:
         sys.exit("STALLED: %d ticker records found in EE RAM (a screen with a footer shows two)" % len(addrs))
     entries = pt.load_entries(oag_wad, "%s:%s" % (source, DATA_WAD))
+    pulse = pp.find(pine)
+    print("pulse objects: Selector controller %s, title Text %s" % tuple(("0x%08x" % a) if a else "none" for a in pulse), flush=True)
     wait_lone_message(pine, addrs, entries)
-    bracket = shot_in_bracket(pine, keyboard, addrs, dest)
+    bracket = shot_in_bracket(pine, keyboard, addrs, dest, pulse)
     if bracket is None:
         sys.exit("no GS screenshot (is the VM paused?)")
-    before, after = bracket
+    before, after, pulse_before, pulse_after = bracket
+    bracket = (before, after)
     # The pair is only the pinned frame when the same one message was alone on screen at both reads.
     lone_before, lone_after = (pt.lone_message(r, HEAD_MARGIN) for r in bracket)
     if not (lone_before and lone_after and lone_before["addr"] == lone_after["addr"] and lone_before["text"] == lone_after["text"]):
@@ -139,7 +148,8 @@ def grab(slot, state_file, dest, settle, oag_wad, source):
     if profile is None:
         sys.exit("STALLED: no single name/tag profile record in EE RAM")
     return {"item": item, "text": lone_before["text"], "record": lone_before["addr"], "addrs": addrs,
-            "head_before": lone_before["head_x"], "head_after": lone_after["head_x"], "name": profile[0], "tag": profile[1], "tag_addr": profile[2]}
+            "head_before": lone_before["head_x"], "head_after": lone_after["head_x"], "name": profile[0], "tag": profile[1], "tag_addr": profile[2],
+            "pulse": {"controller": pulse[0], "text": pulse[1], "before": pulse_before, "after": pulse_after}}
 
 
 def prepare_profile(plat, profile, player):
@@ -186,6 +196,32 @@ def fit_head(args, item, plat, profile, theirs, capture, pdir, extra):
     return best, dict(sorted(scores.items()))
 
 
+def pulse_flags(pair, capture, head):
+    """Ours' `--menu-picker-seconds` and `--menu-title-seconds` for the frame the ticker head fit picked: the counters read before and after the
+    screenshot, placed the same fraction of the way as the fitted head is between its two reads (both move once a frame)."""
+    pulse = capture["pulse"]
+    span = capture["head_before"] - capture["head_after"]
+    frac = (capture["head_before"] - head) / span if span > 0 else 0.0
+    placed = pp.at_fraction(pulse["before"], pulse["after"], frac)
+    flags = ()
+    reads = {"before": pulse["before"], "after": pulse["after"], "fraction": round(min(1.0, max(0.0, frac)), 3), "front_end_clock_at_shot": round(placed["clock"], 4)}
+    if "phase" in placed:
+        seconds = pp.picker_seconds(placed["phase"])
+        flags += ("--menu-picker-seconds", "%.3f" % seconds)
+        pair.rec["original"]["seconds_since_entry"] = {
+            "value": round(seconds, 3), "phase": round(placed["phase"], 4), "controller": "0x%08x" % pulse["controller"], "reads": reads,
+            "basis": "not a wall clock: the Selector's phase (float at controller + 0xa0, GridController_UpdateSelectorStamp 0x0018ee30, advanced 2 dt and "
+                     "wrapped at 2) read from EE RAM over PINE before and after the screenshot, placed at the fitted ticker head's frame; ours draws phase / 2 s"}
+    if "s" in placed:
+        flags += ("--menu-title-seconds", "%.3f" % pp.title_seconds(placed["s"]))
+        pair.rec["original"]["title_glow"] = {
+            "value": placed["s"], "rising": bool(placed["up"]), "seconds": round(pp.title_seconds(placed["s"]), 3), "text": "0x%08x" % pulse["text"], "reads": reads,
+            "basis": "the card title's ladder byte s (Text + 0xed, Text_Draw 0x001a7fe8: 15 a tick of the front-end clock *(0x002e3640)+0x40 times 20, 0 to "
+                     "150 and back) read from EE RAM over PINE before and after the screenshot and stepped to the fitted frame's tick; ours pins its title "
+                     "ladder to step s / 15 (--menu-title-seconds), apart from the Selector's phase"}
+    return flags
+
+
 def build_pair(args, item, out, plat, profile, raw, captured_at, capture):
     pdir = out / ("menu-" + item["id"])
     pdir.mkdir(parents=True, exist_ok=True)
@@ -209,6 +245,7 @@ def build_pair(args, item, out, plat, profile, raw, captured_at, capture):
     prepare_profile(plat, profile, player)
     model = ("--menu-model-seconds", "%.3f" % args.model_seconds) if item["id"] == "team" and args.model_seconds is not None else ()
     head, scores = fit_head(args, item, plat, profile, pdir / "resized.png", capture, pdir, model)
+    clocked = pulse_flags(pair, capture, head) if item["id"] in CLOCKED else ()
     pair.rec["original"]["footer_ticker"] = {
         "basis": "read from EE RAM over PINE with the VM running (scripts/ps2_ticker.py): the message is a rand() draw, so the grab waits for a frame with one tip "
                  "on screen well inside the viewport; a paused VM presents no frame, so the screenshot is bracketed by two reads of the record",
@@ -224,7 +261,7 @@ def build_pair(args, item, out, plat, profile, raw, captured_at, capture):
                      xml_file=item["xml"], screen_seen=item["screen"], screen_wanted=item["screen"], profile_dir=profile,
                      size=ce.size_text(plat), front_end_style="the disc's own", language="English", original_language="English",
                      selection=item["selection"], screen_source="read by eye", player=player,
-                     extra_args=model + ("--menu-ticker", "%s@%d" % (capture["item"], head)))
+                     extra_args=model + clocked + ("--menu-ticker", "%s@%d" % (capture["item"], head)))
         pair.finish()
         (pdir / "resized.png").unlink()
     except SystemExit as exc:
