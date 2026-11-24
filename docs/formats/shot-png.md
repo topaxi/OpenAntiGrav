@@ -74,7 +74,7 @@ for a photo-mode shot without the section prints `no picture controls recorded: 
 them, so it is drawn without any`. Like the mode, it draws none of the game's own motion blur (`--motion-blur` still overrides). It is one frame: a motion blur shot is drawn without
 its blur and the output says so. The re-render draws
 the HUD, which the text does not record: a photo taken with its HUD row off (the default) differs
-there. A photo's re-render turns the visibility sets off, as photo mode does. **Default mods**: the
+there. A photo's re-render turns the visibility sets off, as photo mode does, and draws with the render scale and anti-aliasing of the photo's `[render]` section (at least 100 % and no upscaler) whatever the run's render flags (`docs/ui/photo-mode.md`, "A shot is drawn at the output's size"). **Default mods**: the
 mods that ship enabled in a dev checkout (`oag.energy-turbo` among them) run a simulation module, so
 the race is MODDED; it records its input and the shot carries the stream and the module hashes.
 A shot of an unmodded race, remade in a checkout that has those mods, runs none of them. A shot from Race End

@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+mod native_shot;
 mod picture_controls;
 mod shot_fidelity;
 
@@ -42,8 +43,7 @@ const TO_THE_RACE: &str = "boot; select racebox; press cross; until page=race; \
 /// button is read by the pad's own smoothing, which a visit's frames without a race tick do not
 /// run down, and that is the pad and not the race.
 const TO_THE_TIME_TRIAL: &str = "boot; select racebox; press cross; until page=race; \
-     set race.mode=single_race; \
-     select launch_race; press cross; until screen=picker; press cross; \
+     set race.mode=single_race; select launch_race; press cross; until screen=picker; press cross; \
      until screen.id=ship-select; press cross; until stage=race within 4000; \
      ticks 400; ";
 
