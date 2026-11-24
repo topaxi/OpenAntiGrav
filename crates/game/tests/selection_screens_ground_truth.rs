@@ -881,7 +881,8 @@ fn hd_reads_its_own_team_selection() {
         (
             0x6480_8080,
             0x3280_8080,
-            0x64ff_0000,
+            // `HD_Blue` of the Fury style: `SelectedColumnCol` is not a key the widget reads.
+            0xffac_0717,
             0xff80_8080,
             0xff24_2424
         )
