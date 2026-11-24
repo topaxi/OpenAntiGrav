@@ -1341,6 +1341,60 @@ A duration under full load runs 3-8x its isolated time on this laptop: a test
 that takes 13 s alone took 99-135 s in a full run. Compare isolated CPU, or
 `time`'s user + sys, not nextest durations.
 
+## Nearest-hit folds and batched walks (2026-11-24)
+
+A headless HD Eliminator spent a third of its CPU in `Indices::overlapping`:
+the hover, maglock, clip and sweep rays each collected their candidates into a
+buffer, sorted them ascending and then folded them in that order, and a reset
+contact asked each reset collider's own tree in turn for eleven rays a tick.
+Four changes in `oag-physics`, each kept only if it moved the cycle count:
+
+| Change | G cycles | Why the answer is the same |
+| --- | ---: | --- |
+| Base (`main` at `544649dcd`) | 18.24 | |
+| `CollisionWorld::raycast` folds the walk: the nearest hit is the least `(distance, collider, t, triangle)` over every candidate | 16.73 | The scan takes each collider's least `(t, triangle)`, then the least `(distance, collider)`; `t * length` never decreases as `t` grows for a finite length that is not negative, so the two agree and no visiting order changes a total order. A `NaN` `t` or any other length takes the ascending scan, kept as the reference. `the_folded_nearest_hit_is_the_ascending_scans` |
+| `CollisionWorld::nearest_reset`: one tree over every reset collider's triangles, folded the same way | 15.24 | A collider's box holds its triangles' boxes, so the per-collider box reject removed no candidate. `the_reset_tree_answers_as_each_reset_collider_in_turn` |
+| `Raycaster::raycast_each`: a craft's hover probes walk once over the union of their boxes, each candidate folded into every ray whose own box overlaps it | 15.18 (from 15.45 in its own pair) | A box that overlaps a segment's box overlaps any box holding it, so each ray gets the candidates its own walk visits. `rays_cast_together_answer_as_each_cast_alone` |
+| `CollisionWorld::nearest_reset_each`: a reset contact's swept ray and ten hull probes in one walk; the first ray in the old order that found something wins | 14.23 (from 14.98) | As the row above |
+
+Measured on `hd_eliminator_hud_ground_truth::sweep_race_length` with
+`OAG_SWEEP=1 OAG_SWEEP_DIFFICULTY=elite OAG_SWEEP_SEEDS=1-2` (two Elite score
+Eliminators on HD, 10,858 and 33,664 ticks), a frame-pointer test build (the
+recipe in "What the `speed-plan` pass measured"), `taskset -c 0-5 perf stat -e
+cpu_core/cycles/u`, the two binaries run turn about three times each; repeat
+runs agree to 0.6 % within a session and up to 1.4 % between sessions, which is
+why each row is read against its own pair. Load 20 to 30 throughout. Every run printed the same
+`(seed, end tick, laps)` lines.
+
+- **Whole sweep**: 18.24 to 14.23 G cycles (-22 %), task-clock 8.15 to 6.35 s.
+- **A tick** (samples under `Race::tick_sim_only`, `perf record -F 999`,
+  pinned the same way, back to back): 6,438 to 5,079 samples over 44,522 ticks,
+  0.145 to 0.114 ms a tick for the whole field. The broadphase (the walk, its
+  folds, the `u32` sort and the reset queries) is 58 % of a tick before and
+  47 % after; `Indices::overlapping` alone is 34 % of all samples before and
+  9 % after, what is left of it being the hull probes' `region` and
+  `raycast_all`.
+- **Second witness**, Pulse: `ai_clean_lap_gate::track_07_flash` 15.17 to
+  14.19 G cycles (-6.5 %), 5.77 to 5.35 s. Pulse's two-probe rig casts one ray
+  above `FAST_PROBE_SPEED`, so it gains less from the batch.
+- `race_ground_truth::a_lone_craft_gets_round_the_circuits_it_is_known_to_get_round`
+  prints the same twelve lines before and after, every circuit clean.
+
+- **Render bench** (`bench-render hd --size`, release, both binaries passed by
+  `--binary`, NVIDIA RTX PRO 2000 Blackwell laptop GPU): the same 7,019 frames
+  and final state hash `94a2261ef5045e63` at all three sizes, before and
+  after. `tick_us` p50 730 to 965 us at 1280x800, 648 to 435 us at 1920x1080
+  and 550 to 525 us at 3840x2160, at load 7 to 26, and `record_us` and
+  `submit_us`, which this change does not touch, moved by up to 40 % between
+  the same pairs: at that load the bench cannot see a change of this size.
+
+Measured and dropped: casting `hover::sweep`'s two rays together (fewer
+instructions, +0.6 % cycles; why was not measured). Not tried again: a node holding its
+children's boxes and a branch-free `Aabb::overlaps` (both measured on
+2026-11-06, above). What is left is the walk itself (`Bvh::visit`, about 30 %
+of the sweep, branch misses on about eighteen nodes a query) and the hull
+probes' `region`, whose ascending order `raycast_all` needs.
+
 ## Test-data suite measurements
 
 Moved out of `CLAUDE.md`, which keeps the rules and the ceilings.

@@ -1,7 +1,7 @@
 ---
 status: measure
 titles: [all]
-updated: 2026-10-13
+updated: 2026-11-24
 summary: "Race-load effect of bounded peek, BC7, PSARC inflate and raycast broadphase unmeasured; Deck load runs"
 categories: [gameplay, frontend]
 ---
@@ -59,7 +59,29 @@ the measurements are in
   [`workspace-layout.md`](../../docs/architecture/workspace-layout.md),
   "The collision world's broadphase".
 
+- **Nearest-hit rays fold the walk, reset contacts and hover probes walk once**
+  (2026-11-24, `bvh-perf`). `CollisionWorld::raycast` no longer collects and
+  sorts its candidates; reset contacts ask one tree over every reset collider;
+  a craft's hover probes and a reset contact's eleven rays each share one walk.
+  Two HD Elite Eliminators 18.24 to 14.23 G cycles (-22 %), a tick 0.145 to
+  0.114 ms, the simulation bit-identical. Numbers and the equivalence argument in
+  [`workspace-layout.md`](../../docs/architecture/workspace-layout.md),
+  "Nearest-hit folds and batched walks".
+
 ## Open
+
+- **The broadphase walk itself** (`Bvh::visit`, about 30 % of an HD race's
+  sweep after the folds; branch misses on about eighteen nodes a query) and the
+  hull probes' `region`, whose ascending sort `raycast_all` needs. Already
+  measured and dropped: a node holding its children's boxes, a branch-free
+  `Aabb::overlaps`, batching `hover::sweep`'s two rays. Baseline 14.23 G cycles:
+  a frame-pointer build of `oag-raceplay`'s `it_h_l` (recipe in
+  `workspace-layout.md`, "What the `speed-plan` pass measured"), then from
+  `crates/raceplay`, `OAG_SWEEP=1 OAG_SWEEP_DIFFICULTY=elite
+  OAG_SWEEP_SEEDS=1-2 OAG_SWEEP_OUT=<file> taskset -c 0-5 perf stat -e
+  cpu_core/cycles/u <it_h_l> --ignored --exact
+  hd_eliminator_hud_ground_truth::sweep_race_length`, old and new binaries turn
+  about (the same binary reads up to 1.4 % apart between sessions).
 
 - **Archive walks that sniff by decompressing everything.** The test suite had
   this shape in a dozen places (`sblk`, `.vex`, `.pob` walks over `WADS2.WAD`);
