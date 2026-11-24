@@ -88,11 +88,9 @@ struct Sim {
 
 fn sim_load(options: &race::Options) -> anyhow::Result<Sim> {
     let sim = race::load_sim(options)?;
-    let mut view = race::ViewSetup::headless();
-    view.request = Some(options.replay_setup_on(&sim.circuit));
     Ok(Sim {
+        view: race::ViewSetup::headless_on(options, &sim.circuit),
         setup: sim.setup,
-        view,
         modules: sim.modules,
     })
 }

@@ -212,11 +212,9 @@ impl Start {
     /// report line (`view_independence_ground_truth`: the state hash is the same either way).
     fn sim(options: &race::Options) -> Self {
         let sim = race::load_sim(options).expect("loading the race");
-        let mut view = race::ViewSetup::headless();
-        view.request = Some(options.replay_setup_on(&sim.circuit));
         Self {
+            view: race::ViewSetup::headless_on(options, &sim.circuit),
             setup: sim.setup,
-            view,
             modules: sim.modules,
         }
     }
